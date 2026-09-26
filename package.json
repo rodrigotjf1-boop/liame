@@ -11,7 +11,9 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "dev": "turbo run dev"
+    "dev": "turbo run dev",
+    "db:migrate": "node packages/database/dist/cli/migrate.js",
+    "db:migrate:test": "node packages/database/dist/cli/migrate.js --url-env TEST_DATABASE_URL_OWNER"
   },
   "devDependencies": {
     "turbo": "catalog:",

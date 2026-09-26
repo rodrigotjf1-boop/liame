@@ -1,0 +1,9 @@
+{
+  "extends": "@liame/config/tsconfig/lib.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "tsBuildInfoFile": "./node_modules/.cache/typecheck.tsbuildinfo"
+  },
+  "include": ["src", "test", "vitest.config.mts"]
+}

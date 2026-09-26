@@ -8,6 +8,7 @@ export interface DatabaseOptions {
   /** Conexões do pool. No Supabase, o pooler em modo transação é o caminho da aplicação (ADR-005). */
   max?: number;
   applicationName?: string;
+  connectionTimeoutMillis?: number;
 }
 
 export interface Database {
@@ -28,6 +29,8 @@ export function createDatabase(options: DatabaseOptions): Database {
     connectionString: options.connectionString,
     max: options.max ?? 10,
     application_name: options.applicationName ?? 'liame',
+    // Banco fora do ar não pode prender a requisição (nem o health) indefinidamente.
+    connectionTimeoutMillis: options.connectionTimeoutMillis ?? 5000,
   });
   // Erro numa conexão ociosa derruba o processo se ninguém escutar; loga a causa e segue (LIC-003).
   pool.on('error', (err) => {

@@ -817,6 +817,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - `strictDepBuilds` falha o install listando os scripts não revisados; a resposta vai em `allowBuilds` (`true`/`false`).
   - `--force` instala as dependências opcionais de **todas** as plataformas (evitar).
   - Pelo corepack: `corepack pnpm <cmd>` lê o `packageManager` sem ativar nada global.
+- **pnpm 12, CLI:** `pnpm -s` não existe mais ("unexpected argument"); usar `pnpm --silent` [O, 26/09/2026].
+- **Nest 12 + Express 5:** erro do *body parser* (JSON malformado) chega ao filtro global de exceções como 400; `httpAdapter.setHeader` + `reply` mantém `application/problem+json` [O, teste `api.e2e.spec.ts`, 26/09/2026].
 - **Turborepo 2.11.4:** precisa do executável `pnpm` no PATH (não serve `corepack pnpm`); coleta telemetria anônima por padrão (`TURBO_TELEMETRY_DISABLED=1`).
 - **Versões com menos de 1 dia em 25/09/2026** (fora do catálogo por isso): `@types/node` 24.19.0 (22:09 UTC), `ai` 7.0.116, `vitest` 5.0.2, `@nestjs/cli` 12.0.7.
 - **Actions do CI (conferidas por `git ls-remote`):** `actions/checkout` v7.0.1 `3d3c42e`, `actions/setup-node` v7.0.0 `8207627`, `pnpm/action-setup` v6.1.0 `ea17c68` (suporte ao pnpm 12 desde essa versão).
