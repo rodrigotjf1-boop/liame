@@ -690,6 +690,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 ### 14.2 Feature flags
 
 - **OpenFeature:** CNCF Incubating; `server-sdk` 1.23.0; `nestjs-sdk` 0.2.7 (0.x); OFREP para o front.
+  - **OFREP** [O, open-feature/protocol `service/openapi.yaml`, 26/09/2026]: `POST /ofrep/v1/evaluate/flags/{key}` e `POST /ofrep/v1/evaluate/flags` (lote), corpo `{context: {targetingKey, ...}}`. Sucesso: `key`, `value`, `reason` (STATIC, TARGETING_MATCH, SPLIT, DISABLED, UNKNOWN), `variant`, `metadata`; lote: `{flags: [...]}`. Erro: `key`, `errorCode` (PARSE_ERROR, TARGETING_KEY_MISSING, INVALID_CONTEXT, GENERAL, FLAG_NOT_FOUND), `errorDetails`. Lote com `ETag` e `If-None-Match` → 304.
+  - `server-sdk` 1.23.0 tem peer `@openfeature/core` ^1.12.0 (1.12.0, 28/07/2026); licença Apache-2.0 [O, npm, 26/09/2026].
 - **Unleash OSS:** 1 projeto e **2 ambientes**; Enterprise a US$75/seat.
 - **GrowthBook** exige MongoDB. **Flagsmith** é BSD-3 sobre Postgres. **Flipt v2** é fair source e baseado em Git.
 - **PostHog:** self-host sem suporte oficial.
@@ -834,6 +836,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Nest 12:** `NestFactory.create(App, { rawBody: true })` guarda o corpo cru em `req.rawBody` junto com o JSON já interpretado (necessário para verificar assinatura de webhook) [O, 26/09/2026].
 - **Node `http.request` com `lookup`:** o `lookup` não é chamado quando o host é um IP literal (checar o IP antes) e, com `autoSelectFamily`, pode ser chamado com `{ all: true }` (devolver lista) [O, 26/09/2026].
 - **@nestjs/swagger 12 + Zod 4:** `z.number().positive()` sai no OpenAPI 3.1 como `exclusiveMinimum: true` (forma do 3.0), que o Spectral reprova (`oas3-schema`); usar `.min(1)` [O, 26/09/2026, ERR-013].
+- **oasdiff 1.32:** valor novo num `enum` de **resposta** é quebra (`response-property-enum-value-added`, nível ERR); campo de resposta como texto com `pattern` não é. Para listas que crescem (tipos de evento), resposta em texto aberto e enum só no pedido [O, 26/09/2026, ERR-015].
 - **Actions do CI (conferidas por `git ls-remote`):** `actions/checkout` v7.0.1 `3d3c42e`, `actions/setup-node` v7.0.0 `8207627`, `pnpm/action-setup` v6.1.0 `ea17c68` (suporte ao pnpm 12 desde essa versão).
 
 ---

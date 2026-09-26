@@ -42,3 +42,10 @@ export {
   WebhookEndpointResponse,
 } from './webhooks.js';
 export { AuditEventListResponse, AuditEventQuery, AuditEventResponse, AuditVerifyResponse } from './audit.js';
+export { FlagKey, OfrepBulkResponse, OfrepFailure, OfrepReason, OfrepRequest, OfrepSuccess } from './flags.js';
+export {
+  ActivateKillSwitchRequest,
+  KillSwitchLevel,
+  KillSwitchListResponse,
+  KillSwitchResponse,
+} from './kill-switch.js';

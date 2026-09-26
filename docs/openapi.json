@@ -2034,14 +2034,8 @@
                             "type": "array",
                             "items": {
                               "type": "string",
-                              "enum": [
-                                "liame.brand.created",
-                                "liame.invitation.created",
-                                "liame.member.joined",
-                                "liame.member.updated",
-                                "liame.member.removed",
-                                "liame.webhook.test"
-                              ]
+                              "pattern": "^liame\\.[a-z_]+\\.[a-z_]+$",
+                              "description": "Tipo de evento (CloudEvents type). A lista cresce; ignore o que não conhecer."
                             }
                           },
                           "created_at": {
@@ -2181,6 +2175,8 @@
                         "liame.member.joined",
                         "liame.member.updated",
                         "liame.member.removed",
+                        "liame.kill_switch.activated",
+                        "liame.kill_switch.deactivated",
                         "liame.webhook.test"
                       ]
                     }
@@ -2220,14 +2216,8 @@
                       "type": "array",
                       "items": {
                         "type": "string",
-                        "enum": [
-                          "liame.brand.created",
-                          "liame.invitation.created",
-                          "liame.member.joined",
-                          "liame.member.updated",
-                          "liame.member.removed",
-                          "liame.webhook.test"
-                        ]
+                        "pattern": "^liame\\.[a-z_]+\\.[a-z_]+$",
+                        "description": "Tipo de evento (CloudEvents type). A lista cresce; ignore o que não conhecer."
                       }
                     },
                     "created_at": {
@@ -2638,14 +2628,8 @@
                           },
                           "event_type": {
                             "type": "string",
-                            "enum": [
-                              "liame.brand.created",
-                              "liame.invitation.created",
-                              "liame.member.joined",
-                              "liame.member.updated",
-                              "liame.member.removed",
-                              "liame.webhook.test"
-                            ]
+                            "pattern": "^liame\\.[a-z_]+\\.[a-z_]+$",
+                            "description": "Tipo de evento (CloudEvents type). A lista cresce; ignore o que não conhecer."
                           },
                           "status": {
                             "type": "string",
@@ -3284,6 +3268,814 @@
         "summary": "Verificar a auditoria",
         "tags": [
           "audit"
+        ]
+      }
+    },
+    "/v1/ofrep/v1/evaluate/flags": {
+      "post": {
+        "description": "Valores para a sessão (empresa ativa e pessoa). Responde 304 quando o ETag enviado em If-None-Match ainda vale.",
+        "operationId": "OfrepController_bulk",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "context": {
+                    "type": "object",
+                    "properties": {
+                      "targetingKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "brandId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      }
+                    },
+                    "required": [
+                      "targetingKey"
+                    ],
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "context"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "flags": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              }
+                            ]
+                          },
+                          "reason": {
+                            "type": "string",
+                            "enum": [
+                              "STATIC",
+                              "TARGETING_MATCH",
+                              "SPLIT",
+                              "DISABLED",
+                              "UNKNOWN"
+                            ]
+                          },
+                          "variant": {
+                            "type": "string"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "value",
+                          "reason",
+                          "variant"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "flags"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Avaliar todas as flags (OFREP)",
+        "tags": [
+          "flags"
+        ]
+      }
+    },
+    "/v1/ofrep/v1/evaluate/flags/{key}": {
+      "post": {
+        "description": "Valor da flag para a sessão.",
+        "operationId": "OfrepController_single",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "context": {
+                    "type": "object",
+                    "properties": {
+                      "targetingKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "brandId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      }
+                    },
+                    "required": [
+                      "targetingKey"
+                    ],
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "context"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "STATIC",
+                        "TARGETING_MATCH",
+                        "SPLIT",
+                        "DISABLED",
+                        "UNKNOWN"
+                      ]
+                    },
+                    "variant": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value",
+                    "reason",
+                    "variant"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "errorCode": {
+                      "type": "string",
+                      "enum": [
+                        "PARSE_ERROR",
+                        "TARGETING_KEY_MISSING",
+                        "INVALID_CONTEXT",
+                        "GENERAL",
+                        "FLAG_NOT_FOUND"
+                      ]
+                    },
+                    "errorDetails": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "errorCode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Avaliar uma flag (OFREP)",
+        "tags": [
+          "flags"
+        ]
+      }
+    },
+    "/v1/kill-switches": {
+      "get": {
+        "description": "Travas ativas e recentes da empresa, e as da distribuição que valem para ela.",
+        "operationId": "KillSwitchController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "global",
+                              "provider",
+                              "tenant",
+                              "brand",
+                              "account",
+                              "tool"
+                            ]
+                          },
+                          "provider": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "brand_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "account_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "tool": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "activated_at": {
+                            "type": "string"
+                          },
+                          "deactivated_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "level",
+                          "provider",
+                          "brand_id",
+                          "account_id",
+                          "tool",
+                          "reason",
+                          "activated_at",
+                          "deactivated_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Travas",
+        "tags": [
+          "kill-switch"
+        ]
+      },
+      "post": {
+        "description": "Trava a execução de ações na empresa, numa marca, numa conta de um provedor ou numa ferramenta. Vale na hora e prevalece sobre qualquer flag.",
+        "operationId": "KillSwitchController_activate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "level": {
+                        "type": "string",
+                        "enum": [
+                          "tenant"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "level",
+                      "reason"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "level": {
+                        "type": "string",
+                        "enum": [
+                          "brand"
+                        ]
+                      },
+                      "brand_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "reason": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "level",
+                      "brand_id",
+                      "reason"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "level": {
+                        "type": "string",
+                        "enum": [
+                          "account"
+                        ]
+                      },
+                      "provider": {
+                        "type": "string",
+                        "maxLength": 60,
+                        "pattern": "^[a-z0-9_]+$"
+                      },
+                      "account_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "reason": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "level",
+                      "provider",
+                      "account_id",
+                      "reason"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "level": {
+                        "type": "string",
+                        "enum": [
+                          "tool"
+                        ]
+                      },
+                      "tool": {
+                        "type": "string",
+                        "maxLength": 60,
+                        "pattern": "^[a-z0-9_]+$"
+                      },
+                      "reason": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 500
+                      }
+                    },
+                    "required": [
+                      "level",
+                      "tool",
+                      "reason"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "level": {
+                      "type": "string",
+                      "enum": [
+                        "global",
+                        "provider",
+                        "tenant",
+                        "brand",
+                        "account",
+                        "tool"
+                      ]
+                    },
+                    "provider": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "brand_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "account_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "tool": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "activated_at": {
+                      "type": "string"
+                    },
+                    "deactivated_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "level",
+                    "provider",
+                    "brand_id",
+                    "account_id",
+                    "tool",
+                    "reason",
+                    "activated_at",
+                    "deactivated_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Acionar a parada",
+        "tags": [
+          "kill-switch"
+        ]
+      }
+    },
+    "/v1/kill-switches/{id}": {
+      "delete": {
+        "description": "Libera de novo a execução naquele escopo.",
+        "operationId": "KillSwitchController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Trava desligada"
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Desligar a parada",
+        "tags": [
+          "kill-switch"
         ]
       }
     },
@@ -5950,6 +6742,14 @@
     {
       "name": "audit",
       "description": "Auditoria da empresa: eventos com hash encadeado e verificação (security-model §7)"
+    },
+    {
+      "name": "flags",
+      "description": "Feature flags avaliadas para a sessão, no protocolo OFREP (ADR-012)"
+    },
+    {
+      "name": "kill-switch",
+      "description": "Botão de parada: trava a execução em seis níveis (ADR-007)"
     },
     {
       "name": "inbox",

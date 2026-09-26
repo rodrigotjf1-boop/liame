@@ -36,7 +36,7 @@ rules:
   - id: liame-escopo-sistema
     message: >-
       withSystem() enxerga além do tenant (ignora o isolamento por empresa). Só é permitido na
-      autenticação, na inbox de webhooks (grava antes de saber a empresa), no pacote de banco e nos jobs do agendador. Fora disso, use withContext ou a
+      autenticação, na inbox de webhooks (grava antes de saber a empresa), nas feature flags (configuração da distribuição), no pacote de banco e nos jobs do agendador. Fora disso, use withContext ou a
       transação da requisição (currentTx).
     severity: ERROR
     languages: [typescript]
@@ -44,6 +44,7 @@ rules:
       exclude:
         - '/apps/server/src/auth/**'
         - '/apps/server/src/inbox/**'
+        - '/apps/server/src/flags/**'
         - '/apps/server/src/worker/**'
         - '/apps/server/src/vault/**'
         - '/packages/database/**'
