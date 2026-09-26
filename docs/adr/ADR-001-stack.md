@@ -34,7 +34,7 @@ O plano mestre herdou Next 14 e Nest 10. O projeto ainda não começou, então a
 
 O Nest 12 é ESM e aceita app CommonJS via `require(esm)` (Node 24). O Vercel AI SDK 7 é só ESM (funciona em CJS via `require(esm)`, sem top-level await). O OTel em ESM exige `--experimental-loader`. **Hipótese inicial:** CommonJS no `apps/server` (instrumentação mais simples, zero atrito com a CLI) e ESM no `apps/web`. **O spike A0 escolhe com evidência**: build, testes Vitest, OTel de http/pg/undici, import do AI SDK e do SDK MCP.
 
-**Resultado do spike (25/09/2026, A/B no mesmo código, Node 22.23 local):**
+**Resultado do spike (25/09/2026, A/B no mesmo código, Node 22.23 local; confirmado no [CI](https://github.com/rodrigotjf1-boop/liame/actions/runs/36203403949) com Node 24.21 e Postgres 17):**
 
 | Item | Server CJS (`require(esm)`) | Server ESM |
 | --- | --- | --- |
