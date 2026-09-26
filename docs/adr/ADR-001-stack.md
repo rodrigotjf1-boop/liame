@@ -1,6 +1,6 @@
 # ADR-001 — Stack tecnológica
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Verificação:** `npm view` (tag `latest`), `nodejs.org/dist/index.json`, release notes e docs oficiais, e inspeção de pacotes (`npm pack`) em 24/09/2026. Detalhes na base de conhecimento §9 e §15.
 - **Regra:** versões **fixadas** no lockfile e no `catalogs` do pnpm, e atualizadas de forma consciente.
 

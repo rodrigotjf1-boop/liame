@@ -1,6 +1,6 @@
 # ADR-006 — AI Gateway próprio sobre o Vercel AI SDK
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Decide:** como o Liame chama modelos de IA sem depender de um fornecedor
 - **Base:** comparação de SDKs (base de conhecimento §14.1)
 

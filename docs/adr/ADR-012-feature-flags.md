@@ -1,6 +1,6 @@
 # ADR-012 — Feature flags com OpenFeature e provider próprio no Postgres
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Base:** base de conhecimento §14.2
 
 ## Contexto

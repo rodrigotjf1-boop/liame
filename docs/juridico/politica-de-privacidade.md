@@ -9,13 +9,13 @@ Esta Política explica, em linguagem simples, quais dados pessoais o **Liame** t
 - **Não vendemos dados pessoais.** Não usamos os dados dos nossos clientes, nem os dos clientes deles, para anunciar nada nosso, e **não os usamos para treinar modelos de IA de uso geral**.
 - O Liame tem **dois papéis**: somos **controlador** dos dados de quem usa o Liame (cadastro, acesso, cobrança) e **operador** dos dados que as empresas clientes tratam por meio do Liame (os clientes e contatos delas). A seção 3 explica a diferença.
 - Os dados ficam no **Brasil** sempre que possível. Quando algum fornecedor está em outro país, a transferência segue as regras da LGPD (seção 8).
-- Você pode pedir acesso, correção, exclusão e as demais medidas da seção 10 pelo e-mail **[PREENCHER: e-mail do encarregado]**.
+- Você pode pedir acesso, correção, exclusão e as demais medidas da seção 10 pelo e-mail **appdevsolutionday@gmail.com**.
 
 ## 2. Quem é o responsável
 
-**[PREENCHER: razão social]**, CNPJ **[PREENCHER]**, com sede em **[PREENCHER: endereço]**.
+**SISTER TECNOLOGIA LTDA** (DMS Tecnologias), CNPJ **67.748.508/0001-43**, com sede na Rua Visconde de Pirajá, 414, sala 718, Ipanema, Rio de Janeiro/RJ, CEP 22410-905.
 
-Encarregado pelo tratamento de dados pessoais: **[PREENCHER: nome completo; se for empresa, o nome empresarial e o nome completo da pessoa responsável]**, pelo e-mail **[PREENCHER]**.
+Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-mail **appdevsolutionday@gmail.com**.
 
 ## 3. Os dois papéis do Liame
 
@@ -72,8 +72,8 @@ Encarregado pelo tratamento de dados pessoais: **[PREENCHER: nome completo; se f
 ### Como pedir a exclusão dos seus dados
 
 - **Pelo Liame:** na tela **Contas conectadas**, escolha a conta e peça para desconectar e excluir os dados.
-- **Por e-mail:** **[PREENCHER: e-mail do encarregado]**, informando a conta ou a página conectada.
-- **Pela Meta:** quando o Liame é removido das integrações da sua conta na Meta, recebemos o pedido e excluímos os dados. O andamento pode ser consultado em **[PREENCHER: URL da página de status da exclusão]**.
+- **Por e-mail:** **appdevsolutionday@gmail.com**, informando a conta ou a página conectada.
+- **Pela Meta:** quando o Liame é removido das integrações da sua conta na Meta, recebemos o pedido e excluímos os dados. O andamento pode ser consultado em [agencialiame.com/exclusao-de-dados](https://agencialiame.com/exclusao-de-dados).
 
 Respondemos em até 15 dias. Se algum dado precisar ser guardado por obrigação legal, informamos qual e por quanto tempo.
 
@@ -96,12 +96,11 @@ Compartilhamos dados apenas com fornecedores que nos ajudam a prestar o serviço
 | Supabase | Banco de dados | Brasil (São Paulo) |
 | Hostinger | Servidores da aplicação | Brasil |
 | Cloudflare | Rede, proteção contra ataques e entrega do site | Rede global |
-| Amazon Web Services | Guarda das chaves de criptografia e da cópia da auditoria | Brasil (São Paulo) |
+| Amazon Web Services | Chaves de criptografia, cópia da auditoria e envio dos e-mails do serviço | Brasil (São Paulo) |
 | Anthropic, OpenAI e Google | Modelos de inteligência artificial | Estados Unidos |
 | Grafana Cloud | Monitoramento técnico | Brasil |
 | Sentry | Registro de erros técnicos, sem conteúdo de clientes | Estados Unidos |
 | Langfuse | Qualidade dos funcionários de IA, com conteúdo já sem dados pessoais | [PREENCHER: região contratada] |
-| [PREENCHER: provedor de e-mail] | Envio de e-mails do serviço | [PREENCHER] |
 | [PREENCHER: processador de pagamento] | Cobrança por PIX e cartão | Brasil |
 
 Também compartilhamos dados:
@@ -110,7 +109,7 @@ Também compartilhamos dados:
 - com os **produtos da DMS** que a empresa cliente usa e conecta ao Liame (Regem e RegemCast);
 - com **autoridades**, quando a lei ou uma ordem judicial exigir.
 
-A lista atualizada de fornecedores fica em **[PREENCHER: URL]**. Avisamos as empresas clientes antes de incluir um fornecedor novo que trate dados delas.
+A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/privacidade#fornecedores](https://agencialiame.com/privacidade#fornecedores). Avisamos as empresas clientes antes de incluir um fornecedor novo que trate dados delas.
 
 ### 8.1 Transferência internacional de dados
 
@@ -124,7 +123,7 @@ A lista atualizada de fornecedores fica em **[PREENCHER: URL]**. Avisamos as emp
 | **Mecanismo** | Para países sem decisão de adequação, as **cláusulas-padrão contratuais aprovadas pela ANPD**, adotadas integralmente e sem alteração, ou outro mecanismo do art. 33 da LGPD. |
 | **Compartilhamento e responsabilidades** | O Liame responde pelo tratamento feito pelos seus fornecedores e exige deles as medidas de segurança da seção 11, sigilo e proibição de usar os dados para fins próprios, inclusive para treinar modelos. |
 | **Seus direitos** | Os da seção 10, pelo canal do encarregado. Você pode pedir a **íntegra das cláusulas** usadas em cada transferência: enviamos em até 15 dias. Você também pode peticionar à ANPD. |
-| **Responsável** | **[PREENCHER: razão social]**, CNPJ **[PREENCHER]**, contato **[PREENCHER: e-mail do encarregado]**. |
+| **Responsável** | SISTER TECNOLOGIA LTDA (DMS Tecnologias), CNPJ 67.748.508/0001-43; encarregado Rodrigo de Oliveira, appdevsolutionday@gmail.com. |
 
 ## 9. Por quanto tempo guardamos
 
@@ -157,7 +156,7 @@ Pela LGPD (art. 18), você pode pedir:
 8. revogação do consentimento;
 9. revisão de decisões tomadas unicamente com base em tratamento automatizado que afetem os seus interesses (art. 20).
 
-Envie o pedido para **[PREENCHER: e-mail do encarregado]**. O atendimento é gratuito. Podemos pedir informações para confirmar a sua identidade. A confirmação e o acesso completos são respondidos em até **15 dias** (LGPD, art. 19). Se o pedido tratar de dados que tratamos como operador, encaminhamos à empresa cliente responsável.
+Envie o pedido para **appdevsolutionday@gmail.com**. O atendimento é gratuito. Podemos pedir informações para confirmar a sua identidade. A confirmação e o acesso completos são respondidos em até **15 dias** (LGPD, art. 19). Se o pedido tratar de dados que tratamos como operador, encaminhamos à empresa cliente responsável.
 
 Você também pode apresentar reclamação à **Agência Nacional de Proteção de Dados (ANPD)**.
 
@@ -177,4 +176,4 @@ Quando esta Política mudar de forma relevante, avisaremos pelo Liame e por e-ma
 
 ## 14. Contato
 
-Encarregado: **[PREENCHER]** · **[PREENCHER: e-mail]**.
+Encarregado: **Rodrigo de Oliveira** · **appdevsolutionday@gmail.com**.

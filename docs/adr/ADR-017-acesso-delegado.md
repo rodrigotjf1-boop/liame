@@ -1,6 +1,6 @@
 # ADR-017 — Acesso delegado: o dono convida por e-mail quem administra por ele
 
-- **Status:** Proposto · 25/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 25/09/2026; aprovado com o plano completo pelo dono)
 - **Base:** base de conhecimento §17.5 · ADR-013 (acesso) · ADR-003 (tenant) · `security-model.md` §3
 
 ## Contexto

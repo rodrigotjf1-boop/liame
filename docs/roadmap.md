@@ -1,6 +1,6 @@
 # Liame — Roadmap revisado
 
-> Status: **proposta para aprovação** · 24/09/2026. Sem datas: o ritmo é ditado pelas aprovações externas (Meta, Google, TikTok, GBP) e pelos critérios de saída. Cada fase só termina quando o critério é cumprido, não quando o prazo vence.
+> Status: **aprovado pelo dono em 26/09/2026** (proposta de 24/09/2026). Sem datas: o ritmo é ditado pelas aprovações externas (Meta, Google, TikTok, GBP) e pelos critérios de saída. Cada fase só termina quando o critério é cumprido, não quando o prazo vence.
 
 ## 1. Trilhas
 

@@ -1,6 +1,6 @@
 # Liame — Plano da fase A1 · Núcleo seguro
 
-> **Proposta para aprovação · 25/09/2026.** A A1 é a base em que dá para confiar: identidade, tenant, permissões, auditoria, cofre, eventos, ações com trilho, flags e observabilidade. **Não tem funcionalidade de marketing ainda**: nenhum connector real, nenhuma IA. Critério de saída: os 19 testes de `roadmap.md` §4, verdes no CI da `main`.
+> **Aprovado pelo dono em 26/09/2026** (proposta de 25/09/2026), junto com o roadmap completo; as recomendações da seção 3 valem como decididas. A A1 é a base em que dá para confiar: identidade, tenant, permissões, auditoria, cofre, eventos, ações com trilho, flags e observabilidade. **Não tem funcionalidade de marketing ainda**: nenhum connector real, nenhuma IA. Critério de saída: os 19 testes de `roadmap.md` §4, verdes no CI da `main`.
 
 ## 1. Quando começa
 

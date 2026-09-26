@@ -6,7 +6,7 @@ Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada a
 
 ## 1. Quem somos e quem é você
 
-1.1. O Liame é oferecido por **[PREENCHER: razão social]**, CNPJ **[PREENCHER]**, com sede em **[PREENCHER: endereço]** ("**Liame**", "**nós**").
+1.1. O Liame é oferecido por **SISTER TECNOLOGIA LTDA** (DMS Tecnologias), CNPJ **67.748.508/0001-43**, com sede na Rua Visconde de Pirajá, 414, sala 718, Ipanema, Rio de Janeiro/RJ, CEP 22410-905 ("**Liame**", "**nós**").
 
 1.2. "**Cliente**" ou "**você**" é a empresa ou o profissional que contrata o Liame, identificado por CNPJ (ou CPF, no caso de profissional autônomo). Quem aceita estes Termos em nome do Cliente declara ter poderes para isso.
 
@@ -103,7 +103,7 @@ O funcionário de Compliance do Liame aplica regras automáticas que podem imped
 
 10.1. A assinatura é **mensal, por marca**, paga por PIX ou cartão, conforme o plano escolhido. Não há fidelidade nem percentual sobre o investimento em mídia.
 
-10.2. Cada plano inclui uma quantidade de uso de inteligência artificial. [PREENCHER: o que acontece ao atingir o limite: pausa até o próximo ciclo, pacote adicional ou cobrança por excedente.]
+10.2. Cada plano inclui um uso de inteligência artificial adequado ao dia a dia da agência. Usos de custo maior (por exemplo, grandes volumes, imagens ou vídeos) são avaliados caso a caso: antes de acontecerem, o Liame mostra a estimativa de custo, indica quem arca com ele e sugere a forma de uso mais econômica. Quando o custo for do Cliente, nada é feito sem a sua aprovação.
 
 10.3. Os preços podem ser reajustados com aviso de **30 dias**. Se não concordar, você pode cancelar antes do reajuste valer.
 
@@ -141,8 +141,8 @@ Podemos atualizar estes Termos. Mudanças relevantes são avisadas por e-mail e 
 
 ## 16. Lei e foro
 
-Estes Termos seguem a lei brasileira. Fica eleito o foro da comarca de **[PREENCHER]**, salvo quando a lei garantir outro foro ao Cliente.
+Estes Termos seguem a lei brasileira. Fica eleito o foro da comarca do **Rio de Janeiro/RJ**, salvo quando a lei garantir outro foro ao Cliente.
 
 ## 17. Contato
 
-**[PREENCHER: e-mail de contato]** · WhatsApp da LIA pelo site **agencialiame.com**.
+**appdevsolutionday@gmail.com** · WhatsApp da LIA pelo site **agencialiame.com**.

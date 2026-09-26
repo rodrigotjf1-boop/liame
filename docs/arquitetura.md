@@ -1,6 +1,6 @@
 # Liame — Arquitetura consolidada
 
-> Status: **proposta para aprovação** · 24/09/2026. Regra: **preparado para crescer, mas não complexo antes da necessidade.**
+> Status: **aprovado pelo dono em 26/09/2026** (proposta de 24/09/2026). Regra: **preparado para crescer, mas não complexo antes da necessidade.**
 
 ## 1. Forma geral
 

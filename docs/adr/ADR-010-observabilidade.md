@@ -1,6 +1,6 @@
 # ADR-010 — Observabilidade com OpenTelemetry e backends trocáveis
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Decide:** instrumentação, pipeline de telemetria e destinos
 - **Base:** base de conhecimento §14.3
 

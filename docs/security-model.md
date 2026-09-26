@@ -1,6 +1,6 @@
 # Liame — Modelo de segurança
 
-> Status: **proposta para aprovação** · 24/09/2026 · **threat model revisado em 25/09/2026 (v1.1, §2.1)**. Complementa os ADR-003 (RLS), ADR-007 (política e ações), ADR-008 (MCP), ADR-009 (identidade), ADR-013 (acesso), ADR-014 (ciclo de vida) e ADR-017 (acesso delegado).
+> Status: **aprovado pelo dono em 26/09/2026** (proposta de 24/09/2026) · **threat model revisado em 25/09/2026 (v1.1, §2.1)**. Complementa os ADR-003 (RLS), ADR-007 (política e ações), ADR-008 (MCP), ADR-009 (identidade), ADR-013 (acesso), ADR-014 (ciclo de vida) e ADR-017 (acesso delegado).
 
 ## 1. O que protegemos (ativos)
 

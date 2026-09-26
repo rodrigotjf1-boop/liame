@@ -8,7 +8,7 @@ Este Contrato faz parte dos [Termos de Uso do Liame](termos-de-uso.md) e regula 
 
 1.1. **Controlador:** o **Cliente**, empresa ou profissional que contrata o Liame e decide sobre o tratamento dos dados pessoais dos seus clientes, contatos e públicos.
 
-1.2. **Operador:** **[PREENCHER: razão social]**, CNPJ **[PREENCHER]** ("**Liame**"), que trata esses dados em nome do Cliente, para prestar o serviço.
+1.2. **Operador:** **SISTER TECNOLOGIA LTDA** (DMS Tecnologias), CNPJ **67.748.508/0001-43** ("**Liame**"), que trata esses dados em nome do Cliente, para prestar o serviço.
 
 1.3. Este Contrato não cobre os dados que o Liame trata como controlador (cadastro, acesso e cobrança dos usuários), regidos pela [Política de Privacidade](politica-de-privacidade.md).
 
@@ -54,7 +54,7 @@ O Liame se compromete a:
 
 ## 6. Suboperadores
 
-6.1. O Cliente autoriza o Liame a contratar os suboperadores da lista publicada em **[PREENCHER: URL]** (resumo no Anexo III).
+6.1. O Cliente autoriza o Liame a contratar os suboperadores da lista publicada em [agencialiame.com/privacidade#fornecedores](https://agencialiame.com/privacidade#fornecedores) (resumo no Anexo III).
 
 6.2. O Liame avisa o Cliente com **30 dias** de antecedência antes de incluir ou trocar um suboperador que trate dados do Cliente. Se o Cliente discordar por motivo razoável ligado à proteção de dados, pode encerrar o contrato sem multa antes da mudança valer.
 
@@ -130,17 +130,17 @@ Este Contrato vale enquanto houver tratamento de dados do Cliente pelo Liame e, 
 
 ## Anexo III · Suboperadores
 
-Lista vigente em **[PREENCHER: URL]**. Na data desta versão:
+Lista vigente em [agencialiame.com/privacidade#fornecedores](https://agencialiame.com/privacidade#fornecedores). Na data desta versão:
 
 | Suboperador | Serviço | Local |
 | --- | --- | --- |
 | Supabase | Banco de dados | Brasil (São Paulo) |
 | Hostinger | Servidores da aplicação | Brasil |
 | Cloudflare | Rede e proteção | Rede global |
-| Amazon Web Services | Chaves de criptografia e cópia da auditoria | Brasil (São Paulo) |
+| Amazon Web Services | Chaves de criptografia, cópia da auditoria e e-mails do serviço | Brasil (São Paulo) |
 | Anthropic, OpenAI, Google | Modelos de inteligência artificial (com dados minimizados) | Estados Unidos |
 | Grafana Cloud | Monitoramento técnico | Brasil |
 | Sentry | Erros técnicos, sem conteúdo de clientes | Estados Unidos |
 | Langfuse | Qualidade dos funcionários de IA, sem dados pessoais | [PREENCHER] |
-| [PREENCHER] | E-mail do serviço | [PREENCHER] |
-| DMS (Regem e RegemCast) | Vendas e mensagens, quando o Cliente os conecta | Brasil |
+
+O **Regem** e o **RegemCast**, quando o Cliente os conecta, são serviços da mesma empresa (SISTER TECNOLOGIA LTDA) e seguem as mesmas obrigações deste Contrato; não são suboperadores.

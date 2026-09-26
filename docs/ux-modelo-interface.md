@@ -1,6 +1,6 @@
 # Liame — Modelo de interface
 
-> **Status: proposta de 25/09/2026, aguardando aprovação.** Atualizada no mesmo dia com os modos **Lite e Pro** (D8: Lite = visão do dono; Pro = recursos completos da LIA) e o **acesso delegado** (D10). Nenhum código de produto foi escrito.
+> **Status: aprovado pelo dono em 26/09/2026** (proposta de 25/09/2026). Atualizada no mesmo dia com os modos **Lite e Pro** (D8: Lite = visão do dono; Pro = recursos completos da LIA) e o **acesso delegado** (D10). Nenhum código de produto foi escrito.
 > Protótipo navegável: `mockups/prototipo-app.html` (abre com dois cliques) · publicado em
 > <https://claude.ai/artifact/TL4nqSEwQsNPvpZCeNpoFM> (privado).
 > Feito com a skill `ui-ux-proprio` (pesquisa em três trilhas → recomendação → protótipo → verificação).

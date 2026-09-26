@@ -1,6 +1,6 @@
 # ADR-014 — Ciclo de vida dos dados: ativo, arquivado e expurgado
 
-- **Status:** Proposto · 25/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 25/09/2026; aprovado com o plano completo pelo dono)
 - **Base:** `data-model.md` §9 · base de conhecimento §6 (LGPD) e §17.2 · ADR-011 (chaves)
 
 ## Contexto

@@ -1,6 +1,6 @@
 # ADR-009 — Autenticação do Liame e servidor de autorização do DMS ID
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Decide:** (a) como o Liame autentica agora; (b) qual servidor de autorização (AS) o DMS ID usa na trilha B
 - **Base:** matriz comparativa de 12 opções (base de conhecimento §13), feita contra a spec MCP 2026-07-28
 
