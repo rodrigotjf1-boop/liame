@@ -23,6 +23,14 @@ describe.skipIf(!OWNER_URL || !APP_URL)('migrations reais e catálogo do schema 
     await runMigrations({ connectionString: OWNER_URL, dir: MIGRATIONS });
   });
 
+  it('uuidv7 gera versão 7, variante RFC e ordem pelo tempo', async () => {
+    const { uuidv7 } = await import('../src/ids.js');
+    const a = uuidv7(1_700_000_000_000);
+    const b = uuidv7(1_700_000_000_001);
+    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(a < b).toBe(true);
+  });
+
   it('reaplicar não muda nada', async () => {
     const again = await runMigrations({ connectionString: OWNER_URL, dir: MIGRATIONS });
     expect(again.applied).toEqual([]);
@@ -56,19 +64,50 @@ describe.skipIf(!OWNER_URL || !APP_URL)('migrations reais e catálogo do schema 
     }
   });
 
-  // A1-1: toda tabela com tenant_id tem ENABLE + FORCE ROW LEVEL SECURITY + política.
-  it('A1-1: nenhuma tabela com tenant_id sem RLS forçada e política', async () => {
+  // A1-1, mais estrito: TODA tabela do schema liame (não só as com tenant_id) tem ENABLE + FORCE
+  // ROW LEVEL SECURITY + política. Tabela global (pessoa, sessão) também filtra por contexto.
+  it('A1-1: nenhuma tabela do schema liame sem RLS forçada e política', async () => {
     const semRls = await query<{ tabela: string }>(
       OWNER_URL,
       `select c.relname as tabela
          from pg_class c
          join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'liame' and c.relkind in ('r', 'p')
-          and exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped)
           and (not c.relrowsecurity or not c.relforcerowsecurity
                or not exists (select 1 from pg_policies p where p.schemaname = 'liame' and p.tablename = c.relname))`,
     );
     expect(semRls).toEqual([]);
+  });
+
+  it('as tabelas com tenant_id filtram pelo tenant da transação', async () => {
+    const semFiltro = await query<{ tabela: string }>(
+      OWNER_URL,
+      `select c.relname as tabela
+         from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'liame' and c.relkind in ('r', 'p')
+          and exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped)
+          and not exists (select 1 from pg_policies p where p.schemaname = 'liame' and p.tablename = c.relname
+                                                    and p.qual like '%current_tenant_id()%')`,
+    );
+    expect(semFiltro).toEqual([]);
+  });
+
+  // ADR-018 item 6: o schema TypeScript (Drizzle) espelha o banco migrado, coluna por coluna.
+  it('o schema Drizzle bate com as tabelas migradas', async () => {
+    const { getTableConfig } = await import('drizzle-orm/pg-core');
+    const { allTables } = await import('../src/schema/index.js');
+    for (const table of allTables) {
+      const cfg = getTableConfig(table);
+      const cols = await query<{ column_name: string }>(
+        OWNER_URL,
+        `select column_name from information_schema.columns where table_schema = $1 and table_name = $2 order by column_name`,
+        [cfg.schema ?? 'public', cfg.name],
+      );
+      expect({ tabela: cfg.name, colunas: cols.map((c) => c.column_name) }).toEqual({
+        tabela: cfg.name,
+        colunas: cfg.columns.map((c) => c.name).sort(),
+      });
+    }
   });
 
   // A1-2: a aplicação não é superusuário, não tem BYPASSRLS e não é dona de tabela nenhuma.

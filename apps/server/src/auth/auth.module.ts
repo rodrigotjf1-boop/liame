@@ -1,0 +1,33 @@
+import { Global, Module } from '@nestjs/common';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_CONFIG, type AppConfig, loadConfig } from '../config.js';
+import { UnitOfWorkInterceptor } from '../context/unit-of-work.interceptor.js';
+import { Mailer, MemoryMailer } from '../mail/mailer.js';
+import { AccessGuard } from './access.guard.js';
+import { AuthController, MeController } from './auth.controller.js';
+import { AuthService } from './auth.service.js';
+import { RateLimitService } from './rate-limit.service.js';
+import { SessionService } from './session.service.js';
+
+@Global()
+@Module({
+  controllers: [AuthController, MeController],
+  providers: [
+    { provide: APP_CONFIG, useFactory: () => loadConfig() },
+    {
+      provide: Mailer,
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig) => {
+        if (config.mailTransport !== 'memoria') throw new Error(`transporte de e-mail "${config.mailTransport}" ainda não implementado`);
+        return new MemoryMailer(config.env === 'development');
+      },
+    },
+    SessionService,
+    RateLimitService,
+    AuthService,
+    { provide: APP_GUARD, useClass: AccessGuard },
+    { provide: APP_INTERCEPTOR, useClass: UnitOfWorkInterceptor },
+  ],
+  exports: [APP_CONFIG, Mailer, SessionService, RateLimitService],
+})
+export class AuthModule {}

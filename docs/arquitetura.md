@@ -151,6 +151,7 @@ Resiliência por provider: **circuit breaker** (para de insistir, enfileira, bac
 - `packages/contracts`: schemas **Zod 4** (compatíveis com **Standard Schema**). Uma fonte alimenta validação na API, tipos no front, JSON Schema para ferramentas e structured output, eventos e MCP.
 - **OpenAPI 3.1** gerado a partir desses schemas é o contrato público: Spectral (lint) + oasdiff (barra quebra) + SDK TypeScript gerado.
 - `/v1`, RFC 9457, cursor, `Idempotency-Key`, cabeçalhos `RateLimit`, `Deprecation`/`Sunset`.
+- **Nomes (26/09/2026):** rotas e campos JSON em **inglês** e `snake_case` (contrato para parceiros); textos para a pessoa (`title`, `detail`, mensagens), códigos de erro e as permissões em **português**, como nos ADRs.
 
 ## 8. Organização do código
 

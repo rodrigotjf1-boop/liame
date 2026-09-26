@@ -6,6 +6,9 @@ import { resolve } from 'node:path';
 const envLocal = resolve(process.cwd(), '../../.env.local');
 if (existsSync(envLocal)) process.loadEnvFile(envLocal);
 
+// A checagem de senha vazada chama um serviço externo: tem teste próprio com fetch simulado.
+process.env.BREACHED_PASSWORD_CHECK ??= 'off';
+
 // Nos testes, a API usa sempre o banco de testes (nunca o liame_dev).
 if (process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;

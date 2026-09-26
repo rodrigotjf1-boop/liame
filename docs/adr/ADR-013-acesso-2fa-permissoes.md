@@ -38,3 +38,13 @@ Fato que muda o desenho: o **NIST SP 800-63B-4** proíbe e-mail como autenticado
 
 - O onboarding ganha um passo (ativar o app). Mitigação: tela guiada com QR e os códigos de recuperação para guardar.
 - Permissão fina dá mais trabalho no começo, mas deixa mudar papéis sem mexer em código e explica cada "não pode" pelo nome da permissão.
+
+## Implementação (E2a, 26/09/2026)
+
+- **Senha:** 15 caracteres ou mais, sem regra de composição (NIST SP 800-63B-4 exige 15 quando a senha é o único fator; vale para todos, porque nem todo nível tem app autenticador); checada contra senhas vazadas (Have I Been Pwned por k-anonimato, só os 5 primeiros caracteres do hash saem; fora do ar, deixa passar e registra). Guardada com **scrypt** nativo (N = 2^17, r = 8, p = 1), com os parâmetros no próprio hash.
+- **Sessão no banco:** cookie opaco `liame_sessao` (httpOnly, SameSite=Lax, Secure em produção); o banco guarda só o SHA-256 do token. Validade de 30 dias, com 7 dias de inatividade. Revogação imediata; troca de senha derruba todas as sessões.
+- **Contexto da RLS por transação:** `app.tenant_id`, `app.user_id` e `app.scope`. O **escopo de sistema** só existe para o que precisa enxergar antes do tenant (login, sessão, convite, agendador) e é restrito por regra do Semgrep (`liame-escopo-sistema`).
+- **Guard global** (`AccessGuard`): toda rota declara `@Publico`, `@Autenticado` ou `@Permissao`, e o app **não sobe** se alguma não declarar ou pedir permissão inexistente. Toda rota autenticada roda numa **transação da requisição** (unidade de trabalho).
+- **Limites de tentativa** (Postgres, valem entre réplicas): entrar 10 por e-mail e 30 por IP a cada 15 min; cadastro 10 por IP por hora; esqueci a senha 5 por e-mail por hora. Resposta 429 com `Retry-After`.
+- **Origem:** mutação com cabeçalho `Origin` fora da lista do app é recusada (defesa contra CSRF, além do SameSite).
+- **Nada revela quem tem conta:** cadastro e "esqueci a senha" respondem igual; login com e-mail inexistente gasta o mesmo tempo e dá o mesmo erro.

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { runMigrations } from '@liame/database';
+import { listMigrations, runMigrations } from '@liame/database';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import pg from 'pg';
@@ -15,10 +15,13 @@ describe.skipIf(!hasDb)('GET /health/ready', () => {
   let app: INestApplication;
   let base: string;
   let boss: PgBoss | undefined;
+  let lastMigration = '';
 
   beforeAll(async () => {
     process.env.PGBOSS_SCHEMA = schema;
-    await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
+    const dir = resolve(process.cwd(), '../../packages/database/migrations');
+    await runMigrations({ connectionString: OWNER_URL, dir });
+    lastMigration = (await listMigrations(dir)).at(-1)?.name ?? '';
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication({ logger: false });
     configureApp(app);
@@ -43,7 +46,7 @@ describe.skipIf(!hasDb)('GET /health/ready', () => {
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({
       status: 'indisponivel',
-      migration: '0001_base.sql',
+      migration: lastMigration,
       checks: { database: { status: 'ok' }, queue: { status: 'falhou' } },
     });
   });
