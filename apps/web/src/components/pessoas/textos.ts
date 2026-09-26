@@ -20,9 +20,9 @@ export function detalhesDe(p: MemberResponse, souDono: boolean): string {
   return partes.join(' · ');
 }
 
-export function envioDe(c: InvitationResponse): string {
-  const quando = dia(c.created_at);
-  return `Convite enviado ${quando === 'hoje' ? 'hoje' : `em ${quando}`} · ${vencimento(c.expires_at)}`;
+export function envioDe(c: InvitationResponse, agora = new Date()): string {
+  const quando = dia(c.created_at, agora);
+  return `Convite enviado ${quando === 'hoje' ? 'hoje' : `em ${quando}`} · ${vencimento(c.expires_at, agora)}`;
 }
 
 export function contagem(pessoas: number, convites: number): string {
