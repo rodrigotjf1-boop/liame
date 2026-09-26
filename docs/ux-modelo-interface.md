@@ -182,6 +182,38 @@ Sinais do briefing: o dono decide e o gestor opera (modos Lite e Pro), chega coi
 
 **Tipografia:** Poppins 700 no título da tela, 500 e 400 no resto, como no kit; **600 em título de cartão e números** (proposta, o kit não lista 600). JetBrains Mono em rótulos (caixa alta, espaçamento largo), horários, hash e colunas numéricas.
 
+## 6.1 LIA em 3D (kit da agente)
+
+O kit da LIA fica em [`lia-agente-3d/`](../lia-agente-3d/) (v1.4, fornecido pelo dono em 26/09/2026; a landing já usa). O guia completo é o `LEIA-ME.md` do kit; o **Estúdio** (`index.html`) testa expressões, visuais e cores e exporta PNG e vídeo WebM com fundo transparente. O dono liberou o uso no app; esta seção diz **onde** e **como**.
+
+**O que tem:** personagem gerada por código com three.js (nenhum arquivo 3D externo), 15 expressões (`setState`, `react`, `speak`), 14 visuais (executiva, as quatro estações do hemisfério sul e datas comemorativas, com `outfit: 'auto'` pela data), 7 paletas, enquadramento de corpo, busto ou rosto, e o avatar 2D `lia-avatar.svg` como reserva. Pausa sozinha fora da tela e suaviza o movimento com "reduzir movimento".
+
+**Onde usar no app (referência; cada tela continua seguindo o seu mockup aprovado):**
+
+| Situação | Enquadramento | Expressão |
+| --- | --- | --- |
+| Painel da LIA (conversa) abrindo | `bust` | `wave` por 2,5 s, depois `idle` |
+| Pessoa digitando · aguardando · resposta chegando | `bust` ou `face` | `listen` · `think` (`working` depois de 3 s) · `talk` |
+| Resposta com números ou relatório | `bust` | `analyze` |
+| Tarefa concluída · meta batida | `bust` | `happy` · `celebrate` |
+| Problema, reclamação, erro do lado do cliente | `bust` | `empathetic` (ou `confused` quando não entendeu) |
+| Boas-vindas e primeiros passos (onboarding) | `full` | `wave` |
+| Estado vazio com dica | `face` | `wink` |
+| Avatar pequeno, notificação, e-mail, ícone | — | `lia-avatar.svg` (2D) |
+
+O texto da conversa continua em HTML (lido por leitor de tela); a expressão só acompanha. O backend pode devolver um campo de estado junto com a resposta, como no exemplo `exemplos/app-chat.html`.
+
+**Regras técnicas no app:**
+
+1. **Sem CDN:** os exemplos do kit puxam o three.js r147 e as fontes do jsDelivr e do Google; no app, o three.js entra pelo catálogo do `pnpm-workspace.yaml` (versão fixada) e é servido pelo próprio app, como as fontes (V26, ERR-018). Isso também deixa a CSP sem origem externa de script.
+2. **Carregamento sob demanda:** o 3D só carrega quando o painel da LIA ou a tela que o usa abre (import dinâmico); nenhuma tela espera por ele.
+3. **Reserva:** sem WebGL, `LiaAgent.create` lança erro; capturar e mostrar `lia-avatar.svg`, sempre com texto alternativo ("LIA, assistente virtual da Liame").
+4. **Desempenho:** em avatar pequeno ou no celular, `shadows: false` e `pixelRatio: 1.5`; `pauseWhenHidden` ligado; `capture` só no Estúdio.
+5. **Visual:** no app, o padrão é `executiva`; `auto` (estação e data) só onde a tela pedir, e `torcida` só manual. As cores seguem a paleta `liame`.
+6. **Movimento reduzido:** respeitar o que o kit já faz e não disparar `celebrate` com confete em sequência.
+7. **Segurança do código:** a pasta `lia-agente-3d/` fica fora do Semgrep como material de referência (no kit original ele aponta 18 falsos positivos: `Math.random()` de animação e `console.error` no navegador). Ao trazer o kit para `apps/web`, o código passa pelas regras do CI; exceção só com `nosemgrep` e o motivo na linha.
+8. **three.js r147 é de 2022:** atualizar exige portar o kit para módulos ES (as versões novas não têm `examples/js`). Fica registrado como dívida para quando o kit ganhar acabamento de animação (modelo em GLB, como o próprio `LEIA-ME.md` sugere).
+
 ## 7. Como portar para a stack (Next 16.3, React 19.3, Tailwind 4.3)
 
 1. **Tokens:** valores da §6 no `globals.css`, com `@theme inline` e a variante `dark` por `data-theme` (base de conhecimento §15). Nenhuma cor crua em componente.

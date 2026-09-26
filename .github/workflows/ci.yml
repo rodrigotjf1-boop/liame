@@ -140,11 +140,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: pipx run --spec zizmor==1.30.1 zizmor --format=github .github/workflows
 
+      # mockups, docs e lia-agente-3d são material de referência (o kit da LIA dá 18 falsos positivos:
+      # Math.random de animação e console.error no navegador). O que for para o app é varrido em apps/web.
       - name: Código (Semgrep CE 1.178.0 + regras do Liame)
         run: >-
           pipx run --spec semgrep==1.178.0 semgrep scan
           --config p/typescript --config p/nodejsscan --config p/secrets --config .semgrep
-          --metrics=off --error --exclude mockups --exclude docs .
+          --metrics=off --error --exclude mockups --exclude docs --exclude lia-agente-3d .
 
   imagem:
     name: imagem, SBOM e Grype

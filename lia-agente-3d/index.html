@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Estúdio da LIA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{color-scheme:dark;--noite:#0B0D17;--card:#151A2E;--linha:#2B3150;--violeta:#7B61FF;--lavanda:#A08FFF;--ciano:#2DD4DE;--azul:#3D8BFF;--papel:#F4F2EC;--cinza:#9AA0B4}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--noite);color:var(--papel);font:16px/1.6 Poppins,system-ui,sans-serif;padding-inline:clamp(16px,3vw,40px);padding-block:24px 60px}
+.wrap{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:22px}
+@media (max-width:980px){.wrap{grid-template-columns:1fr}}
+header{grid-column:1/-1;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px}
+.eyebrow{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--ciano)}
+h1{font-size:clamp(30px,4vw,48px);line-height:1.05;letter-spacing:-.03em;margin:.2em 0 0}
+h1 b{color:var(--azul)}
+header p{margin:6px 0 0;color:var(--cinza);max-width:62ch}
+.stage{position:relative;height:clamp(460px,76vh,780px);border-radius:26px;overflow:hidden;border:1px solid var(--linha);background:radial-gradient(ellipse at 50% 40%,#FFFFFF 0%,#F1EEEA 55%,#D9D4CE 100%)}
+.stage.checker{background:repeating-conic-gradient(#e6e3de 0 25%,#f7f5f2 0 50%) 0 0/24px 24px}
+.chip{position:absolute;left:16px;top:16px;background:#0B0D17d9;border-radius:999px;padding:7px 14px;font-size:14px;display:flex;gap:8px;align-items:center;z-index:2}
+.chip i{width:9px;height:9px;border-radius:50%;background:var(--ciano)}
+.fr{position:absolute;right:16px;top:16px;display:flex;gap:6px;z-index:2}
+.fr button{font:500 13px Poppins,sans-serif;background:#0B0D17d9;color:#fff;border:1px solid transparent;border-radius:999px;padding:6px 12px;cursor:pointer}
+.fr button[aria-pressed="true"]{border-color:var(--ciano)}
+aside{display:flex;flex-direction:column;gap:16px}
+.panel{background:var(--card);border:1px solid var(--linha);border-radius:20px;padding:18px}
+.panel h2{font-size:16px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+.states{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.states button,.btn{font:500 14px Poppins,sans-serif;color:var(--papel);background:#0B0D17;border:1px solid var(--linha);border-radius:12px;padding:9px 8px;cursor:pointer}
+.states button:hover,.btn:hover{border-color:var(--lavanda)}
+.states button[aria-pressed="true"]{background:var(--violeta);border-color:var(--violeta)}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{font:500 13px Poppins,sans-serif;color:var(--papel);background:#0B0D17;border:1px solid var(--linha);border-radius:999px;padding:5px 11px;cursor:pointer}
+.rows{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.row{display:flex;align-items:center;justify-content:space-between;font-size:14px;color:var(--cinza)}
+.row input{width:44px;height:28px;border:1px solid var(--linha);border-radius:8px;background:#0B0D17;padding:2px;cursor:pointer}
+.vis h3{font:600 12px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--cinza);margin:12px 0 8px}
+.vis h3:first-of-type{margin-top:0}
+.outs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.outs button{font:500 14px Poppins,sans-serif;color:var(--papel);background:#0B0D17;border:1px solid var(--linha);border-radius:12px;padding:8px 10px;cursor:pointer;text-align:left;line-height:1.25}
+.outs button small{display:block;font-size:11.5px;color:var(--cinza)}
+.outs button:hover{border-color:var(--lavanda)}
+.outs button[aria-pressed="true"]{background:var(--violeta);border-color:var(--violeta)}
+.outs button[aria-pressed="true"] small{color:#E9E4FF}
+.autobtn{width:100%;margin-top:10px}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn.primary{background:var(--ciano);color:#0B0D17;border-color:var(--ciano)}
+.note{font-size:13px;color:var(--cinza);margin:10px 0 0;line-height:1.5}
+label.tg{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--cinza);margin-top:10px;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ciano);outline-offset:2px}
+code{font-family:'JetBrains Mono',monospace;font-size:13px;background:#0B0D17;border:1px solid var(--linha);border-radius:6px;padding:1px 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><div class="eyebrow">Kit da agente 3D · Liame</div><h1>Estúdio da <b>LIA</b></h1>
+    <p>Teste as 15 expressões, ajuste as cores e exporte imagens PNG ou vídeos WebM com fundo transparente para usar no site, no app e nas redes.</p></div>
+  </header>
+
+  <div class="stage" id="stage">
+    <div class="chip" aria-live="polite"><i></i><span id="st">Parada</span></div>
+    <div class="fr" role="group" aria-label="Enquadramento">
+      <button id="f-full" data-f="full" aria-pressed="true">Corpo</button>
+      <button id="f-bust" data-f="bust" aria-pressed="false">Busto</button>
+      <button id="f-face" data-f="face" aria-pressed="false">Rosto</button>
+    </div>
+  </div>
+
+  <aside>
+    <section class="panel vis"><h2>Visual</h2>
+      <h3>Base</h3><div class="outs" id="o-base" role="group" aria-label="Visual base"></div>
+      <h3>Estações · hemisfério sul</h3><div class="outs" id="o-estacao" role="group" aria-label="Estações"></div>
+      <h3>Datas comemorativas</h3><div class="outs" id="o-data" role="group" aria-label="Datas comemorativas"></div>
+      <button class="btn autobtn" id="o-auto">Automático pela data de hoje</button>
+      <p class="note" id="o-note"></p>
+    </section>
+    <section class="panel"><h2>Expressões <label class="tg" style="margin:0"><input type="checkbox" id="auto"> Ciclo automático</label></h2><div class="states" id="states" role="group" aria-label="Expressões"></div></section>
+    <section class="panel"><h2>Cores</h2><div class="presets" id="presets"></div><div class="rows" id="rows"></div></section>
+    <section class="panel"><h2>Exportar</h2>
+      <div class="acts"><button class="btn primary" id="png">Baixar PNG</button><button class="btn" id="rec">Gravar vídeo 5 s</button></div>
+      <label class="tg"><input type="checkbox" id="transp"> Fundo transparente (xadrez)</label>
+      <p class="note" id="msg">O PNG e o vídeo saem sempre com fundo transparente; o xadrez só ajuda a conferir. O vídeo é WebM (Chrome e Edge mantêm a transparência).</p>
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script src="lia-agent.js"></script>
+<script>
+(function(){
+const stage=document.getElementById('stage'),msg=document.getElementById('msg');
+let lia;
+try{lia=LiaAgent.create(stage,{framing:'full',capture:true});}catch(e){stage.insertAdjacentHTML('beforeend','<p style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#2B3150">'+e.message+'</p>');return;}
+const st=document.getElementById('st'),box=document.getElementById('states');
+const btns=LiaAgent.states.map(s=>{const b=document.createElement('button');b.id='s-'+s.id;b.textContent=s.label;b.setAttribute('aria-pressed',String(s.id==='idle'));b.addEventListener('click',()=>{auto.checked=false;lia.setState(s.id);});box.appendChild(b);return b;});
+lia.on('state',s=>{const L=LiaAgent.states.find(x=>x.id===s);st.textContent=L?L.label:s;btns.forEach((b,i)=>b.setAttribute('aria-pressed',String(LiaAgent.states[i].id===s)));});
+const auto=document.getElementById('auto');let ci=0;setInterval(()=>{if(auto.checked){ci=(ci+1)%LiaAgent.states.length;lia.setState(LiaAgent.states[ci].id);}},3200);
+document.querySelectorAll('[data-f]').forEach(b=>b.addEventListener('click',()=>{lia.setFraming(b.dataset.f);document.querySelectorAll('[data-f]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));}));
+// colors
+const names={liame:'Liame',classica:'Clássica',vibrante:'Vibrante',pastel:'Pastel',tropical:'Tropical',noturna:'Noturna',vinho:'Executiva vinho'};
+const parts=[['hair','Cabelo'],['skin','Pele'],['eyes','Olhos'],['suit','Blazer'],['skirt','Saia'],['shirt','Camisa'],['accent','Lenço e luzes'],['set','Headset'],['shoes','Sapatos']];
+const rows=document.getElementById('rows'),inputs={};
+parts.forEach(([k,l])=>{const r=document.createElement('label');r.className='row';r.htmlFor='c-'+k;r.textContent=l;const i=document.createElement('input');i.type='color';i.id='c-'+k;i.addEventListener('input',()=>lia.setColors({[k]:i.value}));r.appendChild(i);rows.appendChild(r);inputs[k]=i;});
+const sync=c=>Object.entries(c).forEach(([k,v])=>{if(inputs[k]){const hex='#'+new THREE.Color(v).getHexString();inputs[k].value=hex;}});
+lia.on('colors',sync);sync(lia.getColors());
+const pr=document.getElementById('presets');Object.keys(LiaAgent.presets).forEach(k=>{const b=document.createElement('button');b.id='p-'+k;b.textContent=names[k]||k;b.addEventListener('click',()=>lia.setColors(k));pr.appendChild(b);});
+// visual (roupas por estação e data)
+const obtns=LiaAgent.outfits.map(o=>{const b=document.createElement('button');b.id='o-'+o.id;b.innerHTML=o.label+'<small>'+o.period+'</small>';b.setAttribute('aria-pressed',String(o.id===lia.getOutfit()));b.addEventListener('click',()=>lia.setOutfit(o.id));document.getElementById('o-'+o.group).appendChild(b);return b;});
+lia.on('outfit',id=>obtns.forEach((b,i)=>b.setAttribute('aria-pressed',String(LiaAgent.outfits[i].id===id))));
+const hoje=LiaAgent.outfitForDate(new Date()),hojeL=LiaAgent.outfits.find(o=>o.id===hoje).label;
+document.getElementById('o-note').textContent='Hoje a LIA usaria: '+hojeL+'. No site, use outfit:\'auto\' para trocar sozinha.';
+document.getElementById('o-auto').addEventListener('click',()=>lia.setOutfit('auto'));
+// export
+const transp=document.getElementById('transp');transp.addEventListener('change',()=>stage.classList.toggle('checker',transp.checked));
+function save(url,name){const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();}
+document.getElementById('png').addEventListener('click',()=>{const fn='lia-'+lia.getOutfit()+'-'+lia.getState()+'.png';save(lia.snapshot(),fn);msg.textContent='PNG gerado: '+fn+'. Se o download não começar, abra este estúdio direto no navegador (arquivo index.html do kit).';});
+const rec=document.getElementById('rec');
+rec.addEventListener('click',()=>{if(!lia.canvas.captureStream||!window.MediaRecorder){msg.textContent='Este navegador não grava vídeo do canvas. Use o Chrome ou o Edge.';return;}
+ const types=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];const type=types.find(t=>MediaRecorder.isTypeSupported(t));
+ const r=new MediaRecorder(lia.canvas.captureStream(30),{mimeType:type,videoBitsPerSecond:8e6});const chunks=[];r.ondataavailable=e=>chunks.push(e.data);
+ r.onstop=()=>{save(URL.createObjectURL(new Blob(chunks,{type:'video/webm'})),'lia-'+lia.getState()+'.webm');rec.disabled=false;rec.textContent='Gravar vídeo 5 s';msg.textContent='Vídeo pronto: lia-'+lia.getState()+'.webm';};
+ r.start();rec.disabled=true;let n=5;rec.textContent='Gravando… '+n;const iv=setInterval(()=>{n--;rec.textContent='Gravando… '+n;if(n<=0){clearInterval(iv);r.stop();}},1000);});
+window.lia=lia;
+})();
+</script>
+</body>
+</html>
