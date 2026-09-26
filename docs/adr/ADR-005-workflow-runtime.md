@@ -48,3 +48,9 @@ Throughput com os limites de conexão do plano (Supabase Micro: 60 diretas, 200 
 ## Consequências
 
 Mais código nosso para o motor de passos, com o ganho de ser simples, transacional e observável no mesmo banco. O schema do pg-boss fica fora da RLS (é infraestrutura), mas **os payloads não carregam PII**: só IDs.
+
+## Implementação base (E6d, 26/09/2026)
+
+- `workflow_run` (um por tipo e assunto) e `workflow_step` (um por passo, com tentativas e saída) na migration 0012; `advance()` grava passos e status na transação de quem executa. Primeiro uso: o fluxo das ações (política → orçamento → aprovação → execução).
+- O passo que espera fica `aguardando` sem job preso; a retomada (aprovação) grava o próximo passo e o executor do worker o pega pela fila da própria tabela (`SKIP LOCKED`), sem Temporal nem Redis. A âncora diária usa o agendamento do pg-boss (E3).
+- `workflow_event`, `tool_execution` e os limites de concorrência por provedor e por empresa entram com os connectors (A2) e a IA (A3).

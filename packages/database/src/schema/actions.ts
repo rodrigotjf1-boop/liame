@@ -82,3 +82,44 @@ export const budgetLedgerEntry = liame.table('budget_ledger_entry', {
   amountMicros: money('amount_micros').notNull(),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
+
+// Migration 0012 (execução e workflow durável, ADR-005).
+export const actionExecution = liame.table('action_execution', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  actionRequestId: uuid('action_request_id').notNull(),
+  planHash: text('plan_hash').notNull(),
+  expectedState: jsonb('expected_state'),
+  expectedVersion: integer('expected_version'),
+  observedState: jsonb('observed_state'),
+  desiredState: jsonb('desired_state').notNull(),
+  resultState: jsonb('result_state'),
+  providerVersion: integer('provider_version'),
+  status: text('status').notNull(),
+  error: text('error'),
+  startedAt: ts('started_at').notNull(),
+  finishedAt: ts('finished_at').notNull().defaultNow(),
+});
+
+export const workflowRun = liame.table('workflow_run', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  kind: text('kind').notNull(),
+  subjectId: uuid('subject_id').notNull(),
+  status: text('status').notNull(),
+  currentStep: text('current_step'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+export const workflowStep = liame.table('workflow_step', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  runId: uuid('run_id').notNull(),
+  name: text('name').notNull(),
+  status: text('status').notNull(),
+  output: jsonb('output'),
+  attempts: integer('attempts').notNull().default(0),
+  startedAt: ts('started_at').notNull().defaultNow(),
+  finishedAt: ts('finished_at'),
+});

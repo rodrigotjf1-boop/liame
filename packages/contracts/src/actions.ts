@@ -61,6 +61,18 @@ export const ActionResponse = z.strictObject({
   status_reason: z.string().nullable(),
   policy: PolicyDecision,
   approvals: z.array(ActionApproval),
+  /** Estado durável do fluxo (ADR-005): política → orçamento → aprovação → execução. */
+  workflow: z.strictObject({
+    status: z.enum(['em_andamento', 'aguardando', 'concluido', 'falhou', 'cancelado']),
+    steps: z.array(
+      z.strictObject({
+        name: z.string(),
+        status: z.enum(['aguardando', 'concluido', 'falhou', 'pulado']),
+        attempts: z.int(),
+        finished_at: z.string().nullable(),
+      }),
+    ),
+  }).nullable(),
   expires_at: z.string(),
   created_at: z.string(),
 });

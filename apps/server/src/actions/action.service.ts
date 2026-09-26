@@ -24,6 +24,7 @@ import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { Mailer } from '../mail/mailer.js';
 import { actionMatches, evaluatePolicy } from '../policy/engine.js';
 import { PolicyService } from '../policy/policy.service.js';
+import { advance, workflowOf } from '../workflow/workflow.js';
 import { BudgetService } from './budget.service.js';
 import { CONNECTORS, type Connector } from './connectors.js';
 import { TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
@@ -132,6 +133,7 @@ export class ActionService {
     if (status !== 'sombra') {
       await this.budget.reserve(tx, { tenantId, brandId: input.brand_id ?? null, actionId: id, amountMicros: plan.reserveMicros });
     }
+    await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
     await emitEvent(tx, { tenantId, type: 'liame.action.requested', subject: id, data: { action_id: id, tool: tool.name, action: plan.action, mode, status } });
     auditDetail({ resourceId: id, after: { tool: tool.name, action: plan.action, mode, status, plan_hash: planHash, reserved_micros: plan.reserveMicros } });
     return this.get(auth, id);
@@ -166,6 +168,7 @@ export class ActionService {
              updated_at = now()
        where id = ${id} and tenant_id = ${tenantId}`);
     if (status !== 'sombra') await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros });
+    await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
     auditDetail({ before: { plan_hash: row.plan_hash, params: row.params }, after: { plan_hash: planHash, params, mode, status } });
     return this.get(auth, id);
   }
@@ -205,6 +208,16 @@ export class ActionService {
     }
     if (sufficient) {
       await tx.execute(sql`update liame.action_request set status = 'aprovada', status_reason = null, updated_at = now() where id = ${id}`);
+      await advance(tx, {
+        tenantId,
+        kind: 'acao',
+        subjectId: id,
+        steps: [
+          { name: 'aprovacao', status: 'concluido', output: { plan_hash: row.plan_hash, approved_by: auth.userId } },
+          { name: 'execucao', status: 'aguardando' },
+        ],
+        run: 'em_andamento',
+      });
       await emitEvent(tx, { tenantId, type: 'liame.action.approved', subject: id, data: { action_id: id, plan_hash: row.plan_hash } });
     } else {
       await this.notifyOwners(tx, tenantId, row, auth.name);
@@ -222,6 +235,7 @@ export class ActionService {
     }
     await tx.execute(sql`update liame.action_request set status = 'cancelada', status_reason = 'cancelada por quem opera', updated_at = now() where id = ${id}`);
     const released = await this.budget.release(tx, tenantId, id);
+    await advance(tx, { tenantId, kind: 'acao', subjectId: id, steps: [{ name: 'execucao', status: 'pulado', output: { motivo: 'cancelada' } }], run: 'cancelado' });
     await emitEvent(tx, { tenantId, type: 'liame.action.cancelled', subject: id, data: { action_id: id } });
     auditDetail({ before: { status: row.status }, after: { status: 'cancelada', released_micros: released } });
     return this.get(auth, id);
@@ -232,8 +246,9 @@ export class ActionService {
     const r = await tx.execute<ActionRow>(sql`
       select * from liame.action_request where tenant_id = ${tenantOf(auth)} ${status ? sql`and status = ${status}` : sql``}
        order by created_at desc limit 100`);
-    const approvals = await this.approvalsOf(tx, r.rows.map((x) => x.id));
-    return r.rows.map((row) => toResponse(row, approvals));
+    const ids = r.rows.map((x) => x.id);
+    const [approvals, flows] = [await this.approvalsOf(tx, ids), await workflowOf(tx, 'acao', ids)];
+    return r.rows.map((row) => toResponse(row, approvals, flows.get(row.id) ?? null));
   }
 
   async get(auth: AuthContext, id: string): Promise<ActionResponse> {
@@ -241,7 +256,7 @@ export class ActionService {
     const r = await tx.execute<ActionRow>(sql`select * from liame.action_request where id = ${id} and tenant_id = ${tenantOf(auth)}`);
     const row = r.rows[0];
     if (!row) throw notFound();
-    return toResponse(row, await this.approvalsOf(tx, [id]));
+    return toResponse(row, await this.approvalsOf(tx, [id]), (await workflowOf(tx, 'acao', [id])).get(id) ?? null);
   }
 
   // ------------------------------------------------------------------ sandbox
@@ -411,7 +426,28 @@ function tenantOf(auth: AuthContext): string {
   return auth.tenantId;
 }
 
-function toResponse(row: ActionRow, approvals: ApprovalRow[]): ActionResponse {
+/** Passos depois do pedido (ou da alteração): política e orçamento feitos; aprovação conforme o modo. */
+function flowAfterRequest(
+  status: ActionStatus,
+  mode: AutonomyMode,
+  decision: PolicyDecision,
+  reserve: number,
+): { steps: Array<{ name: string; status: 'aguardando' | 'concluido' | 'pulado'; output?: Record<string, unknown> }>; run: 'aguardando' | 'em_andamento' | 'concluido' } {
+  const policy = { name: 'politica', status: 'concluido' as const, output: { mode, versions: decision.versions } };
+  if (status === 'sombra') {
+    return {
+      steps: [policy, { name: 'orcamento', status: 'pulado' }, { name: 'aprovacao', status: 'pulado' }, { name: 'execucao', status: 'pulado', output: { motivo: 'sombra' } }],
+      run: 'concluido',
+    };
+  }
+  const budget = { name: 'orcamento', status: 'concluido' as const, output: { reserved_micros: reserve } };
+  if (status === 'aprovada') {
+    return { steps: [policy, budget, { name: 'aprovacao', status: 'concluido', output: { por: 'politica' } }, { name: 'execucao', status: 'aguardando' }], run: 'em_andamento' };
+  }
+  return { steps: [policy, budget, { name: 'aprovacao', status: 'aguardando' }], run: 'aguardando' };
+}
+
+function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionResponse['workflow']): ActionResponse {
   return {
     id: row.id,
     tool: row.tool,
@@ -441,6 +477,7 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[]): ActionResponse {
         current_plan: a.plan_hash === row.plan_hash,
         created_at: new Date(a.created_at).toISOString(),
       })),
+    workflow,
     expires_at: new Date(row.expires_at).toISOString(),
     created_at: new Date(row.created_at).toISOString(),
   };

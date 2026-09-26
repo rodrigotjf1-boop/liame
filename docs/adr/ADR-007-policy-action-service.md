@@ -71,3 +71,12 @@ Amarrada ao `plan_hash`; plano alterado invalida a aprovação. Ações com risc
 - **Aprovação** (`POST /v1/actions/{id}/approve`): código do app agora (step-up, sem código de recuperação, sem repetir passo) + o `plan_hash` visto. Basta quando o limite de quem aprova cobre a reserva; senão fica registrada e o dono é avisado. Alterar o pedido gera hash novo e a aprovação antiga deixa de valer.
 - **Orçamento:** `budget_policy` (envelope do mês da empresa e da marca, no fuso da empresa) e `budget_ledger_entry` só de inserção (`reserva`, `liberacao`, `execucao`); cancelar devolve a reserva.
 - **Falta (E6d):** execução no worker, workflow durável, expiração e o teste ponta a ponta do A1-9.
+
+## Implementação da execução (E6d, 26/09/2026)
+
+- **Executor no worker** (`apps/server/src/worker/action-executor.ts`, laço `acoes`): reserva as ações `aprovada` com `SKIP LOCKED` e executa cada uma sob o contexto da empresa (RLS), conferindo de novo na hora: trava, flag de escrita do provedor, aprovação suficiente para o `plan_hash` atual (ou autonomia com o autopilot ainda ligado). Aplica com `validateOnly` e depois de verdade, com a versão lida no pedido (concorrência otimista): se o recurso mudou, **não sobrescreve** e falha com o motivo.
+- **Registro:** `action_execution` (esperado, observado, desejado, resultado, versão), ledger `execucao` (ou devolução da reserva na falha), evento `liame.action.executed`/`failed` e auditoria com ator `system`, origem `worker` e o `approval_id` (quem aprovou fica ligado à execução).
+- **Prazos:** pedido sem aprovação em 72 h expira e devolve a reserva; execução travada por 10 min (worker caiu antes do commit) volta para a fila — a versão otimista impede aplicar duas vezes.
+- **Workflow durável (ADR-005):** `workflow_run`/`workflow_step` com os passos política → orçamento → aprovação → execução; o passo que espera fica `aguardando` sem job preso e a aprovação libera o seguinte. A ação devolve o `workflow` na API.
+- **Com connectors reais (A2):** a chamada ao provedor sai da transação (reserva → chamada → registro), como os webhooks; o sandbox aplica dentro dela porque está no mesmo banco.
+- **Ainda não:** compensação executável (a estratégia está declarada em cada ferramenta), circuit breaker por provedor e o agente como solicitante (A3).
