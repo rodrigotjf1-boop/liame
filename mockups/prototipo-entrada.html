@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Entrada no Liame</title>
+<!--
+@prototipo Liame · telas de entrada (AGUARDA APROVAÇÃO DO DONO)
+telas: entrar · segundo fator (código do app ou de recuperação) · ativar o app autenticador (QR, código,
+       10 códigos de recuperação) · aceite de convite (criar login, já tem conta, link vencido) · criar conta ·
+       confirmar e-mail · esqueci a senha · senha nova
+trilha: moderno — "Painel com a marca" (formulário à esquerda, palco da marca à direita), com um toque
+        inovador: a LIA em 3D (kit lia-agente-3d, v1.4) reage ao que a pessoa faz no formulário
+pesquisa (verificada em 26/09/2026): Google, verificação em duas etapas (support.google.com/accounts/answer/185839);
+        Stripe, app autenticador e código de reserva (support.stripe.com/topics/two-step-authentication);
+        shadcn/ui login-02, tela dividida com painel de marca (ui.shadcn.com/blocks/login); formulário com
+        personagem que reage (avatar animado de Darin Senneff, codepen.io/dsenneff)
+regras aplicadas: WCAG 2.2 SC 3.3.8 (colar e gerenciador de senhas; código num campo só, com colar) e NIST
+        SP 800-63B-4 §3.1.1.2 (colar, mostrar a senha, sem regra de composição); textos de erro = os da API
+marca: kit Liame v1.0 (tokens do prototipo-app.html) + kit da LIA 3D; o palco é sempre Noite
+3D: carrega depois do formulário, pausa fora da tela, reserva em SVG sem WebGL e no celular; movimento reduzido
+    respeitado. No protótipo o three.js vem do CDN; no app, do próprio app (ux-modelo-interface.md §6.1)
+dados: fictícios (Casa Brasa). Nada aqui é código de produção.
+simulação: senha "errada" → e-mail ou senha incorretos · e-mail com "bloq" → muitas tentativas · e-mail com
+    "novo" → e-mail não confirmado · código 000000 → código inválido · senha nova "senha123456789012" → vazada
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== 1. TOKENS (os mesmos do prototipo-app.html) ===== */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#F4F2EC, #0B0D17); --bg-subtle: light-dark(#ECE9E1, #10131F);
+  --surface: light-dark(#FFFFFF, #151A2E); --surface-2: light-dark(#FAF8F3, #1A2038); --surface-hover: light-dark(#F2EFE8, #1F2645);
+  --border: light-dark(#E5E1D7, #262C49); --border-strong: light-dark(#D0CBBF, #3A4166);
+  --text: light-dark(#0B0D17, #F4F2EC); --text-muted: light-dark(#4A5068, #9AA0B4); --text-subtle: light-dark(#646A80, #878EAB);
+  --primary: #2DD4DE; --primary-hover: light-dark(#26C4CE, #62E1E8); --primary-fg: #0B0D17; --primary-soft: light-dark(#DCF6F8, #0E2B33);
+  --link: light-dark(#0A6C75, #2DD4DE); --foco: light-dark(#008796, #2DD4DE);
+  --ai: light-dark(#5A43D8, #A08FFF); --ai-soft: light-dark(#EEEAFF, #211C45);
+  --success: light-dark(#0C6F5B, #46BC9F); --success-soft: light-dark(#E2F3EE, #0F2C26);
+  --warning: light-dark(#8A5F00, #FFC24B); --warning-soft: light-dark(#FFF1D1, #2E2610);
+  --danger: light-dark(#B42F2F, #FF6B6B); --danger-soft: light-dark(#FFE3E3, #361A1F);
+  --logo-ink: light-dark(#0B0D17, #F4F2EC); --logo-pin: light-dark(#7B61FF, #FFFFFF);
+  --marca-violeta: #7B61FF; --marca-ciano: #2DD4DE; --marca-lavanda: #A08FFF; --marca-lavanda-clara: #CFC6FF;
+  --marca-petroleo: #1BA8B8; --marca-ambar: #FFC24B; --marca-coral: #FF6B6B; --noite: #0B0D17; --papel: #F4F2EC;
+  --radius-sm: 8px; --radius: 10px; --radius-lg: 16px; --radius-xl: 22px; --radius-full: 999px;
+  --shadow-sm: 0 1px 2px light-dark(rgb(11 13 23 / .06), rgb(0 0 0 / .35));
+  --shadow-lg: 0 28px 56px -20px light-dark(rgb(11 13 23 / .32), rgb(0 0 0 / .75)), 0 2px 8px light-dark(rgb(11 13 23 / .08), rgb(0 0 0 / .4));
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--foco);
+  --font-sans: "Poppins", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --text-xs: .75rem; --text-sm: .8125rem; --text-base: .875rem; --text-md: 1rem; --text-lg: 1.125rem; --text-xl: 1.375rem; --text-2xl: 1.75rem;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+  --ease: cubic-bezier(.2, .8, .2, 1); --dur-fast: 140ms; --dur: 220ms;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ===== 2. BASE ===== */
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { height: 100%; -webkit-text-size-adjust: 100%; }
+body { margin: 0; min-height: 100%; font-family: var(--font-sans); font-size: var(--text-base); line-height: 1.5; color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { margin: 0; line-height: 1.2; letter-spacing: -.015em; font-weight: 600; text-wrap: balance; }
+h1 { font-weight: 700; }
+p, ul, ol { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+a { color: var(--link); }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+h1[tabindex="-1"]:focus { outline: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.mono { font-family: var(--font-mono); }
+.rotulo-marca { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text-subtle); }
+
+/* ===== 3. BARRA DE REVISÃO (só do protótipo) ===== */
+.revisao { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); padding: var(--sp-2) var(--sp-4); border-bottom: 1px dashed var(--border-strong); background: var(--bg-subtle); font-size: var(--text-xs); }
+.revisao label { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.revisao select { min-height: 30px; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; padding: 0 var(--sp-2); }
+.revisao .spacer { flex: 1; }
+
+/* ===== 4. LAYOUT: formulário + palco da marca ===== */
+.entrada { min-height: calc(100dvh - 47px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); }
+.coluna { display: flex; flex-direction: column; min-width: 0; padding: var(--sp-8) var(--sp-8) var(--sp-6); }
+.coluna-topo { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.logo { display: block; width: 116px; height: auto; }
+.lia-mini { display: none; width: 44px; height: 44px; border-radius: 14px; background: var(--noite); padding: 4px; }
+.lia-mini img { display: block; width: 100%; height: 100%; }
+.miolo { flex: 1; display: grid; align-content: center; width: 100%; max-width: 400px; margin: 0 auto; padding: var(--sp-10) 0; }
+.tela { display: grid; gap: var(--sp-5); animation: entrar var(--dur) var(--ease); }
+.tela-cab { display: grid; gap: var(--sp-2); }
+.tela-cab h1 { font-size: var(--text-2xl); }
+.tela-cab p { color: var(--text-muted); }
+.rodape { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2) var(--sp-4); font-size: var(--text-xs); color: var(--text-subtle); }
+.rodape a { color: inherit; }
+
+/* palco da marca: sempre Noite, nos dois temas */
+.palco { position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; margin: var(--sp-3); border-radius: var(--radius-xl); background: radial-gradient(120% 90% at 50% 20%, #1F1A4A 0%, #0B0D17 62%); color: var(--papel); border: 1px solid light-dark(transparent, #262C49); }
+.palco::before { content: ""; position: absolute; inset: auto -20% -30% -20%; height: 60%; z-index: -1; background: radial-gradient(closest-side, rgb(45 212 222 / .22), transparent); }
+.lia-3d { position: relative; min-height: 360px; margin: var(--sp-10) var(--sp-8) 0; }
+.lia-3d canvas { display: block; }
+.lia-reserva { align-self: center; justify-self: center; width: min(260px, 60%); height: auto; margin-top: var(--sp-8); }
+.palco-txt { display: grid; gap: var(--sp-3); padding: 0 var(--sp-8) var(--sp-8); }
+.palco-txt .rotulo-marca { color: #A0A6BD; }
+.fala { position: relative; max-width: 46ch; padding: var(--sp-3) var(--sp-4); border-radius: 16px; border-top-left-radius: 6px; background: rgb(255 255 255 / .08); border: 1px solid rgb(255 255 255 / .12); font-size: var(--text-md); line-height: 1.45; }
+.garantias { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.garantias li { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--radius-full); background: rgb(255 255 255 / .06); color: #C9CDDC; font-size: var(--text-xs); }
+.garantias .ic { color: var(--marca-ciano); }
+
+/* ===== 5. COMPONENTES ===== */
+.ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.ic-sm { width: 15px; height: 15px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 44px; padding: 0 var(--sp-4); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.btn:hover { background: var(--surface-hover); }
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn--primary { width: 100%; background: var(--primary); border-color: var(--primary); color: var(--primary-fg); font-weight: 600; }
+.btn--primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn--ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn--sm { min-height: 34px; padding: 0 var(--sp-3); font-size: var(--text-sm); }
+.link-bt { padding: 0; border: 0; background: none; color: var(--link); font: inherit; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.form { display: grid; gap: var(--sp-4); }
+.campo { display: grid; gap: 6px; min-width: 0; }
+.campo-cab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); }
+.campo label { font-size: var(--text-sm); font-weight: 600; }
+.campo-dica { font-size: var(--text-xs); color: var(--text-muted); }
+.campo-erro { font-size: var(--text-sm); font-weight: 500; color: var(--danger); }
+.input { min-height: 46px; width: 100%; padding: 0 var(--sp-3); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); outline: none; font-size: var(--text-md); }
+.input::placeholder { color: var(--text-subtle); }
+.input:focus-visible { border-color: var(--foco); box-shadow: var(--focus-ring); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.input[readonly] { background: var(--bg-subtle); color: var(--text-muted); }
+.input-senha { position: relative; }
+.input-senha .input { padding-right: 104px; }
+.mostrar { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); min-height: 34px; padding: 0 var(--sp-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--link); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.mostrar:hover { background: var(--surface-hover); }
+.codigo { font-family: var(--font-mono); font-size: 1.6rem; letter-spacing: .5em; text-align: center; padding-left: .5em; }
+.codigo-rec { font-family: var(--font-mono); font-size: 1.15rem; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
+.aviso { display: flex; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); font-size: var(--text-sm); }
+.aviso .ic { margin-top: 2px; }
+.aviso b { display: block; font-weight: 600; }
+.aviso--erro { background: var(--danger-soft); color: var(--danger); }
+.aviso--ok { background: var(--success-soft); color: var(--success); }
+.aviso--info { background: var(--ai-soft); color: var(--text); }
+.aviso--info .ic { color: var(--ai); }
+.aviso--atencao { background: var(--warning-soft); color: var(--text); }
+.aviso--atencao .ic { color: var(--warning); }
+.contador { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); }
+.contador.ok { color: var(--success); }
+.linha-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-sm); }
+.alternativa { text-align: center; font-size: var(--text-sm); color: var(--text-muted); }
+.passos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.passo { display: grid; gap: 6px; font-size: var(--text-xs); color: var(--text-subtle); }
+.passo::before { content: ""; height: 4px; border-radius: 4px; background: var(--border); }
+.passo[data-estado="feito"]::before, .passo[data-estado="atual"]::before { background: var(--primary); }
+.passo[data-estado="atual"] { color: var(--text); font-weight: 600; }
+.qr-caixa { display: grid; grid-template-columns: 148px minmax(0, 1fr); align-items: center; gap: var(--sp-4); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.qr { width: 148px; height: 148px; padding: 8px; border-radius: var(--radius); background: #FFFFFF; }
+.chave { display: grid; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.chave code { display: block; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--bg-subtle); color: var(--text); font-family: var(--font-mono); font-size: var(--text-sm); letter-spacing: .06em; word-break: break-all; }
+.apps { font-size: var(--text-xs); color: var(--text-muted); }
+.codigos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); counter-reset: cod; }
+.codigos li { counter-increment: cod; display: flex; align-items: baseline; gap: var(--sp-2); font-family: var(--font-mono); font-size: var(--text-md); letter-spacing: .06em; }
+.codigos li::before { content: counter(cod) "."; min-width: 2.2ch; font-size: var(--text-xs); color: var(--text-subtle); letter-spacing: 0; }
+.acoes-linha { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.check { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--text-sm); cursor: pointer; }
+.check input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--link); flex: none; }
+.convite-card { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.convite-av { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--bg-subtle); font-weight: 600; }
+.convite-card p { font-size: var(--text-sm); color: var(--text-muted); }
+.convite-card b { color: var(--text); }
+.nivel-chip { display: inline-flex; align-items: center; height: 24px; margin-top: 6px; padding: 0 9px; border-radius: 6px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; background: var(--primary-soft); color: var(--link); }
+details.ajuda { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+details.ajuda summary { min-height: 44px; display: flex; align-items: center; padding: 0 var(--sp-4); cursor: pointer; font-size: var(--text-sm); font-weight: 500; }
+details.ajuda div { display: grid; gap: var(--sp-2); padding: 0 var(--sp-4) var(--sp-4); font-size: var(--text-sm); color: var(--text-muted); }
+.carregando { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: gira .7s linear infinite; }
+
+/* ===== 6. RESPONSIVO ===== */
+@media (max-width: 1023px) {
+  .entrada { grid-template-columns: minmax(0, 1fr); }
+  .palco { display: none; }
+  .lia-mini { display: block; }
+}
+@media (max-width: 520px) {
+  .coluna { padding: var(--sp-5) var(--sp-4) var(--sp-5); }
+  .miolo { padding: var(--sp-8) 0; }
+  .tela-cab h1 { font-size: var(--text-xl); }
+  .qr-caixa { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; }
+  .codigos { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ===== 7. MOVIMENTO ===== */
+@keyframes entrar { from { opacity: 0; transform: translateY(8px); } }
+@keyframes gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+</svg>
+
+<div class="revisao" role="region" aria-label="Controles do protótipo">
+  <strong>Protótipo · telas de entrada</strong>
+  <label>Tela <select id="rev-tela"></select></label>
+  <label id="rev-estado-rot">Situação <select id="rev-estado"></select></label>
+  <span class="spacer"></span>
+  <button class="btn btn--sm btn--ghost" type="button" id="rev-tema" aria-pressed="false"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-moon"/></svg>Tema escuro</button>
+</div>
+
+<div class="entrada">
+  <main class="coluna" id="conteudo">
+    <div class="coluna-topo">
+      <svg class="logo" viewBox="0 0 758.18 309" role="img" aria-label="Liame">
+        <g transform="translate(24 24)">
+          <path d="M17.5 84V211.5H84" fill="none" stroke-width="27" style="stroke:var(--logo-ink)"/>
+          <circle cx="106.14" cy="211.5" r="14.04" style="fill:var(--marca-ciano)"/>
+          <path d="M233 702V0H62V702Z" transform="translate(140.88 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <path d="M163.18 12H201.58Q212.38 12 212.38 22.8V49.2Q212.38 60 201.58 60H177.58L164.38 76.8V60H163.18Q152.38 60 152.38 49.2V22.8Q152.38 12 163.18 12Z" style="fill:var(--marca-ciano)"/>
+          <path d="M499 124H237L195 0H16L270 702H468L722 0H541ZM455 256 368 513 282 256Z" transform="translate(203.48 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <clipPath id="liame-mc"><rect x="207.98" y="-57" width="480" height="282"/></clipPath>
+          <g clip-path="url(#liame-mc)" fill="none" stroke-width="31.86" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M512.05 99.93V256.86" style="stroke:var(--marca-petroleo)"/>
+            <path d="M447.98 182.7L512.05 99.93" style="stroke:var(--marca-ciano)"/>
+            <path d="M383.91 99.93L447.98 182.7" style="stroke:var(--marca-lavanda-clara)"/>
+            <path d="M383.91 256.86V99.93" style="stroke:var(--marca-lavanda)"/>
+          </g>
+          <polygon points="531.8,46.4 536.3,57.1 547.9,58 539,65.6 541.7,77 531.8,70.9 521.8,77 524.5,65.6 515.7,58 527.3,57.1" stroke-width="3.05" stroke-linejoin="round" style="fill:var(--marca-ambar);stroke:var(--marca-ambar)"/>
+          <g transform="translate(447.98 202.44) scale(1.128)"><path d="M0 15C-20 2-20-13-9-13C-4-13-1-9 0-7C1-9 4-13 9-13C20-13 20 2 0 15Z" style="fill:var(--marca-coral)"/></g>
+          <g transform="translate(386.73 80.19) scale(1.128)"><path fill-rule="evenodd" d="M0 24C-12 10-17 2-17-7A17 17 0 1 1 17-7C17 2 12 10 0 24ZM0-13.5A6.5 6.5 0 1 0 0-.5A6.5 6.5 0 1 0 0-13.5Z" style="fill:var(--logo-pin)"/></g>
+          <path d="M233 565V423H462V291H233V137H492V0H62V702H492V565Z" transform="translate(539.68 225) scale(0.2 -0.2)" style="fill:var(--logo-ink)"/>
+          <rect x="654.18" y="143.5" width="52" height="22" style="fill:var(--marca-ciano)"/>
+          <rect x="4" y="245" width="702.18" height="8" rx="4" style="fill:var(--marca-ciano)"/>
+        </g>
+      </svg>
+      <span class="lia-mini" aria-hidden="true"><img src="../lia-agente-3d/lia-avatar.svg" alt=""></span>
+    </div>
+
+    <div class="miolo">
+
+      <!-- ============ ENTRAR ============ -->
+      <section class="tela" data-tela="entrar" aria-labelledby="t-entrar">
+        <div class="tela-cab"><h1 id="t-entrar" tabindex="-1">Entrar no Liame</h1><p>Use o e-mail e a senha da sua conta.</p></div>
+        <div class="aviso aviso--erro" id="entrar-erro" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><b data-t></b><span data-d></span></span></div>
+        <div class="aviso aviso--info" data-estado-so="expirada" hidden><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg><span><b>Sua sessão terminou</b>Entre de novo para continuar de onde parou.</span></div>
+        <form class="form" id="f-entrar" novalidate>
+          <div class="campo"><label for="en-email">E-mail</label><input class="input" id="en-email" name="email" type="email" autocomplete="username" inputmode="email" required></div>
+          <div class="campo">
+            <div class="campo-cab"><label for="en-senha">Senha</label><a href="#esqueci-senha" data-ir="esqueci-senha" class="campo-dica">Esqueci a senha</a></div>
+            <div class="input-senha"><input class="input" id="en-senha" name="password" type="password" autocomplete="current-password" required><button class="mostrar" type="button" aria-pressed="false" aria-controls="en-senha">Mostrar</button></div>
+          </div>
+          <button class="btn btn--primary" type="submit">Entrar</button>
+        </form>
+        <p class="alternativa">Ainda não tem conta? <a href="#criar-conta" data-ir="criar-conta">Criar conta</a></p>
+      </section>
+
+      <!-- ============ SEGUNDO FATOR ============ -->
+      <section class="tela" data-tela="segundo-fator" aria-labelledby="t-2f" hidden>
+        <div class="tela-cab"><h1 id="t-2f" tabindex="-1">Digite o código do app</h1><p>Abra o app autenticador (Google Authenticator, Microsoft Authenticator, 1Password ou outro) e digite o código de 6 dígitos do Liame.</p></div>
+        <div class="aviso aviso--erro" id="sf-erro" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><b data-t></b><span data-d></span></span></div>
+        <form class="form" id="f-2f" novalidate>
+          <div class="campo" data-modo="app"><label for="c-app">Código de 6 dígitos</label><input class="input codigo" id="c-app" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="000000"><span class="campo-dica">Dá para colar o código.</span></div>
+          <div class="campo" data-modo="rec" hidden><label for="c-rec">Código de recuperação</label><input class="input codigo-rec" id="c-rec" name="recovery" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="7KQ2M-XH4RP"><span class="campo-dica">Um dos 10 códigos que você guardou ao ativar o app. Cada um vale uma vez.</span></div>
+          <button class="btn btn--primary" type="submit">Confirmar</button>
+        </form>
+        <p class="alternativa"><button class="link-bt" type="button" id="bt-modo-2f">Usar um código de recuperação</button></p>
+        <details class="ajuda"><summary>Perdeu o celular?</summary><div><p>Entre com um dos seus códigos de recuperação. Depois de entrar, peça a troca do app: por segurança, a troca vale em 24 horas e avisamos você por e-mail.</p><p>Sem o celular e sem os códigos, fale com o suporte.</p></div></details>
+        <p class="alternativa">Não é você? <a href="#entrar" data-ir="entrar">Sair</a></p>
+      </section>
+
+      <!-- ============ ATIVAR O APP ============ -->
+      <section class="tela" data-tela="ativar-app" aria-labelledby="t-ativar" hidden>
+        <ol class="passos" aria-label="Etapas">
+          <li class="passo" data-p="1">1. Escanear</li><li class="passo" data-p="2">2. Confirmar</li><li class="passo" data-p="3">3. Guardar os códigos</li>
+        </ol>
+        <div data-passo="1">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 id="t-ativar" tabindex="-1">Proteja a sua conta com o app autenticador</h1><p>O seu nível na Casa Brasa aprova gastos: nele, o app é obrigatório. Leva um minuto.</p></div>
+            <div class="qr-caixa">
+              <svg class="qr" viewBox="0 0 29 29" role="img" aria-label="QR de exemplo do protótipo"><path fill="#0B0D17" fill-rule="evenodd" d="M0 0h7v7H0zm1 1v5h5V1zm1 1h3v3H2zM22 0h7v7h-7zm1 1v5h5V1zm1 1h3v3h-3zM0 22h7v7H0zm1 1v5h5v-5zm1 1h3v3H2zM9 0h2v2H9zm4 1h3v1h-3zm4 1h2v3h-2zM9 3h1v3H9zm3 1h2v2h-2zm-3 5h3v1H9zm5 0h1v3h-1zm3 1h4v1h-4zm6 0h2v2h-2zM0 9h2v2H0zm3 1h3v1H3zm8 2h2v2h-2zm5 1h2v1h-2zm4 0h1v4h-1zm3 1h4v1h-4zM1 13h2v3H1zm4 1h2v2H5zm4 2h4v1H9zm6 1h1v3h-1zm-6 2h2v2H9zm13 0h2v3h-2zm3 1h3v1h-3zM12 21h3v1h-3zm5 0h2v2h-2zm-8 3h1v4H9zm3 1h4v1h-4zm6 1h3v2h-3zm5 0h2v1h-2zm2 2h3v1h-3zm-10 1h2v1h-2z"/></svg>
+              <div class="chave"><p>Aponte a câmera do app para o QR. Não consegue ler? Digite esta chave no app:</p><code id="chave">JBSW Y3DP EHPK 3PXP JBSW Y3DP</code><button class="btn btn--sm" type="button" data-copiar="chave"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-copy"/></svg>Copiar a chave</button></div>
+            </div>
+            <p class="apps">Funciona com Google Authenticator, Microsoft Authenticator, 1Password, Bitwarden e outros apps de código.</p>
+            <button class="btn btn--primary" type="button" data-passo-ir="2">Já adicionei no app</button>
+          </div>
+        </div>
+        <div data-passo="2" hidden>
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 tabindex="-1">Digite o código que aparece no app</h1><p>Assim confirmamos que o app ficou certo.</p></div>
+            <div class="aviso aviso--erro" id="ativ-erro" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><b data-t></b><span data-d></span></span></div>
+            <form class="form" id="f-ativar" novalidate>
+              <div class="campo"><label for="c-ativar">Código de 6 dígitos</label><input class="input codigo" id="c-ativar" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" placeholder="000000"></div>
+              <button class="btn btn--primary" type="submit">Ativar o app</button>
+            </form>
+            <p class="alternativa"><button class="link-bt" type="button" data-passo-ir="1">Voltar ao QR</button></p>
+          </div>
+        </div>
+        <div data-passo="3" hidden>
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 tabindex="-1">Guarde os códigos de recuperação</h1><p>Se você perder o celular, eles abrem a sua conta. Cada código vale uma vez, e eles <b>não aparecem de novo</b>.</p></div>
+            <ol class="codigos mono" id="codigos" aria-label="Códigos de recuperação"></ol>
+            <div class="acoes-linha"><button class="btn btn--sm" type="button" id="bt-copiar-cod"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-copy"/></svg>Copiar</button><button class="btn btn--sm" type="button" id="bt-baixar-cod"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download"/></svg>Baixar arquivo</button></div>
+            <label class="check"><input type="checkbox" id="guardei"> Guardei os códigos num lugar seguro (gerenciador de senhas ou papel guardado)</label>
+            <button class="btn btn--primary" type="button" id="bt-continuar" disabled>Continuar para o Liame</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CONVITE ============ -->
+      <section class="tela" data-tela="convite" aria-labelledby="t-convite" hidden>
+        <div data-estado-so="novo existente logado">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 id="t-convite" tabindex="-1">Você recebeu um convite da Casa Brasa</h1></div>
+            <div class="convite-card"><span class="convite-av" aria-hidden="true">CB</span><div><p><b>Rodrigo</b> convidou <b>juliana@agenciaprado.com.br</b> para cuidar da conta da <b>Casa Brasa</b> no Liame.</p><span class="nivel-chip">Administrador</span></div></div>
+            <p class="campo-dica">Administrador cuida de campanhas, equipe, aprovações até o limite que o dono definiu e pessoas (menos o dono).</p>
+          </div>
+        </div>
+        <div data-estado-so="novo">
+          <form class="form" id="f-convite" novalidate>
+            <div class="aviso aviso--erro" id="conv-erro" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><b data-t></b><span data-d></span></span></div>
+            <div class="campo"><label for="cv-nome">Seu nome</label><input class="input" id="cv-nome" autocomplete="name" required></div>
+            <div class="campo"><label for="cv-email">E-mail</label><input class="input" id="cv-email" type="email" autocomplete="username" value="juliana@agenciaprado.com.br" readonly aria-describedby="cv-email-d"><span class="campo-dica" id="cv-email-d">O convite só vale para este e-mail.</span></div>
+            <div class="campo">
+              <div class="campo-cab"><label for="cv-senha">Crie uma senha</label><span class="contador" data-contador="cv-senha" aria-hidden="true">0/15</span></div>
+              <div class="input-senha"><input class="input" id="cv-senha" type="password" autocomplete="new-password" minlength="15" required aria-describedby="cv-senha-d"><button class="mostrar" type="button" aria-pressed="false" aria-controls="cv-senha">Mostrar</button></div>
+              <span class="campo-dica" id="cv-senha-d">15 caracteres ou mais. Uma frase funciona bem, sem regra de símbolo ou número.</span>
+            </div>
+            <button class="btn btn--primary" type="submit">Criar login e entrar</button>
+            <p class="campo-dica">Em seguida, você ativa o app autenticador (obrigatório para Administrador).</p>
+          </form>
+        </div>
+        <div data-estado-so="existente">
+          <div class="form">
+            <div class="aviso aviso--info"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg><span><b>Você já tem conta no Liame</b>Entre com ela para aceitar. A Casa Brasa aparece junto das outras empresas, no seletor do alto do menu.</span></div>
+            <a class="btn btn--primary" href="#entrar" data-ir="entrar">Entrar para aceitar o convite</a>
+          </div>
+        </div>
+        <div data-estado-so="logado">
+          <div class="form">
+            <p class="campo-dica">Você está como <b>juliana@agenciaprado.com.br</b>.</p>
+            <button class="btn btn--primary" type="button" id="bt-aceitar">Aceitar convite</button>
+            <p class="alternativa">Não é você? <a href="#entrar" data-ir="entrar">Entrar com outra conta</a></p>
+          </div>
+        </div>
+        <div data-estado-so="vencido">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 tabindex="-1">Este convite não vale mais</h1><p>O link venceu (vale 7 dias), foi cancelado ou já foi usado. Peça um convite novo a quem convidou você.</p></div>
+            <a class="btn" href="#entrar" data-ir="entrar">Ir para a entrada</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CRIAR CONTA ============ -->
+      <section class="tela" data-tela="criar-conta" aria-labelledby="t-criar" hidden>
+        <div data-estado-so="formulario">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 id="t-criar" tabindex="-1">Criar conta</h1><p>A conta é da sua empresa. Depois, você convida quem cuida do marketing com você.</p></div>
+            <div class="aviso aviso--erro" id="criar-erro" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><b data-t></b><span data-d></span></span></div>
+            <form class="form" id="f-criar" novalidate>
+              <div class="campo"><label for="cc-nome">Seu nome</label><input class="input" id="cc-nome" autocomplete="name" required></div>
+              <div class="campo"><label for="cc-email">E-mail</label><input class="input" id="cc-email" type="email" autocomplete="username" inputmode="email" required></div>
+              <div class="campo">
+                <div class="campo-cab"><label for="cc-senha">Senha</label><span class="contador" data-contador="cc-senha" aria-hidden="true">0/15</span></div>
+                <div class="input-senha"><input class="input" id="cc-senha" type="password" autocomplete="new-password" minlength="15" required aria-describedby="cc-senha-d"><button class="mostrar" type="button" aria-pressed="false" aria-controls="cc-senha">Mostrar</button></div>
+                <span class="campo-dica" id="cc-senha-d">15 caracteres ou mais. Uma frase funciona bem, sem regra de símbolo ou número.</span>
+              </div>
+              <div class="campo"><label for="cc-empresa">Nome da empresa</label><input class="input" id="cc-empresa" autocomplete="organization" required></div>
+              <div class="campo"><label for="cc-cnpj">CNPJ <span class="campo-dica">(opcional)</span></label><input class="input" id="cc-cnpj" inputmode="numeric" autocomplete="off" placeholder="00.000.000/0000-00"></div>
+              <p class="campo-dica">Ao criar a conta, você concorda com os <a href="#termos">Termos de Uso</a> e a <a href="#privacidade">Política de Privacidade</a>.</p>
+              <button class="btn btn--primary" type="submit">Criar conta</button>
+            </form>
+            <p class="alternativa">Já tem conta? <a href="#entrar" data-ir="entrar">Entrar</a></p>
+          </div>
+        </div>
+        <div data-estado-so="enviado">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 tabindex="-1">Confira seu e-mail</h1><p>Enviamos um link de confirmação para <b id="cc-email-eco">rodrigo@casabrasa.com.br</b>. Ele vale 24 horas.</p></div>
+            <div class="aviso aviso--info"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg><span><b>Não chegou?</b>Confira o spam e as promoções. Se tentar entrar antes de confirmar, mandamos o link de novo.</span></div>
+            <a class="btn" href="#entrar" data-ir="entrar">Ir para a entrada</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CONFIRMAR E-MAIL ============ -->
+      <section class="tela" data-tela="confirmar-email" aria-labelledby="t-conf" hidden>
+        <div data-estado-so="confirmado">
+          <div class="tela" style="animation:none">
+            <div class="aviso aviso--ok"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span><b>E-mail confirmado</b>A conta da Casa Brasa está pronta.</span></div>
+            <div class="tela-cab"><h1 id="t-conf" tabindex="-1">Agora é só entrar</h1><p>No primeiro acesso, você ativa o app autenticador.</p></div>
+            <a class="btn btn--primary" href="#entrar" data-ir="entrar">Entrar</a>
+          </div>
+        </div>
+        <div data-estado-so="vencido">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 tabindex="-1">Este link não vale mais</h1><p>O link de confirmação vale 24 horas e uma vez só. Entre com o seu e-mail e a senha: mandamos um link novo.</p></div>
+            <a class="btn btn--primary" href="#entrar" data-ir="entrar">Entrar</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ESQUECI A SENHA ============ -->
+      <section class="tela" data-tela="esqueci-senha" aria-labelledby="t-esq" hidden>
+        <div data-estado-so="formulario">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 id="t-esq" tabindex="-1">Esqueceu a senha?</h1><p>Digite o e-mail da conta. Mandamos um link para criar uma senha nova.</p></div>
+            <form class="form" id="f-esq" novalidate>
+              <div class="campo"><label for="es-email">E-mail</label><input class="input" id="es-email" type="email" autocomplete="username" inputmode="email" required></div>
+              <button class="btn btn--primary" type="submit">Enviar link</button>
+            </form>
+            <p class="alternativa"><a href="#entrar" data-ir="entrar">Voltar para a entrada</a></p>
+          </div>
+        </div>
+        <div data-estado-so="enviado">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 tabindex="-1">Confira seu e-mail</h1><p>Se houver uma conta com esse e-mail, o link chega em instantes. Ele vale 1 hora e uma vez só.</p></div>
+            <a class="btn" href="#entrar" data-ir="entrar">Voltar para a entrada</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SENHA NOVA ============ -->
+      <section class="tela" data-tela="senha-nova" aria-labelledby="t-nova" hidden>
+        <div data-estado-so="formulario">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 id="t-nova" tabindex="-1">Crie uma senha nova</h1><p>Ao salvar, saímos da sua conta em todos os aparelhos, por segurança.</p></div>
+            <div class="aviso aviso--erro" id="nova-erro" role="alert" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><b data-t></b><span data-d></span></span></div>
+            <form class="form" id="f-nova" novalidate>
+              <div class="campo">
+                <div class="campo-cab"><label for="nv-senha">Senha nova</label><span class="contador" data-contador="nv-senha" aria-hidden="true">0/15</span></div>
+                <div class="input-senha"><input class="input" id="nv-senha" type="password" autocomplete="new-password" minlength="15" required aria-describedby="nv-senha-d"><button class="mostrar" type="button" aria-pressed="false" aria-controls="nv-senha">Mostrar</button></div>
+                <span class="campo-dica" id="nv-senha-d">15 caracteres ou mais. Uma frase funciona bem, sem regra de símbolo ou número.</span>
+              </div>
+              <button class="btn btn--primary" type="submit">Salvar senha nova</button>
+            </form>
+          </div>
+        </div>
+        <div data-estado-so="salva">
+          <div class="tela" style="animation:none">
+            <div class="aviso aviso--ok"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span><b>Senha nova salva</b>Saímos da sua conta em todos os aparelhos.</span></div>
+            <a class="btn btn--primary" href="#entrar" data-ir="entrar">Entrar</a>
+          </div>
+        </div>
+        <div data-estado-so="vencido">
+          <div class="tela" style="animation:none">
+            <div class="tela-cab"><h1 tabindex="-1">Este link não vale mais</h1><p>O link para criar a senha nova vale 1 hora e uma vez só. Peça outro.</p></div>
+            <a class="btn btn--primary" href="#esqueci-senha" data-ir="esqueci-senha">Pedir um link novo</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ENTROU (fim da simulação) ============ -->
+      <section class="tela" data-tela="dentro" aria-labelledby="t-dentro" hidden>
+        <div class="aviso aviso--ok"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span><b>Tudo certo</b>No app, aqui abre a tela inicial (ou a que você tentava abrir).</span></div>
+        <h1 id="t-dentro" tabindex="-1" class="sr-only">Entrou</h1>
+        <a class="btn" href="#entrar" data-ir="entrar">Recomeçar a simulação</a>
+      </section>
+    </div>
+
+    <footer class="rodape"><a href="#termos">Termos de Uso</a><a href="#privacidade">Privacidade</a><a href="#ajuda">Ajuda</a><span>SISTER TECNOLOGIA LTDA</span></footer>
+  </main>
+
+  <aside class="palco" aria-label="LIA, assistente virtual da Liame">
+    <div class="lia-3d" id="lia"></div>
+    <img class="lia-reserva" id="lia-reserva" src="../lia-agente-3d/lia-avatar.svg" alt="LIA, assistente virtual da Liame" hidden>
+    <div class="palco-txt">
+      <p class="rotulo-marca">LIA · atendimento da sua agência</p>
+      <p class="fala" id="fala">Oi! Que bom te ver de novo.</p>
+      <ul class="garantias">
+        <li><svg class="ic ic-sm" aria-hidden="true"><use href="#i-shield"/></svg>Entrada com app autenticador</li>
+        <li><svg class="ic ic-sm" aria-hidden="true"><use href="#i-check"/></svg>Nada vai ao ar sem a sua aprovação</li>
+        <li><svg class="ic ic-sm" aria-hidden="true"><use href="#i-users"/></svg>Você decide quem tem acesso</li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<!-- LIA 3D (kit v1.4). No protótipo o three.js vem do CDN; no app, do próprio app (sem CDN). -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js" defer></script>
+<script src="../lia-agente-3d/lia-agent.js" defer></script>
+<script>
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+/* ---------- telas, situações e o que a LIA diz ---------- */
+const TELAS = {
+  'entrar': { nome: 'Entrar', estados: { normal: 'Normal', expirada: 'Sessão terminou' }, fala: 'Oi! Que bom te ver de novo. Enquanto você entra, a equipe continua trabalhando.', lia: 'wave' },
+  'segundo-fator': { nome: 'Segundo fator', estados: { normal: 'Código do app' }, fala: 'Só mais um passo: o código do seu app autenticador.', lia: 'idle' },
+  'ativar-app': { nome: 'Ativar o app autenticador', estados: { 1: 'Passo 1 · QR', 2: 'Passo 2 · código', 3: 'Passo 3 · códigos de recuperação' }, fala: 'Vamos proteger a sua conta. Eu espero aqui.', lia: 'wave' },
+  'convite': { nome: 'Aceite de convite', estados: { novo: 'Sem conta: criar login', existente: 'Já tem conta, sem sessão', logado: 'Já tem conta, com sessão', vencido: 'Link vencido' }, fala: 'Oi, Juliana! O Rodrigo chamou você para cuidar da Casa Brasa com a gente.', lia: 'wave' },
+  'criar-conta': { nome: 'Criar conta', estados: { formulario: 'Formulário', enviado: 'Confira seu e-mail' }, fala: 'Que bom ter você aqui! Eu sou a LIA, do atendimento. Vou cuidar do seu marketing com a equipe.', lia: 'wave' },
+  'confirmar-email': { nome: 'Confirmar e-mail', estados: { confirmado: 'Confirmado', vencido: 'Link vencido' }, fala: 'E-mail confirmado. Agora a conta é sua.', lia: 'happy' },
+  'esqueci-senha': { nome: 'Esqueci a senha', estados: { formulario: 'Formulário', enviado: 'Link enviado' }, fala: 'Acontece com todo mundo. Mando um link para você criar outra.', lia: 'empathetic' },
+  'senha-nova': { nome: 'Senha nova', estados: { formulario: 'Formulário', salva: 'Salva', vencido: 'Link vencido' }, fala: 'Escolha uma frase fácil de lembrar e difícil de adivinhar.', lia: 'idle' },
+  'dentro': { nome: 'Entrou (fim)', estados: { normal: 'Fim da simulação' }, fala: 'Pronto! Vamos ver o que a equipe fez?', lia: 'celebrate' },
+};
+const FALAS_ESTADO = {
+  'ativar-app:3': 'Guarde esses códigos. Se o celular sumir, são eles que abrem a conta.',
+  'convite:vencido': 'Esse convite não vale mais. Peça um novo a quem convidou você.',
+  'convite:existente': 'Você já é da casa! Entre com a sua conta para aceitar.',
+  'criar-conta:enviado': 'Confira seu e-mail: o link de confirmação está chegando.',
+  'confirmar-email:vencido': 'Esse link venceu. Tente entrar que eu mando outro.',
+  'esqueci-senha:enviado': 'Se a conta existir, o link chega em instantes.',
+  'senha-nova:salva': 'Senha nova salva. Por segurança, saímos de todos os aparelhos.',
+  'entrar:expirada': 'Sua sessão terminou. Entre de novo que eu te levo de volta.',
+};
+
+let lia = null;
+const acessivelParaMovimento = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+function liaEstado(s, ms) { if (!lia) return; ms ? lia.react(s, ms) : lia.setState(s); }
+function falar(t) { $('#fala').textContent = t; }
+
+let tela = 'entrar', estado = 'normal';
+function mostrar(nova, novoEstado, { focar = true } = {}) {
+  const def = TELAS[nova] ? nova : 'entrar';
+  tela = def;
+  const estados = Object.keys(TELAS[def].estados);
+  estado = estados.includes(String(novoEstado)) ? String(novoEstado) : estados[0];
+  $$('[data-tela]').forEach((s) => (s.hidden = s.dataset.tela !== def));
+  const sec = $(`[data-tela="${def}"]`);
+  $$('[data-estado-so]', sec).forEach((b) => (b.hidden = !b.dataset.estadoSo.split(' ').includes(estado)));
+  if (def === 'ativar-app') passo(Number(estado));
+  $$('.aviso--erro', sec).forEach((a) => (a.hidden = true));
+  // barra de revisão
+  $('#rev-tela').value = def;
+  $('#rev-estado').replaceChildren(...estados.map((k) => new Option(TELAS[def].estados[k], k)));
+  $('#rev-estado').value = estado;
+  $('#rev-estado-rot').hidden = estados.length < 2;
+  history.replaceState(null, '', `#${def}${estados.length > 1 ? ':' + estado : ''}`);
+  document.title = `${TELAS[def].nome} · Liame`;
+  falar(FALAS_ESTADO[`${def}:${estado}`] || TELAS[def].fala);
+  liaEstado(TELAS[def].lia, 2600);
+  if (focar) {
+    const h = $$('h1', sec).find((x) => x.getClientRects().length);
+    h?.focus({ preventScroll: true });
+  }
+}
+
+/* ---------- passos do app autenticador ---------- */
+function passo(n) {
+  $$('[data-passo]').forEach((b) => (b.hidden = Number(b.dataset.passo) !== n));
+  $$('.passo').forEach((p) => { const k = Number(p.dataset.p); p.dataset.estado = k < n ? 'feito' : k === n ? 'atual' : ''; if (k === n) p.setAttribute('aria-current', 'step'); else p.removeAttribute('aria-current'); });
+  if (n === 3) gerarCodigos();
+}
+function gerarCodigos() {
+  const alf = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const um = () => Array.from({ length: 10 }, () => alf[Math.floor(Math.random() * alf.length)]).join('').replace(/^(.{5})/, '$1-');
+  $('#codigos').replaceChildren(...Array.from({ length: 10 }, () => { const li = document.createElement('li'); li.textContent = um(); return li; }));
+  $('#guardei').checked = false; $('#bt-continuar').disabled = true;
+}
+
+/* ---------- erros no padrão da API (RFC 9457: título + detalhe) ---------- */
+function erro(id, titulo, detalhe, campo) {
+  const a = $('#' + id);
+  $('[data-t]', a).textContent = titulo + '. ';
+  $('[data-d]', a).textContent = detalhe;
+  a.hidden = false;
+  if (campo) { campo.setAttribute('aria-invalid', 'true'); campo.focus(); }
+  liaEstado('empathetic', 2800);
+}
+function limpar(form) { $$('[aria-invalid]', form).forEach((c) => c.removeAttribute('aria-invalid')); $$('.aviso--erro', form.closest('[data-tela]')).forEach((a) => (a.hidden = true)); }
+function enviando(bt, sim) { bt.disabled = sim; bt.setAttribute('aria-busy', String(sim)); if (sim) { bt.dataset.rot = bt.textContent; bt.innerHTML = '<span class="carregando" aria-hidden="true"></span> Aguarde'; } else if (bt.dataset.rot) bt.textContent = bt.dataset.rot; }
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+async function simular(form, fn) { const bt = $('button[type=submit]', form); enviando(bt, true); liaEstado('think'); await espera(700); enviando(bt, false); liaEstado('idle'); fn(); }
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+$('#f-entrar').addEventListener('submit', (e) => {
+  e.preventDefault(); const f = e.currentTarget; limpar(f);
+  const email = $('#en-email'), senha = $('#en-senha');
+  if (!EMAIL.test(email.value.trim())) return erro('entrar-erro', 'E-mail inválido', 'Confira o endereço, como nome@empresa.com.br.', email);
+  if (!senha.value) return erro('entrar-erro', 'Falta a senha', 'Digite a senha da sua conta.', senha);
+  simular(f, () => {
+    if (/bloq/.test(email.value)) return erro('entrar-erro', 'Muitas tentativas', 'Espere alguns minutos e tente de novo.');
+    if (/novo/.test(email.value)) return erro('entrar-erro', 'Confirme seu e-mail', 'Enviamos de novo o link de confirmação.');
+    if (senha.value === 'errada') { senha.value = ''; return erro('entrar-erro', 'E-mail ou senha incorretos', 'Confira os dados e tente de novo.', senha); }
+    mostrar('segundo-fator');
+  });
+});
+
+let modoRec = false;
+$('#bt-modo-2f').addEventListener('click', () => {
+  modoRec = !modoRec;
+  $('[data-modo="app"]').hidden = modoRec; $('[data-modo="rec"]').hidden = !modoRec;
+  $('#bt-modo-2f').textContent = modoRec ? 'Usar o código do app' : 'Usar um código de recuperação';
+  (modoRec ? $('#c-rec') : $('#c-app')).focus();
+});
+$('#f-2f').addEventListener('submit', (e) => {
+  e.preventDefault(); const f = e.currentTarget; limpar(f);
+  const c = modoRec ? $('#c-rec') : $('#c-app'); const v = c.value.replace(/\s/g, '');
+  if (!modoRec && !/^\d{6}$/.test(v)) return erro('sf-erro', 'O código tem 6 dígitos', 'Digite ou cole o código que aparece no app agora.', c);
+  if (modoRec && !/^[A-Za-z2-9]{5}-?[A-Za-z2-9]{5}$/.test(v)) return erro('sf-erro', 'Código de recuperação inválido', 'Ele tem 10 letras e números, como 7KQ2M-XH4RP.', c);
+  simular(f, () => {
+    if (v === '000000') { c.value = ''; return erro('sf-erro', 'Código inválido', 'Confira o código do app autenticador e tente de novo.', c); }
+    mostrar('dentro');
+  });
+});
+// Colar o código funciona (WCAG 2.2 SC 3.3.8): só deixa os dígitos.
+$('#c-app').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); liaEstado('listen'); });
+$('#c-ativar').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6); });
+
+$$('[data-passo-ir]').forEach((b) => b.addEventListener('click', () => { mostrar('ativar-app', b.dataset.passoIr); }));
+$('#f-ativar').addEventListener('submit', (e) => {
+  e.preventDefault(); const f = e.currentTarget; limpar(f); const c = $('#c-ativar');
+  if (!/^\d{6}$/.test(c.value)) return erro('ativ-erro', 'O código tem 6 dígitos', 'Digite ou cole o código que o app mostra agora.', c);
+  simular(f, () => {
+    if (c.value === '000000') { c.value = ''; return erro('ativ-erro', 'Código inválido', 'Confira se a hora do celular está certa e tente o código novo.', c); }
+    mostrar('ativar-app', 3); liaEstado('celebrate', 2600);
+  });
+});
+$('#guardei').addEventListener('change', (e) => { $('#bt-continuar').disabled = !e.target.checked; });
+$('#bt-continuar').addEventListener('click', () => mostrar('dentro'));
+$('#bt-copiar-cod').addEventListener('click', async () => {
+  const txt = $$('#codigos li').map((l) => l.textContent).join('\n');
+  try { await navigator.clipboard.writeText(txt); $('#bt-copiar-cod').lastChild.textContent = 'Copiados'; } catch { $('#bt-copiar-cod').lastChild.textContent = 'Não deu para copiar'; }
+});
+$('#bt-baixar-cod').addEventListener('click', () => {
+  const txt = 'Liame · códigos de recuperação (cada um vale uma vez)\n\n' + $$('#codigos li').map((l) => l.textContent).join('\n') + '\n';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain' })); a.download = 'liame-codigos-de-recuperacao.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$$('[data-copiar]').forEach((b) => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText($('#' + b.dataset.copiar).textContent.replace(/\s/g, '')); b.lastChild.textContent = 'Chave copiada'; } catch { b.lastChild.textContent = 'Não deu para copiar'; } }));
+
+function senhaNova(campo, idErro) {
+  if (campo.value.length < 15) { erro(idErro, 'Senha curta', 'Use pelo menos 15 caracteres (uma frase serve).', campo); return false; }
+  if (campo.value === 'senha123456789012') { erro(idErro, 'Escolha outra senha', 'Essa senha já apareceu em vazamentos de outros sites. Escolha outra.', campo); return false; }
+  return true;
+}
+$('#f-convite').addEventListener('submit', (e) => {
+  e.preventDefault(); const f = e.currentTarget; limpar(f);
+  if (!$('#cv-nome').value.trim()) return erro('conv-erro', 'Falta o seu nome', 'Digite como você quer aparecer para a Casa Brasa.', $('#cv-nome'));
+  if (!senhaNova($('#cv-senha'), 'conv-erro')) return;
+  simular(f, () => { mostrar('ativar-app', 1); });
+});
+$('#bt-aceitar').addEventListener('click', async () => { liaEstado('think'); await espera(500); liaEstado('celebrate', 2600); mostrar('dentro'); });
+$('#f-criar').addEventListener('submit', (e) => {
+  e.preventDefault(); const f = e.currentTarget; limpar(f);
+  if (!$('#cc-nome').value.trim()) return erro('criar-erro', 'Falta o seu nome', 'Digite o seu nome.', $('#cc-nome'));
+  if (!EMAIL.test($('#cc-email').value.trim())) return erro('criar-erro', 'E-mail inválido', 'Confira o endereço, como nome@empresa.com.br.', $('#cc-email'));
+  if (!senhaNova($('#cc-senha'), 'criar-erro')) return;
+  if (!$('#cc-empresa').value.trim()) return erro('criar-erro', 'Falta o nome da empresa', 'Digite o nome da empresa, como aparece para os clientes.', $('#cc-empresa'));
+  const cnpj = $('#cc-cnpj').value.replace(/\D/g, '');
+  if (cnpj && cnpj.length !== 14) return erro('criar-erro', 'CNPJ incompleto', 'O CNPJ tem 14 dígitos. Se preferir, deixe em branco.', $('#cc-cnpj'));
+  simular(f, () => { $('#cc-email-eco').textContent = $('#cc-email').value.trim().toLowerCase(); mostrar('criar-conta', 'enviado'); });
+});
+$('#f-esq').addEventListener('submit', (e) => { e.preventDefault(); const f = e.currentTarget; simular(f, () => mostrar('esqueci-senha', 'enviado')); });
+$('#f-nova').addEventListener('submit', (e) => { e.preventDefault(); const f = e.currentTarget; limpar(f); if (!senhaNova($('#nv-senha'), 'nova-erro')) return; simular(f, () => mostrar('senha-nova', 'salva')); });
+
+/* ---------- senha: mostrar (NIST §3.1.1.2), contador e a LIA que reage ---------- */
+$$('.mostrar').forEach((b) => b.addEventListener('click', () => {
+  const campo = $('#' + b.getAttribute('aria-controls')); const vis = campo.type === 'password';
+  campo.type = vis ? 'text' : 'password'; b.setAttribute('aria-pressed', String(vis)); b.textContent = vis ? 'Esconder' : 'Mostrar';
+}));
+$$('[data-contador]').forEach((c) => { const campo = $('#' + c.dataset.contador); campo.addEventListener('input', () => { const n = campo.value.length; c.textContent = `${n}/15`; c.classList.toggle('ok', n >= 15); }); });
+$$('input[type=password]').forEach((c) => c.addEventListener('focus', () => liaEstado('shy')));
+$$('input[type=email], #cc-nome, #cv-nome, #cc-empresa').forEach((c) => c.addEventListener('input', () => liaEstado('listen')));
+$$('input').forEach((c) => c.addEventListener('blur', () => setTimeout(() => { if (!document.activeElement?.matches('input')) liaEstado('idle'); }, 60)));
+
+/* ---------- navegação do protótipo ---------- */
+document.addEventListener('click', (e) => { const a = e.target.closest('[data-ir]'); if (!a) return; e.preventDefault(); mostrar(a.dataset.ir); });
+$('#rev-tela').replaceChildren(...Object.entries(TELAS).map(([k, t]) => new Option(t.nome, k)));
+$('#rev-tela').addEventListener('change', (e) => mostrar(e.target.value));
+$('#rev-estado').addEventListener('change', (e) => mostrar(tela, e.target.value));
+$('#rev-tema').addEventListener('click', (e) => {
+  const escuro = document.documentElement.dataset.theme !== 'dark' && !(document.documentElement.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = escuro ? 'dark' : 'light';
+  e.currentTarget.setAttribute('aria-pressed', String(escuro));
+});
+
+/* ---------- LIA 3D: carrega depois do formulário; reserva em SVG ---------- */
+function reserva() { $('#lia').hidden = true; $('#lia-reserva').hidden = false; }
+window.addEventListener('load', () => {
+  if (!matchMedia('(min-width: 1024px)').matches) return; // no celular e no tablet, só o avatar 2D
+  try {
+    if (!window.LiaAgent) throw new Error('kit ausente');
+    lia = LiaAgent.create($('#lia'), { framing: 'bust', background: 'transparent', controls: false, zoom: false, shadows: false, floorRing: true, lookAtPointer: acessivelParaMovimento, state: TELAS[tela].lia, outfit: 'executiva', pixelRatio: 1.5 });
+    lia.on('ready', () => liaEstado(TELAS[tela].lia, 2600));
+  } catch (err) { console.warn('[prototipo] LIA 3D indisponível, usando o avatar 2D:', err.message); reserva(); }
+});
+
+function peloEndereco(focar) { const [h, e] = decodeURIComponent(location.hash.slice(1)).split(':'); mostrar(h || 'entrar', e, { focar }); }
+window.addEventListener('hashchange', () => peloEndereco(true));
+peloEndereco(false);
+</script>
+</body>
+</html>
