@@ -23,6 +23,7 @@
 5. `docs/base-conhecimento.md` (fatos do nicho, com validade)
 6. `mockups/`, quando existirem (sem mockup aprovado, não se inventa tela)
 7. `docs/ux-modelo-interface.md` (modelo de interface Lite e Pro, aprovado em 26/09/2026)
+8. `lia-agente-3d/` (kit da LIA em 3D: personagem, expressões e visuais; referência de identidade, com uso no app pelas regras de `ux-modelo-interface.md` §6.1)
 
 ## 3. Princípios que não se perdem
 

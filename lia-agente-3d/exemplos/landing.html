@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Liame · Exemplo de landing com a LIA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{--noite:#0B0D17;--card:#151A2E;--linha:#2B3150;--violeta:#7B61FF;--ciano:#2DD4DE;--papel:#F4F2EC;--cinza:#9AA0B4}
+*{box-sizing:border-box}html,body{margin:0}
+body{font:17px/1.6 Poppins,system-ui,sans-serif;background:var(--noite);color:var(--papel)}
+nav{display:flex;justify-content:space-between;align-items:center;padding:20px clamp(16px,6vw,96px);border-bottom:1px solid var(--linha)}
+.logo{font-weight:700;font-size:24px;letter-spacing:-.02em}.logo b{color:var(--violeta)}
+.cta{display:inline-flex;align-items:center;gap:10px;background:var(--ciano);color:var(--noite);font-weight:700;border:0;border-radius:999px;padding:14px 26px;font:700 17px Poppins,sans-serif;cursor:pointer;text-decoration:none}
+.ghost{background:transparent;color:var(--papel);border:2px solid var(--linha)}
+.hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);align-items:center;gap:20px;padding:30px clamp(16px,6vw,96px) 0;min-height:620px;background:radial-gradient(ellipse at 75% 45%,#2a2170 0%,transparent 60%)}
+@media (max-width:900px){.hero{grid-template-columns:1fr}}
+.pill{display:inline-flex;gap:10px;align-items:center;background:#1C2240;border-radius:999px;padding:8px 16px;font-size:15px}
+.pill i{width:9px;height:9px;border-radius:50%;background:var(--ciano)}
+h1{font-size:clamp(40px,5.5vw,76px);line-height:1.02;letter-spacing:-.035em;margin:24px 0 0;text-wrap:balance}
+h1 span{color:var(--ciano)}
+.lead{color:var(--cinza);font-size:20px;max-width:34ch;margin:22px 0 34px}
+.btns{display:flex;flex-wrap:wrap;gap:14px}
+#lia{position:relative;height:clamp(460px,70vh,700px)}
+.say{position:absolute;left:4%;top:12%;max-width:240px;background:#fff;color:var(--noite);border-radius:18px 18px 18px 4px;padding:12px 16px;font-size:15px;box-shadow:0 12px 30px #0006;transition:opacity .3s}
+.feat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;padding:70px clamp(16px,6vw,96px)}
+@media (max-width:900px){.feat{grid-template-columns:1fr}}
+.feat div{background:var(--card);border:1px solid var(--linha);border-radius:22px;padding:26px}
+.feat h3{margin:0 0 8px}.feat p{margin:0;color:var(--cinza)}
+</style>
+</head>
+<body>
+<nav><div class="logo">L.<b>IA</b>ME-</div><a class="cta" href="#" id="nav-cta">Falar com a LIA</a></nav>
+
+<section class="hero">
+  <div>
+    <span class="pill"><i></i> Marketing com inteligência artificial</span>
+    <h1>Todas as mídias.<br><span>Uma inteligência.</span></h1>
+    <p class="lead">Google Ads, redes sociais, criação e e-commerce conectados, com a LIA cuidando de cada campanha.</p>
+    <div class="btns"><a class="cta" href="#" id="cta">Quero um diagnóstico ›</a><a class="cta ghost" href="#" id="cta2">Conhecer a LIA</a></div>
+  </div>
+  <div id="lia" aria-label="LIA, assistente virtual da Liame"><div class="say" id="say">Oi! Eu sou a LIA. Posso analisar suas campanhas agora mesmo.</div></div>
+</section>
+
+<section class="feat" id="feat">
+  <div><h3>Conecta</h3><p>Integra contas de anúncio, redes e loja via API e MCP.</p></div>
+  <div><h3>Analisa</h3><p>Cruza os dados e encontra onde vale investir.</p></div>
+  <div><h3>Atende</h3><p>Responde clientes 24 horas por dia, no site e no WhatsApp.</p></div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script src="../lia-agent.js"></script>
+<script>
+// Exemplo de integração na landing: fundo transparente, sem arrastar, reage aos botões.
+const el=document.getElementById('lia'),say=document.getElementById('say');
+const lia=LiaAgent.create(el,{framing:'full',background:'transparent',controls:false,state:'wave',outfit:'auto'});
+setTimeout(()=>lia.setState('idle'),3000);
+const hover=(id,state,text)=>{const b=document.getElementById(id);b.addEventListener('mouseenter',()=>{lia.setState(state);say.textContent=text;});b.addEventListener('mouseleave',()=>lia.setState('idle'));b.addEventListener('focus',()=>lia.setState(state));b.addEventListener('blur',()=>lia.setState('idle'));};
+hover('cta','happy','Vamos lá! Em poucos minutos eu mostro seus resultados.');
+hover('cta2','wink','Prazer! Eu atendo, analiso e otimizo pra você.');
+hover('nav-cta','talk','Estou online. Me chama!');
+// quando os recursos aparecem na tela, ela mostra que está trabalhando
+new IntersectionObserver(e=>{if(e[0].isIntersecting)lia.react('working',3500);},{threshold:.6}).observe(document.getElementById('feat'));
+document.querySelectorAll('a[href="#"]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();lia.react('celebrate',2600);}));
+</script>
+</body>
+</html>

@@ -13,6 +13,7 @@ packages/config   presets de TypeScript
 packages/contracts  schemas Zod (validação, OpenAPI, ferramentas, eventos)
 packages/database   Drizzle + pool do Postgres + contexto de tenant por transação (RLS)
 packages/telemetry  OpenTelemetry (http, undici, pg)
+lia-agente-3d     kit da LIA em 3D (biblioteca, Estúdio, exemplos e avatar 2D)
 ```
 
 ## Como rodar

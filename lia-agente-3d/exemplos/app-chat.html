@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Liame App · Exemplo de chat com a LIA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{--noite:#0B0D17;--card:#151A2E;--linha:#2B3150;--violeta:#7B61FF;--ciano:#2DD4DE;--papel:#F4F2EC;--cinza:#9AA0B4;--fundo:#F3F1EE}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font:15px/1.55 Poppins,system-ui,sans-serif;background:var(--fundo);color:#1b1d2a}
+.app{display:grid;grid-template-columns:230px 1fr;min-height:100%}
+@media (max-width:760px){.app{grid-template-columns:1fr}.side{display:none}}
+.side{background:var(--noite);color:var(--papel);padding:24px 18px;display:flex;flex-direction:column;gap:6px}
+.side .logo{font-weight:700;font-size:22px;margin-bottom:18px}.side .logo b{color:var(--violeta)}
+.side a{color:var(--cinza);text-decoration:none;padding:9px 12px;border-radius:10px}.side a.on{background:#1C2240;color:#fff}
+main{padding:28px clamp(16px,4vw,44px)}
+h1{margin:0 0 18px;font-size:26px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:760px){.kpis{grid-template-columns:1fr}}
+.kpi{background:#fff;border:1px solid #e5e2dc;border-radius:16px;padding:18px}.kpi small{color:#6b6f80}.kpi b{display:block;font-size:26px;margin-top:4px}
+.note{margin-top:16px;color:#6b6f80;font-size:13px}
+/* ---- widget ---- */
+.fab{position:fixed;right:22px;bottom:22px;width:92px;height:92px;border-radius:50%;background:radial-gradient(circle at 50% 35%,#fff,#dfe6ff);border:3px solid var(--ciano);box-shadow:0 14px 34px #0B0D1733;overflow:hidden;cursor:pointer;padding:0;z-index:20}
+.fab .dot{position:absolute;right:8px;top:8px;width:16px;height:16px;border-radius:50%;background:#39D98A;border:3px solid #fff;z-index:2}
+.panel{position:fixed;right:22px;bottom:128px;width:min(380px,calc(100vw - 32px));height:min(620px,calc(100vh - 160px));background:#fff;border-radius:22px;box-shadow:0 24px 60px #0B0D1740;display:flex;flex-direction:column;overflow:hidden;z-index:20}
+.panel[hidden]{display:none}
+.ph{position:relative;height:210px;background:radial-gradient(ellipse at 50% 30%,#fff 0%,#EEF0FF 60%,#D9DEF7 100%);flex-shrink:0}
+.ph .ttl{position:absolute;left:16px;bottom:12px;z-index:2;background:#0B0D17d9;color:#fff;border-radius:999px;padding:5px 12px;font-size:13px}
+.ph .x{position:absolute;right:12px;top:12px;z-index:2;background:#0B0D17d9;color:#fff;border:0;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:16px}
+.msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#FAFAFB}
+.m{max-width:82%;padding:10px 14px;border-radius:16px;font-size:14.5px}
+.m.lia{align-self:flex-start;background:#EEF0FF;border-bottom-left-radius:4px}
+.m.eu{align-self:flex-end;background:var(--violeta);color:#fff;border-bottom-right-radius:4px}
+.typing{align-self:flex-start;display:flex;gap:5px;padding:12px 14px;background:#EEF0FF;border-radius:16px}
+.typing span{width:7px;height:7px;border-radius:50%;background:var(--violeta);animation:b 1s infinite}
+.typing span:nth-child(2){animation-delay:.15s}.typing span:nth-child(3){animation-delay:.3s}
+@keyframes b{0%,100%{opacity:.3}50%{opacity:1}}
+form{display:flex;gap:8px;padding:12px;border-top:1px solid #eee}
+form input{flex:1;border:1px solid #ddd;border-radius:999px;padding:10px 14px;font:14px Poppins,sans-serif}
+form button{border:0;background:var(--ciano);color:var(--noite);font:700 14px Poppins,sans-serif;border-radius:999px;padding:0 16px;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--violeta);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side"><div class="logo">L.<b>IA</b>ME-</div><a class="on" href="#">Painel</a><a href="#">Campanhas</a><a href="#">Criativos</a><a href="#">Integrações</a><a href="#">Relatórios</a></aside>
+  <main>
+    <h1>Painel de campanhas</h1>
+    <div class="kpis"><div class="kpi"><small>Cliques (7 dias)</small><b>[DADO]</b></div><div class="kpi"><small>Conversões</small><b>[DADO]</b></div><div class="kpi"><small>Investimento</small><b>[DADO]</b></div></div>
+    <p class="note">Exemplo de página do app. Os números são campos para ligar aos dados reais. Clique na LIA no canto da tela.</p>
+  </main>
+</div>
+
+<button class="fab" id="fab" aria-label="Abrir chat com a LIA" aria-expanded="false"><span class="dot"></span><span id="mini" style="position:absolute;inset:0"></span></button>
+<section class="panel" id="panel" hidden aria-label="Chat com a LIA">
+  <div class="ph" id="ph"><span class="ttl" id="ttl">LIA · online</span><button class="x" id="close" aria-label="Fechar chat">×</button></div>
+  <div class="msgs" id="msgs" aria-live="polite"></div>
+  <form id="f"><label for="q" style="position:absolute;left:-9999px">Mensagem</label><input id="q" autocomplete="off" placeholder="Pergunte algo para a LIA"><button type="submit">Enviar</button></form>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<script src="../lia-agent.js"></script>
+<script>
+/* Exemplo de widget de chat no app:
+   - avatar pequeno (enquadramento 'face') no botão flutuante
+   - LIA maior (enquadramento 'bust') no topo do chat
+   - estados ligados ao fluxo da conversa: digitando -> listen, aguardando -> think/working, respondendo -> talk
+   Troque a função responder() pela chamada real ao backend da LIA. */
+const mini=LiaAgent.create(document.getElementById('mini'),{framing:'face',controls:false,shadows:false,floorRing:false,pixelRatio:1.5,outfit:'auto'});
+let big=null;
+const fab=document.getElementById('fab'),panel=document.getElementById('panel'),msgs=document.getElementById('msgs'),q=document.getElementById('q'),ttl=document.getElementById('ttl');
+function open(){panel.hidden=false;fab.setAttribute('aria-expanded','true');mini.pause();
+ if(!big){big=LiaAgent.create(document.getElementById('ph'),{framing:'bust',controls:false,shadows:false,floorRing:false,state:'wave',outfit:'auto'});add('lia','Oi! Eu sou a LIA. Posso ver suas campanhas, criar anúncios ou tirar dúvidas.');setTimeout(()=>big.setState('idle'),2500);}
+ else big.resume();q.focus();}
+function close(){panel.hidden=true;fab.setAttribute('aria-expanded','false');if(big)big.pause();mini.resume();fab.focus();}
+fab.addEventListener('click',()=>panel.hidden?open():close());document.getElementById('close').addEventListener('click',close);
+function add(who,text){const d=document.createElement('div');d.className='m '+who;d.textContent=text;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;return d;}
+let typingTimer;q.addEventListener('input',()=>{if(!big)return;big.setState('listen');ttl.textContent='LIA · ouvindo';clearTimeout(typingTimer);typingTimer=setTimeout(()=>{big.setState('idle');ttl.textContent='LIA · online';},1600);});
+// ---- troque por sua API ----
+async function responder(texto){const t=texto.toLowerCase();await new Promise(r=>setTimeout(r,1400));
+ if(t.includes('obrigad'))return{estado:'love',texto:'Eu que agradeço! Qualquer coisa é só chamar.'};
+ if(t.includes('relat')||t.includes('result')||t.includes('campanha'))return{estado:'analyze',texto:'Separei um resumo das suas campanhas. [INSERIR DADOS REAIS DA API]'};
+ if(t.includes('anúncio')||t.includes('anuncio')||t.includes('criar'))return{estado:'working',texto:'Estou montando uma sugestão de anúncio para você revisar.'};
+ if(t.includes('?')&&t.length<6)return{estado:'confused',texto:'Não entendi bem. Pode me contar com outras palavras?'};
+ return{estado:'happy',texto:'Entendi! Vou cuidar disso e te aviso por aqui.'};}
+document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();const v=q.value.trim();if(!v)return;q.value='';add('eu',v);clearTimeout(typingTimer);
+ big.setState('think');ttl.textContent='LIA · pensando';const ty=document.createElement('div');ty.className='typing';ty.innerHTML='<span></span><span></span><span></span>';msgs.appendChild(ty);msgs.scrollTop=msgs.scrollHeight;
+ const r=await responder(v);ty.remove();big.setState('talk');ttl.textContent='LIA · respondendo';
+ const d=add('lia','');let i=0;const iv=setInterval(()=>{d.textContent=r.texto.slice(0,++i);msgs.scrollTop=msgs.scrollHeight;if(i>=r.texto.length){clearInterval(iv);big.react(r.estado,2600);ttl.textContent='LIA · online';}},22);});
+</script>
+</body>
+</html>
