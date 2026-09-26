@@ -24,6 +24,7 @@ import {
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { WebhooksService } from './webhooks.service.js';
+import { Auditar } from '../audit/auditar.js';
 
 // Webhooks de saída da empresa ativa (ADR-004): CloudEvents assinados no padrão Standard Webhooks.
 @ApiTags('webhooks')
@@ -42,6 +43,7 @@ export class WebhooksController {
   }
 
   @Post('endpoints')
+  @Auditar('webhook.cadastrar', { recurso: 'webhook_endpoint' })
   @Permissao('webhooks.gerenciar')
   @HttpCode(201)
   @ApiOperation({
@@ -57,6 +59,7 @@ export class WebhooksController {
   }
 
   @Delete('endpoints/:id')
+  @Auditar('webhook.desativar', { recurso: 'webhook_endpoint' })
   @Permissao('webhooks.gerenciar')
   @HttpCode(204)
   @ApiOperation({ summary: 'Desativar endpoint', description: 'Para de enviar na hora e revoga o segredo.' })
@@ -67,6 +70,7 @@ export class WebhooksController {
   }
 
   @Post('endpoints/:id/test')
+  @Auditar('webhook.testar', { recurso: 'webhook_endpoint' })
   @Permissao('webhooks.gerenciar')
   @HttpCode(202)
   @ApiOperation({ summary: 'Enviar evento de teste', description: 'Manda `liame.webhook.test` só para este endpoint.' })
@@ -85,6 +89,7 @@ export class WebhooksController {
   }
 
   @Post('deliveries/:id/retry')
+  @Auditar('webhook.reenviar', { recurso: 'webhook_delivery' })
   @Permissao('webhooks.gerenciar')
   @HttpCode(202)
   @ApiOperation({ summary: 'Reenviar entrega', description: 'Volta a entrega para a fila agora (reenvio manual, inclusive da fila de mortos).' })

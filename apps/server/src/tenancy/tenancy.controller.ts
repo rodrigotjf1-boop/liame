@@ -10,8 +10,9 @@ import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { sql } from 'drizzle-orm';
 import { Auth, Permissao } from '../auth/access.js';
-import { type AuthContext, currentTx } from '../context/request-context.js';
+import { auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { emitEvent } from '../events/outbox.js';
+import { Auditar } from '../audit/auditar.js';
 
 // Empresa ativa e marcas. A RLS filtra pelo tenant da transação; a rota ainda assim filtra (defesa em camadas, ADR-003).
 @ApiTags('organization')
@@ -41,6 +42,7 @@ export class TenancyController {
   }
 
   @Post('brands')
+  @Auditar('marca.criar', { recurso: 'brand' })
   @Permissao('marcas.gerenciar')
   @HttpCode(201)
   @ApiOperation({ summary: 'Criar marca', description: 'Cria uma marca na empresa ativa.' })
@@ -51,6 +53,7 @@ export class TenancyController {
     const tx = currentTx();
     await tx.execute(sql`insert into liame.brand (id, tenant_id, name) values (${id}, ${auth.tenantId}, ${body.name})`);
     await emitEvent(tx, { tenantId: auth.tenantId!, type: 'liame.brand.created', subject: id, data: { brand_id: id, name: body.name } });
+    auditDetail({ after: { name: body.name } });
     return { id, name: body.name };
   }
 }

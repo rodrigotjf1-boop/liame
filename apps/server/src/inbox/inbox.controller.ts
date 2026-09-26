@@ -3,6 +3,7 @@ import { Controller, HttpCode, Param, Post, Req } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiNotFoundResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { Publico } from '../auth/access.js';
 import { InboxService } from './inbox.service.js';
+import { SemAuditoria } from '../audit/auditar.js';
 
 interface RawRequest {
   rawBody?: Buffer;
@@ -16,6 +17,7 @@ export class InboxController {
   constructor(private readonly inbox: InboxService) {}
 
   @Post(':provider')
+  @SemAuditoria('o registro é o próprio inbox_event, gravado cru e deduplicado')
   @Publico()
   @HttpCode(202)
   @ApiOperation({

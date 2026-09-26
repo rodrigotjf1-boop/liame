@@ -2,6 +2,7 @@ import { ProblemDetails, SpikeEchoRequest, SpikeEchoResponse } from '@liame/cont
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { Publico } from '../auth/access.js';
 import { ApiBadRequestResponse, ApiCreatedResponse, ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SemAuditoria } from '../audit/auditar.js';
 
 /** Rotas do spike A0-3 e da E1: provam validação, OpenAPI e a política de erros. Saem na A1 (E2). */
 @ApiTags('spike')
@@ -9,6 +10,7 @@ import { ApiBadRequestResponse, ApiCreatedResponse, ApiExcludeEndpoint, ApiOpera
 @Controller('spike')
 export class SpikeController {
   @Post('echo')
+  @SemAuditoria('rota provisória do spike, sem estado')
   @ApiOperation({ summary: 'Eco (spike)', description: 'Devolve a mensagem validada pelo schema Zod. Rota provisória do spike A0-3.' })
   @ApiCreatedResponse({ standardSchema: SpikeEchoResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })

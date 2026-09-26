@@ -25,6 +25,7 @@ import type { AuthContext } from '../context/request-context.js';
 import { Auth, Autenticado, Publico } from './access.js';
 import { AuthService, type RequestMeta } from './auth.service.js';
 import { SessionService } from './session.service.js';
+import { Auditar, SemAuditoria } from '../audit/auditar.js';
 
 interface HttpRequest {
   ip?: string;
@@ -48,6 +49,7 @@ export class AuthController {
   ) {}
 
   @Post('signup')
+  @Auditar('conta.criar', { manual: true, recurso: 'organization' })
   @Publico()
   @HttpCode(202)
   @ApiOperation({
@@ -62,6 +64,7 @@ export class AuthController {
   }
 
   @Post('verify-email')
+  @Auditar('email.confirmar', { manual: true, escopo: 'pessoa' })
   @Publico()
   @HttpCode(200)
   @ApiOperation({ summary: 'Confirmar e-mail', description: 'Usa o link de uso único enviado no cadastro (vale 24 horas).' })
@@ -72,6 +75,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Auditar('sessao.abrir', { manual: true, escopo: 'pessoa' })
   @Publico()
   @HttpCode(200)
   @ApiOperation({
@@ -92,6 +96,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @Auditar('sessao.encerrar', { escopo: 'pessoa' })
   @Autenticado({ antesDoSegundoFator: true })
   @ApiCookieAuth('liame_sessao')
   @HttpCode(204)
@@ -103,6 +108,7 @@ export class AuthController {
   }
 
   @Post('password/forgot')
+  @SemAuditoria('só manda o link; a resposta não revela se a conta existe e o registro é o próprio token')
   @Publico()
   @HttpCode(202)
   @ApiOperation({ summary: 'Esqueci a senha', description: 'Manda um link de uso único (1 hora). A resposta é a mesma exista ou não a conta.' })
@@ -113,6 +119,7 @@ export class AuthController {
   }
 
   @Post('password/reset')
+  @Auditar('senha.redefinir', { manual: true, escopo: 'pessoa' })
   @Publico()
   @HttpCode(200)
   @ApiOperation({ summary: 'Criar senha nova', description: 'Usa o link de uso único e encerra todas as sessões abertas.' })
@@ -139,6 +146,7 @@ export class MeController {
   }
 
   @Put('active-organization')
+  @Auditar('empresa.trocar_ativa', { escopo: 'pessoa', recurso: 'organization' })
   @Autenticado()
   @ApiOperation({ summary: 'Trocar de empresa', description: 'Muda a empresa ativa da sessão. Só para empresas com vínculo ativo.' })
   @ApiOkResponse({ standardSchema: MeResponse })

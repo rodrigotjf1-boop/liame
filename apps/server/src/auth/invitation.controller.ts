@@ -15,6 +15,7 @@ import { Auth, Autenticado, Publico } from './access.js';
 import type { RequestMeta } from './auth.service.js';
 import { InvitationAcceptService } from './invitation-accept.service.js';
 import { SessionService } from './session.service.js';
+import { Auditar, SemAuditoria } from '../audit/auditar.js';
 
 interface HttpRequest {
   ip?: string;
@@ -39,6 +40,7 @@ export class InvitationController {
   ) {}
 
   @Post('preview')
+  @SemAuditoria('só consulta o convite; nada muda')
   @Publico()
   @HttpCode(200)
   @ApiOperation({ summary: 'Ver convite', description: 'Empresa, nível e e-mail do convite, e se o e-mail já tem conta.' })
@@ -50,6 +52,7 @@ export class InvitationController {
   }
 
   @Post('signup')
+  @Auditar('convite.aceitar', { manual: true, recurso: 'membership' })
   @Publico()
   @HttpCode(200)
   @ApiOperation({
@@ -71,6 +74,7 @@ export class InvitationController {
   }
 
   @Post('accept')
+  @Auditar('convite.aceitar', { manual: true, recurso: 'membership' })
   @Autenticado()
   @ApiCookieAuth('liame_sessao')
   @HttpCode(200)

@@ -14,7 +14,7 @@ import { ROLE_RANK } from '../auth/permissions.js';
 import { RateLimitService } from '../auth/rate-limit.service.js';
 import { newToken } from '../auth/tokens.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
-import { afterCommit, type AuthContext, currentTx } from '../context/request-context.js';
+import { afterCommit, auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { emitEvent } from '../events/outbox.js';
 import { Mailer } from '../mail/mailer.js';
@@ -129,6 +129,7 @@ export class PeopleService {
 
     // Evento sem o e-mail: webhook sai para fora, e o convite ainda não é da pessoa.
     await emitEvent(tx, { tenantId, type: 'liame.invitation.created', subject: id, data: { invitation_id: id, role: grant.role } });
+    auditDetail({ resourceId: id, after: grantDetail(grant) });
     const org = await this.organizationName(tx, tenantId);
     const link = `${this.config.appUrl}/convite?token=${token}`;
     afterCommit(() =>
@@ -187,6 +188,7 @@ export class PeopleService {
          set role_key = ${grant.role}, approve_limit_micros = ${grant.approveLimitMicros}, dual_approval = ${grant.dualApproval},
              billing_access = ${grant.billingAccess}, expires_at = ${expiresAt}
        where id = ${id} and tenant_id = ${tenantId}`);
+    auditDetail({ before: grantDetail(current), after: grantDetail(grant) });
     await emitEvent(tx, {
       tenantId,
       type: 'liame.member.updated',
@@ -229,6 +231,7 @@ export class PeopleService {
     const target = await this.target(tx, auth, id);
     await tx.execute(sql`update liame.membership set revoked_at = now() where id = ${id} and tenant_id = ${tenantId} and revoked_at is null`);
     await emitEvent(tx, { tenantId, type: 'liame.member.removed', subject: id, data: { member_id: id, user_id: target.user_id } });
+    auditDetail({ before: { user_id: target.user_id, role: target.role_key } });
     if (auth.roleKey !== 'dono') {
       const org = await this.organizationName(tx, tenantId);
       await this.notifyOwners(tx, tenantId, `Liame: ${auth.name} removeu o acesso de ${target.name}`, [
@@ -290,6 +293,11 @@ export class PeopleService {
 function tenantOf(auth: AuthContext): string {
   if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
   return auth.tenantId;
+}
+
+/** O acesso concedido, para a auditoria (sem e-mail). */
+function grantDetail(g: CheckedGrant): Record<string, unknown> {
+  return { role: g.role, approve_limit_micros: g.approveLimitMicros, dual_approval: g.dualApproval, billing_access: g.billingAccess };
 }
 
 function describeLimit(grant: CheckedGrant): string {

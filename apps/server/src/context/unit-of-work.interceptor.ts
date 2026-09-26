@@ -1,8 +1,12 @@
 import { type Database, withContext } from '@liame/database';
 import { type CallHandler, type ExecutionContext, Inject, Injectable, Logger, type NestInterceptor } from '@nestjs/common';
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants.js';
+import { trace } from '@opentelemetry/api';
 import { from, lastValueFrom, type Observable } from 'rxjs';
+import { writeAudit } from '../audit/audit.js';
+import { AUDIT_KEY, type AuditDeclaration } from '../audit/auditar.js';
 import type { RequestWithAuth } from '../auth/access.js';
+import { ROLE_LABEL } from '../people/grant-rules.js';
 import { DATABASE } from '../database/database.module.js';
 import {
   claimIdempotencyKey,
@@ -12,7 +16,7 @@ import {
   requestHash,
   storeIdempotentResponse,
 } from './idempotency.js';
-import { requestStore } from './request-context.js';
+import { type AuthContext, requestStore } from './request-context.js';
 
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -21,6 +25,7 @@ interface HttpRequest extends RequestWithAuth {
   url: string;
   originalUrl?: string;
   body?: unknown;
+  params?: Record<string, string>;
   headers: Record<string, string | string[] | undefined>;
 }
 interface HttpResponse {
@@ -54,10 +59,12 @@ export class UnitOfWorkInterceptor implements NestInterceptor {
     const status = (Reflect.getMetadata(HTTP_CODE_METADATA, ctx.getHandler()) as number | undefined) ?? (method === 'POST' ? 201 : 200);
     const ids = { tenantId: auth.tenantId, userId: auth.userId };
 
+    const declaration = Reflect.getMetadata(AUDIT_KEY, ctx.getHandler()) as AuditDeclaration | undefined;
     const effects: Array<() => Promise<void>> = [];
     let replayed = false;
-    const result = await withContext(database.db, ids, (tx) =>
-      requestStore.run({ tx, afterCommit: effects }, async () => {
+    const result = await withContext(database.db, ids, (tx) => {
+      const store: Parameters<typeof requestStore.run>[0] = { tx, afterCommit: effects };
+      return requestStore.run(store, async () => {
         if (idem) {
           const claim = await claimIdempotencyKey(tx, ids, idem);
           if (claim.replay) {
@@ -66,10 +73,28 @@ export class UnitOfWorkInterceptor implements NestInterceptor {
           }
         }
         const value: unknown = await lastValueFrom(next.handle(), { defaultValue: undefined });
+        // A1-6: a mutação e o evento de auditoria entram na mesma transação.
+        if (declaration?.kind === 'auditar' && !declaration.manual) {
+          await writeAudit(tx, {
+            tenantId: declaration.scope === 'pessoa' ? null : auth.tenantId,
+            actorType: 'human',
+            actorId: auth.userId,
+            actorLabel: actorLabel(auth),
+            actorRole: auth.roleKey,
+            action: declaration.action,
+            resourceType: declaration.resourceType,
+            resourceId: store.audit?.resourceId ?? req.params?.id ?? idOf(value),
+            before: store.audit?.before ?? null,
+            after: store.audit?.after ?? null,
+            reason: store.audit?.reason ?? null,
+            traceId: trace.getActiveSpan()?.spanContext().traceId ?? null,
+            origin: 'api',
+          });
+        }
         if (idem) await storeIdempotentResponse(tx, ids, idem.key, status, value);
         return value;
-      }),
-    );
+      });
+    });
     if (replayed) http.getResponse<HttpResponse>().setHeader(REPLAYED_HEADER, 'true');
     for (const effect of effects) {
       try {
@@ -80,4 +105,14 @@ export class UnitOfWorkInterceptor implements NestInterceptor {
     }
     return result;
   }
+}
+
+/** Quem era no momento: "Juliana, Administrador" (ADR-017). */
+export function actorLabel(auth: Pick<AuthContext, 'name' | 'roleKey'>): string {
+  return auth.roleKey ? `${auth.name}, ${ROLE_LABEL[auth.roleKey]}` : auth.name;
+}
+
+function idOf(value: unknown): string | null {
+  if (value && typeof value === 'object' && typeof (value as { id?: unknown }).id === 'string') return (value as { id: string }).id;
+  return null;
 }

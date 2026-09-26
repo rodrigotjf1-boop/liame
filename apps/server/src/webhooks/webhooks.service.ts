@@ -9,7 +9,7 @@ import { uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
-import { type AuthContext, currentTx } from '../context/request-context.js';
+import { auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { emitEvent } from '../events/outbox.js';
 import { assertSafeUrl, UnsafeUrlError } from '../events/safe-http.js';
@@ -82,6 +82,8 @@ export class WebhooksService {
       values (${id}, ${tenantId}, ${input.url}, ${input.description ?? null},
               ${`{${types.join(',')}}`}::text[], ${secretId}, ${auth.userId})
       returning id, url, description, event_types, created_at, disabled_at`);
+    // Só o host: a URL pode levar parâmetros que o cliente considera sensíveis.
+    auditDetail({ after: { host: new URL(input.url).host, event_types: types } });
     return { ...toEndpoint(r.rows[0]!), secret };
   }
 

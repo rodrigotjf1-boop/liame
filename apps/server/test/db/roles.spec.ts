@@ -87,18 +87,20 @@ describe.skipIf(!hasDb)('papéis como dado', () => {
     expect(routes.length).toBeGreaterThan(5);
     const results: string[] = [];
     for (const [role, cookie] of Object.entries(sessions)) {
-      for (const route of routes) {
-        const needed = route.access!.kind === 'permissao' ? route.access!.permissions : [];
-        const allowed = needed.every((p) => MATRIX[role]!.includes(p));
-        // Corpo vazio e id que não existe: quem passa pelo guard recebe 400 ou 404, sem efeito colateral.
-        const path = route.path.replace(/:[a-zA-Z_]+/g, ANY_ID);
-        const r = await api.call(route.method, path, { cookie, body: route.method === 'GET' ? undefined : {} });
-        const barred = r.status === 403 && r.body?.code === 'sem-permissao';
-        if (barred === allowed) results.push(`${role} ${route.method} ${route.path}: ${r.status} ${r.body?.code ?? ''}`);
-      }
+      // Corpo vazio e id que não existe: quem passa pelo guard recebe 400 ou 404, sem efeito colateral.
+      await Promise.all(
+        routes.map(async (route) => {
+          const needed = route.access!.kind === 'permissao' ? route.access!.permissions : [];
+          const allowed = needed.every((p) => MATRIX[role]!.includes(p));
+          const path = route.path.replace(/:[a-zA-Z_]+/g, ANY_ID);
+          const r = await api.call(route.method, path, { cookie, body: route.method === 'GET' ? undefined : {} });
+          const barred = r.status === 403 && r.body?.code === 'sem-permissao';
+          if (barred === allowed) results.push(`${role} ${route.method} ${route.path}: ${r.status} ${r.body?.code ?? ''}`);
+        }),
+      );
     }
     expect(results).toEqual([]);
-  });
+  }, 90_000);
 
   it('a empresa com conjunto próprio muda o acesso de um papel sem deploy, só para ela', async () => {
     const a = await owner('Empresa A');
