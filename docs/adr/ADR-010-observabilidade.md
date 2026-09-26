@@ -41,3 +41,11 @@ As diretrizes pedem um `trace_id` de ponta a ponta (Next → API → workflow �
 - Custo inicial estimado de **US$0–30/mês**.
 - Mais um contêiner (Collector) para operar, e é nele que ficam as regras de PII e amostragem.
 - O semconv GenAI ainda está em *Development*: normalizar nomes no Collector quando mudarem.
+
+## Implementação (E8, 26/09/2026)
+
+- **Redação na app:** `RedactingSpanExporter` (`packages/telemetry`) envolve o exportador OTLP; o que sai do processo não tem e-mail, telefone, CPF, CNPJ, parâmetros sensíveis de URL (`token`, `code`, `email`…) nem cabeçalho de credencial, e o IP de quem chama vira /24. O endereço do servidor chamado (`server.address`) não é dado pessoal e fica.
+- **Trace de ponta a ponta:** o `traceparent` da requisição é gravado no pedido de ação e no evento (migration 0014); o executor e o entregador de webhooks do worker continuam o mesmo trace. Spans manuais: `politica.avaliar`, `orcamento.reservar`, `acao.executar`, `conector.validar`, `conector.aplicar`, `webhook.entregar` (atributos só com ids e códigos).
+- **Verificação:** `dist/scripts/trace-check.js` roda no `pnpm test` do servidor com o carregamento real de módulos (OTel antes do Nest, do http e do pg).
+- **Collector:** `infra/otel-collector.yaml` com `memory_limiter`, `redaction` (valores com cara de e-mail, telefone, CPF, CNPJ viram `****`), `transform` (IP /24, cookie e autorização fora), `tail_sampling` (100% de erro e de ação, 20% do resto) e exportador OTLP para o Grafana (`GRAFANA_OTLP_ENDPOINT`, `GRAFANA_OTLP_AUTH`). Validado com `otelcol-contrib validate` 0.161.0 e testado com um span de verdade.
+- **Pendente:** conta do Grafana Cloud (região Brasil), contêiner do Collector no EasyPanel e o print do trace (A1-14); Sentry e Langfuse entram com a IA (A3).

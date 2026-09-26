@@ -3,7 +3,11 @@ import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg';
 import { UndiciInstrumentation } from '@opentelemetry/instrumentation-undici';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { NoopSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
+import { BatchSpanProcessor, NoopSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { RedactingSpanExporter } from './redact.js';
+
+export { maskIp, RedactingSpanExporter, redactAttributes, redactSpan, redactString } from './redact.js';
 
 export interface TelemetryOptions {
   /** `liame-api`, `liame-worker` ou `liame-web` (ADR-010). */
@@ -36,13 +40,17 @@ export function startTelemetry(options: TelemetryOptions): NodeSDK {
   );
 
   const quiet = !exportConfigured && !options.spanProcessors;
+  // Exportando, o OTLP passa antes pela redação de dado pessoal (ADR-010, LGPD).
+  const exporting = exportConfigured && process.env.OTEL_TRACES_EXPORTER !== 'none' && !options.spanProcessors;
   sdk = new NodeSDK({
     serviceName: options.serviceName,
     ...(options.spanProcessors
       ? { spanProcessors: options.spanProcessors }
       : quiet
         ? { spanProcessors: [new NoopSpanProcessor()] }
-        : {}),
+        : exporting
+          ? { spanProcessors: [new BatchSpanProcessor(new RedactingSpanExporter(new OTLPTraceExporter()))] }
+          : {}),
     ...(quiet || options.spanProcessors ? { metricReaders: [], logRecordProcessors: [] } : {}),
     instrumentations: [
       new HttpInstrumentation({

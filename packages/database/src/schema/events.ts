@@ -13,6 +13,7 @@ export const outboxEvent = liame.table('outbox_event', {
   occurredAt: ts('occurred_at').notNull().defaultNow(),
   publishedAt: ts('published_at'),
   createdAt: ts('created_at').notNull().defaultNow(),
+  traceContext: text('trace_context'),
 });
 
 export const webhookEndpoint = liame.table('webhook_endpoint', {

@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@opentelemetry/api": "catalog:",
+    "@opentelemetry/exporter-trace-otlp-proto": "catalog:",
     "@opentelemetry/instrumentation-http": "catalog:",
     "@opentelemetry/instrumentation-pg": "catalog:",
     "@opentelemetry/instrumentation-undici": "catalog:",

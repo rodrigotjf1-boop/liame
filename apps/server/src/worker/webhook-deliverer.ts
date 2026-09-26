@@ -6,6 +6,7 @@ import { DATABASE } from '../database/database.module.js';
 import { cloudEvent } from '../events/outbox.js';
 import { safePost } from '../events/safe-http.js';
 import { webhookHeaders } from '../events/standard-webhooks.js';
+import { inSpan } from '../observability/trace.js';
 import { VaultService } from '../vault/vault.service.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
@@ -26,6 +27,7 @@ type Claim = {
   subject: string | null;
   data: unknown;
   occurred_at: Date | string;
+  trace_context: string | null;
 };
 
 /**
@@ -47,7 +49,8 @@ export class WebhookDeliverer {
     if (!database) return 0;
     const claimed = await withSystem(database.db, async (tx) => {
       const r = await tx.execute<Claim>(sql`
-        select d.id, d.attempts, e.url, e.secret_id, ev.id as event_id, ev.tenant_id, ev.type, ev.subject, ev.data, ev.occurred_at
+        select d.id, d.attempts, e.url, e.secret_id, ev.id as event_id, ev.tenant_id, ev.type, ev.subject, ev.data, ev.occurred_at,
+               ev.trace_context
           from liame.webhook_delivery d
           join liame.webhook_endpoint e on e.id = d.endpoint_id
           join liame.outbox_event ev on ev.id = d.event_id
@@ -64,7 +67,11 @@ export class WebhookDeliverer {
       for (const c of r.rows) out.push({ ...c, secret: await this.vault.readSecret(tx, c.secret_id) });
       return out;
     });
-    await Promise.all(claimed.map((c) => this.deliverOne(database, c)));
+    await Promise.all(
+      claimed.map((c) =>
+        inSpan('webhook.entregar', { 'liame.event_type': c.type, 'liame.attempt': c.attempts + 1 }, () => this.deliverOne(database, c), c.trace_context),
+      ),
+    );
     return claimed.length;
   }
 

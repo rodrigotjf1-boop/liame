@@ -1,0 +1,74 @@
+# OpenTelemetry Collector (contrib) do Liame — ADR-010.
+# Recebe OTLP da API, do worker e do web; limpa dado pessoal de novo (a app já limpa: defesa em camadas);
+# amostra por cauda (100% de erro e de ação); exporta para o Grafana Cloud (região Brasil).
+# Validar depois de mudar: `otelcol-contrib validate --config infra/otel-collector.yaml` (docs/configuracao.md).
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  # Qualquer valor com cara de e-mail, telefone, CPF ou CNPJ sai mascarado.
+  redaction:
+    allow_all_keys: true
+    blocked_values:
+      - "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
+      - "(?:\\+?55[\\s.-]?)?\\(?\\d{2}\\)?[\\s.-]?9?\\d{4}[\\s.-]?\\d{4}"
+      - "\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}"
+      - "\\d{2}\\.?\\d{3}\\.?\\d{3}/?\\d{4}-?\\d{2}"
+    summary: silent
+
+  # IP de quem chamou: só a rede /24. Cabeçalhos de credencial nunca saem.
+  transform/pii:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - replace_pattern(attributes["client.address"], "^(\\d+\\.\\d+\\.\\d+)\\.\\d+$", "$$1.0")
+          - replace_pattern(attributes["network.peer.address"], "^(\\d+\\.\\d+\\.\\d+)\\.\\d+$", "$$1.0")
+          - delete_key(attributes, "http.request.header.cookie")
+          - delete_key(attributes, "http.request.header.authorization")
+
+  # Guarda tudo o que tem erro ou ação (dinheiro); do resto, uma amostra.
+  tail_sampling:
+    decision_wait: 10s
+    policies:
+      - name: erros
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: acoes
+        type: string_attribute
+        string_attribute:
+          key: liame.action_id
+          values: [".+"]
+          enabled_regex_matching: true
+      - name: amostra
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 20
+
+  batch: {}
+
+exporters:
+  # Grafana Cloud (OTLP gateway da região escolhida). Endpoint e credencial pelo ambiente, nunca no git.
+  otlphttp/grafana:
+    endpoint: ${env:GRAFANA_OTLP_ENDPOINT}
+    headers:
+      Authorization: Basic ${env:GRAFANA_OTLP_AUTH}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, redaction, transform/pii, tail_sampling, batch]
+      exporters: [otlphttp/grafana]

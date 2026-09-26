@@ -9,6 +9,7 @@ import { DATABASE } from '../database/database.module.js';
 import { emitEvent } from '../events/outbox.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
+import { inSpan } from '../observability/trace.js';
 import { advance } from '../workflow/workflow.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
@@ -48,8 +49,8 @@ export class ActionExecutor {
 
   async executeBatch(limit = 20, scope: JobScope = {}): Promise<number> {
     const claimed = await withSystem(this.db, async (tx) => {
-      const r = await tx.execute<{ id: string; tenant_id: string }>(sql`
-        select id, tenant_id from liame.action_request
+      const r = await tx.execute<{ id: string; tenant_id: string; trace_context: string | null; tool: string; provider: string }>(sql`
+        select id, tenant_id, trace_context, tool, provider from liame.action_request
          where status = 'aprovada' ${tenantFilter(scope, sql`tenant_id`)}
          order by updated_at limit ${limit}
          for update skip locked`);
@@ -60,7 +61,8 @@ export class ActionExecutor {
     });
     for (const c of claimed) {
       try {
-        await this.executeOne(c.tenant_id, c.id);
+        // O span continua o trace da requisição que pediu a ação (API → worker → connector).
+        await inSpan('acao.executar', { 'liame.action_id': c.id, 'liame.tool': c.tool, 'liame.provider': c.provider }, () => this.executeOne(c.tenant_id, c.id), c.trace_context);
       } catch (err) {
         // Erro inesperado: a ação volta para 'aprovada' pelo requeue depois do prazo; o motivo fica no log.
         this.logger.error(`ação ${c.id} falhou ao executar: ${err instanceof Error ? err.message : String(err)}`);
@@ -148,9 +150,10 @@ export class ActionExecutor {
     const ref = { tenantId: row.tenant_id, accountId: row.account_id, resourceId: row.resource_id };
     const expected = row.before_version ?? 0;
     // Primeiro valida (quando o provedor oferece), depois aplica.
-    const check = await connector.apply(tx, ref, row.desired_state, expected, { validateOnly: true });
+    const attrs = { 'liame.provider': row.provider, 'liame.tool': row.tool };
+    const check = await inSpan('conector.validar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { validateOnly: true }));
     if (!check.ok) return { status: 'estado_mudou', reason: 'o recurso mudou desde o pedido; nada foi sobrescrito', result: check.current.state };
-    const applied = await connector.apply(tx, ref, row.desired_state, expected);
+    const applied = await inSpan('conector.aplicar', attrs, () => connector.apply(tx, ref, row.desired_state, expected));
     if (!applied.ok) return { status: 'estado_mudou', reason: 'o recurso mudou desde o pedido; nada foi sobrescrito', result: applied.current.state };
     return { status: 'executada', reason: null, result: applied.state, version: applied.version };
   }

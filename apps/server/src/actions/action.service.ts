@@ -24,6 +24,7 @@ import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { Mailer } from '../mail/mailer.js';
 import { actionMatches, evaluatePolicy } from '../policy/engine.js';
 import { PolicyService } from '../policy/policy.service.js';
+import { currentTraceparent, inSpan } from '../observability/trace.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { BudgetService } from './budget.service.js';
 import { CONNECTORS, type Connector } from './connectors.js';
@@ -105,7 +106,9 @@ export class ActionService {
     const read = await connector.read(tx, { tenantId, accountId: input.account_id, resourceId: input.resource_id });
     if (!read) throw new AppProblem(404, 'recurso-nao-encontrado', 'Recurso não encontrado', 'A conta ou o recurso não existe no provedor.');
     const plan = tool.plan(read.state, params);
-    const decision = await this.decide(tx, tenantId, input.brand_id ?? null, tool, input, plan);
+    const decision = await inSpan('politica.avaliar', { 'liame.tool': tool.name, 'liame.action': plan.action }, () =>
+      this.decide(tx, tenantId, input.brand_id ?? null, tool, input, plan),
+    );
 
     const id = uuidv7();
     const { mode, status, reason } = await this.statusFor(decision.mode, auth, input.brand_id ?? null);
@@ -116,13 +119,13 @@ export class ActionService {
         insert into liame.action_request (id, tenant_id, brand_id, tool, action, provider, account_id, resource_id, params, risk_level,
                                           budget_impact, value_micros, current_value_micros, reserved_micros, before_state, before_version,
                                           desired_state, plan_hash, action_fingerprint, mode, policy_decision, status, status_reason,
-                                          requested_by, expires_at)
+                                          requested_by, expires_at, trace_context)
         values (${id}, ${tenantId}, ${input.brand_id ?? null}, ${tool.name}, ${plan.action}, ${input.provider}, ${input.account_id},
                 ${input.resource_id}, ${JSON.stringify(params)}::jsonb, ${tool.risk}, ${plan.budgetImpact}, ${plan.valueMicros},
                 ${plan.currentValueMicros}, ${status === 'sombra' ? 0 : plan.reserveMicros}, ${JSON.stringify(read.state)}::jsonb,
                 ${read.version}, ${JSON.stringify(plan.desiredState)}::jsonb, ${planHash}, ${fingerprint}, ${mode},
                 ${JSON.stringify(decision)}::jsonb, ${status}, ${reason}, ${auth.userId},
-                now() + make_interval(hours => ${ACTION_TTL_HOURS}))`);
+                now() + make_interval(hours => ${ACTION_TTL_HOURS}), ${currentTraceparent()})`);
     } catch (err) {
       // Outro pedido ativo para a mesma ferramenta no mesmo recurso (A1-8): inclusive dois ao mesmo tempo.
       if ((err as { cause?: { code?: string } }).cause?.code === '23505') {
@@ -131,7 +134,9 @@ export class ActionService {
       throw err;
     }
     if (status !== 'sombra') {
-      await this.budget.reserve(tx, { tenantId, brandId: input.brand_id ?? null, actionId: id, amountMicros: plan.reserveMicros });
+      await inSpan('orcamento.reservar', { 'liame.action_id': id }, () =>
+        this.budget.reserve(tx, { tenantId, brandId: input.brand_id ?? null, actionId: id, amountMicros: plan.reserveMicros }),
+      );
     }
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
     await emitEvent(tx, { tenantId, type: 'liame.action.requested', subject: id, data: { action_id: id, tool: tool.name, action: plan.action, mode, status } });
