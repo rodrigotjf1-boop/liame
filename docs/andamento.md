@@ -13,11 +13,15 @@
 | A0-3b | Contas AWS (KMS sa-east-1 e conta da âncora) | ⏳ dono | IDs das contas, sem segredo. |
 | A0-4 | Mockups aprovados (Lite e Pro) | ⏳ dono | Protótipo em `mockups/prototipo-app.html` (verificado: 24 cenários, 4 larguras, claro e escuro). |
 | A0-5 | Pedidos às plataformas | ⏳ dono | Meta, Google Cloud/Ads, TikTok, GBP. |
-| A0-6 | Termos, privacidade e contrato de operador publicados | ⏳ | Landing no ar sem essas páginas. Posso redigir os rascunhos para revisão jurídica. |
+| A0-6 | Termos, privacidade e contrato de operador publicados | 🟡 **rascunhos prontos** | `docs/juridico/` (v0.1, 25/09/2026): faltam os dados da empresa e 12 decisões do dono (README §1), a revisão do advogado e a publicação no site. |
 | A0-7 | Restaurante de testes confirmado | ⏳ dono | Checklist, incluindo o número de WhatsApp na API oficial. |
 | A0-8 | Supabase São Paulo, EasyPanel, Cloudflare | ⏳ dono | Cloudflare pronta (domínio). |
 | A0-9 | Plano do token por loja do Regem (C1) | ⏳ | Issue/plano no Regem. |
-| A0-10 | Threat model v1 revisado | ⏳ | `security-model.md`. |
+| A0-10 | Threat model v1 revisado | 🟡 **revisão feita** | `security-model.md` §2.1 (v1.1, 25/09/2026): 16 ameaças novas com controle e fase; aguarda o seu aceite. |
+
+## Próxima fase
+
+Plano da A1 (núcleo seguro) para aprovação: [`plano-a1.md`](plano-a1.md). A entrega E1 é infraestrutura e pode começar já.
 
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 

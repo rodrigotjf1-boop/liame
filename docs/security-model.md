@@ -1,6 +1,6 @@
 # Liame — Modelo de segurança
 
-> Status: **proposta para aprovação** · 24/09/2026. Complementa os ADR-003 (RLS), ADR-007 (política e ações), ADR-008 (MCP) e ADR-009 (identidade).
+> Status: **proposta para aprovação** · 24/09/2026 · **threat model revisado em 25/09/2026 (v1.1, §2.1)**. Complementa os ADR-003 (RLS), ADR-007 (política e ações), ADR-008 (MCP), ADR-009 (identidade), ADR-013 (acesso), ADR-014 (ciclo de vida) e ADR-017 (acesso delegado).
 
 ## 1. O que protegemos (ativos)
 
@@ -27,6 +27,35 @@
 | Supply chain | Dependência comprometida (SDKs de IA, MCP, OAuth, crypto) | Lockfile, versões fixas, scanners no CI, SBOM (§9) |
 | Reescrita da auditoria | Acesso total ao banco | Hash encadeado + âncora diária externa (§7) |
 | Abuso da API | Força bruta, scraping | Cloudflare + rate limit por tenant, chave e rota; lockout; 2FA |
+
+### 2.1 Revisão v1.1 (25/09/2026): ameaças acrescentadas
+
+Revisão do threat model depois dos ADR-013 a ADR-017 e do spike A0-3. Cada linha diz o controle e **quando** ele entra.
+
+| Ameaça | Vetor | Controles | Entra em |
+| --- | --- | --- | --- |
+| **Convidado malicioso ou com conta roubada** | Administrador ou gestor convidado (ADR-017) com senha vazada; ex-prestador que ainda tem acesso | Segundo fator obrigatório antes do primeiro acesso; limite por ação com dupla aprovação do dono acima dele; aviso imediato ao dono em pessoa nova, limite alterado, conta conectada trocada e cobrança alterada; remoção que revoga sessões e tokens na hora; data de fim opcional no convite; resumo semanal por pessoa | A1 |
+| **Escalada de privilégio pelo convite** | Administrador que convida alguém com mais poder, aumenta o próprio limite ou libera a cobrança | Regra "ninguém concede mais do que tem" no serviço (não só na tela); permissões finas por rota (ADR-013); teste que tenta cada escalada | A1 |
+| **Convite interceptado ou reutilizado** | E-mail encaminhado, link vazado | Link de uso único, guardado como hash, que vence em 7 dias e só vale para o e-mail convidado | A1 |
+| **Tomada da conta pelo suporte (engenharia social)** | Golpista pede à DMS a "recuperação" da conta do dono | Recuperação só com identidade + CNPJ + canal já cadastrado; espera de segurança antes de valer; aviso ao e-mail antigo; registro na auditoria; nunca pelo WhatsApp da LIA | A1 |
+| **Acesso interno da DMS aos dados de um cliente** | Pessoa da distribuição olhando dados sem motivo; credencial do console roubada | Console separado, com segundo fator; sem leitura de dado pessoal de cliente por padrão; acesso de emergência (*break-glass*) com motivo, prazo curto, aviso ao dono e registro na auditoria; revisão mensal dos acessos | A1 (console) |
+| **Perda de dados por destruição de chave** | Chave de tenant destruída por engano ou por bug do expurgo (crypto-shredding, ADR-014) | Destruição só pelo job de expurgo do tenant encerrado, depois dos 30 dias de graça; período de espera do KMS antes da exclusão definitiva; alarme de `ScheduleKeyDeletion`; teste do expurgo num tenant de teste | A1 |
+| **Expurgo ou job no tenant errado** | Job de sistema que varre todos os tenants sem escopo (LIC-083, LIC-084) | Todo job recebe `tenant_id` e roda sob RLS; o agendador não lê dado de negócio (ADR-003); teste que roda o job num banco com dois tenants | A1 |
+| **Custo de IA disparado de fora** (*denial of wallet*) | Conversa pública com a LIA pelo WhatsApp ou pelo site em volume; prompt que força respostas longas | Limite por número e por tenant; teto diário no AI Usage Ledger; modelo barato no primeiro contato; alarme de custo | A3 |
+| **Dado pessoal vazando pela telemetria** | Spans com texto de query, logs com corpo de requisição, erro com payload, prompt no painel de IA | `enhancedDatabaseReporting` desligado (verificado no spike); redação de PII no Collector; Sentry sem corpo de requisição; Langfuse só com conteúdo já sanitizado (ADR-010); teste que procura e-mail e telefone nos spans | A1 |
+| **Dependência maliciosa ou recém-publicada** | Versão sequestrada no npm; script de instalação | `minimumReleaseAge` com modo estrito (ERR-002); scripts de instalação bloqueados por padrão e revisados no `allowBuilds`; lockfile congelado; versões fixadas no catálogo; actions fixadas por SHA (spike A0-3) | ✅ desde a A0 |
+| **Cópia dupla de dependência** | Mistura de CommonJS e ESM que carrega duas instâncias do mesmo pacote (estado e checagens divergentes) | Tudo ESM (ERR-001, ADR-001) | ✅ desde a A0 |
+| **Mudança de API da plataforma sem aviso** | Campo depreciado passa a ser ignorado e a ação faz outra coisa | Vigia de integrações (ADR-015); `validate_only` antes de escrever; Capability Registry com `deprecated_at`; teste de contrato por connector | A2 |
+| **Mensagem sem consentimento** | Lista importada sem base legal; opt-out ignorado; banimento do número | Consentimento por contato × canal × finalidade com evidência; opt-out vale na hora para envios pendentes; clientes de iFood/99 fora do marketing; limites de envio abaixo dos da Meta | A5 |
+| **Dado de plataforma usado fora do permitido** | Dado das APIs do Google (Uso Limitado) levado para público na Meta ou para treino; dado da Meta guardado depois da exclusão pedida | Proveniência por registro (`provider` de origem); o Action Service recusa enviar a uma plataforma de anúncio dado vindo de outra; callback de exclusão da Meta; teste que tenta a transferência (base §6.1) | A2 |
+| **Uso político ou eleitoral** | Pedido para a IA recomendar candidato ou criar propaganda; cliente que é campanha | Proibido nos Termos; regra do Policy Engine e recusa da IA (Res. TSE 23.755/2026, art. 28 §1º-C); bloqueio de envio no WhatsApp | A3 |
+| **Contrato e realidade divergirem** | A política de privacidade promete o que o sistema ainda não faz | As afirmações dos documentos jurídicos viram checklist de implementação (`docs/juridico/README.md`); nada é publicado como fato antes de existir | A0-6 |
+
+**Riscos aceitos, com revisão marcada:**
+
+- **Postgres local 18 × nuvem 17:** o CI no 17 é o portão (`docs/testes.md`).
+- **Repositório privado sem os recursos pagos do GitHub** (secret scanning, CodeQL): compensado com as ferramentas livres da §9 na A1.
+- **Provedores de IA nos EUA:** transferência internacional com cláusulas-padrão e dado minimizado antes do envio; revisar se surgir provedor com região no Brasil e qualidade equivalente.
 
 ## 3. Identidade e acesso
 
