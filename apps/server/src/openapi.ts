@@ -21,6 +21,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('audit', 'Auditoria da empresa: eventos com hash encadeado e verificação (security-model §7)')
     .addTag('flags', 'Feature flags avaliadas para a sessão, no protocolo OFREP (ADR-012)')
     .addTag('kill-switch', 'Botão de parada: trava a execução em seis níveis (ADR-007)')
+    .addTag('policies', 'Políticas versionadas que o motor aplica antes de qualquer ação (ADR-007)')
     .addTag('inbox', 'Webhooks recebidos de parceiros, verificados e deduplicados (ADR-004)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .addTag('spike', 'Rotas provisórias do spike de compatibilidade (saem na A1)')

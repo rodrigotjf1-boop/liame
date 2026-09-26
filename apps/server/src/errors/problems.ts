@@ -26,6 +26,8 @@ export class AppProblem extends HttpException {
     readonly title: string,
     readonly detail: string,
     readonly headers: Record<string, string> = {},
+    /** Motivos item a item (ex.: cada regra de política que negou). */
+    readonly errors?: FieldError[],
   ) {
     super(title, status);
   }
@@ -92,7 +94,14 @@ export function toProblem(exception: unknown, traceId: string, instance: string)
     };
   }
   if (exception instanceof AppProblem) {
-    return { ...problem, type: `${PROBLEM_TYPE_BASE}${exception.code}`, code: exception.code, title: exception.title, detail: exception.detail };
+    return {
+      ...problem,
+      type: `${PROBLEM_TYPE_BASE}${exception.code}`,
+      code: exception.code,
+      title: exception.title,
+      detail: exception.detail,
+      ...(exception.errors?.length ? { errors: exception.errors } : {}),
+    };
   }
   return problem;
 }

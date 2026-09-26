@@ -2,6 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { APP_CONFIG, type AppConfig, loadConfig } from '../config.js';
 import { UnitOfWorkInterceptor } from '../context/unit-of-work.interceptor.js';
+import { PolicyInterceptor } from '../policy/politica.js';
+import { PolicyService } from '../policy/policy.service.js';
 import { Mailer, MemoryMailer } from '../mail/mailer.js';
 import { AccessGuard } from './access.guard.js';
 import { AuthController, MeController } from './auth.controller.js';
@@ -33,7 +35,10 @@ import { SessionService } from './session.service.js';
     InvitationAcceptService,
     { provide: APP_GUARD, useClass: AccessGuard },
     { provide: APP_INTERCEPTOR, useClass: UnitOfWorkInterceptor },
+    // Depois da unidade de trabalho: a política é avaliada dentro da transação da requisição.
+    PolicyService,
+    { provide: APP_INTERCEPTOR, useClass: PolicyInterceptor },
   ],
-  exports: [APP_CONFIG, Mailer, SessionService, RateLimitService],
+  exports: [APP_CONFIG, Mailer, SessionService, RateLimitService, PolicyService],
 })
 export class AuthModule {}

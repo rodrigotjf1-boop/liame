@@ -43,3 +43,16 @@ export const killSwitch = liame.table('kill_switch', {
   deactivatedBy: uuid('deactivated_by'),
   deactivatedAt: ts('deactivated_at'),
 });
+
+// Migration 0010 (políticas versionadas, ADR-007).
+export const policy = liame.table('policy', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  brandId: uuid('brand_id'),
+  version: integer('version').notNull(),
+  status: text('status').notNull(),
+  document: jsonb('document').notNull(),
+  createdBy: uuid('created_by').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  archivedAt: ts('archived_at'),
+});
