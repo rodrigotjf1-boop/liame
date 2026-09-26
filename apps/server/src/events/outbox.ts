@@ -1,6 +1,7 @@
 import type { EventType } from '@liame/contracts';
 import { type Tx, uuidv7 } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { currentTraceparent } from '../observability/trace.js';
 
 // Outbox (ADR-004): o evento é gravado na MESMA transação da mutação. Se a transação desfizer, o
 // evento some junto; se gravar, o publicador do worker entrega pelo menos uma vez.
@@ -17,8 +18,8 @@ export interface DomainEvent {
 export async function emitEvent(tx: Tx, event: DomainEvent): Promise<string> {
   const id = uuidv7();
   await tx.execute(sql`
-    insert into liame.outbox_event (id, tenant_id, type, subject, data)
-    values (${id}, ${event.tenantId}, ${event.type}, ${event.subject ?? null}, ${JSON.stringify(event.data)}::jsonb)`);
+    insert into liame.outbox_event (id, tenant_id, type, subject, data, trace_context)
+    values (${id}, ${event.tenantId}, ${event.type}, ${event.subject ?? null}, ${JSON.stringify(event.data)}::jsonb, ${currentTraceparent()})`);
   return id;
 }
 

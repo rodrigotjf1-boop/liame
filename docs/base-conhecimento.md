@@ -531,6 +531,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 | 25/09/2026 | §17: segundo fator (NIST SP 800-63B-4, Logto), guarda de registros (Marco Civil art. 15), cabeçalhos `Deprecation`/`Sunset` (RFC 9745/8594), versões da Meta divergentes entre fontes, geração de imagem e vídeo no AI SDK e mercado de modelos de imagem (ADR-013 a ADR-016). |
 | 25/09/2026 | §17.5: acesso delegado no mercado (níveis e convite do Google Ads, conta de administrador, parceiros da Meta, proprietário principal do Perfil da Empresa) para o ADR-017. |
 | 25/09/2026 | §6.1: verificação legal para os documentos jurídicos (LGPD e Lei 15.352/2026, Res. ANPD 2, 15, 18, 19 e 32, Marco Civil, CDC/STJ, ECA Digital, PL 2338, TSE 23.755/2026, Meta, Google Uso Limitado, WhatsApp); corrigidos §2.4, §6 e §17.2. |
+| 26/09/2026 | §15.1: OpenTelemetry Collector contrib 0.161 (validação, `redaction`, checksum por arquivo) (E8). |
 | 26/09/2026 | §13.3: API do Rekor v2 (hashedrekord v0.0.2, `integratedTime` sempre 0, URL por SigningConfig) e TSA pública da Sigstore (E3). |
 | 26/09/2026 | §15.1: Standard Webhooks (vetor oficial conferido), corpo cru no Nest 12 e `lookup` do Node (E5). |
 | 25/09/2026 | §15.1: resultados do spike A0-3 medidos no código (inspeção dos `.d.ts` instalados, build e execução): server em ESM, OTel sem hook de loader, APIs reais do Nest 12, swagger 12, pg-boss 12, MCP 2.1 e AI SDK 7, comportamento do pnpm 12. |
@@ -837,6 +838,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Node `http.request` com `lookup`:** o `lookup` não é chamado quando o host é um IP literal (checar o IP antes) e, com `autoSelectFamily`, pode ser chamado com `{ all: true }` (devolver lista) [O, 26/09/2026].
 - **@nestjs/swagger 12 + Zod 4:** `z.number().positive()` sai no OpenAPI 3.1 como `exclusiveMinimum: true` (forma do 3.0), que o Spectral reprova (`oas3-schema`); usar `.min(1)` [O, 26/09/2026, ERR-013].
 - **oasdiff 1.32:** valor novo num `enum` de **resposta** é quebra (`response-property-enum-value-added`, nível ERR); campo de resposta como texto com `pattern` não é. Para listas que crescem (tipos de evento), resposta em texto aberto e enum só no pedido [O, 26/09/2026, ERR-015].
+- **OpenTelemetry Collector contrib 0.161.0** (16/09/2026) [O, executado em 26/09/2026]: `otelcol-contrib validate --config` confere a configuração sem subir; o processador `redaction` com `allow_all_keys: true` e `blocked_values` troca o valor inteiro por `****`; no `transform`, `replace_pattern` usa `$$1` para o grupo. Checksum por arquivo: `<asset>.sha256` (não há arquivo único de checksums).
 - **Actions do CI (conferidas por `git ls-remote`):** `actions/checkout` v7.0.1 `3d3c42e`, `actions/setup-node` v7.0.0 `8207627`, `pnpm/action-setup` v6.1.0 `ea17c68` (suporte ao pnpm 12 desde essa versão).
 
 ---

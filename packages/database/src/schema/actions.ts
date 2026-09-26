@@ -44,6 +44,7 @@ export const actionRequest = liame.table('action_request', {
   statusReason: text('status_reason'),
   actorType: text('actor_type').notNull().default('human'),
   requestedBy: uuid('requested_by').notNull(),
+  traceContext: text('trace_context'),
   expiresAt: ts('expires_at').notNull(),
   createdAt: ts('created_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),

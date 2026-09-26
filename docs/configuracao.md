@@ -53,6 +53,17 @@ Legenda: **P** = obrigatória em produção · **S** = segredo.
 
 Gerar a chave de assinatura: `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out ancora.pem` (guardar fora do git; publicar a chave pública junto com a política de auditoria).
 
+## Collector (ADR-010)
+
+`infra/otel-collector.yaml` roda no contêiner do OpenTelemetry Collector (contrib). A API e o worker exportam para ele (`OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318`).
+
+| Variável (no contêiner do Collector) | Para quê |
+| --- | --- |
+| `GRAFANA_OTLP_ENDPOINT` **P** | Gateway OTLP do Grafana Cloud da região escolhida |
+| `GRAFANA_OTLP_AUTH` **P S** | `base64(instance_id:token)` do Grafana Cloud |
+
+Depois de mudar o arquivo: `otelcol-contrib validate --config infra/otel-collector.yaml`.
+
 ## Telemetria (ADR-010)
 
 | Variável | Para quê | Padrão |
