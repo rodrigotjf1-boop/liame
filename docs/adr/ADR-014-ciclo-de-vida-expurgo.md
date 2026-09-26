@@ -53,3 +53,9 @@ Ordem judicial, investigação em andamento ou obrigação legal suspendem o exp
 - Toda tabela nova nasce com classe de dado e prazo; migration sem isso não passa na revisão.
 - A cifra por tenant dos dados pessoais precisa existir **desde a A1**. Acrescentar depois exigiria recifrar tudo.
 - Busca exata por telefone ou e-mail usa o índice cego; busca parcial por esses campos deixa de existir.
+
+## Implementação da chave por empresa (E4, 26/09/2026)
+
+- `liame.tenant_key`: a chave de dados da empresa fica embrulhada pela **chave própria da empresa no KMS** (criada na primeira cifra; `key_ref`). Dado pessoal cifrado com ela (`pii1.`), com **índice cego** (HMAC com chave derivada) para busca exata.
+- `destroyTenantKey` marca a linha e agenda a exclusão da chave no KMS (30 dias de espera, com alarme de `ScheduleKeyDeletion` a configurar na conta AWS). Depois disso, a cifra fica ilegível também nos backups. O job de expurgo e o certificado entram na E7.
+- **Custo a acompanhar:** uma chave no KMS custa cerca de US$ 1 por mês. Com uma por empresa, o custo cresce com a base; revisar a alternativa (chave da empresa embrulhada pela KEK global, com expurgo completo quando os backups expiram) se passar de algumas centenas de empresas.

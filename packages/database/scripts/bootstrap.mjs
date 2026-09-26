@@ -130,6 +130,8 @@ if (flag('--write-env')) {
       '# Testes (Vitest).',
       `TEST_DATABASE_URL=${url('liame_app', appPassword, test)}`,
       `TEST_DATABASE_URL_OWNER=${url('liame_owner', ownerPassword, test)}`,
+      '# Chave mestra local do cofre (ADR-011). Só desenvolvimento: em produção, AWS KMS.',
+      `LIAME_KEK_LOCAL=${previous.LIAME_KEK_LOCAL ?? `1:${randomBytes(32).toString('base64')}`}`,
       '',
     ].join('\n'),
     'utf8',

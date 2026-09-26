@@ -52,3 +52,11 @@ Tokens OAuth de Meta, Google, TikTok e WhatsApp dão controle das contas dos cli
 - **Fornecedor novo: AWS**, com duas contas (KMS e âncora). Custo desprezível, domínio de confiança separado do Supabase e da Hostinger. Entra na A0 (criação das contas) e na A1 (critérios A1-6 e A1-13).
 - Invadir a VPS permite decifrar só enquanto o acesso durar. Revogar a credencial IAM fecha a porta sem recifrar a base. Os tokens expostos na janela precisam ser revogados nas plataformas: runbook de incidente.
 - **Dado publicado no Rekor é público e permanente:** só o hash, nunca conteúdo.
+
+## Implementação do cofre (E4, 26/09/2026)
+
+- `apps/server/src/vault/`: envelope AES-256-GCM; cada segredo tem a própria chave de dados, gerada pela chave mestra (KEK) e **amarrada ao registro** pelo contexto (`purpose`, `secret_id`, `tenant_id`/`user_id`), que também é o *encryption context* do KMS.
+- Provedor `aws-kms` (produção: `KEY_PROVIDER=aws-kms`, `AWS_KMS_KEKS="1:alias/..."`, região sa-east-1) e provedor `local` (desenvolvimento e testes: `LIAME_KEK_LOCAL`); em produção o local é recusado na subida.
+- **Rotação (A1-13):** `rotateSecrets` recifra por completo os segredos em versão antiga da KEK, em lotes com `for update skip locked`; depois disso, a versão antiga pode sair.
+- Tabela `liame.secret` (migration 0003) com RLS: segredo da empresa só no tenant dela; segredo pessoal (app autenticador) só para a própria pessoa.
+- A âncora da auditoria (S3 Object Lock, Rekor, RFC 3161) entra na E3.

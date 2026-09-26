@@ -1,6 +1,8 @@
 import * as identity from './identity.js';
+import * as vault from './vault.js';
 
 export * from './identity.js';
+export * from './vault.js';
 
 /** Todas as tabelas espelhadas, para o teste que compara o schema TypeScript com o banco. */
 export const allTables = [
@@ -12,4 +14,6 @@ export const allTables = [
   identity.session,
   identity.userToken,
   identity.rateLimit,
+  vault.secret,
+  vault.tenantKey,
 ];

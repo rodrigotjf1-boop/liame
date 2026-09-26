@@ -44,6 +44,7 @@ rules:
       exclude:
         - 'apps/server/src/auth/**'
         - 'apps/server/src/worker/**'
+        - 'apps/server/src/vault/**'
         - 'packages/database/**'
         - '**/test/**'
         - '*.spec.ts'

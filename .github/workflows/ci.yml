@@ -66,6 +66,9 @@ jobs:
       - name: Papéis e banco de teste (mesmo bootstrap do ambiente local)
         run: node packages/database/scripts/bootstrap.mjs --databases liame_test
 
+      - name: Chave mestra local do cofre, descartável, gerada nesta execução (ADR-011)
+        run: echo "LIAME_KEK_LOCAL=1:$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
       - name: Build
         run: pnpm build
 
