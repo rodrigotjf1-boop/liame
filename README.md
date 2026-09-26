@@ -28,6 +28,8 @@ pnpm typecheck        # tipos, incluindo os testes
 pnpm test             # Vitest + verificação do spike (node dist/spike/verify.js)
 ```
 
+Contrato da API (OpenAPI 3.1): `pnpm openapi` regera `docs/openapi.json` a partir do código (o CI reprova se estiver desatualizado); `pnpm openapi:lint` roda o Spectral (binário da release oficial, [spectral 6.16.3](https://github.com/stoplightio/spectral/releases/tag/v6.16.3), no PATH). O SDK `@liame/sdk` é gerado do contrato a cada build.
+
 Migrations (ADR-018): `pnpm db:migrate` (liame_dev) e `pnpm db:migrate:test` (liame_test), depois do build. Na nuvem, o dono roda o mesmo comando com a URL do `liame_owner`.
 
 Banco local, uma vez por máquina: `node packages/database/scripts/bootstrap.mjs --admin-env-file <.env com a URL de administrador> --write-env` cria os papéis `liame_owner` e `liame_app` e os bancos `liame_dev` e `liame_test`, e grava as URLs no `.env.local` (fora do git). Sem ele, os testes de banco são pulados. Estratégia completa e equivalência com a nuvem em [docs/testes.md](docs/testes.md).

@@ -1,0 +1,34 @@
+# Regras próprias do Liame (Semgrep CE). Cada regra transforma uma lição do registro em verificação no CI.
+rules:
+  - id: liame-contexto-de-tenant-por-sessao
+    message: >-
+      Contexto do tenant por sessão vaza entre requisições no pool (LIC-004, ADR-003).
+      Use set_config('app.tenant_id', ..., true) dentro da transação (withTenant).
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ['*.ts', '*.sql']
+    pattern-regex: (?i)\bset\s+(session\s+)?app\.tenant_id\b|set_config\(\s*'app\.tenant_id'\s*,[^)]*,\s*false\s*\)
+
+  - id: liame-query-no-connect-do-pool
+    message: >-
+      Query dentro de pool.on('connect') corre fora de ordem e deixa estado na conexão (LIC-004).
+      Configure a sessão por transação ou pelas opções da conexão.
+    severity: ERROR
+    languages: [typescript]
+    patterns:
+      - pattern: $POOL.on("connect", $HANDLER)
+      - metavariable-pattern:
+          metavariable: $HANDLER
+          pattern: $CLIENT.query(...)
+
+  - id: liame-promessa-solta
+    message: >-
+      Promessa disparada sem await precisa tratar o próprio erro, senão derruba o processo (LIC-001).
+      Use `.catch(...)` com log do motivo, ou `await`.
+    severity: ERROR
+    languages: [typescript]
+    patterns:
+      - pattern: void $PROMISE
+      - pattern-not: void $X.catch(...)
+      - pattern-not: void $X.then(..., ...)

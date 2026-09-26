@@ -1,0 +1,29 @@
+{
+  "name": "@liame/sdk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cliente TypeScript da API do Liame, gerado do contrato OpenAPI (docs/openapi.json).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "generate": "openapi-typescript ../../docs/openapi.json -o src/schema.ts",
+    "build": "pnpm run generate && tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "openapi-fetch": "catalog:"
+  },
+  "devDependencies": {
+    "@liame/config": "workspace:*",
+    "@types/node": "catalog:",
+    "openapi-typescript": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,7 +1,7 @@
 import { HealthResponse, ReadinessResponse } from '@liame/contracts';
 import type { Database } from '@liame/database';
 import { Controller, Get, Inject, Logger, Res } from '@nestjs/common';
-import { ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import { DATABASE } from '../database/database.module.js';
 import { APP_VERSION } from '../version.js';
 
@@ -36,6 +36,7 @@ export class HealthController {
 
   /** O processo está de pé. Não toca dependências: serve de sonda de vida. */
   @Get('health')
+  @ApiOperation({ summary: 'Sonda de vida', description: 'Responde se o processo está de pé, com a versão do código. Não toca dependências.' })
   @ApiOkResponse({ standardSchema: HealthResponse })
   check(): HealthResponse {
     return { status: 'ok', service: SERVICE, version: APP_VERSION };
@@ -43,6 +44,10 @@ export class HealthController {
 
   /** O serviço consegue trabalhar: toca o banco e a fila e diz a versão e a última migration (LIC-008). */
   @Get('health/ready')
+  @ApiOperation({
+    summary: 'Prontidão',
+    description: 'Toca o banco e a fila e diz a versão do código e a última migration aplicada. Responde 503 quando alguma dependência falha.',
+  })
   @ApiOkResponse({ standardSchema: ReadinessResponse })
   @ApiServiceUnavailableResponse({ standardSchema: ReadinessResponse })
   async ready(@Res({ passthrough: true }) res: { status(code: number): unknown }): Promise<ReadinessResponse> {

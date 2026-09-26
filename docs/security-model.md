@@ -128,6 +128,10 @@ Todo PR roda: auditoria de dependências, varredura de segredos, SAST, verifica�
 | Agendado e no release | **TruffleHog** no histórico completo (só segredos verificados) · osv-scanner completo · build da imagem + **SBOM** (Syft para a imagem, `pnpm sbom` CycloneDX para o código) · **Grype** `--only-fixed` falhando em crítico · `grype sbom:` noturno para CVE nova sem rebuild · suíte completa de evals |
 | Sempre | Actions **fixadas por SHA** · `permissions: contents: read` · Dependabot alerts e security updates (grátis) |
 
+**Ativo no CI desde a E1b (26/09/2026)**, em job próprio, em todo push e PR: gitleaks 8.30.1 no histórico inteiro; osv-scanner 2.6.0 (vulnerabilidades + licenças); zizmor 1.30.1 nos workflows; Semgrep CE 1.178.0 com `p/typescript`, `p/nodejsscan`, `p/secrets` e as regras do Liame (`.semgrep/liame.yml`: contexto de tenant por sessão, query no `connect` do pool, promessa solta). Binários baixados da release oficial e conferidos por SHA-256 fixado no workflow. No job de build: contrato OpenAPI igual ao gerado, Spectral sem aviso e oasdiff barrando quebra (exceção só com o rótulo `contrato-quebrado-aceito` no PR). Faltam SBOM, imagem de contêiner e Grype (E9).
+
+**Licenças permitidas:** MIT, Apache-2.0, ISC, BSD-2/3-Clause, 0BSD, AFL-2.1, BlueOak-1.0.0, CC0-1.0, CC-BY-4.0, Python-2.0, **MPL-2.0** (copyleft por arquivo) e **LGPL-3.0-or-later** (o libvips do sharp, usado como biblioteca). **Proibidas:** GPL, AGPL e SSPL. Exceção só em `osv-scanner.toml`, com motivo e conferência no LICENSE.
+
 **Trivy só fixado por SHA ou digest:** incidente de 19/03/2026 (release maliciosa e tags sequestradas, GHSA-69fq-xp46-6x23).
 
 ## 10. Kill switch e resposta a incidente

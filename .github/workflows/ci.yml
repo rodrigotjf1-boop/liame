@@ -49,6 +49,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Histórico completo: o oasdiff compara com o contrato da base do PR.
+          fetch-depth: 0
 
       # Sem "version": usa o packageManager do package.json (pnpm 12.6.0).
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -70,8 +72,73 @@ jobs:
       - name: Migrations no banco de teste (mesmo executor da nuvem, ADR-018)
         run: pnpm db:migrate:test
 
+      - name: Contrato OpenAPI atualizado (docs/openapi.json igual ao gerado do código)
+        run: |
+          pnpm openapi
+          git diff --exit-code docs/openapi.json || { echo "::error::Contrato desatualizado: rode 'pnpm openapi' e faça commit de docs/openapi.json"; exit 1; }
+
+      - name: Lint do contrato (Spectral 6.16.3)
+        run: |
+          curl -fsSL -o spectral https://github.com/stoplightio/spectral/releases/download/v6.16.3/spectral-linux-x64
+          echo "b90ac8da7b804d04052b9db8d4ea5028d29fba9bc69b02dc85d46e5fcc476452  spectral" | sha256sum -c -
+          chmod +x spectral
+          ./spectral lint docs/openapi.json --ruleset .spectral.yaml --fail-severity=warn
+
+      - name: Quebra de contrato (oasdiff 1.32.1)
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'contrato-quebrado-aceito')
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if ! git cat-file -e "$BASE_SHA:docs/openapi.json" 2>/dev/null; then
+            echo "A base ainda não tem contrato: nada a comparar."; exit 0
+          fi
+          git show "$BASE_SHA:docs/openapi.json" > "$RUNNER_TEMP/openapi-base.json"
+          curl -fsSL -o "$RUNNER_TEMP/oasdiff.tgz" https://github.com/oasdiff/oasdiff/releases/download/v1.32.1/oasdiff_1.32.1_linux_amd64.tar.gz
+          echo "7c8939fc49b75ee11fec66a5b83b37a2fca6aee109fed85013b1ba2ac2a1ee7f  $RUNNER_TEMP/oasdiff.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/oasdiff.tgz" -C "$RUNNER_TEMP" oasdiff
+          "$RUNNER_TEMP/oasdiff" breaking "$RUNNER_TEMP/openapi-base.json" docs/openapi.json --fail-on ERR
+
       - name: Checar tipos (inclui os testes)
         run: pnpm typecheck
 
       - name: Testes e verificação do spike
         run: pnpm test
+
+  seguranca:
+    name: segurança e cadeia de suprimentos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Segredos no histórico (gitleaks 8.30.1)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tgz" https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --exit-code 1 .
+
+      - name: Vulnerabilidades e licenças das dependências (osv-scanner 2.6.0)
+        env:
+          # Permissivas + copyleft fraco usado como biblioteca (MPL-2.0; LGPL do libvips do sharp).
+          # GPL, AGPL e SSPL ficam fora (security-model.md §9).
+          LICENCAS: MIT,Apache-2.0,MPL-2.0,ISC,BSD-3-Clause,BSD-2-Clause,0BSD,AFL-2.1,BlueOak-1.0.0,CC-BY-4.0,CC0-1.0,Python-2.0,LGPL-3.0-or-later
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/osv-scanner" https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64
+          echo "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+          "$RUNNER_TEMP/osv-scanner" scan source -r . --config osv-scanner.toml --licenses="$LICENCAS"
+
+      - name: Workflows do GitHub (zizmor 1.30.1)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pipx run --spec zizmor==1.30.1 zizmor --format=github .github/workflows
+
+      - name: Código (Semgrep CE 1.178.0 + regras do Liame)
+        run: >-
+          pipx run --spec semgrep==1.178.0 semgrep scan
+          --config p/typescript --config p/nodejsscan --config p/secrets --config .semgrep
+          --metrics=off --error --exclude mockups --exclude docs .

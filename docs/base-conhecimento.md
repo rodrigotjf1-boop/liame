@@ -819,6 +819,10 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - Pelo corepack: `corepack pnpm <cmd>` lê o `packageManager` sem ativar nada global.
 - **pnpm 12, CLI:** `pnpm -s` não existe mais ("unexpected argument"); usar `pnpm --silent` [O, 26/09/2026].
 - **Nest 12 + Express 5:** erro do *body parser* (JSON malformado) chega ao filtro global de exceções como 400; `httpAdapter.setHeader` + `reply` mantém `application/problem+json` [O, teste `api.e2e.spec.ts`, 26/09/2026].
+- **Ferramentas do CI (conferidas em 26/09/2026, releases oficiais):** gitleaks 8.30.1 (21/03/2026), osv-scanner 2.6.0 (14/09/2026), zizmor 1.30.1 (09/09/2026), oasdiff 1.32.1 (15/09/2026), Semgrep CE 1.178.0 (PyPI, 23/09/2026; roda no Windows pelo pip), Spectral 6.16.3 (03/08/2026). **A release do Spectral não publica checksum**: o SHA-256 fixado no CI é o calculado no download. Pelo npm, o Spectral traz ~240 pacotes (com `glob@7` e `inflight` obsoletos): preferir o binário [O].
+- **osv-scanner:** não lê o campo antigo `licenses: [...]` do package.json (`busboy`, `streamsearch` saem como UNKNOWN); a correção é `PackageOverrides` no `osv-scanner.toml` [O].
+- **zizmor:** as auditorias online (commit impostor, action vulnerável) usam `GH_TOKEN` [O].
+- **openapi-typescript 7.13 + openapi-fetch 0.17:** o peer declarado é `typescript ^5.x`, mas gera e compila com o 6.0.3 [O, 26/09/2026].
 - **Turborepo 2.11.4:** precisa do executável `pnpm` no PATH (não serve `corepack pnpm`); coleta telemetria anônima por padrão (`TURBO_TELEMETRY_DISABLED=1`).
 - **Versões com menos de 1 dia em 25/09/2026** (fora do catálogo por isso): `@types/node` 24.19.0 (22:09 UTC), `ai` 7.0.116, `vitest` 5.0.2, `@nestjs/cli` 12.0.7.
 - **Actions do CI (conferidas por `git ls-remote`):** `actions/checkout` v7.0.1 `3d3c42e`, `actions/setup-node` v7.0.0 `8207627`, `pnpm/action-setup` v6.1.0 `ea17c68` (suporte ao pnpm 12 desde essa versão).

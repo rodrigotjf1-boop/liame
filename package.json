@@ -13,7 +13,9 @@
     "test": "turbo run test",
     "dev": "turbo run dev",
     "db:migrate": "node packages/database/dist/cli/migrate.js",
-    "db:migrate:test": "node packages/database/dist/cli/migrate.js --url-env TEST_DATABASE_URL_OWNER"
+    "db:migrate:test": "node packages/database/dist/cli/migrate.js --url-env TEST_DATABASE_URL_OWNER",
+    "openapi": "pnpm --filter @liame/server openapi",
+    "openapi:lint": "spectral lint docs/openapi.json --ruleset .spectral.yaml --fail-severity=warn"
   },
   "devDependencies": {
     "turbo": "catalog:",

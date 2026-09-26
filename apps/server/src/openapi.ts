@@ -11,6 +11,9 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .setDescription('Contrato público da API do Liame (API-first).')
     .setVersion('0.0.0')
     .setOpenAPIVersion('3.1.0')
+    .addServer('/', 'Mesma origem do app')
+    .addTag('infra', 'Saúde e prontidão do serviço')
+    .addTag('spike', 'Rotas provisórias do spike de compatibilidade (saem na A1)')
     .build();
   return SwaggerModule.createDocument(app, config);
 }
