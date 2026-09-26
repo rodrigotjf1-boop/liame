@@ -62,3 +62,17 @@ export {
   PublishPolicyRequest,
   RiskLevel,
 } from './policy.js';
+export {
+  ActionListQuery,
+  ActionListResponse,
+  ActionResponse,
+  ActionStatus,
+  ApproveActionRequest,
+  BudgetEnvelope,
+  BudgetPolicyRequest,
+  BudgetResponse,
+  CreateActionRequest,
+  SandboxResourceRequest,
+  SandboxResourceResponse,
+  UpdateActionRequest,
+} from './actions.js';
