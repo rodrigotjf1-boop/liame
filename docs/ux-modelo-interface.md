@@ -211,7 +211,8 @@ O texto da conversa continua em HTML (lido por leitor de tela); a expressão só
 4. **Desempenho:** em avatar pequeno ou no celular, `shadows: false` e `pixelRatio: 1.5`; `pauseWhenHidden` ligado; `capture` só no Estúdio.
 5. **Visual:** no app, o padrão é `executiva`; `auto` (estação e data) só onde a tela pedir, e `torcida` só manual. As cores seguem a paleta `liame`.
 6. **Movimento reduzido:** respeitar o que o kit já faz e não disparar `celebrate` com confete em sequência.
-7. **three.js r147 é de 2022:** atualizar exige portar o kit para módulos ES (as versões novas não têm `examples/js`). Fica registrado como dívida para quando o kit ganhar acabamento de animação (modelo em GLB, como o próprio `LEIA-ME.md` sugere).
+7. **Segurança do código:** a pasta `lia-agente-3d/` fica fora do Semgrep como material de referência (no kit original ele aponta 18 falsos positivos: `Math.random()` de animação e `console.error` no navegador). Ao trazer o kit para `apps/web`, o código passa pelas regras do CI; exceção só com `nosemgrep` e o motivo na linha.
+8. **three.js r147 é de 2022:** atualizar exige portar o kit para módulos ES (as versões novas não têm `examples/js`). Fica registrado como dívida para quando o kit ganhar acabamento de animação (modelo em GLB, como o próprio `LEIA-ME.md` sugere).
 
 ## 7. Como portar para a stack (Next 16.3, React 19.3, Tailwind 4.3)
 
