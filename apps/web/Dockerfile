@@ -4,7 +4,9 @@
 
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
 ENV CI=true TURBO_TELEMETRY_DISABLED=1 NEXT_TELEMETRY_DISABLED=1
-RUN npm install --global --ignore-scripts pnpm@12.6.0
+# pnpm 12 é nativo: o script de instalação DELE troca o marcador pelo binário da plataforma (ERR-017).
+# Os scripts das dependências do projeto continuam desligados (V9, LIC-079).
+RUN npm install --global pnpm@12.6.0
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile --ignore-scripts
