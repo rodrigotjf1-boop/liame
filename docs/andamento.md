@@ -9,7 +9,7 @@
 | --- | --- | --- | --- |
 | A0-1 | ADR-001 a ADR-010 aceitos | ⏳ dono | Os ADRs seguem "Proposto". Aceite é do dono, registrado no arquivo com data. O ADR-001 já traz a decisão ESM do spike. |
 | A0-2 | 8 docs aprovados | ⏳ dono | Registro no changelog de `decisoes-design.md`. |
-| A0-3 | Spike de compatibilidade verde no CI | 🟡 **local verde (16/16 com banco), CI pendente** | Ver abaixo. Falta a execução no CI (Node 24 + Postgres 17). Estratégia de testes em `testes.md`. |
+| A0-3 | Spike de compatibilidade verde no CI | ✅ **cumprido em 25/09/2026** | CI verde em checkout limpo (Node 24.21 + Postgres 17, 16/16 testes + verificação do spike): https://github.com/rodrigotjf1-boop/liame/actions/runs/36203403949 · nota no ADR-001 · estratégia em `testes.md`. |
 | A0-3b | Contas AWS (KMS sa-east-1 e conta da âncora) | ⏳ dono | IDs das contas, sem segredo. |
 | A0-4 | Mockups aprovados (Lite e Pro) | ⏳ dono | Protótipo em `mockups/prototipo-app.html` (verificado: 24 cenários, 4 larguras, claro e escuro). |
 | A0-5 | Pedidos às plataformas | ⏳ dono | Meta, Google Cloud/Ads, TikTok, GBP. |
@@ -25,7 +25,7 @@
 
 **Decisão ESM × CJS:** **ESM** no server, com A/B medido (ADR-001, ERR-001).
 
-| Prova pedida | Onde | Local (Node 22.23, Windows) |
+| Prova pedida | Onde | Local (Node 22.23, Windows, PG 18.4) e CI |
 | --- | --- | --- |
 | Build de tudo | `pnpm build` | ✅ (e em checkout limpo com `--frozen-lockfile`) |
 | Tipos, incluindo testes | `pnpm typecheck` | ✅ |
@@ -35,7 +35,7 @@
 | Envio transacional do pg-boss | `test/db/pgboss.spec.ts` | ✅ commit cria o job, rollback desfaz (PG 18.4 local, papéis sem superusuário) |
 | RLS forçada + contexto por transação | `test/db/rls.spec.ts` | ✅ 6 testes: role sem BYPASSRLS, isolamento, sem contexto nada, sem gravação cruzada, contexto não vaza no pool, concorrência |
 | AI SDK 7 e SDK MCP 2.1 | `verify.js` | ✅ `generateText` com modelo simulado; `tools/list` e `tools/call` |
-| Node 24 | CI | ⏳ no primeiro push |
+| Node 24 + Postgres 17 | CI | ✅ [execução 36203403949](https://github.com/rodrigotjf1-boop/liame/actions/runs/36203403949): 1 min 28 s |
 
 **Como rodar:** ver o README.
 
