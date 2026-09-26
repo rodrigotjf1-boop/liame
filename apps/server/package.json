@@ -7,8 +7,8 @@
   "scripts": {
     "build": "nest build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run && node --enable-source-maps dist/spike/verify.js && node --enable-source-maps dist/scripts/trace-check.js",
-    "spike": "node --enable-source-maps dist/spike/verify.js",
+    "test": "vitest run && node --enable-source-maps dist/verify/deps.js && node --enable-source-maps dist/scripts/trace-check.js",
+    "deps-check": "node --enable-source-maps dist/verify/deps.js",
     "start:api": "node --enable-source-maps --import ./dist/telemetry.js dist/main.api.js",
     "start:worker": "node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js",
     "openapi": "node dist/scripts/openapi.js ../../docs/openapi.json",

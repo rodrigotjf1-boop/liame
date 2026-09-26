@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1.7
+# Imagem da API e do worker (o mesmo código, comandos diferentes; ADR-002). Contexto: raiz do repositório.
+#   docker build -f apps/server/Dockerfile -t liame-server --build-arg APP_VERSION=$(git rev-parse --short HEAD) .
+#   API:    docker run liame-server
+#   worker: docker run liame-server node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js
+#   migrations (release): docker run -e DATABASE_URL_OWNER=... liame-server node node_modules/@liame/database/dist/cli/migrate.js
+
+# Base fixada por digest (Node 24.21.0, bookworm-slim, 19/09/2026): tag sozinha pode mudar por baixo.
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
+ENV CI=true TURBO_TELEMETRY_DISABLED=1 NEXT_TELEMETRY_DISABLED=1
+# pnpm na versão do packageManager; scripts de instalação desligados (V9, LIC-079).
+RUN npm install --global --ignore-scripts pnpm@12.6.0
+WORKDIR /repo
+COPY . .
+RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN pnpm turbo run build --filter=@liame/server...
+# Só o necessário para rodar: dependências de produção + os pacotes do workspace já compilados.
+RUN pnpm --filter @liame/server deploy --prod /out \
+ && rm -rf /out/src /out/test /out/tsconfig.json /out/tsconfig.build.json /out/nest-cli.json
+
+FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
+ARG APP_VERSION=dev
+ENV NODE_ENV=production APP_VERSION=${APP_VERSION} PORT=3001
+WORKDIR /app
+COPY --from=build --chown=node:node /out ./
+# Sem root em tempo de execução.
+USER node
+EXPOSE 3001
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+CMD ["node", "--enable-source-maps", "--import", "./dist/telemetry.js", "dist/main.api.js"]
