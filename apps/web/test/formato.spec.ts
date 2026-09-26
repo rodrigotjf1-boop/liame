@@ -86,11 +86,13 @@ describe('frases de "Pessoas e acessos"', () => {
       dual_approval: true,
       billing_access: false,
       access_expires_at: null,
-      expires_at: new Date(Date.now() + 5 * 86_400_000 + 3_600_000).toISOString(),
+      // Datas fixas (LIC-006): com o relógio real, perto da meia-noite o prazo virava 6 dias (ERR-023).
+      expires_at: local(26 + 5, 23, 30),
       invited_by_name: 'Rodrigo',
-      created_at: new Date().toISOString(),
+      created_at: local(26, 14),
     };
-    expect(envioDe(convite)).toBe('Convite enviado hoje · vence em 5 dias');
+    expect(envioDe(convite, agora)).toBe('Convite enviado hoje · vence em 5 dias');
+    expect(envioDe({ ...convite, created_at: local(24, 9) }, agora)).toBe('Convite enviado em 24/09 · vence em 5 dias');
     expect(contagem(1, 0)).toBe('1 pessoa.');
     expect(contagem(3, 1)).toBe('3 pessoas e 1 convite esperando resposta.');
     expect(contagem(2, 2)).toBe('2 pessoas e 2 convites esperando resposta.');

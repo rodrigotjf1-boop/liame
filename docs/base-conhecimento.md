@@ -531,6 +531,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 | 25/09/2026 | §17: segundo fator (NIST SP 800-63B-4, Logto), guarda de registros (Marco Civil art. 15), cabeçalhos `Deprecation`/`Sunset` (RFC 9745/8594), versões da Meta divergentes entre fontes, geração de imagem e vídeo no AI SDK e mercado de modelos de imagem (ADR-013 a ADR-016). |
 | 25/09/2026 | §17.5: acesso delegado no mercado (níveis e convite do Google Ads, conta de administrador, parceiros da Meta, proprietário principal do Perfil da Empresa) para o ADR-017. |
 | 25/09/2026 | §6.1: verificação legal para os documentos jurídicos (LGPD e Lei 15.352/2026, Res. ANPD 2, 15, 18, 19 e 32, Marco Civil, CDC/STJ, ECA Digital, PL 2338, TSE 23.755/2026, Meta, Google Uso Limitado, WhatsApp); corrigidos §2.4, §6 e §17.2. |
+| 26/09/2026 | §17.1: tela de entrada e de código (NIST 800-63B-4 §3.1.1.2 e §3.1.4.2, WCAG 2.2 SC 3.3.8, Google, Stripe), para o protótipo das telas de entrada. |
 | 26/09/2026 | §15.1: imagem base por digest, Syft, Grype, `pnpm sbom`/`deploy` e Semgrep/zizmor locais no Windows (E9). |
 | 26/09/2026 | §15.1: OpenTelemetry Collector contrib 0.161 (validação, `redaction`, checksum por arquivo) (E8). |
 | 26/09/2026 | §13.3: API do Rekor v2 (hashedrekord v0.0.2, `integratedTime` sempre 0, URL por SigningConfig) e TSA pública da Sigstore (E3). |
@@ -896,6 +897,11 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - autenticadores sincronizáveis (passkeys) são aceitos, com requisitos.
 - **Logto** **[O, via busca]**: MFA com app autenticador (TOTP), passkeys (WebAuthn), código por e-mail, SMS e **10 códigos de recuperação** gerados ao configurar o fator.
 - **Regra do Liame:** e-mail é identidade e recuperação; o segundo fator de quem mexe em dinheiro é o app autenticador (ADR-013).
+- **Tela de entrada e de código** *(verificado em 26/09/2026)*:
+  - **NIST SP 800-63B-4 §3.1.1.2** **[O]**: o verificador **SHOULD** permitir colar a senha (gerenciador de senhas) e **SHOULD** oferecer mostrar a senha enquanto é digitada; outras regras de composição **SHALL NOT** ser impostas. §3.1.4.2: OTP aceito **uma vez só** enquanto válido, com limite de tentativas. Fonte: pages.nist.gov/800-63-4/sp800-63b.html.
+  - **WCAG 2.2 SC 3.3.8 (Autenticação acessível, mínimo)** **[O]**: nenhum passo pode exigir teste cognitivo sem alternativa; colar e preencher pelo gerenciador de senhas satisfazem o critério; **bloquear colar no campo do código**, ou dividir o código em caixas em que o colar só preenche um dígito, reprova. Fonte: w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html.
+  - **Google (verificação em duas etapas)** **[O]**: oferece prompts, chaves de acesso, app de código, SMS e **códigos de reserva de 8 dígitos**; "não perguntar de novo neste computador" só em aparelho próprio. Fonte: support.google.com/accounts/answer/185839.
+  - **Stripe** **[O, via busca]**: app autenticador por QR ou "digitar a chave"; **código de reserva mostrado uma vez**; na entrada, "entrar de outro jeito" → código de reserva. Fonte: support.stripe.com/topics/two-step-authentication.
 
 ### 17.2 Guarda e expurgo
 

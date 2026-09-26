@@ -243,3 +243,39 @@ Script próprio com o mesmo método do `catalogo.mjs verificar` da skill (Chrome
 - 24 cenários (aprovações, plano pelo cartão, aprovar, equipe, funcionário, resultados, LIA, paleta, modo Pro, mais ferramentas, Explicar, Ver detalhes, plano, funcionário e resultados no Pro, dica do trilho, gaveta, estado vazio, Resumo, Pessoas e acessos, convite enviado, diálogo aberto, e-mail inválido, remover acesso) e 5 roteiros (tema, ajuste que muda o hash, rodada ao vivo que cria proposta, período de 30 dias, foco da LIA no celular).
 - Checagens: rolagem horizontal da página e dentro dos contêineres, elemento fora da tela, nome acessível, IDs duplicados, contraste AA calculado e erros de console.
 - Resultado em 25/09/2026: **nenhum problema**, depois de corrigir 8 achados (rede decorativa passando da margem em 768 px, contraste do cinza sutil no escuro, seletor de período sem estilo, marcadores esticados na lista de fontes, busca achatada no trilho, texto cortado na busca, topo apertado com a LIA aberta em 1280 px e contorno no título focado).
+
+## 10. Telas de entrada (proposta, aguarda aprovação)
+
+Protótipo navegável: `mockups/prototipo-entrada.html` (a barra do topo escolhe a tela e a situação). Cobre **entrar**, **segundo fator** (código do app ou de recuperação, aparelho perdido), **ativar o app autenticador** (QR e chave, código, 10 códigos de recuperação), **aceite de convite** (criar login, já tem conta com e sem sessão, link vencido), **criar conta** e "confira seu e-mail", **confirmar e-mail** (confirmado, link vencido), **esqueci a senha** e **senha nova** (salva, link vencido). Textos de erro iguais aos da API; nada de tela que a API não sustenta.
+
+**Briefing (inferido do projeto):** dono de restaurante (Lite) e agência ou consultor (Pro), no celular e no computador; entra de vez em quando (sessão de 30 dias, 7 de inatividade) e confirma com o app a cada sessão nova; tarefa principal: entrar rápido, com segurança e sem ajuda.
+
+### 10.1 Pesquisa (três trilhas)
+
+| Trilha | Referência | O que faz bem | O que levar | Status |
+| --- | --- | --- | --- | --- |
+| Tradicional | [Google, verificação em duas etapas](https://support.google.com/accounts/answer/185839) | Segundo passo com várias saídas: app de código, códigos de reserva de 8 dígitos para guardar | "Usar um código de recuperação" sempre à vista | verificado em 26/09/2026 |
+| Tradicional | [shadcn/ui login-01 e login-03](https://ui.shadcn.com/blocks/login) | Cartão centralizado, marca acima do formulário | Coluna estreita, um objetivo por tela | verificado em 26/09/2026 |
+| Moderno | [Stripe, app autenticador e código de reserva](https://support.stripe.com/topics/two-step-authentication) | QR com "digitar a chave" como alternativa; código de reserva mostrado uma vez; "entrar de outro jeito" | Os três passos da ativação e o aviso de "não aparece de novo" | verificado em 26/09/2026 |
+| Moderno | [shadcn/ui login-02](https://ui.shadcn.com/blocks/login) | Tela dividida: formulário de um lado, painel da marca do outro | O palco da marca ao lado do formulário | verificado em 26/09/2026 |
+| Inovador | [Avatar animado de Darin Senneff](https://codepen.io/dsenneff/details/NyVrzB/2c3e5bc86b372d5424b00edaf4990173) (e recriações em [Lottie](https://github.com/daryl023/Interactive-Lottie-Login-Form)) | Personagem que reage ao formulário (segue o e-mail, tapa os olhos na senha) | A LIA reagindo ao que a pessoa faz, sem atrapalhar o formulário | verificado em 26/09/2026 (via busca) |
+
+**Regras que valem para qualquer caminho:** [WCAG 2.2 SC 3.3.8](https://www.w3.org/WAI/WCAG22/Understanding/accessible-authentication-minimum.html) — colar e gerenciador de senhas funcionando, `autocomplete` certo, código num campo só (colar funciona; nada de seis caixinhas); [NIST SP 800-63B-4 §3.1.1.2](https://pages.nist.gov/800-63-4/sp800-63b.html) — permitir colar, opção de mostrar a senha, **sem** regra de composição (o Liame pede 15 caracteres e barra senha vazada). Verificado em 26/09/2026.
+
+### 10.2 Três caminhos
+
+**A · Tradicional — "Cartão da conta"** (base: shadcn login-01/03, Google): cartão no centro, logo em cima, nada ao lado. Ganha: o mais leve e conhecido. Perde: a marca e a LIA somem justo na porta de entrada.
+
+**B · Moderno — "Painel com a marca"** (base: shadcn login-02 + Stripe): formulário à esquerda; à direita, um palco sempre Noite com a **LIA em 3D** (busto), uma fala curta por tela e três garantias ("Entrada com app autenticador", "Nada vai ao ar sem a sua aprovação", "Você decide quem tem acesso"). No celular e no tablet o palco some e fica o avatar 2D ao lado do logo. Ganha: presença de marca e identidade sem atrasar ninguém (o 3D carrega depois do formulário). Perde: um pouco mais de peso no computador.
+
+**C · Inovador — "A LIA recebe você"** (base: avatar de Senneff + conversa): uma pergunta por vez, em forma de conversa com a LIA. Ganha: memorável. Perde: mais lento para quem entra todo dia, pior para gerenciador de senhas e para leitor de tela.
+
+**Recomendo B**, com um toque do C: a LIA **reage** ao formulário (acena ao abrir, ouve enquanto a pessoa digita, fica tímida no campo da senha, pensa ao enviar, fica empática no erro e comemora quando o app é ativado), mas o formulário continua sendo um formulário comum, que o gerenciador de senhas preenche.
+
+### 10.3 Para o dono decidir
+
+1. **Caminho B** com a LIA 3D no palco (e o avatar 2D no celular).
+2. **Palco sempre Noite**, também no tema claro (a LIA e a marca se destacam mais no escuro).
+3. **Termos no cadastro:** o protótipo mostra "Ao criar a conta, você concorda com os Termos de Uso e a Política de Privacidade". Depende da publicação dos termos (A0-6); guardar a versão aceita pede um campo novo na API.
+4. **Sem "lembrar este aparelho":** cada sessão nova pede o código do app (a sessão já dura 30 dias). É o que a API faz hoje.
+5. **Próxima tela sem mockup:** "Segurança da conta" (trocar o app, pedir a troca sem o aparelho, ver e encerrar sessões), que o fluxo de aparelho perdido cita.
