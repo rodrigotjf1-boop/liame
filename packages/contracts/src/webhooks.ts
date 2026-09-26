@@ -11,6 +11,11 @@ export const EventType = z.enum([
   'liame.member.removed',
   'liame.kill_switch.activated',
   'liame.kill_switch.deactivated',
+  'liame.action.requested',
+  'liame.action.approved',
+  'liame.action.cancelled',
+  'liame.action.executed',
+  'liame.action.failed',
   'liame.webhook.test',
 ]);
 export type EventType = z.infer<typeof EventType>;

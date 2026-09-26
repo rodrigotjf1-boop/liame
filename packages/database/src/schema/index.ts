@@ -1,9 +1,11 @@
+import * as actions from './actions.js';
 import * as audit from './audit.js';
 import * as control from './control.js';
 import * as events from './events.js';
 import * as identity from './identity.js';
 import * as vault from './vault.js';
 
+export * from './actions.js';
 export * from './audit.js';
 export * from './control.js';
 export * from './events.js';
@@ -36,6 +38,11 @@ export const allTables = [
   control.featureFlagRule,
   control.killSwitch,
   control.policy,
+  actions.sandboxResource,
+  actions.actionRequest,
+  actions.approval,
+  actions.budgetPolicy,
+  actions.budgetLedgerEntry,
   vault.secret,
   vault.tenantKey,
 ];

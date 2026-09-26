@@ -39,6 +39,6 @@ import { SessionService } from './session.service.js';
     PolicyService,
     { provide: APP_INTERCEPTOR, useClass: PolicyInterceptor },
   ],
-  exports: [APP_CONFIG, Mailer, SessionService, RateLimitService, PolicyService],
+  exports: [APP_CONFIG, Mailer, SessionService, RateLimitService, PolicyService, MfaService],
 })
 export class AuthModule {}

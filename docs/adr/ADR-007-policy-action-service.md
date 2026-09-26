@@ -61,3 +61,13 @@ Amarrada ao `plan_hash`; plano alterado invalida a aprovação. Ações com risc
 - **Camadas:** a política da **plataforma** fica no código (versão 1: conteúdo político bloqueado, Meta no máximo 3 mudanças de orçamento por hora, `campanha.apagar` escala) e vale sempre; a da **empresa** e a da **marca** ficam em `liame.policy` (migration 0010), versionadas, uma ativa por escopo, documento imutável.
 - **`@Politica(ação, proposta)`** (ADR-013): interceptor logo depois da unidade de trabalho avalia na transação da requisição; negou → 422 `politica-negou` com cada regra em `errors`; permitiu → o handler lê o modo com `currentPolicyDecision()`.
 - **Ainda não:** Revisor de Compliance de IA (A3), Policy Templates com priors das skills e presets por segmento (A2/A3).
+
+## Implementação do pedido de ação (E6c, 26/09/2026)
+
+- **Registro de ferramentas** no código (`apps/server/src/actions/tools.ts`): nome, risco, provedores, compensação, parâmetros (Zod) e uma função pura `plan(estado, parâmetros)` que dá a ação para a política (`orcamento.aumentar`/`reduzir`), o impacto, os valores e o estado desejado. Quem pede manda só ferramenta, alvo e parâmetros.
+- **Conector sandbox** (`sandbox_resource`, migration 0011): provedor de mentira no banco, com versão (concorrência otimista) e `validateOnly`; os reais chegam na A2 pela mesma interface.
+- **Pedido** (`POST /v1/actions`): trava (423) → flag de escrita do provedor → estado lido no provedor → política com a contagem recente na maior janela que casa (422) → `action_fingerprint` único entre os ativos (409; simultâneos esperam o índice e caem em 409) → reserva no envelope do mês, com a linha do envelope travada (422) → plano com `plan_hash` (ferramenta, alvo, parâmetros, valores, estado desejado e versão lida).
+- **Modos:** `SHADOW` registra e não reserva; `LIMITED_AUTO`/`AUTO` só saem aprovados com a flag `autopilot` ligada (nasce desligada); os demais esperam aprovação; `ESCALATE` só o dono.
+- **Aprovação** (`POST /v1/actions/{id}/approve`): código do app agora (step-up, sem código de recuperação, sem repetir passo) + o `plan_hash` visto. Basta quando o limite de quem aprova cobre a reserva; senão fica registrada e o dono é avisado. Alterar o pedido gera hash novo e a aprovação antiga deixa de valer.
+- **Orçamento:** `budget_policy` (envelope do mês da empresa e da marca, no fuso da empresa) e `budget_ledger_entry` só de inserção (`reserva`, `liberacao`, `execucao`); cancelar devolve a reserva.
+- **Falta (E6d):** execução no worker, workflow durável, expiração e o teste ponta a ponta do A1-9.

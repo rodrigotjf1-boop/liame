@@ -97,6 +97,24 @@ export class MfaService {
   }
 
   /**
+   * Confirmação na hora (step-up) para aprovar gasto ou ação de risco (ADR-007): só o código do app,
+   * nunca código de recuperação, e o mesmo código não vale duas vezes. Não mexe na sessão.
+   */
+  async verifyStepUp(tx: Tx, userId: string, code: string): Promise<void> {
+    await this.rateLimit.consume(`segundo-fator:${userId}`, 10, 900);
+    const secret = await this.vault.findUserSecret(tx, userId, 'totp');
+    if (!secret) throw new AppProblem(403, 'segundo-fator-nao-configurado', 'Ative o app autenticador', 'Aprovar exige o app autenticador ativo.');
+    const r = await tx.execute<{ totp_last_step: string | null }>(sql`select totp_last_step from liame.app_user where id = ${userId}`);
+    const lastStep = r.rows[0]?.totp_last_step == null ? null : Number(r.rows[0].totp_last_step);
+    const step = verifyTotp(secret.plaintext, code, { lastStep });
+    if (step === null) throw invalidCode();
+    const upd = await tx.execute(sql`
+      update liame.app_user set totp_last_step = ${step}
+       where id = ${userId} and (totp_last_step is null or totp_last_step < ${step})`);
+    if (upd.rowCount !== 1) throw invalidCode();
+  }
+
+  /**
    * Quem perdeu o aparelho entra com um código de recuperação e pede a troca: o pedido vale depois de
    * 24 horas, com aviso por e-mail (ADR-013). Com o app em mãos, a troca é imediata.
    */
