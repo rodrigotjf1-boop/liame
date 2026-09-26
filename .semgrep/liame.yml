@@ -32,3 +32,19 @@ rules:
       - pattern: void $PROMISE
       - pattern-not: void $X.catch(...)
       - pattern-not: void $X.then(..., ...)
+
+  - id: liame-escopo-sistema
+    message: >-
+      withSystem() enxerga além do tenant (ignora o isolamento por empresa). Só é permitido na
+      autenticação, no pacote de banco e nos jobs do agendador. Fora disso, use withContext ou a
+      transação da requisição (currentTx).
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      exclude:
+        - 'apps/server/src/auth/**'
+        - 'apps/server/src/worker/**'
+        - 'packages/database/**'
+        - '**/test/**'
+        - '*.spec.ts'
+    pattern: withSystem(...)

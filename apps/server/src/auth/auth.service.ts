@@ -1,0 +1,263 @@
+import type { AcceptedResponse, LoginRequest, MeResponse, ResetPasswordRequest, RoleKey, SignupRequest } from '@liame/contracts';
+import { type Database, type Tx, uuidv7, withSystem } from '@liame/database';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { sql } from 'drizzle-orm';
+import { APP_CONFIG, type AppConfig } from '../config.js';
+import { type AuthContext, currentTx } from '../context/request-context.js';
+import { DATABASE } from '../database/database.module.js';
+import { AppProblem, ValidationProblem } from '../errors/problems.js';
+import { Mailer, type MailMessage } from '../mail/mailer.js';
+import { burnPasswordTime, hashPassword, isBreachedPassword, verifyPassword } from './password.js';
+import { RateLimitService } from './rate-limit.service.js';
+import { SessionService } from './session.service.js';
+import { hashToken, newToken } from './tokens.js';
+
+export interface RequestMeta {
+  ip: string | null;
+  userAgent: string | null;
+}
+
+const ACCEPTED_SIGNUP: AcceptedResponse = {
+  status: 'accepted',
+  message: 'Se o e-mail puder ser usado, enviamos um link para confirmar o cadastro.',
+};
+const ACCEPTED_FORGOT: AcceptedResponse = {
+  status: 'accepted',
+  message: 'Se houver uma conta com este e-mail, enviamos um link para criar uma senha nova.',
+};
+
+const invalidCredentials = () =>
+  new AppProblem(401, 'credenciais-invalidas', 'E-mail ou senha incorretos', 'Confira os dados e tente de novo.');
+
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger('auth');
+
+  constructor(
+    @Inject(DATABASE) private readonly database: Database | null,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly sessions: SessionService,
+    private readonly rateLimit: RateLimitService,
+    private readonly mailer: Mailer,
+  ) {}
+
+  private get db() {
+    if (!this.database) throw new AppProblem(503, 'indisponivel', 'Serviço indisponível', 'Tente de novo em instantes.');
+    return this.database.db;
+  }
+
+  // ------------------------------------------------------------------ cadastro
+
+  async signup(input: SignupRequest, meta: RequestMeta): Promise<AcceptedResponse> {
+    await this.rateLimit.consume(`cadastro:ip:${meta.ip ?? '-'}`, 10, 3600);
+    await this.rejectBreached(input.password);
+    const passwordHash = await hashPassword(input.password);
+
+    const outbox: MailMessage[] = [];
+    try {
+      await withSystem(this.db, async (tx) => {
+        const existing = await tx.execute<{ id: string; email_verified_at: string | null }>(
+          sql`select id, email_verified_at from liame.app_user where email = ${input.email}`,
+        );
+        const found = existing.rows[0];
+        if (found) {
+          // Não revela que a conta existe: a resposta é a mesma; só o e-mail muda.
+          outbox.push(
+            found.email_verified_at ? this.alreadyRegisteredMail(input.email) : await this.confirmationMail(tx, found.id, input.email),
+          );
+          return;
+        }
+        const userId = uuidv7();
+        const tenantId = uuidv7();
+        await tx.execute(sql`insert into liame.app_user (id, email, name, password_hash) values (${userId}, ${input.email}, ${input.name}, ${passwordHash})`);
+        await tx.execute(sql`insert into liame.organization (id, name, cnpj) values (${tenantId}, ${input.company.name}, ${input.company.cnpj ?? null})`);
+        await tx.execute(sql`insert into liame.membership (id, tenant_id, user_id, role_key, dual_approval, billing_access)
+                             values (${uuidv7()}, ${tenantId}, ${userId}, 'dono', false, true)`);
+        await tx.execute(sql`insert into liame.brand (id, tenant_id, name) values (${uuidv7()}, ${tenantId}, ${input.company.name})`);
+        outbox.push(await this.confirmationMail(tx, userId, input.email));
+      });
+    } catch (err) {
+      // Dois cadastros ao mesmo tempo com o mesmo e-mail: o segundo cai aqui, e a resposta continua a mesma.
+      if ((err as { code?: string }).code !== '23505') throw err;
+      this.logger.log('cadastro concorrente com e-mail já existente');
+    }
+    await this.deliver(outbox);
+    return ACCEPTED_SIGNUP;
+  }
+
+  async verifyEmail(token: string): Promise<AcceptedResponse> {
+    await withSystem(this.db, async (tx) => {
+      const userId = await this.consumeToken(tx, token, 'confirmar_email');
+      await tx.execute(sql`update liame.app_user set email_verified_at = coalesce(email_verified_at, now()) where id = ${userId}`);
+    });
+    return { status: 'accepted', message: 'E-mail confirmado. Você já pode entrar.' };
+  }
+
+  // ------------------------------------------------------------------ entrar e sair
+
+  async login(input: LoginRequest, meta: RequestMeta): Promise<{ token: string; me: MeResponse }> {
+    await this.rateLimit.consume(`entrar:ip:${meta.ip ?? '-'}`, 30, 900);
+    await this.rateLimit.consume(`entrar:email:${input.email}`, 10, 900);
+
+    const outbox: MailMessage[] = [];
+    const result = await withSystem(this.db, async (tx) => {
+      const r = await tx.execute<{ id: string; password_hash: string; email_verified_at: string | null; disabled_at: string | null }>(
+        sql`select id, password_hash, email_verified_at, disabled_at from liame.app_user where email = ${input.email}`,
+      );
+      const user = r.rows[0];
+      if (!user) {
+        await burnPasswordTime(input.password);
+        throw invalidCredentials();
+      }
+      if (!(await verifyPassword(input.password, user.password_hash)) || user.disabled_at) throw invalidCredentials();
+      if (!user.email_verified_at) {
+        outbox.push(await this.confirmationMail(tx, user.id, input.email));
+        return { unverified: true as const };
+      }
+      const m = await tx.execute<{ tenant_id: string }>(sql`
+        select tenant_id from liame.membership
+         where user_id = ${user.id} and revoked_at is null and (expires_at is null or expires_at > now())
+         order by created_at limit 1`);
+      const tenantId = m.rows[0]?.tenant_id ?? null;
+      const token = await this.sessions.create(tx, { userId: user.id, tenantId, ip: meta.ip, userAgent: meta.userAgent });
+      return { unverified: false as const, token, userId: user.id, tenantId };
+    });
+
+    if (result.unverified) {
+      await this.deliver(outbox);
+      throw new AppProblem(403, 'email-nao-confirmado', 'Confirme seu e-mail', 'Enviamos de novo o link de confirmação.');
+    }
+    const me = await withSystem(this.db, (tx) => this.loadMe(tx, result.userId, result.tenantId, null), { userId: result.userId });
+    return { token: result.token, me };
+  }
+
+  async logout(auth: AuthContext): Promise<void> {
+    await this.sessions.revoke(auth.sessionId);
+  }
+
+  // ------------------------------------------------------------------ senha
+
+  async forgotPassword(email: string, meta: RequestMeta): Promise<AcceptedResponse> {
+    await this.rateLimit.consume(`esqueci:ip:${meta.ip ?? '-'}`, 10, 3600);
+    await this.rateLimit.consume(`esqueci:email:${email}`, 5, 3600);
+    const outbox: MailMessage[] = [];
+    await withSystem(this.db, async (tx) => {
+      const r = await tx.execute<{ id: string }>(
+        sql`select id from liame.app_user where email = ${email} and disabled_at is null`,
+      );
+      const user = r.rows[0];
+      if (!user) return;
+      const { token, hash } = newToken();
+      await tx.execute(sql`insert into liame.user_token (id, user_id, purpose, token_hash, expires_at)
+                           values (${uuidv7()}, ${user.id}, 'redefinir_senha', ${hash}, now() + interval '1 hour')`);
+      outbox.push({
+        to: email,
+        subject: 'Liame: criar uma senha nova',
+        text: `Para criar uma senha nova, abra o link em até 1 hora:\n\n${this.config.appUrl}/redefinir-senha?token=${token}\n\nSe não foi você, ignore este e-mail: a senha atual continua valendo.`,
+      });
+    });
+    await this.deliver(outbox);
+    return ACCEPTED_FORGOT;
+  }
+
+  async resetPassword(input: ResetPasswordRequest): Promise<AcceptedResponse> {
+    await this.rejectBreached(input.password);
+    const passwordHash = await hashPassword(input.password);
+    await withSystem(this.db, async (tx) => {
+      const userId = await this.consumeToken(tx, input.token, 'redefinir_senha');
+      // Quem recebeu o link provou que o e-mail é seu.
+      await tx.execute(sql`update liame.app_user set password_hash = ${passwordHash}, email_verified_at = coalesce(email_verified_at, now())
+                           where id = ${userId}`);
+      await this.sessions.revokeAllForUser(tx, userId);
+    });
+    return { status: 'accepted', message: 'Senha nova criada. Entre com ela.' };
+  }
+
+  // ------------------------------------------------------------------ eu e empresa ativa
+
+  /** Roda na transação da requisição (contexto da pessoa). */
+  async me(auth: AuthContext): Promise<MeResponse> {
+    return this.loadMe(currentTx(), auth.userId, auth.tenantId, auth.mfaVerifiedAt);
+  }
+
+  async switchOrganization(auth: AuthContext, organizationId: string): Promise<MeResponse> {
+    const tx = currentTx();
+    const m = await tx.execute<{ tenant_id: string }>(sql`
+      select tenant_id from liame.membership
+       where tenant_id = ${organizationId} and user_id = ${auth.userId} and revoked_at is null
+         and (expires_at is null or expires_at > now())`);
+    // Sem vínculo, a resposta é a mesma de empresa inexistente (arquitetura §14: nunca "é de outra empresa").
+    if (!m.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Empresa não encontrada.');
+    await tx.execute(sql`update liame.session set active_tenant_id = ${organizationId} where id = ${auth.sessionId}`);
+    return this.loadMe(tx, auth.userId, organizationId, auth.mfaVerifiedAt);
+  }
+
+  private async loadMe(tx: Tx, userId: string, tenantId: string | null, mfaVerifiedAt: Date | null): Promise<MeResponse> {
+    const u = await tx.execute<{ id: string; name: string; email: string }>(
+      sql`select id, name, email from liame.app_user where id = ${userId}`,
+    );
+    const orgs = await tx.execute<{ id: string; name: string; role: RoleKey }>(sql`
+      select o.id, o.name, m.role_key as role
+        from liame.membership m join liame.organization o on o.id = m.tenant_id
+       where m.user_id = ${userId} and m.revoked_at is null and (m.expires_at is null or m.expires_at > now())
+       order by o.name`);
+    const user = u.rows[0];
+    if (!user) throw new AppProblem(401, 'nao-autenticado', 'Entre de novo', 'A sessão acabou.');
+    return {
+      user: { id: user.id, name: user.name, email: user.email },
+      organizations: orgs.rows,
+      active_organization_id: tenantId,
+      mfa: mfaVerifiedAt ? 'verified' : 'not_configured',
+    };
+  }
+
+  // ------------------------------------------------------------------ apoio
+
+  private async rejectBreached(password: string): Promise<void> {
+    if (this.config.breachedPasswordCheck && (await isBreachedPassword(password))) {
+      throw new ValidationProblem([
+        { path: 'password', message: 'Essa senha já apareceu em vazamentos de outros sites. Escolha outra.' },
+      ]);
+    }
+  }
+
+  private async consumeToken(tx: Tx, token: string, purpose: 'confirmar_email' | 'redefinir_senha'): Promise<string> {
+    const r = await tx.execute<{ user_id: string }>(sql`
+      update liame.user_token set used_at = now()
+       where token_hash = ${hashToken(token)} and purpose = ${purpose} and used_at is null and expires_at > now()
+       returning user_id`);
+    const userId = r.rows[0]?.user_id;
+    if (!userId) throw new AppProblem(400, 'link-invalido', 'Link inválido ou vencido', 'Peça um link novo.');
+    return userId;
+  }
+
+  private async confirmationMail(tx: Tx, userId: string, email: string): Promise<MailMessage> {
+    const { token, hash } = newToken();
+    await tx.execute(sql`insert into liame.user_token (id, user_id, purpose, token_hash, expires_at)
+                         values (${uuidv7()}, ${userId}, 'confirmar_email', ${hash}, now() + interval '24 hours')`);
+    return {
+      to: email,
+      subject: 'Liame: confirme seu e-mail',
+      text: `Para confirmar seu e-mail e ativar a conta, abra o link em até 24 horas:\n\n${this.config.appUrl}/confirmar-email?token=${token}\n\nSe não foi você, ignore este e-mail.`,
+    };
+  }
+
+  private alreadyRegisteredMail(email: string): MailMessage {
+    return {
+      to: email,
+      subject: 'Liame: você já tem conta',
+      text: `Alguém tentou criar uma conta com este e-mail, mas você já tem uma.\n\nPara entrar: ${this.config.appUrl}/entrar\nEsqueceu a senha? ${this.config.appUrl}/esqueci-a-senha\n\nSe não foi você, ignore este e-mail.`,
+    };
+  }
+
+  /** Envia depois do commit. Falha de envio não desfaz o cadastro: registra o motivo (LIC-001, LIC-003). */
+  private async deliver(messages: MailMessage[]): Promise<void> {
+    for (const message of messages) {
+      try {
+        await this.mailer.send(message);
+      } catch (err) {
+        this.logger.error(`falha ao enviar e-mail "${message.subject}": ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+}

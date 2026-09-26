@@ -25,6 +25,7 @@ export class AppProblem extends HttpException {
     readonly code: string,
     readonly title: string,
     readonly detail: string,
+    readonly headers: Record<string, string> = {},
   ) {
     super(title, status);
   }

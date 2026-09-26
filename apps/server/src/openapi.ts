@@ -13,6 +13,9 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .setOpenAPIVersion('3.1.0')
     .addServer('/', 'Mesma origem do app')
     .addTag('infra', 'Saúde e prontidão do serviço')
+    .addTag('auth', 'Cadastro, confirmação de e-mail, sessão e senha')
+    .addTag('me', 'A pessoa da sessão e a empresa ativa')
+    .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .addTag('spike', 'Rotas provisórias do spike de compatibilidade (saem na A1)')
     .build();
   return SwaggerModule.createDocument(app, config);

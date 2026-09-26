@@ -1,6 +1,6 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, Logger } from '@nestjs/common';
 import type { HttpAdapterHost } from '@nestjs/core';
-import { currentTraceId, reasonOf, toProblem } from './problems.js';
+import { AppProblem, currentTraceId, reasonOf, toProblem } from './problems.js';
 
 /**
  * Toda resposta de erro sai em RFC 9457 (`application/problem+json`) com `trace_id` (arquitetura §14).
@@ -31,6 +31,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       this.logger.log(`${method} ${path} → ${problem.status} ${problem.code} [trace ${traceId}]: ${reasonOf(exception)}`);
     }
 
+    if (exception instanceof AppProblem) {
+      for (const [name, value] of Object.entries(exception.headers)) httpAdapter.setHeader(res, name, value);
+    }
     httpAdapter.setHeader(res, 'content-type', 'application/problem+json');
     httpAdapter.reply(res, problem, problem.status);
   }

@@ -26,7 +26,8 @@ Plano da A1 (núcleo seguro) **aprovado em 26/09/2026**: [`plano-a1.md`](plano-a
 | Entrega | Situação | Evidência |
 | --- | --- | --- |
 | **E1a** · migrations, schema `liame`, health de prontidão, erros RFC 9457 | ✅ local (36 testes) · CI no PR | ADR-018; `packages/database/migrations/0001_base.sql`; A1-18 (health com versão, banco, fila e migration; 5xx com causa e `trace_id` no log); A1-1 e A1-2 como teste de catálogo |
-| **E1b** · CI de segurança e contrato OpenAPI | ✅ local · CI no PR | A1-15 (contrato gerado e conferido, Spectral sem aviso, oasdiff, SDK `@liame/sdk` gerado que compila); A1-16 parcial (gitleaks, osv-scanner com licenças, zizmor, Semgrep; SBOM e imagem na E9) |
+| **E2a** · identidade, tenant, sessão e guard global | ✅ local · CI no PR | Migration 0002 (organização, pessoa, vínculo, marca, unidade, sessão, tokens, limites; RLS em **todas** as tabelas); cadastro, confirmação, login, sair, senha nova, /me e troca de empresa; A1-3 (SQL, gerado do catálogo), A1-4 (rotas enumeradas), A1-5 nas tabelas reais |
+| **E1b** · CI de segurança e contrato OpenAPI | ✅ | A1-15 (contrato gerado e conferido, Spectral sem aviso, oasdiff, SDK `@liame/sdk` gerado que compila); A1-16 parcial (gitleaks, osv-scanner com licenças, zizmor, Semgrep; SBOM e imagem na E9) |
 
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 

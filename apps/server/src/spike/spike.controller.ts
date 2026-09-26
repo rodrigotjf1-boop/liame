@@ -1,9 +1,11 @@
 import { ProblemDetails, SpikeEchoRequest, SpikeEchoResponse } from '@liame/contracts';
 import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Publico } from '../auth/access.js';
 import { ApiBadRequestResponse, ApiCreatedResponse, ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 /** Rotas do spike A0-3 e da E1: provam validação, OpenAPI e a política de erros. Saem na A1 (E2). */
 @ApiTags('spike')
+@Publico()
 @Controller('spike')
 export class SpikeController {
   @Post('echo')

@@ -2,6 +2,7 @@ import { HealthResponse, ReadinessResponse } from '@liame/contracts';
 import type { Database } from '@liame/database';
 import { Controller, Get, Inject, Logger, Res } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
+import { Publico } from '../auth/access.js';
 import { DATABASE } from '../database/database.module.js';
 import { APP_VERSION } from '../version.js';
 
@@ -28,6 +29,7 @@ async function timed<T>(fn: () => Promise<T>): Promise<{ value: T; ms: number }>
 }
 
 @ApiTags('infra')
+@Publico()
 @Controller()
 export class HealthController {
   private readonly logger = new Logger('health');

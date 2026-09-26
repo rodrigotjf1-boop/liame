@@ -36,7 +36,11 @@ O `.env.local` da raiz (fora do git) guarda as URLs dos papéis `liame_*`. Sem `
 | `packages/database/test/migrate.spec.ts` | executor de migrations: ordem, não reaplica, erro desfaz o arquivo inteiro, arquivo alterado é recusado, execuções simultâneas aplicam uma vez só, numeração sem pular nem repetir |
 | `packages/database/test/catalog.spec.ts` | migrations reais + A1-1 (tabela com `tenant_id` sem RLS forçada e política reprova) e A1-2 (aplicação sem superusuário, BYPASSRLS nem tabela própria) |
 | `test/openapi.spec.ts` | OpenAPI 3.1 com corpo e resposta vindos do Zod |
-| `test/db/rls.spec.ts` | papel da aplicação sem superusuário nem BYPASSRLS; isolamento entre tenants; sem contexto não lê nem grava; não grava linha de outro tenant; contexto morre com a transação; transações concorrentes não se misturam |
+| `test/db/rls.spec.ts` | nas tabelas reais: papel da aplicação sem superusuário nem BYPASSRLS; isolamento entre tenants; sem contexto não lê nem grava; não grava, altera nem apaga linha de outro tenant; contexto morre com a transação; transações concorrentes não se misturam (A1-2, A1-5) |
+| `test/db/cross-tenant.spec.ts` | A1-3 gerado do catálogo: em **toda** tabela com `tenant_id`, sob o contexto de uma empresa, nenhuma linha de outra aparece, é alterada ou é apagada |
+| `test/db/auth.spec.ts` | cadastro, confirmação de e-mail, login, cookie httpOnly, /me, e-mail repetido sem duplicar e sem revelar, erro igual para senha errada e e-mail inexistente, 429 com Retry-After, senha curta, sair, link de uso único, senha nova derruba sessões, troca de empresa só com vínculo, origem estranha recusada |
+| `test/access.spec.ts` | A1-4: lista exata de rotas públicas; toda rota não pública responde 401 sem sessão |
+| `test/password.spec.ts` | scrypt; checagem de senha vazada só com o prefixo do hash; serviço fora do ar não trava |
 | `test/db/pgboss.spec.ts` | envio do pg-boss na transação da aplicação: o commit cria o job, o rollback desfaz |
 | `dist/spike/verify.js` | o build roda no Node sem transformação (ESM): Nest 12, OpenAPI, pg + Drizzle, AI SDK 7, MCP 2.1 e traces de http, undici e pg no mesmo trace |
 
