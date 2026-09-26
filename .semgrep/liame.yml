@@ -42,11 +42,11 @@ rules:
     languages: [typescript]
     paths:
       exclude:
-        - 'apps/server/src/auth/**'
-        - 'apps/server/src/inbox/**'
-        - 'apps/server/src/worker/**'
-        - 'apps/server/src/vault/**'
-        - 'packages/database/**'
+        - '/apps/server/src/auth/**'
+        - '/apps/server/src/inbox/**'
+        - '/apps/server/src/worker/**'
+        - '/apps/server/src/vault/**'
+        - '/packages/database/**'
         - '**/test/**'
         - '*.spec.ts'
     pattern: withSystem(...)

@@ -63,7 +63,8 @@ export function verifyWebhook(
   if (Math.abs(now - timestamp) > (options.toleranceSeconds ?? DEFAULT_TOLERANCE_SECONDS)) {
     return { ok: false, reason: 'webhook-timestamp fora da tolerância' };
   }
-  const expected = Buffer.from(signWebhook(secret, id, timestamp, payload).slice(3), 'base64');
+  const mac = signWebhook(secret, id, timestamp, payload).slice(3);
+  const expected = Buffer.from(mac, 'base64');
   for (const candidate of signatures.split(' ')) {
     const [version, value] = candidate.split(',', 2);
     if (version !== 'v1' || !value) continue;
