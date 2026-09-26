@@ -25,7 +25,14 @@ import { hasDb, OWNER_URL } from './env.js';
 
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Mutações sem auditoria, com motivo revisado: rota nova aqui é decisão consciente. */
-const WITHOUT_AUDIT = ['POST /v1/auth/password/forgot', 'POST /v1/inbox/:provider', 'POST /v1/invitations/preview', 'POST /v1/spike/echo'];
+const WITHOUT_AUDIT = [
+  'POST /v1/auth/password/forgot',
+  'POST /v1/inbox/:provider',
+  'POST /v1/invitations/preview',
+  'POST /v1/ofrep/v1/evaluate/flags',
+  'POST /v1/ofrep/v1/evaluate/flags/:key',
+  'POST /v1/spike/echo',
+];
 
 function mockServer(handler: (body: Buffer, contentType: string) => { status: number; body: Buffer | string }) {
   let server: Server;

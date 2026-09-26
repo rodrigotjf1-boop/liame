@@ -23,6 +23,8 @@
     "@nestjs/core": "catalog:",
     "@nestjs/platform-express": "catalog:",
     "@nestjs/swagger": "catalog:",
+    "@openfeature/core": "catalog:",
+    "@openfeature/server-sdk": "catalog:",
     "@opentelemetry/api": "catalog:",
     "ai": "catalog:",
     "drizzle-orm": "catalog:",

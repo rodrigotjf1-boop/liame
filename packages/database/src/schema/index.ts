@@ -1,9 +1,11 @@
 import * as audit from './audit.js';
+import * as control from './control.js';
 import * as events from './events.js';
 import * as identity from './identity.js';
 import * as vault from './vault.js';
 
 export * from './audit.js';
+export * from './control.js';
 export * from './events.js';
 export * from './identity.js';
 export * from './vault.js';
@@ -30,6 +32,9 @@ export const allTables = [
   audit.auditChain,
   audit.auditEvent,
   audit.auditAnchor,
+  control.featureFlag,
+  control.featureFlagRule,
+  control.killSwitch,
   vault.secret,
   vault.tenantKey,
 ];

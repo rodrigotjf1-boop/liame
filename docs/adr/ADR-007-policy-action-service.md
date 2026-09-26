@@ -48,3 +48,8 @@ Amarrada ao `plan_hash`; plano alterado invalida a aprovação. Ações com risc
 
 - Toda ferramenta nova só entra com risco, impacto financeiro, estratégia de compensação e testes de política.
 - O Action Service é a peça mais testada do sistema (critérios A1-9 a A1-11).
+
+## Implementação do kill switch (E6a, 26/09/2026)
+
+- Tabela `kill_switch` (migration 0009) com os seis níveis e a forma de cada um checada no banco. `KillSwitchService.check(tx, alvo)` devolve a trava mais ampla que pega o alvo (empresa, provedor, marca, conta, ferramenta); o Action Service (E6c) chama antes de executar, e a trava prevalece sobre flags e autonomia.
+- A empresa aciona e desliga as suas (`/v1/kill-switches`, permissão `parada.acionar`: Dono, Administrador e Gestor), com auditoria (`parada.acionar`, `parada.desligar`) e evento `liame.kill_switch.activated`/`deactivated` (a pausa das entidades criadas pelos agentes entra com os connectors, A2). Global e provedor são da distribuição (escopo de sistema); a empresa vê, mas não desliga.
