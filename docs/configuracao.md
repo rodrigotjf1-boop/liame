@@ -7,7 +7,7 @@ Legenda: **P** = obrigatória em produção · **S** = segredo.
 ## Imagens
 
 - **Servidor** (`apps/server/Dockerfile`): o mesmo para API e worker. API é o padrão; worker: `node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js`; migrations no release: `node node_modules/@liame/database/dist/cli/migrate.js` com `DATABASE_URL_OWNER`. `--build-arg APP_VERSION=<commit>` aparece no `/health`.
-- **Web** (`apps/web/Dockerfile`): Next standalone, `node apps/web/server.js`, porta 3000.
+- **Web** (`apps/web/Dockerfile`): Next standalone, `node apps/web/server.js`, porta 3000. `--build-arg NEXT_PUBLIC_API_URL=https://<api>` fixa o endereço da API no build (**P**): o navegador fala direto com a API, que guarda a sessão no próprio cookie (httpOnly, `SameSite=Lax`); por isso o web e a API ficam no mesmo site (subdomínios do mesmo domínio) e a origem do web entra em `APP_URL`. Sem o argumento, vale `http://localhost:3001` (desenvolvimento).
 
 ## Banco e fila
 

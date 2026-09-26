@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # Imagem do webapp (Next 16, saída standalone). Contexto: raiz do repositório.
-#   docker build -f apps/web/Dockerfile -t liame-web .
+#   docker build -f apps/web/Dockerfile -t liame-web --build-arg NEXT_PUBLIC_API_URL=https://api.exemplo .
 
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
 ENV CI=true TURBO_TELEMETRY_DISABLED=1 NEXT_TELEMETRY_DISABLED=1
@@ -10,6 +10,9 @@ RUN npm install --global pnpm@12.6.0
 WORKDIR /repo
 COPY . .
 RUN pnpm install --frozen-lockfile --ignore-scripts
+# Endereço público da API, fixado no build (o navegador fala direto com ela; docs/configuracao.md).
+ARG NEXT_PUBLIC_API_URL=
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN pnpm turbo run build --filter=@liame/web...
 
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime

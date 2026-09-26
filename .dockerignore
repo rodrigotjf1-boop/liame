@@ -15,5 +15,8 @@
 ERROS-CONHECIDOS.md
 mockups
 docs
+# O SDK do web é gerado do contrato no build (packages/sdk): o contrato entra no contexto.
+!docs/openapi.json
 infra
+lia-agente-3d
 *.log

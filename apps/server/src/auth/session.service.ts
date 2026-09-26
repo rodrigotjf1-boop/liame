@@ -51,11 +51,12 @@ export class SessionService {
         mfa_method: 'totp' | 'recuperacao' | null;
         mfa_configured: boolean;
         last_seen_at: string;
+        member_seen_at: string | null;
         permissions: string[] | null;
         tenant_status: 'ativa' | 'suspensa' | 'encerrada' | null;
       }>(sql`
         select s.id as session_id, u.id as user_id, u.email, u.name, s.mfa_verified_at, s.mfa_method, s.last_seen_at,
-               m.tenant_id, m.role_key, p.permissions, o.status as tenant_status,
+               m.tenant_id, m.role_key, m.last_seen_at as member_seen_at, p.permissions, o.status as tenant_status,
                exists (select 1 from liame.secret x
                         where x.owner_user_id = u.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured
           from liame.session s
@@ -81,6 +82,12 @@ export class SessionService {
       if (!row) return null;
       if (Date.now() - new Date(row.last_seen_at).getTime() > TOUCH_AFTER_MS) {
         await tx.execute(sql`update liame.session set last_seen_at = now() where id = ${row.session_id}`);
+      }
+      // Último acesso nesta empresa, para "Pessoas e acessos" (migration 0015); no máximo a cada 5 minutos.
+      if (row.tenant_id && (!row.member_seen_at || Date.now() - new Date(row.member_seen_at).getTime() > TOUCH_AFTER_MS)) {
+        await tx.execute(sql`
+          update liame.membership set last_seen_at = now()
+           where tenant_id = ${row.tenant_id} and user_id = ${row.user_id} and revoked_at is null`);
       }
       return {
         userId: row.user_id,

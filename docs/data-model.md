@@ -21,7 +21,7 @@ organization (tenant) ─┬─ brand ─┬─ unit (loja: endereço, geo, raio
                        └─ plan / subscription (A7)
 ```
 
-- **Acesso delegado (ADR-017):** `membership` guarda `role_key`, `approve_limit_micros`, `dual_approval`, `billing_access`, `expires_at`, `invited_by` e `revoked_at`; `invitation(tenant_id, email, role_key, limites, access_expires_at, token_hash, expires_at, accepted_at, accepted_by, revoked_at, invited_by)` (migration 0005); um usuário pode ter `membership` em várias organizações. Na A7, `partner_link(partner_org_id, client_org_id, status, scope, requested_by, accepted_by, ended_at)`.
+- **Acesso delegado (ADR-017):** `membership` guarda `role_key`, `approve_limit_micros`, `dual_approval`, `billing_access`, `expires_at`, `invited_by`, `revoked_at` e `last_seen_at` (último acesso **nesta** empresa, gravado junto com a sessão a cada 5 minutos; migration 0015); `app_user.mfa_enabled_at` diz desde quando o app autenticador está ativo (o segredo continua só da pessoa, no cofre); `invitation(tenant_id, email, role_key, limites, access_expires_at, token_hash, expires_at, accepted_at, accepted_by, revoked_at, invited_by)` (migration 0005); um usuário pode ter `membership` em várias organizações. Na A7, `partner_link(partner_org_id, client_org_id, status, scope, requested_by, accepted_by, ended_at)`.
 - **RBAC + ABAC:** papel (Dono, Gestor, Analista, Criador, Aprovador, Cliente) + recurso + ação + contexto + política. Exemplo: *Gestor pode aumentar orçamento em até 15%, só na própria marca, só nas contas X e Y, até R$500 por ação.*
 - `credential` (tokens OAuth de terceiros): cifrado com envelope, `key_version`, `rotated_at`, `revoked_at`. **Nunca** sai em log, front, API, prompt ou auditoria visível ao cliente.
 

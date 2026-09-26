@@ -52,7 +52,8 @@ export class MfaService {
     await this.vault.revokeSecret(tx, pending.id);
     // A finalidade faz parte do contexto da cifra: o segredo é regravado como 'totp', não renomeado.
     await this.vault.putSecret(tx, { ownerUserId: auth.userId, purpose: 'totp', plaintext: pending.plaintext });
-    await tx.execute(sql`update liame.app_user set totp_last_step = ${step} where id = ${auth.userId}`);
+    await tx.execute(sql`
+      update liame.app_user set totp_last_step = ${step}, mfa_enabled_at = coalesce(mfa_enabled_at, now()) where id = ${auth.userId}`);
 
     const codes = newRecoveryCodes();
     await tx.execute(sql`delete from liame.recovery_code where user_id = ${auth.userId} and used_at is null`);

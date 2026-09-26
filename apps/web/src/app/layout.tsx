@@ -1,18 +1,27 @@
 import type { Metadata } from 'next';
-import { JetBrains_Mono, Poppins } from 'next/font/google';
+import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
+import { SCRIPT_TEMA } from '@/components/shell/botao-tema';
 import './globals.css';
 
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+// Fontes do kit servidas pelo próprio app (licença OFL em src/fonts): o build não depende de rede (ERR-018).
+const poppins = localFont({
+  src: [
+    { path: '../fonts/poppins-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: '../fonts/poppins-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../fonts/poppins-latin-600-normal.woff2', weight: '600', style: 'normal' },
+    { path: '../fonts/poppins-latin-700-normal.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-poppins',
   display: 'swap',
 });
 
-const jetbrains = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+const jetbrains = localFont({
+  src: [
+    { path: '../fonts/jetbrains-mono-latin-400-normal.woff2', weight: '400', style: 'normal' },
+    { path: '../fonts/jetbrains-mono-latin-500-normal.woff2', weight: '500', style: 'normal' },
+    { path: '../fonts/jetbrains-mono-latin-600-normal.woff2', weight: '600', style: 'normal' },
+  ],
   variable: '--font-jetbrains',
   display: 'swap',
 });
@@ -24,8 +33,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${poppins.variable} ${jetbrains.variable}`}>
-      <body className="min-h-dvh font-sans">{children}</body>
+    <html lang="pt-BR" className={`${poppins.variable} ${jetbrains.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Tema escolhido antes da primeira pintura; o atributo muda no cliente (por isso o aviso suprimido). */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }

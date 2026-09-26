@@ -34,6 +34,8 @@ type MemberRow = {
   expires_at: Date | string | null;
   invited_by_name: string | null;
   created_at: Date | string;
+  mfa_enabled: boolean;
+  last_seen_at: Date | string | null;
 };
 
 type InvitationRow = {
@@ -71,7 +73,7 @@ export class PeopleService {
     const tenantId = tenantOf(auth);
     const members = await tx.execute<MemberRow>(sql`
       select m.id, m.user_id, u.name, u.email, m.role_key, m.approve_limit_micros, m.dual_approval, m.billing_access,
-             m.expires_at, i.name as invited_by_name, m.created_at
+             m.expires_at, i.name as invited_by_name, m.created_at, u.mfa_enabled_at is not null as mfa_enabled, m.last_seen_at
         from liame.membership m
         join liame.app_user u on u.id = m.user_id
         left join liame.app_user i on i.id = m.invited_by
@@ -246,7 +248,7 @@ export class PeopleService {
   private async target(tx: Tx, auth: AuthContext, id: string): Promise<MemberRow> {
     const r = await tx.execute<MemberRow>(sql`
       select m.id, m.user_id, u.name, u.email, m.role_key, m.approve_limit_micros, m.dual_approval, m.billing_access,
-             m.expires_at, i.name as invited_by_name, m.created_at
+             m.expires_at, i.name as invited_by_name, m.created_at, u.mfa_enabled_at is not null as mfa_enabled, m.last_seen_at
         from liame.membership m
         join liame.app_user u on u.id = m.user_id
         left join liame.app_user i on i.id = m.invited_by
@@ -322,6 +324,8 @@ function toMember(r: MemberRow): MemberResponse {
     expires_at: isoOrNull(r.expires_at),
     invited_by_name: r.invited_by_name,
     created_at: iso(r.created_at),
+    mfa_enabled: r.mfa_enabled,
+    last_seen_at: isoOrNull(r.last_seen_at),
   };
 }
 
