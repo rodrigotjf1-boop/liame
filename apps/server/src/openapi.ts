@@ -16,6 +16,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('auth', 'Cadastro, confirmação de e-mail, sessão e senha')
     .addTag('me', 'A pessoa da sessão, o segundo fator e a empresa ativa')
     .addTag('organization', 'Empresa ativa e marcas')
+    .addTag('people', 'Pessoas e acessos: convites, níveis, limites e remoção (ADR-017)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .addTag('spike', 'Rotas provisórias do spike de compatibilidade (saem na A1)')
     .build();

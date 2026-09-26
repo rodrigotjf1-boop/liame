@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import pg from 'pg';
 import { AppModule } from '../../src/app.module.js';
+import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { Mailer, type MemoryMailer } from '../../src/mail/mailer.js';
 import { configureApp } from '../../src/setup.js';
 
@@ -72,6 +73,18 @@ export async function signupAndLogin(api: TestApi, email = uniqueEmail(), compan
   const login = await api.call('POST', '/v1/auth/login', { body: { email, password: PASSWORD } });
   if (login.status !== 200) throw new Error(`login: ${login.status} ${JSON.stringify(login.body)}`);
   return { email, cookie: login.cookie!, me: login.body };
+}
+
+/** Ativa o app autenticador na sessão (níveis que o exigem só usam rotas de permissão depois disso). */
+export async function enableMfa(api: TestApi, cookie: string): Promise<{ secret: string; codes: string[] }> {
+  const setup = await api.call('POST', '/v1/me/mfa/totp/setup', { cookie });
+  if (setup.status !== 200) throw new Error(`segundo fator: ${setup.status} ${JSON.stringify(setup.body)}`);
+  const confirm = await api.call('POST', '/v1/me/mfa/totp/confirm', {
+    cookie,
+    body: { code: totpCode(setup.body.secret, currentStep()) },
+  });
+  if (confirm.status !== 200) throw new Error(`segundo fator: ${confirm.status} ${JSON.stringify(confirm.body)}`);
+  return { secret: setup.body.secret, codes: confirm.body.recovery_codes };
 }
 
 /** Consulta como dono do banco, em escopo de sistema (a RLS é forçada até para o dono). */

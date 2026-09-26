@@ -3,7 +3,7 @@ import { type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
-import { type AuthContext, currentTx } from '../context/request-context.js';
+import { afterCommit, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { Mailer } from '../mail/mailer.js';
 import { VaultService } from '../vault/vault.service.js';
@@ -60,7 +60,7 @@ export class MfaService {
       await tx.execute(sql`insert into liame.recovery_code (id, user_id, code_hash) values (${uuidv7()}, ${auth.userId}, ${hashRecoveryCode(c)})`);
     }
     await this.markSession(tx, auth, 'totp');
-    await this.notify(auth.email, current ? 'Liame: seu segundo fator foi trocado' : 'Liame: segundo fator ativado', current
+    this.notify(auth.email, current ? 'Liame: seu segundo fator foi trocado' : 'Liame: segundo fator ativado', current
       ? 'O app autenticador da sua conta foi trocado. Se não foi você, troque a senha e fale com o suporte.'
       : 'O app autenticador foi ativado na sua conta. Guarde os códigos de recuperação num lugar seguro.');
     return { recovery_codes: codes };
@@ -93,7 +93,7 @@ export class MfaService {
        returning id`);
     if (!used.rows[0]) throw invalidCode();
     await this.markSession(tx, auth, 'recuperacao');
-    await this.notify(auth.email, 'Liame: código de recuperação usado', 'Um código de recuperação foi usado para entrar na sua conta. Se não foi você, troque a senha agora.');
+    this.notify(auth.email, 'Liame: código de recuperação usado', 'Um código de recuperação foi usado para entrar na sua conta. Se não foi você, troque a senha agora.');
   }
 
   /**
@@ -109,7 +109,7 @@ export class MfaService {
     await tx.execute(sql`
       insert into liame.user_token (id, user_id, purpose, token_hash, expires_at, usable_after)
       values (${uuidv7()}, ${auth.userId}, 'trocar_segundo_fator', ${hash}, now() + interval '72 hours', now() + interval '24 hours')`);
-    await this.notify(
+    this.notify(
       auth.email,
       'Liame: pedido de troca do segundo fator',
       'Recebemos um pedido para trocar o app autenticador da sua conta. Ele vale em 24 horas. Se não foi você, troque a senha agora: isso cancela o pedido.',
@@ -137,7 +137,8 @@ export class MfaService {
     await tx.execute(sql`update liame.session set mfa_verified_at = now(), mfa_method = ${method} where id = ${auth.sessionId}`);
   }
 
-  private async notify(to: string, subject: string, text: string): Promise<void> {
-    await this.mailer.send({ to, subject, text: `${text}\n\n${this.config.appUrl}` }).catch(() => undefined);
+  /** O aviso sai depois do commit: se a transação desfizer, ninguém recebe aviso do que não aconteceu. */
+  private notify(to: string, subject: string, text: string): void {
+    afterCommit(() => this.mailer.send({ to, subject, text: `${text}\n\n${this.config.appUrl}` }));
   }
 }
