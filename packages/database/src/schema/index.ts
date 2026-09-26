@@ -35,6 +35,7 @@ export const allTables = [
   control.featureFlag,
   control.featureFlagRule,
   control.killSwitch,
+  control.policy,
   vault.secret,
   vault.tenantKey,
 ];

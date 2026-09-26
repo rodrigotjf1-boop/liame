@@ -53,3 +53,11 @@ Amarrada ao `plan_hash`; plano alterado invalida a aprovação. Ações com risc
 
 - Tabela `kill_switch` (migration 0009) com os seis níveis e a forma de cada um checada no banco. `KillSwitchService.check(tx, alvo)` devolve a trava mais ampla que pega o alvo (empresa, provedor, marca, conta, ferramenta); o Action Service (E6c) chama antes de executar, e a trava prevalece sobre flags e autonomia.
 - A empresa aciona e desliga as suas (`/v1/kill-switches`, permissão `parada.acionar`: Dono, Administrador e Gestor), com auditoria (`parada.acionar`, `parada.desligar`) e evento `liame.kill_switch.activated`/`deactivated` (a pausa das entidades criadas pelos agentes entra com os connectors, A2). Global e provedor são da distribuição (escopo de sistema); a empresa vê, mas não desliga.
+
+## Implementação do motor de políticas (E6b, 26/09/2026)
+
+- **Documento** (`PolicyDocument`, contrato em Zod): regras `max_value`, `max_change_percent`, `allowed_hours`, `allowed_accounts`, `allowed_scope`, `forbidden_categories`, `forbidden_words`, `rate_limit` e `autonomy`. Ações em português com curinga (`orcamento.*`).
+- **Motor** (`apps/server/src/policy/engine.ts`): função pura. Qualquer violação nega; o modo vem da regra de autonomia mais específica (seletores de ação, ferramenta, conta, risco e faixa; no empate, marca > empresa > plataforma), ESCALATE vence sempre, e sem regra o modo é SHADOW. A contagem para `rate_limit` vem de quem pede (o Action Service conta as execuções).
+- **Camadas:** a política da **plataforma** fica no código (versão 1: conteúdo político bloqueado, Meta no máximo 3 mudanças de orçamento por hora, `campanha.apagar` escala) e vale sempre; a da **empresa** e a da **marca** ficam em `liame.policy` (migration 0010), versionadas, uma ativa por escopo, documento imutável.
+- **`@Politica(ação, proposta)`** (ADR-013): interceptor logo depois da unidade de trabalho avalia na transação da requisição; negou → 422 `politica-negou` com cada regra em `errors`; permitiu → o handler lê o modo com `currentPolicyDecision()`.
+- **Ainda não:** Revisor de Compliance de IA (A3), Policy Templates com priors das skills e presets por segmento (A2/A3).

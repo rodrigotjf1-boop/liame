@@ -11,6 +11,7 @@ import { InboxService } from './inbox/inbox.service.js';
 import { KillSwitchController } from './kill-switch/kill-switch.controller.js';
 import { KillSwitchService } from './kill-switch/kill-switch.service.js';
 import { PeopleController } from './people/people.controller.js';
+import { PolicyController } from './policy/policy.controller.js';
 import { PeopleService } from './people/people.service.js';
 import { SpikeController } from './spike/spike.controller.js';
 import { TelemetryLifecycle } from './telemetry.lifecycle.js';
@@ -21,7 +22,7 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
-  controllers: [HealthController, SpikeController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController],
+  controllers: [HealthController, SpikeController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController],
   providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService],
 })
 export class AppModule {}

@@ -49,3 +49,16 @@ export {
   KillSwitchListResponse,
   KillSwitchResponse,
 } from './kill-switch.js';
+export {
+  ActionProposal,
+  AutonomyMode,
+  BudgetImpact,
+  PolicyDecision,
+  PolicyDocument,
+  PolicyListResponse,
+  PolicyRule,
+  PolicyVersionResponse,
+  PolicyViolation,
+  PublishPolicyRequest,
+  RiskLevel,
+} from './policy.js';

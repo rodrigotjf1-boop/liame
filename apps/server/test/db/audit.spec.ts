@@ -31,6 +31,7 @@ const WITHOUT_AUDIT = [
   'POST /v1/invitations/preview',
   'POST /v1/ofrep/v1/evaluate/flags',
   'POST /v1/ofrep/v1/evaluate/flags/:key',
+  'POST /v1/policies/evaluate',
   'POST /v1/spike/echo',
 ];
 
