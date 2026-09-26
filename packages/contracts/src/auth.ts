@@ -67,6 +67,8 @@ export const MeResponse = z.strictObject({
   mfa: MfaStatus,
   /** O nível na empresa ativa exige o app autenticador e ele ainda não foi configurado. */
   mfa_enrollment_required: z.boolean(),
+  /** Permissões na empresa ativa, para a tela esconder o que a pessoa não pode (quem decide é o servidor). */
+  permissions: z.array(z.string()),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 

@@ -11,6 +11,8 @@ export interface AuthContext {
   /** Empresa ativa da sessão e o vínculo da pessoa com ela (nulos se não houver). */
   tenantId: string | null;
   roleKey: RoleKey | null;
+  /** Permissões do papel na empresa ativa, lidas do banco (vazio sem empresa ativa). */
+  permissions: ReadonlySet<string>;
   mfaVerifiedAt: Date | null;
   /** A pessoa tem app autenticador ativo. */
   mfaConfigured: boolean;

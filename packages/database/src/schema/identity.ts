@@ -42,6 +42,21 @@ export const membership = liame.table('membership', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 });
 
+/** Papel (migration 0006, ADR-013). */
+export const role = liame.table('role', {
+  key: text('key').primaryKey(),
+  name: text('name').notNull(),
+  createdAt: createdAt(),
+});
+
+/** Permissões de um papel: padrão do Liame (tenant nulo) ou conjunto próprio da empresa. */
+export const rolePermission = liame.table('role_permission', {
+  tenantId: uuid('tenant_id'),
+  roleKey: text('role_key').notNull(),
+  permission: text('permission').notNull(),
+  createdAt: createdAt(),
+});
+
 /** Convite por e-mail (migration 0005, ADR-017). */
 export const invitation = liame.table('invitation', {
   id: uuid('id').primaryKey(),
