@@ -6,14 +6,18 @@ export const ACCESS_KEY = 'liame:acesso';
 
 export type Access =
   | { kind: 'publico' }
-  | { kind: 'autenticado' }
+  | { kind: 'autenticado'; beforeMfa?: boolean }
   | { kind: 'permissao'; permissions: string[] };
 
 /** Rota aberta: health, login, cadastro. Precisa ser explícito. */
 export const Publico = () => SetMetadata(ACCESS_KEY, { kind: 'publico' } satisfies Access);
 
-/** Qualquer pessoa com sessão válida, sem exigir empresa ativa (ex.: `GET /v1/me`). */
-export const Autenticado = () => SetMetadata(ACCESS_KEY, { kind: 'autenticado' } satisfies Access);
+/**
+ * Qualquer pessoa com sessão válida, sem exigir empresa ativa (ex.: `GET /v1/me`). Quem tem app autenticador só
+ * passa depois de verificar o código, exceto nas rotas `antesDoSegundoFator` (ver quem sou, verificar, sair).
+ */
+export const Autenticado = (options: { antesDoSegundoFator?: boolean } = {}) =>
+  SetMetadata(ACCESS_KEY, { kind: 'autenticado', beforeMfa: options.antesDoSegundoFator ?? false } satisfies Access);
 
 /** Permissão fina na empresa ativa (ADR-013): `@Permissao('pessoas.convidar')`. */
 export const Permissao = (...permissions: string[]) =>

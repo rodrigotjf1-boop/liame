@@ -12,6 +12,10 @@ export interface AuthContext {
   tenantId: string | null;
   roleKey: RoleKey | null;
   mfaVerifiedAt: Date | null;
+  /** A pessoa tem app autenticador ativo. */
+  mfaConfigured: boolean;
+  /** Como a sessão provou o segundo fator. */
+  mfaMethod: 'totp' | 'recuperacao' | null;
 }
 
 interface RequestStore {

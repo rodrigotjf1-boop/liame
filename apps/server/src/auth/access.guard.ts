@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { AppProblem } from '../errors/problems.js';
 import { ACCESS_KEY, type Access, type RequestWithAuth } from './access.js';
-import { hasPermission } from './permissions.js';
+import { hasPermission, MFA_REQUIRED } from './permissions.js';
 import { readCookie, SESSION_COOKIE, SessionService } from './session.service.js';
 
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -40,9 +40,23 @@ export class AccessGuard implements CanActivate {
     if (!auth) throw new AppProblem(401, 'nao-autenticado', 'Entre de novo', 'A sessão acabou ou não foi enviada.');
     req.auth = auth;
 
+    // Quem tem app autenticador precisa verificar o código antes de usar a conta (ADR-013).
+    if (auth.mfaConfigured && !auth.mfaVerifiedAt && !(access.kind === 'autenticado' && access.beforeMfa)) {
+      throw new AppProblem(401, 'segundo-fator-necessario', 'Digite o código do app', 'Confirme o acesso com o código do app autenticador.');
+    }
+
     if (access.kind === 'permissao') {
       if (!auth.tenantId || !auth.roleKey) {
         throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
+      }
+      // Níveis que mexem em dinheiro ou em pessoas só entram com o app autenticador ativo (ADR-013, ADR-017).
+      if (MFA_REQUIRED.has(auth.roleKey) && !auth.mfaConfigured) {
+        throw new AppProblem(
+          403,
+          'segundo-fator-nao-configurado',
+          'Ative o app autenticador',
+          'Seu nível de acesso exige o segundo fator. Configure o app para continuar.',
+        );
       }
       const missing = access.permissions.filter((p) => !hasPermission(auth.roleKey!, p));
       if (missing.length) {

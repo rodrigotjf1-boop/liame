@@ -8,6 +8,7 @@ import { DATABASE } from '../database/database.module.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { Mailer, type MailMessage } from '../mail/mailer.js';
 import { burnPasswordTime, hashPassword, isBreachedPassword, verifyPassword } from './password.js';
+import { MFA_REQUIRED } from './permissions.js';
 import { RateLimitService } from './rate-limit.service.js';
 import { SessionService } from './session.service.js';
 import { hashToken, newToken } from './tokens.js';
@@ -119,6 +120,17 @@ export class AuthService {
          where user_id = ${user.id} and revoked_at is null and (expires_at is null or expires_at > now())
          order by created_at limit 1`);
       const tenantId = m.rows[0]?.tenant_id ?? null;
+      // Aviso de acesso novo (ADR-013): primeiro login deste navegador em 90 dias, numa conta que já tinha acessos.
+      const seen = await tx.execute<{ same: boolean; any: boolean }>(sql`
+        select coalesce(bool_or(user_agent is not distinct from ${meta.userAgent}), false) as same, count(*) > 0 as any
+          from liame.session where user_id = ${user.id} and created_at > now() - interval '90 days'`);
+      if (seen.rows[0]?.any && !seen.rows[0].same) {
+        outbox.push({
+          to: input.email,
+          subject: 'Liame: novo acesso à sua conta',
+          text: `Sua conta foi acessada de um navegador ou aparelho novo.\n\nSe foi você, não precisa fazer nada. Se não foi, troque a senha agora: ${this.config.appUrl}/esqueci-a-senha`,
+        });
+      }
       const token = await this.sessions.create(tx, { userId: user.id, tenantId, ip: meta.ip, userAgent: meta.userAgent });
       return { unverified: false as const, token, userId: user.id, tenantId };
     });
@@ -127,6 +139,7 @@ export class AuthService {
       await this.deliver(outbox);
       throw new AppProblem(403, 'email-nao-confirmado', 'Confirme seu e-mail', 'Enviamos de novo o link de confirmação.');
     }
+    await this.deliver(outbox);
     const me = await withSystem(this.db, (tx) => this.loadMe(tx, result.userId, result.tenantId, null), { userId: result.userId });
     return { token: result.token, me };
   }
@@ -169,6 +182,9 @@ export class AuthService {
       await tx.execute(sql`update liame.app_user set password_hash = ${passwordHash}, email_verified_at = coalesce(email_verified_at, now())
                            where id = ${userId}`);
       await this.sessions.revokeAllForUser(tx, userId);
+      // Trocar a senha cancela um pedido de troca do segundo fator em espera (ADR-013).
+      await tx.execute(sql`update liame.user_token set used_at = now()
+                           where user_id = ${userId} and purpose = 'trocar_segundo_fator' and used_at is null`);
     });
     return { status: 'accepted', message: 'Senha nova criada. Entre com ela.' };
   }
@@ -193,9 +209,11 @@ export class AuthService {
   }
 
   private async loadMe(tx: Tx, userId: string, tenantId: string | null, mfaVerifiedAt: Date | null): Promise<MeResponse> {
-    const u = await tx.execute<{ id: string; name: string; email: string }>(
-      sql`select id, name, email from liame.app_user where id = ${userId}`,
-    );
+    const u = await tx.execute<{ id: string; name: string; email: string; mfa_configured: boolean }>(sql`
+      select id, name, email,
+             exists (select 1 from liame.secret x
+                      where x.owner_user_id = app_user.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured
+        from liame.app_user where id = ${userId}`);
     const orgs = await tx.execute<{ id: string; name: string; role: RoleKey }>(sql`
       select o.id, o.name, m.role_key as role
         from liame.membership m join liame.organization o on o.id = m.tenant_id
@@ -203,11 +221,13 @@ export class AuthService {
        order by o.name`);
     const user = u.rows[0];
     if (!user) throw new AppProblem(401, 'nao-autenticado', 'Entre de novo', 'A sessão acabou.');
+    const activeRole = orgs.rows.find((o) => o.id === tenantId)?.role ?? null;
     return {
       user: { id: user.id, name: user.name, email: user.email },
       organizations: orgs.rows,
       active_organization_id: tenantId,
-      mfa: mfaVerifiedAt ? 'verified' : 'not_configured',
+      mfa: !user.mfa_configured ? 'not_configured' : mfaVerifiedAt ? 'verified' : 'required',
+      mfa_enrollment_required: !user.mfa_configured && activeRole !== null && MFA_REQUIRED.has(activeRole),
     };
   }
 

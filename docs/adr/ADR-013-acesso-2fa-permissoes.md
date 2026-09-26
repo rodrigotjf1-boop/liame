@@ -48,3 +48,12 @@ Fato que muda o desenho: o **NIST SP 800-63B-4** proíbe e-mail como autenticado
 - **Limites de tentativa** (Postgres, valem entre réplicas): entrar 10 por e-mail e 30 por IP a cada 15 min; cadastro 10 por IP por hora; esqueci a senha 5 por e-mail por hora. Resposta 429 com `Retry-After`.
 - **Origem:** mutação com cabeçalho `Origin` fora da lista do app é recusada (defesa contra CSRF, além do SameSite).
 - **Nada revela quem tem conta:** cadastro e "esqueci a senha" respondem igual; login com e-mail inexistente gasta o mesmo tempo e dá o mesmo erro.
+
+## Implementação (E2b, 26/09/2026)
+
+- **App autenticador (TOTP, RFC 6238):** implementação nativa (HMAC-SHA1, 6 dígitos, 30 s, janela de ±1 passo). O segredo fica no cofre (ADR-011/014), primeiro como `totp_pendente` e, depois do código de confirmação, regravado como `totp` (a finalidade faz parte do contexto da cifra). O último passo aceito fica em `app_user.totp_last_step`: o mesmo código não vale duas vezes, nem em duas requisições simultâneas (update condicional).
+- **Códigos de recuperação:** 10, mostrados uma única vez, guardados só como SHA-256, uso único; usar um avisa por e-mail.
+- **Sessão:** `session.mfa_verified_at` e `session.mfa_method` (`totp` ou `recuperacao`). Quem tem o app ativo só usa `GET /v1/me`, `POST /v1/me/mfa/verify` e sair antes de digitar o código (401 `segundo-fator-necessario`).
+- **Obrigatório por nível:** Dono, Administrador, Gestor e Aprovador recebem 403 `segundo-fator-nao-configurado` em rota de permissão enquanto não ativam o app; `/me` devolve `mfa_enrollment_required` para a tela levar direto à configuração.
+- **Troca do app:** imediata com a sessão verificada pelo app. Sem o aparelho: entrar com código de recuperação, pedir a troca (`POST /v1/me/mfa/change-request`), aviso por e-mail, vale depois de 24 horas e expira em 72; senha nova cancela o pedido. A pessoa só enxerga os próprios pedidos de troca (política própria na RLS de `user_token`).
+- **Limite:** 10 tentativas de código por pessoa a cada 15 minutos.
