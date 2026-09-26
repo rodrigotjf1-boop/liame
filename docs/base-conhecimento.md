@@ -531,6 +531,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 | 25/09/2026 | §17: segundo fator (NIST SP 800-63B-4, Logto), guarda de registros (Marco Civil art. 15), cabeçalhos `Deprecation`/`Sunset` (RFC 9745/8594), versões da Meta divergentes entre fontes, geração de imagem e vídeo no AI SDK e mercado de modelos de imagem (ADR-013 a ADR-016). |
 | 25/09/2026 | §17.5: acesso delegado no mercado (níveis e convite do Google Ads, conta de administrador, parceiros da Meta, proprietário principal do Perfil da Empresa) para o ADR-017. |
 | 25/09/2026 | §6.1: verificação legal para os documentos jurídicos (LGPD e Lei 15.352/2026, Res. ANPD 2, 15, 18, 19 e 32, Marco Civil, CDC/STJ, ECA Digital, PL 2338, TSE 23.755/2026, Meta, Google Uso Limitado, WhatsApp); corrigidos §2.4, §6 e §17.2. |
+| 26/09/2026 | §15.1: Standard Webhooks (vetor oficial conferido), corpo cru no Nest 12 e `lookup` do Node (E5). |
 | 25/09/2026 | §15.1: resultados do spike A0-3 medidos no código (inspeção dos `.d.ts` instalados, build e execução): server em ESM, OTel sem hook de loader, APIs reais do Nest 12, swagger 12, pg-boss 12, MCP 2.1 e AI SDK 7, comportamento do pnpm 12. |
 
 **Fontes principais:**
@@ -825,6 +826,9 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **openapi-typescript 7.13 + openapi-fetch 0.17:** o peer declarado é `typescript ^5.x`, mas gera e compila com o 6.0.3 [O, 26/09/2026].
 - **Turborepo 2.11.4:** precisa do executável `pnpm` no PATH (não serve `corepack pnpm`); coleta telemetria anônima por padrão (`TURBO_TELEMETRY_DISABLED=1`).
 - **Versões com menos de 1 dia em 25/09/2026** (fora do catálogo por isso): `@types/node` 24.19.0 (22:09 UTC), `ai` 7.0.116, `vitest` 5.0.2, `@nestjs/cli` 12.0.7.
+- **Standard Webhooks:** o vetor do repositório oficial (segredo `whsec_MfKQ…`, id `msg_p5jX…`, timestamp 1614265330, corpo `{"test": 2432232314}`) dá `v1,g0hM9SsE+OTPJTGt/tmIKtSyZlE3uFJELVlNIOLJ1OE=` com HMAC-SHA256 sobre `id.timestamp.corpo` e a chave = base64 depois de `whsec_` [O, teste `standard-webhooks.spec.ts`, 26/09/2026].
+- **Nest 12:** `NestFactory.create(App, { rawBody: true })` guarda o corpo cru em `req.rawBody` junto com o JSON já interpretado (necessário para verificar assinatura de webhook) [O, 26/09/2026].
+- **Node `http.request` com `lookup`:** o `lookup` não é chamado quando o host é um IP literal (checar o IP antes) e, com `autoSelectFamily`, pode ser chamado com `{ all: true }` (devolver lista) [O, 26/09/2026].
 - **Actions do CI (conferidas por `git ls-remote`):** `actions/checkout` v7.0.1 `3d3c42e`, `actions/setup-node` v7.0.0 `8207627`, `pnpm/action-setup` v6.1.0 `ea17c68` (suporte ao pnpm 12 desde essa versão).
 
 ---

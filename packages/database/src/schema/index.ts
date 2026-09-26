@@ -1,6 +1,8 @@
+import * as events from './events.js';
 import * as identity from './identity.js';
 import * as vault from './vault.js';
 
+export * from './events.js';
 export * from './identity.js';
 export * from './vault.js';
 
@@ -18,6 +20,11 @@ export const allTables = [
   identity.userToken,
   identity.rateLimit,
   identity.recoveryCode,
+  events.outboxEvent,
+  events.webhookEndpoint,
+  events.webhookDelivery,
+  events.inboxEvent,
+  events.idempotencyKey,
   vault.secret,
   vault.tenantKey,
 ];

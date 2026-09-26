@@ -12,8 +12,10 @@ describe.skipIf(!hasDb)('unidade de trabalho: efeitos depois do commit', () => {
   let database: Database;
   let interceptor: UnitOfWorkInterceptor;
 
+  const request = { auth: { userId: '0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a', tenantId: null }, method: 'GET', url: '/teste', headers: {} };
   const ctx = {
-    switchToHttp: () => ({ getRequest: () => ({ auth: { userId: '0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a', tenantId: null } }) }),
+    switchToHttp: () => ({ getRequest: () => request, getResponse: () => ({ setHeader: () => undefined }) }),
+    getHandler: () => function handler() {},
   } as unknown as ExecutionContext;
   const run = (handler: () => Promise<unknown>) =>
     lastValueFrom(interceptor.intercept(ctx, { handle: () => from(handler()) } as CallHandler));

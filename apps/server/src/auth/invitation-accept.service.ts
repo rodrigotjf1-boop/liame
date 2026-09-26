@@ -6,6 +6,7 @@ import { APP_CONFIG, type AppConfig } from '../config.js';
 import type { AuthContext } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
+import { emitEvent } from '../events/outbox.js';
 import { Mailer, type MailMessage } from '../mail/mailer.js';
 import { ROLE_LABEL } from '../people/grant-rules.js';
 import { AuthService, type RequestMeta } from './auth.service.js';
@@ -139,12 +140,19 @@ export class InvitationAcceptService {
   }
 
   private async join(tx: Tx, inv: OpenInvitation, userId: string, name: string, outbox: MailMessage[]): Promise<void> {
+    const memberId = uuidv7();
     await tx.execute(sql`
       insert into liame.membership (id, tenant_id, user_id, role_key, approve_limit_micros, dual_approval, billing_access,
                                     expires_at, invited_by)
-      values (${uuidv7()}, ${inv.tenant_id}, ${userId}, ${inv.role_key}, ${inv.approve_limit_micros}, ${inv.dual_approval},
+      values (${memberId}, ${inv.tenant_id}, ${userId}, ${inv.role_key}, ${inv.approve_limit_micros}, ${inv.dual_approval},
               ${inv.billing_access}, ${inv.access_expires_at}, ${inv.invited_by})`);
     await tx.execute(sql`update liame.invitation set accepted_at = now(), accepted_by = ${userId} where id = ${inv.id}`);
+    await emitEvent(tx, {
+      tenantId: inv.tenant_id,
+      type: 'liame.member.joined',
+      subject: memberId,
+      data: { member_id: memberId, user_id: userId, role: inv.role_key, invitation_id: inv.id },
+    });
     // O dono recebe um aviso quando o convite é aceito (ADR-017).
     const owners = await tx.execute<{ email: string }>(sql`
       select u.email from liame.membership m join liame.app_user u on u.id = m.user_id

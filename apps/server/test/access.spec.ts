@@ -11,6 +11,7 @@ const PUBLIC_ROUTES = [
   'POST /v1/auth/login',
   'POST /v1/auth/password/forgot',
   'POST /v1/auth/password/reset',
+  'POST /v1/inbox/:provider',
   'POST /v1/invitations/preview',
   'POST /v1/invitations/signup',
   'POST /v1/spike/echo',
