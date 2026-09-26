@@ -57,3 +57,10 @@ Fato que muda o desenho: o **NIST SP 800-63B-4** proíbe e-mail como autenticado
 - **Obrigatório por nível:** Dono, Administrador, Gestor e Aprovador recebem 403 `segundo-fator-nao-configurado` em rota de permissão enquanto não ativam o app; `/me` devolve `mfa_enrollment_required` para a tela levar direto à configuração.
 - **Troca do app:** imediata com a sessão verificada pelo app. Sem o aparelho: entrar com código de recuperação, pedir a troca (`POST /v1/me/mfa/change-request`), aviso por e-mail, vale depois de 24 horas e expira em 72; senha nova cancela o pedido. A pessoa só enxerga os próprios pedidos de troca (política própria na RLS de `user_token`).
 - **Limite:** 10 tentativas de código por pessoa a cada 15 minutos.
+
+## Implementação (E2d, 26/09/2026)
+
+- **Papel é dado:** `liame.role` (os seis níveis do ADR-017) e `liame.role_permission` (migration 0006). Linhas com `tenant_id` nulo são o padrão do Liame; uma empresa pode ter o conjunto próprio de um papel, que substitui o padrão por inteiro. Nesta fase só o escopo de sistema grava; a tela para a empresa editar entra quando houver necessidade, sem mudar rotas.
+- **O que continua no código** (é do produto, não da empresa): o vocabulário de permissões (o app não sobe com rota pedindo permissão fora dele), a ordem dos níveis (ninguém concede acima do seu) e quais níveis exigem o app autenticador.
+- **Resolução:** as permissões da empresa ativa vêm junto com a sessão, na mesma consulta; `GET /v1/me` as devolve para a tela esconder o que a pessoa não pode (quem decide é o servidor).
+- **`@Politica` (ABAC)** entra com o motor de políticas na E6, junto com o contexto da ação (valor, conta, horário).

@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { AppProblem } from '../errors/problems.js';
 import { ACCESS_KEY, type Access, type RequestWithAuth } from './access.js';
-import { hasPermission, MFA_REQUIRED } from './permissions.js';
+import { MFA_REQUIRED } from './permissions.js';
 import { readCookie, SESSION_COOKIE, SessionService } from './session.service.js';
 
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -58,7 +58,7 @@ export class AccessGuard implements CanActivate {
           'Seu nível de acesso exige o segundo fator. Configure o app para continuar.',
         );
       }
-      const missing = access.permissions.filter((p) => !hasPermission(auth.roleKey!, p));
+      const missing = access.permissions.filter((p) => !auth.permissions.has(p));
       if (missing.length) {
         throw new AppProblem(403, 'sem-permissao', 'Sem permissão', `Falta a permissão: ${missing.join(', ')}.`);
       }

@@ -222,13 +222,26 @@ export class AuthService {
     const user = u.rows[0];
     if (!user) throw new AppProblem(401, 'nao-autenticado', 'Entre de novo', 'A sessão acabou.');
     const activeRole = orgs.rows.find((o) => o.id === tenantId)?.role ?? null;
+    const permissions = tenantId && activeRole ? await this.permissionsOf(tx, tenantId, activeRole) : [];
     return {
       user: { id: user.id, name: user.name, email: user.email },
       organizations: orgs.rows,
       active_organization_id: tenantId,
       mfa: !user.mfa_configured ? 'not_configured' : mfaVerifiedAt ? 'verified' : 'required',
       mfa_enrollment_required: !user.mfa_configured && activeRole !== null && MFA_REQUIRED.has(activeRole),
+      permissions,
     };
+  }
+
+  /** Papel como dado (ADR-013): o conjunto da empresa para o papel, se houver; senão, o padrão do Liame. */
+  private async permissionsOf(tx: Tx, tenantId: string, role: RoleKey): Promise<string[]> {
+    const r = await tx.execute<{ permission: string }>(sql`
+      select rp.permission from liame.role_permission rp
+       where rp.role_key = ${role}
+         and rp.tenant_id is not distinct from (select t.tenant_id from liame.role_permission t
+                                                  where t.tenant_id = ${tenantId} and t.role_key = ${role} limit 1)
+       order by rp.permission`);
+    return r.rows.map((x) => x.permission);
   }
 
   // ------------------------------------------------------------------ apoio

@@ -51,9 +51,10 @@ export class SessionService {
         mfa_method: 'totp' | 'recuperacao' | null;
         mfa_configured: boolean;
         last_seen_at: string;
+        permissions: string[] | null;
       }>(sql`
         select s.id as session_id, u.id as user_id, u.email, u.name, s.mfa_verified_at, s.mfa_method, s.last_seen_at,
-               m.tenant_id, m.role_key,
+               m.tenant_id, m.role_key, p.permissions,
                exists (select 1 from liame.secret x
                         where x.owner_user_id = u.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured
           from liame.session s
@@ -61,6 +62,14 @@ export class SessionService {
           left join liame.membership m
             on m.tenant_id = s.active_tenant_id and m.user_id = s.user_id and m.revoked_at is null
            and (m.expires_at is null or m.expires_at > now())
+          -- Papel como dado (ADR-013): o conjunto da empresa, se ela tiver um para o papel; senão, o padrão.
+          left join lateral (
+            select array_agg(rp.permission) as permissions
+              from liame.role_permission rp
+             where rp.role_key = m.role_key
+               and rp.tenant_id is not distinct from (select t.tenant_id from liame.role_permission t
+                                                        where t.tenant_id = m.tenant_id and t.role_key = m.role_key limit 1)
+          ) p on m.id is not null
          where s.token_hash = ${hashToken(token)}
            and s.revoked_at is null
            and s.expires_at > now()
@@ -78,6 +87,7 @@ export class SessionService {
         name: row.name,
         tenantId: row.tenant_id,
         roleKey: row.role_key,
+        permissions: new Set(row.permissions ?? []),
         mfaVerifiedAt: row.mfa_verified_at ? new Date(row.mfa_verified_at) : null,
         mfaConfigured: row.mfa_configured,
         mfaMethod: row.mfa_method,

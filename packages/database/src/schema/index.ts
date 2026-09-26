@@ -10,6 +10,8 @@ export const allTables = [
   identity.appUser,
   identity.membership,
   identity.invitation,
+  identity.role,
+  identity.rolePermission,
   identity.brand,
   identity.unit,
   identity.session,
