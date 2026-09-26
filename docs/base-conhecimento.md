@@ -145,7 +145,7 @@ Eventos servidor a servidor (web, app, loja física, **business_messaging**, que
 - **Faturamento em BRL** desde 01/07/2026; migração obrigatória até 30/06/2027 [O].
 - Política de preço para "AI Providers" desde 16/02/2026 [O].
 - **Chatbots de IA de uso geral proibidos desde 15/01/2026**; agentes de negócio seguem permitidos; no Brasil, a regra está em disputa no CADE [S].
-- A política de 23/09/2026 exige **opt-in explícito**, idealmente por categoria, e respeito ao opt-out [S].
+- A política de 23/09/2026 exige **opt-in** (por categoria é boa prática) e respeito ao opt-out **mesmo pedido fora do WhatsApp** [O, conferido em 25/09/2026, §6.1]. No Brasil, a proibição de "AI Providers" (§4.7) está suspensa por medida preventiva do CADE, mantida em 04/03/2026 [O].
 - Cobrança de mensagens de atendimento a partir de 01/10/2026 [NC].
 - Modelos [memória interna, verificado em uso]:
   - LTO só em MARKETING, sem rodapé, cabeçalho IMAGE/VIDEO, `expiration_time_ms` em epoch absoluto;
@@ -261,7 +261,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - **Dado sensível** (art. 11: saúde, religião, opinião política) não serve para segmentar.
   - **Transferência internacional** (provedores de IA e plataformas): arts. 33–36 + Res. CD/ANPD 19/2024, com cláusulas-padrão.
   - **Obrigações:** registro das operações (art. 37); encarregado (Res. 18/2024); incidente comunicado em 3 dias úteis (Res. 15/2024).
-- **ECA Digital (Lei 15.211/2025):** veda perfilamento para publicidade a crianças e adolescentes. Vigência ~mar/2026 [NC].
+- **ECA Digital (Lei 15.211/2025):** veda perfilamento para publicidade a crianças e adolescentes (art. 22). **Em vigor desde 17/03/2026** [O] (art. 41-A, incluído pela Lei 15.352/2026). Detalhe em §6.1.
 - **STF, art. 19 do Marco Civil (jun/2025):** presunção de responsabilidade das plataformas por anúncios pagos ilícitos [NC na tese] → revisão de anúncios mais rígida.
 - **CONAR:**
   - identificar publicidade ("#publi");
@@ -272,10 +272,29 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - Res. TSE 23.610/2019, alterada pela 23.732/2024: impulsionamento só por candidatos, partidos e coligações; identificação obrigatória; **proibição de deepfake e rótulo obrigatório de conteúdo feito com IA** [NC; site do TSE deu 403];
   - **o Google proíbe anúncio político-eleitoral no Brasil** [O];
   - a Meta exige autorização e "Pago por".
-  - **Eleições 2026:** 1º turno em 04/10, 2º turno em 25/10. **Regra do produto: bloquear conteúdo político por padrão.**
+  - **Eleições 2026:** 1º turno em 04/10, 2º turno em 25/10. **Regra do produto: bloquear conteúdo político por padrão.** Atualizado em 25/09/2026: uso político **proibido** nos Termos (§6.1).
 - **Políticas que derrubam contas:**
   - **Meta:** cloaking, atributos pessoais ("Você tem dívidas?"), promessas de saúde e antes/depois, enriquecimento rápido, apostas e cripto sem autorização, figura pública (golpe/deepfake), landing page ruim, falha de pagamento, conta nova com gasto alto.
   - **Google:** *misrepresentation* (mais comum), *circumventing systems*, pagamento suspeito, verificação de anunciante não concluída, saúde, apostas.
+
+### 6.1 Verificação para os documentos jurídicos (25/09/2026)
+
+*Conferido nas fontes oficiais (download direto do Planalto, DOU e gov.br/anpd; o site do TSE deu 403 e a Res. 23.755/2026 foi lida no DJE-TSE). Uso: `docs/juridico/`. Não é parecer jurídico.*
+
+- **ANPD virou "Agência Nacional de Proteção de Dados"**, autarquia especial (Lei 15.352, de 25/02/2026, conversão da MP 1.317/2025). A lei também reescreveu o art. 5º, VIII (encarregado indicado por controlador e operador). Os arts. 7, 9, 18, 33, 37, 39, 41, 42, 46 e 48 da LGPD não mudaram [O].
+- **Direitos do titular (art. 18):** gratuitos; sem regulamento de prazo, vale o art. 19: **15 dias** para a declaração completa [O].
+- **Operador (art. 42 §1º, I):** responde solidariamente quando descumpre a lei ou as instruções lícitas do controlador [O].
+- **Pequeno porte (Res. CD/ANPD 2/2022):** perde o benefício quem faz tratamento de **alto risco** = pelo menos 1 critério geral (larga escala; afetar significativamente direitos) **e** 1 específico (**tecnologias emergentes ou inovadoras**; vigilância; decisões unicamente automatizadas, inclusive perfil de consumo; dados sensíveis ou de crianças, adolescentes e idosos). Dispensa de encarregado exige canal com o titular [O].
+- **Incidente (Res. CD/ANPD 15/2024):** ANPD e titulares em **3 dias úteis** a partir do conhecimento; conteúdo mínimo de 12 incisos (inclui a identificação do operador); complemento em 20 dias úteis; **registro de todo incidente, mesmo os não comunicados, por no mínimo 5 anos**. A norma não fixa prazo do operador → vai no contrato [O].
+- **Encarregado (Res. CD/ANPD 18/2024):** nome completo no site, em destaque (pessoa jurídica: nome empresarial + pessoa natural responsável); pode ser pessoa jurídica; substituto designado; para o operador, a indicação é facultativa [O].
+- **Transferência internacional (Res. CD/ANPD 19/2024):** cláusulas-padrão só valem **integrais e sem alteração** (Anexo I, art. 16); prazo dos contratos antigos venceu em **23/08/2025**; o controlador **publica no site** uma seção sobre a transferência (país, forma, finalidade, direitos, canal; art. 17 §2º) e entrega a íntegra das cláusulas em 15 dias a quem pedir. O Anexo II tem a modalidade **operador → operador**. **UE adequada** pela Res. CD/ANPD 32, de 26/01/2026 (única decisão de adequação); **EUA sem adequação** [O].
+- **Marco Civil, art. 15:** registros de acesso por **6 meses** (mínimo; prorrogável por ordem cautelar), sob sigilo [O] (antes [S] em §17.2).
+- **CDC × B2B:** o STJ aplica o finalismo mitigado: a pessoa jurídica só é consumidora se provar vulnerabilidade (REsp 2.020.811). Decreto 7.962/2013: identificação (nome empresarial, CNPJ, endereços) em destaque, sumário do contrato, cancelamento pela mesma ferramenta. Código Civil: contrato empresarial presumido paritário (art. 421-A); em adesão, interpretação a favor do aderente e nulidade de renúncia antecipada (arts. 423 e 424) [O].
+- **PL 2338/2023 (IA): não é lei.** Câmara, "Aguardando Parecer" em 02/09/2026 [O].
+- **TSE, Res. 23.755, de 02/03/2026** (altera a 23.610/2019): conteúdo sintético na propaganda exige rótulo explícito com a tecnologia usada; **vedado** publicar ou impulsionar conteúdo sintético novo com candidato ou pessoa pública **72 h antes e 24 h depois** do pleito, mesmo rotulado; **provedor de sistema de IA não pode, mesmo a pedido, ranquear, recomendar ou priorizar candidatos nem indicar voto** (art. 28 §1º-C) [O]. Tese de 01/09/2026 sobre deepfake (exige realismo e caráter de propaganda) [S].
+- **Meta, Platform Terms de 03/02/2026:** política de privacidade em URL pública informada no painel do app, dizendo **como pedir exclusão**; excluir dados quando não forem mais necessários ou a pedido; Data Deletion Request Callback **ou** Data Deletion Instructions URL; Tech Provider trata só sob instrução do cliente; avisar a Meta de incidente o mais rápido possível (§6.b.i) [O].
+- **Google, User Data Policy:** `auth/adwords` é escopo **sensível** (desde 01/10/2020), com verificação OAuth; **Uso Limitado** vale para dados brutos e derivados: só funções visíveis ao usuário, **proibido transferir a plataformas de anúncio** ou usar para anúncios, remarketing e crédito; treino de modelo não personalizado listado como proibido na página do OAuth (a declaração expressa de não treinar só é exigida para Workspace). A frase de Uso Limitado é exemplo, não texto obrigatório; a política fica no domínio verificado, com link na página inicial [O]. `analytics.readonly` sensível [S].
+- **WhatsApp, política de 23/09/2026:** opt-in obrigatório (por categoria é boa prática); **opt-out vale mesmo pedido fora do WhatsApp**; automação com caminho para humano; uso por partidos, candidatos e campanhas proibido. **§4.7 "AI Providers" suspenso no Brasil** por medida preventiva do CADE, mantida em 04/03/2026 [O].
 
 ---
 
@@ -511,6 +530,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 | 25/09/2026 | §16: padrões de interface de agentes (HubSpot Agent Hub, Triple Whale Moby Automations, Klaviyo Composer, Linear Agent) e suporte de plataforma (View Transitions, `<ViewTransition>` do React 19.3, `@starting-style`, `light-dark()`, container queries, `inert`, animação por rolagem) para o modelo de interface (`docs/ux-modelo-interface.md`). |
 | 25/09/2026 | §17: segundo fator (NIST SP 800-63B-4, Logto), guarda de registros (Marco Civil art. 15), cabeçalhos `Deprecation`/`Sunset` (RFC 9745/8594), versões da Meta divergentes entre fontes, geração de imagem e vídeo no AI SDK e mercado de modelos de imagem (ADR-013 a ADR-016). |
 | 25/09/2026 | §17.5: acesso delegado no mercado (níveis e convite do Google Ads, conta de administrador, parceiros da Meta, proprietário principal do Perfil da Empresa) para o ADR-017. |
+| 25/09/2026 | §6.1: verificação legal para os documentos jurídicos (LGPD e Lei 15.352/2026, Res. ANPD 2, 15, 18, 19 e 32, Marco Civil, CDC/STJ, ECA Digital, PL 2338, TSE 23.755/2026, Meta, Google Uso Limitado, WhatsApp); corrigidos §2.4, §6 e §17.2. |
 | 25/09/2026 | §15.1: resultados do spike A0-3 medidos no código (inspeção dos `.d.ts` instalados, build e execução): server em ESM, OTel sem hook de loader, APIs reais do Nest 12, swagger 12, pg-boss 12, MCP 2.1 e AI SDK 7, comportamento do pnpm 12. |
 
 **Fontes principais:**
@@ -856,7 +876,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 ### 17.2 Guarda e expurgo
 
-- **Marco Civil, art. 15** **[S, via busca; o site do Planalto não respondeu]**: provedor de aplicação com fins econômicos guarda os **registros de acesso por 6 meses**, em sigilo e ambiente seguro; ordem judicial pode pedir mais. Provedor de conexão guarda 1 ano (art. 13).
+- **Marco Civil, art. 15** **[O desde 25/09/2026, §6.1; antes S]**: provedor de aplicação com fins econômicos guarda os **registros de acesso por 6 meses**, em sigilo e ambiente seguro; ordem judicial pode pedir mais. Provedor de conexão guarda 1 ano (art. 13).
 - **LGPD** (§6): eliminação ao fim do tratamento, com as exceções do art. 16.
 - **Técnica adotada:** crypto-shredding (destruir a chave do tenant) para o expurgo alcançar os backups (ADR-014).
 
