@@ -12,20 +12,29 @@ Também serão necessárias: a **página de exclusão de dados** (Meta) e a **li
 
 ## 1. O que o dono precisa decidir ou informar
 
+**Resolvido em 26/09/2026:**
+
+| # | Item | Decisão |
+| --- | --- | --- |
+| 1 | Empresa que presta o Liame | **SISTER TECNOLOGIA LTDA** (nome fantasia SISTER SOFTWARE E SOLUCOES; marca DMS Tecnologias), CNPJ 67.748.508/0001-43, Rua Visconde de Pirajá, 414, sala 718, Ipanema, Rio de Janeiro/RJ, CEP 22410-905 (cartão CNPJ). Os apps da Meta e do Google vão no nome dela |
+| 2 | Encarregado de dados | **Rodrigo de Oliveira**, appdevsolutionday@gmail.com. A Res. 18/2024 pede o nome completo: se houver sobrenome além deste, completar |
+| 3 | E-mail de contato | appdevsolutionday@gmail.com (canais e horário do suporte ainda em aberto) |
+| 5 | Uso de IA acima do plano | **Estudo de uso caso a caso**, com custo e responsável: estimativa antes, sugestão da forma mais econômica e aprovação do cliente quando o custo for dele (Termos 10.2; D11) |
+| 9 | Foro | Rio de Janeiro/RJ, sede da empresa (trocar se preferir outro) |
+| 11 | E-mail do serviço | Amazon SES em São Paulo (plano da A1, D-A1-4, aprovado) |
+| 12 | Regem e RegemCast | Mesma empresa: não são suboperadores; ficam no anexo só como serviços que o cliente conecta |
+
+**Ainda em aberto:**
+
 | # | Item | Onde aparece |
 | --- | --- | --- |
-| 1 | **Empresa que presta o Liame:** razão social, CNPJ e endereço. Os sites da DMS usam hoje duas razões sociais ("SISTER TECNOLOGIA LTDA" nos rodapés; "SISTER SOFTWARE E SOLUCOES" na política do GoGeM). Os apps da Meta e do Google precisam estar no nome da mesma empresa (D6) | Os três documentos |
-| 2 | **Encarregado de dados:** nome completo (ou empresa + nome da pessoa responsável) e e-mail (sugestão: `privacidade@agencialiame.com`). Recomendo nomear mesmo que a empresa seja de pequeno porte (seção 4) | Política |
-| 3 | **E-mail de contato e de suporte**; canais e horário do suporte | Termos |
+| 3 | Canais e horário do suporte | Termos 12.2 |
 | 4 | **Reembolso e arrependimento em 7 dias** | Termos 11.1 |
-| 5 | **Limite de IA do plano:** pausa, pacote adicional ou cobrança por excedente | Termos 10.2 |
 | 6 | **Dias de inadimplência** até a suspensão | Termos 10.4 |
 | 7 | **Compromisso quando uma ação for executada fora das regras por falha do Liame** (sugestão: devolver o valor gasto fora da regra, até um teto) | Termos 13.2 |
 | 8 | **Teto de responsabilidade** (sugestão: o valor pago nos últimos 12 meses) | Termos 13.3 e Contrato 12 |
-| 9 | **Foro** | Termos 16 |
-| 10 | **Prazos do Contrato de Dados:** repassar pedido de titular (sugestão: 2 dias úteis) e avisar incidente ao cliente (sugestão: 24 horas) | Contrato 7.1 e 8.1 |
-| 11 | **Fornecedores ainda não escolhidos:** e-mail do serviço, processador de pagamento, região do Langfuse | Política 8 e Contrato Anexo III |
-| 12 | **Regem e RegemCast:** se são da mesma empresa que presta o Liame, não são suboperadores; se forem de outra empresa do grupo, são | Contrato Anexo III |
+| 10 | **Prazos do Contrato de Dados:** repassar pedido de titular (sugestão: 2 dias úteis) e avisar incidente ao cliente (sugestão: 24 horas); aviso e custo de auditoria | Contrato 7.1, 8.1 e 10.2 |
+| 11 | Processador de pagamento (entra com a cobrança, A7) e região do Langfuse | Política 8 |
 | 13 | **Sentry e Langfuse na região da UE?** A UE tem adequação da ANPD; os EUA exigem cláusulas-padrão sem alteração, que fornecedores americanos costumam não aceitar | Política 8.1; Contrato 9 |
 
 ## 2. Pontos para o advogado

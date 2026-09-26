@@ -1,6 +1,6 @@
 # Liame — Modelo de dados
 
-> Status: **proposta para aprovação** · 24/09/2026. Modelo **lógico**: nomes definitivos de colunas e tipos saem nas migrations da A1, com o mesmo espírito.
+> Status: **aprovado pelo dono em 26/09/2026** (proposta de 24/09/2026). Modelo **lógico**: nomes definitivos de colunas e tipos saem nas migrations da A1, com o mesmo espírito.
 
 ## 1. Regras gerais
 

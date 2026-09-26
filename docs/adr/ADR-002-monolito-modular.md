@@ -1,6 +1,6 @@
 # ADR-002 — Monólito modular com dois processos
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Decide:** forma do sistema e organização do monorepo
 
 ## Contexto

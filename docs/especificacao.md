@@ -1,6 +1,6 @@
 # Liame — Especificação do produto
 
-> Status: **proposta para aprovação** · 24/09/2026 · nome **Liame** ("Todas as mídias. Uma inteligência."), assistente **LIA**, domínio **agencialiame.com**; marca por configuração (white-label pronto).
+> Status: **aprovado pelo dono em 26/09/2026** (proposta de 24/09/2026) · nome **Liame** ("Todas as mídias. Uma inteligência."), assistente **LIA**, domínio **agencialiame.com**; marca por configuração (white-label pronto).
 > Fontes da verdade, em ordem: este arquivo → `decisoes-design.md` → `arquitetura.md` e demais docs → ADRs → mockups (quando existirem).
 
 ## 1. Definição

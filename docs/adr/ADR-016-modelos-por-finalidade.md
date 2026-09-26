@@ -1,6 +1,6 @@
 # ADR-016 — Modelos de IA por finalidade, com escolha do cliente dentro de um catálogo curado
 
-- **Status:** Proposto · 25/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 25/09/2026; aprovado com o plano completo pelo dono)
 - **Base:** base de conhecimento §10 e §17.4 · ADR-006 (AI Gateway) · `ai-architecture.md` §3
 
 ## Contexto

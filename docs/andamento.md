@@ -7,21 +7,21 @@
 
 | # | Critério | Situação | Evidência / o que falta |
 | --- | --- | --- | --- |
-| A0-1 | ADR-001 a ADR-010 aceitos | ⏳ dono | Os ADRs seguem "Proposto". Aceite é do dono, registrado no arquivo com data. O ADR-001 já traz a decisão ESM do spike. |
-| A0-2 | 8 docs aprovados | ⏳ dono | Registro no changelog de `decisoes-design.md`. |
+| A0-1 | ADR-001 a ADR-010 aceitos | ✅ 26/09/2026 | ADR-001 a ADR-017 "Aceito", com o plano completo aprovado pelo dono. |
+| A0-2 | 8 docs aprovados | ✅ 26/09/2026 | Registro no changelog de `decisoes-design.md`. |
 | A0-3 | Spike de compatibilidade verde no CI | ✅ **cumprido em 25/09/2026** | CI verde em checkout limpo (Node 24.21 + Postgres 17, 16/16 testes + verificação do spike): https://github.com/rodrigotjf1-boop/liame/actions/runs/36203403949 · nota no ADR-001 · estratégia em `testes.md`. |
 | A0-3b | Contas AWS (KMS sa-east-1 e conta da âncora) | ⏳ dono | IDs das contas, sem segredo. |
-| A0-4 | Mockups aprovados (Lite e Pro) | ⏳ dono | Protótipo em `mockups/prototipo-app.html` (verificado: 24 cenários, 4 larguras, claro e escuro). |
+| A0-4 | Mockups aprovados (Lite e Pro) | ✅ 26/09/2026 | Modelo de interface e protótipo `mockups/prototipo-app.html` aprovados com o plano completo. |
 | A0-5 | Pedidos às plataformas | ⏳ dono | Meta, Google Cloud/Ads, TikTok, GBP. |
-| A0-6 | Termos, privacidade e contrato de operador publicados | 🟡 **rascunhos prontos** | `docs/juridico/` (v0.1, 25/09/2026): faltam os dados da empresa e 12 decisões do dono (README §1), a revisão do advogado e a publicação no site. |
+| A0-6 | Termos, privacidade e contrato de operador publicados | 🟡 **rascunhos com os dados da empresa** | `docs/juridico/`: empresa, encarregado, foro e uso de IA preenchidos em 26/09; faltam 8 decisões (README §1), a revisão do advogado e a publicação no site. |
 | A0-7 | Restaurante de testes confirmado | ⏳ dono | Checklist, incluindo o número de WhatsApp na API oficial. |
 | A0-8 | Supabase São Paulo, EasyPanel, Cloudflare | ⏳ dono | Cloudflare pronta (domínio). |
 | A0-9 | Plano do token por loja do Regem (C1) | ⏳ | Issue/plano no Regem. |
-| A0-10 | Threat model v1 revisado | 🟡 **revisão feita** | `security-model.md` §2.1 (v1.1, 25/09/2026): 16 ameaças novas com controle e fase; aguarda o seu aceite. |
+| A0-10 | Threat model v1 revisado | ✅ 26/09/2026 | `security-model.md` §2.1 (v1.1): 16 ameaças novas com controle e fase. |
 
 ## Próxima fase
 
-Plano da A1 (núcleo seguro) para aprovação: [`plano-a1.md`](plano-a1.md). A entrega E1 é infraestrutura e pode começar já.
+Plano da A1 (núcleo seguro) **aprovado em 26/09/2026**: [`plano-a1.md`](plano-a1.md). Em andamento: **E1 (base técnica)**.
 
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 

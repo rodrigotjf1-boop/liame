@@ -1,6 +1,6 @@
 # Liame — Integrações
 
-> Status: **proposta para aprovação** · 24/09/2026. Fatos das plataformas pesquisados em 24/09/2026: **reconferir na hora de implementar** (LIC-021). O Connector Capability Registry guarda `verified_at` por capacidade.
+> Status: **aprovado pelo dono em 26/09/2026** (proposta de 24/09/2026). Fatos das plataformas pesquisados em 24/09/2026: **reconferir na hora de implementar** (LIC-021). O Connector Capability Registry guarda `verified_at` por capacidade.
 
 ## 1. Regras
 

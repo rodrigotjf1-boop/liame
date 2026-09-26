@@ -1,6 +1,6 @@
 # ADR-003 — Multi-tenancy com RLS desde a primeira migration
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Decide:** isolamento entre clientes
 
 ## Contexto

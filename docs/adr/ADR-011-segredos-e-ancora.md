@@ -1,6 +1,6 @@
 # ADR-011 — Chave mestra fora do banco e âncora externa da auditoria
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Decide:** onde vive a KEK do envelope encryption e onde a auditoria é ancorada
 - **Base:** base de conhecimento §13.2 e §13.3
 

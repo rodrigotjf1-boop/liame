@@ -1,6 +1,6 @@
 # ADR-007 — Policy Engine determinístico + Action Service
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Decide:** como qualquer ator (humano, agente, API, automação, MCP, parceiro) muda algo fora do Liame
 
 ## Contexto

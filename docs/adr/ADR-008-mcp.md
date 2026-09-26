@@ -1,6 +1,6 @@
 # ADR-008 — MCP só para fora, pelo Tool Registry
 
-- **Status:** Proposto · 24/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 24/09/2026; aprovado com o plano completo pelo dono)
 - **Decide:** papel do Model Context Protocol no Liame e na MCP central da DMS
 
 ## Contexto

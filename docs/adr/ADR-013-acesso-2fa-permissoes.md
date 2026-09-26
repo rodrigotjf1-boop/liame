@@ -1,6 +1,6 @@
 # ADR-013 — Acesso: e-mail para entrar, app autenticador como segundo fator e permissão fina por rota
 
-- **Status:** Proposto · 25/09/2026
+- **Status:** Aceito · 26/09/2026 (proposto em 25/09/2026; aprovado com o plano completo pelo dono)
 - **Base:** base de conhecimento §17.1 · `security-model.md` §3 · complementa o ADR-009 (DMS ID) e o ADR-003 (tenant)
 
 ## Contexto

@@ -1,6 +1,6 @@
 # Liame — Arquitetura de IA
 
-> Status: **proposta para aprovação** · 24/09/2026. Princípio: **a IA auxilia, o código decide.** A IA é camada de inteligência, não fundação operacional.
+> Status: **aprovado pelo dono em 26/09/2026** (proposta de 24/09/2026). Princípio: **a IA auxilia, o código decide.** A IA é camada de inteligência, não fundação operacional.
 
 ## 1. Camadas
 

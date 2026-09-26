@@ -1,6 +1,6 @@
 # Revisão do plano mestre → especificação arquitetural
 
-> Status: **proposta para aprovação** · 24/09/2026 · base: Plano mestre v4 + diretrizes de revisão arquitetural (85 itens).
+> Status: **aprovado pelo dono em 26/09/2026** (proposta de 24/09/2026) · base: Plano mestre v4 + diretrizes de revisão arquitetural (85 itens).
 > Nada de produto foi programado. Nenhum commit foi feito.
 
 ## 1. Como ler

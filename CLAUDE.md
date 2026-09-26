@@ -1,6 +1,6 @@
 # Liame — Regras do projeto
 
-> Leia este arquivo inteiro antes de qualquer tarefa. **Estado atual:** fase A0 em implementação desde 25/09/2026 (spike de compatibilidade; andamento em `docs/andamento.md`). Funcionalidade de produto só a partir da A1, com os critérios da A0 cumpridos.
+> Leia este arquivo inteiro antes de qualquer tarefa. **Estado atual:** plano completo aprovado pelo dono em 26/09/2026 (ADR-001 a 017 aceitos). A0 com os itens externos pendentes (AWS, plataformas, restaurante, Supabase, publicação dos termos); A1 em andamento pelo `docs/plano-a1.md`. Andamento em `docs/andamento.md`.
 
 ## 1. Base de conhecimento do nicho: consulta obrigatória
 
@@ -17,12 +17,12 @@
 ## 2. Fontes da verdade (em ordem)
 
 1. `docs/especificacao.md`
-2. `docs/decisoes-design.md` (decisões D1–D7 e changelog)
+2. `docs/decisoes-design.md` (decisões D1–D11 e changelog)
 3. `docs/adr/` (decisões técnicas)
 4. `docs/arquitetura.md`, `docs/ai-architecture.md`, `docs/data-model.md`, `docs/security-model.md`, `docs/integrations.md`, `docs/roadmap.md`
 5. `docs/base-conhecimento.md` (fatos do nicho, com validade)
 6. `mockups/`, quando existirem (sem mockup aprovado, não se inventa tela)
-7. `docs/ux-modelo-interface.md` (modelo de interface; **proposta** até a aprovação registrada em `decisoes-design.md`)
+7. `docs/ux-modelo-interface.md` (modelo de interface Lite e Pro, aprovado em 26/09/2026)
 
 ## 3. Princípios que não se perdem
 
@@ -38,7 +38,11 @@ Antes de alterar código ou usar um recurso: consultar `ERROS-CONHECIDOS.md` (na
 
 pt-BR, sentence case, voz ativa. Tokens semânticos no front (nada de cor crua). Responsivo e acessível por padrão.
 
-## 6. Código
+## 6. Empresa
+
+O Liame é prestado pela **SISTER TECNOLOGIA LTDA** (marca DMS Tecnologias; nome fantasia SISTER SOFTWARE E SOLUCOES), CNPJ 67.748.508/0001-43, Rio de Janeiro/RJ. Apps de plataformas, contratos e documentos jurídicos vão no nome dela. Documentos jurídicos em `docs/juridico/`.
+
+## 7. Código
 
 - **Tudo ESM** (`"type": "module"`), apps e pacotes (ADR-001, ERR-001). Imports relativos com `.js`; `import.meta.dirname`; sem import circular entre módulos.
 - Identificadores de código em inglês (módulos do ADR-002, tabelas do `data-model.md`); comentários, mensagens e interface em pt-BR.
