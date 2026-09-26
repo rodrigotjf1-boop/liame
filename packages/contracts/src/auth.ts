@@ -65,6 +65,8 @@ export const MeResponse = z.strictObject({
   organizations: z.array(z.strictObject({ id: z.uuid(), name: z.string(), role: RoleKey })),
   active_organization_id: z.uuid().nullable(),
   mfa: MfaStatus,
+  /** O nível na empresa ativa exige o app autenticador e ele ainda não foi configurado. */
+  mfa_enrollment_required: z.boolean(),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 

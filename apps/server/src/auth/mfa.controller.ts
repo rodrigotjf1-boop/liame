@@ -1,0 +1,75 @@
+import { MfaVerifyRequest, ProblemDetails, RecoveryCodesResponse, TotpCodeRequest, TotpSetupResponse } from '@liame/contracts';
+import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import {
+  ApiAcceptedResponse,
+  ApiBadRequestResponse,
+  ApiCookieAuth,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import type { AuthContext } from '../context/request-context.js';
+import { Auth, Autenticado } from './access.js';
+import { MfaService } from './mfa.service.js';
+
+@ApiTags('me')
+@ApiCookieAuth('liame_sessao')
+@Controller('me/mfa')
+export class MfaController {
+  constructor(private readonly mfa: MfaService) {}
+
+  @Post('totp/setup')
+  @Autenticado()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Configurar o app autenticador',
+    description: 'Gera um segredo pendente e a URI do QR. Trocar um app já ativo exige a sessão verificada pelo app ou um pedido de troca com mais de 24 horas.',
+  })
+  @ApiOkResponse({ standardSchema: TotpSetupResponse })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  setup(@Auth() auth: AuthContext): Promise<TotpSetupResponse> {
+    return this.mfa.setup(auth);
+  }
+
+  @Post('totp/confirm')
+  @Autenticado()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Confirmar o app autenticador',
+    description: 'Ativa o app com um código dele e devolve os 10 códigos de recuperação, mostrados uma única vez.',
+  })
+  @ApiOkResponse({ standardSchema: RecoveryCodesResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  confirm(@Auth() auth: AuthContext, @Body({ schema: TotpCodeRequest }) body: TotpCodeRequest): Promise<RecoveryCodesResponse> {
+    return this.mfa.confirm(auth, body.code);
+  }
+
+  @Post('verify')
+  @Autenticado({ antesDoSegundoFator: true })
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Verificar o segundo fator',
+    description: 'Confirma a sessão com o código do app (6 dígitos) ou com um código de recuperação (uso único).',
+  })
+  @ApiNoContentResponse({ description: 'Sessão verificada' })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  async verify(@Auth() auth: AuthContext, @Body({ schema: MfaVerifyRequest }) body: MfaVerifyRequest): Promise<void> {
+    await this.mfa.verify(auth, body.code);
+  }
+
+  @Post('change-request')
+  @Autenticado()
+  @HttpCode(202)
+  @ApiOperation({
+    summary: 'Pedir a troca do app (aparelho perdido)',
+    description: 'Depois de entrar com um código de recuperação: o pedido vale em 24 horas, com aviso por e-mail (ADR-013).',
+  })
+  @ApiAcceptedResponse({ description: 'Pedido registrado' })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  async changeRequest(@Auth() auth: AuthContext): Promise<void> {
+    await this.mfa.requestChange(auth);
+  }
+}

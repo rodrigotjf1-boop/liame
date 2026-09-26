@@ -48,10 +48,14 @@ export class SessionService {
         tenant_id: string | null;
         role_key: RoleKey | null;
         mfa_verified_at: string | null;
+        mfa_method: 'totp' | 'recuperacao' | null;
+        mfa_configured: boolean;
         last_seen_at: string;
       }>(sql`
-        select s.id as session_id, u.id as user_id, u.email, u.name, s.mfa_verified_at, s.last_seen_at,
-               m.tenant_id, m.role_key
+        select s.id as session_id, u.id as user_id, u.email, u.name, s.mfa_verified_at, s.mfa_method, s.last_seen_at,
+               m.tenant_id, m.role_key,
+               exists (select 1 from liame.secret x
+                        where x.owner_user_id = u.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured
           from liame.session s
           join liame.app_user u on u.id = s.user_id
           left join liame.membership m
@@ -75,6 +79,8 @@ export class SessionService {
         tenantId: row.tenant_id,
         roleKey: row.role_key,
         mfaVerifiedAt: row.mfa_verified_at ? new Date(row.mfa_verified_at) : null,
+        mfaConfigured: row.mfa_configured,
+        mfaMethod: row.mfa_method,
       };
     });
   }

@@ -14,5 +14,7 @@ export {
   TokenRequest,
 } from './auth.js';
 export { HealthResponse, ReadinessResponse } from './health.js';
+export { MfaVerifyRequest, RecoveryCodesResponse, TotpCodeRequest, TotpSetupResponse } from './mfa.js';
+export { BrandListResponse, BrandResponse, CreateBrandRequest, OrganizationResponse } from './tenancy.js';
 export { PROBLEM_TYPE_BASE, ProblemDetails } from './problem.js';
 export { SpikeEchoRequest, SpikeEchoResponse } from './spike.js';

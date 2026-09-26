@@ -14,6 +14,7 @@ export const allTables = [
   identity.session,
   identity.userToken,
   identity.rateLimit,
+  identity.recoveryCode,
   vault.secret,
   vault.tenantKey,
 ];

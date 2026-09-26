@@ -23,6 +23,7 @@ export const appUser = liame.table('app_user', {
   passwordHash: text('password_hash').notNull(),
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   disabledAt: timestamp('disabled_at', { withTimezone: true }),
+  totpLastStep: bigint('totp_last_step', { mode: 'number' }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -65,6 +66,7 @@ export const session = liame.table('session', {
   userId: uuid('user_id').notNull(),
   activeTenantId: uuid('active_tenant_id'),
   mfaVerifiedAt: timestamp('mfa_verified_at', { withTimezone: true }),
+  mfaMethod: text('mfa_method'),
   ip: inet('ip'),
   userAgent: text('user_agent'),
   createdAt: createdAt(),
@@ -79,6 +81,15 @@ export const userToken = liame.table('user_token', {
   purpose: text('purpose').notNull(),
   tokenHash: text('token_hash').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  usableAfter: timestamp('usable_after', { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+export const recoveryCode = liame.table('recovery_code', {
+  id: uuid('id').primaryKey(),
+  userId: uuid('user_id').notNull(),
+  codeHash: text('code_hash').notNull(),
   usedAt: timestamp('used_at', { withTimezone: true }),
   createdAt: createdAt(),
 });

@@ -92,7 +92,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  @Autenticado()
+  @Autenticado({ antesDoSegundoFator: true })
   @ApiCookieAuth('liame_sessao')
   @HttpCode(204)
   @ApiOperation({ summary: 'Sair', description: 'Encerra a sessão atual.' })
@@ -130,7 +130,7 @@ export class MeController {
   constructor(private readonly auth: AuthService) {}
 
   @Get()
-  @Autenticado()
+  @Autenticado({ antesDoSegundoFator: true })
   @ApiOperation({ summary: 'Quem sou eu', description: 'A pessoa da sessão, as empresas a que tem acesso e a empresa ativa.' })
   @ApiOkResponse({ standardSchema: MeResponse })
   @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
