@@ -17,7 +17,7 @@ export interface ApiResponse {
 /** Sobe a API para teste e devolve um cliente HTTP mínimo que guarda o cookie de sessão. */
 export async function startApi() {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app: INestApplication = moduleRef.createNestApplication({ logger: false });
+  const app: INestApplication = moduleRef.createNestApplication({ logger: false, rawBody: true });
   configureApp(app);
   await app.listen(0, '127.0.0.1');
   const base = (await app.getUrl()).replace('[::1]', '127.0.0.1');

@@ -11,6 +11,7 @@ import { ApiCookieAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiOkResponse,
 import { sql } from 'drizzle-orm';
 import { Auth, Permissao } from '../auth/access.js';
 import { type AuthContext, currentTx } from '../context/request-context.js';
+import { emitEvent } from '../events/outbox.js';
 
 // Empresa ativa e marcas. A RLS filtra pelo tenant da transação; a rota ainda assim filtra (defesa em camadas, ADR-003).
 @ApiTags('organization')
@@ -47,7 +48,9 @@ export class TenancyController {
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   async createBrand(@Auth() auth: AuthContext, @Body({ schema: CreateBrandRequest }) body: CreateBrandRequest): Promise<BrandResponse> {
     const id = uuidv7();
-    await currentTx().execute(sql`insert into liame.brand (id, tenant_id, name) values (${id}, ${auth.tenantId}, ${body.name})`);
+    const tx = currentTx();
+    await tx.execute(sql`insert into liame.brand (id, tenant_id, name) values (${id}, ${auth.tenantId}, ${body.name})`);
+    await emitEvent(tx, { tenantId: auth.tenantId!, type: 'liame.brand.created', subject: id, data: { brand_id: id, name: body.name } });
     return { id, name: body.name };
   }
 }

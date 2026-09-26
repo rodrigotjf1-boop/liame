@@ -16,6 +16,7 @@ import { newToken } from '../auth/tokens.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { afterCommit, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
+import { emitEvent } from '../events/outbox.js';
 import { Mailer } from '../mail/mailer.js';
 import { APPROVER_ROLES, type CheckedGrant, checkGrant, type Grantor, ROLE_LABEL } from './grant-rules.js';
 
@@ -126,6 +127,8 @@ export class PeopleService {
       returning id, email, role_key, approve_limit_micros, dual_approval, billing_access, access_expires_at, expires_at,
                 ${auth.name}::text as invited_by_name, created_at`);
 
+    // Evento sem o e-mail: webhook sai para fora, e o convite ainda não é da pessoa.
+    await emitEvent(tx, { tenantId, type: 'liame.invitation.created', subject: id, data: { invitation_id: id, role: grant.role } });
     const org = await this.organizationName(tx, tenantId);
     const link = `${this.config.appUrl}/convite?token=${token}`;
     afterCommit(() =>
@@ -184,6 +187,19 @@ export class PeopleService {
          set role_key = ${grant.role}, approve_limit_micros = ${grant.approveLimitMicros}, dual_approval = ${grant.dualApproval},
              billing_access = ${grant.billingAccess}, expires_at = ${expiresAt}
        where id = ${id} and tenant_id = ${tenantId}`);
+    await emitEvent(tx, {
+      tenantId,
+      type: 'liame.member.updated',
+      subject: id,
+      data: {
+        member_id: id,
+        user_id: target.user_id,
+        role: grant.role,
+        approve_limit_micros: grant.approveLimitMicros,
+        dual_approval: grant.dualApproval,
+        billing_access: grant.billingAccess,
+      },
+    });
 
     if (by.role !== 'dono') {
       const org = await this.organizationName(tx, tenantId);
@@ -212,6 +228,7 @@ export class PeopleService {
     const tenantId = tenantOf(auth);
     const target = await this.target(tx, auth, id);
     await tx.execute(sql`update liame.membership set revoked_at = now() where id = ${id} and tenant_id = ${tenantId} and revoked_at is null`);
+    await emitEvent(tx, { tenantId, type: 'liame.member.removed', subject: id, data: { member_id: id, user_id: target.user_id } });
     if (auth.roleKey !== 'dono') {
       const org = await this.organizationName(tx, tenantId);
       await this.notifyOwners(tx, tenantId, `Liame: ${auth.name} removeu o acesso de ${target.name}`, [

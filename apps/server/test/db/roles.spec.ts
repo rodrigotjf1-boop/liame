@@ -23,7 +23,7 @@ const MATRIX: Record<string, string[]> = {
   administrador: [
     'empresa.ver', 'empresa.editar', 'marcas.ver', 'marcas.gerenciar', 'pessoas.ver', 'pessoas.convidar', 'pessoas.remover',
     'pessoas.alterar_nivel', 'auditoria.ver', 'acoes.aprovar', 'campanhas.ver', 'campanhas.operar', 'relatorios.ver',
-    'agentes.gerenciar', 'parada.acionar',
+    'agentes.gerenciar', 'parada.acionar', 'webhooks.gerenciar',
   ],
   gestor: [
     'empresa.ver', 'marcas.ver', 'pessoas.ver', 'acoes.aprovar', 'campanhas.ver', 'campanhas.operar', 'relatorios.ver',

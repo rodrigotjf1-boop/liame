@@ -22,6 +22,7 @@ export const PERMISSIONS = [
   'relatorios.ver',
   'agentes.gerenciar',
   'parada.acionar',
+  'webhooks.gerenciar',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

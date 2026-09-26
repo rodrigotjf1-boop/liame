@@ -6,7 +6,8 @@ import { AppModule } from './app.module.js';
 import { configureApp } from './setup.js';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Corpo cru guardado junto do JSON: a inbox verifica a assinatura sobre os bytes recebidos.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   // Atrás da Cloudflare e do proxy do EasyPanel: quantos saltos confiar para achar o IP real (security-model §8).
   app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 0));
   configureApp(app);
