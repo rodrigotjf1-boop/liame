@@ -20,6 +20,8 @@ export interface AuthContext {
 
 interface RequestStore {
   tx: Tx;
+  /** Efeitos que só podem acontecer se a transação gravar (e-mail com link, aviso). */
+  afterCommit: Array<() => Promise<void>>;
 }
 
 /** Transação da requisição (unidade de trabalho), com o contexto da RLS já aplicado. */
@@ -30,4 +32,14 @@ export function currentTx(): Tx {
   const store = requestStore.getStore();
   if (!store) throw new Error('sem transação da requisição: use withContext ou withSystem explicitamente');
   return store.tx;
+}
+
+/**
+ * Agenda um efeito para depois do commit da transação da requisição: se ela desfizer, o efeito não
+ * acontece. A falha do efeito é registrada e não muda a resposta (LIC-001).
+ */
+export function afterCommit(effect: () => Promise<void>): void {
+  const store = requestStore.getStore();
+  if (!store) throw new Error('sem transação da requisição: afterCommit só vale dentro de uma rota autenticada');
+  store.afterCommit.push(effect);
 }

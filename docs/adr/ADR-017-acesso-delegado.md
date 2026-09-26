@@ -59,3 +59,13 @@ O que um agente faz a pedido de um administrador segue o limite desse administra
 - Gente de fora com acesso aumenta a superfície de ataque. Por isso o app autenticador é obrigatório e o limite padrão devolve gasto grande ao dono.
 - O suporte precisa de um fluxo de recuperação da conta do dono (identidade + CNPJ), já que o administrador não pode recuperá-la.
 - Na LGPD, quem administra age em nome do cliente (controlador); o Liame continua como operador. Os termos de uso precisam dizer isso.
+
+## Implementação (E2c, 26/09/2026)
+
+- **Convite** (`liame.invitation`, migration 0005): nível (nunca dono), limite de aprovação em micros, aprovação dupla (ligada por padrão), cobrança (só Administrador) e data de fim do acesso. O link é guardado só como hash, vale 7 dias, uma vez e só para o e-mail convidado. Convidar de novo o mesmo e-mail cancela o link anterior. Até 50 convites por empresa por dia.
+- **Aceite:** quem não tem conta cria o login pelo próprio convite (o link prova o e-mail, a conta nasce confirmada) e já entra na empresa; quem tem conta aceita logado com o mesmo e-mail, e a empresa do convite vira a ativa. O link vai no corpo da requisição, nunca na URL da API.
+- **Ninguém dá mais do que tem:** nível acima do seu, limite acima do seu (ou "sem limite" sem ter), cobrança e dispensa da aprovação dupla só pelo dono. As travas valem para o que muda: o que o dono já concedeu continua quando um administrador mexe em outro campo. Quem passa a aprovar precisa de limite informado.
+- **Dono intocável** e **ninguém mexe no próprio acesso** (nem aumenta o próprio limite).
+- **Remoção na hora:** toda requisição confere o vínculo, então a próxima chamada da pessoa naquela empresa já é recusada; as sessões seguem valendo para as outras empresas dela. A data de fim funciona do mesmo jeito.
+- **Avisos ao dono:** convite aceito (sempre); convite, mudança de acesso e remoção feitos por outra pessoa. Todo e-mail sai depois do commit (`afterCommit`); se a transação desfaz, ninguém recebe aviso do que não aconteceu. Na E5, os envios passam para o outbox.
+- **Ainda não:** transferência de propriedade, recuperação da conta do dono pela DMS, resumo semanal por pessoa (depende da auditoria, E3) e o vínculo de parceiro (A7).

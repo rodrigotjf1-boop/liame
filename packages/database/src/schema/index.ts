@@ -9,6 +9,7 @@ export const allTables = [
   identity.organization,
   identity.appUser,
   identity.membership,
+  identity.invitation,
   identity.brand,
   identity.unit,
   identity.session,

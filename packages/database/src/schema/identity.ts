@@ -42,6 +42,25 @@ export const membership = liame.table('membership', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
 });
 
+/** Convite por e-mail (migration 0005, ADR-017). */
+export const invitation = liame.table('invitation', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  email: text('email').notNull(),
+  roleKey: text('role_key').notNull(),
+  approveLimitMicros: bigint('approve_limit_micros', { mode: 'number' }),
+  dualApproval: boolean('dual_approval').notNull().default(true),
+  billingAccess: boolean('billing_access').notNull().default(false),
+  accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }),
+  tokenHash: text('token_hash').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  invitedBy: uuid('invited_by').notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  acceptedBy: uuid('accepted_by'),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
 export const brand = liame.table('brand', {
   id: uuid('id').primaryKey(),
   tenantId: uuid('tenant_id').notNull(),

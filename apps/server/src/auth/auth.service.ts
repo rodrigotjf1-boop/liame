@@ -208,7 +208,7 @@ export class AuthService {
     return this.loadMe(tx, auth.userId, organizationId, auth.mfaVerifiedAt);
   }
 
-  private async loadMe(tx: Tx, userId: string, tenantId: string | null, mfaVerifiedAt: Date | null): Promise<MeResponse> {
+  async loadMe(tx: Tx, userId: string, tenantId: string | null, mfaVerifiedAt: Date | null): Promise<MeResponse> {
     const u = await tx.execute<{ id: string; name: string; email: string; mfa_configured: boolean }>(sql`
       select id, name, email,
              exists (select 1 from liame.secret x
@@ -233,7 +233,7 @@ export class AuthService {
 
   // ------------------------------------------------------------------ apoio
 
-  private async rejectBreached(password: string): Promise<void> {
+  async rejectBreached(password: string): Promise<void> {
     if (this.config.breachedPasswordCheck && (await isBreachedPassword(password))) {
       throw new ValidationProblem([
         { path: 'password', message: 'Essa senha já apareceu em vazamentos de outros sites. Escolha outra.' },

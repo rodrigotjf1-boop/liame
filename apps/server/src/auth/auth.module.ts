@@ -6,6 +6,8 @@ import { Mailer, MemoryMailer } from '../mail/mailer.js';
 import { AccessGuard } from './access.guard.js';
 import { AuthController, MeController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { InvitationAcceptService } from './invitation-accept.service.js';
+import { InvitationController } from './invitation.controller.js';
 import { MfaController } from './mfa.controller.js';
 import { MfaService } from './mfa.service.js';
 import { RateLimitService } from './rate-limit.service.js';
@@ -13,7 +15,7 @@ import { SessionService } from './session.service.js';
 
 @Global()
 @Module({
-  controllers: [AuthController, MeController, MfaController],
+  controllers: [AuthController, MeController, MfaController, InvitationController],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
     {
@@ -28,6 +30,7 @@ import { SessionService } from './session.service.js';
     RateLimitService,
     AuthService,
     MfaService,
+    InvitationAcceptService,
     { provide: APP_GUARD, useClass: AccessGuard },
     { provide: APP_INTERCEPTOR, useClass: UnitOfWorkInterceptor },
   ],
