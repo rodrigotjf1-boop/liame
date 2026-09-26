@@ -62,9 +62,12 @@ export async function run(): Promise<number> {
       headers: JSON_HEADERS,
       body: JSON.stringify({ message: '', extra: 1 }),
     });
-    const badBody = (await bad.json()) as Record<string, unknown>;
+    const badBody = (await bad.json()) as { code?: string; errors?: Array<{ path: string }> };
     if (bad.status !== 400) throw new Error(`corpo inválido deveria dar 400, deu ${bad.status}`);
-    return { detail: `201 com o valor transformado; 400 com ${JSON.stringify(badBody.message)}` };
+    if (!bad.headers.get('content-type')?.startsWith('application/problem+json') || badBody.code !== 'validacao') {
+      throw new Error(`erro fora do RFC 9457: ${JSON.stringify(badBody)}`);
+    }
+    return { detail: `201 com o valor transformado; 400 RFC 9457 nos campos ${badBody.errors?.map((e) => e.path).join(', ')}` };
   });
 
   await check('OpenAPI 3.1 com os schemas do Zod', async () => {

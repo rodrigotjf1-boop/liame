@@ -21,7 +21,12 @@
 
 ## Próxima fase
 
-Plano da A1 (núcleo seguro) **aprovado em 26/09/2026**: [`plano-a1.md`](plano-a1.md). Em andamento: **E1 (base técnica)**.
+Plano da A1 (núcleo seguro) **aprovado em 26/09/2026**: [`plano-a1.md`](plano-a1.md).
+
+| Entrega | Situação | Evidência |
+| --- | --- | --- |
+| **E1a** · migrations, schema `liame`, health de prontidão, erros RFC 9457 | ✅ local (36 testes) · CI no PR | ADR-018; `packages/database/migrations/0001_base.sql`; A1-18 (health com versão, banco, fila e migration; 5xx com causa e `trace_id` no log); A1-1 e A1-2 como teste de catálogo |
+| **E1b** · CI de segurança e contrato OpenAPI | ⏳ próxima | A1-15, A1-16 |
 
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 

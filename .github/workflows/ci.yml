@@ -67,6 +67,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Migrations no banco de teste (mesmo executor da nuvem, ADR-018)
+        run: pnpm db:migrate:test
+
       - name: Checar tipos (inclui os testes)
         run: pnpm typecheck
 

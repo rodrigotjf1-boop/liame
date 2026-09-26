@@ -31,14 +31,19 @@ O `.env.local` da raiz (fora do git) guarda as URLs dos papéis `liame_*`. Sem `
 
 | Suíte | Prova |
 | --- | --- |
-| `test/api.e2e.spec.ts` | validação por Standard Schema (Zod): corpo válido transformado, inválido com 400, campo extra recusado |
+| `test/api.e2e.spec.ts` | validação por Standard Schema (Zod) e política de erros RFC 9457: 400 com os campos, JSON malformado sem ecoar o corpo, 404 sem revelar a rota, 500 sem dado interno e com a causa no log (LIC-003) |
+| `test/db/health.spec.ts` | `/health/ready` toca banco e fila e diz a versão e a última migration (LIC-008): 503 sem fila, 200 com fila, 503 sem banco |
+| `packages/database/test/migrate.spec.ts` | executor de migrations: ordem, não reaplica, erro desfaz o arquivo inteiro, arquivo alterado é recusado, execuções simultâneas aplicam uma vez só, numeração sem pular nem repetir |
+| `packages/database/test/catalog.spec.ts` | migrations reais + A1-1 (tabela com `tenant_id` sem RLS forçada e política reprova) e A1-2 (aplicação sem superusuário, BYPASSRLS nem tabela própria) |
 | `test/openapi.spec.ts` | OpenAPI 3.1 com corpo e resposta vindos do Zod |
 | `test/db/rls.spec.ts` | papel da aplicação sem superusuário nem BYPASSRLS; isolamento entre tenants; sem contexto não lê nem grava; não grava linha de outro tenant; contexto morre com a transação; transações concorrentes não se misturam |
 | `test/db/pgboss.spec.ts` | envio do pg-boss na transação da aplicação: o commit cria o job, o rollback desfaz |
 | `dist/spike/verify.js` | o build roda no Node sem transformação (ESM): Nest 12, OpenAPI, pg + Drizzle, AI SDK 7, MCP 2.1 e traces de http, undici e pg no mesmo trace |
 
-## 4. A partir da A1: migrations
+## 4. Migrations (ADR-018)
 
-- As tabelas do spike são criadas pelos próprios testes. A partir da A1, o banco de teste passa a ser preparado **pelas migrations, com o mesmo executor que aplica na nuvem**: o que o CI aplicou no 17 é o que vai para o Supabase.
+- O banco de teste é preparado **pelas migrations, com o mesmo executor que aplica na nuvem** (`pnpm db:migrate:test` no CI, antes dos testes): o que o CI aplicou no 17 é o que vai para o Supabase. Localmente: `pnpm db:migrate` (liame_dev) e `pnpm db:migrate:test` (liame_test).
+- O teste de catálogo (`packages/database/test/catalog.spec.ts`) cobre A1-1 e A1-2 desde a primeira migration.
+- As tabelas do spike (RLS e pg-boss) ainda são criadas pelos próprios testes; saem na E2.
 - Divisão de trabalho, como no Regem: **eu aplico e testo no local; o dono aplica na nuvem.** Depois de aplicar, conferir as colunas no banco real (LIC-011).
 - Toda tabela com `tenant_id` nasce com `ENABLE` + `FORCE ROW LEVEL SECURITY` + política + GRANT para `liame_app` na mesma migration (ADR-003); um teste enumera as tabelas e falha se faltar (critério A1-1).
