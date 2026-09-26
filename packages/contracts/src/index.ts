@@ -36,7 +36,6 @@ export {
   UpdateMemberRequest,
 } from './people.js';
 export { PROBLEM_TYPE_BASE, ProblemDetails } from './problem.js';
-export { SpikeEchoRequest, SpikeEchoResponse } from './spike.js';
 export {
   CreatedWebhookEndpointResponse,
   CreateWebhookEndpointRequest,

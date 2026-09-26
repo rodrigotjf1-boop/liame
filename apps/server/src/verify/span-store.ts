@@ -7,4 +7,4 @@ export const warnings: string[] = [];
 process.on('warning', (w) => warnings.push(`${w.name}: ${w.message}`));
 
 export const memoryExporter = new InMemorySpanExporter();
-startTelemetry({ serviceName: 'liame-spike', spanProcessors: [new SimpleSpanProcessor(memoryExporter)] });
+startTelemetry({ serviceName: 'liame-verificacao', spanProcessors: [new SimpleSpanProcessor(memoryExporter)] });

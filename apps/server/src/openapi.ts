@@ -25,7 +25,6 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('actions', 'Ações com trilho: política, orçamento com reserva e aprovação amarrada ao plano (ADR-007)')
     .addTag('inbox', 'Webhooks recebidos de parceiros, verificados e deduplicados (ADR-004)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
-    .addTag('spike', 'Rotas provisórias do spike de compatibilidade (saem na A1)')
     .build();
   return SwaggerModule.createDocument(app, config);
 }

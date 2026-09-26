@@ -78,6 +78,13 @@ describe.skipIf(!hasDb)('identidade: cadastro, e-mail, sessão, senha e empresa 
     expect(errada.body.code).toBe('credenciais-invalidas');
     expect(inexistente.body.code).toBe('credenciais-invalidas');
     expect(errada.body.detail).toBe(inexistente.body.detail);
+    // A falha fica na auditoria da própria pessoa (quem tem conta), sem mudar a resposta.
+    const falhas = await ownerQuery<{ action: string }>(
+      `select e.action from liame.audit_event e join liame.app_user u on u.id = e.actor_id
+        where u.email = $1 and e.tenant_id is null order by e.chain_seq`,
+      [email],
+    );
+    expect(falhas.map((f) => f.action)).toEqual(['email.confirmar', 'sessao.abrir', 'sessao.falhar']);
   });
 
   it('muitas tentativas no mesmo e-mail: 429 com Retry-After', async () => {

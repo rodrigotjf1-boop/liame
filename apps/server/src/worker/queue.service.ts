@@ -3,7 +3,6 @@ import { PgBoss } from 'pg-boss';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { LifecyclePurgeService } from './lifecycle-purge.service.js';
 
-export const SPIKE_QUEUE = 'spike';
 /** Âncora diária da auditoria: 03:15 UTC, com o dia anterior fechado (A1-6). */
 export const AUDIT_ANCHOR_QUEUE = 'auditoria-ancora';
 /** Expurgo diário (04:30 UTC) e relatório mensal ao dono (dia 1, 12:00 UTC), ADR-014. */
@@ -33,10 +32,6 @@ export class QueueService implements OnApplicationBootstrap, OnApplicationShutdo
     // Sem listener, um 'error' do EventEmitter derruba o processo (LIC-001).
     boss.on('error', (err: Error) => this.logger.error(`pg-boss: ${err.message}`));
     await boss.start();
-    await boss.createQueue(SPIKE_QUEUE);
-    await boss.work(SPIKE_QUEUE, async (jobs) => {
-      for (const job of jobs) this.logger.log(`job ${job.id} processado`);
-    });
     await boss.createQueue(AUDIT_ANCHOR_QUEUE);
     // Um agendamento só, mesmo com vários workers (o pg-boss guarda o cron no banco).
     await boss.schedule(AUDIT_ANCHOR_QUEUE, '15 3 * * *', null, { tz: 'UTC' });

@@ -104,7 +104,7 @@ jobs:
       - name: Checar tipos (inclui os testes)
         run: pnpm typecheck
 
-      - name: Testes e verificação do spike
+      - name: Testes, verificação das dependências e do rastreio
         run: pnpm test
 
   seguranca:
@@ -145,3 +145,56 @@ jobs:
           pipx run --spec semgrep==1.178.0 semgrep scan
           --config p/typescript --config p/nodejsscan --config p/secrets --config .semgrep
           --metrics=off --error --exclude mockups --exclude docs .
+
+  imagem:
+    name: imagem, SBOM e Grype
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Imagem do servidor (API e worker)
+        run: docker build -f apps/server/Dockerfile -t liame-server:ci --build-arg APP_VERSION="${GITHUB_SHA::12}" .
+
+      - name: Imagem do webapp
+        run: docker build -f apps/web/Dockerfile -t liame-web:ci .
+
+      - name: Fumaça - a imagem do servidor sobe sem root e responde /health com a versão
+        run: |
+          docker run -d --name api -p 3001:3001 -e NODE_ENV=development -e LIAME_KEK_LOCAL="1:$(openssl rand -base64 32)" liame-server:ci
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3001/health && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3001/health | grep -q "\"version\":\"${GITHUB_SHA::12}\""
+          test "$(docker exec api id -u)" != "0"
+          curl -fsSI http://127.0.0.1:3001/health | grep -qi "^x-content-type-options: nosniff"
+          docker rm -f api
+
+      - name: SBOM das imagens (Syft 1.52.0, CycloneDX)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/syft.tgz" https://github.com/anchore/syft/releases/download/v1.52.0/syft_1.52.0_linux_amd64.tar.gz
+          echo "caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d  $RUNNER_TEMP/syft.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/syft.tgz" -C "$RUNNER_TEMP" syft
+          mkdir -p sbom
+          "$RUNNER_TEMP/syft" liame-server:ci -o cyclonedx-json=sbom/imagem-servidor.cdx.json
+          "$RUNNER_TEMP/syft" liame-web:ci -o cyclonedx-json=sbom/imagem-web.cdx.json
+
+      # Sem "version": usa o packageManager do package.json (pnpm 12.6.0).
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: SBOM do código (pnpm sbom, CycloneDX, só pelo lockfile)
+        run: pnpm sbom --sbom-format cyclonedx --lockfile-only --out sbom/codigo.cdx.json
+
+      - name: Vulnerabilidades das imagens (Grype 0.119.0; falha em crítico com correção)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/grype.tgz" https://github.com/anchore/grype/releases/download/v0.119.0/grype_0.119.0_linux_amd64.tar.gz
+          echo "3fa2dc4b924621ab65404cf08d0b8438d896d80ab949c9d5a4ca283c36004c9b  $RUNNER_TEMP/grype.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/grype.tgz" -C "$RUNNER_TEMP" grype
+          "$RUNNER_TEMP/grype" sbom:sbom/imagem-servidor.cdx.json --only-fixed --fail-on critical
+          "$RUNNER_TEMP/grype" sbom:sbom/imagem-web.cdx.json --only-fixed --fail-on critical
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom
+          path: sbom/
+          retention-days: 90

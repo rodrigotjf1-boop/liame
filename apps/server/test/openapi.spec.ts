@@ -30,19 +30,20 @@ describe('OpenAPI 3.1 gerado dos schemas Zod', () => {
   });
 
   it('usa o prefixo /v1 e deixa /health de fora', () => {
-    expect(Object.keys(doc.paths)).toEqual(expect.arrayContaining(['/health', '/v1/spike/echo']));
+    expect(Object.keys(doc.paths)).toEqual(expect.arrayContaining(['/health', '/v1/brands']));
+    expect(Object.keys(doc.paths).some((p) => p.includes('spike'))).toBe(false);
   });
 
   it('reflete o corpo da rota a partir do Zod', () => {
-    const body = doc.paths['/v1/spike/echo']?.post?.requestBody;
+    const body = doc.paths['/v1/brands']?.post?.requestBody;
     const schema = resolve(body && 'content' in body ? (body.content['application/json']?.schema as Schema) : undefined);
-    expect(schema?.properties?.message?.type).toBe('string');
-    expect(schema?.required).toContain('message');
+    expect(schema?.properties?.name?.type).toBe('string');
+    expect(schema?.required).toContain('name');
   });
 
   it('reflete a resposta a partir do Zod', () => {
-    const created = doc.paths['/v1/spike/echo']?.post?.responses?.['201'];
+    const created = doc.paths['/v1/brands']?.post?.responses?.['201'];
     const schema = resolve(created && 'content' in created ? (created.content?.['application/json']?.schema as Schema) : undefined);
-    expect(Object.keys(schema?.properties ?? {})).toEqual(expect.arrayContaining(['message', 'tags', 'length']));
+    expect(Object.keys(schema?.properties ?? {})).toEqual(expect.arrayContaining(['id', 'name', 'archived_at']));
   });
 });

@@ -1,0 +1,19 @@
+# Contexto das imagens: só o código. Nada de dependências locais, builds, segredos ou histórico.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+.git
+.github
+.env
+.env.*
+**/.env
+**/.env.*
+.liame-chaves-locais.json
+ERROS-CONHECIDOS.md
+mockups
+docs
+infra
+*.log

@@ -4,6 +4,11 @@ Variáveis de ambiente lidas por `apps/server`. Valor errado derruba a subida (v
 
 Legenda: **P** = obrigatória em produção · **S** = segredo.
 
+## Imagens
+
+- **Servidor** (`apps/server/Dockerfile`): o mesmo para API e worker. API é o padrão; worker: `node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js`; migrations no release: `node node_modules/@liame/database/dist/cli/migrate.js` com `DATABASE_URL_OWNER`. `--build-arg APP_VERSION=<commit>` aparece no `/health`.
+- **Web** (`apps/web/Dockerfile`): Next standalone, `node apps/web/server.js`, porta 3000.
+
 ## Banco e fila
 
 | Variável | Para quê | Padrão |

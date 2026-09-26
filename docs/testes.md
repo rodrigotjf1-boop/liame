@@ -57,12 +57,15 @@ O `.env.local` da raiz (fora do git) guarda as URLs dos papéis `liame_*`. Sem `
 | `test/db/lifecycle.spec.ts` | toda tabela classificada; marca arquivada (fora da lista, reativa, expurgo no prazo, `legal_hold` segura); prazos por classe apagam só o vencido e auditam as contagens; a transação da empresa não apaga a própria organização; encerrar exige nome e código do app, cancela pedidos e convites, bloqueia mudanças, permite exportar (sem segredo) e reativar; fim da graça com chave destruída (dado pessoal não abre), tudo apagado, certificado ao dono, auditoria que ainda confere e a pessoa mantendo a conta; relatório mensal |
 | `test/redact.spec.ts` | redação de PII: e-mail, telefone, CPF e CNPJ; não apaga pedaço de número maior nem ids; parâmetros sensíveis da URL; IP de quem chama em /24; cabeçalho de credencial descartado |
 | `dist/scripts/trace-check.js` | A1-14 (sem o backend): com o carregamento real de módulos, o mesmo `trace_id` vai da requisição `POST /v1/actions` à política, à execução no worker (fora de span ativo, pelo `traceparent` do banco), às consultas e ao conector; nenhum e-mail, telefone ou IP de pessoa nos spans exportados |
+| `test/http-security.spec.ts` | cabeçalhos de segurança em toda resposta e sem `X-Powered-By`; CORS só para a origem do app, com credenciais; fail-fast da configuração de produção |
+| `dist/verify/deps.js` | as dependências carregam juntas no sistema de módulos real (Nest 12, OpenAPI, pg + Drizzle, pg-boss, AI SDK 7, MCP 2.1, traces) — era a verificação do spike A0-3 |
+| job `imagem` do CI | as imagens constroem, a do servidor sobe sem root e responde `/health` com a versão e os cabeçalhos; SBOM CycloneDX (imagens e código); Grype sem crítico com correção |
 | `test/access.spec.ts` | A1-4: lista exata de rotas públicas; toda rota não pública responde 401 sem sessão |
 | `test/db/vault.spec.ts` | A1-13: banco só com a cifra; cifra amarrada ao registro; RLS nos segredos; segredo pessoal só para a pessoa; rotação v1 → v2; índice cego por empresa; chave destruída não decifra |
 | `test/envelope.spec.ts` | AES-256-GCM com contexto; integridade; índice cego; produção recusa o provedor local |
 | `test/password.spec.ts` | scrypt; checagem de senha vazada só com o prefixo do hash; serviço fora do ar não trava |
 | `test/db/pgboss.spec.ts` | envio do pg-boss na transação da aplicação: o commit cria o job, o rollback desfaz |
-| `dist/spike/verify.js` | o build roda no Node sem transformação (ESM): Nest 12, OpenAPI, pg + Drizzle, AI SDK 7, MCP 2.1 e traces de http, undici e pg no mesmo trace |
+| (antigo) `dist/spike/verify.js` | o build roda no Node sem transformação (ESM): Nest 12, OpenAPI, pg + Drizzle, AI SDK 7, MCP 2.1 e traces de http, undici e pg no mesmo trace |
 
 ## 4. Migrations (ADR-018)
 

@@ -32,7 +32,6 @@ const WITHOUT_AUDIT = [
   'POST /v1/ofrep/v1/evaluate/flags',
   'POST /v1/ofrep/v1/evaluate/flags/:key',
   'POST /v1/policies/evaluate',
-  'POST /v1/spike/echo',
 ];
 
 function mockServer(handler: (body: Buffer, contentType: string) => { status: number; body: Buffer | string }) {

@@ -48,36 +48,36 @@ export async function run(): Promise<number> {
   items.push({ item: 'Nest 12 carregado', status: 'ok', detail: `API de pé em ${base}` });
 
   await check('Standard Schema (Zod) na validação', async () => {
-    const ok = await fetch(`${base}/v1/spike/echo`, {
+    const ok = await fetch(`${base}/v1/auth/password/forgot`, {
       method: 'POST',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ message: '  olá  ' }),
+      body: JSON.stringify({ email: '  Ninguem.Aqui@Teste.Liame.dev ' }),
     });
     const body = (await ok.json()) as Record<string, unknown>;
-    if (ok.status !== 201 || body.message !== 'olá' || body.length !== 3 || !Array.isArray(body.tags)) {
+    if (ok.status !== 202 || body.status !== 'accepted') {
       throw new Error(`corpo válido: ${ok.status} ${JSON.stringify(body)}`);
     }
-    const bad = await fetch(`${base}/v1/spike/echo`, {
+    const bad = await fetch(`${base}/v1/auth/password/forgot`, {
       method: 'POST',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ message: '', extra: 1 }),
+      body: JSON.stringify({ email: 'nao-e-email', extra: 1 }),
     });
     const badBody = (await bad.json()) as { code?: string; errors?: Array<{ path: string }> };
     if (bad.status !== 400) throw new Error(`corpo inválido deveria dar 400, deu ${bad.status}`);
     if (!bad.headers.get('content-type')?.startsWith('application/problem+json') || badBody.code !== 'validacao') {
       throw new Error(`erro fora do RFC 9457: ${JSON.stringify(badBody)}`);
     }
-    return { detail: `201 com o valor transformado; 400 RFC 9457 nos campos ${badBody.errors?.map((e) => e.path).join(', ')}` };
+    return { detail: `202 com o corpo válido; 400 RFC 9457 nos campos ${badBody.errors?.map((e) => e.path).join(', ')}` };
   });
 
   await check('OpenAPI 3.1 com os schemas do Zod', async () => {
     const doc = buildOpenApiDocument(app);
     writeFileSync(join(import.meta.dirname, '..', 'openapi.json'), `${JSON.stringify(doc, null, 2)}\n`);
     if (doc.openapi !== '3.1.0') throw new Error(`versão ${doc.openapi}`);
-    const media = doc.paths['/v1/spike/echo']?.post?.requestBody;
+    const media = doc.paths['/v1/auth/password/forgot']?.post?.requestBody;
     const schema = resolveSchema(doc, media && 'content' in media ? media.content['application/json']?.schema : undefined);
     const props = Object.keys((schema?.properties as Record<string, unknown> | undefined) ?? {});
-    if (!props.includes('message')) throw new Error(`requestBody sem "message": ${JSON.stringify(schema)}`);
+    if (!props.includes('email')) throw new Error(`requestBody sem "email": ${JSON.stringify(schema)}`);
     if (!doc.paths['/health']) throw new Error('/health fora do documento');
     return { detail: `openapi ${doc.openapi}; corpo com ${props.join(', ')}; gravado em dist/openapi.json` };
   });
@@ -86,12 +86,12 @@ export async function run(): Promise<number> {
   await check('pg + Drizzle 0.45', async () => {
     if (!dbUrl) {
       // Sem banco, a tentativa de conexão ainda mostra se o pg foi instrumentado.
-      const { pool, close } = createDatabase({ connectionString: 'postgresql://spike:spike@127.0.0.1:1/spike', max: 1 });
+      const { pool, close } = createDatabase({ connectionString: 'postgresql://verificacao:verificacao@127.0.0.1:1/verificacao', max: 1 });
       await pool.query('select 1').catch(() => undefined);
       await close();
       return { status: 'parcial', detail: 'sem TEST_DATABASE_URL: só a tentativa de conexão' };
     }
-    const { db, close } = createDatabase({ connectionString: dbUrl, max: 2, applicationName: 'liame-spike' });
+    const { db, close } = createDatabase({ connectionString: dbUrl, max: 2, applicationName: 'liame-verificacao' });
     try {
       const r = await db.execute(sql`select current_user as usuario`);
       return { detail: `consulta pelo Drizzle como ${String(r.rows[0]?.usuario)}` };
@@ -124,7 +124,7 @@ export async function run(): Promise<number> {
 
   await check('SDK MCP 2.1 (ferramenta com Zod, HTTP sem estado)', async () => {
     const handler = createMcpHandler(() => {
-      const server = new McpServer({ name: 'liame-spike', version: '0.0.0' });
+      const server = new McpServer({ name: 'liame-verificacao', version: '0.0.0' });
       server.registerTool(
         'echo',
         { description: 'Devolve o texto recebido', inputSchema: z.object({ text: z.string() }) },

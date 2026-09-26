@@ -48,6 +48,13 @@ export type AppConfig = {
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   const env = Env.parse(source);
   const appUrl = new URL(env.APP_URL).origin;
+  // Fail-fast (security-hardening P1): em produção, origem do app explícita e só por HTTPS, cookie seguro.
+  if (env.NODE_ENV === 'production') {
+    if (!source.APP_URL) throw new Error('config: em produção, defina APP_URL (origem do webapp)');
+    const origins = [appUrl, ...env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)];
+    if (origins.some((o) => !o.startsWith('https://'))) throw new Error('config: em produção, APP_URL e ALLOWED_ORIGINS só com https');
+    if (env.COOKIE_SECURE === 'false') throw new Error('config: em produção, o cookie de sessão precisa ser só-HTTPS (COOKIE_SECURE)');
+  }
   if (env.NODE_ENV === 'production' && env.MAIL_TRANSPORT === 'memoria') {
     throw new Error('config: em produção, MAIL_TRANSPORT precisa ser um transporte real');
   }

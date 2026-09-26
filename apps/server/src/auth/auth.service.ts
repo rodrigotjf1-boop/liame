@@ -28,6 +28,11 @@ const ACCEPTED_FORGOT: AcceptedResponse = {
   message: 'Se houver uma conta com este e-mail, enviamos um link para criar uma senha nova.',
 };
 
+type LoginOutcome =
+  | { kind: 'falhou'; userId: string }
+  | { kind: 'nao_confirmado' }
+  | { kind: 'ok'; token: string; userId: string; tenantId: string | null };
+
 const invalidCredentials = () =>
   new AppProblem(401, 'credenciais-invalidas', 'E-mail ou senha incorretos', 'Confira os dados e tente de novo.');
 
@@ -116,7 +121,7 @@ export class AuthService {
     await this.rateLimit.consume(`entrar:email:${input.email}`, 10, 900);
 
     const outbox: MailMessage[] = [];
-    const result = await withSystem(this.db, async (tx) => {
+    const result = await withSystem(this.db, async (tx): Promise<LoginOutcome> => {
       const r = await tx.execute<{ id: string; password_hash: string; email_verified_at: string | null; disabled_at: string | null }>(
         sql`select id, password_hash, email_verified_at, disabled_at from liame.app_user where email = ${input.email}`,
       );
@@ -125,10 +130,14 @@ export class AuthService {
         await burnPasswordTime(input.password);
         throw invalidCredentials();
       }
-      if (!(await verifyPassword(input.password, user.password_hash)) || user.disabled_at) throw invalidCredentials();
+      // A falha fica na auditoria da pessoa, fora desta transação; a resposta é a mesma do e-mail
+      // inexistente (não revela quem tem conta).
+      if (!(await verifyPassword(input.password, user.password_hash)) || user.disabled_at) {
+        return { kind: 'falhou', userId: user.id };
+      }
       if (!user.email_verified_at) {
         outbox.push(await this.confirmationMail(tx, user.id, input.email));
-        return { unverified: true as const };
+        return { kind: 'nao_confirmado' };
       }
       const m = await tx.execute<{ tenant_id: string }>(sql`
         select tenant_id from liame.membership
@@ -148,15 +157,21 @@ export class AuthService {
       }
       const token = await this.sessions.create(tx, { userId: user.id, tenantId, ip: meta.ip, userAgent: meta.userAgent });
       await this.auditPerson(tx, user.id, 'sessao.abrir');
-      return { unverified: false as const, token, userId: user.id, tenantId };
+      return { kind: 'ok', token, userId: user.id, tenantId };
     });
 
-    if (result.unverified) {
+    if (result.kind === 'falhou') {
+      const failedUser = result.userId;
+      await withSystem(this.db, (tx) => this.auditPerson(tx, failedUser, 'sessao.falhar'));
+      throw invalidCredentials();
+    }
+    if (result.kind === 'nao_confirmado') {
       await this.deliver(outbox);
       throw new AppProblem(403, 'email-nao-confirmado', 'Confirme seu e-mail', 'Enviamos de novo o link de confirmação.');
     }
     await this.deliver(outbox);
-    const me = await withSystem(this.db, (tx) => this.loadMe(tx, result.userId, result.tenantId, null), { userId: result.userId });
+    const { userId, tenantId } = result;
+    const me = await withSystem(this.db, (tx) => this.loadMe(tx, userId, tenantId, null), { userId });
     return { token: result.token, me };
   }
 
