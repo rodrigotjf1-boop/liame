@@ -132,6 +132,42 @@ describe.skipIf(!hasDb)('pessoas e convites', () => {
     expect((await api.call('DELETE', `/v1/invitations/${terceiro.body.id}`, { cookie: dono.cookie })).status).toBe(404);
   });
 
+  it('a lista mostra o app autenticador e o último acesso nesta empresa, nunca a atividade em outra', async () => {
+    const dono = await owner('Cantina Acesso');
+    const outra = await signupAndLogin(api, undefined, 'Padaria Outra');
+    await api.call('POST', '/v1/invitations', { cookie: dono.cookie, body: { email: outra.email, role: 'somente_leitura' } });
+    const aceite = await api.call('POST', '/v1/invitations/accept', { cookie: outra.cookie, body: { token: tokenFrom(api.mailer, outra.email) } });
+    expect(aceite.status).toBe(200);
+
+    const pessoa = async () =>
+      (await api.call('GET', '/v1/people', { cookie: dono.cookie })).body.members.find((m: { email: string }) => m.email === outra.email);
+    const donoNaLista = (await api.call('GET', '/v1/people', { cookie: dono.cookie })).body.members[0];
+    expect(donoNaLista).toMatchObject({ role: 'dono', mfa_enabled: true });
+    expect(donoNaLista.last_seen_at).not.toBeNull();
+    // Aceitou, mas ainda não usou a conta nesta empresa; e não tem o app autenticador.
+    expect(await pessoa()).toMatchObject({ mfa_enabled: false, last_seen_at: null });
+
+    expect((await api.call('GET', '/v1/me', { cookie: outra.cookie })).status).toBe(200);
+    const visto = (await pessoa()).last_seen_at;
+    expect(Date.now() - Date.parse(visto)).toBeLessThan(60_000);
+    await enableMfa(api, outra.cookie);
+    expect((await pessoa()).mfa_enabled).toBe(true);
+
+    // Depois de trocar para a própria empresa, usá-la não mexe no último acesso desta.
+    const troca = await api.call('PUT', '/v1/me/active-organization', {
+      cookie: outra.cookie,
+      body: { organization_id: outra.me.active_organization_id },
+    });
+    expect(troca.status).toBe(200);
+    await ownerQuery(`update liame.membership set last_seen_at = now() - interval '2 hours' where tenant_id = $1 and user_id = $2`, [
+      dono.tenantId,
+      outra.me.user.id,
+    ]);
+    const antes = (await pessoa()).last_seen_at;
+    expect((await api.call('GET', '/v1/brands', { cookie: outra.cookie })).status).toBe(200);
+    expect((await pessoa()).last_seen_at).toBe(antes);
+  });
+
   it('quem já tem conta aceita logado e passa a ter as duas empresas', async () => {
     const dono = await owner('Hamburgueria A');
     const outra = await signupAndLogin(api, undefined, 'Doceria B');

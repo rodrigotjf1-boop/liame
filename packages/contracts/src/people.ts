@@ -28,6 +28,10 @@ export const MemberResponse = z.strictObject({
   expires_at: z.string().nullable(),
   invited_by_name: z.string().nullable(),
   created_at: z.string(),
+  /** App autenticador ativo (o segredo nunca sai; só o sim ou não). */
+  mfa_enabled: z.boolean(),
+  /** Último acesso nesta empresa; nulo = ainda não entrou. */
+  last_seen_at: z.string().nullable(),
 });
 export type MemberResponse = z.infer<typeof MemberResponse>;
 

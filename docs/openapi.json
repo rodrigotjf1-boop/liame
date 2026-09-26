@@ -1004,6 +1004,15 @@
                           },
                           "created_at": {
                             "type": "string"
+                          },
+                          "mfa_enabled": {
+                            "type": "boolean"
+                          },
+                          "last_seen_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -1017,7 +1026,9 @@
                           "billing_access",
                           "expires_at",
                           "invited_by_name",
-                          "created_at"
+                          "created_at",
+                          "mfa_enabled",
+                          "last_seen_at"
                         ],
                         "additionalProperties": false
                       }
@@ -1796,6 +1807,15 @@
                     },
                     "created_at": {
                       "type": "string"
+                    },
+                    "mfa_enabled": {
+                      "type": "boolean"
+                    },
+                    "last_seen_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -1809,7 +1829,9 @@
                     "billing_access",
                     "expires_at",
                     "invited_by_name",
-                    "created_at"
+                    "created_at",
+                    "mfa_enabled",
+                    "last_seen_at"
                   ],
                   "additionalProperties": false
                 }

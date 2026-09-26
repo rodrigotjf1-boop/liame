@@ -1,0 +1,41 @@
+/* ===== Pessoas e acessos (protótipo §4c) ===== */
+.acessos-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.acessos-lado { display: grid; gap: var(--sp-4); }
+.pessoas { display: grid; }
+.pessoa { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--sp-2) var(--sp-3); padding: var(--sp-4) 0; border-bottom: 1px solid var(--border); }
+.pessoa:last-child { border-bottom: 0; }
+.pessoa-av { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--bg-subtle); font-size: var(--text-sm); font-weight: 600; }
+.pessoa-av--convite { background: var(--warning-soft); color: var(--warning); }
+.pessoa-txt { display: grid; gap: 2px; min-width: 0; }
+.pessoa-nome { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-weight: 600; overflow-wrap: anywhere; }
+.pessoa-email, .pessoa-det { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.pessoa-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; font-size: var(--text-xs); color: var(--text-muted); }
+.pessoa-acoes { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.pessoa-confirma { font-size: var(--text-sm); font-weight: 500; color: var(--danger); }
+.nivel-chip { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 6px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; background: var(--bg-subtle); color: var(--text-muted); white-space: nowrap; }
+.nivel-chip--dono { background: var(--ai-soft); color: var(--ai); }
+.nivel-chip--admin { background: var(--primary-soft); color: var(--link); }
+.protecao { display: grid; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.protecao li { display: flex; gap: var(--sp-2); }
+.protecao .ic { flex: none; margin-top: 3px; color: var(--success); }
+.tabela-niveis td { white-space: normal; min-width: 96px; }
+.tabela-niveis .sim { color: var(--success); font-weight: 600; }
+.tabela-niveis .nao { color: var(--text-muted); }
+.tabela-niveis .parcial { color: var(--warning); font-weight: 600; }
+.niveis { display: grid; gap: var(--sp-2); }
+.nivel-card { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.nivel-card:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.nivel-card:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.nivel-card input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--link); }
+.nivel-card-txt { display: grid; gap: 2px; font-size: var(--text-sm); }
+.nivel-card-txt b { font-weight: 600; }
+.nivel-card-txt span { color: var(--text-muted); }
+.pessoa-esq { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-4) 0; border-bottom: 1px solid var(--border); }
+.pessoa-esq:last-child { border-bottom: 0; }
+
+@container pagina (max-width: 999px) {
+  .acessos-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@container pagina (max-width: 479px) {
+  .view-cab h1 { font-size: var(--text-xl); }
+}

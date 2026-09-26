@@ -29,6 +29,8 @@ export const appUser = liame.table('app_user', {
   emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   disabledAt: timestamp('disabled_at', { withTimezone: true }),
   totpLastStep: bigint('totp_last_step', { mode: 'number' }),
+  /** App autenticador ativo desde (migration 0015). */
+  mfaEnabledAt: timestamp('mfa_enabled_at', { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -45,6 +47,8 @@ export const membership = liame.table('membership', {
   invitedBy: uuid('invited_by'),
   createdAt: createdAt(),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  /** Último acesso nesta empresa (migration 0015). */
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
 });
 
 /** Papel (migration 0006, ADR-013). */
