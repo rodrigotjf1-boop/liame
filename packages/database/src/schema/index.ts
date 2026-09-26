@@ -43,6 +43,9 @@ export const allTables = [
   actions.approval,
   actions.budgetPolicy,
   actions.budgetLedgerEntry,
+  actions.actionExecution,
+  actions.workflowRun,
+  actions.workflowStep,
   vault.secret,
   vault.tenantKey,
 ];

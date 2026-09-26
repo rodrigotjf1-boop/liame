@@ -1,8 +1,12 @@
 import { Module } from '@nestjs/common';
+import { BudgetService } from '../actions/budget.service.js';
 import { APP_CONFIG, loadConfig } from '../config.js';
 import { DatabaseModule } from '../database/database.module.js';
+import { FlagService } from '../flags/flag.service.js';
+import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { TelemetryLifecycle } from '../telemetry.lifecycle.js';
 import { VaultModule } from '../vault/vault.module.js';
+import { ActionExecutor } from './action-executor.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
@@ -18,6 +22,10 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     { provide: INBOX_HANDLERS, useValue: new Map<string, InboxHandler>() },
     OutboxPublisher,
     AuditAnchorService,
+    FlagService,
+    KillSwitchService,
+    BudgetService,
+    ActionExecutor,
     WebhookDeliverer,
     InboxProcessor,
     EventsLoopService,

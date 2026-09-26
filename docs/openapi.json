@@ -6180,6 +6180,67 @@
                         "additionalProperties": false
                       }
                     },
+                    "workflow": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "em_andamento",
+                            "aguardando",
+                            "concluido",
+                            "falhou",
+                            "cancelado"
+                          ]
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "aguardando",
+                                  "concluido",
+                                  "falhou",
+                                  "pulado"
+                                ]
+                              },
+                              "attempts": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "finished_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "status",
+                              "attempts",
+                              "finished_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "steps"
+                      ],
+                      "additionalProperties": false
+                    },
                     "expires_at": {
                       "type": "string"
                     },
@@ -6207,6 +6268,7 @@
                     "status_reason",
                     "policy",
                     "approvals",
+                    "workflow",
                     "expires_at",
                     "created_at"
                   ],
@@ -6661,6 +6723,67 @@
                               "additionalProperties": false
                             }
                           },
+                          "workflow": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "em_andamento",
+                                  "aguardando",
+                                  "concluido",
+                                  "falhou",
+                                  "cancelado"
+                                ]
+                              },
+                              "steps": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "type": "string",
+                                      "enum": [
+                                        "aguardando",
+                                        "concluido",
+                                        "falhou",
+                                        "pulado"
+                                      ]
+                                    },
+                                    "attempts": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "finished_at": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "status",
+                                    "attempts",
+                                    "finished_at"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "status",
+                              "steps"
+                            ],
+                            "additionalProperties": false
+                          },
                           "expires_at": {
                             "type": "string"
                           },
@@ -6688,6 +6811,7 @@
                           "status_reason",
                           "policy",
                           "approvals",
+                          "workflow",
                           "expires_at",
                           "created_at"
                         ],
@@ -6946,6 +7070,67 @@
                         "additionalProperties": false
                       }
                     },
+                    "workflow": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "em_andamento",
+                            "aguardando",
+                            "concluido",
+                            "falhou",
+                            "cancelado"
+                          ]
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "aguardando",
+                                  "concluido",
+                                  "falhou",
+                                  "pulado"
+                                ]
+                              },
+                              "attempts": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "finished_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "status",
+                              "attempts",
+                              "finished_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "steps"
+                      ],
+                      "additionalProperties": false
+                    },
                     "expires_at": {
                       "type": "string"
                     },
@@ -6973,6 +7158,7 @@
                     "status_reason",
                     "policy",
                     "approvals",
+                    "workflow",
                     "expires_at",
                     "created_at"
                   ],
@@ -7306,6 +7492,67 @@
                         "additionalProperties": false
                       }
                     },
+                    "workflow": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "em_andamento",
+                            "aguardando",
+                            "concluido",
+                            "falhou",
+                            "cancelado"
+                          ]
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "aguardando",
+                                  "concluido",
+                                  "falhou",
+                                  "pulado"
+                                ]
+                              },
+                              "attempts": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "finished_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "status",
+                              "attempts",
+                              "finished_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "steps"
+                      ],
+                      "additionalProperties": false
+                    },
                     "expires_at": {
                       "type": "string"
                     },
@@ -7333,6 +7580,7 @@
                     "status_reason",
                     "policy",
                     "approvals",
+                    "workflow",
                     "expires_at",
                     "created_at"
                   ],
@@ -7673,6 +7921,67 @@
                         "additionalProperties": false
                       }
                     },
+                    "workflow": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "em_andamento",
+                            "aguardando",
+                            "concluido",
+                            "falhou",
+                            "cancelado"
+                          ]
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "aguardando",
+                                  "concluido",
+                                  "falhou",
+                                  "pulado"
+                                ]
+                              },
+                              "attempts": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "finished_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "status",
+                              "attempts",
+                              "finished_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "steps"
+                      ],
+                      "additionalProperties": false
+                    },
                     "expires_at": {
                       "type": "string"
                     },
@@ -7700,6 +8009,7 @@
                     "status_reason",
                     "policy",
                     "approvals",
+                    "workflow",
                     "expires_at",
                     "created_at"
                   ],
@@ -8079,6 +8389,67 @@
                         "additionalProperties": false
                       }
                     },
+                    "workflow": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "em_andamento",
+                            "aguardando",
+                            "concluido",
+                            "falhou",
+                            "cancelado"
+                          ]
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "aguardando",
+                                  "concluido",
+                                  "falhou",
+                                  "pulado"
+                                ]
+                              },
+                              "attempts": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "finished_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "status",
+                              "attempts",
+                              "finished_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "steps"
+                      ],
+                      "additionalProperties": false
+                    },
                     "expires_at": {
                       "type": "string"
                     },
@@ -8106,6 +8477,7 @@
                     "status_reason",
                     "policy",
                     "approvals",
+                    "workflow",
                     "expires_at",
                     "created_at"
                   ],
