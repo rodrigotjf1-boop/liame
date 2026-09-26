@@ -1,0 +1,51 @@
+// Classe de dado e prazo de cada tabela (ADR-014, security-model §6). A classe é a MAIS ALTA entre as
+// colunas; a marcação por coluna chega com as tabelas de contatos e mensagens (A2/A5). Tabela nova
+// sem entrada aqui reprova o teste `lifecycle.spec`.
+
+export type DataClass = 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL' | 'PERSONAL' | 'SENSITIVE' | 'SECRET';
+
+export interface TableClassification {
+  class: DataClass;
+  /** Prazo em texto, como o dono lê no relatório; o que é automático está em `purge`. */
+  retention: string;
+  /** Regra do job diário, quando o prazo é automático. */
+  purge?: { job: string; days: number };
+}
+
+export const DATA_CLASSES: Record<string, TableClassification> = {
+  organization: { class: 'CONFIDENTIAL', retention: 'enquanto houver contrato; 30 dias de graça depois do encerramento', purge: { job: 'empresa', days: 30 } },
+  app_user: { class: 'PERSONAL', retention: 'enquanto a pessoa tiver conta' },
+  membership: { class: 'PERSONAL', retention: 'com a empresa' },
+  brand: { class: 'CONFIDENTIAL', retention: 'arquivada: 12 meses', purge: { job: 'marca_arquivada', days: 365 } },
+  unit: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  session: { class: 'PERSONAL', retention: '6 meses depois de encerrada (Marco Civil, art. 15)', purge: { job: 'sessao', days: 180 } },
+  user_token: { class: 'SECRET', retention: '30 dias depois de vencido', purge: { job: 'token', days: 30 } },
+  rate_limit: { class: 'INTERNAL', retention: '1 dia', purge: { job: 'limite', days: 1 } },
+  secret: { class: 'SECRET', retention: 'até revogar; com a empresa ou a pessoa' },
+  tenant_key: { class: 'SECRET', retention: 'destruída no expurgo da empresa (crypto-shredding)' },
+  recovery_code: { class: 'SECRET', retention: 'enquanto o segundo fator estiver ativo' },
+  invitation: { class: 'PERSONAL', retention: 'com a empresa' },
+  role: { class: 'PUBLIC', retention: 'do produto' },
+  role_permission: { class: 'INTERNAL', retention: 'do produto e da empresa' },
+  outbox_event: { class: 'CONFIDENTIAL', retention: '30 dias depois de publicado', purge: { job: 'outbox', days: 30 } },
+  webhook_endpoint: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  webhook_delivery: { class: 'CONFIDENTIAL', retention: 'com o evento (30 dias)' },
+  inbox_event: { class: 'PERSONAL', retention: '90 dias (payload bruto)', purge: { job: 'inbox', days: 90 } },
+  idempotency_key: { class: 'CONFIDENTIAL', retention: '24 horas', purge: { job: 'idempotencia', days: 0 } },
+  audit_chain: { class: 'INTERNAL', retention: '5 anos, com âncora (revisar com o jurídico)' },
+  audit_event: { class: 'PERSONAL', retention: '5 anos, com âncora (revisar com o jurídico)' },
+  audit_anchor: { class: 'PUBLIC', retention: 'permanente (só hashes)' },
+  feature_flag: { class: 'INTERNAL', retention: 'do produto' },
+  feature_flag_rule: { class: 'INTERNAL', retention: 'do produto' },
+  kill_switch: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  policy: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  sandbox_resource: { class: 'INTERNAL', retention: 'com a empresa' },
+  action_request: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  approval: { class: 'PERSONAL', retention: 'com a empresa' },
+  budget_policy: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  budget_ledger_entry: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  action_execution: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  workflow_run: { class: 'INTERNAL', retention: 'com a empresa' },
+  workflow_step: { class: 'INTERNAL', retention: 'com a empresa' },
+  purge_certificate: { class: 'CONFIDENTIAL', retention: '5 anos (prova do expurgo)' },
+};

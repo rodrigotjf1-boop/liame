@@ -37,3 +37,9 @@ export function maskEmail(email: string): string {
   const [user = '', domain = ''] = email.split('@');
   return `${user.slice(0, 1)}***@${domain}`;
 }
+
+/** Transporte a partir da configuração (API e worker usam o mesmo). */
+export function createMailer(config: { mailTransport: string; env: string }): Mailer {
+  if (config.mailTransport !== 'memoria') throw new Error(`transporte de e-mail "${config.mailTransport}" ainda não implementado`);
+  return new MemoryMailer(config.env === 'development');
+}

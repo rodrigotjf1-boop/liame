@@ -2,7 +2,7 @@ import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@ne
 import { Reflector } from '@nestjs/core';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { AppProblem } from '../errors/problems.js';
-import { ACCESS_KEY, type Access, type RequestWithAuth } from './access.js';
+import { ACCESS_KEY, type Access, DURING_CLOSURE_KEY, type RequestWithAuth } from './access.js';
 import { MFA_REQUIRED } from './permissions.js';
 import { readCookie, SESSION_COOKIE, SessionService } from './session.service.js';
 
@@ -61,6 +61,12 @@ export class AccessGuard implements CanActivate {
       const missing = access.permissions.filter((p) => !auth.permissions.has(p));
       if (missing.length) {
         throw new AppProblem(403, 'sem-permissao', 'Sem permissão', `Falta a permissão: ${missing.join(', ')}.`);
+      }
+      // Empresa em encerramento: 30 dias de graça só para ler, exportar e reativar (ADR-014).
+      const closing = auth.tenantStatus !== null && auth.tenantStatus !== 'ativa';
+      const allowed = this.reflector.getAllAndOverride<boolean | undefined>(DURING_CLOSURE_KEY, [ctx.getHandler(), ctx.getClass()]);
+      if (closing && MUTATIONS.has(req.method.toUpperCase()) && !allowed) {
+        throw new AppProblem(403, 'empresa-em-encerramento', 'Conta em encerramento', 'A conta está encerrando: dá para ver, exportar os dados e reativar, mas não mudar nada.');
       }
     }
     return true;

@@ -14,6 +14,11 @@ export const organization = liame.table('organization', {
   status: text('status').notNull().default('ativa'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
+  suspendedAt: timestamp('suspended_at', { withTimezone: true }),
+  purgeAfter: timestamp('purge_after', { withTimezone: true }),
+  purgeReason: text('purge_reason'),
+  legalHoldAt: timestamp('legal_hold_at', { withTimezone: true }),
+  legalHoldReason: text('legal_hold_reason'),
 });
 
 export const appUser = liame.table('app_user', {
@@ -82,6 +87,9 @@ export const brand = liame.table('brand', {
   name: text('name').notNull(),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  purgeAfter: timestamp('purge_after', { withTimezone: true }),
+  purgeReason: text('purge_reason'),
 });
 
 export const unit = liame.table('unit', {

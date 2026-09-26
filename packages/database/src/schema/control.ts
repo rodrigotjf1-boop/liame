@@ -56,3 +56,15 @@ export const policy = liame.table('policy', {
   createdAt: ts('created_at').notNull().defaultNow(),
   archivedAt: ts('archived_at'),
 });
+
+// Migration 0013 (certificado de expurgo, ADR-014).
+export const purgeCertificate = liame.table('purge_certificate', {
+  id: uuid('id').primaryKey(),
+  purgedTenantId: uuid('purged_tenant_id').notNull(),
+  organizationName: text('organization_name').notNull(),
+  cnpj: text('cnpj'),
+  reason: text('reason').notNull(),
+  summary: jsonb('summary').notNull(),
+  certificateHash: text('certificate_hash').notNull(),
+  purgedAt: ts('purged_at').notNull().defaultNow(),
+});
