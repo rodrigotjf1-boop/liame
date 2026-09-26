@@ -33,3 +33,7 @@ export const Auth = createParamDecorator((_: unknown, ctx: ExecutionContext): Au
   if (!auth) throw new Error('rota sem AuthContext: faltou @Autenticado ou @Permissao');
   return auth;
 });
+
+/** Rota que muda dado e continua valendo com a empresa em encerramento (exportar, reativar; ADR-014). */
+export const DURING_CLOSURE_KEY = 'liame:durante-encerramento';
+export const DuranteEncerramento = () => SetMetadata(DURING_CLOSURE_KEY, true);

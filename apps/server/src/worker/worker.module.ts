@@ -1,15 +1,17 @@
 import { Module } from '@nestjs/common';
 import { BudgetService } from '../actions/budget.service.js';
-import { APP_CONFIG, loadConfig } from '../config.js';
+import { APP_CONFIG, type AppConfig, loadConfig } from '../config.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
+import { createMailer, Mailer } from '../mail/mailer.js';
 import { TelemetryLifecycle } from '../telemetry.lifecycle.js';
 import { VaultModule } from '../vault/vault.module.js';
 import { ActionExecutor } from './action-executor.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
+import { LifecyclePurgeService } from './lifecycle-purge.service.js';
 import { OutboxPublisher } from './outbox-publisher.js';
 import { QueueService } from './queue.service.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
@@ -18,6 +20,7 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
   imports: [DatabaseModule, VaultModule],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
+    { provide: Mailer, inject: [APP_CONFIG], useFactory: (config: AppConfig) => createMailer(config) },
     // Processadores por provedor entram com os connectors (A2); até lá, a inbox só guarda.
     { provide: INBOX_HANDLERS, useValue: new Map<string, InboxHandler>() },
     OutboxPublisher,
@@ -26,6 +29,7 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     KillSwitchService,
     BudgetService,
     ActionExecutor,
+    LifecyclePurgeService,
     WebhookDeliverer,
     InboxProcessor,
     EventsLoopService,

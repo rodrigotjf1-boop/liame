@@ -13,6 +13,8 @@ export interface AuthContext {
   roleKey: RoleKey | null;
   /** Permissões do papel na empresa ativa, lidas do banco (vazio sem empresa ativa). */
   permissions: ReadonlySet<string>;
+  /** Situação da empresa ativa: em encerramento (`suspensa`), só leitura, exportar e reativar (ADR-014). */
+  tenantStatus: 'ativa' | 'suspensa' | 'encerrada' | null;
   mfaVerifiedAt: Date | null;
   /** A pessoa tem app autenticador ativo. */
   mfaConfigured: boolean;

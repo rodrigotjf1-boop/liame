@@ -9,6 +9,8 @@ import { DatabaseModule } from './database/database.module.js';
 import { FlagService } from './flags/flag.service.js';
 import { OfrepController } from './flags/ofrep.controller.js';
 import { HealthController } from './health/health.controller.js';
+import { LifecycleController } from './lifecycle/lifecycle.controller.js';
+import { LifecycleService } from './lifecycle/lifecycle.service.js';
 import { InboxController } from './inbox/inbox.controller.js';
 import { InboxService } from './inbox/inbox.service.js';
 import { KillSwitchController } from './kill-switch/kill-switch.controller.js';
@@ -25,7 +27,7 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
-  controllers: [HealthController, SpikeController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService],
+  controllers: [HealthController, SpikeController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService, LifecycleService],
 })
 export class AppModule {}

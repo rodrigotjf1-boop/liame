@@ -38,6 +38,7 @@ export const allTables = [
   control.featureFlagRule,
   control.killSwitch,
   control.policy,
+  control.purgeCertificate,
   actions.sandboxResource,
   actions.actionRequest,
   actions.approval,

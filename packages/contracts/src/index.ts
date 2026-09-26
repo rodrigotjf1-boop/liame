@@ -15,7 +15,15 @@ export {
 } from './auth.js';
 export { HealthResponse, ReadinessResponse } from './health.js';
 export { MfaVerifyRequest, RecoveryCodesResponse, TotpCodeRequest, TotpSetupResponse } from './mfa.js';
-export { BrandListResponse, BrandResponse, CreateBrandRequest, OrganizationResponse } from './tenancy.js';
+export {
+  BrandListQuery,
+  BrandListResponse,
+  BrandResponse,
+  CloseOrganizationRequest,
+  CreateBrandRequest,
+  ExportResponse,
+  OrganizationResponse,
+} from './tenancy.js';
 export {
   CreateInvitationRequest,
   InvitableRole,
