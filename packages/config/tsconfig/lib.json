@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Liame · pacote compilado (ESM)",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "declaration": true,
+    "declarationMap": true,
+    "incremental": true,
+    "rootDir": "${configDir}/src",
+    "outDir": "${configDir}/dist",
+    "tsBuildInfoFile": "${configDir}/dist/.tsbuildinfo"
+  },
+  "include": ["${configDir}/src"]
+}

@@ -1,0 +1,45 @@
+{
+  "name": "@liame/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "API (main.api) e worker (main.worker) do Liame, num só app Nest (ADR-002).",
+  "type": "module",
+  "scripts": {
+    "build": "nest build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run && node --enable-source-maps dist/spike/verify.js",
+    "spike": "node --enable-source-maps dist/spike/verify.js",
+    "start:api": "node --enable-source-maps --import ./dist/telemetry.js dist/main.api.js",
+    "start:worker": "node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js"
+  },
+  "dependencies": {
+    "@liame/contracts": "workspace:*",
+    "@liame/database": "workspace:*",
+    "@liame/telemetry": "workspace:*",
+    "@modelcontextprotocol/server": "catalog:",
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/platform-express": "catalog:",
+    "@nestjs/swagger": "catalog:",
+    "ai": "catalog:",
+    "drizzle-orm": "catalog:",
+    "pg-boss": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@liame/config": "workspace:*",
+    "@nestjs/cli": "catalog:",
+    "@nestjs/testing": "catalog:",
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/sdk-trace-base": "catalog:",
+    "@swc/core": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "pg": "catalog:",
+    "typescript": "catalog:",
+    "unplugin-swc": "catalog:",
+    "vitest": "catalog:"
+  }
+}

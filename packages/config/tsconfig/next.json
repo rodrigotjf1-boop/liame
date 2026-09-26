@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Liame · app Next",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "sourceMap": false,
+    "plugins": [{ "name": "next" }]
+  }
+}

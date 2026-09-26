@@ -1,0 +1,3 @@
+{
+  "extends": "@liame/config/tsconfig/lib.json"
+}

@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* Tema escuro manual (data-theme) além do automático do sistema (base §15, Tailwind 4.3). */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* ===== Tokens da marca Liame (os mesmos do protótipo aprovado: mockups/prototipo-app.html) ===== */
+:root {
+  color-scheme: light dark;
+
+  --bg: light-dark(#F4F2EC, #0B0D17);
+  --bg-subtle: light-dark(#ECE9E1, #10131F);
+  --surface: light-dark(#FFFFFF, #151A2E);
+  --surface-2: light-dark(#FAF8F3, #1A2038);
+  --border: light-dark(#E5E1D7, #262C49);
+  --border-strong: light-dark(#D0CBBF, #3A4166);
+
+  --text: light-dark(#0B0D17, #F4F2EC);
+  --text-muted: light-dark(#4A5068, #9AA0B4);
+  --text-subtle: light-dark(#646A80, #878EAB);
+
+  --primary: #2DD4DE;
+  --primary-hover: light-dark(#26C4CE, #62E1E8);
+  --primary-fg: #0B0D17;
+  --link: light-dark(#0A6C75, #2DD4DE);
+  --foco: light-dark(#008796, #2DD4DE);
+
+  --ai: light-dark(#5A43D8, #A08FFF);
+  --ai-soft: light-dark(#EEEAFF, #211C45);
+
+  --success: light-dark(#0C6F5B, #46BC9F);
+  --warning: light-dark(#8A5F00, #FFC24B);
+  --danger: light-dark(#B42F2F, #FF6B6B);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* Os utilitários do Tailwind apontam para os tokens semânticos (@theme inline, base §15). */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-subtle: var(--bg-subtle);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-link: var(--link);
+  --color-foco: var(--foco);
+  --color-ai: var(--ai);
+  --color-ai-soft: var(--ai-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--foco);
+    outline-offset: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "@liame/telemetry",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bootstrap do OpenTelemetry (http, undici e pg) para a API, o worker e o Next.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "catalog:",
+    "@opentelemetry/instrumentation-http": "catalog:",
+    "@opentelemetry/instrumentation-pg": "catalog:",
+    "@opentelemetry/instrumentation-undici": "catalog:",
+    "@opentelemetry/sdk-node": "catalog:",
+    "@opentelemetry/sdk-trace-base": "catalog:"
+  },
+  "devDependencies": {
+    "@liame/config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@liame/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Schemas Zod compartilhados: uma definição para validação, OpenAPI, ferramentas e eventos.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@liame/config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

@@ -1,0 +1,27 @@
+# dependências e builds
+node_modules/
+dist/
+.next/
+out/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# ambiente e segredos (nunca no git)
+.env
+.env.*
+!.env.example
+
+# registro interno de erros (skill errei): fica fora do git, como nos outros projetos DMS
+ERROS-CONHECIDOS.md
+
+# sistema e editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# gerados pelo Next
+next-env.d.ts

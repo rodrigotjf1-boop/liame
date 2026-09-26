@@ -1,0 +1,16 @@
+import type { INestApplication } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
+
+/**
+ * Documento OpenAPI do contrato público. O padrão do swagger 12 ainda é 3.0.0:
+ * o 3.1 precisa ser pedido (ADR-001). Os schemas vêm dos Zod declarados nas rotas.
+ */
+export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
+  const config = new DocumentBuilder()
+    .setTitle('Liame API')
+    .setDescription('Contrato público da API do Liame (API-first).')
+    .setVersion('0.0.0')
+    .setOpenAPIVersion('3.1.0')
+    .build();
+  return SwaggerModule.createDocument(app, config);
+}

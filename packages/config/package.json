@@ -1,0 +1,12 @@
+{
+  "name": "@liame/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Presets de TypeScript compartilhados pelo monorepo.",
+  "exports": {
+    "./tsconfig/*": "./tsconfig/*"
+  },
+  "files": [
+    "tsconfig"
+  ]
+}
