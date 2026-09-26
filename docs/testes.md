@@ -40,6 +40,8 @@ O `.env.local` da raiz (fora do git) guarda as URLs dos papéis `liame_*`. Sem `
 | `test/db/cross-tenant.spec.ts` | A1-3 gerado do catálogo: em **toda** tabela com `tenant_id`, sob o contexto de uma empresa, nenhuma linha de outra aparece, é alterada ou é apagada |
 | `test/db/auth.spec.ts` | cadastro, confirmação de e-mail, login, cookie httpOnly, /me, e-mail repetido sem duplicar e sem revelar, erro igual para senha errada e e-mail inexistente, 429 com Retry-After, senha curta, sair, link de uso único, senha nova derruba sessões, troca de empresa só com vínculo, origem estranha recusada |
 | `test/access.spec.ts` | A1-4: lista exata de rotas públicas; toda rota não pública responde 401 sem sessão |
+| `test/db/vault.spec.ts` | A1-13: banco só com a cifra; cifra amarrada ao registro; RLS nos segredos; segredo pessoal só para a pessoa; rotação v1 → v2; índice cego por empresa; chave destruída não decifra |
+| `test/envelope.spec.ts` | AES-256-GCM com contexto; integridade; índice cego; produção recusa o provedor local |
 | `test/password.spec.ts` | scrypt; checagem de senha vazada só com o prefixo do hash; serviço fora do ar não trava |
 | `test/db/pgboss.spec.ts` | envio do pg-boss na transação da aplicação: o commit cria o job, o rollback desfaz |
 | `dist/spike/verify.js` | o build roda no Node sem transformação (ESM): Nest 12, OpenAPI, pg + Drizzle, AI SDK 7, MCP 2.1 e traces de http, undici e pg no mesmo trace |

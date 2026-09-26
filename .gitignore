@@ -28,3 +28,6 @@ next-env.d.ts
 
 # gerado pelo build do SDK a partir de docs/openapi.json
 packages/sdk/src/schema.ts
+
+# chaves locais das empresas (cofre em desenvolvimento)
+.liame-chaves-locais.json
