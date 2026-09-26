@@ -10,7 +10,8 @@
     "test": "vitest run && node --enable-source-maps dist/spike/verify.js",
     "spike": "node --enable-source-maps dist/spike/verify.js",
     "start:api": "node --enable-source-maps --import ./dist/telemetry.js dist/main.api.js",
-    "start:worker": "node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js"
+    "start:worker": "node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js",
+    "openapi": "node dist/scripts/openapi.js ../../docs/openapi.json"
   },
   "dependencies": {
     "@liame/contracts": "workspace:*",

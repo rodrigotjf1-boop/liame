@@ -25,3 +25,6 @@ Thumbs.db
 
 # gerados pelo Next
 next-env.d.ts
+
+# gerado pelo build do SDK a partir de docs/openapi.json
+packages/sdk/src/schema.ts

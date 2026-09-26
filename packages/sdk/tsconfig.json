@@ -1,0 +1,6 @@
+{
+  "extends": "@liame/config/tsconfig/lib.json",
+  "compilerOptions": {
+    "lib": ["es2024", "dom"]
+  }
+}

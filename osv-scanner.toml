@@ -1,0 +1,16 @@
+# Configuração do osv-scanner (CI de segurança, security-model §9).
+# Exceções só com motivo e conferência no arquivo LICENSE do pacote.
+
+[[PackageOverrides]]
+name = "busboy"
+version = "1.6.0"
+ecosystem = "npm"
+license.override = ["MIT"]
+reason = "MIT conferido no LICENSE (26/09/2026); o package.json usa o campo antigo `licenses`, que o scanner não lê"
+
+[[PackageOverrides]]
+name = "streamsearch"
+version = "1.1.0"
+ecosystem = "npm"
+license.override = ["MIT"]
+reason = "MIT conferido no LICENSE (26/09/2026); o package.json usa o campo antigo `licenses`, que o scanner não lê"

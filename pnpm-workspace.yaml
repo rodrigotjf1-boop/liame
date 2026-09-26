@@ -47,6 +47,9 @@ catalog:
   tailwindcss: 4.3.3
   '@tailwindcss/postcss': 4.3.3
 
+  openapi-typescript: 7.13.0
+  openapi-fetch: 0.17.0
+
 # Scripts de instalação: só roda o que foi revisado (strictDepBuilds é padrão no pnpm 12).
 # Revisados em 25/09/2026; nenhum é necessário:
 # - @swc/core: só testa o binário nativo e, se falhar, instala @swc/wasm por fora do lockfile.
@@ -59,3 +62,8 @@ allowBuilds:
 
 # Versão com menos de 1 dia não entra, nem por exceção automática: o install falha e alguém decide.
 minimumReleaseAgeStrict: true
+
+# openapi-typescript 7.13 declara typescript ^5.x; testado com o 6.0.3 (gera e compila o SDK, 26/09/2026).
+peerDependencyRules:
+  allowedVersions:
+    openapi-typescript>typescript: 6.0.3
