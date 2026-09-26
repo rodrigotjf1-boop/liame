@@ -18,6 +18,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('organization', 'Empresa ativa e marcas')
     .addTag('people', 'Pessoas e acessos: convites, níveis, limites e remoção (ADR-017)')
     .addTag('webhooks', 'Webhooks de saída: CloudEvents assinados no padrão Standard Webhooks (ADR-004)')
+    .addTag('audit', 'Auditoria da empresa: eventos com hash encadeado e verificação (security-model §7)')
     .addTag('inbox', 'Webhooks recebidos de parceiros, verificados e deduplicados (ADR-004)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .addTag('spike', 'Rotas provisórias do spike de compatibilidade (saem na A1)')

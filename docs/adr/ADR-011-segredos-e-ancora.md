@@ -60,3 +60,11 @@ Tokens OAuth de Meta, Google, TikTok e WhatsApp dão controle das contas dos cli
 - **Rotação (A1-13):** `rotateSecrets` recifra por completo os segredos em versão antiga da KEK, em lotes com `for update skip locked`; depois disso, a versão antiga pode sair.
 - Tabela `liame.secret` (migration 0003) com RLS: segredo da empresa só no tenant dela; segredo pessoal (app autenticador) só para a própria pessoa.
 - A âncora da auditoria (S3 Object Lock, Rekor, RFC 3161) entra na E3.
+
+## Implementação da auditoria e da âncora (E3, 26/09/2026)
+
+- **Cadeias:** uma por empresa (o que acontece nela) e uma por pessoa (entrar, confirmar e-mail, senha nova, segundo fator). Gravar trava só a cadeia daquela empresa ou pessoa, na transação de quem muda o dado; uma empresa não espera a outra.
+- **Evento:** `audit_event` com ator tipado e rótulo do momento ("Juliana, Administrador"), ação em português (`acesso.alterar`), recurso, antes e depois (sem e-mail nem segredo), `trace_id`, origem e `hash = sha256(hash anterior + JSON canônico do evento)`. A aplicação só insere e lê; uma trava no banco recusa UPDATE e DELETE até para o dono das tabelas (o expurgo do fim de contrato é decidido no ciclo de vida, ADR-014).
+- **Toda rota que muda dado** declara `@Auditar(ação)` ou `@SemAuditoria(motivo)`; o app não sobe sem isso. Rotas autenticadas gravam sozinhas na unidade de trabalho; as públicas (cadastro, entrar, senha nova, aceite de convite) gravam na própria transação do serviço.
+- **Âncora:** raiz do dia (UTC) = SHA-256 do sal interno, da raiz anterior, do dia e da cabeça de cada cadeia no fim do dia. Job no worker às 03:15 UTC: ancora os dias fechados em ordem, publica no **Rekor v2** (`hashedRekordRequestV002`, ECDSA P-256; a URL do shard vem da configuração) e no **carimbo RFC 3161** (o Rekor v2 não dá tempo), e verifica: dias sem buraco, cada raiz ligada à anterior e igual à recalculada, e as cadeias que mudaram no dia. Destino que falha é tentado de novo sem repetir os outros.
+- **Pendente:** S3 Object Lock (terceiro destino) quando a conta AWS dedicada existir; chave de assinatura, sal e URLs de produção (`docs/configuracao.md`); verificação independente que busca a entrada no Rekor pelo índice (hoje confere o que está no banco).

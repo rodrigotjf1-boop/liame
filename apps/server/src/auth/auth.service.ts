@@ -2,8 +2,9 @@ import type { AcceptedResponse, LoginRequest, MeResponse, ResetPasswordRequest, 
 import { type Database, type Tx, uuidv7, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
-import { type AuthContext, currentTx } from '../context/request-context.js';
+import { auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { Mailer, type MailMessage } from '../mail/mailer.js';
@@ -75,6 +76,19 @@ export class AuthService {
         await tx.execute(sql`insert into liame.membership (id, tenant_id, user_id, role_key, dual_approval, billing_access)
                              values (${uuidv7()}, ${tenantId}, ${userId}, 'dono', false, true)`);
         await tx.execute(sql`insert into liame.brand (id, tenant_id, name) values (${uuidv7()}, ${tenantId}, ${input.company.name})`);
+        await writeAudit(tx, {
+          tenantId,
+          actorType: 'human',
+          actorId: userId,
+          actorLabel: `${input.name}, Dono`,
+          actorRole: 'dono',
+          action: 'conta.criar',
+          resourceType: 'organization',
+          resourceId: tenantId,
+          after: { company: input.company.name },
+          traceId: activeTraceId(),
+          origin: 'api',
+        });
         outbox.push(await this.confirmationMail(tx, userId, input.email));
       });
     } catch (err) {
@@ -90,6 +104,7 @@ export class AuthService {
     await withSystem(this.db, async (tx) => {
       const userId = await this.consumeToken(tx, token, 'confirmar_email');
       await tx.execute(sql`update liame.app_user set email_verified_at = coalesce(email_verified_at, now()) where id = ${userId}`);
+      await this.auditPerson(tx, userId, 'email.confirmar');
     });
     return { status: 'accepted', message: 'E-mail confirmado. Você já pode entrar.' };
   }
@@ -132,6 +147,7 @@ export class AuthService {
         });
       }
       const token = await this.sessions.create(tx, { userId: user.id, tenantId, ip: meta.ip, userAgent: meta.userAgent });
+      await this.auditPerson(tx, user.id, 'sessao.abrir');
       return { unverified: false as const, token, userId: user.id, tenantId };
     });
 
@@ -178,6 +194,7 @@ export class AuthService {
     const passwordHash = await hashPassword(input.password);
     await withSystem(this.db, async (tx) => {
       const userId = await this.consumeToken(tx, input.token, 'redefinir_senha');
+      await this.auditPerson(tx, userId, 'senha.redefinir');
       // Quem recebeu o link provou que o e-mail é seu.
       await tx.execute(sql`update liame.app_user set password_hash = ${passwordHash}, email_verified_at = coalesce(email_verified_at, now())
                            where id = ${userId}`);
@@ -205,6 +222,7 @@ export class AuthService {
     // Sem vínculo, a resposta é a mesma de empresa inexistente (arquitetura §14: nunca "é de outra empresa").
     if (!m.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Empresa não encontrada.');
     await tx.execute(sql`update liame.session set active_tenant_id = ${organizationId} where id = ${auth.sessionId}`);
+    auditDetail({ resourceId: organizationId, before: { organization_id: auth.tenantId }, after: { organization_id: organizationId } });
     return this.loadMe(tx, auth.userId, organizationId, auth.mfaVerifiedAt);
   }
 
@@ -245,6 +263,20 @@ export class AuthService {
   }
 
   // ------------------------------------------------------------------ apoio
+
+  /** Evento na cadeia da própria pessoa (entrar, confirmar e-mail, senha nova). */
+  private async auditPerson(tx: Tx, userId: string, action: string): Promise<void> {
+    const r = await tx.execute<{ name: string }>(sql`select name from liame.app_user where id = ${userId}`);
+    await writeAudit(tx, {
+      tenantId: null,
+      actorType: 'human',
+      actorId: userId,
+      actorLabel: r.rows[0]?.name ?? null,
+      action,
+      traceId: activeTraceId(),
+      origin: 'api',
+    });
+  }
 
   async rejectBreached(password: string): Promise<void> {
     if (this.config.breachedPasswordCheck && (await isBreachedPassword(password))) {

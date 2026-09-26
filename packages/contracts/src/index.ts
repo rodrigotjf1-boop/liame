@@ -41,3 +41,4 @@ export {
   WebhookEndpointListResponse,
   WebhookEndpointResponse,
 } from './webhooks.js';
+export { AuditEventListResponse, AuditEventQuery, AuditEventResponse, AuditVerifyResponse } from './audit.js';

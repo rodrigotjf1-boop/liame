@@ -2,6 +2,7 @@ import type { InvitableRole, InvitationPreviewResponse, InvitationSignupRequest,
 import { type Database, type Tx, uuidv7, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import type { AuthContext } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
@@ -147,6 +148,19 @@ export class InvitationAcceptService {
       values (${memberId}, ${inv.tenant_id}, ${userId}, ${inv.role_key}, ${inv.approve_limit_micros}, ${inv.dual_approval},
               ${inv.billing_access}, ${inv.access_expires_at}, ${inv.invited_by})`);
     await tx.execute(sql`update liame.invitation set accepted_at = now(), accepted_by = ${userId} where id = ${inv.id}`);
+    await writeAudit(tx, {
+      tenantId: inv.tenant_id,
+      actorType: 'human',
+      actorId: userId,
+      actorLabel: `${name}, ${ROLE_LABEL[inv.role_key]}`,
+      actorRole: inv.role_key,
+      action: 'convite.aceitar',
+      resourceType: 'membership',
+      resourceId: memberId,
+      after: { role: inv.role_key, invitation_id: inv.id, invited_by: inv.invited_by },
+      traceId: activeTraceId(),
+      origin: 'api',
+    });
     await emitEvent(tx, {
       tenantId: inv.tenant_id,
       type: 'liame.member.joined',

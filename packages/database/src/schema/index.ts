@@ -1,7 +1,9 @@
+import * as audit from './audit.js';
 import * as events from './events.js';
 import * as identity from './identity.js';
 import * as vault from './vault.js';
 
+export * from './audit.js';
 export * from './events.js';
 export * from './identity.js';
 export * from './vault.js';
@@ -25,6 +27,9 @@ export const allTables = [
   events.webhookDelivery,
   events.inboxEvent,
   events.idempotencyKey,
+  audit.auditChain,
+  audit.auditEvent,
+  audit.auditAnchor,
   vault.secret,
   vault.tenantKey,
 ];

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
+import { AuditController } from './audit/audit.controller.js';
 import { AuthModule } from './auth/auth.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health/health.controller.js';
@@ -16,7 +17,7 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
-  controllers: [HealthController, SpikeController, TenancyController, PeopleController, WebhooksController, InboxController],
+  controllers: [HealthController, SpikeController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController],
   providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService],
 })
 export class AppModule {}

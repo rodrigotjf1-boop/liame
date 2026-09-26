@@ -24,6 +24,15 @@ interface RequestStore {
   tx: Tx;
   /** Efeitos que só podem acontecer se a transação gravar (e-mail com link, aviso). */
   afterCommit: Array<() => Promise<void>>;
+  /** Detalhes que o serviço acrescenta ao evento de auditoria automático da rota. */
+  audit?: AuditDetail;
+}
+
+export interface AuditDetail {
+  resourceId?: string;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  reason?: string;
 }
 
 /** Transação da requisição (unidade de trabalho), com o contexto da RLS já aplicado. */
@@ -44,4 +53,11 @@ export function afterCommit(effect: () => Promise<void>): void {
   const store = requestStore.getStore();
   if (!store) throw new Error('sem transação da requisição: afterCommit só vale dentro de uma rota autenticada');
   store.afterCommit.push(effect);
+}
+
+/** Acrescenta detalhes (recurso, antes, depois, motivo) ao evento de auditoria da rota atual. */
+export function auditDetail(detail: AuditDetail): void {
+  const store = requestStore.getStore();
+  if (!store) throw new Error('sem transação da requisição: auditDetail só vale dentro de uma rota autenticada');
+  store.audit = { ...store.audit, ...detail };
 }

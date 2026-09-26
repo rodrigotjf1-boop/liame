@@ -24,6 +24,7 @@ import {
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { PeopleService } from './people.service.js';
+import { Auditar } from '../audit/auditar.js';
 
 // Pessoas e acessos da empresa ativa (ADR-017).
 @ApiTags('people')
@@ -42,6 +43,7 @@ export class PeopleController {
   }
 
   @Post('invitations')
+  @Auditar('convite.criar', { recurso: 'invitation' })
   @Permissao('pessoas.convidar')
   @HttpCode(201)
   @ApiOperation({
@@ -59,6 +61,7 @@ export class PeopleController {
   }
 
   @Delete('invitations/:id')
+  @Auditar('convite.cancelar', { recurso: 'invitation' })
   @Permissao('pessoas.convidar')
   @HttpCode(204)
   @ApiOperation({ summary: 'Cancelar convite', description: 'O link deixa de valer na hora.' })
@@ -69,6 +72,7 @@ export class PeopleController {
   }
 
   @Patch('members/:id')
+  @Auditar('acesso.alterar', { recurso: 'membership' })
   @Permissao('pessoas.alterar_nivel')
   @ApiOperation({
     summary: 'Mudar o acesso de alguém',
@@ -87,6 +91,7 @@ export class PeopleController {
   }
 
   @Delete('members/:id')
+  @Auditar('acesso.remover', { recurso: 'membership' })
   @Permissao('pessoas.remover')
   @HttpCode(204)
   @ApiOperation({ summary: 'Remover acesso', description: 'Corta o acesso da pessoa a esta empresa na hora. O dono não sai.' })
