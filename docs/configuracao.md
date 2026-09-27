@@ -15,7 +15,31 @@ Legenda: **P** = obrigatória em produção · **S** = segredo.
 | --- | --- | --- |
 | `DATABASE_URL` **P S** | Conexão da aplicação (papel `liame_app`, sem BYPASSRLS; pooler em modo transação serve) | — |
 | `DATABASE_URL_JOBS` **P S** | Conexão do pg-boss no worker (direta ou pooler em modo **sessão**: LISTEN/NOTIFY, ADR-005) | — |
+| `DATABASE_URL_OWNER` **S** | Só no passo de migrations (papel `liame_owner`, pooler em modo **sessão**) | — |
 | `PGBOSS_SCHEMA` | Schema do pg-boss conferido no `/health/ready` | `pgboss` |
+
+### Banco na nuvem (Supabase São Paulo)
+
+Projeto `liame` (ref `wzsajknjgcvbmtyonwnn`, `sa-east-1`). Papéis `liame_owner` e `liame_app` criados pelo dono no SQL Editor
+(sem superusuário, sem BYPASSRLS; `liame_owner` com `connect, create, temporary` no banco `postgres`, `liame_app` só com `connect`).
+A conexão direta do Supabase é só IPv6 sem o complemento de IPv4: tudo passa pelo **pooler compartilhado**, com o usuário no
+formato `<papel>.<ref>` (documentação oficial do Supabase, conferida em 27/09/2026). O certificado do Supabase não é de autoridade
+pública: as URLs usam `sslmode=verify-full` com o certificado raiz (`infra/supabase/prod-ca-2021.crt`, "Supabase Root 2021 CA",
+vence em 26/04/2031), que a imagem do servidor copia para `/app/certs/supabase-ca.crt`. Sem ele, o pg recusa a conexão
+(`SELF_SIGNED_CERT_IN_CHAIN`); com ele, a verificação passa (testado em 27/09/2026).
+
+| Variável | Papel | Porta (modo) | Formato |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | `liame_app` | 6543 (transação) | `postgresql://liame_app.wzsajknjgcvbmtyonwnn:<senha>@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=verify-full&sslrootcert=/app/certs/supabase-ca.crt` |
+| `DATABASE_URL_JOBS` | `liame_owner` | 5432 (sessão) | mesmo host, `liame_owner.wzsajknjgcvbmtyonwnn`, porta 5432 |
+| `DATABASE_URL_OWNER` | `liame_owner` | 5432 (sessão) | igual ao `DATABASE_URL_JOBS` |
+
+Senhas só alfanuméricas (símbolo exige codificar a URL). Migrations aplicadas pelo dono, do computador dele, com um `.env.nuvem`
+temporário (fora do git, apagado depois): `node --env-file=.env.nuvem packages/database/dist/cli/migrate.js --url-env NUVEM_DATABASE_URL_OWNER`
+(no computador, `sslrootcert` aponta para o arquivo em `infra/supabase/`). Depois de aplicar, rodar
+`packages/database/scripts/conferencia-catalogo.sql` no SQL Editor e no banco local com as mesmas migrations: o resultado precisa
+ser idêntico (contagens, RLS forçado em todas as tabelas e as três assinaturas md5). Situação: **0001–0020 aplicadas e conferidas
+em 27/09/2026** (55 tabelas, 582 colunas, 78 políticas).
 
 ## Aplicação
 
@@ -30,7 +54,7 @@ Legenda: **P** = obrigatória em produção · **S** = segredo.
 | `BREACHED_PASSWORD_CHECK` | Checagem de senha vazada (HIBP, k-anonimato) | `on` |
 | `TERMS_VERSION` **P** | Versão **publicada** dos Termos de Uso e da Política de Privacidade; o cadastro e o convite gravam a que a pessoa aceitou (migration 0016). Em produção, sem ela a API não sobe (A0-6) | `rascunho-2026-09-25` fora de produção |
 | `TERMS_URL` · `PRIVACY_URL` **P** | Endereços públicos dos termos e da política (links das telas de cadastro) | `https://agencialiame.com/termos` · `/privacidade` |
-| `MAIL_TRANSPORT` **P** | `ses` em produção (Amazon SES São Paulo, D-A1-4); `memoria` é recusado em produção | `memoria` |
+| `MAIL_TRANSPORT` **P** | `ses` em produção (Amazon SES São Paulo, D-A1-4); `memoria` é recusado em produção. **O transporte `ses` ainda não está implementado** (depende da conta AWS, A0-3b): até ele entrar, a API não sobe em produção | `memoria` |
 
 ## Plataformas de mídia (A2)
 
