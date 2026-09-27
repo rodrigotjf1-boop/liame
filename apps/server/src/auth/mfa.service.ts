@@ -3,7 +3,7 @@ import { type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
-import { afterCommit, type AuthContext, currentTx } from '../context/request-context.js';
+import { afterCommit, auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { Mailer } from '../mail/mailer.js';
 import { VaultService } from '../vault/vault.service.js';
@@ -84,6 +84,7 @@ export class MfaService {
          where id = ${auth.userId} and (totp_last_step is null or totp_last_step < ${step})`);
       if (upd.rowCount !== 1) throw invalidCode();
       await this.markSession(tx, auth, 'totp');
+      auditDetail({ after: { metodo: 'totp' } });
       return;
     }
     const used = await tx.execute<{ id: string }>(sql`
@@ -94,6 +95,7 @@ export class MfaService {
        returning id`);
     if (!used.rows[0]) throw invalidCode();
     await this.markSession(tx, auth, 'recuperacao');
+    auditDetail({ after: { metodo: 'recuperacao' } });
     this.notify(auth.email, 'Liame: código de recuperação usado', 'Um código de recuperação foi usado para entrar na sua conta. Se não foi você, troque a senha agora.');
   }
 
@@ -113,6 +115,26 @@ export class MfaService {
       update liame.app_user set totp_last_step = ${step}
        where id = ${userId} and (totp_last_step is null or totp_last_step < ${step})`);
     if (upd.rowCount !== 1) throw invalidCode();
+  }
+
+  /**
+   * Códigos de recuperação novos (tela "Segurança da conta"): confirma com o código do app na hora
+   * (nunca com código de recuperação), invalida os que ainda valiam e avisa por e-mail.
+   */
+  async regenerateRecoveryCodes(auth: AuthContext, code: string): Promise<RecoveryCodesResponse> {
+    const tx = currentTx();
+    await this.verifyStepUp(tx, auth.userId, code);
+    const codes = newRecoveryCodes();
+    await tx.execute(sql`delete from liame.recovery_code where user_id = ${auth.userId} and used_at is null`);
+    for (const c of codes) {
+      await tx.execute(sql`insert into liame.recovery_code (id, user_id, code_hash) values (${uuidv7()}, ${auth.userId}, ${hashRecoveryCode(c)})`);
+    }
+    this.notify(
+      auth.email,
+      'Liame: códigos de recuperação novos',
+      'Você gerou códigos de recuperação novos. Os anteriores deixaram de valer. Se não foi você, troque a senha agora.',
+    );
+    return { recovery_codes: codes };
   }
 
   /**

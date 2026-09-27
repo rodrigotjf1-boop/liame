@@ -64,6 +64,20 @@ export class MfaController {
     await this.mfa.verify(auth, body.code);
   }
 
+  @Post('recovery-codes')
+  @Auditar('segundo_fator.gerar_codigos', { escopo: 'pessoa' })
+  @Autenticado()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Gerar códigos de recuperação novos',
+    description: 'Confirma com o código do app (nunca com código de recuperação); os códigos que ainda valiam deixam de valer. Os novos aparecem uma vez só.',
+  })
+  @ApiOkResponse({ standardSchema: RecoveryCodesResponse })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  regenerate(@Auth() auth: AuthContext, @Body({ schema: TotpCodeRequest }) body: TotpCodeRequest): Promise<RecoveryCodesResponse> {
+    return this.mfa.regenerateRecoveryCodes(auth, body.code);
+  }
+
   @Post('change-request')
   @Auditar('segundo_fator.pedir_troca', { escopo: 'pessoa' })
   @Autenticado()

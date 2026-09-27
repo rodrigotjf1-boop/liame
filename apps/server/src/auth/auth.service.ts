@@ -8,6 +8,7 @@ import { auditDetail, type AuthContext, currentTx } from '../context/request-con
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { Mailer, type MailMessage } from '../mail/mailer.js';
+import { descreverAparelho, mascararIp } from './aparelho.js';
 import { burnPasswordTime, hashPassword, isBreachedPassword, verifyPassword } from './password.js';
 import { MFA_REQUIRED } from './permissions.js';
 import { RateLimitService } from './rate-limit.service.js';
@@ -159,13 +160,13 @@ export class AuthService {
         });
       }
       const token = await this.sessions.create(tx, { userId: user.id, tenantId, ip: meta.ip, userAgent: meta.userAgent });
-      await this.auditPerson(tx, user.id, 'sessao.abrir');
+      await this.auditPerson(tx, user.id, 'sessao.abrir', onde(meta));
       return { kind: 'ok', token, userId: user.id, tenantId };
     });
 
     if (result.kind === 'falhou') {
       const failedUser = result.userId;
-      await withSystem(this.db, (tx) => this.auditPerson(tx, failedUser, 'sessao.falhar'));
+      await withSystem(this.db, (tx) => this.auditPerson(tx, failedUser, 'sessao.falhar', onde(meta)));
       throw invalidCredentials();
     }
     if (result.kind === 'nao_confirmado') {
@@ -283,7 +284,7 @@ export class AuthService {
   // ------------------------------------------------------------------ apoio
 
   /** Evento na cadeia da própria pessoa (entrar, confirmar e-mail, senha nova). */
-  private async auditPerson(tx: Tx, userId: string, action: string): Promise<void> {
+  private async auditPerson(tx: Tx, userId: string, action: string, after?: Record<string, unknown>): Promise<void> {
     const r = await tx.execute<{ name: string }>(sql`select name from liame.app_user where id = ${userId}`);
     await writeAudit(tx, {
       tenantId: null,
@@ -291,6 +292,7 @@ export class AuthService {
       actorId: userId,
       actorLabel: r.rows[0]?.name ?? null,
       action,
+      ...(after ? { after } : {}),
       traceId: activeTraceId(),
       origin: 'api',
     });
@@ -353,4 +355,9 @@ export class AuthService {
       }
     }
   }
+}
+
+/** Onde aconteceu, para a "Atividade de segurança" da pessoa: aparelho e IP com o final escondido. */
+function onde(meta: RequestMeta): Record<string, unknown> {
+  return { aparelho: descreverAparelho(meta.userAgent), ip: mascararIp(meta.ip) };
 }
