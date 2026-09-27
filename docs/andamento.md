@@ -54,6 +54,24 @@ Plano da A1 (núcleo seguro) **aprovado em 26/09/2026**: [`plano-a1.md`](plano-a
 | **E2b** · segundo fator e empresa/marcas | ✅ local (71 testes no servidor) · CI no PR | Migration 0004 (código de recuperação, passo usado do TOTP, pedido de troca); app autenticador (RFC 6238) com QR, 10 códigos de recuperação de uso único, código repetido recusado, troca com o app ou pedido de 24 h cancelado por senha nova; Dono, Administrador, Gestor e Aprovador só usam rotas de permissão com o app ativo; `GET /v1/organization`, `GET/POST /v1/brands` |
 | **E1b** · CI de segurança e contrato OpenAPI | ✅ | A1-15 (contrato gerado e conferido, Spectral sem aviso, oasdiff, SDK `@liame/sdk` gerado que compila); A1-16 parcial (gitleaks, osv-scanner com licenças, zizmor, Semgrep; SBOM e imagem na E9) |
 
+## Fase A2 · Dados de mídia — critérios de saída (plano-a2 §4)
+
+Situação em 27/09/2026. As entregas (G1–G9) estão na tabela acima; aqui, o que cada critério pede e o que falta.
+
+| # | Critério | Situação | Evidência / o que falta |
+| --- | --- | --- | --- |
+| A2-1 | Conectar Meta, Google Ads e GA4 por OAuth; token só no cofre | 🟡 código pronto | `test/db/conexoes.spec.ts` (token nunca na resposta; cifrado no cofre; código e PKCE cifrados até a troca). **Falta:** os apps reais (Meta com Facebook Login for Business; cliente OAuth do Google) — distribuição, A0-5 — e a inspeção dos spans na primeira conexão real |
+| A2-2 | 7 dias fechados iguais à interface da plataforma | ⏳ conta de teste | Conectores com contrato (G4–G6). **Falta:** conferência manual com print no restaurante de testes (A0-7) |
+| A2-3 | Passado reescrito registrado | ✅ | `test/db/midia.spec.ts` e `test/db/sincronizacao.spec.ts` (observação nova quando o número muda; chave que some vira zero) |
+| A2-4 | Cotas respeitadas; uma empresa não gasta a cota das outras | 🟡 testes ok | `conector-http.spec.ts` (cabeçalhos, espera, disjuntor e balde por conta), GA4 com `returnPropertyQuota`, reserva sem duplicar (ERR-029). **Falta:** 7 dias de piloto sem erro 17/613/80000–80014 |
+| A2-5 | Frescor em toda métrica; conta desconectada ou token vencido vira alerta | ✅ | `/v1/media/metrics` com frescor por ponto; `/v1/media/attention` (conta desconectada, dado atrasado, autorização vencendo) — `sincronizacao.spec.ts`, `atencao.spec.ts` |
+| A2-6 | Capability Registry com versão e `verified_at`; Vigia diário com alerta antes da expiração | ✅ | Migrations 0018 e 0020; `vigia.spec.ts`; rotina no pg-boss às 06:10 UTC. A data de fim da v25 do Google Ads ainda não foi confirmada na fonte oficial |
+| A2-7 | Contract tests com fixtures versionadas dos três conectores no CI | ✅ | `test/fixtures/meta/v26.0`, `google-ads/v25`, `ga4/v1beta` e os três `conector-*.spec.ts` |
+| A2-8 | A1-1 a A1-3 cobrindo as tabelas novas | ✅ | Catálogo e cruzamento entre empresas gerados do banco passam com as tabelas das migrations 0017–0020 |
+| A2-9 | Telas de Contas conectadas e Atenção de mídia conforme mockup aprovado | ⏳ dono | Protótipo `mockups/prototipo-contas.html` (ux-modelo-interface §11) aguarda aprovação e a decisão de onde ficam os avisos |
+
+**Para a nuvem:** migrations 0001–0020 a aplicar quando o Supabase São Paulo existir (A0-8).
+
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 
 **Montado:** monorepo pnpm 12.6 + Turborepo 2.11.4 com `apps/server` (Nest 12.1, API + worker), `apps/web` (Next 16.3.6, React 19.3, Tailwind 4.3 com os tokens do protótipo), `packages/config` (presets de TS), `packages/contracts` (Zod), `packages/database` (Drizzle 0.45 + pool + `withTenant`), `packages/telemetry` (OTel http/undici/pg). CI em `.github/workflows/ci.yml`.
