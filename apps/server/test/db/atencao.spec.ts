@@ -112,6 +112,8 @@ describe.skipIf(!hasDb)('atenção de mídia pela API', () => {
     );
     const google = await conta('Casa Brasa Google', 'google_ads', 'ativa', conexao);
     await sincronizada(google, 96);
+    // A mesma autorização do Google também lê um GA4: continua um aviso só de autorização (ERR-033).
+    await conta('Casa Brasa – site', 'ga4', 'ativa', conexao);
 
     // Vigia: a Meta vai desligar uma versão.
     await ownerQuery(
@@ -131,6 +133,7 @@ describe.skipIf(!hasDb)('atenção de mídia pela API', () => {
       'atencao:reconectar_em_breve',
       'info:versao_api',
     ]);
+    expect(itens.find((i: { kind: string }) => i.kind === 'reconectar_em_breve')).toMatchObject({ provider: 'google', connected_account_id: null, title: 'A autorização do Google vence logo', detail: expect.stringContaining('2 contas param de ler') });
     expect(r.body.items.find((i: { kind: string }) => i.kind === 'campanha_parou')).toMatchObject({ campaign_id: campanha, connected_account_id: meta, title: 'A campanha "Delivery noite" parou de entregar' });
     expect(itens.find((i: { kind: string }) => i.kind === 'versao_api')).toMatchObject({ title: `A Meta Ads vai desligar a versão ${versaoTeste} da API`, detail: 'Data de fim: 20/10/2026.', action: 'Nada a fazer: o Liame atualiza a integração antes.' });
 

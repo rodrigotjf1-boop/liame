@@ -20,6 +20,15 @@ describe('aparelho e IP para a tela de segurança', () => {
     expect(mascararIp('177.52.18.201')).toBe('177.52.18.x');
     expect(mascararIp('::ffff:189.40.7.9')).toBe('189.40.7.x');
     expect(mascararIp('2804:14c:65:8a00:1234:5678:9abc:def0')).toBe('2804:14c:65::x');
+    // Forma comprimida: expande antes de cortar, e nunca mostra o endereço inteiro (ERR-032).
+    expect(mascararIp('::1')).toBe('0:0:0::x');
+    expect(mascararIp('2804::1a2b')).toBe('2804:0:0::x');
+    expect(mascararIp('2804:14c::1')).toBe('2804:14c:0::x');
+    expect(mascararIp('2804:014C:0065::8A00')).toBe('2804:14c:65::x');
+    expect(mascararIp('fe80::1%eth0')).toBe('fe80:0:0::x');
+    expect(mascararIp('64:ff9b::192.0.2.1')).toBe('64:ff9b:0::x');
+    expect(mascararIp('não é ip')).toBeNull();
+    expect(mascararIp('2804:::1')).toBeNull();
     expect(mascararIp(null)).toBeNull();
   });
 });

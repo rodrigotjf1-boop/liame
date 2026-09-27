@@ -26,6 +26,7 @@ export class MfaService {
   /** Começa (ou recomeça) a configuração: segredo pendente até a pessoa confirmar com um código. */
   async setup(auth: AuthContext): Promise<TotpSetupResponse> {
     const tx = currentTx();
+    await this.travarPessoa(tx, auth.userId);
     if (auth.mfaConfigured) await this.assertCanChange(tx, auth);
     const pending = await this.vault.findUserSecret(tx, auth.userId, 'totp_pendente');
     if (pending) await this.vault.revokeSecret(tx, pending.id);
@@ -38,6 +39,7 @@ export class MfaService {
   async confirm(auth: AuthContext, code: string): Promise<RecoveryCodesResponse> {
     await this.rateLimit.consume(`segundo-fator:${auth.userId}`, 10, 900);
     const tx = currentTx();
+    await this.travarPessoa(tx, auth.userId);
     const pending = await this.vault.findUserSecret(tx, auth.userId, 'totp_pendente');
     if (!pending) throw new AppProblem(400, 'sem-configuracao-pendente', 'Comece de novo', 'Gere um QR novo para configurar o app.');
     const step = verifyTotp(pending.plaintext, code);
@@ -155,6 +157,14 @@ export class MfaService {
       'Liame: pedido de troca do segundo fator',
       'Recebemos um pedido para trocar o app autenticador da sua conta. Ele vale em 24 horas. Se não foi você, troque a senha agora: isso cancela o pedido.',
     );
+  }
+
+  /**
+   * Um pedido de cada vez por pessoa (ERR-031): dois QRs ou duas confirmações ao mesmo tempo gravariam o
+   * mesmo segredo e bateriam no índice único (500). A trava sai no fim da transação da requisição.
+   */
+  private async travarPessoa(tx: Tx, userId: string): Promise<void> {
+    await tx.execute(sql`select id from liame.app_user where id = ${userId} for update`);
   }
 
   /** A troca exige a sessão verificada pelo app, ou um pedido de troca que já passou das 24 horas. */

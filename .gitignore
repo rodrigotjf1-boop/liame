@@ -34,3 +34,7 @@ packages/sdk/src/schema.ts
 
 # Montado no build a partir de lia-agente-3d/ e do three.js (scripts/copiar-lia.mjs)
 apps/web/public/lia/
+
+# O next dev (16.3) gera instruções para agentes dentro do app; não fazem parte do projeto.
+apps/web/AGENTS.md
+apps/web/CLAUDE.md
