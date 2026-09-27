@@ -65,4 +65,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   api_deprecation_notice: { class: 'PUBLIC', retention: 'do produto' },
   quota_bucket: { class: 'INTERNAL', retention: 'do produto (estado de cota)' },
   circuit_state: { class: 'INTERNAL', retention: 'do produto (estado do disjuntor)' },
+  // Conexões OAuth (A2, G3): o código fica cifrado só até a troca; o token, no cofre.
+  oauth_connection: {
+    class: 'CONFIDENTIAL',
+    retention: 'com a empresa; a que não virou conexão (expirada, erro, revogada) sai em 90 dias',
+    purge: { job: 'conexao_oauth', days: 90 },
+  },
 };

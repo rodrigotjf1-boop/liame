@@ -115,6 +115,14 @@ export class LifecyclePurgeService {
       true,
     );
     await run(
+      'conexao_oauth',
+      sql`delete from liame.oauth_connection where id in (
+            select id from liame.oauth_connection e where e.status in ('expirada', 'erro', 'revogada') and e.updated_at < now() - interval '90 days'
+               and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH})
+          returning tenant_id`,
+      true,
+    );
+    await run(
       'idempotencia',
       sql`delete from liame.idempotency_key where ctid in (
             select ctid from liame.idempotency_key e where expires_at < now() ${t('e.tenant_id')} ${u('e.user_id')} limit ${BATCH})

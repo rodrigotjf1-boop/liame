@@ -102,4 +102,17 @@ describe('fail-fast da configuração em produção', () => {
     expect(() => loadConfig({ ...prod, GA4_DATA_URL: 'http://127.0.0.1:4000' })).toThrow('endereço oficial');
     expect(loadConfig({ NODE_ENV: 'test', META_GRAPH_URL: 'http://127.0.0.1:4000/' } as NodeJS.ProcessEnv).plataformas.metaGraphUrl).toBe('http://127.0.0.1:4000');
   });
+
+  it('apps OAuth: só ligam com todas as peças; em produção, a volta só por https e o diálogo e o token nos endereços oficiais', () => {
+    const meta = { META_APP_ID: '1234567890123', META_APP_SECRET: 'segredo-do-app-meta-teste', META_LOGIN_CONFIG_ID: '99887766554433' };
+    expect(loadConfig(prod).oauth).toEqual({ meta: null, google: null });
+    expect(loadConfig({ ...prod, META_APP_ID: meta.META_APP_ID, META_APP_SECRET: meta.META_APP_SECRET }).oauth.meta).toBeNull();
+    expect(() => loadConfig({ ...prod, ...meta })).toThrow('API_URL');
+    expect(() => loadConfig({ ...prod, ...meta, API_URL: 'http://api.agencialiame.com' })).toThrow('API_URL');
+    const ok = loadConfig({ ...prod, ...meta, API_URL: 'https://api.agencialiame.com/' });
+    expect(ok.apiUrl).toBe('https://api.agencialiame.com');
+    expect(ok.oauth.meta).toEqual({ appId: meta.META_APP_ID, appSecret: meta.META_APP_SECRET, configId: meta.META_LOGIN_CONFIG_ID, dialogUrl: 'https://www.facebook.com' });
+    expect(() => loadConfig({ ...prod, META_DIALOG_URL: 'https://www.facebook.com.outro.site' })).toThrow('endereço oficial');
+    expect(() => loadConfig({ ...prod, GOOGLE_TOKEN_URL: 'https://oauth2.outro.site' })).toThrow('endereço oficial');
+  });
 });

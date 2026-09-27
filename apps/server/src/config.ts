@@ -35,6 +35,17 @@ const Env = z.object({
   GA4_ADMIN_URL: z.url().default('https://analyticsadmin.googleapis.com'),
   /** Segredo do app da Meta (da distribuição): assina as chamadas com appsecret_proof. */
   META_APP_SECRET: z.string().min(16).optional(),
+  /** Origem pública da API: monta o endereço de volta do OAuth (registrado no app de cada plataforma). */
+  API_URL: z.url().default('http://localhost:3001'),
+  /** App da Meta (da distribuição) e a configuração do Facebook Login for Business (token de usuário do sistema). */
+  META_APP_ID: z.string().regex(/^\d{5,25}$/).optional(),
+  META_LOGIN_CONFIG_ID: z.string().regex(/^\d{5,25}$/).optional(),
+  META_DIALOG_URL: z.url().default('https://www.facebook.com'),
+  /** Cliente OAuth do Google (da distribuição): Google Ads e GA4 na mesma autorização. */
+  GOOGLE_OAUTH_CLIENT_ID: z.string().min(10).optional(),
+  GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(10).optional(),
+  GOOGLE_AUTH_URL: z.url().default('https://accounts.google.com'),
+  GOOGLE_TOKEN_URL: z.url().default('https://oauth2.googleapis.com'),
   PRIVACY_URL: z.url().default('https://agencialiame.com/privacidade'),
 });
 
@@ -58,6 +69,13 @@ export type AppConfig = {
   terms: { version: string; termsUrl: string; privacyUrl: string };
   /** Plataformas (A2): endereço de cada API e o que assina as chamadas. */
   plataformas: { metaGraphUrl: string; googleAdsUrl: string; ga4DataUrl: string; ga4AdminUrl: string; metaAppSecret: string | null };
+  /** Origem pública da API (volta do OAuth). */
+  apiUrl: string;
+  /** Apps OAuth da distribuição; nulo = a plataforma ainda não pode ser conectada. */
+  oauth: {
+    meta: { appId: string; appSecret: string; configId: string; dialogUrl: string } | null;
+    google: { clientId: string; clientSecret: string; authUrl: string; tokenUrl: string } | null;
+  };
 };
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -85,11 +103,25 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     GOOGLE_ADS_URL: 'https://googleads.googleapis.com',
     GA4_DATA_URL: 'https://analyticsdata.googleapis.com',
     GA4_ADMIN_URL: 'https://analyticsadmin.googleapis.com',
+    META_DIALOG_URL: 'https://www.facebook.com',
+    GOOGLE_AUTH_URL: 'https://accounts.google.com',
+    GOOGLE_TOKEN_URL: 'https://oauth2.googleapis.com',
   };
   if (env.NODE_ENV === 'production') {
     for (const [nome, oficial] of Object.entries(OFICIAIS)) {
       if (env[nome as keyof typeof env] !== oficial) throw new Error(`config: em produção, ${nome} é o endereço oficial (${oficial})`);
     }
+  }
+  const meta = env.META_APP_ID && env.META_APP_SECRET && env.META_LOGIN_CONFIG_ID
+    ? { appId: env.META_APP_ID, appSecret: env.META_APP_SECRET, configId: env.META_LOGIN_CONFIG_ID, dialogUrl: env.META_DIALOG_URL.replace(/\/$/, '') }
+    : null;
+  const google = env.GOOGLE_OAUTH_CLIENT_ID && env.GOOGLE_OAUTH_CLIENT_SECRET
+    ? { clientId: env.GOOGLE_OAUTH_CLIENT_ID, clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET, authUrl: env.GOOGLE_AUTH_URL.replace(/\/$/, ''), tokenUrl: env.GOOGLE_TOKEN_URL.replace(/\/$/, '') }
+    : null;
+  const apiUrl = new URL(env.API_URL).origin;
+  // A volta do OAuth leva o código da plataforma: em produção, só por HTTPS e com a origem declarada.
+  if (env.NODE_ENV === 'production' && (meta || google) && (!source.API_URL || !apiUrl.startsWith('https://'))) {
+    throw new Error('config: em produção, com app OAuth configurado, defina API_URL com https');
   }
   // Ninguém cria conta em produção aceitando termos que não foram publicados (A0-6).
   if (env.NODE_ENV === 'production' && (!env.TERMS_VERSION || !source.TERMS_URL || !source.PRIVACY_URL)) {
@@ -127,6 +159,8 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       ga4AdminUrl: env.GA4_ADMIN_URL.replace(/\/$/, ''),
       metaAppSecret: env.META_APP_SECRET ?? null,
     },
+    apiUrl,
+    oauth: { meta, google },
   };
 }
 

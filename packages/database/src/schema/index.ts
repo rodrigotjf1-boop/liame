@@ -1,5 +1,6 @@
 import * as actions from './actions.js';
 import * as audit from './audit.js';
+import * as connections from './connections.js';
 import * as connectors from './connectors.js';
 import * as control from './control.js';
 import * as events from './events.js';
@@ -9,6 +10,7 @@ import * as vault from './vault.js';
 
 export * from './actions.js';
 export * from './audit.js';
+export * from './connections.js';
 export * from './connectors.js';
 export * from './control.js';
 export * from './events.js';
@@ -68,4 +70,5 @@ export const allTables = [
   connectors.apiDeprecationNotice,
   connectors.quotaBucket,
   connectors.circuitState,
+  connections.oauthConnection,
 ];

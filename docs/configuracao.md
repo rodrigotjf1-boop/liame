@@ -46,6 +46,21 @@ ser os oficiais, senão a API não sobe; fora dela, os testes apontam para uma p
 
 A versão de cada API não é variável: vem do Capability Registry (`connector_capability`, migration 0018).
 
+### Apps OAuth (G3, da distribuição)
+
+A empresa não cria app nem manuseia segredo: ela só autoriza. Os apps são do Liame, configurados no EasyPanel.
+Sem as peças de um app, a plataforma aparece como "ainda indisponível" (503 `integracao-indisponivel`).
+
+| Variável | Para quê | Padrão |
+| --- | --- | --- |
+| `API_URL` **P** | Origem pública da API. O endereço de volta registrado nos dois apps é `API_URL` + `/v1/oauth/callback`. Em produção, com algum app configurado, só https | `http://localhost:3001` |
+| `META_APP_ID` · `META_APP_SECRET` · `META_LOGIN_CONFIG_ID` | App da Meta e a configuração do Facebook Login for Business do tipo **token de usuário do sistema** (o segredo também assina as chamadas com `appsecret_proof`) | vazio (Meta indisponível) |
+| `META_DIALOG_URL` | Página de autorização da Meta (oficial em produção) | `https://www.facebook.com` |
+| `GOOGLE_OAUTH_CLIENT_ID` · `GOOGLE_OAUTH_CLIENT_SECRET` | Cliente OAuth do tipo "aplicativo da Web" no projeto Google Cloud da distribuição (Google Ads API habilitada; escopos `adwords` e `analytics.readonly`) | vazio (Google indisponível) |
+| `GOOGLE_AUTH_URL` · `GOOGLE_TOKEN_URL` | Autorização e token do Google (oficiais em produção) | `https://accounts.google.com` · `https://oauth2.googleapis.com` |
+
+Enquanto o app do Google estiver em **modo de teste**, o refresh token vence em 7 dias [S]: a conexão mostra a data (`refresh_expires_at`) e a tela avisa antes.
+
 ## Cofre (ADR-011, ADR-014)
 
 | Variável | Para quê | Padrão |
