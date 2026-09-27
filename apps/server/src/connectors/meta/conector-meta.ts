@@ -110,6 +110,15 @@ export function fatias(inicio: string, fim: string, dias: number): { since: stri
   return out;
 }
 
+/** O id da conta entra no caminho da URL: só `act_` + dígitos. */
+function contaValida(id: string): void {
+  if (!/^act_\d{1,20}$/.test(id)) throw new ErroConector('definitivo', 'meta_ads', 'conta da Meta com id inválido');
+}
+
+function dataValida(d: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(`${d}T00:00:00Z`))) throw new ErroConector('definitivo', 'meta_ads', `data inválida: ${d.slice(0, 20)}`);
+}
+
 export class ConectorMeta implements ConectorLeitura {
   readonly provider = 'meta_ads' as const;
   private readonly opcoes: Required<OpcoesMeta>;
@@ -168,6 +177,7 @@ export class ConectorMeta implements ConectorLeitura {
   }
 
   async lerEntidades(conta: ContextoConta): Promise<EntidadesLidas> {
+    contaValida(conta.externalId);
     const ler = <T>(aresta: string, fields: string) =>
       this.paginas<T>(conta.credencial, conta.externalId, `${conta.externalId}/${aresta}`, { fields, limit: '200' }, aresta);
     type Campanha = { id: string; name: string; status?: string; effective_status?: string; objective?: string; daily_budget?: string; lifetime_budget?: string; created_time?: string; updated_time?: string };
@@ -217,6 +227,9 @@ export class ConectorMeta implements ConectorLeitura {
   }
 
   async lerMetricas(conta: ContextoConta, janela: { inicio: string; fim: string }): Promise<PontoMetrica[]> {
+    contaValida(conta.externalId);
+    dataValida(janela.inicio);
+    dataValida(janela.fim);
     const total = (new Date(`${janela.fim}T00:00:00Z`).getTime() - new Date(`${janela.inicio}T00:00:00Z`).getTime()) / DIA_MS + 1;
     const assincrono = total > this.opcoes.diasSincrono;
     const pontos: PontoMetrica[] = [];

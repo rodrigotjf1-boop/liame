@@ -50,14 +50,14 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
     const [no, aresta] = m[1]!.split('/') as [string, string | undefined];
 
     if (no === 'me' && aresta === 'adaccounts') return { status: 200, corpo: fixture('adaccounts') };
-    if (no === 'act_hostil' && aresta === 'campaigns') {
-      return { status: 200, corpo: { data: [], paging: { next: 'https://graph.facebook.com.outro.site/v26.0/act_hostil/campaigns?after=x' } } };
+    if (no === 'act_9990000001' && aresta === 'campaigns') {
+      return { status: 200, corpo: { data: [], paging: { next: 'https://graph.facebook.com.outro.site/v26.0/act_9990000001/campaigns?after=x' } } };
     }
     if (no.startsWith('act_') && aresta) {
       if (aresta === 'campaigns') return { status: 200, corpo: fixture(url.searchParams.get('after') === 'b' ? 'campaigns-2' : 'campaigns-1') };
       if (aresta === 'insights' && p.metodo === 'POST') {
         const id = String(proximoRelatorio++);
-        relatorios.set(id, { timeRange: JSON.parse(url.searchParams.get('time_range')!), consultas: 0, falha: no === 'act_falha' });
+        relatorios.set(id, { timeRange: JSON.parse(url.searchParams.get('time_range')!), consultas: 0, falha: no === 'act_9990000002' });
         return { status: 200, corpo: { report_run_id: id } };
       }
       if (aresta === 'insights') return { status: 200, corpo: insightsDe(JSON.parse(url.searchParams.get('time_range')!)) };
@@ -201,15 +201,22 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
   });
 
   it('relatório que falha ou demora devolve erro passageiro (o job tenta de novo depois)', async () => {
-    await expect(conector().lerMetricas(conta('act_falha'), { inicio: '2026-07-01', fim: '2026-09-20' })).rejects.toMatchObject({ tipo: 'transitorio' });
+    await expect(conector().lerMetricas(conta('act_9990000002'), { inicio: '2026-07-01', fim: '2026-09-20' })).rejects.toMatchObject({ tipo: 'transitorio' });
     await expect(conector({ prazoRelatorioMs: 0 }).lerMetricas(conta(), { inicio: '2026-07-01', fim: '2026-09-20' })).rejects.toMatchObject({
       tipo: 'transitorio',
       message: expect.stringContaining('em andamento'),
     });
   });
 
+  it('id de conta ou data fora do formato nem vira chamada', async () => {
+    const antes = pedidos.length;
+    await expect(conector().lerEntidades(conta('act_1/../me'))).rejects.toMatchObject({ tipo: 'definitivo' });
+    await expect(conector().lerMetricas(conta(), { inicio: '2026-09-14', fim: "2026-09-20' OR 1=1" })).rejects.toMatchObject({ tipo: 'definitivo' });
+    expect(pedidos.length).toBe(antes);
+  });
+
   it('paginação apontando para outro endereço é recusada (o token não sai)', async () => {
-    await expect(conector().lerEntidades(conta('act_hostil'))).rejects.toMatchObject({ tipo: 'definitivo' });
+    await expect(conector().lerEntidades(conta('act_9990000001'))).rejects.toMatchObject({ tipo: 'definitivo' });
   });
 
   it('os pontos lidos gravam no modelo temporal (nomes e janelas aceitos pelo banco)', async () => {
