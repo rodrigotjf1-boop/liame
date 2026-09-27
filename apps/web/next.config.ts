@@ -1,34 +1,14 @@
 import path from 'node:path';
 import type { NextConfig } from 'next';
+import { cspPublica, ROTAS_PUBLICAS } from './src/lib/csp';
 
-// Cabeçalhos de segurança do webapp (security-hardening P1) e a CSP.
-// CSP sem nonce: o app usa Cache Components (ADR-001), e nonce exige renderizar toda página por
-// requisição. Os scripts inline que o React e o Next geram por página (payload do RSC, streaming) mudam a
-// cada build: sem nonce, só passam com 'unsafe-inline' (testado: sem ele a hidratação quebra, React #412).
-// O que a CSP ainda garante: script só do próprio app (com Subresource Integrity nos arquivos), nada de
-// object, base, frame ou formulário para fora, conexão só com a API. A versão mais rígida (nonce, com as
-// telas logadas renderizadas por requisição) está proposta em decisoes-design (changelog de 27/09/2026).
+// Cabeçalhos de segurança do webapp (security-hardening P1) e a CSP das telas de entrada.
+// As telas de entrada são pré-renderizadas (Cache Components, ADR-001): a CSP delas vai aqui, fixa.
+// Todas as outras rotas recebem a CSP com nonce no proxy (src/proxy.ts), a cada requisição.
 const isDev = process.env.NODE_ENV !== 'production';
 const api = new URL(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').origin;
 
-const csp = [
-  "default-src 'self'",
-  // No desenvolvimento, o React usa eval para mostrar os erros do servidor.
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data:",
-  "font-src 'self'",
-  `connect-src 'self' ${api}${isDev ? ' ws:' : ''}`,
-  "worker-src 'self' blob:",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  ...(isDev ? [] : ['upgrade-insecure-requests']),
-].join('; ');
-
 const securityHeaders = [
-  { key: 'Content-Security-Policy', value: csp },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
@@ -46,11 +26,14 @@ const config: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   experimental: {
-    // Hash de cada script no build (integrity): permite a CSP rígida sem nonce e com páginas pré-renderizadas.
+    // Hash de cada script do build (integrity), nas duas CSPs.
     sri: { algorithm: 'sha256' },
   },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      ...ROTAS_PUBLICAS.map((source) => ({ source, headers: [{ key: 'Content-Security-Policy', value: cspPublica({ isDev, api }) }] })),
+    ];
   },
 };
 
