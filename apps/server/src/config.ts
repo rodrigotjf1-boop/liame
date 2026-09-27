@@ -28,6 +28,13 @@ const Env = z.object({
   /** Versão publicada dos Termos de Uso e da Política de Privacidade (o cadastro grava a que foi aceita). */
   TERMS_VERSION: z.string().trim().min(1).max(60).optional(),
   TERMS_URL: z.url().default('https://agencialiame.com/termos'),
+  /** Endereços das plataformas: fixos em produção; fora dela, trocáveis para os testes com respostas gravadas. */
+  META_GRAPH_URL: z.url().default('https://graph.facebook.com'),
+  GOOGLE_ADS_URL: z.url().default('https://googleads.googleapis.com'),
+  GA4_DATA_URL: z.url().default('https://analyticsdata.googleapis.com'),
+  GA4_ADMIN_URL: z.url().default('https://analyticsadmin.googleapis.com'),
+  /** Segredo do app da Meta (da distribuição): assina as chamadas com appsecret_proof. */
+  META_APP_SECRET: z.string().min(16).optional(),
   PRIVACY_URL: z.url().default('https://agencialiame.com/privacidade'),
 });
 
@@ -49,6 +56,8 @@ export type AppConfig = {
   };
   /** Termos vigentes (A0-6): versão e endereços públicos. */
   terms: { version: string; termsUrl: string; privacyUrl: string };
+  /** Plataformas (A2): endereço de cada API e o que assina as chamadas. */
+  plataformas: { metaGraphUrl: string; googleAdsUrl: string; ga4DataUrl: string; ga4AdminUrl: string; metaAppSecret: string | null };
 };
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -71,6 +80,17 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error('config: em produção, a âncora da auditoria precisa de AUDIT_ANCHOR_SALT, REKOR_URL, AUDIT_ANCHOR_SIGNING_KEY e TSA_URL');
   }
   if (env.REKOR_URL && !env.AUDIT_ANCHOR_SIGNING_KEY) throw new Error('config: REKOR_URL exige AUDIT_ANCHOR_SIGNING_KEY');
+  const OFICIAIS: Record<string, string> = {
+    META_GRAPH_URL: 'https://graph.facebook.com',
+    GOOGLE_ADS_URL: 'https://googleads.googleapis.com',
+    GA4_DATA_URL: 'https://analyticsdata.googleapis.com',
+    GA4_ADMIN_URL: 'https://analyticsadmin.googleapis.com',
+  };
+  if (env.NODE_ENV === 'production') {
+    for (const [nome, oficial] of Object.entries(OFICIAIS)) {
+      if (env[nome as keyof typeof env] !== oficial) throw new Error(`config: em produção, ${nome} é o endereço oficial (${oficial})`);
+    }
+  }
   // Ninguém cria conta em produção aceitando termos que não foram publicados (A0-6).
   if (env.NODE_ENV === 'production' && (!env.TERMS_VERSION || !source.TERMS_URL || !source.PRIVACY_URL)) {
     throw new Error('config: em produção, defina TERMS_VERSION, TERMS_URL e PRIVACY_URL (termos publicados)');
@@ -100,6 +120,13 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       tsaUrl: env.TSA_URL ?? null,
     },
     terms: { version: env.TERMS_VERSION ?? TERMS_VERSION_DEV, termsUrl: env.TERMS_URL, privacyUrl: env.PRIVACY_URL },
+    plataformas: {
+      metaGraphUrl: env.META_GRAPH_URL.replace(/\/$/, ''),
+      googleAdsUrl: env.GOOGLE_ADS_URL.replace(/\/$/, ''),
+      ga4DataUrl: env.GA4_DATA_URL.replace(/\/$/, ''),
+      ga4AdminUrl: env.GA4_ADMIN_URL.replace(/\/$/, ''),
+      metaAppSecret: env.META_APP_SECRET ?? null,
+    },
   };
 }
 

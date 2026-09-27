@@ -1,0 +1,6 @@
+{
+  "data": [
+    { "id": "120210000000000001", "name": "Delivery noite", "status": "ACTIVE", "effective_status": "ACTIVE", "objective": "OUTCOME_SALES", "daily_budget": "5000", "created_time": "2026-08-01T10:00:00-0300", "updated_time": "2026-09-20T09:12:00-0300" }
+  ],
+  "paging": { "cursors": { "before": "a", "after": "b" }, "next": "{{BASE}}/v26.0/act_1234567890/campaigns?after=b" }
+}

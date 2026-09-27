@@ -1,0 +1,6 @@
+{
+  "data": [
+    { "id": "120210000000000002", "name": "Almoço executivo", "status": "PAUSED", "effective_status": "PAUSED", "objective": "OUTCOME_ENGAGEMENT", "lifetime_budget": "150000", "created_time": "2026-07-10T10:00:00-0300", "updated_time": "2026-09-01T18:00:00-0300" }
+  ],
+  "paging": { "cursors": { "before": "b", "after": "c" } }
+}

@@ -1,0 +1,7 @@
+{
+  "data": [
+    { "id": "120210000000009001", "name": "Combo Brasa - vídeo", "object_type": "VIDEO", "thumbnail_url": "https://scontent.example/combo.jpg" },
+    { "id": "120210000000009002", "name": "Prato do dia - foto", "object_type": "PHOTO", "thumbnail_url": "https://scontent.example/prato.jpg" }
+  ],
+  "paging": { "cursors": { "before": "a", "after": "b" } }
+}

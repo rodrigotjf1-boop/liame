@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "ad_id": "120210000000001001", "adset_id": "120210000000000101", "campaign_id": "120210000000000001",
+      "date_start": "2026-09-19", "date_stop": "2026-09-19",
+      "spend": "48.37", "impressions": "5120", "reach": "3890", "clicks": "143", "inline_link_clicks": "97",
+      "actions": [
+        { "action_type": "link_click", "value": "97" },
+        { "action_type": "onsite_conversion.messaging_conversation_started_7d", "value": "12", "7d_click": "10", "1d_view": "2" },
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "5", "7d_click": "4", "1d_view": "1" }
+      ],
+      "action_values": [
+        { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "412.50", "7d_click": "330.00", "1d_view": "82.50" }
+      ]
+    },
+    {
+      "ad_id": "120210000000001001", "adset_id": "120210000000000101", "campaign_id": "120210000000000001",
+      "date_start": "2026-09-20", "date_stop": "2026-09-20",
+      "spend": "51.02", "impressions": "5388", "reach": "4012", "clicks": "150", "inline_link_clicks": "101"
+    }
+  ],
+  "paging": { "cursors": { "before": "a", "after": "b" } }
+}
