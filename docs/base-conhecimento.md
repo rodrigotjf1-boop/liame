@@ -113,6 +113,12 @@
   - **no máximo 4 mudanças de orçamento por hora por conjunto**;
   - **no máximo 10 mudanças de spend limit por dia por conta**.
 - Monitorar os cabeçalhos `X-Business-Use-Case-Usage`, `X-Ad-Account-Usage` e `X-FB-Ads-Insights-Throttle`. Erros comuns: 17, 613 e 80000–80014.
+- **Insights assíncronos** *(verificado em 26/09/2026 em developers.facebook.com/docs/marketing-api/insights/best-practices)* [O]:
+  - `POST <objeto>/insights` devolve `{"report_run_id": ...}`;
+  - consultar `GET <report_run_id>` com `async_status` e `async_percent_completion` até `"Job Completed"` e 100;
+  - estados: `Job Not Started`, `Job Started`, `Job Running`, `Job Completed`, `Job Failed` (rever o pedido e tentar de novo), `Job Skipped` (expirou; pedir de novo);
+  - resultado em `GET <report_run_id>/insights`, paginado;
+  - recomendado para volume grande ou quando o síncrono estoura o tempo; o job pode levar até 1 hora; o `report_run_id` expira em 30 dias (não guardar).
 - **Dry-run:** `execution_options=["validate_only"]` [O]. **Teto:** `spend_cap` na conta.
 - **MCP oficial** "Meta Ads AI Connectors" (`mcp.facebook.com/ads`), beta aberto desde 29/04/2026, com cerca de 29 ferramentas [S]:
   - o que é criado nasce pausado [S];

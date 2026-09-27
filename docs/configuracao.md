@@ -32,6 +32,20 @@ Legenda: **P** = obrigatória em produção · **S** = segredo.
 | `TERMS_URL` · `PRIVACY_URL` **P** | Endereços públicos dos termos e da política (links das telas de cadastro) | `https://agencialiame.com/termos` · `/privacidade` |
 | `MAIL_TRANSPORT` **P** | `ses` em produção (Amazon SES São Paulo, D-A1-4); `memoria` é recusado em produção | `memoria` |
 
+## Plataformas de mídia (A2)
+
+Os conectores só chamam estes endereços (o cliente compara a origem, ERR-026). Em produção precisam
+ser os oficiais, senão a API não sobe; fora dela, os testes apontam para uma plataforma local.
+
+| Variável | Para quê | Padrão |
+| --- | --- | --- |
+| `META_GRAPH_URL` | Graph API / Marketing API da Meta | `https://graph.facebook.com` |
+| `GOOGLE_ADS_URL` | Google Ads API (REST) | `https://googleads.googleapis.com` |
+| `GA4_DATA_URL` · `GA4_ADMIN_URL` | GA4 Data API e Admin API | `https://analyticsdata.googleapis.com` · `https://analyticsadmin.googleapis.com` |
+| `META_APP_SECRET` | Segredo do app da Meta (**da distribuição**, só no EasyPanel): assina cada chamada com `appsecret_proof` | vazio (sem assinatura) |
+
+A versão de cada API não é variável: vem do Capability Registry (`connector_capability`, migration 0018).
+
 ## Cofre (ADR-011, ADR-014)
 
 | Variável | Para quê | Padrão |

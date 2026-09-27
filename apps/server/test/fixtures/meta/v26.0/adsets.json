@@ -1,0 +1,7 @@
+{
+  "data": [
+    { "id": "120210000000000101", "name": "Bairros próximos", "status": "ACTIVE", "effective_status": "ACTIVE", "campaign_id": "120210000000000001", "daily_budget": "5000" },
+    { "id": "120210000000000102", "name": "Centro", "status": "ACTIVE", "effective_status": "CAMPAIGN_PAUSED", "campaign_id": "120210000000000002" }
+  ],
+  "paging": { "cursors": { "before": "a", "after": "b" } }
+}
