@@ -1,7 +1,7 @@
 import { TERMS_VERSION_DEV } from '../../src/config.js';
 import { randomBytes } from 'node:crypto';
-import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import pg from 'pg';
 import { AppModule } from '../../src/app.module.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
@@ -15,17 +15,25 @@ export interface ApiResponse {
   cookie: string | null;
 }
 
+/** IPs de origem das APIs subidas neste arquivo de teste (cada arquivo roda no próprio processo). */
+const ipsDoArquivo = new Set<string>();
+
 /** Sobe a API para teste e devolve um cliente HTTP mínimo que guarda o cookie de sessão. */
 export async function startApi(options: { controllers?: Array<new (...args: never[]) => unknown> } = {}) {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule], controllers: options.controllers ?? [] }).compile();
-  const app: INestApplication = moduleRef.createNestApplication({ logger: false, rawBody: true });
+  const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false, rawBody: true });
+  // Cada API de teste tem o próprio IP de origem, como atrás do proxy em produção (TRUST_PROXY_HOPS): os
+  // arquivos rodam em paralelo contra o mesmo banco, e o limite por IP (cadastro 10/h) somava entre eles.
+  app.set('trust proxy', 1);
+  const ip = `10.${[...randomBytes(3)].join('.')}`;
+  ipsDoArquivo.add(ip);
   configureApp(app);
   await app.listen(0, '127.0.0.1');
   const base = (await app.getUrl()).replace('[::1]', '127.0.0.1');
   const mailer = app.get(Mailer) as MemoryMailer;
 
   async function call(method: string, path: string, opts: { body?: unknown; cookie?: string | null; headers?: Record<string, string> } = {}): Promise<ApiResponse> {
-    const headers: Record<string, string> = { ...opts.headers };
+    const headers: Record<string, string> = { 'x-forwarded-for': ip, ...opts.headers };
     if (opts.body !== undefined) headers['content-type'] = 'application/json';
     if (opts.cookie) headers.cookie = opts.cookie;
     const res = await fetch(`${base}${path}`, {
@@ -106,7 +114,8 @@ export async function ownerQuery<T extends pg.QueryResultRow>(sqlText: string, p
   }
 }
 
-/** Zera os contadores por IP (todos os testes saem de 127.0.0.1). */
+/** Zera os contadores por IP deste arquivo (os outros arquivos, rodando em paralelo, têm os próprios IPs). */
 export async function resetIpRateLimits(): Promise<void> {
-  await ownerQuery(`delete from liame.rate_limit where key like '%:ip:%'`);
+  if (!ipsDoArquivo.size) return;
+  await ownerQuery(`delete from liame.rate_limit where split_part(key, ':ip:', 2) = any($1::text[])`, [[...ipsDoArquivo]]);
 }
