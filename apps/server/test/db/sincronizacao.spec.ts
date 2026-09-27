@@ -216,10 +216,13 @@ describe.skipIf(!hasDb)('sincronização das contas conectadas', () => {
     await devidaAgora(contas.vencida);
     await devidaAgora(contas.limite);
     await ownerQuery(`update liame.sync_state set cursor = cursor || '{"proxima": "2999-01-01T00:00:00Z"}'::jsonb where connected_account_id = $1 and dataset = 'metricas'`, [contas.boa]);
-    const [a, b] = await Promise.all([loop.executarLote(5, { tenantIds: [tenantId] }), loop.executarLote(5, { tenantIds: [tenantId] })]);
-    // Duas execuções ao mesmo tempo: a conta devida (a do limite) vai para uma só.
-    expect(a!.length + b!.length).toBe(1);
-  });
+    // Várias reservas ao mesmo tempo, várias vezes: a conta devida (a do limite) vai para uma só (ERR-029).
+    for (let rodada = 0; rodada < 5; rodada++) {
+      if (rodada) await devidaAgora(contas.limite);
+      const todas = await Promise.all(Array.from({ length: 6 }, () => loop.executarLote(5, { tenantIds: [tenantId] })));
+      expect(todas.reduce((n, r) => n + r.length, 0)).toBe(1);
+    }
+  }, 60_000);
 
   it('outra empresa não vê o frescor nem as métricas desta', async () => {
     const outra = await signupAndLogin(api, undefined, 'Outra Casa Sincronização');

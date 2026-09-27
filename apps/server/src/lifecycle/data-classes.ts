@@ -65,6 +65,11 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   api_deprecation_notice: { class: 'PUBLIC', retention: 'do produto' },
   quota_bucket: { class: 'INTERNAL', retention: 'do produto (estado de cota)' },
   circuit_state: { class: 'INTERNAL', retention: 'do produto (estado do disjuntor)' },
+  // Vigia de integrações (A2, G8): documentação pública das plataformas e alertas técnicos.
+  watch_source: { class: 'PUBLIC', retention: 'do produto' },
+  watch_snapshot: { class: 'PUBLIC', retention: 'a última leitura de cada fonte' },
+  watch_change: { class: 'PUBLIC', retention: 'do produto (histórico das mudanças das plataformas)' },
+  watch_alert: { class: 'INTERNAL', retention: 'do produto' },
   // Conexões OAuth (A2, G3): o código fica cifrado só até a troca; o token, no cofre.
   oauth_connection: {
     class: 'CONFIDENTIAL',

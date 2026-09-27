@@ -70,5 +70,9 @@ export const allTables = [
   connectors.apiDeprecationNotice,
   connectors.quotaBucket,
   connectors.circuitState,
+  connectors.watchSource,
+  connectors.watchSnapshot,
+  connectors.watchChange,
+  connectors.watchAlert,
   connections.oauthConnection,
 ];
