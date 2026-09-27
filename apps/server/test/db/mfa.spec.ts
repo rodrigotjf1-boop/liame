@@ -61,6 +61,44 @@ describe.skipIf(!hasDb)('segundo fator (app autenticador)', () => {
     expect(marcas.body.items).toEqual([expect.objectContaining({ name: 'Pizzaria Segura' })]);
   });
 
+  it('pedidos de QR e confirmações ao mesmo tempo não quebram (ERR-031): vale o último QR, confirma uma vez', async () => {
+    const { cookie, me } = await signupAndLogin(api);
+    // O modo estrito do React roda o efeito duas vezes: pedidos de QR chegam juntos.
+    const pedidos = await Promise.all(Array.from({ length: 4 }, () => api.call('POST', '/v1/me/mfa/totp/setup', { cookie })));
+    expect(pedidos.map((p) => p.status)).toEqual([200, 200, 200, 200]);
+    const [pendentes] = await ownerQuery<{ n: string }>(
+      `select count(*) as n from liame.secret where owner_user_id = $1 and purpose = 'totp_pendente' and revoked_at is null`,
+      [me.user.id],
+    );
+    expect(Number(pendentes!.n)).toBe(1);
+    // Só o QR de quem chegou por último vale; confirmações repetidas desse QR: uma entra, a outra não quebra.
+    let valendo: string | null = null;
+    for (const p of pedidos) {
+      const [linha] = await ownerQuery<{ ok: boolean }>(
+        `select exists (select 1 from liame.secret where owner_user_id = $1 and purpose = 'totp_pendente' and revoked_at is null) as ok`,
+        [me.user.id],
+      );
+      if (!linha!.ok) break;
+      const tentativa = await api.call('POST', '/v1/me/mfa/totp/confirm', { cookie, body: { code: code(p.body.secret) } });
+      if (tentativa.status === 200) {
+        valendo = p.body.secret as string;
+        break;
+      }
+      expect(tentativa.status).toBe(401);
+    }
+    expect(valendo).not.toBeNull();
+  });
+
+  it('confirmações iguais ao mesmo tempo: uma ativa, a outra recusa sem erro 500 (ERR-031)', async () => {
+    const { cookie } = await signupAndLogin(api);
+    const setup = await api.call('POST', '/v1/me/mfa/totp/setup', { cookie });
+    const corpo = { code: code(setup.body.secret) };
+    const r = await Promise.all([1, 2, 3].map(() => api.call('POST', '/v1/me/mfa/totp/confirm', { cookie, body: corpo })));
+    const status = r.map((x) => x.status).sort();
+    expect(status.filter((s) => s === 200)).toHaveLength(1);
+    expect(status.every((s) => s < 500)).toBe(true);
+  });
+
   it('login novo: só /me e verificar antes do código; o mesmo código não vale duas vezes', async () => {
     const { email, cookie } = await signupAndLogin(api);
     const { secret } = await enable(cookie);

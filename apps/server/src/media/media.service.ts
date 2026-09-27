@@ -144,8 +144,11 @@ export class MediaService {
       last_success_at: Date | string | null;
       expected_every_minutes: number | null;
       refresh_expires_at: Date | string | null;
+      connection_id: string | null;
+      connection_provider: string | null;
     }>(sql`
-      select a.id, a.name, a.provider, a.currency, a.timezone, a.status, a.status_reason, s.last_success_at, s.expected_every_minutes, c.refresh_expires_at
+      select a.id, a.name, a.provider, a.currency, a.timezone, a.status, a.status_reason, s.last_success_at, s.expected_every_minutes, c.refresh_expires_at,
+             a.connection_id, c.provider as connection_provider
         from liame.connected_account a
         left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'metricas'
         left join liame.oauth_connection c on c.id = a.connection_id
@@ -154,6 +157,8 @@ export class MediaService {
 
     const itens: ItemAtencao[] = [];
     const frescas = new Map<string, (typeof contas.rows)[number]>();
+    // Autorização perto de vencer: um aviso por autorização (o Google cobre Ads e GA4), não um por conta.
+    const vencendo = new Map<string, { vence: number; provider: string; contas: number }>();
     for (const c of contas.rows) {
       const plataforma = nomePlataforma(c.provider);
       const base = { connected_account_id: c.id, campaign_id: null, provider: c.provider };
@@ -175,12 +180,27 @@ export class MediaService {
       } else if (f === 'fresh' && c.status === 'ativa') {
         frescas.set(c.id, c);
       }
-      if (c.refresh_expires_at) {
+      if (c.refresh_expires_at && c.connection_id) {
         const vence = new Date(c.refresh_expires_at).getTime();
         if (vence > agora.getTime() && vence - agora.getTime() <= 2 * 86_400_000) {
-          itens.push({ ...base, kind: 'reconectar_em_breve', severity: 'atencao', title: `A autorização do ${plataforma} vence logo`, detail: `Vence em ${new Date(vence).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}.`, action: 'Conecte de novo em Contas conectadas para a leitura não parar.' });
+          const atual = vencendo.get(c.connection_id);
+          vencendo.set(c.connection_id, { vence, provider: c.connection_provider ?? c.provider, contas: (atual?.contas ?? 0) + 1 });
         }
       }
+    }
+    for (const v of vencendo.values()) {
+      const quem = v.provider === 'meta' ? 'da Meta' : 'do Google';
+      const contasTxt = v.contas === 1 ? '1 conta para de ler' : `${v.contas} contas param de ler`;
+      itens.push({
+        kind: 'reconectar_em_breve',
+        severity: 'atencao',
+        title: `A autorização ${quem} vence logo`,
+        detail: `Vence em ${new Date(v.vence).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}; depois disso, ${contasTxt}.`,
+        action: 'Conecte de novo em Contas conectadas para a leitura não parar.',
+        connected_account_id: null,
+        campaign_id: null,
+        provider: v.provider,
+      });
     }
 
     // Gasto e entrega só nas contas com dado fresco (sem leitura de ontem, não há o que comparar).
