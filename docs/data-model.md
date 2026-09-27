@@ -40,6 +40,8 @@ Cada entidade tem colunas canônicas + `provider_attributes jsonb` (o que é só
 
 **Conexão (`oauth_connection`, migration 0019):** uma autorização OAuth da empresa para uma marca (`meta` ou `google`, que cobre Google Ads e GA4). Situações: `aguardando_autorizacao` → `recebida` → `processando` → `aguardando_escolha` → `ativa`; ou `erro`, `expirada`, `revogada`. O estado do OAuth fica só como hash (`state_hash`); o código e o verificador PKCE ficam cifrados com a chave da empresa até a troca; a credencial vai para o cofre (`credential_secret_id`); `discovered` guarda as contas que a autorização alcança (nome, moeda, fuso), para a pessoa escolher. `connected_account.connection_id` liga cada conta à autorização; uma conta da plataforma fica ligada a uma marca só por vez na empresa (índice único parcial sem `disconnected_at`). Tentativas que não viraram conexão saem em 90 dias.
 
+**Sincronização (G7):** `sync_state` por conta e conjunto de dados (`metricas`, `entidades`) guarda o frescor (`last_success_at` × `expected_every_minutes`), o último erro (texto nosso, sem dado da plataforma) e o `cursor` (`carga_inicial_em`, `revisao_longa_em`, `proxima`, `falhas_seguidas`); `sync_run` registra cada execução. A cada leitura, toda chave lida fica com o `observed_at` da leitura; a chave da janela que ficou para trás (a plataforma deixou de mandar) passa a valer zero com observação nova.
+
 ### 3.1 Métricas com modelo temporal
 
 As plataformas **reescrevem o passado**: uma conversão pode aparecer dias depois. Cada observação é uma linha:
