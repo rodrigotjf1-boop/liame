@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { lerDepreciacao, lerRetryAfter, lerUsoMeta } from '../src/connectors/cabecalhos.js';
-import { classificar } from '../src/connectors/cliente-http.js';
+import { classificar, enderecoLiberado } from '../src/connectors/cliente-http.js';
 
 describe('cabeçalhos das plataformas', () => {
   it('uso de cota da Meta: maior porcentagem entre as cotas e a espera pedida', () => {
@@ -34,6 +34,24 @@ describe('cabeçalhos das plataformas', () => {
       link: 'https://developers.example/versions',
     });
     expect(lerDepreciacao(new Headers())).toBeNull();
+  });
+});
+
+describe('endereços liberados', () => {
+  const meta = ['https://graph.facebook.com'];
+  it('mesma origem passa; parecido não passa', () => {
+    expect(enderecoLiberado('https://graph.facebook.com/v26.0/me/adaccounts?limit=200', meta)).toBe(true);
+    expect(enderecoLiberado('https://graph.facebook.com.outro.site/v26.0/me', meta)).toBe(false);
+    expect(enderecoLiberado('https://graph.facebook.com@outro.site/v26.0/me', meta)).toBe(false);
+    expect(enderecoLiberado('http://graph.facebook.com/v26.0/me', meta)).toBe(false);
+    expect(enderecoLiberado('https://graph.facebook.com:8443/v26.0/me', meta)).toBe(false);
+    expect(enderecoLiberado('nem-endereco', meta)).toBe(false);
+  });
+  it('com caminho na base, só abaixo dele', () => {
+    const base = ['http://127.0.0.1:4000/meta'];
+    expect(enderecoLiberado('http://127.0.0.1:4000/meta/v26.0/x', base)).toBe(true);
+    expect(enderecoLiberado('http://127.0.0.1:4000/metaoutra/v26.0/x', base)).toBe(false);
+    expect(enderecoLiberado('http://127.0.0.1:4000/outra', base)).toBe(false);
   });
 });
 

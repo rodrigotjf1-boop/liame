@@ -76,8 +76,7 @@ export class ClienteConector {
   }
 
   async requisitar<T = unknown>(p: PedidoConector): Promise<RespostaConector<T>> {
-    const liberados = this.cfg.enderecos[p.provider] ?? [];
-    if (!liberados.some((base) => p.url.startsWith(base))) {
+    if (!enderecoLiberado(p.url, this.cfg.enderecos[p.provider] ?? [])) {
       throw new ErroConector('definitivo', p.provider, `endereço fora da lista do provider ${p.provider}`);
     }
     const chave = chaveDe(p.provider, p.conta);
@@ -157,6 +156,25 @@ export class ClienteConector {
            set deprecation = excluded.deprecation, sunset = excluded.sunset, link = excluded.link, last_seen_at = now()`)
       .catch((err: unknown) => this.logger.warn(`aviso de depreciação não gravado (${p.provider}/${p.endpoint}): ${err instanceof Error ? err.message : String(err)}`));
   }
+}
+
+/**
+ * Mesma origem (esquema, host e porta) de um endereço liberado e dentro do caminho dele. Comparar só o
+ * começo do texto deixaria passar `https://graph.facebook.com.outro.site`, e o token iria junto.
+ */
+export function enderecoLiberado(url: string, liberados: string[]): boolean {
+  let alvo: URL;
+  try {
+    alvo = new URL(url);
+  } catch {
+    return false;
+  }
+  if (alvo.username || alvo.password) return false;
+  return liberados.some((base) => {
+    const b = new URL(base);
+    const caminho = b.pathname.endsWith('/') ? b.pathname : `${b.pathname}/`;
+    return alvo.origin === b.origin && (b.pathname === '/' || alvo.pathname === b.pathname || alvo.pathname.startsWith(caminho));
+  });
 }
 
 function tentarJson(texto: string): unknown {
