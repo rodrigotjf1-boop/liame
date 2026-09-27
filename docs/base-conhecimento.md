@@ -206,6 +206,11 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - no GA 360, 10×;
   - usar `returnPropertyQuota`.
   - MCP oficial experimental, só leitura.
+- **GA4 para o conector** *(verificado em 26/09/2026 nas referências REST da Data API v1beta e da Admin API v1beta)* [O]:
+  - `POST https://analyticsdata.googleapis.com/v1beta/properties/{id}:runReport` com `dateRanges`, `dimensions`, `metrics`, `limit` (padrão 10.000, máximo 250.000), `offset`, `keepEmptyRows`, `returnPropertyQuota`;
+  - a resposta traz `rows` (`dimensionValues`/`metricValues`), `rowCount`, `metadata` (`dataLossFromOtherRow`, `samplingMetadatas`, `subjectToThresholding`, `currencyCode`, `timeZone`) e `propertyQuota` (`tokensPerDay`, `tokensPerHour`, `tokensPerProjectPerHour`, `concurrentRequests`, `serverErrorsPerProjectPerHour`, `potentiallyThresholdedRequestsPerHour`, cada um com `consumed`/`remaining`);
+  - `GET https://analyticsadmin.googleapis.com/v1beta/accountSummaries` (`pageSize` até 200, `pageToken`) lista contas e `propertySummaries`; a propriedade (`properties/{id}`) tem `timeZone` e `currencyCode`;
+  - métricas `sessions`, `totalUsers`, `newUsers`, `engagedSessions` e **`keyEvents`** (o antigo "conversions") na página do esquema [O]; `ecommercePurchases`, `purchaseRevenue`, `sessionSource` e `sessionMedium` confirmados só por fonte secundária, porque a página veio cortada [S]; `date` chega como `AAAAMMDD`.
 - **Search Console:** Search Analytics a 1.200 QPM por site; URL Inspection 2.000/dia por site [S].
 - **Google Business Profile** [O]:
   - acesso **restrito**: perfil verificado há **60+ dias**, com site;

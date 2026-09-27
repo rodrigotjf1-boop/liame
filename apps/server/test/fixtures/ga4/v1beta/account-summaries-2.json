@@ -1,0 +1,11 @@
+{
+  "accountSummaries": [
+    {
+      "name": "accountSummaries/222000222", "account": "accounts/222000222", "displayName": "Casa Brasa Delivery",
+      "propertySummaries": [
+        { "property": "properties/666777888", "displayName": "Delivery - app e site", "propertyType": "PROPERTY_TYPE_ORDINARY", "parent": "accounts/222000222" },
+        { "property": "properties/999000111", "displayName": "Propriedade sem acesso", "propertyType": "PROPERTY_TYPE_ORDINARY", "parent": "accounts/222000222" }
+      ]
+    }
+  ]
+}

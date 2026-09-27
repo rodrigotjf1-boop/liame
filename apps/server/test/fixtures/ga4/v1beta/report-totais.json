@@ -1,0 +1,23 @@
+{
+  "dimensionHeaders": [{ "name": "date" }],
+  "metricHeaders": [
+    { "name": "sessions", "type": "TYPE_INTEGER" }, { "name": "totalUsers", "type": "TYPE_INTEGER" }, { "name": "newUsers", "type": "TYPE_INTEGER" },
+    { "name": "engagedSessions", "type": "TYPE_INTEGER" }, { "name": "keyEvents", "type": "TYPE_FLOAT" }, { "name": "ecommercePurchases", "type": "TYPE_INTEGER" },
+    { "name": "purchaseRevenue", "type": "TYPE_CURRENCY" }
+  ],
+  "rows": [
+    { "dimensionValues": [{ "value": "20260919" }], "metricValues": [{ "value": "310" }, { "value": "255" }, { "value": "140" }, { "value": "221" }, { "value": "31" }, { "value": "9" }, { "value": "780.40" }] },
+    { "dimensionValues": [{ "value": "20260920" }], "metricValues": [{ "value": "295" }, { "value": "240" }, { "value": "132" }, { "value": "204" }, { "value": "27" }, { "value": "7" }, { "value": "612.00" }] }
+  ],
+  "rowCount": 2,
+  "metadata": { "currencyCode": "BRL", "timeZone": "America/Sao_Paulo" },
+  "propertyQuota": {
+    "tokensPerDay": { "consumed": 12, "remaining": 199988 },
+    "tokensPerHour": { "consumed": 12, "remaining": 39988 },
+    "concurrentRequests": { "consumed": 0, "remaining": 10 },
+    "serverErrorsPerProjectPerHour": { "consumed": 0, "remaining": 10 },
+    "potentiallyThresholdedRequestsPerHour": { "consumed": 0, "remaining": 120 },
+    "tokensPerProjectPerHour": { "consumed": 12, "remaining": 13988 }
+  },
+  "kind": "analyticsData#runReport"
+}
