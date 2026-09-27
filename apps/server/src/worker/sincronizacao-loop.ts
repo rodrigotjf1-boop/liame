@@ -30,25 +30,36 @@ export class SincronizacaoLoop {
     const db = this.database.db;
     // Relógio da reserva: o do banco, ou o informado (testes e reprocessamento) — o mesmo do sincronizador.
     const referencia = agora ? sql`${agora.toISOString()}::timestamptz` : sql`now()`;
+    const elegivel = sql`a.disconnected_at is null and a.status in ('ativa', 'erro', 'sem_permissao') and a.credential_secret_id is not null`;
     const reservadas = await withSystem(db, async (tx) => {
+      // Conta nova ganha a linha de estado (devida desde sempre) antes da reserva.
+      await tx.execute(sql`
+        insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, cursor)
+        select a.id, 'metricas', a.tenant_id, ${INTERVALO_MIN}, '{}'::jsonb
+          from liame.connected_account a
+         where ${elegivel} ${tenantFilter(scope, sql`a.tenant_id`)}
+           and not exists (select 1 from liame.sync_state s where s.connected_account_id = a.id and s.dataset = 'metricas')
+        on conflict (connected_account_id, dataset) do nothing`);
+      // A trava é na MESMA linha que a reserva muda (sync_state): quem chegar depois, com a foto antiga,
+      // tem a condição reconferida na versão nova e não pega a conta de novo (ERR-029). CTE materializada
+      // para o LIMIT valer uma vez só (LIC-069).
       const r = await tx.execute<{ id: string; tenant_id: string }>(sql`
-        with devidas as (
-          select a.id, a.tenant_id
-            from liame.connected_account a
-            left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'metricas'
-           where a.disconnected_at is null and a.status in ('ativa', 'erro', 'sem_permissao') and a.credential_secret_id is not null
+        with devidas as materialized (
+          select s.connected_account_id
+            from liame.sync_state s
+            join liame.connected_account a on a.id = s.connected_account_id
+           where s.dataset = 'metricas' and ${elegivel}
              and coalesce((s.cursor->>'proxima')::timestamptz, '-infinity'::timestamptz) <= ${referencia}
              ${tenantFilter(scope, sql`a.tenant_id`)}
            order by coalesce((s.cursor->>'proxima')::timestamptz, '-infinity'::timestamptz)
            limit ${limite}
-           for update of a skip locked
+           for update of s skip locked
         )
-        insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, last_attempt_at, cursor)
-        select d.id, 'metricas', d.tenant_id, ${INTERVALO_MIN}, now(), jsonb_build_object('proxima', ${referencia} + ${RESERVA}::interval)
+        update liame.sync_state s
+           set last_attempt_at = now(), cursor = s.cursor || jsonb_build_object('proxima', ${referencia} + ${RESERVA}::interval), updated_at = now()
           from devidas d
-        on conflict (connected_account_id, dataset) do update
-           set last_attempt_at = now(), cursor = liame.sync_state.cursor || jsonb_build_object('proxima', ${referencia} + ${RESERVA}::interval), updated_at = now()
-        returning connected_account_id as id, tenant_id`);
+         where s.connected_account_id = d.connected_account_id and s.dataset = 'metricas'
+        returning s.connected_account_id as id, s.tenant_id`);
       return r.rows;
     });
     const sincronizador = new Sincronizador(db, this.vault, this.config);
