@@ -121,3 +121,31 @@ export async function metricasEm(tx: Tx, contaId: string, metricDate: string, as
      order by level, external_entity_id, metric_name, attribution_window, observed_at desc, id desc`);
   return r.rows;
 }
+
+/**
+ * Zera o que a plataforma deixou de devolver na janela relida por inteiro: a Meta e o GA4 omitem a
+ * linha quando o número vira zero (conversão reatribuída, por exemplo). Toda chave lida nesta execução
+ * ficou com `observed_at` = a hora da leitura; a que ficou para trás, dentro da janela e diferente de
+ * zero, passa a valer zero, com observação nova (o "antes" continua consultável). Só depois de a
+ * janela inteira ter sido lida sem erro.
+ */
+export async function zerarAusentes(tx: Tx, ctx: ContextoMetricas & { observedAt: Date }, janela: { inicio: string; fim: string }): Promise<number> {
+  const r = await tx.execute<{ level: NivelMetrica; external_entity_id: string; entity_id: string | null; metric_date: string; metric_name: string; attribution_window: string }>(sql`
+    select level, external_entity_id, entity_id, metric_date::text as metric_date, metric_name, attribution_window
+      from liame.metric_latest
+     where connected_account_id = ${ctx.connectedAccountId}
+       and metric_date between ${janela.inicio}::date and ${janela.fim}::date
+       and observed_at < ${ctx.observedAt.toISOString()}::timestamptz
+       and metric_value <> 0`);
+  if (!r.rows.length) return 0;
+  const zeros: PontoMetrica[] = r.rows.map((l) => ({
+    level: l.level,
+    externalEntityId: l.external_entity_id,
+    entityId: l.entity_id,
+    metricDate: l.metric_date,
+    metricName: l.metric_name,
+    attributionWindow: l.attribution_window,
+    value: 0,
+  }));
+  return (await gravarMetricas(tx, ctx, zeros)).novas;
+}

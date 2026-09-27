@@ -67,6 +67,8 @@ const PADRAO = { tempoLimiteMs: 30_000, tentativas: 3, balde: { capacidade: 60, 
 export class ClienteConector {
   private readonly logger = new Logger('conectores');
   private readonly cfg: Required<ConfigCliente>;
+  /** Chamadas que saíram por este cliente (um cliente por execução de sincronização: vai para o sync_run). */
+  chamadas = 0;
 
   constructor(
     private readonly db: Db,
@@ -91,6 +93,7 @@ export class ClienteConector {
 
       let resposta: Response;
       try {
+        this.chamadas++;
         resposta = await fetch(p.url, {
           method: p.metodo ?? 'GET',
           headers: { accept: 'application/json', ...(p.corpo === undefined ? {} : { 'content-type': 'application/json' }), ...p.cabecalhos },

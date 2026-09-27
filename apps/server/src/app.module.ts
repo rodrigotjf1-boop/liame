@@ -12,6 +12,8 @@ import { FlagService } from './flags/flag.service.js';
 import { OfrepController } from './flags/ofrep.controller.js';
 import { HealthController } from './health/health.controller.js';
 import { LifecycleController } from './lifecycle/lifecycle.controller.js';
+import { MediaController } from './media/media.controller.js';
+import { MediaService } from './media/media.service.js';
 import { LifecycleService } from './lifecycle/lifecycle.service.js';
 import { InboxController } from './inbox/inbox.controller.js';
 import { InboxService } from './inbox/inbox.service.js';
@@ -28,7 +30,7 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
-  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService, LifecycleService, ConnectionsService],
+  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService, LifecycleService, ConnectionsService, MediaService],
 })
 export class AppModule {}

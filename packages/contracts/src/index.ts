@@ -107,3 +107,12 @@ export {
   StartConnectionRequest,
   StartConnectionResponse,
 } from './connections.js';
+export {
+  AccountFreshness,
+  DatasetFreshness,
+  MediaFreshnessQuery,
+  MediaFreshnessResponse,
+  MediaMetricPoint,
+  MediaMetricsQuery,
+  MediaMetricsResponse,
+} from './media.js';
