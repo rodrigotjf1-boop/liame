@@ -274,7 +274,7 @@ Protótipo navegável: `mockups/prototipo-entrada.html` (a barra do topo escolhe
 
 ### 10.3 Para o dono decidir
 
-> **26/09/2026:** itens 1, 3 e 4 aprovados, 5 autorizado; o 2 aguarda a comparação (`mockups/previas/painel-lia-comparacao.png` e o seletor "Painel da LIA" no protótipo).
+> **26/09/2026:** itens 1, 3 e 4 aprovados, 5 autorizado. **27/09/2026:** item 2 aprovado (palco sempre Noite, também no tema claro: já é o padrão do código, `PALCO = 'noite'`) e o protótipo do item 5 ("Segurança da conta", `mockups/prototipo-seguranca.html`) aprovado.
 
 1. **Caminho B** com a LIA 3D no palco (e o avatar 2D no celular).
 2. **Palco sempre Noite**, também no tema claro (a LIA e a marca se destacam mais no escuro).
@@ -299,6 +299,8 @@ a tela e a situação). A API já existe: `/v1/connections` (G3), `/v1/media/fre
 - Verificado no Chrome sem janela: 1440, 1024, 768 e 375 px, claro e escuro, 6 situações: sem rolagem horizontal,
   sem botão sem nome, sem erro de console; diálogos, filtros (`aria-pressed`), confirmação na linha e gaveta do
   celular (foco entra e volta, Esc fecha).
+
+> **27/09/2026: aprovado pelo dono**, com a recomendação do item 2: os avisos de mídia entram como cartões na home "Atenção" (Pro) e no Resumo (Lite), e a tela "Atenção de mídia" fica como "ver todos". Enquanto a home não existe no app, a tela própria é a entrada pelo menu.
 
 **Para o dono decidir:**
 
