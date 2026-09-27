@@ -78,3 +78,28 @@ export const MediaMetricsResponse = z.strictObject({
   has_more: z.boolean(),
 });
 export type MediaMetricsResponse = z.infer<typeof MediaMetricsResponse>;
+
+export const MediaAttentionQuery = z.strictObject({ brand_id: z.uuid().optional() });
+export type MediaAttentionQuery = z.infer<typeof MediaAttentionQuery>;
+
+export const AttentionItem = z.strictObject({
+  /** `conta_desconectada`, `conta_sem_permissao`, `conta_com_erro`, `dado_atrasado`, `reconectar_em_breve`, `gasto_fora_do_normal`, `campanha_parou` ou `versao_api`. */
+  kind: Slug,
+  /** `critica`, `atencao` ou `info`. */
+  severity: Slug,
+  title: z.string(),
+  detail: z.string(),
+  /** O que fazer, em uma frase. */
+  action: z.string(),
+  connected_account_id: z.uuid().nullable(),
+  campaign_id: z.uuid().nullable(),
+  provider: Slug.nullable(),
+});
+export type AttentionItem = z.infer<typeof AttentionItem>;
+
+export const MediaAttentionResponse = z.strictObject({
+  /** Mais grave primeiro. */
+  items: z.array(AttentionItem),
+  generated_at: z.string(),
+});
+export type MediaAttentionResponse = z.infer<typeof MediaAttentionResponse>;

@@ -1,9 +1,11 @@
-import type { AccountFreshness, MediaFreshnessResponse, MediaMetricsQuery, MediaMetricsResponse } from '@liame/contracts';
+import type { AccountFreshness, MediaAttentionResponse, MediaFreshnessResponse, MediaMetricsQuery, MediaMetricsResponse } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
+import { campanhaParou, gastoForaDoNormal, type ItemAtencao, nomePlataforma, ordenar } from './atencao.js';
 import { frescor } from './frescor.js';
+import { hojeNoFuso } from './sincronizador.js';
 
 // Leitura dos dados de mídia (A2, G7): tudo na transação da requisição, sob a RLS da empresa.
 
@@ -121,5 +123,141 @@ export class MediaService {
       })),
       has_more: r.rows.length > q.limit,
     };
+  }
+
+  /**
+   * "Atenção de mídia": o que precisa de alguém agora, calculado na hora sobre os dados da empresa
+   * (A2, G9). Conta que não lê, dado atrasado, autorização perto de vencer, gasto fora do normal,
+   * campanha que parou de entregar e versão de API que a plataforma vai desligar.
+   */
+  async atencao(brandId: string | undefined, agora = new Date()): Promise<MediaAttentionResponse> {
+    const tx = currentTx();
+    const marca = brandId ? sql`and a.brand_id = ${brandId}` : sql``;
+    const contas = await tx.execute<{
+      id: string;
+      name: string;
+      provider: string;
+      currency: string | null;
+      timezone: string | null;
+      status: string;
+      status_reason: string | null;
+      last_success_at: Date | string | null;
+      expected_every_minutes: number | null;
+      refresh_expires_at: Date | string | null;
+    }>(sql`
+      select a.id, a.name, a.provider, a.currency, a.timezone, a.status, a.status_reason, s.last_success_at, s.expected_every_minutes, c.refresh_expires_at
+        from liame.connected_account a
+        left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'metricas'
+        left join liame.oauth_connection c on c.id = a.connection_id
+       where a.disconnected_at is null ${marca}
+       order by a.name, a.id`);
+
+    const itens: ItemAtencao[] = [];
+    const frescas = new Map<string, (typeof contas.rows)[number]>();
+    for (const c of contas.rows) {
+      const plataforma = nomePlataforma(c.provider);
+      const base = { connected_account_id: c.id, campaign_id: null, provider: c.provider };
+      if (c.status === 'desconectada') {
+        itens.push({ ...base, kind: 'conta_desconectada', severity: 'critica', title: `${c.name} está desconectada`, detail: c.status_reason ?? `A ${plataforma} recusou a autorização.`, action: `Conecte o ${plataforma} de novo em Contas conectadas.` });
+        continue;
+      }
+      if (c.status === 'sem_permissao') {
+        itens.push({ ...base, kind: 'conta_sem_permissao', severity: 'atencao', title: `Sem permissão para ler ${c.name}`, detail: c.status_reason ?? 'Falta permissão na plataforma.', action: `Peça a quem administra a conta no ${plataforma} para liberar o acesso de leitura.` });
+        continue;
+      }
+      if (c.status === 'erro') {
+        itens.push({ ...base, kind: 'conta_com_erro', severity: 'atencao', title: `A leitura de ${c.name} está falhando`, detail: c.status_reason ?? 'A última leitura falhou.', action: 'Nada a fazer por enquanto: tentamos de novo sozinhos. Se continuar amanhã, fale com o suporte.' });
+      }
+      const f = frescor({ lastSuccessAt: c.last_success_at, expectedEveryMinutes: c.expected_every_minutes ?? 1440 }, agora);
+      if (f === 'delayed' || f === 'stale') {
+        const quando = c.last_success_at ? new Date(c.last_success_at).toLocaleString('pt-BR', { timeZone: c.timezone ?? 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }) : 'nunca';
+        itens.push({ ...base, kind: 'dado_atrasado', severity: f === 'stale' ? 'critica' : 'atencao', title: `Os números de ${c.name} estão atrasados`, detail: `Última leitura completa: ${quando}.`, action: 'Os números desta conta podem não refletir hoje; confira na plataforma antes de decidir.' });
+      } else if (f === 'fresh' && c.status === 'ativa') {
+        frescas.set(c.id, c);
+      }
+      if (c.refresh_expires_at) {
+        const vence = new Date(c.refresh_expires_at).getTime();
+        if (vence > agora.getTime() && vence - agora.getTime() <= 2 * 86_400_000) {
+          itens.push({ ...base, kind: 'reconectar_em_breve', severity: 'atencao', title: `A autorização do ${plataforma} vence logo`, detail: `Vence em ${new Date(vence).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}.`, action: 'Conecte de novo em Contas conectadas para a leitura não parar.' });
+        }
+      }
+    }
+
+    // Gasto e entrega só nas contas com dado fresco (sem leitura de ontem, não há o que comparar).
+    if (frescas.size) {
+      const ids = [...frescas.keys()];
+      // Recorte pelo relógio da operação, não pelo current_date do banco (V34).
+      const diaDeReferencia = agora.toISOString().slice(0, 10);
+      const gastos = await tx.execute<{ conta: string; dia: string; valor: string }>(sql`
+        select l.connected_account_id as conta, l.metric_date::text as dia, sum(l.metric_value)::text as valor
+          from liame.metric_latest l join liame.connected_account a on a.id = l.connected_account_id
+         where l.connected_account_id in ${ids} and l.metric_name = 'spend' and l.attribution_window = ''
+           and l.metric_date >= ${diaDeReferencia}::date - 17
+           and ((a.provider = 'google_ads' and l.level = 'campaign') or (a.provider = 'meta_ads' and l.level = 'ad'))
+         group by 1, 2`);
+      const porConta = new Map<string, Map<string, number>>();
+      for (const g of gastos.rows) {
+        if (!porConta.has(g.conta)) porConta.set(g.conta, new Map());
+        porConta.get(g.conta)!.set(g.dia, Number(g.valor));
+      }
+      for (const [id, dias] of porConta) {
+        const c = frescas.get(id)!;
+        const ontem = new Date(Date.parse(`${hojeNoFuso(agora, c.timezone)}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+        const item = gastoForaDoNormal({ id, name: c.name, provider: c.provider, currency: c.currency }, dias, ontem);
+        if (item) itens.push(item);
+      }
+
+      const impressoes = await tx.execute<{ campanha: string; nome: string; conta: string; provider: string; dia: string; valor: string }>(sql`
+        select c.id as campanha, c.name as nome, c.connected_account_id as conta, c.provider, x.dia, sum(x.valor)::text as valor from (
+          select g.campaign_id, l.metric_date::text as dia, l.metric_value as valor
+            from liame.metric_latest l
+            join liame.ad on ad.id = l.entity_id
+            join liame.ad_group g on g.id = ad.ad_group_id
+           where l.connected_account_id in ${ids} and l.level = 'ad' and l.provider = 'meta_ads' and l.metric_name = 'impressions'
+             and l.metric_date >= ${diaDeReferencia}::date - 10
+          union all
+          select l.entity_id, l.metric_date::text, l.metric_value
+            from liame.metric_latest l
+           where l.connected_account_id in ${ids} and l.level = 'campaign' and l.provider = 'google_ads' and l.metric_name = 'impressions'
+             and l.metric_date >= ${diaDeReferencia}::date - 10
+        ) x join liame.campaign c on c.id = x.campaign_id
+         where c.status = 'ativa'
+         group by 1, 2, 3, 4, 5`);
+      const porCampanha = new Map<string, { nome: string; conta: string; provider: string; dias: Map<string, number> }>();
+      for (const i of impressoes.rows) {
+        if (!porCampanha.has(i.campanha)) porCampanha.set(i.campanha, { nome: i.nome, conta: i.conta, provider: i.provider, dias: new Map() });
+        porCampanha.get(i.campanha)!.dias.set(i.dia, Number(i.valor));
+      }
+      for (const [id, c] of porCampanha) {
+        const conta = frescas.get(c.conta)!;
+        const ontem = new Date(Date.parse(`${hojeNoFuso(agora, conta.timezone)}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+        const item = campanhaParou({ id, name: c.nome, connectedAccountId: c.conta, provider: c.provider }, c.dias, ontem);
+        if (item) itens.push(item);
+      }
+    }
+
+    // Versão de API que a plataforma vai desligar (Vigia): só das plataformas que a empresa usa. O Liame migra.
+    const provedores = [...new Set(contas.rows.map((c) => c.provider))];
+    if (provedores.length) {
+      const versoes = await tx.execute<{ provider: string; api_version: string; kind: string; due_date: string | null }>(sql`
+        select distinct on (provider, api_version) provider, api_version, kind, due_date::text as due_date
+          from liame.watch_alert
+         where resolved_at is null and kind in ('versao_expirando', 'versao_expirada') and provider in ${provedores}
+         order by provider, api_version, created_at desc`);
+      for (const v of versoes.rows) {
+        const data = v.due_date ? `${v.due_date.slice(8, 10)}/${v.due_date.slice(5, 7)}/${v.due_date.slice(0, 4)}` : 'em breve';
+        itens.push({
+          kind: 'versao_api',
+          severity: 'info',
+          title: `A ${nomePlataforma(v.provider)} ${v.kind === 'versao_expirada' ? 'desligou' : 'vai desligar'} a versão ${v.api_version} da API`,
+          detail: `Data de fim: ${data}.`,
+          action: 'Nada a fazer: o Liame atualiza a integração antes.',
+          connected_account_id: null,
+          campaign_id: null,
+          provider: v.provider,
+        });
+      }
+    }
+    return { items: ordenar(itens), generated_at: agora.toISOString() };
   }
 }

@@ -17,6 +17,7 @@ describe.skipIf(!hasDb)('vigia de integrações', () => {
   const PROVIDER = `teste_vigia_${marca}`;
   const fonteBoa = { id: randomUUID(), url: `https://developers.google.com/teste-vigia/${marca}/changelog` };
   const fonteRuim = { id: randomUUID(), url: `https://developers.facebook.com/teste-vigia/${marca}/fora` };
+  const inicio = new Date();
   let paginaBoa = '<h2>v1</h2><p>Primeira versão.</p><h2>Limites</h2><p>100 por hora.</p>';
 
   const buscar = async (url: string) => {
@@ -42,7 +43,8 @@ describe.skipIf(!hasDb)('vigia de integrações', () => {
   });
   afterAll(async () => {
     await ownerQuery(`delete from liame.watch_source where provider = $1`, [PROVIDER]);
-    await ownerQuery(`delete from liame.watch_alert where provider = $1`, [PROVIDER]);
+    // Alertas que a rotina criou durante o teste (inclusive das versões reais, a partir de avisos que outros testes gravam).
+    await ownerQuery(`delete from liame.watch_alert where provider = $1 or created_at >= $2`, [PROVIDER, inicio.toISOString()]);
     await ownerQuery(`delete from liame.api_deprecation_notice where provider = $1`, [PROVIDER]);
     await ownerQuery(`delete from liame.connector_capability where provider = $1`, [PROVIDER]);
     await database?.close();

@@ -11537,6 +11537,178 @@
         ]
       }
     },
+    "/v1/media/attention": {
+      "get": {
+        "description": "O que precisa de alguém agora, mais grave primeiro: conta desconectada ou sem permissão, dado atrasado, autorização perto de vencer, gasto fora do normal, campanha que parou de entregar e versão de API que a plataforma vai desligar. Calculado na hora, com o motivo e o que fazer.",
+        "operationId": "MediaController_attention",
+        "parameters": [
+          {
+            "name": "brand_id",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "severity": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "string"
+                          },
+                          "connected_account_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "campaign_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "provider": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z0-9_]+$"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "severity",
+                          "title",
+                          "detail",
+                          "action",
+                          "connected_account_id",
+                          "campaign_id",
+                          "provider"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "generated_at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "generated_at"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Atenção de mídia",
+        "tags": [
+          "media"
+        ]
+      }
+    },
     "/v1/media/metrics": {
       "get": {
         "description": "Último valor de cada métrica por dia (no fuso da conta), nível e janela de atribuição, cada ponto com o frescor da fonte. Período de até 92 dias; `has_more` indica mais páginas (`offset`).",

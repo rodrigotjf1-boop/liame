@@ -109,7 +109,10 @@ export {
 } from './connections.js';
 export {
   AccountFreshness,
+  AttentionItem,
   DatasetFreshness,
+  MediaAttentionQuery,
+  MediaAttentionResponse,
   MediaFreshnessQuery,
   MediaFreshnessResponse,
   MediaMetricPoint,
