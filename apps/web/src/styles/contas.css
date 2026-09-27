@@ -45,6 +45,21 @@
 .escolha--ligada { opacity: .7; cursor: default; }
 .escolha:has(input:focus-visible) { box-shadow: var(--focus-ring); }
 
+/* ===== Atenção de mídia (mesmo protótipo): do mais grave ao menos grave ===== */
+.avisos-midia { display: grid; gap: var(--sp-3); }
+.aviso-midia { gap: var(--sp-2); border-left: 4px solid var(--sev-cor, var(--border)); }
+.aviso-midia[data-sev="critica"] { --sev-cor: var(--danger); }
+.aviso-midia[data-sev="atencao"] { --sev-cor: var(--warning); }
+.aviso-midia[data-sev="info"] { --sev-cor: var(--link); }
+.aviso-topo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.aviso-titulo { font-size: var(--text-md); overflow-wrap: anywhere; }
+.aviso-det { color: var(--text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.aviso-fazer { font-size: var(--text-sm); }
+.sev { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; }
+.sev--critica { background: var(--danger-soft); color: var(--danger); }
+.sev--atencao { background: var(--warning-soft); color: var(--warning); }
+.sev--info { background: var(--primary-soft); color: var(--link); }
+
 /* celular: a tabela vira cartões */
 @container pagina (max-width: 760px) {
   .autorizacoes { grid-template-columns: minmax(0, 1fr); }

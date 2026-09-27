@@ -6,6 +6,7 @@ import { Simbolo } from '@/components/marca/logo';
 import { AvisosProvider } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
+import { ContadorAtencaoProvider } from '@/lib/contador-atencao';
 import { useSessao } from '@/lib/sessao';
 import { MenuLateral } from './menu-lateral';
 import { rotaPessoal, tituloDa } from './navegacao';
@@ -58,50 +59,52 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <AvisosProvider>
-      <a className="skip-link" href="#conteudo">
-        Pular para o conteúdo
-      </a>
-      <div className={`app${gaveta ? ' gaveta' : ''}`}>
-        <MenuLateral id="menu-lateral" aoFechar={fecharGaveta} />
-        {gaveta && <div className="veu" onClick={fecharGaveta} aria-hidden="true" />}
-        <div className="principal" inert={gaveta}>
-          <header className="topbar">
-            <button
-              ref={botaoMenu}
-              className="btn btn--ghost btn--icon tb-menu"
-              type="button"
-              onClick={() => setGaveta(true)}
-              aria-controls="menu-lateral"
-              aria-expanded={gaveta}
-              aria-label="Abrir menu"
-            >
-              <Icone nome="menu" />
-            </button>
-            <Simbolo className="tb-logo" rotulo={false} />
-            <div className="trilha">
-              {pai && <span className="trilha-pai">{pai}</span>}
-              {pai && (
-                <span className="trilha-sep" aria-hidden="true">
-                  /
-                </span>
-              )}
-              <strong>{titulo}</strong>
-            </div>
-            <div className="spacer" />
-          </header>
-          <main id="conteudo" className="conteudo" tabIndex={-1}>
-            <div className="pagina">
-              {empresa || pessoal ? (
-                children
-              ) : (
-                <Estado icone="lock" titulo="Você ainda não tem acesso a uma empresa">
-                  Quando alguém convidar você, o convite chega por e-mail e a empresa aparece aqui.
-                </Estado>
-              )}
-            </div>
-          </main>
+      <ContadorAtencaoProvider>
+        <a className="skip-link" href="#conteudo">
+          Pular para o conteúdo
+        </a>
+        <div className={`app${gaveta ? ' gaveta' : ''}`}>
+          <MenuLateral id="menu-lateral" aoFechar={fecharGaveta} />
+          {gaveta && <div className="veu" onClick={fecharGaveta} aria-hidden="true" />}
+          <div className="principal" inert={gaveta}>
+            <header className="topbar">
+              <button
+                ref={botaoMenu}
+                className="btn btn--ghost btn--icon tb-menu"
+                type="button"
+                onClick={() => setGaveta(true)}
+                aria-controls="menu-lateral"
+                aria-expanded={gaveta}
+                aria-label="Abrir menu"
+              >
+                <Icone nome="menu" />
+              </button>
+              <Simbolo className="tb-logo" rotulo={false} />
+              <div className="trilha">
+                {pai && <span className="trilha-pai">{pai}</span>}
+                {pai && (
+                  <span className="trilha-sep" aria-hidden="true">
+                    /
+                  </span>
+                )}
+                <strong>{titulo}</strong>
+              </div>
+              <div className="spacer" />
+            </header>
+            <main id="conteudo" className="conteudo" tabIndex={-1}>
+              <div className="pagina">
+                {empresa || pessoal ? (
+                  children
+                ) : (
+                  <Estado icone="lock" titulo="Você ainda não tem acesso a uma empresa">
+                    Quando alguém convidar você, o convite chega por e-mail e a empresa aparece aqui.
+                  </Estado>
+                )}
+              </div>
+            </main>
+          </div>
         </div>
-      </div>
+      </ContadorAtencaoProvider>
     </AvisosProvider>
   );
 }

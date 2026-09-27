@@ -8,6 +8,7 @@ import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
+import { useContadorAtencao } from '@/lib/contador-atencao';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
 import { CartaoAutorizacao } from './cartao-autorizacao';
@@ -38,6 +39,8 @@ const MAX_TENTATIVAS = 45;
 export function ContasTela() {
   const { empresa, pode } = useSessao();
   const avisar = useAvisar();
+  // Ligar, desligar e revogar mudam os avisos de mídia: o número do menu é lido de novo.
+  const { recarregar: recarregarAvisos } = useContadorAtencao();
   const router = useRouter();
   const params = useSearchParams();
   const volta = useMemo(() => lerVolta(params), [params]);
@@ -171,6 +174,7 @@ export function ContasTela() {
       return false;
     }
     avisar('Conta desligada. O histórico de números fica.');
+    recarregarAvisos();
     await carregar();
     titulo.current?.focus({ preventScroll: true });
     return true;
@@ -343,6 +347,7 @@ export function ContasTela() {
           aoLigar={(texto) => {
             avisar(texto);
             limparVolta();
+            recarregarAvisos();
             disparar(carregar());
           }}
         />
@@ -354,6 +359,7 @@ export function ContasTela() {
           aoFechar={() => setDialogo(null)}
           aoRevogar={() => {
             avisar('Autorização revogada. A leitura das contas dela parou.');
+            recarregarAvisos();
             disparar(carregar());
           }}
         />

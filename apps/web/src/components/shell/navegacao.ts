@@ -12,6 +12,8 @@ export type ItemNav = {
   icone: NomeIcone;
   /** Sem permissão = tela da própria pessoa (Segurança da conta). */
   permissao?: string;
+  /** Mostra ao lado o número de avisos de mídia (crítico + atenção). */
+  contador?: 'atencao';
 };
 export type GrupoNav = { id: string; rotulo: string; pessoal?: boolean; itens: ItemNav[] };
 
@@ -20,6 +22,7 @@ export const NAVEGACAO: GrupoNav[] = [
     id: 'agencia',
     rotulo: 'Agência',
     itens: [
+      { href: '/atencao', rotulo: 'Atenção', titulo: 'Atenção de mídia', icone: 'atencao', permissao: 'campanhas.ver', contador: 'atencao' },
       { href: '/contas', rotulo: 'Contas conectadas', icone: 'plug', permissao: 'contas.ver' },
       { href: '/pessoas', rotulo: 'Pessoas e acessos', icone: 'user-plus', permissao: 'pessoas.ver' },
     ],

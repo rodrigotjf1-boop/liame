@@ -7,6 +7,8 @@ import { Icone } from '@/components/ui/icone';
 import { iniciais } from '@/lib/formato';
 import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
+import { avisosFalados } from '@/components/atencao/textos';
+import { useContadorAtencao } from '@/lib/contador-atencao';
 import { BotaoTema } from './botao-tema';
 import { itemAtual, NAVEGACAO } from './navegacao';
 import { SeletorEmpresa } from './seletor-empresa';
@@ -14,6 +16,7 @@ import { disparar } from '@/lib/disparar';
 
 export function MenuLateral({ id, aoFechar }: { id: string; aoFechar: () => void }) {
   const { me, empresa, pode, sair } = useSessao();
+  const contador = useContadorAtencao();
   const caminho = usePathname();
 
   return (
@@ -40,12 +43,27 @@ export function MenuLateral({ id, aoFechar }: { id: string; aoFechar: () => void
               <ul className="nav-lista" aria-labelledby={`g-${grupo.id}`}>
                 {itens.map((item) => {
                   const atual = itemAtual(caminho, item.href);
+                  const n = item.contador === 'atencao' ? (contador.total ?? 0) : 0;
                   return (
                     <li key={item.href}>
-                      <Link className="nav-item" href={item.href} aria-current={atual ? 'page' : undefined} title={item.rotulo} onClick={aoFechar}>
+                      <Link
+                        className="nav-item"
+                        href={item.href}
+                        aria-current={atual ? 'page' : undefined}
+                        title={n ? `${item.rotulo}${avisosFalados(n)}` : item.rotulo}
+                        onClick={aoFechar}
+                      >
                         {atual && <span className="nav-no" aria-hidden="true" />}
                         <Icone nome={item.icone} />
                         <span className="rot">{item.rotulo}</span>
+                        {n > 0 && (
+                          <>
+                            <span className="sr-only">{avisosFalados(n)}</span>
+                            <span className="nav-cont num" aria-hidden="true">
+                              {n > 99 ? '99+' : n}
+                            </span>
+                          </>
+                        )}
                       </Link>
                     </li>
                   );
