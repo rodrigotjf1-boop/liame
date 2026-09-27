@@ -8,17 +8,21 @@ import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { useSessao } from '@/lib/sessao';
 import { MenuLateral } from './menu-lateral';
-import { tituloDa } from './navegacao';
+import { rotaPessoal, tituloDa } from './navegacao';
 
 // Shell do app logado (protótipo aprovado §3): menu lateral, trilho no tablet e gaveta no celular.
 // O conteúdo rola; o shell não.
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { empresa } = useSessao();
+  const { me, empresa } = useSessao();
   const caminho = usePathname();
   const [gaveta, setGaveta] = useState(false);
   const botaoMenu = useRef<HTMLButtonElement>(null);
   const titulo = tituloDa(caminho);
+  // Telas da própria pessoa (Segurança da conta) valem para todas as empresas: abrem sem empresa ativa
+  // e a trilha começa pelo nome dela, como no protótipo.
+  const pessoal = rotaPessoal(caminho);
+  const pai = pessoal ? me.user.name : (empresa?.name ?? null);
 
   const abriu = useRef(false);
   const fecharGaveta = useCallback(() => setGaveta(false), []);
@@ -75,8 +79,8 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
             <Simbolo className="tb-logo" rotulo={false} />
             <div className="trilha">
-              {empresa && <span className="trilha-pai">{empresa.name}</span>}
-              {empresa && (
+              {pai && <span className="trilha-pai">{pai}</span>}
+              {pai && (
                 <span className="trilha-sep" aria-hidden="true">
                   /
                 </span>
@@ -87,7 +91,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </header>
           <main id="conteudo" className="conteudo" tabIndex={-1}>
             <div className="pagina">
-              {empresa ? (
+              {empresa || pessoal ? (
                 children
               ) : (
                 <Estado icone="lock" titulo="Você ainda não tem acesso a uma empresa">

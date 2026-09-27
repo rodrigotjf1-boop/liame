@@ -8,7 +8,7 @@ import { iniciais } from '@/lib/formato';
 import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
 import { BotaoTema } from './botao-tema';
-import { NAVEGACAO } from './navegacao';
+import { itemAtual, NAVEGACAO } from './navegacao';
 import { SeletorEmpresa } from './seletor-empresa';
 import { disparar } from '@/lib/disparar';
 
@@ -30,7 +30,7 @@ export function MenuLateral({ id, aoFechar }: { id: string; aoFechar: () => void
 
       <nav aria-label="Principal">
         {NAVEGACAO.map((grupo) => {
-          const itens = grupo.itens.filter((i) => pode(i.permissao));
+          const itens = grupo.itens.filter((i) => !i.permissao || pode(i.permissao));
           if (!itens.length) return null;
           return (
             <div className="nav-grupo" key={grupo.id}>
@@ -39,7 +39,7 @@ export function MenuLateral({ id, aoFechar }: { id: string; aoFechar: () => void
               </p>
               <ul className="nav-lista" aria-labelledby={`g-${grupo.id}`}>
                 {itens.map((item) => {
-                  const atual = caminho === item.href || caminho.startsWith(`${item.href}/`);
+                  const atual = itemAtual(caminho, item.href);
                   return (
                     <li key={item.href}>
                       <Link className="nav-item" href={item.href} aria-current={atual ? 'page' : undefined} title={item.rotulo} onClick={aoFechar}>

@@ -1,0 +1,33 @@
+/* ===== Segurança da conta (mockups/prototipo-seguranca.html) ===== */
+.seg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); align-items: start; }
+.seg-largo { margin-top: var(--sp-4); }
+.seg-txt { font-size: var(--text-sm); color: var(--text-muted); }
+.seg-txt b { color: var(--text); }
+.seg-num { font-size: var(--text-lg); font-weight: 600; }
+.seg-num .mono { font-size: var(--text-2xl); }
+.aviso-seg { display: grid; gap: 2px; margin-bottom: var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); font-size: var(--text-sm); }
+.aviso-seg--atencao { background: var(--warning-soft); color: var(--text); }
+.aparelhos { display: grid; }
+.aparelho { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.aparelho:last-child { border-bottom: 0; }
+.ap-ic { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--bg-subtle); font-family: var(--font-mono); font-size: 10px; font-weight: 600; }
+.ap-txt { min-width: 0; }
+.ap-nome { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-weight: 600; }
+.ap-meta { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.aparelho .seg-acoes { margin-top: 0; }
+.tabela-atividade td:not(:first-child) { white-space: normal; min-width: 150px; }
+
+/* diálogos da tela: códigos novos e troca do app (peças da ativação na entrada) */
+.seg-codigos { display: grid; gap: var(--sp-3); }
+.seg-ok { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--success-soft); color: var(--success); font-size: var(--text-sm); font-weight: 500; }
+.seg-ok .ic { flex: none; margin-top: 2px; }
+.dialogo .check { align-items: flex-start; }
+.dialogo .check input { flex: none; margin-top: 2px; }
+
+@container pagina (max-width: 999px) {
+  .seg-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@container pagina (max-width: 560px) {
+  .aparelho { grid-template-columns: 44px minmax(0, 1fr); }
+  .aparelho > .btn, .aparelho > .seg-acoes { grid-column: 2; justify-self: start; }
+}
