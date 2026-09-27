@@ -31,7 +31,14 @@ export type EntidadesLidas = {
   creatives: { externalId: string; name: string | null; kind: string | null; thumbnailUrl: string | null; providerAttributes?: Record<string, unknown> }[];
 };
 
-export type ContextoConta = { credencial: Credencial; externalId: string; timezone: string | null; currency: string | null };
+export type ContextoConta = {
+  credencial: Credencial;
+  externalId: string;
+  timezone: string | null;
+  currency: string | null;
+  /** Google Ads: conta gerente pela qual o acesso passa (cabeçalho `login-customer-id`). */
+  loginCustomerId?: string | null;
+};
 
 export interface ConectorLeitura {
   readonly provider: ProviderId;

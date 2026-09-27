@@ -1,0 +1,9 @@
+[
+  {
+    "results": [
+      { "customerClient": { "resourceName": "customers/5556667778/customerClients/5556667778", "id": "5556667778", "descriptiveName": "Casa Brasa Loja 2", "currencyCode": "BRL", "timeZone": "America/Sao_Paulo", "manager": false, "level": "0", "status": "ENABLED" } }
+    ],
+    "fieldMask": "customerClient.id,customerClient.descriptiveName,customerClient.currencyCode,customerClient.timeZone,customerClient.manager,customerClient.level,customerClient.status",
+    "requestId": "req-cc-2"
+  }
+]

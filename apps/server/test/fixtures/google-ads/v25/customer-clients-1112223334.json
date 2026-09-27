@@ -1,0 +1,11 @@
+[
+  {
+    "results": [
+      { "customerClient": { "resourceName": "customers/1112223334/customerClients/1112223334", "id": "1112223334", "descriptiveName": "Agência Parceira", "currencyCode": "BRL", "timeZone": "America/Sao_Paulo", "manager": true, "level": "0", "status": "ENABLED" } },
+      { "customerClient": { "resourceName": "customers/1112223334/customerClients/4445556667", "id": "4445556667", "descriptiveName": "Casa Brasa Google", "currencyCode": "BRL", "timeZone": "America/Sao_Paulo", "manager": false, "level": "1", "status": "ENABLED" } },
+      { "customerClient": { "resourceName": "customers/1112223334/customerClients/5556667778", "id": "5556667778", "descriptiveName": "Casa Brasa Loja 2", "currencyCode": "BRL", "timeZone": "America/Sao_Paulo", "manager": false, "level": "1", "status": "ENABLED" } }
+    ],
+    "fieldMask": "customerClient.id,customerClient.descriptiveName,customerClient.currencyCode,customerClient.timeZone,customerClient.manager,customerClient.level,customerClient.status",
+    "requestId": "req-cc-1"
+  }
+]

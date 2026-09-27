@@ -1,0 +1,10 @@
+[
+  {
+    "results": [
+      { "campaign": { "resourceName": "customers/4445556667/campaigns/21000000001", "id": "21000000001" }, "metrics": { "costMicros": "48370000", "impressions": "5120", "clicks": "143", "interactions": "143", "conversions": 5, "conversionsValue": 412.5, "allConversions": 6.5, "allConversionsValue": 450 }, "segments": { "date": "2026-09-19" } },
+      { "campaign": { "resourceName": "customers/4445556667/campaigns/21000000002", "id": "21000000002" }, "metrics": { "costMicros": "12345678", "impressions": "900", "clicks": "20", "interactions": "25", "conversions": 1.5, "conversionsValue": 99.9 }, "segments": { "date": "2026-09-19" } }
+    ],
+    "fieldMask": "campaign.id,segments.date,metrics.costMicros,metrics.impressions,metrics.clicks,metrics.interactions,metrics.conversions,metrics.conversionsValue,metrics.allConversions,metrics.allConversionsValue",
+    "requestId": "req-mc"
+  }
+]

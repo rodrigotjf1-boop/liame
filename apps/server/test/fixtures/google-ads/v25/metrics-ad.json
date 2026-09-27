@@ -1,0 +1,16 @@
+[
+  {
+    "results": [
+      { "adGroupAd": { "resourceName": "customers/4445556667/adGroupAds/41000000001~51000000001", "ad": { "resourceName": "customers/4445556667/ads/51000000001", "id": "51000000001" } }, "metrics": { "costMicros": "48370000", "impressions": "5120", "clicks": "143", "interactions": "143", "conversions": 5, "conversionsValue": 412.5, "allConversions": 6.5, "allConversionsValue": 450 }, "segments": { "date": "2026-09-19" } }
+    ],
+    "fieldMask": "adGroupAd.ad.id,segments.date,metrics.costMicros,metrics.impressions,metrics.clicks,metrics.interactions,metrics.conversions,metrics.conversionsValue,metrics.allConversions,metrics.allConversionsValue",
+    "requestId": "req-m-1"
+  },
+  {
+    "results": [
+      { "adGroupAd": { "resourceName": "customers/4445556667/adGroupAds/41000000001~51000000001", "ad": { "resourceName": "customers/4445556667/ads/51000000001", "id": "51000000001" } }, "metrics": { "costMicros": "51020000", "impressions": "5388", "clicks": "150", "interactions": "150", "conversions": 0, "conversionsValue": 0, "allConversions": 0.5, "allConversionsValue": 20 }, "segments": { "date": "2026-09-20" } }
+    ],
+    "fieldMask": "adGroupAd.ad.id,segments.date,metrics.costMicros,metrics.impressions,metrics.clicks,metrics.interactions,metrics.conversions,metrics.conversionsValue,metrics.allConversions,metrics.allConversionsValue",
+    "requestId": "req-m-1"
+  }
+]
