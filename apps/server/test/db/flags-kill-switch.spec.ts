@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
-import { type Database, runMigrations, withContext, withSystem } from '@liame/database';
+import { applyContext, type Database, runMigrations, withContext, withSystem } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
@@ -140,18 +140,30 @@ describe.skipIf(!hasDb)('feature flags (A1-12) e kill switch (A1-10)', () => {
     expect(await check()).toBeNull();
     await api.call('DELETE', `/v1/kill-switches/${acc.body.id}`, { cookie: a.cookie });
 
-    // Global e provedor são da distribuição: pegam todas as empresas.
-    for (const level of ['provider', 'global'] as const) {
-      const id = await withSystem(database.db, (tx) => switches.activateSystem(tx, { level, provider: 'meta', reason: `teste ${level}` }));
-      try {
-        expect(await check()).toMatchObject({ level });
-        expect(await check({ ...target, tenantId: b.tenantId, brandId: null }, b)).toMatchObject({ level });
-        if (level === 'provider') expect(await check({ ...target, provider: 'google' })).toBeNull();
-        // A empresa vê, mas não desliga a trava da distribuição.
-        expect((await api.call('DELETE', `/v1/kill-switches/${id}`, { cookie: a.cookie })).status).toBe(404);
-      } finally {
-        await ownerQuery(`update liame.kill_switch set deactivated_at = now() where id = $1`, [id]);
-      }
+    // Global e provedor são da distribuição: pegam todas as empresas. A global roda numa transação que
+    // se desfaz no fim: confirmada, ela travaria as ações dos outros arquivos de teste que rodam ao mesmo
+    // tempo no banco compartilhado (actions.spec recebia 423 "teste global").
+    const DESFAZER = new Error('desfazer');
+    await expect(
+      withSystem(database.db, async (tx) => {
+        await switches.activateSystem(tx, { level: 'global', reason: 'teste global' });
+        await applyContext(tx, { tenantId: a.tenantId, userId: a.userId });
+        expect(await switches.check(tx, target)).toMatchObject({ level: 'global' });
+        await applyContext(tx, { tenantId: b.tenantId, userId: b.userId });
+        expect(await switches.check(tx, { ...target, tenantId: b.tenantId, brandId: null })).toMatchObject({ level: 'global' });
+        throw DESFAZER;
+      }),
+    ).rejects.toBe(DESFAZER);
+    // Provedor (a Meta; os outros testes de ação usam o sandbox): confirmada, para a empresa tentar desligar pela API.
+    const id = await withSystem(database.db, (tx) => switches.activateSystem(tx, { level: 'provider', provider: 'meta', reason: 'teste provider' }));
+    try {
+      expect(await check()).toMatchObject({ level: 'provider' });
+      expect(await check({ ...target, tenantId: b.tenantId, brandId: null }, b)).toMatchObject({ level: 'provider' });
+      expect(await check({ ...target, provider: 'google' })).toBeNull();
+      // A empresa vê, mas não desliga a trava da distribuição.
+      expect((await api.call('DELETE', `/v1/kill-switches/${id}`, { cookie: a.cookie })).status).toBe(404);
+    } finally {
+      await ownerQuery(`update liame.kill_switch set deactivated_at = now() where id = $1`, [id]);
     }
   });
 

@@ -281,3 +281,29 @@ Protótipo navegável: `mockups/prototipo-entrada.html` (a barra do topo escolhe
 3. **Termos no cadastro:** o protótipo mostra "Ao criar a conta, você concorda com os Termos de Uso e a Política de Privacidade". Depende da publicação dos termos (A0-6); guardar a versão aceita pede um campo novo na API.
 4. **Sem "lembrar este aparelho":** cada sessão nova pede o código do app (a sessão já dura 30 dias). É o que a API faz hoje.
 5. **Próxima tela sem mockup:** "Segurança da conta" (trocar o app, pedir a troca sem o aparelho, ver e encerrar sessões), que o fluxo de aparelho perdido cita.
+
+## 11. Contas conectadas e Atenção de mídia (A2 · G9, protótipo aguarda aprovação)
+
+Protótipo navegável em `mockups/prototipo-contas.html` (mesmos tokens, shell e componentes do app; barra de revisão com
+a tela e a situação). A API já existe: `/v1/connections` (G3), `/v1/media/freshness` (G7) e `/v1/media/attention` (G9).
+
+- **Contas conectadas:** tabela das contas ligadas (vira cartões no celular) com a plataforma, o frescor dos dados
+  ("Em dia", "Atrasado", "Desconectada", "Sem permissão"), a última leitura e a ação da linha ("Desligar" com
+  confirmação na própria linha; "Conectar de novo" quando a plataforma recusou). Filtro "Precisam de você".
+  Abaixo, as **autorizações** (quem autorizou e quando; no Google em modo de teste, a data em que vence), com
+  "Procurar contas de novo" e "Revogar" (na Meta, o diálogo explica o passo em Configurações do negócio).
+  "Conectar plataforma" abre a escolha Meta × Google (Ads e Analytics numa autorização só) e a marca.
+  Estados da volta: escolher contas (com "já ligada" e "via agência"), conferindo, recusada; e o vazio.
+- **Atenção de mídia:** avisos do mais grave ao menos grave, cada um com a plataforma, o motivo e "O que fazer";
+  filtro por gravidade; vazio "Tudo em dia".
+- Verificado no Chrome sem janela: 1440, 1024, 768 e 375 px, claro e escuro, 6 situações: sem rolagem horizontal,
+  sem botão sem nome, sem erro de console; diálogos, filtros (`aria-pressed`), confirmação na linha e gaveta do
+  celular (foco entra e volta, Esc fecha).
+
+**Para o dono decidir:**
+
+1. Aprovar o protótipo das duas telas.
+2. **Onde ficam os avisos de mídia:** tela própria "Atenção de mídia" (como no protótipo) ou cartões dentro da home
+   "Atenção" do modo Pro (e do Resumo no Lite), ao lado das decisões que o protótipo aprovado já mostra.
+   Recomendação: **cartões na home "Atenção"**, com a tela própria só como "ver todos" — a home já é o lugar do
+   "o que precisa de você agora".

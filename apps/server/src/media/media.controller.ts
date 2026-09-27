@@ -1,4 +1,4 @@
-import { MediaFreshnessQuery, MediaFreshnessResponse, MediaMetricsQuery, MediaMetricsResponse, ProblemDetails } from '@liame/contracts';
+import { MediaAttentionQuery, MediaAttentionResponse, MediaFreshnessQuery, MediaFreshnessResponse, MediaMetricsQuery, MediaMetricsResponse, ProblemDetails } from '@liame/contracts';
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiCookieAuth, ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
 import { Permissao } from '../auth/access.js';
@@ -21,6 +21,19 @@ export class MediaController {
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   freshness(@Query({ schema: MediaFreshnessQuery }) query: MediaFreshnessQuery): Promise<MediaFreshnessResponse> {
     return this.media.frescor(query.brand_id);
+  }
+
+  @Get('attention')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Atenção de mídia',
+    description:
+      'O que precisa de alguém agora, mais grave primeiro: conta desconectada ou sem permissão, dado atrasado, autorização perto de vencer, gasto fora do normal, campanha que parou de entregar e versão de API que a plataforma vai desligar. Calculado na hora, com o motivo e o que fazer.',
+  })
+  @ApiOkResponse({ standardSchema: MediaAttentionResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  attention(@Query({ schema: MediaAttentionQuery }) query: MediaAttentionQuery): Promise<MediaAttentionResponse> {
+    return this.media.atencao(query.brand_id);
   }
 
   @Get('metrics')

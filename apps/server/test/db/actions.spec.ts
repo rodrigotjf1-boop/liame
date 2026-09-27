@@ -175,7 +175,7 @@ describe.skipIf(!hasDb)('pedido de ação: política, orçamento, fingerprint e 
     await policy(dono, [{ type: 'autonomy', mode: 'APPROVAL' }]);
     const adm = await member(dono, 'administrador', 5 * REAL);
     const pedido = await request(dono, { daily_budget_micros: 120 * REAL });
-    // Falhou uma vez sob a suíte inteira com "validacao" na aprovação: o pedido não tinha id. Se repetir, o status real aparece aqui.
+    // Falhou uma vez sob a suíte inteira com "validacao" na aprovação: o pedido não tinha id: era a trava global de outro teste (ERR-030). A conferência fica, para a causa aparecer.
     expect(pedido.status, JSON.stringify(pedido.body)).toBe(201);
     const approve = (p: Person, planHash: string, c: string) =>
       api.call('POST', `/v1/actions/${pedido.body.id}/approve`, { cookie: p.cookie, body: { plan_hash: planHash, code: c } });
