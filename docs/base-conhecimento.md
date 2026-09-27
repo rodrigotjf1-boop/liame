@@ -90,7 +90,7 @@
 
 ### 2.1 Marketing API
 
-- **Versões:** Graph API v26.0 lançada em 29/07/2026 [O]; a tabela da Marketing API lista v25.0 (18/02/2026) [O] (divergência: validar no painel). A **v24 expira em 06/10/2026** [O]. A Marketing API tem vida curta (a v23 expirou em 09/06/2026). Upgrade automático de versão desde 29/07/2026 [S].
+- **Versões** *(reconferido em 26/09/2026 na página oficial de changelog)*: **v26.0 é a mais nova** da Graph API e da Marketing API (29/07/2026, sem data de fim) [O]; v25.0 (18/02/2026) segue valendo [O]; a **v24 da Marketing API expira em 06/10/2026** [O] (a da Graph API vai até 18/02/2028). A divergência de 24/09 (tabela da Marketing API parada na v25) acabou: a tabela já lista a v26. A Marketing API tem vida curta (a v23 expirou em 09/06/2026). Upgrade automático de versão desde 29/07/2026 [S].
 - **Advantage+ unificado** (desde 29/05/2025): o status deriva de 3 alavancas (orçamento, público, posicionamento). ASC/AAC legados bloqueados em todas as versões desde 19/05/2026 [S].
 - **v26** [S]:
   - saem `daily_outcomes_curve` e `estimate_dau`;
@@ -172,7 +172,7 @@ Eventos servidor a servidor (web, app, loja física, **business_messaging**, que
   | Basic | 15.000 | exige **verificação de marca** do projeto |
   | Standard | ilimitado | auditoria manual de ~10 dias úteis; demo e RMF |
 
-- **Versões:** v25 saiu em 22/07/2026 [O]. Cadência **mensal** desde 2026; cada major vive ~12 meses [S] (v22 até out/2026 · v23 até fev/2027 · v24 até mai/2027 · v25 até ago/2027). Validar em `/sunset-dates`.
+- **Versões** *(reconferido em 26/09/2026 nas release notes oficiais)*: a major mais nova continua a **v25** (22/07/2026) [O]; o que sai por mês são **versões menores** dentro da major: **v25.1 (19/08/2026)** e **v25.2 (23/09/2026)** [O]. Cada major vive ~12 meses [S] (v22 até out/2026 · v23 até fev/2027 · v24 até mai/2027 · v25 até ago/2027). Validar em `/sunset-dates`.
 - **Campanhas:** AI Max GA (abr/2026); DSA e broad sobem automaticamente para AI Max a partir de set/2026; fim do DSA adiado para fev/2027 [S]. Display standalone migrando para Demand Gen [S].
 - **Multi-Party Authorization** (v24) pode exigir um segundo admin para operações de usuário [O].
 - **Suspensão por contas relacionadas** (*circumventing systems*) contamina contas ligadas por pagamento, usuário ou MCC: isolar clientes.
@@ -531,6 +531,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 | 25/09/2026 | §17: segundo fator (NIST SP 800-63B-4, Logto), guarda de registros (Marco Civil art. 15), cabeçalhos `Deprecation`/`Sunset` (RFC 9745/8594), versões da Meta divergentes entre fontes, geração de imagem e vídeo no AI SDK e mercado de modelos de imagem (ADR-013 a ADR-016). |
 | 25/09/2026 | §17.5: acesso delegado no mercado (níveis e convite do Google Ads, conta de administrador, parceiros da Meta, proprietário principal do Perfil da Empresa) para o ADR-017. |
 | 25/09/2026 | §6.1: verificação legal para os documentos jurídicos (LGPD e Lei 15.352/2026, Res. ANPD 2, 15, 18, 19 e 32, Marco Civil, CDC/STJ, ECA Digital, PL 2338, TSE 23.755/2026, Meta, Google Uso Limitado, WhatsApp); corrigidos §2.4, §6 e §17.2. |
+| 26/09/2026 | §2.1 e §3.1 reconferidos para o plano da A2: Meta v26.0 é a mais nova nas duas tabelas (divergência resolvida); Google Ads segue na major v25, com menores v25.1 e v25.2 (a "cadência mensal" é de versões menores). |
 | 26/09/2026 | §17.1: tela de entrada e de código (NIST 800-63B-4 §3.1.1.2 e §3.1.4.2, WCAG 2.2 SC 3.3.8, Google, Stripe), para o protótipo das telas de entrada. |
 | 26/09/2026 | §15.1: imagem base por digest, Syft, Grype, `pnpm sbom`/`deploy` e Semgrep/zizmor locais no Windows (E9). |
 | 26/09/2026 | §15.1: OpenTelemetry Collector contrib 0.161 (validação, `redaction`, checksum por arquivo) (E8). |
