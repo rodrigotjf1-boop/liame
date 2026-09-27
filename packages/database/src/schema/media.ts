@@ -17,6 +17,7 @@ export const connectedAccount = liame.table('connected_account', {
   status: text('status').notNull().default('ativa'),
   statusReason: text('status_reason'),
   credentialSecretId: uuid('credential_secret_id'),
+  connectionId: uuid('connection_id'),
   providerAttributes: jsonb('provider_attributes').notNull().default({}),
   connectedBy: uuid('connected_by'),
   connectedAt: ts('connected_at').notNull().defaultNow(),

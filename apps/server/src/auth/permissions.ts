@@ -27,6 +27,8 @@ export const PERMISSIONS = [
   'orcamento.gerenciar',
   'empresa.encerrar',
   'empresa.exportar',
+  'contas.ver',
+  'contas.conectar',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

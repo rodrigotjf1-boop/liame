@@ -93,3 +93,17 @@ export {
   SandboxResourceResponse,
   UpdateActionRequest,
 } from './actions.js';
+export {
+  AccountProvider,
+  ConnectedAccountResponse,
+  ConnectionListQuery,
+  ConnectionListResponse,
+  ConnectionProvider,
+  ConnectionResponse,
+  DiscoveredAccount,
+  LinkAccountsRequest,
+  LinkAccountsResponse,
+  OAuthCallbackQuery,
+  StartConnectionRequest,
+  StartConnectionResponse,
+} from './connections.js';

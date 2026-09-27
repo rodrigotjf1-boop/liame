@@ -9,6 +9,7 @@ import { TelemetryLifecycle } from '../telemetry.lifecycle.js';
 import { VaultModule } from '../vault/vault.module.js';
 import { ActionExecutor } from './action-executor.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
+import { ConexaoProcessor } from './conexao-processor.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
 import { LifecyclePurgeService } from './lifecycle-purge.service.js';
@@ -32,6 +33,7 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     LifecyclePurgeService,
     WebhookDeliverer,
     InboxProcessor,
+    ConexaoProcessor,
     EventsLoopService,
     QueueService,
     TelemetryLifecycle,

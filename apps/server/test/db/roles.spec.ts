@@ -25,14 +25,14 @@ const MATRIX: Record<string, string[]> = {
     'empresa.ver', 'empresa.editar', 'marcas.ver', 'marcas.gerenciar', 'pessoas.ver', 'pessoas.convidar', 'pessoas.remover',
     'pessoas.alterar_nivel', 'auditoria.ver', 'acoes.aprovar', 'campanhas.ver', 'campanhas.operar', 'relatorios.ver',
     'agentes.gerenciar', 'parada.acionar', 'webhooks.gerenciar', 'politicas.gerenciar',
-    'orcamento.gerenciar',
+    'orcamento.gerenciar', 'contas.ver', 'contas.conectar',
   ],
   gestor: [
     'empresa.ver', 'marcas.ver', 'pessoas.ver', 'acoes.aprovar', 'campanhas.ver', 'campanhas.operar', 'relatorios.ver',
-    'agentes.gerenciar', 'parada.acionar',
+    'agentes.gerenciar', 'parada.acionar', 'contas.ver', 'contas.conectar',
   ],
-  aprovador: ['empresa.ver', 'marcas.ver', 'acoes.aprovar', 'campanhas.ver', 'relatorios.ver'],
-  somente_leitura: ['empresa.ver', 'marcas.ver', 'campanhas.ver', 'relatorios.ver'],
+  aprovador: ['empresa.ver', 'marcas.ver', 'acoes.aprovar', 'campanhas.ver', 'relatorios.ver', 'contas.ver'],
+  somente_leitura: ['empresa.ver', 'marcas.ver', 'campanhas.ver', 'relatorios.ver', 'contas.ver'],
   so_relatorios: [],
 };
 const APPROVERS = new Set(['administrador', 'gestor', 'aprovador']);
