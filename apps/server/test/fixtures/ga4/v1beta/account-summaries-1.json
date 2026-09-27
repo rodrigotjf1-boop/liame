@@ -1,0 +1,11 @@
+{
+  "accountSummaries": [
+    {
+      "name": "accountSummaries/111000111", "account": "accounts/111000111", "displayName": "Casa Brasa",
+      "propertySummaries": [
+        { "property": "properties/333444555", "displayName": "Casa Brasa - site", "propertyType": "PROPERTY_TYPE_ORDINARY", "parent": "accounts/111000111" }
+      ]
+    }
+  ],
+  "nextPageToken": "pagina-2"
+}

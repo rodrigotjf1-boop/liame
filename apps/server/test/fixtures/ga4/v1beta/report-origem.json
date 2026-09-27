@@ -1,0 +1,24 @@
+{
+  "dimensionHeaders": [{ "name": "date" }, { "name": "sessionSource" }, { "name": "sessionMedium" }, { "name": "sessionCampaignName" }],
+  "metricHeaders": [
+    { "name": "sessions", "type": "TYPE_INTEGER" }, { "name": "totalUsers", "type": "TYPE_INTEGER" }, { "name": "newUsers", "type": "TYPE_INTEGER" },
+    { "name": "engagedSessions", "type": "TYPE_INTEGER" }, { "name": "keyEvents", "type": "TYPE_FLOAT" }, { "name": "ecommercePurchases", "type": "TYPE_INTEGER" },
+    { "name": "purchaseRevenue", "type": "TYPE_CURRENCY" }
+  ],
+  "rows": [
+    { "dimensionValues": [{ "value": "20260919" }, { "value": "google" }, { "value": "cpc" }, { "value": "Pesquisa - delivery" }], "metricValues": [{ "value": "120" }, { "value": "100" }, { "value": "60" }, { "value": "90" }, { "value": "14" }, { "value": "5" }, { "value": "412.50" }] },
+    { "dimensionValues": [{ "value": "20260919" }, { "value": "facebook" }, { "value": "paid" }, { "value": "Delivery noite" }], "metricValues": [{ "value": "80" }, { "value": "70" }, { "value": "45" }, { "value": "51" }, { "value": "9" }, { "value": "3" }, { "value": "240.00" }] },
+    { "dimensionValues": [{ "value": "20260920" }, { "value": "(direct)" }, { "value": "(none)" }, { "value": "(direct)" }], "metricValues": [{ "value": "95" }, { "value": "88" }, { "value": "30" }, { "value": "70" }, { "value": "8" }, { "value": "2" }, { "value": "150.00" }] }
+  ],
+  "rowCount": 3,
+  "metadata": { "currencyCode": "BRL", "timeZone": "America/Sao_Paulo", "subjectToThresholding": true },
+  "propertyQuota": {
+    "tokensPerDay": { "consumed": 30, "remaining": 199970 },
+    "tokensPerHour": { "consumed": 30, "remaining": 39970 },
+    "concurrentRequests": { "consumed": 0, "remaining": 10 },
+    "serverErrorsPerProjectPerHour": { "consumed": 0, "remaining": 10 },
+    "potentiallyThresholdedRequestsPerHour": { "consumed": 1, "remaining": 119 },
+    "tokensPerProjectPerHour": { "consumed": 30, "remaining": 13970 }
+  },
+  "kind": "analyticsData#runReport"
+}
