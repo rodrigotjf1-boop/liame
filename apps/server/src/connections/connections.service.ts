@@ -254,7 +254,13 @@ export class ConnectionsService {
              ${c.id}, coalesce(x.provider_attributes, '{}'::jsonb), ${auth.userId}
         from jsonb_to_recordset(${JSON.stringify(linhas)}::jsonb)
              as x (id uuid, provider text, external_id text, name text, currency text, timezone text, provider_attributes jsonb)
-      on conflict (tenant_id, provider, external_id) where disconnected_at is null do nothing
+      -- Mesma marca, outra autorização (reconectar depois de token recusado): a nova credencial assume a conta.
+      -- Outra marca ou a mesma autorização: fica como está (volta em already_linked).
+      on conflict (tenant_id, provider, external_id) where disconnected_at is null
+      do update set credential_secret_id = excluded.credential_secret_id, connection_id = excluded.connection_id,
+                    provider_attributes = excluded.provider_attributes, status = 'ativa', status_reason = null, updated_at = now()
+       where liame.connected_account.brand_id = excluded.brand_id
+         and liame.connected_account.connection_id is distinct from excluded.connection_id
       returning id, brand_id, connection_id, provider, external_id, name, currency, timezone, status, status_reason, connected_at, disconnected_at`);
     const novas = new Set(inseridas.rows.map((l) => `${l.provider}:${l.external_id}`));
     if (inseridas.rows.length) {

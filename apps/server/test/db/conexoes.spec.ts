@@ -214,6 +214,24 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     const religar = await api.call('POST', `/v1/connections/${inicio.body.id}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'meta_ads', external_id: 'act_1234567890' }] } });
     expect(religar.body.linked).toHaveLength(1);
 
+    // Token recusado na leitura (a sincronização marca a conta): reautorizar a mesma marca assume a conta
+    // com a credencial nova; ligar a mesma conta a outra marca não mexe nela.
+    await ownerQuery(`update liame.connected_account set status = 'desconectada', status_reason = 'token recusado' where id = $1`, [religar.body.linked[0].id]);
+    const reautorizar = async (brandId: string) => {
+      const r = await api.call('POST', '/v1/connections', { cookie: e.cookie, body: { provider: 'meta', brand_id: brandId } });
+      await voltar(e.cookie, { state: new URL(r.body.authorize_url).searchParams.get('state')!, code: 'codigo-meta-bom' });
+      await processador.processarLote(5, { tenantIds: [e.tenantId] });
+      return r.body.id as string;
+    };
+    const nova = await reautorizar(e.brandId);
+    const assumida = await api.call('POST', `/v1/connections/${nova}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'meta_ads', external_id: 'act_1234567890' }] } });
+    expect(assumida.body.linked).toEqual([expect.objectContaining({ id: religar.body.linked[0].id, connection_id: nova, status: 'ativa', status_reason: null })]);
+    const outraMarca = await api.call('POST', '/v1/brands', { cookie: e.cookie, body: { name: 'Casa Brasa Delivery' } });
+    expect(outraMarca.status).toBe(201);
+    const deOutraMarca = await reautorizar(outraMarca.body.id);
+    const recusada = await api.call('POST', `/v1/connections/${deOutraMarca}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'meta_ads', external_id: 'act_1234567890' }] } });
+    expect(recusada.body).toEqual({ linked: [], already_linked: [{ provider: 'meta_ads', external_id: 'act_1234567890' }] });
+
     const acoes = await ownerQuery<{ action: string }>(`select action from liame.audit_event where tenant_id = $1 order by chain_seq`, [e.tenantId]);
     expect(acoes.map((a) => a.action)).toEqual(expect.arrayContaining(['conexao.iniciar', 'conexao.autorizar', 'conexao.concluir', 'conta.conectar', 'conta.desconectar']));
   });
