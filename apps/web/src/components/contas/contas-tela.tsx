@@ -71,6 +71,15 @@ export function ContasTela() {
     if (podeVer) disparar(carregar());
   }, [carregar, podeVer]);
 
+  // A URL mudou sem remontar a tela (menu, voltar do navegador): acompanha a conexão nova ou para.
+  const conexaoDaUrl = volta.conexao;
+  useEffect(() => {
+    setAcomp((a) => {
+      if (conexaoDaUrl) return a?.id === conexaoDaUrl ? a : { id: conexaoDaUrl, origem: 'volta', conexao: null, tentativas: 0, perdida: false };
+      return a?.origem === 'volta' ? null : a;
+    });
+  }, [conexaoDaUrl]);
+
   const dados = estado.tipo === 'ok' ? estado.dados : null;
   const existentes = useMemo<ContaExistente[]>(() => (dados ? dados.conexoes.flatMap((c) => c.accounts) : []), [dados]);
 
