@@ -9759,6 +9759,12 @@
                             ],
                             "pattern": "^[a-z0-9_]+$"
                           },
+                          "authorized_by": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "created_at": {
                             "type": "string"
                           },
@@ -9803,6 +9809,12 @@
                                 },
                                 "linked": {
                                   "type": "boolean"
+                                },
+                                "via": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
                                 }
                               },
                               "required": [
@@ -9811,7 +9823,8 @@
                                 "name",
                                 "currency",
                                 "timezone",
-                                "linked"
+                                "linked",
+                                "via"
                               ],
                               "additionalProperties": false
                             }
@@ -9905,6 +9918,7 @@
                           "provider",
                           "status",
                           "error_code",
+                          "authorized_by",
                           "created_at",
                           "completed_at",
                           "refresh_expires_at",
@@ -10181,6 +10195,12 @@
                       ],
                       "pattern": "^[a-z0-9_]+$"
                     },
+                    "authorized_by": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
@@ -10225,6 +10245,12 @@
                           },
                           "linked": {
                             "type": "boolean"
+                          },
+                          "via": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -10233,7 +10259,8 @@
                           "name",
                           "currency",
                           "timezone",
-                          "linked"
+                          "linked",
+                          "via"
                         ],
                         "additionalProperties": false
                       }
@@ -10327,6 +10354,7 @@
                     "provider",
                     "status",
                     "error_code",
+                    "authorized_by",
                     "created_at",
                     "completed_at",
                     "refresh_expires_at",
@@ -10941,6 +10969,12 @@
                       ],
                       "pattern": "^[a-z0-9_]+$"
                     },
+                    "authorized_by": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "created_at": {
                       "type": "string"
                     },
@@ -10985,6 +11019,12 @@
                           },
                           "linked": {
                             "type": "boolean"
+                          },
+                          "via": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -10993,7 +11033,8 @@
                           "name",
                           "currency",
                           "timezone",
-                          "linked"
+                          "linked",
+                          "via"
                         ],
                         "additionalProperties": false
                       }
@@ -11087,6 +11128,7 @@
                     "provider",
                     "status",
                     "error_code",
+                    "authorized_by",
                     "created_at",
                     "completed_at",
                     "refresh_expires_at",

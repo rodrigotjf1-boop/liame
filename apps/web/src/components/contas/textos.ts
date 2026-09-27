@@ -257,6 +257,11 @@ export function autorizacoesVisiveis(conexoes: ConnectionResponse[]): Connection
   });
 }
 
+/** Primeiro nome de quem autorizou ("Autorizada por Rodrigo"), ou nulo quando a API não devolve o nome. */
+export function quemAutorizou(c: Pick<ConnectionResponse, 'authorized_by'>): string | null {
+  return c.authorized_by?.trim().split(/\s+/)[0] || null;
+}
+
 /** Contas ligadas (ainda não desligadas) de uma autorização. */
 export function contasDaAutorizacao(c: ConnectionResponse): number {
   return c.accounts.filter((a) => a.disconnected_at === null).length;

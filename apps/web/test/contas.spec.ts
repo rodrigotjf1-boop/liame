@@ -8,6 +8,7 @@ import {
   gruposDaEscolha,
   idDaConta,
   lerVolta,
+  quemAutorizou,
   resumoDaDescoberta,
   situacaoDaConta,
   ultimaLeitura,
@@ -29,6 +30,7 @@ const descoberta = (provider: string, external_id: string, name: string, linked 
   currency: 'BRL',
   timezone: 'America/Sao_Paulo',
   linked,
+  via: null,
 });
 
 const conexao = (extra: Partial<ConnectionResponse> = {}): ConnectionResponse => ({
@@ -37,6 +39,7 @@ const conexao = (extra: Partial<ConnectionResponse> = {}): ConnectionResponse =>
   provider: 'google',
   status: 'aguardando_escolha',
   error_code: null,
+  authorized_by: null,
   created_at: local(27, 9, 0),
   completed_at: null,
   refresh_expires_at: null,
@@ -170,5 +173,14 @@ describe('autorizações', () => {
       texto: 'Vence em 29/09/2026 (app do Google em fase de teste). Conecte de novo antes para a leitura não parar.',
     });
     expect(vencimentoDaAutorizacao({ refresh_expires_at: local(26, 10) }, agora)?.venceu).toBe(true);
+  });
+});
+
+describe('quem autorizou', () => {
+  it('primeiro nome, como no cartão do protótipo; sem nome (pessoa sem vínculo visível), nada', () => {
+    expect(quemAutorizou({ authorized_by: 'Rodrigo de Oliveira' })).toBe('Rodrigo');
+    expect(quemAutorizou({ authorized_by: '  Ana  ' })).toBe('Ana');
+    expect(quemAutorizou({ authorized_by: null })).toBeNull();
+    expect(quemAutorizou({ authorized_by: '   ' })).toBeNull();
   });
 });
