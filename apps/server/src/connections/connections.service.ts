@@ -30,6 +30,7 @@ type LinhaConexao = {
   provider: string;
   status: string;
   requested_by: string | null;
+  requested_by_name?: string | null;
   error_code: string | null;
   created_at: Date | string;
   completed_at: Date | string | null;
@@ -169,17 +170,20 @@ export class ConnectionsService {
   async listar(brandId?: string): Promise<ConnectionListResponse> {
     const tx = currentTx();
     const conexoes = await tx.execute<LinhaConexao>(sql`
-      select id, brand_id, provider, status, requested_by, error_code, created_at, completed_at, refresh_expires_at, expires_at, discovered, credential_secret_id
-        from liame.oauth_connection
-       where status not in ('aguardando_autorizacao', 'expirada') ${brandId ? sql`and brand_id = ${brandId}` : sql``}
-       order by created_at desc limit 200`);
+      select c.id, c.brand_id, c.provider, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id
+        from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
+       where c.status not in ('aguardando_autorizacao', 'expirada') ${brandId ? sql`and c.brand_id = ${brandId}` : sql``}
+       order by c.created_at desc limit 200`);
     return { items: await this.montar(conexoes.rows) };
   }
 
   async detalhe(id: string): Promise<ConnectionResponse> {
     const r = await currentTx().execute<LinhaConexao>(sql`
-      select id, brand_id, provider, status, requested_by, error_code, created_at, completed_at, refresh_expires_at, expires_at, discovered, credential_secret_id
-        from liame.oauth_connection where id = ${id}`);
+      select c.id, c.brand_id, c.provider, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id
+        from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
+       where c.id = ${id}`);
     if (!r.rows[0]) throw naoEncontrada();
     return (await this.montar(r.rows))[0]!;
   }
@@ -199,6 +203,7 @@ export class ConnectionsService {
       provider: l.provider,
       status: l.status,
       error_code: l.error_code,
+      authorized_by: l.requested_by_name ?? null,
       created_at: iso(l.created_at),
       completed_at: isoOuNulo(l.completed_at),
       refresh_expires_at: isoOuNulo(l.refresh_expires_at),
@@ -210,6 +215,7 @@ export class ConnectionsService {
           currency: d.currency,
           timezone: d.timezone,
           linked: ligadas.has(`${d.provider}:${d.external_id}`),
+          via: typeof d.provider_attributes?.via === 'string' ? d.provider_attributes.via : null,
         }),
       ),
       accounts: contas.rows.filter((c) => c.connection_id === l.id).map(conta),

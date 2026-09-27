@@ -95,12 +95,12 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
     expect((await criarConectorGoogleAds(database.db, cliente(), plataformas())).apiVersion).toBe('v25');
   });
 
-  it('descoberta: diretas e clientes das gerentes, sem gerentes; acesso direto vence; sem developer token', async () => {
+  it('descoberta: diretas e clientes das gerentes (com o nome da gerente), sem gerentes; acesso direto vence; sem developer token', async () => {
     const antes = pedidos.length;
     const contas = await conector().descobrirContas({ accessToken: TOKEN });
     expect(contas).toEqual([
-      { externalId: '4445556667', name: 'Casa Brasa Google', currency: 'BRL', timezone: 'America/Sao_Paulo', providerAttributes: { login_customer_id: GERENTE, status: 'ENABLED' } },
-      { externalId: '5556667778', name: 'Casa Brasa Loja 2', currency: 'BRL', timezone: 'America/Sao_Paulo', providerAttributes: { login_customer_id: '5556667778', status: 'ENABLED' } },
+      { externalId: '4445556667', name: 'Casa Brasa Google', currency: 'BRL', timezone: 'America/Sao_Paulo', providerAttributes: { login_customer_id: GERENTE, status: 'ENABLED', via: 'Agência Parceira' } },
+      { externalId: '5556667778', name: 'Casa Brasa Loja 2', currency: 'BRL', timezone: 'America/Sao_Paulo', providerAttributes: { login_customer_id: '5556667778', status: 'ENABLED', via: null } },
     ]);
     const feitos = pedidos.slice(antes);
     expect(feitos.every((p) => p.cabecalhos.authorization === `Bearer ${TOKEN}`)).toBe(true);

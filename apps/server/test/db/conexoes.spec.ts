@@ -187,10 +187,12 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     expect(lista.status).toBe(200);
     expect(JSON.stringify(lista.body)).not.toContain('token-sistema-meta');
     const item = lista.body.items.find((i: { id: string }) => i.id === inicio.body.id);
-    expect(item.discovered.map((d: { external_id: string; linked: boolean }) => [d.external_id, d.linked])).toEqual([
-      ['act_1234567890', false],
-      ['act_2233445566', false],
+    expect(item.discovered.map((d: { external_id: string; linked: boolean; via: string | null }) => [d.external_id, d.linked, d.via])).toEqual([
+      ['act_1234567890', false, null],
+      ['act_2233445566', false, null],
     ]);
+    // Quem autorizou: quem começou a conexão (só ele pode voltar dela).
+    expect(item.authorized_by).toBe('Pessoa de Teste');
 
     const ligar = await api.call('POST', `/v1/connections/${inicio.body.id}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'meta_ads', external_id: 'act_1234567890' }] } });
     expect(ligar.status).toBe(200);
@@ -265,6 +267,17 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
       'google_ads:5556667778',
       'ga4:333444555',
       'ga4:666777888',
+    ]);
+
+    // A conta alcançada pela gerente mostra o nome dela ("via"); a de acesso direto e o GA4, não.
+    const detalhe = await api.call('GET', `/v1/connections/${inicio.body.id}`, { cookie: e.cookie });
+    expect(detalhe.status).toBe(200);
+    expect(detalhe.body.authorized_by).toBe('Pessoa de Teste');
+    expect(detalhe.body.discovered.map((d: { external_id: string; via: string | null }) => [d.external_id, d.via])).toEqual([
+      ['4445556667', 'Agência Parceira'],
+      ['5556667778', null],
+      ['333444555', null],
+      ['666777888', null],
     ]);
 
     const ligar = await api.call('POST', `/v1/connections/${inicio.body.id}/accounts`, {

@@ -47,6 +47,8 @@ export const DiscoveredAccount = z.strictObject({
   timezone: z.string().nullable(),
   /** Já ligada a uma marca desta empresa. */
   linked: z.boolean(),
+  /** Alcançada por meio de outra conta (a gerente do Google Ads, em geral a da agência): o nome dela. Nulo = acesso direto. */
+  via: z.string().nullable(),
 });
 export type DiscoveredAccount = z.infer<typeof DiscoveredAccount>;
 
@@ -74,6 +76,8 @@ export const ConnectionResponse = z.strictObject({
   /** `aguardando_autorizacao`, `recebida`, `processando`, `aguardando_escolha`, `ativa`, `erro`, `expirada` ou `revogada`. */
   status: Slug,
   error_code: Slug.nullable(),
+  /** Nome de quem autorizou (quem começou a conexão é quem precisa voltar dela). */
+  authorized_by: z.string().nullable(),
   created_at: z.string(),
   completed_at: z.string().nullable(),
   /** Google em modo de teste: a autorização vence (7 dias); nulo = não vence. */

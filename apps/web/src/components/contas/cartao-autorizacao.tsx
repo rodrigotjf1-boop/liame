@@ -3,7 +3,7 @@
 import type { ConnectionResponse } from '@liame/contracts';
 import { Icone } from '@/components/ui/icone';
 import { dataCompleta } from '@/lib/formato';
-import { autorizadorDa, contasDaAutorizacao, emConferencia, erroDaConexao, plataforma, vencimentoDaAutorizacao } from './textos';
+import { autorizadorDa, contasDaAutorizacao, emConferencia, erroDaConexao, plataforma, quemAutorizou, vencimentoDaAutorizacao } from './textos';
 
 // Uma autorização (o "sim" que alguém deu na Meta ou no Google): quando, quantas contas, se vence
 // (Google em modo de teste) e as ações: conectar de novo, procurar contas de novo e revogar.
@@ -28,14 +28,28 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
   const falhou = c.status === 'erro' ? erroDaConexao(c.error_code, a) : null;
   const conferindo = emConferencia(c) || procurando;
   const reconectar = Boolean(falhou || vence);
-  const qual = `${a === 'google' ? 'do Google' : 'da Meta'} de ${dataCompleta(c.completed_at ?? c.created_at)}`;
+  const quando = dataCompleta(c.completed_at ?? c.created_at);
+  const quem = quemAutorizou(c);
+  const contas = n === 1 ? '1 conta' : `${n} contas`;
+  const qual = `${a === 'google' ? 'do Google' : 'da Meta'} de ${quando}`;
 
   return (
     <li className="card autorizacao">
       <div className="aut-cab">
         <span className={`plat plat--${plat.classe}`}>{plat.nome}</span>
-        <b>Autorizada em {dataCompleta(c.completed_at ?? c.created_at)}</b>
-        <span className="aut-meta">{n === 1 ? '1 conta' : `${n} contas`}</span>
+        {quem ? (
+          <>
+            <b>Autorizada por {quem}</b>
+            <span className="aut-meta">
+              em {quando} · {contas}
+            </span>
+          </>
+        ) : (
+          <>
+            <b>Autorizada em {quando}</b>
+            <span className="aut-meta">{contas}</span>
+          </>
+        )}
       </div>
       {falhou ? (
         <p className="aut-txt aut-txt--atencao">

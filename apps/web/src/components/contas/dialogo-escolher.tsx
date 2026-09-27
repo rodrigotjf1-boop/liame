@@ -125,6 +125,7 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
                       <b>{d.name}</b>
                       <span className="mono">{idDaConta(d.provider, d.external_id)}</span>
                     </span>
+                    {d.via && <span className="lite-chip">via {d.via}</span>}
                     {travada && <span className="lite-chip">já ligada</span>}
                     {reconectar && <span className="lite-chip lite-chip--perigo">desconectada: ligar de novo</span>}
                   </label>

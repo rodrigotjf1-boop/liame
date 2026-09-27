@@ -139,6 +139,9 @@ export class ConectorGoogleAds implements ConectorLeitura {
         if (err instanceof ErroConector && (err.tipo === 'permissao' || err.tipo === 'definitivo')) continue;
         throw err;
       }
+      // A própria raiz vem no nível 0: numa gerente, o nome dela é o "via" das clientes (em geral, a agência).
+      const gerente = linhas.find(({ customerClient: c }) => String(c.id) === raiz && c.manager)?.customerClient;
+      const via = gerente ? (gerente.descriptiveName ?? raiz) : null;
       for (const { customerClient: c } of linhas) {
         if (c.manager) continue;
         const id = String(c.id);
@@ -150,7 +153,7 @@ export class ConectorGoogleAds implements ConectorLeitura {
           name: c.descriptiveName ?? id,
           currency: c.currencyCode ?? null,
           timezone: c.timeZone ?? null,
-          providerAttributes: { login_customer_id: direta ? id : raiz, status: c.status ?? null },
+          providerAttributes: { login_customer_id: direta ? id : raiz, status: c.status ?? null, via: direta ? null : via },
         });
       }
     }
