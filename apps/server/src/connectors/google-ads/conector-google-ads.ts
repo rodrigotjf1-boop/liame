@@ -4,6 +4,7 @@ import type { PontoMetrica } from '../../media/metric-store.js';
 import { type ClienteConector, ErroConector } from '../cliente-http.js';
 import { dataValida, fatias } from '../janela.js';
 import { type ConectorLeitura, type ContaDescoberta, type ContextoConta, type Credencial, type EntidadesLidas, type StatusCanonico, versaoRegistrada } from '../tipos.js';
+import { soDigitos } from '../validacao.js';
 
 // Conector de LEITURA do Google Ads (A2, G5; base de conhecimento §3.1). GAQL por REST com
 // `googleAds:searchStream` (a resposta é uma lista de lotes, campos em camelCase, int64 como texto).
@@ -70,7 +71,7 @@ const idNumerico = (id: string | number | undefined): string | null => (id === u
 
 /** O id do cliente entra no caminho da URL e no cabeçalho: só dígitos. */
 function clienteValido(id: string | null | undefined, campo: string): string {
-  if (!id || !/^\d{1,20}$/.test(id)) throw new ErroConector('definitivo', 'google_ads', `${campo} do Google Ads inválido`);
+  if (!soDigitos(id)) throw new ErroConector('definitivo', 'google_ads', `${campo} do Google Ads inválido`);
   return id;
 }
 
@@ -121,7 +122,7 @@ export class ConectorGoogleAds implements ConectorLeitura {
       apiVersion: this.apiVersion,
       cabecalhos: this.cabecalhos(credencial),
     });
-    const diretas = (r.corpo.resourceNames ?? []).map((n) => n.replace(/^customers\//, '')).filter((id) => /^\d{1,20}$/.test(id));
+    const diretas = (r.corpo.resourceNames ?? []).map((n) => n.replace(/^customers\//, '')).filter((id) => soDigitos(id));
 
     type Cliente = { customerClient: { id: string; descriptiveName?: string; currencyCode?: string; timeZone?: string; manager?: boolean; level?: string | number; status?: string } };
     const contas = new Map<string, ContaDescoberta>();
