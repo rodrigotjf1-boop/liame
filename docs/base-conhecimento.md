@@ -170,6 +170,12 @@ Eventos servidor a servidor (web, app, loja física, **business_messaging**, que
 ### 3.1 Google Ads API
 
 - **Developer token encerrado em 09/09/2026:** o acesso passa a ser do **projeto Google Cloud**, com inscrição no Cloud Console; MCC não é mais obrigatória [O].
+  - *(reconferido em 26/09/2026 em developers.google.com/google-ads/api/docs/api-policy/developer-token)* o cabeçalho `developer-token` ainda é aceito, mas é **opcional e ignorado**; será **recusado numa major futura**. O nível de acesso vem do projeto Google Cloud que gerou a credencial OAuth [O]. **O Liame não envia o cabeçalho.**
+- **REST** *(verificado em 26/09/2026 em developers.google.com/google-ads/api/rest/auth e /rest/common/search)* [O]:
+  - cabeçalhos: `Authorization: Bearer`; `login-customer-id` (sem hífens) quando a chamada passa por uma conta gerente; `linked-customer-id` só para parceiros em conta vinculada;
+  - `POST /v25/customers/{id}/googleAds:search` (paginado por `pageToken`) e `…:searchStream` (resposta numa **lista JSON de lotes** com `results`, `fieldMask`, `requestId`); campos da resposta em camelCase;
+  - `GET /v25/customers:listAccessibleCustomers` lista as contas de acesso direto (`resourceNames`).
+  - Não verificado na página (regra do JSON do protobuf) [S]: int64 chega como texto e o valor zero pode ser omitido; o conector trata os dois.
 
   | Nível | Operações/dia | Observação |
 | --- | --- | --- |

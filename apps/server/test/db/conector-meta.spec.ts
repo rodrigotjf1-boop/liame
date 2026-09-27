@@ -7,7 +7,8 @@ import { createDatabase, type Database, runMigrations, withTenant } from '@liame
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../../src/connectors/enderecos.js';
-import { ConectorMeta, criarConectorMeta, fatias, METRICAS_CANONICAS_META, orcamentoEmMicros } from '../../src/connectors/meta/conector-meta.js';
+import { fatias } from '../../src/connectors/janela.js';
+import { ConectorMeta, criarConectorMeta, METRICAS_CANONICAS_META, orcamentoEmMicros } from '../../src/connectors/meta/conector-meta.js';
 import { gravarMetricas, type PontoMetrica } from '../../src/media/metric-store.js';
 import { ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';

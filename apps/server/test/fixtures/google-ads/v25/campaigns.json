@@ -1,0 +1,11 @@
+[
+  {
+    "results": [
+      { "campaign": { "resourceName": "customers/4445556667/campaigns/21000000001", "id": "21000000001", "name": "Pesquisa - delivery", "status": "ENABLED", "primaryStatus": "ELIGIBLE", "advertisingChannelType": "SEARCH" }, "campaignBudget": { "resourceName": "customers/4445556667/campaignBudgets/31000000001", "amountMicros": "50000000" } },
+      { "campaign": { "resourceName": "customers/4445556667/campaigns/21000000002", "id": "21000000002", "name": "Performance Max - cardápio", "status": "PAUSED", "primaryStatus": "PAUSED", "advertisingChannelType": "PERFORMANCE_MAX" }, "campaignBudget": { "resourceName": "customers/4445556667/campaignBudgets/31000000002", "amountMicros": "80000000" } },
+      { "campaign": { "resourceName": "customers/4445556667/campaigns/21000000003", "id": "21000000003", "name": "Evento de inauguração", "status": "REMOVED", "primaryStatus": "REMOVED", "advertisingChannelType": "SEARCH" }, "campaignBudget": { "resourceName": "customers/4445556667/campaignBudgets/31000000003", "totalAmountMicros": "1500000000" } }
+    ],
+    "fieldMask": "campaign.id,campaign.name,campaign.status,campaign.primaryStatus,campaign.advertisingChannelType,campaignBudget.amountMicros,campaignBudget.totalAmountMicros",
+    "requestId": "req-camp"
+  }
+]

@@ -4,6 +4,7 @@ import type { Db } from '@liame/database';
 import type { AppConfig } from '../../config.js';
 import type { PontoMetrica } from '../../media/metric-store.js';
 import { type ClienteConector, ErroConector } from '../cliente-http.js';
+import { dataValida, diasNaJanela, fatias } from '../janela.js';
 import { type ConectorLeitura, type ContaDescoberta, type ContextoConta, type Credencial, type EntidadesLidas, type StatusCanonico, versaoRegistrada } from '../tipos.js';
 
 // Conector de LEITURA da Meta Marketing API (A2, G4; base de conhecimento §2.1). Versão vinda do
@@ -94,29 +95,9 @@ function janelasDe(a: Acao): [string, string][] {
   return out;
 }
 
-const DIA_MS = 86_400_000;
-const dia = (d: Date) => d.toISOString().slice(0, 10);
-
-/** Janela [inicio, fim] em fatias de até `dias` dias, sem buraco nem sobreposição. */
-export function fatias(inicio: string, fim: string, dias: number): { since: string; until: string }[] {
-  const out: { since: string; until: string }[] = [];
-  let atual = new Date(`${inicio}T00:00:00Z`);
-  const ultimo = new Date(`${fim}T00:00:00Z`);
-  while (atual <= ultimo) {
-    const fimFatia = new Date(Math.min(ultimo.getTime(), atual.getTime() + (dias - 1) * DIA_MS));
-    out.push({ since: dia(atual), until: dia(fimFatia) });
-    atual = new Date(fimFatia.getTime() + DIA_MS);
-  }
-  return out;
-}
-
 /** O id da conta entra no caminho da URL: só `act_` + dígitos. */
 function contaValida(id: string): void {
   if (!/^act_\d{1,20}$/.test(id)) throw new ErroConector('definitivo', 'meta_ads', 'conta da Meta com id inválido');
-}
-
-function dataValida(d: string): void {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Number.isNaN(Date.parse(`${d}T00:00:00Z`))) throw new ErroConector('definitivo', 'meta_ads', `data inválida: ${d.slice(0, 20)}`);
 }
 
 export class ConectorMeta implements ConectorLeitura {
@@ -228,10 +209,9 @@ export class ConectorMeta implements ConectorLeitura {
 
   async lerMetricas(conta: ContextoConta, janela: { inicio: string; fim: string }): Promise<PontoMetrica[]> {
     contaValida(conta.externalId);
-    dataValida(janela.inicio);
-    dataValida(janela.fim);
-    const total = (new Date(`${janela.fim}T00:00:00Z`).getTime() - new Date(`${janela.inicio}T00:00:00Z`).getTime()) / DIA_MS + 1;
-    const assincrono = total > this.opcoes.diasSincrono;
+    dataValida(this.provider, janela.inicio);
+    dataValida(this.provider, janela.fim);
+    const assincrono = diasNaJanela(janela.inicio, janela.fim) > this.opcoes.diasSincrono;
     const pontos: PontoMetrica[] = [];
     for (const fatia of fatias(janela.inicio, janela.fim, assincrono ? 30 : 7)) {
       const params = {
