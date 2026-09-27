@@ -19,7 +19,10 @@ export const NAVEGACAO: GrupoNav[] = [
   {
     id: 'agencia',
     rotulo: 'Agência',
-    itens: [{ href: '/pessoas', rotulo: 'Pessoas e acessos', icone: 'user-plus', permissao: 'pessoas.ver' }],
+    itens: [
+      { href: '/contas', rotulo: 'Contas conectadas', icone: 'plug', permissao: 'contas.ver' },
+      { href: '/pessoas', rotulo: 'Pessoas e acessos', icone: 'user-plus', permissao: 'pessoas.ver' },
+    ],
   },
   {
     id: 'conta',
