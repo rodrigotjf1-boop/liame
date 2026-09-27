@@ -40,6 +40,8 @@
 .nav-item .ic { width: 18px; height: 18px; }
 .nav-item .rot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-no { position: absolute; left: 4px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--fio); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fio) 22%, transparent); }
+/* número de avisos ao lado de "Atenção" (crítico + atenção) */
+.nav-cont { flex: none; min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: var(--radius-full); background: var(--danger-soft); color: var(--danger); font-size: 11px; font-weight: 600; }
 
 /* rodapé: quem está usando */
 .sb-rodape { margin-top: auto; padding-top: var(--sp-5); display: grid; gap: var(--sp-3); }
@@ -87,6 +89,7 @@
   .nav-grupo-rot { height: 1px; margin: 0 var(--sp-3) var(--sp-3); padding: 0; overflow: hidden; color: transparent; background: var(--border); }
   .nav-item { justify-content: center; padding: 0; height: 44px; }
   .nav-item .rot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav-item .nav-cont { position: absolute; top: 3px; right: 6px; min-width: 17px; height: 17px; padding: 0 4px; font-size: 10px; }
   .usuario { flex-direction: column; padding: 0; }
   .usuario-txt { display: none; }
 }

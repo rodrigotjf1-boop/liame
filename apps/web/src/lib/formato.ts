@@ -41,6 +41,25 @@ export function dataCompleta(iso: string): string {
   return diaMesAno.format(new Date(iso));
 }
 
+/** "08:10". */
+export function horaDe(iso: string): string {
+  return hora.format(new Date(iso));
+}
+
+/** "20/09, 08:10" (com o ano quando não é o ano de agora). */
+export function diaHora(iso: string, agora = new Date()): string {
+  const d = new Date(iso);
+  return `${d.getFullYear() === agora.getFullYear() ? diaMes.format(d) : diaMesAno.format(d)}, ${hora.format(d)}`;
+}
+
+/** "hoje, 08:10", "ontem, 23:47" ou "24/09, 19:32": sempre com a hora (atividade, atualização). */
+export function quandoComHora(iso: string, agora = new Date()): string {
+  const dias = diasAte(iso, agora);
+  if (dias === 0) return `hoje, ${horaDe(iso)}`;
+  if (dias === -1) return `ontem, ${horaDe(iso)}`;
+  return diaHora(iso, agora);
+}
+
 /** "vence hoje", "vence amanhã" ou "vence em 5 dias". */
 export function vencimento(iso: string, agora = new Date()): string {
   const dias = diasAte(iso, agora);
