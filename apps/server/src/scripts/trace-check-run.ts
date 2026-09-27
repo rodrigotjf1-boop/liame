@@ -44,7 +44,14 @@ export async function run(exporter: InMemorySpanExporter): Promise<number> {
     const email = `rastreio.${randomBytes(4).toString('hex')}@teste.liame.dev`;
     // Senha descartável gerada na hora (nada fixo no código).
     const password = `verificacao-${randomBytes(12).toString('base64url')}`;
-    await call('POST', '/v1/auth/signup', { name: 'Pessoa do Rastreio', email, password, company: { name: 'Empresa do Rastreio' } });
+    const termos = await call('GET', '/v1/legal/terms');
+    await call('POST', '/v1/auth/signup', {
+      name: 'Pessoa do Rastreio',
+      email,
+      password,
+      company: { name: 'Empresa do Rastreio' },
+      terms_version: termos.body.version,
+    });
     const token = /token=([A-Za-z0-9_-]+)/.exec(mailer.lastTo(email)?.text ?? '')?.[1];
     await call('POST', '/v1/auth/verify-email', { token });
     const login = await call('POST', '/v1/auth/login', { email, password });

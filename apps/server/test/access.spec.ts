@@ -14,6 +14,7 @@ const PUBLIC_ROUTES = [
   'POST /v1/inbox/:provider',
   'POST /v1/invitations/preview',
   'POST /v1/invitations/signup',
+  'GET /v1/legal/terms',
 ].sort();
 
 describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/lia-agente-3d/lia-agent.js", "$TURBO_ROOT$/lia-agente-3d/lia-avatar.svg"],
+      "outputs": [".next/**", "!.next/cache/**", "public/lia/**"]
+    }
+  }
+}

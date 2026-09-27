@@ -24,6 +24,9 @@ const Cnpj = z
   .transform((v) => v.replace(/\D/g, ''))
   .pipe(z.string().regex(/^\d{14}$/, { error: 'CNPJ precisa ter 14 dígitos' }));
 
+/** Versão dos Termos de Uso e da Política de Privacidade que a pessoa viu e aceitou ao criar o login. */
+export const TermsVersion = z.string().trim().min(1).max(60);
+
 export const SignupRequest = z.strictObject({
   name: z.string().trim().min(1).max(200),
   email: Email,
@@ -32,6 +35,7 @@ export const SignupRequest = z.strictObject({
     name: z.string().trim().min(1).max(200),
     cnpj: Cnpj.optional(),
   }),
+  terms_version: TermsVersion,
 });
 export type SignupRequest = z.infer<typeof SignupRequest>;
 
@@ -41,6 +45,14 @@ export const AcceptedResponse = z.strictObject({
   message: z.string(),
 });
 export type AcceptedResponse = z.infer<typeof AcceptedResponse>;
+
+/** Termos vigentes: a tela de cadastro mostra os links e devolve a versão no pedido. */
+export const LegalTermsResponse = z.strictObject({
+  version: z.string(),
+  terms_url: z.url(),
+  privacy_url: z.url(),
+});
+export type LegalTermsResponse = z.infer<typeof LegalTermsResponse>;
 
 export const TokenRequest = z.strictObject({ token: z.string().min(20).max(200) });
 export type TokenRequest = z.infer<typeof TokenRequest>;

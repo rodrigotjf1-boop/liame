@@ -1,3 +1,4 @@
+import { TERMS_VERSION_DEV } from '../../src/config.js';
 import { randomBytes } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -52,6 +53,9 @@ export function uniqueEmail(prefix = 'pessoa'): string {
   return `${prefix}.${randomBytes(5).toString('hex')}@teste.liame.dev`;
 }
 
+/** Versão dos termos fora de produção: o cadastro precisa mandar a vigente. */
+export const TERMOS = TERMS_VERSION_DEV;
+
 export const PASSWORD = 'uma frase longa de teste';
 
 /** Token do último link enviado para o e-mail. */
@@ -65,7 +69,7 @@ export function tokenFrom(mailer: MemoryMailer, email: string): string {
 /** Cadastra, confirma e entra. Devolve o cookie da sessão e o `me`. */
 export async function signupAndLogin(api: TestApi, email = uniqueEmail(), company = 'Restaurante de Teste') {
   const signup = await api.call('POST', '/v1/auth/signup', {
-    body: { name: 'Pessoa de Teste', email, password: PASSWORD, company: { name: company } },
+    body: { name: 'Pessoa de Teste', email, password: PASSWORD, company: { name: company }, terms_version: TERMOS },
   });
   if (signup.status !== 202) throw new Error(`cadastro: ${signup.status} ${JSON.stringify(signup.body)}`);
   const verify = await api.call('POST', '/v1/auth/verify-email', { body: { token: tokenFrom(api.mailer, email) } });

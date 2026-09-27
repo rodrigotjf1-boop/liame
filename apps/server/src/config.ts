@@ -25,6 +25,10 @@ const Env = z.object({
   REKOR_URL: z.url().optional(),
   /** Carimbo de tempo RFC 3161. Ex.: https://timestamp.sigstore.dev/api/v1/timestamp */
   TSA_URL: z.url().optional(),
+  /** Versão publicada dos Termos de Uso e da Política de Privacidade (o cadastro grava a que foi aceita). */
+  TERMS_VERSION: z.string().trim().min(1).max(60).optional(),
+  TERMS_URL: z.url().default('https://agencialiame.com/termos'),
+  PRIVACY_URL: z.url().default('https://agencialiame.com/privacidade'),
 });
 
 export type AppConfig = {
@@ -43,6 +47,8 @@ export type AppConfig = {
     rekorUrl: string | null;
     tsaUrl: string | null;
   };
+  /** Termos vigentes (A0-6): versão e endereços públicos. */
+  terms: { version: string; termsUrl: string; privacyUrl: string };
 };
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -65,6 +71,10 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error('config: em produção, a âncora da auditoria precisa de AUDIT_ANCHOR_SALT, REKOR_URL, AUDIT_ANCHOR_SIGNING_KEY e TSA_URL');
   }
   if (env.REKOR_URL && !env.AUDIT_ANCHOR_SIGNING_KEY) throw new Error('config: REKOR_URL exige AUDIT_ANCHOR_SIGNING_KEY');
+  // Ninguém cria conta em produção aceitando termos que não foram publicados (A0-6).
+  if (env.NODE_ENV === 'production' && (!env.TERMS_VERSION || !source.TERMS_URL || !source.PRIVACY_URL)) {
+    throw new Error('config: em produção, defina TERMS_VERSION, TERMS_URL e PRIVACY_URL (termos publicados)');
+  }
   const inboxSecrets = new Map<string, string>();
   for (const part of env.INBOX_SECRETS.split(',').map((p) => p.trim()).filter(Boolean)) {
     const i = part.indexOf(':');
@@ -89,7 +99,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       rekorUrl: env.REKOR_URL ?? null,
       tsaUrl: env.TSA_URL ?? null,
     },
+    terms: { version: env.TERMS_VERSION ?? TERMS_VERSION_DEV, termsUrl: env.TERMS_URL, privacyUrl: env.PRIVACY_URL },
   };
 }
+
+/** Versão dos termos fora de produção (rascunho v0.1 de docs/juridico, ainda não publicado). */
+export const TERMS_VERSION_DEV = 'rascunho-2026-09-25';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');

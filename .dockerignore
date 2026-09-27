@@ -18,5 +18,8 @@ docs
 # O SDK do web é gerado do contrato no build (packages/sdk): o contrato entra no contexto.
 !docs/openapi.json
 infra
-lia-agente-3d
+# Do kit da LIA, só o que o web serve (apps/web/scripts/copiar-lia.mjs); Estúdio, exemplos e imagens ficam fora.
+lia-agente-3d/*
+!lia-agente-3d/lia-agent.js
+!lia-agente-3d/lia-avatar.svg
 *.log

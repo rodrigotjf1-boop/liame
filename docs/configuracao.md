@@ -28,6 +28,8 @@ Legenda: **P** = obrigatória em produção · **S** = segredo.
 | `ALLOWED_ORIGINS` | Outras origens aceitas em mutações, separadas por vírgula | vazio |
 | `COOKIE_SECURE` | Cookie só por HTTPS | `true` em produção |
 | `BREACHED_PASSWORD_CHECK` | Checagem de senha vazada (HIBP, k-anonimato) | `on` |
+| `TERMS_VERSION` **P** | Versão **publicada** dos Termos de Uso e da Política de Privacidade; o cadastro e o convite gravam a que a pessoa aceitou (migration 0016). Em produção, sem ela a API não sobe (A0-6) | `rascunho-2026-09-25` fora de produção |
+| `TERMS_URL` · `PRIVACY_URL` **P** | Endereços públicos dos termos e da política (links das telas de cadastro) | `https://agencialiame.com/termos` · `/privacidade` |
 | `MAIL_TRANSPORT` **P** | `ses` em produção (Amazon SES São Paulo, D-A1-4); `memoria` é recusado em produção | `memoria` |
 
 ## Cofre (ADR-011, ADR-014)

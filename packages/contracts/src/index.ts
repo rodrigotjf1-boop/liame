@@ -2,6 +2,7 @@ export {
   AcceptedResponse,
   Email,
   ForgotPasswordRequest,
+  LegalTermsResponse,
   LoginRequest,
   MeResponse,
   MfaStatus,
@@ -11,6 +12,7 @@ export {
   RoleKey,
   SignupRequest,
   SwitchOrganizationRequest,
+  TermsVersion,
   TokenRequest,
 } from './auth.js';
 export { HealthResponse, ReadinessResponse } from './health.js';

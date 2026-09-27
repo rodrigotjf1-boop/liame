@@ -97,7 +97,12 @@ export function newRecoveryCodes(count = 10): string[] {
   });
 }
 
-/** O banco guarda só o hash do código de recuperação (entropia alta: SHA-256 basta). */
+/**
+ * O banco guarda só o hash do código de recuperação (entropia alta: SHA-256 basta). Normaliza o que a
+ * pessoa digita: caixa, espaço e hífen; e 0 → O, 1 → I (o base32 não tem 0 nem 1, que se confundem com
+ * as letras no papel).
+ */
 export function hashRecoveryCode(code: string): string {
-  return createHash('sha256').update(code.toUpperCase().replace(/[\s-]/g, '')).digest('hex');
+  const normalizado = code.toUpperCase().replace(/[\s-]/g, '').replaceAll('0', 'O').replaceAll('1', 'I');
+  return createHash('sha256').update(normalizado).digest('hex');
 }

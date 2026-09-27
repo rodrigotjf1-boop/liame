@@ -10,6 +10,7 @@ import {
   type TestApi,
   tokenFrom,
   uniqueEmail,
+  TERMOS,
 } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
@@ -28,7 +29,7 @@ describe.skipIf(!hasDb)('identidade: cadastro, e-mail, sessão, senha e empresa 
   it('cadastro → confirmação → login → /me com a empresa e o nível de dono', async () => {
     const email = uniqueEmail();
     const signup = await api.call('POST', '/v1/auth/signup', {
-      body: { name: 'Ana Dona', email, password: PASSWORD, company: { name: 'Cantina da Ana', cnpj: '12.345.678/0001-90' } },
+      body: { name: 'Ana Dona', email, password: PASSWORD, company: { name: 'Cantina da Ana', cnpj: '12.345.678/0001-90' }, terms_version: TERMOS },
     });
     expect(signup.status).toBe(202);
 
@@ -61,7 +62,7 @@ describe.skipIf(!hasDb)('identidade: cadastro, e-mail, sessão, senha e empresa 
   it('cadastro com e-mail já usado responde igual e não duplica a conta', async () => {
     const { email } = await signupAndLogin(api);
     const again = await api.call('POST', '/v1/auth/signup', {
-      body: { name: 'Outra', email, password: PASSWORD, company: { name: 'Outra empresa' } },
+      body: { name: 'Outra', email, password: PASSWORD, company: { name: 'Outra empresa' }, terms_version: TERMOS },
     });
     expect(again.status).toBe(202);
     expect(api.mailer.lastTo(email)?.subject).toMatch(/já tem conta/);
@@ -100,9 +101,36 @@ describe.skipIf(!hasDb)('identidade: cadastro, e-mail, sessão, senha e empresa 
     expect(Number(retryAfter)).toBeGreaterThan(0);
   });
 
+  it('o cadastro grava a versão dos termos vigentes; sem ela, ou com outra, recusa', async () => {
+    const vigentes = await api.call('GET', '/v1/legal/terms');
+    expect(vigentes.status).toBe(200);
+    expect(vigentes.body).toEqual({
+      version: TERMOS,
+      terms_url: 'https://agencialiame.com/termos',
+      privacy_url: 'https://agencialiame.com/privacidade',
+    });
+
+    const email = uniqueEmail('termos');
+    const corpo = { name: 'Téo', email, password: PASSWORD, company: { name: 'Téo Lanches' } };
+    const sem = await api.call('POST', '/v1/auth/signup', { body: corpo });
+    expect(sem.status).toBe(400);
+    expect(sem.body.errors).toEqual([expect.objectContaining({ path: 'terms_version' })]);
+    const outra = await api.call('POST', '/v1/auth/signup', { body: { ...corpo, terms_version: 'versao-antiga' } });
+    expect(outra.status).toBe(409);
+    expect(outra.body.code).toBe('termos-desatualizados');
+    expect(await ownerQuery('select 1 from liame.app_user where email = $1', [email])).toEqual([]);
+
+    expect((await api.call('POST', '/v1/auth/signup', { body: { ...corpo, terms_version: TERMOS } })).status).toBe(202);
+    const [u] = await ownerQuery<{ terms_version: string; aceitou_agora: boolean }>(
+      `select terms_version, terms_accepted_at > now() - interval '1 minute' as aceitou_agora from liame.app_user where email = $1`,
+      [email],
+    );
+    expect(u).toEqual({ terms_version: TERMOS, aceitou_agora: true });
+  });
+
   it('senha curta é recusada com o campo indicado', async () => {
     const r = await api.call('POST', '/v1/auth/signup', {
-      body: { name: 'X', email: uniqueEmail(), password: 'curta', company: { name: 'Y' } },
+      body: { name: 'X', email: uniqueEmail(), password: 'curta', company: { name: 'Y' }, terms_version: TERMOS },
     });
     expect(r.status).toBe(400);
     expect(r.body.errors).toEqual([expect.objectContaining({ path: 'password' })]);
@@ -116,7 +144,7 @@ describe.skipIf(!hasDb)('identidade: cadastro, e-mail, sessão, senha e empresa 
 
   it('link de confirmação é de uso único', async () => {
     const email = uniqueEmail();
-    await api.call('POST', '/v1/auth/signup', { body: { name: 'Bia', email, password: PASSWORD, company: { name: 'Bia Lanches' } } });
+    await api.call('POST', '/v1/auth/signup', { body: { name: 'Bia', email, password: PASSWORD, company: { name: 'Bia Lanches' }, terms_version: TERMOS } });
     const token = tokenFrom(api.mailer, email);
     expect((await api.call('POST', '/v1/auth/verify-email', { body: { token } })).status).toBe(200);
     const again = await api.call('POST', '/v1/auth/verify-email', { body: { token } });

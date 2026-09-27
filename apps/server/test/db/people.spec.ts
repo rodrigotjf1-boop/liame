@@ -11,6 +11,7 @@ import {
   type TestApi,
   tokenFrom,
   uniqueEmail,
+  TERMOS,
 } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
@@ -33,7 +34,7 @@ describe.skipIf(!hasDb)('pessoas e convites', () => {
     const inv = await api.call('POST', '/v1/invitations', { cookie: by.cookie, body: { email, role, ...extra } });
     expect(inv.status).toBe(201);
     const s = await api.call('POST', '/v1/invitations/signup', {
-      body: { token: tokenFrom(api.mailer, email), name: `Pessoa ${role}`, password: PASSWORD },
+      body: { token: tokenFrom(api.mailer, email), name: `Pessoa ${role}`, password: PASSWORD, terms_version: TERMOS },
     });
     expect(s.status).toBe(200);
     if (role !== 'somente_leitura' && role !== 'so_relatorios') await enableMfa(api, s.cookie!);
@@ -80,7 +81,7 @@ describe.skipIf(!hasDb)('pessoas e convites', () => {
       account_exists: false,
     });
 
-    const s = await api.call('POST', '/v1/invitations/signup', { body: { token, name: 'Juliana', password: PASSWORD } });
+    const s = await api.call('POST', '/v1/invitations/signup', { body: { token, name: 'Juliana', password: PASSWORD, terms_version: TERMOS } });
     expect(s.status).toBe(200);
     expect(s.cookie).toMatch(/^liame_sessao=/);
     expect(s.body).toMatchObject({
@@ -99,7 +100,7 @@ describe.skipIf(!hasDb)('pessoas e convites', () => {
     expect(depois.body.members.map((m: { role: string }) => m.role)).toEqual(['dono', 'administrador']);
 
     // Link de uso único.
-    expect((await api.call('POST', '/v1/invitations/signup', { body: { token, name: 'De novo', password: PASSWORD } })).status).toBe(400);
+    expect((await api.call('POST', '/v1/invitations/signup', { body: { token, name: 'De novo', password: PASSWORD, terms_version: TERMOS } })).status).toBe(400);
   });
 
   it('o link só vale para o e-mail convidado, vence e deixa de valer quando é cancelado ou substituído', async () => {
@@ -177,7 +178,7 @@ describe.skipIf(!hasDb)('pessoas e convites', () => {
     });
     const token = tokenFrom(api.mailer, outra.email);
     expect((await api.call('POST', '/v1/invitations/preview', { body: { token } })).body.account_exists).toBe(true);
-    const criar = await api.call('POST', '/v1/invitations/signup', { body: { token, name: 'X', password: PASSWORD } });
+    const criar = await api.call('POST', '/v1/invitations/signup', { body: { token, name: 'X', password: PASSWORD, terms_version: TERMOS } });
     expect(criar.body.code).toBe('conta-existente');
 
     const aceite = await api.call('POST', '/v1/invitations/accept', { cookie: outra.cookie, body: { token } });

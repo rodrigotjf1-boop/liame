@@ -274,6 +274,8 @@ Protótipo navegável: `mockups/prototipo-entrada.html` (a barra do topo escolhe
 
 ### 10.3 Para o dono decidir
 
+> **26/09/2026:** itens 1, 3 e 4 aprovados, 5 autorizado; o 2 aguarda a comparação (`mockups/previas/painel-lia-comparacao.png` e o seletor "Painel da LIA" no protótipo).
+
 1. **Caminho B** com a LIA 3D no palco (e o avatar 2D no celular).
 2. **Palco sempre Noite**, também no tema claro (a LIA e a marca se destacam mais no escuro).
 3. **Termos no cadastro:** o protótipo mostra "Ao criar a conta, você concorda com os Termos de Uso e a Política de Privacidade". Depende da publicação dos termos (A0-6); guardar a versão aceita pede um campo novo na API.

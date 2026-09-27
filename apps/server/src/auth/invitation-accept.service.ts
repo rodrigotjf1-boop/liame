@@ -74,6 +74,7 @@ export class InvitationAcceptService {
   /** Quem ainda não tem conta cria o login pelo convite: o link prova o e-mail, então a conta já nasce confirmada. */
   async signup(input: InvitationSignupRequest, meta: RequestMeta): Promise<{ token: string; me: MeResponse }> {
     await this.rateLimit.consume(`convite:ip:${meta.ip ?? '-'}`, 30, 900);
+    this.auth.assertCurrentTerms(input.terms_version);
     await this.auth.rejectBreached(input.password);
     const passwordHash = await hashPassword(input.password);
     const outbox: MailMessage[] = [];
@@ -83,8 +84,8 @@ export class InvitationAcceptService {
       if (exists.rows[0]) throw accountExists();
       const userId = uuidv7();
       await tx.execute(sql`
-        insert into liame.app_user (id, email, name, password_hash, email_verified_at)
-        values (${userId}, ${inv.email}, ${input.name}, ${passwordHash}, now())`);
+        insert into liame.app_user (id, email, name, password_hash, email_verified_at, terms_version, terms_accepted_at)
+        values (${userId}, ${inv.email}, ${input.name}, ${passwordHash}, now(), ${input.terms_version}, now())`);
       await this.join(tx, inv, userId, input.name, outbox);
       const token = await this.sessions.create(tx, { userId, tenantId: inv.tenant_id, ip: meta.ip, userAgent: meta.userAgent });
       const me = await this.auth.loadMe(tx, userId, inv.tenant_id, null);

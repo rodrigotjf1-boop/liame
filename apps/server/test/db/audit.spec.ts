@@ -20,6 +20,7 @@ import {
   type TestApi,
   tokenFrom,
   uniqueEmail,
+  TERMOS,
 } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
@@ -102,7 +103,7 @@ describe.skipIf(!hasDb)('auditoria com hash encadeado e âncora diária', () => 
     const brand = await api.call('POST', '/v1/brands', { cookie: dono.cookie, body: { name: 'Filial Centro' } });
     const email = uniqueEmail('adm');
     await api.call('POST', '/v1/invitations', { cookie: dono.cookie, body: { email, role: 'administrador', approve_limit_micros: 50_000_000 } });
-    const adm = await api.call('POST', '/v1/invitations/signup', { body: { token: tokenFrom(api.mailer, email), name: 'Juliana', password: PASSWORD } });
+    const adm = await api.call('POST', '/v1/invitations/signup', { body: { token: tokenFrom(api.mailer, email), name: 'Juliana', password: PASSWORD, terms_version: TERMOS } });
     const people = await api.call('GET', '/v1/people', { cookie: dono.cookie });
     const memberId = people.body.members.find((m: { email: string }) => m.email === email).id;
     await api.call('PATCH', `/v1/members/${memberId}`, { cookie: dono.cookie, body: { approve_limit_micros: 80_000_000 } });

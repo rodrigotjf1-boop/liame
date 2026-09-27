@@ -78,8 +78,8 @@
   .app { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
   .sidebar { align-items: center; padding: var(--sp-4) var(--sp-2) var(--sp-3); }
   .sb-logo { padding: 0; justify-content: center; }
-  .logo-completo { display: none; }
-  .logo-simbolo { display: block; }
+  .sidebar .logo-completo { display: none; }
+  .sidebar .logo-simbolo { display: block; }
   .ctx { width: 44px; padding: 5px; justify-content: center; }
   .ctx-txt, .ctx > .ic { display: none; }
   .ctx-menu { right: auto; width: 240px; }
