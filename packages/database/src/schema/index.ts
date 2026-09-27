@@ -1,5 +1,6 @@
 import * as actions from './actions.js';
 import * as audit from './audit.js';
+import * as connectors from './connectors.js';
 import * as control from './control.js';
 import * as events from './events.js';
 import * as identity from './identity.js';
@@ -8,6 +9,7 @@ import * as vault from './vault.js';
 
 export * from './actions.js';
 export * from './audit.js';
+export * from './connectors.js';
 export * from './control.js';
 export * from './events.js';
 export * from './identity.js';
@@ -62,4 +64,8 @@ export const allTables = [
   media.rawPayload,
   media.syncRun,
   media.syncState,
+  connectors.connectorCapability,
+  connectors.apiDeprecationNotice,
+  connectors.quotaBucket,
+  connectors.circuitState,
 ];
