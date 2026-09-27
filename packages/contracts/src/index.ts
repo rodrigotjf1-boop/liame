@@ -18,6 +18,14 @@ export {
 export { HealthResponse, ReadinessResponse } from './health.js';
 export { MfaVerifyRequest, RecoveryCodesResponse, TotpCodeRequest, TotpSetupResponse } from './mfa.js';
 export {
+  RevokedSessionsResponse,
+  SecurityEvent,
+  SecurityEventsResponse,
+  SecuritySummaryResponse,
+  SessionListResponse,
+  SessionResponse,
+} from './security.js';
+export {
   BrandListQuery,
   BrandListResponse,
   BrandResponse,
