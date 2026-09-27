@@ -57,6 +57,7 @@ export class AuthService {
 
   async signup(input: SignupRequest, meta: RequestMeta): Promise<AcceptedResponse> {
     await this.rateLimit.consume(`cadastro:ip:${meta.ip ?? '-'}`, 10, 3600);
+    this.assertCurrentTerms(input.terms_version);
     await this.rejectBreached(input.password);
     const passwordHash = await hashPassword(input.password);
 
@@ -76,7 +77,9 @@ export class AuthService {
         }
         const userId = uuidv7();
         const tenantId = uuidv7();
-        await tx.execute(sql`insert into liame.app_user (id, email, name, password_hash) values (${userId}, ${input.email}, ${input.name}, ${passwordHash})`);
+        await tx.execute(sql`
+          insert into liame.app_user (id, email, name, password_hash, terms_version, terms_accepted_at)
+          values (${userId}, ${input.email}, ${input.name}, ${passwordHash}, ${input.terms_version}, now())`);
         await tx.execute(sql`insert into liame.organization (id, name, cnpj) values (${tenantId}, ${input.company.name}, ${input.company.cnpj ?? null})`);
         await tx.execute(sql`insert into liame.membership (id, tenant_id, user_id, role_key, dual_approval, billing_access)
                              values (${uuidv7()}, ${tenantId}, ${userId}, 'dono', false, true)`);
@@ -90,7 +93,7 @@ export class AuthService {
           action: 'conta.criar',
           resourceType: 'organization',
           resourceId: tenantId,
-          after: { company: input.company.name },
+          after: { company: input.company.name, terms_version: input.terms_version },
           traceId: activeTraceId(),
           origin: 'api',
         });
@@ -291,6 +294,16 @@ export class AuthService {
       traceId: activeTraceId(),
       origin: 'api',
     });
+  }
+
+  /**
+   * A tela mostra os termos vigentes e devolve a versão; se mudaram no meio do caminho, a pessoa confere
+   * a versão nova antes de aceitar (a conta grava o que ela viu).
+   */
+  assertCurrentTerms(version: string): void {
+    if (version !== this.config.terms.version) {
+      throw new AppProblem(409, 'termos-desatualizados', 'Os termos mudaram', 'Recarregue a página e confira a versão nova dos termos.');
+    }
   }
 
   async rejectBreached(password: string): Promise<void> {

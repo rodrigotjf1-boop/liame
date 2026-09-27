@@ -31,3 +31,6 @@ packages/sdk/src/schema.ts
 
 # chaves locais das empresas (cofre em desenvolvimento)
 .liame-chaves-locais.json
+
+# Montado no build a partir de lia-agente-3d/ e do three.js (scripts/copiar-lia.mjs)
+apps/web/public/lia/

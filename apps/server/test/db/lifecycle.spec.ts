@@ -9,7 +9,7 @@ import { DATA_CLASSES } from '../../src/lifecycle/data-classes.js';
 import { Mailer, type MemoryMailer } from '../../src/mail/mailer.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { LifecyclePurgeService } from '../../src/worker/lifecycle-purge.service.js';
-import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
+import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom, uniqueEmail, TERMOS } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 describe.skipIf(!hasDb)('ciclo de vida: arquivar, reter, encerrar e expurgar (ADR-014)', () => {
@@ -112,7 +112,7 @@ describe.skipIf(!hasDb)('ciclo de vida: arquivar, reter, encerrar e expurgar (AD
     const dono = await owner('Hamburgueria Encerrando');
     const email = uniqueEmail('adm');
     await api.call('POST', '/v1/invitations', { cookie: dono.cookie, body: { email, role: 'administrador', approve_limit_micros: 1_000_000 } });
-    await api.call('POST', '/v1/invitations/signup', { body: { token: tokenFrom(api.mailer, email), name: 'Admin', password: PASSWORD } });
+    await api.call('POST', '/v1/invitations/signup', { body: { token: tokenFrom(api.mailer, email), name: 'Admin', password: PASSWORD, terms_version: TERMOS } });
     await api.call('POST', '/v1/invitations', { cookie: dono.cookie, body: { email: uniqueEmail('pendente'), role: 'somente_leitura' } });
     await api.call('PUT', '/v1/sandbox/resources', { cookie: dono.cookie, body: { account_id: 'a', resource_id: 'r', state: { daily_budget_micros: 100_000_000 } } });
     await api.call('POST', '/v1/policies', { cookie: dono.cookie, body: { document: { rules: [{ type: 'autonomy', mode: 'APPROVAL' }] } } });

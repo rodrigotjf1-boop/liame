@@ -21,6 +21,8 @@ WORKDIR /app
 # O standalone traz o servidor e só as dependências rastreadas; estáticos e public vão ao lado.
 COPY --from=build --chown=node:node /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static
+# public/ não vai no standalone: a LIA 3D (public/lia, montado no build) é servida daqui.
+COPY --from=build --chown=node:node /repo/apps/web/public ./apps/web/public
 USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]

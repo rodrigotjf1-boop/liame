@@ -13,6 +13,7 @@ import {
   type TestApi,
   tokenFrom,
   uniqueEmail,
+  TERMOS,
 } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
@@ -52,7 +53,7 @@ describe.skipIf(!hasDb)('papéis como dado', () => {
     if (APPROVERS.has(role)) body.approve_limit_micros = 1_000_000;
     expect((await api.call('POST', '/v1/invitations', { cookie: dono.cookie, body })).status).toBe(201);
     const s = await api.call('POST', '/v1/invitations/signup', {
-      body: { token: tokenFrom(api.mailer, email), name: role, password: PASSWORD },
+      body: { token: tokenFrom(api.mailer, email), name: role, password: PASSWORD, terms_version: TERMOS },
     });
     if (APPROVERS.has(role)) await enableMfa(api, s.cookie!);
     return { email, cookie: s.cookie!, me: s.body };

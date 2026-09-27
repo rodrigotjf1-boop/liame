@@ -9415,13 +9415,19 @@
                       "name"
                     ],
                     "additionalProperties": false
+                  },
+                  "terms_version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
                   }
                 },
                 "required": [
                   "name",
                   "email",
                   "password",
-                  "company"
+                  "company",
+                  "terms_version"
                 ],
                 "additionalProperties": false
               }
@@ -11357,12 +11363,18 @@
                     "type": "string",
                     "minLength": 15,
                     "maxLength": 200
+                  },
+                  "terms_version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
                   }
                 },
                 "required": [
                   "token",
                   "name",
-                  "password"
+                  "password",
+                  "terms_version"
                 ],
                 "additionalProperties": false
               }
@@ -11999,6 +12011,48 @@
         "summary": "Aceitar convite",
         "tags": [
           "people"
+        ]
+      }
+    },
+    "/v1/legal/terms": {
+      "get": {
+        "description": "Versão e endereços dos Termos de Uso e da Política de Privacidade. O cadastro envia a versão que a pessoa aceitou.",
+        "operationId": "LegalController_terms",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "terms_url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "privacy_url": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "terms_url",
+                    "privacy_url"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "summary": "Termos vigentes",
+        "tags": [
+          "auth"
         ]
       }
     }

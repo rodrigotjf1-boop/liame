@@ -5,7 +5,7 @@ import { planHashOf } from '../../src/actions/action.service.js';
 import { TOOLS } from '../../src/actions/tools.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { FlagService } from '../../src/flags/flag.service.js';
-import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
+import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom, uniqueEmail, TERMOS } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 const REAL = 1_000_000;
@@ -26,7 +26,7 @@ describe.skipIf(!hasDb)('pedido de ação: política, orçamento, fingerprint e 
   async function member(dono: Owner, role: string, limit: number | null): Promise<Person> {
     const email = uniqueEmail(role);
     await api.call('POST', '/v1/invitations', { cookie: dono.cookie, body: { email, role, approve_limit_micros: limit } });
-    const s = await api.call('POST', '/v1/invitations/signup', { body: { token: tokenFrom(api.mailer, email), name: `Pessoa ${role}`, password: PASSWORD } });
+    const s = await api.call('POST', '/v1/invitations/signup', { body: { token: tokenFrom(api.mailer, email), name: `Pessoa ${role}`, password: PASSWORD, terms_version: TERMOS } });
     const { secret } = await enableMfa(api, s.cookie!);
     return { cookie: s.cookie!, userId: s.body.user.id, secret, email };
   }

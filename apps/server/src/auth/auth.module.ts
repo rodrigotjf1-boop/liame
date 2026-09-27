@@ -10,6 +10,7 @@ import { AuthController, MeController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { InvitationAcceptService } from './invitation-accept.service.js';
 import { InvitationController } from './invitation.controller.js';
+import { LegalController } from './legal.controller.js';
 import { MfaController } from './mfa.controller.js';
 import { MfaService } from './mfa.service.js';
 import { RateLimitService } from './rate-limit.service.js';
@@ -17,7 +18,7 @@ import { SessionService } from './session.service.js';
 
 @Global()
 @Module({
-  controllers: [AuthController, MeController, MfaController, InvitationController],
+  controllers: [AuthController, MeController, MfaController, InvitationController, LegalController],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
     {

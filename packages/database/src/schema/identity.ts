@@ -31,6 +31,9 @@ export const appUser = liame.table('app_user', {
   totpLastStep: bigint('totp_last_step', { mode: 'number' }),
   /** App autenticador ativo desde (migration 0015). */
   mfaEnabledAt: timestamp('mfa_enabled_at', { withTimezone: true }),
+  /** Termos aceitos ao criar o login: versão e quando (migration 0016). */
+  termsVersion: text('terms_version'),
+  termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

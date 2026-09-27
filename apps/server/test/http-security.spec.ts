@@ -62,10 +62,18 @@ describe('fail-fast da configuração em produção', () => {
     AUDIT_ANCHOR_SIGNING_KEY: 'chave',
     REKOR_URL: 'https://rekor.exemplo.dev',
     TSA_URL: 'https://tsa.exemplo.dev/api/v1/timestamp',
+    TERMS_VERSION: '2026-10-01',
+    TERMS_URL: 'https://agencialiame.com/termos',
+    PRIVACY_URL: 'https://agencialiame.com/privacidade',
   } as NodeJS.ProcessEnv;
 
   it('sobe com a configuração completa, cookie seguro por padrão', () => {
-    expect(loadConfig(prod)).toMatchObject({ env: 'production', cookieSecure: true, appUrl: 'https://app.agencialiame.com' });
+    expect(loadConfig(prod)).toMatchObject({
+      env: 'production',
+      cookieSecure: true,
+      appUrl: 'https://app.agencialiame.com',
+      terms: { version: '2026-10-01' },
+    });
   });
 
   it('recusa subir sem APP_URL, com origem sem https ou com cookie inseguro', () => {
@@ -77,5 +85,8 @@ describe('fail-fast da configuração em produção', () => {
     expect(() => loadConfig({ ...prod, MAIL_TRANSPORT: 'memoria' })).toThrow('transporte real');
     expect(() => loadConfig({ ...prod, WEBHOOK_ALLOW_PRIVATE_NETWORK: 'true' })).toThrow('SSRF');
     expect(() => loadConfig({ ...prod, TSA_URL: undefined })).toThrow('âncora');
+    // Ninguém aceita termos que não foram publicados (A0-6).
+    expect(() => loadConfig({ ...prod, TERMS_VERSION: undefined })).toThrow('termos publicados');
+    expect(() => loadConfig({ ...prod, PRIVACY_URL: undefined })).toThrow('termos publicados');
   });
 });

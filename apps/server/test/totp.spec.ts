@@ -67,5 +67,7 @@ describe('TOTP (RFC 6238)', () => {
     expect(new Set(codes).size).toBe(10);
     expect(codes[0]).toMatch(/^[A-Z2-7]{5}-[A-Z2-7]{5}$/);
     expect(hashRecoveryCode(codes[0]!.toLowerCase().replace('-', ''))).toBe(hashRecoveryCode(codes[0]!));
+    // Zero e um digitados no lugar das letras O e I (o base32 não tem 0 nem 1).
+    expect(hashRecoveryCode('4035H-3FWT1')).toBe(hashRecoveryCode('4O35H-3FWTI'));
   });
 });

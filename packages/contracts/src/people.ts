@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Email, Password, RoleKey } from './auth.js';
+import { Email, Password, RoleKey, TermsVersion } from './auth.js';
 
 // Pessoas e acessos (ADR-017): o dono convida por e-mail quem administra por ele.
 // Dinheiro em micros (1 real = 1.000.000), como no resto do modelo de dados.
@@ -94,5 +94,6 @@ export const InvitationSignupRequest = z.strictObject({
   token: z.string().min(20).max(200),
   name: z.string().trim().min(1).max(200),
   password: Password,
+  terms_version: TermsVersion,
 });
 export type InvitationSignupRequest = z.infer<typeof InvitationSignupRequest>;
