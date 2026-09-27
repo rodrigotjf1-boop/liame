@@ -48,4 +48,16 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   workflow_run: { class: 'INTERNAL', retention: 'com a empresa' },
   workflow_step: { class: 'INTERNAL', retention: 'com a empresa' },
   purge_certificate: { class: 'CONFIDENTIAL', retention: '5 anos (prova do expurgo)' },
+  // Mídia (A2): dados das contas de anúncio e de análise da própria empresa.
+  connected_account: { class: 'CONFIDENTIAL', retention: 'com a marca e a empresa' },
+  campaign: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  ad_group: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  creative: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  ad: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  metric_observation: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (revisar: 37 meses, como a Meta)' },
+  metric_latest: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  metric_mapping: { class: 'PUBLIC', retention: 'do produto' },
+  raw_payload: { class: 'CONFIDENTIAL', retention: '30 dias (reprocessamento)', purge: { job: 'payload_bruto', days: 30 } },
+  sync_run: { class: 'INTERNAL', retention: '90 dias', purge: { job: 'execucao_sync', days: 90 } },
+  sync_state: { class: 'INTERNAL', retention: 'com a conta conectada' },
 };

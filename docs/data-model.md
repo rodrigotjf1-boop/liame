@@ -53,7 +53,7 @@ metric_observation(
   metric_value, source_version, quality)
 ```
 
-Com isso dá para responder "quanto a plataforma dizia naquela data?" e "quanto ela diz hoje sobre aquela data?". Particionado por mês de `metric_date`. Uma visão materializada `metric_latest` guarda o último valor observado por chave para os painéis.
+Com isso dá para responder "quanto a plataforma dizia naquela data?" e "quanto ela diz hoje sobre aquela data?". Particionado por mês de `metric_date` **quando o volume pedir** (D-A2-6: adiado; hoje índice por chave + BRIN em `observed_at`). `metric_latest` guarda o último valor observado por chave para os painéis — **tabela mantida na escrita, não visão materializada** (visão materializada não tem RLS; D-A2-5). Linha nova em `metric_observation` só quando o número muda (D-A2-7); a aplicação só insere.
 
 **Mapeamento:** `metric_mapping(provider, provider_metric, canonical_metric, transform, confidence)`. Métrica sem equivalente fica específica do provider, sem ser espremida numa tabela plana.
 
