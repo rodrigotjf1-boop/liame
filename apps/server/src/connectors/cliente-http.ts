@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { setTimeout as esperar } from 'node:timers/promises';
 import type { Db } from '@liame/database';
 import { Logger } from '@nestjs/common';
@@ -141,7 +142,7 @@ export class ClienteConector {
   private async pausa(tentativa: number, pedidoMs: number | null): Promise<void> {
     if (tentativa >= this.cfg.tentativas) return;
     const base = Math.min(8_000, 500 * 2 ** (tentativa - 1));
-    await esperar(pedidoMs ?? base + Math.floor(Math.random() * base));
+    await esperar(pedidoMs ?? base + randomInt(0, base));
   }
 
   /** Aviso de depreciação visto numa resposta: guardado para o Vigia. Nunca derruba a chamada (V5). */
