@@ -18,6 +18,8 @@ docs
 # O SDK do web é gerado do contrato no build (packages/sdk): o contrato entra no contexto.
 !docs/openapi.json
 infra
+# Certificado raiz do Supabase (público): a API, o worker e as migrations verificam o servidor do banco.
+!infra/supabase/prod-ca-2021.crt
 # Do kit da LIA, só o que o web serve (apps/web/scripts/copiar-lia.mjs); Estúdio, exemplos e imagens ficam fora.
 lia-agente-3d/*
 !lia-agente-3d/lia-agent.js

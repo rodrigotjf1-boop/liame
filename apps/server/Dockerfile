@@ -24,6 +24,8 @@ ARG APP_VERSION=dev
 ENV NODE_ENV=production APP_VERSION=${APP_VERSION} PORT=3001
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
+# Certificado raiz do Supabase (público): as URLs do banco usam sslmode=verify-full&sslrootcert=/app/certs/supabase-ca.crt.
+COPY --chown=node:node infra/supabase/prod-ca-2021.crt ./certs/supabase-ca.crt
 # Sem root em tempo de execução.
 USER node
 EXPOSE 3001
