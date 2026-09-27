@@ -26,7 +26,7 @@ Playbook `security-hardening` aplicado ao Liame no fim da A1. Cada item diz onde
 ## Limitações conscientes
 
 - **Limite global por IP** fica na borda (Cloudflare WAF, security-model §8) quando o domínio for configurado; na aplicação há limite só nas rotas de autenticação e de convite.
-- **CSP com nonce no web** entra com as telas (hoje o web não tem página de produto).
+- **CSP no web** (27/09/2026, `apps/web/next.config.ts`): `default-src 'self'`; scripts só do próprio app com **Subresource Integrity** (hash no build, `experimental.sri`); `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'none'`, `connect-src` só o app e a API, `upgrade-insecure-requests` em produção. **Sem nonce:** o app usa Cache Components (ADR-001), e nonce exige renderizar toda página por requisição (a documentação do Next 16.3 diz que é incompatível com a pré-renderização parcial). Os scripts inline do React e do Next mudam a cada build, então `script-src` leva `'unsafe-inline'` (testado no build de produção: sem ele a hidratação quebra, React #412; com ele, nenhuma violação). A versão mais rígida (nonce, com as telas logadas renderizadas por requisição) está proposta ao dono em `decisoes-design.md` (27/09/2026).
 - **Grype falha só em crítico com correção disponível** (`--only-fixed`); alto e médio aparecem no log e no SBOM, para revisão.
 - **Verificação noturna** (`grype sbom:` sem rebuild, TruffleHog no histórico) fica para quando houver deploy; hoje o SBOM sai como artefato de cada execução (90 dias).
 - **Semgrep local no Windows** funciona (Python 3.14, `PYTHONUTF8=1`): rodar antes do PR evita a ida e volta do ERR-012.

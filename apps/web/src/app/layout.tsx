@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
-import { SCRIPT_TEMA } from '@/components/shell/botao-tema';
+import { SCRIPT_TEMA } from '@/lib/tema';
 import './globals.css';
 
 // Fontes do kit servidas pelo próprio app (licença OFL em src/fonts): o build não depende de rede (ERR-018).

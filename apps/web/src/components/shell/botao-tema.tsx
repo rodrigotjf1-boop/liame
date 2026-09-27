@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
+import { CHAVE_TEMA as CHAVE } from '@/lib/tema';
 
 // Tema claro (Papel) ou escuro (Noite). Sem escolha, segue o sistema. A escolha é conveniência de quem
 // usa este navegador: fica no localStorage, nunca dado de negócio (e o acesso pode falhar sem quebrar nada).
-
-const CHAVE = 'liame:tema';
 
 function temaAtual(): 'light' | 'dark' {
   const escolhido = document.documentElement.dataset.theme;
@@ -39,4 +38,3 @@ export function BotaoTema() {
 }
 
 /** Aplica o tema salvo antes da primeira pintura (sem piscar o tema errado). */
-export const SCRIPT_TEMA = `try{var t=localStorage.getItem('${CHAVE}');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}`;
