@@ -43,6 +43,13 @@ pt-BR, sentence case, voz ativa. Tokens semânticos no front (nada de cor crua).
 
 O Liame é prestado pela **SISTER TECNOLOGIA LTDA** (marca DMS Tecnologias; nome fantasia SISTER SOFTWARE E SOLUCOES), CNPJ 67.748.508/0001-43, Rio de Janeiro/RJ. Apps de plataformas, contratos e documentos jurídicos vão no nome dela. Documentos jurídicos em `docs/juridico/`.
 
+**Documentos jurídicos vivos (decisão do dono, 28/09/2026).** Os Termos, a Política de Privacidade e o Contrato de Dados acompanham o produto durante o desenvolvimento:
+
+- Toda implementação ou mudança de processo que altere o que eles dizem (dado coletado, finalidade, fornecedor ou região, prazo, direito do titular, cobrança, o que os funcionários de IA fazem, medida de segurança) **atualiza `docs/juridico/` no mesmo PR**, com a cláusula nova ou ajustada, e registra a mudança no README jurídico ("Mudanças desde a v0.2").
+- A **aprovação final e a revisão do advogado** ficam para quando o Liame for disponibilizado para distribuição e uso.
+- Onde um processo depender deles antes disso (revisão de app da Meta e do Google, produção com `TERMS_VERSION`, página de exclusão de dados), usa-se a versão vigente do rascunho, e ela é atualizada depois. Vale a checagem de verdade (README jurídico §3): nada publicado descreve como existente o que ainda não existe.
+- Mudança depois de publicado: versão nova (`TERMS_VERSION`), aviso de 30 dias (Termos 15) e novo aceite de quem já usa.
+
 ## 7. Código
 
 - **Tudo ESM** (`"type": "module"`), apps e pacotes (ADR-001, ERR-001). Imports relativos com `.js`; `import.meta.dirname`; sem import circular entre módulos.
