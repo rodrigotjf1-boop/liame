@@ -1,6 +1,6 @@
 # Documentos jurídicos do Liame (A0-6)
 
-> **Rascunho 0.1 · 25/09/2026 · para revisão jurídica.** Não é parecer jurídico. Os textos foram escritos a partir das decisões do projeto (ADR-013, 014, 016 e 017; `data-model.md` §5 e §9; `security-model.md`) e da base de conhecimento (§6, §14, §17), com os fatos legais reconferidos nas fontes oficiais (seção 4).
+> **Rascunho 0.2 · 28/09/2026 · para revisão jurídica.** Não é parecer jurídico. Os textos foram escritos a partir das decisões do projeto (ADR-013, 014, 016 e 017; `data-model.md` §5 e §9; `security-model.md`) e da base de conhecimento (§6, §14, §17), com os fatos legais reconferidos nas fontes oficiais (seção 4).
 
 | Documento | Para quem | Onde publicar |
 | --- | --- | --- |
@@ -18,24 +18,23 @@ Também serão necessárias: a **página de exclusão de dados** (Meta) e a **li
 | --- | --- | --- |
 | 1 | Empresa que presta o Liame | **SISTER TECNOLOGIA LTDA** (nome fantasia SISTER SOFTWARE E SOLUCOES; marca DMS Tecnologias), CNPJ 67.748.508/0001-43, Rua Visconde de Pirajá, 414, sala 718, Ipanema, Rio de Janeiro/RJ, CEP 22410-905 (cartão CNPJ). Os apps da Meta e do Google vão no nome dela |
 | 2 | Encarregado de dados | **Rodrigo de Oliveira**, appdevsolutionday@gmail.com. A Res. 18/2024 pede o nome completo: se houver sobrenome além deste, completar |
-| 3 | E-mail de contato | appdevsolutionday@gmail.com (canais e horário do suporte ainda em aberto) |
+| 3 | Contato e suporte | **suporte@agencialiame.com** e WhatsApp da LIA; segunda a sexta, 9h às 18h (Brasília), resposta em até 1 dia útil; incidente de segurança a qualquer hora pelo e-mail (Termos 12.2 e 17; 28/09). O canal do titular segue com o encarregado (item 2) |
 | 5 | Uso de IA acima do plano | **Estudo de uso caso a caso**, com custo e responsável: estimativa antes, sugestão da forma mais econômica e aprovação do cliente quando o custo for dele (Termos 10.2; D11) |
 | 9 | Foro | Rio de Janeiro/RJ, sede da empresa (trocar se preferir outro) |
 | 11 | E-mail do serviço | Amazon SES em São Paulo (plano da A1, D-A1-4, aprovado) |
 | 12 | Regem e RegemCast | Mesma empresa: não são suboperadores; ficam no anexo só como serviços que o cliente conecta |
+| 4 | Arrependimento (28/09) | Primeira contratação: desistência em até **7 dias corridos** do primeiro pagamento, com devolução integral (Termos 11.1) |
+| 6 | Inadimplência (28/09) | Aviso no 1º dia; **10 dias**: ações dos funcionários pausadas (acesso e leitura continuam); **30 dias**: conta suspensa, dados no prazo da seção 11 (Termos 10.4) |
+| 7 | Ação fora das regras por falha do Liame (28/09) | Devolução do valor gasto além da regra, comprovado pela auditoria, em **crédito nas mensalidades seguintes**, até **2 mensalidades** por incidente; fora: ações dentro das regras, aprovadas pelo cliente, regras alteradas por ele e falhas das plataformas (Termos 13.2). O dono pediu também que isso seja evitado: é critério de teste das ações (hoje, `apps/server/test/db/actions.spec.ts`: o teto do orçamento não passa nem com pedidos ao mesmo tempo; acima do limite, só com aprovação amarrada ao plano; e `policy.spec.ts`) |
+| 8 | Teto de responsabilidade (28/09) | Valor pago nos **12 meses** anteriores ao fato, incluído o crédito do 13.2; sem limite em dolo ou onde a lei não permitir (Termos 13.3; Contrato 12) |
+| 10 | Prazos do Contrato de Dados (28/09) | Pedido de titular repassado em **2 dias úteis**; incidente avisado em **24 horas**; auditoria com aviso de **30 dias**, uma vez por ano (além dela, só após incidente), custo do cliente (Contrato 7.1, 8.1 e 10.2) |
+| 13 | Sentry e Langfuse (28/09) | **Região da União Europeia** para os dois (adequação da ANPD, Res. 32/2026); Política 8 e 8.1, Contrato Anexo III |
 
 **Ainda em aberto:**
 
 | # | Item | Onde aparece |
 | --- | --- | --- |
-| 3 | Canais e horário do suporte | Termos 12.2 |
-| 4 | **Reembolso e arrependimento em 7 dias** | Termos 11.1 |
-| 6 | **Dias de inadimplência** até a suspensão | Termos 10.4 |
-| 7 | **Compromisso quando uma ação for executada fora das regras por falha do Liame** (sugestão: devolver o valor gasto fora da regra, até um teto) | Termos 13.2 |
-| 8 | **Teto de responsabilidade** (sugestão: o valor pago nos últimos 12 meses) | Termos 13.3 e Contrato 12 |
-| 10 | **Prazos do Contrato de Dados:** repassar pedido de titular (sugestão: 2 dias úteis) e avisar incidente ao cliente (sugestão: 24 horas); aviso e custo de auditoria | Contrato 7.1, 8.1 e 10.2 |
-| 11 | Processador de pagamento (entra com a cobrança, A7) e região do Langfuse | Política 8 |
-| 13 | **Sentry e Langfuse na região da UE?** A UE tem adequação da ANPD; os EUA exigem cláusulas-padrão sem alteração, que fornecedores americanos costumam não aceitar | Política 8.1; Contrato 9 |
+| 11 | Processador de pagamento | Decidido em 28/09: **sai da política até a cobrança existir** (A7); entra com o fornecedor escolhido e aviso aos clientes |
 
 ## 2. Pontos para o advogado
 
@@ -47,6 +46,8 @@ Também serão necessárias: a **página de exclusão de dados** (Meta) e a **li
 - **Agente de pequeno porte:** se a empresa se enquadra e se o uso de IA com larga escala afasta o enquadramento (seção 4).
 - **Contrato de adesão empresarial:** cláusulas limitativas à luz dos arts. 421-A, 423 e 424 do Código Civil.
 - **Aviso à Meta** em incidente que envolva dados da plataforma (Platform Terms §6.b.i).
+- **Crédito do item 13.2 dos Termos:** o que acontece com o crédito se o contrato terminar antes de ele ser usado; e se a forma de crédito (em vez de dinheiro) se sustenta caso o CDC seja aplicado.
+- **Desistência em 7 dias** oferecida em relação B2B (Termos 11.1): conferir a redação para não parecer reconhecimento de relação de consumo em tudo o mais.
 
 ## 3. Checagem de verdade antes de publicar
 
@@ -64,6 +65,10 @@ Os documentos descrevem o produto como ele será. **Antes de publicar, cada afir
 | Prazos de retenção e expurgo com certificado | Política 9; Contrato 11 | A1 (ADR-014) |
 | Verificação automática de dependências e segredos a cada mudança | Anexo II | Parcial: lockfile e scripts ✅; gitleaks, osv-scanner e Semgrep entram na A1 |
 | Botão de parada por cliente, conta e fornecedor | Anexo II; Termos 2.3 | A1 (kill switch) |
+| Pausa das ações com 10 dias de atraso e suspensão com 30 | Termos 10.4 | A7 (cobrança) |
+| Crédito nas mensalidades do valor gasto fora da regra | Termos 13.2 | A7 (cobrança) + auditoria da ação (A1) |
+| Suporte por `suporte@agencialiame.com` e WhatsApp da LIA, 9h às 18h | Termos 12.2 e 17 | Caixa `suporte@` ativa e LIA respondendo no WhatsApp |
+| Sentry e Langfuse na região da União Europeia | Política 8 e 8.1; Contrato Anexo III | Contratar os dois na região da UE quando forem ligados |
 
 Para a **revisão de app da Meta e do Google (A0-5)**, a política precisa estar publicada antes do produto completo. Nesse caso, publicar a versão com as afirmações que dependem de fase futura escritas como compromisso ("o Liame vai…") ou restritas ao que já existe, e trocar quando cada fase for entregue.
 

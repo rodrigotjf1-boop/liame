@@ -1,6 +1,6 @@
 # Termos de Uso do Liame
 
-**Versão 0.1 · rascunho para revisão jurídica · [PREENCHER: data de publicação]**
+**Versão 0.2 · rascunho para revisão jurídica · [PREENCHER: data de publicação]**
 
 Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada assistente de inteligência artificial trabalha como um funcionário de uma agência. Leia com atenção: ao criar a conta ou usar o Liame, você concorda com estes Termos, com a [Política de Privacidade](politica-de-privacidade.md) e com o [Contrato de Tratamento de Dados](contrato-de-operador.md), que faz parte destes Termos.
 
@@ -107,13 +107,13 @@ O funcionário de Compliance do Liame aplica regras automáticas que podem imped
 
 10.3. Os preços podem ser reajustados com aviso de **30 dias**. Se não concordar, você pode cancelar antes do reajuste valer.
 
-10.4. Se o pagamento não for confirmado, avisamos por e-mail. Depois de **[PREENCHER: número] dias** sem regularização, a conta pode ser suspensa; os seus dados continuam guardados pelo prazo da seção 11.
+10.4. Se o pagamento não for confirmado, avisamos por e-mail já no primeiro dia de atraso. Com **10 dias** sem regularização, as ações dos funcionários de IA ficam pausadas; o acesso à conta e a leitura dos dados continuam. Com **30 dias**, a conta é suspensa; os seus dados continuam guardados pelo prazo da seção 11.
 
 10.5. A nota fiscal é emitida conforme a legislação.
 
 ## 11. Cancelamento e fim da conta
 
-11.1. Você cancela a qualquer momento, pelo próprio Liame, **sem multa**. O cancelamento vale ao fim do período já pago. [PREENCHER: política de reembolso e arrependimento em 7 dias.]
+11.1. Você cancela a qualquer momento, pelo próprio Liame, **sem multa**. O cancelamento vale ao fim do período já pago. Na **primeira contratação**, você pode desistir em até **7 dias corridos** a partir do primeiro pagamento, com **devolução integral** do valor pago.
 
 11.2. Depois do cancelamento ou da suspensão, você tem **30 dias** para exportar os seus dados (CSV ou JSON). Depois disso, os dados da conta são **apagados de forma definitiva**, inclusive das cópias de segurança, e enviamos um certificado de exclusão ao Dono. Guardamos apenas o que a lei nos obriga a guardar, pelo prazo legal (por exemplo, registros de acesso e documentos fiscais).
 
@@ -121,15 +121,15 @@ O funcionário de Compliance do Liame aplica regras automáticas que podem imped
 
 12.1. Trabalhamos para manter o Liame disponível o tempo todo, mas podem ocorrer interrupções por manutenção (avisada com antecedência sempre que possível), falhas de terceiros ou mudanças nas plataformas conectadas.
 
-12.2. O suporte é prestado por **[PREENCHER: canais e horário]**.
+12.2. O suporte é prestado pelo e-mail **suporte@agencialiame.com** e pelo WhatsApp da LIA (pelo site **agencialiame.com**), de segunda a sexta-feira, das 9h às 18h (horário de Brasília), com resposta em até **1 dia útil**. Incidentes de segurança são recebidos a qualquer hora pelo e-mail de suporte.
 
 ## 13. Responsabilidades
 
 13.1. Você responde pelo conteúdo que aprova e publica, pelas ofertas que faz aos seus clientes, pela base legal dos dados que nos entrega e pelo uso da conta pelas pessoas que convidou.
 
-13.2. Nós respondemos por prestar o serviço com cuidado profissional, por proteger os dados conforme a lei e por **executar ações apenas dentro das regras e aprovações que você configurou**. [PREENCHER: compromisso quando uma ação for executada fora dessas regras por falha do Liame.]
+13.2. Nós respondemos por prestar o serviço com cuidado profissional, por proteger os dados conforme a lei e por **executar ações apenas dentro das regras e aprovações que você configurou**. Se, por falha do Liame, uma ação for executada fora dessas regras, devolvemos o valor gasto na plataforma além do que a regra permitia, comprovado pelo registro de auditoria, na forma de **crédito nas mensalidades seguintes**, até o valor de **2 (duas) mensalidades** por incidente. Não entram nesse compromisso: resultados de ações feitas dentro das regras, ações que você aprovou, efeitos de regras que você alterou e falhas das próprias plataformas.
 
-13.3. Não respondemos por decisões das plataformas (reprovação de anúncios, bloqueios, mudanças de preço ou de regras), por resultados comerciais, nem por perdas indiretas ou lucros cessantes. [PREENCHER: limite de responsabilidade, por exemplo, o valor pago nos últimos 12 meses.] Nenhuma limitação vale para casos de dolo ou em que a lei não a permita.
+13.3. Não respondemos por decisões das plataformas (reprovação de anúncios, bloqueios, mudanças de preço ou de regras), por resultados comerciais, nem por perdas indiretas ou lucros cessantes. A responsabilidade total do Liame, incluído o compromisso do item 13.2, fica limitada ao valor pago pelo Cliente nos **12 meses** anteriores ao fato. Nenhuma limitação vale para casos de dolo ou em que a lei não a permita.
 
 ## 14. Suspensão pelo Liame
 
@@ -145,4 +145,4 @@ Estes Termos seguem a lei brasileira. Fica eleito o foro da comarca do **Rio de 
 
 ## 17. Contato
 
-**appdevsolutionday@gmail.com** · WhatsApp da LIA pelo site **agencialiame.com**.
+**suporte@agencialiame.com** · WhatsApp da LIA pelo site **agencialiame.com**. Assuntos de dados pessoais: o encarregado, pelo contato indicado na Política de Privacidade.
