@@ -1,6 +1,6 @@
 # Política de Privacidade do Liame
 
-**Versão 0.1 · rascunho para revisão jurídica · [PREENCHER: data de publicação]**
+**Versão 0.2 · rascunho para revisão jurídica · [PREENCHER: data de publicação]**
 
 Esta Política explica, em linguagem simples, quais dados pessoais o **Liame** trata, para quê, com quem compartilha, por quanto tempo guarda e como você exerce os seus direitos, conforme a **Lei Geral de Proteção de Dados** (Lei nº 13.709/2018, "LGPD").
 
@@ -99,9 +99,8 @@ Compartilhamos dados apenas com fornecedores que nos ajudam a prestar o serviço
 | Amazon Web Services | Chaves de criptografia, cópia da auditoria e envio dos e-mails do serviço | Brasil (São Paulo) |
 | Anthropic, OpenAI e Google | Modelos de inteligência artificial | Estados Unidos |
 | Grafana Cloud | Monitoramento técnico | Brasil |
-| Sentry | Registro de erros técnicos, sem conteúdo de clientes | Estados Unidos |
-| Langfuse | Qualidade dos funcionários de IA, com conteúdo já sem dados pessoais | [PREENCHER: região contratada] |
-| [PREENCHER: processador de pagamento] | Cobrança por PIX e cartão | Brasil |
+| Sentry | Registro de erros técnicos, sem conteúdo de clientes | União Europeia |
+| Langfuse | Qualidade dos funcionários de IA, com conteúdo já sem dados pessoais | União Europeia |
 
 Também compartilhamos dados:
 
@@ -117,7 +116,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 
 | | |
 | --- | --- |
-| **Para onde** | **Estados Unidos**: provedores de inteligência artificial (Anthropic, OpenAI, Google), registro de erros (Sentry) e parte da rede (Cloudflare). **União Europeia**, quando o fornecedor usar região europeia; a União Europeia tem decisão de adequação da ANPD (Resolução CD/ANPD nº 32/2026). |
+| **Para onde** | **Estados Unidos**: provedores de inteligência artificial (Anthropic, OpenAI, Google) e parte da rede (Cloudflare). **União Europeia**: registro de erros (Sentry) e qualidade dos funcionários de IA (Langfuse); a União Europeia tem decisão de adequação da ANPD (Resolução CD/ANPD nº 32/2026). |
 | **Como** | O fornecedor recebe e processa os dados em servidores dele para prestar o serviço contratado. Para os modelos de IA, enviamos só o texto necessário, **sem os dados pessoais que o modelo não precisa**. |
 | **Para quê e por quanto tempo** | As finalidades da seção 5 e da seção 7, pelo tempo necessário para cada uma, respeitados os prazos da seção 9 e os dos contratos com os fornecedores. |
 | **Mecanismo** | Para países sem decisão de adequação, as **cláusulas-padrão contratuais aprovadas pela ANPD**, adotadas integralmente e sem alteração, ou outro mecanismo do art. 33 da LGPD. |

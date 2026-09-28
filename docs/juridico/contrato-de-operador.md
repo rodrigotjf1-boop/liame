@@ -1,6 +1,6 @@
 # Contrato de Tratamento de Dados Pessoais (Liame)
 
-**Versão 0.1 · rascunho para revisão jurídica · [PREENCHER: data de publicação]**
+**Versão 0.2 · rascunho para revisão jurídica · [PREENCHER: data de publicação]**
 
 Este Contrato faz parte dos [Termos de Uso do Liame](termos-de-uso.md) e regula o tratamento de dados pessoais que o Liame realiza **em nome do Cliente**, conforme o art. 39 da Lei nº 13.709/2018 (LGPD).
 
@@ -62,13 +62,13 @@ O Liame se compromete a:
 
 ## 7. Direitos dos titulares
 
-7.1. Se um titular pedir ao Liame algo sobre dados que o Liame trata em nome do Cliente, o Liame encaminha o pedido ao Cliente em até **[PREENCHER: prazo, por exemplo, 2] dias úteis** e não responde diretamente, salvo se o Cliente pedir.
+7.1. Se um titular pedir ao Liame algo sobre dados que o Liame trata em nome do Cliente, o Liame encaminha o pedido ao Cliente em até **2 (dois) dias úteis** e não responde diretamente, salvo se o Cliente pedir.
 
 7.2. O Liame oferece no próprio produto os meios para o Cliente consultar, corrigir, exportar, anonimizar e excluir os dados de um titular, e registrar a revogação de um consentimento, que vale na hora para os envios pendentes.
 
 ## 8. Incidentes de segurança
 
-8.1. O Liame comunica o Cliente sobre incidente de segurança que envolva dados do Cliente **em até [PREENCHER: prazo, por exemplo, 24] horas** depois de tomar ciência. A regulamentação dá ao controlador **3 dias úteis** para comunicar a ANPD e os titulares (Resolução CD/ANPD nº 15/2024), e este prazo existe para que o Cliente consiga cumpri-lo.
+8.1. O Liame comunica o Cliente sobre incidente de segurança que envolva dados do Cliente **em até 24 (vinte e quatro) horas** depois de tomar ciência. A regulamentação dá ao controlador **3 dias úteis** para comunicar a ANPD e os titulares (Resolução CD/ANPD nº 15/2024), e este prazo existe para que o Cliente consiga cumpri-lo.
 
 8.2. A comunicação traz as informações disponíveis sobre: natureza e categorias dos dados; número de titulares afetados, indicando crianças, adolescentes e idosos; medidas de segurança adotadas antes e depois do incidente; riscos; data em que ocorreu e em que o Liame soube; causa; medidas para reverter ou reduzir os efeitos; e a identificação do Liame como operador. Informações novas são enviadas assim que obtidas.
 
@@ -87,7 +87,7 @@ O Liame se compromete a:
 
 10.1. O Liame fornece ao Cliente, quando solicitado, as informações necessárias para demonstrar o cumprimento deste Contrato.
 
-10.2. Auditorias adicionais podem ser combinadas por escrito, com aviso de **[PREENCHER]** dias, sem acesso a dados de outros clientes e em horário que não prejudique o serviço. [PREENCHER: quem arca com os custos.]
+10.2. Auditorias adicionais podem ser combinadas por escrito, com aviso de **30 (trinta) dias**, no máximo uma vez por ano (além dessa, só depois de incidente de segurança que envolva dados do Cliente), sem acesso a dados de outros clientes e em horário que não prejudique o serviço. Os custos da auditoria ficam com o Cliente.
 
 ## 11. Fim do tratamento
 
@@ -97,7 +97,7 @@ O Liame se compromete a:
 
 ## 12. Responsabilidade
 
-Cada parte responde pelos danos que causar ao descumprir a legislação de proteção de dados ou este Contrato. O Liame responde nos termos do art. 42 da LGPD quando descumprir a lei ou as instruções lícitas do Cliente. [PREENCHER: limites e regras de indenização, alinhados à seção 13 dos Termos.]
+Cada parte responde pelos danos que causar ao descumprir a legislação de proteção de dados ou este Contrato. O Liame responde nos termos do art. 42 da LGPD quando descumprir a lei ou as instruções lícitas do Cliente. Os limites e as regras de indenização são os da seção 13 dos Termos de Uso; nenhuma limitação vale para casos de dolo ou em que a lei não a permita.
 
 ## 13. Vigência
 
@@ -140,7 +140,7 @@ Lista vigente em [agencialiame.com/privacidade#fornecedores](https://agencialiam
 | Amazon Web Services | Chaves de criptografia, cópia da auditoria e e-mails do serviço | Brasil (São Paulo) |
 | Anthropic, OpenAI, Google | Modelos de inteligência artificial (com dados minimizados) | Estados Unidos |
 | Grafana Cloud | Monitoramento técnico | Brasil |
-| Sentry | Erros técnicos, sem conteúdo de clientes | Estados Unidos |
-| Langfuse | Qualidade dos funcionários de IA, sem dados pessoais | [PREENCHER] |
+| Sentry | Erros técnicos, sem conteúdo de clientes | União Europeia |
+| Langfuse | Qualidade dos funcionários de IA, sem dados pessoais | União Europeia |
 
 O **Regem** e o **RegemCast**, quando o Cliente os conecta, são serviços da mesma empresa (SISTER TECNOLOGIA LTDA) e seguem as mesmas obrigações deste Contrato; não são suboperadores.
