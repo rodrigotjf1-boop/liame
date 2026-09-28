@@ -10,6 +10,20 @@
 
 Também serão necessárias: a **página de exclusão de dados** (Meta) e a **lista de suboperadores**, que pode ficar na própria política.
 
+## 0. Como estes documentos evoluem (decisão do dono, 28/09/2026)
+
+Os documentos foram lidos pelo dono e ficam **vivos até a distribuição**: a aprovação final e a revisão do advogado acontecem quando o Liame for disponibilizado para uso. Até lá:
+
+1. Toda implementação ou mudança de processo que altere o que eles dizem atualiza estes arquivos **no mesmo PR** e entra na lista abaixo.
+2. Onde um processo depender deles (revisão de app da Meta e do Google, produção, página de exclusão de dados), usa-se a versão vigente, atualizada depois, sempre com a checagem de verdade da seção 3.
+3. Depois de publicados, cada mudança gera versão nova (`TERMS_VERSION`), aviso de 30 dias (Termos 15) e novo aceite de quem já usa.
+
+**Mudanças desde a v0.2** (para a revisão final):
+
+| Data | PR | O que mudou | Documento e seção |
+| --- | --- | --- | --- |
+| — | — | nenhuma ainda | — |
+
 ## 1. O que o dono precisa decidir ou informar
 
 **Resolvido em 26/09/2026:**
