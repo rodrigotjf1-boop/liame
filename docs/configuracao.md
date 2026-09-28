@@ -54,7 +54,7 @@ em 27/09/2026** (55 tabelas, 582 colunas, 78 políticas).
 | `BREACHED_PASSWORD_CHECK` | Checagem de senha vazada (HIBP, k-anonimato) | `on` |
 | `TERMS_VERSION` **P** | Versão **publicada** dos Termos de Uso e da Política de Privacidade; o cadastro e o convite gravam a que a pessoa aceitou (migration 0016). Em produção, sem ela a API não sobe (A0-6) | `rascunho-2026-09-25` fora de produção |
 | `TERMS_URL` · `PRIVACY_URL` **P** | Endereços públicos dos termos e da política (links das telas de cadastro) | `https://agencialiame.com/termos` · `/privacidade` |
-| `MAIL_TRANSPORT` **P** | `ses` em produção (Amazon SES São Paulo, D-A1-4); `memoria` é recusado em produção. **O transporte `ses` ainda não está implementado** (depende da conta AWS, A0-3b): até ele entrar, a API não sobe em produção | `memoria` |
+| `MAIL_TRANSPORT` **P** | `ses` em produção (Amazon SES São Paulo, D-A1-4); `memoria` é recusado em produção. **O transporte `ses` ainda não está implementado:** até ele entrar, a API não sobe em produção. SES (28/09/2026): identidade `agencialiame.com` verificada (DKIM 2048 com 3 CNAME na Cloudflare; MAIL FROM `envio.agencialiame.com` com MX e SPF), pedido de saída do sandbox enviado (transacional) | `memoria` |
 
 ## Plataformas de mídia (A2)
 
@@ -85,6 +85,15 @@ Sem as peças de um app, a plataforma aparece como "ainda indisponível" (503 `i
 
 Enquanto o app do Google estiver em **modo de teste**, o refresh token vence em 7 dias [S]: a conexão mostra a data (`refresh_expires_at`) e a tela avisa antes.
 
+**Situação dos apps (28/09/2026, configurados com o dono; os segredos ficam só no gerenciador de senhas dele e no EasyPanel):**
+
+| Plataforma | O que existe | Valores não secretos |
+| --- | --- | --- |
+| Meta | App **Liame**, tipo Empresa, no portfólio verificado da empresa, em **desenvolvimento**; produtos API de Marketing e Facebook Login for Business; URI de volta `https://api.agencialiame.com/v1/oauth/callback` (modo estrito); configuração "Liame - leitura de anúncios": variação Geral, token de usuário do sistema que **não expira**, ativo Contas de anúncios obrigatório com a tarefa **ANALYZE** (só leitura) e a permissão **`ads_read`** | `META_APP_ID=1399495602273174` · `META_LOGIN_CONFIG_ID=1068233099319648` |
+| Google | Projeto `liame-agencia` (duas contas proprietárias); APIs Google Ads, Analytics Data e Analytics Admin ativas; Google Auth Platform "Liame", **Externo, em teste**, escopos `adwords` e `analytics.readonly`; cliente "Liame API" (aplicativo da Web) com a mesma URI de volta; Google Ads API no nível **Explorer** | `GOOGLE_OAUTH_CLIENT_ID=285693801008-armp76vqm8543v88bhcd19um2k1vitnq.apps.googleusercontent.com` |
+
+Falta, nas duas: publicar a política de privacidade, os termos e as instruções de exclusão de dados no site; testadores (contas do restaurante de testes); ir ao vivo (Meta: acesso avançado e análise do app; Google: verificação da marca e do app, nível Básico). Ao passar a executar ações, uma configuração nova da Meta com a tarefa ADVERTISE e as permissões de escrita.
+
 ## Cofre (ADR-011, ADR-014)
 
 | Variável | Para quê | Padrão |
@@ -94,6 +103,9 @@ Enquanto o app do Google estiver em **modo de teste**, o refresh token vence em 
 | `AWS_KMS_KEKS` **P** | `1:alias/liame-kek-v1,2:alias/liame-kek-v2` | — |
 | `LIAME_KEK_VERSION` | Versão da chave mestra usada para cifrar (as outras só decifram) | a maior |
 | `LIAME_KEK_LOCAL` **S** | Só desenvolvimento e testes: `1:<32 bytes em base64>` | — |
+| `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` **P S** | Chave de acesso do usuário IAM `liame-sistema` (criada no EasyPanel, nunca em arquivo) | — |
+
+**Situação na AWS (28/09/2026):** conta `liame-prod` (472158500701), root com MFA. Chave mestra `alias/liame-kek-v1` em `sa-east-1`, simétrica, rotação anual. Usuário `liame-sistema` sem console, com a política `liame-sistema-kms`: `GenerateDataKey` e `Decrypt` nas chaves da conta (pelo ARN, não pela etiqueta: a etiqueta leva até 5 minutos para valer e o cofre usa a chave da empresa logo depois de criá-la); `CreateKey` só em `sa-east-1`, `SYMMETRIC_DEFAULT`/`ENCRYPT_DECRYPT` e com a etiqueta `liame:tenant`; `ScheduleKeyDeletion` só em chave com essa etiqueta e com 30 dias de espera; **negado** apagar, desativar, etiquetar ou mudar a política da chave mestra. A permissão `ses:SendEmail` entra junto com o transporte `ses`.
 
 ## Eventos e webhooks (ADR-004)
 
