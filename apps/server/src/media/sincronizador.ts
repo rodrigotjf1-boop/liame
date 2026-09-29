@@ -8,7 +8,7 @@ import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { criarConectorGa4 } from '../connectors/ga4/conector-ga4.js';
 import { criarConectorGoogleAds } from '../connectors/google-ads/conector-google-ads.js';
 import { criarConectorMeta } from '../connectors/meta/conector-meta.js';
-import type { ConectorLeitura, ContextoConta, ProviderId } from '../connectors/tipos.js';
+import type { ConectorLeitura, ContextoConta, ProviderMidia } from '../connectors/tipos.js';
 import type { VaultService } from '../vault/vault.service.js';
 import { gravarEntidades, idsDasEntidades } from './entidades-store.js';
 import { gravarMetricas, zerarAusentes } from './metric-store.js';
@@ -19,9 +19,9 @@ import { gravarMetricas, zerarAusentes } from './metric-store.js';
 // ela ainda reescreve). O dia é o do fuso da conta.
 
 /** Dias relidos a cada sincronização (D-A2-4). */
-export const JANELA_REVISAO: Record<ProviderId, number> = { meta_ads: 7, google_ads: 14, ga4: 3 };
+export const JANELA_REVISAO: Record<ProviderMidia, number> = { meta_ads: 7, google_ads: 14, ga4: 3 };
 /** Dias relidos na revisão longa semanal (D-A2-4). */
-export const REVISAO_LONGA: Record<ProviderId, number> = { meta_ads: 28, google_ads: 90, ga4: 3 };
+export const REVISAO_LONGA: Record<ProviderMidia, number> = { meta_ads: 28, google_ads: 90, ga4: 3 };
 export const CARGA_INICIAL_DIAS = 90;
 /** Uma sincronização por dia por conta. */
 export const INTERVALO_MIN = 1440;
@@ -44,7 +44,7 @@ type LinhaConta = {
   id: string;
   tenant_id: string;
   brand_id: string;
-  provider: ProviderId;
+  provider: ProviderMidia;
   external_id: string;
   currency: string | null;
   timezone: string | null;
@@ -66,7 +66,7 @@ export function hojeNoFuso(agora: Date, fuso: string | null): string {
 const menosDias = (dia: string, n: number) => new Date(new Date(`${dia}T00:00:00Z`).getTime() - n * DIA_MS).toISOString().slice(0, 10);
 
 /** Qual janela ler agora (D-A2-3, D-A2-4). */
-export function janelaDaVez(provider: ProviderId, cursor: Cursor, agora: Date, fuso: string | null): { tipo: 'carga_inicial' | 'revisao' | 'incremental'; inicio: string; fim: string } {
+export function janelaDaVez(provider: ProviderMidia, cursor: Cursor, agora: Date, fuso: string | null): { tipo: 'carga_inicial' | 'revisao' | 'incremental'; inicio: string; fim: string } {
   const fim = hojeNoFuso(agora, fuso);
   if (!cursor.carga_inicial_em) return { tipo: 'carga_inicial', inicio: menosDias(fim, CARGA_INICIAL_DIAS - 1), fim };
   const ultimaLonga = cursor.revisao_longa_em ? new Date(cursor.revisao_longa_em).getTime() : 0;
@@ -112,6 +112,7 @@ export class Sincronizador {
     try {
       if (!lida.segredo) throw new ErroConector('autenticacao', conta.provider, 'autorização revogada ou ausente');
       const credencial = JSON.parse(lida.segredo) as CredencialGuardada;
+      if (credencial.tipo === 'regem' || credencial.tipo === 'regemcast') throw new ErroConector('definitivo', conta.provider, 'conta de produto DMS fora da sincronização de mídia');
       const accessToken =
         credencial.tipo === 'meta' ? credencial.access_token : await acessoGoogle(this.config, this.config.oauth.google?.tokenUrl ?? '', credencial.refresh_token);
       const conector = await this.conector(conta.provider, cliente);
@@ -178,7 +179,7 @@ export class Sincronizador {
     }
   }
 
-  private async conector(provider: ProviderId, cliente: ClienteConector): Promise<ConectorLeitura> {
+  private async conector(provider: ProviderMidia, cliente: ClienteConector): Promise<ConectorLeitura> {
     if (provider === 'meta_ads') return criarConectorMeta(this.db, cliente, this.config.plataformas);
     if (provider === 'google_ads') return criarConectorGoogleAds(this.db, cliente, this.config.plataformas);
     return criarConectorGa4(this.db, cliente, this.config.plataformas);

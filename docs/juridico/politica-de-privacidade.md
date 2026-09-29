@@ -69,6 +69,19 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 - não são lidos por pessoas, salvo com autorização da empresa cliente, por segurança, por obrigação legal ou em dados agregados e anonimizados;
 - não são usados para treinar modelos de IA.
 
+6.5. **Regem e RegemCast** (sistemas da mesma empresa, quando a empresa cliente os conecta). O acesso vale **por loja**, com as permissões que o Dono da loja escolhe no próprio sistema e que aparecem para ele antes de autorizar.
+
+- Do **Regem**, o Liame pode receber, conforme essas permissões:
+  - os pedidos confirmados e cancelados, com itens, valores, canal e cupom;
+  - o custo dos itens, só com permissão financeira;
+  - a origem do clique que levou ao pedido (como `gclid` e `fbclid`, captados no cardápio da própria loja);
+  - o telefone do comprador, que o Liame transforma na chegada num código pseudonimizado e **não guarda**.
+- Do **RegemCast**, o Liame recebe só a origem das conversas abertas por anúncio (qual anúncio e quando), **sem o conteúdo das mensagens**, e o telefone, tratado da mesma forma.
+- Pedidos de marketplaces (iFood, 99Food e outros) chegam **sem nenhuma identificação do comprador**.
+- **Para que serve:** medir quais campanhas trouxeram vendas.
+- **Revogação:** a qualquer momento, em **Contas conectadas**. A credencial da loja é apagada do Liame na hora e revogada também no Regem.
+- **Cliente anonimizado:** quando a loja anonimiza um cliente no Regem, o Liame apaga o código pseudonimizado dele.
+
 ### Como pedir a exclusão dos seus dados
 
 O passo a passo completo fica em [agencialiame.com/exclusao-de-dados](https://agencialiame.com/exclusao-de-dados).

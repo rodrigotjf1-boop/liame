@@ -16,6 +16,8 @@ export const oauthConnection = liame.table('oauth_connection', {
   pkceVerifierEnc: text('pkce_verifier_enc'),
   codeEnc: text('code_enc'),
   credentialSecretId: uuid('credential_secret_id'),
+  origin: text('origin').notNull().default('oauth'),
+  inboxSecretId: uuid('inbox_secret_id'),
   scopes: text('scopes').array().notNull().default([]),
   discovered: jsonb('discovered').notNull().default([]),
   errorCode: text('error_code'),

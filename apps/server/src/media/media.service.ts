@@ -152,7 +152,7 @@ export class MediaService {
         from liame.connected_account a
         left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'metricas'
         left join liame.oauth_connection c on c.id = a.connection_id
-       where a.disconnected_at is null ${marca}
+       where a.disconnected_at is null and a.provider in ('meta_ads', 'google_ads', 'ga4') ${marca}
        order by a.name, a.id`);
 
     const itens: ItemAtencao[] = [];

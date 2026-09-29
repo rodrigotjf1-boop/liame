@@ -12,6 +12,9 @@ const PLATAFORMAS: Record<string, { nome: string; classe: string }> = {
   ga4: { nome: 'GA4', classe: 'ga4' },
   meta: { nome: 'Meta', classe: 'meta' },
   google: { nome: 'Google', classe: 'google' },
+  // Produtos DMS (A2.5): a tela própria das lojas espera o protótipo P2; até lá, só o nome.
+  regem: { nome: 'Regem', classe: '' },
+  regemcast: { nome: 'RegemCast', classe: '' },
 };
 
 /** Nome e cor da plataforma (conta ou autorização). */
@@ -175,7 +178,7 @@ export function resumoDaDescoberta(d: DiscoveredAccount[]): string {
   return partes.length === 1 ? partes[0]! : `${partes.slice(0, -1).join(', ')} e ${partes.at(-1)}`;
 }
 
-const TITULO_DO_GRUPO: Record<string, string> = { meta_ads: 'Meta Ads', google_ads: 'Google Ads', ga4: 'Google Analytics (GA4)' };
+const TITULO_DO_GRUPO: Record<string, string> = { meta_ads: 'Meta Ads', google_ads: 'Google Ads', ga4: 'Google Analytics (GA4)', regem: 'Lojas do Regem', regemcast: 'RegemCast' };
 
 /** As descobertas agrupadas por plataforma, na ordem Meta, Google Ads, GA4 (as ligadas primeiro não). */
 export function gruposDaEscolha(d: DiscoveredAccount[]): { provider: string; titulo: string; contas: DiscoveredAccount[] }[] {

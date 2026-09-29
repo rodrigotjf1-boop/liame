@@ -37,6 +37,7 @@ const conexao = (extra: Partial<ConnectionResponse> = {}): ConnectionResponse =>
   id: ID,
   brand_id: '01a0e1a1-ea64-71ed-8775-f13002fd25f0',
   provider: 'google',
+  origin: 'oauth',
   status: 'aguardando_escolha',
   error_code: null,
   authorized_by: null,
@@ -152,7 +153,7 @@ describe('contas ligadas', () => {
 
 describe('autorizações', () => {
   it('lista as que valem e as que falharam depois de valer; tentativa que não chegou a valer fica de fora', () => {
-    const conta = { id: ID, brand_id: ID, connection_id: ID, provider: 'meta_ads', external_id: 'act_1', name: 'a', currency: null, timezone: null, status: 'ativa', status_reason: null, connected_at: local(20, 8), disconnected_at: null };
+    const conta = { id: ID, brand_id: ID, connection_id: ID, provider: 'meta_ads', external_id: 'act_1', name: 'a', currency: null, timezone: null, status: 'ativa', status_reason: null, unit_id: null, connected_at: local(20, 8), disconnected_at: null };
     const lista = [
       conexao({ id: 'a', status: 'ativa' }),
       conexao({ id: 'b', status: 'aguardando_escolha' }),

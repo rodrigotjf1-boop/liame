@@ -55,7 +55,7 @@ describe.skipIf(!hasDb)('feature flags (A1-12) e kill switch (A1-10)', () => {
     const seeded = await ownerQuery<{ key: string; default_value: boolean }>(
       `select key, default_value from liame.feature_flag where is_write and key not like 'teste_%' order by key`,
     );
-    expect(seeded.map((f) => f.key)).toEqual(['autopilot', 'creative_generation', 'google_write', 'mcp_write', 'meta_write', 'whatsapp_campaign']);
+    expect(seeded.map((f) => f.key)).toEqual(['autopilot', 'creative_generation', 'google_write', 'mcp_write', 'meta_write', 'regem_write', 'whatsapp_campaign']);
     expect(seeded.every((f) => f.default_value === false)).toBe(true);
     await expect(
       ownerQuery(`insert into liame.feature_flag (key, kind, default_value, description, owner, is_write) values ('ligada_errada', 'boolean', 'true', 'x', 'x', true)`),

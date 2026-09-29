@@ -7,7 +7,7 @@ import { enderecoLiberado, ErroConector } from '../connectors/cliente-http.js';
 // sistema da integração, que não expira por padrão (a Meta não documenta PKCE nesse fluxo). Segredos
 // do app são da distribuição (config); o token da empresa vai direto para o cofre, nunca para log.
 
-export type ProvedorOAuth = 'meta' | 'google';
+export type ProvedorOAuth = 'meta' | 'google' | 'regem' | 'regemcast';
 
 /** Escopos do Google: Ads e GA4 só leitura na mesma autorização (plano-a2 §1). */
 export const ESCOPOS_GOOGLE = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/analytics.readonly'];
@@ -40,6 +40,19 @@ export function urlDeAutorizacao(
     });
     return `${meta.dialogUrl}/${p.versaoMeta}/dialog/oauth?${q.toString()}`;
   }
+  if (provedor === 'regem') {
+    // Página "Autorizar o Liame" do Regem (C1b): o presidente escolhe as lojas e vê os escopos.
+    const regem = config.oauth.regem!;
+    const q = new URLSearchParams({
+      cliente: regem.clientId,
+      redirect_uri: p.redirectUri,
+      state: p.estado,
+      code_challenge: desafioPkce(p.verificador!),
+      code_challenge_method: 'S256',
+    });
+    return `${regem.authUrl}/integracoes/autorizar?${q.toString()}`;
+  }
+  if (provedor === 'regemcast') throw new ErroConector('definitivo', 'regemcast', 'autorização do RegemCast ainda não existe (C2b)');
   const google = config.oauth.google!;
   const q = new URLSearchParams({
     client_id: google.clientId,
@@ -59,7 +72,10 @@ export function urlDeAutorizacao(
 /** Credencial guardada no cofre (JSON), por provedor. */
 export type CredencialMeta = { tipo: 'meta'; access_token: string; obtido_em: string; expira_em: string | null };
 export type CredencialGoogle = { tipo: 'google'; refresh_token: string; escopos: string[]; obtido_em: string; refresh_expira_em: string | null };
-export type CredencialGuardada = CredencialMeta | CredencialGoogle;
+/** Produtos DMS: um token por loja (Regem) ou por conta (RegemCast), com os escopos concedidos. */
+type TokensDeLoja = { lojas: { loja_id: string; token: string; escopos: string[] }[]; obtido_em: string };
+export type CredencialRegem = (TokensDeLoja & { tipo: 'regem' }) | (TokensDeLoja & { tipo: 'regemcast' });
+export type CredencialGuardada = CredencialMeta | CredencialGoogle | CredencialRegem;
 
 export type ResultadoTroca = {
   credencial: CredencialGuardada;
@@ -104,6 +120,7 @@ export async function trocarCodigo(
   p: { codigo: string; redirectUri: string; verificador: string | null; versaoMeta: string },
   agora = new Date(),
 ): Promise<ResultadoTroca> {
+  if (provedor === 'regem' || provedor === 'regemcast') throw new ErroConector('definitivo', provedor, 'a troca dos produtos DMS é do conector deles');
   if (provedor === 'meta') {
     const meta = config.oauth.meta!;
     const q = new URLSearchParams({ client_id: meta.appId, redirect_uri: p.redirectUri, client_secret: meta.appSecret, code: p.codigo });

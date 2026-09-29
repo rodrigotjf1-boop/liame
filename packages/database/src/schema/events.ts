@@ -47,6 +47,7 @@ export const inboxEvent = liame.table('inbox_event', {
   provider: text('provider').notNull(),
   externalEventId: text('external_event_id').notNull(),
   tenantId: uuid('tenant_id'),
+  connectionId: uuid('connection_id'),
   type: text('type'),
   headers: jsonb('headers').notNull().default({}),
   body: text('body').notNull(),

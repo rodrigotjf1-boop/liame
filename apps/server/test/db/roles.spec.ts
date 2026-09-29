@@ -25,14 +25,15 @@ const MATRIX: Record<string, string[]> = {
     'empresa.ver', 'empresa.editar', 'marcas.ver', 'marcas.gerenciar', 'pessoas.ver', 'pessoas.convidar', 'pessoas.remover',
     'pessoas.alterar_nivel', 'auditoria.ver', 'acoes.aprovar', 'campanhas.ver', 'campanhas.operar', 'relatorios.ver',
     'agentes.gerenciar', 'parada.acionar', 'webhooks.gerenciar', 'politicas.gerenciar',
-    'orcamento.gerenciar', 'contas.ver', 'contas.conectar',
+    'orcamento.gerenciar', 'contas.ver', 'contas.conectar', 'vendas.ver', 'atribuicao.gerenciar', 'links.gerenciar', 'cupons.criar',
   ],
   gestor: [
     'empresa.ver', 'marcas.ver', 'pessoas.ver', 'acoes.aprovar', 'campanhas.ver', 'campanhas.operar', 'relatorios.ver',
-    'agentes.gerenciar', 'parada.acionar', 'contas.ver', 'contas.conectar',
+    'agentes.gerenciar', 'parada.acionar', 'contas.ver', 'contas.conectar', 'vendas.ver', 'atribuicao.gerenciar', 'links.gerenciar',
+    'cupons.criar',
   ],
-  aprovador: ['empresa.ver', 'marcas.ver', 'acoes.aprovar', 'campanhas.ver', 'relatorios.ver', 'contas.ver'],
-  somente_leitura: ['empresa.ver', 'marcas.ver', 'campanhas.ver', 'relatorios.ver', 'contas.ver'],
+  aprovador: ['empresa.ver', 'marcas.ver', 'acoes.aprovar', 'campanhas.ver', 'relatorios.ver', 'contas.ver', 'vendas.ver'],
+  somente_leitura: ['empresa.ver', 'marcas.ver', 'campanhas.ver', 'relatorios.ver', 'contas.ver', 'vendas.ver'],
   so_relatorios: [],
 };
 const APPROVERS = new Set(['administrador', 'gestor', 'aprovador']);

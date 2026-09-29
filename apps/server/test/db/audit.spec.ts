@@ -29,6 +29,7 @@ const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const WITHOUT_AUDIT = [
   'POST /v1/auth/password/forgot',
   'POST /v1/inbox/:provider',
+  'POST /v1/inbox/:provider/:connectionId',
   'POST /v1/invitations/preview',
   'POST /v1/ofrep/v1/evaluate/flags',
   'POST /v1/ofrep/v1/evaluate/flags/:key',
