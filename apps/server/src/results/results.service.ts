@@ -14,8 +14,21 @@ import { frescor } from '../media/frescor.js';
 /** Um trimestre por consulta, como as métricas de mídia. */
 const MAX_DIAS = 92;
 const FUSO_PADRAO = 'America/Sao_Paulo';
-/** "Dá lucro / dá prejuízo" só com a margem conhecida em pelo menos 80% da receita confirmada (D-A2.5-7). */
+/** "Dá lucro / empata / dá prejuízo" só com a margem conhecida em pelo menos 80% da receita confirmada (D-A2.5-7). */
 const COBERTURA_MINIMA_POR_MIL = 800n;
+
+/**
+ * Veredito da campanha, da plataforma ou do total (regra dos protótipos aprovados em 29/09/2026):
+ * (margem conhecida − investimento) ÷ investimento acima de +10% dá lucro, abaixo de −10% dá prejuízo e,
+ * entre os dois, empata. Sem investimento ou com cobertura de margem abaixo de 80%, não há veredito.
+ */
+export function veredito(margemConhecida: bigint | null, investimento: bigint, coberturaPorMil: bigint): 'lucro' | 'empata' | 'prejuizo' | null {
+  if (margemConhecida === null || investimento <= 0n || coberturaPorMil < COBERTURA_MINIMA_POR_MIL) return null;
+  const sobra = margemConhecida - investimento;
+  if (sobra * 10n > investimento) return 'lucro';
+  if (sobra * 10n < -investimento) return 'prejuizo';
+  return 'empata';
+}
 
 /** Janela de cada plataforma na comparação: a Meta com 7 dias do clique (a do modelo); o Google, a da ação de conversão. */
 const JANELA_PLATAFORMA: Record<string, string> = { meta_ads: '7d_click', google_ads: 'padrao' };
@@ -61,6 +74,7 @@ function relatorioDaPlataforma(provider: string, a: Acumulado | undefined): Plat
 }
 
 function resultadoConfirmado(c: Confirmado, spend: bigint) {
+  const cobertura = c.revenue > 0n ? (c.revenueWithMargin * 1000n) / c.revenue : 0n;
   return {
     orders: c.orders,
     revenue_micros: c.revenue.toString(),
@@ -68,6 +82,7 @@ function resultadoConfirmado(c: Confirmado, spend: bigint) {
     cost_per_order_micros: c.orders > 0 && spend > 0n ? (spend / BigInt(c.orders)).toString() : null,
     margin_known_micros: c.marginOrders > 0 ? c.margin.toString() : null,
     margin_coverage_pct: porcento(c.revenueWithMargin, c.revenue),
+    verdict: veredito(c.marginOrders > 0 ? c.margin : null, spend, cobertura),
   };
 }
 
@@ -229,8 +244,6 @@ export class ResultsService {
       .sort((a, b) => Number(BigInt(b.platform.spend_micros) - BigInt(a.platform.spend_micros)) || a.name.localeCompare(b.name, 'pt-BR'));
 
     const provedores = [...new Set([...porProvider.keys(), ...confirmadoPorProvider.keys()])].sort();
-    const cobertura = confirmado.revenue > 0n ? (confirmado.revenueWithMargin * 1000n) / confirmado.revenue : 0n;
-    const veredito = confirmado.marginOrders > 0 && cobertura >= COBERTURA_MINIMA_POR_MIL ? (confirmado.margin - gastoTotal >= 0n ? 'lucro' : 'prejuizo') : null;
 
     return {
       period: { from: q.from, to: q.to, timezone: fuso, account_timezones: await this.fusosDasContas(q.brand_id) },
@@ -252,7 +265,6 @@ export class ResultsService {
           .map(([channel_group, s]) => ({ channel_group, orders: s.orders, revenue_micros: s.revenue.toString() }))
           .sort((a, b) => a.channel_group.localeCompare(b.channel_group)),
         cancelled: { orders: cancelados.orders, revenue_micros: cancelados.revenue.toString() },
-        verdict: veredito,
       },
       platforms: provedores.map((p) => ({
         provider: p,

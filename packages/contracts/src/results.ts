@@ -63,6 +63,12 @@ export const ConfirmedResult = z.strictObject({
   margin_known_micros: Micros.nullable(),
   /** Parte da receita confirmada com margem conhecida. */
   margin_coverage_pct: Porcento,
+  /**
+   * `lucro`, `empata` ou `prejuizo`: (margem conhecida − investimento) ÷ investimento acima de +10%, entre
+   * −10% e +10% ou abaixo de −10% (regra dos protótipos aprovados). Nulo com cobertura de margem abaixo de
+   * 80% (a tela mostra "margem incompleta") ou sem investimento.
+   */
+  verdict: Slug.nullable(),
 });
 export type ConfirmedResult = z.infer<typeof ConfirmedResult>;
 
@@ -116,8 +122,6 @@ export const ClosedLoopResponse = z.strictObject({
     no_click_channels: z.array(ChannelTotals),
     /** Confirmados no período e cancelados depois: saem das contas. */
     cancelled: z.strictObject({ orders: z.number().int().min(0), revenue_micros: Micros }),
-    /** `lucro` ou `prejuizo` só com cobertura de margem ≥ 80%; nulo abaixo disso. */
-    verdict: Slug.nullable(),
   }),
   platforms: z.array(PlatformResult),
   campaigns: z.array(CampaignResult),

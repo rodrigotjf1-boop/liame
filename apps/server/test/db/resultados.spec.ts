@@ -6,7 +6,7 @@ import { atribuirPedidos } from '../../src/attribution/motor.js';
 import { gravarToques } from '../../src/attribution/toque-store.js';
 import { gravarMetricas } from '../../src/media/metric-store.js';
 import { centavosParaMicros, gravarPedidos, type PedidoLido } from '../../src/orders/order-store.js';
-import { razao, porcento } from '../../src/results/results.service.js';
+import { porcento, razao, veredito } from '../../src/results/results.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
@@ -151,6 +151,17 @@ describe.skipIf(!hasDb)('resultados do ciclo fechado (A2.5 · F8)', () => {
     expect(porcento(1n, 0n)).toBeNull();
   });
 
+  it('veredito: lucro acima de +10%, prejuízo abaixo de −10%, empata no meio; sem veredito com margem incompleta', () => {
+    const R = (reais: number) => BigInt(reais) * 1_000_000n;
+    expect(veredito(R(111), R(100), 1000n)).toBe('lucro');
+    expect(veredito(R(110), R(100), 1000n)).toBe('empata');
+    expect(veredito(R(90), R(100), 1000n)).toBe('empata');
+    expect(veredito(R(89), R(100), 1000n)).toBe('prejuizo');
+    expect(veredito(R(200), R(100), 799n)).toBeNull();
+    expect(veredito(R(200), 0n, 1000n)).toBeNull();
+    expect(veredito(null, R(100), 1000n)).toBeNull();
+  });
+
   it('totais: gasto, caixa, atribuído, sem origem, canais sem clique e cancelados', async () => {
     const r = await consultar({ brand_id: brandId, from: '2026-09-26', to: '2026-09-27' });
     expect(r.status).toBe(200);
@@ -168,12 +179,13 @@ describe.skipIf(!hasDb)('resultados do ciclo fechado (A2.5 · F8)', () => {
         // o1: 60 − 20 de custo = 40; o2 tem item sem custo → margem desconhecida (não é zero).
         margin_known_micros: M(40),
         margin_coverage_pct: '60.0',
+        // Cobertura de 60%: "margem incompleta", sem veredito.
+        verdict: null,
       },
       // 2 dos 4 pedidos dos canais com clique (o marketplace fica à parte).
       without_origin: { orders: 2, revenue_micros: M(40), share_pct: '50.0' },
       no_click_channels: [{ channel_group: 'marketplace', orders: 1, revenue_micros: M(80) }],
       cancelled: { orders: 1, revenue_micros: M(25) },
-      verdict: null,
     });
   });
 
@@ -191,7 +203,8 @@ describe.skipIf(!hasDb)('resultados do ciclo fechado (A2.5 · F8)', () => {
         conversations: '10',
         cost_per_conversation_micros: M(15),
       },
-      confirmed: { orders: 1, revenue_micros: M(60), roas: '0.40', cost_per_order_micros: M(150), margin_known_micros: M(40), margin_coverage_pct: '100.0' },
+      // Margem 40 contra 150 de investimento: −73%, dá prejuízo.
+      confirmed: { orders: 1, revenue_micros: M(60), roas: '0.40', cost_per_order_micros: M(150), margin_known_micros: M(40), margin_coverage_pct: '100.0', verdict: 'prejuizo' },
       platform_only_orders: 0,
     });
     const google = r.body.platforms.find((p: { provider: string }) => p.provider === 'google_ads');
@@ -208,13 +221,12 @@ describe.skipIf(!hasDb)('resultados do ciclo fechado (A2.5 · F8)', () => {
     expect(r.body.campaigns[1].confirmed).toMatchObject({ orders: 0, revenue_micros: '0', roas: '0.00', cost_per_order_micros: null, margin_known_micros: null });
   });
 
-  it('com a margem conhecida em 80%+ da receita confirmada, diz se deu lucro ou prejuízo', async () => {
+  it('com a margem conhecida em 80%+ da receita confirmada, diz se deu lucro, empate ou prejuízo', async () => {
     // O item de o2 ganha custo: a margem passa a ser conhecida em toda a receita confirmada.
     await ownerQuery(`update liame.order_item_fact set cost_micros = $1 where order_id = $2`, [M(10), ids.o2]);
     const r = await consultar({ brand_id: brandId, from: '2026-09-26', to: '2026-09-27' });
     // Margem: o1 40 + o2 30 = 70 em 100% da receita confirmada; gasto 190 → prejuízo.
-    expect(r.body.totals.confirmed).toMatchObject({ margin_known_micros: M(70), margin_coverage_pct: '100.0' });
-    expect(r.body.totals.verdict).toBe('prejuizo');
+    expect(r.body.totals.confirmed).toMatchObject({ margin_known_micros: M(70), margin_coverage_pct: '100.0', verdict: 'prejuizo' });
   });
 
   it('origem de cada pedido: evidência, horas antes, janela e motivo; sem dado pessoal', async () => {
