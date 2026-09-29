@@ -25,9 +25,9 @@ migration nova é aplicada e conferida na nuvem **antes** de mesclar o PR que de
 
 | Serviço | Dockerfile | Porta | Domínio |
 | --- | --- | --- | --- |
-| `liame-api` | `apps/server/Dockerfile` | 3001 | `https://api.agencialiame.com` |
-| `liame-worker` | `apps/server/Dockerfile` + comando do worker | — (sonda interna na 3001) | nenhum |
-| `liame-web` | `apps/web/Dockerfile` | 3000 | `https://app.agencialiame.com` |
+| `liame-api` | `apps/server/Dockerfile` | 80 (o EasyPanel injeta `PORT=80`; fora dele, 3001) | `https://api.agencialiame.com` |
+| `liame-worker` | `apps/server/Dockerfile` + comando do worker | — (sonda interna na mesma `PORT`) | nenhum |
+| `liame-web` | `apps/web/Dockerfile` | 80 (o EasyPanel injeta `PORT=80`; fora dele, 3000) | `https://app.agencialiame.com` |
 
 O Collector do OpenTelemetry entra quando a conta do Grafana Cloud existir (`infra/otel-collector.yaml`);
 até lá os processos não exportam (sem `OTEL_EXPORTER_OTLP_ENDPOINT`).
@@ -57,17 +57,18 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 1. **+ Serviço → App** → `liame-api`.
 2. **Fonte**: como acima. **Construção → Dockerfile** → `apps/server/Dockerfile`.
 3. **Ambiente** (tabela da seção 4, coluna API).
-4. **Domínios** → `https://api.agencialiame.com/` → porta **3001**.
+4. **Domínios** → `https://api.agencialiame.com/` → porta **80**: o EasyPanel injeta `PORT=80` e ela vale sobre a da imagem (o log mostra `API no ar na porta 80`).
 5. **Implantar**. Conferir: `https://api.agencialiame.com/health` responde `{"status":"ok",…,"version":"<commit>"}`
    e `/health/ready` responde 200 com a última migration (`0020_vigia`).
 
 ### 3.2 `liame-worker`
 
 1. **+ Serviço → App** → `liame-worker`. Fonte e Dockerfile iguais aos da API.
-2. **Implantações** (Deploy) → **comando** (sobrescreve o da imagem): `node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js`.
-   A documentação do EasyPanel põe o comando no painel de implantação; o nome exato do campo em português se confere no print.
-3. **Ambiente**: tabela da seção 4, coluna worker. **Sem domínio**.
-4. **Implantar**. Conferir nos logs `worker no ar`. A sonda de vida do worker responde `/health` só no
+2. **Avançado** → seção **Implantar** → campo **Comando**: `node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js` → **Salvar**.
+   **Implantar só depois do comando e do Ambiente salvos**: sem o comando, a imagem sobe uma segunda API; sem o
+   Ambiente, o worker cai com `config: em produção, defina APP_URL`.
+3. **Ambiente**: copiar o da API inteiro e acrescentar `DATABASE_URL_JOBS` (tabela da seção 4). **Sem domínio**.
+4. **Implantar**. Conferir nos logs `worker no ar` e, na API, `/health/ready` com `queue: ok` (o worker cria as tabelas da fila na primeira subida). Com "tempo de inatividade zero", o log mistura o contêiner novo e o antigo por alguns instantes. A sonda de vida do worker responde `/health` só no
    `127.0.0.1` do contêiner: é o que o HEALTHCHECK da imagem consulta (sem ela, o contêiner ficaria
    "unhealthy" e seria reiniciado em ciclo).
 
@@ -77,7 +78,7 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 2. **Ambiente**: `NEXT_PUBLIC_API_URL=https://api.agencialiame.com`. O EasyPanel passa as variáveis do
    serviço ao build (documentação oficial): o endereço da API fica fixado no código do navegador e na CSP.
    Trocar o endereço = implantar de novo.
-3. **Domínios** → `https://app.agencialiame.com/` → porta **3000**.
+3. **Domínios** → `https://app.agencialiame.com/` → porta **80** (mesma razão da API).
 4. **Implantar**. Conferir: `https://app.agencialiame.com/entrar` abre, e o console do navegador não mostra
    bloqueio de CSP nem chamada a `localhost`.
 
