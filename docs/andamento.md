@@ -61,8 +61,8 @@ Situação em 27/09/2026. As entregas (G1–G9) estão na tabela acima; aqui, o 
 
 | # | Critério | Situação | Evidência / o que falta |
 | --- | --- | --- | --- |
-| A2-1 | Conectar Meta, Google Ads e GA4 por OAuth; token só no cofre | 🟡 código pronto | `test/db/conexoes.spec.ts` (token nunca na resposta; cifrado no cofre; código e PKCE cifrados até a troca). **Falta:** os apps reais (Meta com Facebook Login for Business; cliente OAuth do Google) — distribuição, A0-5 — e a inspeção dos spans na primeira conexão real |
-| A2-2 | 7 dias fechados iguais à interface da plataforma | ⏳ conta de teste | Conectores com contrato (G4–G6). **Falta:** conferência manual com print no restaurante de testes (A0-7) |
+| A2-1 | Conectar Meta, Google Ads e GA4 por OAuth; token só no cofre | ✅ 29/09/2026 (produção) | Em produção, na Mister Burgers: Meta pelo perfil testador (BM - Mister Burguer, CA - Mister Burguer, só `ads_read`/ANALYZE) e Google Ads pela conta de teste (798-481-1811, nível Explorer); tokens cifrados pelo KMS. Testes: `test/db/conexoes.spec.ts`. GA4: a conta Google do restaurante não trouxe propriedade. Apps ainda **em modo de teste** (Google vence em 7 dias: reconectar ou publicar) |
+| A2-2 | 7 dias fechados iguais à interface da plataforma | 🟡 Meta ✅ · Google não conferido | Meta, 22 a 28/09/2026: Gerenciador de Anúncios R$ 655,96 × Liame R$ 655,93 (R$ 0,03, arredondamento do gasto por anúncio e dia; reconferir depois da revisão diária). Google: Liame R$ 62,77 na semana; a conferência na interface foi **deixada para depois pelo dono**. A conferência achou um alarme falso na Atenção (campanha programada "SEX A DOM"), corrigido no #52 (ERR-039) |
 | A2-3 | Passado reescrito registrado | ✅ | `test/db/midia.spec.ts` e `test/db/sincronizacao.spec.ts` (observação nova quando o número muda; chave que some vira zero) |
 | A2-4 | Cotas respeitadas; uma empresa não gasta a cota das outras | 🟡 testes ok | `conector-http.spec.ts` (cabeçalhos, espera, disjuntor e balde por conta), GA4 com `returnPropertyQuota`, reserva sem duplicar (ERR-029). **Falta:** 7 dias de piloto sem erro 17/613/80000–80014 |
 | A2-5 | Frescor em toda métrica; conta desconectada ou token vencido vira alerta | ✅ | `/v1/media/metrics` com frescor por ponto; `/v1/media/attention` (conta desconectada, dado atrasado, autorização vencendo) — `sincronizacao.spec.ts`, `atencao.spec.ts` |
@@ -71,7 +71,7 @@ Situação em 27/09/2026. As entregas (G1–G9) estão na tabela acima; aqui, o 
 | A2-8 | A1-1 a A1-3 cobrindo as tabelas novas | ✅ | Catálogo e cruzamento entre empresas gerados do banco passam com as tabelas das migrations 0017–0020 |
 | A2-9 | Telas de Contas conectadas e Atenção de mídia conforme mockup aprovado | ✅ 27/09/2026 | Protótipo aprovado pelo dono (avisos como cartões na home Atenção quando ela existir; a tela é o "ver todos"); telas `/contas` e `/atencao` conferidas no navegador (4 larguras, claro e escuro) com dados semeados. **Falta:** repetir com as contas reais do piloto |
 
-**Para a nuvem:** migrations 0001–0020 a aplicar quando o Supabase São Paulo existir (A0-8).
+**Produção (29/09/2026):** Liame no ar (`app.` e `api.agencialiame.com`, EasyPanel projeto `liame`, `docs/deploy.md`); migrations 0001–0020 na nuvem. **Falta da A2:** 7 dias de piloto sem erro de cota (A2-4), a conferência do Google (A2-2) e publicar os apps da Meta e do Google.
 
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 
