@@ -33,6 +33,7 @@ O dono decidiu em 29/09/2026 que o cupom vive no Regem: o Liame puxa os cupons c
    | Escopo | Produto | Libera |
    | --- | --- | --- |
    | `pedidos.ler` | Regem | pedidos confirmados e cancelados, itens, canal, cupom usado e origem do clique |
+   | `clientes.telefone.ler` | Regem | id e telefone do cliente no pedido (sem ele, o caminho B, conversa → pedido, fica desligado) |
    | `custos.ler` | Regem | custo por item (só se quem autorizou tem permissão financeira no Regem) |
    | `clientes.anonimizacao.ler` | Regem | aviso de cliente anonimizado, para o Liame apagar o `customer_ref` |
    | `cupons.ler` | contrato de cupons | cupons com regra e validade |
@@ -61,6 +62,8 @@ O dono decidiu em 29/09/2026 que o cupom vive no Regem: o Liame puxa os cupons c
    - pedido de marketplace (iFood, 99Food, Keeta) chega **sem identificador do cliente** (D-A2.5-11);
    - conversa chega sem conteúdo.
 9. **Proveniência por campo:** cada dado de clique guarda de onde veio (`regem`, `google_ads`, `meta`). O Action Service recusa levar dado das APIs do Google para outra plataforma de anúncio (Uso Limitado, `security-model.md` §2.1).
+
+10. **Contratos escritos** (29/09/2026): [`integracoes/regem.md`](../integracoes/regem.md) (pedidos, loja, clientes anonimizados, autorização, eventos e captura do clique), [`integracoes/cupons.md`](../integracoes/cupons.md) (contrato de cupons neutro) e [`integracoes/regemcast.md`](../integracoes/regemcast.md) (conversas abertas por anúncio). Mudar um contrato é versão nova do documento e dos testes de contrato dos dois lados.
 
 ## Consequências
 
