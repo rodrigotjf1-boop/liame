@@ -17,6 +17,8 @@
 | `clientes.anonimizacao.ler` | avisos de cliente anonimizado | para o Liame apagar o cliente pseudonimizado |
 | `cupons.ler`, `cupons.uso.ler`, `cupons.criar` | contrato de cupons | — |
 
+- **Token do piloto (decisão do dono, 29/09/2026):** sai sem `clientes.telefone.ler` e sem `custos.ler`, só com os outros 5 escopos. O Liame já trata isso pelo contrato: `cliente` e `custo_centavos` vêm `null`, o caminho B (conversa → pedido) fica desligado, e os Resultados mostram "margem incompleta", sem veredito. Liberar os dois depois é emitir um token novo e revogar o antigo.
+
 - **Como o token nasce (produto, C1b):**
   1. No Liame, "Conectar Regem" abre `https://app.dmsregem.com/integracoes/autorizar?cliente=liame&state=…&code_challenge=…&code_challenge_method=S256&redirect_uri=https://api.agencialiame.com/v1/oauth/callback`.
   2. No Regem, o presidente escolhe as lojas e vê os escopos.

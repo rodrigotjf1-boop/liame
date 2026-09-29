@@ -46,3 +46,9 @@ O ROAS confirmado no caixa é o número mais importante do Liame e o mais fácil
 - O número do Liame fica menor que o da plataforma na maioria dos casos. É o diferencial, e a tela mostra os dois com a janela de cada um.
 - Vários toques (multi-touch) e incrementalidade ficam para a A8, como modelos novos na mesma tabela, sem refazer o motor.
 - Configuração por marca (janela, hierarquia) entra no Pro depois, como versão própria da empresa. O modelo padrão da distribuição continua existindo.
+
+## Emendas
+
+- **29/09/2026, decisões do dono na trilha C:**
+  - **O clique só chega ao pedido na mesma visita.** O cardápio do Regem guarda a origem (`lk`, ids de clique e UTM) só enquanto a aba estiver aberta. A compra feita em outra visita só ganha campanha pelo cupom ou pela conversa, ou fica "sem origem". A janela de 7 dias do item 2 continua valendo para os toques que o Liame registra. Os códigos de clique saem em 90 dias, no Regem e no Liame (D-A2.5-10).
+  - **Piloto sem telefone.** O token do piloto sai sem `clientes.telefone.ler`, e o nível "conversa aberta por anúncio" fica sem uso até o escopo ser liberado. O motor não muda: sem telefone no pedido, essa evidência simplesmente não aparece.
