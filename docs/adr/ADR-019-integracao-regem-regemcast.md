@@ -61,7 +61,9 @@ O dono decidiu em 29/09/2026 que o cupom vive no Regem: o Liame puxa os cupons c
    - nome e e-mail não são pedidos;
    - pedido de marketplace (iFood, 99Food, Keeta) chega **sem identificador do cliente** (D-A2.5-11);
    - conversa chega sem conteúdo.
-9. **Proveniência por campo:** cada dado de clique guarda de onde veio (`regem`, `google_ads`, `meta`). O Action Service recusa levar dado das APIs do Google para outra plataforma de anúncio (Uso Limitado, `security-model.md` §2.1).
+9. **Proveniência por campo:** cada dado de clique guarda de onde veio (`url` do cardápio, `regemcast`, `google_ads`). O Action Service recusa levar dado para outra plataforma de anúncio nos dois sentidos:
+   - dado das APIs do Google nunca vai para a Meta (Uso Limitado, `security-model.md` §2.1);
+   - dado de anúncios da Meta, mesmo agregado ou derivado, nunca vai para o Google nem para outra rede de anúncios (Padrões de Publicidade da Meta, "Data use restrictions"; base §2.1, 29/09/2026).
 
 10. **Contratos escritos** (29/09/2026): [`integracoes/regem.md`](../integracoes/regem.md) (pedidos, loja, clientes anonimizados, autorização, eventos e captura do clique), [`integracoes/cupons.md`](../integracoes/cupons.md) (contrato de cupons neutro) e [`integracoes/regemcast.md`](../integracoes/regemcast.md) (conversas abertas por anúncio). Mudar um contrato é versão nova do documento e dos testes de contrato dos dois lados.
 

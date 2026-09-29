@@ -81,4 +81,12 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   customer_ref_link: { class: 'PERSONAL', retention: 'com o cliente pseudonimizado' },
   order_fact: { class: 'CONFIDENTIAL', retention: 'enquanto durar o contrato (sem dado pessoal)' },
   order_item_fact: { class: 'CONFIDENTIAL', retention: 'com o pedido' },
+  // Atribuição (A2.5, F2): ids de clique são dado pessoal (90 dias); o resultado guarda só a evidência.
+  tracking_link: { class: 'CONFIDENTIAL', retention: 'com a marca e a empresa' },
+  coupon: { class: 'CONFIDENTIAL', retention: 'com a conta conectada (espelho da origem)' },
+  campaign_coupon: { class: 'CONFIDENTIAL', retention: 'com a campanha' },
+  touchpoint: { class: 'PERSONAL', retention: '90 dias (ids de clique e do anúncio)', purge: { job: 'toque', days: 90 } },
+  attribution_model: { class: 'PUBLIC', retention: 'do produto (a versão nunca muda)' },
+  attribution_run: { class: 'INTERNAL', retention: '90 dias', purge: { job: 'execucao_atribuicao', days: 90 } },
+  attribution_result: { class: 'CONFIDENTIAL', retention: 'com o pedido' },
 };

@@ -1,4 +1,5 @@
 import * as actions from './actions.js';
+import * as attribution from './attribution.js';
 import * as audit from './audit.js';
 import * as connections from './connections.js';
 import * as connectors from './connectors.js';
@@ -10,6 +11,7 @@ import * as orders from './orders.js';
 import * as vault from './vault.js';
 
 export * from './actions.js';
+export * from './attribution.js';
 export * from './audit.js';
 export * from './connections.js';
 export * from './connectors.js';
@@ -81,4 +83,11 @@ export const allTables = [
   orders.customerRefLink,
   orders.orderFact,
   orders.orderItemFact,
+  attribution.trackingLink,
+  attribution.coupon,
+  attribution.campaignCoupon,
+  attribution.touchpoint,
+  attribution.attributionModel,
+  attribution.attributionRun,
+  attribution.attributionResult,
 ];

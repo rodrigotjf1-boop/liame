@@ -99,6 +99,21 @@ touchpoint (clique/visita/conversa) ─→ identity_link ─→ customer_ref ─
 - `customer_ref_link`: o id do cliente na origem → `customer_ref`, para apagar o cliente quando a origem o anonimiza (as ligações somem junto; pedidos e toques ficam sem cliente).
 - Telefone normalizado antes do índice, com o nono dígito do celular acrescentado: o `wa_id` do WhatsApp vem muitas vezes sem ele.
 
+**Atribuição (A2.5 · F2, migration 0022; ADR-020):**
+
+- `tracking_link`: o link do cardápio com o `lk`, ligado a campanha e anúncio.
+- `coupon`: espelho dos cupons da loja no Regem, com regra, validade e usos.
+- `campaign_coupon`: cupom ligado a uma campanha por período; só o exclusivo é evidência.
+- `touchpoint`:
+  - `clique`: ligado ao pedido pelo id na origem; `conversa`: ligada ao pedido pelo `customer_ref`;
+  - ids de clique e da plataforma válidos ou ausentes; plataforma deduzida dos ids;
+  - `provenance` por campo;
+  - 90 dias.
+- `attribution_model`: regra e janela como dado, imutável por versão, com o modelo `ultimo_toque` v1 na distribuição.
+- `attribution_run`: 90 dias.
+- `attribution_result`: um por pedido e versão de modelo, com evidência, confiança, janela, `counted` e o motivo de ficar sem origem.
+- Motor em uma instrução por execução (`attribution/motor.ts`).
+
 ### 4.1 Metric Authority Matrix
 
 | Métrica | Fonte autoritativa |

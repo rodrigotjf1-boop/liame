@@ -128,6 +128,20 @@
   - para operar em nome de terceiros é preciso App Review com Advanced Access em **`ads_mcp_management`** [O/S].
 - Custom Audience por lista exige o aceite de termos por conta. Telefone BR em **E.164 (+55 e 9º dígito)** antes do SHA-256.
 
+- **Parâmetros de URL dos anúncios** *(verificado em 29/09/2026 em facebook.com/business/help/2360940870872492)* [O]:
+  - dinâmicos: `ad_id={{ad.id}}`, `adset_id={{adset.id}}`, `campaign_id={{campaign.id}}`, `ad_name`, `adset_name`, `campaign_name`, `placement`, `site_source_name` (`an`, `fb`, `ig`, `msg`, `th`) e `media_type` (só catálogo Advantage+);
+  - os de **nome congelam o nome da 1ª publicação** (renomear depois não muda o valor): o id é a evidência, nunca o nome;
+  - não funcionam em anúncio de **coleção nos posicionamentos do Instagram**;
+  - a Meta pode acrescentar sozinha origem, meio (`paid`) e os ids de anúncio, conjunto e campanha.
+- **`url_tags`** *(developers.facebook.com/docs/marketing-api/reference/ad-creative, 29/09/2026)* [O]: campo do **AdCreative**, não do Ad; lê-se por `GET /{ad-id}?fields=creative{url_tags}`. A descrição oficial fala só de page post, message e canvas app install [O]; o uso nos anúncios de link comuns e a presença na v26.0 são inferidos (o changelog da v26.0, de 29/07/2026, não o altera) [NC].
+- **Uso dos dados de anúncio da Meta** *(Padrões de Publicidade, "Data use restrictions", transparency.meta.com/policies/ad-standards, 29/09/2026)* [O]:
+  - só **agregados e anônimos** e só para avaliar as campanhas da Meta do próprio anunciante;
+  - **proibido misturar dados de campanhas de vários anunciantes** (nada de benchmark entre clientes com dado da Meta);
+  - **proibido levar dado de anúncio da Meta, mesmo agregado ou derivado, a outra rede de anúncios**, bolsa ou *data broker*;
+  - pode ser compartilhado com quem age em nome do anunciante (prestador de serviço, como o Liame).
+  - Business Tools Terms 2.a.ii (03/11/2025): relatórios e análises gerados pelas Business Tools não vão a terceiros sem acordo escrito [O].
+  - **Regra do Liame:** proveniência por campo; dado da Meta nunca vai ao Google nem o do Google à Meta (ADR-019 item 9).
+
 ### 2.2 Instagram, Facebook Pages, Threads
 
 - **IG:**
@@ -141,7 +155,13 @@
 
 ### 2.3 Conversions API
 
-Eventos servidor a servidor (web, app, loja física, **business_messaging**, que atribui vendas fechadas no WhatsApp a anúncios click-to-WhatsApp [NC nos parâmetros]). Deduplicação Pixel × CAPI por **`event_id`**; EMQ alto depende de e-mail/telefone com hash, `fbp`/`fbc`, IP e UA. "Pixel ID" virou "Dataset ID" [S]. `event_time` até 7 dias no passado (loja física, 62) [NC].
+Eventos servidor a servidor (web, app, loja física, **business_messaging**). Deduplicação Pixel × CAPI por **`event_id`**; EMQ alto depende de e-mail/telefone com hash, `fbp`/`fbc`, IP e UA. "Pixel ID" virou "Dataset ID" [S].
+
+- **Reconferido em 29/09/2026** *(developers.facebook.com/docs/marketing-api/conversions-api/parameters/server-event, …/fbp-and-fbc e …/business-messaging)* [O]:
+  - **`event_time` até 7 dias no passado; um evento mais velho derruba o lote inteiro.** Os 62 dias valem só para `physical_store`;
+  - **`fbc`** = `fb.<subdomainIndex>.<creationTime em ms>.<fbclid>` (gerado no servidor sem cookie: índice `1`); o fbclid diferencia maiúsculas e não se altera; `fbc` e `fbp` vão **sem hash**; o cookie `_fbc` dura 90 dias (recomendação, não limite da API);
+  - com a Parameter Builder Library, `fbc`/`fbp` podem ter um **apêndice no fim**: não validar com regex de 4 partes;
+  - **mensageria (`action_source: business_messaging`, `messaging_channel: whatsapp`)**: `user_data.ctwa_clid` (sem hash) **obrigatório** + `whatsapp_business_account_id`; dataset por `GET/POST /{WABA_ID}/dataset`; acesso avançado a `whatsapp_business_management` e `whatsapp_business_manage_events` e o recurso "Marketing API Access Tier"; eventos Purchase, LeadSubmitted, OrderCreated, OrderCanceled etc.; **a Meta não deduplica eventos de mensageria**.
 
 ### 2.4 WhatsApp (sempre via RegemCast)
 
@@ -155,6 +175,10 @@ Eventos servidor a servidor (web, app, loja física, **business_messaging**, que
 - **Chatbots de IA de uso geral proibidos desde 15/01/2026**; agentes de negócio seguem permitidos; no Brasil, a regra está em disputa no CADE [S].
 - A política de 23/09/2026 exige **opt-in** (por categoria é boa prática) e respeito ao opt-out **mesmo pedido fora do WhatsApp** [O, conferido em 25/09/2026, §6.1]. No Brasil, a proibição de "AI Providers" (§4.7) está suspensa por medida preventiva do CADE, mantida em 04/03/2026 [O].
 - Cobrança de mensagens de atendimento a partir de 01/10/2026 [NC].
+- **`referral` do anúncio de clique para WhatsApp** *(webhook `messages`, developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/text, 29/09/2026)* [O]:
+  - vem só na mensagem aberta por anúncio: `source_url`, `source_id` (**id do anúncio**), `source_type` (`ad`), `headline`, `body`, `media_type`, `image_url` ou `video_url`/`thumbnail_url`, `ctwa_clid`, `welcome_message`;
+  - **o `ctwa_clid` some** na mensagem vinda de anúncio no **Status do WhatsApp** (o `referral` vem).
+- **Coexistência (app + Cloud API) e o `referral`** [NC]: a página oficial de coexistência diz que o cliente pode rodar anúncios de clique para WhatsApp e reportar pela CAPI, mas **não garante o `referral` no webhook**; a 1ª mensagem de quem clica no anúncio pode chegar como `unsupported` (erro 131060), que "costuma se resolver em segundos". **Testar com número real antes de prometer o caminho B** (D-A2.5-9).
 - Modelos [memória interna, verificado em uso]:
   - LTO só em MARKETING, sem rodapé, cabeçalho IMAGE/VIDEO, `expiration_time_ms` em epoch absoluto;
   - cabeçalho TEXT com 1 variável, até 60 caracteres;
@@ -190,6 +214,14 @@ Eventos servidor a servidor (web, app, loja física, **business_messaging**, que
   | Standard | ilimitado | auditoria manual de ~10 dias úteis; demo e RMF |
 
 - **Versões** *(reconferido em 26/09/2026 nas release notes oficiais)*: a major mais nova continua a **v25** (22/07/2026) [O]; o que sai por mês são **versões menores** dentro da major: **v25.1 (19/08/2026)** e **v25.2 (23/09/2026)** [O]. Cada major vive ~12 meses [S] (v22 até out/2026 · v23 até fev/2027 · v24 até mai/2027 · v25 até ago/2027). Validar em `/sunset-dates`.
+- **Rastreio de cliques** *(verificado em 29/09/2026)* [O]:
+  - **auto-tagging** acrescenta `gclid` e vem **ligado por padrão em contas novas** (support.google.com/google-ads/answer/3095550);
+  - iOS: `wbraid` (clique num app iOS que leva à web) e `gbraid` (clique na web que leva ao app iOS; Search, Shopping, Display e PMax); o **GBRAID não é único por usuário** (agregado, diferencia maiúsculas) e a Google agora recomenda mandar gclid **e** gbraid juntos (developers.google.com/google-ads/api/docs/conversions/upload-clicks, 24/09/2026);
+  - **ValueTrack:** `{campaignid}`, `{adgroupid}`, `{creative}` (id do anúncio), `{keyword}` (vazio em AI Max, DSA e PMax), `{matchtype}`, `{network}` (`x` = todo tráfego PMax), `{device}`, `{gclid}` (support.google.com/google-ads/answer/6305348);
+  - **onde:** modelo de acompanhamento (conta, campanha e grupo exigem `{lpurl}`) e **sufixo do URL final** (conta, campanha, grupo, anúncio, alvo dinâmico, palavra-chave e sitelink);
+  - **leitura pela API v25:** `customer.final_url_suffix`/`tracking_url_template`, `campaign.*`, `ad_group.*`, `ad_group_ad.ad.final_url_suffix`/`tracking_url_template`/`url_custom_parameters`/`final_urls`, `ad_group_criterion.*` (todos selecionáveis);
+  - **`click_view`** resolve `gclid` → anúncio (e campanha e grupo como recursos segmentadores); **um dia por consulta, até 90 dias para trás; sem gbraid/wbraid**; sem gclid em campanhas de app de instalação e pré-registro (developers.google.com/google-ads/api/fields/v25/click_view, 23/09/2026);
+  - **janela de conversão padrão:** clique **30 dias** (1–30, 60 ou 90), visualização engajada 3 dias, visualização 1 dia; mudar só vale daqui em diante (support.google.com/google-ads/answer/3123169).
 - **Campanhas:** AI Max GA (abr/2026); DSA e broad sobem automaticamente para AI Max a partir de set/2026; fim do DSA adiado para fev/2027 [S]. Display standalone migrando para Demand Gen [S].
 - **Multi-Party Authorization** (v24) pode exigir um segundo admin para operações de usuário [O].
 - **Suspensão por contas relacionadas** (*circumventing systems*) contamina contas ligadas por pagamento, usuário ou MCC: isolar clientes.
@@ -203,6 +235,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - Customer Match bloqueado na Ads API desde 01/04/2026 para quem não fez upload em 180 dias.
 - Conversões offline por clique bloqueadas desde 15/06/2026 fora da allowlist (`CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE`).
 - **Integração nova nasce na Data Manager API.**
+- **Reconferido em 29/09/2026** [O]: GA desde 09/12/2025; o Google a chama de **"primary"**, não de "única" (quem já usava a Ads API segue enquanto migra); a allowlist das conversões offline é **por developer token**, e as páginas oficiais divergem na janela exigida (blog: "dezembro de 2025 a maio de 2026"; deprecations: "17/12/2025 a 15/06/2026"). Escopo `https://www.googleapis.com/auth/datamanager` é **sensível** (verificação OAuth do app). Fontes: ads-developers.googleblog.com/2026/05/changes-to-offline-click-conversion.html, developers.google.com/google-ads/api/docs/deprecations, developers.google.com/data-manager/api/devguides/quickstart/set-up-access.
 
 ### 3.3 GA4, Search Console, GBP, YouTube, Merchant
 
@@ -216,6 +249,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - a resposta traz `rows` (`dimensionValues`/`metricValues`), `rowCount`, `metadata` (`dataLossFromOtherRow`, `samplingMetadatas`, `subjectToThresholding`, `currencyCode`, `timeZone`) e `propertyQuota` (`tokensPerDay`, `tokensPerHour`, `tokensPerProjectPerHour`, `concurrentRequests`, `serverErrorsPerProjectPerHour`, `potentiallyThresholdedRequestsPerHour`, cada um com `consumed`/`remaining`);
   - `GET https://analyticsadmin.googleapis.com/v1beta/accountSummaries` (`pageSize` até 200, `pageToken`) lista contas e `propertySummaries`; a propriedade (`properties/{id}`) tem `timeZone` e `currencyCode`;
   - métricas `sessions`, `totalUsers`, `newUsers`, `engagedSessions` e **`keyEvents`** (o antigo "conversions") na página do esquema [O]; `ecommercePurchases`, `purchaseRevenue`, `sessionSource` e `sessionMedium` confirmados só por fonte secundária, porque a página veio cortada [S]; `date` chega como `AAAAMMDD`.
+- **Escopo `analytics.readonly`** *(29/09/2026)*: **não é restrito** (support.google.com/cloud/answer/13464325) [O]; a marca de "sensível" só aparece no Cloud Console, na tela de acesso a dados do projeto [NC]: conferir lá antes de pedir a verificação do app.
 - **Search Console:** Search Analytics a 1.200 QPM por site; URL Inspection 2.000/dia por site [S].
 - **Google Business Profile** [O]:
   - acesso **restrito**: perfil verificado há **60+ dias**, com site;
@@ -298,6 +332,14 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Políticas que derrubam contas:**
   - **Meta:** cloaking, atributos pessoais ("Você tem dívidas?"), promessas de saúde e antes/depois, enriquecimento rápido, apostas e cripto sem autorização, figura pública (golpe/deepfake), landing page ruim, falha de pagamento, conta nova com gasto alto.
   - **Google:** *misrepresentation* (mais comum), *circumventing systems*, pagamento suspeito, verificação de anunciante não concluída, saúde, apostas.
+
+- **Cookies e identificadores de rastreio (ANPD)** *(Guia orientativo "Cookies e proteção de dados pessoais", v1.0, out/2022, ainda vigente; catálogo gov.br modificado em 23/01/2025; lido em 29/09/2026)* [O]:
+  - vale também para "tecnologias similares de rastreamento" (cobre `_fbc`, `_gcl_*`);
+  - **publicidade:** o legítimo interesse "dificilmente será" a base; **consentimento** é a mais apropriada;
+  - **medição/analítica:** legítimo interesse possível em certos contextos (agregado, sem cruzar rastreios, sem perfil);
+  - estritamente necessários: sem consentimento;
+  - banner: "rejeitar todos" no 1º nível, desligados por padrão, nada de consentimento tácito nem botão único "aceito", revogação simples.
+  - O guia **não trata** de `gclid`/`fbclid` guardado no servidor sem cookie [NC]: aplica-se por analogia. Para o cardápio do Regem (C3a): aviso de privacidade da loja; guardar o clique para medir a venda da própria loja (agregado no Liame) é medição; mandar à plataforma (A5) é publicidade → consentimento com prova (C3c).
 
 ### 6.1 Verificação para os documentos jurídicos (25/09/2026)
 
@@ -546,6 +588,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 29/09/2026 | Pesquisa da A2.5 (ciclo fechado, `plano-a25.md` §9), só em fontes oficiais: §2.1 parâmetros de URL da Meta, `url_tags` e **restrição de uso dos dados de anúncio da Meta** (sem misturar anunciantes; nada vai a outra rede, nem agregado); §2.3 CAPI reconferida (`event_time` 7 dias derruba o lote; `fbc` com apêndice; mensageria com `ctwa_clid`, sem dedupe); §2.4 `referral` do WhatsApp (`ctwa_clid` some no Status; coexistência [NC]); §3.1 auto-tagging, gbraid/wbraid, ValueTrack, sufixo do URL final pela API v25, `click_view` (1 dia, 90 dias, sem gbraid) e janelas de conversão; §3.2 Data Manager reconferida; §3.3 `analytics.readonly` não restrito; §6 guia de cookies da ANPD. |
 | 24/09/2026 | Criação: pesquisas de concorrentes, APIs das plataformas, MCP/protocolos, produtos DMS no disco, 49 skills de marketing; versões via npm. |
 | 24/09/2026 | §13: matriz de IdP (12 opções) contra a spec MCP 2026-07-28, KEK e âncora de auditoria. §14: SDKs de IA, feature flags, observabilidade, supply chain e evals. |
 | 24/09/2026 | §15: validação da stack (Nest 12, TS 6×7, Next 16.3, React 19.3, Tailwind 4.3, Drizzle, pg-boss 12, Supabase PG 17, OTel, pnpm 12, Turborepo 2.11). |
