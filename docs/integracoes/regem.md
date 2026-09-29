@@ -1,6 +1,6 @@
 # Contrato Regem → Liame (vendas da loja)
 
-> **Versão 1 · 29/09/2026.** ADR-019 e `plano-a25.md` (C1a, C1b, C1c, C3a, C3b). O Regem é a **autoridade** do pedido, da receita e do custo (Metric Authority Matrix, `data-model.md` §4.1). Este contrato é o que o Regem implementa (rotas só da nuvem) e o que o conector do Liame (F4) consome. As convenções (autorização, cursor, versão, erros, idempotência) são as do [contrato de cupons](cupons.md) §1 e §2; os cupons seguem aquele contrato.
+> **Versão 1 · 29/09/2026**, com as emendas da leitura do código do Regem (plano da trilha C, 29/09/2026): venda `removido`, `faturado_em`, cupom e uso apagados como lápide, estorno só pela situação, `cardapio_url` e o grupo dos canais sem captura de clique. ADR-019 e `plano-a25.md` (C1a, C1b, C1c, C3a, C3b). O Regem é a **autoridade** do pedido, da receita e do custo (Metric Authority Matrix, `data-model.md` §4.1). Este contrato é o que o Regem implementa (rotas só da nuvem) e o que o conector do Liame (F4) consome. As convenções (autorização, cursor, versão, erros, idempotência) são as do [contrato de cupons](cupons.md) §1 e §2; os cupons seguem aquele contrato.
 
 ## 1. Autorização (C1a, C1b)
 
@@ -34,7 +34,10 @@ Endereço base: `https://api.dmsregem.com/api/v1/integracao`. Rotas **só da nuv
 
 ### 2.1 `GET {base}/loja` · qualquer escopo
 
-Quem é a loja do token: `{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moeda", "escopos": [...] }`. O Liame usa na conexão (nome da loja, fuso e escopos concedidos).
+Quem é a loja do token: `{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moeda", "escopos": [...], "cardapio_url" }`.
+
+- O Liame usa na conexão: nome da loja, fuso e escopos concedidos.
+- `cardapio_url` é o endereço público do cardápio online da loja (ou `null` sem cardápio). O construtor de links do Liame (F5) só aceita destino dentro dele (V33).
 
 ### 2.2 `GET {base}/pedidos` · `pedidos.ler`
 
@@ -44,7 +47,8 @@ Quem é a loja do token: `{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moe
 - **O que entra:**
   - todo pedido **confirmado** da loja, de qualquer origem (cardápio online, WhatsApp, balcão, mesa, totem, marketplaces), e o **cancelado** depois de confirmado;
   - pedido que nunca foi confirmado não entra;
-  - a mesma venda aparece uma vez só (comanda de pedido externo não se repete).
+  - a mesma venda aparece uma vez só: a do pedido externo pelo id do pedido; a de balcão, mesa ou totem direto pela comanda sem pedido. É a regra do faturamento do Painel (`comandaEhDeCanal`).
+  - A comanda sem pedido só sai depois de 10 minutos sem mudança. Se ela for publicada e depois virar parte de um pedido, sai de novo com **`situacao: "removido"`**: o Liame a tira das contas (não é cancelamento).
 
 ```json
 {
@@ -65,6 +69,7 @@ Quem é a loja do token: `{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moe
       "cliente": { "id": "5c1e…", "telefone": "+5521999998888", "novo": true },
       "criado_em": "2026-09-26T22:58:00Z",
       "confirmado_em": "2026-09-26T23:00:00Z",
+      "faturado_em": "2026-09-26T22:58:00Z",
       "cancelado_em": null,
       "itens": [
         { "id": "it-1", "produto_id": "p-9", "nome": "Burger da casa", "quantidade": "2", "receita_centavos": 4000, "custo_centavos": 1600 },
@@ -88,17 +93,20 @@ Quem é a loja do token: `{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moe
   - Entra: produto, taxa de entrega quando é da loja, taxas de serviço.
   - Não entra: gorjeta.
   - Reduz: só o desconto bancado pela loja.
-  - O Liame não recalcula (D-A2.5-6). A soma dos pedidos confirmados de um dia tem de bater, ao centavo, com o relatório de faturamento do Regem (critério A2.5-2).
-- **`desconto_loja_centavos`:** informativo, já descontado da receita. **`estornado_centavos`:** estornos registrados no pedido; o Liame desconta do ROAS.
+  - O Liame não recalcula (D-A2.5-6). A soma dos pedidos confirmados de um dia, pelo `faturado_em` no fuso da loja, tem de bater ao centavo com o **"Faturamento" do Painel** da loja (critério A2.5-2). O "Relatório de vendas" do Regem soma de outro jeito e não é a referência.
+- **`faturado_em`:** o instante que o Painel usa para pôr a venda no dia (pedido: a criação; comanda: o fechamento). O Liame agrupa a receita por ele. A janela da atribuição continua contando até `confirmado_em`.
+- **`desconto_loja_centavos`:** informativo, já descontado da receita.
+- **`estornado_centavos`:** na v1 é sempre 0. O Regem não tem estorno parcial: cancelar desfaz a venda inteira, e isso chega pela `situacao`.
+- **`situacao`:** `confirmado`, `cancelado` (depois de confirmado) ou `removido` (venda que deixou de existir sozinha, acima).
 - **`grupo_canal`** (o Regem mapeia o `canal` dele):
 
   | Grupo | Canais do Regem |
   | --- | --- |
-  | `cardapio` | `cardapio`, `cardapio_web`, `loja`, `delivery_direto` |
-  | `whatsapp` | pedidos do bot de WhatsApp |
-  | `presencial` | `balcao`, mesa (comanda), `totem` |
-  | `marketplace` | `ifood`, `99food`, `keeta`, `open_delivery` |
-  | `outro` | `anotaai` e o que não se encaixar |
+  | `cardapio` | `cardapio` (o único com captura do clique, C3a) |
+  | `whatsapp` | pedido do bot de WhatsApp, quando houver marcador próprio. Hoje o bot manda o link do cardápio, e o pedido entra como `cardapio` |
+  | `presencial` | comanda de `balcao`, `mesa` e `totem`; pedido do `totem` e do GoGeM |
+  | `marketplace` | `ifood`, `99food`, `keeta`, `open_delivery`, `rappi`, `ubereats` |
+  | `outro` | `anotaai`, `cardapio_web`, `delivery_direto`, `manual` e o que aparecer (sem captura de clique: só cupom atribui) |
 
 - **Marketplace:** `cliente` **sempre `null`**, mesmo que o Regem saiba quem é (decisão de 09/09/2026, D-A2.5-11).
 - **`cliente`:**
@@ -111,7 +119,9 @@ Quem é a loja do token: `{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moe
   - fica numa tabela própria só da nuvem (`pedido_origem`), sem coluna nova no `pedido_externo`;
   - é `null` quando não houve captura;
   - os valores vão **como vieram na URL** (o Liame valida o formato).
-- **`versao`:** cresce a cada mudança do pedido que altere algum campo acima: confirmação, cancelamento, estorno, item, cupom, origem.
+- **`versao`:** cresce a cada mudança do pedido que altere algum campo acima: confirmação, cancelamento, item, cupom, cliente, origem.
+- **`atualizado_em`:** vem de uma tabela de versões só da nuvem, carimbada depois que a venda foi gravada de vez, e não do `updated_at` do pedido, que chega com a hora da máquina da loja. É o que mantém o cursor sem buracos.
+- **Custo:** o do momento da leitura (o mesmo da Curva ABC). Mudar o custo depois não gera versão nova: para o Liame, vale o custo da primeira leitura da venda.
 
 ### 2.3 `GET {base}/clientes/anonimizados` · `clientes.anonimizacao.ler`
 

@@ -35,7 +35,8 @@
 - **Versão do recurso:** `versao` é um inteiro que **só cresce** a cada mudança. O Liame aplica a maior versão e ignora a menor.
 - **Idempotência nas escritas:** o cabeçalho `Idempotency-Key` é obrigatório (até 24 h).
   - A mesma chave com o mesmo corpo devolve a mesma resposta.
-  - A mesma chave com outro corpo devolve **422**.
+  - A mesma chave com outro corpo devolve **422** (`chave-reutilizada`).
+  - A mesma chave ainda em processamento devolve **409** (`chave-em-uso`).
 
 ## 3. Rotas
 
@@ -66,7 +67,8 @@ Parâmetros: `cursor`, `limite`. Devolve os cupons que valem para a loja do toke
       "max_usos": 300,
       "usos": 42,
       "condicoes": { "somente_novos": false, "max_por_cliente": 1, "min_dias_sem_compra": null },
-      "todas_as_lojas": false
+      "todas_as_lojas": false,
+      "removido": false
     }
   ],
   "proximo_cursor": "eyJ0IjoiMjAyNi0wOS0yOFQxNDowMjoxMS4zODJaIiwiaSI6IjhkOWQ1YzFlIn0",
@@ -77,6 +79,8 @@ Parâmetros: `cursor`, `limite`. Devolve os cupons que valem para a loja do toke
 - `tipo`: `percentual` (usa `percentual`, texto com 2 casas), `valor` (usa `valor_centavos`), `frete_gratis`, `outro`.
 - `valido_ate` é o último dia em que o cupom vale. Sem data, o campo vem `null`.
 - `codigo` sempre em maiúsculas.
+- **Cupom apagado** no sistema de origem sai como lápide: o mesmo `id`, versão nova e `"removido": true`. O Liame tira o cupom da lista e desliga as ligações com campanhas.
+- `todas_as_lojas` é informativo: diz se o cupom foi cadastrado para a empresa inteira. Onde o cupom vale de fato é regra do sistema de origem.
 
 ### 3.2 `GET {base}/cupons/usos` · `cupons.uso.ler`
 
@@ -85,7 +89,7 @@ Parâmetros: `cursor`, `limite`, `desde` (instante; carga inicial). **Sem dado d
 ```json
 {
   "itens": [
-    { "id": "…", "versao": 1, "atualizado_em": "…", "cupom_id": "8d9d…", "codigo": "COMBOSEXTA", "pedido_id": "…", "usado_em": "2026-09-26T23:00:00Z", "desconto_centavos": 599 }
+    { "id": "…", "versao": 1, "atualizado_em": "…", "cupom_id": "8d9d…", "codigo": "COMBOSEXTA", "pedido_id": "…", "usado_em": "2026-09-26T23:00:00Z", "desconto_centavos": 599, "removido": false }
   ],
   "proximo_cursor": "…",
   "tem_mais": false
@@ -94,7 +98,7 @@ Parâmetros: `cursor`, `limite`, `desde` (instante; carga inicial). **Sem dado d
 
 ### 3.3 `POST {base}/cupons` · `cupons.criar`
 
-O Liame chama esta rota **só pelo Action Service**, depois da aprovação e com a flag de escrita do provider ligada (ADR-019 item 6). Cabeçalho `Idempotency-Key` obrigatório.
+O sistema de origem cria o cupom na loja do token e **nunca** atualiza um cupom existente pelo código (409). O Liame chama esta rota **só pelo Action Service**, depois da aprovação e com a flag de escrita do provider ligada (ADR-019 item 6). Cabeçalho `Idempotency-Key` obrigatório.
 
 ```json
 {
@@ -119,7 +123,7 @@ Respostas:
 
 ### 3.4 `POST {base}/cupons/{id}/desativar` · `cupons.criar`
 
-Desfaz a criação (compensação, ADR-019 item 6). Cabeçalho `Idempotency-Key` obrigatório. Devolve **200** com o cupom (`ativo: false`). Cupom já inativo devolve **200** sem mudança.
+Desfaz a criação (compensação, ADR-019 item 6). Cabeçalho `Idempotency-Key` obrigatório. Vale só para cupom **criado pela integração**; outro cupom responde **404**. Devolve **200** com o cupom (`ativo: false`). Cupom já inativo devolve **200** sem mudança.
 
 ## 4. Eventos (opcional)
 
