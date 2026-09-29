@@ -77,6 +77,8 @@ Cada item é um PR no próprio repositório, com o fluxo de lá (Regem: migratio
 
 ## 6. Protótipos para aprovação (antes do código)
 
+> **P1, P2 e P3 aprovados pelo dono em 29/09/2026** (`mockups/prototipo-resultados.html`, `prototipo-contas-regem.html`, `prototipo-links-cupons.html`), com as decisões registradas no changelog de `decisoes-design.md`. Falta o P-R, no Regem.
+
 Sem mockup aprovado não se inventa tela (`CLAUDE.md` §2). A "Resultados" do protótipo geral (A0-4) tem os números inventados e não mostra os estados reais; por isso vira protótipo próprio, como foi feito com `prototipo-contas.html` na A2.
 
 | # | Protótipo | Estados que precisa mostrar |
@@ -135,7 +137,7 @@ Nenhum fornecedor novo entra na A2.5 (Regem e RegemCast são da mesma empresa; R
 | C1 no Regem | Plano do token por loja aprovado (issue no Regem) | A0-9 |
 | Caminho B | Número dos anúncios de clique para WhatsApp e se ele vai para coexistência no RegemCast | A0-7 |
 | Piloto | Acesso ao Regem da Mister Burgers com o perfil presidente (o custo só sai com permissão financeira); 1 ou 2 campanhas reais levando o link da F5 ou um cupom exclusivo | A0-7 |
-| Telas | Aprovar P1, P2, P3 e as telas do Regem (P-R) | — |
+| Telas | Aprovar P1, P2, P3 (✅ 29/09/2026) e as telas do Regem (P-R) | — |
 | Aplicar na nuvem | Migrations 0021–0023 do Liame; as da C1/C3 no Regem e da C2 no RegemCast, **antes** do merge de cada uma | A0-8 |
 | Continuidade do Google | Publicar os apps da Meta e do Google (o token do Google em modo de teste vence em 7 dias) | A0-5 |
 | Aviso ao consumidor | Aprovar o texto do aviso de privacidade no cardápio da loja | A0-6 |

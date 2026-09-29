@@ -1,0 +1,1315 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Contas conectadas · Liame</title>
+<!--
+@prototipo Liame · A2.5 · P2 · Contas conectadas: Regem e RegemCast (AGUARDA APROVAÇÃO DO DONO)
+base: prototipo-contas.html aprovado em 27/09; a parte da Meta e do Google fica igual (só o nome da marca de exemplo mudou)
+o que acrescenta: conectar o Regem (explicação → ida ao Regem → volta simulada), lojas autorizadas e ligação com a loja do Liame,
+           escopos e o que cada um libera (custo só com permissão financeira), frescor ("Pedidos em dia"), primeira leitura de 90
+           dias, revogar com confirmação na linha, token revogado do lado do Regem, RegemCast (conversas abertas por anúncio,
+           sem conteúdo) e o aviso de número fora da API oficial do WhatsApp.
+estados: seletor "Situação" na faixa do topo. Dados fictícios (Mister Burgers).
+fontes: plano-a25.md (§3 F3/F7, §5 D-A2.5-4, §6), ADR-019.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== 1. TOKENS: marca Liame (manual v1.0) nos papéis semânticos, iguais aos protótipos aprovados ===== */
+:root {
+  color-scheme: light dark;
+
+  /* superfícies */
+  --bg: light-dark(#F4F2EC, #0B0D17);
+  --bg-subtle: light-dark(#ECE9E1, #10131F);
+  --surface: light-dark(#FFFFFF, #151A2E);
+  --surface-2: light-dark(#FAF8F3, #1A2038);
+  --surface-hover: light-dark(#F2EFE8, #1F2645);
+  --elevated: light-dark(#FFFFFF, #1B2140);
+  --overlay: light-dark(rgb(11 13 23 / .34), rgb(3 4 10 / .66));
+  --border: light-dark(#E5E1D7, #262C49);
+  --border-strong: light-dark(#D0CBBF, #3A4166);
+
+  /* texto */
+  --text: light-dark(#0B0D17, #F4F2EC);
+  --text-muted: light-dark(#4A5068, #9AA0B4);
+  --text-subtle: light-dark(#646A80, #878EAB);
+
+  /* ação = Ciano Link (botão ciano com tinta Noite nos dois temas) */
+  --primary: #2DD4DE;
+  --primary-hover: light-dark(#26C4CE, #62E1E8);
+  --primary-fg: #0B0D17;
+  --primary-soft: light-dark(#DCF6F8, #0E2B33);
+  --link: light-dark(#0A6C75, #2DD4DE);
+
+  /* foco e fio: o ciano some no fundo claro (1,6:1); no claro entra o petróleo escuro */
+  --foco: light-dark(#008796, #2DD4DE);
+  --fio: light-dark(#009AAA, #2DD4DE);
+
+  /* Violeta IA: aqui só no fundo das notas de diálogo, como no protótipo aprovado de Contas */
+  --ai: light-dark(#5A43D8, #A08FFF);
+  --ai-fill: #7B61FF;
+  --ai-soft: light-dark(#EEEAFF, #211C45);
+
+  /* status (nunca é cor de ação); texto sobre o fundo suave passa de 4,5:1 nos dois temas */
+  --success: light-dark(#0C6F5B, #46BC9F);
+  --success-soft: light-dark(#E2F3EE, #0F2C26);
+  --warning: light-dark(#8A5F00, #FFC24B);
+  --warning-soft: light-dark(#FFF1D1, #2E2610);
+  --danger: light-dark(#B42F2F, #FF6B6B);
+  --danger-soft: light-dark(#FFE3E3, #361A1F);
+
+  /* gráficos (paleta validada com a skill dataviz; ênfase = caixa, contexto = plataforma) */
+  --chart-foco: light-dark(#009AAA, #16A0AF);
+  --chart-contexto: light-dark(#7E8499, #7C83A3);
+  --chart-grade: light-dark(#ECE9E1, #252B48);
+
+  /* QR: módulo escuro sobre fundo claro nos dois temas (leitor de QR precisa disso) */
+  --qr-fundo: #FFFFFF;
+  --qr-tinta: #0B0D17;
+
+  /* marca (logo) */
+  --logo-ink: light-dark(#0B0D17, #F4F2EC);
+  --logo-pin: light-dark(#7B61FF, #FFFFFF);
+  --marca-violeta: #7B61FF;
+  --marca-ciano: #2DD4DE;
+  --marca-lavanda: #A08FFF;
+  --marca-lavanda-clara: #CFC6FF;
+  --marca-petroleo: #1BA8B8;
+  --marca-ambar: #FFC24B;
+  --marca-coral: #FF6B6B;
+
+  /* forma */
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px light-dark(rgb(11 13 23 / .06), rgb(0 0 0 / .35));
+  --shadow: 0 1px 2px light-dark(rgb(11 13 23 / .05), rgb(0 0 0 / .4)), 0 10px 28px -14px light-dark(rgb(11 13 23 / .2), rgb(0 0 0 / .7));
+  --shadow-lg: 0 28px 56px -20px light-dark(rgb(11 13 23 / .32), rgb(0 0 0 / .75)), 0 2px 8px light-dark(rgb(11 13 23 / .08), rgb(0 0 0 / .4));
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--foco);
+
+  /* tipografia (kit: Poppins 700/500/400; 600 só em título de cartão e número) */
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Code", Consolas, monospace;
+  --text-xs: .75rem;
+  --text-sm: .8125rem;
+  --text-base: .875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-hero: clamp(2.6rem, 4.2vw, 3.25rem);
+
+  /* espaço (base 4 px) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* layout */
+  --sidebar-w: 256px;
+  --rail-w: 76px;
+  --topbar-h: 60px;
+  --content-max: 1320px;
+
+  /* movimento */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: 140ms;
+  --dur: 220ms;
+  --dur-slow: 360ms;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ===== 2. BASE ===== */
+:root { --font-poppins: "Poppins"; --font-jetbrains: "JetBrains Mono"; }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+p, ul, ol, dl, dd, h1, h2, h3, figure, fieldset { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+html { height: 100%; -webkit-text-size-adjust: 100%; }
+body {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { line-height: 1.2; letter-spacing: -.015em; font-weight: 600; text-wrap: balance; }
+h1 { font-weight: 700; }
+a { color: var(--link); }
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, h3[tabindex="-1"]:focus { outline: none; }
+code { font-family: var(--font-mono); font-size: .92em; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.rotulo-marca { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text-subtle); }
+.spacer { flex: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip-link { position: absolute; left: var(--sp-3); top: -60px; z-index: 100; padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); background: var(--primary); color: var(--primary-fg); font-weight: 600; text-decoration: none; }
+.skip-link:focus { top: var(--sp-3); }
+
+/* ===== Movimento ===== */
+@keyframes surgir { from { opacity: 0; transform: translateY(10px); } }
+@keyframes surgir-fundo { from { opacity: 0; } }
+@keyframes entrar { from { opacity: 0; transform: translateY(8px); } }
+@keyframes pisca { 50% { opacity: .35; } }
+@keyframes varre { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes gira { to { transform: rotate(360deg); } }
+.anima { animation: surgir .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== 3. FAIXA DO PROTÓTIPO (só do protótipo; não vai para o app) ===== */
+.revisao { position: relative; z-index: 50; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 16px; border-bottom: 1px dashed var(--border-strong); background: var(--bg-subtle); font-size: var(--text-xs); }
+.revisao-marca { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.revisao-marca b { font-family: var(--font-mono); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.revisao-marca span { color: var(--text-muted); }
+.revisao label { flex: 1 1 280px; display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 520px; }
+.revisao select { flex: 1; min-width: 0; min-height: 30px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 0 8px; }
+.revisao .btn { min-height: 30px; }
+
+/* ===== 4. SHELL: menu lateral, trilho no tablet, gaveta no celular (igual ao aprovado) ===== */
+.app { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); overflow: hidden; background: var(--bg); }
+
+.sidebar { position: relative; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-5) var(--sp-3) var(--sp-3); border-right: 1px solid var(--border); background: var(--bg); scrollbar-width: thin; }
+.sidebar > * { flex-shrink: 0; }
+.sidebar > nav { width: 100%; }
+.sb-logo { display: flex; align-items: center; gap: var(--sp-2); height: 44px; padding: 0 var(--sp-2); margin-bottom: var(--sp-4); }
+.logo-completo { display: block; width: 116px; height: auto; }
+.logo-simbolo { display: none; width: 40px; height: 40px; }
+.sidebar .sb-fechar { display: none; margin-left: auto; }
+
+.ctx { width: 100%; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); text-align: left; cursor: default; }
+.ctx-av { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--bg-subtle); font-weight: 600; font-size: var(--text-xs); }
+.ctx-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; }
+.ctx-txt b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-txt span { font-size: var(--text-xs); color: var(--text-muted); }
+
+.nav-grupo { margin-top: var(--sp-5); }
+.nav-grupo-rot { padding: 0 var(--sp-3); margin-bottom: var(--sp-2); }
+.nav-lista { display: grid; gap: 2px; }
+.nav-item { position: relative; width: 100%; display: flex; align-items: center; gap: var(--sp-3); height: 40px; padding: 0 var(--sp-3); border: 0; border-radius: var(--radius); background: transparent; color: var(--text-muted); font-weight: 500; text-align: left; text-decoration: none; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.nav-item:hover { background: var(--surface-hover); color: var(--text); }
+.nav-item[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.nav-item .ic { width: 18px; height: 18px; }
+.nav-item .rot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-no { position: absolute; left: 4px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--fio); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fio) 22%, transparent); }
+.nav-cont { min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: var(--radius-full); background: var(--danger-soft); color: var(--danger); font-size: 11px; font-weight: 600; }
+.nav-mais { margin-top: var(--sp-4); }
+.nav-mais .ic { transition: transform var(--dur) var(--ease); }
+.nav-mais[aria-expanded="true"] .ic { transform: rotate(180deg); }
+.nav-mais-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-full); display: inline-grid; place-items: center; background: var(--bg-subtle); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+
+.sb-rodape { margin-top: auto; padding-top: var(--sp-5); display: grid; gap: var(--sp-3); }
+.usuario { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-1) 0 var(--sp-2); }
+.av-user { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); font-size: var(--text-xs); font-weight: 600; }
+.usuario-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; margin-right: var(--sp-1); }
+.usuario-txt b { font-weight: 600; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usuario-txt span { font-size: var(--text-xs); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* seletor Lite/Pro (protótipo geral aprovado): no topo; na gaveta do celular, no rodapé do menu */
+.modo { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); }
+.modo button { height: 30px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.modo button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.modo button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.modo-top { display: inline-grid; grid-template-columns: auto auto; }
+.modo-top button { min-width: 48px; padding: 0 12px; }
+.sb-rodape .modo { display: none; }
+
+.principal { container: principal / inline-size; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { flex: none; position: relative; z-index: 5; display: flex; align-items: center; gap: var(--sp-2); height: var(--topbar-h); padding: 0 var(--sp-6); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); }
+.topbar .tb-menu { display: none; }
+.trilha { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.trilha-pai { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trilha-sep { color: var(--text-subtle); }
+.trilha strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conteudo { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.pagina { container: pagina / inline-size; max-width: var(--content-max); margin: 0 auto; padding: var(--sp-6) var(--sp-8) var(--sp-16); }
+
+.veu { position: fixed; inset: 0; z-index: 55; background: var(--overlay); animation: surgir-fundo var(--dur) var(--ease); }
+.toast-region { position: fixed; right: var(--sp-4); bottom: var(--sp-4); z-index: 90; display: grid; gap: var(--sp-2); width: min(380px, calc(100vw - 2 * var(--sp-4))); }
+
+@container principal (max-width: 820px) {
+  .trilha-pai, .trilha-sep { display: none; }
+  .topbar { padding: 0 var(--sp-4); }
+}
+
+/* tablet: trilho só com ícones */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .app { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+  .sidebar { align-items: center; padding: var(--sp-4) var(--sp-2) var(--sp-3); }
+  .sb-logo { padding: 0; justify-content: center; }
+  .sidebar .logo-completo { display: none; }
+  .sidebar .logo-simbolo { display: block; }
+  .ctx { width: 44px; padding: 5px; justify-content: center; }
+  .ctx-txt { display: none; }
+  .nav-grupo { width: 100%; margin-top: var(--sp-3); }
+  .nav-grupo-rot { height: 1px; margin: 0 var(--sp-3) var(--sp-3); padding: 0; overflow: hidden; color: transparent; background: var(--border); }
+  .nav-item { justify-content: center; padding: 0; height: 44px; }
+  .nav-item .rot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav-item .nav-cont, .nav-item .nav-mais-n { position: absolute; top: 4px; right: 8px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
+  .usuario { flex-direction: column; padding: 0; }
+  .usuario-txt { display: none; }
+}
+
+/* celular: o menu vira gaveta */
+@media (max-width: 768px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 70; width: min(300px, 86vw); padding-top: calc(var(--sp-5) + env(safe-area-inset-top, 0px)); padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: var(--shadow-lg); transform: translateX(-102%); visibility: hidden; transition: transform var(--dur-slow) var(--ease), visibility 0s linear var(--dur-slow); }
+  /* Ao abrir, a visibilidade muda na hora (sem o atraso de quem fecha): o foco já pode entrar no menu. */
+  .app.gaveta .sidebar { transform: none; visibility: visible; transition: transform var(--dur-slow) var(--ease), visibility 0s linear 0s; }
+  .sidebar .sb-fechar { display: inline-flex; }
+  .sb-rodape .modo { display: grid; }
+  .topbar .modo-top { display: none; }
+  .topbar { padding: 0 var(--sp-3); }
+  .topbar .tb-menu { display: inline-flex; }
+  .trilha-pai, .trilha-sep { display: none; }
+  .pagina { padding: var(--sp-5) var(--sp-4) calc(var(--sp-12) + env(safe-area-inset-bottom)); }
+}
+
+/* Com movimento reduzido, a regra global troca 0s por 0.01ms e criaria uma transição de visibilidade:
+   até o próximo quadro o menu contaria como oculto e o foco não entraria nele. Abre sem transição (V27). */
+@media (prefers-reduced-motion: reduce) {
+  .app.gaveta .sidebar { transition: none !important; }
+}
+
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  .topbar { backdrop-filter: none; background: var(--elevated); }
+}
+
+/* ===== 5. MODOS DE EXIBIÇÃO (protótipo geral aprovado): Lite e Pro ===== */
+.modo-lite .so-pro:not(.aberto .so-pro) { display: none; }
+.modo-pro .so-lite { display: none; }
+
+/* ===== 6. COMPONENTES ===== */
+.ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.ic-sm { width: 15px; height: 15px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 38px; padding: 0 var(--sp-4); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.btn:hover { background: var(--surface-hover); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+.btn--primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); font-weight: 600; }
+.btn--primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn--ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn--ghost:hover { background: var(--surface-hover); color: var(--text); }
+.btn--perigo { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.btn--perigo:hover { background: var(--danger-soft); }
+.btn--perigo-cheio, .btn--perigo-cheio:hover { background: var(--danger); border-color: var(--danger); color: var(--surface); font-weight: 600; }
+.btn--icon { width: 38px; padding: 0; }
+.btn--sm { min-height: 32px; padding: 0 var(--sp-3); font-size: var(--text-sm); }
+.btn--sm.btn--icon { width: 32px; }
+.link-bt { padding: 0; border: 0; background: none; color: var(--link); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-bt:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; border-radius: 2px; }
+
+.input { min-height: 40px; width: 100%; padding: 0 var(--sp-3); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); outline: none; }
+.input::placeholder { color: var(--text-subtle); }
+.input:focus-visible { border-color: var(--foco); box-shadow: var(--focus-ring); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.input[readonly] { color: var(--text-muted); }
+select.input { padding-right: var(--sp-2); }
+
+.card { position: relative; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-5); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.card-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.card-cab h2 { font-size: var(--text-md); }
+.card-sub { margin-top: 2px; font-size: var(--text-sm); color: var(--text-muted); }
+.card-titulo { font-size: var(--text-md); }
+
+.view-cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-6); }
+.view-cab h1 { font-size: var(--text-2xl); }
+.view-cab p { margin-top: var(--sp-1); max-width: 64ch; color: var(--text-muted); }
+
+.st { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.st .dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+.st--aguardando { background: var(--warning-soft); color: var(--warning); }
+.st--concluido { background: var(--success-soft); color: var(--success); }
+.st--espera { background: var(--bg-subtle); color: var(--text-muted); }
+.st--perigo { background: var(--danger-soft); color: var(--danger); }
+.st--info { background: var(--primary-soft); color: var(--link); }
+.lite-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
+.lite-frase { max-width: 70ch; font-size: var(--text-sm); line-height: 1.55; color: var(--text-muted); }
+.lite-frase b { color: var(--text); font-weight: 600; }
+.lite-frase--grande { font-size: var(--text-md); color: var(--text); }
+.eixo-nota { font-size: var(--text-xs); color: var(--text-subtle); }
+
+/* "Ver detalhes" do Lite: abre o Pro ali mesmo (nada some no Lite) */
+.detalhes-bt { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-2); margin-left: calc(-1 * var(--sp-2)); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--link); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.detalhes-bt:hover { background: var(--surface-hover); }
+.detalhes-bt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.detalhes-bt .ic { width: 15px; height: 15px; transition: transform var(--dur) var(--ease); }
+.detalhes-bt[aria-expanded="true"] .ic { transform: rotate(180deg); }
+
+/* tabela */
+.table-wrap { position: relative; width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.tabela { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.tabela th { padding: 10px var(--sp-4); border-bottom: 1px solid var(--border); background: var(--surface-2); text-align: left; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.tabela td, .tabela tbody th, .tabela tfoot th { padding: 12px var(--sp-4); border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+.tabela tbody th, .tabela tfoot th { font-family: var(--font-sans); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; color: var(--text); background: transparent; font-weight: 600; }
+.tabela tbody tr:last-child td, .tabela tbody tr:last-child th { border-bottom: 0; }
+.tabela tfoot td, .tabela tfoot th { border-top: 1px solid var(--border-strong); border-bottom: 0; background: var(--surface-2); font-weight: 600; }
+.tabela .n { text-align: right; }
+.tabela td.acoes { text-align: right; }
+.tabela .sub { display: block; margin-top: 2px; font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--text-subtle); white-space: nowrap; }
+.tabela .forte { font-weight: 600; }
+
+/* campos */
+.campo { display: grid; gap: var(--sp-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.campo > label, .campo > legend { padding: 0; font-size: var(--text-sm); font-weight: 600; }
+.campo-dica { font-size: var(--text-xs); font-weight: 400; color: var(--text-muted); }
+.campo-erro { font-size: var(--text-sm); font-weight: 500; color: var(--danger); }
+.campo-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); font-size: var(--text-sm); }
+.check { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--text-sm); cursor: pointer; }
+.check input { width: 16px; height: 16px; margin: 3px 0 0; flex: none; accent-color: var(--link); }
+.opcoes { display: grid; gap: var(--sp-2); }
+.opcao { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.opcao:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.opcao input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--link); }
+.opcao-txt { display: grid; gap: 2px; font-size: var(--text-sm); }
+.opcao-txt b { font-weight: 600; }
+.opcao-txt span { color: var(--text-muted); }
+.datas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.datas label { display: grid; gap: 4px; font-size: var(--text-sm); font-weight: 500; }
+@media (max-width: 420px) { .datas { grid-template-columns: minmax(0, 1fr); } }
+
+/* diálogo (nativo, com @starting-style) */
+.dialogo { width: min(560px, calc(100vw - 32px)); max-height: min(760px, 92vh); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--elevated); color: var(--text); box-shadow: var(--shadow-lg);
+  opacity: 1; transform: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), overlay var(--dur) allow-discrete, display var(--dur) allow-discrete; }
+.dialogo:not([open]) { opacity: 0; transform: translateY(8px) scale(.98); }
+@starting-style { .dialogo[open] { opacity: 0; transform: translateY(8px) scale(.98); } }
+.dialogo::backdrop { background: var(--overlay); backdrop-filter: blur(3px); }
+.dialogo[open] { display: flex; }
+.dialogo--largo { width: min(720px, calc(100vw - 32px)); }
+.dialogo-form { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.dialogo-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5); border-bottom: 1px solid var(--border); flex: none; }
+.dialogo-cab h2 { font-size: var(--text-lg); min-width: 0; overflow-wrap: anywhere; }
+.dialogo-corpo { position: relative; flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--sp-5); padding: var(--sp-5); }
+.dialogo-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5); border-top: 1px solid var(--border); background: var(--surface-2); flex: none; }
+.dialogo-nota { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--ai-soft); font-size: var(--text-sm); }
+.dialogo-nota .ic { flex: none; margin-top: 2px; color: var(--ai); }
+.dialogo-erro { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--danger-soft); color: var(--danger); font-size: var(--text-sm); font-weight: 500; }
+
+/* gaveta à direita (detalhe), também um <dialog> nativo: foco preso, Esc fecha */
+.dialogo--lado { width: min(520px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0 0 0 auto; border-width: 0 0 0 1px; border-radius: var(--radius-xl) 0 0 var(--radius-xl); }
+.dialogo--lado:not([open]) { opacity: 0; transform: translateX(28px); }
+@starting-style { .dialogo--lado[open] { opacity: 0; transform: translateX(28px); } }
+
+/* toast */
+.toast { display: flex; align-items: center; gap: var(--sp-3); padding: 11px var(--sp-3) 11px var(--sp-4); border-radius: var(--radius-lg); background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); font-size: var(--text-sm); animation: entrar var(--dur) var(--ease); }
+.toast span { flex: 1; }
+.toast--perigo { background: var(--danger); color: var(--surface); }
+.toast.saindo { opacity: 0; transform: translateY(6px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+
+/* estados: vazio, erro e carregando */
+.vazio { display: grid; justify-items: center; gap: var(--sp-3); padding: var(--sp-12) var(--sp-6); text-align: center; }
+.vazio h2, .vazio h3 { font-size: var(--text-lg); outline: none; }
+.vazio p { max-width: 48ch; color: var(--text-muted); }
+.vazio-ic { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--bg-subtle); color: var(--text-muted); }
+.vazio-ic--perigo { background: var(--danger-soft); color: var(--danger); }
+.vazio-ic--ok { background: var(--success-soft); color: var(--success); }
+.vazio-acoes { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.vazio--compacto { padding: var(--sp-8) var(--sp-4); }
+.esqueleto { display: block; height: 14px; border-radius: var(--radius-sm); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface-hover) 80%, transparent), transparent) var(--bg-subtle); background-size: 200% 100%; animation: varre 1.4s linear infinite; }
+.esqueleto--curto { width: 38%; }
+.esqueleto--medio { width: 62%; }
+.esqueleto--alto { height: 44px; width: 30%; }
+.esqueleto--bloco { height: 120px; }
+.girando { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--fio); animation: gira .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .girando { animation: none; border-top-color: var(--border-strong); } }
+
+/* faixa de aviso (Contas aprovada) + variações de atenção e informação */
+.faixa { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-5); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.faixa--acao { border-color: color-mix(in srgb, var(--fio) 45%, var(--border)); background: var(--primary-soft); }
+.faixa--perigo { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: var(--danger-soft); }
+.faixa--atencao { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); background: var(--warning-soft); }
+.faixa-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--surface); }
+.faixa--perigo .faixa-ic { color: var(--danger); }
+.faixa--atencao .faixa-ic { color: var(--warning); }
+.faixa--acao .faixa-ic { color: var(--link); }
+.faixa-txt { flex: 1; min-width: min(100%, 260px); display: grid; gap: 2px; }
+.faixa-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+.faixa--atencao .faixa-txt span, .faixa--perigo .faixa-txt span { color: var(--text); }
+.faixa .btn { flex: none; }
+
+/* filtros e chips (Contas aprovada) */
+.filtros { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface); color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--text); background: var(--text); color: var(--bg); }
+.chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.chip .num { font-size: 11px; opacity: .8; }
+
+/* plataforma (ponto de cor + nome) */
+.plat { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; background: var(--bg-subtle); color: var(--text); }
+.plat::before { content: ""; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--plat-cor, var(--text-subtle)); }
+.plat--meta { --plat-cor: var(--marca-violeta); }
+.plat--google { --plat-cor: var(--marca-petroleo); }
+.plat--ga4 { --plat-cor: var(--marca-ambar); }
+.plat--regem { --plat-cor: var(--marca-coral); }
+.plat--regemcast { --plat-cor: var(--marca-lavanda); }
+
+/* segmentado (período) */
+.seg { display: inline-flex; flex-wrap: wrap; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.seg button { min-height: 32px; padding: 0 12px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.seg button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* frescor */
+.ponto { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--success); }
+.ponto--atraso { background: var(--warning); }
+.ponto--off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-subtle); }
+
+/* confirmação na própria linha (Contas aprovada) */
+.seg-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.confirma-linha { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2); }
+.confirma-txt { flex-basis: 100%; font-size: var(--text-xs); font-weight: 500; color: var(--danger); text-align: right; white-space: normal; }
+
+@media (max-width: 768px) {
+  .toast-region { bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 480px) {
+  .dialogo, .dialogo--largo { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+  .dialogo--lado { border-radius: 0; }
+}
+
+/* ===== P2 · Contas conectadas (tela aprovada em 27/09) + Regem e RegemCast ===== */
+.conta-nome { display: block; font-weight: 600; }
+.conta-id { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: var(--text-subtle); white-space: normal; }
+.conta-id--txt { font-family: var(--font-sans); font-size: var(--text-xs); color: var(--text-muted); }
+.motivo { display: block; margin-top: 4px; font-size: var(--text-xs); color: var(--text-muted); white-space: normal; max-width: 30ch; }
+.quando { color: var(--text-muted); }
+.sub-titulo { margin-top: var(--sp-8); font-size: var(--text-lg); }
+.sub-desc { margin: var(--sp-1) 0 var(--sp-3); max-width: 70ch; font-size: var(--text-sm); color: var(--text-muted); }
+.autorizacoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.aut-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.aut-meta { font-size: var(--text-sm); color: var(--text-muted); }
+.aut-txt { font-size: var(--text-sm); color: var(--text-muted); }
+.aut-txt--atencao, .aut-txt--perigo { display: flex; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); color: var(--text); }
+.aut-txt--atencao { background: var(--warning-soft); }
+.aut-txt--atencao .ic { margin-top: 2px; color: var(--warning); }
+.aut-txt--perigo { background: var(--danger-soft); }
+.aut-txt--perigo .ic { margin-top: 2px; color: var(--danger); }
+.autorizacao .seg-acoes { margin-top: auto; }
+.plataformas { display: grid; gap: var(--sp-3); }
+.plataforma { display: grid; justify-items: start; gap: 4px; padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); text-align: left; cursor: pointer; }
+.plataforma:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.plataforma:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.plataforma > span:last-child { font-size: var(--text-sm); color: var(--text-muted); }
+.escolha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.escolha > span:first-of-type { flex: 1; min-width: 0; display: grid; }
+.escolha .mono { font-size: 11px; color: var(--text-subtle); }
+.escolha input { width: 18px; height: 18px; accent-color: var(--link); }
+.escolha--ligada { opacity: .7; cursor: default; }
+
+/* Regem e RegemCast: o que o Liame pede e o que nunca recebe */
+.dlg-lead { font-size: var(--text-md); font-weight: 600; }
+.passos-num { display: grid; gap: var(--sp-2); counter-reset: passo; }
+.passos-num li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: var(--sp-3); align-items: start; font-size: var(--text-sm); color: var(--text-muted); counter-increment: passo; }
+.passos-num li::before { content: counter(passo); display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--primary-soft); color: var(--link); font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+.passos-num b { color: var(--text); font-weight: 600; }
+.bloco-dlg { display: grid; gap: var(--sp-2); }
+.escopos { display: grid; gap: var(--sp-2); }
+.escopo { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: var(--sp-3); align-items: start; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.escopo > .ic { margin-top: 3px; color: var(--success); }
+.escopo--nao > .ic { color: var(--warning); }
+.escopo--desligado > .ic { color: var(--text-subtle); }
+.escopo-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--text-sm); }
+.escopo-cab b { font-weight: 600; }
+.escopo-cab code { font-size: 11px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.escopo-txt { margin-top: 2px; font-size: var(--text-sm); color: var(--text-muted); }
+.nao-vem { display: grid; gap: 6px; font-size: var(--text-sm); color: var(--text-muted); }
+.nao-vem li { display: flex; gap: var(--sp-2); }
+.nao-vem .ic { flex: none; margin-top: 3px; color: var(--text-subtle); }
+.loja-ligar { display: grid; gap: var(--sp-3); margin: 0; padding: var(--sp-3) var(--sp-4) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.loja-ligar legend { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-1); font-weight: 600; }
+.escopos-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.aut-escopos { display: grid; gap: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.btn-alternar .ic { transition: transform var(--dur) var(--ease); }
+.btn-alternar[aria-expanded="true"] .ic { transform: rotate(180deg); }
+
+@container pagina (max-width: 760px) {
+  .autorizacoes { grid-template-columns: minmax(0, 1fr); }
+  .contas-tabela { border: 0; overflow: visible; }
+  .contas-tabela .tabela, .contas-tabela tbody, .contas-tabela tr, .contas-tabela td, .contas-tabela tbody th { display: block; }
+  .contas-tabela thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .contas-tabela tr { margin-bottom: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+  .contas-tabela td, .contas-tabela tbody th { padding: 4px 0; border: 0; white-space: normal; }
+  .contas-tabela td.acoes { text-align: left; padding-top: var(--sp-2); }
+  .contas-tabela .confirma-linha { justify-content: flex-start; }
+  .contas-tabela .confirma-txt { text-align: left; }
+}
+
+</style>
+</head>
+<body data-pagina="contas">
+<script>document.documentElement.classList.add('modo-lite');</script>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-atencao" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 17v2M13 11v2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-alert-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3M21 21v.01M12 7v3a2 2 0 0 1-2 2H7M3 12h.01M12 3h.01M12 16v.01M16 12h1M21 12v.01M12 21v-1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="liame-simbolo" viewBox="0 0 512 512">
+    <g transform="translate(122.16 61.31)">
+      <path d="M31.1 0V293.76H184.32" fill="none" stroke-width="62.2" style="stroke:var(--logo-ink)"/>
+      <circle cx="235.33" cy="293.76" r="32.35" style="fill:var(--marca-ciano)"/>
+      <rect x="0" y="366.34" width="267.68" height="20.74" rx="10.37" style="fill:var(--marca-ciano)"/>
+    </g>
+  </symbol>
+</svg>
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+<p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
+
+<div class="revisao" role="region" aria-label="Controles do protótipo">
+  <p class="revisao-marca"><b>Protótipo para aprovação · A2.5 · P2</b><span>Contas conectadas: Regem e RegemCast (acréscimo ao protótipo aprovado) · dados de exemplo</span></p>
+  <label>Cenário <select id="rev-cenario"></select></label>
+  <button class="btn btn--sm btn--ghost" type="button" id="rev-tema" aria-pressed="false">Tema escuro</button>
+</div>
+
+<div class="app">
+  <aside class="sidebar" id="menu-lateral" aria-label="Menu">
+    <div class="sb-logo"><svg class="logo-completo" viewBox="0 0 758.18 309" role="img" aria-label="Liame">
+        <g transform="translate(24 24)">
+          <path d="M17.5 84V211.5H84" fill="none" stroke-width="27" style="stroke:var(--logo-ink)"/>
+          <circle cx="106.14" cy="211.5" r="14.04" style="fill:var(--marca-ciano)"/>
+          <path d="M233 702V0H62V702Z" transform="translate(140.88 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <path d="M163.18 12H201.58Q212.38 12 212.38 22.8V49.2Q212.38 60 201.58 60H177.58L164.38 76.8V60H163.18Q152.38 60 152.38 49.2V22.8Q152.38 12 163.18 12Z" style="fill:var(--marca-ciano)"/>
+          <path d="M499 124H237L195 0H16L270 702H468L722 0H541ZM455 256 368 513 282 256Z" transform="translate(203.48 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <clipPath id="liame-mc"><rect x="207.98" y="-57" width="480" height="282"/></clipPath>
+          <g clip-path="url(#liame-mc)" fill="none" stroke-width="31.86" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M512.05 99.93V256.86" style="stroke:var(--marca-petroleo)"/>
+            <path d="M447.98 182.7L512.05 99.93" style="stroke:var(--marca-ciano)"/>
+            <path d="M383.91 99.93L447.98 182.7" style="stroke:var(--marca-lavanda-clara)"/>
+            <path d="M383.91 256.86V99.93" style="stroke:var(--marca-lavanda)"/>
+          </g>
+          <polygon points="531.8,46.4 536.3,57.1 547.9,58 539,65.6 541.7,77 531.8,70.9 521.8,77 524.5,65.6 515.7,58 527.3,57.1" stroke-width="3.05" stroke-linejoin="round" style="fill:var(--marca-ambar);stroke:var(--marca-ambar)"/>
+          <g transform="translate(447.98 202.44) scale(1.128)"><path d="M0 15C-20 2-20-13-9-13C-4-13-1-9 0-7C1-9 4-13 9-13C20-13 20 2 0 15Z" style="fill:var(--marca-coral)"/></g>
+          <g transform="translate(386.73 80.19) scale(1.128)"><path fill-rule="evenodd" d="M0 24C-12 10-17 2-17-7A17 17 0 1 1 17-7C17 2 12 10 0 24ZM0-13.5A6.5 6.5 0 1 0 0-.5A6.5 6.5 0 1 0 0-13.5Z" style="fill:var(--logo-pin)"/></g>
+          <path d="M233 565V423H462V291H233V137H492V0H62V702H492V565Z" transform="translate(539.68 225) scale(0.2 -0.2)" style="fill:var(--logo-ink)"/>
+          <rect x="654.18" y="143.5" width="52" height="22" style="fill:var(--marca-ciano)"/>
+          <rect x="4" y="245" width="702.18" height="8" rx="4" style="fill:var(--marca-ciano)"/>
+        </g>
+      </svg><svg class="logo-simbolo" role="img" aria-label="Liame"><use href="#liame-simbolo"/></svg><button class="btn btn--icon btn--ghost sb-fechar" type="button" id="bt-fechar-menu" aria-label="Fechar menu"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <button class="ctx" type="button" disabled><span class="ctx-av" aria-hidden="true">MB</span><span class="ctx-txt"><b>Mister Burgers</b><span>Dono</span></span></button>
+    <nav aria-label="Principal">
+      <div class="nav-grupo">
+        <p class="nav-grupo-rot rotulo-marca" id="g-ag">Agência</p>
+        <ul class="nav-lista" aria-labelledby="g-ag">
+          <li><a class="nav-item" href="#" title="Atenção" data-fora="Fora deste protótipo: a Atenção de mídia está no protótipo aprovado de Contas (prototipo-contas.html)."><svg class="ic" aria-hidden="true"><use href="#i-atencao"/></svg><span class="rot">Atenção</span><span class="sr-only">, 5 avisos</span><span class="nav-cont num" aria-hidden="true">5</span></a></li>
+          <li><a class="nav-item" href="prototipo-resultados.html" data-destino="prototipo-resultados.html" title="Resultados"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg><span class="rot">Resultados</span></a></li>
+          <li><a class="nav-item" href="prototipo-contas-regem.html" data-destino="prototipo-contas-regem.html" title="Contas conectadas" aria-current="page"><span class="nav-no" aria-hidden="true"></span><svg class="ic" aria-hidden="true"><use href="#i-plug"/></svg><span class="rot">Contas conectadas</span></a></li>
+          <li><a class="nav-item" href="#" title="Pessoas e acessos" data-fora="Fora deste protótipo: Pessoas e acessos já está no app."><svg class="ic" aria-hidden="true"><use href="#i-user-plus"/></svg><span class="rot">Pessoas e acessos</span></a></li>
+        </ul>
+      </div>
+      <button class="nav-item nav-mais so-lite" type="button" id="bt-ferramentas" aria-expanded="false" aria-controls="g-ferramentas" title="Mais ferramentas"><svg class="ic" aria-hidden="true"><use href="#i-chevron-down"/></svg><span class="rot">Mais ferramentas</span><span class="nav-mais-n" aria-hidden="true">1</span><span class="sr-only">, 1 ferramenta</span></button>
+      <div id="g-ferramentas" hidden>
+        <div class="nav-grupo">
+          <p class="nav-grupo-rot rotulo-marca" id="g-oper">Operação</p>
+          <ul class="nav-lista" aria-labelledby="g-oper">
+            <li><a class="nav-item" href="prototipo-links-cupons.html" data-destino="prototipo-links-cupons.html" title="Links e cupons"><svg class="ic" aria-hidden="true"><use href="#i-link"/></svg><span class="rot">Links e cupons</span></a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="nav-grupo">
+        <p class="nav-grupo-rot rotulo-marca" id="g-conta">Sua conta</p>
+        <ul class="nav-lista" aria-labelledby="g-conta">
+          <li><a class="nav-item" href="#" title="Segurança da conta" data-fora="Fora deste protótipo: Segurança da conta já está no app."><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span class="rot">Segurança da conta</span></a></li>
+        </ul>
+      </div>
+    </nav>
+    <div class="sb-rodape">
+      <div class="modo" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false">Pro</button></div>
+      <div class="usuario"><span class="av-user" aria-hidden="true">R</span><span class="usuario-txt"><b>Rodrigo</b><span>Dono · Mister Burgers</span></span></div>
+    </div>
+  </aside>
+
+  <div class="principal">
+    <header class="topbar"><button class="btn btn--icon btn--ghost tb-menu" type="button" id="bt-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu-lateral"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button><div class="trilha"><span class="trilha-pai">Mister Burgers</span><span class="trilha-sep" aria-hidden="true">/</span><strong>Contas conectadas</strong></div><span class="spacer"></span><div class="modo modo-top" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true" title="Lite: o essencial; o resto em Ver detalhes">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false" title="Pro: todos os números e tabelas">Pro</button></div></header>
+    <main id="conteudo" class="conteudo" tabindex="-1">
+      <div class="pagina">
+<section id="tela-contas" aria-labelledby="h-contas">
+  <div class="view-cab">
+    <div><h1 id="h-contas" tabindex="-1">Contas conectadas</h1><p>As plataformas de onde a equipe lê os seus números. Você só autoriza; nenhuma senha ou token aparece aqui.</p></div>
+    <button class="btn btn--primary" type="button" id="bt-conectar" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-conectar"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Conectar plataforma</button>
+  </div>
+
+  <!-- avisos da situação (volta das autorizações, revogação, número fora da API oficial) -->
+  <div id="faixas"></div>
+
+  <!-- vazio -->
+  <div class="card" id="vazio-contas" hidden>
+    <div class="vazio">
+      <div class="vazio-ic"><svg class="ic" aria-hidden="true"><use href="#i-plug"/></svg></div>
+      <h2>Conecte suas plataformas de anúncio</h2>
+      <p>Com a Meta e o Google conectados, a equipe lê gasto, cliques, conversas e vendas todo dia, e avisa quando algo sai do normal.</p>
+      <p>Com o Regem, o Liame confirma no caixa quais pedidos vieram dos anúncios.</p>
+      <div class="vazio-acoes">
+        <button class="btn btn--primary" type="button" data-conectar="meta">Conectar a Meta</button>
+        <button class="btn" type="button" data-conectar="google">Conectar o Google (Ads e Analytics)</button>
+        <button class="btn" type="button" data-conectar="regem">Conectar o Regem (vendas)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- contas ligadas -->
+  <div id="bloco-contas">
+    <div class="filtros" role="group" aria-label="Filtrar contas">
+      <button class="chip" type="button" aria-pressed="true" data-filtro="todas" id="f-todas">Todas <span class="num">0</span></button>
+      <button class="chip" type="button" aria-pressed="false" data-filtro="problema" id="f-problema">Precisam de você <span class="num">0</span></button>
+    </div>
+    <div class="table-wrap contas-tabela">
+      <table class="tabela">
+        <caption class="sr-only">Contas ligadas à marca Mister Burgers</caption>
+        <thead><tr><th scope="col">Conta</th><th scope="col">Plataforma</th><th scope="col">Dados</th><th scope="col">Última leitura</th><th scope="col"><span class="sr-only">Ações</span></th></tr></thead>
+        <tbody id="linhas"></tbody>
+      </table>
+    </div>
+
+    <h2 class="sub-titulo">Autorizações</h2>
+    <p class="sub-desc">Cada autorização é o "sim" que alguém deu na Meta, no Google, no Regem ou no RegemCast. Revogar para a leitura de todas as contas dela.</p>
+    <ul class="autorizacoes" id="autorizacoes"></ul>
+  </div>
+</section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- conectar: escolher a plataforma (aprovado; acrescenta Regem e RegemCast) -->
+<dialog class="dialogo" id="dlg-conectar" aria-labelledby="dlg-conectar-t">
+  <form method="dialog" class="dialogo-form">
+    <div class="dialogo-cab"><h2 id="dlg-conectar-t">Conectar plataforma</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <label class="campo">Marca <select class="input"><option>Mister Burgers</option><option>Mister Burgers Delivery</option></select></label>
+      <div class="plataformas">
+        <button class="plataforma" value="meta"><span class="plat plat--meta">Meta</span><b>Meta Ads</b><span>Facebook e Instagram. Você escolhe as contas de anúncio na tela da Meta.</span></button>
+        <button class="plataforma" value="google"><span class="plat plat--google">Google</span><b>Google Ads e Google Analytics</b><span>Uma autorização só para os dois. Somente leitura.</span></button>
+        <button class="plataforma" value="regem"><span class="plat plat--regem">Regem</span><b>Regem · vendas da loja</b><span>Pedidos, custos e cupons confirmados no caixa. Você escolhe as lojas no Regem.</span></button>
+        <button class="plataforma" value="regemcast"><span class="plat plat--regemcast">RegemCast</span><b>RegemCast · conversas do WhatsApp</b><span>Só a origem das conversas abertas por anúncio, sem as mensagens.</span></button>
+      </div>
+      <p class="dialogo-nota"><span>Você vai para a página da plataforma, confirma lá e volta para cá. Na Meta e no Google, o Liame só lê: não cria, não muda e não gasta nada. No Regem, a única escrita possível é o cupom de campanha, sempre com aprovação.</span></p>
+    </div>
+  </form>
+</dialog>
+
+<!-- escolher contas depois da autorização (aprovado) -->
+<dialog class="dialogo" id="dlg-escolher" aria-labelledby="dlg-escolher-t">
+  <form method="dialog" class="dialogo-form">
+    <div class="dialogo-cab"><h2 id="dlg-escolher-t">Escolher contas para Mister Burgers</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <fieldset class="campo"><legend>Google Ads</legend>
+        <label class="escolha"><input type="checkbox" checked><span><b>Mister Burgers Google</b><span class="mono">444-555-6667</span></span><span class="lite-chip">via Agência Parceira</span></label>
+        <label class="escolha"><input type="checkbox"><span><b>Mister Burgers Loja 2</b><span class="mono">555-666-7778</span></span></label>
+      </fieldset>
+      <fieldset class="campo"><legend>Google Analytics (GA4)</legend>
+        <label class="escolha"><input type="checkbox" checked><span><b>Mister Burgers – site</b><span class="mono">333444555</span></span></label>
+        <label class="escolha escolha--ligada"><input type="checkbox" checked disabled><span><b>Delivery – app e site</b><span class="mono">666777888</span></span><span class="lite-chip">já ligada</span></label>
+      </fieldset>
+      <p class="dialogo-nota"><span>A primeira leitura traz os últimos 90 dias e leva alguns minutos. Depois, os números são atualizados todo dia.</span></p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Agora não</button><button class="btn btn--primary" value="ok" id="bt-ligar">Ligar 2 contas</button></div>
+  </form>
+</dialog>
+
+<!-- revogar (aprovado; notas do Regem e do RegemCast) -->
+<dialog class="dialogo" id="dlg-revogar" aria-labelledby="dlg-revogar-t">
+  <form method="dialog" class="dialogo-form">
+    <div class="dialogo-cab"><h2 id="dlg-revogar-t">Revogar a autorização?</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <p id="revogar-txt">A leitura das <b>2 contas</b> desta autorização para agora. O histórico de números fica.</p>
+      <p class="dialogo-nota" data-so-revogar="meta"><span>Na Meta, para tirar o acesso de vez, remova também o app Liame em <b>Configurações do negócio → Integrações → Apps conectados</b>.</span></p>
+      <p class="dialogo-nota" data-so-revogar="google" hidden><span>No Google, o acesso é revogado lá também, na hora.</span></p>
+      <p class="dialogo-nota" data-so-revogar="regem" hidden><span>No Regem, o token de cada loja é revogado na hora, dos dois lados. O que já foi lido segue o prazo de guarda.</span></p>
+      <p class="dialogo-nota" data-so-revogar="regemcast" hidden><span>No RegemCast, o acesso é revogado na hora, dos dois lados. O que já foi lido segue o prazo de guarda.</span></p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--perigo-cheio" value="ok">Revogar</button></div>
+  </form>
+</dialog>
+
+<!-- conectar o Regem: o que vai acontecer, antes de ir -->
+<dialog class="dialogo" id="dlg-regem" aria-labelledby="dlg-regem-t">
+  <form class="dialogo-form" id="form-regem">
+    <div class="dialogo-cab"><h2 id="dlg-regem-t">Conectar o Regem</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <p class="dlg-lead">Você vai ao Regem escolher as lojas; o Liame recebe só o que estiver marcado.</p>
+      <ol class="passos-num">
+        <li><span><b>Entre no Regem</b> com o perfil de presidente. O custo dos itens só sai com permissão financeira.</span></li>
+        <li><span><b>Escolha as lojas</b> e confira o que cada uma libera.</span></li>
+        <li><span><b>Volte para cá</b> e ligue cada loja do Regem a uma loja do Liame.</span></li>
+      </ol>
+      <section class="bloco-dlg" aria-labelledby="dlg-regem-pede"><h3 class="rotulo-marca" id="dlg-regem-pede">O que o Liame pede</h3><ul class="escopos" id="escopos-regem"></ul></section>
+      <section class="bloco-dlg" aria-labelledby="dlg-regem-nunca"><h3 class="rotulo-marca" id="dlg-regem-nunca">O que o Liame nunca recebe</h3>
+        <ul class="nao-vem">
+          <li><svg class="ic ic-sm" aria-hidden="true"><use href="#i-lock"/></svg><span>Nome e e-mail de cliente.</span></li>
+          <li><svg class="ic ic-sm" aria-hidden="true"><use href="#i-lock"/></svg><span>O telefone em si: ele vira um identificador pseudonimizado na chegada e não fica guardado.</span></li>
+          <li><svg class="ic ic-sm" aria-hidden="true"><use href="#i-lock"/></svg><span>Qualquer identificador de cliente de iFood, 99Food e Keeta.</span></li>
+        </ul>
+      </section>
+      <p class="dialogo-nota"><span>Nenhuma senha ou token passa por você: o Regem entrega o acesso direto ao Liame, com um token para cada loja. Você revoga quando quiser, aqui ou no Regem.</span></p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Ir para o Regem<svg class="ic ic-sm" aria-hidden="true"><use href="#i-external"/></svg></button></div>
+  </form>
+</dialog>
+
+<!-- voltou do Regem: ligar cada loja do Regem a uma loja do Liame -->
+<dialog class="dialogo" id="dlg-lojas" aria-labelledby="dlg-lojas-t">
+  <form class="dialogo-form" id="form-lojas" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-lojas-t">Ligar as lojas do Regem</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <p class="aut-meta">Autorizado no Regem por Rodrigo (presidente) · hoje, 10:12 · 2 lojas</p>
+      <fieldset class="loja-ligar">
+        <legend>Mister Burgers — Loja Centro <span class="plat plat--regem">Regem</span></legend>
+        <div class="campo"><label for="lj-centro">Loja no Liame</label><select class="input" id="lj-centro" aria-describedby="lj-erro"><option value="centro" selected>Centro</option><option value="barra">Barra</option><option value="nova">＋ Criar loja no Liame</option></select></div>
+        <ul class="escopos-chips" aria-label="O que a Loja Centro libera" data-chips></ul>
+      </fieldset>
+      <fieldset class="loja-ligar">
+        <legend>Mister Burgers — Loja Barra <span class="plat plat--regem">Regem</span></legend>
+        <div class="campo"><label for="lj-barra">Loja no Liame</label><select class="input" id="lj-barra" aria-describedby="lj-erro"><option value="centro">Centro</option><option value="barra" selected>Barra</option><option value="nova">＋ Criar loja no Liame</option></select></div>
+        <ul class="escopos-chips" aria-label="O que a Loja Barra libera" data-chips></ul>
+      </fieldset>
+      <p class="campo-erro" id="lj-erro" role="alert" hidden>Cada loja do Regem vai para uma loja do Liame diferente.</p>
+      <p class="dialogo-nota"><span>A primeira leitura traz os pedidos dos últimos 90 dias e leva alguns minutos. Depois, os pedidos chegam ao longo do dia.</span></p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Agora não</button><button class="btn btn--primary" type="submit">Ligar 2 lojas</button></div>
+  </form>
+</dialog>
+
+<!-- conectar o RegemCast: o que vai acontecer, antes de ir -->
+<dialog class="dialogo" id="dlg-regemcast" aria-labelledby="dlg-regemcast-t">
+  <form class="dialogo-form" id="form-regemcast">
+    <div class="dialogo-cab"><h2 id="dlg-regemcast-t">Conectar o RegemCast</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <p class="dlg-lead">Você vai ao RegemCast escolher o número do WhatsApp; o Liame recebe só as conversas abertas por anúncio.</p>
+      <section class="bloco-dlg" aria-labelledby="dlg-rc-pede"><h3 class="rotulo-marca" id="dlg-rc-pede">O que o Liame pede</h3><ul class="escopos" id="escopos-rc"></ul></section>
+      <p class="dialogo-nota"><span>Só número na API oficial do WhatsApp manda de qual anúncio veio a conversa. Se o número estiver fora dela, o Liame avisa aqui, e a medição segue pelo link do cardápio e pelo cupom.</span></p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Ir para o RegemCast<svg class="ic ic-sm" aria-hidden="true"><use href="#i-external"/></svg></button></div>
+  </form>
+</dialog>
+
+<div class="veu" id="veu" hidden></div>
+<div class="toast-region" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ---------- utilidades ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const raiz = document.documentElement;
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const reduzido = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const moeda = (v, casas = 2) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: casas, maximumFractionDigits: casas });
+const numero = (v, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+const vezes = (v) => numero(v, 1) + '×';
+const pct = (v) => numero(Math.round(v * 100)) + '%';
+const ic = (nome, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#${nome}"/></svg>`;
+const params = new URLSearchParams(location.search);
+
+function anunciar(t) { const a = $('#anuncio'); if (!a) return; a.textContent = ''; setTimeout(() => { a.textContent = t; }, 30); }
+function toast(texto, { tipo = 'ok' } = {}) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (tipo === 'perigo' ? ' toast--perigo' : '');
+  const s = document.createElement('span'); s.textContent = texto; t.append(s);
+  $('.toast-region').append(t);
+  setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 260); }, 4200);
+}
+async function copiar(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; } catch { /* sem permissão: tenta o jeito antigo */ }
+  const ta = document.createElement('textarea');
+  ta.value = texto; ta.setAttribute('readonly', ''); ta.className = 'sr-only';
+  (document.querySelector('dialog[open]') || document.body).append(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+/* ---------- tema (faixa do protótipo) ---------- */
+const btTema = $('#rev-tema');
+const temaAtual = () => raiz.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+function sincTema() { btTema.setAttribute('aria-pressed', String(temaAtual() === 'dark')); }
+btTema.addEventListener('click', () => { raiz.dataset.theme = temaAtual() === 'dark' ? 'light' : 'dark'; sincTema(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', sincTema);
+sincTema();
+
+/* ---------- gaveta do menu (celular), como na tela aprovada ---------- */
+const app = $('.app'), btMenu = $('#bt-menu'), veu = $('#veu');
+function menu(abrir) {
+  app.classList.toggle('gaveta', abrir);
+  veu.hidden = !abrir;
+  btMenu.setAttribute('aria-expanded', String(abrir));
+  $('.principal').inert = abrir;
+  $('.revisao').inert = abrir;
+  // Foco depois do commit, sem requestAnimationFrame, com uma nova tentativa (V27).
+  const alvo = abrir ? $('#bt-fechar-menu') : btMenu;
+  setTimeout(() => { alvo.focus(); if (document.activeElement !== alvo) setTimeout(() => alvo.focus(), 400); }, 0);
+}
+btMenu.addEventListener('click', () => menu(true));
+$('#bt-fechar-menu').addEventListener('click', () => menu(false));
+veu.addEventListener('click', () => menu(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && app.classList.contains('gaveta') && !document.querySelector('dialog[open]')) menu(false); });
+matchMedia('(max-width: 768px)').addEventListener('change', (e) => {
+  if (!e.matches && app.classList.contains('gaveta')) { app.classList.remove('gaveta'); veu.hidden = true; btMenu.setAttribute('aria-expanded', 'false'); $('.principal').inert = false; $('.revisao').inert = false; }
+});
+$$('[data-fora]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); if (app.classList.contains('gaveta')) menu(false); toast(a.dataset.fora); }));
+
+/* ---------- modos Lite e Pro (protótipo geral aprovado) ---------- */
+const shell = { modo: 'lite', ferramentas: document.body.dataset.ferramentas === 'abertas' };
+function sincFerramentas() {
+  $('#g-ferramentas').hidden = !(shell.modo === 'pro' || shell.ferramentas);
+  $('#bt-ferramentas').setAttribute('aria-expanded', String(shell.ferramentas));
+}
+$('#bt-ferramentas').addEventListener('click', () => { shell.ferramentas = !shell.ferramentas; sincFerramentas(); });
+function comModo(destino) {
+  const [base, q = ''] = destino.split('?');
+  const p = new URLSearchParams(q); p.set('modo', shell.modo);
+  return `${base}?${p}`;
+}
+function sincLinks() { $$('a[data-destino]').forEach((a) => a.setAttribute('href', comModo(a.dataset.destino))); }
+function sincDetalhesBt(bt, aberto) {
+  bt.setAttribute('aria-expanded', String(aberto));
+  const r = bt.querySelector('.rot'); if (r) r.textContent = aberto ? 'Ocultar detalhes' : 'Ver detalhes';
+}
+function definirModo(modo, { silencioso = false } = {}) {
+  if (modo !== 'lite' && modo !== 'pro') return;
+  shell.modo = modo;
+  raiz.classList.toggle('modo-lite', modo === 'lite');
+  raiz.classList.toggle('modo-pro', modo === 'pro');
+  $$('[data-modo-bt]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.modoBt === modo)));
+  $$('.aberto').forEach((e) => e.classList.remove('aberto'));
+  $$('[data-detalhes]').forEach((b) => sincDetalhesBt(b, false));
+  sincFerramentas();
+  sincLinks();
+  if (typeof window.aoMudarModo === 'function') window.aoMudarModo(modo);
+  if (!silencioso) {
+    anunciar(modo === 'pro' ? 'Modo Pro' : 'Modo Lite');
+    toast(modo === 'pro' ? 'Modo Pro: todos os números, tabelas e ferramentas.' : 'Modo Lite: o essencial; o resto fica em "Ver detalhes".');
+  }
+}
+document.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target : null; if (!alvo) return;
+  const m = alvo.closest('[data-modo-bt]'); if (m) { definirModo(m.dataset.modoBt); return; }
+  const d = alvo.closest('[data-detalhes]');
+  if (d) {
+    const bloco = $(d.dataset.detalhes); if (!bloco) return;
+    const aberto = !bloco.classList.contains('aberto');
+    bloco.classList.toggle('aberto', aberto);
+    $$(`[data-detalhes="${d.dataset.detalhes}"]`).forEach((b) => sincDetalhesBt(b, aberto));
+  }
+});
+
+/* ---------- diálogos nativos: foco volta a quem abriu; clique no fundo e "Fechar" fecham ---------- */
+const origemDlg = new WeakMap();
+function abrirDialogo(dlg, origem = document.activeElement) {
+  if (dlg.open) return;
+  const o = origem instanceof HTMLElement && origem !== document.body ? origem : null;
+  origemDlg.set(dlg, o);
+  if (o && o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'true');
+  dlg.returnValue = ''; // Esc fecha sem valor; sem isto, a escolha anterior voltaria
+  dlg.showModal();
+}
+$$('dialog').forEach((dlg) => {
+  dlg.addEventListener('close', () => {
+    const o = origemDlg.get(dlg);
+    if (o) { if (o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'false'); if (o.isConnected) o.focus({ preventScroll: true }); }
+    origemDlg.delete(dlg);
+  });
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg || (e.target instanceof Element && e.target.closest('[data-fechar]'))) dlg.close('cancelar');
+  });
+});
+
+/* ---------- confirmação na própria linha (como na tela aprovada) ---------- */
+function confirmarNaLinha(bt, { texto = '', rotulo, voltar = 'Cancelar', aoConfirmar }) {
+  const caixa = document.createElement('div');
+  caixa.className = 'confirma-linha';
+  caixa.innerHTML = `${texto ? `<span class="confirma-txt">${esc(texto)}</span>` : ''}<button class="btn btn--sm btn--perigo-cheio" type="button">${esc(rotulo)}</button><button class="btn btn--sm" type="button">${esc(voltar)}</button>`;
+  const [conf, canc] = caixa.querySelectorAll('button');
+  bt.replaceWith(caixa);
+  conf.focus();
+  conf.addEventListener('click', aoConfirmar);
+  canc.addEventListener('click', () => { caixa.replaceWith(bt); bt.focus(); });
+}
+
+/* ---------- cenário (faixa do protótipo) ---------- */
+const selCenario = $('#rev-cenario');
+function marcarCenario(id) { if (selCenario.value !== id) selCenario.value = id; }
+/* grupos: [{ grupo: 'Rótulo' ou null, itens: { id: 'texto' } }] */
+function preencherCenarios(grupos) {
+  selCenario.replaceChildren(...grupos.flatMap(({ grupo, itens }) => {
+    const ops = Object.entries(itens).map(([id, rot]) => new Option(rot, id));
+    if (!grupo) return ops;
+    const g = document.createElement('optgroup'); g.label = grupo; g.append(...ops); return [g];
+  }));
+}
+window.uiuxCenarios = {};
+
+/* ---------- início do shell ---------- */
+definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true });
+
+/* ===================== P2 · Contas conectadas: Regem e RegemCast ===================== */
+/* A parte da Meta e do Google repete a tela aprovada em 27/09 (só a marca de exemplo mudou). Dados fictícios. */
+
+const LINHAS_MG = [
+  { id: 'meta1', nome: 'Mister Burgers', sub: 'act_1234567890', plat: 'meta', platRot: 'Meta Ads', st: 'ok', stRot: 'Em dia', quando: 'hoje, 06:12', acao: 'desligar' },
+  { id: 'google1', nome: 'Mister Burgers Google', sub: '444-555-6667', plat: 'google', platRot: 'Google Ads', st: 'ok', stRot: 'Em dia', quando: 'hoje, 06:20', acao: 'desligar' },
+  { id: 'ga4a', nome: 'Mister Burgers – site', sub: '333444555', plat: 'ga4', platRot: 'GA4', st: 'atraso', stRot: 'Atrasado', quando: 'há 2 dias', acao: 'desligar' },
+  { id: 'meta2', nome: 'Mister Burgers Loja 2', sub: 'act_2233445566', plat: 'meta', platRot: 'Meta Ads', st: 'perigo', stRot: 'Desconectada', motivo: 'A Meta recusou a autorização.', quando: 'há 4 dias', acao: 'reconectar', reconectar: 'meta', problema: true },
+  { id: 'ga4b', nome: 'Delivery – app e site', sub: '666777888', plat: 'ga4', platRot: 'GA4', st: 'atraso', stRot: 'Sem permissão', motivo: 'Falta acesso de leitura na propriedade.', quando: 'nunca', acao: 'desligar', problema: true },
+];
+const REGEM_CENTRO = { id: 'regem-centro', nome: 'Mister Burgers — Loja Centro', sub: 'Loja no Liame: Centro · token próprio da loja', texto: true, plat: 'regem', platRot: 'Regem', st: 'ok', stRot: 'Pedidos em dia', quando: 'hoje, 10:05', acao: 'revogar' };
+const REGEMCAST = { id: 'regemcast', nome: 'WhatsApp da loja', sub: '(21) 9••••-0142 · Loja no Liame: Centro', texto: true, plat: 'regemcast', platRot: 'RegemCast', st: 'ok', stRot: 'Conversas em dia', quando: 'hoje, 10:02', acao: 'revogar' };
+const SEM_REGEM = new Set(['vazio', 'sem-regem', 'regem-ida', 'regem-no-regem', 'regem-volta']);
+const SEM_RC = new Set([...SEM_REGEM, 'regemcast-ida', 'regemcast-no']);
+
+const ESCOPOS_REGEM = [
+  { cod: 'pedidos.ler', rot: 'Pedidos', txt: 'Pedidos confirmados e cancelados, com itens, canal, cupom usado e a origem do clique.' },
+  { cod: 'custos.ler', rot: 'Custo dos itens', txt: 'Custo de cada item, para calcular a margem. Sem ele, a margem fica desconhecida, nunca zero.', chip: 'só com permissão financeira', financeiro: true },
+  { cod: 'clientes.anonimizacao.ler', rot: 'Aviso de cliente anonimizado', txt: 'Quando o Regem anonimiza um cliente, o Liame apaga o identificador dele.' },
+  { cod: 'cupons.ler', rot: 'Cupons', txt: 'Cupons da loja, com regra e validade.' },
+  { cod: 'cupons.uso.ler', rot: 'Usos dos cupons', txt: 'Em qual pedido cada cupom foi usado, quando e com que valor.' },
+  { cod: 'cupons.criar', rot: 'Criar cupom de campanha', txt: 'Criar e desativar cupom pelo Liame, sempre com aprovação. Fica desligado até a sua empresa ligar.', chip: 'com aprovação', escrita: true },
+];
+const ESCOPOS_RC = [
+  { cod: 'conversas.anuncio.ler', rot: 'Conversas abertas por anúncio', txt: 'O id do anúncio, o momento e o telefone, que vira um identificador pseudonimizado na chegada. Nenhuma mensagem.' },
+];
+
+const estado = { cenario: 'normal', filtro: 'todas', semCusto: false };
+const CENARIOS = [
+  { grupo: 'Regem e RegemCast', itens: {
+    normal: 'Regem e RegemCast ligados',
+    'regem-ida': 'Conectar o Regem: antes de ir ao Regem',
+    'regem-no-regem': 'Conectar o Regem: autorizando no Regem (simulação)',
+    'regem-volta': 'Voltou do Regem: ligar as lojas',
+    'regem-lendo': 'Lojas ligadas: primeira leitura (90 dias)',
+    'regem-sem-custo': 'Autorizado sem permissão financeira (sem custos)',
+    revogar: 'Revogar uma loja (confirmação na linha)',
+    'regem-revogado': 'Token revogado do lado do Regem',
+    'regemcast-ida': 'Conectar o RegemCast: antes de ir',
+    'regemcast-sem-api': 'RegemCast: número fora da API oficial',
+    'sem-regem': 'Meta e Google ligados, Regem ainda não',
+  } },
+  { grupo: 'Meta e Google (tela aprovada em 27/09)', itens: {
+    escolher: 'Voltou do Google: escolher contas',
+    conferindo: 'Voltou da Meta: conferindo',
+    erro: 'A Meta recusou a autorização',
+    vazio: 'Nenhuma conta ainda',
+  } },
+];
+const TODOS_CENARIOS = Object.assign({}, ...CENARIOS.map((g) => g.itens));
+
+/* ---------- linhas da tabela ---------- */
+function linhasDe(cen) {
+  if (cen === 'vazio') return [];
+  const l = LINHAS_MG.map((x) => ({ ...x }));
+  if (!SEM_REGEM.has(cen)) {
+    if (cen === 'regem-lendo') {
+      l.push({ ...REGEM_CENTRO, st: 'lendo', stRot: 'Primeira leitura: 72%', motivo: 'Trazendo os pedidos dos últimos 90 dias. Leva alguns minutos.', quando: 'agora' });
+      l.push({ ...REGEM_CENTRO, id: 'regem-barra', nome: 'Mister Burgers — Loja Barra', sub: 'Loja no Liame: Barra · token próprio da loja', st: 'lendo', stRot: 'Primeira leitura: 38%', motivo: 'Trazendo os pedidos dos últimos 90 dias. Leva alguns minutos.', quando: 'agora' });
+    } else if (cen === 'regem-revogado') l.push({ ...REGEM_CENTRO, st: 'perigo', stRot: 'Desconectada', motivo: 'A autorização foi revogada no Regem — conecte de novo.', quando: 'hoje, 09:58', acao: 'reconectar', reconectar: 'regem', problema: true });
+    else if (cen === 'regem-sem-custo') l.push({ ...REGEM_CENTRO, st: 'atraso', stRot: 'Sem custos', motivo: 'Quem autorizou não tem permissão financeira no Regem: a margem desta loja fica desconhecida.', problema: true });
+    else l.push({ ...REGEM_CENTRO });
+  }
+  if (!SEM_RC.has(cen)) {
+    if (cen === 'regemcast-sem-api') l.push({ ...REGEMCAST, st: 'atraso', stRot: 'Fora da API oficial', motivo: 'O número (21) 9••••-0142 não está na API oficial do WhatsApp; conversas de anúncio não chegam.', quando: 'nunca', problema: true });
+    else l.push({ ...REGEMCAST });
+  }
+  return l;
+}
+const ST = { ok: 'st--concluido', atraso: 'st--aguardando', perigo: 'st--perigo', lendo: 'st--info' };
+function htmlLinha(l) {
+  let acao = `<button class="btn btn--sm btn--ghost" type="button" data-desligar>Desligar</button>`;
+  if (l.acao === 'reconectar') acao = `<button class="btn btn--sm btn--primary" type="button" data-conectar="${l.reconectar}">Conectar de novo</button>`;
+  if (l.acao === 'revogar') acao = `<button class="btn btn--sm btn--ghost" type="button" data-revogar-linha="${l.plat}">Revogar</button>`;
+  const lendo = l.st === 'lendo' ? '<span class="girando" aria-hidden="true"></span>' : '<span class="dot"></span>';
+  return `<tr data-id="${l.id}"${l.problema ? ' data-problema' : ''}>
+    <th scope="row"><span class="conta-nome">${esc(l.nome)}</span><span class="conta-id${l.texto ? ' conta-id--txt' : ' mono'}">${esc(l.sub)}</span></th>
+    <td><span class="plat plat--${l.plat}">${l.platRot}</span></td>
+    <td><span class="st ${ST[l.st]}">${lendo}${esc(l.stRot)}</span>${l.motivo ? `<span class="motivo">${esc(l.motivo)}</span>` : ''}</td>
+    <td><span class="quando">${esc(l.quando)}</span></td>
+    <td class="acoes">${acao}</td>
+  </tr>`;
+}
+
+/* ---------- escopos (o que cada um libera) ---------- */
+function htmlEscopos(lista, { status = false } = {}) {
+  return lista.map((e) => {
+    let st = '', cls = '', icone = 'i-check';
+    if (status && e.financeiro && estado.semCusto) { st = '<span class="st st--aguardando">Não liberado</span>'; cls = ' escopo--nao'; icone = 'i-alert'; }
+    else if (status && e.escrita) { st = '<span class="st st--espera">Liberado · desligado no Liame</span>'; cls = ' escopo--desligado'; icone = 'i-lock'; }
+    else if (status) st = '<span class="st st--concluido">Liberado</span>';
+    const chip = !status && e.chip ? `<span class="lite-chip">${e.chip}</span>` : '';
+    const txt = status && e.financeiro && estado.semCusto ? 'Quem autorizou não tem permissão financeira no Regem. Para liberar, um presidente autoriza de novo.' : e.txt;
+    return `<li class="escopo${cls}">${ic(icone, 'ic ic-sm')}<div><p class="escopo-cab"><b>${e.rot}</b><code>${e.cod}</code>${chip}${st}</p><p class="escopo-txt">${txt}</p></div></li>`;
+  }).join('');
+}
+$('#escopos-regem').innerHTML = htmlEscopos(ESCOPOS_REGEM);
+$('#escopos-rc').innerHTML = htmlEscopos(ESCOPOS_RC);
+function chipsLojas() {
+  const itens = ESCOPOS_REGEM.map((e) => (e.financeiro && estado.semCusto ? `<li class="st st--aguardando">${e.rot}: não liberado</li>` : `<li class="st ${e.escrita ? 'st--espera' : 'st--concluido'}">${e.rot}${e.escrita ? ' · desligado no Liame' : ''}</li>`)).join('');
+  $$('#dlg-lojas [data-chips]').forEach((u) => { u.innerHTML = itens; });
+}
+
+/* ---------- autorizações ---------- */
+function cartoesDe(cen) {
+  if (cen === 'vazio') return '';
+  const c = [];
+  c.push(`<li class="card autorizacao">
+    <div class="aut-cab"><span class="plat plat--meta">Meta</span><b>Autorizada por Rodrigo</b><span class="aut-meta">em 20/09/2026 · 2 contas</span></div>
+    <p class="aut-txt">Autorização da empresa, sem prazo de validade.</p>
+    <div class="seg-acoes"><button class="btn btn--sm" type="button" data-toast="Procurando contas novas na Meta. Aparecem aqui em alguns segundos.">Procurar contas de novo</button><button class="btn btn--sm btn--perigo" type="button" data-revogar="meta">Revogar</button></div>
+  </li>`);
+  c.push(`<li class="card autorizacao">
+    <div class="aut-cab"><span class="plat plat--google">Google</span><b>Autorizada por Rodrigo</b><span class="aut-meta">em 22/09/2026 · 3 contas</span></div>
+    <p class="aut-txt aut-txt--atencao">${ic('i-clock', 'ic ic-sm')}Vence em 29/09/2026 (app do Google em fase de teste). Conecte de novo antes para a leitura não parar.</p>
+    <div class="seg-acoes"><button class="btn btn--sm btn--primary" type="button" data-conectar="google">Conectar de novo</button><button class="btn btn--sm" type="button" data-toast="Procurando contas novas no Google. Aparecem aqui em alguns segundos.">Procurar contas de novo</button><button class="btn btn--sm btn--perigo" type="button" data-revogar="google">Revogar</button></div>
+  </li>`);
+  if (!SEM_REGEM.has(cen)) {
+    const revogado = cen === 'regem-revogado';
+    const lojas = cen === 'regem-lendo' ? '2 lojas' : '1 loja';
+    c.push(`<li class="card autorizacao" data-aut="regem">
+      <div class="aut-cab"><span class="plat plat--regem">Regem</span><b>Autorizada por Rodrigo</b><span class="aut-meta">presidente no Regem · em 29/09/2026 · ${lojas}</span></div>
+      ${revogado ? `<p class="aut-txt aut-txt--perigo">${ic('i-alert-circle', 'ic ic-sm')}Revogada no Regem em 29/09/2026, 09:58. A leitura dos pedidos parou; conecte de novo para voltar.</p>` : '<p class="aut-txt">Um token para cada loja, guardado cifrado no Liame e só em hash no Regem. Revogar aqui revoga lá também.</p>'}
+      ${estado.semCusto && !revogado ? `<p class="aut-txt aut-txt--atencao">${ic('i-alert', 'ic ic-sm')}Sem o custo dos itens: quem autorizou não tem permissão financeira no Regem.</p>` : ''}
+      <div class="aut-escopos" id="esc-regem" hidden><ul class="escopos">${htmlEscopos(ESCOPOS_REGEM, { status: true })}</ul></div>
+      <div class="seg-acoes">${revogado ? '<button class="btn btn--sm btn--primary" type="button" data-conectar="regem">Conectar de novo</button>' : ''}<button class="btn btn--sm btn-alternar" type="button" aria-expanded="false" aria-controls="esc-regem" data-alternar="#esc-regem">O que o Liame recebe${ic('i-chevron-down', 'ic ic-sm')}</button>${revogado ? '' : '<button class="btn btn--sm" type="button" data-conectar="regem">Adicionar lojas</button><button class="btn btn--sm btn--perigo" type="button" data-revogar="regem">Revogar</button>'}</div>
+    </li>`);
+  }
+  if (!SEM_RC.has(cen)) {
+    const semApi = cen === 'regemcast-sem-api';
+    c.push(`<li class="card autorizacao" data-aut="regemcast">
+      <div class="aut-cab"><span class="plat plat--regemcast">RegemCast</span><b>Autorizada por Rodrigo</b><span class="aut-meta">em 29/09/2026 · 1 número</span></div>
+      <p class="aut-txt">O Liame recebe só a origem das conversas abertas por anúncio: o id do anúncio, o momento e o telefone, que vira um identificador pseudonimizado na chegada. Nenhuma mensagem.</p>
+      ${semApi ? `<p class="aut-txt aut-txt--atencao">${ic('i-alert', 'ic ic-sm')}O número (21) 9••••-0142 não está na API oficial do WhatsApp; conversas de anúncio não chegam.</p>` : ''}
+      <div class="aut-escopos" id="esc-rc" hidden><ul class="escopos">${htmlEscopos(ESCOPOS_RC, { status: true })}</ul></div>
+      <div class="seg-acoes"><button class="btn btn--sm btn-alternar" type="button" aria-expanded="false" aria-controls="esc-rc" data-alternar="#esc-rc">O que o Liame recebe${ic('i-chevron-down', 'ic ic-sm')}</button><button class="btn btn--sm btn--perigo" type="button" data-revogar="regemcast">Revogar</button></div>
+    </li>`);
+  }
+  return c.join('');
+}
+
+/* ---------- avisos da situação ---------- */
+function faixa({ tipo = '', icone = 'i-info', girando = false, titulo, texto, acao = '', papel = 'status' }) {
+  return `<div class="faixa${tipo ? ' faixa--' + tipo : ''}" role="${papel}"><div class="faixa-ic">${girando ? '<span class="girando" aria-hidden="true"></span>' : ic(icone)}</div><div class="faixa-txt"><b>${titulo}</b><span>${texto}</span></div>${acao}</div>`;
+}
+function faixasDe(cen) {
+  switch (cen) {
+    case 'escolher': return faixa({ tipo: 'acao', icone: 'i-check', titulo: 'O Google autorizou. Encontramos 4 contas.', texto: '2 do Google Ads e 2 propriedades do GA4. Escolha quais ligar à marca Mister Burgers.', acao: '<button class="btn btn--primary" type="button" id="bt-escolher" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-escolher">Escolher contas</button>' });
+    case 'conferindo': return faixa({ girando: true, titulo: 'Conferindo a autorização com a Meta…', texto: 'Estamos buscando as contas de anúncio que você liberou. Leva alguns segundos; pode continuar usando o Liame.' });
+    case 'erro': return faixa({ tipo: 'perigo', icone: 'i-alert-circle', papel: 'alert', titulo: 'A Meta não autorizou a conexão.', texto: 'A autorização foi recusada ou fechada antes do fim. Nada foi ligado.', acao: '<button class="btn" type="button" data-conectar="meta">Tentar de novo</button>' });
+    case 'sem-regem': case 'regem-ida': return faixa({ tipo: 'acao', icone: 'i-plug', titulo: 'Conecte o caixa da loja', texto: 'Com o Regem, o Liame confirma no caixa quais pedidos vieram dos anúncios, com receita e margem. Com o RegemCast, entram as conversas abertas por anúncio.', acao: '<button class="btn btn--primary" type="button" data-conectar="regem">Conectar o Regem</button>' });
+    case 'regem-no-regem': return faixa({ girando: true, titulo: 'Você está no Regem, autorizando o Liame…', texto: 'Simulação do protótipo: no app, esta aba espera a volta do Regem. Lá, o presidente escolhe as lojas e confere o que cada uma libera.', acao: '<button class="btn btn--primary" type="button" data-simular="regem-volta">Simular a volta do Regem</button>' });
+    case 'regem-volta': return faixa({ tipo: 'acao', icone: 'i-check', titulo: 'O Regem autorizou 2 lojas.', texto: 'Ligue cada uma a uma loja do Liame. A primeira leitura traz os pedidos dos últimos 90 dias.', acao: '<button class="btn btn--primary" type="button" id="bt-lojas" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-lojas">Ligar lojas</button>' });
+    case 'regem-revogado': return faixa({ tipo: 'perigo', icone: 'i-alert-circle', papel: 'alert', titulo: 'A autorização foi revogada no Regem — conecte de novo', texto: 'Os pedidos da Loja Centro pararam de chegar às 09:58. Até conectar de novo, os Resultados mostram o caixa só até essa hora.', acao: '<button class="btn btn--primary" type="button" data-conectar="regem">Conectar o Regem de novo</button>' });
+    case 'regem-sem-custo': return faixa({ tipo: 'atencao', icone: 'i-alert', titulo: 'O Regem liberou os pedidos, mas não o custo dos itens', texto: 'Quem autorizou não tem permissão financeira no Regem. Sem o custo, a margem fica desconhecida e os Resultados não dizem se deu lucro. Para liberar, um presidente autoriza de novo.', acao: '<button class="btn" type="button" data-conectar="regem">Autorizar de novo</button>' });
+    case 'regemcast-sem-api': return faixa({ tipo: 'atencao', icone: 'i-alert', titulo: 'O número (21) 9••••-0142 não está na API oficial do WhatsApp; conversas de anúncio não chegam.', texto: 'Fora da API oficial, o WhatsApp não manda de qual anúncio veio a conversa. Enquanto isso, o Liame mede pelo link do cardápio e pelo cupom exclusivo. Para as conversas de anúncio chegarem, o número precisa estar na API oficial pelo RegemCast.' });
+    case 'regemcast-no': return faixa({ girando: true, titulo: 'Você está no RegemCast, autorizando o Liame…', texto: 'Simulação do protótipo: lá você escolhe o número do WhatsApp e confirma.', acao: '<button class="btn btn--primary" type="button" data-simular="regemcast-volta">Simular a volta do RegemCast</button>' });
+    default: return '';
+  }
+}
+
+/* ---------- desenhar ---------- */
+function aplicarFiltro() {
+  $$('[data-filtro]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.filtro === estado.filtro)));
+  $$('#linhas tr').forEach((tr) => { tr.hidden = estado.filtro === 'problema' && !tr.hasAttribute('data-problema'); });
+}
+function contar() {
+  const trs = $$('#linhas tr');
+  $('#f-todas .num').textContent = trs.length;
+  $('#f-problema .num').textContent = trs.filter((tr) => tr.hasAttribute('data-problema')).length;
+}
+function desenhar() {
+  const cen = estado.cenario;
+  $('#faixas').innerHTML = faixasDe(cen);
+  $('#vazio-contas').hidden = cen !== 'vazio';
+  $('#bloco-contas').hidden = cen === 'vazio';
+  $('#linhas').innerHTML = linhasDe(cen).map(htmlLinha).join('');
+  $('#autorizacoes').innerHTML = cartoesDe(cen);
+  chipsLojas();
+  contar();
+  aplicarFiltro();
+}
+function fecharDialogos() { $$('dialog[open]').forEach((d) => d.close('cancelar')); }
+function aplicarCenario(id, { focar = false } = {}) {
+  if (id === 'regemcast-no') { /* passo intermediário da simulação, fora da lista */ }
+  else if (!TODOS_CENARIOS[id]) id = 'normal';
+  fecharDialogos();
+  estado.cenario = id;
+  estado.semCusto = id === 'regem-sem-custo';
+  estado.filtro = 'todas';
+  if (TODOS_CENARIOS[id]) marcarCenario(id);
+  desenhar();
+  if (TODOS_CENARIOS[id]) anunciar('Situação: ' + TODOS_CENARIOS[id]);
+  if (id === 'regem-ida') setTimeout(() => abrirDialogo($('#dlg-regem'), $('#bt-conectar')), 60);
+  if (id === 'regemcast-ida') setTimeout(() => abrirDialogo($('#dlg-regemcast'), $('#bt-conectar')), 60);
+  if (id === 'revogar') setTimeout(() => $('[data-revogar-linha="regem"]')?.click(), 60);
+  if (focar && !['regem-ida', 'regemcast-ida', 'revogar'].includes(id)) $('#h-contas').focus({ preventScroll: true });
+}
+
+/* ---------- eventos ---------- */
+const dlgConectar = $('#dlg-conectar'), dlgRegem = $('#dlg-regem'), dlgRc = $('#dlg-regemcast'), dlgLojas = $('#dlg-lojas'), dlgEscolher = $('#dlg-escolher'), dlgRevogar = $('#dlg-revogar');
+$('#bt-conectar').addEventListener('click', (e) => abrirDialogo(dlgConectar, e.currentTarget));
+dlgConectar.addEventListener('close', () => {
+  const v = dlgConectar.returnValue;
+  if (v === 'meta' || v === 'google') toast(`Indo para a página ${v === 'meta' ? 'da Meta' : 'do Google'} para você autorizar…`);
+  if (v === 'regem') abrirDialogo(dlgRegem, $('#bt-conectar'));
+  if (v === 'regemcast') abrirDialogo(dlgRc, $('#bt-conectar'));
+});
+$('#form-regem').addEventListener('submit', (e) => { e.preventDefault(); dlgRegem.close('ok'); toast('Indo para o Regem para você autorizar…'); aplicarCenario('regem-no-regem'); });
+$('#form-regemcast').addEventListener('submit', (e) => { e.preventDefault(); dlgRc.close('ok'); toast('Indo para o RegemCast para você autorizar…'); aplicarCenario('regemcast-no'); });
+$('#form-lojas').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const a = $('#lj-centro'), b = $('#lj-barra'), erro = $('#lj-erro');
+  const repetida = a.value !== 'nova' && a.value === b.value;
+  a.setAttribute('aria-invalid', String(repetida)); b.setAttribute('aria-invalid', String(repetida));
+  erro.hidden = !repetida;
+  if (repetida) { b.focus(); return; }
+  const cria = [a, b].some((s) => s.value === 'nova');
+  dlgLojas.close('ok');
+  toast(cria ? 'Lojas ligadas. O Liame criou a loja nova com o nome e o fuso do Regem. A primeira leitura traz 90 dias de pedidos.' : 'Lojas ligadas. A primeira leitura traz os pedidos dos últimos 90 dias e leva alguns minutos.');
+  aplicarCenario('regem-lendo');
+});
+$$('#dlg-lojas select').forEach((s) => s.addEventListener('change', () => { $('#lj-erro').hidden = true; $$('#dlg-lojas select').forEach((x) => x.removeAttribute('aria-invalid')); }));
+$$('#dlg-escolher input[type="checkbox"]:not(:disabled)').forEach((c) => c.addEventListener('change', () => {
+  const n = $$('#dlg-escolher input[type="checkbox"]:not(:disabled):checked').length;
+  $('#bt-ligar').textContent = n ? `Ligar ${n} conta${n > 1 ? 's' : ''}` : 'Escolha ao menos uma';
+  $('#bt-ligar').disabled = !n;
+}));
+dlgEscolher.addEventListener('close', () => {
+  if (dlgEscolher.returnValue !== 'ok') return;
+  aplicarCenario('normal');
+  toast('Contas ligadas. A primeira leitura (90 dias) começou e leva alguns minutos.');
+});
+let revogando = null;
+dlgRevogar.addEventListener('close', () => {
+  if (dlgRevogar.returnValue !== 'ok' || !revogando) return;
+  const plat = revogando.dataset.plat;
+  revogando.card.remove();
+  if (plat === 'regem' || plat === 'regemcast') $$(`#linhas [data-revogar-linha="${plat}"]`).forEach((b) => b.closest('tr')?.remove());
+  contar();
+  toast(plat === 'regem' ? 'Autorização do Regem revogada. O token de cada loja foi revogado lá também; a leitura dos pedidos parou.' : plat === 'regemcast' ? 'Autorização do RegemCast revogada lá também. As conversas por anúncio pararam de chegar.' : 'Autorização revogada. A leitura das contas dela parou.');
+  revogando = null;
+});
+
+document.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target : null; if (!alvo) return;
+  const con = alvo.closest('[data-conectar]');
+  if (con) {
+    const p = con.dataset.conectar;
+    abrirDialogo(p === 'regem' ? dlgRegem : p === 'regemcast' ? dlgRc : dlgConectar, con);
+    return;
+  }
+  const sim = alvo.closest('[data-simular]');
+  if (sim) {
+    if (sim.dataset.simular === 'regemcast-volta') { aplicarCenario('normal'); toast('Número (21) 9••••-0142 ligado à loja Centro. As conversas abertas por anúncio começam a chegar.'); return; }
+    aplicarCenario(sim.dataset.simular);
+    setTimeout(() => $('#bt-lojas')?.focus(), 30);
+    return;
+  }
+  if (alvo.closest('#bt-lojas')) { abrirDialogo(dlgLojas, $('#bt-lojas')); return; }
+  if (alvo.closest('#bt-escolher')) { abrirDialogo(dlgEscolher, $('#bt-escolher')); return; }
+  const rev = alvo.closest('[data-revogar]');
+  if (rev) {
+    const plat = rev.dataset.revogar;
+    revogando = { card: rev.closest('li'), dataset: { plat } };
+    $$('[data-so-revogar]').forEach((p) => { p.hidden = p.dataset.soRevogar !== plat; });
+    $('#revogar-txt').innerHTML = plat === 'meta' ? 'A leitura das <b>2 contas</b> desta autorização para agora. O histórico de números fica.'
+      : plat === 'google' ? 'A leitura das <b>3 contas</b> desta autorização para agora. O histórico de números fica.'
+        : plat === 'regem' ? 'A leitura dos pedidos, custos e cupons <b>das lojas desta autorização</b> para agora. O histórico fica.'
+          : 'A leitura das <b>conversas abertas por anúncio</b> deste número para agora. O histórico fica.';
+    abrirDialogo(dlgRevogar, rev);
+    return;
+  }
+  const des = alvo.closest('[data-desligar]');
+  if (des) { const tr = des.closest('tr'); confirmarNaLinha(des, { rotulo: 'Desligar agora', aoConfirmar: () => { tr.remove(); contar(); toast('Conta desligada. O histórico de números fica.'); } }); return; }
+  const rl = alvo.closest('[data-revogar-linha]');
+  if (rl) {
+    const tr = rl.closest('tr'), regem = rl.dataset.revogarLinha === 'regem';
+    confirmarNaLinha(rl, {
+      texto: regem ? 'O token desta loja é revogado no Regem também.' : 'O acesso a este número é revogado no RegemCast também.',
+      rotulo: 'Revogar agora',
+      aoConfirmar: () => { tr.remove(); contar(); toast(regem ? 'Loja desligada. O token foi revogado no Regem e no Liame; o que já foi lido segue o prazo de guarda.' : 'Número desligado. O acesso foi revogado no RegemCast também.'); },
+    });
+    return;
+  }
+  const alt = alvo.closest('[data-alternar]');
+  if (alt) { const bloco = $(alt.dataset.alternar); const abrir = bloco.hidden; bloco.hidden = !abrir; alt.setAttribute('aria-expanded', String(abrir)); return; }
+  const f = alvo.closest('[data-filtro]'); if (f) { estado.filtro = f.dataset.filtro; aplicarFiltro(); return; }
+  const t = alvo.closest('[data-toast]'); if (t) toast(t.dataset.toast);
+});
+selCenario.addEventListener('change', () => aplicarCenario(selCenario.value, { focar: true }));
+
+/* ---------- início ---------- */
+preencherCenarios(CENARIOS);
+aplicarCenario(params.get('cenario') || 'normal');
+
+/* ---------- cenários para a verificação no navegador sem janela ---------- */
+(() => {
+  const todas = [1440, 1024, 768, 375];
+  for (const id of Object.keys(TODOS_CENARIOS)) window.uiuxCenarios[id] = { larguras: todas, executar: async () => { aplicarCenario(id); await esperar(450); } };
+  window.uiuxCenarios['dlg-conectar'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('normal'); $('#bt-conectar').click(); await esperar(350); if (!dlgConectar.open) throw new Error('não abriu'); } };
+  window.uiuxCenarios['dlg-lojas'] = { larguras: [1440, 768, 375], executar: async () => { aplicarCenario('regem-volta'); await esperar(200); $('#bt-lojas').click(); await esperar(350); if (!dlgLojas.open) throw new Error('não abriu'); } };
+  window.uiuxCenarios['dlg-lojas-repetida'] = { larguras: [1440], executar: async () => { aplicarCenario('regem-volta'); await esperar(200); $('#bt-lojas').click(); await esperar(300); $('#lj-barra').value = 'centro'; $('#form-lojas').requestSubmit(); await esperar(200); if ($('#lj-erro').hidden) throw new Error('o erro não apareceu'); } };
+  window.uiuxCenarios['lojas-ligadas'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('regem-volta'); await esperar(200); $('#bt-lojas').click(); await esperar(300); $('#form-lojas').requestSubmit(); await esperar(400); if (estado.cenario !== 'regem-lendo') throw new Error('não ligou'); } };
+  window.uiuxCenarios['escopos-abertos'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('regem-sem-custo'); await esperar(200); $('[data-alternar="#esc-regem"]').click(); await esperar(200); if ($('#esc-regem').hidden) throw new Error('não abriu'); } };
+  window.uiuxCenarios['revogar-dialogo'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('normal'); await esperar(200); $('[data-revogar="regem"]').click(); await esperar(350); if (!dlgRevogar.open || $('[data-so-revogar="regem"]').hidden) throw new Error('diálogo errado'); } };
+  window.uiuxCenarios['revogar-linha-confirma'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('revogar'); await esperar(250); const b = $('.confirma-linha .btn--perigo-cheio'); if (!b) throw new Error('sem confirmação'); b.click(); await esperar(250); if ($('[data-id="regem-centro"]')) throw new Error('a linha não saiu'); } };
+  window.uiuxCenarios['esc-volta-sem-escolha'] = { larguras: [1440], executar: async () => { aplicarCenario('normal'); $('#bt-conectar').click(); await esperar(200); dlgConectar.close('regem'); await esperar(300); dlgRegem.close('cancelar'); await esperar(200); $('#bt-conectar').click(); await esperar(200); dlgConectar.dispatchEvent(new Event('cancel')); dlgConectar.close(); await esperar(250); if (dlgRegem.open) throw new Error('Esc reabriu o Regem'); } };
+  window.uiuxCenarios['gaveta-menu'] = { larguras: [375, 768], executar: async () => { btMenu.click(); await esperar(500); if (!app.classList.contains('gaveta')) throw new Error('a gaveta não abriu'); } };
+  window.uiuxCenarios['modo-pro'] = { larguras: [1440, 1024], executar: async () => { definirModo('pro', { silencioso: true }); await esperar(200); if ($('#g-ferramentas').hidden) throw new Error('ferramentas não abriram no Pro'); } };
+})();
+
+</script>
+</body>
+</html>
