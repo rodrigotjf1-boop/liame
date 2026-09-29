@@ -73,6 +73,23 @@ Situação em 27/09/2026. As entregas (G1–G9) estão na tabela acima; aqui, o 
 
 **Produção (29/09/2026):** Liame no ar (`app.` e `api.agencialiame.com`, EasyPanel projeto `liame`, `docs/deploy.md`); migrations 0001–0020 na nuvem. **Falta da A2:** 7 dias de piloto sem erro de cota (A2-4), a conferência do Google (A2-2) e publicar os apps da Meta e do Google.
 
+## Fase A2.5 · Ciclo fechado
+
+Plano **aprovado pelo dono em 29/09/2026**: [`plano-a25.md`](plano-a25.md), com o ADR-019 (integração com Regem e RegemCast) e o ADR-020 (atribuição determinística). Integração por REST agora; as mesmas ferramentas no hub MCP quando ele existir.
+
+| Entrega | Situação | Evidência |
+| --- | --- | --- |
+| **F1** · modelo de vendas | ⏳ | Migration **0021** |
+| **F2** · pontos de contato e motor de atribuição | ⏳ | Migration **0022** |
+| **F3** · conectar Regem e RegemCast | ⏳ | Migration **0023**; depende da C1a/C1b no Regem |
+| **F4** · conector Regem (leitura) | ⏳ | Contra respostas gravadas do contrato; depende da C1c |
+| **F5** · links de campanha | ⏳ | Protótipo P3; pesquisa da seção 9 do plano |
+| **F6** · cupons de campanha | ⏳ | Contrato de cupons; protótipo P3 |
+| **F7** · conector RegemCast (leitura) | ⏳ | Depende da C2 |
+| **F8** · Resultados (ROAS plataforma × caixa) | ⏳ | Protótipo P1 |
+| **F9** · Atenção do ciclo fechado | ⏳ | — |
+| **Trilha C** (Regem: C1a, C1c, C3a; RegemCast: C2) | ⏳ | Plano de cada uma aprovado no próprio repositório (A0-9) |
+
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 
 **Montado:** monorepo pnpm 12.6 + Turborepo 2.11.4 com `apps/server` (Nest 12.1, API + worker), `apps/web` (Next 16.3.6, React 19.3, Tailwind 4.3 com os tokens do protótipo), `packages/config` (presets de TS), `packages/contracts` (Zod), `packages/database` (Drizzle 0.45 + pool + `withTenant`), `packages/telemetry` (OTel http/undici/pg). CI em `.github/workflows/ci.yml`.
