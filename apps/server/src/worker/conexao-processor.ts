@@ -305,7 +305,7 @@ export async function descobrirLojas(cliente: ClienteConector, apiUrl: string, c
         name: loja.loja_nome,
         currency: loja.moeda,
         timezone: loja.fuso,
-        provider_attributes: { escopos: loja.escopos, empresa: loja.empresa_nome ?? null },
+        provider_attributes: { escopos: loja.escopos, empresa: loja.empresa_nome ?? null, cardapio_url: loja.cardapio_url ?? null },
       });
     } catch (err) {
       if (err instanceof ErroConector && err.tipo === 'autenticacao') {

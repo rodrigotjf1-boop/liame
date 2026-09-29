@@ -47,6 +47,7 @@ export const orderFact = liame.table('order_fact', {
   isNewCustomer: boolean('is_new_customer'),
   placedAt: ts('placed_at'),
   confirmedAt: ts('confirmed_at').notNull(),
+  billedAt: ts('billed_at'),
   cancelledAt: ts('cancelled_at'),
   sourceVersion: bigint('source_version', { mode: 'number' }).notNull(),
   sourceUpdatedAt: ts('source_updated_at').notNull(),

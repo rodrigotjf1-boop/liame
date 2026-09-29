@@ -146,7 +146,7 @@ export async function atribuirPedidos(
                e.provider, e.campaign_id, e.ad_id, e.evidencia, m.rules -> 'confianca' ->> e.evidencia,
                e.touchpoint_id, e.campaign_coupon_id, e.touch_at, m.window_days,
                p.status = 'confirmado' and coalesce(m.rules -> 'confianca' ->> e.evidencia, '') in ('alta', 'media'),
-               case when p.status = 'cancelado' then 'cancelado' when e.order_id is null then mo.reason end,
+               case when p.status = 'cancelado' then 'cancelado' when p.status = 'removido' then 'removido' when e.order_id is null then mo.reason end,
                now()
           from pedidos p
           cross join modelo m

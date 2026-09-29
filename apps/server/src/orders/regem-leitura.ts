@@ -26,6 +26,7 @@ export function pedidoDoRegem(p: PedidoRegem, indiceTelefone: string | null): Pe
     isNewCustomer: marketplace ? null : (p.cliente?.novo ?? null),
     placedAt: p.criado_em ?? null,
     confirmedAt: p.confirmado_em,
+    billedAt: p.faturado_em ?? null,
     cancelledAt: p.cancelado_em,
     version: p.versao,
     sourceUpdatedAt: p.atualizado_em,
@@ -96,6 +97,7 @@ export async function gravarCupons(tx: Tx, ctx: ContextoCupons, cupons: CupomReg
     uses_count: c.usos,
     conditions: c.condicoes ?? {},
     all_units: c.todas_as_lojas ?? false,
+    removido: c.removido ?? false,
     source_version: c.versao.toString(),
     source_updated_at: c.atualizado_em,
   }));
@@ -104,26 +106,39 @@ export async function gravarCupons(tx: Tx, ctx: ContextoCupons, cupons: CupomReg
       select * from jsonb_to_recordset(${JSON.stringify(linhas)}::jsonb) as e(
         new_id uuid, external_id text, code text, description text, kind text, percent numeric, value_micros bigint,
         max_discount_micros bigint, min_order_micros bigint, valido_de date, valido_ate date, fuso text, active boolean,
-        max_uses integer, uses_count integer, conditions jsonb, all_units boolean, source_version bigint, source_updated_at timestamptz)
-    )
+        max_uses integer, uses_count integer, conditions jsonb, all_units boolean, removido boolean, source_version bigint,
+        source_updated_at timestamptz)
+    ),
+    gravados as (
     insert into liame.coupon (
       id, tenant_id, brand_id, connected_account_id, external_id, code, description, kind, percent, value_micros,
       max_discount_micros, min_order_micros, valid_from, valid_until, active, max_uses, uses_count, conditions, all_units,
-      source_version, source_updated_at)
+      removed_at, source_version, source_updated_at)
     select e.new_id, ${ctx.tenantId}, ${ctx.brandId}, ${ctx.connectedAccountId}, e.external_id, e.code, e.description, e.kind,
            e.percent, e.value_micros, e.max_discount_micros, e.min_order_micros,
            e.valido_de::timestamp at time zone e.fuso,
            (e.valido_ate + 1)::timestamp at time zone e.fuso,
-           e.active, e.max_uses, e.uses_count, e.conditions, e.all_units, e.source_version, e.source_updated_at
+           e.active, e.max_uses, e.uses_count, e.conditions, e.all_units, case when e.removido then now() end,
+           e.source_version, e.source_updated_at
       from e
     on conflict (connected_account_id, external_id) do update
        set code = excluded.code, description = excluded.description, kind = excluded.kind, percent = excluded.percent,
            value_micros = excluded.value_micros, max_discount_micros = excluded.max_discount_micros,
            min_order_micros = excluded.min_order_micros, valid_from = excluded.valid_from, valid_until = excluded.valid_until,
            active = excluded.active, max_uses = excluded.max_uses, uses_count = excluded.uses_count,
-           conditions = excluded.conditions, all_units = excluded.all_units, source_version = excluded.source_version,
-           source_updated_at = excluded.source_updated_at
+           conditions = excluded.conditions, all_units = excluded.all_units,
+           removed_at = case when excluded.removed_at is null then null else coalesce(liame.coupon.removed_at, excluded.removed_at) end,
+           source_version = excluded.source_version, source_updated_at = excluded.source_updated_at
      where liame.coupon.source_version < excluded.source_version
-    returning id`);
+    returning id, removed_at
+    ),
+    -- Cupom apagado na origem deixa de ligar a campanhas; o que já foi atribuído fica.
+    desligados as (
+      update liame.campaign_coupon cc set unlinked_at = now()
+        from gravados g
+       where cc.coupon_id = g.id and g.removed_at is not null and cc.unlinked_at is null
+      returning cc.id
+    )
+    select g.id from gravados g`);
   return { alterados: r.rows.length };
 }

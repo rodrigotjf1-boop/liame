@@ -25,7 +25,8 @@ export type PedidoLido = {
   externalId: string;
   channel: string;
   channelGroup: GrupoCanal;
-  status: 'confirmado' | 'cancelado';
+  /** `removido`: a venda deixou de existir sozinha na origem e sai das contas (não é cancelamento). */
+  status: 'confirmado' | 'cancelado' | 'removido';
   currency: string;
   timezone: string;
   /** Receita pela definição única de faturamento do Regem (D-A2.5-6). */
@@ -38,6 +39,8 @@ export type PedidoLido = {
   isNewCustomer: boolean | null;
   placedAt: string | null;
   confirmedAt: string;
+  /** Instante que põe a receita no dia (o do Painel do Regem); nulo = o da confirmação. */
+  billedAt?: string | null;
   cancelledAt: string | null;
   /** Versão do recurso na origem: só cresce. */
   version: bigint;
@@ -166,6 +169,7 @@ async function gravarLote(tx: Tx, ctx: ContextoPedidos, lote: PedidoLido[]): Pro
     is_new_customer: p.isNewCustomer,
     placed_at: p.placedAt,
     confirmed_at: p.confirmedAt,
+    billed_at: p.billedAt ?? null,
     cancelled_at: p.status === 'cancelado' ? (p.cancelledAt ?? p.sourceUpdatedAt) : null,
     source_version: p.version.toString(),
     source_updated_at: p.sourceUpdatedAt,
@@ -176,7 +180,7 @@ async function gravarLote(tx: Tx, ctx: ContextoPedidos, lote: PedidoLido[]): Pro
         external_id text, new_id uuid, channel text, channel_group text, status text, currency text, timezone text,
         revenue_micros bigint, discount_micros bigint, refunded_micros bigint, coupon_code text, phone_index text,
         customer_external_id text, is_new_customer boolean, placed_at timestamptz, confirmed_at timestamptz,
-        cancelled_at timestamptz, source_version bigint, source_updated_at timestamptz)
+        billed_at timestamptz, cancelled_at timestamptz, source_version bigint, source_updated_at timestamptz)
     ),
     c as (
       select e.*, coalesce(rp.id, l.customer_ref_id) as customer_ref_id
@@ -187,11 +191,11 @@ async function gravarLote(tx: Tx, ctx: ContextoPedidos, lote: PedidoLido[]): Pro
     insert into liame.order_fact (
       id, tenant_id, brand_id, unit_id, connected_account_id, provider, external_id, channel, channel_group, status,
       currency, timezone, revenue_micros, discount_micros, refunded_micros, coupon_code, customer_ref_id,
-      is_new_customer, placed_at, confirmed_at, cancelled_at, source_version, source_updated_at)
+      is_new_customer, placed_at, confirmed_at, billed_at, cancelled_at, source_version, source_updated_at)
     select c.new_id, ${ctx.tenantId}, ${ctx.brandId}, ${ctx.unitId}, ${ctx.connectedAccountId}, ${ctx.provider}, c.external_id,
            c.channel, c.channel_group, c.status, c.currency, c.timezone, c.revenue_micros, c.discount_micros, c.refunded_micros,
            c.coupon_code, case when c.channel_group = 'marketplace' then null else c.customer_ref_id end,
-           c.is_new_customer, c.placed_at, c.confirmed_at, c.cancelled_at, c.source_version, c.source_updated_at
+           c.is_new_customer, c.placed_at, c.confirmed_at, c.billed_at, c.cancelled_at, c.source_version, c.source_updated_at
       from c
     on conflict (connected_account_id, external_id) do update
        set channel = excluded.channel, channel_group = excluded.channel_group, status = excluded.status,
@@ -199,7 +203,8 @@ async function gravarLote(tx: Tx, ctx: ContextoPedidos, lote: PedidoLido[]): Pro
            revenue_micros = excluded.revenue_micros, discount_micros = excluded.discount_micros,
            refunded_micros = excluded.refunded_micros, coupon_code = excluded.coupon_code,
            customer_ref_id = excluded.customer_ref_id, is_new_customer = excluded.is_new_customer,
-           placed_at = excluded.placed_at, confirmed_at = excluded.confirmed_at, cancelled_at = excluded.cancelled_at,
+           placed_at = excluded.placed_at, confirmed_at = excluded.confirmed_at, billed_at = excluded.billed_at,
+           cancelled_at = excluded.cancelled_at,
            source_version = excluded.source_version, source_updated_at = excluded.source_updated_at
      where liame.order_fact.source_version < excluded.source_version
     returning id, external_id, (xmax = 0) as novo`);

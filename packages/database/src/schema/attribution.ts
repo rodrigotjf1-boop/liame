@@ -42,6 +42,7 @@ export const coupon = liame.table('coupon', {
   maxDiscountMicros: micros('max_discount_micros'),
   conditions: jsonb('conditions').notNull().default({}),
   allUnits: boolean('all_units').notNull().default(false),
+  removedAt: ts('removed_at'),
   validFrom: ts('valid_from'),
   validUntil: ts('valid_until'),
   active: boolean('active').notNull(),

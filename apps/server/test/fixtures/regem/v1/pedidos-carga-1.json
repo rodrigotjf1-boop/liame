@@ -13,13 +13,31 @@
       "desconto_loja_centavos": 500,
       "estornado_centavos": 0,
       "cupom": null,
-      "cliente": { "id": "cli-1", "telefone": "(21) 99999-8888", "novo": true },
+      "cliente": {
+        "id": "cli-1",
+        "telefone": "(21) 99999-8888",
+        "novo": true
+      },
       "criado_em": "2026-09-26T22:58:00Z",
       "confirmado_em": "2026-09-26T23:00:00Z",
       "cancelado_em": null,
       "itens": [
-        { "id": "it-1", "produto_id": "p-9", "nome": "Burger da casa", "quantidade": "2", "receita_centavos": 4000, "custo_centavos": 1600 },
-        { "id": "it-2", "produto_id": "p-3", "nome": "Refrigerante lata", "quantidade": "1", "receita_centavos": 990, "custo_centavos": null }
+        {
+          "id": "it-1",
+          "produto_id": "p-9",
+          "nome": "Burger da casa",
+          "quantidade": "2",
+          "receita_centavos": 4000,
+          "custo_centavos": 1600
+        },
+        {
+          "id": "it-2",
+          "produto_id": "p-3",
+          "nome": "Refrigerante lata",
+          "quantidade": "1",
+          "receita_centavos": 990,
+          "custo_centavos": null
+        }
       ],
       "origem": {
         "capturado_em": "2026-09-25T20:41:07Z",
@@ -37,7 +55,8 @@
         "gbraid": null,
         "wbraid": null,
         "fbclid": "IwAR0ped001"
-      }
+      },
+      "faturado_em": "2026-09-26T22:58:00Z"
     },
     {
       "id": "ped-002",
@@ -52,12 +71,28 @@
       "desconto_loja_centavos": 0,
       "estornado_centavos": 0,
       "cupom": null,
-      "cliente": { "id": "cli-ifood", "telefone": "(21) 97777-6666", "novo": null },
+      "cliente": {
+        "id": "cli-ifood",
+        "telefone": "(21) 97777-6666",
+        "novo": null
+      },
       "criado_em": "2026-09-26T23:05:00Z",
       "confirmado_em": "2026-09-26T23:06:00Z",
       "cancelado_em": null,
-      "itens": [{ "id": "it-1", "produto_id": "p-10", "nome": "Combo duplo", "quantidade": "1", "receita_centavos": 7450, "custo_centavos": 2900 }],
-      "origem": { "capturado_em": "2026-09-26T22:00:00Z", "fbclid": "IwAR0naoconta" }
+      "itens": [
+        {
+          "id": "it-1",
+          "produto_id": "p-10",
+          "nome": "Combo duplo",
+          "quantidade": "1",
+          "receita_centavos": 7450,
+          "custo_centavos": 2900
+        }
+      ],
+      "origem": {
+        "capturado_em": "2026-09-26T22:00:00Z",
+        "fbclid": "IwAR0naoconta"
+      }
     },
     {
       "id": "ped-003",
@@ -76,8 +111,22 @@
       "confirmado_em": "2026-09-26T23:20:00Z",
       "cancelado_em": null,
       "itens": [
-        { "id": "it-1", "produto_id": "p-9", "nome": "Burger da casa", "quantidade": "1", "receita_centavos": 2000, "custo_centavos": 800 },
-        { "id": "it-2", "produto_id": "p-11", "nome": "Batata média", "quantidade": "1", "receita_centavos": 2410, "custo_centavos": 600 }
+        {
+          "id": "it-1",
+          "produto_id": "p-9",
+          "nome": "Burger da casa",
+          "quantidade": "1",
+          "receita_centavos": 2000,
+          "custo_centavos": 800
+        },
+        {
+          "id": "it-2",
+          "produto_id": "p-11",
+          "nome": "Batata média",
+          "quantidade": "1",
+          "receita_centavos": 2410,
+          "custo_centavos": 600
+        }
       ],
       "origem": null
     }

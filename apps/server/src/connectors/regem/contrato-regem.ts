@@ -19,6 +19,8 @@ export const LojaRegem = z.object({
   fuso: Texto(64).min(1),
   moeda: z.string().regex(/^[A-Z]{3}$/),
   escopos: z.array(z.string().regex(/^[a-z_.]+$/)).max(50),
+  /** Endereço público do cardápio online da loja (destino dos links de campanha, F5). */
+  cardapio_url: z.url().max(2048).nullable().optional(),
 });
 export type LojaRegem = z.infer<typeof LojaRegem>;
 
@@ -71,7 +73,8 @@ export const PedidoRegem = z.object({
   atualizado_em: Instante,
   canal: z.string().regex(/^[a-z0-9_]{1,40}$/),
   grupo_canal: GrupoCanal,
-  situacao: z.enum(['confirmado', 'cancelado']),
+  /** `removido`: a venda deixou de existir sozinha (comanda que virou parte de um pedido); sai das contas. */
+  situacao: z.enum(['confirmado', 'cancelado', 'removido']),
   moeda: z.string().regex(/^[A-Z]{3}$/),
   fuso: Texto(64).min(1),
   receita_centavos: Centavos,
@@ -87,6 +90,8 @@ export const PedidoRegem = z.object({
     .nullable(),
   criado_em: Instante.nullable().optional(),
   confirmado_em: Instante,
+  /** O instante que o Painel do Regem usa para pôr a venda no dia (a receita do dia bate por ele). */
+  faturado_em: Instante.nullable().optional(),
   cancelado_em: Instante.nullable(),
   itens: z.array(ItemPedido).max(1000),
   origem: OrigemPedido.nullable().optional(),
@@ -119,6 +124,8 @@ export const CupomRegem = z.object({
   usos: z.number().int().min(0),
   condicoes: z.record(z.string(), z.unknown()).optional(),
   todas_as_lojas: z.boolean().optional(),
+  /** Lápide: o cupom foi apagado na origem. */
+  removido: z.boolean().optional(),
 });
 export type CupomRegem = z.infer<typeof CupomRegem>;
 
@@ -131,6 +138,7 @@ export const UsoCupomRegem = z.object({
   pedido_id: Id.nullable(),
   usado_em: Instante,
   desconto_centavos: Centavos.nullable().optional(),
+  removido: z.boolean().optional(),
 });
 
 /** Página com cursor (contrato de cupons §2). */

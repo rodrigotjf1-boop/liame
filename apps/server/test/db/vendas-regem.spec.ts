@@ -140,13 +140,14 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
 
   it('carga inicial: 90 dias de pedidos, cupons, cliques e atribuição; receita do dia igual à do Regem', async () => {
     const r = await sincronizador.sincronizar(contaId, tenantId, T0);
-    expect(r).toMatchObject({ status: 'ok', pedidos: { novos: 5, atualizados: 0, ignorados: 0 }, cupons: 2, semPermissao: [] });
+    expect(r).toMatchObject({ status: 'ok', pedidos: { novos: 6, atualizados: 0, ignorados: 0 }, cupons: 2, semPermissao: [] });
     // A carga inicial pede os confirmados dos últimos 90 dias; as páginas seguintes vão só pelo cursor.
     expect(pedidosPedidos[0]!.get('confirmados_desde')).toBe(new Date(T0.getTime() - 90 * 86_400_000).toISOString());
     expect(pedidosPedidos[1]!.get('cursor')).toBe('ped-c1');
     expect(pedidosPedidos[1]!.get('confirmados_desde')).toBeNull();
 
     expect(await pedidos()).toEqual([
+      { external_id: 'com-010', status: 'confirmado', channel_group: 'presencial', revenue_micros: '19900000', refunded_micros: '0', coupon_code: null, tem_cliente: false },
       { external_id: 'ped-001', status: 'confirmado', channel_group: 'cardapio', revenue_micros: '59900000', refunded_micros: '0', coupon_code: null, tem_cliente: true },
       { external_id: 'ped-002', status: 'confirmado', channel_group: 'marketplace', revenue_micros: '74500000', refunded_micros: '0', coupon_code: null, tem_cliente: false },
       { external_id: 'ped-003', status: 'confirmado', channel_group: 'presencial', revenue_micros: '44100000', refunded_micros: '0', coupon_code: 'COMBOSEXTA', tem_cliente: false },
@@ -154,13 +155,15 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
       { external_id: 'ped-005', status: 'confirmado', channel_group: 'cardapio', revenue_micros: '25900000', refunded_micros: '0', coupon_code: null, tem_cliente: true },
     ]);
 
-    // A2.5-2 (fixture): a soma do dia no fuso da loja é a soma dos pedidos do relatório de faturamento.
+    // A2.5-2 (fixture): a soma do dia, pelo instante do faturamento no fuso da loja, é a do Painel do Regem.
     const [dia] = await ownerQuery<{ dia: string; receita: string }>(
-      `select (confirmed_at at time zone timezone)::date::text as dia, sum(revenue_micros)::text as receita
+      `select (coalesce(billed_at, confirmed_at) at time zone timezone)::date::text as dia, sum(revenue_micros)::text as receita
          from liame.order_fact where connected_account_id = $1 and status = 'confirmado' group by 1`,
       [contaId],
     );
-    expect(dia).toEqual({ dia: '2026-09-26', receita: String((5990 + 7450 + 4410 + 3980 + 2590) * 10_000) });
+    expect(dia).toEqual({ dia: '2026-09-26', receita: String((5990 + 7450 + 4410 + 3980 + 2590 + 1990) * 10_000) });
+    const [conta] = await ownerQuery<{ cardapio: string }>(`select provider_attributes->>'cardapio_url' as cardapio from liame.connected_account where id = $1`, [contaId]);
+    expect(conta?.cardapio).toBe('https://cardapio.exemplo.com.br/misterburgers-centro');
 
     const cupons = await ownerQuery<{ code: string; kind: string; valid_from: Date | null; valid_until: Date | null; max_discount_micros: string | null; conditions: Record<string, unknown>; all_units: boolean }>(
       `select code, kind, valid_from, valid_until, max_discount_micros::text, conditions, all_units from liame.coupon where connected_account_id = $1 order by code`,
@@ -173,6 +176,7 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     expect(cupons[1]).toMatchObject({ code: 'FRETEGRATIS', kind: 'frete_gratis', valid_from: null, all_units: true });
 
     expect(await atribuicoes()).toEqual([
+      { external_id: 'com-010', status: 'sem_origem', evidence: null, provider: null, counted: false, reason: 'canal_sem_clique', campanha: null },
       { external_id: 'ped-001', status: 'atribuido', evidence: 'clique_campanha', provider: 'meta_ads', counted: true, reason: null, campanha: '120215566778899' },
       { external_id: 'ped-002', status: 'sem_origem', evidence: null, provider: null, counted: false, reason: 'canal_sem_clique', campanha: null },
       { external_id: 'ped-003', status: 'sem_origem', evidence: null, provider: null, counted: false, reason: 'canal_sem_clique', campanha: null },
@@ -209,12 +213,15 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
   it('incremental: o cancelamento chega pelo cursor, o pedido sai do ROAS e o gclid sem campanha fica na plataforma', async () => {
     estado.incremental = true;
     const r = await sincronizador.sincronizar(contaId, tenantId, mais(20));
-    expect(r).toMatchObject({ status: 'ok', pedidos: { novos: 1, atualizados: 1 } });
+    expect(r).toMatchObject({ status: 'ok', pedidos: { novos: 1, atualizados: 2 } });
     const p = await pedidos();
     expect(p.find((x) => x.external_id === 'ped-001')).toMatchObject({ status: 'cancelado', refunded_micros: '59900000' });
     const a = await atribuicoes();
     expect(a.find((x) => x.external_id === 'ped-001')).toMatchObject({ status: 'atribuido', counted: false, reason: 'cancelado' });
     expect(a.find((x) => x.external_id === 'ped-006')).toMatchObject({ status: 'plataforma', evidence: 'clique_plataforma', provider: 'google_ads', counted: true });
+    // A comanda que virou parte de um pedido sai das contas como removida (não é cancelamento).
+    expect(p.find((x) => x.external_id === 'com-010')).toMatchObject({ status: 'removido' });
+    expect(a.find((x) => x.external_id === 'com-010')).toMatchObject({ counted: false, reason: 'removido' });
     // A reconciliação diária releu os confirmados dos últimos 3 dias sem mudar nada (a versão decide).
     const [s] = await ownerQuery<{ cursor: Record<string, string> }>(`select cursor from liame.sync_state where connected_account_id = $1 and dataset = 'pedidos'`, [contaId]);
     expect(s!.cursor.reconciliacao_em).toBe(mais(20).toISOString());
