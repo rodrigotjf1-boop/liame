@@ -76,7 +76,10 @@ const CAMPOS = [
 
 const valido = (v: string | null | undefined, formato: RegExp): string | null => {
   const s = v?.trim();
-  return s && formato.test(s) ? s : null;
+  if (!s || s.length > 1024) return null;
+  // As três regex acima são ancoradas, de uma classe de caracteres só e com repetição limitada: tempo
+  // linear, sem retrocesso catastrófico; o texto ainda passa pelo teto de 1.024 caracteres antes.
+  return formato.test(s) ? s : null; // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
 };
 
 const limpo = (v: string | null | undefined, max: number): string | null => {
