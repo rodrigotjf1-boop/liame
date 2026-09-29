@@ -143,6 +143,13 @@ A chave privada fica só no gerenciador de senhas e no painel. A **pública** n�
 
 - Conferência de ponta a ponta: cadastro com e-mail real (chega pelo SES), segundo fator, conectar a Meta
   com o perfil testador e o Google com a conta de teste, primeira leitura.
-- Implantação automática: webhook do GitHub apontando para `https://painel.dmstecnologias.com/...` (nunca
-  o IP cru da VPS). Conferir as entregas com
-  `gh api repos/rodrigotjf1-boop/liame/hooks --jq '.[] | "\(.active) \(.config.url)"'`.
+- **Implantação automática (ligada em 29/09/2026 nos três serviços).** O EasyPanel cria os webhooks do GitHub com
+  o IP cru da VPS (`http://187.127.55.183:3000/api/deploy/<token>`), que o GitHub não alcança (502). Depois de
+  ligar a opção em cada serviço, trocar só o começo do endereço por `https://painel.dmstecnologias.com`, mantendo
+  o token, e ligar a verificação de SSL:
+  ```bash
+  gh api repos/rodrigotjf1-boop/liame/hooks --jq '.[] | "\(.id) \(.config.url)"'            # conferir
+  gh api -X PATCH repos/rodrigotjf1-boop/liame/hooks/<id>/config -f url=https://painel.dmstecnologias.com/api/deploy/<token> -f insecure_ssl=0
+  ```
+  Um *ping* do webhook também implanta. Com isso, **todo merge na `main` sobe sozinho**: migration nova vai
+  para a nuvem e é conferida **antes** do merge do PR que depende dela.
