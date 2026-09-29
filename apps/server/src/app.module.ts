@@ -21,6 +21,8 @@ import { KillSwitchController } from './kill-switch/kill-switch.controller.js';
 import { KillSwitchService } from './kill-switch/kill-switch.service.js';
 import { PeopleController } from './people/people.controller.js';
 import { PolicyController } from './policy/policy.controller.js';
+import { ResultsController } from './results/results.controller.js';
+import { ResultsService } from './results/results.service.js';
 import { PeopleService } from './people/people.service.js';
 import { TelemetryLifecycle } from './telemetry.lifecycle.js';
 import { TenancyController } from './tenancy/tenancy.controller.js';
@@ -30,7 +32,7 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
-  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService, LifecycleService, ConnectionsService, MediaService],
+  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService],
 })
 export class AppModule {}

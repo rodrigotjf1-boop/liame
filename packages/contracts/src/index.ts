@@ -119,3 +119,15 @@ export {
   MediaMetricsQuery,
   MediaMetricsResponse,
 } from './media.js';
+export {
+  CampaignResult,
+  ClosedLoopQuery,
+  ClosedLoopResponse,
+  ConfirmedResult,
+  OrderOrigin,
+  OrderOriginQuery,
+  OrderOriginResponse,
+  PlatformReport,
+  PlatformResult,
+  SourceFreshness,
+} from './results.js';
