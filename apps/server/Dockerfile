@@ -3,6 +3,7 @@
 #   docker build -f apps/server/Dockerfile -t liame-server --build-arg APP_VERSION=$(git rev-parse --short HEAD) .
 #   API:    docker run liame-server
 #   worker: docker run liame-server node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js
+#           (o worker responde /health no 127.0.0.1 do contêiner: o HEALTHCHECK abaixo vale para os dois)
 #   migrations (release): docker run -e DATABASE_URL_OWNER=... liame-server node node_modules/@liame/database/dist/cli/migrate.js
 
 # Base fixada por digest (Node 24.21.0, bookworm-slim, 19/09/2026): tag sozinha pode mudar por baixo.
@@ -20,7 +21,9 @@ RUN pnpm --filter @liame/server deploy --prod /out \
  && rm -rf /out/src /out/test /out/tsconfig.json /out/tsconfig.build.json /out/nest-cli.json
 
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
-ARG APP_VERSION=dev
+# Versão no /health: o EasyPanel passa GIT_SHA como argumento de build; APP_VERSION explícito vence.
+ARG GIT_SHA=dev
+ARG APP_VERSION=${GIT_SHA}
 ENV NODE_ENV=production APP_VERSION=${APP_VERSION} PORT=3001
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
