@@ -74,12 +74,13 @@ const CAMPOS = [
   ['ctwaClid', 'ctwa_clid', ID_CLIQUE],
 ] as const;
 
+// As três regex acima são ancoradas, de uma classe de caracteres só e com repetição limitada: tempo linear,
+// sem retrocesso catastrófico; o texto ainda passa pelo teto de 1.024 caracteres antes (ERR-040).
 const valido = (v: string | null | undefined, formato: RegExp): string | null => {
+  // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
   const s = v?.trim();
   if (!s || s.length > 1024) return null;
-  // As três regex acima são ancoradas, de uma classe de caracteres só e com repetição limitada: tempo
-  // linear, sem retrocesso catastrófico; o texto ainda passa pelo teto de 1.024 caracteres antes.
-  return formato.test(s) ? s : null; // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos
+  return formato.test(s) ? s : null;
 };
 
 const limpo = (v: string | null | undefined, max: number): string | null => {
