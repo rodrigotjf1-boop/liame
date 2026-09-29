@@ -59,6 +59,8 @@ describe('fail-fast da configuração em produção', () => {
     APP_URL: 'https://app.agencialiame.com',
     MAIL_TRANSPORT: 'ses',
     MAIL_FROM: 'Liame <nao-responda@agencialiame.com>',
+    AWS_ACCESS_KEY_ID: 'AKIAEXEMPLO000000000',
+    AWS_SECRET_ACCESS_KEY: 'segredo-de-exemplo-com-quarenta-caracteres',
     AUDIT_ANCHOR_SALT: 'um-sal-bem-comprido-de-teste',
     AUDIT_ANCHOR_SIGNING_KEY: 'chave',
     REKOR_URL: 'https://rekor.exemplo.dev',
@@ -85,6 +87,11 @@ describe('fail-fast da configuração em produção', () => {
     expect(() => loadConfig({ ...prod, COOKIE_SECURE: 'false' })).toThrow('só-HTTPS');
     expect(() => loadConfig({ ...prod, MAIL_TRANSPORT: 'memoria' })).toThrow('transporte real');
     expect(() => loadConfig({ ...prod, MAIL_FROM: undefined })).toThrow('defina MAIL_FROM');
+    // ERR-038: sem a chave da AWS, a API subia e só falhava no primeiro e-mail.
+    expect(() => loadConfig({ ...prod, AWS_SECRET_ACCESS_KEY: undefined })).toThrow('AWS_SECRET_ACCESS_KEY');
+    expect(() => loadConfig({ ...prod, AWS_SECRET_ACCESS_KEY: '' })).toThrow('AWS_SECRET_ACCESS_KEY');
+    expect(() => loadConfig({ ...prod, AWS_ACCESS_KEY_ID: 'AKIA-errado' })).toThrow('AWS_ACCESS_KEY_ID');
+    expect(() => loadConfig({ ...prod, MAIL_TRANSPORT: 'ses', AWS_ACCESS_KEY_ID: undefined, KEY_PROVIDER: 'aws-kms' })).toThrow('AWS_ACCESS_KEY_ID');
     expect(() => loadConfig({ ...prod, MAIL_FROM: 'Liame' })).toThrow('MAIL_FROM precisa ser um e-mail');
     expect(() => loadConfig({ ...prod, WEBHOOK_ALLOW_PRIVATE_NETWORK: 'true' })).toThrow('SSRF');
     expect(() => loadConfig({ ...prod, TSA_URL: undefined })).toThrow('âncora');
