@@ -24,8 +24,9 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('policies', 'Políticas versionadas que o motor aplica antes de qualquer ação (ADR-007)')
     .addTag('actions', 'Ações com trilho: política, orçamento com reserva e aprovação amarrada ao plano (ADR-007)')
     .addTag('inbox', 'Webhooks recebidos de parceiros, verificados e deduplicados (ADR-004)')
-    .addTag('connections', 'Contas conectadas: autorização OAuth da Meta e do Google, contas de cada marca (A2)')
+    .addTag('connections', 'Contas conectadas: autorização da Meta, do Google e dos produtos DMS (Regem, RegemCast), contas e lojas de cada marca (A2, A2.5)')
     .addTag('media', 'Dados de mídia lidos das plataformas, com o frescor de cada fonte (A2)')
+    .addTag('results', 'Ciclo fechado: ROAS da plataforma ao lado do ROAS confirmado no caixa e a origem de cada pedido (A2.5)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .build();
   return SwaggerModule.createDocument(app, config);

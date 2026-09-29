@@ -16920,11 +16920,15 @@
     },
     {
       "name": "connections",
-      "description": "Contas conectadas: autorização OAuth da Meta e do Google, contas de cada marca (A2)"
+      "description": "Contas conectadas: autorização da Meta, do Google e dos produtos DMS (Regem, RegemCast), contas e lojas de cada marca (A2, A2.5)"
     },
     {
       "name": "media",
       "description": "Dados de mídia lidos das plataformas, com o frescor de cada fonte (A2)"
+    },
+    {
+      "name": "results",
+      "description": "Ciclo fechado: ROAS da plataforma ao lado do ROAS confirmado no caixa e a origem de cada pedido (A2.5)"
     }
   ],
   "servers": [
