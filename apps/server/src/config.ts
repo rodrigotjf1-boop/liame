@@ -13,6 +13,12 @@ const Env = z.object({
   BREACHED_PASSWORD_CHECK: z.enum(['on', 'off']).default('on'),
   /** Transporte de e-mail: `memoria` (desenvolvimento e testes) ou `ses` (produção, quando a conta AWS existir). */
   MAIL_TRANSPORT: z.enum(['memoria', 'ses']).default('memoria'),
+  /** Remetente dos e-mails do serviço (endereço do domínio verificado no SES; nome opcional: `Liame <nao-responda@...>`). */
+  MAIL_FROM: z.string().trim().min(3).max(200).default('Liame <nao-responda@agencialiame.com>'),
+  /** Região do SES (a mesma do KMS). */
+  AWS_REGION: z.string().regex(/^[a-z]{2}-[a-z]+-\d$/).default('sa-east-1'),
+  /** Conjunto de configuração do SES (eventos de entrega); vazio = sem conjunto. */
+  SES_CONFIGURATION_SET: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
   /** Webhooks de saída para rede privada/loopback: só em desenvolvimento e testes (SSRF). */
   WEBHOOK_ALLOW_PRIVATE_NETWORK: z.enum(['true', 'false']).default('false'),
   /** Segredos Standard Webhooks por provedor da inbox: `regem:whsec_...,regemcast:whsec_...`. */
@@ -56,6 +62,8 @@ export type AppConfig = {
   cookieSecure: boolean;
   breachedPasswordCheck: boolean;
   mailTransport: 'memoria' | 'ses';
+  /** Remetente e SES (usados só com `mailTransport = 'ses'`). */
+  mail: { from: string; fromAddress: string; region: string; configurationSet: string | null };
   webhookAllowPrivateNetwork: boolean;
   /** Provedor da inbox → segredo de assinatura. Provedor fora daqui recebe 404. */
   inboxSecrets: ReadonlyMap<string, string>;
@@ -127,6 +135,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   if (env.NODE_ENV === 'production' && (!env.TERMS_VERSION || !source.TERMS_URL || !source.PRIVACY_URL)) {
     throw new Error('config: em produção, defina TERMS_VERSION, TERMS_URL e PRIVACY_URL (termos publicados)');
   }
+  const fromAddress = enderecoDoRemetente(env.MAIL_FROM);
+  if (!fromAddress) throw new Error('config: MAIL_FROM precisa ser um e-mail (com ou sem nome: "Liame <nao-responda@dominio>")');
+  if (env.NODE_ENV === 'production' && env.MAIL_TRANSPORT === 'ses' && !source.MAIL_FROM) {
+    throw new Error('config: em produção, defina MAIL_FROM (remetente do domínio verificado no SES)');
+  }
   const inboxSecrets = new Map<string, string>();
   for (const part of env.INBOX_SECRETS.split(',').map((p) => p.trim()).filter(Boolean)) {
     const i = part.indexOf(':');
@@ -141,6 +154,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     cookieSecure: env.COOKIE_SECURE ? env.COOKIE_SECURE === 'true' : env.NODE_ENV === 'production',
     breachedPasswordCheck: env.BREACHED_PASSWORD_CHECK === 'on',
     mailTransport: env.MAIL_TRANSPORT,
+    mail: { from: env.MAIL_FROM, fromAddress, region: env.AWS_REGION, configurationSet: env.SES_CONFIGURATION_SET ?? null },
     webhookAllowPrivateNetwork: env.WEBHOOK_ALLOW_PRIVATE_NETWORK === 'true',
     inboxSecrets,
     auditAnchor: {
@@ -162,6 +176,13 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     apiUrl,
     oauth: { meta, google },
   };
+}
+
+/** Endereço do remetente, com ou sem nome ("Liame <x@y>" → "x@y"); nulo se não for um e-mail. */
+export function enderecoDoRemetente(from: string): string | null {
+  const m = /^(?:[^<>]*<([^<>\s]+)>|([^<>\s]+))$/.exec(from.trim());
+  const address = (m?.[1] ?? m?.[2] ?? '').toLowerCase();
+  return /^[^@\s]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(address) ? address : null;
 }
 
 /** Versão dos termos fora de produção (rascunho v0.1 de docs/juridico, ainda não publicado). */

@@ -58,6 +58,7 @@ describe('fail-fast da configuração em produção', () => {
     NODE_ENV: 'production',
     APP_URL: 'https://app.agencialiame.com',
     MAIL_TRANSPORT: 'ses',
+    MAIL_FROM: 'Liame <nao-responda@agencialiame.com>',
     AUDIT_ANCHOR_SALT: 'um-sal-bem-comprido-de-teste',
     AUDIT_ANCHOR_SIGNING_KEY: 'chave',
     REKOR_URL: 'https://rekor.exemplo.dev',
@@ -83,6 +84,8 @@ describe('fail-fast da configuração em produção', () => {
     expect(() => loadConfig({ ...prod, ALLOWED_ORIGINS: 'http://outro.dev' })).toThrow('só com https');
     expect(() => loadConfig({ ...prod, COOKIE_SECURE: 'false' })).toThrow('só-HTTPS');
     expect(() => loadConfig({ ...prod, MAIL_TRANSPORT: 'memoria' })).toThrow('transporte real');
+    expect(() => loadConfig({ ...prod, MAIL_FROM: undefined })).toThrow('defina MAIL_FROM');
+    expect(() => loadConfig({ ...prod, MAIL_FROM: 'Liame' })).toThrow('MAIL_FROM precisa ser um e-mail');
     expect(() => loadConfig({ ...prod, WEBHOOK_ALLOW_PRIVATE_NETWORK: 'true' })).toThrow('SSRF');
     expect(() => loadConfig({ ...prod, TSA_URL: undefined })).toThrow('âncora');
     // Ninguém aceita termos que não foram publicados (A0-6).

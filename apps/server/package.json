@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-kms": "catalog:",
+    "@aws-sdk/client-sesv2": "catalog:",
     "@liame/contracts": "workspace:*",
     "@liame/database": "workspace:*",
     "@liame/telemetry": "workspace:*",

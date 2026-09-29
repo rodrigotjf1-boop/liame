@@ -54,7 +54,10 @@ em 27/09/2026** (55 tabelas, 582 colunas, 78 políticas).
 | `BREACHED_PASSWORD_CHECK` | Checagem de senha vazada (HIBP, k-anonimato) | `on` |
 | `TERMS_VERSION` **P** | Versão **publicada** dos Termos de Uso e da Política de Privacidade; o cadastro e o convite gravam a que a pessoa aceitou (migration 0016). Em produção, sem ela a API não sobe (A0-6) | `rascunho-2026-09-25` fora de produção |
 | `TERMS_URL` · `PRIVACY_URL` **P** | Endereços públicos dos termos e da política (links das telas de cadastro) | `https://agencialiame.com/termos` · `/privacidade` |
-| `MAIL_TRANSPORT` **P** | `ses` em produção (Amazon SES São Paulo, D-A1-4); `memoria` é recusado em produção. **O transporte `ses` ainda não está implementado:** até ele entrar, a API não sobe em produção. SES (28/09/2026): identidade `agencialiame.com` verificada (DKIM 2048 com 3 CNAME na Cloudflare; MAIL FROM `envio.agencialiame.com` com MX e SPF), pedido de saída do sandbox enviado (transacional) | `memoria` |
+| `MAIL_TRANSPORT` **P** | `ses` em produção (Amazon SES v2 em São Paulo, D-A1-4); `memoria` é recusado em produção. SES (28/09/2026): identidade `agencialiame.com` verificada (DKIM 2048 com 3 CNAME na Cloudflare; MAIL FROM `envio.agencialiame.com` com MX e SPF), pedido de saída do sandbox enviado (transacional). No sandbox, só chega a endereço verificado (por exemplo, `@agencialiame.com`) | `memoria` |
+| `MAIL_FROM` **P** | Remetente, com ou sem nome, de um domínio verificado no SES. Obrigatória em produção com `ses` | `Liame <nao-responda@agencialiame.com>` |
+| `AWS_REGION` | Região do SES e do KMS | `sa-east-1` |
+| `SES_CONFIGURATION_SET` | Conjunto de configuração do SES (eventos de entrega, quando existir) | vazio |
 
 ## Plataformas de mídia (A2)
 
@@ -105,7 +108,24 @@ Falta, nas duas: publicar a política de privacidade, os termos e as instruçõe
 | `LIAME_KEK_LOCAL` **S** | Só desenvolvimento e testes: `1:<32 bytes em base64>` | — |
 | `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` **P S** | Chave de acesso do usuário IAM `liame-sistema` (criada no EasyPanel, nunca em arquivo) | — |
 
-**Situação na AWS (28/09/2026):** conta `liame-prod` (472158500701), root com MFA. Chave mestra `alias/liame-kek-v1` em `sa-east-1`, simétrica, rotação anual. Usuário `liame-sistema` sem console, com a política `liame-sistema-kms`: `GenerateDataKey` e `Decrypt` nas chaves da conta (pelo ARN, não pela etiqueta: a etiqueta leva até 5 minutos para valer e o cofre usa a chave da empresa logo depois de criá-la); `CreateKey` só em `sa-east-1`, `SYMMETRIC_DEFAULT`/`ENCRYPT_DECRYPT` e com a etiqueta `liame:tenant`; `ScheduleKeyDeletion` só em chave com essa etiqueta e com 30 dias de espera; **negado** apagar, desativar, etiquetar ou mudar a política da chave mestra. A permissão `ses:SendEmail` entra junto com o transporte `ses`.
+**Situação na AWS (28/09/2026):** conta `liame-prod` (472158500701), root com MFA. Chave mestra `alias/liame-kek-v1` em `sa-east-1`, simétrica, rotação anual. Usuário `liame-sistema` sem console, com a política `liame-sistema-kms`: `GenerateDataKey` e `Decrypt` nas chaves da conta (pelo ARN, não pela etiqueta: a etiqueta leva até 5 minutos para valer e o cofre usa a chave da empresa logo depois de criá-la); `CreateKey` só em `sa-east-1`, `SYMMETRIC_DEFAULT`/`ENCRYPT_DECRYPT` e com a etiqueta `liame:tenant`; `ScheduleKeyDeletion` só em chave com essa etiqueta e com 30 dias de espera; **negado** apagar, desativar, etiquetar ou mudar a política da chave mestra. Envio de e-mail: política `liame-sistema-ses` no mesmo usuário, só `ses:SendEmail` pela API v2 e só com o remetente do serviço:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EnviarEmailDoServico",
+      "Effect": "Allow",
+      "Action": "ses:SendEmail",
+      "Resource": "*",
+      "Condition": { "StringEquals": { "ses:FromAddress": "nao-responda@agencialiame.com", "ses:ApiVersion": "2" } }
+    }
+  ]
+}
+```
+
+Devoluções permanentes e reclamações: a lista de supressão da conta vem ligada para as duas (conta criada depois de 25/11/2019); o SES aceita e não entrega para endereço suprimido. O Gmail não manda reclamação ao SES. Falha de envio não desfaz a operação: fica no log com o motivo.
 
 ## Eventos e webhooks (ADR-004)
 
