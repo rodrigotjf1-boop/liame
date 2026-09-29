@@ -2,12 +2,13 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShut
 import { ActionExecutor } from './action-executor.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
+import { VendasLoop } from './vendas-loop.js';
 import { InboxProcessor } from './inbox-processor.js';
 import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth e sincronizar as contas conectadas. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas e ler as vendas das lojas do Regem. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -25,6 +26,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly actions: ActionExecutor,
     private readonly conexoes: ConexaoProcessor,
     private readonly sincronizacao: SincronizacaoLoop,
+    private readonly vendas: VendasLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -35,6 +37,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('acoes', 20, 1_000, (n) => this.actions.runCycle(n)),
       this.loop('conexoes', 5, 2_000, (n) => this.conexoes.processarLote(n)),
       this.loop('sincronizacao', 3, 30_000, async (n) => (await this.sincronizacao.executarLote(n)).length),
+      this.loop('vendas', 3, 30_000, async (n) => (await this.vendas.executarLote(n)).length),
     );
   }
 

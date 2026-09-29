@@ -11,6 +11,7 @@ import { ActionExecutor } from './action-executor.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
+import { eventoDoRegem, VendasLoop } from './vendas-loop.js';
 import { VigiaService } from './vigia.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
@@ -24,8 +25,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
     { provide: Mailer, inject: [APP_CONFIG], useFactory: (config: AppConfig) => createMailer(config) },
-    // Processadores por provedor entram com os connectors (A2); até lá, a inbox só guarda.
-    { provide: INBOX_HANDLERS, useValue: new Map<string, InboxHandler>() },
+    // Processadores por provedor: o Regem (A2.5) antecipa a leitura das lojas da conexão; os demais só guardam.
+    { provide: INBOX_HANDLERS, useValue: new Map<string, InboxHandler>([['regem', eventoDoRegem]]) },
     OutboxPublisher,
     AuditAnchorService,
     FlagService,
@@ -37,6 +38,7 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     InboxProcessor,
     ConexaoProcessor,
     SincronizacaoLoop,
+    VendasLoop,
     VigiaService,
     EventsLoopService,
     QueueService,
