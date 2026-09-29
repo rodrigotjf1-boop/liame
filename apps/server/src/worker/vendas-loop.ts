@@ -3,7 +3,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { DATABASE } from '../database/database.module.js';
-import { INTERVALO_VENDAS_MIN, type ResultadoVendas, SincronizadorVendas } from '../orders/sincronizador-vendas.js';
+import { apagarClientesDaOrigem } from '../orders/order-store.js';
+import { type ApagarAnonimizados, INTERVALO_VENDAS_MIN, type ResultadoVendas, SincronizadorVendas } from '../orders/sincronizador-vendas.js';
 import { VaultService } from '../vault/vault.service.js';
 import type { InboxRow } from './inbox-processor.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
@@ -58,7 +59,7 @@ export class VendasLoop {
         returning s.connected_account_id as id, s.tenant_id`);
       return r.rows;
     });
-    const sincronizador = new SincronizadorVendas(db, this.vault, this.config);
+    const sincronizador = new SincronizadorVendas(db, this.vault, this.config, apagarAnonimizadosNoSistema(db));
     const resultados: ResultadoVendas[] = [];
     for (const c of reservadas) {
       try {
@@ -71,6 +72,14 @@ export class VendasLoop {
     }
     return resultados;
   }
+}
+
+/**
+ * Cliente anonimizado na origem: apaga o cliente pseudonimizado no escopo de sistema, com a empresa e a
+ * conta explícitas em cada instrução (o escopo de sistema enxerga além da empresa).
+ */
+export function apagarAnonimizadosNoSistema(db: Database['db']): ApagarAnonimizados {
+  return (alvo) => withSystem(db, (tx) => apagarClientesDaOrigem(tx, alvo));
 }
 
 /**

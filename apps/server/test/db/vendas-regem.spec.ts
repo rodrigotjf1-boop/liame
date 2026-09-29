@@ -10,7 +10,7 @@ import { loadConfig } from '../../src/config.js';
 import { registrarConexaoDaDistribuicao } from '../../src/connections/distribuicao.js';
 import { SincronizadorVendas } from '../../src/orders/sincronizador-vendas.js';
 import { VaultService } from '../../src/vault/vault.service.js';
-import { eventoDoRegem, VendasLoop } from '../../src/worker/vendas-loop.js';
+import { apagarAnonimizadosNoSistema, eventoDoRegem, VendasLoop } from '../../src/worker/vendas-loop.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
 import { APP_URL, hasDb } from './env.js';
 
@@ -89,7 +89,7 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     api = await startApi();
     await resetIpRateLimits();
     database = createDatabase({ connectionString: APP_URL, max: 3, applicationName: 'liame-test' });
-    sincronizador = new SincronizadorVendas(database.db, api.app.get(VaultService), loadConfig());
+    sincronizador = new SincronizadorVendas(database.db, api.app.get(VaultService), loadConfig(), apagarAnonimizadosNoSistema(database.db));
 
     const s = await signupAndLogin(api, undefined, 'Mister Burgers Vendas');
     await enableMfa(api, s.cookie);

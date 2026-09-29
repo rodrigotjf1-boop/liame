@@ -1,4 +1,4 @@
-import { type Db, uuidv7, withSystem, withTenant } from '@liame/database';
+import { type Db, uuidv7, withTenant } from '@liame/database';
 import { Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { atribuirPedidos, pedidosDosToques } from '../attribution/motor.js';
@@ -10,7 +10,7 @@ import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { lerPagina, VERSAO_CONTRATO_REGEM } from '../connectors/regem/conector-regem.js';
 import { ClienteAnonimizado, CupomRegem, PedidoRegem } from '../connectors/regem/contrato-regem.js';
 import type { VaultService } from '../vault/vault.service.js';
-import { apagarClienteDaOrigem, gravarPedidos, type PedidoLido } from './order-store.js';
+import { gravarPedidos, type PedidoLido } from './order-store.js';
 import { gravarCupons, pedidoDoRegem, toqueDoPedido } from './regem-leitura.js';
 import { normalizarTelefone } from './telefone.js';
 
@@ -65,6 +65,13 @@ export type ResultadoVendas = {
   erro?: string;
 };
 
+/**
+ * Apaga os clientes pseudonimizados que a origem anonimizou. Apagar é só do escopo de sistema ("só o
+ * expurgo apaga"), que o worker concede (regra `liame-escopo-sistema` do Semgrep): quem cria o
+ * sincronizador passa esta função (`worker/vendas-loop.ts`).
+ */
+export type ApagarAnonimizados = (alvo: { tenantId: string; connectedAccountId: string; externalCustomerIds: string[] }) => Promise<number>;
+
 export class SincronizadorVendas {
   private readonly logger = new Logger('vendas');
 
@@ -72,6 +79,7 @@ export class SincronizadorVendas {
     private readonly db: Db,
     private readonly vault: VaultService,
     private readonly config: AppConfig,
+    private readonly apagarAnonimizados: ApagarAnonimizados,
   ) {}
 
   async sincronizar(contaId: string, tenantId: string, agora: Date = new Date()): Promise<ResultadoVendas> {
@@ -236,11 +244,7 @@ export class SincronizadorVendas {
     for (let pagina = 0; pagina < PAGINAS_POR_EXECUCAO; pagina++) {
       const pg = await lerPagina(ctx, { token, lojaChave: conta.external_id, rota: 'clientes/anonimizados', item: ClienteAnonimizado, cursor: posicao });
       if (pg.itens.length) {
-        apagados += await withSystem(this.db, async (tx) => {
-          let n = 0;
-          for (const c of pg.itens) n += await apagarClienteDaOrigem(tx, { tenantId: conta.tenant_id, connectedAccountId: conta.id, externalCustomerId: c.id });
-          return n;
-        });
+        apagados += await this.apagarAnonimizados({ tenantId: conta.tenant_id, connectedAccountId: conta.id, externalCustomerIds: pg.itens.map((c) => c.id) });
       }
       posicao = pg.proximoCursor ?? posicao;
       await this.marcarEstado(conta, 'clientes_anonimizados', null, { ...cursor, cursor: posicao, proxima: this.depois(agora, INTERVALO_VENDAS_MIN), falhas_seguidas: 0 });

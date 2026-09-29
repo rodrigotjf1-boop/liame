@@ -267,3 +267,16 @@ export async function apagarClienteDaOrigem(tx: Tx, alvo: { tenantId: string; co
     returning c.id`);
   return r.rows.length;
 }
+
+/** Vários clientes anonimizados da mesma conta numa instrução (a página inteira do aviso da origem). */
+export async function apagarClientesDaOrigem(tx: Tx, alvo: { tenantId: string; connectedAccountId: string; externalCustomerIds: string[] }): Promise<number> {
+  if (!alvo.externalCustomerIds.length) return 0;
+  const r = await tx.execute<{ id: string }>(sql`
+    delete from liame.customer_ref c
+     using liame.customer_ref_link l
+     where l.connected_account_id = ${alvo.connectedAccountId} and l.tenant_id = ${alvo.tenantId}
+       and l.external_id in (select value from jsonb_array_elements_text(${JSON.stringify(alvo.externalCustomerIds)}::jsonb))
+       and c.id = l.customer_ref_id and c.tenant_id = ${alvo.tenantId}
+    returning c.id`);
+  return new Set(r.rows.map((x) => x.id)).size;
+}
