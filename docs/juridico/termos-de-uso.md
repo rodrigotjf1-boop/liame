@@ -62,7 +62,7 @@ Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada a
 
 6.1. O que os funcionários produzem (análises, planos, textos, imagens, respostas) é gerado por inteligência artificial e **pode conter erros**. Por isso as ações relevantes passam pela sua aprovação. **Revise antes de aprovar.**
 
-6.2. **Não garantimos resultado** de vendas, retorno sobre investimento, alcance, aprovação de anúncios ou posição em buscas. Números de desempenho vêm das plataformas e dos seus sistemas; quando eles divergem, mostramos a origem de cada número.
+6.2. **Não garantimos resultado** de vendas, retorno sobre investimento, alcance, aprovação de anúncios ou posição em buscas. Números de desempenho vêm das plataformas e dos seus sistemas; quando eles divergem, mostramos a origem de cada número. O **retorno confirmado no caixa** é o resultado de um modelo de atribuição declarado na tela (regra e janela, hoje o último toque em até 7 dias depois do clique ou da conversa, sem contar visualização): o pedido sem evidência fica sem origem, nunca é atribuído por estimativa, e o número pode diferir do que cada plataforma informa com as regras dela.
 
 6.3. Quando a lei ou a plataforma exigir, o conteúdo feito com IA sai identificado como tal. As pessoas que conversam com os funcionários pelos seus canais são informadas de que falam com uma assistente de IA.
 

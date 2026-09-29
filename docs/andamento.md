@@ -86,7 +86,7 @@ Plano **aprovado pelo dono em 29/09/2026**: [`plano-a25.md`](plano-a25.md), com 
 | **F5** · links de campanha | ⏳ | Protótipo P3; pesquisa da seção 9 do plano |
 | **F6** · cupons de campanha | ⏳ | Contrato de cupons; protótipo P3 |
 | **F7** · conector RegemCast (leitura) | ⏳ | Depende da C2 |
-| **F8** · Resultados (ROAS plataforma × caixa) | ⏳ | Protótipo P1 |
+| **F8** · Resultados (ROAS plataforma × caixa) | 🟡 API ✅ local · CI no PR; tela espera o protótipo P1 | **`GET /v1/results/closed-loop`** (`vendas.ver`), para a marca ou a loja, no período no fuso da loja:<br>• gasto;<br>• o que cada plataforma informa, com a janela dela (Meta `7d_click`; Google a da ação de conversão) e o custo por conversa quando não há valor;<br>• pedidos e receita confirmados pelo dia do faturamento;<br>• atribuído pelo modelo (último toque, 7 dias), com ROAS e custo por pedido;<br>• margem conhecida e cobertura, e "lucro/prejuízo" só com cobertura ≥ 80%;<br>• sem origem (%), canais sem clique à parte e cancelados;<br>• frescor de cada fonte;<br>• por plataforma (com os pedidos provados só na plataforma) e por campanha.<br><br>**`GET /v1/results/orders`:** a origem de cada pedido (evidência, horas antes, janela, confiança ou motivo), sem dado pessoal.<br><br>Contas em micros com BigInt. Testes: `test/db/resultados.spec.ts` (A2.5-6 e A2.5-9 na API). Jurídico: Termos 6.2 |
 | **F9** · Atenção do ciclo fechado | ⏳ | — |
 | **Trilha C** (Regem: C1a, C1c, C3a; RegemCast: C2) | ⏳ | Plano de cada uma aprovado no próprio repositório (A0-9) |
 

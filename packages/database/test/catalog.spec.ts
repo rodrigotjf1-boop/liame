@@ -96,14 +96,19 @@ describe.skipIf(!OWNER_URL || !APP_URL)('migrations reais e catálogo do schema 
   it('o schema Drizzle bate com as tabelas migradas', async () => {
     const { getTableConfig } = await import('drizzle-orm/pg-core');
     const { allTables } = await import('../src/schema/index.js');
+    // Uma consulta para o catálogo inteiro: uma conexão por tabela estourava o prazo com a suíte em paralelo.
+    const todas = await query<{ table_schema: string; table_name: string; column_name: string }>(
+      OWNER_URL,
+      `select table_schema, table_name, column_name from information_schema.columns where table_schema in ('liame', 'public')`,
+    );
+    const noBanco = new Map<string, string[]>();
+    for (const c of todas) {
+      const chave = `${c.table_schema}.${c.table_name}`;
+      noBanco.set(chave, [...(noBanco.get(chave) ?? []), c.column_name]);
+    }
     for (const table of allTables) {
       const cfg = getTableConfig(table);
-      const cols = await query<{ column_name: string }>(
-        OWNER_URL,
-        `select column_name from information_schema.columns where table_schema = $1 and table_name = $2 order by column_name`,
-        [cfg.schema ?? 'public', cfg.name],
-      );
-      expect({ tabela: cfg.name, colunas: cols.map((c) => c.column_name) }).toEqual({
+      expect({ tabela: cfg.name, colunas: (noBanco.get(`${cfg.schema ?? 'public'}.${cfg.name}`) ?? []).sort() }).toEqual({
         tabela: cfg.name,
         colunas: cfg.columns.map((c) => c.name).sort(),
       });
