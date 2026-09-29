@@ -88,7 +88,8 @@ Plano **aprovado pelo dono em 29/09/2026**: [`plano-a25.md`](plano-a25.md), com 
 | **F7** · conector RegemCast (leitura) | ⏳ | Depende da C2 |
 | **F8** · Resultados (ROAS plataforma × caixa) | ⏳ | Protótipo P1 |
 | **F9** · Atenção do ciclo fechado | ⏳ | — |
-| **Trilha C** (Regem: C1a, C1c, C3a; RegemCast: C2) | ⏳ | Plano de cada uma aprovado no próprio repositório (A0-9) |
+| **Protótipos P1, P2 e P3** | ✅ 29/09/2026 | Aprovados pelo dono com as recomendações ("Hoje" com a mídia no dia seguinte; veredito com empate em ±10%; cupom aprovado na tela Aprovações do protótipo geral) |
+| **Trilha C** (Regem: C1a, C1c, C3a; RegemCast: C2) | 🟡 plano do Regem com as decisões do dono (29/09/2026) | https://claude.ai/artifact/D5LGG2WyqBj7exzc8Gy1RT: PRs 1 a 6 no Regem, migrations 295 a 300 só da nuvem, sem `.zip` nem `.exe`. Antes das rotas de vendas, corrigir no Regem o cancelamento de marketplace que conta como balcão (A18) e o "esquecer" que deixa nome e telefone no pedido (A10). **Falta do dono:** as 3 consultas de leitura na nuvem do Regem e a ordem para abrir os PRs lá (A0-9) |
 
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 
