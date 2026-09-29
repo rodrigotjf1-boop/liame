@@ -7,6 +7,7 @@
 | [Termos de Uso](termos-de-uso.md) | Empresas clientes e pessoas convidadas | `agencialiame.com/termos` |
 | [Política de Privacidade](politica-de-privacidade.md) | Usuários, visitantes e titulares | `agencialiame.com/privacidade` (link na página inicial: exigência da Meta e do Google) |
 | [Contrato de Tratamento de Dados](contrato-de-operador.md) | Empresas clientes (anexo dos Termos) | `agencialiame.com/contrato-de-dados` |
+| [Como excluir os seus dados](exclusao-de-dados.md) | Usuários, titulares e revisão da Meta (instruções de exclusão de dados) | `agencialiame.com/exclusao-de-dados` |
 
 Também serão necessárias: a **página de exclusão de dados** (Meta) e a **lista de suboperadores**, que pode ficar na própria política.
 
@@ -22,7 +23,7 @@ Os documentos foram lidos pelo dono e ficam **vivos até a distribuição**: a a
 
 | Data | PR | O que mudou | Documento e seção |
 | --- | --- | --- | --- |
-| — | — | nenhuma ainda | — |
+| 29/09/2026 | este PR | **v0.3 = texto de publicação** na fase de lançamento, pela checagem de verdade (seção 3): o que ainda não existe virou "quando for ligado"/"vai" — IA sem envio de dados a modelos (Política 7), fornecedores **em uso × previstos** (Política 8; Contrato Anexo III; AWS só KMS e SES), "revogar" apaga credenciais e "desligar" só para a leitura (Política 6.3; Termos 5.3), dados brutos das plataformas **30 dias** (era 90; o sistema apaga em 30), cópias de segurança "até 35 dias", Termos 2.6 **fase de lançamento**, Contrato 2.3 e 7.2 (exclusão por titular pelo suporte até existir o módulo de contatos), exclusão de dados por **instruções** (página nova `exclusao-de-dados`; não há o retorno automático de exclusão da Meta) | Termos 2.6, 5.3, 7; Política 4, 6.3, 6 (exclusão), 7, 8, 8.1, 9; Contrato 2.3, 7.2, Anexos II e III; página de exclusão |
 
 ## 1. O que o dono precisa decidir ou informar
 
