@@ -15,7 +15,7 @@ O ROAS confirmado no caixa é o número mais importante do Liame e o mais fácil
    - a versão é **imutável**: mudar a regra cria uma versão nova.
    - Cada `attribution_result` diz o modelo e a versão que o produziram.
 2. **Modelo inicial `ultimo_toque` v1** (D-A2.5-1):
-   - hierarquia: **cupom exclusivo da campanha** > **clique com id da campanha ou do anúncio** (parâmetros da URL, `lk` do link do Liame, `gclid` resolvido pela API do Google) > **conversa aberta por anúncio** com o mesmo telefone (índice cego);
+   - hierarquia: **cupom exclusivo da campanha** > **clique com id da campanha, do grupo ou do anúncio** (parâmetros da URL, `lk` do link do Liame, `gclid` resolvido pela API do Google) > **conversa aberta por anúncio** com o mesmo telefone (índice cego) > **clique só da plataforma** > **conversa só da plataforma** (os dois últimos: item 4);
    - janela de **7 dias** do toque até a confirmação do pedido; toque depois do pedido não conta;
    - **sem visualização** (não é observável no caixa);
    - um pedido dá crédito a **uma** campanha. Dentro do mesmo nível vence o toque mais recente e, no empate, o de menor id (a mesma entrada dá sempre o mesmo resultado).
@@ -29,7 +29,9 @@ O ROAS confirmado no caixa é o número mais importante do Liame e o mais fácil
 
    - O **ROAS confirmado** usa só alta e média (D-A2.5-8).
    - Pedido sem evidência fica **sem origem**, e a porcentagem de pedidos sem origem aparece ao lado do ROAS.
-4. **Plataforma sem campanha.** Clique com `fbclid` (ou `gclid` ainda não resolvido) sem id de campanha prova a plataforma, mas não a campanha. O pedido fica atribuído à **plataforma**, com campanha vazia: entra no total da plataforma e não entra no de nenhuma campanha.
+4. **Plataforma sem campanha.** Clique com `fbclid` (ou `gclid` ainda não resolvido, ou `gbraid`/`wbraid`, que o `click_view` do Google não resolve) sem id de campanha prova a plataforma, mas não a campanha; o mesmo vale para a conversa cujo anúncio não está sincronizado. O pedido fica atribuído à **plataforma**, com campanha vazia: entra no total da plataforma e não entra no de nenhuma campanha. Por dizer menos, essa evidência fica abaixo das que apontam a campanha.
+   - **Id válido:** id de plataforma é só número; o parâmetro que a plataforma não substituiu (`{{campaign.id}}`) e o valor fora do formato viram ausentes, nunca cortados.
+   - **`utm_source` sozinho não prova a plataforma:** só vale junto com um id de campanha, grupo ou anúncio.
 5. **Canais sem clique** (D-A2.5-11): iFood, 99Food, Keeta, Anota Aí e balcão só ganham campanha por cupom exclusivo. O resto aparece como "canais sem clique", fora do ROAS de mídia própria.
 6. **Motor em SQL de conjunto, sem IA e idempotente:**
    - uma execução (`attribution_run`) calcula por empresa, em **uma instrução**, todos os pedidos afetados (sem laço de N);

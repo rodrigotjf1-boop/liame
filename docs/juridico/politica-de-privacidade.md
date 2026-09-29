@@ -58,7 +58,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 
 6.1. Quando a empresa cliente conecta uma conta, o Liame recebe **apenas as permissões que ela aprova** na própria plataforma, para: mostrar campanhas, métricas, páginas e públicos; analisar resultados; e executar as ações que ela configurou e aprovou.
 
-6.2. Os dados recebidos dessas plataformas **não são vendidos, não são usados para publicidade do Liame e não são usados para treinar modelos de IA de uso geral**. As credenciais de acesso ficam cifradas, com a chave guardada fora do nosso banco de dados.
+6.2. Os dados recebidos dessas plataformas **não são vendidos, não são usados para publicidade do Liame e não são usados para treinar modelos de IA de uso geral**. As credenciais de acesso ficam cifradas, com a chave guardada fora do nosso banco de dados. Os dados dos anúncios da Meta servem só para mostrar e avaliar as campanhas da própria empresa cliente, nunca são misturados com os de outros anunciantes e não são levados ao Google nem a outra rede de anúncios, nem agregados (Padrões de Publicidade da Meta).
 
 6.3. A autorização pode ser revogada a qualquer momento, no Liame (tela **Contas conectadas**) ou na própria plataforma. Ao revogar pelo Liame, apagamos as credenciais na hora e paramos de ler as contas daquela autorização; ao só desligar uma conta, paramos de lê-la. Os dados recebidos da plataforma são apagados quando deixam de ser necessários, quando a empresa cliente pede, quando a conta é encerrada ou quando a plataforma pede, salvo o que a lei nos obrigue a guardar.
 
@@ -146,6 +146,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | Campanhas, peças e tarefas arquivadas | 12 meses após arquivar; estatísticas sem dados pessoais ficam |
 | Dados de contatos dos clientes (como operador) | enquanto a empresa cliente tiver finalidade e base legal; pedido de exclusão ou saída da lista, em até 15 dias |
 | Pedidos e itens vindos do Regem, quando conectado (valores, itens, canal e cupom, sem dados pessoais) | enquanto durar o contrato |
+| Identificadores de clique e de anúncio que levaram a um pedido (como `gclid` e `fbclid`, captados no cardápio da própria loja, e o identificador do anúncio que abriu uma conversa), quando o Regem ou o RegemCast forem conectados | 90 dias |
 | Identificador pseudonimizado do cliente, quando o Regem ou o RegemCast forem conectados (um código calculado a partir do telefone com a chave da empresa cliente; **o telefone não é guardado**) | enquanto a empresa cliente tiver finalidade; apagado quando a loja anonimiza o cliente no Regem |
 | Auditoria de ações | 5 anos, com proteção contra alteração |
 | Registro de incidentes de segurança | no mínimo 5 anos (Resolução CD/ANPD nº 15/2024, art. 10) |

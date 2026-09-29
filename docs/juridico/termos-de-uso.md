@@ -54,7 +54,7 @@ Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada a
 
 5.3. Você pode revogar uma autorização a qualquer momento, no Liame ou na própria plataforma. Ao revogar pelo Liame, paramos de acessar as contas daquela autorização e apagamos as credenciais guardadas; ao só desligar uma conta, paramos de lê-la. O passo a passo para excluir os dados recebidos fica em [agencialiame.com/exclusao-de-dados](https://agencialiame.com/exclusao-de-dados).
 
-5.4. Algumas plataformas limitam o uso dos dados que entregam. Por exemplo, os dados recebidos das APIs do Google (Google Ads e Google Analytics) ficam dentro das funções do Liame e **não são levados para outras plataformas de anúncio**. O Liame aplica esses limites automaticamente.
+5.4. Algumas plataformas limitam o uso dos dados que entregam. Os dados recebidos das APIs do Google (Google Ads e Google Analytics) ficam dentro das funções do Liame e **não são levados para outras plataformas de anúncio**. Da mesma forma, os dados dos seus anúncios na Meta servem para mostrar e avaliar as suas campanhas, e **não são levados ao Google nem a outra rede de anúncios**, nem agregados. O Liame aplica esses limites automaticamente.
 
 5.5. Conversas automáticas feitas pelos funcionários sempre oferecem um caminho para falar com uma pessoa da sua equipe.
 

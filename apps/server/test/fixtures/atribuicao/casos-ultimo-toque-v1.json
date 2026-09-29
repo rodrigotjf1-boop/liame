@@ -1,0 +1,164 @@
+{
+  "modelo": "ultimo_toque v1 (ADR-020)",
+  "notas": "Casos de referência do motor de atribuição (critério A2.5-3). Mudar a regra do modelo sem atualizar estes casos reprova o CI. Horas relativas à confirmação do pedido (positivo = antes). Campanhas do catálogo do teste: C_META_1 (120001; grupo 230001; anúncio 340001), C_META_2 (120002), C_GOOG_1 (9001; grupo 9101; anúncio 9201). Link LKGOOG9001 aponta para C_GOOG_1.",
+  "casos": [
+    {
+      "caso": "cupom_vence_clique",
+      "pedido": { "grupo": "cardapio", "cupom": "PROMOMETA2" },
+      "cupons": [{ "codigo": "PROMOMETA2", "campanha": "C_META_2", "exclusivo": true, "ligado_horas_antes": 240 }],
+      "toques": [{ "tipo": "clique", "horas_antes": 24, "fbclid": "IwAR0caso1", "campaign_id": "120001", "utm_source": "meta" }],
+      "esperado": { "status": "atribuido", "evidencia": "cupom", "campanha": "C_META_2", "provider": "meta_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "clique_com_campanha",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 48, "fbclid": "IwAR0caso2", "campaign_id": "120001", "utm_source": "meta" }],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_META_1", "provider": "meta_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "clique_pelo_anuncio",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 5, "ad_id": "340001", "utm_source": "fb" }],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_META_1", "provider": "meta_ads", "confianca": "alta", "conta": true, "anuncio": "340001" }
+    },
+    {
+      "caso": "clique_pelo_grupo_google",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 3, "gclid": "Cj0caso4", "adgroup_id": "9101" }],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_GOOG_1", "provider": "google_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "clique_pelo_link_do_liame",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 30, "lk": "LKGOOG9001", "utm_source": "google" }],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_GOOG_1", "provider": "google_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "fora_da_janela",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 169, "fbclid": "IwAR0caso6", "campaign_id": "120001" }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "fora_da_janela" }
+    },
+    {
+      "caso": "no_limite_da_janela",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 167, "fbclid": "IwAR0caso7", "campaign_id": "120001" }],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_META_1", "provider": "meta_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "toque_depois_do_pedido",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": -1, "fbclid": "IwAR0caso8", "campaign_id": "120001" }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "fora_da_janela" }
+    },
+    {
+      "caso": "mais_recente_vence_no_mesmo_nivel",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [
+        { "tipo": "clique", "horas_antes": 72, "fbclid": "IwAR0caso9", "campaign_id": "120001" },
+        { "tipo": "clique", "horas_antes": 12, "gclid": "Cj0caso9", "campaign_id": "9001" }
+      ],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_GOOG_1", "provider": "google_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "conversa_por_anuncio",
+      "pedido": { "grupo": "whatsapp", "cliente": "A" },
+      "toques": [{ "tipo": "conversa", "horas_antes": 20, "cliente": "A", "ad_id": "340001", "ctwa_clid": "ARAkcaso10" }],
+      "esperado": { "status": "atribuido", "evidencia": "conversa_anuncio", "campanha": "C_META_1", "provider": "meta_ads", "confianca": "media", "conta": true }
+    },
+    {
+      "caso": "clique_vence_conversa",
+      "pedido": { "grupo": "cardapio", "cliente": "A" },
+      "toques": [
+        { "tipo": "conversa", "horas_antes": 1, "cliente": "A", "ad_id": "340001", "ctwa_clid": "ARAkcaso11" },
+        { "tipo": "clique", "horas_antes": 48, "gclid": "Cj0caso11", "campaign_id": "9001" }
+      ],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_GOOG_1", "provider": "google_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "conversa_de_outro_cliente",
+      "pedido": { "grupo": "whatsapp", "cliente": "A" },
+      "toques": [{ "tipo": "conversa", "horas_antes": 2, "cliente": "B", "ad_id": "340001", "ctwa_clid": "ARAkcaso12" }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "sem_evidencia" }
+    },
+    {
+      "caso": "conversa_com_anuncio_desconhecido",
+      "pedido": { "grupo": "whatsapp", "cliente": "A" },
+      "toques": [{ "tipo": "conversa", "horas_antes": 2, "cliente": "A", "ad_id": "999999999", "ctwa_clid": "ARAkcaso13" }],
+      "esperado": { "status": "plataforma", "evidencia": "conversa_plataforma", "provider": "meta_ads", "confianca": "media", "conta": true }
+    },
+    {
+      "caso": "so_fbclid_prova_a_plataforma",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 6, "fbclid": "IwAR0caso14" }],
+      "esperado": { "status": "plataforma", "evidencia": "clique_plataforma", "provider": "meta_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "gbraid_sem_campanha",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 6, "gbraid": "0AAAAcaso15" }],
+      "esperado": { "status": "plataforma", "evidencia": "clique_plataforma", "provider": "google_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "clique_com_campanha_vence_clique_so_da_plataforma",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [
+        { "tipo": "clique", "horas_antes": 1, "fbclid": "IwAR0caso16" },
+        { "tipo": "clique", "horas_antes": 50, "gclid": "Cj0caso16", "campaign_id": "9001" }
+      ],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_GOOG_1", "provider": "google_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "nome_solto_no_utm_nao_conta",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 4, "utm_source": "facebook", "utm_campaign": "promo de sexta" }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "sem_id" }
+    },
+    {
+      "caso": "parametro_nao_substituido_nao_conta",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 4, "utm_source": "meta", "campaign_id": "{{campaign.id}}" }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "sem_id" }
+    },
+    {
+      "caso": "marketplace_sem_cupom",
+      "pedido": { "grupo": "marketplace", "canal": "ifood" },
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "canal_sem_clique" }
+    },
+    {
+      "caso": "marketplace_com_cupom_exclusivo",
+      "pedido": { "grupo": "marketplace", "canal": "ifood", "cupom": "IFOODMETA1" },
+      "cupons": [{ "codigo": "IFOODMETA1", "campanha": "C_META_1", "exclusivo": true, "ligado_horas_antes": 100 }],
+      "esperado": { "status": "atribuido", "evidencia": "cupom", "campanha": "C_META_1", "provider": "meta_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "balcao_so_por_cupom",
+      "pedido": { "grupo": "presencial", "canal": "balcao", "cliente": "A" },
+      "toques": [{ "tipo": "conversa", "horas_antes": 2, "cliente": "A", "ad_id": "340001", "ctwa_clid": "ARAkcaso21" }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "canal_sem_clique" }
+    },
+    {
+      "caso": "cupom_nao_exclusivo_nao_conta",
+      "pedido": { "grupo": "cardapio", "cupom": "GERAL10" },
+      "cupons": [{ "codigo": "GERAL10", "campanha": "C_META_1", "exclusivo": false, "ligado_horas_antes": 100 }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "sem_evidencia" }
+    },
+    {
+      "caso": "cupom_desligado_antes_do_pedido",
+      "pedido": { "grupo": "cardapio", "cupom": "VELHO20" },
+      "cupons": [{ "codigo": "VELHO20", "campanha": "C_META_1", "exclusivo": true, "ligado_horas_antes": 300, "desligado_horas_antes": 10 }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "sem_evidencia" }
+    },
+    {
+      "caso": "cancelado_nao_conta",
+      "pedido": { "grupo": "cardapio", "status": "cancelado" },
+      "toques": [{ "tipo": "clique", "horas_antes": 10, "fbclid": "IwAR0caso24", "campaign_id": "120001" }],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_META_1", "provider": "meta_ads", "confianca": "alta", "conta": false, "motivo": "cancelado" }
+    },
+    {
+      "caso": "sem_nada",
+      "pedido": { "grupo": "cardapio" },
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "sem_evidencia" }
+    }
+  ]
+}

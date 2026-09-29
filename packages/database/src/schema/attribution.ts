@@ -1,0 +1,142 @@
+import { bigint, boolean, integer, jsonb, numeric, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { liame } from './identity.js';
+
+// Espelho das tabelas da migration 0022 (pontos de contato e atribuição, A2.5 F2; ADR-019 e ADR-020).
+const ts = (name: string) => timestamp(name, { withTimezone: true });
+const micros = (name: string) => bigint(name, { mode: 'number' });
+
+export const trackingLink = liame.table('tracking_link', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  brandId: uuid('brand_id').notNull(),
+  unitId: uuid('unit_id'),
+  code: text('code').notNull(),
+  name: text('name').notNull(),
+  provider: text('provider').notNull(),
+  campaignId: uuid('campaign_id'),
+  adGroupId: uuid('ad_group_id'),
+  adId: uuid('ad_id'),
+  destinationUrl: text('destination_url').notNull(),
+  utmSource: text('utm_source').notNull(),
+  utmMedium: text('utm_medium').notNull(),
+  utmCampaign: text('utm_campaign'),
+  utmContent: text('utm_content'),
+  utmTerm: text('utm_term'),
+  createdBy: uuid('created_by'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  archivedAt: ts('archived_at'),
+});
+
+export const coupon = liame.table('coupon', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  brandId: uuid('brand_id').notNull(),
+  connectedAccountId: uuid('connected_account_id').notNull(),
+  externalId: text('external_id').notNull(),
+  code: text('code').notNull(),
+  description: text('description'),
+  kind: text('kind').notNull(),
+  percent: numeric('percent', { precision: 5, scale: 2 }),
+  valueMicros: micros('value_micros'),
+  minOrderMicros: micros('min_order_micros'),
+  validFrom: ts('valid_from'),
+  validUntil: ts('valid_until'),
+  active: boolean('active').notNull(),
+  maxUses: integer('max_uses'),
+  usesCount: integer('uses_count').notNull().default(0),
+  sourceVersion: bigint('source_version', { mode: 'number' }).notNull(),
+  sourceUpdatedAt: ts('source_updated_at').notNull(),
+  firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+export const campaignCoupon = liame.table('campaign_coupon', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  brandId: uuid('brand_id').notNull(),
+  couponId: uuid('coupon_id').notNull(),
+  campaignId: uuid('campaign_id').notNull(),
+  exclusive: boolean('exclusive').notNull().default(true),
+  linkedAt: ts('linked_at').notNull().defaultNow(),
+  unlinkedAt: ts('unlinked_at'),
+  createdBy: uuid('created_by'),
+});
+
+export const touchpoint = liame.table('touchpoint', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  brandId: uuid('brand_id').notNull(),
+  connectedAccountId: uuid('connected_account_id').notNull(),
+  externalId: text('external_id').notNull(),
+  kind: text('kind').notNull(),
+  occurredAt: ts('occurred_at').notNull(),
+  orderExternalId: text('order_external_id'),
+  customerRefId: uuid('customer_ref_id'),
+  provider: text('provider'),
+  linkCode: text('link_code'),
+  campaignExternalId: text('campaign_external_id'),
+  adGroupExternalId: text('ad_group_external_id'),
+  adExternalId: text('ad_external_id'),
+  gclid: text('gclid'),
+  gbraid: text('gbraid'),
+  wbraid: text('wbraid'),
+  fbclid: text('fbclid'),
+  ctwaClid: text('ctwa_clid'),
+  utmSource: text('utm_source'),
+  utmMedium: text('utm_medium'),
+  utmCampaign: text('utm_campaign'),
+  utmContent: text('utm_content'),
+  utmTerm: text('utm_term'),
+  provenance: jsonb('provenance').notNull().default({}),
+  firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+export const attributionModel = liame.table('attribution_model', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id'),
+  key: text('key').notNull(),
+  version: integer('version').notNull(),
+  windowDays: integer('window_days').notNull(),
+  rules: jsonb('rules').notNull(),
+  description: text('description').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+export const attributionRun = liame.table('attribution_run', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  modelId: uuid('model_id').notNull(),
+  trigger: text('trigger').notNull(),
+  ordersConsidered: integer('orders_considered').notNull().default(0),
+  attributed: integer('attributed').notNull().default(0),
+  platformOnly: integer('platform_only').notNull().default(0),
+  withoutOrigin: integer('without_origin').notNull().default(0),
+  startedAt: ts('started_at').notNull().defaultNow(),
+  finishedAt: ts('finished_at'),
+});
+
+export const attributionResult = liame.table(
+  'attribution_result',
+  {
+    orderId: uuid('order_id').notNull(),
+    modelId: uuid('model_id').notNull(),
+    tenantId: uuid('tenant_id').notNull(),
+    brandId: uuid('brand_id').notNull(),
+    runId: uuid('run_id'),
+    status: text('status').notNull(),
+    provider: text('provider'),
+    campaignId: uuid('campaign_id'),
+    adId: uuid('ad_id'),
+    evidence: text('evidence'),
+    confidence: text('confidence'),
+    touchpointId: uuid('touchpoint_id'),
+    campaignCouponId: uuid('campaign_coupon_id'),
+    touchAt: ts('touch_at'),
+    windowDays: integer('window_days').notNull(),
+    counted: boolean('counted').notNull(),
+    reason: text('reason'),
+    computedAt: ts('computed_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.orderId, t.modelId] })],
+);

@@ -123,6 +123,21 @@ export class LifecyclePurgeService {
       true,
     );
     await run(
+      'toque',
+      sql`delete from liame.touchpoint where id in (
+            select id from liame.touchpoint e where e.occurred_at < now() - interval '90 days' and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH})
+          returning tenant_id`,
+      true,
+    );
+    await run(
+      'execucao_atribuicao',
+      sql`delete from liame.attribution_run where id in (
+            select id from liame.attribution_run e where coalesce(e.finished_at, e.started_at) < now() - interval '90 days'
+               and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH})
+          returning tenant_id`,
+      true,
+    );
+    await run(
       'idempotencia',
       sql`delete from liame.idempotency_key where ctid in (
             select ctid from liame.idempotency_key e where expires_at < now() ${t('e.tenant_id')} ${u('e.user_id')} limit ${BATCH})
