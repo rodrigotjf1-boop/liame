@@ -3193,6 +3193,193 @@
         ]
       }
     },
+    "/v1/inbox/{provider}/{connectionId}": {
+      "post": {
+        "description": "Produtos da DMS (Regem, RegemCast): cada conexão tem o próprio segredo de assinatura (Standard Webhooks). O evento é só gatilho: o Liame lê pela rota com cursor em seguida. Conexão inexistente ou revogada responde 404.",
+        "operationId": "InboxController_receiveForConnection",
+        "parameters": [
+          {
+            "name": "provider",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9_-]{1,40}$"
+            }
+          },
+          {
+            "name": "connectionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "accepted"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "summary": "Receber webhook de uma conexão",
+        "tags": [
+          "inbox"
+        ]
+      }
+    },
     "/v1/audit/events": {
       "get": {
         "description": "Do mais novo para o mais antigo, em páginas.",
@@ -9390,7 +9577,9 @@
                     "type": "string",
                     "enum": [
                       "meta",
-                      "google"
+                      "google",
+                      "regem",
+                      "regemcast"
                     ]
                   },
                   "brand_id": {
@@ -9759,6 +9948,10 @@
                             ],
                             "pattern": "^[a-z0-9_]+$"
                           },
+                          "origin": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9_]+$"
+                          },
                           "authorized_by": {
                             "type": [
                               "string",
@@ -9884,6 +10077,14 @@
                                     "null"
                                   ]
                                 },
+                                "unit_id": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
                                 "connected_at": {
                                   "type": "string"
                                 },
@@ -9905,6 +10106,7 @@
                                 "timezone",
                                 "status",
                                 "status_reason",
+                                "unit_id",
                                 "connected_at",
                                 "disconnected_at"
                               ],
@@ -9918,6 +10120,7 @@
                           "provider",
                           "status",
                           "error_code",
+                          "origin",
                           "authorized_by",
                           "created_at",
                           "completed_at",
@@ -10195,6 +10398,10 @@
                       ],
                       "pattern": "^[a-z0-9_]+$"
                     },
+                    "origin": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9_]+$"
+                    },
                     "authorized_by": {
                       "type": [
                         "string",
@@ -10320,6 +10527,14 @@
                               "null"
                             ]
                           },
+                          "unit_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
                           "connected_at": {
                             "type": "string"
                           },
@@ -10341,6 +10556,7 @@
                           "timezone",
                           "status",
                           "status_reason",
+                          "unit_id",
                           "connected_at",
                           "disconnected_at"
                         ],
@@ -10354,6 +10570,7 @@
                     "provider",
                     "status",
                     "error_code",
+                    "origin",
                     "authorized_by",
                     "created_at",
                     "completed_at",
@@ -10571,13 +10788,20 @@
                           "enum": [
                             "meta_ads",
                             "google_ads",
-                            "ga4"
+                            "ga4",
+                            "regem",
+                            "regemcast"
                           ]
                         },
                         "external_id": {
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 100
+                        },
+                        "unit_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                         }
                       },
                       "required": [
@@ -10659,6 +10883,14 @@
                               "null"
                             ]
                           },
+                          "unit_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
                           "connected_at": {
                             "type": "string"
                           },
@@ -10680,6 +10912,7 @@
                           "timezone",
                           "status",
                           "status_reason",
+                          "unit_id",
                           "connected_at",
                           "disconnected_at"
                         ],
@@ -10969,6 +11202,10 @@
                       ],
                       "pattern": "^[a-z0-9_]+$"
                     },
+                    "origin": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9_]+$"
+                    },
                     "authorized_by": {
                       "type": [
                         "string",
@@ -11094,6 +11331,14 @@
                               "null"
                             ]
                           },
+                          "unit_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
                           "connected_at": {
                             "type": "string"
                           },
@@ -11115,6 +11360,7 @@
                           "timezone",
                           "status",
                           "status_reason",
+                          "unit_id",
                           "connected_at",
                           "disconnected_at"
                         ],
@@ -11128,6 +11374,7 @@
                     "provider",
                     "status",
                     "error_code",
+                    "origin",
                     "authorized_by",
                     "created_at",
                     "completed_at",

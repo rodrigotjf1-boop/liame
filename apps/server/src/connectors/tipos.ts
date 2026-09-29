@@ -6,7 +6,10 @@ import type { PontoMetrica } from '../media/metric-store.js';
 // A4 pelo Action Service). Cada conector só traduz a plataforma para o modelo canônico (G1); cota,
 // disjuntor e erros são do cliente HTTP (G2); gravar e agendar é da sincronização (G7).
 
-export type ProviderId = 'meta_ads' | 'google_ads' | 'ga4';
+/** Plataformas de anúncio e de análise (A2). */
+export type ProviderMidia = 'meta_ads' | 'google_ads' | 'ga4';
+/** Toda origem lida por um conector: as plataformas e os produtos DMS (A2.5). */
+export type ProviderId = ProviderMidia | 'regem' | 'regemcast';
 
 /** Credencial já decifrada do cofre, só na memória da chamada (nunca em log, API ou tela). */
 export type Credencial = { accessToken: string };
@@ -41,7 +44,7 @@ export type ContextoConta = {
 };
 
 export interface ConectorLeitura {
-  readonly provider: ProviderId;
+  readonly provider: ProviderMidia;
   readonly apiVersion: string;
   /** Contas que a credencial alcança (para a pessoa escolher quais ligar a cada marca). */
   descobrirContas(credencial: Credencial): Promise<ContaDescoberta[]>;

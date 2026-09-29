@@ -29,6 +29,11 @@ export const PERMISSIONS = [
   'empresa.exportar',
   'contas.ver',
   'contas.conectar',
+  // Ciclo fechado (A2.5, migration 0023).
+  'vendas.ver',
+  'atribuicao.gerenciar',
+  'links.gerenciar',
+  'cupons.criar',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

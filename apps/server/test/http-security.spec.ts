@@ -115,7 +115,7 @@ describe('fail-fast da configuração em produção', () => {
 
   it('apps OAuth: só ligam com todas as peças; em produção, a volta só por https e o diálogo e o token nos endereços oficiais', () => {
     const meta = { META_APP_ID: '1234567890123', META_APP_SECRET: 'segredo-do-app-meta-teste', META_LOGIN_CONFIG_ID: '99887766554433' };
-    expect(loadConfig(prod).oauth).toEqual({ meta: null, google: null });
+    expect(loadConfig(prod).oauth).toEqual({ meta: null, google: null, regem: null });
     expect(loadConfig({ ...prod, META_APP_ID: meta.META_APP_ID, META_APP_SECRET: meta.META_APP_SECRET }).oauth.meta).toBeNull();
     expect(() => loadConfig({ ...prod, ...meta })).toThrow('API_URL');
     expect(() => loadConfig({ ...prod, ...meta, API_URL: 'http://api.agencialiame.com' })).toThrow('API_URL');
@@ -124,5 +124,15 @@ describe('fail-fast da configuração em produção', () => {
     expect(ok.oauth.meta).toEqual({ appId: meta.META_APP_ID, appSecret: meta.META_APP_SECRET, configId: meta.META_LOGIN_CONFIG_ID, dialogUrl: 'https://www.facebook.com' });
     expect(() => loadConfig({ ...prod, META_DIALOG_URL: 'https://www.facebook.com.outro.site' })).toThrow('endereço oficial');
     expect(() => loadConfig({ ...prod, GOOGLE_TOKEN_URL: 'https://oauth2.outro.site' })).toThrow('endereço oficial');
+    // Produtos DMS (A2.5): o endereço do Regem é o oficial em produção, e o cliente liga só com as duas peças.
+    expect(() => loadConfig({ ...prod, REGEM_API_URL: 'https://api.dmsregem.com.outro.site/api/v1/integracao' })).toThrow('endereço oficial');
+    expect(loadConfig({ ...prod, REGEM_CLIENT_ID: 'liame' }).oauth.regem).toBeNull();
+    expect(() => loadConfig({ ...prod, REGEM_CLIENT_ID: 'liame', REGEM_CLIENT_SECRET: 'segredo-do-liame-no-regem' })).toThrow('API_URL');
+    expect(loadConfig({ ...prod, API_URL: 'https://api.agencialiame.com', REGEM_CLIENT_ID: 'liame', REGEM_CLIENT_SECRET: 'segredo-do-liame-no-regem' }).oauth.regem).toEqual({
+      clientId: 'liame',
+      clientSecret: 'segredo-do-liame-no-regem',
+      authUrl: 'https://app.dmsregem.com',
+    });
+    expect(() => loadConfig({ ...prod, REGEMCAST_API_URL: 'http://regemcast.local' })).toThrow('REGEMCAST_API_URL');
   });
 });

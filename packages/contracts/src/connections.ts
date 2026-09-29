@@ -4,12 +4,16 @@ import { z } from 'zod';
 // contas que a autorização alcança e a pessoa escolhe quais ligar a cada marca. Token nenhum passa por
 // aqui: fica só no cofre. Listas que crescem (plataformas, situações) vão como texto nas respostas (V23).
 
-/** Quem autoriza: `meta` (Meta Ads) ou `google` (Google Ads e GA4 na mesma autorização). */
-export const ConnectionProvider = z.enum(['meta', 'google']);
+/**
+ * Quem autoriza: `meta` (Meta Ads), `google` (Google Ads e GA4 na mesma autorização), `regem` (lojas do
+ * Regem: pedidos, custos e cupons) ou `regemcast` (conversas abertas por anúncio). Os dois últimos são
+ * produtos da DMS (A2.5, ADR-019).
+ */
+export const ConnectionProvider = z.enum(['meta', 'google', 'regem', 'regemcast']);
 export type ConnectionProvider = z.infer<typeof ConnectionProvider>;
 
 /** Plataforma da conta ligada. */
-export const AccountProvider = z.enum(['meta_ads', 'google_ads', 'ga4']);
+export const AccountProvider = z.enum(['meta_ads', 'google_ads', 'ga4', 'regem', 'regemcast']);
 export type AccountProvider = z.infer<typeof AccountProvider>;
 
 const Slug = z.string().regex(/^[a-z0-9_]+$/);
@@ -64,6 +68,8 @@ export const ConnectedAccountResponse = z.strictObject({
   /** `ativa`, `desconectada`, `sem_permissao` ou `erro`. */
   status: Slug,
   status_reason: z.string().nullable(),
+  /** Loja do Liame a que a conta pertence (a loja do Regem, a conta do RegemCast); nulo = a marca toda. */
+  unit_id: z.uuid().nullable(),
   connected_at: z.string(),
   disconnected_at: z.string().nullable(),
 });
@@ -76,6 +82,8 @@ export const ConnectionResponse = z.strictObject({
   /** `aguardando_autorizacao`, `recebida`, `processando`, `aguardando_escolha`, `ativa`, `erro`, `expirada` ou `revogada`. */
   status: Slug,
   error_code: Slug.nullable(),
+  /** `oauth` (a pessoa autorizou) ou `distribuicao` (token emitido pela distribuição no produto DMS, no piloto). */
+  origin: Slug,
   /** Nome de quem autorizou (quem começou a conexão é quem precisa voltar dela). */
   authorized_by: z.string().nullable(),
   created_at: z.string(),
@@ -96,7 +104,14 @@ export type ConnectionListResponse = z.infer<typeof ConnectionListResponse>;
 
 export const LinkAccountsRequest = z.strictObject({
   accounts: z
-    .array(z.strictObject({ provider: AccountProvider, external_id: z.string().min(1).max(100) }))
+    .array(
+      z.strictObject({
+        provider: AccountProvider,
+        external_id: z.string().min(1).max(100),
+        /** Loja do Liame (da marca da conexão) para a loja do Regem ou a conta do RegemCast. */
+        unit_id: z.uuid().optional(),
+      }),
+    )
     .min(1)
     .max(200),
 });

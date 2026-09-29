@@ -97,6 +97,25 @@ Enquanto o app do Google estiver em **modo de teste**, o refresh token vence em 
 
 Falta, nas duas: publicar a política de privacidade, os termos e as instruções de exclusão de dados no site; testadores (contas do restaurante de testes); ir ao vivo (Meta: acesso avançado e análise do app; Google: verificação da marca e do app, nível Básico). Ao passar a executar ações, uma configuração nova da Meta com a tarefa ADVERTISE e as permissões de escrita.
 
+## Produtos DMS (A2.5, ADR-019)
+
+Contratos em `docs/integracoes/`. O endereço de cada produto é da distribuição, nunca informado pelo usuário.
+
+| Variável | O que é | Padrão |
+| --- | --- | --- |
+| `REGEM_API_URL` | Rotas de integração do Regem (só da nuvem); em produção, só o oficial | `https://api.dmsregem.com/api/v1/integracao` |
+| `REGEM_AUTH_URL` | Onde o presidente da loja autoriza o Liame (C1b); em produção, só o oficial | `https://app.dmsregem.com` |
+| `REGEM_CLIENT_ID` · `REGEM_CLIENT_SECRET` | Credencial do Liame como cliente do Regem, para trocar o código pelo token da loja. Sem elas, "Conectar Regem" responde 503 e só vale o registro pela distribuição | vazio |
+| `REGEMCAST_API_URL` | Rotas do RegemCast (C2b) | vazio |
+
+**Piloto (D-A2.5-4):** a distribuição emite o token da loja no Regem e o grava no cofre do Liame, dentro do contêiner da API. O token entra pela entrada padrão, nunca pela linha de comando:
+
+```bash
+node dist/scripts/conectar-produto.js --empresa <uuid da empresa> --marca <uuid da marca> --produto regem < tokens.txt
+```
+
+Depois, a pessoa liga a loja à loja do Liame em **Contas conectadas**. Revogar lá apaga o token do cofre e o revoga no Regem.
+
 ## Cofre (ADR-011, ADR-014)
 
 | Variável | Para quê | Padrão |

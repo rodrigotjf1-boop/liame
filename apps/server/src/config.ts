@@ -53,6 +53,14 @@ const Env = z.object({
   GOOGLE_AUTH_URL: z.url().default('https://accounts.google.com'),
   GOOGLE_TOKEN_URL: z.url().default('https://oauth2.googleapis.com'),
   PRIVACY_URL: z.url().default('https://agencialiame.com/privacidade'),
+  /** Produtos DMS (A2.5, ADR-019): endereço das rotas de integração e a página onde a loja autoriza. */
+  REGEM_API_URL: z.url().default('https://api.dmsregem.com/api/v1/integracao'),
+  REGEM_AUTH_URL: z.url().default('https://app.dmsregem.com'),
+  /** Credencial do Liame como cliente do Regem (da distribuição), para trocar o código pelo token da loja. */
+  REGEM_CLIENT_ID: z.string().min(3).max(100).optional(),
+  REGEM_CLIENT_SECRET: z.string().min(16).optional(),
+  /** RegemCast: definido na C2b (docs/integracoes/regemcast.md); sem ele, conversas de anúncio não são lidas. */
+  REGEMCAST_API_URL: z.url().optional(),
 });
 
 export type AppConfig = {
@@ -77,12 +85,16 @@ export type AppConfig = {
   terms: { version: string; termsUrl: string; privacyUrl: string };
   /** Plataformas (A2): endereço de cada API e o que assina as chamadas. */
   plataformas: { metaGraphUrl: string; googleAdsUrl: string; ga4DataUrl: string; ga4AdminUrl: string; metaAppSecret: string | null };
+  /** Produtos DMS (A2.5): rotas de integração do Regem e do RegemCast (nulo = ainda sem endereço). */
+  produtos: { regemApiUrl: string; regemcastApiUrl: string | null };
   /** Origem pública da API (volta do OAuth). */
   apiUrl: string;
   /** Apps OAuth da distribuição; nulo = a plataforma ainda não pode ser conectada. */
   oauth: {
     meta: { appId: string; appSecret: string; configId: string; dialogUrl: string } | null;
     google: { clientId: string; clientSecret: string; authUrl: string; tokenUrl: string } | null;
+    /** Autorização da loja no Regem (código + PKCE, C1b); nulo = só pelo token emitido pela distribuição. */
+    regem: { clientId: string; clientSecret: string; authUrl: string } | null;
   };
 };
 
@@ -114,6 +126,8 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     META_DIALOG_URL: 'https://www.facebook.com',
     GOOGLE_AUTH_URL: 'https://accounts.google.com',
     GOOGLE_TOKEN_URL: 'https://oauth2.googleapis.com',
+    REGEM_API_URL: 'https://api.dmsregem.com/api/v1/integracao',
+    REGEM_AUTH_URL: 'https://app.dmsregem.com',
   };
   if (env.NODE_ENV === 'production') {
     for (const [nome, oficial] of Object.entries(OFICIAIS)) {
@@ -126,9 +140,15 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   const google = env.GOOGLE_OAUTH_CLIENT_ID && env.GOOGLE_OAUTH_CLIENT_SECRET
     ? { clientId: env.GOOGLE_OAUTH_CLIENT_ID, clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET, authUrl: env.GOOGLE_AUTH_URL.replace(/\/$/, ''), tokenUrl: env.GOOGLE_TOKEN_URL.replace(/\/$/, '') }
     : null;
+  const regem = env.REGEM_CLIENT_ID && env.REGEM_CLIENT_SECRET
+    ? { clientId: env.REGEM_CLIENT_ID, clientSecret: env.REGEM_CLIENT_SECRET, authUrl: env.REGEM_AUTH_URL.replace(/\/$/, '') }
+    : null;
+  if (env.NODE_ENV === 'production' && env.REGEMCAST_API_URL && !env.REGEMCAST_API_URL.startsWith('https://')) {
+    throw new Error('config: em produção, REGEMCAST_API_URL só com https');
+  }
   const apiUrl = new URL(env.API_URL).origin;
   // A volta do OAuth leva o código da plataforma: em produção, só por HTTPS e com a origem declarada.
-  if (env.NODE_ENV === 'production' && (meta || google) && (!source.API_URL || !apiUrl.startsWith('https://'))) {
+  if (env.NODE_ENV === 'production' && (meta || google || regem) && (!source.API_URL || !apiUrl.startsWith('https://'))) {
     throw new Error('config: em produção, com app OAuth configurado, defina API_URL com https');
   }
   // Ninguém cria conta em produção aceitando termos que não foram publicados (A0-6).
@@ -182,8 +202,9 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       ga4AdminUrl: env.GA4_ADMIN_URL.replace(/\/$/, ''),
       metaAppSecret: env.META_APP_SECRET ?? null,
     },
+    produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl: env.REGEMCAST_API_URL?.replace(/\/$/, '') ?? null },
     apiUrl,
-    oauth: { meta, google },
+    oauth: { meta, google, regem },
   };
 }
 

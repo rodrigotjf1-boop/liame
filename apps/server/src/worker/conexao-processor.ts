@@ -4,12 +4,13 @@ import { sql } from 'drizzle-orm';
 import { writeAudit } from '../audit/audit.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import type { DescobertaGuardada } from '../connections/connections.service.js';
-import { acessoGoogle, type CredencialGuardada, ESCOPOS_GOOGLE, type ProvedorOAuth, trocarCodigo } from '../connections/oauth.js';
+import { acessoGoogle, type CredencialGuardada, type CredencialRegem, ESCOPOS_GOOGLE, type ProvedorOAuth, trocarCodigo } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { criarConectorGa4 } from '../connectors/ga4/conector-ga4.js';
 import { criarConectorGoogleAds } from '../connectors/google-ads/conector-google-ads.js';
 import { criarConectorMeta } from '../connectors/meta/conector-meta.js';
+import { lerLoja, trocarCodigoRegem } from '../connectors/regem/conector-regem.js';
 import type { ContaDescoberta } from '../connectors/tipos.js';
 import { versaoRegistrada } from '../connectors/tipos.js';
 import { DATABASE } from '../database/database.module.js';
@@ -104,9 +105,28 @@ export class ConexaoProcessor {
     if (dados.credencial) {
       credencial = JSON.parse(dados.credencial) as CredencialGuardada;
       try {
-        accessToken = credencial.tipo === 'meta' ? credencial.access_token : await this.acessoGoogle(credencial.refresh_token);
+        accessToken =
+          credencial.tipo === 'meta' ? credencial.access_token : credencial.tipo === 'google' ? await this.acessoGoogle(credencial.refresh_token) : '';
       } catch (err) {
         await this.falhar(id, tenantId, err, tentativa, false);
+        return;
+      }
+    } else if (dados.codigo && provedor === 'regem') {
+      try {
+        credencial = await this.trocarRegem(dados.codigo, dados.verificador, dados.redirectUri);
+        accessToken = '';
+        const guardada = credencial;
+        await withTenant(this.db, tenantId, async (tx) => {
+          const secretId = await this.vault.putSecret(tx, { tenantId, purpose: 'oauth_regem', plaintext: JSON.stringify(guardada) });
+          const escopos = [...new Set(guardada.lojas.flatMap((l) => l.escopos))].sort();
+          await tx.execute(sql`
+            update liame.oauth_connection
+               set credential_secret_id = ${secretId}, code_enc = null, pkce_verifier_enc = null,
+                   scopes = array(select jsonb_array_elements_text(${JSON.stringify(escopos)}::jsonb)), updated_at = now()
+             where id = ${id}`);
+        });
+      } catch (err) {
+        await this.falhar(id, tenantId, err, tentativa, true);
         return;
       }
     } else if (dados.codigo) {
@@ -166,13 +186,31 @@ export class ConexaoProcessor {
     });
   }
 
+  /** Código + PKCE → um token por loja, entre servidores. Uma tentativa só: o código vale uma vez. */
+  private async trocarRegem(codigo: string, verificador: string | null, redirectUri: string): Promise<CredencialRegem> {
+    const regem = this.config.oauth.regem;
+    if (!regem) throw new ErroConector('definitivo', 'regem', 'cliente do Regem não configurado');
+    if (!verificador) throw new ErroConector('definitivo', 'regem', 'autorização do Regem sem PKCE');
+    const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 1 });
+    const tokens = await trocarCodigoRegem(
+      { cliente, apiUrl: this.config.produtos.regemApiUrl },
+      { codigo, verificador, redirectUri, clientId: regem.clientId, clientSecret: regem.clientSecret },
+    );
+    return {
+      tipo: 'regem',
+      lojas: tokens.lojas.map((l) => ({ loja_id: l.loja_id, token: l.token, escopos: l.escopos })),
+      obtido_em: new Date().toISOString(),
+    };
+  }
+
   private acessoGoogle(refreshToken: string): Promise<string> {
     return acessoGoogle(this.config, this.config.oauth.google?.tokenUrl ?? '', refreshToken);
   }
 
   /** Meta: contas de anúncio. Google: clientes do Google Ads e propriedades do GA4 (cada uma se o escopo veio). */
   private async descobrir(provedor: ProvedorOAuth, accessToken: string, credencial: CredencialGuardada): Promise<DescobertaGuardada[]> {
-    const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas) });
+    const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos) });
+    if (credencial.tipo === 'regem' || credencial.tipo === 'regemcast') return descobrirLojas(cliente, this.config.produtos.regemApiUrl, credencial);
     const credencialLeitura = { accessToken };
     const guardar = (provider: DescobertaGuardada['provider'], contas: ContaDescoberta[]) =>
       contas.map(
@@ -249,4 +287,34 @@ export class ConexaoProcessor {
       }
     });
   }
+}
+
+/**
+ * Lojas que os tokens alcançam (produtos DMS): cada token diz a loja dele (`GET /loja`). Token recusado
+ * fica de fora; se todos forem recusados, a conexão precisa ser refeita.
+ */
+export async function descobrirLojas(cliente: ClienteConector, apiUrl: string, credencial: CredencialRegem): Promise<DescobertaGuardada[]> {
+  const descobertas: DescobertaGuardada[] = [];
+  let recusados = 0;
+  for (const l of credencial.lojas) {
+    try {
+      const loja = await lerLoja({ cliente, apiUrl }, l.token, l.loja_id);
+      descobertas.push({
+        provider: credencial.tipo,
+        external_id: loja.loja_id,
+        name: loja.loja_nome,
+        currency: loja.moeda,
+        timezone: loja.fuso,
+        provider_attributes: { escopos: loja.escopos, empresa: loja.empresa_nome ?? null },
+      });
+    } catch (err) {
+      if (err instanceof ErroConector && err.tipo === 'autenticacao') {
+        recusados++;
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (!descobertas.length && recusados) throw new ErroConector('autenticacao', credencial.tipo, 'todos os tokens das lojas foram recusados');
+  return descobertas;
 }

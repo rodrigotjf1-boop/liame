@@ -30,7 +30,9 @@ export class SincronizacaoLoop {
     const db = this.database.db;
     // Relógio da reserva: o do banco, ou o informado (testes e reprocessamento) — o mesmo do sincronizador.
     const referencia = agora ? sql`${agora.toISOString()}::timestamptz` : sql`now()`;
-    const elegivel = sql`a.disconnected_at is null and a.status in ('ativa', 'erro', 'sem_permissao') and a.credential_secret_id is not null`;
+    // Só as plataformas de anúncio: as lojas do Regem e as contas do RegemCast têm a leitura de vendas (A2.5).
+    const elegivel = sql`a.disconnected_at is null and a.status in ('ativa', 'erro', 'sem_permissao') and a.credential_secret_id is not null
+                         and a.provider in ('meta_ads', 'google_ads', 'ga4')`;
     const reservadas = await withSystem(db, async (tx) => {
       // Conta nova ganha a linha de estado (devida desde sempre) antes da reserva.
       await tx.execute(sql`

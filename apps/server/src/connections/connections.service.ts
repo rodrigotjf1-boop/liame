@@ -9,14 +9,18 @@ import type {
   StartConnectionRequest,
   StartConnectionResponse,
 } from '@liame/contracts';
-import { uuidv7 } from '@liame/database';
+import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { type AuthContext, afterCommit, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { VaultService } from '../vault/vault.service.js';
-import { type CredencialGuardada, enderecoDeVolta, hashEstado, novoEstado, novoVerificador, type ProvedorOAuth, revogarGoogle, urlDeAutorizacao } from './oauth.js';
+import { ClienteConector } from '../connectors/cliente-http.js';
+import { enderecosDasPlataformas } from '../connectors/enderecos.js';
+import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
+import { DATABASE } from '../database/database.module.js';
+import { type CredencialGuardada, type CredencialRegem, enderecoDeVolta, hashEstado, novoEstado, novoVerificador, type ProvedorOAuth, revogarGoogle, urlDeAutorizacao } from './oauth.js';
 
 // Conectar contas (A2, G3), lado da API: tudo na transação curta da requisição. A troca do código e a
 // descoberta das contas (chamadas externas) ficam com o worker (ConexaoProcessor), nunca aqui.
@@ -28,6 +32,7 @@ type LinhaConexao = {
   id: string;
   brand_id: string;
   provider: string;
+  origin: string;
   status: string;
   requested_by: string | null;
   requested_by_name?: string | null;
@@ -42,7 +47,7 @@ type LinhaConexao = {
 
 /** Conta descoberta, como o worker guarda em `oauth_connection.discovered`. */
 export type DescobertaGuardada = {
-  provider: 'meta_ads' | 'google_ads' | 'ga4';
+  provider: 'meta_ads' | 'google_ads' | 'ga4' | 'regem' | 'regemcast';
   external_id: string;
   name: string;
   currency: string | null;
@@ -61,6 +66,7 @@ type LinhaConta = {
   timezone: string | null;
   status: string;
   status_reason: string | null;
+  unit_id: string | null;
   connected_at: Date | string;
   disconnected_at: Date | string | null;
 };
@@ -82,6 +88,7 @@ function conta(l: LinhaConta): ConnectedAccountResponse {
     timezone: l.timezone,
     status: l.status,
     status_reason: l.status_reason,
+    unit_id: l.unit_id,
     connected_at: iso(l.connected_at),
     disconnected_at: isoOuNulo(l.disconnected_at),
   };
@@ -93,6 +100,7 @@ export class ConnectionsService {
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(DATABASE) private readonly database: Database | null,
     private readonly vault: VaultService,
   ) {}
 
@@ -100,13 +108,11 @@ export class ConnectionsService {
   async iniciar(auth: AuthContext, body: StartConnectionRequest): Promise<StartConnectionResponse> {
     const tenantId = auth.tenantId!;
     const provedor: ProvedorOAuth = body.provider;
-    if (!this.config.oauth[provedor]) {
-      throw new AppProblem(
-        503,
-        'integracao-indisponivel',
-        'Conexão ainda indisponível',
-        provedor === 'meta' ? 'A conexão com a Meta ainda não está disponível. Tente de novo mais tarde.' : 'A conexão com o Google ainda não está disponível. Tente de novo mais tarde.',
-      );
+    // RegemCast ainda sem autorização própria (C2b); o Regem, só quando o cliente dele estiver configurado.
+    const disponivel = provedor === 'regemcast' ? false : Boolean(this.config.oauth[provedor]);
+    if (!disponivel) {
+      const nome = { meta: 'a Meta', google: 'o Google', regem: 'o Regem', regemcast: 'o RegemCast' }[provedor];
+      throw new AppProblem(503, 'integracao-indisponivel', 'Conexão ainda indisponível', `A conexão com ${nome} ainda não está disponível. Tente de novo mais tarde.`);
     }
     const tx = currentTx();
     const marca = await tx.execute<{ id: string }>(sql`select id from liame.brand where id = ${body.brand_id} and archived_at is null`);
@@ -114,7 +120,7 @@ export class ConnectionsService {
 
     const id = uuidv7();
     const estado = novoEstado();
-    const verificador = provedor === 'google' ? novoVerificador() : null;
+    const verificador = provedor === 'google' || provedor === 'regem' ? novoVerificador() : null;
     const versaoMeta = await this.versaoMeta();
     const redirectUri = enderecoDeVolta(this.config);
     const verificadorCifrado = verificador ? await this.vault.encryptForTenant(tx, tenantId, `oauth_pkce:${id}`, verificador) : null;
@@ -170,7 +176,7 @@ export class ConnectionsService {
   async listar(brandId?: string): Promise<ConnectionListResponse> {
     const tx = currentTx();
     const conexoes = await tx.execute<LinhaConexao>(sql`
-      select c.id, c.brand_id, c.provider, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
+      select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
              c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.status not in ('aguardando_autorizacao', 'expirada') ${brandId ? sql`and c.brand_id = ${brandId}` : sql``}
@@ -180,7 +186,7 @@ export class ConnectionsService {
 
   async detalhe(id: string): Promise<ConnectionResponse> {
     const r = await currentTx().execute<LinhaConexao>(sql`
-      select c.id, c.brand_id, c.provider, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
+      select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
              c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.id = ${id}`);
@@ -192,7 +198,7 @@ export class ConnectionsService {
   private async montar(linhas: LinhaConexao[]): Promise<ConnectionResponse[]> {
     if (!linhas.length) return [];
     const contas = await currentTx().execute<LinhaConta>(sql`
-      select id, brand_id, connection_id, provider, external_id, name, currency, timezone, status, status_reason, connected_at, disconnected_at
+      select id, brand_id, connection_id, provider, external_id, name, currency, timezone, status, status_reason, unit_id, connected_at, disconnected_at
         from liame.connected_account
        where connection_id in ${linhas.map((l) => l.id)} or disconnected_at is null
        order by connected_at`);
@@ -201,6 +207,7 @@ export class ConnectionsService {
       id: l.id,
       brand_id: l.brand_id,
       provider: l.provider,
+      origin: l.origin,
       status: l.status,
       error_code: l.error_code,
       authorized_by: l.requested_by_name ?? null,
@@ -226,7 +233,7 @@ export class ConnectionsService {
   async ligarContas(auth: AuthContext, id: string, body: LinkAccountsRequest): Promise<LinkAccountsResponse> {
     const tx = currentTx();
     const r = await tx.execute<LinhaConexao & { tenant_id: string }>(sql`
-      select id, tenant_id, brand_id, provider, status, discovered, credential_secret_id, requested_by, error_code, created_at, completed_at, refresh_expires_at, expires_at
+      select id, tenant_id, brand_id, provider, origin, status, discovered, credential_secret_id, requested_by, error_code, created_at, completed_at, refresh_expires_at, expires_at
         from liame.oauth_connection where id = ${id} for update`);
     const c = r.rows[0];
     if (!c) throw naoEncontrada();
@@ -236,16 +243,29 @@ export class ConnectionsService {
     const descobertas = new Map((c.discovered ?? []).map((d) => [`${d.provider}:${d.external_id}`, d]));
     const escolhidas: DescobertaGuardada[] = [];
     const faltando: string[] = [];
+    const lojaDe = new Map<string, string>();
     for (const a of body.accounts) {
       const d = descobertas.get(`${a.provider}:${a.external_id}`);
       if (d) escolhidas.push(d);
       else faltando.push(`${a.provider}:${a.external_id}`);
+      if (a.unit_id) lojaDe.set(`${a.provider}:${a.external_id}`, a.unit_id);
     }
     if (faltando.length) {
       throw new AppProblem(422, 'conta-nao-descoberta', 'Conta fora desta autorização', 'Só dá para ligar contas que esta autorização alcança.', {}, faltando.map((f) => ({ path: 'accounts', message: f })));
     }
+    // A loja do Liame precisa ser da marca da conexão (a RLS já garante a empresa).
+    const lojas = [...new Set(lojaDe.values())];
+    if (lojas.length) {
+      const ok = await tx.execute<{ id: string }>(sql`select id from liame.unit where brand_id = ${c.brand_id} and id in ${lojas}`);
+      const validas = new Set(ok.rows.map((u) => u.id));
+      const erradas = lojas.filter((u) => !validas.has(u));
+      if (erradas.length) {
+        throw new AppProblem(422, 'loja-fora-da-marca', 'Loja fora desta marca', 'Escolha uma loja da marca desta conexão.', {}, erradas.map((u) => ({ path: 'accounts.unit_id', message: u })));
+      }
+    }
     const linhas = escolhidas.map((d) => ({
       id: uuidv7(),
+      unit_id: lojaDe.get(`${d.provider}:${d.external_id}`) ?? null,
       provider: d.provider,
       external_id: d.external_id,
       name: d.name.slice(0, 300),
@@ -254,20 +274,21 @@ export class ConnectionsService {
       provider_attributes: d.provider_attributes ?? {},
     }));
     const inseridas = await tx.execute<LinhaConta>(sql`
-      insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone, credential_secret_id,
+      insert into liame.connected_account (id, tenant_id, brand_id, unit_id, provider, external_id, name, currency, timezone, credential_secret_id,
                                            connection_id, provider_attributes, connected_by)
-      select x.id, ${c.tenant_id}, ${c.brand_id}, x.provider, x.external_id, x.name, x.currency, x.timezone, ${c.credential_secret_id},
+      select x.id, ${c.tenant_id}, ${c.brand_id}, x.unit_id, x.provider, x.external_id, x.name, x.currency, x.timezone, ${c.credential_secret_id},
              ${c.id}, coalesce(x.provider_attributes, '{}'::jsonb), ${auth.userId}
         from jsonb_to_recordset(${JSON.stringify(linhas)}::jsonb)
-             as x (id uuid, provider text, external_id text, name text, currency text, timezone text, provider_attributes jsonb)
+             as x (id uuid, unit_id uuid, provider text, external_id text, name text, currency text, timezone text, provider_attributes jsonb)
       -- Mesma marca, outra autorização (reconectar depois de token recusado): a nova credencial assume a conta.
       -- Outra marca ou a mesma autorização: fica como está (volta em already_linked).
       on conflict (tenant_id, provider, external_id) where disconnected_at is null
       do update set credential_secret_id = excluded.credential_secret_id, connection_id = excluded.connection_id,
+                    unit_id = coalesce(excluded.unit_id, liame.connected_account.unit_id),
                     provider_attributes = excluded.provider_attributes, status = 'ativa', status_reason = null, updated_at = now()
        where liame.connected_account.brand_id = excluded.brand_id
          and liame.connected_account.connection_id is distinct from excluded.connection_id
-      returning id, brand_id, connection_id, provider, external_id, name, currency, timezone, status, status_reason, connected_at, disconnected_at`);
+      returning id, brand_id, connection_id, provider, external_id, name, currency, timezone, status, status_reason, unit_id, connected_at, disconnected_at`);
     const novas = new Set(inseridas.rows.map((l) => `${l.provider}:${l.external_id}`));
     if (inseridas.rows.length) {
       await tx.execute(sql`update liame.oauth_connection set status = 'ativa', completed_at = coalesce(completed_at, now()), updated_at = now() where id = ${c.id}`);
@@ -317,9 +338,11 @@ export class ConnectionsService {
     if (!c) throw naoEncontrada();
     if (c.status === 'revogada') return;
     let refreshGoogle: string | null = null;
+    let tokensRegem: { loja_id: string; token: string }[] = [];
     if (c.credential_secret_id) {
       const guardada = await this.vault.readSecret(tx, c.credential_secret_id);
       if (guardada && c.provider === 'google') refreshGoogle = (JSON.parse(guardada) as CredencialGuardada & { tipo: 'google' }).refresh_token;
+      if (guardada && c.provider === 'regem') tokensRegem = (JSON.parse(guardada) as CredencialRegem).lojas.map((l) => ({ loja_id: l.loja_id, token: l.token }));
       await this.vault.revokeSecret(tx, c.credential_secret_id);
     }
     const contas = await tx.execute<{ id: string }>(sql`
@@ -328,6 +351,20 @@ export class ConnectionsService {
     await tx.execute(sql`
       update liame.oauth_connection set status = 'revogada', revoked_at = now(), code_enc = null, pkce_verifier_enc = null, updated_at = now() where id = ${id}`);
     auditDetail({ resourceId: id, before: { status: c.status }, after: { status: 'revogada', contas_desligadas: contas.rows.length } });
+    if (tokensRegem.length && this.database) {
+      // Revoga cada token da loja no Regem depois do commit (o token já saiu do cofre do Liame).
+      const cliente = new ClienteConector(this.database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 2 });
+      const ctx = { cliente, apiUrl: this.config.produtos.regemApiUrl };
+      afterCommit(async () => {
+        for (const t of tokensRegem) {
+          try {
+            await revogarNoRegem(ctx, t.token, t.loja_id);
+          } catch (err) {
+            this.logger.warn(`revogação no Regem falhou (conexão ${id}, loja ${t.loja_id}): ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      });
+    }
     const tokenUrl = this.config.oauth.google?.tokenUrl;
     if (refreshGoogle && tokenUrl) {
       const token = refreshGoogle;

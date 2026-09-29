@@ -5,6 +5,7 @@ import { APP_CONFIG, type AppConfig } from '../config.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { verifyWebhook } from '../events/standard-webhooks.js';
+import { VaultService } from '../vault/vault.service.js';
 
 /** Cabeçalhos guardados junto com o corpo (nada de cookie, autorização ou assinatura). */
 const KEPT_HEADERS = ['content-type', 'user-agent', 'webhook-id', 'webhook-timestamp'];
@@ -22,6 +23,7 @@ export class InboxService {
   constructor(
     @Inject(DATABASE) private readonly database: Database | null,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly vault: VaultService,
   ) {}
 
   async receive(provider: string, rawBody: Buffer | undefined, headers: Record<string, string | string[] | undefined>): Promise<{ duplicate: boolean }> {
@@ -46,6 +48,41 @@ export class InboxService {
         on conflict (provider, external_event_id) do nothing`),
     );
     return { duplicate: inserted.rowCount === 0 };
+  }
+
+  /**
+   * Webhook de um produto DMS para uma conexão (A2.5, ADR-019): cada conexão tem o próprio segredo, no
+   * cofre. Conexão inexistente, de outro produto, revogada ou sem segredo responde como rota inexistente.
+   * O evento é só gatilho de frescor: o conector lê pela rota com cursor em seguida.
+   */
+  async receiveForConnection(
+    provider: string,
+    connectionId: string,
+    rawBody: Buffer | undefined,
+    headers: Record<string, string | string[] | undefined>,
+  ): Promise<{ duplicate: boolean }> {
+    if (!this.database) throw new AppProblem(503, 'indisponivel', 'Serviço indisponível', 'Tente de novo em instantes.');
+    if (!rawBody?.length) throw new AppProblem(400, 'corpo-vazio', 'Corpo vazio', 'O webhook chegou sem corpo.');
+    const body = rawBody.toString('utf8');
+    return withSystem(this.database.db, async (tx) => {
+      const r = await tx.execute<{ tenant_id: string; inbox_secret_id: string | null }>(sql`
+        select tenant_id, inbox_secret_id from liame.oauth_connection
+         where id = ${connectionId} and provider = ${provider} and status in ('aguardando_escolha', 'ativa')`);
+      const conexao = r.rows[0];
+      const secret = conexao?.inbox_secret_id ? await this.vault.readSecret(tx, conexao.inbox_secret_id) : null;
+      if (!conexao || !secret) throw notFound();
+      const check = verifyWebhook(secret, headers, body);
+      if (!check.ok) {
+        this.logger.warn(`webhook de ${provider} para a conexão ${connectionId} recusado: ${check.reason}`);
+        throw new AppProblem(401, 'assinatura-invalida', 'Assinatura inválida', 'A assinatura do webhook não confere.');
+      }
+      const kept = Object.fromEntries(KEPT_HEADERS.filter((h) => typeof headers[h] === 'string').map((h) => [h, headers[h]]));
+      const inserted = await tx.execute(sql`
+        insert into liame.inbox_event (id, provider, external_event_id, tenant_id, connection_id, type, headers, body)
+        values (${uuidv7()}, ${provider}, ${check.id}, ${conexao.tenant_id}, ${connectionId}, ${typeOf(body)}, ${JSON.stringify(kept)}::jsonb, ${body})
+        on conflict (provider, external_event_id) do nothing`);
+      return { duplicate: inserted.rowCount === 0 };
+    });
   }
 }
 

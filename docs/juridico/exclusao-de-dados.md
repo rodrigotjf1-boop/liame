@@ -9,8 +9,8 @@ Esta página explica como tirar o acesso do Liame às suas contas e como pedir a
 **Pelo Liame** (recomendado):
 
 1. Entre no Liame e abra **Contas conectadas**.
-2. Na autorização da plataforma (Meta ou Google), escolha **Revogar**.
-3. As credenciais de acesso são apagadas na hora, e as contas daquela autorização param de ser lidas. No Google, a autorização também é revogada do lado dele.
+2. Na autorização da plataforma (Meta, Google ou, quando conectado, Regem), escolha **Revogar**.
+3. As credenciais de acesso são apagadas na hora, e as contas daquela autorização param de ser lidas. No Google e no Regem, a autorização também é revogada do lado deles.
 
 **Pela própria plataforma:**
 
@@ -22,7 +22,7 @@ Esta página explica como tirar o acesso do Liame às suas contas e como pedir a
 Envie um e-mail para **appdevsolutionday@gmail.com** com:
 
 - o nome da empresa e o e-mail de quem é o Dono da conta no Liame (ou, se você não usa o Liame, o nome da página ou da conta de anúncio envolvida);
-- a plataforma (Meta, Google Ads ou Google Analytics);
+- a plataforma (Meta, Google Ads, Google Analytics, Regem ou RegemCast);
 - o que deseja excluir (tudo o que veio da plataforma ou só uma conta).
 
 Confirmamos o recebimento e concluímos a exclusão em até **15 dias**, respondendo com o que foi apagado. Se algum dado precisar ser guardado por obrigação legal (por exemplo, registros de acesso por 6 meses, pelo Marco Civil da Internet), informamos qual e por quanto tempo.

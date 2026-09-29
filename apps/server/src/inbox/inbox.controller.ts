@@ -1,4 +1,4 @@
-import { AcceptedResponse, InboxProvider, ProblemDetails } from '@liame/contracts';
+import { AcceptedResponse, InboxProvider, ProblemDetails, ResourceId } from '@liame/contracts';
 import { Controller, HttpCode, Param, Post, Req } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiNotFoundResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { Publico } from '../auth/access.js';
@@ -30,6 +30,27 @@ export class InboxController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   async receive(@Param('provider', { schema: InboxProvider }) provider: string, @Req() req: RawRequest): Promise<AcceptedResponse> {
     const { duplicate } = await this.inbox.receive(provider, req.rawBody, req.headers);
+    return { status: 'accepted', message: duplicate ? 'Evento já recebido.' : 'Evento recebido.' };
+  }
+
+  @Post(':provider/:connectionId')
+  @SemAuditoria('o registro é o próprio inbox_event, gravado cru e deduplicado')
+  @Publico()
+  @HttpCode(202)
+  @ApiOperation({
+    summary: 'Receber webhook de uma conexão',
+    description:
+      'Produtos da DMS (Regem, RegemCast): cada conexão tem o próprio segredo de assinatura (Standard Webhooks). O evento é só gatilho: o Liame lê pela rota com cursor em seguida. Conexão inexistente ou revogada responde 404.',
+  })
+  @ApiAcceptedResponse({ standardSchema: AcceptedResponse })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  async receiveForConnection(
+    @Param('provider', { schema: InboxProvider }) provider: string,
+    @Param('connectionId', { schema: ResourceId }) connectionId: string,
+    @Req() req: RawRequest,
+  ): Promise<AcceptedResponse> {
+    const { duplicate } = await this.inbox.receiveForConnection(provider, connectionId, req.rawBody, req.headers);
     return { status: 'accepted', message: duplicate ? 'Evento já recebido.' : 'Evento recebido.' };
   }
 }
