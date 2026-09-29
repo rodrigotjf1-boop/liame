@@ -9,6 +9,7 @@ export const connectedAccount = liame.table('connected_account', {
   id: uuid('id').primaryKey(),
   tenantId: uuid('tenant_id').notNull(),
   brandId: uuid('brand_id').notNull(),
+  unitId: uuid('unit_id'),
   provider: text('provider').notNull(),
   externalId: text('external_id').notNull(),
   name: text('name').notNull(),

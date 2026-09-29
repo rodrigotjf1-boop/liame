@@ -6,6 +6,7 @@ import * as control from './control.js';
 import * as events from './events.js';
 import * as identity from './identity.js';
 import * as media from './media.js';
+import * as orders from './orders.js';
 import * as vault from './vault.js';
 
 export * from './actions.js';
@@ -16,6 +17,7 @@ export * from './control.js';
 export * from './events.js';
 export * from './identity.js';
 export * from './media.js';
+export * from './orders.js';
 export * from './vault.js';
 
 /** Todas as tabelas espelhadas, para o teste que compara o schema TypeScript com o banco. */
@@ -75,4 +77,8 @@ export const allTables = [
   connectors.watchChange,
   connectors.watchAlert,
   connections.oauthConnection,
+  orders.customerRef,
+  orders.customerRefLink,
+  orders.orderFact,
+  orders.orderItemFact,
 ];

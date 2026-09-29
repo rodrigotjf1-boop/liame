@@ -84,6 +84,21 @@ touchpoint (clique/visita/conversa) ─→ identity_link ─→ customer_ref ─
 
 **Margem desconhecida ≠ zero:** item sem custo cadastrado gera `margin = null` e sinaliza a lacuna.
 
+**Vendas (A2.5 · F1, migration 0021; ADR-019):**
+
+- `connected_account.unit_id` liga a loja do Regem (ou a conta do RegemCast) à loja do Liame.
+- `order_fact`:
+  - canal e grupo do canal (`cardapio`, `whatsapp`, `presencial`, `marketplace`, `outro`), situação (`confirmado` ou `cancelado`);
+  - receita pela definição única do Regem, desconto e estorno **em micros**, cupom, `confirmed_at` e fuso da loja;
+  - versão do recurso (`source_version`): o upsert só aplica versão maior;
+  - marketplace sem cliente, garantido por `check` no banco.
+- `order_item_fact`:
+  - quantidade, receita e custo em micros; `cost_known` gerado;
+  - o item que some numa versão nova fica com `removed_at`.
+- `customer_ref`: só o índice cego do telefone em E.164 (HMAC com a chave da empresa).
+- `customer_ref_link`: o id do cliente na origem → `customer_ref`, para apagar o cliente quando a origem o anonimiza (as ligações somem junto; pedidos e toques ficam sem cliente).
+- Telefone normalizado antes do índice, com o nono dígito do celular acrescentado: o `wa_id` do WhatsApp vem muitas vezes sem ele.
+
 ### 4.1 Metric Authority Matrix
 
 | Métrica | Fonte autoritativa |

@@ -145,6 +145,8 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | Dados brutos recebidos das plataformas | 30 dias |
 | Campanhas, peças e tarefas arquivadas | 12 meses após arquivar; estatísticas sem dados pessoais ficam |
 | Dados de contatos dos clientes (como operador) | enquanto a empresa cliente tiver finalidade e base legal; pedido de exclusão ou saída da lista, em até 15 dias |
+| Pedidos e itens vindos do Regem, quando conectado (valores, itens, canal e cupom, sem dados pessoais) | enquanto durar o contrato |
+| Identificador pseudonimizado do cliente, quando o Regem ou o RegemCast forem conectados (um código calculado a partir do telefone com a chave da empresa cliente; **o telefone não é guardado**) | enquanto a empresa cliente tiver finalidade; apagado quando a loja anonimiza o cliente no Regem |
 | Auditoria de ações | 5 anos, com proteção contra alteração |
 | Registro de incidentes de segurança | no mínimo 5 anos (Resolução CD/ANPD nº 15/2024, art. 10) |
 | Cópias de segurança | até 35 dias; os dados pessoais nelas ficam cifrados com uma chave por empresa cliente |
