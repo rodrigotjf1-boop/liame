@@ -79,7 +79,7 @@ Plano **aprovado pelo dono em 29/09/2026**: [`plano-a25.md`](plano-a25.md), com 
 
 | Entrega | Situação | Evidência |
 | --- | --- | --- |
-| **F1** · modelo de vendas | ⏳ | Migration **0021** |
+| **F1** · modelo de vendas | ✅ local · CI no PR | Migration **0021**: `order_fact`, `order_item_fact`, `customer_ref` (só índice cego), `customer_ref_link` e `connected_account.unit_id`; RLS forçada e "só o expurgo apaga"; classe e prazo de cada tabela. `orders/order-store.ts`: gravação em poucas instruções por lote (1.200 pedidos no teste), versão do recurso decide (repetido e fora de ordem não mudam nada), item que some fica marcado, marketplace sem cliente (`check` no banco), cliente apagado quando a origem anonimiza. Telefone em E.164 com o nono dígito (`orders/telefone.ts`) e centavos → micros sem ponto flutuante. Testes: `test/db/vendas.spec.ts`, `test/telefone.spec.ts`. Jurídico: Política 9 e Contrato Anexo I ("quando conectado") |
 | **F2** · pontos de contato e motor de atribuição | ⏳ | Migration **0022** |
 | **F3** · conectar Regem e RegemCast | ⏳ | Migration **0023**; depende da C1a/C1b no Regem |
 | **F4** · conector Regem (leitura) | ⏳ | Contra respostas gravadas do contrato; depende da C1c |

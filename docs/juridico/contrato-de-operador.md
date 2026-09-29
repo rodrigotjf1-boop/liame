@@ -112,7 +112,7 @@ Este Contrato vale enquanto houver tratamento de dados do Cliente pelo Liame e, 
 | Item | Descrição |
 | --- | --- |
 | **Titulares** | Clientes e contatos do Cliente; pessoas que interagem com as páginas, anúncios e canais do Cliente; pessoas que o Cliente convida para a conta |
-| **Categorias de dados** | Identificação e contato (nome, telefone, e-mail); histórico de pedidos e compras vindo dos sistemas do Cliente; mensagens trocadas pelos canais conectados; identificadores de anúncio e de clique; registros de consentimento e de saída de listas; resumos criptográficos (*hash*) de contato usados em públicos de anúncios |
+| **Categorias de dados** | Identificação e contato (nome, telefone, e-mail); histórico de pedidos e compras vindo dos sistemas do Cliente (itens, valores, canal e cupom; o telefone do comprador vira um identificador pseudonimizado na chegada e não é guardado; pedidos de marketplaces chegam sem identificação do comprador); mensagens trocadas pelos canais conectados; identificadores de anúncio e de clique; registros de consentimento e de saída de listas; resumos criptográficos (*hash*) de contato usados em públicos de anúncios |
 | **Dados sensíveis** | Não tratados. O Cliente não deve enviá-los |
 | **Finalidades** | Atendimento e relacionamento com os clientes do Cliente; mensagens com consentimento; públicos de anúncios com consentimento; medição e atribuição de vendas a campanhas; relatórios |
 | **Operações** | Coleta pelas integrações, armazenamento, análise, envio às plataformas por ordem do Cliente, anonimização e eliminação |

@@ -76,4 +76,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
     retention: 'com a empresa; a que não virou conexão (expirada, erro, revogada) sai em 90 dias',
     purge: { job: 'conexao_oauth', days: 90 },
   },
+  // Vendas (A2.5, F1): pedidos e itens sem dado pessoal; o cliente só como índice cego do telefone.
+  customer_ref: { class: 'PERSONAL', retention: 'enquanto houver finalidade; apagado quando a origem anonimiza o cliente (em até 1 dia)' },
+  customer_ref_link: { class: 'PERSONAL', retention: 'com o cliente pseudonimizado' },
+  order_fact: { class: 'CONFIDENTIAL', retention: 'enquanto durar o contrato (sem dado pessoal)' },
+  order_item_fact: { class: 'CONFIDENTIAL', retention: 'com o pedido' },
 };
