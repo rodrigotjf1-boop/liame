@@ -1,6 +1,6 @@
 # Política de Privacidade do Liame
 
-**Versão 0.2 · rascunho para revisão jurídica · [PREENCHER: data de publicação]**
+**Versão 0.3 · texto de publicação durante a fase de lançamento · [PREENCHER: data de publicação]**
 
 Esta Política explica, em linguagem simples, quais dados pessoais o **Liame** trata, para quê, com quem compartilha, por quanto tempo guarda e como você exerce os seus direitos, conforme a **Lei Geral de Proteção de Dados** (Lei nº 13.709/2018, "LGPD").
 
@@ -37,7 +37,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 | **Cobrança:** plano, valores, notas fiscais e status de pagamento. Os dados do cartão são tratados pelo processador de pagamento; o Liame não os guarda | Você e o processador de pagamento |
 | **Atendimento:** mensagens trocadas com a LIA e com o suporte, inclusive pelo WhatsApp | Você |
 
-**Site agencialiame.com:** o site não tem formulário de cadastro nem cookies de publicidade. A conversa de demonstração com a LIA roda no seu navegador e não é gravada; se você escolher continuar no WhatsApp, a conversa passa a seguir também as regras do WhatsApp. O nosso provedor de rede pode usar cookies estritamente necessários de segurança.
+**Site agencialiame.com:** o site não tem formulário de cadastro nem cookies de publicidade. A conversa de demonstração com a LIA roda no seu navegador e não é gravada; se você escolher continuar no WhatsApp, a conversa passa a seguir também as regras do WhatsApp. O nosso provedor de rede (Cloudflare) mede as visitas de forma agregada, sem cookies, e pode usar cookies estritamente necessários de segurança.
 
 **No aplicativo**, usamos apenas cookies necessários para manter a sessão e proteger a conta. Não usamos cookies de publicidade.
 
@@ -60,7 +60,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 
 6.2. Os dados recebidos dessas plataformas **não são vendidos, não são usados para publicidade do Liame e não são usados para treinar modelos de IA de uso geral**. As credenciais de acesso ficam cifradas, com a chave guardada fora do nosso banco de dados.
 
-6.3. A conta pode ser desconectada a qualquer momento, no Liame ou na própria plataforma. Ao desconectar, apagamos as credenciais. Também apagamos os dados recebidos da plataforma quando deixam de ser necessários, quando a conta é desconectada ou encerrada, ou quando a plataforma pede, salvo o que a lei nos obrigue a guardar.
+6.3. A autorização pode ser revogada a qualquer momento, no Liame (tela **Contas conectadas**) ou na própria plataforma. Ao revogar pelo Liame, apagamos as credenciais na hora e paramos de ler as contas daquela autorização; ao só desligar uma conta, paramos de lê-la. Os dados recebidos da plataforma são apagados quando deixam de ser necessários, quando a empresa cliente pede, quando a conta é encerrada ou quando a plataforma pede, salvo o que a lei nos obrigue a guardar.
 
 6.4. **Dados das APIs do Google** (Google Ads e Google Analytics). O uso e a transferência, pelo Liame, de informações recebidas das APIs do Google seguem a [Política de Dados do Usuário dos Serviços de API do Google](https://developers.google.com/terms/api-services-user-data-policy), inclusive os requisitos de Uso Limitado. *(The Liame's use and transfer of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements.)* Em especial, esses dados:
 
@@ -71,33 +71,44 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 
 ### Como pedir a exclusão dos seus dados
 
-- **Pelo Liame:** na tela **Contas conectadas**, escolha a conta e peça para desconectar e excluir os dados.
-- **Por e-mail:** **appdevsolutionday@gmail.com**, informando a conta ou a página conectada.
-- **Pela Meta:** quando o Liame é removido das integrações da sua conta na Meta, recebemos o pedido e excluímos os dados. O andamento pode ser consultado em [agencialiame.com/exclusao-de-dados](https://agencialiame.com/exclusao-de-dados).
+O passo a passo completo fica em [agencialiame.com/exclusao-de-dados](https://agencialiame.com/exclusao-de-dados).
+
+- **Parar o acesso na hora:** no Liame, tela **Contas conectadas**, revogue a autorização (as credenciais são apagadas na hora). Você também pode tirar o acesso pela própria plataforma: na Meta, nas integrações da sua conta ou do seu portfólio empresarial; no Google, na sua Conta do Google, conforme a [ajuda do Google sobre apps com acesso aos seus dados](https://support.google.com/accounts/answer/14012355).
+- **Excluir os dados que já recebemos:** peça por e-mail, em **appdevsolutionday@gmail.com**, informando a empresa e a conta ou a página conectada.
 
 Respondemos em até 15 dias. Se algum dado precisar ser guardado por obrigação legal, informamos qual e por quanto tempo.
 
 ## 7. Inteligência artificial
 
-7.1. Os funcionários do Liame usam modelos de IA de fornecedores especializados (seção 8). **Antes de enviar qualquer texto a um modelo, o Liame remove ou substitui dados pessoais** (nome, telefone, e-mail, endereço) sempre que o modelo não precisa deles.
+**Nesta fase de lançamento, o Liame ainda não envia dados a modelos de inteligência artificial.** Quando os funcionários de IA forem ligados, valem as regras abaixo, e avisamos antes.
+
+7.1. Os funcionários do Liame vão usar modelos de IA de fornecedores especializados (seção 8). **Antes de enviar qualquer texto a um modelo, o Liame remove ou substitui dados pessoais** (nome, telefone, e-mail, endereço) sempre que o modelo não precisa deles.
 
 7.2. Só contratamos fornecedores de IA que **não usam os dados enviados para treinar os modelos deles**.
 
-7.3. Guardamos o conteúdo das conversas com os modelos por **30 dias**, para investigar erros e abusos; depois, só informações técnicas (horário, custo, versão do modelo), sem o conteúdo.
+7.3. O conteúdo das conversas com os modelos fica guardado por **30 dias**, para investigar erros e abusos; depois, só informações técnicas (horário, custo, versão do modelo), sem o conteúdo.
 
 7.4. A IA sugere; **ações relevantes dependem de aprovação humana**, dentro dos limites que a empresa cliente define.
 
 ## 8. Com quem compartilhamos
 
-Compartilhamos dados apenas com fornecedores que nos ajudam a prestar o serviço, pelo mínimo necessário e com contrato que os obriga a proteger os dados:
+Compartilhamos dados apenas com fornecedores que nos ajudam a prestar o serviço, pelo mínimo necessário e com contrato que os obriga a proteger os dados.
+
+**Em uso:**
 
 | Fornecedor | Para quê | Onde os dados ficam |
 | --- | --- | --- |
 | Supabase | Banco de dados | Brasil (São Paulo) |
 | Hostinger | Servidores da aplicação | Brasil |
 | Cloudflare | Rede, proteção contra ataques e entrega do site | Rede global |
-| Amazon Web Services | Chaves de criptografia, cópia da auditoria e envio dos e-mails do serviço | Brasil (São Paulo) |
+| Amazon Web Services | Chaves de criptografia e envio dos e-mails do serviço | Brasil (São Paulo) |
+
+**Previstos** (entram junto com as funções que dependem deles; avisamos antes de ligar cada um):
+
+| Fornecedor | Para quê | Onde os dados ficam |
+| --- | --- | --- |
 | Anthropic, OpenAI e Google | Modelos de inteligência artificial | Estados Unidos |
+| Amazon Web Services | Cópia da auditoria em armazenamento que não permite alteração | Brasil (São Paulo) |
 | Grafana Cloud | Monitoramento técnico | Brasil |
 | Sentry | Registro de erros técnicos, sem conteúdo de clientes | União Europeia |
 | Langfuse | Qualidade dos funcionários de IA, com conteúdo já sem dados pessoais | União Europeia |
@@ -116,7 +127,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 
 | | |
 | --- | --- |
-| **Para onde** | **Estados Unidos**: provedores de inteligência artificial (Anthropic, OpenAI, Google) e parte da rede (Cloudflare). **União Europeia**: registro de erros (Sentry) e qualidade dos funcionários de IA (Langfuse); a União Europeia tem decisão de adequação da ANPD (Resolução CD/ANPD nº 32/2026). |
+| **Para onde** | **Hoje:** parte da rede (Cloudflare), que pode passar por outros países. **Quando ligados:** **Estados Unidos**, provedores de inteligência artificial (Anthropic, OpenAI, Google); **União Europeia**, registro de erros (Sentry) e qualidade dos funcionários de IA (Langfuse); a União Europeia tem decisão de adequação da ANPD (Resolução CD/ANPD nº 32/2026). |
 | **Como** | O fornecedor recebe e processa os dados em servidores dele para prestar o serviço contratado. Para os modelos de IA, enviamos só o texto necessário, **sem os dados pessoais que o modelo não precisa**. |
 | **Para quê e por quanto tempo** | As finalidades da seção 5 e da seção 7, pelo tempo necessário para cada uma, respeitados os prazos da seção 9 e os dos contratos com os fornecedores. |
 | **Mecanismo** | Para países sem decisão de adequação, as **cláusulas-padrão contratuais aprovadas pela ANPD**, adotadas integralmente e sem alteração, ou outro mecanismo do art. 33 da LGPD. |
@@ -130,13 +141,13 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | --- | --- |
 | Registros de acesso à aplicação | 6 meses (Marco Civil da Internet, art. 15) |
 | Registros técnicos (logs) | 30 dias |
-| Conteúdo das conversas com modelos de IA | 30 dias; depois, só metadados |
-| Dados brutos recebidos das plataformas | 90 dias |
+| Conteúdo das conversas com modelos de IA (quando ligados) | 30 dias; depois, só metadados |
+| Dados brutos recebidos das plataformas | 30 dias |
 | Campanhas, peças e tarefas arquivadas | 12 meses após arquivar; estatísticas sem dados pessoais ficam |
 | Dados de contatos dos clientes (como operador) | enquanto a empresa cliente tiver finalidade e base legal; pedido de exclusão ou saída da lista, em até 15 dias |
 | Auditoria de ações | 5 anos, com proteção contra alteração |
 | Registro de incidentes de segurança | no mínimo 5 anos (Resolução CD/ANPD nº 15/2024, art. 10) |
-| Cópias de segurança | 35 dias; os dados pessoais nelas ficam cifrados com uma chave por empresa cliente |
+| Cópias de segurança | até 35 dias; os dados pessoais nelas ficam cifrados com uma chave por empresa cliente |
 | Documentos fiscais | pelo prazo da legislação fiscal |
 
 **Fim do contrato:** a empresa cliente tem 30 dias para exportar os dados. Depois, apagamos tudo de forma definitiva, inclusive das cópias de segurança (destruímos a chave que as tornava legíveis), e enviamos um certificado de exclusão. Guardamos só o que a lei obriga, pelo prazo legal.

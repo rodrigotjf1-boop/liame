@@ -1,6 +1,6 @@
 # Termos de Uso do Liame
 
-**Versão 0.2 · rascunho para revisão jurídica · [PREENCHER: data de publicação]**
+**Versão 0.3 · texto de publicação durante a fase de lançamento · [PREENCHER: data de publicação]**
 
 Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada assistente de inteligência artificial trabalha como um funcionário de uma agência. Leia com atenção: ao criar a conta ou usar o Liame, você concorda com estes Termos, com a [Política de Privacidade](politica-de-privacidade.md) e com o [Contrato de Tratamento de Dados](contrato-de-operador.md), que faz parte destes Termos.
 
@@ -26,6 +26,8 @@ Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada a
 
 2.5. O Liame depende das plataformas que você conecta. Quando uma delas muda regras, preços ou interfaces, algumas funções podem mudar ou parar até que sejam adaptadas.
 
+2.6. **Fase de lançamento.** O Liame está entrando no ar por etapas. Nesta fase, ele lê as contas de anúncio e de análise que você conecta (Meta, Google Ads e Google Analytics) e mostra os resultados, os avisos e o frescor de cada número; os funcionários de IA, a execução de ações nas plataformas, as mensagens e as demais funções descritas nestes Termos entram aos poucos, e cada uma passa a seguir estes Termos quando for ligada. O que já está disponível aparece no próprio Liame.
+
 ## 3. Conta e segurança
 
 3.1. Você cria a conta com um e-mail válido e informações verdadeiras sobre o negócio, e as mantém atualizadas.
@@ -50,7 +52,7 @@ Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada a
 
 5.2. Você continua sujeito aos termos e às políticas de cada plataforma (Meta, Google, WhatsApp e outras). O Liame não é afiliado a elas, e elas podem revisar, reprovar ou bloquear anúncios e contas por critérios próprios.
 
-5.3. Você pode desconectar uma conta a qualquer momento, no Liame ou na própria plataforma. Ao desconectar, paramos de acessá-la e apagamos as credenciais guardadas.
+5.3. Você pode revogar uma autorização a qualquer momento, no Liame ou na própria plataforma. Ao revogar pelo Liame, paramos de acessar as contas daquela autorização e apagamos as credenciais guardadas; ao só desligar uma conta, paramos de lê-la. O passo a passo para excluir os dados recebidos fica em [agencialiame.com/exclusao-de-dados](https://agencialiame.com/exclusao-de-dados).
 
 5.4. Algumas plataformas limitam o uso dos dados que entregam. Por exemplo, os dados recebidos das APIs do Google (Google Ads e Google Analytics) ficam dentro das funções do Liame e **não são levados para outras plataformas de anúncio**. O Liame aplica esses limites automaticamente.
 
@@ -81,7 +83,7 @@ Você concorda em não usar o Liame para:
 9. burlar limites, aprovações ou medidas de segurança do Liame ou das plataformas; fazer engenharia reversa; extrair dados em massa; sobrecarregar o serviço;
 10. revender ou oferecer o Liame a terceiros sem contrato específico conosco.
 
-O funcionário de Compliance do Liame aplica regras automáticas que podem impedir, pausar ou pedir revisão de conteúdo e ações que pareçam violar esta seção. Isso não transfere para nós a responsabilidade pelo conteúdo que você aprova.
+O Liame aplica regras automáticas (e, quando ligado, o funcionário de Compliance) que podem impedir, pausar ou pedir revisão de conteúdo e ações que pareçam violar esta seção. Isso não transfere para nós a responsabilidade pelo conteúdo que você aprova.
 
 ## 8. Seus dados e o nosso papel
 

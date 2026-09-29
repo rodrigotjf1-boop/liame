@@ -1,6 +1,6 @@
 # Contrato de Tratamento de Dados Pessoais (Liame)
 
-**Versão 0.2 · rascunho para revisão jurídica · [PREENCHER: data de publicação]**
+**Versão 0.3 · texto de publicação durante a fase de lançamento · [PREENCHER: data de publicação]**
 
 Este Contrato faz parte dos [Termos de Uso do Liame](termos-de-uso.md) e regula o tratamento de dados pessoais que o Liame realiza **em nome do Cliente**, conforme o art. 39 da Lei nº 13.709/2018 (LGPD).
 
@@ -17,6 +17,8 @@ Este Contrato faz parte dos [Termos de Uso do Liame](termos-de-uso.md) e regula 
 2.1. O Liame trata dados pessoais apenas para prestar os serviços descritos nos Termos: conectar contas e sistemas do Cliente, analisar resultados, atribuir vendas a campanhas, montar públicos, enviar mensagens e executar ações aprovadas.
 
 2.2. A descrição do tratamento (titulares, categorias de dados, finalidades, duração) está no **Anexo I**.
+
+2.3. Na fase de lançamento (Termos, item 2.6), o Liame trata os dados das contas de anúncio e de análise conectadas; as demais operações do Anexo I passam a valer quando cada função for ligada.
 
 ## 3. Instruções do Cliente
 
@@ -64,7 +66,7 @@ O Liame se compromete a:
 
 7.1. Se um titular pedir ao Liame algo sobre dados que o Liame trata em nome do Cliente, o Liame encaminha o pedido ao Cliente em até **2 (dois) dias úteis** e não responde diretamente, salvo se o Cliente pedir.
 
-7.2. O Liame oferece no próprio produto os meios para o Cliente consultar, corrigir, exportar, anonimizar e excluir os dados de um titular, e registrar a revogação de um consentimento, que vale na hora para os envios pendentes.
+7.2. Quando o módulo de contatos for ligado, o Liame vai oferecer no próprio produto os meios para o Cliente consultar, corrigir, exportar, anonimizar e excluir os dados de um titular, e registrar a revogação de um consentimento, que vale na hora para os envios pendentes. Até lá, esses pedidos são atendidos pelo suporte, no prazo da cláusula 7.1.
 
 ## 8. Incidentes de segurança
 
@@ -121,9 +123,9 @@ Este Contrato vale enquanto houver tratamento de dados do Cliente pelo Liame e, 
 - Criptografia em trânsito (TLS) e em repouso; dados pessoais cifrados com **chave própria de cada cliente**; chaves mestras guardadas fora do banco de dados, em serviço de gestão de chaves.
 - Separação entre clientes no aplicativo e no banco de dados (segurança por linha forçada), com testes automáticos que tentam acessar dados de outro cliente.
 - Segundo fator por aplicativo autenticador para quem aprova gasto ou administra a conta; convites de uso único, com validade e restritos ao e-mail convidado; remoção de acesso imediata.
-- Registro de auditoria que não pode ser alterado, com prova diária guardada fora do sistema.
+- Registro de auditoria que não pode ser alterado, com prova diária publicada fora do sistema (registro público de transparência e carimbo de tempo).
 - Credenciais de terceiros nunca aparecem em registros técnicos, telas, respostas de API ou textos enviados à IA.
-- Registros técnicos por 30 dias; cópias de segurança por 35 dias.
+- Registros técnicos por 30 dias; cópias de segurança por até 35 dias.
 - Acesso interno mínimo, individual e registrado; revisão periódica.
 - Verificação automática de dependências e de segredos no código a cada mudança; revisão de segurança externa antes da abertura comercial.
 - Plano de resposta a incidentes, com botão de parada que pausa as ações automáticas por cliente, conta ou fornecedor.
@@ -137,8 +139,14 @@ Lista vigente em [agencialiame.com/privacidade#fornecedores](https://agencialiam
 | Supabase | Banco de dados | Brasil (São Paulo) |
 | Hostinger | Servidores da aplicação | Brasil |
 | Cloudflare | Rede e proteção | Rede global |
-| Amazon Web Services | Chaves de criptografia, cópia da auditoria e e-mails do serviço | Brasil (São Paulo) |
+| Amazon Web Services | Chaves de criptografia e e-mails do serviço | Brasil (São Paulo) |
+
+Previstos, com o aviso da cláusula 6.2 antes de cada um ser ligado:
+
+| Suboperador | Serviço | Local |
+| --- | --- | --- |
 | Anthropic, OpenAI, Google | Modelos de inteligência artificial (com dados minimizados) | Estados Unidos |
+| Amazon Web Services | Cópia da auditoria em armazenamento que não permite alteração | Brasil (São Paulo) |
 | Grafana Cloud | Monitoramento técnico | Brasil |
 | Sentry | Erros técnicos, sem conteúdo de clientes | União Europeia |
 | Langfuse | Qualidade dos funcionários de IA, sem dados pessoais | União Europeia |
