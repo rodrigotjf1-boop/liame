@@ -33,6 +33,17 @@ describe('regras da atenção de mídia', () => {
     expect(campanhaParou(campanha, new Map(Array.from({ length: 7 }, (_, i) => [dia(ontem, -(i + 1)), 20] as const)), ontem)).toBeNull();
   });
 
+  it('ERR-039: campanha programada por dia da semana não "parou" no dia de folga (visto na Mister Burgers)', () => {
+    // "VENDAS | SEX A DOM": entrega sexta, sábado e domingo; ontem = segunda. Média da semana 100+, mas a
+    // segunda anterior também não teve entrega: é a programação, não uma parada.
+    const segunda = '2026-09-28';
+    const campanha = { id: randomUUID(), name: 'VENDAS | COMPRAR | SEX A DOM', connectedAccountId: conta.id, provider: 'meta_ads' };
+    const sexADom = new Map<string, number>([['2026-09-25', 2900], ['2026-09-26', 3100], ['2026-09-27', 2800]]);
+    expect(campanhaParou(campanha, sexADom, segunda)).toBeNull();
+    // A mesma campanha que entregou na segunda anterior e não entregou ontem: aí sim parou.
+    expect(campanhaParou(campanha, new Map<string, number>(sexADom).set('2026-09-21', 2500), segunda)).toMatchObject({ kind: 'campanha_parou' });
+  });
+
   it('ordem: crítica, atenção, informação; na mesma gravidade, pela prioridade do tipo', () => {
     const item = (kind: ItemAtencao['kind'], severity: ItemAtencao['severity']): ItemAtencao => ({ kind, severity, title: kind, detail: '', action: '', connected_account_id: null, campaign_id: null, provider: null });
     expect(ordenar([item('versao_api', 'info'), item('dado_atrasado', 'atencao'), item('campanha_parou', 'critica'), item('conta_desconectada', 'critica')]).map((i) => i.kind)).toEqual([
