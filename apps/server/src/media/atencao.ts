@@ -73,7 +73,11 @@ export function gastoForaDoNormal(
   };
 }
 
-/** Campanha ativa que entregava (média de 100+ impressões por dia na semana anterior) e ontem não entregou. */
+/**
+ * Campanha ativa que entregava (média de 100+ impressões por dia na semana anterior) e ontem não entregou.
+ * Só conta como "parou" se entregou no mesmo dia da semana anterior: campanha programada por dia da semana
+ * ("SEX A DOM", "SEG A QUI") fica sem entrega nos dias de folga por desenho, e isso não é aviso (ERR-039).
+ */
 export function campanhaParou(
   campanha: { id: string; name: string; connectedAccountId: string; provider: string },
   impressoesPorDia: Map<string, number>,
@@ -84,6 +88,8 @@ export function campanhaParou(
   for (let i = 1; i <= 7; i++) soma += impressoesPorDia.get(new Date(base - i * 86_400_000).toISOString().slice(0, 10)) ?? 0;
   const media = soma / 7;
   if (media < MEDIA_MINIMA_IMPRESSOES || (impressoesPorDia.get(ontem) ?? 0) > 0) return null;
+  const mesmoDiaSemanaPassada = impressoesPorDia.get(new Date(base - 7 * 86_400_000).toISOString().slice(0, 10)) ?? 0;
+  if (mesmoDiaSemanaPassada <= 0) return null;
   return {
     kind: 'campanha_parou',
     severity: 'critica',
