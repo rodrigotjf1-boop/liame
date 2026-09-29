@@ -11,7 +11,7 @@ git, o chat ou um arquivo). Variáveis e o que cada uma faz: `docs/configuracao.
 | Banco: Supabase São Paulo, migrations aplicadas e conferidas | ✅ 0001–0020 (`configuracao.md`, "Banco na nuvem") |
 | AWS: chave mestra no KMS, usuário `liame-sistema` com `liame-sistema-kms` e `liame-sistema-ses` | ✅ |
 | SES: domínio verificado; saída do sandbox | ✅ domínio · ⏳ resposta da AWS |
-| Termos, privacidade e exclusão de dados publicados no site | ⏳ a API não sobe em produção sem `TERMS_VERSION` e os endereços |
+| Termos, privacidade e exclusão de dados publicados no site | ✅ 29/09/2026: `/termos/`, `/privacidade/`, `/contrato-de-dados/`, `/exclusao-de-dados/` (gerados de `docs/juridico` por `dms-sites/scripts/importar-juridico-liame.mjs`) |
 | Apps da Meta e do Google (em teste) | ✅ |
 
 **Migration nova sempre antes do merge:** com implantação automática, o merge sobe o código na hora. Uma
@@ -25,9 +25,9 @@ migration nova é aplicada e conferida na nuvem **antes** de mesclar o PR que de
 
 | Serviço | Dockerfile | Porta | Domínio |
 | --- | --- | --- | --- |
-| `liame-api` | `apps/server/Dockerfile` | 3001 | `https://api.agencialiame.com` |
-| `liame-worker` | `apps/server/Dockerfile` + comando do worker | — (sonda interna na 3001) | nenhum |
-| `liame-web` | `apps/web/Dockerfile` | 3000 | `https://app.agencialiame.com` |
+| `liame-api` | `apps/server/Dockerfile` | 80 (o EasyPanel injeta `PORT=80`; fora dele, 3001) | `https://api.agencialiame.com` |
+| `liame-worker` | `apps/server/Dockerfile` + comando do worker | — (sonda interna na mesma `PORT`) | nenhum |
+| `liame-web` | `apps/web/Dockerfile` | 80 (o EasyPanel injeta `PORT=80`; fora dele, 3000) | `https://app.agencialiame.com` |
 
 O Collector do OpenTelemetry entra quando a conta do Grafana Cloud existir (`infra/otel-collector.yaml`);
 até lá os processos não exportam (sem `OTEL_EXPORTER_OTLP_ENDPOINT`).
@@ -57,17 +57,18 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 1. **+ Serviço → App** → `liame-api`.
 2. **Fonte**: como acima. **Construção → Dockerfile** → `apps/server/Dockerfile`.
 3. **Ambiente** (tabela da seção 4, coluna API).
-4. **Domínios** → `https://api.agencialiame.com/` → porta **3001**.
+4. **Domínios** → `https://api.agencialiame.com/` → porta **80**: o EasyPanel injeta `PORT=80` e ela vale sobre a da imagem (o log mostra `API no ar na porta 80`).
 5. **Implantar**. Conferir: `https://api.agencialiame.com/health` responde `{"status":"ok",…,"version":"<commit>"}`
    e `/health/ready` responde 200 com a última migration (`0020_vigia`).
 
 ### 3.2 `liame-worker`
 
 1. **+ Serviço → App** → `liame-worker`. Fonte e Dockerfile iguais aos da API.
-2. **Implantações** (Deploy) → **comando** (sobrescreve o da imagem): `node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js`.
-   A documentação do EasyPanel põe o comando no painel de implantação; o nome exato do campo em português se confere no print.
-3. **Ambiente**: tabela da seção 4, coluna worker. **Sem domínio**.
-4. **Implantar**. Conferir nos logs `worker no ar`. A sonda de vida do worker responde `/health` só no
+2. **Avançado** → seção **Implantar** → campo **Comando**: `node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js` → **Salvar**.
+   **Implantar só depois do comando e do Ambiente salvos**: sem o comando, a imagem sobe uma segunda API; sem o
+   Ambiente, o worker cai com `config: em produção, defina APP_URL`.
+3. **Ambiente**: copiar o da API inteiro e acrescentar `DATABASE_URL_JOBS` (tabela da seção 4). **Sem domínio**.
+4. **Implantar**. Conferir nos logs `worker no ar` e, na API, `/health/ready` com `queue: ok` (o worker cria as tabelas da fila na primeira subida). Com "tempo de inatividade zero", o log mistura o contêiner novo e o antigo por alguns instantes. A sonda de vida do worker responde `/health` só no
    `127.0.0.1` do contêiner: é o que o HEALTHCHECK da imagem consulta (sem ela, o contêiner ficaria
    "unhealthy" e seria reiniciado em ciclo).
 
@@ -77,7 +78,7 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 2. **Ambiente**: `NEXT_PUBLIC_API_URL=https://api.agencialiame.com`. O EasyPanel passa as variáveis do
    serviço ao build (documentação oficial): o endereço da API fica fixado no código do navegador e na CSP.
    Trocar o endereço = implantar de novo.
-3. **Domínios** → `https://app.agencialiame.com/` → porta **3000**.
+3. **Domínios** → `https://app.agencialiame.com/` → porta **80** (mesma razão da API).
 4. **Implantar**. Conferir: `https://app.agencialiame.com/entrar` abre, e o console do navegador não mostra
    bloqueio de CSP nem chamada a `localhost`.
 
@@ -102,13 +103,15 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 | `AUDIT_ANCHOR_SIGNING_KEY` **S** | ✔ | ✔ | chave ECDSA P-256 numa linha (seção 5) |
 | `REKOR_URL` | ✔ | ✔ | `https://log2025-1.rekor.sigstore.dev` (conferir o shard vigente no SigningConfig da Sigstore) |
 | `TSA_URL` | ✔ | ✔ | `https://timestamp.sigstore.dev/api/v1/timestamp` |
-| `TERMS_VERSION` | ✔ | ✔ | a versão publicada no site (ex.: `2026-09-30`) |
-| `TERMS_URL` · `PRIVACY_URL` | ✔ | ✔ | `https://agencialiame.com/termos` · `https://agencialiame.com/privacidade` |
+| `TERMS_VERSION` | ✔ | ✔ | a versão publicada no site: `2026-09-29` (páginas no ar desde 29/09/2026) |
+| `TERMS_URL` · `PRIVACY_URL` | ✔ | ✔ | `https://agencialiame.com/termos/` · `https://agencialiame.com/privacidade/` |
 | `META_APP_ID` · `META_LOGIN_CONFIG_ID` | ✔ | ✔ | `1399495602273174` · `1068233099319648` |
 | `META_APP_SECRET` **S** | ✔ | ✔ | Configurações do app → Básico → Chave Secreta do app |
 | `GOOGLE_OAUTH_CLIENT_ID` | ✔ | ✔ | `285693801008-armp76vqm8543v88bhcd19um2k1vitnq.apps.googleusercontent.com` |
 | `GOOGLE_OAUTH_CLIENT_SECRET` **S** | ✔ | ✔ | a chave ativa do cliente "Liame API" (gerenciador de senhas) |
 
+Variável opcional fica **fora** do Ambiente até ter valor: uma linha `NOME=` vazia é um valor vazio, e a
+validação recusa (por exemplo, `META_APP_SECRET` exige 16 ou mais caracteres).
 `NODE_ENV=production`, a porta e a versão (`GIT_SHA` do EasyPanel) vêm da imagem. Não definir
 `LIAME_KEK_LOCAL`, `COOKIE_SECURE=false`, `WEBHOOK_ALLOW_PRIVATE_NETWORK` nem endereços de plataforma
 (a API recusa subir com eles em produção).
@@ -116,21 +119,25 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 ## 5. Segredos gerados pelo dono (uma vez, no computador dele)
 
 Em PowerShell (5.1 ou 7), numa pasta temporária; nada aparece na tela, vai direto para a área de
-transferência (comandos testados em 28/09/2026 no Windows PowerShell 5.1):
+transferência (comandos testados em 28/09/2026 no Windows PowerShell 5.1). Entrar na pasta pelo caminho
+longo: o `$env:TEMP` pode vir em nome curto 8.3 (`USURIO~2`), que o `cd` do PowerShell 5.1 não aceita (ERR-037):
 
 ```powershell
+mkdir "$env:USERPROFILE\AppData\Local\Temp\liame-ancora"; cd "$env:USERPROFILE\AppData\Local\Temp\liame-ancora"
+
 # Sal da âncora: 32 bytes aleatórios em base64 → colar no gerenciador de senhas e no painel
 $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b) | Set-Clipboard
 
 # Chave de assinatura da âncora (precisa do OpenSSL, que vem com o Git para Windows)
 & "C:\Program Files\Git\usr\bin\openssl.exe" genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out ancora.pem
 ((Get-Content ancora.pem -Raw).Trim() -replace '\r?\n', '\n') | Set-Clipboard   # uma linha, com \n literal
-& "C:\Program Files\Git\usr\bin\openssl.exe" pkey -in ancora.pem -pubout -out ancora-publica.pem
+& "C:\Program Files\Git\usr\bin\openssl.exe" pkey -in ancora.pem -pubout -out C:\Liame\infra\ancora-publica.pem
+Remove-Item ancora.pem
 ```
 
-A chave privada vai para o gerenciador de senhas e para o painel; depois, `ancora.pem` é apagado. A
-**pública** (`ancora-publica.pem`) não é segredo: entra no repositório junto com a política de auditoria,
-para qualquer pessoa conferir as âncoras.
+A chave privada fica só no gerenciador de senhas e no painel. A **pública** não é segredo: está em
+`infra/ancora-publica.pem` (P-256, gerada em 29/09/2026), para qualquer pessoa conferir as assinaturas das
+âncoras publicadas no Rekor.
 
 ## 6. Depois de no ar
 
