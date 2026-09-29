@@ -137,6 +137,15 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   }
   const fromAddress = enderecoDoRemetente(env.MAIL_FROM);
   if (!fromAddress) throw new Error('config: MAIL_FROM precisa ser um e-mail (com ou sem nome: "Liame <nao-responda@dominio>")');
+  // KMS e SES usam a chave do usuário IAM (liame-sistema). Sem ela, a API subia e só falhava no primeiro uso
+  // ("Could not load credentials from any providers", ERR-038): em produção, recusa subir.
+  if (env.NODE_ENV === 'production' && (source.KEY_PROVIDER === 'aws-kms' || env.MAIL_TRANSPORT === 'ses')) {
+    const id = source.AWS_ACCESS_KEY_ID?.trim() ?? '';
+    const segredo = source.AWS_SECRET_ACCESS_KEY?.trim() ?? '';
+    if (!/^A[KS]IA[A-Z0-9]{16}$/.test(id) || segredo.length < 30) {
+      throw new Error('config: em produção, KMS e SES precisam de AWS_ACCESS_KEY_ID e AWS_SECRET_ACCESS_KEY completas (chave do usuário liame-sistema)');
+    }
+  }
   if (env.NODE_ENV === 'production' && env.MAIL_TRANSPORT === 'ses' && !source.MAIL_FROM) {
     throw new Error('config: em produção, defina MAIL_FROM (remetente do domínio verificado no SES)');
   }
