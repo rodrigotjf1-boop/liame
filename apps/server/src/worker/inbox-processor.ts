@@ -8,6 +8,8 @@ export type InboxRow = {
   provider: string;
   external_event_id: string;
   tenant_id: string | null;
+  /** Conexão que assinou o evento (webhook por conexão dos produtos DMS); nulo nos demais. */
+  connection_id: string | null;
   type: string | null;
   body: string;
   attempts: number;
@@ -38,7 +40,7 @@ export class InboxProcessor {
     if (scope.ids && !scope.ids.length) return 0;
     return withSystem(this.database.db, async (tx) => {
       const r = await tx.execute<InboxRow>(sql`
-        select id, provider, external_event_id, tenant_id, type, body, attempts from liame.inbox_event
+        select id, provider, external_event_id, tenant_id, connection_id, type, body, attempts from liame.inbox_event
          where processed_at is null and attempts < ${MAX_ATTEMPTS} and provider in ${providers}
                ${scope.ids ? sql`and id in ${scope.ids}` : sql``}
          order by received_at limit ${limit}

@@ -1,0 +1,46 @@
+{
+  "itens": [
+    {
+      "id": "cup-combo-sexta",
+      "versao": 4,
+      "atualizado_em": "2026-09-25T14:02:11.382Z",
+      "codigo": "COMBOSEXTA",
+      "nome": "Combo de sexta",
+      "tipo": "percentual",
+      "percentual": "10.00",
+      "valor_centavos": null,
+      "teto_desconto_centavos": 1500,
+      "pedido_minimo_centavos": 4000,
+      "valido_de": "2026-09-26",
+      "valido_ate": "2026-10-31",
+      "fuso": "America/Sao_Paulo",
+      "ativo": true,
+      "max_usos": 300,
+      "usos": 42,
+      "condicoes": { "somente_novos": false, "max_por_cliente": 1, "min_dias_sem_compra": null },
+      "todas_as_lojas": false
+    },
+    {
+      "id": "cup-frete",
+      "versao": 1,
+      "atualizado_em": "2026-09-20T10:00:00Z",
+      "codigo": "FRETEGRATIS",
+      "nome": null,
+      "tipo": "frete_gratis",
+      "percentual": null,
+      "valor_centavos": null,
+      "teto_desconto_centavos": null,
+      "pedido_minimo_centavos": null,
+      "valido_de": null,
+      "valido_ate": null,
+      "fuso": "America/Sao_Paulo",
+      "ativo": true,
+      "max_usos": null,
+      "usos": 7,
+      "condicoes": {},
+      "todas_as_lojas": true
+    }
+  ],
+  "proximo_cursor": "cup-c1",
+  "tem_mais": false
+}

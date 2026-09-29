@@ -1,0 +1,44 @@
+{
+  "itens": [
+    {
+      "id": "ped-004",
+      "versao": 1,
+      "atualizado_em": "2026-09-27T00:30:00Z",
+      "canal": "whatsapp_bot",
+      "grupo_canal": "whatsapp",
+      "situacao": "confirmado",
+      "moeda": "BRL",
+      "fuso": "America/Sao_Paulo",
+      "receita_centavos": 3980,
+      "desconto_loja_centavos": 0,
+      "estornado_centavos": 0,
+      "cupom": null,
+      "cliente": { "id": "cli-2", "telefone": "552198887777", "novo": false },
+      "confirmado_em": "2026-09-27T00:30:00Z",
+      "cancelado_em": null,
+      "itens": [{ "id": "it-1", "produto_id": "p-12", "nome": "Smash simples", "quantidade": "2", "receita_centavos": 3980, "custo_centavos": null }],
+      "origem": null
+    },
+    {
+      "id": "ped-005",
+      "versao": 1,
+      "atualizado_em": "2026-09-27T01:00:00Z",
+      "canal": "cardapio",
+      "grupo_canal": "cardapio",
+      "situacao": "confirmado",
+      "moeda": "BRL",
+      "fuso": "America/Sao_Paulo",
+      "receita_centavos": 2590,
+      "desconto_loja_centavos": 0,
+      "estornado_centavos": 0,
+      "cupom": null,
+      "cliente": { "id": "cli-3", "telefone": null, "novo": true },
+      "confirmado_em": "2026-09-27T01:00:00Z",
+      "cancelado_em": null,
+      "itens": [{ "id": "it-1", "produto_id": "p-13", "nome": "Milkshake", "quantidade": "1", "receita_centavos": 2590, "custo_centavos": 700 }],
+      "origem": { "capturado_em": "2026-09-27T00:50:00Z", "utm_source": "facebook", "utm_campaign": "promo de sexta", "campaign_id": "{{campaign.id}}" }
+    }
+  ],
+  "proximo_cursor": "ped-c2",
+  "tem_mais": false
+}

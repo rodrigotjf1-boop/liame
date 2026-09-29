@@ -18,7 +18,7 @@ Este Contrato faz parte dos [Termos de Uso do Liame](termos-de-uso.md) e regula 
 
 2.2. A descrição do tratamento (titulares, categorias de dados, finalidades, duração) está no **Anexo I**.
 
-2.3. Na fase de lançamento (Termos, item 2.6), o Liame trata os dados das contas de anúncio e de análise conectadas; as demais operações do Anexo I passam a valer quando cada função for ligada.
+2.3. Na fase de lançamento (Termos, item 2.6), o Liame trata os dados das contas de anúncio e de análise conectadas e, quando o Cliente conecta o Regem, os pedidos, os cupons e os custos das lojas autorizadas, para medir quais campanhas trouxeram vendas; as demais operações do Anexo I passam a valer quando cada função for ligada.
 
 ## 3. Instruções do Cliente
 
@@ -66,7 +66,7 @@ O Liame se compromete a:
 
 7.1. Se um titular pedir ao Liame algo sobre dados que o Liame trata em nome do Cliente, o Liame encaminha o pedido ao Cliente em até **2 (dois) dias úteis** e não responde diretamente, salvo se o Cliente pedir.
 
-7.2. Quando o módulo de contatos for ligado, o Liame vai oferecer no próprio produto os meios para o Cliente consultar, corrigir, exportar, anonimizar e excluir os dados de um titular, e registrar a revogação de um consentimento, que vale na hora para os envios pendentes. Até lá, esses pedidos são atendidos pelo suporte, no prazo da cláusula 7.1.
+7.2. Quando o módulo de contatos for ligado, o Liame vai oferecer no próprio produto os meios para o Cliente consultar, corrigir, exportar, anonimizar e excluir os dados de um titular, e registrar a revogação de um consentimento, que vale na hora para os envios pendentes. Até lá, esses pedidos são atendidos pelo suporte, no prazo da cláusula 7.1. O cliente anonimizado pelo Cliente no Regem tem o identificador pseudonimizado apagado do Liame em até 1 (um) dia.
 
 ## 8. Incidentes de segurança
 
@@ -125,6 +125,7 @@ Este Contrato vale enquanto houver tratamento de dados do Cliente pelo Liame e, 
 - Segundo fator por aplicativo autenticador para quem aprova gasto ou administra a conta; convites de uso único, com validade e restritos ao e-mail convidado; remoção de acesso imediata.
 - Registro de auditoria que não pode ser alterado, com prova diária publicada fora do sistema (registro público de transparência e carimbo de tempo).
 - Credenciais de terceiros nunca aparecem em registros técnicos, telas, respostas de API ou textos enviados à IA.
+- O telefone do comprador vindo do Regem ou do RegemCast é transformado, na chegada, num código pseudonimizado com a chave própria do Cliente e não é guardado; pedidos de marketplaces chegam sem identificação do comprador.
 - Registros técnicos por 30 dias; cópias de segurança por até 35 dias.
 - Acesso interno mínimo, individual e registrado; revisão periódica.
 - Verificação automática de dependências e de segredos no código a cada mudança; revisão de segurança externa antes da abertura comercial.

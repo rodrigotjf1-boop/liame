@@ -1,0 +1,87 @@
+{
+  "itens": [
+    {
+      "id": "ped-001",
+      "versao": 3,
+      "atualizado_em": "2026-09-26T23:00:01.412Z",
+      "canal": "cardapio",
+      "grupo_canal": "cardapio",
+      "situacao": "confirmado",
+      "moeda": "BRL",
+      "fuso": "America/Sao_Paulo",
+      "receita_centavos": 5990,
+      "desconto_loja_centavos": 500,
+      "estornado_centavos": 0,
+      "cupom": null,
+      "cliente": { "id": "cli-1", "telefone": "(21) 99999-8888", "novo": true },
+      "criado_em": "2026-09-26T22:58:00Z",
+      "confirmado_em": "2026-09-26T23:00:00Z",
+      "cancelado_em": null,
+      "itens": [
+        { "id": "it-1", "produto_id": "p-9", "nome": "Burger da casa", "quantidade": "2", "receita_centavos": 4000, "custo_centavos": 1600 },
+        { "id": "it-2", "produto_id": "p-3", "nome": "Refrigerante lata", "quantidade": "1", "receita_centavos": 990, "custo_centavos": null }
+      ],
+      "origem": {
+        "capturado_em": "2026-09-25T20:41:07Z",
+        "lk": null,
+        "utm_source": "meta",
+        "utm_medium": "paid",
+        "utm_campaign": "Combo sexta",
+        "utm_content": null,
+        "utm_term": null,
+        "campaign_id": "120215566778899",
+        "adset_id": "120215566770000",
+        "adgroup_id": null,
+        "ad_id": "120215566771111",
+        "gclid": null,
+        "gbraid": null,
+        "wbraid": null,
+        "fbclid": "IwAR0ped001"
+      }
+    },
+    {
+      "id": "ped-002",
+      "versao": 2,
+      "atualizado_em": "2026-09-26T23:10:00Z",
+      "canal": "ifood",
+      "grupo_canal": "marketplace",
+      "situacao": "confirmado",
+      "moeda": "BRL",
+      "fuso": "America/Sao_Paulo",
+      "receita_centavos": 7450,
+      "desconto_loja_centavos": 0,
+      "estornado_centavos": 0,
+      "cupom": null,
+      "cliente": { "id": "cli-ifood", "telefone": "(21) 97777-6666", "novo": null },
+      "criado_em": "2026-09-26T23:05:00Z",
+      "confirmado_em": "2026-09-26T23:06:00Z",
+      "cancelado_em": null,
+      "itens": [{ "id": "it-1", "produto_id": "p-10", "nome": "Combo duplo", "quantidade": "1", "receita_centavos": 7450, "custo_centavos": 2900 }],
+      "origem": { "capturado_em": "2026-09-26T22:00:00Z", "fbclid": "IwAR0naoconta" }
+    },
+    {
+      "id": "ped-003",
+      "versao": 1,
+      "atualizado_em": "2026-09-26T23:20:00Z",
+      "canal": "balcao",
+      "grupo_canal": "presencial",
+      "situacao": "confirmado",
+      "moeda": "BRL",
+      "fuso": "America/Sao_Paulo",
+      "receita_centavos": 4410,
+      "desconto_loja_centavos": 490,
+      "estornado_centavos": 0,
+      "cupom": "combosexta",
+      "cliente": null,
+      "confirmado_em": "2026-09-26T23:20:00Z",
+      "cancelado_em": null,
+      "itens": [
+        { "id": "it-1", "produto_id": "p-9", "nome": "Burger da casa", "quantidade": "1", "receita_centavos": 2000, "custo_centavos": 800 },
+        { "id": "it-2", "produto_id": "p-11", "nome": "Batata média", "quantidade": "1", "receita_centavos": 2410, "custo_centavos": 600 }
+      ],
+      "origem": null
+    }
+  ],
+  "proximo_cursor": "ped-c1",
+  "tem_mais": true
+}
