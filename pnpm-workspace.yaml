@@ -32,6 +32,8 @@ catalog:
   ai: 7.0.114
   '@modelcontextprotocol/server': 2.1.0
   '@aws-sdk/client-kms': 3.1140.0
+  # E-mail do serviço (SES v2, São Paulo): mesma versão do client-kms, para dividir o núcleo do SDK.
+  '@aws-sdk/client-sesv2': 3.1140.0
   '@openfeature/server-sdk': 1.23.0
   '@openfeature/core': 1.12.0
 
