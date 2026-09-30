@@ -134,6 +134,10 @@
   - não funcionam em anúncio de **coleção nos posicionamentos do Instagram**;
   - a Meta pode acrescentar sozinha origem, meio (`paid`) e os ids de anúncio, conjunto e campanha.
 - **`url_tags`** *(developers.facebook.com/docs/marketing-api/reference/ad-creative, 29/09/2026)* [O]: campo do **AdCreative**, não do Ad; lê-se por `GET /{ad-id}?fields=creative{url_tags}`. A descrição oficial fala só de page post, message e canvas app install [O]; o uso nos anúncios de link comuns e a presença na v26.0 são inferidos (o changelog da v26.0, de 29/07/2026, não o altera) [NC].
+  - **Reconferido para a F5 (29/09/2026)** *(developers.facebook.com/docs/instagram/ads-api/guides/url-tags-for-tracking)* [O]: o guia "Use URL Tags for Tracking" põe o rastreio no `url_tags` do **AdCreative**, no formato `chave=valor` unidos por `&`, com os parâmetros dinâmicos `{{campaign.id}}`, `{{adset.id}}`, `{{ad.id}}`, `{{campaign.name}}`, `{{adset.name}}` e `{{ad.name}}`; os de nome guardam uma foto do nome na 1ª publicação. Que o campo "Parâmetros de URL" do Gerenciador de Anúncios grava no `url_tags` é o que as fontes secundárias dizem [S]: a conferência do rastreio (F5) mostra no piloto.
+  - **Onde o criativo diz para onde leva (referência v26.0, 29/09/2026)** [O]: `object_story_spec.link_data.link` ("tem de ser o mesmo link do botão") e `child_attachments[].link` (carrossel: 2 a 5 cartões, até 10) em developers.facebook.com/docs/marketing-api/reference/ad-creative-link-data; `video_data.call_to_action.value.link` (ad-creative-video-data e ad-creative-link-data-call-to-action-value); `asset_feed_spec.link_urls[]` com `website_url` e **`url_tags` próprio de cada link** (ad-asset-feed-spec-link-url); `object_url` no AdCreative ("abre no clique de um anúncio de link", página mostrada na v25.0). Anúncio de publicação existente (`effective_object_story_id`) não traz o link sem permissão da Página: fica "não verificado".
+  - **Destino do conjunto** (`destination_type` do Ad Set, página mostrada na v25.0, 29/09/2026) [O]: `WEBSITE`, `APP`, `MESSENGER`, `APPLINKS_AUTOMATIC`, `WHATSAPP`, `INSTAGRAM_DIRECT`, `FACEBOOK`, `MESSAGING_MESSENGER_WHATSAPP`, `MESSAGING_INSTAGRAM_DIRECT_MESSENGER`, `MESSAGING_INSTAGRAM_DIRECT_MESSENGER_WHATSAPP`, `MESSAGING_INSTAGRAM_DIRECT_WHATSAPP`, `SHOP_AUTOMATIC`, `ON_AD`, `ON_POST`, `ON_EVENT`, `ON_VIDEO`, `ON_PAGE`, `INSTAGRAM_PROFILE`, `FACEBOOK_PAGE`, `INSTAGRAM_PROFILE_AND_FACEBOOK_PAGE`, `INSTAGRAM_LIVE`, `FACEBOOK_LIVE` e `IMAGINE`.
+  - **Expansão de campos aninhados** (`object_story_spec{link_data{link}}`) na aresta `adcreatives`: só em exemplo de terceiros [S]. O conector pede assim e, se a Meta recusar (erro 100) ou responder "dados demais" (código 1, "Please reduce the amount of data you're asking for"), lê sem os campos de URL e segue, com os anúncios "não verificados": confirmar na primeira leitura real.
 - **Uso dos dados de anúncio da Meta** *(Padrões de Publicidade, "Data use restrictions", transparency.meta.com/policies/ad-standards, 29/09/2026)* [O]:
   - só **agregados e anônimos** e só para avaliar as campanhas da Meta do próprio anunciante;
   - **proibido misturar dados de campanhas de vários anunciantes** (nada de benchmark entre clientes com dado da Meta);
@@ -220,6 +224,13 @@ Eventos servidor a servidor (web, app, loja física, **business_messaging**). De
   - **ValueTrack:** `{campaignid}`, `{adgroupid}`, `{creative}` (id do anúncio), `{keyword}` (vazio em AI Max, DSA e PMax), `{matchtype}`, `{network}` (`x` = todo tráfego PMax), `{device}`, `{gclid}` (support.google.com/google-ads/answer/6305348);
   - **onde:** modelo de acompanhamento (conta, campanha e grupo exigem `{lpurl}`) e **sufixo do URL final** (conta, campanha, grupo, anúncio, alvo dinâmico, palavra-chave e sitelink);
   - **leitura pela API v25:** `customer.final_url_suffix`/`tracking_url_template`, `campaign.*`, `ad_group.*`, `ad_group_ad.ad.final_url_suffix`/`tracking_url_template`/`url_custom_parameters`/`final_urls`, `ad_group_criterion.*` (todos selecionáveis);
+  - **Reconferido para a F5 (29/09/2026)** [O]:
+    - o campo se chama **"Sufixo do URL final"** na interface em português; o valor é `x=y` sem o `?` (o Google põe o `?`), com os parâmetros unidos por `&` (support.google.com/google-ads/answer/9054021?hl=pt-BR; exemplo `keyword={keyword}&matchtype={matchtype}&adgroupid={adgroupid}` no `Customer.final_url_suffix` em developers.google.com/google-ads/api/docs/account-management/create-account);
+    - **qual vale:** o modelo de acompanhamento e o sufixo são resolvidos **cada um por si**, pela entidade **mais baixa** da hierarquia que define o valor (developers.google.com/google-ads/api/docs/ads/upgraded-urls/serving-url-rules, atualizada em 23/09/2026); no modelo, palavra-chave > anúncio > grupo > campanha > conta (support.google.com/google-ads/answer/6076199);
+    - ValueTrack `{campaignid}`, `{adgroupid}` e `{creative}` valem "no URL final, no modelo de acompanhamento ou em parâmetro personalizado"; a lista oficial **não tem o nome da campanha**; `{lpurl}` sai codificado, a não ser no começo do modelo (support.google.com/google-ads/answer/6305348);
+    - campos confirmados nos protos oficiais da v25 (github.com/googleapis/googleapis, `google/ads/googleads/v25/resources`): `Ad.final_urls`, `tracking_url_template`, `final_url_suffix` e `url_custom_parameters`; `Customer`, `Campaign` e `AdGroup` com `tracking_url_template` e `final_url_suffix`;
+    - recurso atribuído na GAQL: `SELECT campaign.name, customer.id FROM campaign` (developers.google.com/google-ads/api/docs/query/structure) e `campaign.name`, `ad_group.name` e `ad_group_ad.ad.final_urls` `FROM ad_group_ad` (…/docs/query/cookbook), os dois de 23/09/2026;
+    - **o Liame lê** as URLs finais e o sufixo e o modelo do anúncio, do grupo, da campanha e da conta (esta pela campanha), no mesmo escopo de leitura; sufixo de palavra-chave, de segmentação dinâmica e de sitelink e o parâmetro personalizado (`{_lk}`) não são lidos.
   - **`click_view`** resolve `gclid` → anúncio (e campanha e grupo como recursos segmentadores); **um dia por consulta, até 90 dias para trás; sem gbraid/wbraid**; sem gclid em campanhas de app de instalação e pré-registro (developers.google.com/google-ads/api/fields/v25/click_view, 23/09/2026);
   - **janela de conversão padrão:** clique **30 dias** (1–30, 60 ou 90), visualização engajada 3 dias, visualização 1 dia; mudar só vale daqui em diante (support.google.com/google-ads/answer/3123169).
 - **Campanhas:** AI Max GA (abr/2026); DSA e broad sobem automaticamente para AI Max a partir de set/2026; fim do DSA adiado para fev/2027 [S]. Display standalone migrando para Demand Gen [S].
@@ -588,6 +599,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 29/09/2026 | Links de campanha (A2.5 · F5), conferido na documentação oficial: §2.1 `url_tags` no AdCreative com os parâmetros dinâmicos (guia "Use URL Tags for Tracking") e onde o criativo diz para onde leva (`link_data.link`, cartões, botão do vídeo, `asset_feed_spec.link_urls` com `url_tags` próprio, `object_url`), `destination_type` do conjunto; "Parâmetros de URL" = `url_tags` e a expansão aninhada ficam [S] até a primeira leitura real. §3.1 "Sufixo do URL final" (formato, níveis e o mais específico vence, resolvido separado do modelo), ValueTrack no URL final (sem nome de campanha), campos dos protos v25 e recurso atribuído na GAQL. A página de ajuda da Meta dos parâmetros dinâmicos só abre no navegador (a busca devolve só o título). |
 | 29/09/2026 | Pesquisa da A2.5 (ciclo fechado, `plano-a25.md` §9), só em fontes oficiais: §2.1 parâmetros de URL da Meta, `url_tags` e **restrição de uso dos dados de anúncio da Meta** (sem misturar anunciantes; nada vai a outra rede, nem agregado); §2.3 CAPI reconferida (`event_time` 7 dias derruba o lote; `fbc` com apêndice; mensageria com `ctwa_clid`, sem dedupe); §2.4 `referral` do WhatsApp (`ctwa_clid` some no Status; coexistência [NC]); §3.1 auto-tagging, gbraid/wbraid, ValueTrack, sufixo do URL final pela API v25, `click_view` (1 dia, 90 dias, sem gbraid) e janelas de conversão; §3.2 Data Manager reconferida; §3.3 `analytics.readonly` não restrito; §6 guia de cookies da ANPD. |
 | 24/09/2026 | Criação: pesquisas de concorrentes, APIs das plataformas, MCP/protocolos, produtos DMS no disco, 49 skills de marketing; versões via npm. |
 | 24/09/2026 | §13: matriz de IdP (12 opções) contra a spec MCP 2026-07-28, KEK e âncora de auditoria. §14: SDKs de IA, feature flags, observabilidade, supply chain e evals. |
@@ -615,6 +627,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - …/instagram-platform/content-publishing
   - …/whatsapp/pricing
   - …/threads/overview
+  - …/instagram/ads-api/guides/url-tags-for-tracking · …/marketing-api/reference/ad-asset-feed-spec-link-url (F5)
 - **Google:**
   - developers.google.com/google-ads/api/docs/api-policy/access-levels
   - …/release-notes
@@ -625,6 +638,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - developers.google.com/analytics/devguides/reporting/data/v1/quotas
   - developers.google.com/my-business/content/prereqs
   - developers.google.com/youtube/v3/revision_history
+  - developers.google.com/google-ads/api/docs/ads/upgraded-urls/serving-url-rules · support.google.com/google-ads/answer/9054021 · …/6305348 (F5)
 - **TikTok:**
   - developers.tiktok.com/docs/en/content-sharing-guidelines
   - ads.tiktok.com/business/en/blog/tiktok-agentic-hub-ai-agents-skills-mcp

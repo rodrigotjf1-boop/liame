@@ -131,3 +131,20 @@ export {
   PlatformResult,
   SourceFreshness,
 } from './results.js';
+export {
+  CreatedTrackingLinkResponse,
+  CreateTrackingLinkRequest,
+  LinkCampaignOption,
+  LinkDestination,
+  LinkListQuery,
+  LinkOptionsQuery,
+  LinkOptionsResponse,
+  LinkSource,
+  PlatformParams,
+  TrackingCheckItem,
+  TrackingCheckQuery,
+  TrackingCheckResponse,
+  TrackingLink,
+  TrackingLinkDetailResponse,
+  TrackingLinkListResponse,
+} from './links.js';

@@ -1,9 +1,22 @@
 import type { Db } from '@liame/database';
+import { Logger } from '@nestjs/common';
 import type { AppConfig } from '../../config.js';
 import type { PontoMetrica } from '../../media/metric-store.js';
 import { type ClienteConector, ErroConector } from '../cliente-http.js';
 import { dataValida, fatias } from '../janela.js';
-import { type ConectorLeitura, type ContaDescoberta, type ContextoConta, type Credencial, type EntidadesLidas, type StatusCanonico, versaoRegistrada } from '../tipos.js';
+import {
+  type ConectorLeitura,
+  type ContaDescoberta,
+  type ContextoConta,
+  type Credencial,
+  type EntidadesLidas,
+  juntarDestinos,
+  type NivelUrlGoogle,
+  type RastreioLido,
+  type StatusCanonico,
+  textoDeUrl,
+  versaoRegistrada,
+} from '../tipos.js';
 import { soDigitos } from '../validacao.js';
 
 // Conector de LEITURA do Google Ads (A2, G5; base de conhecimento §3.1). GAQL por REST com
@@ -75,8 +88,56 @@ function clienteValido(id: string | null | undefined, campo: string): string {
   return id;
 }
 
+// Consultas das entidades. Os campos de URL servem à conferência do rastreio (A2.5, F5; base §3.1): as URLs
+// finais do anúncio e o sufixo do URL final e o modelo de acompanhamento de cada nível (anúncio, grupo,
+// campanha e conta, lida pela campanha como recurso atribuído). Mesmo escopo de leitura.
+const CAMPANHA = 'campaign.id, campaign.name, campaign.status, campaign.primary_status, campaign.advertising_channel_type, campaign_budget.amount_micros, campaign_budget.total_amount_micros';
+const CAMPANHA_URL = 'campaign.final_url_suffix, campaign.tracking_url_template, customer.final_url_suffix, customer.tracking_url_template';
+const GRUPO = 'ad_group.id, ad_group.name, ad_group.status, ad_group.type, campaign.id';
+const GRUPO_URL = 'ad_group.final_url_suffix, ad_group.tracking_url_template';
+const ANUNCIO = 'ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.ad.type, ad_group_ad.status, ad_group.id';
+const ANUNCIO_URL = 'ad_group_ad.ad.final_urls, ad_group_ad.ad.final_url_suffix, ad_group_ad.ad.tracking_url_template';
+
+/** Sufixo e modelo de um nível, como o Google devolve (vazio ou ausente = o nível não define). */
+export type UrlDoNivel = { finalUrlSuffix?: string; trackingUrlTemplate?: string };
+
+/**
+ * O que vale para o anúncio (base §3.1, "Serving URL expansion rules"): o sufixo do URL final e o modelo de
+ * acompanhamento são resolvidos cada um por si, pelo nível mais específico que define (anúncio > grupo >
+ * campanha > conta). Sufixo por palavra-chave, segmentação dinâmica e sitelink não são lidos.
+ */
+export function resolverUrlGoogle(
+  niveis: { anuncio?: UrlDoNivel; grupo?: UrlDoNivel; campanha?: UrlDoNivel; conta?: UrlDoNivel },
+  finalUrls: unknown,
+): RastreioLido {
+  const ordem: [NivelUrlGoogle, UrlDoNivel | undefined][] = [
+    ['anuncio', niveis.anuncio],
+    ['grupo', niveis.grupo],
+    ['campanha', niveis.campanha],
+    ['conta', niveis.conta],
+  ];
+  const primeiro = (campo: keyof UrlDoNivel): [string | null, NivelUrlGoogle | null] => {
+    for (const [nivel, valor] of ordem) {
+      const v = textoDeUrl(valor?.[campo]);
+      if (v) return [v, nivel];
+    }
+    return [null, null];
+  };
+  const [sufixo, sufixoNivel] = primeiro('finalUrlSuffix');
+  const [modelo, modeloNivel] = primeiro('trackingUrlTemplate');
+  return {
+    url_tags: null,
+    destinos: juntarDestinos((Array.isArray(finalUrls) ? finalUrls : []).map((url: unknown) => ({ url }))),
+    sufixo,
+    sufixo_nivel: sufixoNivel,
+    modelo,
+    modelo_nivel: modeloNivel,
+  };
+}
+
 export class ConectorGoogleAds implements ConectorLeitura {
   readonly provider = 'google_ads' as const;
+  private readonly logger = new Logger('conector-google-ads');
 
   constructor(
     private readonly cliente: ClienteConector,
@@ -160,24 +221,43 @@ export class ConectorGoogleAds implements ConectorLeitura {
     return [...contas.values()];
   }
 
+  /**
+   * Consulta com os campos de URL (F5); se o Google recusar a consulta (pedido definitivo) ou falhar com ela
+   * (transitório), consulta sem eles e segue: a leitura das campanhas e das métricas nunca para por causa da
+   * conferência do rastreio. Limite, permissão e autenticação seguem para quem chama, como antes.
+   */
+  private async comReserva<T>(q: (query: string) => Promise<T[]>, completa: string, basica: string, recurso: string): Promise<{ itens: T[]; completo: boolean }> {
+    try {
+      return { itens: await q(completa), completo: true };
+    } catch (err) {
+      if (!(err instanceof ErroConector) || (err.tipo !== 'definitivo' && err.tipo !== 'transitorio')) throw err;
+      this.logger.warn(`${recurso}: a consulta com os campos de URL falhou (${err.tipo}: ${err.message}); lido sem eles`);
+      return { itens: await q(basica), completo: false };
+    }
+  }
+
   async lerEntidades(conta: ContextoConta): Promise<EntidadesLidas> {
     const q = <T>(query: string) => this.consultar<T>(conta.credencial, conta.externalId, conta.loginCustomerId, query);
     type Campanha = {
-      campaign: { id: string; name: string; status?: string; primaryStatus?: string; advertisingChannelType?: string };
+      campaign: { id: string; name: string; status?: string; primaryStatus?: string; advertisingChannelType?: string } & UrlDoNivel;
       campaignBudget?: { amountMicros?: string; totalAmountMicros?: string };
+      customer?: UrlDoNivel;
     };
-    type Grupo = { adGroup: { id: string; name: string; status?: string; type?: string }; campaign?: { id?: string } };
-    type Anuncio = { adGroupAd: { status?: string; ad: { id: string; name?: string; type?: string } }; adGroup?: { id?: string } };
+    type Grupo = { adGroup: { id: string; name: string; status?: string; type?: string } & UrlDoNivel; campaign?: { id?: string } };
+    type Anuncio = { adGroupAd: { status?: string; ad: { id: string; name?: string; type?: string; finalUrls?: string[] } & UrlDoNivel }; adGroup?: { id?: string } };
     const [campanhas, grupos, anuncios] = await Promise.all([
-      q<Campanha>(
-        'SELECT campaign.id, campaign.name, campaign.status, campaign.primary_status, campaign.advertising_channel_type, campaign_budget.amount_micros, campaign_budget.total_amount_micros FROM campaign',
-      ),
-      q<Grupo>('SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.type, campaign.id FROM ad_group'),
-      q<Anuncio>('SELECT ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.ad.type, ad_group_ad.status, ad_group.id FROM ad_group_ad'),
+      this.comReserva((x) => q<Campanha>(x), `SELECT ${CAMPANHA}, ${CAMPANHA_URL} FROM campaign`, `SELECT ${CAMPANHA} FROM campaign`, 'campaign'),
+      this.comReserva((x) => q<Grupo>(x), `SELECT ${GRUPO}, ${GRUPO_URL} FROM ad_group`, `SELECT ${GRUPO} FROM ad_group`, 'ad_group'),
+      this.comReserva((x) => q<Anuncio>(x), `SELECT ${ANUNCIO}, ${ANUNCIO_URL} FROM ad_group_ad`, `SELECT ${ANUNCIO} FROM ad_group_ad`, 'ad_group_ad'),
     ]);
+    // O que vale para cada anúncio só é conhecido com os quatro níveis lidos.
+    const urlCompleta = campanhas.completo && grupos.completo && anuncios.completo;
+    const urlDaConta = campanhas.itens.find((c) => c.customer)?.customer;
+    const urlDaCampanha = new Map(campanhas.itens.map(({ campaign: c }) => [String(c.id), c]));
+    const grupoDoAnuncio = new Map(grupos.itens.map(({ adGroup: g, campaign }) => [String(g.id), { url: g, campanha: idNumerico(campaign?.id) }]));
     const micros = (v: string | undefined) => (v === undefined ? null : Number(v));
     return {
-      campaigns: campanhas.map(({ campaign: c, campaignBudget: b }) => ({
+      campaigns: campanhas.itens.map(({ campaign: c, campaignBudget: b }) => ({
         externalId: String(c.id),
         name: c.name,
         status: statusCanonico(c.status),
@@ -187,7 +267,7 @@ export class ConectorGoogleAds implements ConectorLeitura {
         lifetimeBudgetMicros: micros(b?.totalAmountMicros),
         providerAttributes: { advertising_channel_type: c.advertisingChannelType ?? null },
       })),
-      adGroups: grupos.map(({ adGroup: g, campaign }) => ({
+      adGroups: grupos.itens.map(({ adGroup: g, campaign }) => ({
         externalId: String(g.id),
         name: g.name,
         status: statusCanonico(g.status),
@@ -196,15 +276,22 @@ export class ConectorGoogleAds implements ConectorLeitura {
         providerAttributes: { type: g.type ?? null },
       })),
       // No Google Ads o anúncio é o próprio criativo: um criativo por anúncio, com o mesmo id.
-      ads: anuncios.map(({ adGroupAd: a, adGroup }) => ({
-        externalId: String(a.ad.id),
-        name: a.ad.name ?? `Anúncio ${a.ad.id}`,
-        status: statusCanonico(a.status),
-        providerStatus: a.status ?? null,
-        parentExternalId: idNumerico(adGroup?.id),
-        creativeExternalId: String(a.ad.id),
-      })),
-      creatives: anuncios.map(({ adGroupAd: a }) => ({ externalId: String(a.ad.id), name: a.ad.name ?? null, kind: a.ad.type ?? null, thumbnailUrl: null })),
+      ads: anuncios.itens.map(({ adGroupAd: a, adGroup }) => {
+        const grupo = adGroup?.id === undefined ? undefined : grupoDoAnuncio.get(String(adGroup.id));
+        const campanha = grupo?.campanha ? urlDaCampanha.get(grupo.campanha) : undefined;
+        return {
+          externalId: String(a.ad.id),
+          name: a.ad.name ?? `Anúncio ${a.ad.id}`,
+          status: statusCanonico(a.status),
+          providerStatus: a.status ?? null,
+          parentExternalId: idNumerico(adGroup?.id),
+          creativeExternalId: String(a.ad.id),
+          ...(urlCompleta
+            ? { providerAttributes: { rastreio: resolverUrlGoogle({ anuncio: a.ad, grupo: grupo?.url, campanha, conta: urlDaConta }, a.ad.finalUrls) } }
+            : {}),
+        };
+      }),
+      creatives: anuncios.itens.map(({ adGroupAd: a }) => ({ externalId: String(a.ad.id), name: a.ad.name ?? null, kind: a.ad.type ?? null, thumbnailUrl: null })),
     };
   }
 

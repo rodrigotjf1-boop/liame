@@ -1,7 +1,39 @@
 {
   "data": [
-    { "id": "120210000000009001", "name": "Combo Brasa - vídeo", "object_type": "VIDEO", "thumbnail_url": "https://scontent.example/combo.jpg" },
-    { "id": "120210000000009002", "name": "Prato do dia - foto", "object_type": "PHOTO", "thumbnail_url": "https://scontent.example/prato.jpg" }
+    {
+      "id": "120210000000009001",
+      "name": "Combo Brasa - vídeo",
+      "object_type": "VIDEO",
+      "thumbnail_url": "https://scontent.example/combo.jpg",
+      "url_tags": "utm_source=meta&utm_medium=paid&utm_campaign={{campaign.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}&lk=CS7Q2XK9PA",
+      "object_url": "https://cardapio.exemplo.com.br/casabrasa",
+      "object_story_spec": {
+        "video_data": { "call_to_action": { "type": "ORDER_NOW", "value": { "link": "https://cardapio.exemplo.com.br/casabrasa" } } }
+      }
+    },
+    {
+      "id": "120210000000009002",
+      "name": "Prato do dia - foto",
+      "object_type": "SHARE",
+      "thumbnail_url": "https://scontent.example/prato.jpg",
+      "object_story_spec": {
+        "link_data": {
+          "link": "https://cardapio.exemplo.com.br/casabrasa",
+          "child_attachments": [{ "link": "https://cardapio.exemplo.com.br/casabrasa/prato-do-dia" }, { "link": "https://cardapio.exemplo.com.br/casabrasa" }]
+        }
+      }
+    },
+    {
+      "id": "120210000000009003",
+      "name": "Combo Brasa - dinâmico",
+      "object_type": "SHARE",
+      "thumbnail_url": "https://scontent.example/dinamico.jpg",
+      "asset_feed_spec": {
+        "link_urls": [
+          { "website_url": "https://cardapio.exemplo.com.br/casabrasa", "display_url": "cardapio.exemplo.com.br", "url_tags": "campaign_id={{campaign.id}}&ad_id={{ad.id}}" }
+        ]
+      }
+    }
   ],
   "paging": { "cursors": { "before": "a", "after": "b" } }
 }
