@@ -1,14 +1,7 @@
 /* ===== Contas conectadas (mockups/prototipo-contas.html) ===== */
 
-/* faixa da volta da autorização: escolher contas, conferindo, recusada */
-.faixa { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-5); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
-.faixa--acao { border-color: color-mix(in srgb, var(--fio) 45%, var(--border)); background: var(--primary-soft); }
-.faixa--perigo { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: var(--danger-soft); }
-.faixa-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--surface); }
+/* faixa da volta da autorização (a faixa em si é componente, em componentes.css): o "conferindo" gira */
 .faixa-ic .girando { width: 18px; height: 18px; color: var(--fio); }
-.faixa--perigo .faixa-ic { color: var(--danger); }
-.faixa-txt { flex: 1; min-width: min(100%, 260px); display: grid; gap: 2px; }
-.faixa-txt span { font-size: var(--text-sm); color: var(--text-muted); }
 
 /* tabela das contas */
 .conta-nome { display: block; font-weight: 600; }

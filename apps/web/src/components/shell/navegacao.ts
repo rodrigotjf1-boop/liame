@@ -14,6 +14,8 @@ export type ItemNav = {
   permissao?: string;
   /** Mostra ao lado o número de avisos de mídia (crítico + atenção). */
   contador?: 'atencao';
+  /** A tela tem as duas visões (Lite e Pro): o seletor de modo aparece no topo. */
+  modos?: boolean;
 };
 export type GrupoNav = { id: string; rotulo: string; pessoal?: boolean; itens: ItemNav[] };
 
@@ -23,6 +25,7 @@ export const NAVEGACAO: GrupoNav[] = [
     rotulo: 'Agência',
     itens: [
       { href: '/atencao', rotulo: 'Atenção', titulo: 'Atenção de mídia', icone: 'atencao', permissao: 'campanhas.ver', contador: 'atencao' },
+      { href: '/resultados', rotulo: 'Resultados', icone: 'chart', permissao: 'vendas.ver', modos: true },
       { href: '/contas', rotulo: 'Contas conectadas', icone: 'plug', permissao: 'contas.ver' },
       { href: '/pessoas', rotulo: 'Pessoas e acessos', icone: 'user-plus', permissao: 'pessoas.ver' },
     ],
@@ -48,4 +51,14 @@ export function tituloDa(caminho: string): string {
 /** Tela da própria pessoa: abre sem empresa ativa e mostra o nome dela na trilha. */
 export function rotaPessoal(caminho: string): boolean {
   return NAVEGACAO.some((g) => g.pessoal && g.itens.some((i) => itemAtual(caminho, i.href)));
+}
+
+/** Itens que a pessoa vê no grupo: some o que exige permissão que ela não tem (o servidor também barra). */
+export function itensVisiveis(grupo: GrupoNav, pode: (permissao: string) => boolean): ItemNav[] {
+  return grupo.itens.filter((i) => !i.permissao || pode(i.permissao));
+}
+
+/** A tela aberta tem as visões Lite e Pro e a pessoa pode vê-la (sem permissão, a tela é só o aviso). */
+export function temModos(caminho: string, pode: (permissao: string) => boolean): boolean {
+  return NAVEGACAO.some((g) => g.itens.some((i) => i.modos && itemAtual(caminho, i.href) && (!i.permissao || pode(i.permissao))));
 }

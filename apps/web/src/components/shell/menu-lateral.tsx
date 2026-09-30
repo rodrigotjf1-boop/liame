@@ -10,11 +10,12 @@ import { useSessao } from '@/lib/sessao';
 import { avisosFalados } from '@/components/atencao/textos';
 import { useContadorAtencao } from '@/lib/contador-atencao';
 import { BotaoTema } from './botao-tema';
-import { itemAtual, NAVEGACAO } from './navegacao';
+import { itemAtual, itensVisiveis, NAVEGACAO } from './navegacao';
 import { SeletorEmpresa } from './seletor-empresa';
+import { SeletorModo } from './seletor-modo';
 import { disparar } from '@/lib/disparar';
 
-export function MenuLateral({ id, aoFechar }: { id: string; aoFechar: () => void }) {
+export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () => void; modos: boolean }) {
   const { me, empresa, pode, sair } = useSessao();
   const contador = useContadorAtencao();
   const caminho = usePathname();
@@ -33,7 +34,7 @@ export function MenuLateral({ id, aoFechar }: { id: string; aoFechar: () => void
 
       <nav aria-label="Principal">
         {NAVEGACAO.map((grupo) => {
-          const itens = grupo.itens.filter((i) => !i.permissao || pode(i.permissao));
+          const itens = itensVisiveis(grupo, pode);
           if (!itens.length) return null;
           return (
             <div className="nav-grupo" key={grupo.id}>
@@ -75,6 +76,8 @@ export function MenuLateral({ id, aoFechar }: { id: string; aoFechar: () => void
       </nav>
 
       <div className="sb-rodape">
+        {/* No celular, o seletor Lite/Pro do topo desce para a gaveta (protótipo aprovado). */}
+        {modos && <SeletorModo />}
         <div className="usuario">
           <span className="av-user" aria-hidden="true">
             {iniciais(me.user.name)}

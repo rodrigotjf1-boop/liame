@@ -11,6 +11,42 @@ export function moeda(micros: number): string {
   return reais.format(micros / MICROS);
 }
 
+const MICROS_POR_CENTAVO = 10_000n;
+const MICROS_POR_REAL = 1_000_000n;
+const inteiros = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
+
+/** "1234567" → "1.234.567" (o texto é só de dígitos, vindo de um BigInt). */
+function milhares(digitos: string): string {
+  let saida = '';
+  for (let i = 0; i < digitos.length; i++) {
+    if (i > 0 && (digitos.length - i) % 3 === 0) saida += '.';
+    saida += digitos[i];
+  }
+  return saida;
+}
+
+/**
+ * Dinheiro da API (micros em texto, que cabe em bigint) em reais, **sem ponto flutuante**: "R$ 1.234,57",
+ * arredondado para o centavo (ou para o real, com `casas` 0) mais próximo, metade para cima. O espaço
+ * depois do "R$" é o mesmo espaço fixo do `Intl` (as telas não quebram o valor no meio).
+ */
+export function reaisDeMicros(micros: string | bigint, casas: 0 | 2 = 2): string {
+  const valor = typeof micros === 'bigint' ? micros : BigInt(micros);
+  const negativo = valor < 0n;
+  const absoluto = negativo ? -valor : valor;
+  const passo = casas === 2 ? MICROS_POR_CENTAVO : MICROS_POR_REAL;
+  const arredondado = (absoluto + passo / 2n) / passo;
+  const parteInteira = casas === 2 ? arredondado / 100n : arredondado;
+  const centavos = casas === 2 ? `,${(arredondado % 100n).toString().padStart(2, '0')}` : '';
+  const texto = `R$ ${milhares(parteInteira.toString())}${centavos}`;
+  return negativo && arredondado > 0n ? `-${texto}` : texto;
+}
+
+/** Contagem com separador de milhar ("1.036"); aceita o texto de inteiro da API (conversas, conversões). */
+export function inteiro(n: number | bigint | string): string {
+  return inteiros.format(typeof n === 'string' ? BigInt(n) : n);
+}
+
 function inicioDoDia(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }

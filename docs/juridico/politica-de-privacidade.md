@@ -39,7 +39,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 
 **Site agencialiame.com:** o site não tem formulário de cadastro nem cookies de publicidade. A conversa de demonstração com a LIA roda no seu navegador e não é gravada; se você escolher continuar no WhatsApp, a conversa passa a seguir também as regras do WhatsApp. O nosso provedor de rede (Cloudflare) mede as visitas de forma agregada, sem cookies, e pode usar cookies estritamente necessários de segurança.
 
-**No aplicativo**, usamos apenas cookies necessários para manter a sessão e proteger a conta. Não usamos cookies de publicidade.
+**No aplicativo**, usamos apenas cookies necessários para manter a sessão e proteger a conta. Não usamos cookies de publicidade. O aplicativo também guarda no seu navegador duas preferências de exibição (o tema claro ou escuro e o modo de visualização, Lite ou Pro); elas ficam só no seu aparelho e não são enviadas a nós.
 
 ## 5. Para que usamos e com base em quê
 
