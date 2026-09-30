@@ -26,3 +26,7 @@ A especificação MCP atual é a **2026-07-28**: sem estado, sem handshake `init
 
 - O Tool Registry precisa ter tudo o que o MCP expõe (schema, risco, escopos, impacto financeiro, anotações).
 - A exposição MCP do Liame entra na B4, depois de o hub e o DMS ID existirem.
+
+## Nota de conformidade (30/09/2026)
+
+A política do Google Ads de 31/08/2026 proíbe o **"programmatic proxy"**: interface hospedada por terceiro, API secundária, serviço de *wrapper* ou servidor MCP que **só replique, embrulhe ou reexponha** capacidades do Google Ads (base de conhecimento §3). As ferramentas do `/mcp/liame` expõem capacidades do Liame (resultados, aprovações, planos), nunca operações do Google Ads repassadas; a escrita nas plataformas continua só pelo Action Service. Os MCPs oficiais das plataformas não aceleram a integração (mesma API e mesmas revisões) e não servem à sincronização agendada — ver a análise na base §8.1.
