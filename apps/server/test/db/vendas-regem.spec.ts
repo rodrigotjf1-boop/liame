@@ -4,7 +4,8 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 import { createDatabase, type Database, withSystem } from '@liame/database';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MODELO_PADRAO } from '../../src/attribution/motor.js';
 import { loadConfig } from '../../src/config.js';
 import { registrarConexaoDaDistribuicao } from '../../src/connections/distribuicao.js';
@@ -15,16 +16,22 @@ import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, typ
 import { APP_URL, hasDb } from './env.js';
 
 // A2.5 · F4: conector do Regem (leitura) contra respostas gravadas no formato do contrato v1
-// (docs/integracoes/regem.md; test/fixtures/regem/v1). Carga inicial de 90 dias, cursor, reconciliação,
-// cancelamento que recalcula a atribuição, cliente anonimizado apagado, e nenhum telefone em claro no
-// banco (A2.5-2, A2.5-4, A2.5-7).
+// (docs/integracoes/regem.md; test/fixtures/regem/v1). Carga inicial de 90 dias, cursor, reconciliação
+// (que relê a loja e o endereço do cardápio), cancelamento que recalcula a atribuição, cliente anonimizado
+// apagado, e nenhum telefone em claro no banco (A2.5-2, A2.5-4, A2.5-7). Na loja da Barra, os conjuntos
+// independentes: 404 nos cupons não impede os pedidos, o cupom que chega depois religa a atribuição, cupom
+// que o banco recusaria fica de fora e token recusado continua parando tudo.
 
 const FIX = resolve(import.meta.dirname, '../fixtures/regem/v1');
 const fixture = (arquivo: string) => JSON.parse(readFileSync(resolve(FIX, arquivo), 'utf8')) as unknown;
 const TOKEN = `rgm_it_${'L'.repeat(32)}`;
+const TOKEN_BARRA = `rgm_it_${'B'.repeat(32)}`;
 const vazia = (cursor: string) => ({ itens: [], proximo_cursor: cursor, tem_mais: false });
+const problema = (status: number, title: string) => ({ type: 'about:blank', title, status });
 const T0 = new Date('2026-09-28T12:00:00Z');
 const mais = (min: number) => new Date(T0.getTime() + min * 60_000);
+const CARDAPIO = 'https://cardapio.exemplo.com.br/misterburgers-centro';
+const CARDAPIO_NOVO = 'https://cardapio.exemplo.com.br/misterburgers-centro-novo';
 
 describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => {
   let api: TestApi;
@@ -32,18 +39,47 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
   let regem: Server;
   let base = '';
   const anterior: Record<string, string | undefined> = {};
-  const estado = { incremental: false, anonimizar: false, tokenRevogado: false, cuponsProibidos: false };
+  const estado = { incremental: false, anonimizar: false, tokenRevogado: false, cuponsProibidos: false, cardapio: null as string | null };
   const pedidosPedidos: URLSearchParams[] = [];
+  /** Leituras da rota `/loja` da loja Centro (a conexão lê uma; a reconciliação, uma por dia). */
+  let lojaLida = 0;
+  let lojaLidaNaReconciliacao = 0;
   let tenantId = '';
   let contaId = '';
+  let marcaId = '';
+  let campanhaMeta = '';
+  let cookie = '';
   let sincronizador: SincronizadorVendas;
+  /** Loja da Barra: cupons fora do ar (404) e depois de volta; token recusado no fim. As rotas pedidas, em ordem. */
+  const barra = { cupons: 'fora' as 'fora' | 'ok', tokenRevogado: false, rotas: [] as string[] };
+
+  function responderBarra(url: URL): { status: number; corpo: unknown } {
+    barra.rotas.push(url.pathname.slice('/regem/'.length));
+    if (barra.tokenRevogado) return { status: 401, corpo: problema(401, 'Token inválido') };
+    const cursor = url.searchParams.get('cursor');
+    switch (url.pathname) {
+      case '/regem/loja':
+        return { status: 200, corpo: fixture('loja-barra.json') };
+      case '/regem/cupons':
+        if (barra.cupons === 'fora') return { status: 404, corpo: problema(404, 'Não encontrado') };
+        return { status: 200, corpo: cursor ? vazia('bcup-c1') : fixture('cupons-barra.json') };
+      case '/regem/pedidos':
+        return { status: 200, corpo: cursor ? vazia(cursor) : fixture('pedidos-barra.json') };
+      case '/regem/clientes/anonimizados':
+        return { status: 200, corpo: vazia(cursor ?? 'banon-c0') };
+      default:
+        return { status: 404, corpo: problema(404, 'Não encontrado') };
+    }
+  }
 
   function responder(url: URL, autorizacao: string | undefined): { status: number; corpo: unknown } {
-    if (autorizacao !== `Bearer ${TOKEN}` || estado.tokenRevogado) return { status: 401, corpo: { type: 'about:blank', title: 'Token inválido', status: 401 } };
+    if (autorizacao === `Bearer ${TOKEN_BARRA}`) return responderBarra(url);
+    if (autorizacao !== `Bearer ${TOKEN}` || estado.tokenRevogado) return { status: 401, corpo: problema(401, 'Token inválido') };
     const q = url.searchParams;
     switch (url.pathname) {
       case '/regem/loja':
-        return { status: 200, corpo: fixture('loja-centro.json') };
+        lojaLida++;
+        return { status: 200, corpo: { ...(fixture('loja-centro.json') as Record<string, unknown>), ...(estado.cardapio ? { cardapio_url: estado.cardapio } : {}) } };
       case '/regem/cupons':
         return estado.cuponsProibidos ? { status: 403, corpo: { type: 'about:blank', title: 'Escopo', status: 403 } } : { status: 200, corpo: q.get('cursor') ? vazia('cup-c1') : fixture('cupons.json') };
       case '/regem/pedidos': {
@@ -93,8 +129,10 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
 
     const s = await signupAndLogin(api, undefined, 'Mister Burgers Vendas');
     await enableMfa(api, s.cookie);
+    cookie = s.cookie;
     tenantId = s.me.active_organization_id as string;
     const [marca] = await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [tenantId]);
+    marcaId = marca!.id;
     const unitId = randomUUID();
     await ownerQuery(`insert into liame.unit (id, tenant_id, brand_id, name) values ($1, $2, $3, 'Loja Centro')`, [unitId, tenantId, marca!.id]);
 
@@ -110,6 +148,7 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
       `insert into liame.campaign (id, tenant_id, connected_account_id, provider, external_id, name, status) values ($1, $2, $3, 'meta_ads', '120215566778899', 'Combo sexta', 'ativa') returning id`,
       [randomUUID(), tenantId, meta],
     );
+    campanhaMeta = c!.id;
     const [g] = await ownerQuery<{ id: string }>(
       `insert into liame.ad_group (id, tenant_id, connected_account_id, campaign_id, provider, external_id, name, status) values ($1, $2, $3, $4, 'meta_ads', '120215566770000', 'Público', 'ativa') returning id`,
       [randomUUID(), tenantId, meta, c!.id],
@@ -163,7 +202,9 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     );
     expect(dia).toEqual({ dia: '2026-09-26', receita: String((5990 + 7450 + 4410 + 3980 + 2590 + 1990) * 10_000) });
     const [conta] = await ownerQuery<{ cardapio: string }>(`select provider_attributes->>'cardapio_url' as cardapio from liame.connected_account where id = $1`, [contaId]);
-    expect(conta?.cardapio).toBe('https://cardapio.exemplo.com.br/misterburgers-centro');
+    expect(conta?.cardapio).toBe(CARDAPIO);
+    // A carga inicial não relê a loja: a conexão acabou de ler.
+    expect(lojaLida).toBe(1);
 
     const cupons = await ownerQuery<{ code: string; kind: string; valid_from: Date | null; valid_until: Date | null; max_discount_micros: string | null; conditions: Record<string, unknown>; all_units: boolean }>(
       `select code, kind, valid_from, valid_until, max_discount_micros::text, conditions, all_units from liame.coupon where connected_account_id = $1 order by code`,
@@ -212,6 +253,8 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
 
   it('incremental: o cancelamento chega pelo cursor, o pedido sai do ROAS e o gclid sem campanha fica na plataforma', async () => {
     estado.incremental = true;
+    // A loja trocou o endereço do cardápio no Regem (sem reconectar).
+    estado.cardapio = CARDAPIO_NOVO;
     const r = await sincronizador.sincronizar(contaId, tenantId, mais(20));
     expect(r).toMatchObject({ status: 'ok', pedidos: { novos: 1, atualizados: 2 } });
     const p = await pedidos();
@@ -227,12 +270,27 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     expect(s!.cursor.reconciliacao_em).toBe(mais(20).toISOString());
     expect(s!.cursor.cursor).toBe('ped-c3');
     expect(pedidosPedidos.some((q) => q.get('confirmados_desde') === new Date(mais(20).getTime() - 3 * 86_400_000).toISOString())).toBe(true);
+
+    // A reconciliação relê a loja (uma chamada) e atualiza o endereço do cardápio que mudou, com auditoria.
+    expect(lojaLida).toBe(2);
+    lojaLidaNaReconciliacao = lojaLida;
+    const [conta] = await ownerQuery<{ atributos: Record<string, unknown> }>(`select provider_attributes as atributos from liame.connected_account where id = $1`, [contaId]);
+    expect(conta?.atributos).toMatchObject({ cardapio_url: CARDAPIO_NOVO, empresa: 'Mister Burgers' });
+    expect((conta?.atributos.escopos as string[] | undefined)?.length).toBe(6);
+    const auditoria = await ownerQuery<{ actor_type: string; origin: string; before: unknown; after: unknown }>(
+      `select actor_type, origin, before, after from liame.audit_event
+        where tenant_id = $1 and action = 'conexao.atualizar_cardapio' and resource_id = $2`,
+      [tenantId, contaId],
+    );
+    expect(auditoria).toEqual([{ actor_type: 'system', origin: 'worker', before: { cardapio_url: CARDAPIO }, after: { cardapio_url: CARDAPIO_NOVO } }]);
   });
 
   it('cliente anonimizado no Regem: o Liame apaga o cliente pseudonimizado e o pedido fica sem cliente', async () => {
     estado.anonimizar = true;
     const r = await sincronizador.sincronizar(contaId, tenantId, mais(40));
     expect(r).toMatchObject({ status: 'ok', anonimizados: 1 });
+    // A loja é relida uma vez por dia: não de novo 20 minutos depois.
+    expect(lojaLida).toBe(lojaLidaNaReconciliacao);
     expect((await pedidos()).find((x) => x.external_id === 'ped-001')?.tem_cliente).toBe(false);
     const [n] = await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.customer_ref_link where connected_account_id = $1 and external_id = 'cli-1'`, [contaId]);
     expect(n?.n).toBe('0');
@@ -265,5 +323,154 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     const [conta] = await ownerQuery<{ status: string; status_reason: string }>(`select status, status_reason from liame.connected_account where id = $1`, [contaId]);
     expect(conta).toMatchObject({ status: 'desconectada' });
     expect(conta!.status_reason).toContain('conecte de novo');
+  });
+
+  describe('conjuntos independentes (loja da Barra)', () => {
+    const TB0 = new Date('2026-09-29T15:00:00Z');
+    const depoisDe = (min: number) => new Date(TB0.getTime() + min * 60_000);
+    let contaBarra = '';
+
+    const estadosBarra = () =>
+      ownerQuery<{ dataset: string; last_error: string | null; cursor: Record<string, unknown> }>(
+        `select dataset, last_error, cursor from liame.sync_state where connected_account_id = $1 order by dataset`,
+        [contaBarra],
+      );
+    const ultimaExecucao = async () =>
+      (
+        await ownerQuery<{ status: string; error: string | null }>(
+          `select status, error from liame.sync_run where connected_account_id = $1 order by started_at desc, id desc limit 1`,
+          [contaBarra],
+        )
+      )[0];
+    const situacao = async () =>
+      (await ownerQuery<{ status: string; status_reason: string | null }>(`select status, status_reason from liame.connected_account where id = $1`, [contaBarra]))[0];
+    const atribuicaoBar001 = async () =>
+      (
+        await ownerQuery<{ status: string; evidence: string | null; provider: string | null; counted: boolean; reason: string | null; campanha: string | null }>(
+          `select r.status, r.evidence, r.provider, r.counted, r.reason, c.external_id as campanha
+             from liame.attribution_result r join liame.order_fact o on o.id = r.order_id left join liame.campaign c on c.id = r.campaign_id
+            where o.connected_account_id = $1 and o.external_id = 'bar-001' and r.model_id = $2`,
+          [contaBarra, MODELO_PADRAO],
+        )
+      )[0];
+
+    beforeAll(async () => {
+      const unidade = randomUUID();
+      await ownerQuery(`insert into liame.unit (id, tenant_id, brand_id, name) values ($1, $2, $3, 'Loja Barra')`, [unidade, tenantId, marcaId]);
+      const conexao = await registrarConexaoDaDistribuicao(
+        { db: database.db, vault: api.app.get(VaultService), config: loadConfig() },
+        { tenantId, brandId: marcaId, produto: 'regem', tokens: [TOKEN_BARRA] },
+      );
+      const ligar = await api.call('POST', `/v1/connections/${conexao.connectionId}/accounts`, {
+        cookie,
+        body: { accounts: [{ provider: 'regem', external_id: 'loja-barra', unit_id: unidade }] },
+      });
+      expect(ligar.status).toBe(200);
+      contaBarra = ligar.body.linked[0].id;
+      // O cupom exclusivo da campanha da Meta já está no espelho com o código antigo; na origem ele virou
+      // BARRA15 (versão 2), o código que o pedido bar-001 cita.
+      const cupom = randomUUID();
+      await ownerQuery(
+        `insert into liame.coupon (id, tenant_id, brand_id, connected_account_id, external_id, code, kind, percent, active, source_version, source_updated_at)
+         values ($1, $2, $3, $4, 'cup-barra', 'BARRA10', 'percentual', 10, true, 1, '2026-09-20T12:00:00Z')`,
+        [cupom, tenantId, marcaId, contaBarra],
+      );
+      await ownerQuery(
+        `insert into liame.campaign_coupon (id, tenant_id, brand_id, coupon_id, campaign_id, exclusive, linked_at) values ($1, $2, $3, $4, $5, true, '2026-09-20T12:00:00Z')`,
+        [randomUUID(), tenantId, marcaId, cupom, campanhaMeta],
+      );
+      barra.rotas.length = 0;
+    });
+
+    it('404 nos cupons não impede a leitura dos pedidos: o erro e a espera ficam só no conjunto dos cupons', async () => {
+      const r = await sincronizador.sincronizar(contaBarra, tenantId, TB0);
+      expect(r).toMatchObject({
+        status: 'parcial',
+        pedidos: { novos: 1, atualizados: 0, ignorados: 0 },
+        falhas: { cupons: 'definitivo: HTTP 404' },
+        erro: 'cupons: definitivo: HTTP 404',
+        semPermissao: [],
+        adiados: [],
+      });
+      expect(barra.rotas).toEqual(['cupons', 'pedidos', 'clientes/anonimizados']);
+      // O pedido chegou antes do cupom que ele cita (no Liame o cupom ainda tem o código antigo): sem origem.
+      expect(await atribuicaoBar001()).toMatchObject({ status: 'sem_origem', evidence: null, reason: 'canal_sem_clique' });
+
+      const estados = await estadosBarra();
+      const cupons = estados.find((e) => e.dataset === 'cupons')!;
+      expect(cupons.last_error).toBe('definitivo: HTTP 404');
+      // Erro definitivo: os cupons esperam 6 h; os pedidos e os avisos seguem no ritmo deles.
+      expect(cupons.cursor).toMatchObject({ espera_ate: depoisDe(6 * 60).toISOString(), falha: 'definitivo', falhas_seguidas: 1 });
+      const pedidosEstado = estados.find((e) => e.dataset === 'pedidos')!;
+      expect(pedidosEstado.last_error).toBeNull();
+      expect(pedidosEstado.cursor).toMatchObject({ cursor: 'bar-c1', carga_inicial_em: TB0.toISOString(), proxima: depoisDe(15).toISOString() });
+      expect(pedidosEstado.cursor.espera_ate).toBeUndefined();
+      expect(estados.find((e) => e.dataset === 'clientes_anonimizados')!.last_error).toBeNull();
+
+      // A execução diz o que falhou; a conta mostra o erro só dos cupons.
+      expect(await ultimaExecucao()).toEqual({ status: 'parcial', error: 'cupons: definitivo: HTTP 404' });
+      expect(await situacao()).toEqual({ status: 'erro', status_reason: 'A leitura dos cupons falhou; tentamos de novo mais tarde.' });
+
+      // 20 minutos depois (a loja voltou para a fila em 15): os cupons esperam a vez deles e os outros seguem.
+      barra.rotas.length = 0;
+      const r2 = await sincronizador.sincronizar(contaBarra, tenantId, depoisDe(20));
+      expect(r2).toMatchObject({ status: 'ok', falhas: {}, adiados: ['cupons'] });
+      expect(barra.rotas).not.toContain('cupons');
+      expect(barra.rotas).toContain('pedidos');
+      expect(barra.rotas).toContain('clientes/anonimizados');
+      // A loja volta quando os pedidos pedem (15 min), não quando os cupons voltam (6 h); a conta segue com o erro.
+      const [p] = await ownerQuery<{ proxima: string }>(`select cursor->>'proxima' as proxima from liame.sync_state where connected_account_id = $1 and dataset = 'pedidos'`, [
+        contaBarra,
+      ]);
+      expect(p?.proxima).toBe(depoisDe(20 + 15).toISOString());
+      expect((await situacao())?.status).toBe('erro');
+    });
+
+    it('o cupom que chega depois dos pedidos que o citam religa a atribuição; o que o banco recusaria fica de fora', async () => {
+      barra.cupons = 'ok';
+      barra.rotas.length = 0;
+      const aviso = vi.spyOn(Logger.prototype, 'warn');
+      try {
+        // 7 h depois: a espera dos cupons (6 h) passou.
+        const r = await sincronizador.sincronizar(contaBarra, tenantId, depoisDe(7 * 60));
+        expect(r).toMatchObject({ status: 'ok', cupons: 1, cuponsIgnorados: 2, atribuidos: 1, falhas: {}, adiados: [] });
+        expect(barra.rotas[0]).toBe('cupons');
+        // O cupom ligado à campanha agora tem o código que o pedido citou: o pedido passa a ser da campanha, pelo cupom.
+        expect(await atribuicaoBar001()).toEqual({ status: 'atribuido', evidence: 'cupom', provider: 'meta_ads', counted: true, reason: null, campanha: '120215566778899' });
+        const cupons = await ownerQuery<{ external_id: string; code: string; versao: string }>(
+          `select external_id, code, source_version::text as versao from liame.coupon where connected_account_id = $1 order by external_id`,
+          [contaBarra],
+        );
+        expect(cupons).toEqual([{ external_id: 'cup-barra', code: 'BARRA15', versao: '2' }]);
+        // Cada cupom de fora vai para o log com o motivo, sem o código nem o nome (podem ter nome de gente).
+        const log = aviso.mock.calls.map((c) => String(c[0])).find((m) => m.includes('ficaram de fora'));
+        expect(log).toContain('"cup-sem-limite" (limite ou contagem de usos acima do que o banco guarda)');
+        expect(log).toContain('"cup-espacos" (código vazio ou com mais de 60 caracteres)');
+        expect(log).not.toMatch(/MARIA|Maria/);
+      } finally {
+        aviso.mockRestore();
+      }
+      const cuponsEstado = (await estadosBarra()).find((e) => e.dataset === 'cupons')!;
+      expect(cuponsEstado.last_error).toBeNull();
+      expect(cuponsEstado.cursor).toMatchObject({ cursor: 'bcup-c1', falhas_seguidas: 0 });
+      expect(cuponsEstado.cursor.espera_ate).toBeUndefined();
+      expect(cuponsEstado.cursor.falha).toBeUndefined();
+      expect(await situacao()).toEqual({ status: 'ativa', status_reason: null });
+      // A atribuição refeita pelo cupom fica registrada com o gatilho dela (uma execução, a desta página).
+      const [n] = await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.attribution_run where tenant_id = $1 and trigger = 'cupons'`, [tenantId]);
+      expect(n?.n).toBe('1');
+    });
+
+    it('token recusado continua parando tudo: depois do 401, nenhum outro conjunto é lido', async () => {
+      barra.tokenRevogado = true;
+      barra.rotas.length = 0;
+      const r = await sincronizador.sincronizar(contaBarra, tenantId, depoisDe(8 * 60));
+      expect(r).toEqual({ status: 'falhou', erro: 'autenticacao: HTTP 401' });
+      expect(barra.rotas).toEqual(['cupons']);
+      expect(await ultimaExecucao()).toEqual({ status: 'falhou', error: 'cupons: autenticacao: HTTP 401' });
+      const conta = await situacao();
+      expect(conta?.status).toBe('desconectada');
+      expect(conta?.status_reason).toContain('conecte de novo');
+    });
   });
 });

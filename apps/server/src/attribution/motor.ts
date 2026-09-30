@@ -212,6 +212,20 @@ export async function pedidosDoCupomDeCampanha(tx: Tx, tenantId: string, campaig
   return r.rows.map((x) => x.id);
 }
 
+/**
+ * Pedidos que um cupom novo ou alterado pode mudar — o cupom que chega depois dos pedidos que o citam: os do
+ * código dele, por cada ligação do cupom com uma campanha (`pedidosDoCupomDeCampanha`). Cupom sem ligação não
+ * é evidência de nada (ADR-020) e não muda pedido nenhum.
+ */
+export async function pedidosDosCupons(tx: Tx, tenantId: string, couponIds: string[]): Promise<string[]> {
+  if (!couponIds.length) return [];
+  const r = await tx.execute<{ id: string }>(sql`
+    select cc.id from liame.campaign_coupon cc
+     where cc.tenant_id = ${tenantId}
+       and cc.coupon_id in (select value::uuid from jsonb_array_elements_text(${JSON.stringify(couponIds)}::jsonb))`);
+  return pedidosDoCupomDeCampanha(tx, tenantId, r.rows.map((x) => x.id));
+}
+
 /** Pedidos da empresa confirmados desde um instante (recálculo do período: campanha nova sincronizada, gclid resolvido). */
 export async function pedidosDesde(tx: Tx, tenantId: string, desde: Date): Promise<string[]> {
   const r = await tx.execute<{ id: string }>(sql`

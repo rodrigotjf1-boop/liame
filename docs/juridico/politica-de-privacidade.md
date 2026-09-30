@@ -130,7 +130,7 @@ Também compartilhamos dados:
 
 - com as **plataformas que a empresa cliente conecta** (Meta, Google, WhatsApp e outras), quando ela manda executar uma ação, por exemplo, publicar um anúncio ou enviar uma mensagem;
 - com os **produtos da DMS** que a empresa cliente usa e conecta ao Liame (Regem e RegemCast);
-- com **autoridades**, quando a lei ou uma ordem judicial exigir.
+- com **autoridades**, quando a lei ou uma ordem judicial exigir. Todo pedido de autoridade passa antes pelo nosso encarregado, que confere se ele é legítimo e tem base na lei. Se o pedido for ilegal, nós o contestamos. Quando o pedido é devido, entregamos só o mínimo necessário para atendê-lo. O encarregado mantém o registro de cada pedido: quem pediu, a nossa resposta e o fundamento da decisão.
 
 A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/privacidade#fornecedores](https://agencialiame.com/privacidade#fornecedores). Avisamos as empresas clientes antes de incluir um fornecedor novo que trate dados delas.
 

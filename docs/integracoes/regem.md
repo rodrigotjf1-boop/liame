@@ -39,6 +39,7 @@ Endereço base: `https://api.dmsregem.com/api/v1/integracao`. Rotas **só da nuv
 Quem é a loja do token: `{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moeda", "escopos": [...], "cardapio_url" }`.
 
 - O Liame usa na conexão: nome da loja, fuso e escopos concedidos.
+- Depois, relê a rota **uma vez por dia por loja**, na reconciliação, e atualiza o `cardapio_url` quando ele muda (30/09/2026). Campo ausente mantém o endereço gravado; `null` tira o cardápio da loja.
 - `cardapio_url` é o endereço público do cardápio online da loja (ou `null` sem cardápio). O construtor de links do Liame (F5) só aceita destino dentro dele (V33).
 
 ### 2.2 `GET {base}/pedidos` · `pedidos.ler`

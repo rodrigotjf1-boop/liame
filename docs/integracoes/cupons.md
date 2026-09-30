@@ -1,6 +1,6 @@
 # Contrato de cupons (neutro de produto)
 
-> **Versão 1 · 29/09/2026.** Decisão do dono (D-A2.5-3, `plano-a25.md`) e ADR-019. O cupom **vive no sistema de vendas** (Regem hoje; GoGeM e outros depois), onde é resgatado. O Liame lê os cupons e os usos para ligar a campanhas, e cria cupons pelo Action Service. Qualquer sistema que implementar este contrato conecta ao Liame **sem código novo** no Liame: o endereço base de cada produto é configuração da distribuição, nunca informado pelo usuário.
+> **Versão 1 · 29/09/2026**, com a emenda de 30/09/2026 (faixa do percentual e cupom que o Liame não guarda, §3.1). Decisão do dono (D-A2.5-3, `plano-a25.md`) e ADR-019. O cupom **vive no sistema de vendas** (Regem hoje; GoGeM e outros depois), onde é resgatado. O Liame lê os cupons e os usos para ligar a campanhas, e cria cupons pelo Action Service. Qualquer sistema que implementar este contrato conecta ao Liame **sem código novo** no Liame: o endereço base de cada produto é configuração da distribuição, nunca informado pelo usuário.
 >
 > **Hoje por REST.** Quando o hub MCP da DMS existir (ADR-008, trilha B), as mesmas operações saem como ferramentas (`cupons_listar`, `cupons_usos_listar`, `cupom_criar`, `cupom_desativar`), com os mesmos escopos.
 
@@ -76,7 +76,9 @@ Parâmetros: `cursor`, `limite`. Devolve os cupons que valem para a loja do toke
 }
 ```
 
-- `tipo`: `percentual` (usa `percentual`, texto com 2 casas), `valor` (usa `valor_centavos`), `frete_gratis`, `outro`.
+- `tipo`: `percentual` (usa `percentual`, texto com 2 casas, **maior que 0 e até 100**), `valor` (usa `valor_centavos`), `frete_gratis`, `outro`.
+  - Percentual fora dessa faixa sai como **`tipo: "outro"`, sem `percentual`** (é o que o Regem faz; emenda de 30/09/2026). Percentual fora da faixa é resposta fora do contrato: o Liame recusa a página de cupons e tenta de novo mais tarde, sem parar a leitura dos pedidos.
+- `max_usos` e `usos` cabem num inteiro de 32 bits. O cupom que o banco do Liame não guarda (código vazio depois de tirar os espaços, número acima desse limite, data do ano 0000, fuso fora da lista da IANA com data de validade, texto com o caractere nulo) **fica de fora da leitura, com o motivo no registro do Liame**, e o resto da página segue.
 - `valido_ate` é o último dia em que o cupom vale. Sem data, o campo vem `null`.
 - `codigo` sempre em maiúsculas.
 - **Cupom apagado** no sistema de origem sai como lápide: o mesmo `id`, versão nova e `"removido": true`. O Liame tira o cupom da lista e desliga as ligações com campanhas.

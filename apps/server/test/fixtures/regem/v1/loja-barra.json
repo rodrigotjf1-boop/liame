@@ -1,0 +1,15 @@
+{
+  "loja_id": "loja-barra",
+  "loja_nome": "Mister Burgers — Loja Barra",
+  "empresa_nome": "Mister Burgers",
+  "fuso": "America/Sao_Paulo",
+  "moeda": "BRL",
+  "escopos": [
+    "pedidos.ler",
+    "clientes.anonimizacao.ler",
+    "cupons.ler",
+    "cupons.uso.ler",
+    "cupons.criar"
+  ],
+  "cardapio_url": "https://cardapio.exemplo.com.br/misterburgers-barra"
+}
