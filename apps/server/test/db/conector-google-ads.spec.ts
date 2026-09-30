@@ -51,6 +51,10 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
     if (!m || req.method !== 'POST' || !query) return { status: 404, corpo: { error: { code: 404, status: 'NOT_FOUND', message: 'not found' } } };
     const cliente = m[1]!;
     if (cliente === '9990000009') return { status: 403, corpo: { error: { code: 403, status: 'PERMISSION_DENIED', message: "The caller does not have permission" } } };
+    // Conta em que o Google recusa os campos de URL (campo desconhecido na versão): o conector lê sem eles.
+    if (cliente === '7778889990' && /final_url|tracking_url_template/.test(query)) {
+      return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Unrecognized field in the query' } } };
+    }
     if (/FROM customer_client/.test(query)) return { status: 200, corpo: fixture(`customer-clients-${cliente}`) };
     const comData = /segments\.date BETWEEN/.test(query);
     if (/FROM campaign\b/.test(query)) return { status: 200, corpo: comData ? porData('metrics-campaign', query) : fixture('campaigns') };
@@ -137,6 +141,50 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
       ['51000000001', 'RESPONSIVE_SEARCH_AD'],
       ['51000000002', 'RESPONSIVE_SEARCH_AD'],
     ]);
+  });
+
+  it('F5: URLs finais, sufixo do URL final e modelo de cada anúncio, pelo nível mais específico (conferência do rastreio)', async () => {
+    const antes = pedidos.length;
+    const e = await conector().lerEntidades(conta());
+    const consultas = pedidos.slice(antes).map((p) => p.query ?? '');
+    expect(consultas.find((q) => /FROM campaign$/.test(q))).toContain('customer.final_url_suffix, customer.tracking_url_template FROM campaign');
+    expect(consultas.find((q) => /FROM ad_group$/.test(q))).toContain('ad_group.final_url_suffix, ad_group.tracking_url_template FROM ad_group');
+    expect(consultas.find((q) => /FROM ad_group_ad$/.test(q))).toContain('ad_group_ad.ad.final_urls, ad_group_ad.ad.final_url_suffix, ad_group_ad.ad.tracking_url_template FROM ad_group_ad');
+    const CARDAPIO = 'https://cardapio.exemplo.com.br/casabrasa';
+    expect(e.ads.map((a) => a.providerAttributes)).toEqual([
+      {
+        rastreio: {
+          url_tags: null,
+          destinos: [{ url: CARDAPIO, url_tags: null }],
+          // Sem sufixo no anúncio, no grupo nem na campanha: vale o da conta.
+          sufixo: 'utm_source=google&utm_medium=cpc&campaign_id={campaignid}&adgroup_id={adgroupid}&ad_id={creative}&lk=BH4K8XJ2QM',
+          sufixo_nivel: 'conta',
+          modelo: null,
+          modelo_nivel: null,
+        },
+      },
+      {
+        rastreio: {
+          url_tags: null,
+          destinos: [{ url: CARDAPIO, url_tags: null }],
+          // O do anúncio vence o da conta; o modelo vem do grupo.
+          sufixo: 'utm_source=google',
+          sufixo_nivel: 'anuncio',
+          modelo: '{lpurl}?lk=BH4K8XJ2QM',
+          modelo_nivel: 'grupo',
+        },
+      },
+    ]);
+  });
+
+  it('F5: se o Google recusa os campos de URL, lê sem eles e segue (os anúncios ficam por conferir)', async () => {
+    const antes = pedidos.length;
+    const e = await conector().lerEntidades(conta('7778889990', null));
+    expect(e.campaigns).toHaveLength(3);
+    expect(e.ads.map((a) => a.providerAttributes)).toEqual([undefined, undefined]);
+    const consultas = pedidos.slice(antes).map((p) => p.query ?? '');
+    expect(consultas.filter((q) => /final_url|tracking_url_template/.test(q))).toHaveLength(3);
+    expect(consultas.filter((q) => !/final_url|tracking_url_template/.test(q))).toHaveLength(3);
   });
 
   it('micros para unidade sem ponto flutuante', () => {

@@ -54,6 +54,15 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
     if (no === 'act_9990000001' && aresta === 'campaigns') {
       return { status: 200, corpo: { data: [], paging: { next: 'https://graph.facebook.com.outro.site/v26.0/act_9990000001/campaigns?after=x' } } };
     }
+    // Conta em que a Meta recusa os campos de URL (campo desconhecido na versão): o conector lê sem eles.
+    const campos = url.searchParams.get('fields') ?? '';
+    if (no === 'act_9990000003' && ((aresta === 'adcreatives' && campos.includes('url_tags')) || (aresta === 'adsets' && campos.includes('destination_type')))) {
+      return { status: 400, corpo: { error: { code: 100, type: 'OAuthException', message: '(#100) Tried accessing nonexisting field' } } };
+    }
+    // Conta grande: com os links do criativo, a Meta responde "dados demais" (código 1, transitório).
+    if (no === 'act_9990000004' && aresta === 'adcreatives' && campos.includes('url_tags')) {
+      return { status: 500, corpo: { error: { code: 1, type: 'OAuthException', message: "Please reduce the amount of data you're asking for, then retry your request" } } };
+    }
     if (no.startsWith('act_') && aresta) {
       if (aresta === 'campaigns') return { status: 200, corpo: fixture(url.searchParams.get('after') === 'b' ? 'campaigns-2' : 'campaigns-1') };
       if (aresta === 'insights' && p.metodo === 'POST') {
@@ -136,7 +145,60 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
     ]);
     expect(e.creatives.map((c) => [c.externalId, c.kind])).toEqual([
       ['120210000000009001', 'VIDEO'],
-      ['120210000000009002', 'PHOTO'],
+      ['120210000000009002', 'SHARE'],
+      ['120210000000009003', 'SHARE'],
+    ]);
+  });
+
+  it('F5: o link de cada criativo e os parâmetros de URL, e o destino de cada conjunto (conferência do rastreio)', async () => {
+    const antes = pedidos.length;
+    const e = await conector().lerEntidades(conta());
+    const campos = (aresta: string) => pedidos.slice(antes).find((p) => p.caminho.endsWith(`/${aresta}`))!.query.get('fields');
+    expect(campos('adcreatives')).toBe(
+      'id,name,object_type,thumbnail_url,url_tags,object_url,object_story_spec{link_data{link,child_attachments{link}},video_data{call_to_action}},asset_feed_spec{link_urls}',
+    );
+    expect(campos('adsets')).toBe('id,name,status,effective_status,campaign_id,daily_budget,destination_type');
+    expect(e.adGroups.map((g) => g.providerAttributes)).toEqual([{ destination_type: 'WEBSITE' }, { destination_type: 'WHATSAPP' }]);
+    const CARDAPIO = 'https://cardapio.exemplo.com.br/casabrasa';
+    const vazio = { sufixo: null, sufixo_nivel: null, modelo: null, modelo_nivel: null };
+    expect(e.creatives.map((c) => c.providerAttributes)).toEqual([
+      {
+        rastreio: {
+          url_tags: 'utm_source=meta&utm_medium=paid&utm_campaign={{campaign.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}&lk=CS7Q2XK9PA',
+          destinos: [{ url: CARDAPIO, url_tags: null }],
+          ...vazio,
+        },
+      },
+      { rastreio: { url_tags: null, destinos: [{ url: CARDAPIO, url_tags: null }, { url: `${CARDAPIO}/prato-do-dia`, url_tags: null }], ...vazio } },
+      { rastreio: { url_tags: null, destinos: [{ url: CARDAPIO, url_tags: 'campaign_id={{campaign.id}}&ad_id={{ad.id}}' }], ...vazio } },
+    ]);
+  });
+
+  it('F5: se a Meta responde "dados demais" (código 1) com os links do criativo, lê o criativo sem eles e a conta segue', async () => {
+    const antes = pedidos.length;
+    const e = await conector().lerEntidades(conta('act_9990000004'));
+    expect(e.campaigns).toHaveLength(2);
+    // O destino dos conjuntos veio; só os criativos ficam por conferir.
+    expect(e.adGroups.map((g) => g.providerAttributes)).toEqual([{ destination_type: 'WEBSITE' }, { destination_type: 'WHATSAPP' }]);
+    expect(e.creatives.map((c) => c.providerAttributes)).toEqual([undefined, undefined, undefined]);
+    const criativos = pedidos.slice(antes).filter((p) => p.caminho.endsWith('/adcreatives')).map((p) => p.query.get('fields')?.includes('url_tags'));
+    // As tentativas do cliente com os campos de URL e, depois, uma leitura sem eles.
+    expect(criativos.at(-1)).toBe(false);
+    expect(criativos.filter(Boolean).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('F5: se a Meta recusa os campos de URL, lê sem eles e segue (os anúncios ficam por conferir)', async () => {
+    const antes = pedidos.length;
+    const e = await conector().lerEntidades(conta('act_9990000003'));
+    expect(e.campaigns).toHaveLength(2);
+    expect(e.adGroups.map((g) => g.providerAttributes)).toEqual([undefined, undefined]);
+    expect(e.creatives.map((c) => c.providerAttributes)).toEqual([undefined, undefined, undefined]);
+    const lidos = pedidos.slice(antes).filter((p) => /\/(adcreatives|adsets)$/.test(p.caminho)).map((p) => [p.caminho.split('/').pop(), p.query.get('fields')?.includes('url_tags') || p.query.get('fields')?.includes('destination_type')]);
+    expect(lidos.sort()).toEqual([
+      ['adcreatives', false],
+      ['adcreatives', true],
+      ['adsets', false],
+      ['adsets', true],
     ]);
   });
 

@@ -1,10 +1,10 @@
 [
   {
     "results": [
-      { "adGroupAd": { "resourceName": "customers/4445556667/adGroupAds/41000000001~51000000001", "status": "ENABLED", "ad": { "resourceName": "customers/4445556667/ads/51000000001", "id": "51000000001", "type": "RESPONSIVE_SEARCH_AD" } }, "adGroup": { "resourceName": "customers/4445556667/adGroups/41000000001", "id": "41000000001" } },
-      { "adGroupAd": { "resourceName": "customers/4445556667/adGroupAds/41000000002~51000000002", "status": "PAUSED", "ad": { "resourceName": "customers/4445556667/ads/51000000002", "id": "51000000002", "name": "Marca - institucional", "type": "RESPONSIVE_SEARCH_AD" } }, "adGroup": { "resourceName": "customers/4445556667/adGroups/41000000002", "id": "41000000002" } }
+      { "adGroupAd": { "resourceName": "customers/4445556667/adGroupAds/41000000001~51000000001", "status": "ENABLED", "ad": { "resourceName": "customers/4445556667/ads/51000000001", "id": "51000000001", "type": "RESPONSIVE_SEARCH_AD", "finalUrls": ["https://cardapio.exemplo.com.br/casabrasa"] } }, "adGroup": { "resourceName": "customers/4445556667/adGroups/41000000001", "id": "41000000001" } },
+      { "adGroupAd": { "resourceName": "customers/4445556667/adGroupAds/41000000002~51000000002", "status": "PAUSED", "ad": { "resourceName": "customers/4445556667/ads/51000000002", "id": "51000000002", "name": "Marca - institucional", "type": "RESPONSIVE_SEARCH_AD", "finalUrls": ["https://cardapio.exemplo.com.br/casabrasa"], "finalUrlSuffix": "utm_source=google" } }, "adGroup": { "resourceName": "customers/4445556667/adGroups/41000000002", "id": "41000000002" } }
     ],
-    "fieldMask": "adGroupAd.ad.id,adGroupAd.ad.name,adGroupAd.ad.type,adGroupAd.status,adGroup.id",
+    "fieldMask": "adGroupAd.ad.id,adGroupAd.ad.name,adGroupAd.ad.type,adGroupAd.status,adGroup.id,adGroupAd.ad.finalUrls,adGroupAd.ad.finalUrlSuffix,adGroupAd.ad.trackingUrlTemplate",
     "requestId": "req-ads"
   }
 ]

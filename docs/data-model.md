@@ -38,6 +38,8 @@ Não fingir que Meta e Google têm os mesmos conceitos.
 
 Cada entidade tem colunas canônicas + `provider_attributes jsonb` (o que é só do provider) + `raw_ref` (ponteiro para o payload bruto).
 
+**Link do anúncio (A2.5 · F5, sem migration):** para a conferência do rastreio, o conector guarda em `provider_attributes.rastreio` para onde o anúncio leva e o que ele acrescenta ao link — no `creative` da Meta (`url_tags` e os links do criativo, cada um com os próprios parâmetros) e no `ad` do Google (URLs finais e o sufixo do URL final e o modelo de acompanhamento que valem para o anúncio, com o nível de onde vieram). O conjunto da Meta guarda o `destination_type` (site, WhatsApp…). Sem a chave, o link ainda não foi lido.
+
 **Conexão (`oauth_connection`, migration 0019):** uma autorização OAuth da empresa para uma marca (`meta` ou `google`, que cobre Google Ads e GA4). Situações: `aguardando_autorizacao` → `recebida` → `processando` → `aguardando_escolha` → `ativa`; ou `erro`, `expirada`, `revogada`. O estado do OAuth fica só como hash (`state_hash`); o código e o verificador PKCE ficam cifrados com a chave da empresa até a troca; a credencial vai para o cofre (`credential_secret_id`); `discovered` guarda as contas que a autorização alcança (nome, moeda, fuso), para a pessoa escolher. `connected_account.connection_id` liga cada conta à autorização; uma conta da plataforma fica ligada a uma marca só por vez na empresa (índice único parcial sem `disconnected_at`). Tentativas que não viraram conexão saem em 90 dias.
 
 **Sincronização (G7):** `sync_state` por conta e conjunto de dados (`metricas`, `entidades`) guarda o frescor (`last_success_at` × `expected_every_minutes`), o último erro (texto nosso, sem dado da plataforma) e o `cursor` (`carga_inicial_em`, `revisao_longa_em`, `proxima`, `falhas_seguidas`); `sync_run` registra cada execução. **Vigia (G8, migration 0020, da distribuição):** `watch_source` (fontes oficiais), `watch_snapshot` (hash de cada trecho da última leitura), `watch_change` (o que mudou, com o texto novo) e `watch_alert` (versão expirando ou expirada, descontinuação vista, fonte que mudou ou falhou; único por tipo, provider, versão e etapa). Leitura para todos (documentação pública), escrita só do sistema.
@@ -101,7 +103,7 @@ touchpoint (clique/visita/conversa) ─→ identity_link ─→ customer_ref ─
 
 **Atribuição (A2.5 · F2, migration 0022; ADR-020):**
 
-- `tracking_link`: o link do cardápio com o `lk`, ligado a campanha e anúncio.
+- `tracking_link`: o link do cardápio com o `lk`, ligado a campanha e anúncio. O `lk` sai da chave natural (empresa, loja, campanha, anúncio ou todos, destino; F5): o índice único `(tenant_id, code)` garante um link só por chave, sem migration nova.
 - `coupon`: espelho dos cupons da loja no Regem, com regra, validade e usos.
 - `campaign_coupon`: cupom ligado a uma campanha por período; só o exclusivo é evidência.
 - `touchpoint`:

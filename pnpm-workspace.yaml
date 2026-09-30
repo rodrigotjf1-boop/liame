@@ -9,7 +9,7 @@ catalog:
   typescript: 6.0.3
   # three r147: a versão que o kit da LIA 3D usa (examples/js clássico, sem módulos). Atualizar = portar o kit (ux §6.1).
   three: 0.147.0
-  # QR do app autenticador (MIT, sem dependências), desenhado em SVG no próprio componente.
+  # QR (MIT, sem dependências), desenhado em SVG por nós: o do app autenticador no web e o dos links de campanha no servidor (F5).
   uqr: 0.1.3
   turbo: 2.11.4
   '@types/node': 24.13.6

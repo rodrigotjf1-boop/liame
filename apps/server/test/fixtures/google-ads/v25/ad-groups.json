@@ -2,9 +2,9 @@
   {
     "results": [
       { "adGroup": { "resourceName": "customers/4445556667/adGroups/41000000001", "id": "41000000001", "name": "Pizza delivery", "status": "ENABLED", "type": "SEARCH_STANDARD" }, "campaign": { "resourceName": "customers/4445556667/campaigns/21000000001", "id": "21000000001" } },
-      { "adGroup": { "resourceName": "customers/4445556667/adGroups/41000000002", "id": "41000000002", "name": "Marca", "status": "PAUSED", "type": "SEARCH_STANDARD" }, "campaign": { "resourceName": "customers/4445556667/campaigns/21000000001", "id": "21000000001" } }
+      { "adGroup": { "resourceName": "customers/4445556667/adGroups/41000000002", "id": "41000000002", "name": "Marca", "status": "PAUSED", "type": "SEARCH_STANDARD", "trackingUrlTemplate": "{lpurl}?lk=BH4K8XJ2QM" }, "campaign": { "resourceName": "customers/4445556667/campaigns/21000000001", "id": "21000000001" } }
     ],
-    "fieldMask": "adGroup.id,adGroup.name,adGroup.status,adGroup.type,campaign.id",
+    "fieldMask": "adGroup.id,adGroup.name,adGroup.status,adGroup.type,campaign.id,adGroup.finalUrlSuffix,adGroup.trackingUrlTemplate",
     "requestId": "req-ag"
   }
 ]

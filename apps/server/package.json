@@ -33,6 +33,7 @@
     "pg-boss": "catalog:",
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
+    "uqr": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
