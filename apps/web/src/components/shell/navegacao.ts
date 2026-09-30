@@ -3,6 +3,8 @@ import type { NomeIcone } from '@/components/ui/icone';
 // Itens do menu na ordem do protótipo aprovado. Só entram as telas que já existem: as outras chegam
 // com as suas fases (roadmap). Cada item some para quem não tem a permissão da tela; os itens de
 // "Sua conta" são da própria pessoa (valem para todas as empresas, inclusive sem empresa ativa).
+// Os grupos de ferramenta ficam em "Mais ferramentas": recolhido no Lite, aberto no Pro
+// (ux-modelo-interface §4.1).
 
 export type ItemNav = {
   href: string;
@@ -17,7 +19,14 @@ export type ItemNav = {
   /** A tela tem as duas visões (Lite e Pro): o seletor de modo aparece no topo. */
   modos?: boolean;
 };
-export type GrupoNav = { id: string; rotulo: string; pessoal?: boolean; itens: ItemNav[] };
+export type GrupoNav = {
+  id: string;
+  rotulo: string;
+  pessoal?: boolean;
+  /** Grupo de ferramentas: no Lite, fica dentro de "Mais ferramentas" (recolhido); no Pro, aberto. */
+  ferramenta?: boolean;
+  itens: ItemNav[];
+};
 
 export const NAVEGACAO: GrupoNav[] = [
   {
@@ -29,6 +38,12 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/contas', rotulo: 'Contas conectadas', icone: 'plug', permissao: 'contas.ver' },
       { href: '/pessoas', rotulo: 'Pessoas e acessos', icone: 'user-plus', permissao: 'pessoas.ver' },
     ],
+  },
+  {
+    id: 'operacao',
+    rotulo: 'Operação',
+    ferramenta: true,
+    itens: [{ href: '/links', rotulo: 'Links e cupons', icone: 'link', permissao: 'vendas.ver' }],
   },
   {
     id: 'conta',
@@ -56,6 +71,11 @@ export function rotaPessoal(caminho: string): boolean {
 /** Itens que a pessoa vê no grupo: some o que exige permissão que ela não tem (o servidor também barra). */
 export function itensVisiveis(grupo: GrupoNav, pode: (permissao: string) => boolean): ItemNav[] {
   return grupo.itens.filter((i) => !i.permissao || pode(i.permissao));
+}
+
+/** A tela aberta está num grupo de ferramentas ("Mais ferramentas" começa aberto nela). */
+export function emFerramenta(caminho: string): boolean {
+  return NAVEGACAO.some((g) => g.ferramenta && g.itens.some((i) => itemAtual(caminho, i.href)));
 }
 
 /** A tela aberta tem as visões Lite e Pro e a pessoa pode vê-la (sem permissão, a tela é só o aviso). */
