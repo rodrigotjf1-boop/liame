@@ -154,8 +154,8 @@ export function motivoCampanhaSemLink(c: LinkCampaignOption): string | null {
 }
 
 /** As campanhas por plataforma, na ordem da API (Meta, depois Google). */
-export function gruposDeCampanhas(campanhas: LinkCampaignOption[]): { provider: string; titulo: string; campanhas: LinkCampaignOption[] }[] {
-  const grupos: { provider: string; titulo: string; campanhas: LinkCampaignOption[] }[] = [];
+export function gruposDeCampanhas<T extends { provider: string }>(campanhas: T[]): { provider: string; titulo: string; campanhas: T[] }[] {
+  const grupos: { provider: string; titulo: string; campanhas: T[] }[] = [];
   for (const c of campanhas) {
     let g = grupos.find((x) => x.provider === c.provider);
     if (!g) {

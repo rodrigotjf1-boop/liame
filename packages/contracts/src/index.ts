@@ -132,6 +132,25 @@ export {
   SourceFreshness,
 } from './results.js';
 export {
+  CouponCampaign,
+  CouponCode,
+  CouponItem,
+  CouponLink,
+  CouponListQuery,
+  CouponListResponse,
+  CouponResponse,
+  CouponStore,
+  CreateExternalCouponRequest,
+  DetectedPlatform,
+  EXTERNAL_COUPON_PLATFORMS,
+  ExternalCouponPlatform,
+  LinkCouponRequest,
+  ORDER_PLATFORMS,
+  OrderPlatform,
+  OrderPlatformResponse,
+  SetOrderPlatformRequest,
+} from './coupons.js';
+export {
   CreatedTrackingLinkResponse,
   CreateTrackingLinkRequest,
   LinkCampaignOption,

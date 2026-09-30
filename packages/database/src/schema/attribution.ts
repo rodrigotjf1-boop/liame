@@ -50,6 +50,9 @@ export const coupon = liame.table('coupon', {
   usesCount: integer('uses_count').notNull().default(0),
   sourceVersion: bigint('source_version', { mode: 'number' }).notNull(),
   sourceUpdatedAt: ts('source_updated_at').notNull(),
+  origin: text('origin').notNull().default('regem'),
+  platform: text('platform'),
+  createdBy: uuid('created_by'),
   firstSeenAt: ts('first_seen_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 });

@@ -19,6 +19,8 @@ import { InboxController } from './inbox/inbox.controller.js';
 import { InboxService } from './inbox/inbox.service.js';
 import { KillSwitchController } from './kill-switch/kill-switch.controller.js';
 import { KillSwitchService } from './kill-switch/kill-switch.service.js';
+import { CouponsController } from './coupons/coupons.controller.js';
+import { CouponsService } from './coupons/coupons.service.js';
 import { LinksController } from './links/links.controller.js';
 import { LinksService } from './links/links.service.js';
 import { PeopleController } from './people/people.controller.js';
@@ -34,7 +36,7 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
-  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService],
+  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService],
 })
 export class AppModule {}

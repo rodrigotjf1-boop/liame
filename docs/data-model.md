@@ -104,8 +104,9 @@ touchpoint (clique/visita/conversa) ─→ identity_link ─→ customer_ref ─
 **Atribuição (A2.5 · F2, migration 0022; ADR-020):**
 
 - `tracking_link`: o link do cardápio com o `lk`, ligado a campanha e anúncio. O `lk` sai da chave natural (empresa, loja, campanha, anúncio ou todos, destino; F5): o índice único `(tenant_id, code)` garante um link só por chave, sem migration nova.
-- `coupon`: espelho dos cupons da loja no Regem, com regra, validade e usos.
-- `campaign_coupon`: cupom ligado a uma campanha por período; só o exclusivo é evidência.
+- `coupon`: espelho dos cupons da loja no Regem, com regra, validade e usos (`origin` `regem`), e os **informados de outra plataforma de pedidos** (`origin` `externo`, `platform` `anotaai` ou `cardapioweb`, id na origem `externo:<CÓDIGO>`, `created_by`; migration 0026, F6): a regra e a validade ficam na plataforma, e o Liame reconhece o código nos pedidos da loja.
+- `campaign_coupon`: cupom ligado a uma campanha por período (dias no fuso da loja; um vínculo por vez, sem períodos que se cruzem); só o exclusivo é evidência. O vínculo agendado que ainda não começou pode ser apagado; o que já valeu fica.
+- `unit.order_platform` (0026): onde a loja recebe os pedidos online, informado pela empresa (`regem`, `anotaai`, `cardapioweb`, `brendi`, `outra` com `order_platform_url` https), com quem e quando informou.
 - `touchpoint`:
   - `clique`: ligado ao pedido pelo id na origem; `conversa`: ligada ao pedido pelo `customer_ref`;
   - ids de clique e da plataforma válidos ou ausentes; plataforma deduzida dos ids;

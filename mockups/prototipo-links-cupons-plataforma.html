@@ -1,0 +1,1539 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Links e cupons · Liame</title>
+<!--
+@prototipo Liame · A2.5 · P3 · Links e cupons de campanha (AGUARDA APROVAÇÃO DO DONO)
+tela nova em "Mais ferramentas" (grupo Operação), com o shell e os componentes dos protótipos aprovados
+Links: criar link (campanha, anúncio opcional, destino = cardápio da loja, nome), link pronto, parâmetros para colar na Meta
+       ("Parâmetros de URL") e no Google Ads ("Sufixo do URL final") com copiar, QR ilustrativo, lista e anúncios ativos sem rastreio.
+Cupons: cupons lidos do Regem, ligar a uma campanha (exclusivo sim/não), desligar, criar no Regem com aprovação (flag regem_write),
+       aguardando aprovação, criação desligada, cupom sem uso com gasto; estados vazios e de erro.
+regras: o Liame não escreve na Meta nem no Google; a única escrita é o cupom no Regem, com aprovação. Dados fictícios.
+fontes: plano-a25.md (§3 F5/F6, §5 D-A2.5-3, §6), ADR-019 (escopos e contrato de cupons), pesquisa de 29/09 (parâmetros [O]).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== 1. TOKENS: marca Liame (manual v1.0) nos papéis semânticos, iguais aos protótipos aprovados ===== */
+:root {
+  color-scheme: light dark;
+
+  /* superfícies */
+  --bg: light-dark(#F4F2EC, #0B0D17);
+  --bg-subtle: light-dark(#ECE9E1, #10131F);
+  --surface: light-dark(#FFFFFF, #151A2E);
+  --surface-2: light-dark(#FAF8F3, #1A2038);
+  --surface-hover: light-dark(#F2EFE8, #1F2645);
+  --elevated: light-dark(#FFFFFF, #1B2140);
+  --overlay: light-dark(rgb(11 13 23 / .34), rgb(3 4 10 / .66));
+  --border: light-dark(#E5E1D7, #262C49);
+  --border-strong: light-dark(#D0CBBF, #3A4166);
+
+  /* texto */
+  --text: light-dark(#0B0D17, #F4F2EC);
+  --text-muted: light-dark(#4A5068, #9AA0B4);
+  --text-subtle: light-dark(#646A80, #878EAB);
+
+  /* ação = Ciano Link (botão ciano com tinta Noite nos dois temas) */
+  --primary: #2DD4DE;
+  --primary-hover: light-dark(#26C4CE, #62E1E8);
+  --primary-fg: #0B0D17;
+  --primary-soft: light-dark(#DCF6F8, #0E2B33);
+  --link: light-dark(#0A6C75, #2DD4DE);
+
+  /* foco e fio: o ciano some no fundo claro (1,6:1); no claro entra o petróleo escuro */
+  --foco: light-dark(#008796, #2DD4DE);
+  --fio: light-dark(#009AAA, #2DD4DE);
+
+  /* Violeta IA: aqui só no fundo das notas de diálogo, como no protótipo aprovado de Contas */
+  --ai: light-dark(#5A43D8, #A08FFF);
+  --ai-fill: #7B61FF;
+  --ai-soft: light-dark(#EEEAFF, #211C45);
+
+  /* status (nunca é cor de ação); texto sobre o fundo suave passa de 4,5:1 nos dois temas */
+  --success: light-dark(#0C6F5B, #46BC9F);
+  --success-soft: light-dark(#E2F3EE, #0F2C26);
+  --warning: light-dark(#8A5F00, #FFC24B);
+  --warning-soft: light-dark(#FFF1D1, #2E2610);
+  --danger: light-dark(#B42F2F, #FF6B6B);
+  --danger-soft: light-dark(#FFE3E3, #361A1F);
+
+  /* gráficos (paleta validada com a skill dataviz; ênfase = caixa, contexto = plataforma) */
+  --chart-foco: light-dark(#009AAA, #16A0AF);
+  --chart-contexto: light-dark(#7E8499, #7C83A3);
+  --chart-grade: light-dark(#ECE9E1, #252B48);
+
+  /* QR: módulo escuro sobre fundo claro nos dois temas (leitor de QR precisa disso) */
+  --qr-fundo: #FFFFFF;
+  --qr-tinta: #0B0D17;
+
+  /* marca (logo) */
+  --logo-ink: light-dark(#0B0D17, #F4F2EC);
+  --logo-pin: light-dark(#7B61FF, #FFFFFF);
+  --marca-violeta: #7B61FF;
+  --marca-ciano: #2DD4DE;
+  --marca-lavanda: #A08FFF;
+  --marca-lavanda-clara: #CFC6FF;
+  --marca-petroleo: #1BA8B8;
+  --marca-ambar: #FFC24B;
+  --marca-coral: #FF6B6B;
+
+  /* forma */
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px light-dark(rgb(11 13 23 / .06), rgb(0 0 0 / .35));
+  --shadow: 0 1px 2px light-dark(rgb(11 13 23 / .05), rgb(0 0 0 / .4)), 0 10px 28px -14px light-dark(rgb(11 13 23 / .2), rgb(0 0 0 / .7));
+  --shadow-lg: 0 28px 56px -20px light-dark(rgb(11 13 23 / .32), rgb(0 0 0 / .75)), 0 2px 8px light-dark(rgb(11 13 23 / .08), rgb(0 0 0 / .4));
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--foco);
+
+  /* tipografia (kit: Poppins 700/500/400; 600 só em título de cartão e número) */
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Code", Consolas, monospace;
+  --text-xs: .75rem;
+  --text-sm: .8125rem;
+  --text-base: .875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-hero: clamp(2.6rem, 4.2vw, 3.25rem);
+
+  /* espaço (base 4 px) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* layout */
+  --sidebar-w: 256px;
+  --rail-w: 76px;
+  --topbar-h: 60px;
+  --content-max: 1320px;
+
+  /* movimento */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: 140ms;
+  --dur: 220ms;
+  --dur-slow: 360ms;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ===== 2. BASE ===== */
+:root { --font-poppins: "Poppins"; --font-jetbrains: "JetBrains Mono"; }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+p, ul, ol, dl, dd, h1, h2, h3, figure, fieldset { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+html { height: 100%; -webkit-text-size-adjust: 100%; }
+body {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { line-height: 1.2; letter-spacing: -.015em; font-weight: 600; text-wrap: balance; }
+h1 { font-weight: 700; }
+a { color: var(--link); }
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, h3[tabindex="-1"]:focus { outline: none; }
+code { font-family: var(--font-mono); font-size: .92em; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.rotulo-marca { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text-subtle); }
+.spacer { flex: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip-link { position: absolute; left: var(--sp-3); top: -60px; z-index: 100; padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); background: var(--primary); color: var(--primary-fg); font-weight: 600; text-decoration: none; }
+.skip-link:focus { top: var(--sp-3); }
+
+/* ===== Movimento ===== */
+@keyframes surgir { from { opacity: 0; transform: translateY(10px); } }
+@keyframes surgir-fundo { from { opacity: 0; } }
+@keyframes entrar { from { opacity: 0; transform: translateY(8px); } }
+@keyframes pisca { 50% { opacity: .35; } }
+@keyframes varre { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes gira { to { transform: rotate(360deg); } }
+.anima { animation: surgir .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== 3. FAIXA DO PROTÓTIPO (só do protótipo; não vai para o app) ===== */
+.revisao { position: relative; z-index: 50; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 16px; border-bottom: 1px dashed var(--border-strong); background: var(--bg-subtle); font-size: var(--text-xs); }
+.revisao-marca { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.revisao-marca b { font-family: var(--font-mono); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.revisao-marca span { color: var(--text-muted); }
+.revisao label { flex: 1 1 280px; display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 520px; }
+.revisao select { flex: 1; min-width: 0; min-height: 30px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 0 8px; }
+.revisao .btn { min-height: 30px; }
+
+/* ===== 4. SHELL: menu lateral, trilho no tablet, gaveta no celular (igual ao aprovado) ===== */
+.app { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); overflow: hidden; background: var(--bg); }
+
+.sidebar { position: relative; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-5) var(--sp-3) var(--sp-3); border-right: 1px solid var(--border); background: var(--bg); scrollbar-width: thin; }
+.sidebar > * { flex-shrink: 0; }
+.sidebar > nav { width: 100%; }
+.sb-logo { display: flex; align-items: center; gap: var(--sp-2); height: 44px; padding: 0 var(--sp-2); margin-bottom: var(--sp-4); }
+.logo-completo { display: block; width: 116px; height: auto; }
+.logo-simbolo { display: none; width: 40px; height: 40px; }
+.sidebar .sb-fechar { display: none; margin-left: auto; }
+
+.ctx { width: 100%; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); text-align: left; cursor: default; }
+.ctx-av { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--bg-subtle); font-weight: 600; font-size: var(--text-xs); }
+.ctx-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; }
+.ctx-txt b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-txt span { font-size: var(--text-xs); color: var(--text-muted); }
+
+.nav-grupo { margin-top: var(--sp-5); }
+.nav-grupo-rot { padding: 0 var(--sp-3); margin-bottom: var(--sp-2); }
+.nav-lista { display: grid; gap: 2px; }
+.nav-item { position: relative; width: 100%; display: flex; align-items: center; gap: var(--sp-3); height: 40px; padding: 0 var(--sp-3); border: 0; border-radius: var(--radius); background: transparent; color: var(--text-muted); font-weight: 500; text-align: left; text-decoration: none; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.nav-item:hover { background: var(--surface-hover); color: var(--text); }
+.nav-item[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.nav-item .ic { width: 18px; height: 18px; }
+.nav-item .rot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-no { position: absolute; left: 4px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--fio); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fio) 22%, transparent); }
+.nav-cont { min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: var(--radius-full); background: var(--danger-soft); color: var(--danger); font-size: 11px; font-weight: 600; }
+.nav-mais { margin-top: var(--sp-4); }
+.nav-mais .ic { transition: transform var(--dur) var(--ease); }
+.nav-mais[aria-expanded="true"] .ic { transform: rotate(180deg); }
+.nav-mais-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-full); display: inline-grid; place-items: center; background: var(--bg-subtle); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+
+.sb-rodape { margin-top: auto; padding-top: var(--sp-5); display: grid; gap: var(--sp-3); }
+.usuario { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-1) 0 var(--sp-2); }
+.av-user { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); font-size: var(--text-xs); font-weight: 600; }
+.usuario-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; margin-right: var(--sp-1); }
+.usuario-txt b { font-weight: 600; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usuario-txt span { font-size: var(--text-xs); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* seletor Lite/Pro (protótipo geral aprovado): no topo; na gaveta do celular, no rodapé do menu */
+.modo { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); }
+.modo button { height: 30px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.modo button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.modo button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.modo-top { display: inline-grid; grid-template-columns: auto auto; }
+.modo-top button { min-width: 48px; padding: 0 12px; }
+.sb-rodape .modo { display: none; }
+
+.principal { container: principal / inline-size; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { flex: none; position: relative; z-index: 5; display: flex; align-items: center; gap: var(--sp-2); height: var(--topbar-h); padding: 0 var(--sp-6); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); }
+.topbar .tb-menu { display: none; }
+.trilha { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.trilha-pai { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trilha-sep { color: var(--text-subtle); }
+.trilha strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conteudo { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.pagina { container: pagina / inline-size; max-width: var(--content-max); margin: 0 auto; padding: var(--sp-6) var(--sp-8) var(--sp-16); }
+
+.veu { position: fixed; inset: 0; z-index: 55; background: var(--overlay); animation: surgir-fundo var(--dur) var(--ease); }
+.toast-region { position: fixed; right: var(--sp-4); bottom: var(--sp-4); z-index: 90; display: grid; gap: var(--sp-2); width: min(380px, calc(100vw - 2 * var(--sp-4))); }
+
+@container principal (max-width: 820px) {
+  .trilha-pai, .trilha-sep { display: none; }
+  .topbar { padding: 0 var(--sp-4); }
+}
+
+/* tablet: trilho só com ícones */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .app { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+  .sidebar { align-items: center; padding: var(--sp-4) var(--sp-2) var(--sp-3); }
+  .sb-logo { padding: 0; justify-content: center; }
+  .sidebar .logo-completo { display: none; }
+  .sidebar .logo-simbolo { display: block; }
+  .ctx { width: 44px; padding: 5px; justify-content: center; }
+  .ctx-txt { display: none; }
+  .nav-grupo { width: 100%; margin-top: var(--sp-3); }
+  .nav-grupo-rot { height: 1px; margin: 0 var(--sp-3) var(--sp-3); padding: 0; overflow: hidden; color: transparent; background: var(--border); }
+  .nav-item { justify-content: center; padding: 0; height: 44px; }
+  .nav-item .rot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav-item .nav-cont, .nav-item .nav-mais-n { position: absolute; top: 4px; right: 8px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
+  .usuario { flex-direction: column; padding: 0; }
+  .usuario-txt { display: none; }
+}
+
+/* celular: o menu vira gaveta */
+@media (max-width: 768px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 70; width: min(300px, 86vw); padding-top: calc(var(--sp-5) + env(safe-area-inset-top, 0px)); padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: var(--shadow-lg); transform: translateX(-102%); visibility: hidden; transition: transform var(--dur-slow) var(--ease), visibility 0s linear var(--dur-slow); }
+  /* Ao abrir, a visibilidade muda na hora (sem o atraso de quem fecha): o foco já pode entrar no menu. */
+  .app.gaveta .sidebar { transform: none; visibility: visible; transition: transform var(--dur-slow) var(--ease), visibility 0s linear 0s; }
+  .sidebar .sb-fechar { display: inline-flex; }
+  .sb-rodape .modo { display: grid; }
+  .topbar .modo-top { display: none; }
+  .topbar { padding: 0 var(--sp-3); }
+  .topbar .tb-menu { display: inline-flex; }
+  .trilha-pai, .trilha-sep { display: none; }
+  .pagina { padding: var(--sp-5) var(--sp-4) calc(var(--sp-12) + env(safe-area-inset-bottom)); }
+}
+
+/* Com movimento reduzido, a regra global troca 0s por 0.01ms e criaria uma transição de visibilidade:
+   até o próximo quadro o menu contaria como oculto e o foco não entraria nele. Abre sem transição (V27). */
+@media (prefers-reduced-motion: reduce) {
+  .app.gaveta .sidebar { transition: none !important; }
+}
+
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  .topbar { backdrop-filter: none; background: var(--elevated); }
+}
+
+/* ===== 5. MODOS DE EXIBIÇÃO (protótipo geral aprovado): Lite e Pro ===== */
+.modo-lite .so-pro:not(.aberto .so-pro) { display: none; }
+.modo-pro .so-lite { display: none; }
+
+/* ===== 6. COMPONENTES ===== */
+.ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.ic-sm { width: 15px; height: 15px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 38px; padding: 0 var(--sp-4); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.btn:hover { background: var(--surface-hover); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+.btn--primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); font-weight: 600; }
+.btn--primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn--ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn--ghost:hover { background: var(--surface-hover); color: var(--text); }
+.btn--perigo { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.btn--perigo:hover { background: var(--danger-soft); }
+.btn--perigo-cheio, .btn--perigo-cheio:hover { background: var(--danger); border-color: var(--danger); color: var(--surface); font-weight: 600; }
+.btn--icon { width: 38px; padding: 0; }
+.btn--sm { min-height: 32px; padding: 0 var(--sp-3); font-size: var(--text-sm); }
+.btn--sm.btn--icon { width: 32px; }
+.link-bt { padding: 0; border: 0; background: none; color: var(--link); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-bt:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; border-radius: 2px; }
+
+.input { min-height: 40px; width: 100%; padding: 0 var(--sp-3); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); outline: none; }
+.input::placeholder { color: var(--text-subtle); }
+.input:focus-visible { border-color: var(--foco); box-shadow: var(--focus-ring); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.input[readonly] { color: var(--text-muted); }
+select.input { padding-right: var(--sp-2); }
+
+.card { position: relative; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-5); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.card-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.card-cab h2 { font-size: var(--text-md); }
+.card-sub { margin-top: 2px; font-size: var(--text-sm); color: var(--text-muted); }
+.card-titulo { font-size: var(--text-md); }
+
+.view-cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-6); }
+.view-cab h1 { font-size: var(--text-2xl); }
+.view-cab p { margin-top: var(--sp-1); max-width: 64ch; color: var(--text-muted); }
+
+.st { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.st .dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+.st--aguardando { background: var(--warning-soft); color: var(--warning); }
+.st--concluido { background: var(--success-soft); color: var(--success); }
+.st--espera { background: var(--bg-subtle); color: var(--text-muted); }
+.st--perigo { background: var(--danger-soft); color: var(--danger); }
+.st--info { background: var(--primary-soft); color: var(--link); }
+.lite-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
+.lite-frase { max-width: 70ch; font-size: var(--text-sm); line-height: 1.55; color: var(--text-muted); }
+.lite-frase b { color: var(--text); font-weight: 600; }
+.lite-frase--grande { font-size: var(--text-md); color: var(--text); }
+.eixo-nota { font-size: var(--text-xs); color: var(--text-subtle); }
+
+/* "Ver detalhes" do Lite: abre o Pro ali mesmo (nada some no Lite) */
+.detalhes-bt { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-2); margin-left: calc(-1 * var(--sp-2)); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--link); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.detalhes-bt:hover { background: var(--surface-hover); }
+.detalhes-bt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.detalhes-bt .ic { width: 15px; height: 15px; transition: transform var(--dur) var(--ease); }
+.detalhes-bt[aria-expanded="true"] .ic { transform: rotate(180deg); }
+
+/* tabela */
+.table-wrap { position: relative; width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.tabela { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.tabela th { padding: 10px var(--sp-4); border-bottom: 1px solid var(--border); background: var(--surface-2); text-align: left; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.tabela td, .tabela tbody th, .tabela tfoot th { padding: 12px var(--sp-4); border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+.tabela tbody th, .tabela tfoot th { font-family: var(--font-sans); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; color: var(--text); background: transparent; font-weight: 600; }
+.tabela tbody tr:last-child td, .tabela tbody tr:last-child th { border-bottom: 0; }
+.tabela tfoot td, .tabela tfoot th { border-top: 1px solid var(--border-strong); border-bottom: 0; background: var(--surface-2); font-weight: 600; }
+.tabela .n { text-align: right; }
+.tabela td.acoes { text-align: right; }
+.tabela .sub { display: block; margin-top: 2px; font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--text-subtle); white-space: nowrap; }
+.tabela .forte { font-weight: 600; }
+
+/* campos */
+.campo { display: grid; gap: var(--sp-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.campo > label, .campo > legend { padding: 0; font-size: var(--text-sm); font-weight: 600; }
+.campo-dica { font-size: var(--text-xs); font-weight: 400; color: var(--text-muted); }
+.campo-erro { font-size: var(--text-sm); font-weight: 500; color: var(--danger); }
+.campo-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); font-size: var(--text-sm); }
+.check { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--text-sm); cursor: pointer; }
+.check input { width: 16px; height: 16px; margin: 3px 0 0; flex: none; accent-color: var(--link); }
+.opcoes { display: grid; gap: var(--sp-2); }
+.opcao { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.opcao:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.opcao input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--link); }
+.opcao-txt { display: grid; gap: 2px; font-size: var(--text-sm); }
+.opcao-txt b { font-weight: 600; }
+.opcao-txt span { color: var(--text-muted); }
+.datas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.datas label { display: grid; gap: 4px; font-size: var(--text-sm); font-weight: 500; }
+@media (max-width: 420px) { .datas { grid-template-columns: minmax(0, 1fr); } }
+
+/* diálogo (nativo, com @starting-style) */
+.dialogo { width: min(560px, calc(100vw - 32px)); max-height: min(760px, 92vh); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--elevated); color: var(--text); box-shadow: var(--shadow-lg);
+  opacity: 1; transform: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), overlay var(--dur) allow-discrete, display var(--dur) allow-discrete; }
+.dialogo:not([open]) { opacity: 0; transform: translateY(8px) scale(.98); }
+@starting-style { .dialogo[open] { opacity: 0; transform: translateY(8px) scale(.98); } }
+.dialogo::backdrop { background: var(--overlay); backdrop-filter: blur(3px); }
+.dialogo[open] { display: flex; }
+.dialogo--largo { width: min(720px, calc(100vw - 32px)); }
+.dialogo-form { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.dialogo-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5); border-bottom: 1px solid var(--border); flex: none; }
+.dialogo-cab h2 { font-size: var(--text-lg); min-width: 0; overflow-wrap: anywhere; }
+.dialogo-corpo { position: relative; flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--sp-5); padding: var(--sp-5); }
+.dialogo-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5); border-top: 1px solid var(--border); background: var(--surface-2); flex: none; }
+.dialogo-nota { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--ai-soft); font-size: var(--text-sm); }
+.dialogo-nota .ic { flex: none; margin-top: 2px; color: var(--ai); }
+.dialogo-erro { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--danger-soft); color: var(--danger); font-size: var(--text-sm); font-weight: 500; }
+
+/* gaveta à direita (detalhe), também um <dialog> nativo: foco preso, Esc fecha */
+.dialogo--lado { width: min(520px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0 0 0 auto; border-width: 0 0 0 1px; border-radius: var(--radius-xl) 0 0 var(--radius-xl); }
+.dialogo--lado:not([open]) { opacity: 0; transform: translateX(28px); }
+@starting-style { .dialogo--lado[open] { opacity: 0; transform: translateX(28px); } }
+
+/* toast */
+.toast { display: flex; align-items: center; gap: var(--sp-3); padding: 11px var(--sp-3) 11px var(--sp-4); border-radius: var(--radius-lg); background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); font-size: var(--text-sm); animation: entrar var(--dur) var(--ease); }
+.toast span { flex: 1; }
+.toast--perigo { background: var(--danger); color: var(--surface); }
+.toast.saindo { opacity: 0; transform: translateY(6px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+
+/* estados: vazio, erro e carregando */
+.vazio { display: grid; justify-items: center; gap: var(--sp-3); padding: var(--sp-12) var(--sp-6); text-align: center; }
+.vazio h2, .vazio h3 { font-size: var(--text-lg); outline: none; }
+.vazio p { max-width: 48ch; color: var(--text-muted); }
+.vazio-ic { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--bg-subtle); color: var(--text-muted); }
+.vazio-ic--perigo { background: var(--danger-soft); color: var(--danger); }
+.vazio-ic--ok { background: var(--success-soft); color: var(--success); }
+.vazio-acoes { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.vazio--compacto { padding: var(--sp-8) var(--sp-4); }
+.esqueleto { display: block; height: 14px; border-radius: var(--radius-sm); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface-hover) 80%, transparent), transparent) var(--bg-subtle); background-size: 200% 100%; animation: varre 1.4s linear infinite; }
+.esqueleto--curto { width: 38%; }
+.esqueleto--medio { width: 62%; }
+.esqueleto--alto { height: 44px; width: 30%; }
+.esqueleto--bloco { height: 120px; }
+.girando { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--fio); animation: gira .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .girando { animation: none; border-top-color: var(--border-strong); } }
+
+/* faixa de aviso (Contas aprovada) + variações de atenção e informação */
+.faixa { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-5); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.faixa--acao { border-color: color-mix(in srgb, var(--fio) 45%, var(--border)); background: var(--primary-soft); }
+.faixa--perigo { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: var(--danger-soft); }
+.faixa--atencao { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); background: var(--warning-soft); }
+.faixa-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--surface); }
+.faixa--perigo .faixa-ic { color: var(--danger); }
+.faixa--atencao .faixa-ic { color: var(--warning); }
+.faixa--acao .faixa-ic { color: var(--link); }
+.faixa-txt { flex: 1; min-width: min(100%, 260px); display: grid; gap: 2px; }
+.faixa-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+.faixa--atencao .faixa-txt span, .faixa--perigo .faixa-txt span { color: var(--text); }
+.faixa .btn { flex: none; }
+
+/* filtros e chips (Contas aprovada) */
+.filtros { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface); color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--text); background: var(--text); color: var(--bg); }
+.chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.chip .num { font-size: 11px; opacity: .8; }
+
+/* plataforma (ponto de cor + nome) */
+.plat { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; background: var(--bg-subtle); color: var(--text); }
+.plat::before { content: ""; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--plat-cor, var(--text-subtle)); }
+.plat--meta { --plat-cor: var(--marca-violeta); }
+.plat--google { --plat-cor: var(--marca-petroleo); }
+.plat--ga4 { --plat-cor: var(--marca-ambar); }
+.plat--regem { --plat-cor: var(--marca-coral); }
+.plat--regemcast { --plat-cor: var(--marca-lavanda); }
+
+/* segmentado (período) */
+.seg { display: inline-flex; flex-wrap: wrap; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.seg button { min-height: 32px; padding: 0 12px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.seg button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* frescor */
+.ponto { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--success); }
+.ponto--atraso { background: var(--warning); }
+.ponto--off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-subtle); }
+
+/* confirmação na própria linha (Contas aprovada) */
+.seg-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.confirma-linha { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2); }
+.confirma-txt { flex-basis: 100%; font-size: var(--text-xs); font-weight: 500; color: var(--danger); text-align: right; white-space: normal; }
+
+@media (max-width: 768px) {
+  .toast-region { bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 480px) {
+  .dialogo, .dialogo--largo { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+  .dialogo--lado { border-radius: 0; }
+}
+
+/* ===== P3 · Links e cupons de campanha ===== */
+.abas { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-5); border-bottom: 1px solid var(--border); }
+.aba { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 var(--sp-4); border: 0; border-radius: var(--radius-sm) var(--radius-sm) 0 0; background: transparent; color: var(--text-muted); font-weight: 500; cursor: pointer; }
+.aba:hover { color: var(--text); background: var(--surface-hover); }
+.aba[aria-selected="true"] { color: var(--text); font-weight: 600; }
+.aba[aria-selected="true"]::after { content: ""; position: absolute; left: var(--sp-3); right: var(--sp-3); bottom: -1px; height: 2px; border-radius: 2px; background: var(--fio); }
+.aba:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.aba .num { min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.aba .ic { width: 16px; height: 16px; }
+
+.painel-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4); }
+.painel-desc { flex: 1 1 320px; max-width: 70ch; font-size: var(--text-sm); color: var(--text-muted); }
+.painel-desc .ponto { display: inline-block; margin-right: 8px; vertical-align: 1px; }
+.painel-desc b { color: var(--text); font-weight: 600; }
+
+/* plataforma de pedidos da loja (proposta de 30/09) */
+.plataforma-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin: 0 0 var(--sp-5); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); font-size: var(--text-sm); }
+.plataforma-linha .pl-txt { flex: 1 1 280px; min-width: 0; display: grid; gap: 2px; }
+.plataforma-linha .pl-txt b { font-weight: 600; }
+.plataforma-linha .pl-txt span { color: var(--text-muted); font-size: var(--text-xs); }
+
+/* anúncios ativos sem rastreio */
+.sem-rastreio { display: grid; gap: var(--sp-2); margin: calc(-1 * var(--sp-3)) 0 var(--sp-5); }
+.sem-rastreio li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border)); border-radius: var(--radius); background: var(--surface); }
+.sem-rastreio .sr-txt { flex: 1 1 240px; min-width: 0; display: grid; gap: 1px; font-size: var(--text-sm); }
+.sem-rastreio .sr-txt b { font-weight: 600; }
+.sem-rastreio .sr-txt span { color: var(--text-muted); font-size: var(--text-xs); }
+
+/* tabelas que viram cartões no celular (como Contas conectadas) */
+.cod-lk, .cupom-cod { font-family: var(--font-mono); font-weight: 600; letter-spacing: .04em; }
+.link-url { display: block; margin-top: 2px; max-width: 34ch; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 400; color: var(--text-subtle); font-family: var(--font-mono); }
+.camp-cel { display: grid; gap: 3px; }
+.camp-cel .linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.camp-cel small { font-size: var(--text-xs); color: var(--text-muted); white-space: normal; }
+.tabela .sub { display: block; margin-top: 2px; font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--text-subtle); white-space: normal; }
+.tabela .sub--atencao { color: var(--warning); font-weight: 600; }
+.cupom-estado { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tabela tr.pendente th, .tabela tr.pendente td { background: color-mix(in srgb, var(--warning-soft) 45%, transparent); }
+.tabela tr.vencido .cupom-cod { color: var(--text-subtle); text-decoration: line-through; }
+.tabela td.regra { white-space: normal; min-width: 170px; }
+.tabela .sub.nowrap, .tabela td.n .sub { white-space: nowrap; }
+
+/* parâmetros para colar e QR */
+.copiar-linha { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.copiar-linha .input { flex: 1 1 240px; min-width: 0; font-family: var(--font-mono); font-size: 12px; }
+.param-bloco { display: grid; gap: var(--sp-2); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.param-bloco h3 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); }
+.codigo { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--bg-subtle); }
+.codigo code { flex: 1 1 240px; min-width: 0; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-all; }
+.qr-bloco { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--sp-4); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.qr { width: 132px; padding: 6px; border-radius: var(--radius); background: var(--qr-fundo); box-shadow: inset 0 0 0 1px var(--border); }
+.qr svg { display: block; width: 100%; height: auto; }
+.qr-txt { display: grid; gap: var(--sp-2); }
+.qr-txt h3 { font-size: var(--text-sm); }
+@media (max-width: 480px) { .qr-bloco { grid-template-columns: minmax(0, 1fr); } }
+
+/* formulários dos diálogos */
+.opcoes--linha { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 480px) { .opcoes--linha { grid-template-columns: minmax(0, 1fr); } }
+.valores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.valores label { display: grid; gap: 4px; font-size: var(--text-sm); font-weight: 500; }
+@media (max-width: 420px) { .valores { grid-template-columns: minmax(0, 1fr); } }
+.cupom-resumo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); color: var(--text-muted); }
+.cupom-resumo .cupom-cod { color: var(--text); font-size: var(--text-md); }
+
+@container pagina (max-width: 760px) {
+  .lista-cartoes { border: 0; overflow: visible; }
+  .lista-cartoes .tabela, .lista-cartoes tbody, .lista-cartoes tr, .lista-cartoes td, .lista-cartoes tbody th { display: block; }
+  .lista-cartoes thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .lista-cartoes tr { margin-bottom: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+  .lista-cartoes td, .lista-cartoes tbody th { padding: 4px 0; border: 0; white-space: normal; text-align: left; }
+  .lista-cartoes td.n { text-align: left; }
+  .lista-cartoes td[data-rot]::before { content: attr(data-rot); display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+  .lista-cartoes td.acoes { text-align: left; padding-top: var(--sp-2); }
+  .lista-cartoes .confirma-linha { justify-content: flex-start; }
+  .lista-cartoes .confirma-txt { text-align: left; }
+  .tabela tr.pendente th, .tabela tr.pendente td { background: transparent; }
+  .lista-cartoes tr.pendente { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+}
+
+</style>
+</head>
+<body data-pagina="links" data-ferramentas="abertas">
+<script>document.documentElement.classList.add('modo-lite');</script>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-atencao" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 17v2M13 11v2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-alert-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3M21 21v.01M12 7v3a2 2 0 0 1-2 2H7M3 12h.01M12 3h.01M12 16v.01M16 12h1M21 12v.01M12 21v-1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="liame-simbolo" viewBox="0 0 512 512">
+    <g transform="translate(122.16 61.31)">
+      <path d="M31.1 0V293.76H184.32" fill="none" stroke-width="62.2" style="stroke:var(--logo-ink)"/>
+      <circle cx="235.33" cy="293.76" r="32.35" style="fill:var(--marca-ciano)"/>
+      <rect x="0" y="366.34" width="267.68" height="20.74" rx="10.37" style="fill:var(--marca-ciano)"/>
+    </g>
+  </symbol>
+</svg>
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+<p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
+
+<div class="revisao" role="region" aria-label="Controles do protótipo">
+  <p class="revisao-marca"><b>Protótipo para aprovação · A2.5 · P3</b><span>Links e cupons de campanha (tela nova em “Mais ferramentas”) · dados de exemplo · <b>proposta de 30/09</b>: plataforma de pedidos da loja e cupom de outra plataforma (cenários “Plataforma de pedidos”)</span></p>
+  <label>Cenário <select id="rev-cenario"></select></label>
+  <button class="btn btn--sm btn--ghost" type="button" id="rev-tema" aria-pressed="false">Tema escuro</button>
+</div>
+
+<div class="app">
+  <aside class="sidebar" id="menu-lateral" aria-label="Menu">
+    <div class="sb-logo"><svg class="logo-completo" viewBox="0 0 758.18 309" role="img" aria-label="Liame">
+        <g transform="translate(24 24)">
+          <path d="M17.5 84V211.5H84" fill="none" stroke-width="27" style="stroke:var(--logo-ink)"/>
+          <circle cx="106.14" cy="211.5" r="14.04" style="fill:var(--marca-ciano)"/>
+          <path d="M233 702V0H62V702Z" transform="translate(140.88 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <path d="M163.18 12H201.58Q212.38 12 212.38 22.8V49.2Q212.38 60 201.58 60H177.58L164.38 76.8V60H163.18Q152.38 60 152.38 49.2V22.8Q152.38 12 163.18 12Z" style="fill:var(--marca-ciano)"/>
+          <path d="M499 124H237L195 0H16L270 702H468L722 0H541ZM455 256 368 513 282 256Z" transform="translate(203.48 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <clipPath id="liame-mc"><rect x="207.98" y="-57" width="480" height="282"/></clipPath>
+          <g clip-path="url(#liame-mc)" fill="none" stroke-width="31.86" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M512.05 99.93V256.86" style="stroke:var(--marca-petroleo)"/>
+            <path d="M447.98 182.7L512.05 99.93" style="stroke:var(--marca-ciano)"/>
+            <path d="M383.91 99.93L447.98 182.7" style="stroke:var(--marca-lavanda-clara)"/>
+            <path d="M383.91 256.86V99.93" style="stroke:var(--marca-lavanda)"/>
+          </g>
+          <polygon points="531.8,46.4 536.3,57.1 547.9,58 539,65.6 541.7,77 531.8,70.9 521.8,77 524.5,65.6 515.7,58 527.3,57.1" stroke-width="3.05" stroke-linejoin="round" style="fill:var(--marca-ambar);stroke:var(--marca-ambar)"/>
+          <g transform="translate(447.98 202.44) scale(1.128)"><path d="M0 15C-20 2-20-13-9-13C-4-13-1-9 0-7C1-9 4-13 9-13C20-13 20 2 0 15Z" style="fill:var(--marca-coral)"/></g>
+          <g transform="translate(386.73 80.19) scale(1.128)"><path fill-rule="evenodd" d="M0 24C-12 10-17 2-17-7A17 17 0 1 1 17-7C17 2 12 10 0 24ZM0-13.5A6.5 6.5 0 1 0 0-.5A6.5 6.5 0 1 0 0-13.5Z" style="fill:var(--logo-pin)"/></g>
+          <path d="M233 565V423H462V291H233V137H492V0H62V702H492V565Z" transform="translate(539.68 225) scale(0.2 -0.2)" style="fill:var(--logo-ink)"/>
+          <rect x="654.18" y="143.5" width="52" height="22" style="fill:var(--marca-ciano)"/>
+          <rect x="4" y="245" width="702.18" height="8" rx="4" style="fill:var(--marca-ciano)"/>
+        </g>
+      </svg><svg class="logo-simbolo" role="img" aria-label="Liame"><use href="#liame-simbolo"/></svg><button class="btn btn--icon btn--ghost sb-fechar" type="button" id="bt-fechar-menu" aria-label="Fechar menu"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <button class="ctx" type="button" disabled><span class="ctx-av" aria-hidden="true">MB</span><span class="ctx-txt"><b>Mister Burgers</b><span>Dono</span></span></button>
+    <nav aria-label="Principal">
+      <div class="nav-grupo">
+        <p class="nav-grupo-rot rotulo-marca" id="g-ag">Agência</p>
+        <ul class="nav-lista" aria-labelledby="g-ag">
+          <li><a class="nav-item" href="#" title="Atenção" data-fora="Fora deste protótipo: a Atenção de mídia está no protótipo aprovado de Contas (prototipo-contas.html)."><svg class="ic" aria-hidden="true"><use href="#i-atencao"/></svg><span class="rot">Atenção</span><span class="sr-only">, 5 avisos</span><span class="nav-cont num" aria-hidden="true">5</span></a></li>
+          <li><a class="nav-item" href="prototipo-resultados.html" data-destino="prototipo-resultados.html" title="Resultados"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg><span class="rot">Resultados</span></a></li>
+          <li><a class="nav-item" href="prototipo-contas-regem.html" data-destino="prototipo-contas-regem.html" title="Contas conectadas"><svg class="ic" aria-hidden="true"><use href="#i-plug"/></svg><span class="rot">Contas conectadas</span></a></li>
+          <li><a class="nav-item" href="#" title="Pessoas e acessos" data-fora="Fora deste protótipo: Pessoas e acessos já está no app."><svg class="ic" aria-hidden="true"><use href="#i-user-plus"/></svg><span class="rot">Pessoas e acessos</span></a></li>
+        </ul>
+      </div>
+      <button class="nav-item nav-mais so-lite" type="button" id="bt-ferramentas" aria-expanded="false" aria-controls="g-ferramentas" title="Mais ferramentas"><svg class="ic" aria-hidden="true"><use href="#i-chevron-down"/></svg><span class="rot">Mais ferramentas</span><span class="nav-mais-n" aria-hidden="true">1</span><span class="sr-only">, 1 ferramenta</span></button>
+      <div id="g-ferramentas" hidden>
+        <div class="nav-grupo">
+          <p class="nav-grupo-rot rotulo-marca" id="g-oper">Operação</p>
+          <ul class="nav-lista" aria-labelledby="g-oper">
+            <li><a class="nav-item" href="prototipo-links-cupons.html" data-destino="prototipo-links-cupons.html" title="Links e cupons" aria-current="page"><span class="nav-no" aria-hidden="true"></span><svg class="ic" aria-hidden="true"><use href="#i-link"/></svg><span class="rot">Links e cupons</span></a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="nav-grupo">
+        <p class="nav-grupo-rot rotulo-marca" id="g-conta">Sua conta</p>
+        <ul class="nav-lista" aria-labelledby="g-conta">
+          <li><a class="nav-item" href="#" title="Segurança da conta" data-fora="Fora deste protótipo: Segurança da conta já está no app."><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span class="rot">Segurança da conta</span></a></li>
+        </ul>
+      </div>
+    </nav>
+    <div class="sb-rodape">
+      <div class="modo" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false">Pro</button></div>
+      <div class="usuario"><span class="av-user" aria-hidden="true">R</span><span class="usuario-txt"><b>Rodrigo</b><span>Dono · Mister Burgers</span></span></div>
+    </div>
+  </aside>
+
+  <div class="principal">
+    <header class="topbar"><button class="btn btn--icon btn--ghost tb-menu" type="button" id="bt-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu-lateral"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button><div class="trilha"><span class="trilha-pai">Mister Burgers</span><span class="trilha-sep" aria-hidden="true">/</span><strong>Links e cupons</strong></div><span class="spacer"></span><div class="modo modo-top" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true" title="Lite: o essencial; o resto em Ver detalhes">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false" title="Pro: todos os números e tabelas">Pro</button></div></header>
+    <main id="conteudo" class="conteudo" tabindex="-1">
+      <div class="pagina">
+<section id="tela-links" aria-labelledby="h-links">
+  <div class="view-cab">
+    <div><h1 id="h-links" tabindex="-1">Links e cupons</h1><p>O link do cardápio com rastreio e o cupom exclusivo de cada campanha: é assim que o Liame prova de onde veio cada pedido. O Liame não mexe nos anúncios; você cola os parâmetros.</p></div>
+  </div>
+
+  <div id="plataforma-pedidos"></div>
+
+  <div class="abas" role="tablist" aria-label="Links e cupons">
+    <button class="aba" type="button" role="tab" id="aba-links" aria-controls="painel-links" aria-selected="true"><svg class="ic" aria-hidden="true"><use href="#i-link"/></svg>Links <span class="num" id="n-links">3</span></button>
+    <button class="aba" type="button" role="tab" id="aba-cupons" aria-controls="painel-cupons" aria-selected="false" tabindex="-1"><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg>Cupons <span class="num" id="n-cupons">6</span></button>
+  </div>
+
+  <div class="painel" role="tabpanel" id="painel-links" aria-labelledby="aba-links">
+    <div class="painel-cab">
+      <p class="painel-desc">Cada link leva ao cardápio da loja com o código do Liame (lk) e os parâmetros de cada plataforma. Também sai em QR para material impresso.</p>
+      <button class="btn btn--primary" type="button" id="bt-criar-link" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-link"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Criar link</button>
+    </div>
+    <div id="links-conteudo"></div>
+  </div>
+
+  <div class="painel" role="tabpanel" id="painel-cupons" aria-labelledby="aba-cupons" hidden>
+    <div class="painel-cab">
+      <p class="painel-desc" id="cupons-fonte"></p>
+      <button class="btn" type="button" id="bt-cupom-externo" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-externo" hidden><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg><span id="bt-cupom-externo-rot">Informar cupom</span></button>
+      <button class="btn btn--primary" type="button" id="bt-criar-cupom" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-cupom"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Criar cupom no Regem</button>
+    </div>
+    <div id="cupons-conteudo"></div>
+  </div>
+</section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- criar link de campanha -->
+<dialog class="dialogo" id="dlg-link" aria-labelledby="dlg-link-t">
+  <form class="dialogo-form" id="form-link" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-link-t">Criar link de campanha</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <div class="campo"><label for="lk-nome">Nome do link</label><input class="input" id="lk-nome" autocomplete="off" maxlength="60" placeholder="Ex.: Combo sexta · stories" aria-describedby="lk-nome-erro"><p class="campo-erro" id="lk-nome-erro" hidden></p></div>
+      <div class="campo"><label for="lk-camp">Campanha</label>
+        <select class="input" id="lk-camp" aria-describedby="lk-camp-dica lk-camp-erro">
+          <option value="">Escolha a campanha</option>
+          <optgroup label="Meta Ads"><option value="c1">Combo sexta</option><option value="c3">Delivery noite</option><option value="c2" disabled>Smash em dobro (mensagens: o anúncio abre o WhatsApp)</option></optgroup>
+          <optgroup label="Google Ads"><option value="c4">Busca “hambúrguer perto”</option></optgroup>
+        </select>
+        <p class="campo-dica" id="lk-camp-dica">Campanhas lidas da Meta e do Google Ads hoje, 06:12.</p><p class="campo-erro" id="lk-camp-erro" hidden></p></div>
+      <div class="campo"><label for="lk-anuncio">Anúncio <span class="campo-dica">(opcional)</span></label><select class="input" id="lk-anuncio" disabled><option value="">Todos os anúncios da campanha</option></select></div>
+      <div class="campo"><label for="lk-destino">Destino</label><select class="input" id="lk-destino" aria-describedby="lk-destino-dica"><option value="centro">Cardápio online · Loja Centro</option><option value="barra">Cardápio online · Loja Barra</option></select><p class="campo-dica" id="lk-destino-dica">Só o cardápio da loja é aceito como destino.</p></div>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Criar link</button></div>
+  </form>
+</dialog>
+
+<!-- link pronto: parâmetros para colar e QR -->
+<dialog class="dialogo dialogo--largo" id="dlg-pronto" aria-labelledby="dlg-pronto-t">
+  <div class="dialogo-form">
+    <div class="dialogo-cab"><h2 id="dlg-pronto-t">Link pronto</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo" id="pronto-corpo"></div>
+    <div class="dialogo-acoes"><button class="btn btn--primary" type="button" data-fechar>Pronto</button></div>
+  </div>
+</dialog>
+
+<!-- ligar cupom a uma campanha -->
+<dialog class="dialogo" id="dlg-ligar" aria-labelledby="dlg-ligar-t">
+  <form class="dialogo-form" id="form-ligar" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-ligar-t">Ligar cupom a uma campanha</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <p class="cupom-resumo"><span class="cupom-cod" id="lg-cod">CUPOM</span><span id="lg-regra"></span></p>
+      <div class="campo"><label for="lg-camp">Campanha</label>
+        <select class="input" id="lg-camp" aria-describedby="lg-camp-erro">
+          <option value="">Escolha a campanha</option>
+          <optgroup label="Meta Ads"><option value="c1">Combo sexta</option><option value="c2">Smash em dobro</option><option value="c3">Delivery noite</option></optgroup>
+          <optgroup label="Google Ads"><option value="c4">Busca “hambúrguer perto”</option></optgroup>
+        </select><p class="campo-erro" id="lg-camp-erro" hidden></p></div>
+      <fieldset class="campo"><legend>Período do vínculo</legend><div class="datas"><label>Início<input class="input" type="date" id="lg-de"></label><label>Fim<input class="input" type="date" id="lg-ate"></label></div><p class="campo-erro" id="lg-data-erro" hidden></p></fieldset>
+      <fieldset class="campo"><legend>O cupom é exclusivo desta campanha?</legend>
+        <div class="opcoes">
+          <label class="opcao"><input type="radio" name="lg-excl" value="sim" aria-describedby="lg-excl-erro"><span class="opcao-txt"><b>Sim, só esta campanha divulga o cupom</b><span>Todo pedido com o cupom conta para a campanha, até no balcão e no Anota Aí.</span></span></label>
+          <label class="opcao"><input type="radio" name="lg-excl" value="nao" aria-describedby="lg-excl-erro"><span class="opcao-txt"><b>Não, ele aparece em outros lugares</b><span>O cupom fica ligado para acompanhar os usos, mas não conta como evidência.</span></span></label>
+        </div>
+        <p class="campo-erro" id="lg-excl-erro" hidden>Escolha se o cupom é exclusivo desta campanha.</p>
+      </fieldset>
+      <p class="dialogo-nota"><span><b>Só cupom exclusivo prova de onde veio o pedido.</b> Marque “sim” só se o código não aparece em nenhum outro lugar.</span></p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Ligar cupom</button></div>
+  </form>
+</dialog>
+
+<!-- criar cupom no Regem (com aprovação) -->
+<dialog class="dialogo" id="dlg-cupom" aria-labelledby="dlg-cupom-t">
+  <form class="dialogo-form" id="form-cupom" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-cupom-t">Criar cupom no Regem</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <div class="campo"><label for="cp-cod">Código do cupom</label><input class="input mono" id="cp-cod" autocomplete="off" spellcheck="false" maxlength="20" placeholder="Ex.: SEXTA15" aria-describedby="cp-cod-dica cp-cod-erro"><p class="campo-dica" id="cp-cod-dica">De 4 a 20 letras ou números, sem espaço. Único na empresa, no Regem.</p><p class="campo-erro" id="cp-cod-erro" hidden></p></div>
+      <fieldset class="campo"><legend>Desconto</legend>
+        <div class="opcoes opcoes--linha">
+          <label class="opcao"><input type="radio" name="cp-tipo" value="pct" checked><span class="opcao-txt"><b>Percentual</b></span></label>
+          <label class="opcao"><input type="radio" name="cp-tipo" value="valor"><span class="opcao-txt"><b>Valor fixo</b></span></label>
+          <label class="opcao"><input type="radio" name="cp-tipo" value="frete"><span class="opcao-txt"><b>Entrega grátis</b></span></label>
+        </div>
+        <div class="valores">
+          <label id="cp-valor-caixa"><span id="cp-valor-rot">Desconto (%)</span><input class="input num" id="cp-valor" type="number" min="1" step="1" value="15" inputmode="numeric" aria-describedby="cp-valor-erro"></label>
+          <label>Pedido mínimo (R$)<input class="input num" id="cp-min" type="number" min="0" step="1" value="50" inputmode="numeric"></label>
+        </div>
+        <p class="campo-erro" id="cp-valor-erro" hidden></p>
+      </fieldset>
+      <fieldset class="campo"><legend>Validade</legend><div class="datas"><label>Início<input class="input" type="date" id="cp-de" value="2026-10-02"></label><label>Fim<input class="input" type="date" id="cp-ate" value="2026-10-31" aria-describedby="cp-data-erro"></label></div><p class="campo-erro" id="cp-data-erro" hidden></p></fieldset>
+      <div class="campo"><label for="cp-camp">Campanha</label>
+        <select class="input" id="cp-camp" aria-describedby="cp-camp-erro">
+          <option value="">Escolha a campanha</option>
+          <optgroup label="Meta Ads"><option value="c1">Combo sexta</option><option value="c2">Smash em dobro</option><option value="c3">Delivery noite</option></optgroup>
+          <optgroup label="Google Ads"><option value="c4">Busca “hambúrguer perto”</option></optgroup>
+        </select><p class="campo-erro" id="cp-camp-erro" hidden></p></div>
+      <label class="check"><input type="checkbox" id="cp-excl" checked><span><b>Exclusivo desta campanha.</b> Só cupom exclusivo prova de onde veio o pedido: use o código só nesta campanha.</span></label>
+      <div class="campo"><label for="cp-loja">Loja</label><input class="input" id="cp-loja" value="Loja Centro" readonly></div>
+      <p class="dialogo-nota"><span>Vai para aprovação de quem pode aprovar; depois de aprovado, o Liame cria o cupom no Regem. Dá para desfazer: o cupom pode ser desativado depois.</span></p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Enviar para aprovação</button></div>
+  </form>
+</dialog>
+
+<!-- onde a loja recebe pedidos online (proposta de 30/09) -->
+<dialog class="dialogo" id="dlg-plataforma" aria-labelledby="dlg-plataforma-t">
+  <form class="dialogo-form" id="form-plataforma" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-plataforma-t">Onde a loja recebe pedidos online</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <p class="campo-dica">O Liame usa isso para conferir os anúncios e para dizer como medir as vendas de cada campanha. Nada muda na plataforma.</p>
+      <fieldset class="campo"><legend>Plataforma de pedidos da Loja Centro</legend>
+        <div class="opcoes">
+          <label class="opcao"><input type="radio" name="pf" value="anotaai"><span class="opcao-txt"><b>Anota AI</b><span>Os pedidos chegam ao Regem pela integração. Mede cada campanha pelo cupom exclusivo.</span></span></label>
+          <label class="opcao"><input type="radio" name="pf" value="cardapioweb"><span class="opcao-txt"><b>CardápioWeb</b><span>Os pedidos chegam ao Regem pela integração. Mede cada campanha pelo cupom exclusivo.</span></span></label>
+          <label class="opcao"><input type="radio" name="pf" value="brendi"><span class="opcao-txt"><b>Brendi</b><span>Os pedidos ainda não chegam ao Regem: por enquanto, o Liame não mede essas vendas.</span></span></label>
+          <label class="opcao"><input type="radio" name="pf" value="regem"><span class="opcao-txt"><b>Cardápio do Regem</b><span>Mede pelo link com rastreio e pelo cupom exclusivo.</span></span></label>
+          <label class="opcao"><input type="radio" name="pf" value="outra"><span class="opcao-txt"><b>Outra plataforma</b><span>Informe o endereço do cardápio.</span></span></label>
+        </div>
+      </fieldset>
+      <div class="campo" id="pf-url-caixa" hidden><label for="pf-url">Endereço do cardápio</label><input class="input" id="pf-url" autocomplete="off" inputmode="url" placeholder="https://" aria-describedby="pf-url-erro"><p class="campo-erro" id="pf-url-erro" hidden></p></div>
+      <p class="dialogo-nota"><span>Detectado nos anúncios ativos da Meta: <b>pedido.anota.ai</b>. Confirme ou troque.</span></p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Salvar</button></div>
+  </form>
+</dialog>
+
+<!-- informar cupom de outra plataforma (proposta de 30/09) -->
+<dialog class="dialogo" id="dlg-externo" aria-labelledby="dlg-externo-t">
+  <form class="dialogo-form" id="form-externo" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-externo-t">Informar cupom do Anota AI</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <p class="dialogo-nota" id="ex-nota"><span></span></p>
+      <div class="campo"><label for="ex-cod">Código do cupom</label><input class="input mono" id="ex-cod" autocomplete="off" spellcheck="false" maxlength="60" placeholder="Ex.: SEXTA10" aria-describedby="ex-cod-dica ex-cod-erro"><p class="campo-dica" id="ex-cod-dica">Exatamente como está na plataforma, sem espaço.</p><p class="campo-erro" id="ex-cod-erro" hidden></p></div>
+      <div class="campo"><label for="ex-camp">Campanha</label>
+        <select class="input" id="ex-camp" aria-describedby="ex-camp-erro">
+          <option value="">Escolha a campanha</option>
+          <optgroup label="Meta Ads"><option value="c1">Combo sexta</option><option value="c2">Smash em dobro</option><option value="c3">Delivery noite</option></optgroup>
+          <optgroup label="Google Ads"><option value="c4">Busca “hambúrguer perto”</option></optgroup>
+        </select><p class="campo-erro" id="ex-camp-erro" hidden></p></div>
+      <fieldset class="campo"><legend>O cupom é exclusivo desta campanha?</legend>
+        <div class="opcoes">
+          <label class="opcao"><input type="radio" name="ex-excl" value="sim" aria-describedby="ex-excl-erro"><span class="opcao-txt"><b>Sim, só esta campanha divulga o cupom</b><span>Todo pedido com o cupom conta para a campanha.</span></span></label>
+          <label class="opcao"><input type="radio" name="ex-excl" value="nao" aria-describedby="ex-excl-erro"><span class="opcao-txt"><b>Não, ele aparece em outros lugares</b><span>O cupom fica ligado para acompanhar os usos, mas não conta como evidência.</span></span></label>
+        </div>
+        <p class="campo-erro" id="ex-excl-erro" hidden>Escolha se o cupom é exclusivo desta campanha.</p>
+      </fieldset>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Salvar cupom</button></div>
+  </form>
+</dialog>
+
+<div class="veu" id="veu" hidden></div>
+<div class="toast-region" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ---------- utilidades ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const raiz = document.documentElement;
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const reduzido = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const moeda = (v, casas = 2) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: casas, maximumFractionDigits: casas });
+const numero = (v, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+const vezes = (v) => numero(v, 1) + '×';
+const pct = (v) => numero(Math.round(v * 100)) + '%';
+const ic = (nome, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#${nome}"/></svg>`;
+const params = new URLSearchParams(location.search);
+
+function anunciar(t) { const a = $('#anuncio'); if (!a) return; a.textContent = ''; setTimeout(() => { a.textContent = t; }, 30); }
+function toast(texto, { tipo = 'ok' } = {}) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (tipo === 'perigo' ? ' toast--perigo' : '');
+  const s = document.createElement('span'); s.textContent = texto; t.append(s);
+  $('.toast-region').append(t);
+  setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 260); }, 4200);
+}
+async function copiar(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; } catch { /* sem permissão: tenta o jeito antigo */ }
+  const ta = document.createElement('textarea');
+  ta.value = texto; ta.setAttribute('readonly', ''); ta.className = 'sr-only';
+  (document.querySelector('dialog[open]') || document.body).append(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+/* ---------- tema (faixa do protótipo) ---------- */
+const btTema = $('#rev-tema');
+const temaAtual = () => raiz.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+function sincTema() { btTema.setAttribute('aria-pressed', String(temaAtual() === 'dark')); }
+btTema.addEventListener('click', () => { raiz.dataset.theme = temaAtual() === 'dark' ? 'light' : 'dark'; sincTema(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', sincTema);
+sincTema();
+
+/* ---------- gaveta do menu (celular), como na tela aprovada ---------- */
+const app = $('.app'), btMenu = $('#bt-menu'), veu = $('#veu');
+function menu(abrir) {
+  app.classList.toggle('gaveta', abrir);
+  veu.hidden = !abrir;
+  btMenu.setAttribute('aria-expanded', String(abrir));
+  $('.principal').inert = abrir;
+  $('.revisao').inert = abrir;
+  // Foco depois do commit, sem requestAnimationFrame, com uma nova tentativa (V27).
+  const alvo = abrir ? $('#bt-fechar-menu') : btMenu;
+  setTimeout(() => { alvo.focus(); if (document.activeElement !== alvo) setTimeout(() => alvo.focus(), 400); }, 0);
+}
+btMenu.addEventListener('click', () => menu(true));
+$('#bt-fechar-menu').addEventListener('click', () => menu(false));
+veu.addEventListener('click', () => menu(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && app.classList.contains('gaveta') && !document.querySelector('dialog[open]')) menu(false); });
+matchMedia('(max-width: 768px)').addEventListener('change', (e) => {
+  if (!e.matches && app.classList.contains('gaveta')) { app.classList.remove('gaveta'); veu.hidden = true; btMenu.setAttribute('aria-expanded', 'false'); $('.principal').inert = false; $('.revisao').inert = false; }
+});
+$$('[data-fora]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); if (app.classList.contains('gaveta')) menu(false); toast(a.dataset.fora); }));
+
+/* ---------- modos Lite e Pro (protótipo geral aprovado) ---------- */
+const shell = { modo: 'lite', ferramentas: document.body.dataset.ferramentas === 'abertas' };
+function sincFerramentas() {
+  $('#g-ferramentas').hidden = !(shell.modo === 'pro' || shell.ferramentas);
+  $('#bt-ferramentas').setAttribute('aria-expanded', String(shell.ferramentas));
+}
+$('#bt-ferramentas').addEventListener('click', () => { shell.ferramentas = !shell.ferramentas; sincFerramentas(); });
+function comModo(destino) {
+  const [base, q = ''] = destino.split('?');
+  const p = new URLSearchParams(q); p.set('modo', shell.modo);
+  return `${base}?${p}`;
+}
+function sincLinks() { $$('a[data-destino]').forEach((a) => a.setAttribute('href', comModo(a.dataset.destino))); }
+function sincDetalhesBt(bt, aberto) {
+  bt.setAttribute('aria-expanded', String(aberto));
+  const r = bt.querySelector('.rot'); if (r) r.textContent = aberto ? 'Ocultar detalhes' : 'Ver detalhes';
+}
+function definirModo(modo, { silencioso = false } = {}) {
+  if (modo !== 'lite' && modo !== 'pro') return;
+  shell.modo = modo;
+  raiz.classList.toggle('modo-lite', modo === 'lite');
+  raiz.classList.toggle('modo-pro', modo === 'pro');
+  $$('[data-modo-bt]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.modoBt === modo)));
+  $$('.aberto').forEach((e) => e.classList.remove('aberto'));
+  $$('[data-detalhes]').forEach((b) => sincDetalhesBt(b, false));
+  sincFerramentas();
+  sincLinks();
+  if (typeof window.aoMudarModo === 'function') window.aoMudarModo(modo);
+  if (!silencioso) {
+    anunciar(modo === 'pro' ? 'Modo Pro' : 'Modo Lite');
+    toast(modo === 'pro' ? 'Modo Pro: todos os números, tabelas e ferramentas.' : 'Modo Lite: o essencial; o resto fica em "Ver detalhes".');
+  }
+}
+document.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target : null; if (!alvo) return;
+  const m = alvo.closest('[data-modo-bt]'); if (m) { definirModo(m.dataset.modoBt); return; }
+  const d = alvo.closest('[data-detalhes]');
+  if (d) {
+    const bloco = $(d.dataset.detalhes); if (!bloco) return;
+    const aberto = !bloco.classList.contains('aberto');
+    bloco.classList.toggle('aberto', aberto);
+    $$(`[data-detalhes="${d.dataset.detalhes}"]`).forEach((b) => sincDetalhesBt(b, aberto));
+  }
+});
+
+/* ---------- diálogos nativos: foco volta a quem abriu; clique no fundo e "Fechar" fecham ---------- */
+const origemDlg = new WeakMap();
+function abrirDialogo(dlg, origem = document.activeElement) {
+  if (dlg.open) return;
+  const o = origem instanceof HTMLElement && origem !== document.body ? origem : null;
+  origemDlg.set(dlg, o);
+  if (o && o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'true');
+  dlg.returnValue = ''; // Esc fecha sem valor; sem isto, a escolha anterior voltaria
+  dlg.showModal();
+}
+$$('dialog').forEach((dlg) => {
+  dlg.addEventListener('close', () => {
+    const o = origemDlg.get(dlg);
+    if (o) { if (o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'false'); if (o.isConnected) o.focus({ preventScroll: true }); }
+    origemDlg.delete(dlg);
+  });
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg || (e.target instanceof Element && e.target.closest('[data-fechar]'))) dlg.close('cancelar');
+  });
+});
+
+/* ---------- confirmação na própria linha (como na tela aprovada) ---------- */
+function confirmarNaLinha(bt, { texto = '', rotulo, voltar = 'Cancelar', aoConfirmar }) {
+  const caixa = document.createElement('div');
+  caixa.className = 'confirma-linha';
+  caixa.innerHTML = `${texto ? `<span class="confirma-txt">${esc(texto)}</span>` : ''}<button class="btn btn--sm btn--perigo-cheio" type="button">${esc(rotulo)}</button><button class="btn btn--sm" type="button">${esc(voltar)}</button>`;
+  const [conf, canc] = caixa.querySelectorAll('button');
+  bt.replaceWith(caixa);
+  conf.focus();
+  conf.addEventListener('click', aoConfirmar);
+  canc.addEventListener('click', () => { caixa.replaceWith(bt); bt.focus(); });
+}
+
+/* ---------- cenário (faixa do protótipo) ---------- */
+const selCenario = $('#rev-cenario');
+function marcarCenario(id) { if (selCenario.value !== id) selCenario.value = id; }
+/* grupos: [{ grupo: 'Rótulo' ou null, itens: { id: 'texto' } }] */
+function preencherCenarios(grupos) {
+  selCenario.replaceChildren(...grupos.flatMap(({ grupo, itens }) => {
+    const ops = Object.entries(itens).map(([id, rot]) => new Option(rot, id));
+    if (!grupo) return ops;
+    const g = document.createElement('optgroup'); g.label = grupo; g.append(...ops); return [g];
+  }));
+}
+window.uiuxCenarios = {};
+
+/* ---------- início do shell ---------- */
+definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true });
+
+/* ===================== P3 · Links e cupons de campanha ===================== */
+/* O Liame não escreve na Meta nem no Google: gera o link e os parâmetros para colar. A única escrita é o cupom no Regem,
+   com aprovação e atrás da flag regem_write. Dados fictícios (Mister Burgers). */
+
+const CAMPANHAS = {
+  c1: { nome: 'Combo sexta', plat: 'meta', anuncios: ['Combo sexta · vídeo 15s', 'Combo sexta · carrossel', 'Combo sexta · stories'] },
+  c2: { nome: 'Smash em dobro', plat: 'meta', msg: true, anuncios: ['Smash em dobro · vídeo 2'] },
+  c3: { nome: 'Delivery noite', plat: 'meta', anuncios: ['Delivery noite · foto', 'Delivery noite · vídeo 15s'] },
+  c4: { nome: 'Busca “hambúrguer perto”', plat: 'google', anuncios: ['Anúncio de pesquisa 1', 'Anúncio de pesquisa 2', 'Anúncio de pesquisa 3'] },
+};
+const PLAT_ROT = { meta: 'Meta Ads', google: 'Google Ads' };
+const LOJAS = { centro: { nome: 'Loja Centro', url: 'https://app.dmsregem.com/c/mister-centro' }, barra: { nome: 'Loja Barra', url: 'https://app.dmsregem.com/c/mister-barra' } };
+const LINKS_BASE = [
+  { nome: 'Combo sexta', camp: 'c1', anuncio: null, loja: 'centro', lk: 'CS7Q2', criado: '22/09', pedidos: 13 },
+  { nome: 'Busca hambúrguer perto', camp: 'c4', anuncio: null, loja: 'centro', lk: 'BH4K8', criado: '22/09', pedidos: 12 },
+  { nome: 'Delivery noite', camp: 'c3', anuncio: null, loja: 'centro', lk: 'DN9T3', criado: '24/09', pedidos: 3 },
+];
+const SEM_RASTREIO_BASE = [
+  { plat: 'meta', anuncio: 'Combo sexta · carrossel', camp: 'c1', desde: '24/09', motivo: 'o link do anúncio não tem os parâmetros do Liame' },
+  { plat: 'meta', anuncio: 'Delivery noite · vídeo 15s', camp: 'c3', desde: '25/09', motivo: 'o link do anúncio não tem os parâmetros do Liame' },
+  { plat: 'google', anuncio: 'Anúncio de pesquisa 3', camp: 'c4', desde: '26/09', motivo: 'o URL final deste anúncio está sem o sufixo com os parâmetros do Liame' },
+];
+const CUPONS_BASE = [
+  { cod: 'SEXTA10', regra: '10% · mín. R$ 40', validade: 'até 31/10', usos: 14, valor: 912.40, camp: 'c1', exclusivo: true },
+  { cod: 'SMASH15', regra: 'R$ 15 de desconto · mín. R$ 60', validade: 'até 15/10', usos: 0, valor: 0, camp: 'c2', exclusivo: true, semUsoGasto: 279.80 },
+  { cod: 'FRETEGRATIS', regra: 'Entrega grátis · mín. R$ 50', validade: 'até 30/09 · vence amanhã', usos: 22, valor: 1286.00, camp: 'c4', exclusivo: false },
+  { cod: 'BEMVINDO', regra: '15% no primeiro pedido', validade: 'sem validade', usos: 37, valor: 1874.10, camp: null },
+  { cod: 'COMBO2', regra: '2º combo com 50% · mín. R$ 70', validade: 'até 10/10', usos: 5, valor: 402.50, camp: null },
+  { cod: 'COPA5', regra: 'R$ 5 · sem mínimo', validade: 'venceu em 20/09', usos: 0, valor: 0, camp: null, vencido: true },
+];
+const PENDENTE_EXEMPLO = { cod: 'SEXTA15', regra: '15% · mín. R$ 50', validade: '02/10 a 31/10', usos: null, camp: 'c1', exclusivo: true, pendente: 'hoje, 10:14' };
+/* plataforma de pedidos da loja e cupons informados de outra plataforma (proposta de 30/09) */
+const PLATAFORMAS = {
+  regem: { nome: 'Cardápio do Regem', integrado: true },
+  anotaai: { nome: 'Anota AI', integrado: true },
+  cardapioweb: { nome: 'CardápioWeb', integrado: true },
+  brendi: { nome: 'Brendi', integrado: false },
+  outra: { nome: 'Outra plataforma', integrado: false },
+};
+const CUPONS_ANOTA = [
+  { cod: 'SEXTA10', externo: 'anotaai', regra: 'Cupom do Anota AI · informado em 30/09', validade: 'regra e validade ficam no Anota AI', usos: 6, valor: 412.30, camp: 'c1', exclusivo: true },
+  { cod: 'NOITE15', externo: 'anotaai', regra: 'Cupom do Anota AI · informado em 30/09', validade: 'regra e validade ficam no Anota AI', usos: 0, valor: 0, camp: 'c3', exclusivo: true, semUsoGasto: 152.60 },
+];
+
+/* valor em reais não quebra entre o símbolo e o número */
+for (const c of [...CUPONS_BASE, PENDENTE_EXEMPLO]) c.regra = c.regra.replace(/R\$ /g, 'R$\u00a0');
+
+const CENARIOS = [
+  { grupo: 'Links', itens: {
+    links: 'Links, com anúncios ativos sem rastreio',
+    'links-criar': 'Criar link (diálogo)',
+    'links-criado': 'Link criado: parâmetros para colar e QR',
+    'links-google': 'Parâmetros para o Google Ads',
+    'links-ok': 'Todos os anúncios ativos com rastreio',
+    'links-vazio': 'Nenhum link ainda',
+    'links-erro': 'Erro ao carregar os links',
+  } },
+  { grupo: 'Cupons', itens: {
+    cupons: 'Cupons do Regem (um sem uso com gasto)',
+    'cupons-ligar': 'Ligar cupom a uma campanha (diálogo)',
+    'cupons-criar': 'Criar cupom no Regem (diálogo)',
+    'cupons-aguardando': 'Cupom aguardando aprovação',
+    'cupons-desligado': 'Criação de cupons desligada (regem_write)',
+    'cupons-vazio': 'Nenhum cupom no Regem',
+    'cupons-sem-regem': 'Regem não conectado',
+    'cupons-erro': 'Erro ao ler os cupons',
+  } },
+  { grupo: 'Plataforma de pedidos (proposta de 30/09)', itens: {
+    'anota-links': 'Loja no Anota AI: aba Links',
+    'anota-cupons': 'Loja no Anota AI: cupons do Regem e do Anota AI',
+    'anota-externo': 'Informar cupom do Anota AI (diálogo)',
+    'anota-plataforma': 'Onde a loja recebe pedidos (diálogo)',
+    'brendi-cupons': 'Loja na Brendi (ainda sem integração)',
+  } },
+];
+const TODOS = Object.assign({}, ...CENARIOS.map((g) => g.itens));
+const estado = { plataforma: 'regem', cenario: 'links', aba: 'links', links: [], semRastreio: [], verSemRastreio: false, cupons: [], filtro: 'todos', escrita: true };
+
+/* ---------- utilidades ---------- */
+const slug = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const paramsMeta = (lk) => `utm_source=meta&utm_medium=paid&utm_campaign={{campaign.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}&lk=${lk}`;
+const paramsGoogle = (lk) => `utm_source=google&utm_medium=cpc&campaign_id={campaignid}&adgroup_id={adgroupid}&ad_id={creative}&lk=${lk}`;
+function linkCompleto(l) {
+  const c = CAMPANHAS[l.camp], meta = c.plat === 'meta';
+  return `${LOJAS[l.loja].url}?utm_source=${meta ? 'meta' : 'google'}&utm_medium=${meta ? 'paid' : 'cpc'}&utm_campaign=${slug(c.nome)}&lk=${l.lk}`;
+}
+function gerarLk(nome) {
+  const ini = nome.split(/\s+/).filter((w) => /[a-z0-9]/i.test(w)).slice(0, 2).map((w) => slug(w)[0] || 'X').join('').toUpperCase().padEnd(2, 'L');
+  let h = 7; for (const ch of nome) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  let lk;
+  do { lk = ini + h.toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-3).padStart(3, '7'); h = (h * 17 + 3) >>> 0; } while (estado.links.some((l) => l.lk === lk));
+  return lk;
+}
+/* QR ilustrativo: padrões de canto de verdade e o miolo sorteado a partir do texto (não é um QR válido) */
+function qrSvg(texto, rotulo) {
+  const n = 25;
+  let h = 2166136261; for (const ch of texto) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  const rnd = () => { h ^= h << 13; h >>>= 0; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
+  const canto = (x, y, cx, cy) => { const dx = x - cx, dy = y - cy; if (dx < 0 || dy < 0 || dx > 6 || dy > 6) return null; const b = Math.max(Math.abs(dx - 3), Math.abs(dy - 3)); return b === 3 || b <= 1; };
+  let d = '';
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    let on = canto(x, y, 0, 0) ?? canto(x, y, n - 7, 0) ?? canto(x, y, 0, n - 7);
+    const perto = (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
+    if (on === null) on = perto ? false : (y === 6 || x === 6) ? (x + y) % 2 === 0 : rnd() < 0.46;
+    if (on) d += `M${x + 2} ${y + 2}h1v1h-1z`;
+  }
+  return `<svg viewBox="0 0 ${n + 4} ${n + 4}" role="img" aria-label="${esc(rotulo)}"><rect width="${n + 4}" height="${n + 4}" style="fill:var(--qr-fundo)"/><path d="${d}" style="fill:var(--qr-tinta)"/></svg>`;
+}
+function faixa({ tipo = '', icone = 'i-info', titulo, texto, acao = '', papel = 'status' }) {
+  return `<div class="faixa${tipo ? ' faixa--' + tipo : ''}" role="${papel}"><div class="faixa-ic">${ic(icone)}</div><div class="faixa-txt"><b>${titulo}</b><span>${texto}</span></div>${acao}</div>`;
+}
+function vazio({ icone = 'i-info', titulo, texto, acao = '', perigo = false }) {
+  return `<div class="card"><div class="vazio"${perigo ? ' role="alert"' : ''}><div class="vazio-ic${perigo ? ' vazio-ic--perigo' : ''}">${ic(icone)}</div><h2>${titulo}</h2><p>${texto}</p>${acao ? `<div class="vazio-acoes">${acao}</div>` : ''}</div></div>`;
+}
+
+/* ---------- abas ---------- */
+function mostrarAba(aba, { focar = false } = {}) {
+  estado.aba = aba;
+  $$('[role="tab"]').forEach((t) => { const sel = t.id === 'aba-' + aba; t.setAttribute('aria-selected', String(sel)); t.tabIndex = sel ? 0 : -1; if (sel && focar) t.focus(); });
+  $('#painel-links').hidden = aba !== 'links';
+  $('#painel-cupons').hidden = aba !== 'cupons';
+}
+$('.abas').addEventListener('keydown', (e) => {
+  const ordem = ['links', 'cupons'], i = ordem.indexOf(estado.aba);
+  const alvo = { ArrowRight: ordem[(i + 1) % 2], ArrowLeft: ordem[(i + 1) % 2], Home: 'links', End: 'cupons' }[e.key];
+  if (alvo) { e.preventDefault(); mostrarAba(alvo, { focar: true }); }
+});
+$$('[role="tab"]').forEach((t) => t.addEventListener('click', () => mostrarAba(t.id.replace('aba-', ''))));
+
+/* ---------- links ---------- */
+function htmlSemRastreio() {
+  if (estado.plataforma !== 'regem') return htmlSemCupom();
+  const n = estado.semRastreio.length;
+  if (!n) return faixa({ tipo: 'acao', icone: 'i-check', titulo: 'Todos os anúncios ativos têm os parâmetros do Liame', texto: 'Conferido hoje, 06:12, com os anúncios ativos da Meta e do Google Ads. Os pedidos que vierem deles chegam com a campanha.' });
+  const lista = estado.semRastreio.map((a, i) => `<li><span class="plat plat--${a.plat}">${PLAT_ROT[a.plat]}</span><span class="sr-txt"><b>${esc(a.anuncio)}</b><span>Campanha ${esc(CAMPANHAS[a.camp].nome)} · no ar desde ${a.desde} · ${esc(a.motivo)}</span></span><button class="btn btn--sm" type="button" data-params-camp="${a.camp}" data-idx="${i}" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-pronto">Ver parâmetros</button></li>`).join('');
+  return faixa({ tipo: 'atencao', icone: 'i-alert', titulo: `${n} ${n === 1 ? 'anúncio ativo' : 'anúncios ativos'} sem os parâmetros do Liame — as vendas ${n === 1 ? 'dele ficam' : 'deles ficam'} sem origem.`, texto: 'Conferido hoje, 06:12, com os anúncios ativos da Meta e do Google Ads. O Liame não mexe nos anúncios: cole os parâmetros em cada um.', acao: `<button class="btn btn-alternar" type="button" id="bt-sem-rastreio" aria-expanded="${estado.verSemRastreio}" aria-controls="lista-sem-rastreio">${estado.verSemRastreio ? 'Ocultar' : `Ver ${n === 1 ? 'o anúncio' : `os ${n} anúncios`}`}</button>` })
+    + `<ul class="sem-rastreio" id="lista-sem-rastreio"${estado.verSemRastreio ? '' : ' hidden'} aria-label="Anúncios ativos sem rastreio">${lista}</ul>`;
+}
+function htmlLinks() {
+  const cen = estado.cenario;
+  if (cen === 'links-erro') return vazio({ perigo: true, icone: 'i-alert-circle', titulo: 'Não foi possível carregar os links', texto: 'A conexão com o servidor do Liame falhou. Os links que já estão nos anúncios continuam funcionando no cardápio.', acao: `<button class="btn btn--primary" type="button" data-tentar="links">${ic('i-refresh')}Tentar de novo</button>` });
+  if (!estado.links.length) return vazio({ icone: 'i-link', titulo: 'Nenhum link de campanha ainda', texto: 'Crie o primeiro link: o Liame monta o endereço do cardápio com o rastreio e os parâmetros para colar na Meta e no Google Ads, e o QR para material impresso.', acao: '<button class="btn btn--primary" type="button" data-criar-link>Criar o primeiro link</button>' });
+  const linhas = estado.links.map((l, i) => {
+    const c = CAMPANHAS[l.camp];
+    return `<tr${l.novo ? ' class="novo"' : ''}>
+      <th scope="row">${esc(l.nome)}<span class="link-url" title="${esc(linkCompleto(l))}">${esc(LOJAS[l.loja].url.replace('https://', ''))}</span><span class="sub">criado ${l.criado === 'hoje' ? 'hoje' : 'em ' + esc(l.criado)}</span></th>
+      <td data-rot="Campanha"><span class="camp-cel"><span class="linha"><b>${esc(c.nome)}</b><span class="plat plat--${c.plat}">${PLAT_ROT[c.plat]}</span></span><small>${l.anuncio ? 'Anúncio: ' + esc(l.anuncio) : 'Todos os anúncios'}</small></span></td>
+      <td data-rot="Código"><span class="cod-lk">${esc(l.lk)}</span></td>
+      <td class="n num" data-rot="Pedidos em 7 dias">${l.pedidos == null ? '—' : numero(l.pedidos)}</td>
+      <td class="acoes"><span class="seg-acoes"><button class="btn btn--sm" type="button" data-copiar-link="${i}" aria-label="Copiar o link ${esc(l.nome)}">${ic('i-copy', 'ic ic-sm')}Copiar link</button><button class="btn btn--sm" type="button" data-params="${i}" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-pronto" aria-label="Parâmetros e QR do link ${esc(l.nome)}">${ic('i-qr', 'ic ic-sm')}Parâmetros e QR</button></span></td>
+    </tr>`;
+  }).join('');
+  return htmlSemRastreio() + `<div class="table-wrap lista-cartoes"><table class="tabela">
+      <caption class="sr-only">Links de campanha da Mister Burgers</caption>
+      <thead><tr><th scope="col">Link</th><th scope="col">Campanha</th><th scope="col">Código</th><th scope="col" class="n">Pedidos em 7 dias</th><th scope="col"><span class="sr-only">Ações</span></th></tr></thead>
+      <tbody>${linhas}</tbody></table></div>
+    <p class="eixo-nota">Os pedidos de cada link são os que chegaram com o código dele e ficaram com a campanha. Pedido com cupom exclusivo conta pelo cupom.</p>`;
+}
+function htmlPronto(l, { criado = false } = {}) {
+  const c = CAMPANHAS[l.camp], loja = LOJAS[l.loja], meta = c.plat === 'meta', url = linkCompleto(l);
+  const params = meta ? paramsMeta(l.lk) : paramsGoogle(l.lk);
+  return `${criado ? faixa({ tipo: 'acao', icone: 'i-check', titulo: 'Link criado', texto: `Código ${esc(l.lk)} · campanha ${esc(c.nome)} · ${l.anuncio ? 'anúncio ' + esc(l.anuncio) : 'todos os anúncios'}.` }) : ''}
+    <div class="campo"><label for="pr-link">Link com rastreio</label><div class="copiar-linha"><input class="input" id="pr-link" readonly value="${esc(url)}"><button class="btn" type="button" data-copiar="#pr-link" data-copiado="Link copiado.">${ic('i-copy')}Copiar link</button></div><p class="campo-dica">Para a bio, o WhatsApp da loja e o QR impresso. Destino: cardápio online da ${esc(loja.nome)}.</p></div>
+    <section class="param-bloco" aria-labelledby="pr-plat-t">
+      <h3 id="pr-plat-t"><span class="plat plat--${c.plat}">${PLAT_ROT[c.plat]}</span>${meta ? 'No anúncio, no campo “Parâmetros de URL”, cole:' : 'No campo “Sufixo do URL final”, cole:'}</h3>
+      <div class="codigo"><code id="pr-params">${esc(params)}</code><button class="btn btn--sm" type="button" data-copiar="#pr-params" data-copiado="${meta ? 'Parâmetros da Meta copiados. Cole no campo “Parâmetros de URL” do anúncio.' : 'Sufixo do Google Ads copiado. Cole no campo “Sufixo do URL final”.'}">${ic('i-copy', 'ic ic-sm')}Copiar</button></div>
+      <p class="campo-dica">${meta ? `O endereço do anúncio continua sendo o do cardápio (${esc(loja.url)}). A Meta troca o que está entre chaves pelo nome e pelos números da campanha, do conjunto e do anúncio.` : `O URL final continua sendo o do cardápio (${esc(loja.url)}). O Google Ads troca o que está entre chaves pelos números da campanha, do grupo e do anúncio.`}</p>
+    </section>
+    <section class="qr-bloco" aria-labelledby="pr-qr-t">
+      <div class="qr">${qrSvg(url, 'QR ilustrativo do link com rastreio')}</div>
+      <div class="qr-txt"><h3 id="pr-qr-t">QR para material impresso</h3><p class="campo-dica">Ilustrativo neste protótipo; no app, ele abre o link com rastreio. Pedido feito pelo QR conta para a campanha ${esc(c.nome)}.</p>
+        <div class="seg-acoes"><button class="btn btn--sm" type="button" data-toast="No protótipo o QR é ilustrativo; no app, o PNG baixa na hora.">${ic('i-download', 'ic ic-sm')}Baixar PNG</button><button class="btn btn--sm" type="button" data-toast="No protótipo o QR é ilustrativo; no app, o SVG baixa na hora.">${ic('i-download', 'ic ic-sm')}Baixar SVG</button></div></div>
+    </section>
+    <p class="dialogo-nota"><span>O Liame não escreve na Meta nem no Google: você cola os parâmetros no anúncio. Na leitura da manhã seguinte, a conferência dos anúncios ativos mostra se ficou certo.</span></p>`;
+}
+const dlgPronto = $('#dlg-pronto');
+function abrirPronto(l, origem, { criado = false } = {}) {
+  $('#dlg-pronto-t').textContent = criado ? `Link pronto: ${l.nome}` : `${l.nome}: parâmetros e QR`;
+  $('#pronto-corpo').innerHTML = htmlPronto(l, { criado });
+  $('#pronto-corpo').scrollTop = 0;
+  abrirDialogo(dlgPronto, origem);
+}
+
+/* ---------- plataforma de pedidos da loja (proposta de 30/09) ---------- */
+const nomePlat = () => PLATAFORMAS[estado.plataforma].nome;
+function htmlPlataforma() {
+  const pf = estado.plataforma, nome = nomePlat();
+  const como = pf === 'regem' ? 'O Liame mede pelo link com rastreio e pelo cupom exclusivo.'
+    : PLATAFORMAS[pf].integrado ? `Os pedidos do ${nome} chegam ao Regem, mas sem o clique do anúncio: o Liame mede cada campanha pelo cupom exclusivo dela.`
+      : `Os pedidos da ${nome} ainda não chegam ao Regem: por enquanto, o Liame não consegue medir essas vendas.`;
+  return `<div class="plataforma-linha"><span class="pl-txt"><b>Pedidos online da Loja Centro: ${esc(nome)}</b><span>${como}</span></span><button class="btn btn--sm" type="button" id="bt-plataforma" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-plataforma">Alterar</button></div>`;
+}
+/* Na loja que vende por outra plataforma, a conferência pede cupom exclusivo, não troca de destino. */
+function htmlSemCupom() {
+  const nome = nomePlat();
+  if (!PLATAFORMAS[estado.plataforma].integrado) return faixa({ icone: 'i-info', titulo: `Os anúncios levam à ${esc(nome)}, que ainda não está integrada ao Regem`, texto: 'Os pedidos de lá não chegam ao Regem, então o Liame ainda não sabe quais anúncios vendem. O ROAS da plataforma segue em Resultados.' });
+  const semCupom = Object.keys(CAMPANHAS).filter((id) => !estado.cupons.some((c) => c.camp === id && c.exclusivo));
+  if (!semCupom.length) return faixa({ tipo: 'acao', icone: 'i-check', titulo: 'Todas as campanhas ativas têm cupom exclusivo', texto: `Os pedidos do ${esc(nome)} com o cupom de cada campanha contam para ela.` });
+  const n = semCupom.length;
+  const lista = semCupom.map((id) => `<li><span class="plat plat--${CAMPANHAS[id].plat}">${PLAT_ROT[CAMPANHAS[id].plat]}</span><span class="sr-txt"><b>${esc(CAMPANHAS[id].nome)}</b><span>Sem cupom exclusivo · os anúncios levam ao ${esc(nome)} e o clique não chega ao pedido</span></span><button class="btn btn--sm" type="button" data-cupom-externo="${id}" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-externo">Informar cupom</button></li>`).join('');
+  return faixa({ tipo: 'atencao', icone: 'i-alert', titulo: `${n} ${n === 1 ? 'campanha ativa' : 'campanhas ativas'} sem cupom exclusivo — as vendas ${n === 1 ? 'dela ficam' : 'delas ficam'} sem origem.`, texto: `Os anúncios levam ao ${esc(nome)}, a plataforma de pedidos da loja. Crie um cupom lá para cada campanha e informe o código aqui.`, acao: `<button class="btn btn-alternar" type="button" id="bt-sem-rastreio" aria-expanded="${estado.verSemRastreio}" aria-controls="lista-sem-rastreio">${estado.verSemRastreio ? 'Ocultar' : `Ver ${n === 1 ? 'a campanha' : `as ${n} campanhas`}`}</button>` })
+    + `<ul class="sem-rastreio" id="lista-sem-rastreio"${estado.verSemRastreio ? '' : ' hidden'} aria-label="Campanhas sem cupom exclusivo">${lista}</ul>`;
+}
+
+/* ---------- cupons ---------- */
+function htmlCupons() {
+  const cen = estado.cenario;
+  const fonte = $('#cupons-fonte'), bt = $('#bt-criar-cupom');
+  fonte.innerHTML = cen === 'cupons-sem-regem' ? '<span class="ponto ponto--off" aria-hidden="true"></span>Os cupons vêm do Regem, que ainda não está conectado.'
+    : cen === 'cupons-erro' ? '<span class="ponto ponto--atraso" aria-hidden="true"></span>Cupons do Regem · Loja Centro · a última leitura falhou'
+      : estado.plataforma === 'brendi' ? '<span class="ponto" aria-hidden="true"></span>Cupons do Regem · <b>Loja Centro</b>. Cupom da Brendi ainda não conta: os pedidos de lá não chegam ao Regem.'
+        : estado.plataforma !== 'regem' ? `<span class="ponto" aria-hidden="true"></span>Cupons do Regem e os informados do ${esc(nomePlat())} · <b>Loja Centro</b>. O cupom do ${esc(nomePlat())} vive lá; aqui você informa o código e liga a uma campanha.`
+          : '<span class="ponto" aria-hidden="true"></span>Cupons do Regem · <b>Loja Centro</b> · lidos hoje, 10:05. Os cupons vivem no Regem; aqui você liga cada um a uma campanha.';
+  bt.hidden = cen === 'cupons-sem-regem' || cen === 'cupons-erro';
+  if (estado.escrita) bt.removeAttribute('aria-disabled'); else bt.setAttribute('aria-disabled', 'true');
+  if (cen === 'cupons-sem-regem') return vazio({ icone: 'i-plug', titulo: 'Conecte o Regem para ver os cupons da loja', texto: 'Os cupons vivem no Regem, onde são usados. Com a conexão, eles aparecem aqui prontos para ligar a uma campanha, e o Liame conta os usos.', acao: '<a class="btn btn--primary" data-destino="prototipo-contas-regem.html?cenario=regem-ida" href="prototipo-contas-regem.html?cenario=regem-ida">Conectar o Regem</a>' });
+  if (cen === 'cupons-erro') return vazio({ perigo: true, icone: 'i-alert-circle', titulo: 'Não foi possível ler os cupons do Regem', texto: 'O Regem não respondeu na última leitura. Os cupons continuam valendo no caixa; aqui eles voltam quando a leitura der certo.', acao: `<button class="btn btn--primary" type="button" data-tentar="cupons">${ic('i-refresh')}Tentar de novo</button>` });
+  let topo = '';
+  if (!estado.escrita) topo += faixa({ icone: 'i-lock', titulo: 'A criação de cupons está desligada para a sua empresa', texto: 'Enquanto isso, crie o cupom direto no Regem: ele aparece aqui na próxima leitura, pronto para ligar a uma campanha.' });
+  const pend = estado.cupons.filter((c) => c.pendente);
+  if (pend.length) topo += faixa({ tipo: 'acao', icone: 'i-clock', titulo: `${pend.length === 1 ? 'O cupom ' + pend[0].cod + ' está' : pend.length + ' cupons estão'} aguardando aprovação`, texto: 'Quem pode aprovar recebe o pedido. Depois de aprovado, o Liame cria o cupom no Regem e ele aparece aqui, já ligado à campanha.' });
+  const semUso = estado.cupons.filter((c) => c.semUsoGasto && c.camp);
+  semUso.forEach((c) => { topo += faixa({ tipo: 'atencao', icone: 'i-alert', titulo: `O cupom ${c.cod} não teve nenhum uso, e a campanha dele gastou ${moeda(c.semUsoGasto)} em 7 dias`, texto: `Ele está ligado à campanha ${esc(CAMPANHAS[c.camp].nome)} como exclusivo. Confira se o código aparece no anúncio e na conversa do WhatsApp.` }); });
+  if (!estado.cupons.length) return topo + vazio({ icone: 'i-ticket', titulo: 'Nenhum cupom na Loja Centro', texto: 'Crie um cupom no Regem ou por aqui, com aprovação. Cupom exclusivo de campanha é o jeito de medir vendas no balcão e no Anota Aí, que não têm clique.', acao: '<button class="btn btn--primary" type="button" data-criar-cupom>Criar cupom no Regem</button>' });
+  const cont = { todos: estado.cupons.length, ligados: estado.cupons.filter((c) => c.camp).length, sem: estado.cupons.filter((c) => !c.camp).length };
+  const chip = (f, rot) => `<button class="chip" type="button" data-filtro-cupom="${f}" aria-pressed="${estado.filtro === f}">${rot} <span class="num">${cont[f]}</span></button>`;
+  const visiveis = estado.cupons.filter((c) => estado.filtro === 'todos' || (estado.filtro === 'ligados' ? c.camp : !c.camp));
+  const linhas = visiveis.map((c) => {
+    const i = estado.cupons.indexOf(c), camp = c.camp ? CAMPANHAS[c.camp] : null;
+    const estadoChip = c.pendente ? '<span class="cupom-estado"><span class="st st--aguardando"><span class="dot"></span>Aguardando aprovação</span></span>' : c.vencido ? '<span class="cupom-estado"><span class="st st--espera">Vencido</span></span>' : '';
+    const usos = c.pendente ? '—<span class="sub">ainda não existe no Regem</span>' : c.semUsoGasto ? `0<span class="sub sub--atencao">sem uso, com ${moeda(c.semUsoGasto)} gastos</span>` : `${numero(c.usos)}${c.valor ? `<span class="sub">${moeda(c.valor)} em pedidos</span>` : ''}`;
+    const campCel = camp ? `<span class="camp-cel"><span class="linha"><b>${esc(camp.nome)}</b><span class="plat plat--${camp.plat}">${PLAT_ROT[camp.plat]}</span></span><small>${c.exclusivo ? 'exclusivo · prova a origem' : 'não exclusivo · só acompanha'}</small></span>` : '<span class="eixo-nota">Sem campanha</span>';
+    let acao = '';
+    if (c.pendente) acao = `<button class="btn btn--sm btn--ghost" type="button" data-cancelar-pedido="${i}" aria-label="Cancelar o pedido do cupom ${esc(c.cod)}">Cancelar pedido</button>`;
+    else if (c.vencido) acao = '<span class="eixo-nota">Vencido no Regem</span>';
+    else if (c.camp) acao = `<button class="btn btn--sm btn--ghost" type="button" data-desligar-cupom="${i}" aria-label="Desligar ${esc(c.cod)} da campanha ${esc(camp.nome)}">Desligar</button>`;
+    else acao = `<button class="btn btn--sm" type="button" data-ligar="${i}" aria-haspopup="dialog" aria-expanded="false" aria-controls="dlg-ligar" aria-label="Ligar ${esc(c.cod)} a uma campanha">Ligar a campanha</button>`;
+    return `<tr class="${c.pendente ? 'pendente' : ''}${c.vencido ? ' vencido' : ''}">
+      <th scope="row"><span class="cupom-cod">${esc(c.cod)}</span>${c.externo ? ` <span class="plat">${esc(PLATAFORMAS[c.externo].nome)}</span>` : ''}${estadoChip}</th>
+      <td data-rot="Regra e validade" class="regra">${esc(c.regra)}<span class="sub">${esc(c.validade)}</span></td>
+      <td class="n num" data-rot="Usos em 7 dias">${usos}</td>
+      <td data-rot="Campanha">${campCel}</td>
+      <td class="acoes">${acao}</td>
+    </tr>`;
+  }).join('');
+  return topo + `<div class="filtros" role="group" aria-label="Filtrar cupons">${chip('todos', 'Todos')}${chip('ligados', 'Ligados a campanha')}${chip('sem', 'Sem campanha')}</div>
+    <div class="table-wrap lista-cartoes"><table class="tabela">
+      <caption class="sr-only">Cupons da Loja Centro lidos do Regem</caption>
+      <thead><tr><th scope="col">Cupom</th><th scope="col">Regra e validade</th><th scope="col" class="n">Usos em 7 dias</th><th scope="col">Campanha</th><th scope="col"><span class="sr-only">Ações</span></th></tr></thead>
+      <tbody>${linhas || '<tr><td colspan="5"><span class="eixo-nota">Nenhum cupom com este filtro.</span></td></tr>'}</tbody></table></div>
+    <p class="eixo-nota">Só cupom exclusivo prova de onde veio o pedido: ele vale no cardápio, no WhatsApp, no balcão e no Anota Aí. Cupom que aparece em outros lugares fica ligado só para acompanhar.</p>`;
+}
+
+/* ---------- desenhar e cenários ---------- */
+function desenhar() {
+  $('#plataforma-pedidos').innerHTML = htmlPlataforma();
+  const externo = estado.plataforma !== 'regem' && estado.plataforma !== 'brendi';
+  $('#bt-cupom-externo').hidden = !externo || ['cupons-sem-regem', 'cupons-erro'].includes(estado.cenario);
+  $('#bt-cupom-externo-rot').textContent = `Informar cupom do ${nomePlat()}`;
+  $('#bt-cupom-externo').className = externo ? 'btn btn--primary' : 'btn';
+  $('#bt-criar-cupom').className = externo ? 'btn' : 'btn btn--primary';
+  $('#links-conteudo').innerHTML = htmlLinks();
+  $('#cupons-conteudo').innerHTML = htmlCupons();
+  $('#n-links').textContent = estado.cenario === 'links-erro' ? '—' : estado.links.length;
+  $('#n-cupons').textContent = ['cupons-sem-regem', 'cupons-erro'].includes(estado.cenario) ? '—' : estado.cupons.length;
+  sincLinks();
+}
+function aplicarCenario(id, { focar = false } = {}) {
+  if (!TODOS[id]) id = 'links';
+  $$('dialog[open]').forEach((d) => d.close('cancelar'));
+  estado.cenario = id;
+  estado.links = LINKS_BASE.map((l) => ({ ...l }));
+  estado.semRastreio = id === 'links-ok' ? [] : SEM_RASTREIO_BASE.map((a) => ({ ...a }));
+  estado.verSemRastreio = false;
+  estado.cupons = CUPONS_BASE.map((c) => ({ ...c }));
+  estado.filtro = 'todos';
+  estado.escrita = id !== 'cupons-desligado';
+  estado.plataforma = id.startsWith('anota-') ? 'anotaai' : id.startsWith('brendi-') ? 'brendi' : 'regem';
+  if (estado.plataforma === 'anotaai') estado.cupons = [...CUPONS_ANOTA.map((c) => ({ ...c })), ...CUPONS_BASE.filter((c) => !c.camp).map((c) => ({ ...c }))];
+  if (estado.plataforma === 'brendi') estado.cupons = CUPONS_BASE.filter((c) => !c.camp).map((c) => ({ ...c }));
+  if (id === 'links-vazio') estado.links = [];
+  if (id === 'cupons-vazio') estado.cupons = [];
+  if (id === 'cupons-aguardando') estado.cupons.unshift({ ...PENDENTE_EXEMPLO });
+  if (id === 'links-criado') estado.links.unshift({ nome: 'Combo sexta · stories', camp: 'c1', anuncio: 'Combo sexta · stories', loja: 'centro', lk: 'CS3ST', criado: 'hoje', pedidos: null, novo: true });
+  mostrarAba(id.startsWith('cupons') || ['anota-cupons', 'anota-externo', 'brendi-cupons'].includes(id) ? 'cupons' : 'links');
+  marcarCenario(id);
+  desenhar();
+  anunciar('Cenário: ' + TODOS[id]);
+  if (id === 'links-criado') setTimeout(() => abrirPronto(estado.links[0], $('#bt-criar-link'), { criado: true }), 60);
+  if (id === 'links-google') setTimeout(() => abrirPronto(estado.links.find((l) => l.camp === 'c4'), $('[data-params="1"]')), 60);
+  if (id === 'links-criar') setTimeout(() => abrirCriarLink($('#bt-criar-link')), 60);
+  if (id === 'cupons-criar') setTimeout(() => abrirCriarCupom($('#bt-criar-cupom')), 60);
+  if (id === 'cupons-ligar') setTimeout(() => abrirLigar(3, $('[data-ligar="3"]')), 60);
+  if (id === 'anota-externo') setTimeout(() => abrirExterno('c4', $('#bt-cupom-externo')), 60);
+  if (id === 'anota-plataforma') setTimeout(() => abrirPlataforma($('#bt-plataforma')), 60);
+  if (focar && !['links-criado', 'links-google', 'links-criar', 'cupons-criar', 'cupons-ligar', 'anota-externo', 'anota-plataforma'].includes(id)) $('#h-links').focus({ preventScroll: true });
+}
+
+/* ---------- criar link ---------- */
+const dlgLink = $('#dlg-link');
+function erroCampo(input, idErro, msg) {
+  const e = $('#' + idErro);
+  if (msg) { e.textContent = msg; e.hidden = false; input.setAttribute('aria-invalid', 'true'); } else { e.hidden = true; input.removeAttribute('aria-invalid'); }
+  return !!msg;
+}
+function preencherAnuncios() {
+  const c = CAMPANHAS[$('#lk-camp').value], sel = $('#lk-anuncio');
+  sel.replaceChildren(new Option('Todos os anúncios da campanha', ''), ...(c ? c.anuncios.map((a) => new Option(a, a)) : []));
+  sel.disabled = !c;
+}
+function abrirCriarLink(origem) {
+  $('#form-link').reset();
+  erroCampo($('#lk-nome'), 'lk-nome-erro', ''); erroCampo($('#lk-camp'), 'lk-camp-erro', '');
+  preencherAnuncios();
+  abrirDialogo(dlgLink, origem);
+  $('#lk-nome').focus();
+}
+$('#lk-camp').addEventListener('change', () => { preencherAnuncios(); erroCampo($('#lk-camp'), 'lk-camp-erro', ''); });
+$('#lk-nome').addEventListener('input', () => erroCampo($('#lk-nome'), 'lk-nome-erro', ''));
+$('#form-link').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const nome = $('#lk-nome').value.trim(), camp = $('#lk-camp').value;
+  const e1 = erroCampo($('#lk-nome'), 'lk-nome-erro', nome ? '' : 'Dê um nome ao link, como “Combo sexta · stories”.');
+  const e2 = erroCampo($('#lk-camp'), 'lk-camp-erro', camp ? '' : 'Escolha a campanha do link.');
+  if (e1) { $('#lk-nome').focus(); return; }
+  if (e2) { $('#lk-camp').focus(); return; }
+  const l = { nome, camp, anuncio: $('#lk-anuncio').value || null, loja: $('#lk-destino').value, lk: gerarLk(nome), criado: 'hoje', pedidos: null, novo: true };
+  estado.links.unshift(l);
+  dlgLink.close('ok');
+  desenhar();
+  toast('Link criado. Copie os parâmetros e cole no anúncio.');
+  setTimeout(() => abrirPronto(l, $('#bt-criar-link'), { criado: true }), 30);
+});
+
+/* ---------- ligar e desligar cupom ---------- */
+const dlgLigar = $('#dlg-ligar');
+let ligando = null;
+function abrirLigar(i, origem) {
+  const c = estado.cupons[i]; if (!c) return;
+  ligando = i;
+  $('#form-ligar').reset();
+  $('#lg-cod').textContent = c.cod;
+  $('#lg-regra').textContent = `${c.regra} · ${c.validade}`;
+  $('#lg-de').value = '2026-09-29'; $('#lg-de').min = '2026-09-29'; $('#lg-ate').min = '2026-09-29';
+  ['lg-camp-erro', 'lg-excl-erro', 'lg-data-erro'].forEach((id) => { $('#' + id).hidden = true; });
+  $('#lg-camp').removeAttribute('aria-invalid');
+  abrirDialogo(dlgLigar, origem);
+}
+$('#form-ligar').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const camp = $('#lg-camp').value, excl = $('input[name="lg-excl"]:checked')?.value, de = $('#lg-de').value, ate = $('#lg-ate').value;
+  const e1 = erroCampo($('#lg-camp'), 'lg-camp-erro', camp ? '' : 'Escolha a campanha.');
+  $('#lg-excl-erro').hidden = !!excl;
+  const e3 = erroCampo($('#lg-ate'), 'lg-data-erro', ate && de && ate < de ? 'O fim do vínculo não pode ser antes do início.' : '');
+  if (e1) { $('#lg-camp').focus(); return; }
+  if (!excl) { $('input[name="lg-excl"]').focus(); return; }
+  if (e3) { $('#lg-ate').focus(); return; }
+  const c = estado.cupons[ligando];
+  Object.assign(c, { camp, exclusivo: excl === 'sim' });
+  dlgLigar.close('ok');
+  desenhar();
+  toast(excl === 'sim' ? `${c.cod} ligado à campanha ${CAMPANHAS[camp].nome} como exclusivo: os pedidos com ele passam a contar para a campanha.` : `${c.cod} ligado à campanha ${CAMPANHAS[camp].nome} para acompanhar. Como não é exclusivo, não conta como evidência.`);
+});
+
+/* ---------- criar cupom no Regem (com aprovação) ---------- */
+const dlgCupom = $('#dlg-cupom');
+function sincTipo() {
+  const t = $('input[name="cp-tipo"]:checked').value;
+  $('#cp-valor-caixa').hidden = t === 'frete';
+  $('#cp-valor-rot').textContent = t === 'pct' ? 'Desconto (%)' : 'Desconto (R$)';
+  $('#cp-valor').max = t === 'pct' ? '100' : '';
+}
+$$('input[name="cp-tipo"]').forEach((r) => r.addEventListener('change', sincTipo));
+function abrirCriarCupom(origem) {
+  if (!estado.escrita) { toast('A criação de cupons está desligada para a sua empresa. Crie o cupom no Regem: ele aparece aqui na próxima leitura.'); return; }
+  $('#form-cupom').reset();
+  ['cp-cod-erro', 'cp-valor-erro', 'cp-data-erro', 'cp-camp-erro'].forEach((id) => { $('#' + id).hidden = true; });
+  ['cp-cod', 'cp-valor', 'cp-ate', 'cp-camp'].forEach((id) => $('#' + id).removeAttribute('aria-invalid'));
+  $('#cp-de').min = '2026-09-29'; $('#cp-ate').min = '2026-09-29';
+  sincTipo();
+  abrirDialogo(dlgCupom, origem);
+  $('#cp-cod').focus();
+}
+$('#cp-cod').addEventListener('input', (e) => { const i = e.target; const p = i.selectionStart; i.value = i.value.toUpperCase().replace(/\s/g, ''); i.setSelectionRange(p, p); erroCampo(i, 'cp-cod-erro', ''); });
+$('#form-cupom').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const cod = $('#cp-cod').value.trim().toUpperCase(), tipo = $('input[name="cp-tipo"]:checked').value, valor = Number($('#cp-valor').value), min = Number($('#cp-min').value) || 0;
+  const de = $('#cp-de').value, ate = $('#cp-ate').value, camp = $('#cp-camp').value;
+  const eCod = erroCampo($('#cp-cod'), 'cp-cod-erro', !/^[A-Z0-9]{4,20}$/.test(cod) ? 'Use de 4 a 20 letras ou números, sem espaço nem acento.' : estado.cupons.some((c) => c.cod === cod) ? 'Esse código já existe no Regem. Escolha outro.' : '');
+  const eVal = erroCampo($('#cp-valor'), 'cp-valor-erro', tipo === 'frete' ? '' : !(valor > 0) ? 'Informe o valor do desconto.' : tipo === 'pct' && valor > 100 ? 'O percentual vai de 1 a 100.' : '');
+  const eData = erroCampo($('#cp-ate'), 'cp-data-erro', !de || !ate ? 'Informe o início e o fim da validade.' : ate < de ? 'O fim da validade não pode ser antes do início.' : '');
+  const eCamp = erroCampo($('#cp-camp'), 'cp-camp-erro', camp ? '' : 'Escolha a campanha do cupom.');
+  const primeiro = [[eCod, '#cp-cod'], [eVal, '#cp-valor'], [eData, '#cp-ate'], [eCamp, '#cp-camp']].find(([x]) => x);
+  if (primeiro) { $(primeiro[1]).focus(); return; }
+  const regra = (tipo === 'pct' ? `${numero(valor)}%` : tipo === 'valor' ? `${moeda(valor, 0)} de desconto` : 'Entrega grátis') + (min ? ` · mín. ${moeda(min, 0)}` : ' · sem mínimo');
+  const br = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
+  estado.cupons.unshift({ cod, regra, validade: `${br(de)} a ${br(ate)}`, usos: null, camp, exclusivo: $('#cp-excl').checked, pendente: 'agora' });
+  estado.filtro = 'todos';
+  dlgCupom.close('ok');
+  desenhar();
+  toast('Pedido enviado para aprovação. Depois de aprovado, o Liame cria o cupom no Regem.');
+});
+
+/* ---------- plataforma de pedidos e cupom de outra plataforma (proposta de 30/09) ---------- */
+const dlgPlataforma = $('#dlg-plataforma');
+function sincUrl() { $('#pf-url-caixa').hidden = $('input[name="pf"]:checked')?.value !== 'outra'; }
+$$('input[name="pf"]').forEach((r) => r.addEventListener('change', sincUrl));
+function abrirPlataforma(origem) {
+  $('#form-plataforma').reset();
+  $(`input[name="pf"][value="${estado.plataforma}"]`).checked = true;
+  $('#pf-url-erro').hidden = true;
+  sincUrl();
+  abrirDialogo(dlgPlataforma, origem);
+  $('input[name="pf"]:checked').focus();
+}
+$('#form-plataforma').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const pf = $('input[name="pf"]:checked')?.value;
+  if (pf === 'outra' && erroCampo($('#pf-url'), 'pf-url-erro', /^https:[/][/][^\s]+[.][^\s]+/.test($('#pf-url').value.trim()) ? '' : 'Informe o endereço do cardápio, começando com https://.')) { $('#pf-url').focus(); return; }
+  estado.plataforma = pf;
+  estado.verSemRastreio = false;
+  dlgPlataforma.close('ok');
+  desenhar();
+  toast(`Plataforma de pedidos: ${nomePlat()}. A conferência dos anúncios e os cupons passam a seguir essa escolha.`);
+});
+const dlgExterno = $('#dlg-externo');
+function abrirExterno(camp, origem) {
+  const nome = nomePlat();
+  $('#form-externo').reset();
+  $('#dlg-externo-t').textContent = `Informar cupom do ${nome}`;
+  $('#ex-nota span').textContent = `Crie o cupom no ${nome} primeiro. Aqui você só informa o código: o Liame reconhece o cupom nos pedidos que chegam ao Regem pelo ${nome}. O Liame não cria nem muda nada no ${nome}.`;
+  ['ex-cod-erro', 'ex-camp-erro', 'ex-excl-erro'].forEach((id) => { $('#' + id).hidden = true; });
+  ['ex-cod', 'ex-camp'].forEach((id) => $('#' + id).removeAttribute('aria-invalid'));
+  if (camp) $('#ex-camp').value = camp;
+  abrirDialogo(dlgExterno, origem);
+  $('#ex-cod').focus();
+}
+$('#ex-cod').addEventListener('input', (e) => { const i = e.target; const p = i.selectionStart; i.value = i.value.replace(/\s/g, ''); i.setSelectionRange(p, p); erroCampo(i, 'ex-cod-erro', ''); });
+$('#form-externo').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const cod = $('#ex-cod').value.trim(), camp = $('#ex-camp').value, excl = $('input[name="ex-excl"]:checked')?.value;
+  const eCod = erroCampo($('#ex-cod'), 'ex-cod-erro', !/^[A-Za-z0-9][A-Za-z0-9._-]{2,59}$/.test(cod) ? 'Use de 3 a 60 letras, números, ponto, hífen ou sublinhado, sem espaço.' : estado.cupons.some((c) => c.cod.toUpperCase() === cod.toUpperCase()) ? 'Esse código já está na lista.' : '');
+  const eCamp = erroCampo($('#ex-camp'), 'ex-camp-erro', camp ? '' : 'Escolha a campanha do cupom.');
+  $('#ex-excl-erro').hidden = !!excl;
+  if (eCod) { $('#ex-cod').focus(); return; }
+  if (eCamp) { $('#ex-camp').focus(); return; }
+  if (!excl) { $('input[name="ex-excl"]').focus(); return; }
+  const nome = nomePlat();
+  estado.cupons.unshift({ cod, externo: estado.plataforma, regra: `Cupom do ${nome} · informado agora`, validade: `regra e validade ficam no ${nome}`, usos: 0, valor: 0, camp, exclusivo: excl === 'sim' });
+  estado.filtro = 'todos';
+  dlgExterno.close('ok');
+  desenhar();
+  toast(excl === 'sim' ? `${cod} ligado à campanha ${CAMPANHAS[camp].nome} como exclusivo: os pedidos do ${nome} com ele passam a contar para a campanha.` : `${cod} ligado à campanha ${CAMPANHAS[camp].nome} para acompanhar. Como não é exclusivo, não conta como evidência.`);
+});
+
+/* ---------- eventos ---------- */
+$('#bt-criar-link').addEventListener('click', (e) => abrirCriarLink(e.currentTarget));
+$('#bt-criar-cupom').addEventListener('click', (e) => abrirCriarCupom(e.currentTarget));
+document.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target : null; if (!alvo) return;
+  if (alvo.closest('[data-criar-link]')) { abrirCriarLink(alvo.closest('[data-criar-link]')); return; }
+  if (alvo.closest('[data-criar-cupom]')) { abrirCriarCupom(alvo.closest('[data-criar-cupom]')); return; }
+  if (alvo.closest('#bt-plataforma')) { abrirPlataforma(alvo.closest('#bt-plataforma')); return; }
+  if (alvo.closest('#bt-cupom-externo')) { abrirExterno('', alvo.closest('#bt-cupom-externo')); return; }
+  const ce = alvo.closest('[data-cupom-externo]'); if (ce) { abrirExterno(ce.dataset.cupomExterno, ce); return; }
+  const tentar = alvo.closest('[data-tentar]');
+  if (tentar) { const aba = tentar.dataset.tentar; aplicarCenario(aba === 'links' ? 'links' : 'cupons', { focar: true }); toast(aba === 'links' ? 'Links carregados.' : 'Cupons lidos do Regem agora.'); return; }
+  if (alvo.closest('#bt-sem-rastreio')) { estado.verSemRastreio = !estado.verSemRastreio; $('#links-conteudo').innerHTML = htmlLinks(); sincLinks(); $('#bt-sem-rastreio').focus(); return; }
+  const pc = alvo.closest('[data-params-camp]');
+  if (pc) { const l = estado.links.find((x) => x.camp === pc.dataset.paramsCamp); if (l) abrirPronto(l, pc); return; }
+  const pr = alvo.closest('[data-params]'); if (pr) { abrirPronto(estado.links[Number(pr.dataset.params)], pr); return; }
+  const cl = alvo.closest('[data-copiar-link]');
+  if (cl) { copiar(linkCompleto(estado.links[Number(cl.dataset.copiarLink)])).then((ok) => toast(ok ? 'Link com rastreio copiado.' : 'Não deu para copiar: abra “Parâmetros e QR” e copie de lá.')); return; }
+  const cp = alvo.closest('[data-copiar]');
+  if (cp) { const el = $(cp.dataset.copiar); const txt = 'value' in el ? el.value : el.textContent; copiar(txt).then((ok) => toast(ok ? cp.dataset.copiado : 'Não deu para copiar: selecione o texto e copie à mão.')); return; }
+  const lg = alvo.closest('[data-ligar]'); if (lg) { abrirLigar(Number(lg.dataset.ligar), lg); return; }
+  const dc = alvo.closest('[data-desligar-cupom]');
+  if (dc) {
+    const c = estado.cupons[Number(dc.dataset.desligarCupom)];
+    confirmarNaLinha(dc, { texto: 'Os usos até agora continuam valendo; os próximos não contam para a campanha.', rotulo: 'Desligar agora', aoConfirmar: () => { const camp = CAMPANHAS[c.camp].nome; c.camp = null; c.exclusivo = false; c.semUsoGasto = null; desenhar(); toast(`${c.cod} desligado da campanha ${camp}. O cupom continua valendo no Regem.`); } });
+    return;
+  }
+  const cpd = alvo.closest('[data-cancelar-pedido]');
+  if (cpd) {
+    const i = Number(cpd.dataset.cancelarPedido), c = estado.cupons[i];
+    confirmarNaLinha(cpd, { texto: 'O pedido de aprovação sai da fila e o cupom não é criado.', rotulo: 'Cancelar o pedido', voltar: 'Manter', aoConfirmar: () => { estado.cupons.splice(i, 1); desenhar(); toast(`Pedido do cupom ${c.cod} cancelado. Nada foi criado no Regem.`); } });
+    return;
+  }
+  const fc = alvo.closest('[data-filtro-cupom]'); if (fc) { estado.filtro = fc.dataset.filtroCupom; $('#cupons-conteudo').innerHTML = htmlCupons(); sincLinks(); $(`[data-filtro-cupom="${estado.filtro}"]`)?.focus(); return; }
+  const t = alvo.closest('[data-toast]'); if (t) toast(t.dataset.toast);
+});
+selCenario.addEventListener('change', () => aplicarCenario(selCenario.value, { focar: true }));
+
+/* ---------- início ---------- */
+preencherCenarios(CENARIOS);
+aplicarCenario(params.get('cenario') || 'links');
+
+/* ---------- cenários para a verificação no navegador sem janela ---------- */
+(() => {
+  const todas = [1440, 1024, 768, 375];
+  for (const id of Object.keys(TODOS)) window.uiuxCenarios[id] = { larguras: todas, executar: async () => { aplicarCenario(id); await esperar(450); } };
+  window.uiuxCenarios['sem-rastreio-aberto'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('links'); await esperar(150); $('#bt-sem-rastreio').click(); await esperar(200); if ($('#lista-sem-rastreio').hidden) throw new Error('lista não abriu'); } };
+  window.uiuxCenarios['link-erros'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('links-criar'); await esperar(300); $('#form-link').requestSubmit(); await esperar(200); if ($('#lk-nome-erro').hidden) throw new Error('erro do nome não apareceu'); } };
+  window.uiuxCenarios['link-criar-fluxo'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('links-criar'); await esperar(300); $('#lk-nome').value = 'Delivery noite · reels'; $('#lk-camp').value = 'c3'; $('#lk-camp').dispatchEvent(new Event('change')); $('#form-link').requestSubmit(); await esperar(450); if (!dlgPronto.open) throw new Error('o link pronto não abriu'); } };
+  window.uiuxCenarios['cupom-erros'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('cupons-criar'); await esperar(300); $('#cp-cod').value = 'SEXTA10'; $('#form-cupom').requestSubmit(); await esperar(200); if ($('#cp-cod-erro').hidden) throw new Error('erro do código não apareceu'); } };
+  window.uiuxCenarios['cupom-enviado'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('cupons-criar'); await esperar(300); $('#cp-cod').value = 'NOITE20'; $('#cp-camp').value = 'c3'; $('#form-cupom').requestSubmit(); await esperar(400); if (!estado.cupons[0].pendente) throw new Error('não entrou como pendente'); } };
+  window.uiuxCenarios['ligar-sem-escolha'] = { larguras: [1440], executar: async () => { aplicarCenario('cupons-ligar'); await esperar(300); $('#lg-camp').value = 'c3'; $('#form-ligar').requestSubmit(); await esperar(200); if ($('#lg-excl-erro').hidden) throw new Error('faltou o erro do exclusivo'); } };
+  window.uiuxCenarios['ligar-exclusivo'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('cupons-ligar'); await esperar(300); $('#lg-camp').value = 'c3'; $('input[name="lg-excl"][value="sim"]').checked = true; $('#form-ligar').requestSubmit(); await esperar(400); if (!estado.cupons[3].exclusivo) throw new Error('não ligou'); } };
+  window.uiuxCenarios['desligar-cupom'] = { larguras: [1440, 375], executar: async () => { aplicarCenario('cupons'); await esperar(200); $('[data-desligar-cupom="0"]').click(); await esperar(200); if (!$('.confirma-linha')) throw new Error('sem confirmação na linha'); } };
+  window.uiuxCenarios['criar-desligado'] = { larguras: [1440], executar: async () => { aplicarCenario('cupons-desligado'); await esperar(200); $('#bt-criar-cupom').click(); await esperar(250); if (dlgCupom.open) throw new Error('abriu com a flag desligada'); } };
+  window.uiuxCenarios['abas-teclado'] = { larguras: [1440], executar: async () => { aplicarCenario('links'); $('#aba-links').focus(); $('#aba-links').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); await esperar(200); if ($('#painel-cupons').hidden || document.activeElement.id !== 'aba-cupons') throw new Error('seta não trocou a aba'); } };
+  window.uiuxCenarios['gaveta-menu'] = { larguras: [375, 768], executar: async () => { btMenu.click(); await esperar(500); if (!app.classList.contains('gaveta')) throw new Error('a gaveta não abriu'); } };
+})();
+
+</script>
+</body>
+</html>

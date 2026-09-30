@@ -105,6 +105,10 @@ export const unit = liame.table('unit', {
   brandId: uuid('brand_id').notNull(),
   name: text('name').notNull(),
   timezone: text('timezone').notNull().default('America/Sao_Paulo'),
+  orderPlatform: text('order_platform'),
+  orderPlatformUrl: text('order_platform_url'),
+  orderPlatformSetAt: timestamp('order_platform_set_at', { withTimezone: true }),
+  orderPlatformSetBy: uuid('order_platform_set_by'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
