@@ -121,11 +121,11 @@ describe.skipIf(!hasDb)('cupons de campanha (A2.5 · F6)', () => {
   }
   const cupomRegem = (id: string, codigo: string, over: Partial<CupomRegem> = {}): CupomRegem => ({
     id,
-    versao: 1,
+    versao: 1n,
     atualizado_em: atras(HORA),
     codigo,
     tipo: 'percentual',
-    percentual: 10,
+    percentual: '10',
     pedido_minimo_centavos: 5000,
     fuso: FUSO,
     ativo: true,
@@ -215,8 +215,8 @@ describe.skipIf(!hasDb)('cupons de campanha (A2.5 · F6)', () => {
     await withTenant(database.db, tenantId, (tx) =>
       gravarCupons(tx, { tenantId, brandId, connectedAccountId: contas.regemCentro! }, [
         cupomRegem('r-sexta', 'sexta10'),
-        cupomRegem('r-noite', 'NOITE15', { percentual: 15, pedido_minimo_centavos: null }),
-        cupomRegem('r-fds', 'FDS20', { percentual: 20 }),
+        cupomRegem('r-noite', 'NOITE15', { percentual: '15', pedido_minimo_centavos: null }),
+        cupomRegem('r-fds', 'FDS20', { percentual: '20' }),
         cupomRegem('r-copa', 'COPA5', { tipo: 'valor', percentual: null, valor_centavos: 500, valido_ate: somarDias(hoje, -3) }),
         cupomRegem('r-off', 'OFF', { ativo: false }),
         cupomRegem('r-velho', 'VELHO', { removido: true }),
@@ -457,8 +457,8 @@ describe.skipIf(!hasDb)('cupons de campanha (A2.5 · F6)', () => {
     expect((await ligar(cupons.NOITE15!, { campaign_id: ids.C2, exclusive: true, starts_on: somarDias(hoje, 3) })).status).toBe(200);
     await withTenant(database.db, tenantId, (tx) =>
       gravarCupons(tx, { tenantId, brandId, connectedAccountId: contas.regemCentro! }, [
-        cupomRegem('r-fds', 'FDS20', { percentual: 20, versao: 2, removido: true }),
-        cupomRegem('r-noite', 'NOITE15', { percentual: 15, versao: 2, removido: true }),
+        cupomRegem('r-fds', 'FDS20', { percentual: '20', versao: 2n, removido: true }),
+        cupomRegem('r-noite', 'NOITE15', { percentual: '15', versao: 2n, removido: true }),
       ]),
     );
     const fds = await ownerQuery<{ unlinked_at: Date | null }>(`select unlinked_at from liame.campaign_coupon where coupon_id = $1`, [cupons.FDS20]);
