@@ -1,0 +1,48 @@
+/* "Links e cupons" (mockups/prototipo-links-cupons.html, P3 aprovado em 29/09/2026), aba Links. */
+
+.painel-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4); }
+.painel-desc { flex: 1 1 320px; max-width: 70ch; font-size: var(--text-sm); color: var(--text-muted); }
+
+/* anúncios ativos sem rastreio */
+.sem-rastreio { display: grid; gap: var(--sp-2); margin: calc(-1 * var(--sp-3)) 0 var(--sp-5); padding: 0; list-style: none; }
+.sem-rastreio li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border)); border-radius: var(--radius); background: var(--surface); }
+.sem-rastreio .sr-txt { flex: 1 1 240px; min-width: 0; display: grid; gap: 1px; font-size: var(--text-sm); }
+.sem-rastreio .sr-txt b { font-weight: 600; }
+.sem-rastreio .sr-txt span { color: var(--text-muted); font-size: var(--text-xs); }
+
+/* tabela de links (vira cartões no celular) */
+.cod-lk { font-family: var(--font-mono); font-weight: 600; letter-spacing: .04em; }
+.link-url { display: block; margin-top: 2px; max-width: 34ch; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-weight: 400; color: var(--text-subtle); font-family: var(--font-mono); }
+.camp-cel { display: grid; gap: 3px; }
+.camp-cel .linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.camp-cel small { font-size: var(--text-xs); color: var(--text-muted); white-space: normal; }
+
+@container pagina (max-width: 760px) {
+  .lista-cartoes { border: 0; overflow: visible; }
+  .lista-cartoes .tabela, .lista-cartoes tbody, .lista-cartoes tr, .lista-cartoes td, .lista-cartoes tbody th { display: block; }
+  .lista-cartoes thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .lista-cartoes tr { margin-bottom: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+  .lista-cartoes td, .lista-cartoes tbody th { padding: 4px 0; border: 0; white-space: normal; text-align: left; }
+  .lista-cartoes td.n { text-align: left; }
+  .lista-cartoes td[data-rot]::before { content: attr(data-rot); display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+  .lista-cartoes td.acoes { text-align: left; padding-top: var(--sp-2); }
+}
+
+/* link pronto: parâmetros para colar e QR */
+.dialogo--largo { width: min(720px, calc(100vw - 32px)); }
+.copiar-linha { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.copiar-linha .input { flex: 1 1 240px; min-width: 0; font-family: var(--font-mono); font-size: 12px; }
+.param-bloco { display: grid; gap: var(--sp-2); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.param-bloco h3 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); }
+.param-codigo { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--bg-subtle); }
+.param-codigo code { flex: 1 1 240px; min-width: 0; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-all; }
+.qr-bloco { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--sp-4); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+/* Branco nos dois temas, como o QR do segundo fator (entrada.css): o leitor precisa do contraste. */
+.qr-link { width: 132px; padding: 6px; border-radius: var(--radius); background: #FFFFFF; box-shadow: inset 0 0 0 1px var(--border); }
+.qr-link svg { display: block; width: 100%; height: auto; }
+.qr-txt { display: grid; gap: var(--sp-2); }
+.qr-txt h3 { font-size: var(--text-sm); }
+@media (max-width: 480px) { .qr-bloco { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 768px) {
+  .dialogo--largo { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+}

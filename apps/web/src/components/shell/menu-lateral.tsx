@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useId, useState } from 'react';
 import { LogoCompleto, Simbolo } from '@/components/marca/logo';
 import { Icone } from '@/components/ui/icone';
 import { iniciais } from '@/lib/formato';
@@ -9,8 +10,9 @@ import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
 import { avisosFalados } from '@/components/atencao/textos';
 import { useContadorAtencao } from '@/lib/contador-atencao';
+import { useModo } from '@/lib/modo';
 import { BotaoTema } from './botao-tema';
-import { itemAtual, itensVisiveis, NAVEGACAO } from './navegacao';
+import { emFerramenta, type GrupoNav, itemAtual, itensVisiveis, NAVEGACAO } from './navegacao';
 import { SeletorEmpresa } from './seletor-empresa';
 import { SeletorModo } from './seletor-modo';
 import { disparar } from '@/lib/disparar';
@@ -19,6 +21,56 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
   const { me, empresa, pode, sair } = useSessao();
   const contador = useContadorAtencao();
   const caminho = usePathname();
+  const { modo } = useModo();
+  const idFerramentas = useId();
+  // "Mais ferramentas" começa aberto quando a tela aberta é uma ferramenta (protótipo P3).
+  const [ferramentasAbertas, setFerramentasAbertas] = useState(() => emFerramenta(caminho));
+  const principais = NAVEGACAO.filter((g) => !g.ferramenta && !g.pessoal);
+  const ferramentas = NAVEGACAO.filter((g) => g.ferramenta && itensVisiveis(g, pode).length);
+  const pessoais = NAVEGACAO.filter((g) => g.pessoal);
+  const nFerramentas = ferramentas.reduce((n, g) => n + itensVisiveis(g, pode).length, 0);
+  const lite = modo === 'lite';
+
+  const grupoNav = (grupo: GrupoNav) => {
+    const itens = itensVisiveis(grupo, pode);
+    if (!itens.length) return null;
+    return (
+      <div className="nav-grupo" key={grupo.id}>
+        <p className="nav-grupo-rot rotulo-marca" id={`g-${grupo.id}`}>
+          {grupo.rotulo}
+        </p>
+        <ul className="nav-lista" aria-labelledby={`g-${grupo.id}`}>
+          {itens.map((item) => {
+            const atual = itemAtual(caminho, item.href);
+            const n = item.contador === 'atencao' ? (contador.total ?? 0) : 0;
+            return (
+              <li key={item.href}>
+                <Link
+                  className="nav-item"
+                  href={item.href}
+                  aria-current={atual ? 'page' : undefined}
+                  title={n ? `${item.rotulo}${avisosFalados(n)}` : item.rotulo}
+                  onClick={aoFechar}
+                >
+                  {atual && <span className="nav-no" aria-hidden="true" />}
+                  <Icone nome={item.icone} />
+                  <span className="rot">{item.rotulo}</span>
+                  {n > 0 && (
+                    <>
+                      <span className="sr-only">{avisosFalados(n)}</span>
+                      <span className="nav-cont num" aria-hidden="true">
+                        {n > 99 ? '99+' : n}
+                      </span>
+                    </>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  };
 
   return (
     <aside className="sidebar" id={id} aria-label="Menu">
@@ -33,46 +85,30 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
       <SeletorEmpresa />
 
       <nav aria-label="Principal">
-        {NAVEGACAO.map((grupo) => {
-          const itens = itensVisiveis(grupo, pode);
-          if (!itens.length) return null;
-          return (
-            <div className="nav-grupo" key={grupo.id}>
-              <p className="nav-grupo-rot rotulo-marca" id={`g-${grupo.id}`}>
-                {grupo.rotulo}
-              </p>
-              <ul className="nav-lista" aria-labelledby={`g-${grupo.id}`}>
-                {itens.map((item) => {
-                  const atual = itemAtual(caminho, item.href);
-                  const n = item.contador === 'atencao' ? (contador.total ?? 0) : 0;
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        className="nav-item"
-                        href={item.href}
-                        aria-current={atual ? 'page' : undefined}
-                        title={n ? `${item.rotulo}${avisosFalados(n)}` : item.rotulo}
-                        onClick={aoFechar}
-                      >
-                        {atual && <span className="nav-no" aria-hidden="true" />}
-                        <Icone nome={item.icone} />
-                        <span className="rot">{item.rotulo}</span>
-                        {n > 0 && (
-                          <>
-                            <span className="sr-only">{avisosFalados(n)}</span>
-                            <span className="nav-cont num" aria-hidden="true">
-                              {n > 99 ? '99+' : n}
-                            </span>
-                          </>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          );
-        })}
+        {principais.map(grupoNav)}
+        {nFerramentas > 0 && lite && (
+          <button
+            className="nav-item nav-mais"
+            type="button"
+            aria-expanded={ferramentasAbertas}
+            aria-controls={idFerramentas}
+            title="Mais ferramentas"
+            onClick={() => setFerramentasAbertas((a) => !a)}
+          >
+            <Icone nome="chevron-down" />
+            <span className="rot">Mais ferramentas</span>
+            <span className="nav-mais-n" aria-hidden="true">
+              {nFerramentas}
+            </span>
+            <span className="sr-only">{`, ${nFerramentas} ${nFerramentas === 1 ? 'ferramenta' : 'ferramentas'}`}</span>
+          </button>
+        )}
+        {nFerramentas > 0 && (
+          <div id={idFerramentas} hidden={lite && !ferramentasAbertas}>
+            {ferramentas.map(grupoNav)}
+          </div>
+        )}
+        {pessoais.map(grupoNav)}
       </nav>
 
       <div className="sb-rodape">
