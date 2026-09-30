@@ -11,6 +11,14 @@ const Id = z.string().min(1).max(100);
 /** A versão do recurso só cresce; número inteiro (até 2^53) ou texto de dígitos. */
 const Versao = z.union([z.number().int().min(0), z.string().regex(/^\d{1,19}$/)]).transform((v) => BigInt(v));
 const Texto = (max: number) => z.string().max(max);
+/**
+ * Percentual do cupom (contrato de cupons §3.1): texto com até 2 casas, maior que 0 e até 100 — a faixa que
+ * `liame.coupon` aceita. Cupom com percentual fora dela a origem manda como `tipo: "outro"`, sem percentual.
+ */
+const Percentual = z
+  .string()
+  .regex(/^\d{1,3}(\.\d{1,2})?$/)
+  .refine((v) => Number(v) > 0 && Number(v) <= 100, { message: 'percentual fora de (0, 100]' });
 
 export const LojaRegem = z.object({
   loja_id: Id,
@@ -112,7 +120,7 @@ export const CupomRegem = z.object({
   codigo: Texto(60).min(1),
   nome: Texto(300).nullable().optional(),
   tipo: z.enum(['percentual', 'valor', 'frete_gratis', 'outro']),
-  percentual: z.string().regex(/^\d{1,3}(\.\d{1,2})?$/).nullable().optional(),
+  percentual: Percentual.nullable().optional(),
   valor_centavos: Centavos.nullable().optional(),
   teto_desconto_centavos: Centavos.nullable().optional(),
   pedido_minimo_centavos: Centavos.nullable().optional(),

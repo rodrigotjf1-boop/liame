@@ -1,0 +1,36 @@
+{
+  "itens": [
+    {
+      "id": "bar-001",
+      "versao": 1,
+      "atualizado_em": "2026-09-29T12:00:01Z",
+      "canal": "balcao",
+      "grupo_canal": "presencial",
+      "situacao": "confirmado",
+      "moeda": "BRL",
+      "fuso": "America/Sao_Paulo",
+      "receita_centavos": 3000,
+      "desconto_loja_centavos": 530,
+      "estornado_centavos": 0,
+      "cupom": "barra15",
+      "cliente": null,
+      "criado_em": "2026-09-29T11:55:00Z",
+      "confirmado_em": "2026-09-29T12:00:00Z",
+      "faturado_em": "2026-09-29T11:55:00Z",
+      "cancelado_em": null,
+      "itens": [
+        {
+          "id": "it-1",
+          "produto_id": "p-9",
+          "nome": "Burger da casa",
+          "quantidade": "1",
+          "receita_centavos": 3000,
+          "custo_centavos": null
+        }
+      ],
+      "origem": null
+    }
+  ],
+  "proximo_cursor": "bar-c1",
+  "tem_mais": false
+}
