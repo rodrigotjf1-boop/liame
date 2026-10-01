@@ -46,7 +46,7 @@ import {
 // "Revogar" por loja — o Regem só é oferecido quando a API diz que dá para conectar (`available`).
 // Nenhum token passa pelo navegador; quem pode ver e conectar é o servidor que decide.
 
-type Dados = { marcas: BrandResponse[]; conexoes: ConnectionResponse[]; contas: AccountFreshness[]; disponiveis: string[] };
+type Dados = { marcas: BrandResponse[]; conexoes: ConnectionResponse[]; contas: AccountFreshness[]; disponiveis: string[]; escritaRegem: boolean };
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: Dados } | { tipo: 'erro'; problema: Problema };
 type Dialogo =
   | { tipo: 'conectar'; marca: string | null }
@@ -88,7 +88,7 @@ export function ContasTela() {
     if (!m.ok) return setEstado({ tipo: 'erro', problema: m.problema });
     if (!c.ok) return setEstado({ tipo: 'erro', problema: c.problema });
     if (!f.ok) return setEstado({ tipo: 'erro', problema: f.problema });
-    setEstado({ tipo: 'ok', dados: { marcas: m.data.items.filter((b) => !b.archived_at), conexoes: c.data.items, contas: f.data.items, disponiveis: c.data.available } });
+    setEstado({ tipo: 'ok', dados: { marcas: m.data.items.filter((b) => !b.archived_at), conexoes: c.data.items, contas: f.data.items, disponiveis: c.data.available, escritaRegem: c.data.regem_write } });
   }, []);
 
   useEffect(() => {
@@ -410,6 +410,7 @@ export function ContasTela() {
                   aoEscolher={c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length ? () => setDialogo({ tipo: 'escolher', conexao: c }) : null}
                   aoConectar={podeRegem ? () => setDialogo({ tipo: 'regem', marca: c.brand_id }) : null}
                   aoRevogar={() => setDialogo({ tipo: 'revogar', conexao: c })}
+                  escritaLigada={Boolean(dados?.escritaRegem)}
                 />
               ) : (
               <CartaoAutorizacao
@@ -453,6 +454,7 @@ export function ContasTela() {
           conexao={dialogo.conexao}
           existentes={existentes}
           reserva={titulo}
+          escritaLigada={Boolean(dados?.escritaRegem)}
           aoFechar={() => setDialogo(null)}
           aoLigar={(texto) => {
             avisar(texto);

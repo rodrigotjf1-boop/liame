@@ -352,9 +352,11 @@ export function motivoSemCusto(origem: string): string {
 }
 
 /** "O que o Liame recebe": cada escopo do protótipo com a situação dele, mais os liberados fora da lista. */
-export function escoposDoRegem(scopes: string[], origem: string): EscopoDaLoja[] {
+export function escoposDoRegem(scopes: string[], origem: string, escritaLigada = false): EscopoDaLoja[] {
   const lista: EscopoDaLoja[] = ESCOPOS_REGEM.map((e) => {
     if (!scopes.includes(e.cod)) return { cod: e.cod, rotulo: e.rotulo, texto: e.financeiro ? motivoSemCusto(origem) : e.texto, estado: 'nao_liberado' };
+    // A escrita (criar cupom) só vale quando a empresa a tem ligada no Liame; a loja já ter liberado não basta.
+    if (e.escrita && escritaLigada) return { cod: e.cod, rotulo: e.rotulo, texto: 'Criar cupom de campanha pelo Liame, sempre com aprovação de alguém da sua empresa.', estado: 'liberado' };
     return { cod: e.cod, rotulo: e.rotulo, texto: e.texto, estado: e.escrita ? 'desligado' : 'liberado' };
   });
   const conhecidos = new Set(ESCOPOS_REGEM.map((e) => e.cod));
@@ -459,8 +461,8 @@ export const NUNCA_VEM_DO_REGEM = [
 ];
 
 /** As etiquetas do que a loja libera, no diálogo de ligar as lojas: liberado, desligado no Liame ou não liberado. */
-export function chipsDoRegem(scopes: string[], origem: string): { cod: string; texto: string; classe: string }[] {
-  return escoposDoRegem(scopes, origem).map((e) => ({
+export function chipsDoRegem(scopes: string[], origem: string, escritaLigada = false): { cod: string; texto: string; classe: string }[] {
+  return escoposDoRegem(scopes, origem, escritaLigada).map((e) => ({
     cod: e.cod,
     texto: e.estado === 'nao_liberado' ? `${e.rotulo}: não liberado` : e.estado === 'desligado' ? `${e.rotulo} · desligado no Liame` : e.rotulo,
     classe: e.estado === 'nao_liberado' ? 'st--aguardando' : e.estado === 'desligado' ? 'st--espera' : 'st--concluido',

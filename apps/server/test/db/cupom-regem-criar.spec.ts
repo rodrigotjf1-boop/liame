@@ -242,6 +242,7 @@ describe.skipIf(!hasDb)('criar cupom no Regem com aprovação (A2.5 · F6 parte 
     const lista = await listar();
     expect(lista.status).toBe(200);
     expect(lista.body.create_in_regem).toBe(false);
+    expect((await api.call('GET', '/v1/connections', { cookie: e.cookie })).body.regem_write).toBe(false);
     expect(lista.body.requests).toEqual([]);
     expect((lista.body.stores as { unit: { name: string }; can_create: boolean }[]).map((l) => [l.unit.name, l.can_create])).toEqual([
       ['Loja Centro', true],
@@ -257,6 +258,8 @@ describe.skipIf(!hasDb)('criar cupom no Regem com aprovação (A2.5 · F6 parte 
   it('pedir → aguardando aprovação na lista (nada no Regem) → aprovar com o código do app → o worker cria no Regem e o cupom aparece ligado à campanha', async () => {
     await ligarFlag(true);
     expect((await listar()).body.create_in_regem).toBe(true);
+    // Contas conectadas sabe pela mesma flag que a permissão "criar cupom" liberada pela loja já vale.
+    expect((await api.call('GET', `/v1/connections?brand_id=${e.brandId}`, { cookie: e.cookie })).body.regem_write).toBe(true);
 
     const r = await pedir({ code: ' sexta15 ', min_order_micros: '50000000' });
     expect(r.status).toBe(201);
@@ -500,6 +503,69 @@ describe.skipIf(!hasDb)('criar cupom no Regem com aprovação (A2.5 · F6 parte 
     const volta = await api.call('POST', '/v1/policies', { cookie: e.cookie, body: { document: { rules: [{ type: 'autonomy', action: 'cupom.criar', mode: 'APPROVAL' }] } } });
     expect(volta.status).toBe(201);
     expect((await pedir({ code: 'SOMBRA10' })).status).toBe(201);
+  });
+
+  it('recusar: quem pode aprovar recusa com o motivo e o plano visto; o pedido volta como recusado na aba Cupons, nada vai ao Regem e a auditoria guarda quem recusou', async () => {
+    await ligarFlag(true);
+    const r = await pedir({ code: 'RECUSA10' });
+    const id = r.body.request.action_id as string;
+    const a = await acao(id);
+    // O pedido leva o que a tela Aprovações mostra: quem pediu, a loja do alvo e a campanha.
+    expect(a).toMatchObject({
+      requested_by: { id: e.userId, name: 'Pessoa de Teste' },
+      account_name: 'Loja Centro',
+      campaign: { id: e.C1, name: 'Combo sexta', provider: 'meta_ads', status: 'ativa' },
+    });
+    expect(Date.parse((a as unknown as { updated_at: string }).updated_at)).not.toBeNaN();
+    const recusar = (corpo: Record<string, unknown>, cookie = e.cookie) => api.call('POST', `/v1/actions/${id}/reject`, { cookie, body: corpo });
+    expect((await recusar({ plan_hash: a.plan_hash, reason: 'x' })).status).toBe(400);
+    expect((await recusar({ reason: 'Desconto alto demais' })).status).toBe(400);
+    const trocado = await recusar({ plan_hash: 'f'.repeat(64), reason: 'Desconto alto demais' });
+    expect([trocado.status, trocado.body.code]).toEqual([409, 'plano-mudou']);
+
+    // Quem só lê não recusa; o Aprovador (aprova e recusa, sem operar campanha nem pedir cupom) recusa, sem código do app.
+    const convidar = async (papel: string, nome: string, extra: Record<string, unknown> = {}) => {
+      const email = uniqueEmail(nome.split(' ')[0]!.toLowerCase());
+      expect((await api.call('POST', '/v1/invitations', { cookie: e.cookie, body: { email, role: papel, ...extra } })).status).toBe(201);
+      const s = await api.call('POST', '/v1/invitations/signup', { body: { token: tokenFrom(api.mailer, email), name: nome, password: PASSWORD, terms_version: TERMOS } });
+      expect(s.status).toBe(200);
+      return s.cookie!;
+    };
+    const leitor = await convidar('somente_leitura', 'Leo Leitor');
+    expect((await recusar({ plan_hash: a.plan_hash, reason: 'Desconto alto demais' }, leitor)).body.code).toBe('sem-permissao');
+    // O convite de Aprovador pede o limite de aprovação por ação.
+    const aprovador = await convidar('aprovador', 'Ana Aprovadora', { approve_limit_micros: 100_000_000 });
+    // Quem pode aprovar só age com o app autenticador ativo (recusar não pede o código, mas a conta precisa dele).
+    expect((await recusar({ plan_hash: a.plan_hash, reason: 'Desconto alto demais' }, aprovador)).body.code).toBe('segundo-fator-nao-configurado');
+    await enableMfa(api, aprovador);
+    expect((await pedir({ code: 'APROVA10' }, aprovador)).body.code).toBe('sem-permissao');
+    const feito = await recusar({ plan_hash: a.plan_hash, reason: '  Desconto alto demais ' }, aprovador);
+    expect([feito.status, feito.body.status, feito.body.status_reason]).toEqual([200, 'cancelada', 'recusada por Ana Aprovadora: Desconto alto demais']);
+    expect(feito.body.workflow).toMatchObject({ status: 'cancelado' });
+    const deNovo = await recusar({ plan_hash: a.plan_hash, reason: 'Desconto alto demais' }, aprovador);
+    expect([deNovo.status, deNovo.body.code]).toEqual([409, 'acao-nao-aguarda']);
+
+    // Na aba Cupons, quem pediu vê que foi recusado, por quem e por quê; nada foi ao Regem.
+    expect((await pedidosDaLista()).find((p) => p.code === 'RECUSA10')).toMatchObject({ action_id: id, status: 'recusada', status_reason: 'recusada por Ana Aprovadora: Desconto alto demais' });
+    await ciclo();
+    expect(chamadasDe('RECUSA10')).toEqual([]);
+    const trilha = await ownerQuery<{ action: string; actor_label: string; after: Record<string, unknown> }>(
+      `select action, actor_label, after from liame.audit_event where chain_key = $1 and resource_id = $2 order by chain_seq`,
+      [e.tenantId, id],
+    );
+    expect(trilha.map((t) => t.action)).toEqual(['cupom.pedir_criacao', 'acao.recusar']);
+    expect(trilha[1]).toMatchObject({ after: { status: 'cancelada', recusada: true, reason: 'Desconto alto demais' } });
+    const eventos = await ownerQuery<{ type: string; data: { rejected?: boolean } }>(`select type, data from liame.outbox_event where subject = $1 order by created_at`, [id]);
+    expect(eventos.map((x) => [x.type, x.data.rejected ?? null])).toEqual([
+      ['liame.action.requested', null],
+      ['liame.action.cancelled', true],
+    ]);
+
+    // O pedido recusado não trava o código: pedir de novo tira o recusado da lista.
+    const outro = await pedir({ code: 'RECUSA10' });
+    expect(outro.status).toBe(201);
+    expect((await pedidosDaLista()).filter((p) => p.code === 'RECUSA10').map((p) => p.status)).toEqual(['aguardando_aprovacao']);
+    expect((await cancelar(outro.body.request.action_id)).status).toBe(204);
   });
 
   it('permissão e isolamento: Somente leitura vê os pedidos, mas não pede nem cancela; outra empresa não pede na loja desta nem cancela o pedido desta (A1-3)', async () => {

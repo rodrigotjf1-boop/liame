@@ -18,13 +18,15 @@ type Props = {
   /** Dá para conectar o Regem de novo (a API diz que está disponível): o botão da autorização revogada. */
   aoConectar: (() => void) | null;
   aoRevogar: () => void;
+  /** Criar cupom no Regem pelo Liame está ligado para a empresa (a permissão liberada pela loja passa a valer). */
+  escritaLigada?: boolean;
 };
 
 const ROTULO = { liberado: 'Liberado', nao_liberado: 'Não liberado', desligado: 'Liberado · desligado no Liame' } as const;
 const TOM = { liberado: 'st--concluido', nao_liberado: 'st--aguardando', desligado: 'st--espera' } as const;
 const ICONE = { liberado: 'check', nao_liberado: 'alert', desligado: 'lock' } as const;
 
-export function CartaoAutorizacaoRegem({ conexao: c, podeConectar, aoEscolher, aoConectar, aoRevogar }: Props) {
+export function CartaoAutorizacaoRegem({ conexao: c, podeConectar, aoEscolher, aoConectar, aoRevogar, escritaLigada = false }: Props) {
   const [aberto, setAberto] = useState(false);
   const id = useId();
   const n = contasDaAutorizacao(c);
@@ -69,7 +71,7 @@ export function CartaoAutorizacaoRegem({ conexao: c, podeConectar, aoEscolher, a
       )}
       <div className="aut-escopos" id={id} hidden={!aberto}>
         <ul className="escopos">
-          {escoposDoRegem(c.scopes, c.origin).map((e) => (
+          {escoposDoRegem(c.scopes, c.origin, escritaLigada).map((e) => (
             <li key={e.cod} className={`escopo escopo--${e.estado}`}>
               <Icone nome={ICONE[e.estado]} pequeno />
               <div>

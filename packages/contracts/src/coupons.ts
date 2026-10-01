@@ -145,9 +145,9 @@ export const CouponRequest = z.strictObject({
   /** A campanha do cupom; nula se ela saiu da lista depois do pedido. */
   campaign: CouponCampaign.nullable(),
   exclusive: z.boolean(),
-  /** `aguardando_aprovacao`, `aprovada`, `executando` (o Liame está criando no Regem), `falhou` ou `expirada`. */
+  /** `aguardando_aprovacao`, `aprovada`, `executando` (o Liame está criando no Regem), `falhou`, `expirada` ou `recusada` (por quem aprova). */
   status: Slug,
-  /** O motivo, quando o pedido falhou ou expirou. */
+  /** O motivo, quando o pedido falhou, expirou ou foi recusado (`recusada por <nome>: <motivo>`). */
   status_reason: z.string().nullable(),
   requested_by: z.strictObject({ id: z.uuid(), name: z.string() }),
   requested_at: z.string(),
@@ -162,8 +162,8 @@ export const CouponListResponse = z.strictObject({
   /** Cupons das lojas da marca (sem os apagados na origem): ligados primeiro, depois por código. */
   items: z.array(CouponItem),
   /**
-   * Pedidos de criação no Regem em andamento (esperando aprovação ou sendo criados) e os que falharam ou
-   * expiraram nos últimos 3 dias sem que o cupom exista. Os mais novos primeiro.
+   * Pedidos de criação no Regem em andamento (esperando aprovação ou sendo criados) e os que falharam, expiraram
+   * ou foram recusados nos últimos 3 dias sem que o cupom exista. Os mais novos primeiro.
    */
   requests: z.array(CouponRequest),
   /** Campanhas ativas e pausadas da Meta e do Google Ads da marca (para ligar e para a conferência de cupom). */

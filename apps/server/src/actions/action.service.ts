@@ -6,6 +6,7 @@ import type {
   AutonomyMode,
   CreateActionRequest,
   PolicyDecision,
+  RejectActionRequest,
   SandboxResourceRequest,
   SandboxResourceResponse,
   UpdateActionRequest,
@@ -13,6 +14,7 @@ import type {
 import { type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { canonicalJson, sha256 } from '../audit/audit.js';
 import { MfaService } from '../auth/mfa.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
@@ -61,7 +63,15 @@ export type ActionRow = {
   requested_by: string;
   expires_at: Date | string;
   created_at: Date | string;
+  updated_at: Date | string;
 };
+
+/** O que a tela mostra de cada pedido e não mora na linha dele: quem pediu, a conta do alvo e a campanha citada. */
+type Apresentacao = { pessoas: Map<string, string>; contas: Map<string, string>; campanhas: Map<string, NonNullable<ActionResponse['campaign']>> };
+
+/** Como a recusa fica gravada no motivo do pedido (a aba Cupons e a tela Aprovações reconhecem por aqui). */
+export const PREFIXO_RECUSA = 'recusada por ';
+const ehUuid = (v: unknown): v is string => z.uuid().safeParse(v).success;
 
 type ApprovalRow = {
   action_request_id: string;
@@ -231,6 +241,38 @@ export class ActionService {
     return this.get(auth, id);
   }
 
+  /**
+   * Recusar (quem pode aprovar): o pedido sai da fila, a reserva volta ao envelope e nada é executado. O motivo
+   * fica no pedido, com o nome de quem recusou, e na auditoria. Não pede o código do app: recusar não executa nada.
+   */
+  async reject(auth: AuthContext, id: string, input: RejectActionRequest): Promise<ActionResponse> {
+    const tx = currentTx();
+    const tenantId = tenantOf(auth);
+    const row = await this.lock(tx, tenantId, id);
+    if (row.status !== 'aguardando_aprovacao') {
+      throw new AppProblem(409, 'acao-nao-aguarda', 'Não espera aprovação', 'Este pedido não está esperando aprovação.');
+    }
+    if (row.plan_hash !== input.plan_hash) {
+      throw new AppProblem(409, 'plano-mudou', 'O plano mudou', 'O pedido foi alterado depois que você abriu. Confira o plano novo antes de recusar.');
+    }
+    const motivo = `${PREFIXO_RECUSA}${auth.name}: ${input.reason}`;
+    await tx.execute(sql`update liame.action_request set status = 'cancelada', status_reason = ${motivo}, updated_at = now() where id = ${id}`);
+    const released = await this.budget.release(tx, tenantId, id);
+    await advance(tx, {
+      tenantId,
+      kind: 'acao',
+      subjectId: id,
+      steps: [
+        { name: 'aprovacao', status: 'falhou', output: { motivo: 'recusada', por: auth.userId } },
+        { name: 'execucao', status: 'pulado', output: { motivo: 'recusada' } },
+      ],
+      run: 'cancelado',
+    });
+    await emitEvent(tx, { tenantId, type: 'liame.action.cancelled', subject: id, data: { action_id: id, rejected: true } });
+    auditDetail({ before: { status: row.status, plan_hash: row.plan_hash }, after: { status: 'cancelada', recusada: true, reason: input.reason, released_micros: released } });
+    return this.get(auth, id);
+  }
+
   async cancel(auth: AuthContext, id: string): Promise<ActionResponse> {
     const tx = currentTx();
     const tenantId = tenantOf(auth);
@@ -252,8 +294,8 @@ export class ActionService {
       select * from liame.action_request where tenant_id = ${tenantOf(auth)} ${status ? sql`and status = ${status}` : sql``}
        order by created_at desc limit 100`);
     const ids = r.rows.map((x) => x.id);
-    const [approvals, flows] = [await this.approvalsOf(tx, ids), await workflowOf(tx, 'acao', ids)];
-    return r.rows.map((row) => toResponse(row, approvals, flows.get(row.id) ?? null));
+    const [approvals, flows, ap] = [await this.approvalsOf(tx, ids), await workflowOf(tx, 'acao', ids), await this.apresentacaoDe(tx, r.rows)];
+    return r.rows.map((row) => toResponse(row, approvals, flows.get(row.id) ?? null, ap));
   }
 
   async get(auth: AuthContext, id: string): Promise<ActionResponse> {
@@ -261,7 +303,7 @@ export class ActionService {
     const r = await tx.execute<ActionRow>(sql`select * from liame.action_request where id = ${id} and tenant_id = ${tenantOf(auth)}`);
     const row = r.rows[0];
     if (!row) throw notFound();
-    return toResponse(row, await this.approvalsOf(tx, [id]), (await workflowOf(tx, 'acao', [id])).get(id) ?? null);
+    return toResponse(row, await this.approvalsOf(tx, [id]), (await workflowOf(tx, 'acao', [id])).get(id) ?? null, await this.apresentacaoDe(tx, [row]));
   }
 
   // ------------------------------------------------------------------ sandbox
@@ -394,6 +436,29 @@ export class ActionService {
     if (!b.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
   }
 
+  /** Os nomes que a tela precisa, lidos de uma vez para a página inteira (sob a RLS da empresa). */
+  private async apresentacaoDe(tx: Tx, rows: ActionRow[]): Promise<Apresentacao> {
+    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map() };
+    if (!rows.length) return ap;
+    const pessoas = [...new Set(rows.map((r) => r.requested_by))];
+    const contas = [...new Set(rows.map((r) => r.account_id).filter(ehUuid))];
+    const campanhas = [...new Set(rows.map((r) => r.params.campaign_id).filter(ehUuid))];
+    const u = await tx.execute<{ id: string; name: string }>(sql`select id, name from liame.app_user where id in ${pessoas}`);
+    for (const l of u.rows) ap.pessoas.set(l.id, l.name);
+    if (contas.length) {
+      // A loja do Liame, quando a conta é de uma loja; senão, o nome da conta conectada.
+      const a = await tx.execute<{ id: string; name: string }>(sql`
+        select a.id, coalesce(un.name, a.name) as name from liame.connected_account a left join liame.unit un on un.id = a.unit_id where a.id in ${contas}`);
+      for (const l of a.rows) ap.contas.set(l.id, l.name);
+    }
+    if (campanhas.length) {
+      const c = await tx.execute<{ id: string; name: string; provider: string; status: string }>(sql`
+        select id, name, provider, status from liame.campaign where id in ${campanhas}`);
+      for (const l of c.rows) ap.campanhas.set(l.id, l);
+    }
+    return ap;
+  }
+
   private async approvalsOf(tx: Tx, ids: string[]): Promise<ApprovalRow[]> {
     if (!ids.length) return [];
     const r = await tx.execute<ApprovalRow>(sql`
@@ -462,7 +527,8 @@ function flowAfterRequest(
   return { steps: [policy, budget, { name: 'aprovacao', status: 'aguardando' }], run: 'aguardando' };
 }
 
-function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionResponse['workflow']): ActionResponse {
+function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionResponse['workflow'], ap: Apresentacao): ActionResponse {
+  const campanha = row.params.campaign_id;
   return {
     id: row.id,
     tool: row.tool,
@@ -495,6 +561,10 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     workflow,
     expires_at: new Date(row.expires_at).toISOString(),
     created_at: new Date(row.created_at).toISOString(),
+    updated_at: new Date(row.updated_at).toISOString(),
+    requested_by: { id: row.requested_by, name: ap.pessoas.get(row.requested_by) ?? 'Pessoa removida' },
+    account_name: ap.contas.get(row.account_id) ?? null,
+    campaign: typeof campanha === 'string' ? (ap.campanhas.get(campanha) ?? null) : null,
   };
 }
 

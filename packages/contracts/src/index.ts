@@ -89,6 +89,7 @@ export {
   BudgetPolicyRequest,
   BudgetResponse,
   CreateActionRequest,
+  RejectActionRequest,
   SandboxResourceRequest,
   SandboxResourceResponse,
   UpdateActionRequest,
