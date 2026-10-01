@@ -12,8 +12,8 @@ import { type CredencialRegem, hashEstado } from './oauth.js';
 
 // Piloto (D-A2.5-4): a distribuição emite o token da loja no produto DMS e o grava direto no cofre do
 // Liame, sem passar pelo usuário. A conexão nasce como as da autorização, só que com origem
-// `distribuicao` e já com as lojas descobertas: a pessoa liga cada loja à loja do Liame na tela
-// "Contas conectadas", como faz com as contas da Meta e do Google.
+// `distribuicao` e já com as lojas descobertas: a pessoa liga cada loja na tela "Contas conectadas", como
+// faz com as contas da Meta e do Google, e a loja do Regem ganha ali a loja do Liame dela (ERR-047).
 
 export type RegistroDistribuicao = {
   tenantId: string;

@@ -263,6 +263,36 @@ export class ConnectionsService {
         throw new AppProblem(422, 'loja-fora-da-marca', 'Loja fora desta marca', 'Escolha uma loja da marca desta conexão.', {}, erradas.map((u) => ({ path: 'accounts.unit_id', message: u })));
       }
     }
+    // A loja do Regem é uma loja do Liame (o link, o cupom e a plataforma de pedidos são por loja): sem loja
+    // escolhida, ela fica com a que a conta já tinha, com a loja da marca de mesmo nome ou com uma loja nova,
+    // com o nome e o fuso dela. Sem isso, a conta nascia sem loja e não havia onde criar uma (ERR-047).
+    const lojasCriadas: { id: string; name: string }[] = [];
+    const semLoja = escolhidas.filter((d) => d.provider === 'regem' && !lojaDe.has(`${d.provider}:${d.external_id}`));
+    if (semLoja.length) {
+      const daConta = await tx.execute<{ external_id: string; unit_id: string }>(sql`
+        select external_id, unit_id from liame.connected_account
+         where provider = 'regem' and brand_id = ${c.brand_id} and disconnected_at is null and unit_id is not null
+           and external_id in ${semLoja.map((d) => d.external_id)}`);
+      const jaTem = new Map(daConta.rows.map((l) => [l.external_id, l.unit_id]));
+      const daMarca = await tx.execute<{ id: string; chave: string }>(sql`
+        select id, lower(btrim(name)) as chave from liame.unit where brand_id = ${c.brand_id} order by created_at, id`);
+      const porNome = new Map<string, string>();
+      for (const u of daMarca.rows) if (!porNome.has(u.chave)) porNome.set(u.chave, u.id);
+      for (const d of semLoja) {
+        const chave = `${d.provider}:${d.external_id}`;
+        const nome = d.name.trim().slice(0, 200) || 'Loja';
+        let unitId = jaTem.get(d.external_id) ?? porNome.get(nome.toLowerCase());
+        if (!unitId) {
+          unitId = uuidv7();
+          lojasCriadas.push({ id: unitId, name: nome });
+          porNome.set(nome.toLowerCase(), unitId);
+          await tx.execute(sql`
+            insert into liame.unit (id, tenant_id, brand_id, name, timezone)
+            values (${unitId}, ${c.tenant_id}, ${c.brand_id}, ${nome}, ${d.timezone || 'America/Sao_Paulo'})`);
+        }
+        lojaDe.set(chave, unitId);
+      }
+    }
     const linhas = escolhidas.map((d) => ({
       id: uuidv7(),
       unit_id: lojaDe.get(`${d.provider}:${d.external_id}`) ?? null,
@@ -293,7 +323,10 @@ export class ConnectionsService {
     if (inseridas.rows.length) {
       await tx.execute(sql`update liame.oauth_connection set status = 'ativa', completed_at = coalesce(completed_at, now()), updated_at = now() where id = ${c.id}`);
     }
-    auditDetail({ resourceId: c.id, after: { contas: inseridas.rows.map((l) => `${l.provider}:${l.external_id}`) } });
+    auditDetail({
+      resourceId: c.id,
+      after: { contas: inseridas.rows.map((l) => `${l.provider}:${l.external_id}`), ...(lojasCriadas.length ? { lojas_criadas: lojasCriadas } : {}) },
+    });
     return {
       linked: inseridas.rows.map(conta),
       already_linked: escolhidas.filter((d) => !novas.has(`${d.provider}:${d.external_id}`)).map((d) => ({ provider: d.provider, external_id: d.external_id })),

@@ -15,7 +15,7 @@ import { VaultService } from '../vault/vault.service.js';
 //   node dist/scripts/conectar-produto.js --empresa <uuid> --marca <uuid> --produto regem < tokens.txt
 //
 // Os tokens entram pela entrada padrão, um por linha: nunca como argumento (histórico do terminal) nem
-// em log. Depois, a pessoa liga a loja à loja do Liame na tela "Contas conectadas".
+// em log. Depois, a pessoa liga a loja na tela "Contas conectadas", e a loja do Liame nasce com o nome dela.
 
 @Module({ imports: [DatabaseModule, VaultModule], providers: [{ provide: APP_CONFIG, useFactory: () => loadConfig() }] })
 class DistribuicaoModule {}
@@ -45,7 +45,7 @@ async function main(): Promise<void> {
       { tenantId: values.empresa, brandId: values.marca, produto: 'regem', tokens },
     );
     console.log(`conexão ${r.connectionId} registrada com ${r.lojas.length} loja(s): ${r.lojas.map((l) => l.name).join(', ')}`);
-    console.log('próximo passo: no Liame, tela Contas conectadas, ligar cada loja à loja do Liame.');
+    console.log('próximo passo: no Liame, tela Contas conectadas, ligar cada loja (a loja do Liame é criada com o nome dela).');
   } finally {
     await app.close();
   }

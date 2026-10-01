@@ -88,7 +88,7 @@ touchpoint (clique/visita/conversa) ─→ identity_link ─→ customer_ref ─
 
 **Vendas (A2.5 · F1, migration 0021; ADR-019):**
 
-- `connected_account.unit_id` liga a loja do Regem (ou a conta do RegemCast) à loja do Liame.
+- `connected_account.unit_id` liga a loja do Regem (ou a conta do RegemCast) à loja do Liame. A loja do Regem ligada sem loja escolhida ganha a dela: a que a conta já tinha, a da marca com o mesmo nome ou uma nova com o nome e o fuso da loja (#71; a migration 0027 fez o mesmo para as já ligadas e apontou os pedidos lidos para ela). O link, o cupom informado e a plataforma de pedidos são por loja do Liame.
 - `order_fact`:
   - canal e grupo do canal (`cardapio`, `whatsapp`, `presencial`, `marketplace`, `outro`), situação (`confirmado` ou `cancelado`);
   - receita pela definição única do Regem, desconto e estorno **em micros**, cupom, `confirmed_at` e fuso da loja;
