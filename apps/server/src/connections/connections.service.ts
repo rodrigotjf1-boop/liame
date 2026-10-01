@@ -11,7 +11,7 @@ import type {
 } from '@liame/contracts';
 import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { type AuthContext, afterCommit, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
@@ -43,6 +43,7 @@ type LinhaConexao = {
   expires_at: Date | string;
   discovered: DescobertaGuardada[];
   credential_secret_id: string | null;
+  scopes?: string[] | null;
 };
 
 /** Conta descoberta, como o worker guarda em `oauth_connection.discovered`. */
@@ -67,11 +68,19 @@ type LinhaConta = {
   status: string;
   status_reason: string | null;
   unit_id: string | null;
+  unit_name?: string | null;
+  escopos?: string[] | null;
   connected_at: Date | string;
   disconnected_at: Date | string | null;
 };
 
 const iso = (v: Date | string) => new Date(v).toISOString();
+
+/** A loja do Liame da conta e o que a loja do Regem libera (os escopos do token dela), para a tela de Contas (P2). */
+const lojaEEscopos = (tabela: SQL) => sql`
+  (select u.name from liame.unit u where u.id = ${tabela}.unit_id) as unit_name,
+  array(select jsonb_array_elements_text(case when jsonb_typeof(${tabela}.provider_attributes -> 'escopos') = 'array'
+                                              then ${tabela}.provider_attributes -> 'escopos' else '[]'::jsonb end)) as escopos`;
 const isoOuNulo = (v: Date | string | null) => (v ? iso(v) : null);
 
 const naoEncontrada = () => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conexão não encontrada nesta empresa.');
@@ -89,6 +98,8 @@ function conta(l: LinhaConta): ConnectedAccountResponse {
     status: l.status,
     status_reason: l.status_reason,
     unit_id: l.unit_id,
+    unit_name: l.unit_name ?? null,
+    scopes: l.escopos ?? [],
     connected_at: iso(l.connected_at),
     disconnected_at: isoOuNulo(l.disconnected_at),
   };
@@ -177,7 +188,7 @@ export class ConnectionsService {
     const tx = currentTx();
     const conexoes = await tx.execute<LinhaConexao>(sql`
       select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
-             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.status not in ('aguardando_autorizacao', 'expirada') ${brandId ? sql`and c.brand_id = ${brandId}` : sql``}
        order by c.created_at desc limit 200`);
@@ -187,7 +198,7 @@ export class ConnectionsService {
   async detalhe(id: string): Promise<ConnectionResponse> {
     const r = await currentTx().execute<LinhaConexao>(sql`
       select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
-             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.id = ${id}`);
     if (!r.rows[0]) throw naoEncontrada();
@@ -198,10 +209,11 @@ export class ConnectionsService {
   private async montar(linhas: LinhaConexao[]): Promise<ConnectionResponse[]> {
     if (!linhas.length) return [];
     const contas = await currentTx().execute<LinhaConta>(sql`
-      select id, brand_id, connection_id, provider, external_id, name, currency, timezone, status, status_reason, unit_id, connected_at, disconnected_at
-        from liame.connected_account
-       where connection_id in ${linhas.map((l) => l.id)} or disconnected_at is null
-       order by connected_at`);
+      select a.id, a.brand_id, a.connection_id, a.provider, a.external_id, a.name, a.currency, a.timezone, a.status, a.status_reason, a.unit_id,
+             ${lojaEEscopos(sql`a`)}, a.connected_at, a.disconnected_at
+        from liame.connected_account a
+       where a.connection_id in ${linhas.map((l) => l.id)} or a.disconnected_at is null
+       order by a.connected_at`);
     const ligadas = new Set(contas.rows.filter((c) => !c.disconnected_at).map((c) => `${c.provider}:${c.external_id}`));
     return linhas.map((l) => ({
       id: l.id,
@@ -214,6 +226,7 @@ export class ConnectionsService {
       created_at: iso(l.created_at),
       completed_at: isoOuNulo(l.completed_at),
       refresh_expires_at: isoOuNulo(l.refresh_expires_at),
+      scopes: l.scopes ?? [],
       discovered: (l.discovered ?? []).map(
         (d): DiscoveredAccount => ({
           provider: d.provider,
@@ -318,7 +331,8 @@ export class ConnectionsService {
                     provider_attributes = excluded.provider_attributes, status = 'ativa', status_reason = null, updated_at = now()
        where liame.connected_account.brand_id = excluded.brand_id
          and liame.connected_account.connection_id is distinct from excluded.connection_id
-      returning id, brand_id, connection_id, provider, external_id, name, currency, timezone, status, status_reason, unit_id, connected_at, disconnected_at`);
+      returning id, brand_id, connection_id, provider, external_id, name, currency, timezone, status, status_reason, unit_id,
+                ${lojaEEscopos(sql`liame.connected_account`)}, connected_at, disconnected_at`);
     const novas = new Set(inseridas.rows.map((l) => `${l.provider}:${l.external_id}`));
     if (inseridas.rows.length) {
       await tx.execute(sql`update liame.oauth_connection set status = 'ativa', completed_at = coalesce(completed_at, now()), updated_at = now() where id = ${c.id}`);

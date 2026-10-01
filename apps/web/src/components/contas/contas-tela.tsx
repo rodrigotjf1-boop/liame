@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
+import { Faixa as FaixaDeAviso } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
@@ -12,15 +13,31 @@ import { useContadorAtencao } from '@/lib/contador-atencao';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
 import { CartaoAutorizacao } from './cartao-autorizacao';
+import { CartaoAutorizacaoRegem } from './cartao-autorizacao-regem';
 import { DialogoConectar } from './dialogo-conectar';
 import { DialogoEscolher } from './dialogo-escolher';
 import { DialogoRevogar } from './dialogo-revogar';
 import { FaixaVolta } from './faixa-volta';
 import { type ContaDaTabela, LinhaConta } from './linha-conta';
-import { autorizacoesVisiveis, autorizadorDa, type ContaExistente, emConferencia, escolhiveis, type Faixa, faixaDaVolta, lerVolta, situacaoDaConta } from './textos';
+import {
+  autorizacoesVisiveis,
+  autorizadorDa,
+  type ContaExistente,
+  emConferencia,
+  escolhiveis,
+  type Faixa,
+  faixaDaVolta,
+  faixaDoRegem,
+  lerVolta,
+  semCusto,
+  situacaoDaConta,
+  situacaoDaLoja,
+  subDaLoja,
+} from './textos';
 
-// "Contas conectadas" (mockups/prototipo-contas.html): as plataformas de onde a equipe lê os números,
-// com o frescor de cada conta, as autorizações e a volta do OAuth (escolher, conferindo, recusada).
+// "Contas conectadas" (mockups/prototipo-contas.html e, para as lojas do Regem, prototipo-contas-regem.html,
+// P2): as plataformas de onde a equipe lê os números, com o frescor de cada conta, as autorizações e a volta
+// do OAuth (escolher, conferindo, recusada). A loja do Regem mostra a leitura dos pedidos e o que ela libera.
 // Nenhum token passa pelo navegador; quem pode ver e conectar é o servidor que decide.
 
 type Dados = { marcas: BrandResponse[]; conexoes: ConnectionResponse[]; contas: AccountFreshness[] };
@@ -121,20 +138,40 @@ export function ContasTela() {
     [dados, empresa],
   );
 
-  const linhas = useMemo<ContaDaTabela[]>(() => {
+  const linhas = useMemo<(ContaDaTabela & { loja?: { scopes: string[]; origem: string } })[]>(() => {
     if (!dados) return [];
     const ligadas = new Map(dados.conexoes.flatMap((c) => c.accounts).map((a) => [a.id, a]));
     const variasMarcas = new Set(dados.contas.map((c) => c.brand_id)).size > 1;
-    return dados.contas.map((c) => ({
-      id: c.connected_account_id,
-      nome: c.name,
-      provider: c.provider,
-      externalId: ligadas.get(c.connected_account_id)?.external_id ?? null,
-      marca: variasMarcas ? (dados.marcas.find((m) => m.id === c.brand_id)?.name ?? null) : null,
-      brandId: c.brand_id,
-      situacao: situacaoDaConta(c),
-    }));
-  }, [dados]);
+    const origemDa = new Map(dados.conexoes.map((c) => [c.id, c.origin]));
+    return dados.contas.map((c) => {
+      const ligada = ligadas.get(c.connected_account_id);
+      const base = {
+        id: c.connected_account_id,
+        nome: c.name,
+        provider: c.provider,
+        externalId: ligada?.external_id ?? null,
+        marca: variasMarcas ? (dados.marcas.find((m) => m.id === c.brand_id)?.name ?? null) : null,
+        brandId: c.brand_id,
+      };
+      // A loja do Regem: a leitura dos pedidos, o que ela libera e a loja do Liame no lugar do id.
+      if (c.provider === 'regem') {
+        const loja = { scopes: ligada?.scopes ?? [], origem: (ligada?.connection_id && origemDa.get(ligada.connection_id)) || 'oauth' };
+        return { ...base, sub: subDaLoja(ligada?.unit_name ?? null), situacao: situacaoDaLoja(c, loja, agora), loja };
+      }
+      return { ...base, situacao: situacaoDaConta(c) };
+    });
+  }, [dados, agora]);
+  const avisoDoRegem = useMemo(
+    () =>
+      faixaDoRegem(
+        linhas.flatMap((l) =>
+          'loja' in l && l.loja
+            ? [{ nome: l.nome, desconectada: l.situacao.rotulo === 'Desconectada', semCusto: l.situacao.tom !== 'lendo' && semCusto(l.loja.scopes), origem: l.loja.origem }]
+            : [],
+        ),
+      ),
+    [linhas],
+  );
   const autorizacoes = useMemo(() => (dados ? autorizacoesVisiveis(dados.conexoes) : []), [dados]);
 
   if (!podeVer) {
@@ -223,6 +260,10 @@ export function ContasTela() {
           aoTentarDeNovo={podeConectar && dados ? () => setDialogo({ tipo: 'conectar', marca: conexaoDaFaixa?.brand_id ?? null }) : null}
           aoConferirDeNovo={() => setAcomp((a) => (a ? { ...a, tentativas: 0 } : a))}
         />
+      )}
+
+      {avisoDoRegem && (
+        <FaixaDeAviso tipo={avisoDoRegem.tipo} icone={<Icone nome={avisoDoRegem.tipo === 'perigo' ? 'alert-circle' : 'alert'} />} titulo={avisoDoRegem.titulo} texto={avisoDoRegem.texto} />
       )}
 
       {estado.tipo === 'carregando' && <TabelaCarregando />}
@@ -318,9 +359,18 @@ export function ContasTela() {
       {dados && autorizacoes.length > 0 && (
         <div className="anima" style={{ ['--i' as string]: 2 }}>
           <h2 className="sub-titulo">Autorizações</h2>
-          <p className="sub-desc">Cada autorização é o &ldquo;sim&rdquo; que alguém deu na Meta ou no Google. Revogar para a leitura de todas as contas dela.</p>
+          <p className="sub-desc">Cada autorização é o &ldquo;sim&rdquo; que alguém deu na Meta, no Google ou no Regem. Revogar para a leitura de todas as contas dela.</p>
           <ul className="autorizacoes">
-            {autorizacoes.map((c) => (
+            {autorizacoes.map((c) =>
+              c.provider === 'regem' ? (
+                <CartaoAutorizacaoRegem
+                  key={c.id}
+                  conexao={c}
+                  podeConectar={podeConectar}
+                  aoEscolher={c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length ? () => setDialogo({ tipo: 'escolher', conexao: c }) : null}
+                  aoRevogar={() => setDialogo({ tipo: 'revogar', conexao: c })}
+                />
+              ) : (
               <CartaoAutorizacao
                 key={c.id}
                 conexao={c}
@@ -332,7 +382,8 @@ export function ContasTela() {
                 aoProcurar={() => disparar(procurar(c))}
                 aoRevogar={() => setDialogo({ tipo: 'revogar', conexao: c })}
               />
-            ))}
+              ),
+            )}
           </ul>
         </div>
       )}

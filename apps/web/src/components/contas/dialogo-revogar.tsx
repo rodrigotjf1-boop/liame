@@ -26,6 +26,7 @@ export function DialogoRevogar({ conexao, reserva, aoRevogar, aoFechar }: Props)
   const [erro, setErro] = useState('');
   const n = contasDaAutorizacao(conexao);
   const meta = autorizadorDa(conexao.provider) === 'meta';
+  const regem = conexao.provider === 'regem';
 
   async function revogar() {
     setErro('');
@@ -67,13 +68,18 @@ export function DialogoRevogar({ conexao, reserva, aoRevogar, aoFechar }: Props)
           <p>
             {n ? (
               <>
-                A leitura {n === 1 ? 'da' : 'das'} <b>{n === 1 ? 'conta' : `${n} contas`}</b> desta autorização para agora. O histórico de números fica.
+                A leitura {n === 1 ? 'da' : 'das'} <b>{n === 1 ? (regem ? 'loja' : 'conta') : `${n} ${regem ? 'lojas' : 'contas'}`}</b> desta autorização para agora. O histórico de números fica.
               </>
             ) : (
               'Nenhuma conta está ligada por esta autorização. Revogar tira o acesso do Liame à plataforma.'
             )}
           </p>
-          {meta ? (
+          {regem ? (
+            <p className="dialogo-nota">
+              <Icone nome="shield" pequeno />
+              <span>No Regem, o token de cada loja é revogado na hora, dos dois lados. O que já foi lido segue o prazo de guarda.</span>
+            </p>
+          ) : meta ? (
             <p className="dialogo-nota">
               <Icone nome="shield" pequeno />
               <span>

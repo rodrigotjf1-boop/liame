@@ -13,6 +13,8 @@ export type ContaDaTabela = {
   provider: string;
   externalId: string | null;
   marca: string | null;
+  /** Texto de baixo do nome no lugar do id (loja do Regem: "Loja no Liame: Centro · token próprio da loja"). */
+  sub?: string;
   brandId: string;
   situacao: SituacaoConta;
 };
@@ -25,7 +27,7 @@ type Props = {
   aoDesligar: () => Promise<boolean>;
 };
 
-const TOM: Record<SituacaoConta['tom'], string> = { ok: 'st--concluido', atencao: 'st--aguardando', perigo: 'st--perigo', espera: 'st--espera' };
+const TOM: Record<SituacaoConta['tom'], string> = { ok: 'st--concluido', atencao: 'st--aguardando', perigo: 'st--perigo', espera: 'st--espera', lendo: 'st--info' };
 
 export function LinhaConta({ conta: c, agora, podeConectar, aoReconectar, aoDesligar }: Props) {
   const [confirmando, setConfirmando] = useState(false);
@@ -59,14 +61,14 @@ export function LinhaConta({ conta: c, agora, podeConectar, aoReconectar, aoDesl
     <tr>
       <th scope="row">
         <span className="conta-nome">{c.nome}</span>
-        {id && <span className="conta-id mono">{id}</span>}
+        {c.sub ? <span className="conta-id conta-id--txt">{c.sub}</span> : id && <span className="conta-id mono">{id}</span>}
       </th>
       <td>
         <span className={`plat plat--${plat.classe}`}>{plat.nome}</span>
       </td>
       <td>
         <span className={`st ${TOM[c.situacao.tom]}`}>
-          <span className="dot" aria-hidden="true" />
+          {c.situacao.tom === 'lendo' ? <span className="girando" aria-hidden="true" /> : <span className="dot" aria-hidden="true" />}
           {c.situacao.rotulo}
         </span>
         {c.situacao.motivo && <span className="motivo">{c.situacao.motivo}</span>}
