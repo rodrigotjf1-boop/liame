@@ -187,6 +187,8 @@ describe.skipIf(!hasDb)('pedido de ação: política, orçamento, fingerprint e 
     const parcial = await approve(adm, pedido.body.plan_hash, await code(adm));
     expect(parcial.body).toMatchObject({ status: 'aguardando_aprovacao', approvals: [{ approver_role: 'administrador', sufficient: false, current_plan: true }] });
     expect(api.mailer.lastTo(dono.email)?.subject).toBe('Liame: uma ação espera a sua aprovação');
+    // O link do e-mail abre a tela Aprovações já no pedido.
+    expect(api.mailer.lastTo(dono.email)?.text).toContain(`/aprovacoes?pedido=${pedido.body.id}`);
 
     // O plano muda: a aprovação antiga não vale para o novo.
     const alterado = await api.call('PATCH', `/v1/actions/${pedido.body.id}`, { cookie: dono.cookie, body: { params: { daily_budget_micros: 125 * REAL } } });

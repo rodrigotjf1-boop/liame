@@ -474,7 +474,7 @@ export class ActionService {
        where m.tenant_id = ${tenantId} and m.role_key = 'dono' and m.revoked_at is null`);
     const text =
       `${approverName} aprovou a ação ${row.action} (${row.tool}), mas o valor de ${brl(Number(row.reserved_micros))} passa do limite dela` +
-      `${row.mode === 'ESCALATE' ? ' ou a política pede a sua decisão' : ''}. Falta a sua aprovação:\n\n${this.config.appUrl}/aprovacoes/${row.id}`;
+      `${row.mode === 'ESCALATE' ? ' ou a política pede a sua decisão' : ''}. Falta a sua aprovação:\n\n${this.config.appUrl}/aprovacoes?pedido=${row.id}`;
     for (const { email } of owners.rows) afterCommit(() => this.mailer.send({ to: email, subject: 'Liame: uma ação espera a sua aprovação', text }));
   }
 }

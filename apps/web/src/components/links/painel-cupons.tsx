@@ -3,12 +3,13 @@
 import type { CouponItem, CouponListResponse, CouponRequest, CouponStore } from '@liame/contracts';
 import Link from 'next/link';
 import type { RefObject } from 'react';
+import { enderecoDoPedido } from '@/components/aprovacoes/textos';
 import { Estado } from '@/components/ui/estado';
 import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import { mensagemDe, type Problema } from '@/lib/api';
 import { reaisDeMicros } from '@/lib/formato';
-import { bloqueioDaCriacao, faixaAguardando, faixaDoPedidoEncerrado, fonteDosCupons, nomeDaLoja, pedidosEmAndamento, type PlataformaDaLoja, semUsoComGasto } from './cupons-textos';
+import { bloqueioDaCriacao, faixaAguardando, faixaDoPedidoEncerrado, fonteDosCupons, nomeDaLoja, pedidosEmAndamento, type PlataformaDaLoja, semUsoComGasto, situacaoDoPedido } from './cupons-textos';
 import { TabelaCupons } from './tabela-cupons';
 
 // Aba Cupons (protótipo P3 com a plataforma de pedidos): de onde vêm os cupons da loja, os avisos (criação no
@@ -29,6 +30,8 @@ type Props = {
   podeGerenciar: boolean;
   podeCriarCupom: boolean;
   podeVerContas: boolean;
+  /** Vê a tela Aprovações (`campanhas.ver`): a faixa do pedido que espera leva até lá. */
+  podeVerAprovacoes?: boolean;
   botaoInformar: RefObject<HTMLButtonElement | null>;
   botaoCriar: RefObject<HTMLButtonElement | null>;
   aoInformar: () => void;
@@ -156,6 +159,7 @@ export function PainelCupons(p: Props) {
   const emAndamento = pedidosEmAndamento(pedidos);
   const encerrados = pedidos.filter((x) => !emAndamento.includes(x));
   const aguardando = faixaAguardando(pedidos);
+  const esperando = emAndamento.filter((x) => situacaoDoPedido(x) === 'aguardando');
 
   return (
     <>
@@ -181,7 +185,22 @@ export function PainelCupons(p: Props) {
           }
         />
       )}
-      {aguardando && <Faixa tipo="acao" icone={<Icone nome="clock" />} titulo={aguardando.titulo} texto={aguardando.texto} />}
+      {aguardando && (
+        <Faixa
+          tipo="acao"
+          icone={<Icone nome="clock" />}
+          titulo={aguardando.titulo}
+          texto={aguardando.texto}
+          acao={
+            p.podeVerAprovacoes ? (
+              // Um pedido só: abre direto nele; vários: a fila.
+              <Link className="btn btn--sm" href={esperando.length === 1 ? enderecoDoPedido(esperando[0]!.action_id) : '/aprovacoes'}>
+                Abrir em Aprovações
+              </Link>
+            ) : undefined
+          }
+        />
+      )}
       {encerrados.map((x) => {
         const f = faixaDoPedidoEncerrado(x);
         return <Faixa key={x.action_id} tipo="atencao" icone={<Icone nome="alert" />} titulo={f.titulo} texto={f.texto} />;

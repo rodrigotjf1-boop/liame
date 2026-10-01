@@ -714,8 +714,8 @@ describe('menu e permissão', () => {
 
   it('Resultados aparece só para quem tem vendas.ver (a mesma permissão que a API exige)', () => {
     expect(agencia.itens.find((i) => i.href === '/resultados')).toMatchObject({ permissao: 'vendas.ver', modos: true });
-    expect(itensVisiveis(agencia, () => true).map((i) => i.href)).toEqual(['/atencao', '/resultados', '/contas', '/pessoas']);
-    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver').map((i) => i.href)).toEqual(['/atencao', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, () => true).map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/resultados', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/contas', '/pessoas']);
     expect(itensVisiveis(agencia, (p) => p === 'vendas.ver').map((i) => i.href)).toEqual(['/resultados']);
   });
 

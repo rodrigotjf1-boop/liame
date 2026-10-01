@@ -8,7 +8,9 @@ import { Icone } from '@/components/ui/icone';
 import { iniciais } from '@/lib/formato';
 import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
+import { pendentesFalados } from '@/components/aprovacoes/textos';
 import { avisosFalados } from '@/components/atencao/textos';
+import { useContadorAprovacoes } from '@/lib/contador-aprovacoes';
 import { useContadorAtencao } from '@/lib/contador-atencao';
 import { useModo } from '@/lib/modo';
 import { BotaoTema } from './botao-tema';
@@ -20,6 +22,7 @@ import { disparar } from '@/lib/disparar';
 export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () => void; modos: boolean }) {
   const { me, empresa, pode, sair } = useSessao();
   const contador = useContadorAtencao();
+  const aprovacoes = useContadorAprovacoes();
   const caminho = usePathname();
   const { modo } = useModo();
   const idFerramentas = useId();
@@ -42,14 +45,15 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
         <ul className="nav-lista" aria-labelledby={`g-${grupo.id}`}>
           {itens.map((item) => {
             const atual = itemAtual(caminho, item.href);
-            const n = item.contador === 'atencao' ? (contador.total ?? 0) : 0;
+            const n = item.contador === 'atencao' ? (contador.total ?? 0) : item.contador === 'aprovacoes' ? (aprovacoes.total ?? 0) : 0;
+            const falado = n ? (item.contador === 'aprovacoes' ? pendentesFalados(n) : avisosFalados(n)) : '';
             return (
               <li key={item.href}>
                 <Link
                   className="nav-item"
                   href={item.href}
                   aria-current={atual ? 'page' : undefined}
-                  title={n ? `${item.rotulo}${avisosFalados(n)}` : item.rotulo}
+                  title={`${item.rotulo}${falado}`}
                   onClick={aoFechar}
                 >
                   {atual && <span className="nav-no" aria-hidden="true" />}
@@ -57,7 +61,7 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
                   <span className="rot">{item.rotulo}</span>
                   {n > 0 && (
                     <>
-                      <span className="sr-only">{avisosFalados(n)}</span>
+                      <span className="sr-only">{falado}</span>
                       <span className="nav-cont num" aria-hidden="true">
                         {n > 99 ? '99+' : n}
                       </span>
