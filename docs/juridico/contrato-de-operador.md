@@ -18,7 +18,7 @@ Este Contrato faz parte dos [Termos de Uso do Liame](termos-de-uso.md) e regula 
 
 2.2. A descrição do tratamento (titulares, categorias de dados, finalidades, duração) está no **Anexo I**.
 
-2.3. Na fase de lançamento (Termos, item 2.6), o Liame trata os dados das contas de anúncio e de análise conectadas e, quando o Cliente conecta o Regem, os pedidos, os cupons e os custos das lojas autorizadas, para medir quais campanhas trouxeram vendas; as demais operações do Anexo I passam a valer quando cada função for ligada.
+2.3. Na fase de lançamento (Termos, item 2.6), o Liame trata os dados das contas de anúncio e de análise conectadas e, quando o Cliente conecta o Regem, os pedidos, os cupons e os custos das lojas autorizadas, para medir quais campanhas trouxeram vendas. Quando a criação de cupom de campanha está ligada para o Cliente e o Dono da loja liberou essa permissão no Regem, o Liame envia ao Regem a regra do cupom (código, nome, desconto, pedido mínimo, validade e limites de uso), que não contém dados pessoais, sempre depois da aprovação de uma pessoa do Cliente. As demais operações do Anexo I passam a valer quando cada função for ligada.
 
 ## 3. Instruções do Cliente
 

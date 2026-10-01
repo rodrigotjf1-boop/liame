@@ -26,7 +26,7 @@ Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada a
 
 2.5. O Liame depende das plataformas que você conecta. Quando uma delas muda regras, preços ou interfaces, algumas funções podem mudar ou parar até que sejam adaptadas.
 
-2.6. **Fase de lançamento.** O Liame está entrando no ar por etapas. Nesta fase, ele lê as contas de anúncio e de análise que você conecta (Meta, Google Ads e Google Analytics) e, quando você conecta o Regem, os pedidos, os cupons e os custos das suas lojas, e mostra os resultados, os avisos e o frescor de cada número; os funcionários de IA, a execução de ações nas plataformas, as mensagens e as demais funções descritas nestes Termos entram aos poucos, e cada uma passa a seguir estes Termos quando for ligada. O que já está disponível aparece no próprio Liame.
+2.6. **Fase de lançamento.** O Liame está entrando no ar por etapas. Nesta fase, ele lê as contas de anúncio e de análise que você conecta (Meta, Google Ads e Google Analytics) e, quando você conecta o Regem, os pedidos, os cupons e os custos das suas lojas, e mostra os resultados, os avisos e o frescor de cada número. **Criar cupom de campanha na loja do Regem** já está disponível para a empresa em que essa função foi ligada, quando o Dono da loja libera essa permissão no Regem: o cupom só é criado depois da aprovação de uma pessoa da sua empresa (itens 2.3 e 5.1), e o Liame só desativa cupom que ele mesmo criou. Os funcionários de IA, as demais ações nas plataformas, as mensagens e as demais funções descritas nestes Termos entram aos poucos, e cada uma passa a seguir estes Termos quando for ligada. O que já está disponível aparece no próprio Liame.
 
 ## 3. Conta e segurança
 
