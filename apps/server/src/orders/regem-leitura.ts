@@ -203,11 +203,19 @@ export async function gravarCupons(tx: Tx, ctx: ContextoCupons, cupons: CupomReg
      where liame.coupon.source_version < excluded.source_version
     returning id, removed_at
     ),
-    -- Cupom apagado na origem deixa de ligar a campanhas; o que já foi atribuído fica.
+    -- Cupom apagado na origem deixa de ligar a campanhas; o que já foi atribuído fica. O vínculo em vigor
+    -- (inclusive o que tinha fim marcado) fecha agora; o agendado, que ainda não começou, sai (0026).
     desligados as (
       update liame.campaign_coupon cc set unlinked_at = now()
         from gravados g
-       where cc.coupon_id = g.id and g.removed_at is not null and cc.unlinked_at is null
+       where cc.coupon_id = g.id and g.removed_at is not null and cc.linked_at < now()
+         and (cc.unlinked_at is null or cc.unlinked_at > now())
+      returning cc.id
+    ),
+    agendados as (
+      delete from liame.campaign_coupon cc
+       using gravados g
+       where cc.coupon_id = g.id and g.removed_at is not null and cc.linked_at >= now()
       returning cc.id
     )
     select g.id, null::text as recusado from gravados g

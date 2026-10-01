@@ -82,6 +82,12 @@ const DESENHOS = {
   ),
   plug: <path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  ticket: (
+    <>
+      <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+      <path d="M13 5v2M13 17v2M13 11v2" />
+    </>
+  ),
   'alert-circle': (
     <>
       <circle cx="12" cy="12" r="9" />

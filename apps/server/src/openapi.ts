@@ -28,6 +28,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('media', 'Dados de mídia lidos das plataformas, com o frescor de cada fonte (A2)')
     .addTag('results', 'Ciclo fechado: ROAS da plataforma ao lado do ROAS confirmado no caixa e a origem de cada pedido (A2.5)')
     .addTag('links', 'Links de campanha: o link do cardápio da loja com rastreio, os parâmetros para colar no anúncio, o QR e a conferência dos anúncios ativos (A2.5)')
+    .addTag('cupons', 'Cupons de campanha: os do Regem e os de outra plataforma de pedidos, ligados a campanhas, e onde cada loja recebe os pedidos online (A2.5)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .build();
   return SwaggerModule.createDocument(app, config);

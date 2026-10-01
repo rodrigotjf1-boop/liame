@@ -99,6 +99,7 @@ Quem é a loja do token: `{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moe
   - O Liame não recalcula (D-A2.5-6). A soma dos pedidos confirmados de um dia, pelo `faturado_em` no fuso da loja, tem de bater ao centavo com o **"Faturamento" do Painel** da loja (critério A2.5-2). O "Relatório de vendas" do Regem soma de outro jeito e não é a referência.
 - **`faturado_em`:** o instante que o Painel usa para pôr a venda no dia (pedido: a criação; comanda: o fechamento). O Liame agrupa a receita por ele. A janela da atribuição continua contando até `confirmado_em`.
 - **`desconto_loja_centavos`:** informativo, já descontado da receita.
+- **`cupom`:** o código do cupom usado. É o do Regem (cardápio, balcão) ou, no pedido de plataforma de pedidos integrada (Anota AI, CardápioWeb), o código que ela manda no desconto (Regem #594, 30/09/2026). Pedido de marketplace nunca traz cupom. O Liame grava em maiúsculas e compara sem diferenciar maiúsculas e minúsculas (F6).
 - **`estornado_centavos`:** na v1 é sempre 0. O Regem não tem estorno parcial: cancelar desfaz a venda inteira, e isso chega pela `situacao`.
 - **`situacao`:** `confirmado`, `cancelado` (depois de confirmado) ou `removido` (venda que deixou de existir sozinha, acima).
 - **`grupo_canal`** (o Regem mapeia o `canal` dele):
