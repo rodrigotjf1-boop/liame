@@ -1,9 +1,11 @@
-import type { CouponCampaign, CouponItem, CouponListResponse, CouponStore, OrderPlatform } from '@liame/contracts';
+import type { CouponCampaign, CouponItem, CouponListResponse, CouponRequest, CouponStore, OrderPlatform } from '@liame/contracts';
+import type { Problema } from '@/lib/api';
 import { dia, quandoComHora, reaisDeMicros } from '@/lib/formato';
 
 // Regras e textos da aba Cupons e da plataforma de pedidos da loja (mockups/prototipo-links-cupons-
 // plataforma.html, aprovado em 30/09/2026). Só o cupom exclusivo prova de onde veio o pedido; o Liame não
-// cria nem muda nada no Regem nem na plataforma de pedidos (a criação no Regem, com aprovação, vem depois).
+// muda nada na plataforma de pedidos. No Regem, a única escrita é criar o cupom de campanha, e só depois da
+// aprovação de quem pode aprovar (o pedido fica na lista enquanto espera).
 
 type InfoPlataforma = {
   nome: string;
@@ -107,12 +109,10 @@ const diaMesNoFuso = (iso: string, fuso: string) => new Intl.DateTimeFormat('pt-
 /** O último dia da validade: o fim é exclusivo (começo do dia seguinte). */
 const ultimoDia = (iso: string, fuso: string) => diaMesNoFuso(new Date(new Date(iso).getTime() - 1).toISOString(), fuso);
 
-/** "15% · mín. R$ 50", "R$ 5 · sem mínimo", "Entrega grátis · mín. R$ 40"; o informado mostra de onde veio. */
-export function regraDoCupom(c: CouponItem, agora: Date): string {
-  if (c.origin === 'externo' && c.platform) {
-    const quando = dia(c.first_seen_at, agora);
-    return `Cupom ${infoPlataforma(c.platform as OrderPlatform).de} · informado ${quando === 'hoje' ? 'hoje' : `em ${quando}`}`;
-  }
+type Regra = { kind: string; percent: number | null; value_micros: string | null; min_order_micros: string | null; max_discount_micros?: string | null };
+
+/** "15% · mín. R$ 50", "R$ 5 de desconto · sem mínimo", "Entrega grátis · mín. R$ 40". */
+function textoDaRegra(c: Regra): string {
   let base: string;
   if (c.kind === 'percentual' && c.percent !== null) base = `${c.percent.toLocaleString('pt-BR')}%${c.max_discount_micros ? ` até ${valor(c.max_discount_micros)}` : ''}`;
   else if (c.kind === 'valor' && c.value_micros) base = `${valor(c.value_micros)} de desconto`;
@@ -120,6 +120,15 @@ export function regraDoCupom(c: CouponItem, agora: Date): string {
   else base = 'Regra no Regem';
   const minimo = c.min_order_micros && BigInt(c.min_order_micros) > 0n ? `mín. ${valor(c.min_order_micros)}` : 'sem mínimo';
   return `${base} · ${minimo}`;
+}
+
+/** A regra do cupom do Regem; o informado mostra de onde veio. */
+export function regraDoCupom(c: CouponItem, agora: Date): string {
+  if (c.origin === 'externo' && c.platform) {
+    const quando = dia(c.first_seen_at, agora);
+    return `Cupom ${infoPlataforma(c.platform as OrderPlatform).de} · informado ${quando === 'hoje' ? 'hoje' : `em ${quando}`}`;
+  }
+  return textoDaRegra(c);
 }
 
 /** "até 10/10", "02/10 a 31/10", "venceu em 20/09", "sem validade"; o informado: a regra fica na plataforma. */
@@ -205,6 +214,154 @@ export function avisoLigado(codigo: string, campanha: string, exclusivo: boolean
 export function avisoDesligado(c: CouponItem, campanha: string): string {
   const onde = c.origin === 'externo' && c.platform ? `no ${infoPlataforma(c.platform as OrderPlatform).nome}` : 'no Regem';
   return `${c.code} desligado da campanha ${campanha}. O cupom continua valendo ${onde}.`;
+}
+
+// ─────────────────────────── criar cupom no Regem (com aprovação) ───────────────────────────
+
+export type TipoDesconto = 'percentual' | 'valor' | 'frete_gratis';
+
+/** "12,50", "12.5" ou "12" (reais) → micros em texto; nulo quando não é um valor em reais com até 2 casas. */
+export function microsDeReais(texto: string): string | null {
+  const t = texto.trim().replace(',', '.');
+  if (!/^\d{1,7}(\.\d{1,2})?$/.test(t)) return null;
+  const [reais, centavos = ''] = t.split('.');
+  return (BigInt(reais!) * 1_000_000n + BigInt(centavos.padEnd(2, '0')) * 10_000n).toString();
+}
+
+export type ErrosCriar = { codigo?: string; valor?: string; minimo?: string; data?: string; campanha?: string };
+
+export type CamposCriar = {
+  codigo: string;
+  tipo: TipoDesconto;
+  /** Percentual (inteiro) ou valor em reais, conforme o tipo; ignorado na entrega grátis. */
+  valor: string;
+  /** Pedido mínimo em reais; vazio = sem mínimo. */
+  minimo: string;
+  inicio: string;
+  fim: string;
+  campanha: string;
+};
+
+/** Confere o pedido antes de enviar (o servidor confere de novo): `existentes` são os códigos da loja; `pedidos`, os que esperam. */
+export function errosCriar(v: CamposCriar, ctx: { hoje: string; existentes: string[]; pedidos: string[] }): ErrosCriar {
+  const e: ErrosCriar = {};
+  const codigo = v.codigo.trim().toUpperCase();
+  if (!/^[A-Z0-9]{4,20}$/.test(codigo)) e.codigo = 'Use de 4 a 20 letras ou números, sem espaço nem acento.';
+  else if (ctx.existentes.some((x) => x.toUpperCase() === codigo)) e.codigo = 'Esse código já existe nesta loja. Escolha outro.';
+  else if (ctx.pedidos.some((x) => x.toUpperCase() === codigo)) e.codigo = 'Já existe um pedido de cupom com este código. Cancele o pedido ou escolha outro código.';
+  if (v.tipo === 'percentual') {
+    const texto = v.valor.trim();
+    // Só dígitos, sem regex (a varredura de segurança barra regex em texto digitado): "12.5", "1e1" e "-3" não passam.
+    const inteiro = texto.length <= 3 && [...texto].every((c) => c >= '0' && c <= '9');
+    const n = Number(texto);
+    if (!texto) e.valor = 'Informe o valor do desconto.';
+    else if (!inteiro || n < 1 || n > 100) e.valor = 'O percentual vai de 1 a 100, sem casas decimais.';
+  } else if (v.tipo === 'valor') {
+    const micros = microsDeReais(v.valor);
+    if (!micros || BigInt(micros) <= 0n) e.valor = 'Informe o valor do desconto, em reais.';
+  }
+  if (v.minimo.trim() && microsDeReais(v.minimo) === null) e.minimo = 'Informe o pedido mínimo em reais, ou deixe em branco.';
+  if (!v.inicio || !v.fim) e.data = 'Informe o início e o fim da validade.';
+  else if (v.fim < v.inicio) e.data = 'O fim da validade não pode ser antes do início.';
+  else if (v.fim < ctx.hoje) e.data = 'O fim da validade já passou.';
+  if (!v.campanha) e.campanha = 'Escolha a campanha do cupom.';
+  return e;
+}
+
+/** O corpo de `POST /v1/coupons/regem` a partir dos campos já conferidos. */
+export function corpoDoPedido(v: CamposCriar, unidade: string, exclusivo: boolean) {
+  const minimo = v.minimo.trim() ? microsDeReais(v.minimo) : null;
+  return {
+    unit_id: unidade,
+    code: v.codigo.trim().toUpperCase(),
+    kind: v.tipo,
+    ...(v.tipo === 'percentual' ? { percent: Number(v.valor) } : {}),
+    ...(v.tipo === 'valor' ? { value_micros: microsDeReais(v.valor) ?? '0' } : {}),
+    ...(minimo && BigInt(minimo) > 0n ? { min_order_micros: minimo } : {}),
+    valid_from: v.inicio,
+    valid_until: v.fim,
+    campaign_id: v.campanha,
+    exclusive: exclusivo,
+  };
+}
+
+/** A recusa do servidor no campo certo do diálogo; sem campo, a mensagem vai para o topo. */
+export function erroDoPedido(p: Problema): { campo?: keyof ErrosCriar; mensagem: string } {
+  const doCampo: Record<string, keyof ErrosCriar> = { code: 'codigo', percent: 'valor', value_micros: 'valor', min_order_micros: 'minimo', valid_from: 'data', valid_until: 'data', campaign_id: 'campanha' };
+  const primeiro = p.errors?.[0];
+  if (primeiro && doCampo[primeiro.path]) return { campo: doCampo[primeiro.path], mensagem: primeiro.message };
+  if (p.code === 'acao-duplicada') return { campo: 'codigo', mensagem: 'Já existe um pedido de cupom com este código. Cancele o pedido ou escolha outro código.' };
+  if (p.code === 'plano-recusado' && p.detail?.startsWith('Já existe')) return { campo: 'codigo', mensagem: 'Esse código já existe nesta loja. Escolha outro.' };
+  if (p.code === 'campanha-encerrada' || p.code === 'campanha-fora-da-marca' || p.code === 'plataforma-sem-cupom') return { campo: 'campanha', mensagem: p.detail ?? p.title };
+  if (p.code === 'escrita-desligada') return { mensagem: 'A criação de cupons está desligada para a sua empresa. Crie o cupom no Regem: ele aparece aqui na próxima leitura.' };
+  return { mensagem: p.detail ?? p.title };
+}
+
+/** Como o pedido aparece na lista: esperando quem aprova, sendo criado no Regem, ou encerrado sem cupom. */
+export type SituacaoPedido = 'aguardando' | 'criando' | 'falhou' | 'expirou';
+
+export function situacaoDoPedido(p: CouponRequest): SituacaoPedido {
+  if (p.status === 'aguardando_aprovacao') return 'aguardando';
+  if (p.status === 'expirada') return 'expirou';
+  if (p.status === 'falhou') return 'falhou';
+  return 'criando';
+}
+
+/** Os pedidos que viram linha na tabela: o cupom ainda vai existir. */
+export function pedidosEmAndamento(pedidos: CouponRequest[]): CouponRequest[] {
+  return pedidos.filter((p) => ['aguardando', 'criando'].includes(situacaoDoPedido(p)));
+}
+
+/** "15% · mín. R$ 50", como a regra de um cupom que já existe. */
+export function regraDoPedido(p: CouponRequest): string {
+  return textoDaRegra(p);
+}
+
+const diaMes = (d: string) => d.split('-').reverse().slice(0, 2).join('/');
+
+/** "02/10 a 31/10": a validade pedida, em dias da loja. */
+export function validadeDoPedido(p: CouponRequest): string {
+  return `${diaMes(p.valid_from)} a ${diaMes(p.valid_until)}`;
+}
+
+/** A faixa dos pedidos que esperam aprovação (protótipo P3); nula sem nenhum. */
+export function faixaAguardando(pedidos: CouponRequest[]): { titulo: string; texto: string } | null {
+  const esperando = pedidos.filter((p) => situacaoDoPedido(p) === 'aguardando');
+  if (!esperando.length) return null;
+  return {
+    titulo: esperando.length === 1 ? `O cupom ${esperando[0]!.code} está aguardando aprovação` : `${esperando.length} cupons estão aguardando aprovação`,
+    texto: 'Quem pode aprovar recebe o pedido. Depois de aprovado, o Liame cria o cupom no Regem e ele aparece aqui, já ligado à campanha.',
+  };
+}
+
+/** O motivo de o cupom não ter sido criado, em palavras de gente (o do Regem já vem assim do servidor). */
+function motivoDaFalha(motivo: string | null): string {
+  if (!motivo) return 'O Regem não criou o cupom.';
+  if (motivo.startsWith('escrita em')) return 'A criação de cupons foi desligada antes de o cupom ser criado.';
+  if (motivo.startsWith('trava ativa')) return 'A parada de segurança estava ligada na hora de criar o cupom.';
+  if (motivo.startsWith('sem aprovação')) return 'A aprovação não valia mais para este pedido.';
+  if (motivo.startsWith('o recurso mudou')) return 'A situação do cupom mudou depois do pedido.';
+  return motivo;
+}
+
+/** A faixa do pedido que terminou sem cupom: falhou (com o motivo) ou expirou sem aprovação. */
+export function faixaDoPedidoEncerrado(p: CouponRequest): { titulo: string; texto: string } {
+  if (situacaoDoPedido(p) === 'expirou') {
+    return { titulo: `O pedido do cupom ${p.code} expirou sem aprovação`, texto: 'Ninguém aprovou no prazo de 3 dias, e nada foi criado no Regem. Se ainda quiser o cupom, peça de novo.' };
+  }
+  return { titulo: `O cupom ${p.code} não foi criado`, texto: `${motivoDaFalha(p.status_reason)} Nada mudou no Regem.` };
+}
+
+/** Por que a loja não pode pedir cupom, quando a criação está ligada para a empresa; nulo quando pode. */
+export function bloqueioDaCriacao(loja: CouponStore): { titulo: string; texto: string } | null {
+  if (!loja.unit) return { titulo: 'Ligue a loja para criar cupons por aqui', texto: 'Esta loja do Regem ainda não está ligada a uma loja do Liame. Ligue em Contas conectadas.' };
+  if (!loja.can_create) {
+    return {
+      titulo: 'A loja não liberou a criação de cupons no Regem',
+      texto: 'Para criar cupons por aqui, o dono da loja autoriza o Liame de novo no Regem com a chave "Criar cupom de campanha" ligada, em Contas conectadas. Enquanto isso, crie o cupom direto no Regem.',
+    };
+  }
+  return null;
 }
 
 /** Campanhas ativas sem cupom exclusivo da loja (em vigor ou agendado): na loja de outra plataforma, é o que falta. */

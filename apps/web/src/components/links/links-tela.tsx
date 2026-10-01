@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandResponse, CouponItem, CouponResponse, CouponStore, CreatedTrackingLinkResponse, ExternalCouponPlatform, TrackingCheckResponse, TrackingLink } from '@liame/contracts';
+import type { BrandResponse, CouponItem, CouponRequest, CouponResponse, CouponStore, CreatedTrackingLinkResponse, ExternalCouponPlatform, TrackingCheckResponse, TrackingLink } from '@liame/contracts';
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
@@ -11,7 +11,8 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
 import { copiar } from './copiar';
-import { avisoDesligado, avisoLigado, infoPlataforma, plataformaDaLoja } from './cupons-textos';
+import { avisoDesligado, avisoLigado, bloqueioDaCriacao, infoPlataforma, pedidosEmAndamento, plataformaDaLoja, situacaoDoPedido } from './cupons-textos';
+import { DialogoCriarCupom } from './dialogo-criar-cupom';
 import { DialogoCriarLink } from './dialogo-criar-link';
 import { DialogoCupomExterno } from './dialogo-cupom-externo';
 import { DialogoLigarCupom } from './dialogo-ligar-cupom';
@@ -28,8 +29,8 @@ import { avisoDoLink } from './textos';
 // em 30/09/2026): a plataforma de pedidos da loja e duas abas. Links: o link do cardápio com rastreio de cada
 // campanha, os parâmetros para colar e a conferência dos anúncios ativos (`GET /v1/links`,
 // `/v1/links/tracking-check`). Cupons: os do Regem e os informados de outra plataforma, ligados a campanhas
-// (`GET /v1/coupons`; mudar com `atribuicao.gerenciar`). O Liame não escreve na Meta, no Google, no Regem nem
-// na plataforma de pedidos.
+// (`GET /v1/coupons`; mudar com `atribuicao.gerenciar`). O Liame não escreve na Meta, no Google nem na plataforma
+// de pedidos; no Regem, só cria cupom de campanha, e depois da aprovação (`POST /v1/coupons/regem`, `cupons.criar`).
 
 type Dados = { links: TrackingLink[]; check: TrackingCheckResponse | null; erroCheck: Problema | null };
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: Dados } | { tipo: 'erro'; problema: Problema };
@@ -39,9 +40,13 @@ type Dialogo =
   | { tipo: 'pronto'; link: TrackingLink; criado: boolean | null }
   | { tipo: 'plataforma' }
   | { tipo: 'externo'; campanha?: string }
+  | { tipo: 'criar-cupom' }
   | { tipo: 'ligar'; cupom: CouponItem };
 
 const ABAS: Aba[] = ['links', 'cupons'];
+/** Com pedido de cupom em andamento, a lista se atualiza sozinha: rápido enquanto o cupom é criado, devagar enquanto espera aprovação. */
+const ESPERA_CRIANDO_MS = 15_000;
+const ESPERA_APROVACAO_MS = 60_000;
 
 export function LinksTela() {
   const { pode } = useSessao();
@@ -54,6 +59,7 @@ export function LinksTela() {
   const titulo = useRef<HTMLHeadingElement>(null);
   const botaoCriar = useRef<HTMLButtonElement>(null);
   const botaoInformar = useRef<HTMLButtonElement>(null);
+  const botaoCriarCupom = useRef<HTMLButtonElement>(null);
   const abas = useRef<Record<Aba, HTMLButtonElement | null>>({ links: null, cupons: null });
   const [marcas, setMarcas] = useState<BrandResponse[] | null>(null);
   const [erroMarcas, setErroMarcas] = useState<Problema | null>(null);
@@ -112,6 +118,16 @@ export function LinksTela() {
     );
   }, [marca, tentativa]);
 
+  // Pedido de cupom em andamento: a aprovação acontece em outra tela (ou por outra pessoa) e o worker cria em
+  // instantes; a lista volta a ler sozinha até o pedido virar cupom, sem a pessoa recarregar a página.
+  const situacoes = cupons.tipo === 'ok' ? cupons.dados.requests.map(situacaoDoPedido) : [];
+  const espera = situacoes.includes('criando') ? ESPERA_CRIANDO_MS : situacoes.includes('aguardando') ? ESPERA_APROVACAO_MS : 0;
+  useEffect(() => {
+    if (!espera) return;
+    const t = setTimeout(() => setTentativa((n) => n + 1), espera);
+    return () => clearTimeout(t);
+  }, [espera, cupons]);
+
   if (!podeVer) {
     return (
       <Estado icone="lock" titulo="Esta tela é de quem acompanha as vendas">
@@ -125,6 +141,8 @@ export function LinksTela() {
   const dadosCupons = cupons.tipo === 'ok' ? cupons.dados : null;
   const lojaAtual: CouponStore | null = dadosCupons?.stores.find((s) => s.connected_account_id === loja) ?? null;
   const itensDaLoja = dadosCupons && lojaAtual ? dadosCupons.items.filter((i) => i.connected_account_id === lojaAtual.connected_account_id) : [];
+  const pedidosDaLoja = dadosCupons && lojaAtual ? dadosCupons.requests.filter((r) => r.connected_account_id === lojaAtual.connected_account_id) : [];
+  const pedidosAbertos = pedidosEmAndamento(pedidosDaLoja);
   const plataforma = plataformaDaLoja(lojaAtual, dadosCupons?.detected_platform ?? null);
   const recarregar = () => setTentativa((t) => t + 1);
 
@@ -172,6 +190,27 @@ export function LinksTela() {
       return false;
     }
     avisar(avisoDesligado(c, campanha));
+    recarregar();
+    return true;
+  }
+
+  /** Abre o diálogo; com a criação desligada ou não liberada pela loja, diz por quê (o botão fica marcado como desativado). */
+  function criarNoRegem() {
+    if (!dadosCupons?.create_in_regem) return avisar('A criação de cupons está desligada para a sua empresa. Crie o cupom no Regem: ele aparece aqui na próxima leitura.');
+    const bloqueio = lojaAtual ? bloqueioDaCriacao(lojaAtual) : null;
+    if (bloqueio) return avisar(`${bloqueio.titulo}. ${bloqueio.texto}`);
+    setDialogo({ tipo: 'criar-cupom' });
+  }
+
+  async function cancelarPedido(pedido: CouponRequest): Promise<boolean> {
+    const r = await chamar(() => api.POST('/v1/coupons/regem/{id}/cancel', { params: { path: { id: pedido.action_id } } }));
+    if (!r.ok) {
+      avisar(mensagemDe(r.problema), { tipo: 'perigo' });
+      // O pedido pode ter sido aprovado ou cancelado por outra pessoa: a lista mostra como ficou.
+      recarregar();
+      return false;
+    }
+    avisar(`Pedido do cupom ${pedido.code} cancelado. Nada foi criado no Regem.`);
     recarregar();
     return true;
   }
@@ -337,7 +376,7 @@ export function LinksTela() {
           onClick={() => mostrarAba('cupons')}
         >
           <Icone nome="ticket" />
-          Cupons <span className="aba-num">{dadosCupons && lojaAtual ? itensDaLoja.length : '—'}</span>
+          Cupons <span className="aba-num">{dadosCupons && lojaAtual ? itensDaLoja.length + pedidosAbertos.length : '—'}</span>
         </button>
       </div>
 
@@ -359,14 +398,17 @@ export function LinksTela() {
           carga={cupons}
           loja={lojaAtual}
           itens={itensDaLoja}
+          pedidos={pedidosDaLoja}
           plataforma={plataforma}
           agora={agora}
           podeGerenciar={podeGerenciarCupons}
           podeCriarCupom={podeCriarCupom}
           podeVerContas={podeVerContas}
           botaoInformar={botaoInformar}
+          botaoCriar={botaoCriarCupom}
           aoInformar={() => setDialogo({ tipo: 'externo' })}
-          aoCriarNoRegem={() => avisar('A criação de cupons está desligada para a sua empresa. Crie o cupom no Regem: ele aparece aqui na próxima leitura.')}
+          aoCriarNoRegem={criarNoRegem}
+          aoCancelarPedido={cancelarPedido}
           aoLigar={(cupom) => setDialogo({ tipo: 'ligar', cupom })}
           aoDesligar={desligar}
           aoTentar={recarregar}
@@ -415,6 +457,21 @@ export function LinksTela() {
           reserva={titulo}
           aoInformado={(r) => aoCupomLigado(r, plataforma.info.de)}
           aoFechar={() => setDialogo((d) => (d?.tipo === 'externo' ? null : d))}
+        />
+      )}
+      {dialogo?.tipo === 'criar-cupom' && lojaAtual?.unit && dadosCupons && (
+        <DialogoCriarCupom
+          loja={{ ...lojaAtual, unit: lojaAtual.unit }}
+          campanhas={dadosCupons.campaigns}
+          existentes={itensDaLoja.map((i) => i.code)}
+          pedidos={pedidosAbertos.map((r) => r.code)}
+          agora={agora}
+          reserva={botaoCriarCupom}
+          aoEnviado={() => {
+            avisar('Pedido enviado para aprovação. Depois de aprovado, o Liame cria o cupom no Regem.');
+            recarregar();
+          }}
+          aoFechar={() => setDialogo((d) => (d?.tipo === 'criar-cupom' ? null : d))}
         />
       )}
       {dialogo?.tipo === 'ligar' && lojaAtual && dadosCupons && (
