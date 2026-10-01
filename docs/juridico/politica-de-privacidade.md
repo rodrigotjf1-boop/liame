@@ -79,6 +79,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 - Do **RegemCast**, o Liame recebe só a origem das conversas abertas por anúncio (qual anúncio e quando), **sem o conteúdo das mensagens**, e o telefone, tratado da mesma forma.
 - Pedidos de marketplaces (iFood, 99Food e outros) chegam **sem nenhuma identificação do comprador**.
 - **Para que serve:** medir quais campanhas trouxeram vendas.
+- **O que o Liame envia ao Regem:** só quando a criação de cupom de campanha está ligada para a empresa e o Dono da loja liberou essa permissão. Vai a regra do cupom (código, nome, desconto, pedido mínimo, validade e limites de uso), depois da aprovação de uma pessoa da empresa. **Nenhum dado pessoal é enviado.**
 - **Revogação:** a qualquer momento, em **Contas conectadas**. A credencial da loja é apagada do Liame na hora e revogada também no Regem.
 - **Cliente anonimizado:** quando a loja anonimiza um cliente no Regem, o Liame apaga o código pseudonimizado dele.
 
