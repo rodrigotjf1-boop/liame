@@ -4,7 +4,7 @@ import { dataCompleta, dia, diasAte, quandoComHora } from '@/lib/formato';
 // Regras e frases de "Contas conectadas" (mockups/prototipo-contas.html). Funções puras: o "agora" entra
 // como parâmetro (LIC-006). A API manda listas que crescem como texto (V23): valor desconhecido tem saída.
 
-export type Autorizador = 'meta' | 'google';
+export type Autorizador = 'meta' | 'google' | 'regem';
 
 const PLATAFORMAS: Record<string, { nome: string; classe: string }> = {
   meta_ads: { nome: 'Meta Ads', classe: 'meta' },
@@ -26,13 +26,34 @@ export function plataforma(provider: string | null): { nome: string; classe: str
 export function autorizadorDa(provider: string | null): Autorizador | null {
   if (provider === 'meta_ads' || provider === 'meta') return 'meta';
   if (provider === 'google_ads' || provider === 'ga4' || provider === 'google') return 'google';
+  if (provider === 'regem') return 'regem';
   return null;
 }
 
 /** "A Meta" / "O Google" (ou em minúscula, no meio da frase). */
 export function artigo(a: Autorizador | null, maiuscula = true): string {
-  const t = a === 'meta' ? 'a Meta' : a === 'google' ? 'o Google' : 'a plataforma';
+  const t = a === 'meta' ? 'a Meta' : a === 'google' ? 'o Google' : a === 'regem' ? 'o Regem' : 'a plataforma';
   return maiuscula ? t[0]!.toUpperCase() + t.slice(1) : t;
+}
+
+/** "na Meta" / "no Google" / "no Regem". */
+export function naPlataforma(a: Autorizador | null): string {
+  return a === 'meta' ? 'na Meta' : a === 'google' ? 'no Google' : a === 'regem' ? 'no Regem' : 'na plataforma';
+}
+
+/** "da Meta" / "do Google" / "do Regem". */
+export function daPlataforma(a: Autorizador | null): string {
+  return a === 'meta' ? 'da Meta' : a === 'google' ? 'do Google' : a === 'regem' ? 'do Regem' : 'da plataforma';
+}
+
+/** Só endereço http(s) absoluto: a URL vem da nossa API, mas nada de `javascript:` por engano. */
+export function enderecoSeguro(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Id como a plataforma mostra: o Google Ads usa 444-555-6667. */
@@ -85,33 +106,41 @@ export function escolhiveis(c: Pick<ConnectionResponse, 'id' | 'discovered'>, ex
       .filter((e) => e.disconnected_at === null && e.status === 'desconectada' && e.connection_id !== c.id)
       .map((e) => `${e.provider}:${e.external_id}`),
   );
+  // Loja do Regem ligada por OUTRA autorização: esta troca o token dela (o antigo parou de valer no Regem
+  // quando o novo nasceu), então ela entra de novo na escolha, como reconexão.
+  const trocaDeToken = new Set(
+    existentes.filter((e) => e.disconnected_at === null && e.provider === 'regem' && e.connection_id !== c.id).map((e) => `${e.provider}:${e.external_id}`),
+  );
   return c.discovered.flatMap((d): Escolhivel[] => {
     if (!d.linked) return [{ conta: d, reconectar: false }];
-    return recusadas.has(`${d.provider}:${d.external_id}`) ? [{ conta: d, reconectar: true }] : [];
+    const k = `${d.provider}:${d.external_id}`;
+    return recusadas.has(k) || trocaDeToken.has(k) ? [{ conta: d, reconectar: true }] : [];
   });
 }
 
 export type Faixa =
-  | { tipo: 'escolher'; titulo: string; texto: string }
+  | { tipo: 'escolher'; titulo: string; texto: string; botao?: string }
   | { tipo: 'conferindo'; titulo: string; texto: string }
   | { tipo: 'demorando'; titulo: string; texto: string }
   | { tipo: 'erro'; titulo: string; texto: string; autorizador: Autorizador | null };
 
 /** Texto da falha de uma conexão pelo código que a API guarda (`error_code`) ou devolve na volta. */
 export function erroDaConexao(codigo: string | null, a: Autorizador | null): { titulo: string; texto: string } {
-  const plat = a === 'meta' ? 'Meta' : a === 'google' ? 'Google' : 'plataforma';
   switch (codigo) {
     case 'recusada_na_plataforma':
       return { titulo: `${artigo(a)} não autorizou a conexão.`, texto: 'A autorização foi recusada ou fechada antes do fim. Nada foi ligado.' };
     case 'autorizacao_expirada':
-      return { titulo: 'A autorização demorou demais.', texto: `A volta ${a === 'google' ? 'do' : 'da'} ${plat} chegou depois de 10 minutos. Nada foi ligado: conecte de novo.` };
+      return { titulo: 'A autorização demorou demais.', texto: `A volta ${daPlataforma(a)} chegou depois de 10 minutos. Nada foi ligado: conecte de novo.` };
     case 'autorizacao_invalida':
       return { titulo: 'Não reconhecemos essa autorização.', texto: 'O link de volta já foi usado, é de outra pessoa ou venceu. Nada foi ligado: conecte de novo.' };
     case 'troca_recusada':
     case 'credencial_recusada':
       return { titulo: `${artigo(a)} recusou a autorização.`, texto: 'A plataforma não aceitou a autorização. Nada foi ligado: conecte de novo.' };
     case 'sem_permissao':
-      return { titulo: `Faltou permissão ${a === 'google' ? 'no' : 'na'} ${plat}.`, texto: 'A autorização não deu acesso às contas. Conecte de novo e aceite as permissões pedidas.' };
+      return {
+        titulo: `Faltou permissão ${naPlataforma(a)}.`,
+        texto: a === 'regem' ? 'A autorização não deu acesso às lojas. Conecte de novo.' : 'A autorização não deu acesso às contas. Conecte de novo e aceite as permissões pedidas.',
+      };
     case 'plataforma_indisponivel':
       return { titulo: `${artigo(a)} não respondeu.`, texto: 'Tentamos algumas vezes e a plataforma não respondeu. Tente de novo em instantes.' };
     default:
@@ -142,16 +171,25 @@ export function faixaDaVolta(
       return {
         tipo: 'demorando',
         titulo: `Ainda conferindo a autorização com ${artigo(a, false)}.`,
-        texto: 'Está levando mais que o normal. As contas aparecem aqui assim que a conferência terminar.',
+        texto: `Está levando mais que o normal. As ${a === 'regem' ? 'lojas' : 'contas'} aparecem aqui assim que a conferência terminar.`,
       };
     }
     return {
       tipo: 'conferindo',
       titulo: `Conferindo a autorização com ${artigo(a, false)}…`,
-      texto: 'Estamos buscando as contas que você liberou. Leva alguns segundos; pode continuar usando o Liame.',
+      texto: `Estamos buscando as ${a === 'regem' ? 'lojas' : 'contas'} que você liberou. Leva alguns segundos; pode continuar usando o Liame.`,
     };
   }
   if (escolhiveis(conexao, existentes).length && (conexao.status === 'aguardando_escolha' || conexao.status === 'ativa')) {
+    if (a === 'regem') {
+      const n = escolhiveis(conexao, existentes).length;
+      return {
+        tipo: 'escolher',
+        titulo: `O Regem autorizou ${n === 1 ? '1 loja' : `${n} lojas`}.`,
+        texto: `${n === 1 ? 'Ligue a loja' : 'Ligue cada uma'} a uma loja do Liame. A primeira leitura traz os pedidos dos últimos 90 dias.`,
+        botao: 'Ligar lojas',
+      };
+    }
     const total = conexao.discovered.length;
     return {
       tipo: 'escolher',
@@ -336,7 +374,7 @@ export function situacaoDaLoja(c: AccountFreshness, loja: { scopes: string[]; or
   const pedidos = c.datasets.find((x) => x.dataset === 'pedidos') ?? null;
   const ultimaLeituraEm = pedidos?.last_success_at ?? null;
   if (c.status === 'desconectada') {
-    return { rotulo: 'Desconectada', tom: 'perigo', motivo: c.status_reason ?? 'A autorização foi revogada no Regem — conecte de novo.', precisaDeVoce: true, reconectar: false, ultimaLeituraEm };
+    return { rotulo: 'Desconectada', tom: 'perigo', motivo: c.status_reason ?? 'A autorização foi revogada no Regem — conecte de novo.', precisaDeVoce: true, reconectar: true, ultimaLeituraEm };
   }
   if (c.status === 'sem_permissao') {
     return { rotulo: 'Sem permissão', tom: 'atencao', motivo: c.status_reason ?? 'A loja não liberou a leitura dos pedidos.', precisaDeVoce: true, reconectar: false, ultimaLeituraEm };
@@ -365,7 +403,8 @@ export function subDaLoja(unitName: string | null): string {
   return unitName ? `Loja no Liame: ${unitName} · token próprio da loja` : 'Sem loja no Liame · token próprio da loja';
 }
 
-export type FaixaDoRegem = { tipo: 'perigo' | 'atencao'; titulo: string; texto: string };
+/** `botao`: o que a faixa oferece quando dá para conectar o Regem ("Conectar o Regem de novo", "Autorizar de novo"). */
+export type FaixaDoRegem = { tipo: 'perigo' | 'atencao'; titulo: string; texto: string; botao: string };
 
 /** A faixa do topo para as lojas do Regem: a revogada primeiro; depois, a que não libera o custo. */
 export function faixaDoRegem(lojas: { nome: string; desconectada: boolean; semCusto: boolean; origem: string }[]): FaixaDoRegem | null {
@@ -375,6 +414,7 @@ export function faixaDoRegem(lojas: { nome: string; desconectada: boolean; semCu
       tipo: 'perigo',
       titulo: 'A autorização foi revogada no Regem — conecte de novo',
       texto: `Os pedidos da ${fora.nome} pararam de chegar. Até conectar de novo, os Resultados mostram o caixa só até a última leitura.`,
+      botao: 'Conectar o Regem de novo',
     };
   }
   const sem = lojas.find((l) => l.semCusto);
@@ -385,6 +425,7 @@ export function faixaDoRegem(lojas: { nome: string; desconectada: boolean; semCu
     tipo: 'atencao',
     titulo: 'O Regem liberou os pedidos, mas não o custo dos itens',
     texto: `${porque} Sem o custo, a margem fica desconhecida e os Resultados não dizem se deu lucro.${comoLiberar}`,
+    botao: 'Autorizar de novo',
   };
 }
 
@@ -392,4 +433,52 @@ export function faixaDoRegem(lojas: { nome: string; desconectada: boolean; semCu
 export function regemRevogado(c: ConnectionResponse): boolean {
   const lojas = c.accounts.filter((a) => a.disconnected_at === null);
   return c.status === 'erro' || (lojas.length > 0 && lojas.every((a) => a.status === 'desconectada'));
+}
+
+// ------------------------------------------------------------------ conectar o Regem e ligar as lojas (P2, parte 2)
+
+/**
+ * "O que o Liame pede" no diálogo de conectar: o que vai sempre e o que o presidente decide na página do
+ * Regem (o custo, que exige permissão financeira lá, e o cupom de campanha).
+ */
+export function pedidosAoRegem(): { cod: string; rotulo: string; texto: string; opcional: boolean; nota: string | null }[] {
+  return ESCOPOS_REGEM.map((e) => ({
+    cod: e.cod,
+    rotulo: e.rotulo,
+    texto: e.texto,
+    opcional: Boolean(e.financeiro || e.escrita),
+    nota: e.financeiro ? 'só com permissão financeira' : e.escrita ? 'com aprovação' : null,
+  }));
+}
+
+/** O que a autorização pelo Regem nunca entrega (a página de lá diz o mesmo). */
+export const NUNCA_VEM_DO_REGEM = [
+  'Nome, telefone, e-mail e endereço de cliente.',
+  'Equipe, escala, ponto, estoque e caixa da loja.',
+  'Senha ou acesso à sua conta do Regem.',
+];
+
+/** As etiquetas do que a loja libera, no diálogo de ligar as lojas: liberado, desligado no Liame ou não liberado. */
+export function chipsDoRegem(scopes: string[], origem: string): { cod: string; texto: string; classe: string }[] {
+  return escoposDoRegem(scopes, origem).map((e) => ({
+    cod: e.cod,
+    texto: e.estado === 'nao_liberado' ? `${e.rotulo}: não liberado` : e.estado === 'desligado' ? `${e.rotulo} · desligado no Liame` : e.rotulo,
+    classe: e.estado === 'nao_liberado' ? 'st--aguardando' : e.estado === 'desligado' ? 'st--espera' : 'st--concluido',
+  }));
+}
+
+/** A loja do Liame que já vem escolhida para uma loja do Regem: a de mesmo nome; sem ela, "Criar loja no Liame" (vazio). */
+export function lojaSugerida(nomeNoRegem: string, lojas: { id: string; name: string }[]): string {
+  const chave = (s: string) => s.trim().toLowerCase();
+  return lojas.find((u) => chave(u.name) === chave(nomeNoRegem))?.id ?? '';
+}
+
+/** As lojas do Regem que apontam para a MESMA loja do Liame ("criar loja", vazio, nunca repete). */
+export function lojasRepetidas(escolha: Record<string, string>): Set<string> {
+  const porLoja = new Map<string, string[]>();
+  for (const [doRegem, doLiame] of Object.entries(escolha)) {
+    if (!doLiame) continue;
+    porLoja.set(doLiame, [...(porLoja.get(doLiame) ?? []), doRegem]);
+  }
+  return new Set([...porLoja.values()].filter((l) => l.length > 1).flat());
 }

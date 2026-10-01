@@ -350,6 +350,71 @@ describe.skipIf(!hasDb)('conectar o Regem (A2.5 · F3)', () => {
     expect(await enviar(r.connectionId, segredo, `msg_${randomUUID()}`)).toBe(404);
   });
 
+  // Tela "Contas conectadas" (P2, parte 2): o que a tela precisa para oferecer o Regem, ligar as lojas e revogar por loja.
+  it('a lista diz que dá para conectar o Regem e as lojas da marca saem por nome; desligar uma loja revoga só o token dela; autorizar de novo troca a credencial da loja já ligada', async () => {
+    const e = await empresa('Mister Burgers Lojas');
+    await ownerQuery(`insert into liame.unit (id, tenant_id, brand_id, name) values ($1, $2, $3, 'barra')`, [randomUUID(), e.tenantId, e.brandId]);
+
+    const lista = await api.call('GET', '/v1/connections', { cookie: e.cookie });
+    expect(lista.body.available).toContain('regem');
+    expect(lista.body.available).not.toContain('regemcast');
+    const lojasDaMarca = await api.call('GET', `/v1/units?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(lojasDaMarca.status).toBe(200);
+    expect((lojasDaMarca.body.items as { name: string; brand_id: string }[]).map((u) => [u.name, u.brand_id])).toEqual([
+      ['barra', e.brandId],
+      ['Loja Centro', e.brandId],
+    ]);
+    // Marca de outra empresa: a RLS não deixa ver as lojas dela.
+    const outra = await empresa('Outra Empresa Lojas');
+    expect((await api.call('GET', `/v1/units?brand_id=${e.brandId}`, { cookie: outra.cookie })).body.items).toEqual([]);
+
+    const autorizar = async () => {
+      const inicio = await api.call('POST', '/v1/connections', { cookie: e.cookie, body: { provider: 'regem', brand_id: e.brandId } });
+      const url = new URL(inicio.body.authorize_url);
+      desafios.add(url.searchParams.get('code_challenge')!);
+      await fetch(`${api.base}/v1/oauth/callback?${new URLSearchParams({ state: url.searchParams.get('state')!, code: 'codigo-regem-bom' })}`, { headers: { cookie: e.cookie }, redirect: 'manual' });
+      expect(await processador.processarLote(5, { tenantIds: [e.tenantId] })).toBe(1);
+      return inicio.body.id as string;
+    };
+    const primeira = await autorizar();
+    const ligar = await api.call('POST', `/v1/connections/${primeira}/accounts`, {
+      cookie: e.cookie,
+      body: { accounts: [{ provider: 'regem', external_id: 'loja-centro', unit_id: e.unitId }, { provider: 'regem', external_id: 'loja-praia' }] },
+    });
+    expect(ligar.status).toBe(200);
+    const contas = ligar.body.linked as { id: string; external_id: string; connection_id: string }[];
+    const centro = contas.find((c) => c.external_id === 'loja-centro')!;
+    const praia = contas.find((c) => c.external_id === 'loja-praia')!;
+
+    // Revogar por loja: só o token da Praia vai para a revogação no Regem; a Centro segue ligada.
+    revogados.length = 0;
+    expect((await api.call('DELETE', `/v1/connected-accounts/${praia.id}`, { cookie: e.cookie })).status).toBe(204);
+    for (let i = 0; i < 50 && revogados.length < 1; i++) await new Promise((ok) => setTimeout(ok, 20));
+    await new Promise((ok) => setTimeout(ok, 60));
+    expect(revogados).toEqual([TOKEN_PRAIA]);
+    const depois = await ownerQuery<{ external_id: string; status: string; desligada: boolean }>(
+      `select external_id, status, disconnected_at is not null as desligada from liame.connected_account where connection_id = $1 order by external_id`,
+      [primeira],
+    );
+    expect(depois).toEqual([
+      { external_id: 'loja-centro', status: 'ativa', desligada: false },
+      { external_id: 'loja-praia', status: 'desconectada', desligada: true },
+    ]);
+    const [auditoria] = await ownerQuery<{ after: Record<string, unknown> }>(
+      `select after from liame.audit_event where chain_key = $1 and resource_id = $2 and action = 'conta.desconectar' order by chain_seq desc limit 1`,
+      [e.tenantId, praia.id],
+    );
+    expect(auditoria?.after).toMatchObject({ provider: 'regem', external_id: 'loja-praia', revogada_no_regem: true });
+    expect(JSON.stringify(auditoria)).not.toContain('rgm_it_');
+
+    // Autorizar de novo (o Regem troca o token da loja): a MESMA conta passa para a autorização nova.
+    const segunda = await autorizar();
+    const religar = await api.call('POST', `/v1/connections/${segunda}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'regem', external_id: 'loja-centro' }] } });
+    expect(religar.status).toBe(200);
+    expect(religar.body.linked).toHaveLength(1);
+    expect(religar.body.linked[0]).toMatchObject({ id: centro.id, connection_id: segunda, unit_id: e.unitId, status: 'ativa' });
+  });
+
   it('RegemCast ainda sem autorização própria: 503, sem criar conexão', async () => {
     const e = await empresa('Mister Burgers RegemCast');
     const r = await api.call('POST', '/v1/connections', { cookie: e.cookie, body: { provider: 'regemcast', brand_id: e.brandId } });

@@ -106,6 +106,9 @@ export {
   OAuthCallbackQuery,
   StartConnectionRequest,
   StartConnectionResponse,
+  UnitListQuery,
+  UnitListResponse,
+  UnitSummary,
 } from './connections.js';
 export {
   AccountFreshness,

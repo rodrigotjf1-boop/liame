@@ -6,10 +6,11 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
-import type { Autorizador } from './textos';
+import { type Autorizador, enderecoSeguro } from './textos';
 
 // "Conectar plataforma" (protótipo aprovado): a marca e a plataforma (Meta, ou Google com Ads e Analytics
-// numa autorização só). O navegador vai para a página da plataforma; nenhum token passa por aqui.
+// numa autorização só). O navegador vai para a página da plataforma; nenhum token passa por aqui. O Regem
+// (protótipo P2) aparece quando a API diz que dá para conectar, e abre o diálogo dele, que explica antes de ir.
 
 type Props = {
   marcas: BrandResponse[];
@@ -19,19 +20,11 @@ type Props = {
   /** Leva o navegador para a plataforma (injetável para a tela; padrão: window.location.assign). */
   irPara?: (url: string) => void;
   aoIr: (a: Autorizador) => void;
+  /** A API diz que dá para conectar o Regem: a opção aparece e leva ao diálogo dele, com a marca escolhida. */
+  aoRegem?: ((marca: string) => void) | null;
 };
 
-/** Só endereço http(s) absoluto: a URL vem da nossa API, mas nada de `javascript:` por engano. */
-function enderecoSeguro(url: string): string | null {
-  try {
-    const u = new URL(url);
-    return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
-export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr, irPara = (url) => window.location.assign(url) }: Props) {
+export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr, aoRegem = null, irPara = (url) => window.location.assign(url) }: Props) {
   const campoMarca = useRef<HTMLSelectElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: campoMarca, reserva });
   const ids = useId();
@@ -39,7 +32,7 @@ export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr,
   const [indo, setIndo] = useState<Autorizador | null>(null);
   const [erro, setErro] = useState('');
 
-  async function conectar(provider: Autorizador) {
+  async function conectar(provider: Exclude<Autorizador, 'regem'>) {
     setErro('');
     if (!marca) return setErro('Escolha a marca que vai receber as contas.');
     setIndo(provider);
@@ -105,10 +98,29 @@ export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr,
               <b>{indo === 'google' ? 'Indo para o Google…' : 'Google Ads e Google Analytics'}</b>
               <span>Uma autorização só para os dois. Somente leitura.</span>
             </button>
+            {aoRegem && (
+              <button
+                className="plataforma"
+                type="button"
+                disabled={indo !== null}
+                onClick={() => {
+                  if (!marca) return setErro('Escolha a marca que vai receber as lojas.');
+                  aoRegem(marca);
+                }}
+              >
+                <span className="plat plat--regem">Regem</span>
+                <b>Regem · vendas da loja</b>
+                <span>Pedidos, custos e cupons confirmados no caixa. Você escolhe as lojas no Regem.</span>
+              </button>
+            )}
           </div>
           <p className="dialogo-nota">
             <Icone nome="shield" pequeno />
-            <span>Você vai para a página da plataforma, confirma lá e volta para cá. O Liame só lê: não cria, não muda e não gasta nada.</span>
+            <span>
+              {aoRegem
+                ? 'Você vai para a página da plataforma, confirma lá e volta para cá. Na Meta e no Google, o Liame só lê: não cria, não muda e não gasta nada. No Regem, a única escrita possível é o cupom de campanha, sempre com aprovação.'
+                : 'Você vai para a página da plataforma, confirma lá e volta para cá. O Liame só lê: não cria, não muda e não gasta nada.'}
+            </span>
           </p>
         </div>
       </div>
