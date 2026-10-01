@@ -143,9 +143,12 @@ export {
   CouponLink,
   CouponListQuery,
   CouponListResponse,
+  CouponRequest,
+  CouponRequestResponse,
   CouponResponse,
   CouponStore,
   CreateExternalCouponRequest,
+  CreateRegemCouponRequest,
   DetectedPlatform,
   EXTERNAL_COUPON_PLATFORMS,
   ExternalCouponPlatform,
@@ -153,6 +156,8 @@ export {
   ORDER_PLATFORMS,
   OrderPlatform,
   OrderPlatformResponse,
+  REGEM_COUPON_KINDS,
+  RegemCouponCode,
   SetOrderPlatformRequest,
 } from './coupons.js';
 export {

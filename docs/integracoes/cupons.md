@@ -140,5 +140,5 @@ O evento é **só gatilho**: o Liame lê pela rota com cursor em seguida. Evento
 
 | Sistema | Situação | Onde |
 | --- | --- | --- |
-| Regem | a implementar (trilha C, C1c) | rotas só da nuvem, sob o token por loja (C1a) |
+| Regem | no ar desde 30/09/2026 (trilha C, C1c); o Liame chama a criação (§3.3) pela ferramenta `regem_cupom_criar` desde 01/10/2026, com a flag `regem_write` desligada | rotas só da nuvem, sob o token por loja (C1a) |
 | GoGeM | futuro | — |

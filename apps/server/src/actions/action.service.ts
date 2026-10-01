@@ -28,7 +28,7 @@ import { currentTraceparent, inSpan } from '../observability/trace.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { BudgetService } from './budget.service.js';
 import { CONNECTORS, type Connector } from './connectors.js';
-import { TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
+import { PlanoRecusado, type ResourceState, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
 
 /** Pedido que ninguém aprova expira (e devolve a reserva). */
 export const ACTION_TTL_HOURS = 72;
@@ -105,7 +105,7 @@ export class ActionService {
     const params = this.parseParams(tool, input.params);
     const read = await connector.read(tx, { tenantId, accountId: input.account_id, resourceId: input.resource_id });
     if (!read) throw new AppProblem(404, 'recurso-nao-encontrado', 'Recurso não encontrado', 'A conta ou o recurso não existe no provedor.');
-    const plan = tool.plan(read.state, params);
+    const plan = this.planejar(tool, read.state, params);
     const decision = await inSpan('politica.avaliar', { 'liame.tool': tool.name, 'liame.action': plan.action }, () =>
       this.decide(tx, tenantId, input.brand_id ?? null, tool, input, plan),
     );
@@ -156,7 +156,7 @@ export class ActionService {
     const params = this.parseParams(tool, input.params);
     const read = await connector.read(tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
     if (!read) throw new AppProblem(404, 'recurso-nao-encontrado', 'Recurso não encontrado', 'A conta ou o recurso não existe no provedor.');
-    const plan = tool.plan(read.state, params);
+    const plan = this.planejar(tool, read.state, params);
     const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params };
     const decision = await this.decide(tx, tenantId, row.brand_id, tool, request, plan);
     const { mode, status, reason } = await this.statusFor(decision.mode, auth, row.brand_id);
@@ -288,6 +288,16 @@ export class ActionService {
       throw new AppProblem(400, 'provedor-nao-suportado', 'Provedor não suportado', `A ferramenta ${tool.name} não atende o provedor "${provider}".`);
     }
     return { tool, connector };
+  }
+
+  /** O plano da ferramenta; o que ela recusa pelo estado do recurso (`PlanoRecusado`) volta como 422, com o motivo. */
+  private planejar(tool: ToolDefinition, before: ResourceState, params: Record<string, unknown>): ToolPlan {
+    try {
+      return tool.plan(before, params);
+    } catch (err) {
+      if (err instanceof PlanoRecusado) throw new AppProblem(422, 'plano-recusado', 'Não dá para pedir isto', err.message);
+      throw err;
+    }
   }
 
   private parseParams(tool: ToolDefinition, params: Record<string, unknown>): Record<string, unknown> {

@@ -1,8 +1,10 @@
 import {
   CouponListQuery,
   CouponListResponse,
+  CouponRequestResponse,
   CouponResponse,
   CreateExternalCouponRequest,
+  CreateRegemCouponRequest,
   LinkCouponRequest,
   OrderPlatformResponse,
   ProblemDetails,
@@ -14,7 +16,9 @@ import {
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCookieAuth,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -28,7 +32,8 @@ import { CouponsService } from './coupons.service.js';
 
 // Cupons de campanha (A2.5, F6; protótipo P3 com a plataforma de pedidos, aprovado em 30/09/2026): os cupons
 // do Regem e os informados de outra plataforma de pedidos, ligados a campanhas, e onde cada loja recebe os
-// pedidos online. Nada é escrito no Regem, na Meta, no Google nem na plataforma de pedidos.
+// pedidos online. Nada é escrito na Meta, no Google nem na plataforma de pedidos; no Regem, só a criação de cupom,
+// e ela não sai daqui: a rota monta o pedido e o Action Service cuida da política, da aprovação e da execução.
 @ApiTags('cupons')
 @ApiCookieAuth('liame_sessao')
 @Controller()
@@ -46,8 +51,44 @@ export class CouponsController {
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
-  list(@Query({ schema: CouponListQuery }) query: CouponListQuery): Promise<CouponListResponse> {
-    return this.coupons.list(query.brand_id);
+  list(@Auth() auth: AuthContext, @Query({ schema: CouponListQuery }) query: CouponListQuery): Promise<CouponListResponse> {
+    return this.coupons.list(auth, query.brand_id);
+  }
+
+  @Post('coupons/regem')
+  @Auditar('cupom.pedir_criacao', { recurso: 'action_request' })
+  @Permissao('cupons.criar')
+  @HttpCode(201)
+  @ApiOperation({
+    summary: 'Pedir a criação de um cupom no Regem',
+    description:
+      'Monta o pedido de um cupom de campanha na loja do Regem (percentual, valor fixo ou entrega grátis, com validade em dias do fuso da loja) e o entrega ao Action Service: nada é criado agora. Quem pode aprovar confirma com o código do app (`POST /v1/actions/{id}/approve`); depois disso o Liame cria o cupom no Regem e o liga à campanha. Volta 403 se a criação pelo Liame está desligada para a empresa, 422 se a loja não liberou "criar cupom de campanha" no Regem ou se o código já existe nela, e 409 se já há um pedido ativo para o mesmo código.',
+  })
+  @ApiCreatedResponse({ standardSchema: CouponRequestResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  createInRegem(@Auth() auth: AuthContext, @Body({ schema: CreateRegemCouponRequest }) body: CreateRegemCouponRequest): Promise<CouponRequestResponse> {
+    return this.coupons.createInRegem(auth, body);
+  }
+
+  @Post('coupons/regem/:id/cancel')
+  @Auditar('cupom.cancelar_pedido', { recurso: 'action_request' })
+  @Permissao('cupons.criar')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Cancelar o pedido de criação de um cupom',
+    description: 'Cancela o pedido que ainda não foi executado (esperando aprovação ou já aprovado): o cupom não chega a existir no Regem. Depois de executado, volta 409.',
+  })
+  @ApiNoContentResponse({ description: 'Pedido cancelado' })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  async cancelRegemRequest(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<void> {
+    await this.coupons.cancelRegemRequest(auth, id);
   }
 
   @Post('coupons/external')

@@ -254,6 +254,7 @@ describe.skipIf(!hasDb)('cupons de campanha (A2.5 · F6)', () => {
         coupons_read_at: expect.any(String),
         coupons_freshness: 'fresh',
         coupons_error: null,
+        can_create: false,
       },
       {
         connected_account_id: contas.regemSolta,
@@ -266,6 +267,7 @@ describe.skipIf(!hasDb)('cupons de campanha (A2.5 · F6)', () => {
         coupons_read_at: null,
         coupons_freshness: 'unknown',
         coupons_error: 'sem_permissao',
+        can_create: false,
       },
     ]);
     const itens = r.body.items as Item[];
@@ -291,6 +293,7 @@ describe.skipIf(!hasDb)('cupons de campanha (A2.5 · F6)', () => {
     ]);
     expect(r.body.detected_platform).toEqual({ platform: 'anotaai', host: 'pedido.anota.ai', provider: 'meta_ads', ads: 2 });
     expect(r.body.create_in_regem).toBe(false);
+    expect(r.body.requests).toEqual([]);
   });
 
   it('plataforma de pedidos da loja: informar, trocar para outra com o endereço, voltar; recusas', async () => {

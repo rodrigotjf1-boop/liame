@@ -47,6 +47,7 @@ const loja = (o: Partial<CouponStore> = {}): CouponStore => ({
   coupons_read_at: local(30, 10, 5),
   coupons_freshness: 'fresh',
   coupons_error: null,
+  can_create: false,
   ...o,
 });
 

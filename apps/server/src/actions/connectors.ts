@@ -1,9 +1,11 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { regemCupomConnector } from './regem-cupom.js';
 import type { ResourceState } from './tools.js';
 
-// Connectors (arquitetura §6): um por provedor, com a mesma interface. Na A1 só existe o sandbox
-// (no próprio banco); Meta, Google e GA4 chegam na A2 e passam pelo mesmo Action Service.
+// Connectors (arquitetura §6): um por provedor, com a mesma interface. Na A1 só existia o sandbox
+// (no próprio banco). O primeiro de verdade é o do Regem (A2.5, F6 parte 2): criar cupom de campanha.
+// Meta e Google chegam na A4 e passam pelo mesmo Action Service.
 
 export interface ResourceRef {
   tenantId: string;
@@ -19,7 +21,12 @@ export interface ReadResult {
 export type ApplyResult =
   | { ok: true; state: ResourceState; version: number }
   /** O recurso mudou desde o pedido: não sobrescreve (ADR-007, compensação). */
-  | { ok: false; reason: 'estado-mudou'; current: ReadResult };
+  | { ok: false; reason: 'estado-mudou'; current: ReadResult }
+  /** O provedor recusou de vez (regra inválida, código em uso, sem permissão): repetir não resolve. */
+  | { ok: false; reason: 'recusado'; mensagem: string };
+
+/** `validateOnly`: só confere se dá para aplicar. `requestedBy`: quem pediu a ação (o connector não decide por ele; só registra). */
+export type ApplyOptions = { validateOnly?: boolean; requestedBy?: string | null };
 
 export interface Connector {
   readonly provider: string;
@@ -27,7 +34,7 @@ export interface Connector {
   readonly writeFlag: string | null;
   read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null>;
   /** Aplica o estado desejado se a versão ainda for a esperada (concorrência otimista). */
-  apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options?: { validateOnly?: boolean }): Promise<ApplyResult>;
+  apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options?: ApplyOptions): Promise<ApplyResult>;
 }
 
 export class SandboxConnector implements Connector {
@@ -41,7 +48,7 @@ export class SandboxConnector implements Connector {
     return r.rows[0] ?? null;
   }
 
-  async apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options: { validateOnly?: boolean } = {}): Promise<ApplyResult> {
+  async apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options: ApplyOptions = {}): Promise<ApplyResult> {
     const current = await this.read(tx, ref);
     if (!current || current.version !== expectedVersion) {
       return { ok: false, reason: 'estado-mudou', current: current ?? { state: {}, version: 0 } };
@@ -57,4 +64,4 @@ export class SandboxConnector implements Connector {
   }
 }
 
-export const CONNECTORS: Record<string, Connector> = { sandbox: new SandboxConnector() };
+export const CONNECTORS: Record<string, Connector> = { sandbox: new SandboxConnector(), regem: regemCupomConnector };

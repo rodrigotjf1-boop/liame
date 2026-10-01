@@ -49,7 +49,7 @@ O dono decidiu em 29/09/2026 que o cupom vive no Regem: o Liame puxa os cupons c
    - **Webhook:** o webhook do produto (Standard Webhooks) é **só gatilho de frescor**, com um segredo por conexão. A inbox do Liame recebe em `POST /v1/inbox/{provider}/{connection_id}`, grava cru, deduplica e responde 202; o conector lê pelo cursor em seguida.
 6. **Escrita só pelo Action Service:**
    - o cupom é a única escrita externa da A2.5: ferramenta `regem_cupom_criar`, risco R1, reversível por desativação;
-   - aprovação pela política da empresa;
+   - aprovação pela política: a da plataforma (versão 2) manda `cupom.criar` para aprovação mesmo sem regra da empresa, e a empresa pode apertar;
    - `Idempotency-Key` repassada até o Regem;
    - flag `regem_write`, que nasce desligada, e kill switch do provider `regem`.
 7. **Contrato de cupons neutro** (`docs/integracoes/cupons.md`):
