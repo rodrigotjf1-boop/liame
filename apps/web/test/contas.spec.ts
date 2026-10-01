@@ -1,16 +1,25 @@
-import type { AccountFreshness, ConnectionResponse, DiscoveredAccount } from '@liame/contracts';
+import type { AccountFreshness, ConnectedAccountResponse, ConnectionResponse, DiscoveredAccount } from '@liame/contracts';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { CartaoAutorizacaoRegem } from '@/components/contas/cartao-autorizacao-regem';
 import {
   autorizacoesVisiveis,
   botaoLigar,
   escolhiveis,
+  escoposDoRegem,
   faixaDaVolta,
+  faixaDoRegem,
   gruposDaEscolha,
   idDaConta,
   lerVolta,
+  plataforma,
   quemAutorizou,
+  regemRevogado,
   resumoDaDescoberta,
   situacaoDaConta,
+  situacaoDaLoja,
+  subDaLoja,
   ultimaLeitura,
   vencimentoDaAutorizacao,
 } from '@/components/contas/textos';
@@ -44,6 +53,7 @@ const conexao = (extra: Partial<ConnectionResponse> = {}): ConnectionResponse =>
   created_at: local(27, 9, 0),
   completed_at: null,
   refresh_expires_at: null,
+  scopes: [],
   discovered: [],
   accounts: [],
   ...extra,
@@ -153,7 +163,7 @@ describe('contas ligadas', () => {
 
 describe('autorizações', () => {
   it('lista as que valem e as que falharam depois de valer; tentativa que não chegou a valer fica de fora', () => {
-    const conta = { id: ID, brand_id: ID, connection_id: ID, provider: 'meta_ads', external_id: 'act_1', name: 'a', currency: null, timezone: null, status: 'ativa', status_reason: null, unit_id: null, connected_at: local(20, 8), disconnected_at: null };
+    const conta = { id: ID, brand_id: ID, connection_id: ID, provider: 'meta_ads', external_id: 'act_1', name: 'a', currency: null, timezone: null, status: 'ativa', status_reason: null, unit_id: null, unit_name: null, scopes: [], connected_at: local(20, 8), disconnected_at: null };
     const lista = [
       conexao({ id: 'a', status: 'ativa' }),
       conexao({ id: 'b', status: 'aguardando_escolha' }),
@@ -183,5 +193,137 @@ describe('quem autorizou', () => {
     expect(quemAutorizou({ authorized_by: '  Ana  ' })).toBe('Ana');
     expect(quemAutorizou({ authorized_by: null })).toBeNull();
     expect(quemAutorizou({ authorized_by: '   ' })).toBeNull();
+  });
+});
+
+// Lojas do Regem (protótipo P2, aprovado em 29/09/2026): a leitura dos pedidos, o que a loja libera e a autorização.
+describe('lojas do Regem', () => {
+  const COMPLETO = ['pedidos.ler', 'custos.ler', 'clientes.anonimizacao.ler', 'cupons.ler', 'cupons.uso.ler'];
+  const SEM_CUSTO = COMPLETO.filter((e) => e !== 'custos.ler');
+  const loja = (extra: Partial<AccountFreshness> = {}, pedidosEm: string | null = local(27, 9, 20)): AccountFreshness => ({
+    connected_account_id: ID,
+    brand_id: ID,
+    provider: 'regem',
+    name: 'Mister Burguer Steakhouse',
+    status: 'ativa',
+    status_reason: null,
+    datasets: [
+      { dataset: 'cupons', freshness: 'fresh', last_success_at: local(27, 9, 20), last_attempt_at: local(27, 9, 20), last_error: null, next_at: null },
+      { dataset: 'pedidos', freshness: 'fresh', last_success_at: pedidosEm, last_attempt_at: pedidosEm, last_error: null, next_at: null },
+    ],
+    ...extra,
+  });
+  const contaRegem = (extra: Partial<ConnectedAccountResponse> = {}): ConnectedAccountResponse => ({
+    id: ID,
+    brand_id: ID,
+    connection_id: ID,
+    provider: 'regem',
+    external_id: 'loja-1',
+    name: 'Mister Burguer Steakhouse',
+    currency: 'BRL',
+    timezone: 'America/Sao_Paulo',
+    status: 'ativa',
+    status_reason: null,
+    unit_id: ID,
+    unit_name: 'Mister Burguer Steakhouse',
+    scopes: SEM_CUSTO,
+    connected_at: local(20, 8),
+    disconnected_at: null,
+    ...extra,
+  });
+
+  it('situação da loja: pedidos em dia, primeira leitura, atrasados só depois de 2 horas, sem custos e desconectada', () => {
+    const completa = { scopes: COMPLETO, origem: 'oauth' };
+    expect(situacaoDaLoja(loja(), completa, agora)).toMatchObject({ rotulo: 'Pedidos em dia', tom: 'ok', precisaDeVoce: false, ultimaLeituraEm: local(27, 9, 20) });
+    expect(situacaoDaLoja(loja({}, null), completa, agora)).toMatchObject({ rotulo: 'Primeira leitura', tom: 'lendo', motivo: 'Trazendo os pedidos dos últimos 90 dias. Leva alguns minutos.' });
+    // 09:30 menos 1h59 ainda está em dia; 2h01, atrasado.
+    expect(situacaoDaLoja(loja({}, local(27, 7, 31)), completa, agora).rotulo).toBe('Pedidos em dia');
+    expect(situacaoDaLoja(loja({}, local(27, 7, 29)), completa, agora)).toMatchObject({ rotulo: 'Pedidos atrasados', tom: 'atencao' });
+    expect(situacaoDaLoja(loja(), { scopes: SEM_CUSTO, origem: 'oauth' }, agora)).toMatchObject({
+      rotulo: 'Sem custos',
+      tom: 'atencao',
+      precisaDeVoce: true,
+      motivo: 'Quem autorizou não tem permissão financeira no Regem: a margem desta loja fica desconhecida.',
+    });
+    expect(situacaoDaLoja(loja(), { scopes: SEM_CUSTO, origem: 'distribuicao' }, agora).motivo).toBe('O token desta loja foi emitido sem o custo dos itens: a margem desta loja fica desconhecida.');
+    expect(situacaoDaLoja(loja({ status: 'desconectada' }), completa, agora)).toMatchObject({
+      rotulo: 'Desconectada',
+      tom: 'perigo',
+      precisaDeVoce: true,
+      reconectar: false,
+      motivo: 'A autorização foi revogada no Regem — conecte de novo.',
+    });
+    expect(subDaLoja('Centro')).toBe('Loja no Liame: Centro · token próprio da loja');
+    expect(subDaLoja(null)).toBe('Sem loja no Liame · token próprio da loja');
+    expect(plataforma('regem')).toEqual({ nome: 'Regem', classe: 'regem' });
+  });
+
+  it('o que o Liame recebe: liberado, não liberado (com o porquê do custo) e o cupom desligado no Liame', () => {
+    const lista = escoposDoRegem([...SEM_CUSTO, 'cupons.criar', 'clientes.telefone.ler'], 'distribuicao');
+    expect(lista.map((e) => [e.cod, e.estado])).toEqual([
+      ['pedidos.ler', 'liberado'],
+      ['custos.ler', 'nao_liberado'],
+      ['clientes.anonimizacao.ler', 'liberado'],
+      ['cupons.ler', 'liberado'],
+      ['cupons.uso.ler', 'liberado'],
+      ['cupons.criar', 'desligado'],
+      ['clientes.telefone.ler', 'liberado'],
+    ]);
+    expect(lista[1]!.texto).toBe('O token desta loja foi emitido sem o custo dos itens.');
+    expect(escoposDoRegem(SEM_CUSTO, 'oauth')[1]!.texto).toContain('permissão financeira no Regem');
+    expect(lista[6]!.rotulo).toBe('Telefone do cliente, pseudonimizado');
+    expect(escoposDoRegem(['escopo.novo'], 'oauth').at(-1)).toMatchObject({ cod: 'escopo.novo', rotulo: 'escopo.novo', estado: 'liberado' });
+  });
+
+  it('faixa do topo: a revogada vem antes da sem custo; tudo certo, nenhuma', () => {
+    const l = { nome: 'Loja Centro', desconectada: false, semCusto: false, origem: 'oauth' };
+    expect(faixaDoRegem([l])).toBeNull();
+    expect(faixaDoRegem([{ ...l, semCusto: true }])).toEqual({
+      tipo: 'atencao',
+      titulo: 'O Regem liberou os pedidos, mas não o custo dos itens',
+      texto: 'Quem autorizou não tem permissão financeira no Regem. Sem o custo, a margem fica desconhecida e os Resultados não dizem se deu lucro. Para liberar, um presidente autoriza de novo.',
+    });
+    expect(faixaDoRegem([{ ...l, semCusto: true, origem: 'distribuicao' }])!.texto).toBe(
+      'O token da loja foi emitido sem o custo dos itens. Sem o custo, a margem fica desconhecida e os Resultados não dizem se deu lucro.',
+    );
+    expect(faixaDoRegem([{ ...l, semCusto: true }, { ...l, nome: 'Loja Barra', desconectada: true }])).toMatchObject({
+      tipo: 'perigo',
+      titulo: 'A autorização foi revogada no Regem — conecte de novo',
+      texto: 'Os pedidos da Loja Barra pararam de chegar. Até conectar de novo, os Resultados mostram o caixa só até a última leitura.',
+    });
+  });
+
+  it('cartão da autorização: quem autorizou e quantas lojas, o aviso de sem custo, a lista do que o Liame recebe e a revogada', () => {
+    const cartao = (c: ConnectionResponse, podeConectar = true) =>
+      renderToStaticMarkup(createElement(CartaoAutorizacaoRegem, { conexao: c, podeConectar, aoEscolher: null, aoRevogar: () => {} }));
+    const daDistribuicao = cartao(conexao({ provider: 'regem', origin: 'distribuicao', status: 'ativa', completed_at: local(30, 9), scopes: SEM_CUSTO, accounts: [contaRegem()] }));
+    expect(daDistribuicao).toContain('<b>Autorizada em 30/09/2026</b>');
+    expect(daDistribuicao).toContain('pela distribuição DMS · 1 loja');
+    expect(daDistribuicao).toContain('Um token para cada loja, guardado cifrado no Liame e só em hash no Regem.');
+    expect(daDistribuicao).toContain('Sem o custo dos itens: o token desta loja foi emitido sem ele.');
+    expect(daDistribuicao).toContain('O que o Liame recebe');
+    expect(daDistribuicao).toContain('aria-expanded="false"');
+    expect(daDistribuicao).toContain('<code>custos.ler</code><span class="st st--aguardando">Não liberado</span>');
+    expect(daDistribuicao).toContain('<code>pedidos.ler</code><span class="st st--concluido">Liberado</span>');
+    expect(daDistribuicao).toContain('aria-label="Revogar a autorização do Regem de 30/09/2026"');
+
+    const peloPresidente = cartao(
+      conexao({ provider: 'regem', status: 'ativa', authorized_by: 'Rodrigo Silva', completed_at: local(29, 10), scopes: [...COMPLETO, 'cupons.criar'], accounts: [contaRegem({ scopes: COMPLETO }), contaRegem({ id: 'b', external_id: 'loja-2' })] }),
+    );
+    expect(peloPresidente).toContain('<b>Autorizada por Rodrigo</b>');
+    expect(peloPresidente).toContain('presidente no Regem · em 29/09/2026 · 2 lojas');
+    expect(peloPresidente).not.toContain('Sem o custo dos itens');
+    expect(peloPresidente).toContain('Liberado · desligado no Liame');
+
+    const revogada = conexao({ provider: 'regem', status: 'ativa', scopes: SEM_CUSTO, accounts: [contaRegem({ status: 'desconectada' })] });
+    expect(regemRevogado(revogada)).toBe(true);
+    expect(regemRevogado(conexao({ provider: 'regem', status: 'ativa', accounts: [contaRegem(), contaRegem({ status: 'desconectada' })] }))).toBe(false);
+    const html = cartao(revogada);
+    expect(html).toContain('Revogada no Regem. A leitura dos pedidos parou; conecte de novo para voltar.');
+    expect(html).not.toContain('Sem o custo dos itens');
+    // Quem só vê não revoga, mas pode abrir a lista do que o Liame recebe.
+    const soLeitura = cartao(revogada, false);
+    expect(soLeitura).not.toContain('Revogar');
+    expect(soLeitura).toContain('O que o Liame recebe');
   });
 });

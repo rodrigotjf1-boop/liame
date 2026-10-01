@@ -12,9 +12,9 @@ const PLATAFORMAS: Record<string, { nome: string; classe: string }> = {
   ga4: { nome: 'GA4', classe: 'ga4' },
   meta: { nome: 'Meta', classe: 'meta' },
   google: { nome: 'Google', classe: 'google' },
-  // Produtos DMS (A2.5): a tela própria das lojas espera o protótipo P2; até lá, só o nome.
-  regem: { nome: 'Regem', classe: '' },
-  regemcast: { nome: 'RegemCast', classe: '' },
+  // Produtos DMS (A2.5, protótipo P2): a loja do Regem e o número do RegemCast.
+  regem: { nome: 'Regem', classe: 'regem' },
+  regemcast: { nome: 'RegemCast', classe: 'regemcast' },
 };
 
 /** Nome e cor da plataforma (conta ou autorização). */
@@ -203,7 +203,7 @@ export function botaoLigar(n: number): string {
 
 // ------------------------------------------------------------------ contas ligadas
 
-export type Tom = 'ok' | 'atencao' | 'perigo' | 'espera';
+export type Tom = 'ok' | 'atencao' | 'perigo' | 'espera' | 'lendo';
 export type SituacaoConta = {
   rotulo: string;
   tom: Tom;
@@ -278,4 +278,118 @@ export function vencimentoDaAutorizacao(c: Pick<ConnectionResponse, 'refresh_exp
   return venceu
     ? { venceu, texto: `Venceu em ${data} (app do Google em fase de teste). Conecte de novo para a leitura voltar.` }
     : { venceu, texto: `Vence em ${data} (app do Google em fase de teste). Conecte de novo antes para a leitura não parar.` };
+}
+
+// ------------------------------------------------------------------ lojas do Regem (protótipo P2, aprovado em 29/09/2026)
+
+/** O que o Liame pede ao Regem, na ordem do protótipo. `financeiro`: só sai com permissão financeira; `escrita`: fica desligado no Liame. */
+const ESCOPOS_REGEM: { cod: string; rotulo: string; texto: string; financeiro?: boolean; escrita?: boolean }[] = [
+  { cod: 'pedidos.ler', rotulo: 'Pedidos', texto: 'Pedidos confirmados e cancelados, com itens, canal, cupom usado e a origem do clique.' },
+  { cod: 'custos.ler', rotulo: 'Custo dos itens', texto: 'Custo de cada item, para calcular a margem. Sem ele, a margem fica desconhecida, nunca zero.', financeiro: true },
+  { cod: 'clientes.anonimizacao.ler', rotulo: 'Aviso de cliente anonimizado', texto: 'Quando o Regem anonimiza um cliente, o Liame apaga o identificador dele.' },
+  { cod: 'cupons.ler', rotulo: 'Cupons', texto: 'Cupons da loja, com regra e validade.' },
+  { cod: 'cupons.uso.ler', rotulo: 'Usos dos cupons', texto: 'Em qual pedido cada cupom foi usado, quando e com que valor.' },
+  { cod: 'cupons.criar', rotulo: 'Criar cupom de campanha', texto: 'Criar e desativar cupom pelo Liame, sempre com aprovação. Fica desligado até a sua empresa ligar.', escrita: true },
+];
+/** Liberados que o protótipo não lista: aparecem só quando a loja libera. */
+const ESCOPOS_EXTRAS: Record<string, { rotulo: string; texto: string }> = {
+  'clientes.telefone.ler': {
+    rotulo: 'Telefone do cliente, pseudonimizado',
+    texto: 'O telefone vira um identificador pseudonimizado na chegada e não fica guardado; liga a conversa do anúncio ao pedido.',
+  },
+};
+
+export type EscopoDaLoja = { cod: string; rotulo: string; texto: string; estado: 'liberado' | 'nao_liberado' | 'desligado' };
+
+/** A loja não libera o custo dos itens (sem ele, a margem fica desconhecida). */
+export function semCusto(scopes: string[]): boolean {
+  return !scopes.includes('custos.ler');
+}
+
+/** Por que o custo não veio: quem autorizou não tinha permissão financeira, ou o token da distribuição saiu sem ele. */
+export function motivoSemCusto(origem: string): string {
+  return origem === 'distribuicao'
+    ? 'O token desta loja foi emitido sem o custo dos itens.'
+    : 'Quem autorizou não tem permissão financeira no Regem. Para liberar, um presidente autoriza de novo.';
+}
+
+/** "O que o Liame recebe": cada escopo do protótipo com a situação dele, mais os liberados fora da lista. */
+export function escoposDoRegem(scopes: string[], origem: string): EscopoDaLoja[] {
+  const lista: EscopoDaLoja[] = ESCOPOS_REGEM.map((e) => {
+    if (!scopes.includes(e.cod)) return { cod: e.cod, rotulo: e.rotulo, texto: e.financeiro ? motivoSemCusto(origem) : e.texto, estado: 'nao_liberado' };
+    return { cod: e.cod, rotulo: e.rotulo, texto: e.texto, estado: e.escrita ? 'desligado' : 'liberado' };
+  });
+  const conhecidos = new Set(ESCOPOS_REGEM.map((e) => e.cod));
+  for (const cod of scopes) {
+    if (conhecidos.has(cod)) continue;
+    const extra = ESCOPOS_EXTRAS[cod];
+    lista.push({ cod, rotulo: extra?.rotulo ?? cod, texto: extra?.texto ?? 'Liberado pela loja no Regem.', estado: 'liberado' });
+  }
+  return lista;
+}
+
+/** Os pedidos chegam a cada 15 minutos: atraso só depois de 2 horas sem leitura (o mesmo limite da Atenção, F9). */
+const PEDIDOS_ATRASADOS_MS = 2 * 3_600_000;
+
+/** Situação da loja do Regem na tabela: a conexão primeiro, depois a leitura dos pedidos e o que a loja libera. */
+export function situacaoDaLoja(c: AccountFreshness, loja: { scopes: string[]; origem: string }, agora: Date): SituacaoConta {
+  const pedidos = c.datasets.find((x) => x.dataset === 'pedidos') ?? null;
+  const ultimaLeituraEm = pedidos?.last_success_at ?? null;
+  if (c.status === 'desconectada') {
+    return { rotulo: 'Desconectada', tom: 'perigo', motivo: c.status_reason ?? 'A autorização foi revogada no Regem — conecte de novo.', precisaDeVoce: true, reconectar: false, ultimaLeituraEm };
+  }
+  if (c.status === 'sem_permissao') {
+    return { rotulo: 'Sem permissão', tom: 'atencao', motivo: c.status_reason ?? 'A loja não liberou a leitura dos pedidos.', precisaDeVoce: true, reconectar: false, ultimaLeituraEm };
+  }
+  if (c.status === 'erro') {
+    return { rotulo: 'Leitura falhando', tom: 'atencao', motivo: c.status_reason ?? 'A última leitura falhou; tentamos de novo sozinhos.', precisaDeVoce: false, reconectar: false, ultimaLeituraEm };
+  }
+  if (!ultimaLeituraEm) {
+    return { rotulo: 'Primeira leitura', tom: 'lendo', motivo: 'Trazendo os pedidos dos últimos 90 dias. Leva alguns minutos.', precisaDeVoce: false, reconectar: false, ultimaLeituraEm };
+  }
+  if (agora.getTime() - new Date(ultimaLeituraEm).getTime() > PEDIDOS_ATRASADOS_MS) {
+    return { rotulo: 'Pedidos atrasados', tom: 'atencao', motivo: null, precisaDeVoce: false, reconectar: false, ultimaLeituraEm };
+  }
+  if (semCusto(loja.scopes)) {
+    const motivo =
+      loja.origem === 'distribuicao'
+        ? 'O token desta loja foi emitido sem o custo dos itens: a margem desta loja fica desconhecida.'
+        : 'Quem autorizou não tem permissão financeira no Regem: a margem desta loja fica desconhecida.';
+    return { rotulo: 'Sem custos', tom: 'atencao', motivo, precisaDeVoce: true, reconectar: false, ultimaLeituraEm };
+  }
+  return { rotulo: 'Pedidos em dia', tom: 'ok', motivo: null, precisaDeVoce: false, reconectar: false, ultimaLeituraEm };
+}
+
+/** "Loja no Liame: Centro · token próprio da loja" (a linha de baixo do nome, na tabela). */
+export function subDaLoja(unitName: string | null): string {
+  return unitName ? `Loja no Liame: ${unitName} · token próprio da loja` : 'Sem loja no Liame · token próprio da loja';
+}
+
+export type FaixaDoRegem = { tipo: 'perigo' | 'atencao'; titulo: string; texto: string };
+
+/** A faixa do topo para as lojas do Regem: a revogada primeiro; depois, a que não libera o custo. */
+export function faixaDoRegem(lojas: { nome: string; desconectada: boolean; semCusto: boolean; origem: string }[]): FaixaDoRegem | null {
+  const fora = lojas.find((l) => l.desconectada);
+  if (fora) {
+    return {
+      tipo: 'perigo',
+      titulo: 'A autorização foi revogada no Regem — conecte de novo',
+      texto: `Os pedidos da ${fora.nome} pararam de chegar. Até conectar de novo, os Resultados mostram o caixa só até a última leitura.`,
+    };
+  }
+  const sem = lojas.find((l) => l.semCusto);
+  if (!sem) return null;
+  const porque = sem.origem === 'distribuicao' ? 'O token da loja foi emitido sem o custo dos itens.' : 'Quem autorizou não tem permissão financeira no Regem.';
+  const comoLiberar = sem.origem === 'distribuicao' ? '' : ' Para liberar, um presidente autoriza de novo.';
+  return {
+    tipo: 'atencao',
+    titulo: 'O Regem liberou os pedidos, mas não o custo dos itens',
+    texto: `${porque} Sem o custo, a margem fica desconhecida e os Resultados não dizem se deu lucro.${comoLiberar}`,
+  };
+}
+
+/** A autorização do Regem foi revogada do lado de lá: todas as lojas dela estão desconectadas (ou a conexão falhou). */
+export function regemRevogado(c: ConnectionResponse): boolean {
+  const lojas = c.accounts.filter((a) => a.disconnected_at === null);
+  return c.status === 'erro' || (lojas.length > 0 && lojas.every((a) => a.status === 'desconectada'));
 }

@@ -70,6 +70,10 @@ export const ConnectedAccountResponse = z.strictObject({
   status_reason: z.string().nullable(),
   /** Loja do Liame a que a conta pertence (a loja do Regem, a conta do RegemCast); nulo = a marca toda. */
   unit_id: z.uuid().nullable(),
+  /** Nome da loja do Liame (a tela mostra "Loja no Liame: Centro"); nulo sem loja. */
+  unit_name: z.string().nullable(),
+  /** O que a loja do Regem libera para o Liame (escopos do token dela: `pedidos.ler`, `custos.ler`…); vazio nas outras plataformas. */
+  scopes: z.array(z.string()),
   connected_at: z.string(),
   disconnected_at: z.string().nullable(),
 });
@@ -90,6 +94,8 @@ export const ConnectionResponse = z.strictObject({
   completed_at: z.string().nullable(),
   /** Google em modo de teste: a autorização vence (7 dias); nulo = não vence. */
   refresh_expires_at: z.string().nullable(),
+  /** O que a autorização libera (Regem: a união dos escopos das lojas; Meta e Google: os escopos do OAuth). */
+  scopes: z.array(z.string()),
   /** Contas que a autorização alcança (só depois da descoberta). */
   discovered: z.array(DiscoveredAccount),
   accounts: z.array(ConnectedAccountResponse),

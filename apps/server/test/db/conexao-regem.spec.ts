@@ -212,6 +212,12 @@ describe.skipIf(!hasDb)('conectar o Regem (A2.5 · F3)', () => {
     expect(nova.timezone).toBe('America/Sao_Paulo');
     const lojaDe = new Map((ligar.body.linked as { external_id: string; unit_id: string | null }[]).map((l) => [l.external_id, l.unit_id]));
     expect(lojaDe.get('loja-centro')).toBe(nova.id);
+    // A resposta leva a loja do Liame e o que a loja do Regem libera (tela Contas conectadas, P2).
+    expect((ligar.body.linked as { external_id: string }[]).find((l) => l.external_id === 'loja-centro')).toMatchObject({ unit_name: 'Mister Burgers — Loja Centro', scopes: ESCOPOS });
+    const lista = await api.call('GET', '/v1/connections', { cookie: e.cookie });
+    const daLista = (lista.body.items as { id: string; scopes: string[]; origin: string; accounts: { unit_name: string | null; scopes: string[] }[] }[]).find((c) => c.id === r.connectionId)!;
+    expect(daLista).toMatchObject({ origin: 'distribuicao', scopes: [...ESCOPOS].sort() });
+    expect(daLista.accounts.map((a) => [a.unit_name?.trim(), a.scopes.length])).toEqual(expect.arrayContaining([['Mister Burgers — Loja Centro', ESCOPOS.length]]));
     expect(lojaDe.get('loja-praia')).toBe(praia);
     const [auditoria] = await ownerQuery<{ after: { lojas_criadas?: { id: string; name: string }[] } }>(
       `select after from liame.audit_event where tenant_id = $1 and resource_id = $2 and after ? 'lojas_criadas'`,

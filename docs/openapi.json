@@ -9973,6 +9973,12 @@
                               "null"
                             ]
                           },
+                          "scopes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "discovered": {
                             "type": "array",
                             "items": {
@@ -10085,6 +10091,18 @@
                                   "format": "uuid",
                                   "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                                 },
+                                "unit_name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "scopes": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "connected_at": {
                                   "type": "string"
                                 },
@@ -10107,6 +10125,8 @@
                                 "status",
                                 "status_reason",
                                 "unit_id",
+                                "unit_name",
+                                "scopes",
                                 "connected_at",
                                 "disconnected_at"
                               ],
@@ -10125,6 +10145,7 @@
                           "created_at",
                           "completed_at",
                           "refresh_expires_at",
+                          "scopes",
                           "discovered",
                           "accounts"
                         ],
@@ -10423,6 +10444,12 @@
                         "null"
                       ]
                     },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "discovered": {
                       "type": "array",
                       "items": {
@@ -10535,6 +10562,18 @@
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                           },
+                          "unit_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "scopes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "connected_at": {
                             "type": "string"
                           },
@@ -10557,6 +10596,8 @@
                           "status",
                           "status_reason",
                           "unit_id",
+                          "unit_name",
+                          "scopes",
                           "connected_at",
                           "disconnected_at"
                         ],
@@ -10575,6 +10616,7 @@
                     "created_at",
                     "completed_at",
                     "refresh_expires_at",
+                    "scopes",
                     "discovered",
                     "accounts"
                   ],
@@ -10891,6 +10933,18 @@
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                           },
+                          "unit_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "scopes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "connected_at": {
                             "type": "string"
                           },
@@ -10913,6 +10967,8 @@
                           "status",
                           "status_reason",
                           "unit_id",
+                          "unit_name",
+                          "scopes",
                           "connected_at",
                           "disconnected_at"
                         ],
@@ -11227,6 +11283,12 @@
                         "null"
                       ]
                     },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "discovered": {
                       "type": "array",
                       "items": {
@@ -11339,6 +11401,18 @@
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                           },
+                          "unit_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "scopes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "connected_at": {
                             "type": "string"
                           },
@@ -11361,6 +11435,8 @@
                           "status",
                           "status_reason",
                           "unit_id",
+                          "unit_name",
+                          "scopes",
                           "connected_at",
                           "disconnected_at"
                         ],
@@ -11379,6 +11455,7 @@
                     "created_at",
                     "completed_at",
                     "refresh_expires_at",
+                    "scopes",
                     "discovered",
                     "accounts"
                   ],
