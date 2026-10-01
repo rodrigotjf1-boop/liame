@@ -1,12 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
+import { resolve } from 'node:path';
 import { createDatabase, type Database, withTenant } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config.js';
 import { registrarConexaoDaDistribuicao } from '../../src/connections/distribuicao.js';
 import { newWebhookSecret, webhookHeaders } from '../../src/events/standard-webhooks.js';
+import { gravarPedidos } from '../../src/orders/order-store.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { ConexaoProcessor } from '../../src/worker/conexao-processor.js';
 import { SincronizacaoLoop } from '../../src/worker/sincronizacao-loop.js';
@@ -186,6 +190,107 @@ describe.skipIf(!hasDb)('conectar o Regem (A2.5 · F3)', () => {
     });
     expect(ligar.status).toBe(422);
     expect(ligar.body.type).toContain('loja-fora-da-marca');
+  });
+
+  it('sem loja escolhida, a loja do Regem ganha a loja do Liame com o nome e o fuso dela; ligar de novo ou achar uma de mesmo nome não cria outra (ERR-047)', async () => {
+    const e = await empresa('Mister Burgers Sem Loja');
+    const deps = { db: database.db, vault: api.app.get(VaultService), config: loadConfig() };
+    // Já existe na marca uma loja com o nome da loja Praia do Regem (maiúsculas e espaço diferentes).
+    const praia = randomUUID();
+    await ownerQuery(`insert into liame.unit (id, tenant_id, brand_id, name) values ($1, $2, $3, ' mister burgers — loja PRAIA ')`, [praia, e.tenantId, e.brandId]);
+    const r = await registrarConexaoDaDistribuicao(deps, { tenantId: e.tenantId, brandId: e.brandId, produto: 'regem', tokens: [TOKEN_CENTRO, TOKEN_PRAIA] });
+    const ligar = await api.call('POST', `/v1/connections/${r.connectionId}/accounts`, {
+      cookie: e.cookie,
+      body: { accounts: [{ provider: 'regem', external_id: 'loja-centro' }, { provider: 'regem', external_id: 'loja-praia' }] },
+    });
+    expect(ligar.status).toBe(200);
+    const lojasDoLiame = () => ownerQuery<{ id: string; name: string; timezone: string }>(`select id, name, timezone from liame.unit where tenant_id = $1 order by created_at, id`, [e.tenantId]);
+    const unidades = await lojasDoLiame();
+    // A do cadastro do teste, a que já existia com o nome da Praia e a nova, da Loja Centro do Regem.
+    expect(unidades.map((u) => u.name.trim())).toEqual(['Loja Centro', 'mister burgers — loja PRAIA', 'Mister Burgers — Loja Centro']);
+    const nova = unidades[2]!;
+    expect(nova.timezone).toBe('America/Sao_Paulo');
+    const lojaDe = new Map((ligar.body.linked as { external_id: string; unit_id: string | null }[]).map((l) => [l.external_id, l.unit_id]));
+    expect(lojaDe.get('loja-centro')).toBe(nova.id);
+    expect(lojaDe.get('loja-praia')).toBe(praia);
+    const [auditoria] = await ownerQuery<{ after: { lojas_criadas?: { id: string; name: string }[] } }>(
+      `select after from liame.audit_event where tenant_id = $1 and resource_id = $2 and after ? 'lojas_criadas'`,
+      [e.tenantId, r.connectionId],
+    );
+    expect(auditoria!.after.lojas_criadas).toEqual([{ id: nova.id, name: 'Mister Burgers — Loja Centro' }]);
+
+    // Outra autorização da mesma loja (reconectar): a conta continua na mesma loja do Liame, sem loja nova.
+    const r2 = await registrarConexaoDaDistribuicao(deps, { tenantId: e.tenantId, brandId: e.brandId, produto: 'regem', tokens: [TOKEN_CENTRO] });
+    const deNovo = await api.call('POST', `/v1/connections/${r2.connectionId}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'regem', external_id: 'loja-centro' }] } });
+    expect(deNovo.status).toBe(200);
+    expect(deNovo.body.linked[0]).toMatchObject({ external_id: 'loja-centro', unit_id: nova.id });
+    expect((await lojasDoLiame()).length).toBe(3);
+  });
+
+  it('migration 0027: a conta do Regem já ligada sem loja ganha a loja dela e os pedidos lidos passam a apontar para ela; de novo, nada muda', async () => {
+    const e = await empresa('Mister Burgers Antes da Loja');
+    const contaId = randomUUID();
+    await ownerQuery(
+      `insert into liame.connected_account (id, tenant_id, brand_id, unit_id, provider, external_id, name, currency, timezone)
+       values ($1, $2, $3, null, 'regem', $4, '  Mister Burguer Steakhouse  ', 'BRL', 'America/Manaus')`,
+      [contaId, e.tenantId, e.brandId, randomUUID()],
+    );
+    const agora = new Date().toISOString();
+    await withTenant(database.db, e.tenantId, (tx) =>
+      gravarPedidos(tx, { tenantId: e.tenantId, brandId: e.brandId, unitId: null, connectedAccountId: contaId, provider: 'regem' }, [
+        {
+          externalId: 'antes-da-loja-1',
+          channel: 'cardapio',
+          channelGroup: 'cardapio',
+          status: 'confirmado',
+          currency: 'BRL',
+          timezone: 'America/Manaus',
+          revenueMicros: 50_000_000n,
+          discountMicros: 0n,
+          refundedMicros: 0n,
+          couponCode: null,
+          customer: null,
+          isNewCustomer: null,
+          placedAt: null,
+          confirmedAt: agora,
+          cancelledAt: null,
+          version: 1n,
+          sourceUpdatedAt: agora,
+          items: [],
+        },
+      ]),
+    );
+
+    // O arquivo da migration, só para esta empresa: os outros testes rodam no mesmo banco, em paralelo.
+    const arquivo = await readFile(resolve(process.cwd(), '../../packages/database/migrations/0027_loja_do_regem.sql'), 'utf8');
+    const escopo = "select set_config('app.scope', 'sistema', true);";
+    expect(arquivo.split(escopo).length).toBe(2);
+    const soDestaEmpresa = arquivo.replace(escopo, `select set_config('app.tenant_id', '${e.tenantId}', true);`);
+    const aplicar = async () => {
+      const cliente = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL_OWNER });
+      await cliente.connect();
+      try {
+        await cliente.query(`begin; ${soDestaEmpresa}; commit;`);
+      } finally {
+        await cliente.end();
+      }
+    };
+    await aplicar();
+    const estado = () =>
+      ownerQuery<{ unit_id: string | null; nome: string | null; fuso: string | null; pedido: string | null; lojas: string }>(
+        `select a.unit_id, u.name as nome, u.timezone as fuso,
+                (select o.unit_id::text from liame.order_fact o where o.connected_account_id = a.id) as pedido,
+                (select count(*)::text from liame.unit where tenant_id = a.tenant_id) as lojas
+           from liame.connected_account a left join liame.unit u on u.id = a.unit_id where a.id = $1`,
+        [contaId],
+      );
+    const [depois] = await estado();
+    expect(depois).toMatchObject({ nome: 'Mister Burguer Steakhouse', fuso: 'America/Manaus', lojas: '2' });
+    expect(depois!.unit_id).not.toBeNull();
+    expect(depois!.pedido).toBe(depois!.unit_id);
+
+    await aplicar();
+    expect((await estado())[0]).toEqual(depois);
   });
 
   it('piloto: a distribuição grava o token no cofre, sem passar pelo usuário; token recusado ou fora do formato não entra', async () => {

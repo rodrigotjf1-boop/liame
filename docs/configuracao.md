@@ -114,7 +114,7 @@ Contratos em `docs/integracoes/`. O endereço de cada produto é da distribuiç�
 node dist/scripts/conectar-produto.js --empresa <uuid da empresa> --marca <uuid da marca> --produto regem < tokens.txt
 ```
 
-Depois, a pessoa liga a loja à loja do Liame em **Contas conectadas**. Revogar lá apaga o token do cofre e o revoga no Regem.
+Depois, a pessoa liga a loja em **Contas conectadas**; a loja do Liame dela é criada ali, com o nome e o fuso da loja do Regem (#71, ERR-047). Revogar lá apaga o token do cofre e o revoga no Regem.
 
 ## Cofre (ADR-011, ADR-014)
 
