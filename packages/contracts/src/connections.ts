@@ -109,6 +109,8 @@ export const ConnectionListResponse = z.strictObject({
   items: z.array(ConnectionResponse),
   /** Autorizações que dá para começar agora (a do Regem depende de a distribuição ter configurado o cliente). */
   available: z.array(ConnectionProvider),
+  /** Criar cupom no Regem pelo Liame (com aprovação) está ligado para a empresa: a permissão que a loja liberou no Regem passa a valer. */
+  regem_write: z.boolean(),
 });
 export type ConnectionListResponse = z.infer<typeof ConnectionListResponse>;
 

@@ -7,6 +7,7 @@ import {
   BudgetResponse,
   CreateActionRequest,
   ProblemDetails,
+  RejectActionRequest,
   ResourceId,
   SandboxResourceRequest,
   SandboxResourceResponse,
@@ -100,6 +101,22 @@ export class ActionsController {
   @ApiConflictResponse({ standardSchema: ProblemDetails })
   approve(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string, @Body({ schema: ApproveActionRequest }) body: ApproveActionRequest): Promise<ActionResponse> {
     return this.actions.approve(auth, id, body);
+  }
+
+  @Post('actions/:id/reject')
+  @Permissao('acoes.aprovar')
+  @Auditar('acao.recusar', { recurso: 'action_request' })
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Recusar',
+    description: 'Quem pode aprovar recusa o pedido que espera aprovação, com o motivo e o hash do plano visto: o pedido é cancelado, a reserva volta ao envelope e nada é executado. O motivo e quem recusou ficam no pedido (`status_reason`) e na auditoria.',
+  })
+  @ApiOkResponse({ standardSchema: ActionResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  reject(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string, @Body({ schema: RejectActionRequest }) body: RejectActionRequest): Promise<ActionResponse> {
+    return this.actions.reject(auth, id, body);
   }
 
   @Post('actions/:id/cancel')

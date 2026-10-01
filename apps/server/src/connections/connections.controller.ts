@@ -79,8 +79,8 @@ export class ConnectionsController {
   @ApiOperation({ summary: 'Conexões e contas', description: 'Autorizações da empresa (ou da marca), as contas ligadas a cada uma e as descobertas para escolher.' })
   @ApiOkResponse({ standardSchema: ConnectionListResponse })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
-  list(@Query({ schema: ConnectionListQuery }) query: ConnectionListQuery): Promise<ConnectionListResponse> {
-    return this.connections.listar(query.brand_id);
+  list(@Auth() auth: AuthContext, @Query({ schema: ConnectionListQuery }) query: ConnectionListQuery): Promise<ConnectionListResponse> {
+    return this.connections.listar(auth, query.brand_id);
   }
 
   @Get('units')

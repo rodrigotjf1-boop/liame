@@ -16,6 +16,7 @@ import { type SQL, sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { type AuthContext, afterCommit, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
+import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { ClienteConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
@@ -114,6 +115,7 @@ export class ConnectionsService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(DATABASE) private readonly database: Database | null,
     private readonly vault: VaultService,
+    private readonly flags: FlagService,
   ) {}
 
   /**
@@ -198,7 +200,7 @@ export class ConnectionsService {
     return tela({ conexao: linha.id });
   }
 
-  async listar(brandId?: string): Promise<ConnectionListResponse> {
+  async listar(auth: AuthContext, brandId?: string): Promise<ConnectionListResponse> {
     const tx = currentTx();
     const conexoes = await tx.execute<LinhaConexao>(sql`
       select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
@@ -206,7 +208,12 @@ export class ConnectionsService {
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.status not in ('aguardando_autorizacao', 'expirada') ${brandId ? sql`and c.brand_id = ${brandId}` : sql``}
        order by c.created_at desc limit 200`);
-    return { items: await this.montar(conexoes.rows), available: this.disponiveis() };
+    return {
+      items: await this.montar(conexoes.rows),
+      available: this.disponiveis(),
+      // A mesma flag que o Action Service confere ao pedir e ao executar a criação do cupom.
+      regem_write: await this.flags.isEnabled('regem_write', this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId: brandId ?? null })),
+    };
   }
 
   async detalhe(id: string): Promise<ConnectionResponse> {

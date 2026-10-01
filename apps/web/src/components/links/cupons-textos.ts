@@ -298,11 +298,12 @@ export function erroDoPedido(p: Problema): { campo?: keyof ErrosCriar; mensagem:
 }
 
 /** Como o pedido aparece na lista: esperando quem aprova, sendo criado no Regem, ou encerrado sem cupom. */
-export type SituacaoPedido = 'aguardando' | 'criando' | 'falhou' | 'expirou';
+export type SituacaoPedido = 'aguardando' | 'criando' | 'falhou' | 'expirou' | 'recusado';
 
 export function situacaoDoPedido(p: CouponRequest): SituacaoPedido {
   if (p.status === 'aguardando_aprovacao') return 'aguardando';
   if (p.status === 'expirada') return 'expirou';
+  if (p.status === 'recusada') return 'recusado';
   if (p.status === 'falhou') return 'falhou';
   return 'criando';
 }
@@ -344,8 +345,23 @@ function motivoDaFalha(motivo: string | null): string {
   return motivo;
 }
 
-/** A faixa do pedido que terminou sem cupom: falhou (com o motivo) ou expirou sem aprovação. */
+const PREFIXO_RECUSA = 'recusada por ';
+
+/** Quem recusou e por quê, do motivo gravado no pedido (`recusada por <nome>: <motivo>`). */
+export function recusaDoPedido(motivo: string | null): { quem: string | null; motivo: string | null } {
+  if (!motivo?.startsWith(PREFIXO_RECUSA)) return { quem: null, motivo };
+  const resto = motivo.slice(PREFIXO_RECUSA.length);
+  const i = resto.indexOf(': ');
+  return i < 0 ? { quem: resto, motivo: null } : { quem: resto.slice(0, i), motivo: resto.slice(i + 2) };
+}
+
+/** A faixa do pedido que terminou sem cupom: falhou (com o motivo), foi recusado por quem aprova ou expirou sem aprovação. */
 export function faixaDoPedidoEncerrado(p: CouponRequest): { titulo: string; texto: string } {
+  if (situacaoDoPedido(p) === 'recusado') {
+    const r = recusaDoPedido(p.status_reason);
+    const quem = r.quem ?? 'Quem aprova';
+    return { titulo: `O pedido do cupom ${p.code} foi recusado`, texto: `${r.motivo ? `${quem} recusou: “${r.motivo}”.` : `${quem} recusou o pedido.`} Nada foi criado no Regem.` };
+  }
   if (situacaoDoPedido(p) === 'expirou') {
     return { titulo: `O pedido do cupom ${p.code} expirou sem aprovação`, texto: 'Ninguém aprovou no prazo de 3 dias, e nada foi criado no Regem. Se ainda quiser o cupom, peça de novo.' };
   }

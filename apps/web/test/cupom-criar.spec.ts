@@ -13,6 +13,7 @@ import {
   microsDeReais,
   pedidosEmAndamento,
   plataformaDaLoja,
+  recusaDoPedido,
   regraDoPedido,
   situacaoDoPedido,
   validadeDoPedido,
@@ -166,7 +167,8 @@ describe('criar cupom no Regem: o pedido na lista', () => {
     expect(situacaoDoPedido(pedido('A', { status: 'executando' }))).toBe('criando');
     expect(situacaoDoPedido(pedido('A', { status: 'falhou' }))).toBe('falhou');
     expect(situacaoDoPedido(pedido('A', { status: 'expirada' }))).toBe('expirou');
-    const todos = [pedido('AAAA'), pedido('BBBBB', { status: 'aprovada' }), pedido('CCCCCC', { status: 'falhou' }), pedido('DDDDDDD', { status: 'expirada' })];
+    expect(situacaoDoPedido(pedido('A', { status: 'recusada' }))).toBe('recusado');
+    const todos = [pedido('AAAA'), pedido('BBBBB', { status: 'aprovada' }), pedido('CCCCCC', { status: 'falhou' }), pedido('DDDDDDD', { status: 'expirada' }), pedido('EEEEEEEE', { status: 'recusada' })];
     expect(pedidosEmAndamento(todos).map((p) => p.code)).toEqual(['AAAA', 'BBBBB']);
   });
 
@@ -199,6 +201,18 @@ describe('criar cupom no Regem: o pedido na lista', () => {
       titulo: 'O pedido do cupom VELHO10 expirou sem aprovação',
       texto: 'Ninguém aprovou no prazo de 3 dias, e nada foi criado no Regem. Se ainda quiser o cupom, peça de novo.',
     });
+  });
+
+  it('pedido recusado por quem aprova: a faixa diz quem recusou e por quê', () => {
+    const recusado = (motivo: string | null) => faixaDoPedidoEncerrado(pedido('SEXTA15', { status: 'recusada', status_reason: motivo }));
+    expect(recusado('recusada por Ana Aprovadora: Desconto alto demais')).toEqual({
+      titulo: 'O pedido do cupom SEXTA15 foi recusado',
+      texto: 'Ana Aprovadora recusou: “Desconto alto demais”. Nada foi criado no Regem.',
+    });
+    // O motivo pode ter dois-pontos: só o primeiro separa o nome.
+    expect(recusaDoPedido('recusada por Ana: outro valor: 10%')).toEqual({ quem: 'Ana', motivo: 'outro valor: 10%' });
+    expect(recusado('recusada por Ana').texto).toBe('Ana recusou o pedido. Nada foi criado no Regem.');
+    expect(recusado(null).texto).toBe('Quem aprova recusou o pedido. Nada foi criado no Regem.');
   });
 
   it('a loja que não liberou a criação no Regem, ou sem loja do Liame, não pede cupom', () => {

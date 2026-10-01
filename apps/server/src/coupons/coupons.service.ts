@@ -15,7 +15,7 @@ import type {
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
-import { ActionService } from '../actions/action.service.js';
+import { ActionService, PREFIXO_RECUSA } from '../actions/action.service.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, type FieldError, ValidationProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -152,7 +152,8 @@ function montarPedido(l: LinhaPedido): CouponRequest {
     valid_until: p.valido_ate,
     campaign: l.campaign_id && l.campaign_name ? { id: l.campaign_id, name: l.campaign_name, provider: l.campaign_provider ?? 'desconhecida', status: l.campaign_status ?? 'desconhecida' } : null,
     exclusive: p.exclusive,
-    status: l.status,
+    // Recusado por quem aprova: a ação fica cancelada com o motivo; para a aba Cupons, é um pedido recusado.
+    status: l.status === 'cancelada' ? 'recusada' : l.status,
     status_reason: l.status_reason,
     requested_by: { id: l.requested_by, name: l.requester },
     requested_at: iso(l.created_at),
@@ -453,7 +454,8 @@ export class CouponsService {
 
   /**
    * Pedidos de criação de cupom no Regem, de lojas ainda conectadas: os que estão em andamento e, por 3 dias, os
-   * que falharam ou expiraram — estes só enquanto o cupom não existe e ninguém pediu o mesmo código de novo.
+   * que falharam, expiraram ou foram recusados por quem aprova — estes só enquanto o cupom não existe e ninguém
+   * pediu o mesmo código de novo. O pedido cancelado por quem pediu não aparece.
    */
   private async pedidos(filtro: SQL): Promise<LinhaPedido[]> {
     const r = await currentTx().execute<LinhaPedido>(sql`
@@ -465,7 +467,8 @@ export class CouponsService {
         left join liame.campaign c on c.id::text = r.params->>'campaign_id'
        where r.tool = ${FERRAMENTA_CUPOM} and r.provider = 'regem' and ${filtro}
          and (r.status in ('aguardando_aprovacao', 'aprovada', 'executando')
-              or (r.status in ('falhou', 'expirada') and r.updated_at > now() - make_interval(days => ${DIAS_PEDIDO_ENCERRADO})
+              or ((r.status in ('falhou', 'expirada') or (r.status = 'cancelada' and starts_with(coalesce(r.status_reason, ''), ${PREFIXO_RECUSA})))
+                  and r.updated_at > now() - make_interval(days => ${DIAS_PEDIDO_ENCERRADO})
                   and not exists (select 1 from liame.coupon cp
                                    where cp.connected_account_id = a.id and cp.code = r.params->>'codigo' and cp.removed_at is null)
                   and not exists (select 1 from liame.action_request n

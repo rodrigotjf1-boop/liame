@@ -19,13 +19,15 @@ type Props = {
   /** Contas já ligadas na empresa (para reconhecer a loja que só troca de token). */
   existentes: ContaExistente[];
   reserva: RefObject<HTMLElement | null>;
+  /** Criar cupom no Regem pelo Liame está ligado para a empresa. */
+  escritaLigada?: boolean;
   aoLigar: (texto: string) => void;
   aoFechar: () => void;
 };
 
 type Carga = { tipo: 'carregando' } | { tipo: 'erro'; texto: string } | { tipo: 'ok'; lojas: UnitSummary[] };
 
-export function DialogoLojasRegem({ conexao, existentes, reserva, aoLigar, aoFechar }: Props) {
+export function DialogoLojasRegem({ conexao, existentes, reserva, escritaLigada = false, aoLigar, aoFechar }: Props) {
   const primeiro = useRef<HTMLSelectElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ reserva });
   const ids = useId();
@@ -35,7 +37,7 @@ export function DialogoLojasRegem({ conexao, existentes, reserva, aoLigar, aoFec
   const [repetidas, setRepetidas] = useState<Set<string>>(new Set());
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
-  const chips = chipsDoRegem(conexao.scopes, conexao.origin);
+  const chips = chipsDoRegem(conexao.scopes, conexao.origin, escritaLigada);
   const n = opcoes.length;
 
   useEffect(() => {

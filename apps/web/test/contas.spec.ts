@@ -408,6 +408,12 @@ describe('conectar o Regem e ligar as lojas', () => {
       ['Usos dos cupons', 'st--concluido'],
       ['Criar cupom de campanha · desligado no Liame', 'st--espera'],
     ]);
+    // Com a criação de cupom ligada para a empresa, a permissão que a loja liberou passa a valer.
+    const comEscrita = chipsDoRegem(['pedidos.ler', 'cupons.criar'], 'oauth', true).find((c) => c.cod === 'cupons.criar');
+    expect(comEscrita).toMatchObject({ texto: 'Criar cupom de campanha', classe: 'st--concluido' });
+    expect(escoposDoRegem(['cupons.criar'], 'oauth', true).find((e) => e.cod === 'cupons.criar')).toMatchObject({ estado: 'liberado', texto: 'Criar cupom de campanha pelo Liame, sempre com aprovação de alguém da sua empresa.' });
+    // Ligada para a empresa, mas a loja não liberou: continua "não liberado".
+    expect(chipsDoRegem(['pedidos.ler'], 'oauth', true).find((c) => c.cod === 'cupons.criar')).toMatchObject({ texto: 'Criar cupom de campanha: não liberado', classe: 'st--aguardando' });
     const lojas = [
       { id: 'u1', name: 'Loja Centro' },
       { id: 'u2', name: 'Barra' },

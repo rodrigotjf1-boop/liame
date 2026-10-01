@@ -31,6 +31,16 @@ export const ApproveActionRequest = z.strictObject({
 });
 export type ApproveActionRequest = z.infer<typeof ApproveActionRequest>;
 
+/**
+ * Recusar (quem pode aprovar): o pedido sai da fila, nada é executado e o motivo fica no pedido e na auditoria.
+ * O plano visto vai junto, como na aprovação: se o pedido mudou, a recusa não vale para a versão nova.
+ */
+export const RejectActionRequest = z.strictObject({
+  plan_hash: z.string().regex(/^[0-9a-f]{64}$/),
+  reason: z.string().trim().min(3, { error: 'Diga o motivo em poucas palavras' }).max(200),
+});
+export type RejectActionRequest = z.infer<typeof RejectActionRequest>;
+
 export const ActionApproval = z.strictObject({
   approved_by: z.uuid(),
   approver_name: z.string(),
@@ -75,6 +85,14 @@ export const ActionResponse = z.strictObject({
   }).nullable(),
   expires_at: z.string(),
   created_at: z.string(),
+  /** A última mudança de situação (pedido, aprovação, recusa, execução). */
+  updated_at: z.string(),
+  /** Quem pediu. */
+  requested_by: z.strictObject({ id: z.uuid(), name: z.string() }),
+  /** A conta do alvo, para a tela: a loja do Liame (ou o nome da conta conectada); nula quando a conta não é do Liame (sandbox). */
+  account_name: z.string().nullable(),
+  /** A campanha citada nos parâmetros (`campaign_id`), quando há; nula se ela saiu da lista. */
+  campaign: z.strictObject({ id: z.uuid(), name: z.string(), provider: z.string(), status: z.string() }).nullable(),
 });
 export type ActionResponse = z.infer<typeof ActionResponse>;
 
