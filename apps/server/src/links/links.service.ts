@@ -94,6 +94,9 @@ type LinhaAnuncio = {
   conta_id: string;
 };
 
+/** Os anúncios ativos de uma campanha pela conferência do rastreio. */
+export type RastreioDaCampanha = { name: string; provider: string; comRastreio: number; semRastreio: number; naoVerificados: number; naoSeAplica: number };
+
 const ehPlataformaDoLink = (p: string): p is PlataformaDoLink => (PLATAFORMAS_DO_LINK as readonly string[]).includes(p);
 
 /** O rastreio que o conector guardou: no criativo (Meta) ou no anúncio (Google). */
@@ -311,6 +314,19 @@ export class LinksService {
    * leitura de cada conta da marca, cada um conferido pela função pura `conferirAnuncio`.
    */
   async trackingCheck(brandId: string, agora = new Date()): Promise<TrackingCheckResponse> {
+    return (await this.conferir(brandId, agora)).resposta;
+  }
+
+  /**
+   * Por campanha com anúncio ativo, quantos levam o rastreio e quantos não (Atenção do ciclo fechado, F9): a
+   * mesma conferência da tela, sem montar os textos de novo.
+   */
+  async rastreioPorCampanha(brandId: string, agora = new Date()): Promise<{ resumo: TrackingCheckResponse['summary']; campanhas: Map<string, RastreioDaCampanha> }> {
+    const c = await this.conferir(brandId, agora);
+    return { resumo: c.resposta.summary, campanhas: c.porCampanha };
+  }
+
+  private async conferir(brandId: string, agora: Date): Promise<{ resposta: TrackingCheckResponse; porCampanha: Map<string, RastreioDaCampanha> }> {
     await this.marca(brandId);
     const tx = currentTx();
     // Ativo = anúncio, grupo e campanha ativos, visto na última leitura com sucesso da conta (o que sumiu da
@@ -357,9 +373,12 @@ export class LinksService {
     const summary = { active_ads: 0, with_tracking: 0, without_tracking: 0, not_verifiable: 0, not_applicable: 0 };
     const semRastreio: TrackingCheckItem[] = [];
     const naoVerificados: TrackingCheckItem[] = [];
+    const porCampanha = new Map<string, RastreioDaCampanha>();
     for (const l of anuncios.rows) {
       if (!ehPlataformaDoLink(l.provider)) continue;
       summary.active_ads++;
+      const daCampanha = porCampanha.get(l.campanha_id) ?? { name: l.campanha_nome, provider: l.provider, comRastreio: 0, semRastreio: 0, naoVerificados: 0, naoSeAplica: 0 };
+      porCampanha.set(l.campanha_id, daCampanha);
       const r = conferirAnuncio(
         {
           provider: l.provider,
@@ -372,14 +391,21 @@ export class LinksService {
       );
       if (r.status === 'com_rastreio') {
         summary.with_tracking++;
+        daCampanha.comRastreio++;
         continue;
       }
       if (r.status === 'nao_se_aplica') {
         summary.not_applicable++;
+        daCampanha.naoSeAplica++;
         continue;
       }
-      if (r.status === 'sem_rastreio') summary.without_tracking++;
-      else summary.not_verifiable++;
+      if (r.status === 'sem_rastreio') {
+        summary.without_tracking++;
+        daCampanha.semRastreio++;
+      } else {
+        summary.not_verifiable++;
+        daCampanha.naoVerificados++;
+      }
       const item: TrackingCheckItem = {
         status: r.status,
         reason: r.reason,
@@ -394,7 +420,8 @@ export class LinksService {
       };
       (r.status === 'sem_rastreio' ? semRastreio : naoVerificados).push(item);
     }
-    return { summary, items: [...semRastreio, ...naoVerificados], sources: await this.fontes(brandId, agora), generated_at: agora.toISOString() };
+    const resposta = { summary, items: [...semRastreio, ...naoVerificados], sources: await this.fontes(brandId, agora), generated_at: agora.toISOString() };
+    return { resposta, porCampanha };
   }
 
   // ------------------------------------------------------------------ apoio

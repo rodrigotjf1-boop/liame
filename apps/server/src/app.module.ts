@@ -25,6 +25,7 @@ import { LinksController } from './links/links.controller.js';
 import { LinksService } from './links/links.service.js';
 import { PeopleController } from './people/people.controller.js';
 import { PolicyController } from './policy/policy.controller.js';
+import { AtencaoCicloService } from './results/atencao-ciclo.service.js';
 import { ResultsController } from './results/results.controller.js';
 import { ResultsService } from './results/results.service.js';
 import { PeopleService } from './people/people.service.js';
@@ -37,6 +38,6 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
   controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService],
 })
 export class AppModule {}
