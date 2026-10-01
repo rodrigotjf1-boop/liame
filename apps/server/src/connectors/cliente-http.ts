@@ -39,7 +39,7 @@ export type PedidoConector = {
   conta: string;
   /** Endereço completo; precisa começar por um dos endereços liberados do provider. */
   url: string;
-  metodo?: 'GET' | 'POST';
+  metodo?: 'GET' | 'POST' | 'PUT';
   cabecalhos?: Record<string, string>;
   corpo?: unknown;
   /** Rótulo curto do endpoint para os avisos de depreciação (ex.: insights). */

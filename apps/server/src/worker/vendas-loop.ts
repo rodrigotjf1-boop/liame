@@ -82,17 +82,34 @@ export function apagarAnonimizadosNoSistema(db: Database['db']): ApagarAnonimiza
   return (alvo) => withSystem(db, (tx) => apagarClientesDaOrigem(tx, alvo));
 }
 
+/** A loja a que o aviso se refere (`loja_id` do corpo, contrato §3); sem ela, vale para a conexão inteira. */
+export function lojaDoEvento(corpo: string): string | null {
+  try {
+    const loja = (JSON.parse(corpo) as { loja_id?: unknown } | null)?.loja_id;
+    return typeof loja === 'string' && loja.length > 0 && loja.length <= 100 ? loja : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Evento do Regem (webhook por conexão): só gatilho de frescor. As lojas da conexão ficam devidas agora
- * e a próxima volta do laço lê pelo cursor (ADR-019 item 5).
+ * Evento do Regem (webhook por conexão): só gatilho de frescor. A loja do aviso (ou, sem `loja_id`, todas
+ * as lojas da conexão) fica devida agora e a próxima volta do laço lê pelo cursor (ADR-019 item 5). O
+ * instante do aviso fica em `evento_em`: a leitura que estiver em andamento vê que ele chegou depois de ela
+ * começar e agenda outra em seguida, em vez de empurrar a loja para dali a 15 minutos.
  */
 export async function eventoDoRegem(tx: Tx, evento: InboxRow): Promise<void> {
   if (!evento.connection_id) return;
+  const loja = lojaDoEvento(evento.body);
   await tx.execute(sql`
     update liame.sync_state s
-       set cursor = s.cursor || jsonb_build_object('proxima', now()), updated_at = now()
+       set cursor = s.cursor
+                    || jsonb_build_object('evento_em', now())
+                    || case when coalesce((s.cursor->>'proxima')::timestamptz, '-infinity'::timestamptz) > now()
+                            then jsonb_build_object('proxima', now()) else '{}'::jsonb end,
+           updated_at = now()
       from liame.connected_account a
      where a.connection_id = ${evento.connection_id} and a.provider = 'regem' and a.disconnected_at is null
-       and s.connected_account_id = a.id and s.dataset = 'pedidos'
-       and coalesce((s.cursor->>'proxima')::timestamptz, '-infinity'::timestamptz) > now()`);
+       ${loja ? sql`and a.external_id = ${loja}` : sql``}
+       and s.connected_account_id = a.id and s.dataset = 'pedidos'`);
 }

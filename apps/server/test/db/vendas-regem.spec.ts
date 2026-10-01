@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MODELO_PADRAO } from '../../src/attribution/motor.js';
 import { loadConfig } from '../../src/config.js';
 import { registrarConexaoDaDistribuicao } from '../../src/connections/distribuicao.js';
+import { newWebhookSecret, webhookHeaders } from '../../src/events/standard-webhooks.js';
 import { SincronizadorVendas } from '../../src/orders/sincronizador-vendas.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { apagarAnonimizadosNoSistema, eventoDoRegem, VendasLoop } from '../../src/worker/vendas-loop.js';
@@ -39,7 +40,18 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
   let regem: Server;
   let base = '';
   const anterior: Record<string, string | undefined> = {};
-  const estado = { incremental: false, anonimizar: false, tokenRevogado: false, cuponsProibidos: false, cardapio: null as string | null };
+  const estado = {
+    incremental: false,
+    anonimizar: false,
+    tokenRevogado: false,
+    cuponsProibidos: false,
+    cardapio: null as string | null,
+    aviso: 'ok' as 'ok' | 'recusa',
+    /** O que acontece no Regem enquanto o Liame lê os pedidos da loja Centro (um aviso que chega no meio da leitura). */
+    aoLerPedidos: null as (() => Promise<void>) | null,
+  };
+  /** Os registros de aviso que a loja Centro recebeu (`PUT /webhook`), em ordem. */
+  const avisos: { url: string; segredo: string }[] = [];
   const pedidosPedidos: URLSearchParams[] = [];
   /** Leituras da rota `/loja` da loja Centro (a conexão lê uma; a reconciliação, uma por dia). */
   let lojaLida = 0;
@@ -72,10 +84,20 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     }
   }
 
-  function responder(url: URL, autorizacao: string | undefined): { status: number; corpo: unknown } {
+  function responder(url: URL, autorizacao: string | undefined, metodo = 'GET', corpo = ''): { status: number; corpo: unknown } {
     if (autorizacao === `Bearer ${TOKEN_BARRA}`) return responderBarra(url);
     if (autorizacao !== `Bearer ${TOKEN}` || estado.tokenRevogado) return { status: 401, corpo: problema(401, 'Token inválido') };
     const q = url.searchParams;
+    // O aviso (webhook) da loja Centro: o registro que o Liame faz depois da carga inicial (contrato §3).
+    if (url.pathname === '/regem/webhook') {
+      if (metodo !== 'PUT') return { status: 404, corpo: problema(404, 'Não encontrado') };
+      const pedido = JSON.parse(corpo) as { url: string; segredo: string };
+      avisos.push(pedido);
+      if (estado.aviso === 'recusa') {
+        return { status: 422, corpo: { type: 'https://api.dmsregem.com/problemas/endereco-nao-permitido', title: 'Endereço não permitido', status: 422, detail: 'endereço fora da lista' } };
+      }
+      return { status: 200, corpo: { url: pedido.url, registrado_em: '2026-09-28T12:20:00.000000Z', pausado: false, pausado_em: null, motivo_pausa: null, ultimo_envio_em: null, ultimo_status_http: null, falhas_seguidas: 0, entregues: 0 } };
+    }
     switch (url.pathname) {
       case '/regem/loja':
         lojaLida++;
@@ -114,9 +136,22 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
 
   beforeAll(async () => {
     regem = createServer((req, res) => {
-      const r = responder(new URL(req.url ?? '/', base), req.headers.authorization);
-      res.writeHead(r.status, { 'content-type': 'application/json' });
-      res.end(JSON.stringify(r.corpo));
+      const partes: Buffer[] = [];
+      req.on('data', (d: Buffer) => partes.push(d));
+      req.on('end', () => {
+        const atender = async () => {
+          const url = new URL(req.url ?? '/', base);
+          if (url.pathname === '/regem/pedidos' && req.headers.authorization === `Bearer ${TOKEN}` && estado.aoLerPedidos) await estado.aoLerPedidos();
+          const r = responder(url, req.headers.authorization, req.method, Buffer.concat(partes).toString('utf8'));
+          res.writeHead(r.status, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(r.corpo));
+        };
+        // Erro no servidor de teste vira 500 (o conector trata como falha passageira), nunca promessa solta.
+        void atender().catch(() => {
+          if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' });
+          res.end('{}');
+        });
+      });
     });
     await new Promise<void>((ok) => regem.listen(0, '127.0.0.1', ok));
     base = `http://127.0.0.1:${(regem.address() as AddressInfo).port}`;
@@ -235,6 +270,8 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
       ['pedidos', true, 'ped-c2'],
     ]);
     expect(estados.find((e) => e.dataset === 'pedidos')!.cursor.carga_inicial_em).toBe(T0.toISOString());
+    // A carga inicial não registra o aviso (a primeira leitura já é pesada): fica para a seguinte.
+    expect(avisos).toEqual([]);
   });
 
   it('nenhum telefone em claro no banco: nem pedido, nem ponto de contato, nem auditoria (A2.5-7)', async () => {
@@ -296,18 +333,151 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     expect(n?.n).toBe('0');
   });
 
-  it('webhook do Regem antecipa a leitura; o laço lê só as lojas do Regem', async () => {
-    const [conexao] = await ownerQuery<{ connection_id: string }>(`select connection_id from liame.connected_account where id = $1`, [contaId]);
-    await withSystem(database.db, (tx) =>
-      eventoDoRegem(tx, { id: randomUUID(), provider: 'regem', external_event_id: 'msg_1', tenant_id: tenantId, connection_id: conexao!.connection_id, type: null, body: '{}', attempts: 0 }),
+  const conexaoDaLoja = async () => (await ownerQuery<{ connection_id: string }>(`select connection_id from liame.connected_account where id = $1`, [contaId]))[0]!.connection_id;
+  const avisoGravado = async () =>
+    (await ownerQuery<{ aviso: { em: string; ok: boolean } | null }>(`select cursor->'aviso' as aviso from liame.sync_state where connected_account_id = $1 and dataset = 'pedidos'`, [contaId]))[0]!.aviso;
+  /** Em quantos segundos a loja volta para a fila (negativo ou zero = já está na vez), pelo relógio do banco. */
+  const esperaDaLoja = async () =>
+    Number(
+      (
+        await ownerQuery<{ espera: string }>(
+          `select extract(epoch from ((cursor->>'proxima')::timestamptz - now()))::text as espera from liame.sync_state where connected_account_id = $1 and dataset = 'pedidos'`,
+          [contaId],
+        )
+      )[0]!.espera,
     );
-    const [s] = await ownerQuery<{ devida: boolean }>(`select (cursor->>'proxima')::timestamptz <= now() as devida from liame.sync_state where connected_account_id = $1 and dataset = 'pedidos'`, [contaId]);
-    expect(s?.devida).toBe(true);
+  const evento = (conexaoId: string, corpo: Record<string, unknown>) => ({
+    id: randomUUID(),
+    provider: 'regem',
+    external_event_id: `msg_${randomUUID()}`,
+    tenant_id: tenantId,
+    connection_id: conexaoId,
+    type: null,
+    body: JSON.stringify(corpo),
+    attempts: 0,
+  });
+
+  it('aviso do Regem: depois da carga inicial o Liame registra para onde avisar, uma vez por dia, com o segredo da conexão', async () => {
+    const conexaoId = await conexaoDaLoja();
+    // As duas leituras depois da carga inicial (aos 20 e aos 40 minutos) registraram UMA vez.
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]!.url).toBe(`${loadConfig().apiUrl}/v1/inbox/regem/${conexaoId}`);
+    expect(avisos[0]!.segredo).toMatch(/^whsec_[A-Za-z0-9+/]{43}=$/);
+    expect(await avisoGravado()).toEqual({ em: mais(20).toISOString(), ok: true });
+
+    // O segredo fica no cofre (cifrado), ligado à conexão; a criação fica na auditoria, sem o segredo.
+    const [c] = await ownerQuery<{ inbox_secret_id: string | null }>(`select inbox_secret_id from liame.oauth_connection where id = $1`, [conexaoId]);
+    expect(c?.inbox_secret_id).toBeTruthy();
+    const [guardado] = await ownerQuery<{ purpose: string; texto: string }>(`select purpose, row_to_json(s)::text as texto from liame.secret s where id = $1`, [c!.inbox_secret_id]);
+    expect(guardado?.purpose).toBe('inbox_regem');
+    expect(guardado?.texto).not.toContain(avisos[0]!.segredo.slice(6));
+    const auditoria = await ownerQuery<{ actor_type: string; origin: string; resource_id: string; texto: string }>(
+      `select actor_type, origin, resource_id, row_to_json(a)::text as texto from liame.audit_event a where tenant_id = $1 and action = 'conexao.ativar_aviso'`,
+      [tenantId],
+    );
+    expect(auditoria).toHaveLength(1);
+    expect(auditoria[0]).toMatchObject({ actor_type: 'system', origin: 'worker', resource_id: conexaoId });
+    expect(auditoria[0]!.texto).not.toContain(avisos[0]!.segredo.slice(6));
+
+    // O aviso assinado com esse segredo entra pelo inbox da conexão; com outro segredo, não.
+    const corpo = JSON.stringify({ tipo: 'pedido.alterado', id: 'ped-001', versao: 4, loja_id: 'loja-centro' });
+    const enviar = (segredo: string) =>
+      fetch(`${api.base}/v1/inbox/regem/${conexaoId}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...webhookHeaders(segredo, `msg_${randomUUID()}`, corpo) },
+        body: corpo,
+      });
+    expect((await enviar(avisos[0]!.segredo)).status).toBe(202);
+    expect((await enviar(newWebhookSecret())).status).toBe(401);
+  });
+
+  it('aviso recusado pelo Regem não falha a leitura: nova tentativa em uma hora, com o MESMO segredo', async () => {
+    const registradoEm = (data: Date, ok: boolean) =>
+      ownerQuery(`update liame.sync_state set cursor = cursor || jsonb_build_object('aviso', jsonb_build_object('em', $2::text, 'ok', $3::boolean)) where connected_account_id = $1 and dataset = 'pedidos'`, [
+        contaId,
+        data.toISOString(),
+        ok,
+      ]);
+    // Um dia depois do último registro, o Liame repete (repetir religa o que o Regem tiver pausado). Desta vez o Regem recusa.
+    await registradoEm(new Date(mais(45).getTime() - 86_400_000), true);
+    estado.aviso = 'recusa';
+    const aviso = vi.spyOn(Logger.prototype, 'warn');
+    try {
+      const r = await sincronizador.sincronizar(contaId, tenantId, mais(45));
+      expect(r.status).toBe('ok');
+      expect(avisos).toHaveLength(2);
+      const log = aviso.mock.calls.map((c) => String(c[0])).find((m) => m.includes('aviso do Regem não registrado'));
+      expect(log).toContain('definitivo: endereço fora da lista');
+      expect(log).not.toContain(avisos[1]!.segredo.slice(6));
+      expect(log).not.toContain(TOKEN);
+    } finally {
+      aviso.mockRestore();
+    }
+    expect(await avisoGravado()).toEqual({ em: mais(45).toISOString(), ok: false });
+
+    // Cinco minutos depois, ainda não; passada uma hora da falha, de novo — e o segredo é o mesmo (um por conexão).
+    estado.aviso = 'ok';
+    await sincronizador.sincronizar(contaId, tenantId, mais(50));
+    expect(avisos).toHaveLength(2);
+    await registradoEm(new Date(mais(55).getTime() - 3_600_000), false);
+    await sincronizador.sincronizar(contaId, tenantId, mais(55));
+    expect(avisos).toHaveLength(3);
+    expect(new Set(avisos.map((a) => a.segredo)).size).toBe(1);
+    expect(new Set(avisos.map((a) => a.url)).size).toBe(1);
+    expect(await avisoGravado()).toEqual({ em: mais(55).toISOString(), ok: true });
+  });
+
+  it('webhook do Regem antecipa a leitura só da loja do aviso; o laço lê só as lojas do Regem', async () => {
+    const conexaoId = await conexaoDaLoja();
+    const daquiADezMinutos = () =>
+      ownerQuery(`update liame.sync_state set cursor = cursor || jsonb_build_object('proxima', now() + interval '10 minutes') where connected_account_id = $1 and dataset = 'pedidos'`, [contaId]);
+    await daquiADezMinutos();
+    expect(await esperaDaLoja()).toBeGreaterThan(500);
+
+    // Aviso de OUTRA loja da mesma conexão: esta não é acordada.
+    await withSystem(database.db, (tx) => eventoDoRegem(tx, evento(conexaoId, { tipo: 'pedido.alterado', id: 'ped-x', versao: 1, loja_id: 'loja-de-outra-conta' })));
+    expect(await esperaDaLoja()).toBeGreaterThan(500);
+    // Aviso desta loja: fica na vez agora, e o instante do aviso fica guardado.
+    await withSystem(database.db, (tx) => eventoDoRegem(tx, evento(conexaoId, { tipo: 'pedido.alterado', id: 'ped-001', versao: 4, loja_id: 'loja-centro' })));
+    expect(await esperaDaLoja()).toBeLessThanOrEqual(0);
+    const [s] = await ownerQuery<{ recente: boolean }>(
+      `select (cursor->>'evento_em')::timestamptz > now() - interval '1 minute' as recente from liame.sync_state where connected_account_id = $1 and dataset = 'pedidos'`,
+      [contaId],
+    );
+    expect(s?.recente).toBe(true);
+    // Aviso sem `loja_id` (token da empresa inteira, ou corpo que não é JSON): vale para todas as lojas da conexão.
+    await daquiADezMinutos();
+    await withSystem(database.db, (tx) => eventoDoRegem(tx, { ...evento(conexaoId, {}), body: 'não é json' }));
+    expect(await esperaDaLoja()).toBeLessThanOrEqual(0);
 
     const loop = new VendasLoop(database, loadConfig(), api.app.get(VaultService));
     const resultados = await loop.executarLote(5, { tenantIds: [tenantId] });
     expect(resultados).toHaveLength(1);
     expect(resultados[0]!.status).toBe('ok');
+    // Lida, a loja volta para a fila no ritmo normal: o aviso de antes da leitura não a segura na vez.
+    expect(await esperaDaLoja()).toBeGreaterThan(14 * 60);
+  });
+
+  it('aviso que chega NO MEIO de uma leitura pede outra leitura em seguida, em vez de esperar os 15 minutos', async () => {
+    const conexaoId = await conexaoDaLoja();
+    // O Regem publica uma venda e avisa enquanto o Liame ainda está lendo a página dos pedidos.
+    let avisou = 0;
+    estado.aoLerPedidos = async () => {
+      estado.aoLerPedidos = null;
+      avisou++;
+      await withSystem(database.db, (tx) => eventoDoRegem(tx, evento(conexaoId, { tipo: 'pedido.alterado', id: 'ped-novo', versao: 1, loja_id: 'loja-centro' })));
+    };
+    try {
+      const r = await sincronizador.sincronizar(contaId, tenantId);
+      expect(r.status).toBe('ok');
+    } finally {
+      estado.aoLerPedidos = null;
+    }
+    expect(avisou).toBe(1);
+    expect(await esperaDaLoja()).toBeLessThanOrEqual(0);
+    // A leitura seguinte (sem aviso no meio) devolve a loja ao ritmo normal.
+    await sincronizador.sincronizar(contaId, tenantId);
+    expect(await esperaDaLoja()).toBeGreaterThan(14 * 60);
   });
 
   it('escopo faltando para cupons não para os pedidos; token recusado desliga a leitura da loja', async () => {
@@ -323,6 +493,21 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     const [conta] = await ownerQuery<{ status: string; status_reason: string }>(`select status, status_reason from liame.connected_account where id = $1`, [contaId]);
     expect(conta).toMatchObject({ status: 'desconectada' });
     expect(conta!.status_reason).toContain('conecte de novo');
+  });
+
+  it('revogar a conexão tira do cofre o segredo dos avisos: o inbox dela deixa de aceitar', async () => {
+    const conexaoId = await conexaoDaLoja();
+    const [antes] = await ownerQuery<{ inbox_secret_id: string }>(`select inbox_secret_id from liame.oauth_connection where id = $1`, [conexaoId]);
+    expect((await api.call('DELETE', `/v1/connections/${conexaoId}`, { cookie })).status).toBe(204);
+    const [segredo] = await ownerQuery<{ revogado: boolean }>(`select revoked_at is not null as revogado from liame.secret where id = $1`, [antes!.inbox_secret_id]);
+    expect(segredo?.revogado).toBe(true);
+    const corpo = JSON.stringify({ tipo: 'pedido.alterado', id: 'ped-001', versao: 9, loja_id: 'loja-centro' });
+    const r = await fetch(`${api.base}/v1/inbox/regem/${conexaoId}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...webhookHeaders(avisos[0]!.segredo, `msg_${randomUUID()}`, corpo) },
+      body: corpo,
+    });
+    expect(r.status).toBe(404);
   });
 
   describe('conjuntos independentes (loja da Barra)', () => {
