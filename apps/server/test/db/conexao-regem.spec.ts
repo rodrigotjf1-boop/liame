@@ -413,6 +413,20 @@ describe.skipIf(!hasDb)('conectar o Regem (A2.5 · F3)', () => {
     expect(religar.status).toBe(200);
     expect(religar.body.linked).toHaveLength(1);
     expect(religar.body.linked[0]).toMatchObject({ id: centro.id, connection_id: segunda, unit_id: e.unitId, status: 'ativa' });
+    // A primeira autorização ficou sem loja nenhuma (a Praia foi revogada, a Centro passou para a nova): é encerrada,
+    // a credencial dela sai do cofre e ela some da lista de autorizações que valem (ficava na tela com "0 lojas").
+    const antiga = await conexao(primeira);
+    expect(antiga.status).toBe('revogada');
+    const [segredoAntigo] = await ownerQuery<{ revogado: boolean }>(`select revoked_at is not null as revogado from liame.secret where id = $1`, [antiga.credential_secret_id]);
+    expect(segredoAntigo?.revogado).toBe(true);
+    expect((await conexao(segunda)).status).toBe('ativa');
+    const [conta] = await ownerQuery<{ status: string; desligada: boolean }>(`select status, disconnected_at is not null as desligada from liame.connected_account where id = $1`, [centro.id]);
+    expect(conta).toEqual({ status: 'ativa', desligada: false });
+    const [auditoriaDaTroca] = await ownerQuery<{ after: Record<string, unknown> }>(
+      `select after from liame.audit_event where chain_key = $1 and resource_id = $2 and action = 'conta.conectar' order by chain_seq desc limit 1`,
+      [e.tenantId, segunda],
+    );
+    expect(auditoriaDaTroca?.after).toMatchObject({ autorizacoes_encerradas: [primeira] });
   });
 
   it('RegemCast ainda sem autorização própria: 503, sem criar conexão', async () => {
