@@ -116,6 +116,15 @@ node dist/scripts/conectar-produto.js --empresa <uuid da empresa> --marca <uuid 
 
 Depois, a pessoa liga a loja em **Contas conectadas**; a loja do Liame dela é criada ali, com o nome e o fuso da loja do Regem (#71, ERR-047). Revogar lá apaga o token do cofre e o revoga no Regem.
 
+**Ligar uma função para uma empresa (ADR-012):** as funções de escrita nascem desligadas (`regem_write`, `meta_write`, `google_write`…). Quem liga é a distribuição, por empresa, com o papel dono do banco (`liame_owner`, o mesmo das migrations): o papel do aplicativo não grava regra de flag. O endereço do banco vem do ambiente, pelo nome da variável, e fica na auditoria da empresa quem decidiu e por quê:
+
+```bash
+node --env-file=.env.nuvem apps/server/dist/scripts/ligar-flag.js --url-env NUVEM_DATABASE_URL_OWNER \
+  --flag regem_write --empresa <uuid da empresa> --ligar --por "Nome" --motivo "piloto do cupom de campanha"
+```
+
+Para desligar, `--desligar` no lugar de `--ligar` (a regra da empresa é apagada e ela volta ao padrão da flag). Vale em até 15 segundos, na API e no worker. Para `regem_write` valer numa loja, a loja também precisa ter liberado "Criar cupom de campanha" na autorização do Regem.
+
 ## Cofre (ADR-011, ADR-014)
 
 | Variável | Para quê | Padrão |
