@@ -32,6 +32,14 @@ export const LojaRegem = z.object({
 });
 export type LojaRegem = z.infer<typeof LojaRegem>;
 
+/** Situação do aviso (webhook) registrado para o token da loja (contrato §3). O segredo nunca volta. */
+export const AvisoRegem = z.object({
+  url: z.url().max(500),
+  pausado: z.boolean(),
+  motivo_pausa: Texto(500).nullable().optional(),
+});
+export type AvisoRegem = z.infer<typeof AvisoRegem>;
+
 /** Troca do código pelo token (C1b): um token por loja autorizada. */
 export const TokensRegem = z.object({
   lojas: z

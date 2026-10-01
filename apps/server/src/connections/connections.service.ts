@@ -460,11 +460,13 @@ export class ConnectionsService {
    */
   private async encerrar(id: string): Promise<{ antes: string; contas: number } | null> {
     const tx = currentTx();
-    const r = await tx.execute<{ provider: string; credential_secret_id: string | null; status: string }>(sql`
-      select provider, credential_secret_id, status from liame.oauth_connection where id = ${id} for update`);
+    const r = await tx.execute<{ provider: string; credential_secret_id: string | null; inbox_secret_id: string | null; status: string }>(sql`
+      select provider, credential_secret_id, inbox_secret_id, status from liame.oauth_connection where id = ${id} for update`);
     const c = r.rows[0];
     if (!c) throw naoEncontrada();
     if (c.status === 'revogada') return null;
+    // O segredo dos avisos (webhook) da conexão sai do cofre junto: depois disto nenhuma assinatura confere.
+    if (c.inbox_secret_id) await this.vault.revokeSecret(tx, c.inbox_secret_id);
     let refreshGoogle: string | null = null;
     let tokensRegem: { loja_id: string; token: string }[] = [];
     if (c.credential_secret_id) {

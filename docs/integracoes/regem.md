@@ -144,15 +144,38 @@ Parâmetros: `cursor`, `limite`. Devolve `{ "itens": [{ "id": "<cliente_id>", "a
 
 Pelo [contrato de cupons](cupons.md), no mesmo endereço base (`{base}/cupons`, `{base}/cupons/usos`).
 
-## 3. Eventos (C3b, depois do MVP)
+## 3. Eventos (C3b)
 
-Standard Webhooks, um segredo por conexão, a partir da fila de saída do Regem (`aviso_integracao`, mig 289), só da nuvem:
+No ar no Regem desde 01/10/2026 (PR #603, migration 304). O aviso é **só gatilho de frescor**: o Liame lê pela rota com cursor em seguida. Aviso perdido, repetido ou fora de ordem não muda o resultado; sem avisos, a leitura com cursor a cada 15 minutos e a reconciliação diária bastam (D-A2.5-5).
 
-- `pedido.alterado` → `{ "tipo": "pedido.alterado", "id": "<pedido_id>", "versao": 18 }`
-- `cliente.anonimizado` → `{ "tipo": "cliente.anonimizado", "id": "<cliente_id>" }`
-- `cupom.alterado` e `cupom.usado` (contrato de cupons §4).
+### 3.1 Registro · qualquer escopo
 
-Só gatilho de frescor: o Liame lê pela rota com cursor. Sem eventos, a leitura com cursor a cada 15 minutos e a reconciliação diária bastam (D-A2.5-5).
+Quem registra é o Liame, com o token da loja (o usuário não configura nada):
+
+- `PUT {base}/webhook` com `{ "url": "https://api.agencialiame.com/v1/inbox/regem/<connection_id>", "segredo": "whsec_…" }` → 200 com a situação (`url`, `registrado_em`, `pausado`, `motivo_pausa`, `ultimo_envio_em`, `ultimo_status_http`, `falhas_seguidas`, `entregues`). O segredo nunca volta. Repetir o registro religa o que estava pausado.
+- `GET {base}/webhook` → a situação (404 se não há registro); `DELETE {base}/webhook` → 204.
+- O endereço tem de estar **dentro da lista que a distribuição do Regem liberou** para o Liame (padrão: `https://api.agencialiame.com/v1/inbox/regem/`, com um trecho só depois dele, o id da conexão). Fora dela: 422 `endereco-nao-permitido`. O Regem nunca faz chamada para endereço escolhido por quem tem só o token, e não segue redirecionamento.
+- O segredo segue o Standard Webhooks (`whsec_` + base64 de 24 a 64 bytes) e fica cifrado no Regem. Formato errado: 400 `parametro-invalido`. Regem sem a chave de segredos: 503 `aviso-indisponivel`.
+- Token revogado: o Regem para de avisar e apaga o registro.
+
+No Liame, o segredo é **um por conexão** (cofre, `oauth_connection.inbox_secret_id`), criado no primeiro registro; cada loja da conexão registra o mesmo endereço e o mesmo segredo com o token dela. O registro acontece na leitura das vendas, depois da carga inicial, e é repetido uma vez por dia; se falhar, de hora em hora. Falha no registro nunca falha a leitura. Revogar a conexão tira o segredo do cofre.
+
+### 3.2 O aviso
+
+`POST` no endereço registrado, no padrão **Standard Webhooks** (cabeçalhos `webhook-id`, `webhook-timestamp` e `webhook-signature`, HMAC-SHA256 de `id.timestamp.corpo`):
+
+- `pedido.alterado` → `{ "tipo": "pedido.alterado", "id": "<pedido_id>", "versao": 18, "loja_id": "<loja_id>" }`
+- `cliente.anonimizado` → `{ "tipo": "cliente.anonimizado", "id": "<cliente_id>", "loja_id": "<loja_id>" }`
+- `cupom.alterado` e `cupom.usado` (contrato de cupons §4), também com `loja_id`.
+
+Regras do envio:
+
+- `loja_id` é a loja **do token** que registrou (não a do recurso): uma conexão pode ter várias lojas no mesmo endereço, e é por ele que o Liame sabe qual reler. Sem `loja_id`, o Liame relê todas as lojas da conexão.
+- **No máximo um aviso por loja por minuto**, e um aviso vale por várias mudanças: o `id` é o da mais recente. Não é uma lista do que mudou.
+- Só vira aviso o que a leitura da loja devolveria: o recurso que o escopo do token libera, já carimbado há mais de 15 segundos (quando o aviso chega, a rota com cursor já devolve a mudança).
+- O Regem espera resposta 2xx em até 5 segundos. Falha: nova tentativa com recuo de 1 minuto a 1 hora, sem perder a posição. Pausa depois de 3 dias de falha, ou de 1 hora respondendo 404/410 (a conexão não existe mais); o próximo registro religa.
+
+No Liame, o inbox (`POST /v1/inbox/regem/{connection_id}`) confere a assinatura com o segredo da conexão, grava o evento cru e deduplica pelo `webhook-id`; o worker põe a loja na vez. Se o aviso chega no meio de uma leitura da mesma loja, a leitura termina e a loja é lida de novo em seguida.
 
 ## 4. Captura do clique no cardápio (C3a)
 

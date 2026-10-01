@@ -134,6 +134,8 @@ Webhook no padrão **Standard Webhooks** (cabeçalhos `webhook-id`, `webhook-tim
 - `cupom.alterado` → `{ "tipo": "cupom.alterado", "id": "<cupom_id>", "versao": 5 }`
 - `cupom.usado` → `{ "tipo": "cupom.usado", "id": "<uso_id>", "cupom_id": "…", "pedido_id": "…" }`
 
+Os dois levam também `loja_id` (a loja do token que registrou o aviso). O registro do endereço, o limite de um aviso por loja por minuto e as regras de falha estão no contrato do Regem (`regem.md` §3).
+
 O evento é **só gatilho**: o Liame lê pela rota com cursor em seguida. Evento perdido, repetido ou fora de ordem não muda o resultado (ADR-019 item 5).
 
 ## 5. Quem implementa

@@ -1,7 +1,7 @@
 import type { z } from 'zod';
 import type { ClienteConector } from '../cliente-http.js';
 import { ErroConector } from '../cliente-http.js';
-import { LojaRegem, pagina, TokensRegem } from './contrato-regem.js';
+import { AvisoRegem, LojaRegem, pagina, TokensRegem } from './contrato-regem.js';
 
 // Chamadas ao Regem pelo contrato v1 (docs/integracoes/regem.md; ADR-019). O token da loja vai só no
 // cabeçalho e nunca em log; o endereço é o da distribuição, liberado no cliente HTTP (V33). Cota e
@@ -70,6 +70,25 @@ export async function trocarCodigoRegem(
     apiVersion: VERSAO_CONTRATO_REGEM,
   });
   return conferir(TokensRegem, r.corpo, 'autorizacao/token');
+}
+
+/**
+ * Registra (ou repete) no Regem para onde ele avisa que algo mudou nesta loja (contrato §3): o endereço do
+ * inbox desta conexão e o segredo da assinatura. O segredo vai só no corpo e nunca em log. A cota e o
+ * disjuntor são à parte dos da leitura (`<loja>:aviso`): o aviso fora do ar não segura as vendas.
+ */
+export async function registrarAvisoNoRegem(ctx: Contexto, token: string, lojaChave: string, p: { url: string; segredo: string }): Promise<AvisoRegem> {
+  const r = await ctx.cliente.requisitar({
+    provider: 'regem',
+    conta: `${lojaChave}:aviso`,
+    url: `${ctx.apiUrl}/webhook`,
+    metodo: 'PUT',
+    corpo: { url: p.url, segredo: p.segredo },
+    cabecalhos: { authorization: `Bearer ${token}` },
+    endpoint: 'webhook',
+    apiVersion: VERSAO_CONTRATO_REGEM,
+  });
+  return conferir(AvisoRegem, r.corpo, 'webhook');
 }
 
 /** Revoga o token da loja no Regem (segunda camada: o token já saiu do cofre do Liame). */

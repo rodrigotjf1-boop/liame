@@ -8,8 +8,9 @@ import type { AppConfig } from '../config.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector, type TipoErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
-import { lerLoja, lerPagina, VERSAO_CONTRATO_REGEM } from '../connectors/regem/conector-regem.js';
+import { lerLoja, lerPagina, registrarAvisoNoRegem, VERSAO_CONTRATO_REGEM } from '../connectors/regem/conector-regem.js';
 import { ClienteAnonimizado, CupomRegem, type LojaRegem, PedidoRegem } from '../connectors/regem/contrato-regem.js';
+import { newWebhookSecret } from '../events/standard-webhooks.js';
 import type { VaultService } from '../vault/vault.service.js';
 import { gravarPedidos, type PedidoLido } from './order-store.js';
 import { gravarCupons, pedidoDoRegem, toqueDoPedido } from './regem-leitura.js';
@@ -32,6 +33,7 @@ const RECONCILIACAO_DIAS = 3;
 /** Teto de páginas por conjunto numa execução: loja grande termina na próxima, sem prender o worker. */
 const PAGINAS_POR_EXECUCAO = 20;
 const DIA_MS = 86_400_000;
+const HORA_MS = 3_600_000;
 
 export type DatasetVendas = 'pedidos' | 'cupons' | 'clientes_anonimizados';
 
@@ -66,6 +68,10 @@ type CursorVendas = {
   espera_ate?: string;
   /** O tipo da falha que o conjunto espera passar (a situação da conta sai daqui). */
   falha?: TipoFalha;
+  /** Pedidos: a última vez que o aviso (webhook) desta loja foi registrado no Regem, e se deu certo. */
+  aviso?: { em: string; ok: boolean };
+  /** Pedidos: quando chegou o último aviso do Regem (gravado por quem recebe; a execução nunca o sobrescreve). */
+  evento_em?: string;
 };
 
 /** Um conjunto durante a execução: o último cursor gravado (a falha parte dele, não do início da execução). */
@@ -82,6 +88,7 @@ type LinhaConta = {
   status: string;
   status_reason: string | null;
   credential_secret_id: string | null;
+  connection_id: string | null;
 };
 
 export type ResultadoVendas = {
@@ -147,8 +154,10 @@ export class SincronizadorVendas {
 
   async sincronizar(contaId: string, tenantId: string, agora: Date = new Date()): Promise<ResultadoVendas> {
     const lida = await withTenant(this.db, tenantId, async (tx) => {
-      const r = await tx.execute<LinhaConta & { cursores: Record<string, CursorVendas> | null }>(sql`
-        select a.id, a.tenant_id, a.brand_id, a.unit_id, a.external_id, a.status, a.status_reason, a.credential_secret_id,
+      // `inicio`: o relógio do BANCO no começo da leitura (o mesmo que carimba o aviso recebido).
+      const r = await tx.execute<LinhaConta & { cursores: Record<string, CursorVendas> | null; inicio: string }>(sql`
+        select a.id, a.tenant_id, a.brand_id, a.unit_id, a.external_id, a.status, a.status_reason, a.credential_secret_id, a.connection_id,
+               now()::text as inicio,
                (select jsonb_object_agg(s.dataset, s.cursor) from liame.sync_state s where s.connected_account_id = a.id) as cursores
           from liame.connected_account a
          where a.id = ${contaId} and a.provider = 'regem' and a.disconnected_at is null`);
@@ -212,8 +221,9 @@ export class SincronizadorVendas {
     resultado.status = status;
     if (falharam.length) resultado.erro = falharam.map((d) => `${d}: ${resultado.falhas![d]}`).join('; ').slice(0, 500);
     await this.fecharExecucao(conta, runId, status, cliente.chamadas, resultado, resultado.erro ?? null);
+    await this.conferirAviso(ctx, conta, loja.token, cursores.pedidos ?? {}, agora);
     // Sem nenhum conjunto liberado pelo token, a loja é vista de novo no dia seguinte.
-    await this.agendarLoja(conta, proximas.length ? Math.min(...proximas) : agora.getTime() + DIA_MS);
+    await this.agendarLoja(conta, proximas.length ? Math.min(...proximas) : agora.getTime() + DIA_MS, conta.inicio);
     await this.atualizarSituacao(conta, comErro);
     return resultado;
   }
@@ -431,6 +441,69 @@ export class SincronizadorVendas {
     });
   }
 
+  /**
+   * O aviso do Regem (contrato §3): o Liame diz ao Regem para onde avisar quando algo muda nesta loja — o
+   * inbox da conexão dela, com o segredo da conexão. É só um atalho: sem ele, a leitura de 15 em 15 minutos
+   * segue igual, por isso nada aqui falha a execução. Depois da carga inicial (a primeira leitura já é
+   * pesada), uma vez por dia (repetir religa o que o Regem tiver pausado); se falhou, de hora em hora.
+   */
+  private async conferirAviso(ctx: Contexto, conta: LinhaConta, token: string, cursor: CursorVendas, agora: Date): Promise<void> {
+    if (!conta.connection_id || !cursor.carga_inicial_em) return;
+    const ultimo = cursor.aviso?.em ? Date.parse(cursor.aviso.em) : Number.NaN;
+    if (agora.getTime() - ultimo < (cursor.aviso?.ok ? DIA_MS : HORA_MS)) return;
+    let ok = false;
+    try {
+      const segredo = await this.segredoDoAviso(conta);
+      // Conexão revogada no meio do caminho: não há para onde avisar.
+      if (!segredo) return;
+      await registrarAvisoNoRegem(ctx, token, conta.external_id, { url: `${this.config.apiUrl}/v1/inbox/regem/${conta.connection_id}`, segredo });
+      ok = true;
+    } catch (err) {
+      // Só o tipo e o texto do erro do conector (o segredo e o token nunca entram na mensagem).
+      this.logger.warn(`loja ${conta.id}: aviso do Regem não registrado (${err instanceof ErroConector ? `${err.tipo}: ${err.message}` : 'erro interno'}); nova tentativa em uma hora`);
+    }
+    try {
+      await withTenant(this.db, conta.tenant_id, (tx) =>
+        tx.execute(sql`
+          update liame.sync_state
+             set cursor = cursor || jsonb_build_object('aviso', jsonb_build_object('em', ${agora.toISOString()}::text, 'ok', ${ok}::boolean)), updated_at = now()
+           where connected_account_id = ${conta.id} and dataset = 'pedidos'`),
+      );
+    } catch (err) {
+      this.logger.warn(`loja ${conta.id}: situação do aviso não gravada (${err instanceof Error ? err.name : 'erro'}); o registro é repetido na próxima leitura`);
+    }
+  }
+
+  /** O segredo da assinatura dos avisos desta conexão (um por conexão, no cofre); criado na primeira vez. */
+  private segredoDoAviso(conta: LinhaConta): Promise<string | null> {
+    return withTenant(this.db, conta.tenant_id, async (tx) => {
+      const r = await tx.execute<{ inbox_secret_id: string | null }>(sql`
+        select inbox_secret_id from liame.oauth_connection
+         where id = ${conta.connection_id} and provider = 'regem' and status in ('aguardando_escolha', 'ativa')
+         for update`);
+      const conexao = r.rows[0];
+      if (!conexao) return null;
+      const guardado = conexao.inbox_secret_id ? await this.vault.readSecret(tx, conexao.inbox_secret_id) : null;
+      if (guardado) return guardado;
+      const novo = newWebhookSecret();
+      const id = await this.vault.putSecret(tx, { tenantId: conta.tenant_id, purpose: 'inbox_regem', plaintext: novo });
+      await tx.execute(sql`update liame.oauth_connection set inbox_secret_id = ${id}, updated_at = now() where id = ${conta.connection_id}`);
+      await writeAudit(tx, {
+        tenantId: conta.tenant_id,
+        actorType: 'system',
+        actorId: null,
+        actorLabel: 'Liame (leitura do Regem)',
+        action: 'conexao.ativar_aviso',
+        resourceType: 'oauth_connection',
+        resourceId: conta.connection_id!,
+        before: null,
+        after: { aviso: 'segredo criado para os avisos do Regem' },
+        origin: 'worker',
+      });
+      return novo;
+    });
+  }
+
   private depois(agora: Date, minutos: number): string {
     return new Date(agora.getTime() + minutos * 60_000).toISOString();
   }
@@ -455,7 +528,10 @@ export class SincronizadorVendas {
     );
   }
 
-  /** Estado por conjunto (frescor): sucesso limpa o erro e grava o cursor; falha guarda o motivo. */
+  /**
+   * Estado por conjunto (frescor): sucesso limpa o erro e grava o cursor; falha guarda o motivo. O instante
+   * do último aviso (`evento_em`) é de quem recebe o aviso, não desta execução: fica sempre o do banco.
+   */
   private async marcarEstado(conta: LinhaConta, dataset: DatasetVendas, erro: string | null, cursor: CursorVendas) {
     const sucesso = erro === null;
     await withTenant(this.db, conta.tenant_id, (tx) =>
@@ -465,19 +541,31 @@ export class SincronizadorVendas {
         on conflict (connected_account_id, dataset) do update
            set expected_every_minutes = excluded.expected_every_minutes,
                last_success_at = case when ${sucesso}::boolean then now() else liame.sync_state.last_success_at end,
-               last_attempt_at = now(), last_error = excluded.last_error, cursor = excluded.cursor, updated_at = now()`),
+               last_attempt_at = now(), last_error = excluded.last_error,
+               cursor = excluded.cursor
+                        || case when (liame.sync_state.cursor->'evento_em') is not null
+                                then jsonb_build_object('evento_em', liame.sync_state.cursor->'evento_em') else '{}'::jsonb end,
+               updated_at = now()`),
     );
   }
 
-  /** Quando a loja volta para a fila. A reserva é pela linha de `pedidos` (ERR-029): só a `proxima` dela muda. */
-  private async agendarLoja(conta: LinhaConta, quando: number) {
+  /**
+   * Quando a loja volta para a fila. A reserva é pela linha de `pedidos` (ERR-029): só a `proxima` dela muda.
+   * Aviso do Regem que chegou DURANTE esta leitura (depois de `inicio`, pelo relógio do banco) pede outra
+   * leitura agora: a página pode ter sido lida antes de a mudança aparecer, e sem isto ela esperaria 15 minutos.
+   */
+  private async agendarLoja(conta: LinhaConta, quando: number, inicio: string | null = null) {
     const proxima = new Date(quando).toISOString();
     await withTenant(this.db, conta.tenant_id, (tx) =>
       tx.execute(sql`
-        insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, cursor)
+        insert into liame.sync_state as s (connected_account_id, dataset, tenant_id, expected_every_minutes, cursor)
         values (${conta.id}, 'pedidos', ${conta.tenant_id}, ${INTERVALO_VENDAS_MIN}, jsonb_build_object('proxima', ${proxima}::text))
         on conflict (connected_account_id, dataset) do update
-           set cursor = liame.sync_state.cursor || jsonb_build_object('proxima', ${proxima}::text), updated_at = now()`),
+           set cursor = s.cursor || jsonb_build_object('proxima',
+                 case when ${inicio}::timestamptz is not null and (s.cursor->>'evento_em')::timestamptz > ${inicio}::timestamptz
+                      then to_jsonb(least(${proxima}::timestamptz, now()))
+                      else to_jsonb(${proxima}::text) end),
+               updated_at = now()`),
     );
   }
 
