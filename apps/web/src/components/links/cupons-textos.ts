@@ -250,9 +250,12 @@ export function errosCriar(v: CamposCriar, ctx: { hoje: string; existentes: stri
   else if (ctx.existentes.some((x) => x.toUpperCase() === codigo)) e.codigo = 'Esse código já existe nesta loja. Escolha outro.';
   else if (ctx.pedidos.some((x) => x.toUpperCase() === codigo)) e.codigo = 'Já existe um pedido de cupom com este código. Cancele o pedido ou escolha outro código.';
   if (v.tipo === 'percentual') {
-    const n = Number(v.valor);
-    if (!v.valor.trim()) e.valor = 'Informe o valor do desconto.';
-    else if (!/^\d{1,3}$/.test(v.valor.trim()) || n < 1 || n > 100) e.valor = 'O percentual vai de 1 a 100, sem casas decimais.';
+    const texto = v.valor.trim();
+    // Só dígitos, sem regex (a varredura de segurança barra regex em texto digitado): "12.5", "1e1" e "-3" não passam.
+    const inteiro = texto.length <= 3 && [...texto].every((c) => c >= '0' && c <= '9');
+    const n = Number(texto);
+    if (!texto) e.valor = 'Informe o valor do desconto.';
+    else if (!inteiro || n < 1 || n > 100) e.valor = 'O percentual vai de 1 a 100, sem casas decimais.';
   } else if (v.tipo === 'valor') {
     const micros = microsDeReais(v.valor);
     if (!micros || BigInt(micros) <= 0n) e.valor = 'Informe o valor do desconto, em reais.';

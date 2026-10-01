@@ -102,7 +102,8 @@ describe('criar cupom no Regem: o pedido', () => {
     expect(errosCriar(campos({ codigo: 'fds20' }), ctx).codigo).toBe('Esse código já existe nesta loja. Escolha outro.');
     expect(errosCriar(campos({ codigo: 'noite20' }), ctx).codigo).toContain('Já existe um pedido de cupom com este código');
     expect(errosCriar(campos({ valor: '' }), ctx).valor).toBe('Informe o valor do desconto.');
-    for (const v of ['0', '101', '12.5', '-3']) expect(errosCriar(campos({ valor: v }), ctx).valor).toBe('O percentual vai de 1 a 100, sem casas decimais.');
+    for (const v of ['0', '101', '12.5', '-3', '1e1', '1000', '15%']) expect(errosCriar(campos({ valor: v }), ctx).valor).toBe('O percentual vai de 1 a 100, sem casas decimais.');
+    for (const v of ['1', ' 15 ', '100']) expect(errosCriar(campos({ valor: v }), ctx).valor).toBeUndefined();
     expect(errosCriar(campos({ tipo: 'valor', valor: '' }), ctx).valor).toBe('Informe o valor do desconto, em reais.');
     expect(errosCriar(campos({ tipo: 'valor', valor: '0' }), ctx).valor).toBe('Informe o valor do desconto, em reais.');
     expect(errosCriar(campos({ tipo: 'valor', valor: '7,50' }), ctx)).toEqual({});
