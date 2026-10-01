@@ -3,13 +3,24 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { CartaoAutorizacaoRegem } from '@/components/contas/cartao-autorizacao-regem';
+import { DialogoConectar } from '@/components/contas/dialogo-conectar';
+import { DialogoConectarRegem } from '@/components/contas/dialogo-conectar-regem';
 import {
   autorizacoesVisiveis,
+  artigo,
   botaoLigar,
+  chipsDoRegem,
+  daPlataforma,
+  enderecoSeguro,
+  erroDaConexao,
   escolhiveis,
   escoposDoRegem,
   faixaDaVolta,
   faixaDoRegem,
+  lojaSugerida,
+  lojasRepetidas,
+  naPlataforma,
+  pedidosAoRegem,
   gruposDaEscolha,
   idDaConta,
   lerVolta,
@@ -250,7 +261,7 @@ describe('lojas do Regem', () => {
       rotulo: 'Desconectada',
       tom: 'perigo',
       precisaDeVoce: true,
-      reconectar: false,
+      reconectar: true,
       motivo: 'A autorização foi revogada no Regem — conecte de novo.',
     });
     expect(subDaLoja('Centro')).toBe('Loja no Liame: Centro · token próprio da loja');
@@ -282,6 +293,7 @@ describe('lojas do Regem', () => {
       tipo: 'atencao',
       titulo: 'O Regem liberou os pedidos, mas não o custo dos itens',
       texto: 'Quem autorizou não tem permissão financeira no Regem. Sem o custo, a margem fica desconhecida e os Resultados não dizem se deu lucro. Para liberar, um presidente autoriza de novo.',
+      botao: 'Autorizar de novo',
     });
     expect(faixaDoRegem([{ ...l, semCusto: true, origem: 'distribuicao' }])!.texto).toBe(
       'O token da loja foi emitido sem o custo dos itens. Sem o custo, a margem fica desconhecida e os Resultados não dizem se deu lucro.',
@@ -289,13 +301,14 @@ describe('lojas do Regem', () => {
     expect(faixaDoRegem([{ ...l, semCusto: true }, { ...l, nome: 'Loja Barra', desconectada: true }])).toMatchObject({
       tipo: 'perigo',
       titulo: 'A autorização foi revogada no Regem — conecte de novo',
+      botao: 'Conectar o Regem de novo',
       texto: 'Os pedidos da Loja Barra pararam de chegar. Até conectar de novo, os Resultados mostram o caixa só até a última leitura.',
     });
   });
 
   it('cartão da autorização: quem autorizou e quantas lojas, o aviso de sem custo, a lista do que o Liame recebe e a revogada', () => {
-    const cartao = (c: ConnectionResponse, podeConectar = true) =>
-      renderToStaticMarkup(createElement(CartaoAutorizacaoRegem, { conexao: c, podeConectar, aoEscolher: null, aoRevogar: () => {} }));
+    const cartao = (c: ConnectionResponse, podeConectar = true, aoConectar: (() => void) | null = null) =>
+      renderToStaticMarkup(createElement(CartaoAutorizacaoRegem, { conexao: c, podeConectar, aoEscolher: null, aoConectar, aoRevogar: () => {} }));
     const daDistribuicao = cartao(conexao({ provider: 'regem', origin: 'distribuicao', status: 'ativa', completed_at: local(30, 9), scopes: SEM_CUSTO, accounts: [contaRegem()] }));
     expect(daDistribuicao).toContain('<b>Autorizada em 30/09/2026</b>');
     expect(daDistribuicao).toContain('pela distribuição DMS · 1 loja');
@@ -325,5 +338,117 @@ describe('lojas do Regem', () => {
     const soLeitura = cartao(revogada, false);
     expect(soLeitura).not.toContain('Revogar');
     expect(soLeitura).toContain('O que o Liame recebe');
+  });
+});
+
+// Conectar o Regem e ligar as lojas (protótipo P2, parte 2): a volta do Regem, a troca de token e os diálogos.
+describe('conectar o Regem e ligar as lojas', () => {
+  const descoberta = (externalId: string, name: string, linked = false): DiscoveredAccount => ({ provider: 'regem', external_id: externalId, name, currency: 'BRL', timezone: 'America/Sao_Paulo', linked, via: null });
+  const doRegem = (extra: Partial<ConnectionResponse> = {}) =>
+    conexao({ provider: 'regem', status: 'aguardando_escolha', completed_at: local(27, 9), scopes: ['pedidos.ler', 'clientes.anonimizacao.ler', 'cupons.ler', 'cupons.uso.ler'], ...extra });
+  const semElemento = { current: null };
+
+  it('o Regem entra nos textos: artigo, "no Regem", "do Regem" e os erros da volta', () => {
+    expect(artigo('regem')).toBe('O Regem');
+    expect(naPlataforma('regem')).toBe('no Regem');
+    expect(daPlataforma('regem')).toBe('do Regem');
+    expect([naPlataforma('meta'), naPlataforma('google'), naPlataforma(null)]).toEqual(['na Meta', 'no Google', 'na plataforma']);
+    expect(erroDaConexao('recusada_na_plataforma', 'regem').titulo).toBe('O Regem não autorizou a conexão.');
+    expect(erroDaConexao('autorizacao_expirada', 'regem').texto).toBe('A volta do Regem chegou depois de 10 minutos. Nada foi ligado: conecte de novo.');
+    expect(erroDaConexao('sem_permissao', 'regem')).toEqual({ titulo: 'Faltou permissão no Regem.', texto: 'A autorização não deu acesso às lojas. Conecte de novo.' });
+    // Meta e Google ficam como eram.
+    expect(erroDaConexao('autorizacao_expirada', 'google').texto).toBe('A volta do Google chegou depois de 10 minutos. Nada foi ligado: conecte de novo.');
+    expect(erroDaConexao('sem_permissao', 'meta').titulo).toBe('Faltou permissão na Meta.');
+    expect(enderecoSeguro('https://app.dmsregem.com/integracoes/autorizar?cliente=liame')).toBe('https://app.dmsregem.com/integracoes/autorizar?cliente=liame');
+    expect(enderecoSeguro('javascript:alert(1)')).toBeNull();
+  });
+
+  it('a volta do Regem: conferindo fala em lojas; depois, "O Regem autorizou N lojas" com o botão "Ligar lojas"', () => {
+    const conferindo = faixaDaVolta({ conexao: ID, erro: null }, doRegem({ status: 'processando' }), 'Mister Burgers');
+    expect(conferindo).toMatchObject({ tipo: 'conferindo', titulo: 'Conferindo a autorização com o Regem…' });
+    expect(conferindo!.texto).toContain('as lojas que você liberou');
+    const duas = doRegem({ discovered: [descoberta('loja-1', 'Loja Centro'), descoberta('loja-2', 'Loja Barra')] });
+    expect(faixaDaVolta({ conexao: ID, erro: null }, duas, 'Mister Burgers')).toEqual({
+      tipo: 'escolher',
+      titulo: 'O Regem autorizou 2 lojas.',
+      texto: 'Ligue cada uma a uma loja do Liame. A primeira leitura traz os pedidos dos últimos 90 dias.',
+      botao: 'Ligar lojas',
+    });
+    const uma = doRegem({ discovered: [descoberta('loja-1', 'Loja Centro')] });
+    expect(faixaDaVolta({ conexao: ID, erro: null }, uma, 'Mister Burgers')).toMatchObject({ titulo: 'O Regem autorizou 1 loja.', texto: expect.stringContaining('Ligue a loja a uma loja do Liame.') });
+  });
+
+  it('loja já ligada por OUTRA autorização entra na escolha como troca de token; pela mesma, não', () => {
+    const c = doRegem({ id: 'nova', discovered: [descoberta('loja-1', 'Loja Centro', true), descoberta('loja-2', 'Loja Barra')] });
+    const ligada = (connectionId: string, status = 'ativa') => ({ provider: 'regem', external_id: 'loja-1', status, connection_id: connectionId, disconnected_at: null });
+    expect(escolhiveis(c, [ligada('antiga')]).map((o) => [o.conta.external_id, o.reconectar])).toEqual([
+      ['loja-1', true],
+      ['loja-2', false],
+    ]);
+    expect(escolhiveis(c, [ligada('nova')]).map((o) => o.conta.external_id)).toEqual(['loja-2']);
+    // Conta de anúncio ativa em outra autorização continua travada (só a do Regem troca de token).
+    const meta = conexao({ id: 'nova', discovered: [{ provider: 'meta_ads', external_id: 'act_1', name: 'Conta', currency: 'BRL', timezone: null, linked: true, via: null }] });
+    expect(escolhiveis(meta, [{ provider: 'meta_ads', external_id: 'act_1', status: 'ativa', connection_id: 'antiga', disconnected_at: null }])).toEqual([]);
+  });
+
+  it('o que o Liame pede, as etiquetas do que a loja libera, a loja sugerida e a loja repetida', () => {
+    expect(pedidosAoRegem().map((e) => [e.cod, e.opcional, e.nota])).toEqual([
+      ['pedidos.ler', false, null],
+      ['custos.ler', true, 'só com permissão financeira'],
+      ['clientes.anonimizacao.ler', false, null],
+      ['cupons.ler', false, null],
+      ['cupons.uso.ler', false, null],
+      ['cupons.criar', true, 'com aprovação'],
+    ]);
+    expect(chipsDoRegem(['pedidos.ler', 'clientes.anonimizacao.ler', 'cupons.ler', 'cupons.uso.ler', 'cupons.criar'], 'oauth').map((c) => [c.texto, c.classe])).toEqual([
+      ['Pedidos', 'st--concluido'],
+      ['Custo dos itens: não liberado', 'st--aguardando'],
+      ['Aviso de cliente anonimizado', 'st--concluido'],
+      ['Cupons', 'st--concluido'],
+      ['Usos dos cupons', 'st--concluido'],
+      ['Criar cupom de campanha · desligado no Liame', 'st--espera'],
+    ]);
+    const lojas = [
+      { id: 'u1', name: 'Loja Centro' },
+      { id: 'u2', name: 'Barra' },
+    ];
+    expect(lojaSugerida(' loja centro ', lojas)).toBe('u1');
+    expect(lojaSugerida('Loja Barra', lojas)).toBe(''); // sem a de mesmo nome: "Criar loja no Liame"
+    expect([...lojasRepetidas({ a: 'u1', b: 'u1', c: 'u2', d: '', e: '' })].sort()).toEqual(['a', 'b']);
+    expect(lojasRepetidas({ a: 'u1', b: 'u2', c: '' }).size).toBe(0);
+  });
+
+  it('diálogo de conectar: a opção do Regem só aparece quando dá para conectar; o diálogo do Regem diz o que pede e o que nunca vem', () => {
+    const marcas = [{ id: ID, name: 'Mister Burgers', archived_at: null, purge_after: null }];
+    const base = { marcas, marcaInicial: null, reserva: semElemento, aoFechar: () => {}, aoIr: () => {} };
+    const sem = renderToStaticMarkup(createElement(DialogoConectar, base));
+    expect(sem).not.toContain('Regem · vendas da loja');
+    expect(sem).toContain('O Liame só lê: não cria, não muda e não gasta nada.');
+    const com = renderToStaticMarkup(createElement(DialogoConectar, { ...base, aoRegem: () => {} }));
+    expect(com).toContain('<b>Regem · vendas da loja</b>');
+    expect(com).toContain('No Regem, a única escrita possível é o cupom de campanha, sempre com aprovação.');
+
+    const regem = renderToStaticMarkup(createElement(DialogoConectarRegem, base));
+    expect(regem).toContain('Conectar o Regem</h2>');
+    expect(regem).toContain('Você vai ao Regem escolher as lojas; o Liame recebe só o que estiver marcado.');
+    expect(regem).toContain('<b>Entre no Regem</b> com o perfil de presidente.');
+    expect(regem).toContain('<code>custos.ler</code><span class="st st--espera">só com permissão financeira</span>');
+    expect(regem).toContain('Nome, telefone, e-mail e endereço de cliente.');
+    expect(regem).toContain('Nenhuma senha ou token passa por você');
+    expect(regem).toContain('Ir para o Regem');
+    expect(regem).not.toContain('<select'); // uma marca só: não pergunta
+    const duasMarcas = renderToStaticMarkup(createElement(DialogoConectarRegem, { ...base, marcas: [...marcas, { ...marcas[0]!, id: 'outra', name: 'Outra' }] }));
+    expect(duasMarcas).toContain('<select');
+  });
+
+  it('cartão da autorização revogada oferece "Conectar de novo" só quando dá para conectar o Regem', () => {
+    const revogada = conexao({ provider: 'regem', status: 'erro', scopes: [], accounts: [] });
+    const render = (aoConectar: (() => void) | null, podeConectar = true) =>
+      renderToStaticMarkup(createElement(CartaoAutorizacaoRegem, { conexao: revogada, podeConectar, aoEscolher: null, aoConectar, aoRevogar: () => {} }));
+    expect(render(() => {})).toContain('Conectar de novo');
+    expect(render(null)).not.toContain('Conectar de novo');
+    expect(render(() => {}, false)).not.toContain('Conectar de novo');
+    const ativa = conexao({ provider: 'regem', status: 'ativa', scopes: ['pedidos.ler', 'custos.ler'], accounts: [] });
+    expect(renderToStaticMarkup(createElement(CartaoAutorizacaoRegem, { conexao: ativa, podeConectar: true, aoEscolher: null, aoConectar: () => {}, aoRevogar: () => {} }))).not.toContain('Conectar de novo');
   });
 });

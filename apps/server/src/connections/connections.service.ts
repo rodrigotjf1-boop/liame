@@ -8,6 +8,7 @@ import type {
   OAuthCallbackQuery,
   StartConnectionRequest,
   StartConnectionResponse,
+  UnitListResponse,
 } from '@liame/contracts';
 import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -115,13 +116,26 @@ export class ConnectionsService {
     private readonly vault: VaultService,
   ) {}
 
+  /**
+   * Autorizações que dá para começar agora. RegemCast ainda sem autorização própria (C2b); o Regem, só
+   * quando o cliente dele está configurado (`REGEM_CLIENT_ID` e `REGEM_CLIENT_SECRET`, da distribuição).
+   */
+  private disponiveis(): ProvedorOAuth[] {
+    return (['meta', 'google', 'regem'] as const).filter((p) => Boolean(this.config.oauth[p]));
+  }
+
+  /** Lojas do Liame da marca, por nome: a escolha de "Loja no Liame" ao ligar as lojas do Regem. */
+  async lojasDaMarca(brandId: string): Promise<UnitListResponse> {
+    const r = await currentTx().execute<{ id: string; brand_id: string; name: string }>(sql`
+      select id, brand_id, name from liame.unit where brand_id = ${brandId} order by lower(name), id limit 500`);
+    return { items: r.rows.map((u) => ({ id: u.id, brand_id: u.brand_id, name: u.name })) };
+  }
+
   /** Cria o estado do OAuth e devolve para onde mandar a pessoa autorizar. */
   async iniciar(auth: AuthContext, body: StartConnectionRequest): Promise<StartConnectionResponse> {
     const tenantId = auth.tenantId!;
     const provedor: ProvedorOAuth = body.provider;
-    // RegemCast ainda sem autorização própria (C2b); o Regem, só quando o cliente dele estiver configurado.
-    const disponivel = provedor === 'regemcast' ? false : Boolean(this.config.oauth[provedor]);
-    if (!disponivel) {
+    if (!this.disponiveis().includes(provedor)) {
       const nome = { meta: 'a Meta', google: 'o Google', regem: 'o Regem', regemcast: 'o RegemCast' }[provedor];
       throw new AppProblem(503, 'integracao-indisponivel', 'Conexão ainda indisponível', `A conexão com ${nome} ainda não está disponível. Tente de novo mais tarde.`);
     }
@@ -192,7 +206,7 @@ export class ConnectionsService {
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.status not in ('aguardando_autorizacao', 'expirada') ${brandId ? sql`and c.brand_id = ${brandId}` : sql``}
        order by c.created_at desc limit 200`);
-    return { items: await this.montar(conexoes.rows) };
+    return { items: await this.montar(conexoes.rows), available: this.disponiveis() };
   }
 
   async detalhe(id: string): Promise<ConnectionResponse> {
@@ -364,13 +378,41 @@ export class ConnectionsService {
   }
 
   /** Tira uma conta da marca: a leitura para; o histórico fica. */
+  /**
+   * Desliga uma conta: ela para de ser lida para a marca. Na loja do Regem, o token DELA é revogado lá
+   * também (depois do commit) — cada loja tem o próprio token, então as outras lojas da autorização seguem.
+   */
   async desligarConta(id: string): Promise<void> {
-    const r = await currentTx().execute<{ provider: string; external_id: string }>(sql`
+    const tx = currentTx();
+    const r = await tx.execute<{ provider: string; external_id: string; credential_secret_id: string | null; connection_id: string | null }>(sql`
       update liame.connected_account set status = 'desconectada', status_reason = 'desligada por pessoa', disconnected_at = now(), updated_at = now()
        where id = ${id} and disconnected_at is null
-       returning provider, external_id`);
-    if (!r.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conta conectada não encontrada nesta empresa.');
-    auditDetail({ resourceId: id, before: { status: 'ativa' }, after: { status: 'desconectada', provider: r.rows[0].provider, external_id: r.rows[0].external_id } });
+       returning provider, external_id, credential_secret_id, connection_id`);
+    const conta = r.rows[0];
+    if (!conta) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conta conectada não encontrada nesta empresa.');
+    let tokenDaLoja: string | null = null;
+    if (conta.provider === 'regem' && conta.credential_secret_id) {
+      const guardada = await this.vault.readSecret(tx, conta.credential_secret_id);
+      const lojas = guardada ? ((JSON.parse(guardada) as CredencialRegem).lojas ?? []) : [];
+      tokenDaLoja = lojas.find((l) => l.loja_id === conta.external_id)?.token ?? null;
+    }
+    auditDetail({
+      resourceId: id,
+      before: { status: 'ativa' },
+      after: { status: 'desconectada', provider: conta.provider, external_id: conta.external_id, ...(tokenDaLoja ? { revogada_no_regem: true } : {}) },
+    });
+    if (tokenDaLoja && this.database) {
+      const token = tokenDaLoja;
+      const cliente = new ClienteConector(this.database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 2 });
+      const ctx = { cliente, apiUrl: this.config.produtos.regemApiUrl };
+      afterCommit(async () => {
+        try {
+          await revogarNoRegem(ctx, token, conta.external_id);
+        } catch (err) {
+          this.logger.warn(`revogação no Regem falhou (conta ${id}, loja ${conta.external_id}): ${err instanceof Error ? err.message : String(err)}`);
+        }
+      });
+    }
   }
 
   /**

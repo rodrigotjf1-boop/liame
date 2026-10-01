@@ -29,7 +29,7 @@ export function FaixaVolta({ faixa, aoEscolher, aoTentarDeNovo, aoConferirDeNovo
         <>
           {faixa.tipo === 'escolher' && (
             <button className="btn btn--primary" type="button" onClick={aoEscolher}>
-              Escolher contas
+              {faixa.botao ?? 'Escolher contas'}
             </button>
           )}
           {faixa.tipo === 'erro' && aoTentarDeNovo && (

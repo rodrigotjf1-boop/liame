@@ -5,7 +5,8 @@ import { disparar } from '@/lib/disparar';
 import { idDaConta, plataforma, type SituacaoConta, ultimaLeitura } from './textos';
 
 // Uma conta ligada (vira cartão no celular). "Desligar" confirma na própria linha; conta que a
-// plataforma recusou oferece "Conectar de novo" (protótipo aprovado).
+// plataforma recusou oferece "Conectar de novo" (protótipo aprovado). Na loja do Regem a ação é "Revogar":
+// o token daquela loja é revogado no Regem também (protótipo P2).
 
 export type ContaDaTabela = {
   id: string;
@@ -15,6 +16,8 @@ export type ContaDaTabela = {
   marca: string | null;
   /** Texto de baixo do nome no lugar do id (loja do Regem: "Loja no Liame: Centro · token próprio da loja"). */
   sub?: string;
+  /** Loja do Regem: a ação da linha é "Revogar" (o token dela para de valer no Regem também). */
+  revogar?: boolean;
   brandId: string;
   situacao: SituacaoConta;
 };
@@ -95,15 +98,21 @@ export function LinhaConta({ conta: c, agora, podeConectar, aoReconectar, aoDesl
                 disabled={desligando}
                 aria-busy={desligando}
               >
-                {desligando ? 'Desligando…' : 'Desligar agora'}
+                {c.revogar ? (desligando ? 'Revogando…' : 'Revogar agora') : desligando ? 'Desligando…' : 'Desligar agora'}
               </button>
               <button className="btn btn--sm" type="button" disabled={desligando} onClick={() => setConfirmando(false)}>
                 Cancelar
               </button>
             </div>
           ) : (
-            <button ref={desligar} className="btn btn--sm btn--ghost" type="button" onClick={() => setConfirmando(true)} aria-label={`Desligar ${c.nome}`}>
-              Desligar
+            <button
+              ref={desligar}
+              className="btn btn--sm btn--ghost"
+              type="button"
+              onClick={() => setConfirmando(true)}
+              aria-label={c.revogar ? `Revogar o acesso à loja ${c.nome}` : `Desligar ${c.nome}`}
+            >
+              {c.revogar ? 'Revogar' : 'Desligar'}
             </button>
           ))}
       </td>

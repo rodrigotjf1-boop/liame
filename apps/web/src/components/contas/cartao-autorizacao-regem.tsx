@@ -15,6 +15,8 @@ type Props = {
   podeConectar: boolean;
   /** Autorização que ainda espera a escolha das lojas. */
   aoEscolher: (() => void) | null;
+  /** Dá para conectar o Regem de novo (a API diz que está disponível): o botão da autorização revogada. */
+  aoConectar: (() => void) | null;
   aoRevogar: () => void;
 };
 
@@ -22,7 +24,7 @@ const ROTULO = { liberado: 'Liberado', nao_liberado: 'Não liberado', desligado:
 const TOM = { liberado: 'st--concluido', nao_liberado: 'st--aguardando', desligado: 'st--espera' } as const;
 const ICONE = { liberado: 'check', nao_liberado: 'alert', desligado: 'lock' } as const;
 
-export function CartaoAutorizacaoRegem({ conexao: c, podeConectar, aoEscolher, aoRevogar }: Props) {
+export function CartaoAutorizacaoRegem({ conexao: c, podeConectar, aoEscolher, aoConectar, aoRevogar }: Props) {
   const [aberto, setAberto] = useState(false);
   const id = useId();
   const n = contasDaAutorizacao(c);
@@ -83,6 +85,11 @@ export function CartaoAutorizacaoRegem({ conexao: c, podeConectar, aoEscolher, a
         </ul>
       </div>
       <div className="seg-acoes">
+        {podeConectar && revogada && aoConectar && (
+          <button className="btn btn--sm btn--primary" type="button" onClick={aoConectar} aria-label={`Conectar de novo: autorização ${qual}`}>
+            Conectar de novo
+          </button>
+        )}
         {podeConectar && aoEscolher && (
           <button className="btn btn--sm btn--primary" type="button" onClick={aoEscolher} aria-label={`Ligar lojas: autorização ${qual}`}>
             Ligar lojas

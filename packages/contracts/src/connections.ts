@@ -105,8 +105,22 @@ export type ConnectionResponse = z.infer<typeof ConnectionResponse>;
 export const ConnectionListQuery = z.strictObject({ brand_id: z.uuid().optional() });
 export type ConnectionListQuery = z.infer<typeof ConnectionListQuery>;
 
-export const ConnectionListResponse = z.strictObject({ items: z.array(ConnectionResponse) });
+export const ConnectionListResponse = z.strictObject({
+  items: z.array(ConnectionResponse),
+  /** Autorizações que dá para começar agora (a do Regem depende de a distribuição ter configurado o cliente). */
+  available: z.array(ConnectionProvider),
+});
 export type ConnectionListResponse = z.infer<typeof ConnectionListResponse>;
+
+/** Lojas do Liame de uma marca: a escolha de "Loja no Liame" ao ligar as lojas do Regem. */
+export const UnitListQuery = z.strictObject({ brand_id: z.uuid() });
+export type UnitListQuery = z.infer<typeof UnitListQuery>;
+
+export const UnitSummary = z.strictObject({ id: z.uuid(), brand_id: z.uuid(), name: z.string() });
+export type UnitSummary = z.infer<typeof UnitSummary>;
+
+export const UnitListResponse = z.strictObject({ items: z.array(UnitSummary) });
+export type UnitListResponse = z.infer<typeof UnitListResponse>;
 
 export const LinkAccountsRequest = z.strictObject({
   accounts: z

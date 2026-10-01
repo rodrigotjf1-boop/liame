@@ -15,11 +15,14 @@ import { useSessao } from '@/lib/sessao';
 import { CartaoAutorizacao } from './cartao-autorizacao';
 import { CartaoAutorizacaoRegem } from './cartao-autorizacao-regem';
 import { DialogoConectar } from './dialogo-conectar';
+import { DialogoConectarRegem } from './dialogo-conectar-regem';
 import { DialogoEscolher } from './dialogo-escolher';
+import { DialogoLojasRegem } from './dialogo-lojas-regem';
 import { DialogoRevogar } from './dialogo-revogar';
 import { FaixaVolta } from './faixa-volta';
 import { type ContaDaTabela, LinhaConta } from './linha-conta';
 import {
+  artigo,
   autorizacoesVisiveis,
   autorizadorDa,
   type ContaExistente,
@@ -29,6 +32,7 @@ import {
   faixaDaVolta,
   faixaDoRegem,
   lerVolta,
+  naPlataforma,
   semCusto,
   situacaoDaConta,
   situacaoDaLoja,
@@ -38,12 +42,15 @@ import {
 // "Contas conectadas" (mockups/prototipo-contas.html e, para as lojas do Regem, prototipo-contas-regem.html,
 // P2): as plataformas de onde a equipe lê os números, com o frescor de cada conta, as autorizações e a volta
 // do OAuth (escolher, conferindo, recusada). A loja do Regem mostra a leitura dos pedidos e o que ela libera.
+// Parte 2 da P2: "Conectar o Regem" (o diálogo que explica antes de ir), "Ligar as lojas do Regem" na volta e
+// "Revogar" por loja — o Regem só é oferecido quando a API diz que dá para conectar (`available`).
 // Nenhum token passa pelo navegador; quem pode ver e conectar é o servidor que decide.
 
-type Dados = { marcas: BrandResponse[]; conexoes: ConnectionResponse[]; contas: AccountFreshness[] };
+type Dados = { marcas: BrandResponse[]; conexoes: ConnectionResponse[]; contas: AccountFreshness[]; disponiveis: string[] };
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: Dados } | { tipo: 'erro'; problema: Problema };
 type Dialogo =
   | { tipo: 'conectar'; marca: string | null }
+  | { tipo: 'regem'; marca: string | null }
   | { tipo: 'escolher'; conexao: ConnectionResponse }
   | { tipo: 'revogar'; conexao: ConnectionResponse };
 /** A conexão sendo acompanhada: a da volta da plataforma ou a de um "procurar contas de novo". */
@@ -81,7 +88,7 @@ export function ContasTela() {
     if (!m.ok) return setEstado({ tipo: 'erro', problema: m.problema });
     if (!c.ok) return setEstado({ tipo: 'erro', problema: c.problema });
     if (!f.ok) return setEstado({ tipo: 'erro', problema: f.problema });
-    setEstado({ tipo: 'ok', dados: { marcas: m.data.items.filter((b) => !b.archived_at), conexoes: c.data.items, contas: f.data.items } });
+    setEstado({ tipo: 'ok', dados: { marcas: m.data.items.filter((b) => !b.archived_at), conexoes: c.data.items, contas: f.data.items, disponiveis: c.data.available } });
   }, []);
 
   useEffect(() => {
@@ -128,8 +135,8 @@ export function ContasTela() {
     if (!acomp || acomp.origem !== 'procurar' || !acomp.conexao || emConferencia(acomp.conexao)) return;
     if (acomp.conexao.status !== 'erro' && escolhiveis(acomp.conexao, existentes).length) return;
     const a = autorizadorDa(acomp.conexao.provider);
-    if (acomp.conexao.status === 'erro') avisar(`Não deu para procurar as contas ${a === 'google' ? 'no Google' : 'na Meta'}. Veja a autorização abaixo.`, { tipo: 'perigo' });
-    else avisar(`Nenhuma conta nova ${a === 'google' ? 'no Google' : 'na Meta'}.`);
+    if (acomp.conexao.status === 'erro') avisar(`Não deu para procurar as contas ${naPlataforma(a)}. Veja a autorização abaixo.`, { tipo: 'perigo' });
+    else avisar(`Nenhuma conta nova ${naPlataforma(a)}.`);
     setAcomp(null);
   }, [acomp, avisar, existentes]);
 
@@ -138,6 +145,8 @@ export function ContasTela() {
     [dados, empresa],
   );
 
+  // O Regem só é oferecido (conectar, conectar de novo, autorizar de novo) quando a API diz que dá para começar.
+  const podeRegem = Boolean(dados?.disponiveis.includes('regem'));
   const linhas = useMemo<(ContaDaTabela & { loja?: { scopes: string[]; origem: string } })[]>(() => {
     if (!dados) return [];
     const ligadas = new Map(dados.conexoes.flatMap((c) => c.accounts).map((a) => [a.id, a]));
@@ -156,11 +165,12 @@ export function ContasTela() {
       // A loja do Regem: a leitura dos pedidos, o que ela libera e a loja do Liame no lugar do id.
       if (c.provider === 'regem') {
         const loja = { scopes: ligada?.scopes ?? [], origem: (ligada?.connection_id && origemDa.get(ligada.connection_id)) || 'oauth' };
-        return { ...base, sub: subDaLoja(ligada?.unit_name ?? null), situacao: situacaoDaLoja(c, loja, agora), loja };
+        const situacao = situacaoDaLoja(c, loja, agora);
+        return { ...base, sub: subDaLoja(ligada?.unit_name ?? null), revogar: true, situacao: { ...situacao, reconectar: situacao.reconectar && podeRegem }, loja };
       }
       return { ...base, situacao: situacaoDaConta(c) };
     });
-  }, [dados, agora]);
+  }, [dados, agora, podeRegem]);
   const avisoDoRegem = useMemo(
     () =>
       faixaDoRegem(
@@ -203,7 +213,7 @@ export function ContasTela() {
     // O "procurar de novo" só ganha faixa quando há contas para escolher; a espera aparece no cartão.
     if (acomp.origem === 'procurar') {
       const n = f?.tipo === 'escolher' ? escolhiveis(acomp.conexao, existentes).length : 0;
-      const onde = autorizadorDa(acomp.conexao.provider) === 'google' ? 'no Google' : 'na Meta';
+      const onde = naPlataforma(autorizadorDa(acomp.conexao.provider));
       faixa = f?.tipo === 'escolher' ? { ...f, titulo: `Encontramos ${n} ${n === 1 ? 'conta para ligar' : 'contas para ligar'} ${onde}.` } : null;
     } else faixa = f;
   }
@@ -219,7 +229,11 @@ export function ContasTela() {
       avisar(mensagemDe(r.problema), { tipo: 'perigo' });
       return false;
     }
-    avisar('Conta desligada. O histórico de números fica.');
+    avisar(
+      l.revogar
+        ? 'Loja desligada. O token foi revogado no Regem e no Liame; o que já foi lido segue o prazo de guarda.'
+        : 'Conta desligada. O histórico de números fica.',
+    );
     recarregarAvisos();
     await carregar();
     titulo.current?.focus({ preventScroll: true });
@@ -229,8 +243,7 @@ export function ContasTela() {
   async function procurar(c: ConnectionResponse) {
     const r = await chamar(() => api.POST('/v1/connections/{id}/discover', { params: { path: { id: c.id } } }));
     if (!r.ok) return avisar(mensagemDe(r.problema), { tipo: 'perigo' });
-    const a = autorizadorDa(c.provider);
-    avisar(`Procurando contas novas ${a === 'google' ? 'no Google' : 'na Meta'}. Aparecem aqui em alguns segundos.`);
+    avisar(`Procurando contas novas ${naPlataforma(autorizadorDa(c.provider))}. Aparecem aqui em alguns segundos.`);
     setAcomp({ id: c.id, origem: 'procurar', conexao: r.data, tentativas: 1, perdida: false });
   }
 
@@ -257,13 +270,33 @@ export function ContasTela() {
         <FaixaVolta
           faixa={faixa}
           aoEscolher={() => conexaoDaFaixa && setDialogo({ tipo: 'escolher', conexao: conexaoDaFaixa })}
-          aoTentarDeNovo={podeConectar && dados ? () => setDialogo({ tipo: 'conectar', marca: conexaoDaFaixa?.brand_id ?? null }) : null}
+          aoTentarDeNovo={
+            podeConectar && dados
+              ? () => setDialogo({ tipo: conexaoDaFaixa?.provider === 'regem' && podeRegem ? 'regem' : 'conectar', marca: conexaoDaFaixa?.brand_id ?? null })
+              : null
+          }
           aoConferirDeNovo={() => setAcomp((a) => (a ? { ...a, tentativas: 0 } : a))}
         />
       )}
 
       {avisoDoRegem && (
-        <FaixaDeAviso tipo={avisoDoRegem.tipo} icone={<Icone nome={avisoDoRegem.tipo === 'perigo' ? 'alert-circle' : 'alert'} />} titulo={avisoDoRegem.titulo} texto={avisoDoRegem.texto} />
+        <FaixaDeAviso
+          tipo={avisoDoRegem.tipo}
+          icone={<Icone nome={avisoDoRegem.tipo === 'perigo' ? 'alert-circle' : 'alert'} />}
+          titulo={avisoDoRegem.titulo}
+          texto={avisoDoRegem.texto}
+          acao={
+            podeConectar && podeRegem ? (
+              <button
+                className={avisoDoRegem.tipo === 'perigo' ? 'btn btn--primary' : 'btn'}
+                type="button"
+                onClick={() => setDialogo({ tipo: 'regem', marca: linhas.find((l) => l.loja)?.brandId ?? null })}
+              >
+                {avisoDoRegem.botao}
+              </button>
+            ) : undefined
+          }
+        />
       )}
 
       {estado.tipo === 'carregando' && <TabelaCarregando />}
@@ -299,12 +332,19 @@ export function ContasTela() {
                   <button className="btn" type="button" onClick={() => setDialogo({ tipo: 'conectar', marca: null })}>
                     Conectar o Google (Ads e Analytics)
                   </button>
+                  {podeRegem && (
+                    <button className="btn" type="button" onClick={() => setDialogo({ tipo: 'regem', marca: null })}>
+                      Conectar o Regem (vendas)
+                    </button>
+                  )}
                 </div>
               ) : undefined
             }
           >
             {podeConectar
-              ? 'Com a Meta e o Google conectados, a equipe lê gasto, cliques, conversas e vendas todo dia, e avisa quando algo sai do normal.'
+              ? `Com a Meta e o Google conectados, a equipe lê gasto, cliques, conversas e vendas todo dia, e avisa quando algo sai do normal.${
+                  podeRegem ? ' Com o Regem, o Liame confirma no caixa quais pedidos vieram dos anúncios.' : ''
+                }`
               : 'Nenhuma plataforma conectada ainda. Quem administra a conta conecta a Meta e o Google aqui.'}
           </Estado>
         </div>
@@ -341,7 +381,7 @@ export function ContasTela() {
                     conta={l}
                     agora={agora}
                     podeConectar={podeConectar}
-                    aoReconectar={() => setDialogo({ tipo: 'conectar', marca: l.brandId })}
+                    aoReconectar={() => setDialogo({ tipo: l.provider === 'regem' ? 'regem' : 'conectar', marca: l.brandId })}
                     aoDesligar={() => desligar(l)}
                   />
                 ))}
@@ -368,6 +408,7 @@ export function ContasTela() {
                   conexao={c}
                   podeConectar={podeConectar}
                   aoEscolher={c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length ? () => setDialogo({ tipo: 'escolher', conexao: c }) : null}
+                  aoConectar={podeRegem ? () => setDialogo({ tipo: 'regem', marca: c.brand_id }) : null}
                   aoRevogar={() => setDialogo({ tipo: 'revogar', conexao: c })}
                 />
               ) : (
@@ -393,11 +434,35 @@ export function ContasTela() {
           marcas={marcas}
           marcaInicial={dialogo.marca}
           reserva={titulo}
-          aoFechar={() => setDialogo(null)}
+          aoFechar={() => setDialogo((d) => (d?.tipo === 'conectar' ? null : d))}
           aoIr={(a) => avisar(`Indo para a página ${a === 'meta' ? 'da Meta' : 'do Google'} para você autorizar…`)}
+          aoRegem={podeRegem ? (marca) => setDialogo({ tipo: 'regem', marca }) : null}
         />
       )}
-      {dialogo?.tipo === 'escolher' && (
+      {dialogo?.tipo === 'regem' && (
+        <DialogoConectarRegem
+          marcas={marcas}
+          marcaInicial={dialogo.marca}
+          reserva={titulo}
+          aoFechar={() => setDialogo((d) => (d?.tipo === 'regem' ? null : d))}
+          aoIr={() => avisar('Indo para o Regem para o presidente autorizar…')}
+        />
+      )}
+      {dialogo?.tipo === 'escolher' && dialogo.conexao.provider === 'regem' && (
+        <DialogoLojasRegem
+          conexao={dialogo.conexao}
+          existentes={existentes}
+          reserva={titulo}
+          aoFechar={() => setDialogo(null)}
+          aoLigar={(texto) => {
+            avisar(texto);
+            limparVolta();
+            recarregarAvisos();
+            disparar(carregar());
+          }}
+        />
+      )}
+      {dialogo?.tipo === 'escolher' && dialogo.conexao.provider !== 'regem' && (
         <DialogoEscolher
           conexao={dialogo.conexao}
           existentes={existentes}

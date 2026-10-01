@@ -18,16 +18,25 @@
 | `cupons.ler`, `cupons.uso.ler`, `cupons.criar` | contrato de cupons | — |
 
 - **Token do piloto (decisão do dono, 29/09/2026):** sai sem `clientes.telefone.ler` e sem `custos.ler`, só com os outros 5 escopos. O Liame já trata isso pelo contrato: `cliente` e `custo_centavos` vêm `null`, o caminho B (conversa → pedido) fica desligado, e os Resultados mostram "margem incompleta", sem veredito. Liberar os dois depois é emitir um token novo e revogar o antigo.
+  - ⚠️ **Conferido em 01/10/2026:** o token do piloto em produção tem os 7 escopos, inclusive `clientes.telefone.ler` e `custos.ler`. A decisão acima não foi a que valeu na emissão. Pendente com o dono: manter (e corrigir esta linha) ou emitir outro token sem os dois e revogar este.
 
 - **Como o token nasce (produto, C1b):**
   1. No Liame, "Conectar Regem" abre `https://app.dmsregem.com/integracoes/autorizar?cliente=liame&state=…&code_challenge=…&code_challenge_method=S256&redirect_uri=https://api.agencialiame.com/v1/oauth/callback`.
-  2. No Regem, o presidente escolhe as lojas e vê os escopos.
-  3. O Regem volta com `code` (uso único, 10 minutos) e `state`.
-  4. O worker do Liame troca o código por um token por loja, entre servidores, em `POST {base}/autorizacao/token` com `code`, `code_verifier` e a credencial de cliente do Liame (da distribuição).
-  5. A resposta traz `[{ "loja_id", "loja_nome", "token", "escopos" }]`.
+  2. No Regem (no ar desde 01/10/2026, Regem #599), o presidente escolhe as lojas e o que libera. Só o presidente autoriza; sem sessão, ele entra e volta para a página.
+     - **Vão sempre:** `pedidos.ler`, `clientes.anonimizacao.ler`, `cupons.ler` e `cupons.uso.ler`.
+     - **Com chave, a decisão é dele:** `custos.ler` (nasce ligada; só para quem tem "Ver valores em R$" no Regem) e `cupons.criar` (nasce desligada).
+     - **`clientes.telefone.ler` não sai por esta página** (decisão do dono, 01/10/2026): só pelo console da distribuição. Com o caminho B (RegemCast), será uma autorização nova.
+     - Os escopos valem igual para todas as lojas marcadas na mesma autorização.
+  3. O Regem volta com `code` (uso único, 10 minutos) e `state`. Se a pessoa cancela, volta com `error=access_denied` e `state`. Pedido com endereço de volta fora da lista, sem `state` ou sem PKCE S256 para na página do Regem e não redireciona.
+  4. O worker do Liame troca o código por um token por loja, entre servidores, em `POST {base}/autorizacao/token`, com o corpo JSON `{ code, code_verifier, redirect_uri, client_id, client_secret }` (`client_id` = `liame`; o segredo é o da distribuição).
+     - **Uma tentativa:** a primeira troca gasta o código, dando certo ou não. Só o segredo de cliente errado não gasta.
+     - Erros em `application/problem+json`: **401** `cliente-invalido`; **400** `autorizacao-invalida` (código desconhecido, vencido, já usado, endereço de volta diferente, PKCE que não confere, quem autorizou deixou de ser presidente, loja apagada).
+  5. A resposta traz `{ "lojas": [{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moeda", "escopos", "cardapio_url", "token" }] }`. O token de cada loja aparece só aqui.
+  6. **Loja que já tinha token do Liame** (o piloto, ou uma autorização anterior): o Regem revoga o antigo na mesma transação em que o novo nasce. No Liame, ligar a loja pela autorização nova passa a MESMA conta para a credencial nova (a loja do Liame e o histórico ficam).
+  7. No Regem, o presidente vê e revoga em **Configurações → Aplicativos conectados**, por loja ou todas.
 - **No piloto:** a distribuição emite o token no console do Regem e o grava direto no cofre do Liame, sem passar pelo usuário.
 - **Revogação:**
-  - `POST {base}/autorizacao/revogar` (com o próprio token) revoga no Regem;
+  - `POST {base}/autorizacao/revogar` (com o próprio token) revoga no Regem — o Liame chama ao revogar a autorização inteira e, desde a P2 parte 2, ao revogar **uma loja** na tela de Contas (só o token dela);
   - token revogado no Regem devolve **401**, e o Liame marca a conta como `desconectada`.
 
 ## 2. Rotas (C1c)

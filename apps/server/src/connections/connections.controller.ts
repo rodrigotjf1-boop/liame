@@ -9,6 +9,8 @@ import {
   ResourceId,
   StartConnectionRequest,
   StartConnectionResponse,
+  UnitListQuery,
+  UnitListResponse,
 } from '@liame/contracts';
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Redirect } from '@nestjs/common';
 import {
@@ -79,6 +81,15 @@ export class ConnectionsController {
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   list(@Query({ schema: ConnectionListQuery }) query: ConnectionListQuery): Promise<ConnectionListResponse> {
     return this.connections.listar(query.brand_id);
+  }
+
+  @Get('units')
+  @Permissao('contas.ver')
+  @ApiOperation({ summary: 'Lojas da marca', description: 'Lojas do Liame de uma marca, por nome: a escolha de "Loja no Liame" ao ligar as lojas do Regem.' })
+  @ApiOkResponse({ standardSchema: UnitListResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  units(@Query({ schema: UnitListQuery }) query: UnitListQuery): Promise<UnitListResponse> {
+    return this.connections.lojasDaMarca(query.brand_id);
   }
 
   @Get('connections/:id')
