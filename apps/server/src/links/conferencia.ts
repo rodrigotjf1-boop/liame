@@ -223,11 +223,19 @@ export function textoDoAviso(anuncio: string, provider: PlataformaDoLink, r: Exc
   if (r.status === 'nao_verificavel') {
     return r.reason === 'leitura_pendente'
       ? { title: `Ainda não conferimos o anúncio "${anuncio}"`, detail: `O Liame ainda não leu o link deste anúncio; a conferência entra na próxima leitura do ${NOME[provider]}.`, action: 'Nada a fazer agora.' }
-      : {
-          title: `Não deu para conferir o anúncio "${anuncio}"`,
-          detail: meta ? 'O anúncio usa uma publicação ou um formato de que o Liame não lê o link.' : 'O anúncio não tem URL final que o Liame leia (Performance Max, ligação ou app).',
-          action: `Confira no ${NOME[provider]} se o link do anúncio leva os parâmetros do Liame.`,
-        };
+      : meta
+        ? {
+            // Sem link lido e sem "Parâmetros de URL" (com eles, a conferência é feita só pelos parâmetros). O caso
+            // comum é o anúncio de publicação que já existia: o link mora na publicação, não no criativo.
+            title: `Não deu para conferir o anúncio "${anuncio}"`,
+            detail: 'O Liame não achou o link deste anúncio, o que acontece quando ele usa uma publicação que já existia (o link fica na publicação), e o campo "Parâmetros de URL" está vazio.',
+            action: 'Se o anúncio leva ao cardápio, copie os parâmetros de um link desta campanha em Links e cupons e cole no campo "Parâmetros de URL" do anúncio: o Liame passa a conferir. Se ele não leva a um site, não precisa de nada.',
+          }
+        : {
+            title: `Não deu para conferir o anúncio "${anuncio}"`,
+            detail: 'O anúncio não tem URL final que o Liame leia (Performance Max, ligação ou app).',
+            action: `Confira no ${NOME[provider]} se o link do anúncio leva os parâmetros do Liame.`,
+          };
   }
   const titulo = `O anúncio "${anuncio}" está sem o rastreio do Liame`;
   switch (r.reason) {
