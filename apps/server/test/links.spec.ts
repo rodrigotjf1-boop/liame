@@ -348,5 +348,14 @@ describe('conferência do rastreio (função pura)', () => {
     );
     expect(textoDoAviso('X', 'meta_ads', { status: 'sem_rastreio', reason: 'destino_fora_do_cardapio', destino: 'https://www.ifood.com.br/x' }).detail).toContain('www.ifood.com.br');
     expect(textoDoAviso('X', 'google_ads', { status: 'nao_verificavel', reason: 'leitura_pendente' }).action).toBe('Nada a fazer agora.');
+    // Meta sem link lido e sem parâmetros (anúncio de publicação que já existia): diz o porquê e o que resolve.
+    expect(textoDoAviso('Reels de sexta', 'meta_ads', { status: 'nao_verificavel', reason: 'sem_link' })).toEqual({
+      title: 'Não deu para conferir o anúncio "Reels de sexta"',
+      detail: 'O Liame não achou o link deste anúncio, o que acontece quando ele usa uma publicação que já existia (o link fica na publicação), e o campo "Parâmetros de URL" está vazio.',
+      action: 'Se o anúncio leva ao cardápio, copie os parâmetros de um link desta campanha em Links e cupons e cole no campo "Parâmetros de URL" do anúncio: o Liame passa a conferir. Se ele não leva a um site, não precisa de nada.',
+    });
+    // Com os parâmetros colados, o mesmo anúncio passa a ser conferido só por eles.
+    expect(conferir(meta({ destinos: [], url_tags: 'lk=LINKCAMP01&utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.id}}' })).status).not.toBe('nao_verificavel');
+    expect(textoDoAviso('X', 'google_ads', { status: 'nao_verificavel', reason: 'sem_link' }).action).toBe('Confira no Google Ads se o link do anúncio leva os parâmetros do Liame.');
   });
 });
