@@ -320,6 +320,17 @@ export class ConnectionsService {
         lojaDe.set(chave, unitId);
       }
     }
+    // Lojas do Regem que hoje estão ligadas por OUTRA autorização: esta troca o token delas (o Regem revoga o
+    // antigo quando o novo nasce). A autorização que ficar sem loja nenhuma é encerrada no fim.
+    const lojasTrocadas = escolhidas.filter((d) => d.provider === 'regem').map((d) => d.external_id);
+    const antigas = lojasTrocadas.length
+      ? (
+          await tx.execute<{ connection_id: string }>(sql`
+            select distinct connection_id from liame.connected_account
+             where provider = 'regem' and brand_id = ${c.brand_id} and disconnected_at is null
+               and connection_id is not null and connection_id <> ${c.id} and external_id in ${lojasTrocadas}`)
+        ).rows.map((l) => l.connection_id)
+      : [];
     const linhas = escolhidas.map((d) => ({
       id: uuidv7(),
       unit_id: lojaDe.get(`${d.provider}:${d.external_id}`) ?? null,
@@ -351,9 +362,21 @@ export class ConnectionsService {
     if (inseridas.rows.length) {
       await tx.execute(sql`update liame.oauth_connection set status = 'ativa', completed_at = coalesce(completed_at, now()), updated_at = now() where id = ${c.id}`);
     }
+    // A autorização antiga do Regem que perdeu todas as lojas para esta: o token dela já não vale lá; aqui a
+    // credencial sai do cofre e ela deixa de aparecer como se ainda valesse (ficava na tela com "0 lojas").
+    const encerradas: string[] = [];
+    for (const antiga of antigas) {
+      const resta = await tx.execute(sql`select 1 from liame.connected_account where connection_id = ${antiga} and disconnected_at is null limit 1`);
+      if (resta.rows.length) continue;
+      if (await this.encerrar(antiga)) encerradas.push(antiga);
+    }
     auditDetail({
       resourceId: c.id,
-      after: { contas: inseridas.rows.map((l) => `${l.provider}:${l.external_id}`), ...(lojasCriadas.length ? { lojas_criadas: lojasCriadas } : {}) },
+      after: {
+        contas: inseridas.rows.map((l) => `${l.provider}:${l.external_id}`),
+        ...(lojasCriadas.length ? { lojas_criadas: lojasCriadas } : {}),
+        ...(encerradas.length ? { autorizacoes_encerradas: encerradas } : {}),
+      },
     });
     return {
       linked: inseridas.rows.map(conta),
@@ -420,12 +443,21 @@ export class ConnectionsService {
    * também (depois do commit). Na Meta, a empresa remove o app nas Configurações do negócio.
    */
   async revogar(id: string): Promise<void> {
+    const r = await this.encerrar(id);
+    if (r) auditDetail({ resourceId: id, before: { status: r.antes }, after: { status: 'revogada', contas_desligadas: r.contas } });
+  }
+
+  /**
+   * O miolo da revogação (sem a auditoria, que é de quem chama): a credencial sai do cofre, as contas da
+   * autorização param e o token é revogado na origem depois do commit. `null` = já estava revogada.
+   */
+  private async encerrar(id: string): Promise<{ antes: string; contas: number } | null> {
     const tx = currentTx();
     const r = await tx.execute<{ provider: string; credential_secret_id: string | null; status: string }>(sql`
       select provider, credential_secret_id, status from liame.oauth_connection where id = ${id} for update`);
     const c = r.rows[0];
     if (!c) throw naoEncontrada();
-    if (c.status === 'revogada') return;
+    if (c.status === 'revogada') return null;
     let refreshGoogle: string | null = null;
     let tokensRegem: { loja_id: string; token: string }[] = [];
     if (c.credential_secret_id) {
@@ -439,7 +471,6 @@ export class ConnectionsService {
        where connection_id = ${id} and disconnected_at is null returning id`);
     await tx.execute(sql`
       update liame.oauth_connection set status = 'revogada', revoked_at = now(), code_enc = null, pkce_verifier_enc = null, updated_at = now() where id = ${id}`);
-    auditDetail({ resourceId: id, before: { status: c.status }, after: { status: 'revogada', contas_desligadas: contas.rows.length } });
     if (tokensRegem.length && this.database) {
       // Revoga cada token da loja no Regem depois do commit (o token já saiu do cofre do Liame).
       const cliente = new ClienteConector(this.database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 2 });
@@ -466,6 +497,7 @@ export class ConnectionsService {
         }
       });
     }
+    return { antes: c.status, contas: contas.rows.length };
   }
 
   private async versaoMeta(): Promise<string> {

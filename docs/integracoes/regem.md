@@ -18,7 +18,7 @@
 | `cupons.ler`, `cupons.uso.ler`, `cupons.criar` | contrato de cupons | — |
 
 - **Token do piloto (decisão do dono, 29/09/2026):** sai sem `clientes.telefone.ler` e sem `custos.ler`, só com os outros 5 escopos. O Liame já trata isso pelo contrato: `cliente` e `custo_centavos` vêm `null`, o caminho B (conversa → pedido) fica desligado, e os Resultados mostram "margem incompleta", sem veredito. Liberar os dois depois é emitir um token novo e revogar o antigo.
-  - ⚠️ **Conferido em 01/10/2026:** o token do piloto em produção tem os 7 escopos, inclusive `clientes.telefone.ler` e `custos.ler`. A decisão acima não foi a que valeu na emissão. Pendente com o dono: manter (e corrigir esta linha) ou emitir outro token sem os dois e revogar este.
+  - **Desde 01/10/2026, 04:03, o piloto usa o token da autorização pela loja** (o dono conectou pelo Liame): pedidos, custo, aviso de anonimização, cupons, usos e criar cupom, **sem `clientes.telefone.ler`**. O token da distribuição (que tinha os 7 escopos, diferente da decisão acima) foi revogado na troca.
 
 - **Como o token nasce (produto, C1b):**
   1. No Liame, "Conectar Regem" abre `https://app.dmsregem.com/integracoes/autorizar?cliente=liame&state=…&code_challenge=…&code_challenge_method=S256&redirect_uri=https://api.agencialiame.com/v1/oauth/callback`.
@@ -32,7 +32,7 @@
      - **Uma tentativa:** a primeira troca gasta o código, dando certo ou não. Só o segredo de cliente errado não gasta.
      - Erros em `application/problem+json`: **401** `cliente-invalido`; **400** `autorizacao-invalida` (código desconhecido, vencido, já usado, endereço de volta diferente, PKCE que não confere, quem autorizou deixou de ser presidente, loja apagada).
   5. A resposta traz `{ "lojas": [{ "loja_id", "loja_nome", "empresa_nome", "fuso", "moeda", "escopos", "cardapio_url", "token" }] }`. O token de cada loja aparece só aqui.
-  6. **Loja que já tinha token do Liame** (o piloto, ou uma autorização anterior): o Regem revoga o antigo na mesma transação em que o novo nasce. No Liame, ligar a loja pela autorização nova passa a MESMA conta para a credencial nova (a loja do Liame e o histórico ficam).
+  6. **Loja que já tinha token do Liame** (o piloto, ou uma autorização anterior): o Regem revoga o antigo na mesma transação em que o novo nasce. No Liame, ligar a loja pela autorização nova passa a MESMA conta para a credencial nova (a loja do Liame e o histórico ficam), e a autorização antiga que ficar sem loja nenhuma é encerrada na mesma operação.
   7. No Regem, o presidente vê e revoga em **Configurações → Aplicativos conectados**, por loja ou todas.
 - **No piloto:** a distribuição emite o token no console do Regem e o grava direto no cofre do Liame, sem passar pelo usuário.
 - **Revogação:**
