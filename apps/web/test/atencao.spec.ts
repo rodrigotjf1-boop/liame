@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { acaoDoAviso, avisosFalados, contadorDoMenu, contagemPorGravidade, gravidadeDe, oQueFazer, rotuloDoFiltro } from '@/components/atencao/textos';
+import type { AttentionItem } from '@liame/contracts';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { ItemAviso } from '@/components/atencao/item-aviso';
+import { acaoDoAviso, avisosFalados, contadorDoMenu, contagemPorGravidade, destinoDoAviso, gravidadeDe, juntarAvisos, oQueFazer, rotuloDoFiltro } from '@/components/atencao/textos';
 import { itemAtual, rotaPessoal, tituloDa } from '@/components/shell/navegacao';
 
 // Regras puras de "Atenção de mídia" (gravidade, contagens, texto do "o que fazer") e do menu.
@@ -39,6 +43,53 @@ describe('atenção de mídia', () => {
     expect(acaoDoAviso('reconectar_em_breve')).toBe('reconectar');
     expect(acaoDoAviso('gasto_fora_do_normal')).toBeNull();
     expect(acaoDoAviso('tipo_novo')).toBeNull();
+  });
+
+  it('avisos do ciclo fechado (F9): cada tipo leva à tela onde se resolve', () => {
+    expect(acaoDoAviso('vendas_nao_conectadas')).toBe('abrir-contas');
+    expect([acaoDoAviso('anuncio_sem_rastreio'), acaoDoAviso('plataforma_nao_informada')]).toEqual(['abrir-links', 'abrir-links']);
+    expect([acaoDoAviso('campanha_sem_cupom'), acaoDoAviso('cupom_sem_uso')]).toEqual(['abrir-cupons', 'abrir-cupons']);
+    expect(['campanha_sem_pedido', 'margem_desconhecida', 'plataforma_x_caixa', 'vendas_nao_medidas'].map(acaoDoAviso)).toEqual(Array(4).fill('abrir-resultados'));
+    expect(destinoDoAviso('abrir-links')).toEqual({ href: '/links', rotulo: 'Abrir Links e cupons' });
+    expect(destinoDoAviso('abrir-cupons')).toEqual({ href: '/links#cupons', rotulo: 'Abrir os cupons' });
+    expect(destinoDoAviso('abrir-resultados')).toEqual({ href: '/resultados', rotulo: 'Abrir Resultados' });
+    expect(destinoDoAviso('abrir-contas')).toBeNull();
+    expect(destinoDoAviso('reconectar')).toBeNull();
+  });
+
+  it('mídia e ciclo fechado numa lista só: mais grave primeiro e, na mesma gravidade, os de mídia antes', () => {
+    const midia = [{ severity: 'critica', kind: 'm1' }, { severity: 'atencao', kind: 'm2' }, { severity: 'info', kind: 'm3' }];
+    const ciclo = [{ severity: 'critica', kind: 'c1' }, { severity: 'atencao', kind: 'c2' }, { severity: 'gravidade_nova', kind: 'c3' }];
+    expect(juntarAvisos(midia, ciclo).map((i) => i.kind)).toEqual(['m1', 'c1', 'm2', 'c2', 'm3', 'c3']);
+    expect(juntarAvisos(midia, [])).toEqual(midia);
+    expect(contadorDoMenu(juntarAvisos(midia, ciclo))).toBe(4);
+  });
+
+  it('cartão do aviso do ciclo fechado: a etiqueta do Regem e o botão da tela, só para quem vê as vendas', () => {
+    const aviso = (o: Partial<AttentionItem>): AttentionItem => ({
+      kind: 'campanha_sem_cupom',
+      severity: 'atencao',
+      title: '6 campanhas ativas sem cupom exclusivo',
+      detail: 'Os anúncios levam ao Anota AI, e o clique não chega ao pedido: as vendas delas ficam sem origem.',
+      action: 'Crie na plataforma de pedidos um cupom para cada campanha e informe o código em Links e cupons.',
+      connected_account_id: null,
+      campaign_id: null,
+      provider: null,
+      ...o,
+    });
+    const cartao = (item: AttentionItem, podeVerVendas = true) =>
+      renderToStaticMarkup(createElement(ItemAviso, { item, podeVerContas: true, podeConectar: true, podeVerVendas, aoReconectar: () => {} }));
+    const cupom = cartao(aviso({}));
+    expect(cupom).toContain('6 campanhas ativas sem cupom exclusivo');
+    expect(cupom).toContain('<b>O que fazer:</b> crie na plataforma de pedidos um cupom');
+    expect(cupom).toContain('href="/links#cupons"');
+    expect(cupom).toContain('Abrir os cupons');
+    expect(cartao(aviso({}), false)).not.toContain('href=');
+    const atrasado = cartao(aviso({ kind: 'dado_atrasado', provider: 'regem', title: 'As vendas da Loja Centro estão atrasadas' }));
+    expect(atrasado).toContain('>Regem<');
+    expect(atrasado).not.toContain('href=');
+    expect(cartao(aviso({ kind: 'conta_desconectada', severity: 'critica', provider: 'regem' }))).toContain('href="/contas"');
+    expect(cartao(aviso({ kind: 'margem_desconhecida' }))).toContain('href="/resultados"');
   });
 });
 

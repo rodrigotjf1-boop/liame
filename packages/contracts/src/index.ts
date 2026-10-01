@@ -122,6 +122,8 @@ export {
 export {
   CampaignResult,
   ClosedLoopQuery,
+  ClosedLoopAttentionQuery,
+  ClosedLoopAttentionResponse,
   ClosedLoopResponse,
   ConfirmedResult,
   OrderOrigin,

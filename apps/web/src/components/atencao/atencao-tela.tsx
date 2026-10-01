@@ -1,11 +1,12 @@
 'use client';
 
-import type { BrandResponse, MediaAttentionResponse } from '@liame/contracts';
+import type { BrandResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DialogoConectar } from '@/components/contas/dialogo-conectar';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
+import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
@@ -13,16 +14,18 @@ import { useContadorAtencao } from '@/lib/contador-atencao';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
 import { useSessao } from '@/lib/sessao';
+import { type Avisos, buscarAvisos } from './buscar-avisos';
 import { ItemAviso } from './item-aviso';
 import { contadorDoMenu, contagemPorGravidade, type Gravidade, GRAVIDADES, gravidadeDe, rotuloDoFiltro } from './textos';
 
-// "Atenção de mídia" (mockups/prototipo-contas.html): o que precisa de alguém agora nas contas de anúncio,
-// do mais grave para o menos (a API já ordena), com o motivo e o que fazer. É a tela "ver todos"; na
-// home, os avisos entram como cartões numa fase futura (ux-modelo-interface §11).
+// "Atenção de mídia" (mockups/prototipo-contas.html): o que precisa de alguém agora nas contas de anúncio
+// e, para quem vê as vendas, entre a mídia e o caixa (Atenção do ciclo fechado, F9), do mais grave para o
+// menos, com o motivo e o que fazer. É a tela "ver todos"; na home, os avisos entram como cartões numa
+// fase futura (ux-modelo-interface §11).
 
 type Carga =
   | { tipo: 'carregando' }
-  | { tipo: 'ok'; dados: MediaAttentionResponse; semContas: boolean }
+  | { tipo: 'ok'; dados: Avisos; semContas: boolean }
   | { tipo: 'erro'; problema: Problema };
 type Filtro = Gravidade | 'todas';
 
@@ -38,10 +41,11 @@ export function AtencaoTela() {
   const podeVer = pode('campanhas.ver');
   const podeVerContas = pode('contas.ver');
   const podeConectar = pode('contas.conectar');
+  const podeVerVendas = pode('vendas.ver');
   const { definir } = contador;
 
   const carregar = useCallback(async () => {
-    const r = await chamar(() => api.GET('/v1/media/attention'));
+    const r = await buscarAvisos(podeVerVendas);
     if (!r.ok) return setEstado({ tipo: 'erro', problema: r.problema });
     definir(contadorDoMenu(r.data.items));
     // Sem avisos: "tudo em dia" só vale se há conta ligada; sem nenhuma, o convite é conectar.
@@ -51,7 +55,7 @@ export function AtencaoTela() {
       semContas = f.ok && !f.data.items.length;
     }
     setEstado({ tipo: 'ok', dados: r.data, semContas });
-  }, [definir, podeVerContas]);
+  }, [definir, podeVerContas, podeVerVendas]);
 
   useEffect(() => {
     if (podeVer) disparar(carregar());
@@ -83,7 +87,11 @@ export function AtencaoTela() {
           <h1 id="h-atencao" ref={titulo} tabIndex={-1}>
             Atenção de mídia
           </h1>
-          <p>O que precisa de alguém agora nas suas contas de anúncio, do mais grave para o menos. Cada aviso diz o motivo e o que fazer.</p>
+          <p>
+            {podeVerVendas
+              ? 'O que precisa de alguém agora nas suas contas de anúncio e nas vendas das campanhas, do mais grave para o menos. Cada aviso diz o motivo e o que fazer.'
+              : 'O que precisa de alguém agora nas suas contas de anúncio, do mais grave para o menos. Cada aviso diz o motivo e o que fazer.'}
+          </p>
         </div>
         {dados && <span className="lite-chip">Atualizado {quandoComHora(dados.generated_at, agora)}</span>}
       </div>
@@ -105,6 +113,14 @@ export function AtencaoTela() {
             {mensagemDe(estado.problema)}
           </Estado>
         </div>
+      )}
+
+      {dados?.erroCiclo && (
+        <Faixa
+          icone={<Icone nome="info" />}
+          titulo="Os avisos das vendas não carregaram agora"
+          texto={`${mensagemDe(dados.erroCiclo)} Os avisos das contas de anúncio abaixo continuam valendo.`}
+        />
       )}
 
       {estado.tipo === 'ok' && !itens.length && (
@@ -139,13 +155,14 @@ export function AtencaoTela() {
             ))}
           </div>
           {visiveis.length ? (
-            <ul className="avisos-midia anima" style={{ ['--i' as string]: 2 }} aria-label="Avisos de mídia">
+            <ul className="avisos-midia anima" style={{ ['--i' as string]: 2 }} aria-label="Avisos">
               {visiveis.map((item, i) => (
                 <ItemAviso
                   key={`${item.kind}-${item.connected_account_id ?? ''}-${item.campaign_id ?? ''}-${item.provider ?? ''}-${i}`}
                   item={item}
                   podeVerContas={podeVerContas}
                   podeConectar={podeConectar}
+                  podeVerVendas={podeVerVendas}
                   aoReconectar={() => disparar(abrirConectar())}
                 />
               ))}

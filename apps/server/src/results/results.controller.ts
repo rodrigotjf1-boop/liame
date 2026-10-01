@@ -1,7 +1,8 @@
-import { ClosedLoopQuery, ClosedLoopResponse, OrderOriginQuery, OrderOriginResponse, ProblemDetails } from '@liame/contracts';
+import { ClosedLoopAttentionQuery, ClosedLoopAttentionResponse, ClosedLoopQuery, ClosedLoopResponse, OrderOriginQuery, OrderOriginResponse, ProblemDetails } from '@liame/contracts';
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiCookieAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
 import { Permissao } from '../auth/access.js';
+import { AtencaoCicloService } from './atencao-ciclo.service.js';
 import { ResultsService } from './results.service.js';
 
 // Resultados do ciclo fechado (A2.5, F8): o ROAS da plataforma ao lado do confirmado no caixa.
@@ -9,7 +10,24 @@ import { ResultsService } from './results.service.js';
 @ApiCookieAuth('liame_sessao')
 @Controller('results')
 export class ResultsController {
-  constructor(private readonly results: ResultsService) {}
+  constructor(
+    private readonly results: ResultsService,
+    private readonly ciclo: AtencaoCicloService,
+  ) {}
+
+  @Get('attention')
+  @Permissao('vendas.ver')
+  @ApiOperation({
+    summary: 'Atenção do ciclo fechado',
+    description:
+      'O que precisa de alguém agora entre a mídia e as vendas, mais grave primeiro: Regem desconectado ou com os pedidos atrasados, loja sem a plataforma de pedidos informada, anúncios ativos sem rastreio, campanhas sem cupom exclusivo, campanha medida pelo clique com gasto e sem pedido confirmado em 7 dias, cupom exclusivo sem uso com a campanha gastando, margem desconhecida acima de 20% da receita atribuída e plataforma × caixa muito distantes (informativo). Calculado na hora, com o motivo e o que fazer, no formato dos avisos de mídia.',
+  })
+  @ApiOkResponse({ standardSchema: ClosedLoopAttentionResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  attention(@Query({ schema: ClosedLoopAttentionQuery }) query: ClosedLoopAttentionQuery): Promise<ClosedLoopAttentionResponse> {
+    return this.ciclo.atencao(query.brand_id);
+  }
 
   @Get('closed-loop')
   @Permissao('vendas.ver')

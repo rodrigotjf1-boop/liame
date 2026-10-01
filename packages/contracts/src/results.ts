@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AttentionItem } from './media.js';
 
 // Resultados do ciclo fechado (A2.5, F8; ADR-020, D-A2.5-6 a 8): o ROAS que a plataforma informa, com a
 // janela dela, ao lado do ROAS confirmado no caixa do Regem, com a janela do modelo. Dinheiro em micros
@@ -175,3 +176,15 @@ export type OrderOrigin = z.infer<typeof OrderOrigin>;
 
 export const OrderOriginResponse = z.strictObject({ items: z.array(OrderOrigin) });
 export type OrderOriginResponse = z.infer<typeof OrderOriginResponse>;
+
+// Atenção do ciclo fechado (A2.5, F9): os avisos que cruzam a mídia com as vendas confirmadas, no mesmo
+// formato dos avisos de mídia (`AttentionItem`), para a tela Atenção juntar os dois. Calculados na hora.
+export const ClosedLoopAttentionQuery = z.strictObject({ brand_id: z.uuid().optional() });
+export type ClosedLoopAttentionQuery = z.infer<typeof ClosedLoopAttentionQuery>;
+
+export const ClosedLoopAttentionResponse = z.strictObject({
+  /** Mais grave primeiro. */
+  items: z.array(AttentionItem),
+  generated_at: z.string(),
+});
+export type ClosedLoopAttentionResponse = z.infer<typeof ClosedLoopAttentionResponse>;

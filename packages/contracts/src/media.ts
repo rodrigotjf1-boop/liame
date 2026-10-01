@@ -83,7 +83,13 @@ export const MediaAttentionQuery = z.strictObject({ brand_id: z.uuid().optional(
 export type MediaAttentionQuery = z.infer<typeof MediaAttentionQuery>;
 
 export const AttentionItem = z.strictObject({
-  /** `conta_desconectada`, `conta_sem_permissao`, `conta_com_erro`, `dado_atrasado`, `reconectar_em_breve`, `gasto_fora_do_normal`, `campanha_parou` ou `versao_api`. */
+  /**
+   * Mídia: `conta_desconectada`, `conta_sem_permissao`, `conta_com_erro`, `dado_atrasado`, `reconectar_em_breve`,
+   * `gasto_fora_do_normal`, `campanha_parou` ou `versao_api`. Ciclo fechado (F9): os quatro primeiros com o
+   * `provider` `regem`, e `vendas_nao_conectadas`, `plataforma_nao_informada`, `anuncio_sem_rastreio`,
+   * `campanha_sem_cupom`, `vendas_nao_medidas`, `campanha_sem_pedido`, `cupom_sem_uso`, `margem_desconhecida`
+   * ou `plataforma_x_caixa`.
+   */
   kind: Slug,
   /** `critica`, `atencao` ou `info`. */
   severity: Slug,

@@ -51,9 +51,38 @@ export function oQueFazer(acao: string): string {
   return acao;
 }
 
-/** O botão de cada aviso, como no protótipo: conta desconectada leva a Contas; autorização vencendo reconecta. */
-export function acaoDoAviso(kind: string): 'abrir-contas' | 'reconectar' | null {
-  if (kind === 'conta_desconectada') return 'abrir-contas';
+export type AcaoDoAviso = 'abrir-contas' | 'reconectar' | 'abrir-links' | 'abrir-cupons' | 'abrir-resultados';
+
+/**
+ * O botão de cada aviso, como no protótipo: conta desconectada leva a Contas; autorização vencendo reconecta.
+ * Os avisos do ciclo fechado (F9) levam à tela onde se resolve: Links e cupons ou Resultados.
+ */
+export function acaoDoAviso(kind: string): AcaoDoAviso | null {
+  if (kind === 'conta_desconectada' || kind === 'vendas_nao_conectadas') return 'abrir-contas';
   if (kind === 'reconectar_em_breve') return 'reconectar';
+  if (kind === 'anuncio_sem_rastreio' || kind === 'plataforma_nao_informada') return 'abrir-links';
+  if (kind === 'campanha_sem_cupom' || kind === 'cupom_sem_uso') return 'abrir-cupons';
+  if (kind === 'campanha_sem_pedido' || kind === 'margem_desconhecida' || kind === 'plataforma_x_caixa' || kind === 'vendas_nao_medidas') return 'abrir-resultados';
   return null;
+}
+
+/** Para onde leva o botão de tela (os de Contas e de reconectar têm o próprio tratamento). */
+export function destinoDoAviso(acao: AcaoDoAviso): { href: string; rotulo: string } | null {
+  if (acao === 'abrir-links') return { href: '/links', rotulo: 'Abrir Links e cupons' };
+  if (acao === 'abrir-cupons') return { href: '/links#cupons', rotulo: 'Abrir os cupons' };
+  if (acao === 'abrir-resultados') return { href: '/resultados', rotulo: 'Abrir Resultados' };
+  return null;
+}
+
+const PESO: Record<Gravidade, number> = { critica: 0, atencao: 1, info: 2 };
+
+/**
+ * Os avisos de mídia e os do ciclo fechado numa lista só: mais grave primeiro; na mesma gravidade, os de mídia
+ * antes (cada API já manda os dela na ordem).
+ */
+export function juntarAvisos<T extends Pick<AttentionItem, 'severity'>>(midia: T[], ciclo: T[]): T[] {
+  return [...midia, ...ciclo]
+    .map((item, i) => ({ item, i }))
+    .sort((a, b) => PESO[gravidadeDe(a.item.severity)] - PESO[gravidadeDe(b.item.severity)] || a.i - b.i)
+    .map((x) => x.item);
 }
