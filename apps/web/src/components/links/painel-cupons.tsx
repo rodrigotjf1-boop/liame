@@ -1,6 +1,6 @@
 'use client';
 
-import type { CouponItem, CouponListResponse, CouponStore } from '@liame/contracts';
+import type { CouponItem, CouponListResponse, CouponRequest, CouponStore } from '@liame/contracts';
 import Link from 'next/link';
 import type { RefObject } from 'react';
 import { Estado } from '@/components/ui/estado';
@@ -8,12 +8,13 @@ import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import { mensagemDe, type Problema } from '@/lib/api';
 import { reaisDeMicros } from '@/lib/formato';
-import { fonteDosCupons, nomeDaLoja, type PlataformaDaLoja, semUsoComGasto } from './cupons-textos';
+import { bloqueioDaCriacao, faixaAguardando, faixaDoPedidoEncerrado, fonteDosCupons, nomeDaLoja, pedidosEmAndamento, type PlataformaDaLoja, semUsoComGasto } from './cupons-textos';
 import { TabelaCupons } from './tabela-cupons';
 
-// Aba Cupons (protótipo P3 com a plataforma de pedidos): de onde vêm os cupons da loja, os avisos (cupom
-// exclusivo sem uso com a campanha gastando; criação no Regem ainda desligada) e a tabela. Informar cupom de
-// outra plataforma e ligar a campanha pedem `atribuicao.gerenciar`.
+// Aba Cupons (protótipo P3 com a plataforma de pedidos): de onde vêm os cupons da loja, os avisos (criação no
+// Regem desligada ou não liberada pela loja; pedido aguardando aprovação; pedido que terminou sem cupom; cupom
+// exclusivo sem uso com a campanha gastando) e a tabela. Informar cupom de outra plataforma e ligar a campanha
+// pedem `atribuicao.gerenciar`; pedir a criação no Regem (e cancelar o pedido), `cupons.criar`.
 
 export type CargaCupons = { tipo: 'carregando' } | { tipo: 'ok'; dados: CouponListResponse } | { tipo: 'erro'; problema: Problema };
 
@@ -21,24 +22,32 @@ type Props = {
   carga: CargaCupons;
   loja: CouponStore | null;
   itens: CouponItem[];
+  /** Pedidos de criação da loja: em andamento e os que terminaram sem cupom nos últimos dias. */
+  pedidos: CouponRequest[];
   plataforma: PlataformaDaLoja;
   agora: Date;
   podeGerenciar: boolean;
   podeCriarCupom: boolean;
   podeVerContas: boolean;
   botaoInformar: RefObject<HTMLButtonElement | null>;
+  botaoCriar: RefObject<HTMLButtonElement | null>;
   aoInformar: () => void;
   aoCriarNoRegem: () => void;
+  aoCancelarPedido: (p: CouponRequest) => Promise<boolean>;
   aoLigar: (c: CouponItem) => void;
   aoDesligar: (c: CouponItem) => Promise<boolean>;
   aoTentar: () => void;
 };
 
 export function PainelCupons(p: Props) {
-  const { carga, loja, itens, plataforma, agora } = p;
+  const { carga, loja, itens, pedidos, plataforma, agora } = p;
   const dados = carga.tipo === 'ok' ? carga.dados : null;
   const externo = !!loja?.unit && plataforma.info.cupomExterno;
   const fonte = loja ? fonteDosCupons(loja, plataforma, agora) : null;
+  // A criação pelo Liame: ligada para a empresa (flag) e liberada pela loja na autorização do Regem.
+  const ligada = !!dados?.create_in_regem;
+  const bloqueio = ligada && loja ? bloqueioDaCriacao(loja) : null;
+  const podePedir = p.podeCriarCupom && ligada && !bloqueio;
 
   const cabecalho = (
     <div className="painel-cab">
@@ -66,7 +75,14 @@ export function PainelCupons(p: Props) {
             </button>
           )}
           {p.podeCriarCupom && (
-            <button className={externo && p.podeGerenciar ? 'btn' : 'btn btn--primary'} type="button" aria-disabled={!dados.create_in_regem} onClick={p.aoCriarNoRegem}>
+            <button
+              ref={p.botaoCriar}
+              className={externo && p.podeGerenciar ? 'btn' : 'btn btn--primary'}
+              type="button"
+              aria-haspopup={podePedir ? 'dialog' : undefined}
+              aria-disabled={!podePedir}
+              onClick={p.aoCriarNoRegem}
+            >
               <Icone nome="plus" />
               Criar cupom no Regem
             </button>
@@ -137,16 +153,39 @@ export function PainelCupons(p: Props) {
     );
   }
 
+  const emAndamento = pedidosEmAndamento(pedidos);
+  const encerrados = pedidos.filter((x) => !emAndamento.includes(x));
+  const aguardando = faixaAguardando(pedidos);
+
   return (
     <>
       {cabecalho}
-      {p.podeCriarCupom && !carga.dados.create_in_regem && (
+      {p.podeCriarCupom && !ligada && (
         <Faixa
           icone={<Icone nome="lock" />}
           titulo="A criação de cupons está desligada para a sua empresa"
           texto="Enquanto isso, crie o cupom direto no Regem: ele aparece aqui na próxima leitura, pronto para ligar a uma campanha."
         />
       )}
+      {p.podeCriarCupom && bloqueio && (
+        <Faixa
+          icone={<Icone nome="lock" />}
+          titulo={bloqueio.titulo}
+          texto={bloqueio.texto}
+          acao={
+            p.podeVerContas ? (
+              <Link className="btn btn--sm" href="/contas">
+                Abrir Contas conectadas
+              </Link>
+            ) : undefined
+          }
+        />
+      )}
+      {aguardando && <Faixa tipo="acao" icone={<Icone nome="clock" />} titulo={aguardando.titulo} texto={aguardando.texto} />}
+      {encerrados.map((x) => {
+        const f = faixaDoPedidoEncerrado(x);
+        return <Faixa key={x.action_id} tipo="atencao" icone={<Icone nome="alert" />} titulo={f.titulo} texto={f.texto} />;
+      })}
       {itens.filter(semUsoComGasto).map((c) => (
         <Faixa
           key={c.id}
@@ -156,26 +195,45 @@ export function PainelCupons(p: Props) {
           texto={`Ele está ligado à campanha ${c.link!.campaign.name} como exclusivo. Confira se o código aparece no anúncio e na conversa do WhatsApp.`}
         />
       ))}
-      {itens.length ? (
-        <TabelaCupons itens={itens} loja={loja} agora={agora} podeGerenciar={p.podeGerenciar} aoLigar={p.aoLigar} aoDesligar={p.aoDesligar} />
+      {itens.length || emAndamento.length ? (
+        <TabelaCupons
+          itens={itens}
+          pedidos={emAndamento}
+          loja={loja}
+          agora={agora}
+          podeGerenciar={p.podeGerenciar}
+          podeCriarCupom={p.podeCriarCupom}
+          aoLigar={p.aoLigar}
+          aoDesligar={p.aoDesligar}
+          aoCancelarPedido={p.aoCancelarPedido}
+        />
       ) : (
         <div className="card">
           <Estado
             icone="ticket"
             titulo={`Nenhum cupom na ${nomeDaLoja(loja)}`}
             acao={
-              externo && p.podeGerenciar ? (
+              (externo && p.podeGerenciar) || podePedir ? (
                 <div className="vazio-acoes">
-                  <button className="btn btn--primary" type="button" aria-haspopup="dialog" onClick={p.aoInformar}>
-                    Informar cupom {plataforma.info.de}
-                  </button>
+                  {externo && p.podeGerenciar && (
+                    <button className="btn btn--primary" type="button" aria-haspopup="dialog" onClick={p.aoInformar}>
+                      Informar cupom {plataforma.info.de}
+                    </button>
+                  )}
+                  {podePedir && (
+                    <button className={externo && p.podeGerenciar ? 'btn' : 'btn btn--primary'} type="button" aria-haspopup="dialog" onClick={p.aoCriarNoRegem}>
+                      Criar cupom no Regem
+                    </button>
+                  )}
                 </div>
               ) : undefined
             }
           >
             {externo
               ? `Crie um cupom no ${plataforma.info.nome} para cada campanha e informe o código aqui. Cupom exclusivo de campanha é o jeito de medir as vendas que chegam sem o clique do anúncio.`
-              : 'Crie um cupom no Regem: ele aparece aqui na próxima leitura. Cupom exclusivo de campanha é o jeito de medir vendas no balcão e nas plataformas de pedidos, que não têm clique.'}
+              : podePedir
+                ? 'Crie um cupom no Regem ou por aqui, com aprovação. Cupom exclusivo de campanha é o jeito de medir vendas no balcão e nas plataformas de pedidos, que não têm clique.'
+                : 'Crie um cupom no Regem: ele aparece aqui na próxima leitura. Cupom exclusivo de campanha é o jeito de medir vendas no balcão e nas plataformas de pedidos, que não têm clique.'}
           </Estado>
         </div>
       )}

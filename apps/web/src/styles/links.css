@@ -70,6 +70,8 @@
 .tabela--cupons tr.cupom-vencido .cupom-cod { color: var(--text-subtle); text-decoration: line-through; }
 .tabela--cupons td.cupom-regra { white-space: normal; min-width: 170px; }
 .tabela--cupons .sub { white-space: normal; }
+/* Pedido de criação que ainda não virou cupom no Regem (espera aprovação ou está sendo criado). */
+.tabela--cupons tr.cupom-pendente th, .tabela--cupons tr.cupom-pendente td { background: color-mix(in srgb, var(--warning-soft) 45%, transparent); }
 .confirma-linha { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2); }
 .confirma-txt { flex-basis: 100%; font-size: var(--text-xs); font-weight: 500; color: var(--danger); text-align: right; white-space: normal; }
 
@@ -84,9 +86,18 @@
 .datas label { display: grid; gap: 4px; font-size: var(--text-sm); font-weight: 500; }
 .cupom-resumo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); color: var(--text-muted); }
 .cupom-resumo .cupom-cod { color: var(--text); font-size: var(--text-md); }
-@media (max-width: 420px) { .datas { grid-template-columns: minmax(0, 1fr); } }
+/* Criar cupom no Regem: os três tipos de desconto lado a lado e os valores em duas colunas. */
+.opcoes--linha { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.valores { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); margin-top: var(--sp-3); }
+.valores label { display: grid; gap: 4px; font-size: var(--text-sm); font-weight: 500; }
+.check--topo { align-items: flex-start; }
+.check--topo input { flex: none; margin: 3px 0 0; }
+@media (max-width: 480px) { .opcoes--linha { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 420px) { .datas, .valores { grid-template-columns: minmax(0, 1fr); } }
 @container pagina (max-width: 760px) {
   .lista-cartoes .confirma-linha { justify-content: flex-start; }
   .lista-cartoes .confirma-txt { text-align: left; }
+  .lista-cartoes tr.cupom-pendente th, .lista-cartoes tr.cupom-pendente td { background: transparent; }
+  .lista-cartoes tr.cupom-pendente { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
 }
 @media (prefers-reduced-motion: reduce) { .opcao { transition: none; } }
