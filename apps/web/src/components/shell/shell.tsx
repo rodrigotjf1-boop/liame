@@ -6,6 +6,7 @@ import { Simbolo } from '@/components/marca/logo';
 import { AvisosProvider } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
+import { ContadorAprovacoesProvider } from '@/lib/contador-aprovacoes';
 import { ContadorAtencaoProvider } from '@/lib/contador-atencao';
 import { ModoProvider } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
@@ -64,6 +65,7 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <AvisosProvider>
       <ContadorAtencaoProvider>
+        <ContadorAprovacoesProvider>
         <ModoProvider>
           <a className="skip-link" href="#conteudo">
             Pular para o conteúdo
@@ -111,6 +113,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </ModoProvider>
+        </ContadorAprovacoesProvider>
       </ContadorAtencaoProvider>
     </AvisosProvider>
   );

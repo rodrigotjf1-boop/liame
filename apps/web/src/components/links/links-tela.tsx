@@ -404,6 +404,7 @@ export function LinksTela() {
           podeGerenciar={podeGerenciarCupons}
           podeCriarCupom={podeCriarCupom}
           podeVerContas={podeVerContas}
+          podeVerAprovacoes={pode('campanhas.ver')}
           botaoInformar={botaoInformar}
           botaoCriar={botaoCriarCupom}
           aoInformar={() => setDialogo({ tipo: 'externo' })}

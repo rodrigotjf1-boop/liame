@@ -14,8 +14,8 @@ export type ItemNav = {
   icone: NomeIcone;
   /** Sem permissão = tela da própria pessoa (Segurança da conta). */
   permissao?: string;
-  /** Mostra ao lado o número de avisos de mídia (crítico + atenção). */
-  contador?: 'atencao';
+  /** Mostra ao lado um número: os avisos de mídia (crítico + atenção) ou os pedidos esperando aprovação. */
+  contador?: 'atencao' | 'aprovacoes';
   /** A tela tem as duas visões (Lite e Pro): o seletor de modo aparece no topo. */
   modos?: boolean;
 };
@@ -34,6 +34,7 @@ export const NAVEGACAO: GrupoNav[] = [
     rotulo: 'Agência',
     itens: [
       { href: '/atencao', rotulo: 'Atenção', titulo: 'Atenção de mídia', icone: 'atencao', permissao: 'campanhas.ver', contador: 'atencao' },
+      { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check-circle', permissao: 'campanhas.ver', contador: 'aprovacoes', modos: true },
       { href: '/resultados', rotulo: 'Resultados', icone: 'chart', permissao: 'vendas.ver', modos: true },
       { href: '/contas', rotulo: 'Contas conectadas', icone: 'plug', permissao: 'contas.ver' },
       { href: '/pessoas', rotulo: 'Pessoas e acessos', icone: 'user-plus', permissao: 'pessoas.ver' },
