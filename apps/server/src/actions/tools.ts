@@ -28,6 +28,37 @@ export interface ToolDefinition {
   plan(before: ResourceState, params: Record<string, unknown>): ToolPlan;
 }
 
+/** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
+export class PlanoRecusado extends Error {}
+
+const Dia = z.iso.date();
+/**
+ * Cupom de campanha no Regem (contrato de cupons §3.3). O código é o do recurso (`cupom:CODIGO`); a campanha e
+ * "exclusivo" são do Liame: o cupom nasce ligado à campanha, e só o exclusivo prova de onde veio o pedido.
+ */
+const CupomParams = z
+  .strictObject({
+    codigo: z.string().regex(/^[A-Z0-9]{4,20}$/, { error: 'De 4 a 20 letras maiúsculas ou números, sem espaço' }),
+    nome: z.string().trim().min(1).max(80).optional(),
+    tipo: z.enum(['percentual', 'valor', 'frete_gratis']),
+    /** Só no percentual: de 1 a 100, inteiro (o Regem recebe com duas casas). */
+    percentual: z.int().min(1).max(100).optional(),
+    /** Só no valor fixo. */
+    valor_centavos: z.int().min(1).max(100_000_000).optional(),
+    pedido_minimo_centavos: z.int().min(0).max(100_000_000).default(0),
+    valido_de: Dia,
+    valido_ate: Dia,
+    campaign_id: z.uuid(),
+    exclusive: z.boolean(),
+  })
+  .superRefine((p, ctx) => {
+    if (p.tipo === 'percentual' && p.percentual === undefined) ctx.addIssue({ code: 'custom', path: ['percentual'], message: 'Informe o desconto em %' });
+    if (p.tipo !== 'percentual' && p.percentual !== undefined) ctx.addIssue({ code: 'custom', path: ['percentual'], message: 'O percentual só vale no cupom percentual' });
+    if (p.tipo === 'valor' && p.valor_centavos === undefined) ctx.addIssue({ code: 'custom', path: ['valor_centavos'], message: 'Informe o valor do desconto' });
+    if (p.tipo !== 'valor' && p.valor_centavos !== undefined) ctx.addIssue({ code: 'custom', path: ['valor_centavos'], message: 'O valor só vale no cupom de valor fixo' });
+    if (p.valido_ate < p.valido_de) ctx.addIssue({ code: 'custom', path: ['valido_ate'], message: 'O fim não pode ser antes do início' });
+  });
+
 const BudgetParams = z.strictObject({ daily_budget_micros: z.int().min(1_000_000).max(Number.MAX_SAFE_INTEGER) });
 const NoParams = z.strictObject({});
 
@@ -57,6 +88,39 @@ export const TOOLS: Record<string, ToolDefinition> = {
         // Reserva a diferença de um dia a mais de gasto; redução não reserva.
         reserveMicros: increase ? value - current : 0,
         desiredState: { ...before, daily_budget_micros: value },
+      };
+    },
+  },
+  regem_cupom_criar: {
+    name: 'regem_cupom_criar',
+    description: 'Cria um cupom de campanha na loja do Regem e liga à campanha.',
+    risk: 'R1',
+    providers: ['regem'],
+    compensation: 'desativar_cupom',
+    params: CupomParams,
+    plan(before, params) {
+      const p = CupomParams.parse(params);
+      if (before.codigo !== p.codigo) throw new PlanoRecusado('O código do cupom não confere com o recurso do pedido.');
+      if (before.pode_criar !== true) throw new PlanoRecusado('A loja não liberou "criar cupom de campanha" no Regem. Autorize de novo em Contas conectadas e ligue essa chave lá.');
+      if (before.existe === true) throw new PlanoRecusado('Já existe um cupom com este código nesta loja. Escolha outro código.');
+      const regra = {
+        codigo: p.codigo,
+        nome: p.nome ?? `Campanha · ${p.codigo}`,
+        tipo: p.tipo,
+        ...(p.tipo === 'percentual' ? { percentual: `${p.percentual}.00` } : {}),
+        ...(p.tipo === 'valor' ? { valor_centavos: p.valor_centavos } : {}),
+        ...(p.pedido_minimo_centavos > 0 ? { pedido_minimo_centavos: p.pedido_minimo_centavos } : {}),
+        valido_de: p.valido_de,
+        valido_ate: p.valido_ate,
+      };
+      return {
+        action: 'cupom.criar',
+        // O desconto sai do caixa da loja, não do orçamento de mídia: nada a reservar no envelope.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: { codigo: p.codigo, existe: true, regra, campanha: { id: p.campaign_id, exclusivo: p.exclusive } },
       };
     },
   },

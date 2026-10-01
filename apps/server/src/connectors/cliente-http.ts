@@ -197,22 +197,26 @@ export function classificar(provider: string, status: number, corpo: unknown, h:
   const erro = (corpo as { error?: Record<string, unknown> } | null)?.error ?? {};
   const codigo = erro.code !== undefined ? String(erro.code) : null;
   const statusGoogle = typeof erro.status === 'string' ? erro.status : null;
-  const mensagem = typeof erro.message === 'string' ? erro.message.slice(0, 300) : `HTTP ${status}`;
+  // Produtos DMS respondem em `application/problem+json` (RFC 9457): o tipo é o fim do `type` e o texto é o `detail`.
+  const problema = corpo as { type?: unknown; detail?: unknown } | null;
+  const tipoProblema = typeof problema?.type === 'string' ? (problema.type.split('/').pop() ?? null) : null;
+  const mensagem =
+    typeof erro.message === 'string' ? erro.message.slice(0, 300) : typeof problema?.detail === 'string' ? problema.detail.slice(0, 300) : `HTTP ${status}`;
   const esperaPedida = lerRetryAfter(h) ?? (uso?.esperarMs ? uso.esperarMs : null);
   const cod = codigo === null ? NaN : Number(codigo);
 
   const ehLimiteMeta = [4, 17, 32, 613].includes(cod) || (cod >= 80000 && cod <= 80014);
   if (status === 429 || ehLimiteMeta || statusGoogle === 'RESOURCE_EXHAUSTED') {
-    return new ErroConector('limite', provider, mensagem, status, esperaPedida ?? 60_000, codigo ?? statusGoogle);
+    return new ErroConector('limite', provider, mensagem, status, esperaPedida ?? 60_000, codigo ?? statusGoogle ?? tipoProblema);
   }
   if (status === 401 || cod === 190 || statusGoogle === 'UNAUTHENTICATED') {
-    return new ErroConector('autenticacao', provider, mensagem, status, null, codigo ?? statusGoogle);
+    return new ErroConector('autenticacao', provider, mensagem, status, null, codigo ?? statusGoogle ?? tipoProblema);
   }
   if (status === 403 || cod === 10 || (cod >= 200 && cod <= 299) || statusGoogle === 'PERMISSION_DENIED') {
-    return new ErroConector('permissao', provider, mensagem, status, null, codigo ?? statusGoogle);
+    return new ErroConector('permissao', provider, mensagem, status, null, codigo ?? statusGoogle ?? tipoProblema);
   }
   if (status >= 500 || status === 408 || cod === 1 || cod === 2) {
-    return new ErroConector('transitorio', provider, mensagem, status, esperaPedida, codigo ?? statusGoogle);
+    return new ErroConector('transitorio', provider, mensagem, status, esperaPedida, codigo ?? statusGoogle ?? tipoProblema);
   }
-  return new ErroConector('definitivo', provider, mensagem, status, null, codigo ?? statusGoogle);
+  return new ErroConector('definitivo', provider, mensagem, status, null, codigo ?? statusGoogle ?? tipoProblema);
 }

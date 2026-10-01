@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import type { ActionRow } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
-import { CONNECTORS } from '../actions/connectors.js';
+import { type ApplyResult, CONNECTORS } from '../actions/connectors.js';
 import { writeAudit } from '../audit/audit.js';
 import { DATABASE } from '../database/database.module.js';
 import { emitEvent } from '../events/outbox.js';
@@ -17,6 +17,12 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 const STUCK_MINUTES = 10;
 
 type Outcome = { status: 'executada' | 'falhou' | 'estado_mudou' | 'bloqueada'; reason: string | null; result?: Record<string, unknown>; version?: number };
+
+/** O connector não aplicou: alguém mexeu no recurso desde o pedido, ou o provedor recusou de vez. */
+function recusa(r: Exclude<ApplyResult, { ok: true }>): Outcome {
+  if (r.reason === 'recusado') return { status: 'falhou', reason: r.mensagem };
+  return { status: 'estado_mudou', reason: 'o recurso mudou desde o pedido; nada foi sobrescrito', result: r.current.state };
+}
 
 /**
  * Action Service, lado da execução (ADR-007): pega as ações aprovadas (SKIP LOCKED) e, na hora de
@@ -151,10 +157,10 @@ export class ActionExecutor {
     const expected = row.before_version ?? 0;
     // Primeiro valida (quando o provedor oferece), depois aplica.
     const attrs = { 'liame.provider': row.provider, 'liame.tool': row.tool };
-    const check = await inSpan('conector.validar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { validateOnly: true }));
-    if (!check.ok) return { status: 'estado_mudou', reason: 'o recurso mudou desde o pedido; nada foi sobrescrito', result: check.current.state };
-    const applied = await inSpan('conector.aplicar', attrs, () => connector.apply(tx, ref, row.desired_state, expected));
-    if (!applied.ok) return { status: 'estado_mudou', reason: 'o recurso mudou desde o pedido; nada foi sobrescrito', result: applied.current.state };
+    const check = await inSpan('conector.validar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { validateOnly: true, requestedBy: row.requested_by }));
+    if (!check.ok) return recusa(check);
+    const applied = await inSpan('conector.aplicar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { requestedBy: row.requested_by }));
+    if (!applied.ok) return recusa(applied);
     return { status: 'executada', reason: null, result: applied.state, version: applied.version };
   }
 

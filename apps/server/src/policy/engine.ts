@@ -17,7 +17,7 @@ export interface LoadedPolicy {
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 1,
+  version: 2,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -26,6 +26,8 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       { type: 'rate_limit', action: 'orcamento.*', provider: 'meta', max: 3, window_minutes: 60 },
       // Apagar é sempre com um humano olhando.
       { type: 'autonomy', action: 'campanha.apagar', mode: 'ESCALATE' },
+      // Cupom de campanha no Regem (v2, 01/10/2026): sempre com a aprovação de alguém da empresa (plano da A2.5, F6).
+      { type: 'autonomy', action: 'cupom.criar', mode: 'APPROVAL' },
     ],
   },
 };

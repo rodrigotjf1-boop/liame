@@ -24,7 +24,7 @@ const run = (policies: LoadedPolicy[], p = proposal(), at = AT) => evaluatePolic
 
 describe('A1-11: motor de políticas determinístico', () => {
   it('sem política da empresa: permitido, em SHADOW (ferramenta nova começa em sombra), com a versão da plataforma', () => {
-    expect(run([])).toEqual({ allowed: true, mode: 'SHADOW', violations: [], versions: ['plataforma@1'] });
+    expect(run([])).toEqual({ allowed: true, mode: 'SHADOW', violations: [], versions: ['plataforma@2'] });
   });
 
   it('teto por ação', () => {
@@ -105,7 +105,7 @@ describe('A1-11: motor de políticas determinístico', () => {
     expect(run([tenant(doc)], proposal({ value_micros: 400_000_000, current_value_micros: 380_000_000 })).mode).toBe('APPROVAL');
     expect(run([tenant(doc)], proposal({ action: 'anuncio.pausar', value_micros: null })).mode).toBe('AUTO');
     const daMarca: PolicyDocument = { rules: [{ type: 'autonomy', action: 'orcamento.aumentar', up_to_percent: 10, mode: 'APPROVAL' }] };
-    expect(run([tenant(doc), brand(daMarca)], proposal({ value_micros: 110_000_000 }))).toMatchObject({ mode: 'APPROVAL', versions: ['plataforma@1', 'empresa@1', 'marca@1'] });
+    expect(run([tenant(doc), brand(daMarca)], proposal({ value_micros: 110_000_000 }))).toMatchObject({ mode: 'APPROVAL', versions: ['plataforma@2', 'empresa@1', 'marca@1'] });
     // A plataforma manda escalar o apagar, mesmo que a empresa diga AUTO.
     const auto: PolicyDocument = { rules: [{ type: 'autonomy', action: 'campanha.apagar', mode: 'AUTO' }] };
     expect(run([tenant(auto)], proposal({ action: 'campanha.apagar', value_micros: null })).mode).toBe('ESCALATE');

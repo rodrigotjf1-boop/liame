@@ -2,9 +2,12 @@ import type {
   CouponCampaign,
   CouponItem,
   CouponListResponse,
+  CouponRequest,
+  CouponRequestResponse,
   CouponResponse,
   CouponStore,
   CreateExternalCouponRequest,
+  CreateRegemCouponRequest,
   LinkCouponRequest,
   OrderPlatformResponse,
   SetOrderPlatformRequest,
@@ -12,21 +15,40 @@ import type {
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
-import { atribuirPedidos, pedidosDoCupomDeCampanha } from '../attribution/motor.js';
+import { ActionService } from '../actions/action.service.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
-import { AppProblem } from '../errors/problems.js';
+import { AppProblem, type FieldError, ValidationProblem } from '../errors/problems.js';
+import { FlagService } from '../flags/flag.service.js';
 import { frescor } from '../media/frescor.js';
-import { diaNoFuso, enderecoDoCardapio, type MotivoEndereco, periodoDoVinculo, sugerirPlataforma } from './plataforma.js';
+import { centavosParaMicros } from '../orders/order-store.js';
+import { diaNoFuso, enderecoDoCardapio, type MotivoEndereco, sugerirPlataforma } from './plataforma.js';
+import { campanhaDoVinculo, type CupomTravado, FUSO_PADRAO, type Ligacao, ligacaoEmVigor, ligarCupom, reatribuirLigacao, travarCupom, type VinculoFeito } from './vinculo.js';
 
 // Cupons de campanha (A2.5, F6): tudo na transação da requisição, sob a RLS da empresa. Os cupons do Regem
 // vêm da leitura (F4); o de outra plataforma de pedidos (Anota AI, CardápioWeb) a empresa informa, e o Liame
 // o reconhece pelo código nos pedidos que chegam ao Regem. Ligar, desligar e informar refazem na hora a
 // atribuição dos pedidos com o código (o motor lê o período da ligação).
+//
+// Criar o cupom no Regem (F6 parte 2) não acontece aqui: esta camada só monta o PEDIDO e o entrega ao Action
+// Service (ferramenta `regem_cupom_criar`), que passa pela política, pela aprovação e pela flag `regem_write`.
 
 const DIA_MS = 86_400_000;
 /** Janela do "Usos em 7 dias" e do gasto do aviso de cupom sem uso (protótipo P3). */
 const DIAS_USOS = 7;
-const FUSO_PADRAO = 'America/Sao_Paulo';
+/** A ferramenta do Action Service que cria o cupom na loja do Regem. */
+const FERRAMENTA_CUPOM = 'regem_cupom_criar';
+/** Por quantos dias o pedido que falhou ou expirou continua na lista (com o motivo). */
+const DIAS_PEDIDO_ENCERRADO = 3;
+const MICROS_POR_CENTAVO = 10_000n;
+/** Teto do desconto em valor e do pedido mínimo: R$ 1.000.000,00 (o mesmo da ferramenta). */
+const MAX_CENTAVOS = 100_000_000n;
+
+/** Micros em texto → centavos inteiros; nulo quando não é centavo inteiro ou passa do teto. */
+function microsParaCentavos(micros: string): number | null {
+  const m = BigInt(micros);
+  if (m < 0n || m % MICROS_POR_CENTAVO !== 0n || m / MICROS_POR_CENTAVO > MAX_CENTAVOS) return null;
+  return Number(m / MICROS_POR_CENTAVO);
+}
 
 const iso = (v: Date | string) => new Date(v).toISOString();
 const naoEncontrado = (detail: string) => new AppProblem(404, 'nao-encontrado', 'Não encontramos', detail);
@@ -51,6 +73,23 @@ type LinhaLoja = {
   last_success_at: Date | string | null;
   expected_every_minutes: number | null;
   last_error: string | null;
+  pode_criar: boolean;
+};
+
+type LinhaPedido = {
+  id: string;
+  account_id: string;
+  params: Record<string, unknown>;
+  status: string;
+  status_reason: string | null;
+  requested_by: string;
+  requester: string;
+  created_at: Date | string;
+  expires_at: Date | string;
+  campaign_id: string | null;
+  campaign_name: string | null;
+  campaign_provider: string | null;
+  campaign_status: string | null;
 };
 
 type LinhaCupom = {
@@ -81,10 +120,6 @@ type LinhaCupom = {
 };
 
 /** O cupom travado para mudar a ligação (uma mudança por vez no mesmo cupom). */
-type CupomTravado = { id: string; tenant_id: string; brand_id: string; code: string; removed_at: Date | string | null; valid_until: Date | string | null; active: boolean; fuso: string };
-
-type Ligacao = { id: string; campaign_id: string; exclusive: boolean; linked_at: Date | string; unlinked_at: Date | string | null };
-
 function montarLoja(l: LinhaLoja, agora: Date): CouponStore {
   return {
     connected_account_id: l.id,
@@ -98,6 +133,30 @@ function montarLoja(l: LinhaLoja, agora: Date): CouponStore {
     coupons_freshness: frescor({ lastSuccessAt: l.last_success_at, expectedEveryMinutes: l.expected_every_minutes ?? 15 }, agora),
     // Só o tipo da falha: o texto guardado pode ter dado da loja.
     coupons_error: !l.last_error ? null : l.last_error.startsWith('sem_permissao') ? 'sem_permissao' : 'falhou',
+    can_create: l.pode_criar,
+  };
+}
+
+/** O pedido de criação como a aba Cupons mostra: a regra sai dos parâmetros que a ferramenta já validou. */
+function montarPedido(l: LinhaPedido): CouponRequest {
+  const p = l.params as { codigo: string; tipo: string; percentual?: number; valor_centavos?: number; pedido_minimo_centavos?: number; valido_de: string; valido_ate: string; exclusive: boolean };
+  return {
+    action_id: l.id,
+    code: p.codigo,
+    connected_account_id: l.account_id,
+    kind: p.tipo,
+    percent: p.percentual ?? null,
+    value_micros: p.valor_centavos == null ? null : centavosParaMicros(p.valor_centavos).toString(),
+    min_order_micros: p.pedido_minimo_centavos ? centavosParaMicros(p.pedido_minimo_centavos).toString() : null,
+    valid_from: p.valido_de,
+    valid_until: p.valido_ate,
+    campaign: l.campaign_id && l.campaign_name ? { id: l.campaign_id, name: l.campaign_name, provider: l.campaign_provider ?? 'desconhecida', status: l.campaign_status ?? 'desconhecida' } : null,
+    exclusive: p.exclusive,
+    status: l.status,
+    status_reason: l.status_reason,
+    requested_by: { id: l.requested_by, name: l.requester },
+    requested_at: iso(l.created_at),
+    expires_at: iso(l.expires_at),
   };
 }
 
@@ -138,8 +197,13 @@ function montarCupom(l: LinhaCupom, gasto: Map<string, string>, agora: Date): Co
 
 @Injectable()
 export class CouponsService {
-  /** Lojas, cupons (com os usos de 7 dias e a ligação em vigor), campanhas e a plataforma sugerida pelos anúncios. */
-  async list(brandId: string, agora = new Date()): Promise<CouponListResponse> {
+  constructor(
+    private readonly actions: ActionService,
+    private readonly flags: FlagService,
+  ) {}
+
+  /** Lojas, cupons (com os usos de 7 dias e a ligação em vigor), pedidos de criação, campanhas e a plataforma sugerida pelos anúncios. */
+  async list(auth: AuthContext, brandId: string, agora = new Date()): Promise<CouponListResponse> {
     await this.marca(brandId);
     const tx = currentTx();
     const lojas = await this.lojas(sql`a.brand_id = ${brandId}`);
@@ -160,14 +224,73 @@ export class CouponsService {
     return {
       stores: lojas.map((l) => montarLoja(l, agora)),
       items: cupons.map((c) => montarCupom(c, gasto, agora)),
+      requests: (await this.pedidos(sql`r.brand_id = ${brandId}`)).map(montarPedido),
       campaigns: campanhas.rows,
       detected_platform: await this.plataformaDosAnuncios(
         brandId,
         lojas.map((l) => l.cardapio).filter((c): c is string => typeof c === 'string'),
       ),
-      create_in_regem: false,
+      // A mesma flag que o Action Service confere na hora de pedir e de executar (nasce desligada).
+      create_in_regem: await this.flags.isEnabled('regem_write', this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId })),
       generated_at: agora.toISOString(),
     };
+  }
+
+  /**
+   * Pede a criação de um cupom de campanha na loja do Regem. Nada é criado aqui: o pedido entra no Action
+   * Service, espera a aprovação de quem pode aprovar e só então o Liame cria o cupom no Regem e o liga à campanha.
+   */
+  async createInRegem(auth: AuthContext, body: CreateRegemCouponRequest, agora = new Date()): Promise<CouponRequestResponse> {
+    const tx = currentTx();
+    const loja = await this.lojaDaUnidade(body.unit_id);
+    const [conta] = await this.lojas(sql`a.id = ${loja.contaId}`);
+
+    const erros: FieldError[] = [];
+    if (body.kind === 'percentual' && body.percent === undefined) erros.push({ path: 'percent', message: 'Informe o desconto em %, de 1 a 100.' });
+    if (body.kind !== 'percentual' && body.percent !== undefined) erros.push({ path: 'percent', message: 'O percentual só vale no cupom percentual.' });
+    const valor = body.value_micros === undefined ? undefined : microsParaCentavos(body.value_micros);
+    if (body.kind === 'valor' && (!valor || valor < 1)) erros.push({ path: 'value_micros', message: 'Informe o valor do desconto, em centavos inteiros, até R$ 1.000.000,00.' });
+    if (body.kind !== 'valor' && body.value_micros !== undefined) erros.push({ path: 'value_micros', message: 'O valor só vale no cupom de valor fixo.' });
+    const minimo = body.min_order_micros === undefined ? 0 : microsParaCentavos(body.min_order_micros);
+    if (minimo === null) erros.push({ path: 'min_order_micros', message: 'Informe o pedido mínimo em centavos inteiros, até R$ 1.000.000,00.' });
+    if (body.valid_until < body.valid_from) erros.push({ path: 'valid_until', message: 'O fim da validade não pode ser antes do início.' });
+    else if (body.valid_until < diaNoFuso(agora, conta?.fuso ?? FUSO_PADRAO)) erros.push({ path: 'valid_until', message: 'O fim da validade já passou.' });
+    if (erros.length) throw new ValidationProblem(erros);
+
+    // A campanha é conferida já no pedido (e de novo na hora de criar): ninguém aprova um cupom de campanha encerrada.
+    const campanha = await campanhaDoVinculo(tx, body.campaign_id, loja.brandId);
+    const acao = await this.actions.create(auth, {
+      tool: FERRAMENTA_CUPOM,
+      brand_id: loja.brandId,
+      provider: 'regem',
+      account_id: loja.contaId,
+      resource_id: `cupom:${body.code}`,
+      params: {
+        codigo: body.code,
+        // O nome do cupom no Regem diz de onde ele veio (o da campanha, sem caractere de controle).
+        nome: `Liame · ${campanha.name.replace(/\p{Cc}/gu, ' ')}`.slice(0, 80).trim(),
+        tipo: body.kind,
+        ...(body.kind === 'percentual' ? { percentual: body.percent } : {}),
+        ...(body.kind === 'valor' ? { valor_centavos: valor } : {}),
+        pedido_minimo_centavos: minimo ?? 0,
+        valido_de: body.valid_from,
+        valido_ate: body.valid_until,
+        campaign_id: campanha.id,
+        exclusive: body.exclusive,
+      },
+    });
+    // Política da empresa em modo sombra para esta ação: o pedido só seria registrado, sem nunca criar o cupom.
+    // Volta o motivo em vez de deixar a pessoa esperando uma aprovação que não existe (a transação é desfeita).
+    if (acao.status === 'sombra') {
+      throw new AppProblem(409, 'criacao-em-sombra', 'A política só registra', 'A política da empresa deixa a criação de cupom em modo sombra (registra e não executa). Mude a regra na política para pedir a criação.');
+    }
+    return { request: await this.pedido(acao.id) };
+  }
+
+  /** Cancela o pedido de criação que ainda não foi executado (o cupom não chega a existir no Regem). */
+  async cancelRegemRequest(auth: AuthContext, actionId: string): Promise<void> {
+    await this.exigirPedido(actionId);
+    await this.actions.cancel(auth, actionId);
   }
 
   /**
@@ -288,93 +411,22 @@ export class CouponsService {
     return { brandId: l.brand_id, contaId: l.conta_id };
   }
 
-  private async travarCupom(couponId: string): Promise<CupomTravado> {
-    const r = await currentTx().execute<CupomTravado>(sql`
-      select cp.id, cp.tenant_id, cp.brand_id, cp.code, cp.removed_at, cp.valid_until, cp.active,
-             coalesce(u.timezone, a.timezone, ${FUSO_PADRAO}) as fuso
-        from liame.coupon cp
-        join liame.connected_account a on a.id = cp.connected_account_id
-        left join liame.unit u on u.id = a.unit_id
-       where cp.id = ${couponId}
-         for update of cp`);
-    if (!r.rows[0]) throw naoEncontrado('Cupom não encontrado nesta empresa.');
-    return r.rows[0];
+  private travarCupom(couponId: string): Promise<CupomTravado> {
+    return travarCupom(currentTx(), couponId);
   }
 
-  private async ligacaoEmVigor(couponId: string): Promise<Ligacao | null> {
-    const r = await currentTx().execute<Ligacao>(sql`
-      select id, campaign_id, exclusive, linked_at, unlinked_at from liame.campaign_coupon
-       where coupon_id = ${couponId} and (unlinked_at is null or unlinked_at > now())
-       order by linked_at desc limit 1`);
-    return r.rows[0] ?? null;
+  private ligacaoEmVigor(couponId: string): Promise<Ligacao | null> {
+    return ligacaoEmVigor(currentTx(), couponId);
   }
 
   /** Grava o vínculo (com o cupom já travado) e refaz a atribuição dos pedidos com o código, se ele for exclusivo. */
-  private async ligar(
-    auth: AuthContext,
-    cupom: CupomTravado,
-    body: LinkCouponRequest,
-    agora: Date,
-  ): Promise<{ ligacaoId: string; inicio: string; fim: string | null; reatribuidos: number; repetido: boolean }> {
-    const tx = currentTx();
-    const campanha = (
-      await tx.execute<{ id: string; name: string; provider: string; status: string; brand_id: string }>(sql`
-        select c.id, c.name, c.provider, c.status, a.brand_id
-          from liame.campaign c join liame.connected_account a on a.id = c.connected_account_id
-         where c.id = ${body.campaign_id}`)
-    ).rows[0];
-    if (!campanha) throw naoEncontrado('Campanha não encontrada nesta empresa.');
-    if (campanha.brand_id !== cupom.brand_id) throw new AppProblem(422, 'campanha-fora-da-marca', 'Campanha de outra marca', 'Escolha uma campanha da mesma marca da loja do cupom.');
-    if (campanha.provider !== 'meta_ads' && campanha.provider !== 'google_ads') {
-      throw new AppProblem(422, 'plataforma-sem-cupom', 'Plataforma sem cupom de campanha', 'O cupom de campanha vale para as campanhas da Meta e do Google Ads.');
-    }
-    if (campanha.status === 'removida' || campanha.status === 'arquivada') {
-      throw new AppProblem(422, 'campanha-encerrada', 'Campanha encerrada', 'Esta campanha foi removida ou arquivada na plataforma.');
-    }
-
-    const hoje = diaNoFuso(agora, cupom.fuso);
-    const periodo = periodoDoVinculo(hoje, body.starts_on, body.ends_on);
-    if (!periodo.ok) {
-      throw new AppProblem(
-        422,
-        periodo.motivo === 'inicio_no_passado' ? 'inicio-no-passado' : periodo.motivo === 'fim_antes_do_inicio' ? 'fim-antes-do-inicio' : 'dia-invalido',
-        'Período não aceito',
-        periodo.motivo === 'inicio_no_passado'
-          ? 'O vínculo começa hoje ou depois.'
-          : periodo.motivo === 'fim_antes_do_inicio'
-            ? 'O fim do vínculo não pode ser antes do início.'
-            : 'Informe as datas do vínculo no formato de calendário.',
-      );
-    }
-
-    const atual = await this.ligacaoEmVigor(cupom.id);
-    if (atual) {
-      if (atual.campaign_id === campanha.id && atual.exclusive === body.exclusive && body.starts_on === undefined && body.ends_on == null && atual.unlinked_at === null) {
-        return { ligacaoId: atual.id, inicio: periodo.inicio, fim: null, reatribuidos: 0, repetido: true };
-      }
-      const nome = (await tx.execute<{ name: string }>(sql`select name from liame.campaign where id = ${atual.campaign_id}`)).rows[0]?.name ?? 'outra campanha';
-      throw new AppProblem(409, 'cupom-ja-ligado', 'Cupom já ligado', `O cupom já está ligado à campanha ${nome}. Desligue antes de ligar a outra.`);
-    }
-
-    const id = uuidv7();
-    await tx.execute(sql`
-      insert into liame.campaign_coupon (id, tenant_id, brand_id, coupon_id, campaign_id, exclusive, linked_at, unlinked_at, created_by)
-      select ${id}, ${cupom.tenant_id}, ${cupom.brand_id}, ${cupom.id}, ${campanha.id}, ${body.exclusive},
-             greatest((${periodo.inicio}::date)::timestamp at time zone ${cupom.fuso},
-                      coalesce((select max(cc.unlinked_at) from liame.campaign_coupon cc where cc.coupon_id = ${cupom.id}), '-infinity'::timestamptz)),
-             case when ${periodo.fim}::date is null then null else ((${periodo.fim}::date + 1)::timestamp at time zone ${cupom.fuso}) end,
-             ${auth.userId}`);
-    const reatribuidos = body.exclusive ? await this.reatribuir(cupom.tenant_id, id) : 0;
-    return { ligacaoId: id, inicio: periodo.inicio, fim: periodo.fim, reatribuidos, repetido: false };
+  private ligar(auth: AuthContext, cupom: CupomTravado, body: LinkCouponRequest, agora: Date): Promise<VinculoFeito> {
+    return ligarCupom(currentTx(), { userId: auth.userId, cupom, body, agora });
   }
 
   /** Os pedidos com o código do cupom desde o início do vínculo passam de novo pelo motor. */
-  private async reatribuir(tenantId: string, ligacaoId: string): Promise<number> {
-    const tx = currentTx();
-    const pedidos = await pedidosDoCupomDeCampanha(tx, tenantId, [ligacaoId]);
-    if (!pedidos.length) return 0;
-    const r = await atribuirPedidos(tx, { tenantId, orderIds: pedidos, gatilho: 'cupons' });
-    return r.considerados;
+  private reatribuir(tenantId: string, ligacaoId: string): Promise<number> {
+    return reatribuirLigacao(currentTx(), tenantId, ligacaoId);
   }
 
   private async item(couponId: string, agora: Date): Promise<CouponItem> {
@@ -389,13 +441,51 @@ export class CouponsService {
       select a.id, a.name, a.unit_id, u.name as unit_name, coalesce(u.timezone, a.timezone, ${FUSO_PADRAO}) as fuso,
              u.order_platform, u.order_platform_url, u.order_platform_set_at,
              a.provider_attributes->>'cardapio_url' as cardapio,
-             s.last_success_at, s.expected_every_minutes, s.last_error
+             s.last_success_at, s.expected_every_minutes, s.last_error,
+             coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) as pode_criar
         from liame.connected_account a
         left join liame.unit u on u.id = a.unit_id
         left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'cupons'
        where a.provider = 'regem' and a.disconnected_at is null and ${filtro}
        order by u.name nulls last, a.name, a.id`);
     return r.rows;
+  }
+
+  /**
+   * Pedidos de criação de cupom no Regem, de lojas ainda conectadas: os que estão em andamento e, por 3 dias, os
+   * que falharam ou expiraram — estes só enquanto o cupom não existe e ninguém pediu o mesmo código de novo.
+   */
+  private async pedidos(filtro: SQL): Promise<LinhaPedido[]> {
+    const r = await currentTx().execute<LinhaPedido>(sql`
+      select r.id, r.account_id, r.params, r.status, r.status_reason, r.requested_by, u.name as requester, r.created_at, r.expires_at,
+             c.id as campaign_id, c.name as campaign_name, c.provider as campaign_provider, c.status as campaign_status
+        from liame.action_request r
+        join liame.connected_account a on a.id::text = r.account_id and a.provider = 'regem' and a.disconnected_at is null
+        join liame.app_user u on u.id = r.requested_by
+        left join liame.campaign c on c.id::text = r.params->>'campaign_id'
+       where r.tool = ${FERRAMENTA_CUPOM} and r.provider = 'regem' and ${filtro}
+         and (r.status in ('aguardando_aprovacao', 'aprovada', 'executando')
+              or (r.status in ('falhou', 'expirada') and r.updated_at > now() - make_interval(days => ${DIAS_PEDIDO_ENCERRADO})
+                  and not exists (select 1 from liame.coupon cp
+                                   where cp.connected_account_id = a.id and cp.code = r.params->>'codigo' and cp.removed_at is null)
+                  and not exists (select 1 from liame.action_request n
+                                   where n.tenant_id = r.tenant_id and n.tool = r.tool and n.account_id = r.account_id
+                                     and n.resource_id = r.resource_id and n.created_at > r.created_at)))
+       order by r.created_at desc, r.id desc limit 50`);
+    return r.rows;
+  }
+
+  /** Um pedido de criação da lista, pelo id da ação. */
+  private async pedido(actionId: string): Promise<CouponRequest> {
+    const [linha] = await this.pedidos(sql`r.id = ${actionId}`);
+    if (!linha) throw naoEncontrado('Pedido de cupom não encontrado nesta empresa.');
+    return montarPedido(linha);
+  }
+
+  /** A ação é um pedido de cupom desta empresa (a rota de cancelar da aba Cupons não cancela outro tipo de ação). */
+  private async exigirPedido(actionId: string): Promise<void> {
+    const r = await currentTx().execute<{ id: string }>(sql`select id from liame.action_request where id = ${actionId} and tool = ${FERRAMENTA_CUPOM}`);
+    if (!r.rows[0]) throw naoEncontrado('Pedido de cupom não encontrado nesta empresa.');
   }
 
   /**

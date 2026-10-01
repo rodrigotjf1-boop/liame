@@ -53,6 +53,8 @@ export const CouponStore = z.strictObject({
   coupons_freshness: Slug,
   /** Motivo da última leitura que falhou (`sem_permissao`, erro), sem dado da loja. */
   coupons_error: z.string().nullable(),
+  /** A loja liberou "criar cupom de campanha" na autorização do Regem (sem isso, o Liame não pede a criação). */
+  can_create: z.boolean(),
 });
 export type CouponStore = z.infer<typeof CouponStore>;
 
@@ -123,16 +125,52 @@ export const DetectedPlatform = z.strictObject({
 });
 export type DetectedPlatform = z.infer<typeof DetectedPlatform>;
 
+/**
+ * Pedido de criação de cupom no Regem (ADR-019 item 6): passa pela aprovação e só depois o Liame cria o cupom
+ * na loja. Enquanto isso, o cupom ainda não existe no Regem.
+ */
+export const CouponRequest = z.strictObject({
+  /** O pedido no Action Service: aprovar é por ele (`POST /v1/actions/{id}/approve`). */
+  action_id: z.uuid(),
+  code: z.string(),
+  connected_account_id: z.uuid(),
+  /** `percentual`, `valor` ou `frete_gratis`. */
+  kind: Slug,
+  percent: z.number().nullable(),
+  value_micros: Micros.nullable(),
+  min_order_micros: Micros.nullable(),
+  /** Validade pedida, em dias do fuso da loja (o fim é inclusive). */
+  valid_from: Dia,
+  valid_until: Dia,
+  /** A campanha do cupom; nula se ela saiu da lista depois do pedido. */
+  campaign: CouponCampaign.nullable(),
+  exclusive: z.boolean(),
+  /** `aguardando_aprovacao`, `aprovada`, `executando` (o Liame está criando no Regem), `falhou` ou `expirada`. */
+  status: Slug,
+  /** O motivo, quando o pedido falhou ou expirou. */
+  status_reason: z.string().nullable(),
+  requested_by: z.strictObject({ id: z.uuid(), name: z.string() }),
+  requested_at: z.string(),
+  /** Sem aprovação até aqui, o pedido expira. */
+  expires_at: z.string(),
+});
+export type CouponRequest = z.infer<typeof CouponRequest>;
+
 export const CouponListResponse = z.strictObject({
   /** Lojas da marca com o Regem conectado. */
   stores: z.array(CouponStore),
   /** Cupons das lojas da marca (sem os apagados na origem): ligados primeiro, depois por código. */
   items: z.array(CouponItem),
+  /**
+   * Pedidos de criação no Regem em andamento (esperando aprovação ou sendo criados) e os que falharam ou
+   * expiraram nos últimos 3 dias sem que o cupom exista. Os mais novos primeiro.
+   */
+  requests: z.array(CouponRequest),
   /** Campanhas ativas e pausadas da Meta e do Google Ads da marca (para ligar e para a conferência de cupom). */
   campaigns: z.array(CouponCampaign),
   /** Plataforma de pedidos sugerida pelo destino dos anúncios ativos; nula quando não dá para dizer. */
   detected_platform: DetectedPlatform.nullable(),
-  /** Criar cupom no Regem pelo Liame (com aprovação): ainda não disponível. */
+  /** Criar cupom no Regem pelo Liame (com aprovação) está ligado para esta empresa e marca. Desligado, o cupom se cria no Regem. */
   create_in_regem: z.boolean(),
   generated_at: z.string(),
 });
@@ -157,6 +195,39 @@ export const CreateExternalCouponRequest = z.strictObject({
   exclusive: z.boolean(),
 });
 export type CreateExternalCouponRequest = z.infer<typeof CreateExternalCouponRequest>;
+
+/** Código do cupom que o Liame cria no Regem: de 4 a 20 letras ou números, sem espaço (vai em maiúsculas). */
+export const RegemCouponCode = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9]{4,20}$/, 'Use de 4 a 20 letras ou números, sem espaço nem acento.');
+
+/** Tipos de desconto que o Liame pede ao Regem. */
+export const REGEM_COUPON_KINDS = ['percentual', 'valor', 'frete_gratis'] as const;
+
+export const CreateRegemCouponRequest = z.strictObject({
+  /** Loja do Liame com o Regem conectado: o cupom nasce nela. */
+  unit_id: z.uuid(),
+  code: RegemCouponCode,
+  kind: z.enum(REGEM_COUPON_KINDS),
+  /** Só no `percentual`: de 1 a 100, inteiro. */
+  percent: z.int().min(1).max(100).optional(),
+  /** Só no `valor`: o desconto, em micros (centavo inteiro). */
+  value_micros: Micros.optional(),
+  /** Pedido mínimo, em micros (centavo inteiro); sem ele, não há mínimo. */
+  min_order_micros: Micros.optional(),
+  /** Primeiro e último dia da validade (inclusive), no fuso da loja. */
+  valid_from: Dia,
+  valid_until: Dia,
+  campaign_id: z.uuid(),
+  /** Só o cupom exclusivo da campanha prova de onde veio o pedido. */
+  exclusive: z.boolean(),
+});
+export type CreateRegemCouponRequest = z.infer<typeof CreateRegemCouponRequest>;
+
+export const CouponRequestResponse = z.strictObject({ request: CouponRequest });
+export type CouponRequestResponse = z.infer<typeof CouponRequestResponse>;
 
 export const SetOrderPlatformRequest = z.strictObject({
   platform: OrderPlatform,
