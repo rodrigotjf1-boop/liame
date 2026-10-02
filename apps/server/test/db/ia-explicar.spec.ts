@@ -161,6 +161,22 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(mock.doGenerateCalls).toHaveLength(0);
   });
 
+  it('A3-15: campanha com nome político ou eleitoral não vai para a IA; a explicação do código segue', async () => {
+    const d = await dono();
+    await ownerQuery(`update liame.campaign set name = 'Vote 45 | Vereador do bairro' where connected_account_id = $1`, [d.contaId]);
+    const mock = responder(responde(JSON.stringify(BOA)));
+    const r = await pedir(d);
+    expect(r).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'conteudo_politico', usage_id: null });
+    expect(r.explicacao.o_que_aconteceu).toContain('o investimento em anúncios foi de R$ 200,00');
+    expect(mock.doGenerateCalls).toHaveLength(0);
+    expect(await usos(d.tenantId)).toEqual([]);
+
+    // E a IA que escreve promessa de resultado ou pedido de voto é recusada pelas regras de texto.
+    const normal = await dono();
+    responder(responde(JSON.stringify({ ...BOA, o_que_fazer: ['Dobre a verba: é retorno garantido.'] })));
+    expect(await pedir(normal)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'compliance' });
+  });
+
   it('A3-4: só explica para quem vê os resultados, e a marca de outra empresa não existe', async () => {
     const [a, b] = [await dono(), await dono()];
     responder(responde(JSON.stringify(BOA)));

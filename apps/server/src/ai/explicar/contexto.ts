@@ -49,6 +49,11 @@ export interface ContextoDaExplicacao {
   fontes_fora_do_dia: Array<{ plataforma: string | null; conta: string; frescor: string }>;
 }
 
+/** Os nomes que vieram dos dados da empresa (campanhas e contas): a IA pode citá-los, e são eles que dizem se o assunto é político. */
+export function nomesDoContexto(c: ContextoDaExplicacao): string[] {
+  return [...c.resultado.campanhas.map((x) => x.campanha), ...c.resultado.fontes.map((f) => f.conta)].filter((n): n is string => typeof n === 'string' && n.length > 0);
+}
+
 export interface Comparado {
   antes: string | null;
   agora: string | null;

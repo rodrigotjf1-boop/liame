@@ -24,7 +24,7 @@ O promptfoo só percorre os casos e junta o relatório. O que importa está no s
 
 | Tarefa | Casos | O que os grupos provam |
 | --- | --- | --- |
-| `explicar_resultados` | 17 | `referencia`: cenários do dia a dia, com o risco esperado · `numero`: o contexto não traz um número e a IA não pode calcular nem inventar · `injecao`: nome de campanha ou de conta com instrução escondida · `politica`: campanha com nome eleitoral · `dado_parcial`: sem investimento, sem pedido com origem ou sem margem |
+| `explicar_resultados` | 17 | `referencia`: cenários do dia a dia, com o risco esperado · `numero`: o contexto não traz um número e a IA não pode calcular nem inventar · `injecao`: nome de campanha ou de conta com instrução escondida · `politica`: campanha com nome eleitoral, com respostas ruins de pedido de voto, promessa de resultado e dado pessoal (regras de texto, I9) · `dado_parcial`: sem investimento, sem pedido com origem ou sem margem |
 
 Vazamento entre empresas não é caso desta tarefa: o contexto de uma chamada só tem uma empresa, por construção (teste `A3-4` em `apps/server/test/db`). Ele entra nos evals da Conversa (I10), em que a pessoa escreve texto livre.
 

@@ -172,4 +172,20 @@ describe('conferência da resposta da IA: o que não serve para a tela', () => {
     expect(conferirExplicacao({ ...boa, o_que_fazer: ['Veja em https://exemplo.com como arrumar.'] }, contexto)).toEqual({ recusa: 'trecho_proibido', detalhe: ['https://'] });
     expect(conferirExplicacao({ ...boa, o_que_aconteceu: 'A IA decidiu pausar a campanha.' }, contexto)).toEqual({ recusa: 'trecho_proibido', detalhe: ['a ia decidiu'] });
   });
+
+  it('A3-15 · compliance: as regras de texto recusam antes de qualquer revisor (político, promessa, categoria proibida, dado pessoal)', () => {
+    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Vote em quem apoia o comércio do bairro.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['politico_eleitoral: vote em'] });
+    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Aumente a verba: é retorno garantido.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['promessa_de_resultado: retorno garantido'] });
+    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Faça um sorteio pelo jogo do bicho.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['categoria_proibida: jogo do bicho'] });
+    // O dado pessoal é recusado antes da conferência dos números, e o log não repete o dado.
+    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Ligue para o cliente no (21) 98888-7777.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['dado_pessoal: dado pessoal no texto'] });
+  });
+
+  it('o nome de uma campanha da empresa pode ser citado, mesmo com palavra de política; o resto do texto é conferido', () => {
+    const base = resultado();
+    const eleitoral = contextoDosResultados({ ...base, campaigns: base.campaigns.map((c, i) => (i === 0 ? { ...c, name: 'Eleições do sabor | Vote no smash' } : c)) }, anterior());
+    const cita = { ...boa, o_que_fazer: ['Revise a campanha "Eleições do sabor | Vote no smash" antes de aumentar a verba.'] };
+    expect(conferirExplicacao(cita, eleitoral)).toBeNull();
+    expect(conferirExplicacao({ ...cita, motivos: [...boa.motivos, 'Aproveite a eleição para falar com o eleitor.'] }, eleitoral)).toMatchObject({ recusa: 'compliance' });
+  });
 });
