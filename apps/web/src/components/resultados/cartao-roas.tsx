@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useDetalhes } from '@/lib/modo';
 import { BotaoDetalhes, SeloVeredito, TextoRico } from './pecas';
 import type { CartaoRoas as Dados } from './textos';
@@ -7,7 +8,7 @@ import type { CartaoRoas as Dados } from './textos';
 // Herói da tela (protótipo P1): o ROAS confirmado no caixa, com a frase do dono no Lite; no Pro (ou em
 // "Ver detalhes"), cada plataforma com a janela dela ao lado do confirmado no caixa, com a janela do Liame.
 
-export function CartaoRoas({ roas }: { roas: Dados }) {
+export function CartaoRoas({ roas, explicar }: { roas: Dados; /** O botão "Explicar" (A3 · I4), quando há o que explicar. */ explicar?: ReactNode }) {
   const d = useDetalhes();
   return (
     <article className="card res-hero" aria-labelledby="t-roas">
@@ -21,6 +22,7 @@ export function CartaoRoas({ roas }: { roas: Dados }) {
             {s}
           </span>
         ))}
+        {explicar}
       </div>
       <p className={`hero-num num${roas.vazio ? ' hero-num--vazio' : ''}`}>{roas.numero}</p>
       {roas.frase && (

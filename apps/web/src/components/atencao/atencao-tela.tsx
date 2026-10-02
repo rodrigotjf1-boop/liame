@@ -4,6 +4,8 @@ import type { BrandResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DialogoConectar } from '@/components/contas/dialogo-conectar';
+import { liaLigada } from '@/components/explicar/pedir';
+import { avisoTemExplicacao } from '@/components/explicar/textos';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Faixa } from '@/components/ui/faixa';
@@ -37,6 +39,8 @@ export function AtencaoTela() {
   const [estado, setEstado] = useState<Carga>({ tipo: 'carregando' });
   const [filtro, setFiltro] = useState<Filtro>('todas');
   const [conectar, setConectar] = useState<BrandResponse[] | null>(null);
+  /** Nulo até a tela saber (o botão "Explicar" só aparece depois, já no formato certo). */
+  const [lia, setLia] = useState<boolean | null>(null);
   const agora = useAgora(60_000, estado);
   const podeVer = pode('campanhas.ver');
   const podeVerContas = pode('contas.ver');
@@ -44,9 +48,13 @@ export function AtencaoTela() {
   const podeVerVendas = pode('vendas.ver');
   const { definir } = contador;
 
-  const carregar = useCallback(async () => {
+  /** Carrega os avisos; devolve se deu certo. */
+  const carregar = useCallback(async (): Promise<boolean> => {
     const r = await buscarAvisos(podeVerVendas);
-    if (!r.ok) return setEstado({ tipo: 'erro', problema: r.problema });
+    if (!r.ok) {
+      setEstado({ tipo: 'erro', problema: r.problema });
+      return false;
+    }
     definir(contadorDoMenu(r.data.items));
     // Sem avisos: "tudo em dia" só vale se há conta ligada; sem nenhuma, o convite é conectar.
     let semContas = false;
@@ -55,11 +63,34 @@ export function AtencaoTela() {
       semContas = f.ok && !f.data.items.length;
     }
     setEstado({ tipo: 'ok', dados: r.data, semContas });
+    return true;
   }, [definir, podeVerContas, podeVerVendas]);
 
   useEffect(() => {
     if (podeVer) disparar(carregar());
   }, [carregar, podeVer]);
+
+  // "Explicar" (A3 · I4) é de quem vê as vendas. A LIA responde para a empresa? Decide o botão dela ou o neutro.
+  useEffect(() => {
+    if (!podeVer || !podeVerVendas) return;
+    let vivo = true;
+    disparar(
+      liaLigada().then((ligada) => {
+        if (vivo) setLia(ligada);
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [podeVer, podeVerVendas]);
+
+  // A explicação de um aviso que saiu da lista com a tela aberta pede a lista de agora. O aviso some junto
+  // com o botão que tinha o foco: o foco vai para o título da tela.
+  async function atualizarAvisos() {
+    const ok = await carregar();
+    titulo.current?.focus();
+    if (ok) avisar('Avisos atualizados.');
+  }
 
   async function abrirConectar() {
     const r = await chamar(() => api.GET('/v1/brands'));
@@ -164,6 +195,8 @@ export function AtencaoTela() {
                   podeConectar={podeConectar}
                   podeVerVendas={podeVerVendas}
                   aoReconectar={() => disparar(abrirConectar())}
+                  explicar={podeVerVendas && lia !== null && avisoTemExplicacao(item) ? { lia } : null}
+                  aoAtualizar={() => disparar(atualizarAvisos())}
                 />
               ))}
             </ul>

@@ -61,3 +61,29 @@ export function Simbolo({ className = 'logo-simbolo', rotulo = true }: { classNa
     </svg>
   );
 }
+
+/** Ícone da LIA (kit da marca; o mesmo do protótipo P4): decorativo, quem lê a tela ouve "Explicação da LIA". */
+export function IconeLia() {
+  return (
+    <span className="av-lia" aria-hidden="true">
+      <svg viewBox="0 0 1024 1024" focusable="false">
+        <rect width="1024" height="1024" rx="230" style={{ fill: 'var(--marca-violeta)' }} />
+        <g transform="translate(192.61 277.1)">
+          <path d="M31.5 151.2V380.7H151.2" fill="none" strokeWidth="48.6" style={{ stroke: 'var(--marca-branco)' }} />
+          <circle cx="191.05" cy="380.7" r="25.27" style={{ fill: 'var(--marca-ciano)' }} />
+          <path d="M233 702V0H62V702Z" transform="translate(253.58 405) scale(0.36 -0.36)" style={{ fill: 'var(--marca-branco)' }} />
+          <path
+            d="M293.72 21.6H362.84Q382.28 21.6 382.28 41.04V88.56Q382.28 108 362.84 108H319.64L295.88 138.24V108H293.72Q274.28 108 274.28 88.56V41.04Q274.28 21.6 293.72 21.6Z"
+            style={{ fill: 'var(--marca-ciano)' }}
+          />
+          <path
+            d="M499 124H237L195 0H16L270 702H468L722 0H541ZM455 256 368 513 282 256Z"
+            transform="translate(366.26 405) scale(0.36 -0.36)"
+            style={{ fill: 'var(--marca-branco)' }}
+          />
+          <rect x="7.2" y="441" width="624.38" height="14.4" rx="7.2" style={{ fill: 'var(--marca-ciano)' }} />
+        </g>
+      </svg>
+    </span>
+  );
+}
