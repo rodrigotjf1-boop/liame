@@ -82,6 +82,8 @@ Sem protótipo aprovado não se inventa tela (`CLAUDE.md` §2). As vistas do pro
 > **P4 aprovado pelo dono em 02/10/2026:** `mockups/prototipo-explicar.html`, com os seletores "Tela" (Resultados, Atenção, Revisão semanal) e "Explicação" (os estados) na faixa do topo. A aprovação libera a rota e a tela do Explicar (I4) e a revisão semanal (I7). As escolhas aprovadas estão no changelog de `decisoes-design.md`; **segue em aberto para onde leva "Falar com uma pessoa"**.
 >
 > **P5 pronto para a aprovação do dono (02/10/2026):** `mockups/prototipo-conversa.html`, com o seletor "Conversa" (24 estados) na faixa do topo. A conversa é o painel da LIA do modelo aprovado (ao lado da tela, por cima dela ou em tela cheia), aberto por "Conversa" no menu, pelo botão do topo e por Ctrl J. As escolhas propostas estão no changelog de `decisoes-design.md`. **A confirmar: para onde leva "Falar com uma pessoa"** (o protótipo propõe o e-mail do atendimento, mostrado na própria conversa). Sem a aprovação, a I10 não tem código de tela.
+>
+> **P6 pronto para a aprovação do dono (02/10/2026):** `mockups/prototipo-marca.html`, com o seletor "Minha marca" (15 estados) na faixa do topo: o dossiê em nove partes, a sugestão da LIA a conferir, "o que não pode dizer" com o teste de frase, as versões com a anterior e o preenchimento guiado. As escolhas propostas estão no changelog de `decisoes-design.md`. Sem a aprovação, a I8 não tem código de tela.
 
 ## 6. Critérios de saída da A3
 
