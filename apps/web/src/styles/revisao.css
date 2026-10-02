@@ -1,0 +1,34 @@
+/* ===== Revisão da semana (A3 · I7; mockups/prototipo-explicar.html, P4 aprovado em 02/10/2026) =====
+   Os quatro números do topo, a leitura da semana (o mesmo bloco do Explicar), a tabela das campanhas, o que
+   melhorou, o que piorou e o que precisa de decisão. */
+
+.rev-sem { display: grid; gap: var(--sp-4); }
+.rev-sem > * { min-width: 0; }
+.rev-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-4); }
+.rev-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); }
+.rev-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.rev-duas > * { min-width: 0; }
+.rev-decisoes { display: grid; margin: 0; padding: 0; list-style: none; }
+.rev-decisoes li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); padding: var(--sp-3) 0; border-top: 1px solid var(--border); }
+.rev-decisoes li:first-child { border-top: 0; padding-top: 0; }
+.rev-decisoes li > div { flex: 1; min-width: min(100%, 240px); display: grid; gap: 2px; }
+.rev-decisoes li > div span { font-size: var(--text-sm); color: var(--text-muted); }
+.rev-lista { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.rev-lista li { display: flex; gap: var(--sp-2); line-height: 1.55; }
+.rev-lista .ic { flex: none; width: 16px; height: 16px; margin-top: 3px; }
+.rev-lista--bom .ic { color: var(--success); }
+.rev-lista--ruim .ic { color: var(--warning); }
+.rev-envio { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.rev-envio .ic { flex: none; margin-top: 3px; }
+/* Lista vazia ("nada melhorou", "nada piorou", "nada pede decisão"). */
+.rev-nada { font-size: var(--text-sm); color: var(--text-muted); }
+
+@container pagina (max-width: 899px) {
+  .rev-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container pagina (max-width: 699px) {
+  .rev-duas { grid-template-columns: minmax(0, 1fr); }
+}
+@container pagina (max-width: 419px) {
+  .rev-nums { grid-template-columns: minmax(0, 1fr); }
+}

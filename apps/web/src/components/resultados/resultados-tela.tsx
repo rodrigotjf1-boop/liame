@@ -208,6 +208,13 @@ export function ResultadosTela() {
           <p>O que a mídia virou de verdade: pedidos, receita e margem confirmados no caixa do Regem, ao lado do que cada plataforma informa.</p>
         </div>
         <div className="res-controles">
+          {/* A revisão da semana abre por aqui; sem o Regem não há o que revisar (protótipo P4). */}
+          {dados && tela && !tela.base.semRegem && (
+            <Link className="btn btn--sm" href={`/resultados/revisao?marca=${dados.marca}`}>
+              <Icone nome="file" pequeno />
+              Revisão da semana
+            </Link>
+          )}
           {marcas && marcas.length > 1 && (
             <label className="res-campo">
               <span>Marca</span>

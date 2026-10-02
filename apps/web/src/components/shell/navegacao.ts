@@ -59,7 +59,17 @@ export function itemAtual(caminho: string, href: string): boolean {
   return caminho === href || caminho.startsWith(`${href}/`);
 }
 
+/**
+ * Telas abaixo de um item do menu, com título próprio na trilha. `modos`: a subtela tem as visões Lite e
+ * Pro? (A revisão da semana é uma só; o seletor some nela.)
+ */
+const SUBTELAS: Record<string, { titulo: string; modos: boolean }> = {
+  '/resultados/revisao': { titulo: 'Resultados · Revisão da semana', modos: false },
+};
+
 export function tituloDa(caminho: string): string {
+  const sub = SUBTELAS[caminho];
+  if (sub) return sub.titulo;
   for (const g of NAVEGACAO) for (const i of g.itens) if (itemAtual(caminho, i.href)) return i.titulo ?? i.rotulo;
   return 'Liame';
 }
@@ -81,5 +91,6 @@ export function emFerramenta(caminho: string): boolean {
 
 /** A tela aberta tem as visões Lite e Pro e a pessoa pode vê-la (sem permissão, a tela é só o aviso). */
 export function temModos(caminho: string, pode: (permissao: string) => boolean): boolean {
+  if (SUBTELAS[caminho] && !SUBTELAS[caminho].modos) return false;
   return NAVEGACAO.some((g) => g.itens.some((i) => i.modos && itemAtual(caminho, i.href) && (!i.permissao || pode(i.permissao))));
 }

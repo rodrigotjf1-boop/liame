@@ -8,13 +8,14 @@ import { Icone } from '@/components/ui/icone';
 import { mensagemDe } from '@/lib/api';
 import { quandoComHora } from '@/lib/formato';
 import { Retorno } from './retorno';
-import { avisoSemIa, ehDaLia, seloDoRisco, tituloDasFontes } from './textos';
+import { type AvisoSemIa, avisoSemIa, ehDaLia, seloDoRisco, tituloDasFontes } from './textos';
 import type { EstadoDaExplicacao } from './use-explicacao';
 
 // O bloco da explicação (mockups/prototipo-explicar.html, P4): fica logo abaixo do que ele explica (o número
 // principal dos Resultados ou um aviso da Atenção). O texto vem pronto da API, em trechos: cada número é um
 // botão que abre "De onde vêm os números" na linha dele. A LIA aparece em violeta, com "Feito com IA"; o
 // resumo do sistema, em cinza, com "Sem IA" e o motivo. Quem decide é a pessoa: as ações são de navegação.
+// O mesmo bloco mostra a leitura da revisão da semana: fixo na tela, com os títulos, a hora e o aviso dela.
 
 type Props = {
   /** Identifica o bloco na tela (ids e rótulos): `resultados` ou `aviso-…`. */
@@ -22,8 +23,8 @@ type Props = {
   estado: Exclude<EstadoDaExplicacao, { tipo: 'fechada' }>;
   /** A LIA responde para esta empresa? Decide o texto enquanto carrega. */
   lia: boolean;
-  /** O que está sendo explicado: os números da tela ou os de um aviso. */
-  sobre: 'tela' | 'aviso';
+  /** O que está sendo explicado: os números da tela, os de um aviso ou os da revisão da semana. */
+  sobre: 'tela' | 'aviso' | 'revisao';
   /** Nível do título do bloco (2 em Resultados; 3 dentro de um aviso, cujo título é o 2). */
   nivel?: 2 | 3;
   /** Dentro de um aviso o bloco não é um cartão: sem moldura dupla. */
@@ -31,8 +32,16 @@ type Props = {
   /** Até duas ações de navegação (nada muda em campanha por aqui). */
   acoes?: ReactNode;
   podeVerContas: boolean;
-  aoFechar: () => void;
-  aoPedirDeNovo: () => void;
+  /** Bloco fixo (a leitura da revisão da semana): sem o botão de fechar e sem puxar o foco ao aparecer. */
+  fixo?: boolean;
+  /** Os títulos do bloco, quando não são os do Explicar. */
+  titulos?: { lia: string; sistema: string };
+  /** Quando a leitura foi escrita, já por extenso; sem isso, a hora da resposta. */
+  quando?: string;
+  /** O aviso de "sem IA" desta tela, no lugar do padrão do Explicar (nulo: sem aviso). */
+  aviso?: AvisoSemIa | null;
+  aoFechar?: () => void;
+  aoPedirDeNovo?: () => void;
   /** Só no aviso: recarrega a lista quando o aviso explicado saiu dela (pedir de novo não resolveria). */
   aoAtualizar?: () => void;
 };
@@ -40,13 +49,14 @@ type Props = {
 /** O código que a API manda quando o aviso explicado não está mais ativo. */
 const AVISO_SUMIU = 'aviso-nao-encontrado';
 
-const SOBRE = { tela: 'com os números desta tela', aviso: 'com os números deste aviso' } as const;
+const SOBRE = { tela: 'com os números desta tela', aviso: 'com os números deste aviso', revisao: 'com os números desta revisão' } as const;
+const DESTE = { tela: 'desta tela', aviso: 'deste aviso', revisao: 'desta revisão' } as const;
 
 function semMovimento(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-export function BlocoExplicacao({ id, estado, lia, sobre, nivel = 2, solto = false, acoes, podeVerContas, aoFechar, aoPedirDeNovo, aoAtualizar }: Props) {
+export function BlocoExplicacao({ id, estado, lia, sobre, nivel = 2, solto = false, acoes, podeVerContas, fixo = false, titulos, quando, aviso, aoFechar, aoPedirDeNovo, aoAtualizar }: Props) {
   const Bloco = solto ? 'div' : 'article';
   const Titulo = nivel === 2 ? 'h2' : 'h3';
   const caixa = useRef<HTMLElement | null>(null);
@@ -59,13 +69,14 @@ export function BlocoExplicacao({ id, estado, lia, sobre, nivel = 2, solto = fal
   const daLia = resposta ? ehDaLia(resposta) : lia;
 
   // A cada passo (lendo, pronta, falhou) o bloco entra na vista e o título recebe o foco: quem ouve a
-  // tela acompanha sem procurar.
+  // tela acompanha sem procurar. O bloco fixo já faz parte da tela: não puxa o foco nem a rolagem.
   useEffect(() => {
+    if (fixo) return;
     caixa.current?.scrollIntoView({ block: 'nearest', behavior: semMovimento() ? 'auto' : 'smooth' });
     titulo.current?.focus({ preventScroll: true });
-  }, [estado.tipo]);
+  }, [estado.tipo, fixo]);
 
-  const fechar = (
+  const fechar = !fixo && aoFechar && (
     <button className="btn btn--icon btn--sm btn--ghost" type="button" onClick={aoFechar} aria-label="Fechar a explicação">
       <Icone nome="x" />
     </button>
@@ -110,7 +121,7 @@ export function BlocoExplicacao({ id, estado, lia, sobre, nivel = 2, solto = fal
           <span className="esqueleto" />
           <span className="esqueleto esqueleto--curto" />
         </div>
-        {lia && <p className="explica-nota">A LIA recebe só os números {sobre === 'tela' ? 'desta tela' : 'deste aviso'}, já calculados pelo sistema, sem dado pessoal de cliente.</p>}
+        {lia && <p className="explica-nota">A LIA recebe só os números {DESTE[sobre]}, já calculados pelo sistema, sem dado pessoal de cliente.</p>}
       </Bloco>
     );
   }
@@ -124,10 +135,12 @@ export function BlocoExplicacao({ id, estado, lia, sobre, nivel = 2, solto = fal
         <div className="explica-aviso explica-aviso--neutro" role="alert">
           <Icone nome="alert-circle" />
           <div className="explica-aviso-txt">{mensagemDe(estado.problema)}</div>
-          <button className="btn btn--sm" type="button" onClick={sumiu ? aoAtualizar : aoPedirDeNovo}>
-            <Icone nome="refresh" pequeno />
-            {sumiu ? 'Atualizar os avisos' : 'Tentar de novo'}
-          </button>
+          {(sumiu || aoPedirDeNovo) && (
+            <button className="btn btn--sm" type="button" onClick={sumiu ? aoAtualizar : aoPedirDeNovo}>
+              <Icone nome="refresh" pequeno />
+              {sumiu ? 'Atualizar os avisos' : 'Tentar de novo'}
+            </button>
+          )}
         </div>
       </Bloco>
     );
@@ -136,15 +149,31 @@ export function BlocoExplicacao({ id, estado, lia, sobre, nivel = 2, solto = fal
   return (
     <Bloco className={classe} id={`exp-${id}`} ref={guardarCaixa} aria-labelledby={`exp-t-${id}`}>
       {daLia
-        ? cabecalho('Explicação da LIA', feitoComIa, `${SOBRE[sobre]} · ${quandoComHora(estado.resposta.generated_at)}`, true)
-        : cabecalho('Resumo do sistema', semIa, `montado por regra, ${SOBRE[sobre]}`, false)}
-      <Conteudo id={id} resposta={estado.resposta} nivel={nivel} acoes={acoes} podeVerContas={podeVerContas} aoPedirDeNovo={aoPedirDeNovo} />
+        ? cabecalho(titulos?.lia ?? 'Explicação da LIA', feitoComIa, `${SOBRE[sobre]} · ${quando ?? quandoComHora(estado.resposta.generated_at)}`, true)
+        : cabecalho(titulos?.sistema ?? 'Resumo do sistema', semIa, `montado por regra, ${SOBRE[sobre]}`, false)}
+      <Conteudo id={id} resposta={estado.resposta} nivel={nivel} acoes={acoes} podeVerContas={podeVerContas} aviso={aviso} aoPedirDeNovo={aoPedirDeNovo} />
     </Bloco>
   );
 }
 
 /** O corpo da explicação pronta: o aviso de "sem IA", o texto, as fontes dos números e o rodapé. */
-function Conteudo({ id, resposta, nivel, acoes, podeVerContas, aoPedirDeNovo }: { id: string; resposta: ExplanationResponse; nivel: 2 | 3; acoes: ReactNode; podeVerContas: boolean; aoPedirDeNovo: () => void }) {
+function Conteudo({
+  id,
+  resposta,
+  nivel,
+  acoes,
+  podeVerContas,
+  aviso: avisoDaTela,
+  aoPedirDeNovo,
+}: {
+  id: string;
+  resposta: ExplanationResponse;
+  nivel: 2 | 3;
+  acoes: ReactNode;
+  podeVerContas: boolean;
+  aviso: AvisoSemIa | null | undefined;
+  aoPedirDeNovo: (() => void) | undefined;
+}) {
   const Secao = nivel === 2 ? 'h3' : 'h4';
   const [fontesAbertas, setFontesAbertas] = useState(false);
   const [destaque, setDestaque] = useState<number | null>(null);
@@ -152,7 +181,8 @@ function Conteudo({ id, resposta, nivel, acoes, podeVerContas, aoPedirDeNovo }: 
   const linhas = useRef<Array<HTMLDivElement | null>>([]);
   const e = resposta.explanation;
   const daLia = ehDaLia(resposta);
-  const aviso = avisoSemIa(resposta);
+  // A tela que tem o próprio aviso de "sem IA" (a revisão da semana) manda o dela; as outras, o do Explicar.
+  const aviso = avisoDaTela !== undefined ? avisoDaTela : avisoSemIa(resposta);
   const selo = seloDoRisco(e.risk);
 
   // Tocar num número abre a lista na linha dele (e diz a fonte para quem ouve a tela).
@@ -176,7 +206,7 @@ function Conteudo({ id, resposta, nivel, acoes, podeVerContas, aoPedirDeNovo }: 
             <b>{aviso.titulo}</b>
             {aviso.texto}
           </div>
-          {aviso.acao === 'de-novo' && (
+          {aviso.acao === 'de-novo' && aoPedirDeNovo && (
             <button className="btn btn--sm" type="button" onClick={aoPedirDeNovo}>
               <Icone nome="refresh" pequeno />
               Tentar de novo com a LIA
