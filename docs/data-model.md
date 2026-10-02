@@ -157,9 +157,10 @@ Opt-in amarrado à **finalidade**. Opt-out vale na hora para envios pendentes. C
 | `budget_policy` | Limites por marca, conta e período |
 | `budget_ledger_entry` | `requested → reserved → executed → reported → actual_spend`, com lock por conta; orçamento configurado ≠ gasto real |
 | `autonomy_rule` | Modo por tenant, marca, conta, ferramenta, ação, valor e risco |
-| `readiness_snapshot` | Sinais do Readiness Score por conta × ferramenta |
-| `shadow_decision` | Recomendação, confiança, estado, ação humana, resultado posterior, `action_regret` |
-| `human_override` | Recomendada × executada, motivo |
+| `readiness_snapshot` | Sinais do índice de prontidão por conta × ferramenta, um retrato por dia: amostra comparável, concordância com a pessoa, parte em que teria piorado, soma do arrependimento, confiança média e o que falta para propor a promoção (0030) |
+| `shadow_decision` | Recomendação em sombra (ferramenta, regra e versão, parâmetros), confiança, retrato do estado, janela olhada, ação da pessoa vista pela leitura diária, resultado posterior e `action_regret_micros` com o rótulo; uma em aberto por campanha (0030) |
+| `shadow_state` | A vez de cada marca na rotina da sombra: último dia rodado e quando volta (0030) |
+| `human_override` | Quando a pessoa discorda na tela: recomendada × executada, código do motivo e texto; a pessoa grava só em nome dela (0030; a rota chega com a tela Sua equipe) |
 | `kill_switch` | Nível (global, provider, tenant, marca, conta, ferramenta), escopo, quem, quando |
 | `feature_flag` / `flag_override` | Flags por ambiente, plano, tenant, marca, conta, usuário |
 

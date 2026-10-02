@@ -12,6 +12,9 @@ import { ActionExecutor } from './action-executor.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
+import { ResultsService } from '../results/results.service.js';
+import { SombraLoop } from './sombra-loop.js';
+import { SombraService } from './sombra.service.js';
 import { eventoDoRegem, VendasLoop } from './vendas-loop.js';
 import { VigiaService } from './vigia.service.js';
 import { EventsLoopService } from './events-loop.service.js';
@@ -45,6 +48,10 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ConexaoProcessor,
     SincronizacaoLoop,
     VendasLoop,
+    // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.
+    ResultsService,
+    SombraService,
+    SombraLoop,
     VigiaService,
     EventsLoopService,
     QueueService,

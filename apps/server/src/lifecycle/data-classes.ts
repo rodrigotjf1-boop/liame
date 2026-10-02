@@ -102,4 +102,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   prompt_version: { class: 'INTERNAL', retention: 'do produto (histórico das versões)' },
   agent_definition: { class: 'INTERNAL', retention: 'do produto (histórico das versões)' },
   agent_activation: { class: 'INTERNAL', retention: 'com a empresa' },
+  // Sombra de verdade (A3, I5): o que o Liame recomendaria em anúncio, o que a pessoa fez e o resultado
+  // (dados de campanha, sem cliente); o motivo de quem discorda é da pessoa.
+  shadow_decision: { class: 'CONFIDENTIAL', retention: 'com a campanha e a conta conectada' },
+  shadow_state: { class: 'INTERNAL', retention: 'com a marca' },
+  readiness_snapshot: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  human_override: { class: 'PERSONAL', retention: 'com a empresa (quem discordou e o motivo)' },
 };
