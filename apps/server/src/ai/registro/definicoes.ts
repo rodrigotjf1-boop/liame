@@ -2,6 +2,7 @@ import type { RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { TOOLS } from '../../actions/tools.js';
 import { canonicalJson, sha256 } from '../../audit/audit.js';
+import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
 import { LEITURAS } from './leituras.defs.js';
 
 // Registros da IA (arquitetura §3, `ai-architecture.md` §1 e §8): ferramenta, prompt e funcionário são
@@ -43,9 +44,12 @@ export interface FuncionarioDef {
   ativoPorPadrao: boolean;
 }
 
-/** Os prompts e os funcionários entram com o primeiro uso real de cada um (o Analista, na I4). */
-export const PROMPTS: PromptDef[] = [];
-export const FUNCIONARIOS: FuncionarioDef[] = [];
+/**
+ * Os prompts e os funcionários entram com o primeiro uso real de cada um. Estar aqui não põe ninguém para
+ * trabalhar: sem rota de modelo ativa para a tarefa (publicada só depois do eval, I3), a tela usa o texto sem IA.
+ */
+export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS];
+export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA];
 
 /** Todas as ferramentas: as de escrita (Action Service) e as de leitura dos funcionários de IA. */
 export function ferramentas(): FerramentaDef[] {

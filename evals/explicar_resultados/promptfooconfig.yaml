@@ -1,0 +1,15 @@
+# Eval da tarefa `explicar_resultados` (A3, I3; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto e o formato da resposta são os do
+# servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do servidor (apoio/conferir.mjs).
+# Rodar: ver evals/README.md.
+description: 'Liame · explicar_resultados: número só do contexto, injeção, formato e risco'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: explicar_resultados
+
+tests: file://testes.mjs

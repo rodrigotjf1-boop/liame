@@ -109,6 +109,34 @@ jobs:
       - name: Testes, verificação das dependências e do rastreio
         run: pnpm test
 
+      # Evals (A3, I3; evals/README.md): o caminho do promptfoo e o portão, com as respostas gravadas nos
+      # casos. Sem chave de fornecedor e sem custo: prova que a resposta boa aprova e que a ruim reprova.
+      - name: Evals em modo gravado (promptfoo 0.123.1) - as respostas boas aprovam
+        env:
+          PROMPTFOO_DISABLE_TELEMETRY: '1'
+          PROMPTFOO_DISABLE_UPDATE: '1'
+          PROMPTFOO_FAILED_TEST_EXIT_CODE: '0'
+        run: |
+          cd evals/explicar_resultados
+          npx --yes promptfoo@0.123.1 eval -c promptfooconfig.yaml --no-cache --no-progress-bar --no-table -o "$RUNNER_TEMP/eval-boa.json"
+          cd ../..
+          node evals/apoio/portao.mjs "$RUNNER_TEMP/eval-boa.json"
+
+      - name: Evals em modo gravado - o portão reprova as respostas ruins
+        env:
+          PROMPTFOO_DISABLE_TELEMETRY: '1'
+          PROMPTFOO_DISABLE_UPDATE: '1'
+          PROMPTFOO_FAILED_TEST_EXIT_CODE: '0'
+          EVAL_GRAVADO: ruim
+        run: |
+          cd evals/explicar_resultados
+          npx --yes promptfoo@0.123.1 eval -c promptfooconfig.yaml --no-cache --no-progress-bar --no-table -o "$RUNNER_TEMP/eval-ruim.json"
+          cd ../..
+          if node evals/apoio/portao.mjs "$RUNNER_TEMP/eval-ruim.json"; then
+            echo "o portão aprovou respostas que deveria reprovar"
+            exit 1
+          fi
+
   seguranca:
     name: segurança e cadeia de suprimentos
     runs-on: ubuntu-24.04

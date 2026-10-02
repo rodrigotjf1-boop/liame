@@ -3,7 +3,6 @@ import { resolve } from 'node:path';
 import { type Database, runMigrations, withContext } from '@liame/database';
 import { trace } from '@opentelemetry/api';
 import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { APICallError } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,39 +19,12 @@ import { Mailer } from '../../src/mail/mailer.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { LifecyclePurgeService } from '../../src/worker/lifecycle-purge.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import { ligarIa, ModelosDeTeste, modeloComPreco, recusa, type RefDeModelo, responde, rotaAtiva, uso } from '../helpers/ia.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // Os spans do gateway caem aqui: o teste confere que só levam dado técnico (A3-3).
 const spans = new InMemorySpanExporter();
 trace.setGlobalTracerProvider(new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(spans)] }));
-
-/** Os modelos do teste: simulados, por `fornecedor/modelo`; o que não está aqui fica "sem credencial". */
-class ModelosDeTeste extends ModelosIa {
-  constructor(
-    config: AppConfig,
-    readonly porChave = new Map<string, MockLanguageModelV4>(),
-  ) {
-    super(config);
-  }
-  override modelo(provider: string, model: string) {
-    return this.porChave.get(`${provider}/${model}`) ?? null;
-  }
-}
-
-const uso = (input: number, output: number, cacheRead?: number, cacheWrite?: number) => ({
-  inputTokens: { total: input + (cacheRead ?? 0) + (cacheWrite ?? 0), noCache: input, cacheRead, cacheWrite },
-  outputTokens: { total: output, text: output, reasoning: undefined },
-});
-const responde = (text: string, u = uso(1000, 500)) =>
-  new MockLanguageModelV4({
-    doGenerate: async () => ({ content: [{ type: 'text' as const, text }], finishReason: { unified: 'stop' as const, raw: undefined }, usage: u, warnings: [] }),
-  });
-const recusa = (statusCode: number) =>
-  new MockLanguageModelV4({
-    doGenerate: async () => {
-      throw new APICallError({ message: 'recusado', url: 'https://fornecedor.test', requestBodyValues: {}, statusCode, isRetryable: false });
-    },
-  });
 
 describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e funcionamento sem IA (A3, I1)', () => {
   const RODADA = `teste_${randomBytes(4).toString('hex')}`;
@@ -70,41 +42,13 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     const s = await signupAndLogin(api, undefined, company);
     await enableMfa(api, s.cookie);
     const d = { cookie: s.cookie, tenantId: s.me.active_organization_id as string, userId: s.me.user.id as string };
-    if (ligada) {
-      await ownerQuery(
-        `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), 'ia', 'tenant', $1, 'true'::jsonb, 'testes')`,
-        [d.tenantId],
-      );
-      flags.invalidate();
-    }
+    if (ligada) await ligarIa(flags, d.tenantId);
     return d;
   }
 
-  /** Modelo simulado com preço na tabela (US$ por milhão: 4 de entrada, 20 de saída; o econômico, 1 e 5). */
-  async function modelo(mock: MockLanguageModelV4, barato = false, provider = 'teste'): Promise<{ provider: string; model: string; mock: MockLanguageModelV4 }> {
-    const model = `${RODADA}_${randomBytes(3).toString('hex')}`;
-    await ownerQuery(
-      `insert into liame.ai_model_price (id, provider, model, valid_from, input_usd_micros_per_mtok, output_usd_micros_per_mtok, cache_read_usd_micros_per_mtok,
-                                         cache_write_5m_usd_micros_per_mtok, cache_write_1h_usd_micros_per_mtok, source, checked_on)
-       values (gen_random_uuid(), $1, $2, current_date - 1, $3, $4, $5, $6, $7, 'teste automatizado', current_date)`,
-      barato ? [provider, model, 1_000_000, 5_000_000, 100_000, 1_250_000, 2_000_000] : [provider, model, 4_000_000, 20_000_000, 200_000, 5_000_000, 8_000_000],
-    );
-    modelos.porChave.set(`${provider}/${model}`, mock);
-    return { provider, model, mock };
-  }
-
-  type Ref = { provider: string; model: string };
+  const modelo = (mock: MockLanguageModelV4, barato = false, provider = 'teste') => modeloComPreco(modelos, RODADA, mock, barato, provider);
   /** Rota ativa só deste teste (o banco é compartilhado: a tarefa é única por rodada). */
-  async function rota(principal: Ref, extra: { reserva?: Ref[]; economico?: Ref; timeoutMs?: number; effort?: string; maxCost?: number } = {}): Promise<string> {
-    const task = `${RODADA}_${randomBytes(3).toString('hex')}`;
-    await ownerQuery(
-      `insert into liame.ai_model_route (id, task, version, status, purpose, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros, fallback,
-                                         economy_provider, economy_model, created_by, deployed_at)
-       values (gen_random_uuid(), $1, 3, 'ativa', 'analise', $2, $3, $4, 4000, $5, $6, $7::jsonb, $8, $9, 'testes', now())`,
-      [task, principal.provider, principal.model, extra.effort ?? null, extra.timeoutMs ?? 30_000, extra.maxCost ?? 200_000, JSON.stringify(extra.reserva ?? []), extra.economico?.provider ?? null, extra.economico?.model ?? null],
-    );
-    return task;
-  }
+  const rota = (principal: RefDeModelo, extra: Parameters<typeof rotaAtiva>[2] = {}) => rotaAtiva(`${RODADA}_${randomBytes(3).toString('hex')}`, principal, extra);
 
   /** Gateway com a configuração de IA do teste (os modelos simulados são os mesmos). */
   const gateway = (ai: Partial<AppConfig['ai']> = {}) => {
