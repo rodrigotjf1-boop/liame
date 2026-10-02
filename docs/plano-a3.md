@@ -80,6 +80,8 @@ Sem protótipo aprovado não se inventa tela (`CLAUDE.md` §2). As vistas do pro
 | P8 | **Resumo** (página inicial do Lite) e **Plano do Estrategista** | Sem dados ainda; semana normal; algo precisa de você; plano para aprovar, editar ou recusar |
 
 > **P4 aprovado pelo dono em 02/10/2026:** `mockups/prototipo-explicar.html`, com os seletores "Tela" (Resultados, Atenção, Revisão semanal) e "Explicação" (os estados) na faixa do topo. A aprovação libera a rota e a tela do Explicar (I4) e a revisão semanal (I7). As escolhas aprovadas estão no changelog de `decisoes-design.md`; **segue em aberto para onde leva "Falar com uma pessoa"**.
+>
+> **P5 pronto para a aprovação do dono (02/10/2026):** `mockups/prototipo-conversa.html`, com o seletor "Conversa" (24 estados) na faixa do topo. A conversa é o painel da LIA do modelo aprovado (ao lado da tela, por cima dela ou em tela cheia), aberto por "Conversa" no menu, pelo botão do topo e por Ctrl J. As escolhas propostas estão no changelog de `decisoes-design.md`. **A confirmar: para onde leva "Falar com uma pessoa"** (o protótipo propõe o e-mail do atendimento, mostrado na própria conversa). Sem a aprovação, a I10 não tem código de tela.
 
 ## 6. Critérios de saída da A3
 
@@ -119,7 +121,7 @@ Fornecedor novo de verdade: **Anthropic** (suboperador, Estados Unidos). Reimpor
 
 - **Reconferir na fonte oficial:** §10 (lista de modelos e preços: a tabela é de 24/06/2026 e já há modelo mais novo; ids exatos, limites e o que cada um aceita); §14.1 (versão atual do AI SDK, do promptfoo e do SDK da Anthropic; cache de prompt e lote); o estado do padrão `gen_ai.*` do OpenTelemetry.
 - **Pesquisar e registrar com [O]:** termos de dados da Anthropic para API (sem treino, prazo de guarda, opção de guarda zero, região de processamento); preço e limites de uso por nível de conta; LGPD art. 20 e orientação da ANPD sobre decisão automatizada e IA; Res. TSE 23.755/2026 (texto do art. 28 §1º-C) para a regra do Compliance; OWASP LLM e Agentic Top 10 na versão vigente.
-- **Atualizar a §16.1** (como produtos de marketing mostram agentes) antes dos protótipos P5 e P7.
+- **Atualizar a §16.1** (como produtos de marketing mostram agentes) antes dos protótipos P5 e P7. *Feito para o P5 em 02/10/2026 (conversa com o assistente); falta a parte do P7 (equipe e prontidão).*
 
 ## 9. O que depende de você
 
