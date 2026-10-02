@@ -7,9 +7,11 @@ import type { Explicacao } from './resposta.js';
 // código, olhando o contexto que ele mesmo montou: a IA não escreve fonte nenhuma. O mesmo vale para o
 // resumo do sistema. O número é procurado pelo valor E pelo que ele mede (dinheiro, porcentagem, dias,
 // data, número com casas, contagem): "7 dias" não ganha a fonte de "7 pedidos", nem "7 pedidos" a de um
-// ROAS de 7,00. A frase que cita uma campanha fala dela; a que não cita, não fala de campanha nenhuma.
-// Quando o mesmo valor ainda está em mais de um lugar, a lista leva os lugares, do mais específico para o
-// mais geral, sem adivinhar qual deles a frase quis dizer.
+// ROAS de 7,00. A frase que cita uma campanha fala dela; a que não cita, não fala de campanha nenhuma. O
+// número que está no texto do aviso é do aviso: não ganha a fonte de um parâmetro geral que só tem o mesmo
+// valor (o "7 dias" do aviso não é a janela de 7 dias do modelo de atribuição). Quando o mesmo valor ainda
+// está em mais de um lugar, a lista leva os lugares, do mais específico para o mais geral, sem adivinhar
+// qual deles a frase quis dizer. Cada fato entra uma vez só: o "agora" da comparação é o total do período.
 
 /** Um trecho do texto: comum, ou um número com a posição dele na lista de fontes. */
 export interface TrechoMarcado {
@@ -160,11 +162,11 @@ function lugaresDoContexto(c: ContextoComAviso): Map<string, Lugar[]> {
     por(x.janela, `${nome} · janela de atribuição da plataforma`, ORDEM.geral);
   };
 
-  // O aviso que está sendo explicado: o número está no próprio texto do aviso. E os resultados que o
-  // acompanham são os dos últimos dias completos.
+  // O aviso que está sendo explicado: o número está no próprio texto do aviso. De quando são os resultados
+  // que o acompanham é um parâmetro geral, como o período e a janela do modelo.
   if (c.aviso) {
     for (const texto of [c.aviso.titulo, c.aviso.detalhe, c.aviso.o_que_fazer]) por(texto, 'Aviso da Atenção · o número está no texto do aviso', ORDEM.aviso);
-    por(c.aviso.resultados_de, `Liame · os resultados que acompanham o aviso são dos ${c.aviso.resultados_de}`, ORDEM.aviso);
+    por(c.aviso.resultados_de, `Liame · os resultados que acompanham o aviso são dos ${c.aviso.resultados_de}`, ORDEM.geral);
   }
 
   // Período e modelo.
@@ -211,9 +213,10 @@ function lugaresDoContexto(c: ContextoComAviso): Map<string, Lugar[]> {
     const antes = a.de && a.ate ? `${a.de} a ${a.ate}` : 'período anterior';
     por(a.de, 'Período anterior, usado na comparação', ORDEM.geral);
     por(a.ate, 'Período anterior, usado na comparação', ORDEM.geral);
-    const comparado = (x: { antes: string | null; agora: string | null; variacao: string | null }, origem: string, oque: string) => {
+    // O "agora" de cada comparação é o próprio total do período, que já tem o lugar dele (acima, com a
+    // origem e a hora da leitura): repetir aqui daria duas linhas para o mesmo fato.
+    const comparado = (x: { antes: string | null; variacao: string | null }, origem: string, oque: string) => {
       por(x.antes, `${origem} · ${oque} no período anterior · ${antes}`, ORDEM.comparacao);
-      por(x.agora, `${origem} · ${oque}${periodo}`, ORDEM.comparacao);
       por(x.variacao, doLiame(`variação de ${oque} sobre o período anterior (${antes})`), ORDEM.comparacao);
     };
     comparado(c.comparacao.investimento, asPlataformas, 'investimento em anúncios');
@@ -279,13 +282,17 @@ export function marcarNumeros(e: Explicacao, contexto: ContextoComAviso): Explic
     /**
      * As fontes de um número nesta frase. Com o número entre os da campanha que a frase cita, são as dela
      * (a frase fala da campanha). Senão, as que não são de campanha nenhuma (o total, a plataforma, a
-     * comparação, o aviso). Só na falta das duas valem os lugares de outras campanhas.
+     * comparação, o aviso). Só na falta das duas valem os lugares de outras campanhas. E o número que está
+     * no texto do aviso não leva o parâmetro geral de mesmo valor (período, janela do modelo, hora da
+     * leitura): aí é coincidência, não fonte.
      */
     const fontesDe = (todos: Lugar[] | undefined): string[] => {
       if (!todos?.length) return [SEM_LUGAR];
       const daCampanhaCitada = todos.filter((l) => l.campanha !== undefined && citadas.includes(l.campanha));
       const semCampanha = todos.filter((l) => l.campanha === undefined);
-      const daFrase = daCampanhaCitada.length ? daCampanhaCitada : semCampanha.length ? semCampanha : todos;
+      const doAviso = semCampanha.some((l) => l.ordem === ORDEM.aviso);
+      const foraDeCampanha = doAviso ? semCampanha.filter((l) => l.ordem !== ORDEM.geral) : semCampanha;
+      const daFrase = daCampanhaCitada.length ? daCampanhaCitada : foraDeCampanha.length ? foraDeCampanha : todos;
       return daFrase.slice(0, FONTES_POR_NUMERO).map((l) => l.descricao);
     };
     let fim = 0;

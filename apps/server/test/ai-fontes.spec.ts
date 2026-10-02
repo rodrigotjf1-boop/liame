@@ -67,12 +67,11 @@ describe('de onde vem cada número: quem diz é o código', () => {
   it('cada número do contexto tem o lugar dele, com a origem, o período e a hora da leitura', () => {
     const i = indiceDasFontes(contexto());
     // O mesmo valor em dois lugares do contexto leva os dois, do mais específico (a plataforma) para o mais
-    // geral (o total); a mesma descrição não se repete (o total e o "agora" da comparação são a mesma).
+    // geral (o total). O "agora" da comparação é o próprio total: não vira uma segunda linha do mesmo fato.
     expect(i.get('dinheiro|960')).toEqual(['Meta · investimento da Meta · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 06:12', 'Meta · investimento em anúncios · 25/09/2026 a 01/10/2026']);
     expect(i.get('numero|38')).toEqual([
       'Regem · pedidos confirmados com origem na Meta · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05',
       'Regem · pedidos confirmados com origem provada em campanha · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05',
-      'Regem · pedidos com origem provada · 25/09/2026 a 01/10/2026',
     ]);
     expect(i.get('decimal|2.6')?.[1]).toBe('Liame · ROAS confirmado no caixa com origem provada em campanha (receita confirmada ÷ investimento) · calculado pelo sistema');
     expect(i.get('decimal|12.56')).toEqual(['Meta · ROAS que a plataforma informa da Meta, na janela de 7 dias depois do clique · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 06:12']);
@@ -162,12 +161,38 @@ describe('de onde vem cada número: quem diz é o código', () => {
         fontes: [
           'Regem · receita confirmada com origem na Meta · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05',
           'Regem · receita confirmada com origem provada em campanha · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05',
-          'Regem · receita com origem provada · 25/09/2026 a 01/10/2026',
         ],
       },
     ]);
     // Os dois "7" soltos são linhas diferentes da lista: cada um aponta para a sua.
     expect(m.o_que_aconteceu.filter((t) => t.numero !== null).map((t) => [t.texto, t.numero])).toEqual([['7', 0], ['R$ 7,00', 1], ['7', 2]]);
+  });
+
+  it('o "agora" da comparação é o total do período: tem a fonte do total, e não uma segunda linha do mesmo fato', () => {
+    const c = contexto();
+    const cmp = c.comparacao!;
+    const agora = [cmp.investimento, cmp.pedidos_confirmados, cmp.receita_confirmada, cmp.pedidos_com_origem, cmp.receita_com_origem, cmp.roas_confirmado].map((x) => x.agora);
+    expect(agora).toEqual(['R$ 960,00', '1.250', 'R$ 81.250,00', '38', 'R$ 2.496,00', '2,60']);
+    const m = marcarNumeros(
+      { o_que_aconteceu: `Agora: ${agora[0]}, ${agora[1]} pedidos, ${agora[2]}, ${agora[3]} pedidos, ${agora[4]} e ROAS de ${agora[5]}.`, motivos: ['Sem número.'], risco: 'baixo', risco_motivo: 'sem número.', o_que_fazer: ['Nada.'] },
+      c,
+    );
+    // Nenhum fica sem lugar: quem responde por cada um é o total (e a plataforma, quando o valor é o mesmo).
+    expect(m.numeros.map((n) => n.valor)).toEqual(agora);
+    expect(m.numeros.flatMap((n) => n.fontes)).not.toContain('Liame · dado do período desta tela');
+    expect(m.numeros[3]!.fontes).toEqual([
+      'Regem · pedidos confirmados com origem na Meta · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05',
+      'Regem · pedidos confirmados com origem provada em campanha · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05',
+    ]);
+    // O total de pedidos foi o mesmo nos dois períodos: aí sim são dois lugares, o de agora e o de antes.
+    expect(m.numeros[1]!.fontes).toEqual([
+      'Regem · todos os pedidos confirmados no caixa · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05',
+      'Regem · todos os pedidos confirmados no período anterior · 18/09/2026 a 24/09/2026',
+    ]);
+    // A comparação responde pelo que só ela tem: o valor de antes e a variação.
+    const descricoes = [...indiceDasFontes(c).values()].flat();
+    expect(descricoes.filter((d) => d.includes('no período anterior ·'))).toHaveLength(6);
+    expect(descricoes.filter((d) => d.startsWith('Regem · pedidos com origem provada ·') || d.startsWith('Regem · receita com origem provada ·'))).toEqual([]);
   });
 
   it('marca cada número do texto, puxa o "R$" e o "%" para dentro do valor e não repete a linha', () => {
@@ -265,13 +290,28 @@ describe('explicar um aviso da Atenção', () => {
     const m = marcarNumeros(e, c);
     expect(m.numeros.map((n) => n.valor)).toEqual(['7', nbsp('R$ 279,80'), '25/09/2026', '01/10/2026', 'R$ 700,00', '30', 'R$ 1.980,00']);
     expect(m.numeros[1]!.fontes).toEqual(['Aviso da Atenção · o número está no texto do aviso']);
-    // O "7 dias" do aviso é, antes de tudo, o do aviso e o dos resultados que o acompanham; a janela de atribuição vem depois.
-    expect(m.numeros[0]!.fontes).toEqual([
-      'Aviso da Atenção · o número está no texto do aviso',
-      'Liame · os resultados que acompanham o aviso são dos últimos 7 dias completos',
-      'Liame · janela do modelo de atribuição, em dias',
-    ]);
+    // O "7 dias" do aviso é do aviso: a janela de 7 dias do modelo de atribuição e a das plataformas têm o
+    // mesmo valor por coincidência, e não entram como fonte dele.
+    expect(m.numeros[0]!.fontes).toEqual(['Aviso da Atenção · o número está no texto do aviso']);
     expect(m.o_que_aconteceu[0]).toEqual({ texto: 'O cupom SMASH10 não teve nenhum uso em ', numero: null });
+  });
+
+  it('o "7 dias" que não está no texto do aviso é parâmetro geral: os resultados do aviso e as janelas de atribuição', () => {
+    // O aviso da plataforma × caixa fala em dinheiro; quem escreve "7 dias" é a explicação.
+    const semDias = { ...item, kind: 'plataforma_x_caixa', severity: 'info', title: nbsp('A Meta informa R$ 12.060,00 em vendas; no caixa, o Liame confirmou R$ 2.496,00'), detail: 'A plataforma conta pela janela dela; o Liame conta só o pedido com prova.', action: 'Use o número confirmado para decidir.' };
+    const c: ContextoDoAviso = { aviso: avisoNoContexto(semDias, null), ...contexto() };
+    const m = marcarNumeros(
+      { o_que_aconteceu: nbsp('Nos últimos 7 dias completos, a Meta informa R$ 12.060,00 em vendas.'), motivos: ['Sem número.'], risco: 'baixo', risco_motivo: 'sem número.', o_que_fazer: ['Nada.'] },
+      c,
+    );
+    expect(m.numeros).toEqual([
+      { valor: '7', fontes: ['Liame · os resultados que acompanham o aviso são dos últimos 7 dias completos', 'Liame · janela do modelo de atribuição, em dias', 'Meta · janela de atribuição da plataforma'] },
+      // O dinheiro do aviso é o mesmo fato que a plataforma informa: o aviso primeiro, e a leitura de onde ele saiu.
+      {
+        valor: nbsp('R$ 12.060,00'),
+        fontes: ['Aviso da Atenção · o número está no texto do aviso', 'Meta · valor de venda que a plataforma informa da Meta, na janela de 7 dias depois do clique · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 06:12'],
+      },
+    ]);
   });
 
   it('a hora solta do texto do aviso fica como texto: não é um valor com fonte', () => {

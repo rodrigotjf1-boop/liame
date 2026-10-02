@@ -315,9 +315,10 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(contexto.resultado.periodo).toMatchObject(janela);
     expect(contexto.resultado.campanhas).toMatchObject([{ campanha: 'Delivery noite', plataforma_informa: { investimento: 'R$ 80,00' }, caixa_confirma: { pedidos: '0' } }]);
 
-    // O "7 dias" está no texto do aviso; os R$ 80,00, também na campanha citada. O código do cupom não é número.
+    // O "7 dias" está no texto do aviso, e é dele (a janela de 7 dias do modelo de atribuição só tem o mesmo
+    // valor); os R$ 80,00, também na campanha citada. O código do cupom não é número.
     expect(r.marcada.numeros).toEqual([
-      { valor: '7', fontes: ['Aviso da Atenção · o número está no texto do aviso', 'Liame · os resultados que acompanham o aviso são dos últimos 7 dias completos', 'Liame · janela do modelo de atribuição, em dias'] },
+      { valor: '7', fontes: ['Aviso da Atenção · o número está no texto do aviso'] },
       // A frase cita a campanha: a fonte é o número dela nos 7 dias completos (o mesmo do aviso).
       { valor: 'R$ 80,00', fontes: [expect.stringContaining(`Meta · investimento da campanha "Delivery noite" · ${janela.de} a ${janela.ate} · lido em `)] },
     ]);
