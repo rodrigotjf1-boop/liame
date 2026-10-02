@@ -81,6 +81,7 @@ describe('atenção de mídia', () => {
       connected_account_id: null,
       campaign_id: null,
       provider: null,
+      brand_id: null,
       ...o,
     });
     const cartao = (item: AttentionItem, podeVerVendas = true) =>

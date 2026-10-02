@@ -199,113 +199,121 @@ export class AtencaoCicloService {
     const primeiroDia = <T>(serie: Map<string, T> | undefined) => (serie?.size ? [...serie.keys()].sort()[0]! : null);
 
     const itens: ItemCiclo[] = [];
+    // A marca de cada aviso: é com ela que a tela pede a explicação (I4). Os avisos saem das regras sem
+    // marca; aqui cada um fica com a da volta em que nasceu.
+    const marcaDoAviso = new Map<ItemCiclo, string>();
     for (const marca of marcas) {
-      const lojasDaMarca = lojas.rows.filter((l) => l.brand_id === marca);
-      const campanhasDaMarca = campanhas.rows.filter((c) => c.brand_id === marca);
-      if (!lojasDaMarca.length) {
-        if (comMidia.has(marca) && !itens.some((i) => i.kind === 'vendas_nao_conectadas')) itens.push(avisoSemRegem());
-        continue;
-      }
+      const inicio = itens.length;
+      try {
+        const lojasDaMarca = lojas.rows.filter((l) => l.brand_id === marca);
+        const campanhasDaMarca = campanhas.rows.filter((c) => c.brand_id === marca);
+        if (!lojasDaMarca.length) {
+          if (comMidia.has(marca) && !itens.some((i) => i.kind === 'vendas_nao_conectadas')) itens.push(avisoSemRegem());
+          continue;
+        }
 
-      // Fonte das vendas e como cada loja mede.
-      const plataformas = new Set<string>();
-      for (const l of lojasDaMarca) {
-        const loja = { id: l.id, nome: l.unit_name ?? l.name };
-        itens.push(...avisosDaFonte({ ...loja, status: l.status, statusReason: l.status_reason, fuso: l.timezone, pedidosLidosEm: l.pedidos_lidos_em }, agora));
-        // Vendas de ontem fora do normal: só com os pedidos lidos hoje (dado velho não gera aviso).
-        const fusoDaLoja = l.timezone ?? FUSO_PADRAO;
-        if (l.status === 'ativa' && l.pedidos_lidos_em && lidaHoje(l.pedidos_lidos_em, agora, fusoDaLoja)) {
-          const serie = serieDaLoja.get(l.id) ?? new Map<string, VendasDoDia>();
-          const aviso = avisoVendasForaDoNormal({ ...loja, fuso: fusoDaLoja, lidoEm: l.pedidos_lidos_em, desde: primeiroDia(serie), porDia: serie }, menosDias(diaNoFuso(agora, fusoDaLoja), 1));
-          if (aviso) itens.push(aviso);
+        // Fonte das vendas e como cada loja mede.
+        const plataformas = new Set<string>();
+        for (const l of lojasDaMarca) {
+          const loja = { id: l.id, nome: l.unit_name ?? l.name };
+          itens.push(...avisosDaFonte({ ...loja, status: l.status, statusReason: l.status_reason, fuso: l.timezone, pedidosLidosEm: l.pedidos_lidos_em }, agora));
+          // Vendas de ontem fora do normal: só com os pedidos lidos hoje (dado velho não gera aviso).
+          const fusoDaLoja = l.timezone ?? FUSO_PADRAO;
+          if (l.status === 'ativa' && l.pedidos_lidos_em && lidaHoje(l.pedidos_lidos_em, agora, fusoDaLoja)) {
+            const serie = serieDaLoja.get(l.id) ?? new Map<string, VendasDoDia>();
+            const aviso = avisoVendasForaDoNormal({ ...loja, fuso: fusoDaLoja, lidoEm: l.pedidos_lidos_em, desde: primeiroDia(serie), porDia: serie }, menosDias(diaNoFuso(agora, fusoDaLoja), 1));
+            if (aviso) itens.push(aviso);
+          }
+          if (!comMidia.has(marca)) continue;
+          if (!l.order_platform) itens.push(avisoPlataformaNaoInformada(loja));
+          else if (l.order_platform === 'regem' || plataformaIntegrada(l.order_platform)) plataformas.add(l.order_platform);
+          else itens.push(avisoVendasNaoMedidas(loja, l.order_platform));
         }
         if (!comMidia.has(marca)) continue;
-        if (!l.order_platform) itens.push(avisoPlataformaNaoInformada(loja));
-        else if (l.order_platform === 'regem' || plataformaIntegrada(l.order_platform)) plataformas.add(l.order_platform);
-        else itens.push(avisoVendasNaoMedidas(loja, l.order_platform));
-      }
-      if (!comMidia.has(marca)) continue;
 
-      const cuponsDaMarca = cupons.rows.filter((c) => c.brand_id === marca);
-      const comCupom = new Set(cuponsDaMarca.map((c) => c.campaign_id));
-      const pedidosDaCampanha = new Map<string, number>();
-      for (const c of caixa.rows) if (c.brand_id === marca && c.campaign_id) pedidosDaCampanha.set(c.campaign_id, (pedidosDaCampanha.get(c.campaign_id) ?? 0) + Number(c.n));
+        const cuponsDaMarca = cupons.rows.filter((c) => c.brand_id === marca);
+        const comCupom = new Set(cuponsDaMarca.map((c) => c.campaign_id));
+        const pedidosDaCampanha = new Map<string, number>();
+        for (const c of caixa.rows) if (c.brand_id === marca && c.campaign_id) pedidosDaCampanha.set(c.campaign_id, (pedidosDaCampanha.get(c.campaign_id) ?? 0) + Number(c.n));
 
-      // Loja no cardápio do Regem: os anúncios ativos precisam dos parâmetros; a campanha medida pelo clique
-      // que gastou e não vendeu vira aviso.
-      if (plataformas.has('regem')) {
-        const rastreio = await this.links.rastreioPorCampanha(marca, agora);
-        const comAnuncioSemRastreio = [...rastreio.campanhas.values()].filter((c) => c.semRastreio > 0).length;
-        const aviso = avisoAnunciosSemRastreio(rastreio.resumo.without_tracking, comAnuncioSemRastreio);
-        if (aviso) itens.push(aviso);
-        for (const c of campanhasDaMarca) {
-          if (!campanhaAtiva.has(c.id)) continue;
-          const semPedido = avisoCampanhaSemPedido({
-            id: c.id,
-            name: c.name,
-            provider: c.provider,
-            connectedAccountId: c.conta,
-            gastoMicros: BigInt(c.gasto),
-            pedidos: pedidosDaCampanha.get(c.id) ?? 0,
-            anunciosComRastreio: rastreio.campanhas.get(c.id)?.comRastreio ?? 0,
-            temCupomExclusivo: comCupom.has(c.id),
-          });
-          if (semPedido) itens.push(semPedido);
+        // Loja no cardápio do Regem: os anúncios ativos precisam dos parâmetros; a campanha medida pelo clique
+        // que gastou e não vendeu vira aviso.
+        if (plataformas.has('regem')) {
+          const rastreio = await this.links.rastreioPorCampanha(marca, agora);
+          const comAnuncioSemRastreio = [...rastreio.campanhas.values()].filter((c) => c.semRastreio > 0).length;
+          const aviso = avisoAnunciosSemRastreio(rastreio.resumo.without_tracking, comAnuncioSemRastreio);
+          if (aviso) itens.push(aviso);
+          for (const c of campanhasDaMarca) {
+            if (!campanhaAtiva.has(c.id)) continue;
+            const semPedido = avisoCampanhaSemPedido({
+              id: c.id,
+              name: c.name,
+              provider: c.provider,
+              connectedAccountId: c.conta,
+              gastoMicros: BigInt(c.gasto),
+              pedidos: pedidosDaCampanha.get(c.id) ?? 0,
+              anunciosComRastreio: rastreio.campanhas.get(c.id)?.comRastreio ?? 0,
+              temCupomExclusivo: comCupom.has(c.id),
+            });
+            if (semPedido) itens.push(semPedido);
+          }
         }
-      }
-      // Loja em plataforma de pedidos integrada: cada campanha ativa precisa de um cupom exclusivo.
-      const integrada = [...plataformas].find(plataformaIntegrada);
-      if (integrada) {
-        const semCupom = campanhasDaMarca.filter((c) => campanhaAtiva.has(c.id) && !comCupom.has(c.id)).length;
-        const aviso = avisoCampanhasSemCupom(semCupom, integrada);
-        if (aviso) itens.push(aviso);
-      }
+        // Loja em plataforma de pedidos integrada: cada campanha ativa precisa de um cupom exclusivo.
+        const integrada = [...plataformas].find(plataformaIntegrada);
+        if (integrada) {
+          const semCupom = campanhasDaMarca.filter((c) => campanhaAtiva.has(c.id) && !comCupom.has(c.id)).length;
+          const aviso = avisoCampanhasSemCupom(semCupom, integrada);
+          if (aviso) itens.push(aviso);
+        }
 
-      // Cupom exclusivo sem uso, com a campanha gastando.
-      for (const cupom of cuponsDaMarca) {
-        const campanha = campanhasDaMarca.find((c) => c.id === cupom.campaign_id);
-        if (!campanha) continue;
-        const aviso = avisoCupomSemUso(
-          { code: cupom.code, campaignId: campanha.id, campaignName: campanha.name, provider: campanha.provider, connectedAccountId: campanha.conta, ligadoEm: cupom.linked_at, usos: Number(cupom.usos), gastoMicros: BigInt(campanha.gasto) },
-          agora,
-        );
-        if (aviso) itens.push(aviso);
-      }
+        // Cupom exclusivo sem uso, com a campanha gastando.
+        for (const cupom of cuponsDaMarca) {
+          const campanha = campanhasDaMarca.find((c) => c.id === cupom.campaign_id);
+          if (!campanha) continue;
+          const aviso = avisoCupomSemUso(
+            { code: cupom.code, campaignId: campanha.id, campaignName: campanha.name, provider: campanha.provider, connectedAccountId: campanha.conta, ligadoEm: cupom.linked_at, usos: Number(cupom.usos), gastoMicros: BigInt(campanha.gasto) },
+            agora,
+          );
+          if (aviso) itens.push(aviso);
+        }
 
-      // Fora do normal por campanha (I6): o gasto de ontem e o custo por pedido, só com a plataforma lida hoje.
-      for (const c of campanhasDaMarca) {
-        const contaDeAnuncio = contasDeAnuncio.get(c.conta);
-        if (!campanhaAtiva.has(c.id) || !contaDeAnuncio || !contaDeAnuncio.lidas_em || !lidaHoje(contaDeAnuncio.lidas_em, agora, contaDeAnuncio.fuso)) continue;
-        const serie = serieDaCampanha.get(c.id) ?? new Map<string, bigint>();
-        const hoje = diaNoFuso(agora, contaDeAnuncio.fuso);
-        const base = { id: c.id, name: c.name, provider: c.provider, connectedAccountId: c.conta };
-        const gasto = avisoGastoDaCampanha({ ...base, fuso: contaDeAnuncio.fuso, lidoEm: contaDeAnuncio.lidas_em, desde: primeiroDia(serie), gastoPorDia: serie }, menosDias(hoje, 1));
-        if (gasto) itens.push(gasto);
-        // As 4 semanas antes dos últimos 7 dias.
-        let gastoDaHistoria = 0n;
-        for (let d = LIMIARES.dias; d < LIMIARES.dias + 28; d++) gastoDaHistoria += serie.get(menosDias(hoje, d)) ?? 0n;
-        const custo = avisoCustoPorPedido({
-          ...base,
-          semana: { gastoMicros: BigInt(c.gasto), pedidos: pedidosDaCampanha.get(c.id) ?? 0 },
-          historia: { gastoMicros: gastoDaHistoria, pedidos: pedidosDaHistoria.get(c.id) ?? 0 },
-        });
-        if (custo) itens.push(custo);
-      }
+        // Fora do normal por campanha (I6): o gasto de ontem e o custo por pedido, só com a plataforma lida hoje.
+        for (const c of campanhasDaMarca) {
+          const contaDeAnuncio = contasDeAnuncio.get(c.conta);
+          if (!campanhaAtiva.has(c.id) || !contaDeAnuncio || !contaDeAnuncio.lidas_em || !lidaHoje(contaDeAnuncio.lidas_em, agora, contaDeAnuncio.fuso)) continue;
+          const serie = serieDaCampanha.get(c.id) ?? new Map<string, bigint>();
+          const hoje = diaNoFuso(agora, contaDeAnuncio.fuso);
+          const base = { id: c.id, name: c.name, provider: c.provider, connectedAccountId: c.conta };
+          const gasto = avisoGastoDaCampanha({ ...base, fuso: contaDeAnuncio.fuso, lidoEm: contaDeAnuncio.lidas_em, desde: primeiroDia(serie), gastoPorDia: serie }, menosDias(hoje, 1));
+          if (gasto) itens.push(gasto);
+          // As 4 semanas antes dos últimos 7 dias.
+          let gastoDaHistoria = 0n;
+          for (let d = LIMIARES.dias; d < LIMIARES.dias + 28; d++) gastoDaHistoria += serie.get(menosDias(hoje, d)) ?? 0n;
+          const custo = avisoCustoPorPedido({
+            ...base,
+            semana: { gastoMicros: BigInt(c.gasto), pedidos: pedidosDaCampanha.get(c.id) ?? 0 },
+            historia: { gastoMicros: gastoDaHistoria, pedidos: pedidosDaHistoria.get(c.id) ?? 0 },
+          });
+          if (custo) itens.push(custo);
+        }
 
-      // Margem desconhecida na receita atribuída e plataforma × caixa, por plataforma de anúncio.
-      const caixaDaMarca = caixa.rows.filter((c) => c.brand_id === marca);
-      const receita = caixaDaMarca.reduce((s, c) => s + BigInt(c.receita), 0n);
-      const semMargem = caixaDaMarca.reduce((s, c) => s + BigInt(c.sem_margem), 0n);
-      const liberaCusto = lojasDaMarca.some((l) => (l.escopos ?? []).includes('custos.ler'));
-      const margem = avisoMargemDesconhecida(receita, semMargem, liberaCusto);
-      if (margem) itens.push(margem);
-      for (const provider of ['meta_ads', 'google_ads']) {
-        const informado = campanhasDaMarca.filter((c) => c.provider === provider).reduce((s, c) => s + BigInt(c.valor), 0n);
-        const confirmado = caixaDaMarca.filter((c) => c.provider === provider).reduce((s, c) => s + BigInt(c.receita), 0n);
-        const aviso = avisoPlataformaCaixa(provider, informado, confirmado);
-        if (aviso) itens.push(aviso);
+        // Margem desconhecida na receita atribuída e plataforma × caixa, por plataforma de anúncio.
+        const caixaDaMarca = caixa.rows.filter((c) => c.brand_id === marca);
+        const receita = caixaDaMarca.reduce((s, c) => s + BigInt(c.receita), 0n);
+        const semMargem = caixaDaMarca.reduce((s, c) => s + BigInt(c.sem_margem), 0n);
+        const liberaCusto = lojasDaMarca.some((l) => (l.escopos ?? []).includes('custos.ler'));
+        const margem = avisoMargemDesconhecida(receita, semMargem, liberaCusto);
+        if (margem) itens.push(margem);
+        for (const provider of ['meta_ads', 'google_ads']) {
+          const informado = campanhasDaMarca.filter((c) => c.provider === provider).reduce((s, c) => s + BigInt(c.valor), 0n);
+          const confirmado = caixaDaMarca.filter((c) => c.provider === provider).reduce((s, c) => s + BigInt(c.receita), 0n);
+          const aviso = avisoPlataformaCaixa(provider, informado, confirmado);
+          if (aviso) itens.push(aviso);
+        }
+      } finally {
+        for (let k = inicio; k < itens.length; k++) marcaDoAviso.set(itens[k]!, marca);
       }
     }
-    return { items: ordenarCiclo(itens), generated_at: agora.toISOString() };
+    return { items: ordenarCiclo(itens).map((i) => ({ ...i, brand_id: marcaDoAviso.get(i) ?? null })), generated_at: agora.toISOString() };
   }
 }

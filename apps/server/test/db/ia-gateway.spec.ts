@@ -80,6 +80,8 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
       [tenantId, micros],
     );
   const falha = async (p: Promise<unknown>) => p.then(() => null, (e: unknown) => (e instanceof AiError ? e.code : `outro erro: ${String(e)}`));
+  /** O erro inteiro, para conferir o detalhe que a tela usa (qual teto, quando o limite libera). */
+  const erro = async (p: Promise<unknown>) => p.then(() => null, (e: unknown) => e);
 
   beforeAll(async () => {
     await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
@@ -253,8 +255,8 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     // 80% → econômico (US$ 0,0035) → 83,5%.
     expect(await gateway().generate(pedido(a, task))).toMatchObject({ servedBy: 'economico', model: economico.model, text: 'resposta do econômico', costUsdMicros: 3_500 });
     await gastar(a.tenantId, 16_500);
-    // 100% → nada é chamado; fica o registro do pedido barrado, sem modelo e sem custo.
-    expect(await falha(gateway().generate(pedido(a, task)))).toBe('teto');
+    // 100% → nada é chamado; fica o registro do pedido barrado, sem modelo e sem custo. O erro diz qual teto barrou.
+    expect(await erro(gateway().generate(pedido(a, task)))).toMatchObject({ code: 'teto', detalhe: { teto: 'dia' } });
     expect(principal.mock.doGenerateCalls).toHaveLength(1);
     expect(economico.mock.doGenerateCalls).toHaveLength(1);
     expect((await usos(a.tenantId, task)).map((u) => [u.outcome, u.served_by, u.model === null, u.cost_usd_micros])).toEqual([
@@ -269,6 +271,9 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     const semEconomico = await rota(principal);
     await ownerQuery(`update liame.ai_budget set daily_usd_micros = 120000 where tenant_id = $1`, [a.tenantId]);
     expect(await gateway().generate(pedido(a, semEconomico))).toMatchObject({ servedBy: 'principal' });
+    // Com o do mês também cheio, é ele que a tela mostra (a IA volta no mês que vem, não amanhã).
+    await ownerQuery(`update liame.ai_budget set daily_usd_micros = 100000, monthly_usd_micros = 100000 where tenant_id = $1`, [a.tenantId]);
+    expect(await erro(gateway().generate(pedido(a, semEconomico)))).toMatchObject({ code: 'teto', detalhe: { teto: 'mes' } });
   });
 
   it('limite por pessoa: passou das chamadas da hora, barra só ela; a rotina do sistema segue', async () => {
@@ -278,7 +283,11 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     const g = gateway({ userHourlyCalls: 2 });
     await g.generate(pedido(d, task));
     await g.generate(pedido(d, task));
-    expect(await falha(g.generate(pedido(d, task)))).toBe('limite-usuario');
+    const barrado = (await erro(g.generate(pedido(d, task)))) as AiError;
+    expect(barrado).toMatchObject({ code: 'limite-usuario' });
+    // O erro diz quando a pessoa volta a ser atendida: uma hora depois da chamada que completou a conta.
+    const [primeira] = await ownerQuery<{ em: Date }>(`select occurred_at as em from liame.ai_usage where tenant_id = $1 and task = $2 and model is not null order by occurred_at limit 1`, [d.tenantId, task]);
+    expect(barrado.detalhe.voltaEm?.getTime()).toBe(new Date(primeira!.em).getTime() + 3_600_000);
     expect(m.mock.doGenerateCalls).toHaveLength(2);
     expect((await usos(d.tenantId, task)).map((u) => u.outcome)).toEqual(['ok', 'ok', 'limite_usuario']);
     expect((await g.generate(pedido(d, task, { userId: null }))).text).toBe('ok');

@@ -247,6 +247,8 @@ describe.skipIf(!hasDb)('atenção do ciclo fechado (A2.5 · F9)', () => {
     expect(r.itens[2]).toMatchObject({ title: 'Margem desconhecida em 100% da receita das campanhas', provider: 'regem' });
     expect(r.itens[2]!.action).toContain('ainda não liberou o custo');
     expect(r.itens[3]!.title).toBe(nbsp('A Meta informa R$ 1.000,00 em vendas; no caixa, o Liame confirmou R$ 200,00'));
+    // Cada aviso leva a marca em que nasceu: é com ela que a tela pede a explicação (A3, I4).
+    expect((r.corpo.items as Array<{ brand_id: string | null }>).map((i) => i.brand_id)).toEqual(Array(4).fill(e.brandId));
     // Nenhum dado pessoal nem id de clique na resposta.
     expect(JSON.stringify(r.corpo)).not.toMatch(/telefone|fbclid|gclid/);
   });

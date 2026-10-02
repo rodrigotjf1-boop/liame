@@ -46,6 +46,14 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     }
   });
 
+  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4)', () => {
+    const semTransacao = listRoutes(api.app)
+      .filter((r) => r.semTransacao)
+      .map((r) => `${r.method} ${r.path}`)
+      .sort();
+    expect(semTransacao).toEqual(['POST /v1/ai/explain/attention', 'POST /v1/ai/explain/results']);
+  });
+
   it('cookie inválido também é 401', async () => {
     const res = await api.call('GET', '/v1/me', { cookie: 'liame_sessao=token-que-nao-existe' });
     expect(res.status).toBe(401);

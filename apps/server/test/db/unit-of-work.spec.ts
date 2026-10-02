@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { from, lastValueFrom } from 'rxjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { afterCommit, currentTx } from '../../src/context/request-context.js';
+import { SEM_TRANSACAO_KEY } from '../../src/context/sem-transacao.js';
 import { UnitOfWorkInterceptor } from '../../src/context/unit-of-work.interceptor.js';
 import { APP_URL, hasDb } from './env.js';
 
@@ -46,6 +47,23 @@ describe.skipIf(!hasDb)('unidade de trabalho: efeitos depois do commit', () => {
     });
     expect(result).toBe('ok');
     expect(seen).toEqual(['primeiro', 'terceiro']);
+  });
+
+  it('rota @SemTransacao: a unidade de trabalho não abre transação (quem espera um modelo de IA abre as próprias, curtas)', async () => {
+    const handler = function esperaUmModelo() {};
+    Reflect.defineMetadata(SEM_TRANSACAO_KEY, { motivo: 'espera um modelo de IA por segundos' }, handler);
+    const semTransacao = { ...ctx, getHandler: () => handler } as unknown as ExecutionContext;
+    const temTransacao = async () => {
+      try {
+        currentTx();
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    expect(await lastValueFrom(interceptor.intercept(semTransacao, { handle: () => from(temTransacao()) } as CallHandler))).toBe(false);
+    // A rota comum segue dentro da transação da requisição.
+    expect(await run(temTransacao)).toBe(true);
   });
 
   it('com rollback, nenhum efeito roda', async () => {

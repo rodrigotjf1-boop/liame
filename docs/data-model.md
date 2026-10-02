@@ -178,6 +178,7 @@ Opt-in amarrado à **finalidade**. Opt-out vale na hora para envios pendentes. C
 - `audit_anchor(day, root_hash, anchored_at, anchor_ref)`: o `daily_root_hash` publicado **fora** do banco (security-model §7).
 - `ai_usage(tenant, brand, user, workflow, task, route_version, prompt_version, provider, model, served_by [principal|reserva|economico], inference_geo, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, reasoning_tokens, cost_usd_micros, latency_ms, tool_calls, tool_failures, outcome [ok|erro|teto|limite_usuario], error_code, pii_removed, trace_id, occurred_at)`: uma linha por tentativa de chamada; a aplicação só insere (migration 0028).
 - `ai_exchange(usage_id, tenant, request, response)`: o que foi enviado ao modelo e o que voltou, já sem dado pessoal; apagado em 30 dias pelo expurgo.
+- `ai_feedback(tenant, usage_id, user, verdict [fez_sentido|discordo], reasons [numero|motivo|faltou|sugestao], comment, created_at, updated_at)`: o retorno da pessoa sobre uma explicação da IA (migration 0031); um por pessoa e explicação; a empresa lê os dela, cada pessoa grava só em nome dela, e ninguém apaga pela aplicação; some com a linha de uso. O comentário é limpo de dado pessoal antes de gravar, e nada disto vai ao fornecedor do modelo.
 - `ai_model_price(provider, model, valid_from, preço por milhão de tokens em micros de dólar: entrada, saída, cache lido, cache escrito 5 min e 1 h, source, checked_on)` e `ai_model_route(task, version, status, purpose, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros, fallback, economy_provider, economy_model, eval_threshold, eval_score, created_by, deployed_at)`: do produto, sem dado de empresa; uma rota ativa por tarefa.
 - `ai_budget(tenant, daily_usd_micros, monthly_usd_micros, set_by, reason)`: teto de custo de IA da empresa; ela lê, só a distribuição grava.
 
@@ -189,6 +190,7 @@ Opt-in amarrado à **finalidade**. Opt-out vale na hora para envios pendentes. C
 | Logs operacionais | 30 dias |
 | Traces | 14 dias (amostrados); traces de ação financeira, 180 dias |
 | Prompts e respostas de IA | 30 dias com conteúdo; depois só metadados e hashes |
+| Retorno da pessoa sobre uma explicação da IA | com a empresa (some com a linha de uso da explicação); sem autor se a conta da pessoa for excluída |
 | Mensagens (conteúdo) | enquanto houver finalidade; opt-out/pedido de exclusão → apagar ou anonimizar |
 | Dados pessoais de contatos | enquanto houver consentimento/finalidade; cancelamento do cliente → exportar e excluir em até 30 dias |
 | Métricas agregadas | indefinido (sem PII) |

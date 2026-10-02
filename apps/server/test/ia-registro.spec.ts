@@ -119,6 +119,7 @@ describe('visão das leituras para o modelo: tudo já formatado, nada que a limp
       connected_account_id: null,
       campaign_id: '0199a300-0000-7000-8000-0000000000c1',
       provider: n % 2 ? 'meta_ads' : null,
+      brand_id: null,
     });
     const v = visaoDosAvisos([aviso('info', 1), aviso('critica', 2), aviso('atencao', 3)], '2026-10-02T12:00:00.000Z', 'America/Sao_Paulo');
     expect(v.avisos.map((a) => a.gravidade)).toEqual(['critica', 'atencao', 'info']);

@@ -45,7 +45,20 @@ export function explicacaoSemIa(c: ContextoDaExplicacao): Explicacao {
   }
   if (!motivos.length) motivos.push('Ainda não há campanha com investimento e pedido confirmado neste período para comparar.');
 
-  const risco: Explicacao['risco'] = origem.resultado === 'prejuízo' ? 'alto' : origem.resultado === 'lucro' ? 'baixo' : sobe(cmp?.investimento.variacao ?? null) && cai(cmp?.receita_com_origem.variacao ?? null) ? 'alto' : 'medio';
+  // O risco e o porquê dele, pela regra do sistema (a mesma do veredito da tela Resultados).
+  const piorou = sobe(cmp?.investimento.variacao ?? null) && cai(cmp?.receita_com_origem.variacao ?? null);
+  const [risco, porque]: [Explicacao['risco'], string] =
+    origem.resultado === 'prejuízo'
+      ? ['alto', 'o período deu prejuízo depois de pagar os anúncios.']
+      : origem.resultado === 'lucro'
+        ? ['baixo', 'o período deu lucro depois de pagar os anúncios.']
+        : origem.resultado === 'empata'
+          ? ['medio', 'o período empata: a margem conhecida fica perto do investimento.']
+          : piorou
+            ? ['alto', 'o investimento subiu e a receita com origem provada caiu.']
+            : semInvestimento
+              ? ['medio', 'sem investimento em anúncios lido, não há retorno para avaliar.']
+              : ['medio', 'falta custo cadastrado para dizer se o período deu lucro.'];
 
   const fazer: string[] = [];
   if (c.fontes_fora_do_dia.length) fazer.push('Confira em Contas conectadas as fontes que não estão em dia antes de decidir com estes números.');
@@ -53,5 +66,5 @@ export function explicacaoSemIa(c: ContextoDaExplicacao): Explicacao {
   if (risco === 'alto') fazer.push('Olhe as campanhas com mais investimento e menos pedidos confirmados antes de manter a verba.');
   if (!fazer.length) fazer.push('Acompanhe os avisos da Atenção: eles apontam o que precisa de você.');
 
-  return { o_que_aconteceu: aconteceu.join(' '), motivos: motivos.slice(0, 4), risco, o_que_fazer: fazer.slice(0, 3) };
+  return { o_que_aconteceu: aconteceu.join(' '), motivos: motivos.slice(0, 4), risco, risco_motivo: `pela regra do sistema, ${porque}`, o_que_fazer: fazer.slice(0, 3) };
 }

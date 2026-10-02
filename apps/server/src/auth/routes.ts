@@ -3,6 +3,7 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants.js';
 import { DiscoveryService, MetadataScanner, Reflector } from '@nestjs/core';
 import { API_PREFIX_EXCLUDE, API_PREFIX } from '../setup-constants.js';
 import { AUDIT_KEY, type AuditDeclaration } from '../audit/auditar.js';
+import { SEM_TRANSACAO_KEY, type SemTransacaoDeclaration } from '../context/sem-transacao.js';
 import { ACCESS_KEY, type Access } from './access.js';
 import { isKnownPermission } from './permissions.js';
 
@@ -11,6 +12,8 @@ export interface RouteInfo {
   path: string;
   access: Access | undefined;
   audit: AuditDeclaration | undefined;
+  /** A rota roda fora da transação da requisição (`@SemTransacao`). */
+  semTransacao: SemTransacaoDeclaration | undefined;
   handler: string;
 }
 
@@ -34,11 +37,13 @@ export function listRoutes(app: INestApplication): RouteInfo[] {
       const method = RequestMethod[Reflect.getMetadata(METHOD_METADATA, handler) as RequestMethod];
       const access = reflector.getAllAndOverride<Access | undefined>(ACCESS_KEY, [handler as () => void, metatype]);
       const audit = reflector.getAllAndOverride<AuditDeclaration | undefined>(AUDIT_KEY, [handler as () => void, metatype]);
+      // Só no método: é a mesma leitura que a unidade de trabalho faz.
+      const semTransacao = Reflect.getMetadata(SEM_TRANSACAO_KEY, handler) as SemTransacaoDeclaration | undefined;
       for (const base of bases) {
         for (const p of ([] as string[]).concat(paths)) {
           const local = join(base, p);
           const path = API_PREFIX_EXCLUDE.includes(local.slice(1)) ? local : join(API_PREFIX, local);
-          routes.push({ method, path, access, audit, handler: `${metatype.name}.${name}` });
+          routes.push({ method, path, access, audit, semTransacao, handler: `${metatype.name}.${name}` });
         }
       }
     }
@@ -67,6 +72,11 @@ const ACTION = /^[a-z_]+\.[a-z_]+$/;
 export function assertAuditDeclarations(app: INestApplication): void {
   const problems: string[] = [];
   for (const route of listRoutes(app)) {
+    // Fora da transação da requisição não há auditoria automática, e o motivo fica escrito.
+    if (route.semTransacao) {
+      if (route.semTransacao.motivo.trim().length < 10) problems.push(`${route.method} ${route.path}: @SemTransacao precisa de um motivo`);
+      if (route.audit?.kind === 'auditar' && !route.audit.manual) problems.push(`${route.method} ${route.path}: rota @SemTransacao só audita com manual: true (não há transação da requisição)`);
+    }
     if (!MUTATIONS.has(route.method)) continue;
     if (!route.audit) problems.push(`${route.method} ${route.path} (${route.handler}) sem @Auditar ou @SemAuditoria`);
     else if (route.audit.kind === 'auditar' && !ACTION.test(route.audit.action)) {

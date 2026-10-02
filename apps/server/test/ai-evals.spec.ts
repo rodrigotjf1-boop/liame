@@ -2,10 +2,10 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { type Avaliacao, avaliarExplicacao, contextoDoCaso, portao, resumir } from '../src/ai/evals/avaliar.js';
+import { type Avaliacao, avaliarExplicacao, contextoDoCaso, portao, resumir, semIaDoCaso } from '../src/ai/evals/avaliar.js';
 import { type CasoDeEval, carregarCasos, GRUPOS } from '../src/ai/evals/casos.js';
-import { conferirExplicacao } from '../src/ai/explicar/resposta.js';
-import { explicacaoSemIa } from '../src/ai/explicar/sem-ia.js';
+import { marcarNumeros } from '../src/ai/explicar/fontes.js';
+import { conferirExplicacao, Explicacao } from '../src/ai/explicar/resposta.js';
 import { limparTexto } from '../src/ai/sanitizar.js';
 
 const ARQUIVO = resolve(process.cwd(), '../../evals/explicar_resultados/casos.jsonl');
@@ -36,8 +36,25 @@ describe('casos de eval do "Explicar" (A3, I3): o avaliador é provado sem model
   });
 
   it.each(casos.map((c) => [c.id, c] as const))('%s: a explicação sem IA serve para a tela (A3-6)', (_id, caso) => {
+    expect(conferirExplicacao(semIaDoCaso(caso), contextoDoCaso(caso))).toBeNull();
+  });
+
+  it.each(casos.map((c) => [c.id, c] as const))('%s: cada número da resposta boa e da explicação do sistema tem fonte no contexto (I4)', (_id, caso) => {
     const contexto = contextoDoCaso(caso);
-    expect(conferirExplicacao(explicacaoSemIa(contexto), contexto)).toBeNull();
+    for (const explicacao of [Explicacao.parse(caso.gravadas.boa), semIaDoCaso(caso)]) {
+      const marcada = marcarNumeros(explicacao, contexto);
+      expect(marcada.numeros.filter((n) => n.fontes.includes('Liame · dado do período desta tela')).map((n) => n.valor)).toEqual([]);
+      expect(marcada.o_que_aconteceu.map((t) => t.texto).join('')).toBe(explicacao.o_que_aconteceu);
+    }
+  });
+
+  it('o "Explicar" de um aviso da Atenção tem casos próprios: o aviso vai na frente do contexto', () => {
+    const deAviso = casos.filter((c) => c.aviso);
+    expect(deAviso.length).toBeGreaterThanOrEqual(5);
+    for (const caso of deAviso) expect(Object.keys(contextoDoCaso(caso))[0], caso.id).toBe('aviso');
+    // Aviso crítico nunca é risco baixo: pelo menos um caso prova que a resposta que diz o contrário reprova.
+    expect(deAviso.some((c) => c.aviso!.severity === 'critica' && c.gravadas.ruins.some((r) => r.falha === 'risco'))).toBe(true);
+    expect(deAviso.some((c) => c.grupo === 'numero') && deAviso.some((c) => c.grupo === 'injecao')).toBe(true);
   });
 
   it('pelo menos um caso de cada grupo exigido prova que a resposta errada reprova', () => {

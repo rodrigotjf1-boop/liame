@@ -17,6 +17,7 @@ import {
   storeIdempotentResponse,
 } from './idempotency.js';
 import { type AuthContext, requestStore } from './request-context.js';
+import { SEM_TRANSACAO_KEY } from './sem-transacao.js';
 
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -35,7 +36,8 @@ interface HttpResponse {
 /**
  * Unidade de trabalho: toda rota autenticada roda numa transação com o tenant e a pessoa no contexto
  * da RLS (ADR-003). A mutação, a auditoria, o outbox e a resposta idempotente entram juntos ou não entram.
- * A transação é curta: chamada a serviço externo não acontece aqui (vai para a fila).
+ * A transação é curta: chamada a serviço externo não acontece aqui (vai para a fila). A exceção declarada
+ * é a rota `@SemTransacao`, que espera um modelo de IA e abre as próprias transações.
  */
 @Injectable()
 export class UnitOfWorkInterceptor implements NestInterceptor {
@@ -46,6 +48,8 @@ export class UnitOfWorkInterceptor implements NestInterceptor {
   intercept(ctx: ExecutionContext, next: CallHandler): Observable<unknown> {
     const auth = ctx.switchToHttp().getRequest<RequestWithAuth>().auth;
     if (!auth || !this.database) return next.handle();
+    // A rota que espera um modelo de IA abre as próprias transações curtas (`@SemTransacao`).
+    if (Reflect.getMetadata(SEM_TRANSACAO_KEY, ctx.getHandler())) return next.handle();
     return from(this.run(this.database, auth, ctx, next));
   }
 
