@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { conferirTexto } from '../../policy/texto.js';
 import { conferirNumeros } from '../verificador-numeros.js';
-import type { ContextoDaExplicacao } from './contexto.js';
+import { type ContextoDaExplicacao, nomesDoContexto } from './contexto.js';
 
 // O formato da explicação (plano A3, I4; `ai-architecture.md` §8): o que aconteceu · motivos com números
 // · risco · o que fazer. O schema que vai ao fornecedor é o mais simples possível (texto, lista, opção);
@@ -19,7 +20,8 @@ export const LIMITES = { o_que_aconteceu: 600, motivo: 300, motivos: 4, acao: 24
 /** Trechos que uma explicação nunca traz: a IA explica e sugere, quem decide é a pessoa; e não manda ninguém a lugar nenhum. */
 const PROIBIDOS = ['a ia decidiu', 'eu decidi', 'http://', 'https://', 'www.'];
 
-export type Recusa = 'vazia' | 'longa' | 'numero_fora' | 'trecho_proibido';
+/** `compliance`: as regras de texto do Policy Engine (político e eleitoral, promessa de resultado, categoria proibida, dado pessoal). */
+export type Recusa = 'vazia' | 'longa' | 'numero_fora' | 'trecho_proibido' | 'compliance';
 
 /**
  * A resposta da IA serve para a tela? Devolve o motivo da recusa (e, no caso dos números, quais), ou nulo
@@ -41,6 +43,10 @@ export function conferirExplicacao(e: Explicacao, contexto: ContextoDaExplicacao
   const minusculo = textos.join(' ').toLowerCase();
   const achados = PROIBIDOS.filter((p) => minusculo.includes(p));
   if (achados.length) return { recusa: 'trecho_proibido', detalhe: achados };
+  // Compliance (I9): o código decide antes de qualquer revisor de IA. O nome de uma campanha ou conta da
+  // própria empresa pode ser citado; o que se confere é o que a IA escreveu em volta.
+  const regras = conferirTexto(textos, { ignorar: nomesDoContexto(contexto) });
+  if (regras.length) return { recusa: 'compliance', detalhe: regras.map((r) => `${r.regra}: ${r.trecho}`) };
   const numeros = conferirNumeros(textos, contexto);
   if (!numeros.ok) return { recusa: 'numero_fora', detalhe: numeros.fora };
   return null;

@@ -8,13 +8,14 @@ import { AiError, type AiErrorCode, AiGateway } from '../gateway.js';
 import { naTransacaoDaEmpresa } from '../na-empresa.js';
 import { funcionarioAtivo } from '../registro/ativacao.js';
 import type { ContextoDaLeitura } from '../registro/leituras.js';
-import { type ContextoDaExplicacao, contextoDosResultados, periodoAnterior } from './contexto.js';
+import { nomesPoliticos } from '../../policy/texto.js';
+import { type ContextoDaExplicacao, contextoDosResultados, nomesDoContexto, periodoAnterior } from './contexto.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS, TAREFA_EXPLICAR_RESULTADOS } from './prompt.js';
 import { conferirExplicacao, Explicacao, type Recusa } from './resposta.js';
 import { explicacaoSemIa } from './sem-ia.js';
 
 /** Por que a explicação é a do código e não a da IA. */
-export type MotivoSemIa = AiErrorCode | Recusa | 'dado_velho' | 'funcionario_desligado';
+export type MotivoSemIa = AiErrorCode | Recusa | 'dado_velho' | 'funcionario_desligado' | 'conteudo_politico';
 
 export interface ExplicacaoDosResultados {
   origem: 'ia' | 'sem_ia';
@@ -68,6 +69,12 @@ export class ExplicarService {
     // A IA não explica com dado velho: a explicação seria sobre um número que já mudou.
     if (contexto.fontes_fora_do_dia.length) return semIa('dado_velho');
     if (!lido.ativo) return semIa('funcionario_desligado');
+    // Uso político ou eleitoral é proibido nos Termos e bloqueado por regra (A3-15): com campanha ou conta
+    // de nome político, a IA nem é chamada. A explicação do código segue, com os números.
+    if (nomesPoliticos(nomesDoContexto(contexto)).length) {
+      this.logger.warn(`explicação sem IA: campanha ou conta com nome político ou eleitoral (empresa ${ctx.tenantId})`);
+      return semIa('conteudo_politico');
+    }
 
     try {
       const r = await this.gateway.structured({
