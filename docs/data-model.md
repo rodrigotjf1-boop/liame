@@ -173,7 +173,10 @@ Opt-in amarrado à **finalidade**. Opt-out vale na hora para envios pendentes. C
 
 - `audit_event` (append-only, sem UPDATE/DELETE na role da aplicação): `who, actor_type [human|agent|integration|system|partner], tenant, brand, unit, action, resource, before, after, reason, approval_id, trace_id, tool, agent, model, occurred_at, prev_hash, hash`.
 - `audit_anchor(day, root_hash, anchored_at, anchor_ref)`: o `daily_root_hash` publicado **fora** do banco (security-model §7).
-- `ai_usage(tenant, workflow, task, provider, model, prompt_version, tokens_in, tokens_out, cache_hit, latency_ms, cost_micros, tool_calls, tool_failures, outcome)`.
+- `ai_usage(tenant, brand, user, workflow, task, route_version, prompt_version, provider, model, served_by [principal|reserva|economico], inference_geo, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, reasoning_tokens, cost_usd_micros, latency_ms, tool_calls, tool_failures, outcome [ok|erro|teto|limite_usuario], error_code, pii_removed, trace_id, occurred_at)`: uma linha por tentativa de chamada; a aplicação só insere (migration 0028).
+- `ai_exchange(usage_id, tenant, request, response)`: o que foi enviado ao modelo e o que voltou, já sem dado pessoal; apagado em 30 dias pelo expurgo.
+- `ai_model_price(provider, model, valid_from, preço por milhão de tokens em micros de dólar: entrada, saída, cache lido, cache escrito 5 min e 1 h, source, checked_on)` e `ai_model_route(task, version, status, purpose, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros, fallback, economy_provider, economy_model, eval_threshold, eval_score, created_by, deployed_at)`: do produto, sem dado de empresa; uma rota ativa por tarefa.
+- `ai_budget(tenant, daily_usd_micros, monthly_usd_micros, set_by, reason)`: teto de custo de IA da empresa; ela lê, só a distribuição grava.
 
 ## 9. Retenção (proposta inicial)
 

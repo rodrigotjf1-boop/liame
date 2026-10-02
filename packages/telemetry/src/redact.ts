@@ -21,13 +21,24 @@ const IP_KEYS = new Set(['client.address', 'net.peer.ip', 'http.client_ip', 'net
 /** Atributos que nunca saem, qualquer que seja o valor. */
 const DROP_KEYS = new Set(['http.request.header.cookie', 'http.request.header.authorization', 'enduser.id', 'user.email']);
 
+/** O mesmo texto sem dado pessoal, e quantos trechos saíram (o AI Gateway registra a contagem). */
+export function redactCounting(value: string): { text: string; removed: number } {
+  let removed = 0;
+  const swap = (label: string) => () => {
+    removed += 1;
+    return label;
+  };
+  const text = value
+    .replace(SENSITIVE_PARAMS, (_m, param: string) => swap(`${param}[removido]`)())
+    .replace(EMAIL, swap('[email]'))
+    .replace(CNPJ, swap('[cnpj]'))
+    .replace(CPF, swap('[cpf]'))
+    .replace(PHONE, (m) => (m.replace(/\D/g, '').length >= 10 ? swap('[telefone]')() : m));
+  return { text, removed };
+}
+
 export function redactString(value: string): string {
-  return value
-    .replace(SENSITIVE_PARAMS, '$1[removido]')
-    .replace(EMAIL, '[email]')
-    .replace(CNPJ, '[cnpj]')
-    .replace(CPF, '[cpf]')
-    .replace(PHONE, (m) => (m.replace(/\D/g, '').length >= 10 ? '[telefone]' : m));
+  return redactCounting(value).text;
 }
 
 /** IP de pessoa: guarda só a rede (/24), suficiente para diagnóstico. */

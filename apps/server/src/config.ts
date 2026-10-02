@@ -61,6 +61,15 @@ const Env = z.object({
   REGEM_CLIENT_SECRET: z.string().min(16).optional(),
   /** RegemCast: definido na C2b (docs/integracoes/regemcast.md); sem ele, conversas de anúncio não são lidas. */
   REGEMCAST_API_URL: z.url().optional(),
+  /** Chave de API da Anthropic (da distribuição). Sem ela, os funcionários de IA ficam indisponíveis e o resto segue. */
+  ANTHROPIC_API_KEY: z.string().trim().min(20).optional(),
+  /** Onde o modelo roda: `us` fixa nos Estados Unidos (10% a mais); `global` é o padrão do fornecedor (D-A3-13). */
+  AI_INFERENCE_GEO: z.enum(['us', 'global']).default('us'),
+  /** Teto de custo de IA por empresa, em dólar, quando ela não tem um próprio em `ai_budget` (D-A3-3). */
+  AI_DAILY_LIMIT_USD: z.coerce.number().positive().max(10_000).default(2),
+  AI_MONTHLY_LIMIT_USD: z.coerce.number().positive().max(100_000).default(20),
+  /** Chamadas de IA que uma pessoa pode disparar por hora (custo disparado de fora, security-model). */
+  AI_USER_HOURLY_CALLS: z.coerce.number().int().min(1).max(10_000).default(30),
 });
 
 export type AppConfig = {
@@ -95,6 +104,14 @@ export type AppConfig = {
     google: { clientId: string; clientSecret: string; authUrl: string; tokenUrl: string } | null;
     /** Autorização da loja no Regem (código + PKCE, C1b); nulo = só pelo token emitido pela distribuição. */
     regem: { clientId: string; clientSecret: string; authUrl: string } | null;
+  };
+  /** IA (A3): credencial do fornecedor, onde o modelo roda e os limites padrão de custo (em micros de dólar). */
+  ai: {
+    anthropicApiKey: string | null;
+    inferenceGeo: 'us' | 'global';
+    dailyLimitUsdMicros: number;
+    monthlyLimitUsdMicros: number;
+    userHourlyCalls: number;
   };
 };
 
@@ -169,6 +186,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   if (env.NODE_ENV === 'production' && env.MAIL_TRANSPORT === 'ses' && !source.MAIL_FROM) {
     throw new Error('config: em produção, defina MAIL_FROM (remetente do domínio verificado no SES)');
   }
+  if (env.AI_MONTHLY_LIMIT_USD < env.AI_DAILY_LIMIT_USD) throw new Error('config: AI_MONTHLY_LIMIT_USD não pode ser menor que AI_DAILY_LIMIT_USD');
   const inboxSecrets = new Map<string, string>();
   for (const part of env.INBOX_SECRETS.split(',').map((p) => p.trim()).filter(Boolean)) {
     const i = part.indexOf(':');
@@ -205,6 +223,13 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl: env.REGEMCAST_API_URL?.replace(/\/$/, '') ?? null },
     apiUrl,
     oauth: { meta, google, regem },
+    ai: {
+      anthropicApiKey: env.ANTHROPIC_API_KEY ?? null,
+      inferenceGeo: env.AI_INFERENCE_GEO,
+      dailyLimitUsdMicros: Math.round(env.AI_DAILY_LIMIT_USD * 1_000_000),
+      monthlyLimitUsdMicros: Math.round(env.AI_MONTHLY_LIMIT_USD * 1_000_000),
+      userHourlyCalls: env.AI_USER_HOURLY_CALLS,
+    },
   };
 }
 

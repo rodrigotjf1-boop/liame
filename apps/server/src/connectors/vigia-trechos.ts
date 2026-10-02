@@ -7,7 +7,7 @@ export type Trecho = { titulo: string; hash: string; texto: string };
 export type Mudanca = { titulo: string; mudanca: 'novo' | 'alterado' | 'removido'; hashAntes: string | null; hashDepois: string | null; texto: string | null };
 
 /** Hosts oficiais que o Vigia lê (os mesmos da restrição da tabela `watch_source`). */
-export const HOSTS_DO_VIGIA = new Set(['developers.facebook.com', 'developers.google.com', 'ads-developers.googleblog.com']);
+export const HOSTS_DO_VIGIA = new Set(['developers.facebook.com', 'developers.google.com', 'ads-developers.googleblog.com', 'platform.claude.com']);
 
 const ENTIDADES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'", nbsp: ' ' };
 

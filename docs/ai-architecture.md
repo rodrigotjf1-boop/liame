@@ -20,7 +20,7 @@ Infra         AI Gateway (adapters) · Tool Registry · AI Usage Ledger · Evals
 
 **Cada funcionário é uma definição no Agent Registry, não um runtime:** `agent_id, versão, cargo, responsabilidades, skills, ferramentas permitidas (subconjunto do Tool Registry), políticas e modos de autonomia, rotas de modelo por tarefa, workflows que possui, KPIs, eval_score, status`. Criar um funcionário novo é criar uma definição, passar no eval dela e publicar uma versão. Nada de código de runtime novo. Ativar um funcionário para um cliente é uma permissão por plano e por marca.
 
-## 2. AI Gateway (`apps/server/src/modules/ai`)
+## 2. AI Gateway (`apps/server/src/ai`)
 
 Nenhum módulo chama SDK de provedor diretamente. A interface é da DMS:
 
@@ -39,6 +39,15 @@ interface AiGateway {
 ```
 
 Adapters: `AnthropicAdapter` (primeiro), `OpenAIAdapter`, `GoogleAdapter`, `FutureProviderAdapter`. O gateway aplica, em toda chamada: **sanitização de PII** (classificação de dados), orçamento do AI Usage Ledger, timeout, trace `gen_ai.*`, registro de versões e custo. Se a base de baixo nível é o SDK oficial de cada provider ou um SDK agregador, é decidido no ADR-006 (pesquisa + spike). Em qualquer caso, **a semântica interna é da DMS**.
+
+**No código (A3, I1, 02/10/2026):** `generate` e `structured` estão prontos; `stream` entra com a Conversa (I10) e `agent`, com o registro de ferramentas (I2), para nascerem junto do primeiro uso real. Em toda chamada, nesta ordem: flag `ia` da empresa → trava (kill switch global, do provider `ai`, da empresa ou da marca) → rota ativa da tarefa → limite de chamadas por pessoa → teto de custo → remoção de dado pessoal → modelo da rota, com reserva só da própria rota → custo → `ai_usage` (uma linha por tentativa) e `ai_exchange` (o conteúdo, por 30 dias).
+
+- A chamada **não roda dentro da transação da requisição**: leva segundos, e o custo fica gravado mesmo que a requisição desista.
+- **Toda falha é um erro só** (`AiError`: desligada, travada, sem rota, entrada grande demais, limite da pessoa, teto, indisponível). Quem chama cai no caminho sem IA.
+- **Entrada com tamanho máximo** (200 mil caracteres entre instruções e mensagens): o teto é conferido antes da chamada, então um pedido só não pode custar mais que o teto do dia.
+- **Dado pessoal** (e-mail, telefone, CPF, CNPJ, CEP) sai do que é enviado, do que é devolvido a quem chamou e do que fica guardado. Quem monta o contexto manda os números já formatados: número cru com 10 dígitos ou mais parece telefone ou CPF e sai na limpeza.
+- **Modelo sem credencial ou sem preço cadastrado não roda:** custo que não se mede não se gasta.
+- **Trace:** um span `chat {modelo}` com atributos `gen_ai.*` só técnicos (fornecedor, modelo, tokens). A telemetria do próprio SDK fica desligada, porque ela grava entrada e saída. O erro do SDK guarda o corpo enviado: só o código do motivo vai para o log e para o registro.
 
 ## 3. Model routing por tarefa
 
@@ -143,6 +152,8 @@ Datasets versionados em `evals/`: golden scenarios, policy attacks, prompt injec
 ## 10. AI Usage Ledger e orçamento de IA
 
 Registro por `tenant, workflow, task, model, provider`: tokens de entrada e saída, cache hit, latência, custo, tool calls e falhas, bloqueios de política, aprovações, concordância, sucesso e regret. Controles: orçamento de tokens, de custo diário e mensal, e franquia do plano. **Degradação elegante** ao atingir a franquia: modelo premium → modelo econômico **com eval aprovado** → só workflows determinísticos, antes de bloquear, conforme o plano comercial. O painel interno mostra custo por tenant, por workflow e por resultado, approval rate, sucesso, override, violações e latência p95.
+
+**No código (I1):** custo em micros de dólar = tokens × `ai_model_price` (a linha que valia na data), contando o cache lido e o escrito, × 1,1 quando o modelo roda fixo nos Estados Unidos; a soma é em inteiro. Teto diário e mensal por empresa (`ai_budget`, ou o padrão do ambiente), virando no fuso da empresa: **70% avisa, 80% usa o modelo econômico da rota (se ela tiver), 100% barra** e registra o pedido barrado. O teto é conferido antes da chamada, sem reserva: chamadas simultâneas podem passar dele pelo custo das que já estavam em curso, o que é limitado pelo `max_output_tokens` da rota e pelo limite por pessoa.
 
 ## 11. Proibições
 

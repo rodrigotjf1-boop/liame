@@ -89,4 +89,11 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   attribution_model: { class: 'PUBLIC', retention: 'do produto (a versão nunca muda)' },
   attribution_run: { class: 'INTERNAL', retention: '90 dias', purge: { job: 'execucao_atribuicao', days: 90 } },
   attribution_result: { class: 'CONFIDENTIAL', retention: 'com o pedido' },
+  // IA (A3, I1): preços e rotas são do produto; o uso é o registro técnico de cada chamada (quem pediu,
+  // sem conteúdo); o conteúdo enviado e recebido, já sem dado pessoal, fica 30 dias (Política 7.3).
+  ai_model_price: { class: 'PUBLIC', retention: 'do produto' },
+  ai_model_route: { class: 'INTERNAL', retention: 'do produto' },
+  ai_budget: { class: 'INTERNAL', retention: 'com a empresa' },
+  ai_usage: { class: 'PERSONAL', retention: 'com a empresa (registro técnico, sem conteúdo)' },
+  ai_exchange: { class: 'CONFIDENTIAL', retention: '30 dias (o que foi enviado ao modelo e o que voltou)', purge: { job: 'conteudo_ia', days: 30 } },
 };

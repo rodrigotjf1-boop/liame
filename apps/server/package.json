@@ -15,6 +15,7 @@
     "trace-check": "node --enable-source-maps dist/scripts/trace-check.js"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "catalog:",
     "@aws-sdk/client-kms": "catalog:",
     "@aws-sdk/client-sesv2": "catalog:",
     "@liame/contracts": "workspace:*",
