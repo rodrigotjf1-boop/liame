@@ -12,6 +12,15 @@ const GRAVIDADE = ['critica', 'atencao', 'info'];
 export const AVISOS_MAXIMO = 40;
 
 export const plataforma = (provider: string | null): string | null => (provider ? (PLATAFORMA[provider] ?? provider) : null);
+
+// O nome da plataforma numa frase: "a Meta", mas "o Google Ads", "o Regem", "o GA4".
+const FEMININAS = new Set(['Meta', 'plataforma']);
+/** "A Meta" / "O Google Ads" (com `inicio`, em maiúscula: começo de frase). */
+export const comArtigo = (nome: string, inicio = false): string => `${FEMININAS.has(nome) ? (inicio ? 'A' : 'a') : inicio ? 'O' : 'o'} ${nome}`;
+/** "da Meta" / "do Google Ads". */
+export const comDe = (nome: string): string => `${FEMININAS.has(nome) ? 'da' : 'do'} ${nome}`;
+/** "na Meta" / "no Google Ads". */
+export const comEm = (nome: string): string => `${FEMININAS.has(nome) ? 'na' : 'no'} ${nome}`;
 /** `fresh` → "em dia", `delayed` → "atrasado", `stale` → "parado", `unknown` → "nunca leu". */
 export const frescorDe = (frescor: string): string => FRESCOR[frescor] ?? frescor;
 

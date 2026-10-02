@@ -279,14 +279,16 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     const d = await dono();
     responder(responde(JSON.stringify(BOA)));
     const r = await pedir(d);
-    expect(r.marcada.numeros.map((n) => n.valor)).toEqual(['R$ 100,00', 'R$ 200,00', '100,0%']);
+    // O mesmo valor (R$ 200,00) aparece duas vezes: na frase do total e na frase da campanha. São duas linhas.
+    expect(r.marcada.numeros.map((n) => n.valor)).toEqual(['R$ 100,00', 'R$ 200,00', '100,0%', 'R$ 200,00']);
     expect(r.marcada.numeros[0]!.fontes).toEqual(['Meta · investimento em anúncios no período anterior · 04/09/2026 a 17/09/2026']);
-    // O mesmo valor está na campanha, na plataforma e no total: vem do mais específico para o mais geral.
+    // A frase do total: a plataforma (com a hora da leitura) e o total, do mais específico para o mais geral.
     expect(r.marcada.numeros[1]!.fontes).toEqual([
-      expect.stringMatching(/^Meta · investimento da campanha "Delivery noite" · 18\/09\/2026 a 01\/10\/2026 · lido em \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/),
-      expect.stringMatching(/^Meta · investimento da Meta · 18\/09\/2026 a 01\/10\/2026 · lido em /),
+      expect.stringMatching(/^Meta · investimento da Meta · 18\/09\/2026 a 01\/10\/2026 · lido em \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/),
       'Meta · investimento em anúncios · 18/09/2026 a 01/10/2026',
     ]);
+    // A frase que cita a campanha: só o número dela.
+    expect(r.marcada.numeros[3]!.fontes).toEqual([expect.stringMatching(/^Meta · investimento da campanha "Delivery noite" · 18\/09\/2026 a 01\/10\/2026 · lido em /)]);
     expect(r.marcada.numeros[2]!.fontes).toEqual(['Liame · variação de investimento em anúncios sobre o período anterior (04/09/2026 a 17/09/2026) · calculado pelo sistema']);
     expect(r.marcada.o_que_aconteceu.map((t) => t.texto).join('')).toBe(BOA.o_que_aconteceu);
     // A explicação do sistema passa pela mesma marcação.
@@ -313,17 +315,11 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(contexto.resultado.periodo).toMatchObject(janela);
     expect(contexto.resultado.campanhas).toMatchObject([{ campanha: 'Delivery noite', plataforma_informa: { investimento: 'R$ 80,00' }, caixa_confirma: { pedidos: '0' } }]);
 
-    // O "7 dias" e os R$ 80,00 estão no texto do aviso; o investimento, também na campanha. O código do cupom não é número.
+    // O "7 dias" está no texto do aviso; os R$ 80,00, também na campanha citada. O código do cupom não é número.
     expect(r.marcada.numeros).toEqual([
       { valor: '7', fontes: ['Aviso da Atenção · o número está no texto do aviso', 'Liame · os resultados que acompanham o aviso são dos últimos 7 dias completos', 'Liame · janela do modelo de atribuição, em dias'] },
-      {
-        valor: 'R$ 80,00',
-        fontes: [
-          'Aviso da Atenção · o número está no texto do aviso',
-          expect.stringContaining(`Meta · investimento da campanha "Delivery noite" · ${janela.de} a ${janela.ate} · lido em `),
-          expect.stringContaining(`Meta · investimento da Meta · ${janela.de} a ${janela.ate} · lido em `),
-        ],
-      },
+      // A frase cita a campanha: a fonte é o número dela nos 7 dias completos (o mesmo do aviso).
+      { valor: 'R$ 80,00', fontes: [expect.stringContaining(`Meta · investimento da campanha "Delivery noite" · ${janela.de} a ${janela.ate} · lido em `)] },
     ]);
     expect(await usos(d.tenantId)).toEqual([
       { workflow: 'atencao.explicar', task: TAREFA_EXPLICAR_RESULTADOS, prompt_version: `${PROMPT_EXPLICAR_RESULTADOS.key}@${PROMPT_EXPLICAR_RESULTADOS.version}`, outcome: 'ok', cost: 14_000 },
@@ -385,7 +381,7 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(corpo.explanation.reasons.map((m) => m.map((t) => t.text).join(''))).toEqual(BOA.motivos);
     expect(corpo.explanation.risk_reason.map((t) => t.text).join('')).toBe(BOA.risco_motivo);
     expect(corpo.explanation.what_to_do.map((m) => m.map((t) => t.text).join(''))).toEqual(BOA.o_que_fazer);
-    expect(corpo.numbers.map((n) => n.value)).toEqual(['R$ 100,00', 'R$ 200,00', '100,0%']);
+    expect(corpo.numbers.map((n) => n.value)).toEqual(['R$ 100,00', 'R$ 200,00', '100,0%', 'R$ 200,00']);
     // Todo trecho numerado aponta para a linha da lista com o mesmo valor.
     const trechos = [corpo.explanation.what_happened, ...corpo.explanation.reasons, corpo.explanation.risk_reason, ...corpo.explanation.what_to_do].flat();
     expect(trechos.filter((t) => t.number !== null).map((t) => [t.text, corpo.numbers[t.number!]?.value])).toEqual([
@@ -438,7 +434,7 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(corpo.period).toEqual({ from: janelaDoAviso().de, to: janelaDoAviso().ate });
     expect(corpo.numbers.map((n) => [n.value, n.sources[0]])).toEqual([
       ['7', 'Aviso da Atenção · o número está no texto do aviso'],
-      ['R$ 80,00', 'Aviso da Atenção · o número está no texto do aviso'],
+      ['R$ 80,00', expect.stringContaining('Meta · investimento da campanha "Delivery noite"')],
     ]);
     expect(corpo.explanation.what_happened.map((t) => t.text).join('')).toBe(BOA_DO_AVISO.o_que_aconteceu);
 

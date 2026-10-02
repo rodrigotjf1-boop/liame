@@ -99,12 +99,12 @@ describe.skipIf(!hasDb)('atenção do ciclo fechado (A2.5 · F9)', () => {
   }
   const rastreio = (url_tags: string | null) => ({ rastreio: { url_tags, destinos: [{ url: CARDAPIO, url_tags: null }], sufixo: null, sufixo_nivel: null, modelo: null, modelo_nivel: null } });
   /** Métrica de ontem (no dia da conta) do anúncio. */
-  const metrica = (e: Empresa, contaId: string, anuncio: { ad: string; externo: string }, nome: string, janela: string, valor: number) =>
+  const metrica = (e: Empresa, contaId: string, anuncio: { ad: string; externo: string }, nome: string, janela: string, valor: number, diasAtras = 1) =>
     ownerQuery(
       `insert into liame.metric_latest (connected_account_id, level, external_entity_id, metric_date, metric_name, attribution_window, tenant_id, brand_id,
                                         provider, entity_id, metric_value, currency, timezone, observed_at, changed_at)
-       values ($1, 'ad', $2, (now() at time zone $3)::date - 1, $4, $5, $6, $7, 'meta_ads', $8, $9, 'BRL', $3, now(), now())`,
-      [contaId, anuncio.externo, FUSO, nome, janela, e.tenantId, e.brandId, anuncio.ad, valor],
+       values ($1, 'ad', $2, (now() at time zone $3)::date - $10::int, $4, $5, $6, $7, 'meta_ads', $8, $9, 'BRL', $3, now(), now())`,
+      [contaId, anuncio.externo, FUSO, nome, janela, e.tenantId, e.brandId, anuncio.ad, valor, diasAtras],
     );
   const entidadesLidas = async (e: Empresa, contaId: string) => {
     await ownerQuery(
@@ -220,7 +220,11 @@ describe.skipIf(!hasDb)('atenção do ciclo fechado (A2.5 · F9)', () => {
     await campanha(e, meta, 'Reconhecimento');
     await campanha(e, meta, 'Antiga', { status: 'pausada' });
     await entidadesLidas(e, meta);
-    await metrica(e, meta, c1, 'spend', '', 80);
+    // A janela são os 7 dias completos: o gasto de 7 dias atrás conta; o de hoje e o de 8 dias atrás, não.
+    await metrica(e, meta, c1, 'spend', '', 50);
+    await metrica(e, meta, c1, 'spend', '', 30, 7);
+    await metrica(e, meta, c1, 'spend', '', 999, 0);
+    await metrica(e, meta, c1, 'spend', '', 999, 8);
     await metrica(e, meta, c2, 'spend', '', 150);
     await metrica(e, meta, c2, 'purchase_value', '7d_click', 1000);
     await cupomExclusivo(e, regem, 'NOITE15', c1.id, 6);

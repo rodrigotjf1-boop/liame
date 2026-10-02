@@ -56,7 +56,12 @@ export class AtencaoCicloService {
     ).rows.map((m) => m.id);
     if (brandId && !marcas.length) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
     if (!marcas.length) return { items: [], generated_at: agora.toISOString() };
-    const desde = new Date(agora.getTime() - LIMIARES.dias * 86_400_000).toISOString();
+    // A janela dos avisos de campanha são os últimos 7 dias COMPLETOS, os mesmos da explicação (I4): o gasto
+    // de cada dia fechado da conta de anúncio e os pedidos do começo desse primeiro dia (no fuso da loja) até
+    // agora. O pedido de hoje já conta: um uso do cupom hoje desfaz o aviso.
+    const instante = agora.toISOString();
+    /** Limite que o índice de `confirmed_at` usa; o corte exato, por dia, vem na condição seguinte de cada consulta. */
+    const desdeAmplo = new Date(agora.getTime() - (LIMIARES.dias + 2) * 86_400_000).toISOString();
 
     // 1. As lojas do Regem (com a leitura dos pedidos e a plataforma informada) e as marcas com conta de anúncio.
     const lojas = await tx.execute<LinhaLoja>(sql`
@@ -76,7 +81,7 @@ export class AtencaoCicloService {
       ).rows.map((l) => l.brand_id),
     );
 
-    // 2. Campanhas ativas, com o gasto e o que a plataforma informa na janela (no dia da conta de anúncio).
+    // 2. Campanhas ativas, com o gasto e o que a plataforma informa nos 7 dias completos (no dia da conta de anúncio).
     const campanhas = await tx.execute<{ id: string; name: string; provider: string; brand_id: string; conta: string; gasto: string; valor: string }>(sql`
       with metricas as (
         select coalesce(g.campaign_id, cd.id) as campaign_id, ml.metric_name, sum(ml.metric_value) as total
@@ -90,7 +95,8 @@ export class AtencaoCicloService {
            and ((ml.metric_name = 'spend' and ml.attribution_window = '')
              or (a.provider = 'meta_ads' and ml.attribution_window = '7d_click' and ml.metric_name = 'purchase_value')
              or (a.provider = 'google_ads' and ml.attribution_window = 'padrao' and ml.metric_name = 'conversions_value'))
-           and ml.metric_date > (${agora.toISOString()}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int
+           and ml.metric_date >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int
+           and ml.metric_date < (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
          group by 1, 2
       )
       select c.id, c.name, c.provider, a.brand_id, a.id as conta,
@@ -110,7 +116,9 @@ export class AtencaoCicloService {
       select cp.code, cc.campaign_id, cc.linked_at, a.brand_id,
              (select count(*)::int from liame.order_fact o
                where o.tenant_id = cp.tenant_id and o.coupon_code = cp.code and o.connected_account_id = cp.connected_account_id
-                 and o.status = 'confirmado' and o.confirmed_at >= ${desde}::timestamptz) as usos
+                 and o.status = 'confirmado' and o.confirmed_at >= ${desdeAmplo}::timestamptz
+                 and (o.confirmed_at at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
+                     >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int) as usos
         from liame.campaign_coupon cc
         join liame.coupon cp on cp.id = cc.coupon_id
         join liame.connected_account a on a.id = cp.connected_account_id
@@ -123,7 +131,10 @@ export class AtencaoCicloService {
       with pedidos as (
         select o.id, o.brand_id, o.revenue_micros - o.refunded_micros as liquido
           from liame.order_fact o
-         where o.brand_id in ${marcas} and o.status = 'confirmado' and o.confirmed_at >= ${desde}::timestamptz
+          join liame.connected_account a on a.id = o.connected_account_id
+         where o.brand_id in ${marcas} and o.status = 'confirmado' and o.confirmed_at >= ${desdeAmplo}::timestamptz
+           and (o.confirmed_at at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
+               >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int
       ),
       custos as (
         select i.order_id, bool_and(i.cost_known) as conhecido, count(*) as n
@@ -189,10 +200,14 @@ export class AtencaoCicloService {
         await tx.execute<{ campaign_id: string; n: number }>(sql`
           select r.campaign_id, count(*)::int as n
             from liame.order_fact o
+            join liame.connected_account a on a.id = o.connected_account_id
             join liame.attribution_result r on r.order_id = o.id and r.model_id = ${MODELO_PADRAO} and r.counted
            where o.brand_id in ${marcas} and o.status = 'confirmado' and r.campaign_id is not null
-             and o.confirmed_at >= ${new Date(agora.getTime() - (LIMIARES.dias + 28) * 86_400_000).toISOString()}::timestamptz
-             and o.confirmed_at < ${desde}::timestamptz
+             and o.confirmed_at >= ${new Date(agora.getTime() - (LIMIARES.dias + 30) * 86_400_000).toISOString()}::timestamptz
+             and (o.confirmed_at at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
+                 >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias + 28}::int
+             and (o.confirmed_at at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
+                 < (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int
            group by 1`)
       ).rows.map((l) => [l.campaign_id, Number(l.n)]),
     );
@@ -286,9 +301,9 @@ export class AtencaoCicloService {
           const base = { id: c.id, name: c.name, provider: c.provider, connectedAccountId: c.conta };
           const gasto = avisoGastoDaCampanha({ ...base, fuso: contaDeAnuncio.fuso, lidoEm: contaDeAnuncio.lidas_em, desde: primeiroDia(serie), gastoPorDia: serie }, menosDias(hoje, 1));
           if (gasto) itens.push(gasto);
-          // As 4 semanas antes dos últimos 7 dias.
+          // As 4 semanas antes dos últimos 7 dias completos (de 8 a 35 dias atrás).
           let gastoDaHistoria = 0n;
-          for (let d = LIMIARES.dias; d < LIMIARES.dias + 28; d++) gastoDaHistoria += serie.get(menosDias(hoje, d)) ?? 0n;
+          for (let d = LIMIARES.dias + 1; d <= LIMIARES.dias + 28; d++) gastoDaHistoria += serie.get(menosDias(hoje, d)) ?? 0n;
           const custo = avisoCustoPorPedido({
             ...base,
             semana: { gastoMicros: BigInt(c.gasto), pedidos: pedidosDaCampanha.get(c.id) ?? 0 },

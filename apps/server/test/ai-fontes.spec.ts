@@ -74,8 +74,8 @@ describe('de onde vem cada número: quem diz é o código', () => {
       'Regem · pedidos confirmados com origem provada em campanha · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05',
       'Regem · pedidos com origem provada · 25/09/2026 a 01/10/2026',
     ]);
-    expect(i.get('numero|2.6')?.[1]).toBe('Liame · ROAS confirmado no caixa com origem provada em campanha (receita confirmada ÷ investimento) · calculado pelo sistema');
-    expect(i.get('numero|12.56')).toEqual(['Meta · ROAS que a plataforma informa da Meta, na janela de 7 dias depois do clique · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 06:12']);
+    expect(i.get('decimal|2.6')?.[1]).toBe('Liame · ROAS confirmado no caixa com origem provada em campanha (receita confirmada ÷ investimento) · calculado pelo sistema');
+    expect(i.get('decimal|12.56')).toEqual(['Meta · ROAS que a plataforma informa da Meta, na janela de 7 dias depois do clique · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 06:12']);
     expect(i.get('numero|30')).toEqual(['Regem · pedidos confirmados da campanha "Smash em dobro" · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05']);
     expect(i.get('dinheiro|700')).toEqual(['Meta · investimento da campanha "Smash em dobro" · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 06:12']);
     // A comparação: o valor de antes, e a variação calculada pelo código.
@@ -90,6 +90,58 @@ describe('de onde vem cada número: quem diz é o código', () => {
     expect(i.get('dias|7')).toEqual(['Liame · janela do modelo de atribuição, em dias', 'Meta · janela de atribuição da plataforma']);
     expect(i.get('numero|7')).toBeUndefined();
     expect(i.get('numero|960')).toBeUndefined();
+    // O número com casas (ROAS) não é contagem: "2,60" não responde por "2,6 pedidos", e a contagem não responde por um ROAS.
+    expect(i.get('numero|2.6')).toBeUndefined();
+    expect(i.get('decimal|38')).toBeUndefined();
+  });
+
+  it('o nome da plataforma entra na frase com o artigo certo, e a janela não se repete', () => {
+    const base = resultado();
+    const google = { ...base.platforms[0]!, provider: 'google_ads', platform: { ...base.platforms[0]!.platform, roas: '3.40', window: 'padrao' } };
+    const i = indiceDasFontes(contextoDosResultados({ ...base, platforms: [google] }, null));
+    expect(i.get('decimal|3.4')).toEqual(['Google Ads · ROAS que a plataforma informa do Google Ads, na janela de cada conversão (padrão da plataforma) · 25/09/2026 a 01/10/2026']);
+    expect(i.get('numero|38')?.[0]).toBe('Regem · pedidos confirmados com origem no Google Ads · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05');
+    expect(i.get('dinheiro|960')?.[0]).toBe('Google Ads · investimento do Google Ads · 25/09/2026 a 01/10/2026');
+    // E a explicação do sistema fala "O Google Ads", não "A Google Ads".
+    expect(explicacaoSemIa(contextoDosResultados({ ...base, platforms: [google] }, null)).motivos).toContain('O Google Ads informa ROAS de 3,40; o caixa confirma 2,60. Para decidir, vale o do caixa.');
+  });
+
+  it('a frase que cita uma campanha ganha a fonte dela; a que não cita, a do total, mesmo com o valor igual', () => {
+    // Duas campanhas com 7 pedidos cada, e uma terceira com ROAS de 7,00: três "7" que não se misturam.
+    const base = resultado();
+    const campanha = base.campaigns[0]!;
+    const sete = { ...campanha.confirmed, orders: 7 };
+    const c = contextoDosResultados(
+      {
+        ...base,
+        totals: { ...base.totals, confirmed: { ...base.totals.confirmed, orders: 7 } },
+        platforms: [],
+        campaigns: [
+          { ...campanha, campaign_id: U(11), name: 'Busca perto', confirmed: sete },
+          { ...campanha, campaign_id: U(12), name: 'Smash em dobro', confirmed: sete },
+          { ...campanha, campaign_id: U(13), name: 'Delivery noite', confirmed: { ...campanha.confirmed, orders: 2, roas: '7.00' } },
+        ],
+      },
+      null,
+    );
+    const m = marcarNumeros(
+      {
+        o_que_aconteceu: 'O caixa confirmou 7 pedidos com origem em campanha.',
+        motivos: ['A campanha "Smash em dobro" teve 7 pedidos confirmados.', 'A "Busca perto" também teve 7 pedidos.', 'Na "Delivery noite", o ROAS confirmado foi de 7,00.'],
+        risco: 'medio',
+        risco_motivo: 'foram 7 pedidos no total.',
+        o_que_fazer: ['Acompanhe a campanha "Smash em dobro".'],
+      },
+      c,
+    );
+    expect(m.numeros).toEqual([
+      { valor: '7', fontes: ['Regem · pedidos confirmados com origem provada em campanha · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05'] },
+      { valor: '7', fontes: ['Regem · pedidos confirmados da campanha "Smash em dobro" · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05'] },
+      { valor: '7', fontes: ['Regem · pedidos confirmados da campanha "Busca perto" · 25/09/2026 a 01/10/2026 · lido em 02/10/2026 14:05'] },
+      { valor: '7,00', fontes: ['Liame · ROAS confirmado no caixa da campanha "Delivery noite" (receita confirmada ÷ investimento) · calculado pelo sistema'] },
+    ]);
+    // O "7 pedidos no total" do risco volta para a linha do total: o mesmo valor, com as mesmas fontes.
+    expect(m.risco_motivo.find((t) => t.numero !== null)).toEqual({ texto: '7', numero: 0 });
   });
 
   it('o que o número mede decide a fonte: dinheiro, porcentagem, dias e contagem não se misturam', () => {

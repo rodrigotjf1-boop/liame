@@ -1,3 +1,4 @@
+import { comArtigo } from '../registro/leituras.visoes.js';
 import type { ContextoDaExplicacao } from './contexto.js';
 import type { Explicacao } from './resposta.js';
 
@@ -38,7 +39,7 @@ export function explicacaoSemIa(c: ContextoDaExplicacao): Explicacao {
   }
   const plataforma = c.resultado.plataformas[0];
   if (plataforma?.plataforma_informa.roas && plataforma.caixa_confirma.roas && plataforma.plataforma_informa.roas !== plataforma.caixa_confirma.roas) {
-    motivos.push(`A ${plataforma.plataforma} informa ROAS de ${plataforma.plataforma_informa.roas}; o caixa confirma ${plataforma.caixa_confirma.roas}. Para decidir, vale o do caixa.`);
+    motivos.push(`${comArtigo(plataforma.plataforma ?? 'plataforma', true)} informa ROAS de ${plataforma.plataforma_informa.roas}; o caixa confirma ${plataforma.caixa_confirma.roas}. Para decidir, vale o do caixa.`);
   }
   if (t.sem_origem.pedidos && t.sem_origem.pedidos !== '0') {
     motivos.push(`${t.sem_origem.pedidos} pedido(s) dos canais com clique ficaram sem origem provada${t.sem_origem.parte_dos_pedidos_com_clique ? ` (${t.sem_origem.parte_dos_pedidos_com_clique})` : ''}: não dá para dizer de que campanha vieram.`);

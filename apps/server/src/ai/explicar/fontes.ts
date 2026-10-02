@@ -1,3 +1,4 @@
+import { comDe, comEm } from '../registro/leituras.visoes.js';
 import { trechosDe } from '../verificador-numeros.js';
 import { type ContextoComAviso, type ContextoDaExplicacao, nomesDoContexto } from './contexto.js';
 import type { Explicacao } from './resposta.js';
@@ -5,9 +6,10 @@ import type { Explicacao } from './resposta.js';
 // De onde vem cada número da explicação (A3, I4; protótipo P4: "De onde vêm os números"). Quem diz é o
 // código, olhando o contexto que ele mesmo montou: a IA não escreve fonte nenhuma. O mesmo vale para o
 // resumo do sistema. O número é procurado pelo valor E pelo que ele mede (dinheiro, porcentagem, dias,
-// data, contagem): "7 dias" não ganha a fonte de "7 pedidos". Quando o mesmo valor está em mais de um
-// lugar do contexto, a lista leva os lugares, do mais específico para o mais geral, sem adivinhar qual
-// deles a frase quis dizer.
+// data, número com casas, contagem): "7 dias" não ganha a fonte de "7 pedidos", nem "7 pedidos" a de um
+// ROAS de 7,00. A frase que cita uma campanha fala dela; a que não cita, não fala de campanha nenhuma.
+// Quando o mesmo valor ainda está em mais de um lugar, a lista leva os lugares, do mais específico para o
+// mais geral, sem adivinhar qual deles a frase quis dizer.
 
 /** Um trecho do texto: comum, ou um número com a posição dele na lista de fontes. */
 export interface TrechoMarcado {
@@ -34,8 +36,11 @@ export interface ExplicacaoMarcada {
 const FONTES_POR_NUMERO = 3;
 const SEM_LUGAR = 'Liame · dado do período desta tela';
 
-/** O que o número mede, pelo que está escrito em volta dele. */
-export type Medida = 'dinheiro' | 'porcento' | 'dias' | 'data' | 'numero';
+/**
+ * O que o número mede, pelo que está escrito em volta dele. `decimal` é o número com casas ("2,60": ROAS,
+ * conversões fracionárias); `numero`, a contagem ("38").
+ */
+export type Medida = 'dinheiro' | 'porcento' | 'dias' | 'data' | 'decimal' | 'numero';
 
 interface Valor {
   /** A forma em que o número é comparado (a do verificador de números). */
@@ -68,7 +73,17 @@ function valoresDe(texto: string): Valor[] {
     if ((texto[fim] === ':' && DIGITO.test(texto[fim + 1] ?? '')) || (texto[inicio - 1] === ':' && DIGITO.test(texto[inicio - 2] ?? ''))) continue;
     const moeda = MOEDA.test(texto.slice(Math.max(0, inicio - 3), inicio));
     const porcento = texto[fim] === '%';
-    const medida: Medida = t.forma.startsWith('data:') ? 'data' : moeda ? 'dinheiro' : porcento ? 'porcento' : DIAS.test(texto.slice(fim, fim + 6)) ? 'dias' : 'numero';
+    const medida: Medida = t.forma.startsWith('data:')
+      ? 'data'
+      : moeda
+        ? 'dinheiro'
+        : porcento
+          ? 'porcento'
+          : DIAS.test(texto.slice(fim, fim + 6))
+            ? 'dias'
+            : t.texto.includes(',')
+              ? 'decimal'
+              : 'numero';
     valores.push({ forma: t.forma, medida, inicio: moeda ? inicio - 3 : inicio, fim: porcento ? fim + 1 : fim });
   }
   return valores;
@@ -77,29 +92,37 @@ function valoresDe(texto: string): Valor[] {
 /** A ordem das fontes de um mesmo número: da mais específica para a mais geral. */
 const ORDEM = { aviso: 0, campanha: 1, plataforma: 2, total: 3, comparacao: 4, geral: 5 } as const;
 
+/** Um lugar do contexto em que o número está. */
+interface Lugar {
+  descricao: string;
+  ordem: number;
+  /** A campanha, quando o número é de uma: é o que decide se ele serve para a frase. */
+  campanha?: string;
+}
+
 type Confirmado = ContextoDaExplicacao['resultado']['totais']['com_origem_provada'];
 type Informado = ContextoDaExplicacao['resultado']['plataformas'][number]['plataforma_informa'];
 
-/**
- * Cada número do contexto com a descrição de onde ele está. A chave é `medida|forma` ("dinheiro|960",
- * "porcento|22.4", "data:25/09/2026" como "data|data:25/09/2026"); as descrições vêm da mais específica
- * para a mais geral.
- */
-export function indiceDasFontes(c: ContextoComAviso): Map<string, string[]> {
-  const lugares = new Map<string, Array<{ descricao: string; ordem: number }>>();
-  const guardar = (chave: string, descricao: string, ordem: number) => {
+/** ", na janela de 7 dias depois do clique" / ", na janela de cada conversão (padrão da plataforma)". */
+const naJanela = (janela: string | undefined): string => (!janela ? '' : janela.startsWith('a janela ') ? `, na ${janela.slice(2)}` : `, na janela de ${janela}`);
+
+/** Cada número do contexto (chave `medida|forma`) com os lugares em que ele está, do mais específico para o mais geral. */
+function lugaresDoContexto(c: ContextoComAviso): Map<string, Lugar[]> {
+  const lugares = new Map<string, Lugar[]>();
+  const guardar = (chave: string, lugar: Lugar) => {
     const lista = lugares.get(chave) ?? [];
-    const igual = lista.find((l) => l.descricao === descricao);
-    if (igual) igual.ordem = Math.min(igual.ordem, ordem);
-    else lista.push({ descricao, ordem });
+    const igual = lista.find((l) => l.descricao === lugar.descricao);
+    if (igual) igual.ordem = Math.min(igual.ordem, lugar.ordem);
+    else lista.push({ ...lugar });
     lugares.set(chave, lista);
   };
-  const por = (valor: string | number | null | undefined, descricao: string, ordem: number, medida?: Medida) => {
+  const por = (valor: string | number | null | undefined, descricao: string, ordem: number, extra: { medida?: Medida; campanha?: string } = {}) => {
     if (valor === null || valor === undefined) return;
+    const lugar: Lugar = { descricao, ordem, ...(extra.campanha ? { campanha: extra.campanha } : {}) };
     for (const v of valoresDe(String(valor))) {
-      guardar(`${medida ?? v.medida}|${v.forma}`, descricao, ordem);
+      guardar(`${extra.medida ?? v.medida}|${v.forma}`, lugar);
       // A data com a hora também responde pela data sozinha.
-      if (v.medida === 'data' && v.forma.length > 15) guardar(`data|${v.forma.slice(0, 15)}`, descricao, ordem);
+      if (v.medida === 'data' && v.forma.length > 15) guardar(`data|${v.forma.slice(0, 15)}`, lugar);
     }
   };
 
@@ -111,27 +134,29 @@ export function indiceDasFontes(c: ContextoComAviso): Map<string, string[]> {
     return fontes.length === 1 ? ` · lido em ${fontes[0]!.ultima_leitura}` : '';
   };
   const doCaixa = (oque: string) => `Regem · ${oque}${periodo}${lido('Regem')}`;
-  const daPlataforma = (nome: string, oque: string) => `${nome} · ${oque}${periodo}${lido(nome)}`;
+  const naFonte = (nome: string, oque: string) => `${nome} · ${oque}${periodo}${lido(nome)}`;
   const doLiame = (oque: string) => `Liame · ${oque} · calculado pelo sistema`;
   const anuncios = r.plataformas.map((p) => p.plataforma).filter((n): n is string => !!n);
   const asPlataformas = anuncios.length ? anuncios.join(' e ') : 'Plataformas de anúncio';
 
-  const confirmado = (x: Confirmado, de: string, ordem: number) => {
-    por(x.pedidos, doCaixa(`pedidos confirmados ${de}`), ordem);
-    por(x.receita, doCaixa(`receita confirmada ${de}`), ordem);
-    por(x.roas, doLiame(`ROAS confirmado no caixa ${de} (receita confirmada ÷ investimento)`), ordem);
-    por(x.custo_por_pedido, doLiame(`custo por pedido confirmado ${de} (investimento ÷ pedidos)`), ordem);
-    por(x.margem_conhecida, doCaixa(`margem conhecida ${de} (preço menos custo cadastrado)`), ordem);
-    por(x.parte_da_receita_com_margem_conhecida, doCaixa(`parte da receita ${de} com custo cadastrado`), ordem);
+  const confirmado = (x: Confirmado, de: string, ordem: number, campanha?: string) => {
+    const extra = campanha ? { campanha } : {};
+    por(x.pedidos, doCaixa(`pedidos confirmados ${de}`), ordem, extra);
+    por(x.receita, doCaixa(`receita confirmada ${de}`), ordem, extra);
+    por(x.roas, doLiame(`ROAS confirmado no caixa ${de} (receita confirmada ÷ investimento)`), ordem, extra);
+    por(x.custo_por_pedido, doLiame(`custo por pedido confirmado ${de} (investimento ÷ pedidos)`), ordem, extra);
+    por(x.margem_conhecida, doCaixa(`margem conhecida ${de} (preço menos custo cadastrado)`), ordem, extra);
+    por(x.parte_da_receita_com_margem_conhecida, doCaixa(`parte da receita ${de} com custo cadastrado`), ordem, extra);
   };
-  const informado = (x: Informado, nome: string, de: string, ordem: number) => {
-    const janela = x.janela ? `, na janela de ${x.janela}` : '';
-    por(x.investimento, daPlataforma(nome, `investimento ${de}`), ordem);
-    por(x.valor_de_venda, daPlataforma(nome, `valor de venda que a plataforma informa ${de}${janela}`), ordem);
-    por(x.roas, daPlataforma(nome, `ROAS que a plataforma informa ${de}${janela}`), ordem);
-    por(x.conversoes, daPlataforma(nome, `conversões que a plataforma informa ${de}${janela}`), ordem);
-    por(x.conversas, daPlataforma(nome, `conversas iniciadas ${de}`), ordem);
-    por(x.custo_por_conversa, daPlataforma(nome, `custo por conversa ${de}`), ordem);
+  const informado = (x: Informado, nome: string, de: string, ordem: number, campanha?: string) => {
+    const extra = campanha ? { campanha } : {};
+    const janela = naJanela(x.janela);
+    por(x.investimento, naFonte(nome, `investimento ${de}`), ordem, extra);
+    por(x.valor_de_venda, naFonte(nome, `valor de venda que a plataforma informa ${de}${janela}`), ordem, extra);
+    por(x.roas, naFonte(nome, `ROAS que a plataforma informa ${de}${janela}`), ordem, extra);
+    por(x.conversoes, naFonte(nome, `conversões que a plataforma informa ${de}${janela}`), ordem, extra);
+    por(x.conversas, naFonte(nome, `conversas iniciadas ${de}`), ordem, extra);
+    por(x.custo_por_conversa, naFonte(nome, `custo por conversa ${de}`), ordem, extra);
     por(x.janela, `${nome} · janela de atribuição da plataforma`, ORDEM.geral);
   };
 
@@ -145,7 +170,7 @@ export function indiceDasFontes(c: ContextoComAviso): Map<string, string[]> {
   // Período e modelo.
   por(r.periodo.de, 'Período desta explicação', ORDEM.geral);
   por(r.periodo.ate, 'Período desta explicação', ORDEM.geral);
-  por(r.atribuicao.janela_em_dias, 'Liame · janela do modelo de atribuição, em dias', ORDEM.geral, 'dias');
+  por(r.atribuicao.janela_em_dias, 'Liame · janela do modelo de atribuição, em dias', ORDEM.geral, { medida: 'dias' });
 
   // Totais.
   const t = r.totais;
@@ -165,15 +190,15 @@ export function indiceDasFontes(c: ContextoComAviso): Map<string, string[]> {
 
   // Por plataforma e por campanha.
   for (const p of r.plataformas) {
-    const nome = p.plataforma ?? 'Plataforma';
-    informado(p.plataforma_informa, nome, `da ${nome}`, ORDEM.plataforma);
-    confirmado(p.caixa_confirma, `com origem na ${nome}`, ORDEM.plataforma);
+    const nome = p.plataforma ?? 'plataforma';
+    informado(p.plataforma_informa, nome, comDe(nome), ORDEM.plataforma);
+    confirmado(p.caixa_confirma, `com origem ${comEm(nome)}`, ORDEM.plataforma);
     por(p.pedidos_provados_so_na_plataforma, doCaixa(`pedidos provados só na plataforma (${nome}), sem campanha`), ORDEM.plataforma);
   }
   for (const k of r.campanhas) {
-    const nome = k.plataforma ?? 'Plataforma';
-    informado(k.plataforma_informa, nome, `da campanha "${k.campanha}"`, ORDEM.campanha);
-    confirmado(k.caixa_confirma, `da campanha "${k.campanha}"`, ORDEM.campanha);
+    const nome = k.plataforma ?? 'plataforma';
+    informado(k.plataforma_informa, nome, `da campanha "${k.campanha}"`, ORDEM.campanha, k.campanha);
+    confirmado(k.caixa_confirma, `da campanha "${k.campanha}"`, ORDEM.campanha, k.campanha);
   }
   por(r.campanhas_fora_da_lista, doLiame('campanhas com investimento que ficaram fora desta lista'), ORDEM.geral);
 
@@ -200,7 +225,17 @@ export function indiceDasFontes(c: ContextoComAviso): Map<string, string[]> {
   }
 
   // A ordenação é estável: na mesma ordem, vale a de chegada.
-  return new Map([...lugares].map(([chave, lista]) => [chave, [...lista].sort((x, y) => x.ordem - y.ordem).map((l) => l.descricao)]));
+  for (const lista of lugares.values()) lista.sort((x, y) => x.ordem - y.ordem);
+  return lugares;
+}
+
+/**
+ * Cada número do contexto com a descrição de onde ele está. A chave é `medida|forma` ("dinheiro|960",
+ * "porcento|22.4", "decimal|2.6", "data|data:25/09/2026"); as descrições vêm da mais específica para a mais
+ * geral, sem olhar para a frase em que o número aparece (isso é do `marcarNumeros`).
+ */
+export function indiceDasFontes(c: ContextoComAviso): Map<string, string[]> {
+  return new Map([...lugaresDoContexto(c)].map(([chave, lista]) => [chave, lista.map((l) => l.descricao)]));
 }
 
 /**
@@ -218,39 +253,55 @@ function faixasDosNomes(texto: string, nomes: string[]): Array<[number, number]>
 
 /**
  * A explicação com cada número marcado e a lista "De onde vêm os números", na ordem de leitura. O mesmo
- * valor escrito duas vezes aponta para a mesma linha da lista. Fica como texto comum o número que é parte
- * de um nome da empresa ou que está colado numa letra (código de cupom "SMASH10", "2x1"): a conferência dos
- * números continua valendo para ele, só não vira um valor com fonte na tela.
+ * valor, com as mesmas fontes, escrito duas vezes aponta para a mesma linha da lista. Fica como texto comum
+ * o número que é parte de um nome da empresa ou que está colado numa letra (código de cupom "SMASH10",
+ * "2x1"): a conferência dos números continua valendo para ele, só não vira um valor com fonte na tela.
  */
 export function marcarNumeros(e: Explicacao, contexto: ContextoComAviso): ExplicacaoMarcada {
-  const indice = indiceDasFontes(contexto);
+  const lugares = lugaresDoContexto(contexto);
   // Sem lugar com a mesma medida (a frase escreveu "960 reais", sem o "R$"), vale o valor em qualquer medida.
-  const emQualquerMedida = new Map<string, string[]>();
-  for (const [chave, descricoes] of indice) {
+  const emQualquerMedida = new Map<string, Lugar[]>();
+  for (const [chave, lista] of lugares) {
     const forma = chave.slice(chave.indexOf('|') + 1);
-    const lista = emQualquerMedida.get(forma) ?? [];
-    for (const d of descricoes) if (!lista.includes(d)) lista.push(d);
-    emQualquerMedida.set(forma, lista);
+    const juntos = emQualquerMedida.get(forma) ?? [];
+    for (const l of lista) if (!juntos.some((j) => j.descricao === l.descricao)) juntos.push(l);
+    emQualquerMedida.set(forma, juntos);
   }
   const nomes = nomesDoContexto(contexto);
+  const campanhas = [...new Set([...contexto.resultado.campanhas.map((k) => k.campanha), contexto.aviso?.campanha].filter((n): n is string => !!n))];
   const numeros: NumeroComFonte[] = [];
   const posicao = new Map<string, number>();
 
   const marcar = (texto: string): TrechoMarcado[] => {
     const saida: TrechoMarcado[] = [];
     const faixas = faixasDosNomes(texto, nomes);
+    const citadas = campanhas.filter((nome) => texto.includes(nome));
+    /**
+     * As fontes de um número nesta frase. Com o número entre os da campanha que a frase cita, são as dela
+     * (a frase fala da campanha). Senão, as que não são de campanha nenhuma (o total, a plataforma, a
+     * comparação, o aviso). Só na falta das duas valem os lugares de outras campanhas.
+     */
+    const fontesDe = (todos: Lugar[] | undefined): string[] => {
+      if (!todos?.length) return [SEM_LUGAR];
+      const daCampanhaCitada = todos.filter((l) => l.campanha !== undefined && citadas.includes(l.campanha));
+      const semCampanha = todos.filter((l) => l.campanha === undefined);
+      const daFrase = daCampanhaCitada.length ? daCampanhaCitada : semCampanha.length ? semCampanha : todos;
+      return daFrase.slice(0, FONTES_POR_NUMERO).map((l) => l.descricao);
+    };
     let fim = 0;
     for (const v of valoresDe(texto)) {
       if (faixas.some(([de, ate]) => v.inicio >= de && v.fim <= ate)) continue;
       if (v.inicio > fim) saida.push({ texto: texto.slice(fim, v.inicio), numero: null });
       const valor = texto.slice(v.inicio, v.fim);
-      // Uma linha por valor e medida: "R$ 960,00" escrito duas vezes (ou com outro espaço) é a mesma linha.
-      const chave = `${v.medida}|${v.forma}`;
+      const fontes = fontesDe(lugares.get(`${v.medida}|${v.forma}`) ?? emQualquerMedida.get(v.forma));
+      // Uma linha por valor, medida e fontes: "R$ 960,00" escrito duas vezes (ou com outro espaço) é a mesma
+      // linha; o mesmo "7" de duas campanhas diferentes são duas.
+      const chave = `${v.medida}|${v.forma}|${fontes.join('|')}`;
       let n = posicao.get(chave);
       if (n === undefined) {
         n = numeros.length;
         posicao.set(chave, n);
-        numeros.push({ valor, fontes: (indice.get(`${v.medida}|${v.forma}`) ?? emQualquerMedida.get(v.forma) ?? [SEM_LUGAR]).slice(0, FONTES_POR_NUMERO) });
+        numeros.push({ valor, fontes });
       }
       saida.push({ texto: valor, numero: n });
       fim = v.fim;
