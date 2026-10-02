@@ -88,7 +88,8 @@ export const AttentionItem = z.strictObject({
    * `gasto_fora_do_normal`, `campanha_parou` ou `versao_api`. Ciclo fechado (F9): os quatro primeiros com o
    * `provider` `regem`, e `vendas_nao_conectadas`, `plataforma_nao_informada`, `anuncio_sem_rastreio`,
    * `campanha_sem_cupom`, `vendas_nao_medidas`, `campanha_sem_pedido`, `cupom_sem_uso`, `margem_desconhecida`
-   * ou `plataforma_x_caixa`.
+   * ou `plataforma_x_caixa`. Fora do normal (A3, I6): `vendas_fora_do_normal`,
+   * `gasto_da_campanha_fora_do_normal` e `custo_por_pedido_fora_do_normal`.
    */
   kind: Slug,
   /** `critica`, `atencao` ou `info`. */

@@ -17,7 +17,11 @@ export type TipoCiclo =
   | 'campanha_sem_pedido'
   | 'cupom_sem_uso'
   | 'margem_desconhecida'
-  | 'plataforma_x_caixa';
+  | 'plataforma_x_caixa'
+  // Fora do normal (A3, I6): as regras estão em `fora-do-normal.ts`.
+  | 'vendas_fora_do_normal'
+  | 'gasto_da_campanha_fora_do_normal'
+  | 'custo_por_pedido_fora_do_normal';
 
 export type ItemCiclo = {
   kind: TipoCiclo;
@@ -312,15 +316,18 @@ export function avisoPlataformaCaixa(provider: string, plataformaMicros: bigint,
 
 const ORDEM: Record<Severidade, number> = { critica: 0, atencao: 1, info: 2 };
 
-/** Dentro da mesma gravidade: a fonte parada, depois o que impede medir, depois o dinheiro, depois o resto. */
+/** Dentro da mesma gravidade: a fonte parada, as vendas fora do normal, o que impede medir, o dinheiro, depois o resto. */
 const PRIORIDADE: TipoCiclo[] = [
   'conta_desconectada',
   'dado_atrasado',
   'conta_sem_permissao',
   'conta_com_erro',
+  'vendas_fora_do_normal',
   'anuncio_sem_rastreio',
   'campanha_sem_cupom',
   'campanha_sem_pedido',
+  'gasto_da_campanha_fora_do_normal',
+  'custo_por_pedido_fora_do_normal',
   'cupom_sem_uso',
   'margem_desconhecida',
   'vendas_nao_conectadas',

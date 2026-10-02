@@ -57,6 +57,12 @@ describe('atenção de mídia', () => {
     expect(destinoDoAviso('reconectar')).toBeNull();
   });
 
+  it('fora do normal (A3, I6): vendas, gasto da campanha e custo por pedido se conferem em Resultados', () => {
+    expect(['vendas_fora_do_normal', 'gasto_da_campanha_fora_do_normal', 'custo_por_pedido_fora_do_normal'].map(acaoDoAviso)).toEqual(Array(3).fill('abrir-resultados'));
+    // O gasto da conta (aviso de mídia, da A2) segue sem botão, como no protótipo.
+    expect(acaoDoAviso('gasto_fora_do_normal')).toBeNull();
+  });
+
   it('mídia e ciclo fechado numa lista só: mais grave primeiro e, na mesma gravidade, os de mídia antes', () => {
     const midia = [{ severity: 'critica', kind: 'm1' }, { severity: 'atencao', kind: 'm2' }, { severity: 'info', kind: 'm3' }];
     const ciclo = [{ severity: 'critica', kind: 'c1' }, { severity: 'atencao', kind: 'c2' }, { severity: 'gravidade_nova', kind: 'c3' }];

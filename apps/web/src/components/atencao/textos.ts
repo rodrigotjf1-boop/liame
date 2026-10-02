@@ -63,6 +63,8 @@ export function acaoDoAviso(kind: string): AcaoDoAviso | null {
   if (kind === 'anuncio_sem_rastreio' || kind === 'plataforma_nao_informada') return 'abrir-links';
   if (kind === 'campanha_sem_cupom' || kind === 'cupom_sem_uso') return 'abrir-cupons';
   if (kind === 'campanha_sem_pedido' || kind === 'margem_desconhecida' || kind === 'plataforma_x_caixa' || kind === 'vendas_nao_medidas') return 'abrir-resultados';
+  // Fora do normal (A3, I6): vendas, gasto da campanha e custo por pedido se conferem em Resultados.
+  if (kind === 'vendas_fora_do_normal' || kind === 'gasto_da_campanha_fora_do_normal' || kind === 'custo_por_pedido_fora_do_normal') return 'abrir-resultados';
   return null;
 }
 

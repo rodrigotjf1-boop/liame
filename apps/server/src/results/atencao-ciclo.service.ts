@@ -21,10 +21,12 @@ import {
   ordenarCiclo,
   plataformaIntegrada,
 } from './atencao-ciclo.js';
+import { avisoCustoPorPedido, avisoGastoDaCampanha, avisoVendasForaDoNormal, DIAS_DA_SERIE, diaNoFuso, lidaHoje, menosDias, type VendasDoDia } from './fora-do-normal.js';
 
 // Atenção do ciclo fechado (A2.5, F9): calculada na hora, na transação da requisição e sob a RLS da empresa,
 // em poucas consultas de conjunto para todas as marcas pedidas (só a conferência do rastreio é por marca, e só
-// para a marca com loja no cardápio do Regem). As regras e os textos são funções puras (`atencao-ciclo.ts`).
+// para a marca com loja no cardápio do Regem). As regras e os textos são funções puras (`atencao-ciclo.ts` e,
+// para o que saiu do normal, `fora-do-normal.ts`).
 
 const FUSO_PADRAO = 'America/Sao_Paulo';
 
@@ -136,6 +138,66 @@ export class AtencaoCicloService {
         left join custos c on c.order_id = p.id
        group by 1, 2, 3`);
 
+    // 5. Fora do normal (A3, I6): a série dos últimos dias de cada loja e de cada campanha, para comparar
+    //    ontem com o mesmo dia das semanas anteriores, e os pedidos das 4 semanas antes da janela.
+    const inicioDaSerie = new Date(agora.getTime() - DIAS_DA_SERIE * 86_400_000).toISOString();
+    const vendasPorDia = await tx.execute<{ loja: string; dia: string; pedidos: number; receita: string }>(sql`
+      select o.connected_account_id as loja,
+             (coalesce(o.billed_at, o.confirmed_at) at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date::text as dia,
+             count(*)::int as pedidos, sum(o.revenue_micros - o.refunded_micros)::text as receita
+        from liame.order_fact o
+        join liame.connected_account a on a.id = o.connected_account_id
+       where o.brand_id in ${marcas} and o.status = 'confirmado' and a.provider = 'regem' and a.disconnected_at is null
+         and coalesce(o.billed_at, o.confirmed_at) >= ${inicioDaSerie}::timestamptz
+       group by 1, 2`);
+    const serieDaLoja = new Map<string, Map<string, VendasDoDia>>();
+    for (const l of vendasPorDia.rows) {
+      const serie = serieDaLoja.get(l.loja) ?? new Map<string, VendasDoDia>();
+      serie.set(l.dia, { pedidos: Number(l.pedidos), receitaMicros: BigInt(l.receita) });
+      serieDaLoja.set(l.loja, serie);
+    }
+    const gastoPorDia = await tx.execute<{ campaign_id: string | null; dia: string; gasto: string }>(sql`
+      select coalesce(g.campaign_id, cd.id) as campaign_id, ml.metric_date::text as dia, round(sum(ml.metric_value) * 1000000)::bigint::text as gasto
+        from liame.metric_latest ml
+        join liame.connected_account a on a.id = ml.connected_account_id
+        left join liame.ad ad on ml.level = 'ad' and ad.id = ml.entity_id
+        left join liame.ad_group g on g.id = ad.ad_group_id
+        left join liame.campaign cd on ml.level = 'campaign' and cd.id = ml.entity_id
+       where a.brand_id in ${marcas} and a.provider in ('meta_ads', 'google_ads') and a.disconnected_at is null
+         and ((a.provider = 'meta_ads' and ml.level = 'ad') or (a.provider = 'google_ads' and ml.level = 'campaign'))
+         and ml.metric_name = 'spend' and ml.attribution_window = ''
+         and ml.metric_date >= (${agora.toISOString()}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${DIAS_DA_SERIE}::int
+       group by 1, 2`);
+    const serieDaCampanha = new Map<string, Map<string, bigint>>();
+    for (const l of gastoPorDia.rows) {
+      if (!l.campaign_id) continue;
+      const serie = serieDaCampanha.get(l.campaign_id) ?? new Map<string, bigint>();
+      serie.set(l.dia, BigInt(l.gasto));
+      serieDaCampanha.set(l.campaign_id, serie);
+    }
+    const contasDeAnuncio = new Map(
+      (
+        await tx.execute<{ id: string; fuso: string; lidas_em: Date | string | null }>(sql`
+          select a.id, coalesce(a.timezone, ${FUSO_PADRAO}) as fuso, s.last_success_at as lidas_em
+            from liame.connected_account a
+            left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'metricas'
+           where a.brand_id in ${marcas} and a.provider in ('meta_ads', 'google_ads') and a.disconnected_at is null`)
+      ).rows.map((c) => [c.id, c]),
+    );
+    const pedidosDaHistoria = new Map(
+      (
+        await tx.execute<{ campaign_id: string; n: number }>(sql`
+          select r.campaign_id, count(*)::int as n
+            from liame.order_fact o
+            join liame.attribution_result r on r.order_id = o.id and r.model_id = ${MODELO_PADRAO} and r.counted
+           where o.brand_id in ${marcas} and o.status = 'confirmado' and r.campaign_id is not null
+             and o.confirmed_at >= ${new Date(agora.getTime() - (LIMIARES.dias + 28) * 86_400_000).toISOString()}::timestamptz
+             and o.confirmed_at < ${desde}::timestamptz
+           group by 1`)
+      ).rows.map((l) => [l.campaign_id, Number(l.n)]),
+    );
+    const primeiroDia = <T>(serie: Map<string, T> | undefined) => (serie?.size ? [...serie.keys()].sort()[0]! : null);
+
     const itens: ItemCiclo[] = [];
     for (const marca of marcas) {
       const lojasDaMarca = lojas.rows.filter((l) => l.brand_id === marca);
@@ -150,6 +212,13 @@ export class AtencaoCicloService {
       for (const l of lojasDaMarca) {
         const loja = { id: l.id, nome: l.unit_name ?? l.name };
         itens.push(...avisosDaFonte({ ...loja, status: l.status, statusReason: l.status_reason, fuso: l.timezone, pedidosLidosEm: l.pedidos_lidos_em }, agora));
+        // Vendas de ontem fora do normal: só com os pedidos lidos hoje (dado velho não gera aviso).
+        const fusoDaLoja = l.timezone ?? FUSO_PADRAO;
+        if (l.status === 'ativa' && l.pedidos_lidos_em && lidaHoje(l.pedidos_lidos_em, agora, fusoDaLoja)) {
+          const serie = serieDaLoja.get(l.id) ?? new Map<string, VendasDoDia>();
+          const aviso = avisoVendasForaDoNormal({ ...loja, fuso: fusoDaLoja, lidoEm: l.pedidos_lidos_em, desde: primeiroDia(serie), porDia: serie }, menosDias(diaNoFuso(agora, fusoDaLoja), 1));
+          if (aviso) itens.push(aviso);
+        }
         if (!comMidia.has(marca)) continue;
         if (!l.order_platform) itens.push(avisoPlataformaNaoInformada(loja));
         else if (l.order_platform === 'regem' || plataformaIntegrada(l.order_platform)) plataformas.add(l.order_platform);
@@ -201,6 +270,26 @@ export class AtencaoCicloService {
           agora,
         );
         if (aviso) itens.push(aviso);
+      }
+
+      // Fora do normal por campanha (I6): o gasto de ontem e o custo por pedido, só com a plataforma lida hoje.
+      for (const c of campanhasDaMarca) {
+        const contaDeAnuncio = contasDeAnuncio.get(c.conta);
+        if (!campanhaAtiva.has(c.id) || !contaDeAnuncio || !contaDeAnuncio.lidas_em || !lidaHoje(contaDeAnuncio.lidas_em, agora, contaDeAnuncio.fuso)) continue;
+        const serie = serieDaCampanha.get(c.id) ?? new Map<string, bigint>();
+        const hoje = diaNoFuso(agora, contaDeAnuncio.fuso);
+        const base = { id: c.id, name: c.name, provider: c.provider, connectedAccountId: c.conta };
+        const gasto = avisoGastoDaCampanha({ ...base, fuso: contaDeAnuncio.fuso, lidoEm: contaDeAnuncio.lidas_em, desde: primeiroDia(serie), gastoPorDia: serie }, menosDias(hoje, 1));
+        if (gasto) itens.push(gasto);
+        // As 4 semanas antes dos últimos 7 dias.
+        let gastoDaHistoria = 0n;
+        for (let d = LIMIARES.dias; d < LIMIARES.dias + 28; d++) gastoDaHistoria += serie.get(menosDias(hoje, d)) ?? 0n;
+        const custo = avisoCustoPorPedido({
+          ...base,
+          semana: { gastoMicros: BigInt(c.gasto), pedidos: pedidosDaCampanha.get(c.id) ?? 0 },
+          historia: { gastoMicros: gastoDaHistoria, pedidos: pedidosDaHistoria.get(c.id) ?? 0 },
+        });
+        if (custo) itens.push(custo);
       }
 
       // Margem desconhecida na receita atribuída e plataforma × caixa, por plataforma de anúncio.
