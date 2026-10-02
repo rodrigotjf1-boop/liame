@@ -1,6 +1,6 @@
 # Liame — Plano da fase A3 · Camada de inteligência
 
-> **Proposta de 01/10/2026, aguardando a aprovação do dono.** A A3 é quando "os funcionários pensam" (roadmap §2): a LIA explica os números, a revisão semanal chega pronta, o que fugiu do normal vem com o motivo, e cada funcionário aparece em "Sua equipe" com o que fez e o quanto já dá para confiar nele. **A IA não escreve em plataforma de anúncio nesta fase** (A4) e **não calcula número final**: ROAS, receita, margem e custo continuam vindo do código (`ai-architecture.md` §8). Tudo o que a IA recomendar sobre anúncio roda em **sombra** (registrado e comparado com o que a pessoa fez), para medir a prontidão antes da A4. A única escrita externa continua sendo o cupom no Regem, sempre com aprovação. O produto segue funcionando com a IA fora do ar (especificação §5, item 5).
+> **Aprovado pelo dono em 02/10/2026** ("2 autorizado"), com as decisões D-A3-1 a D-A3-12 como recomendadas. Ficaram em aberto com ele: o valor do teto de custo do piloto (D-A3-3), a conta de API na Anthropic e a D-A3-13, que nasceu da reconferência da base. A A3 é quando "os funcionários pensam" (roadmap §2): a LIA explica os números, a revisão semanal chega pronta, o que fugiu do normal vem com o motivo, e cada funcionário aparece em "Sua equipe" com o que fez e o quanto já dá para confiar nele. **A IA não escreve em plataforma de anúncio nesta fase** (A4) e **não calcula número final**: ROAS, receita, margem e custo continuam vindo do código (`ai-architecture.md` §8). Tudo o que a IA recomendar sobre anúncio roda em **sombra** (registrado e comparado com o que a pessoa fez), para medir a prontidão antes da A4. A única escrita externa continua sendo o cupom no Regem, sempre com aprovação. O produto segue funcionando com a IA fora do ar (especificação §5, item 5).
 
 ## 1. De onde partimos (código e documentos lidos em 01/10/2026)
 
@@ -47,7 +47,7 @@ Cada entrega é um PR com CI verde. **Migrations em negrito**: testadas no local
 
 Ordem: I1 → I2 → I3 → I4 (primeiro valor visível, menor risco) → I5 (junta amostra desde cedo) → I6 → I7 → I8 → I9 → I10 → I11 → I12 → I13. Tudo sai testado contra respostas gravadas do provedor antes de gastar com chamadas reais; os evals pagos rodam só quando o que eles protegem muda.
 
-## 4. Decisões para aprovar
+## 4. Decisões (aprovadas pelo dono em 02/10/2026; a D-A3-13 aguarda)
 
 | # | Decisão | Recomendação | Por quê |
 | --- | --- | --- | --- |
@@ -63,6 +63,7 @@ Ordem: I1 → I2 → I3 → I4 (primeiro valor visível, menor risco) → I5 (ju
 | D-A3-10 | **Portões da prontidão** | Os de `ai-architecture.md` §4.2 como ponto de partida (30 decisões comparáveis, concordância ≥ 80%, zero violação de política, dado fresco em ≥ 95%); o piloto tem uma loja, então o prazo é o que a amostra pedir | Promover sem amostra é palpite |
 | D-A3-11 | **Observabilidade de IA** | Usar o nosso OpenTelemetry e o `ai_usage`; **não contratar o Langfuse agora** (segue como "previsto" nos documentos) | Um fornecedor a menos enquanto o volume é de piloto |
 | D-A3-12 | **Escolha de modelo pelo cliente** | Lite fica em "Automático"; a escolha por finalidade no Pro entra na I13, só com modelos do catálogo que passaram no eval. Sem chave própria do cliente | ADR-016 |
+| D-A3-13 | **Onde o modelo roda** (nova, 02/10/2026; **aguarda o dono**) | Fixar `inference_geo: "us"` em toda chamada, pagando 10% a mais | A Anthropic não tem região no Brasil; o padrão (`global`) pode rodar em qualquer região disponível, e os nossos documentos dizem "Estados Unidos". Fixar torna a frase verdadeira e verificável. O Haiku 4.5 não aceita o parâmetro: fica fora das rotas |
 
 ## 5. Protótipos para aprovação (antes do código de tela)
 
