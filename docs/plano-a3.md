@@ -79,6 +79,8 @@ Sem protótipo aprovado não se inventa tela (`CLAUDE.md` §2). As vistas do pro
 | P7 | **Sua equipe** | Funcionário ativo, em sombra e desligado; prontidão com o que falta; proposta de promoção para aprovar; custo do mês; histórico |
 | P8 | **Resumo** (página inicial do Lite) e **Plano do Estrategista** | Sem dados ainda; semana normal; algo precisa de você; plano para aprovar, editar ou recusar |
 
+> **P4 entregue para aprovação em 02/10/2026:** `mockups/prototipo-explicar.html`, com os seletores "Tela" (Resultados, Atenção, Revisão semanal) e "Explicação" (os estados) na faixa do topo. **Aguarda o dono.** A rota e a tela do Explicar (I4) e a revisão semanal (I7) só começam depois da aprovação. As escolhas propostas estão no changelog de `decisoes-design.md`.
+
 ## 6. Critérios de saída da A3
 
 | # | Critério | Como é verificado |
