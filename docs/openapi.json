@@ -25787,6 +25787,10 @@
     {
       "name": "cupons",
       "description": "Cupons de campanha: os do Regem e os de outra plataforma de pedidos, ligados a campanhas, e onde cada loja recebe os pedidos online (A2.5)"
+    },
+    {
+      "name": "ia",
+      "description": "Inteligência artificial: o \"Explicar\" dos resultados e de um aviso da Atenção, com a fonte de cada número, e o retorno da pessoa (A3)"
     }
   ],
   "servers": [
