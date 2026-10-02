@@ -12,7 +12,8 @@
     "start:api": "node --enable-source-maps --import ./dist/telemetry.js dist/main.api.js",
     "start:worker": "node --enable-source-maps --import ./dist/telemetry.js dist/main.worker.js",
     "openapi": "node dist/scripts/openapi.js ../../docs/openapi.json",
-    "trace-check": "node --enable-source-maps dist/scripts/trace-check.js"
+    "trace-check": "node --enable-source-maps dist/scripts/trace-check.js",
+    "ia:lock": "node --enable-source-maps dist/scripts/ia-lock.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "catalog:",

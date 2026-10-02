@@ -169,6 +169,8 @@ Opt-in amarrado à **finalidade**. Opt-out vale na hora para envios pendentes. C
 
 `agent_definition` (funcionário: cargo, responsabilidades, ferramentas permitidas, políticas, rotas de modelo, KPIs) + `agent_activation` (qual funcionário está ativo para qual tenant/marca/plano), `tool_registry`, `connector_capability`, `policy` / `policy_template`, `prompt_version`, `model_route`, `knowledge_item` (dossiê estruturado e base da agência): todos versionados com `status, created_by, eval_score, deployed_at`.
 
+**No banco desde a migration 0029 (A3, I2):** `tool_registry(name, version, status, risk, permission, description, input_schema, owner, content_hash, deployed_at, retired_at)`, `prompt_version(key, version, status, task, content, content_hash, eval_score, deployed_at, retired_at)` e `agent_definition(key, version, status, name, definition, content_hash, eval_score, deployed_at, retired_at)`: do produto, uma versão ativa por nome, nunca apagadas; quem grava é o worker, na subida, a partir das definições do código. `agent_activation(tenant, brand, agent_key, enabled, set_by, reason)`: da empresa; ela lê, a distribuição grava. `model_route` é a `ai_model_route` da 0028; `knowledge_item` chega na I8.
+
 ## 8. Auditoria e uso de IA
 
 - `audit_event` (append-only, sem UPDATE/DELETE na role da aplicação): `who, actor_type [human|agent|integration|system|partner], tenant, brand, unit, action, resource, before, after, reason, approval_id, trace_id, tool, agent, model, occurred_at, prev_hash, hash`.

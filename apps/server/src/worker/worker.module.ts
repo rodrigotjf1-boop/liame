@@ -19,6 +19,7 @@ import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-proce
 import { LifecyclePurgeService } from './lifecycle-purge.service.js';
 import { OutboxPublisher } from './outbox-publisher.js';
 import { QueueService } from './queue.service.js';
+import { RegistroIaService } from './registro-ia.service.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 @Module({
@@ -37,6 +38,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // O connector de escrita do Regem (criar cupom de campanha) recebe o cofre e o cliente HTTP aqui.
     EscritaRegem,
     LifecyclePurgeService,
+    // Grava na subida as versões de ferramenta, prompt e funcionário de IA que este código traz (A3, I2).
+    RegistroIaService,
     WebhookDeliverer,
     InboxProcessor,
     ConexaoProcessor,

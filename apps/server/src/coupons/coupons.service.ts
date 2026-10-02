@@ -203,8 +203,11 @@ export class CouponsService {
     private readonly flags: FlagService,
   ) {}
 
-  /** Lojas, cupons (com os usos de 7 dias e a ligação em vigor), pedidos de criação, campanhas e a plataforma sugerida pelos anúncios. */
-  async list(auth: AuthContext, brandId: string, agora = new Date()): Promise<CouponListResponse> {
+  /**
+   * Lojas, cupons (com os usos de 7 dias e a ligação em vigor), pedidos de criação, campanhas e a plataforma sugerida pelos anúncios.
+   * De quem pede só entram a empresa e a pessoa (a flag de criação); a rotina sem pessoa (leitura da IA) passa `userId` nulo.
+   */
+  async list(auth: { tenantId: string | null; userId: string | null }, brandId: string, agora = new Date()): Promise<CouponListResponse> {
     await this.marca(brandId);
     const tx = currentTx();
     const lojas = await this.lojas(sql`a.brand_id = ${brandId}`);

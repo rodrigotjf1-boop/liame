@@ -96,4 +96,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   ai_budget: { class: 'INTERNAL', retention: 'com a empresa' },
   ai_usage: { class: 'PERSONAL', retention: 'com a empresa (registro técnico, sem conteúdo)' },
   ai_exchange: { class: 'CONFIDENTIAL', retention: '30 dias (o que foi enviado ao modelo e o que voltou)', purge: { job: 'conteudo_ia', days: 30 } },
+  // Registros da IA (A3, I2): cada versão de ferramenta, prompt e funcionário que foi ao ar (do produto);
+  // a ativação diz qual funcionário trabalha para qual empresa.
+  tool_registry: { class: 'PUBLIC', retention: 'do produto (histórico das versões)' },
+  prompt_version: { class: 'INTERNAL', retention: 'do produto (histórico das versões)' },
+  agent_definition: { class: 'INTERNAL', retention: 'do produto (histórico das versões)' },
+  agent_activation: { class: 'INTERNAL', retention: 'com a empresa' },
 };
