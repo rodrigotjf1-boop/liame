@@ -99,7 +99,7 @@ Plano **aprovado pelo dono em 29/09/2026**: [`plano-a25.md`](plano-a25.md), com 
 
 ## Fase A3 · Camada de inteligência
 
-Plano **proposto em 01/10/2026, aguardando a aprovação do dono**: [`plano-a3.md`](plano-a3.md). Entregas I1 a I13 (gateway de IA e custo, registros, evals, Explicar, sombra, fora do normal, relatórios, Minha marca, Compliance, Conversa, Estrategista, Pesquisador, Sua equipe e Resumo), decisões D-A3-1 a D-A3-12, protótipos P4 a P8 e critérios A3-1 a A3-15. Nada de código antes do aceite, dos protótipos e da reconferência da base de conhecimento (plano §8).
+Plano **aprovado pelo dono em 02/10/2026**: [`plano-a3.md`](plano-a3.md). Base de conhecimento reconferida no mesmo dia (§10: modelos, preços, cache, lote, região e dados da Anthropic; §14.1: versões). Em aberto com o dono: teto de custo do piloto, conta de API e a D-A3-13 (onde o modelo roda). Entregas I1 a I13 (gateway de IA e custo, registros, evals, Explicar, sombra, fora do normal, relatórios, Minha marca, Compliance, Conversa, Estrategista, Pesquisador, Sua equipe e Resumo), decisões D-A3-1 a D-A3-12, protótipos P4 a P8 e critérios A3-1 a A3-15. Código de tela só depois dos protótipos P4 a P8 aprovados; a I1 (gateway e custo) não tem tela e começa primeiro.
 
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 

@@ -583,17 +583,28 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 ## 10. Modelos de IA
 
-*Tabela da Anthropic de 24/06/2026, cacheada na skill `claude-api`. Reconferir preços antes de fixar orçamento.* O produto é provider-agnostic: **escolher por eval, custo e latência por tarefa**.
+*Reconferido em 02/10/2026 nas páginas oficiais da Anthropic (`platform.claude.com/docs`: models/overview, about-claude/pricing, manage-claude/data-residency; `privacy.claude.com`). Substitui a tabela de 24/06/2026.* O produto é provider-agnostic: **escolher por eval, custo e latência por tarefa**.
 
-| Modelo (Anthropic) | Entrada / saída por milhão de tokens | Contexto |
-| --- | --- | --- |
-| Opus 5 | US$5 / US$25 | 1M |
-| Opus 5.5 | US$4 / US$20 | 1M |
-| Sonnet 5 | US$2 / US$10 | 1M |
-| Haiku 4.5 | US$1 / US$5 | 200K |
-| Fable 5.1 | US$10 / US$50 | 1M |
+| Modelo atual (Anthropic) | Id na API | Entrada / saída por milhão de tokens | Leitura do cache | Contexto · saída máx. | Para que a Anthropic indica |
+| --- | --- | --- | --- | --- | --- |
+| Fable 5.1 | `claude-fable-5-1` | US$10 / US$50 | 0,025× | 1M · 128 mil | raciocínio exigente e trabalho longo de agente |
+| Opus 5.5 | `claude-opus-5-5` | US$4 / US$20 | 0,05× | 1M · 128 mil | "comece por ele na maioria dos casos" |
+| Sonnet 5.5 | `claude-sonnet-5-5` | US$2 / US$10 | 0,1× | 1M · 128 mil | melhor combinação de velocidade e inteligência |
+| Haiku 4.5 | `claude-haiku-4-5-20251001` | US$1 / US$5 | 0,1× | 200 mil · 64 mil | o mais rápido |
 
-**Batch API** = 50% mais barata (relatórios noturnos). **Prompt caching:** prefixo estável primeiro (dossiê estruturado em ordem fixa). Opus 5.5 e Fable 5.1 **não aceitam `tool_choice` forçado**: usar `auto` + `strict: true` ou structured outputs. Nos modelos 4.6+ o thinking é adaptativo (`budget_tokens` rejeitado). Preços de OpenAI e Google: [pendente de pesquisa].
+- **Legados ainda disponíveis** (não usar em rota nova): Fable 5, Opus 5, Opus 4.8/4.7/4.6/4.5, Sonnet 5, Sonnet 4.6 [O].
+- **Aposentadoria** (compromisso da Anthropic): Fable 5.1 não antes de 01/09/2027; Opus 5.5, de 22/09/2027; Sonnet 5.5, de 28/09/2027; **Haiku 4.5, não antes de 15/10/2026** [O]. Consequência: não fixar a rota econômica no Haiku 4.5 sem acompanhar o aviso de aposentadoria (cadastrar a página `model-deprecations` no Vigia).
+- **Cache de prompt:** escrita a 1,25× (5 min) ou 2× (1 h); leitura a 0,1× da entrada (0,05× no Opus 5.5 e 0,025× no Fable 5.1). Prefixo estável primeiro (dossiê estruturado em ordem fixa) [O].
+- **Lote (Batch API):** 50% mais barato na entrada e na saída; acumula com o cache [O]. Serve aos relatórios noturnos.
+- **Contexto de 1M** no preço normal nos modelos 4.6 em diante [O].
+- **Tokenizer novo** (modelos 4.7 em diante): cerca de **30% mais tokens** para o mesmo texto [O]. Estimativa de custo feita com a contagem antiga sai baixa.
+- **Pensamento:** adaptativo e sempre ligado no Fable 5.1 e no Opus 5.5; adaptativo no Sonnet 5.5; o Haiku 4.5 usa o modo antigo (`budget_tokens`). Parâmetro `effort` (padrão `high` no Fable 5.1 e no Sonnet 5.5, `medium` no Opus 5.5; o Haiku 4.5 não aceita) [O].
+- **`tool_choice` forçado:** a tabela de preços não traz a coluna "any, tool" para o Opus 5.5 e o Sonnet 5.5 [O]; usar `auto` + saída estruturada (conferir no adapter antes de depender disso [NC]).
+- **Ferramentas do servidor:** busca na web a US$10 por mil buscas; leitura de página (web fetch) sem custo além dos tokens [O]. A A3 não usa busca aberta (D-A3-8).
+- **Onde roda:** `inference_geo` aceita `"global"` (padrão: qualquer região disponível) ou `"us"` (só Estados Unidos, **preço × 1,1**), nos modelos 4.6 em diante; o Haiku 4.5 não aceita o parâmetro. Guarda em repouso (workspace geo): só `"us"`. **Não há região no Brasil nem na América do Sul** [O].
+- **Dados (produtos comerciais e API):** por padrão a Anthropic **não treina** com entradas e saídas; apaga entradas e saídas em **até 30 dias**; guarda zero só por acordo próprio; conteúdo marcado como violação de política fica até 2 anos (e a nota de segurança, até 7); avaliação enviada com "gostei/não gostei" fica 5 anos e pode ser usada em treino, então **não enviar avaliação pela API** [O].
+- **Custo real:** existe a API de administração de uso e custo (`usage-cost-api`) para a reconciliação mensal (A3-2) [O, não testada].
+- Preços de OpenAI e Google: [pendente de pesquisa; só quando uma finalidade pedir].
 
 ---
 
@@ -787,6 +798,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 *Verificado em 24/09/2026. Decisões nos ADR-006, ADR-010 e ADR-012.*
 
 ### 14.1 SDKs de IA
+
+*Versões publicadas em 02/10/2026 (`npm view`): `ai` 7.0.127 · `@ai-sdk/anthropic` 4.0.71 · `@ai-sdk/otel` 1.0.127 · `@anthropic-ai/sdk` 0.131.0 · `promptfoo` 0.123.1. O AI SDK segue na série 7; o texto abaixo é o de 24/09/2026.*
 
 - **Vercel AI SDK 7** (`ai` 7.0.113, Apache-2.0):
   - GA em 25/06/2026; **só ESM e Node ≥ 22**; um major a cada ~6 meses.
