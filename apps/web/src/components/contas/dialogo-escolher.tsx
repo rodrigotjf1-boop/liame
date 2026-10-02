@@ -10,7 +10,8 @@ import { botaoLigar, type ContaExistente, escolhiveis, gruposDaEscolha, idDaCont
 
 // "Escolher contas" depois da autorização (protótipo aprovado): as contas que ela alcança, agrupadas
 // por plataforma; as que já estão ligadas aparecem marcadas e travadas, menos as que a plataforma
-// recusou antes ("desconectada"), que esta autorização reconecta. Uma chamada liga todas.
+// recusou antes ("desconectada"), que esta autorização reconecta, e as que são lidas por uma autorização
+// que vence antes desta (Google em fase de teste), que esta renova. Uma chamada liga todas.
 
 type Props = {
   conexao: ConnectionResponse;
@@ -31,6 +32,8 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const opcoes = escolhiveis(conexao, existentes);
   const livres = opcoes.map((o) => o.conta);
   const reconectaveis = new Set(opcoes.filter((o) => o.reconectar).map((o) => chave(o.conta.provider, o.conta.external_id)));
+  // Lidas hoje por uma autorização que vence antes desta: ligar aqui só troca a autorização (sem primeira leitura).
+  const renovaveis = new Set(opcoes.filter((o) => o.renovar).map((o) => chave(o.conta.provider, o.conta.external_id)));
   // Reconectar já vem marcado; uma conta nova só, também. Várias novas: a pessoa escolhe (nada ligado sem querer).
   const [marcadas, setMarcadas] = useState<Set<string>>(() => {
     const iniciais = new Set(reconectaveis);
@@ -67,12 +70,15 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
     if (!r.ok) return setErro(mensagemDe(r.problema));
     const ja = r.data.already_linked.length;
     const novas = r.data.linked.length;
+    const soRenovou = novas > 0 && contas.every((d) => renovaveis.has(chave(d.provider, d.external_id)));
     aoLigar(
       !novas
         ? `Nada novo: ${ja === 1 ? 'a conta já estava ligada' : 'as contas já estavam ligadas'} a uma marca.`
-        : `${novas === 1 ? 'Conta ligada' : 'Contas ligadas'}. A primeira leitura (90 dias) começou e leva alguns minutos.${
-            ja ? ` ${ja === 1 ? '1 já estava ligada' : `${ja} já estavam ligadas`} a uma marca.` : ''
-          }`,
+        : soRenovou
+          ? `Autorização renovada: ${novas === 1 ? 'a conta passa' : 'as contas passam'} a ser ${novas === 1 ? 'lida' : 'lidas'} pela autorização nova. A leitura segue sem parar.`
+          : `${novas === 1 ? 'Conta ligada' : 'Contas ligadas'}. A primeira leitura (90 dias) começou e leva alguns minutos.${
+              ja ? ` ${ja === 1 ? '1 já estava ligada' : `${ja} já estavam ligadas`} a uma marca.` : ''
+            }`,
     );
     fechar();
   }
@@ -127,7 +133,8 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
                     </span>
                     {d.via && <span className="lite-chip">via {d.via}</span>}
                     {travada && <span className="lite-chip">já ligada</span>}
-                    {reconectar && <span className="lite-chip lite-chip--perigo">desconectada: ligar de novo</span>}
+                    {reconectar && !renovaveis.has(k) && <span className="lite-chip lite-chip--perigo">desconectada: ligar de novo</span>}
+                    {renovaveis.has(k) && <span className="lite-chip lite-chip--atraso">a autorização atual vence antes: renovar</span>}
                   </label>
                 );
               })}

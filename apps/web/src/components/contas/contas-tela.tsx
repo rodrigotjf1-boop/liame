@@ -26,6 +26,7 @@ import {
   autorizacoesVisiveis,
   autorizadorDa,
   type ContaExistente,
+  contasExistentes,
   emConferencia,
   escolhiveis,
   type Faixa,
@@ -105,7 +106,7 @@ export function ContasTela() {
   }, [conexaoDaUrl]);
 
   const dados = estado.tipo === 'ok' ? estado.dados : null;
-  const existentes = useMemo<ContaExistente[]>(() => (dados ? dados.conexoes.flatMap((c) => c.accounts) : []), [dados]);
+  const existentes = useMemo<ContaExistente[]>(() => (dados ? contasExistentes(dados.conexoes) : []), [dados]);
 
   // Conferência curta da conexão acompanhada, enquanto o worker troca o código e descobre as contas.
   useEffect(() => {
@@ -419,7 +420,12 @@ export function ContasTela() {
                 agora={agora}
                 podeConectar={podeConectar}
                 procurando={acomp?.origem === 'procurar' && acomp.id === c.id && (!acomp.conexao || emConferencia(acomp.conexao))}
-                aoEscolher={c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length ? () => setDialogo({ tipo: 'escolher', conexao: c }) : null}
+                aoEscolher={
+                  // Esperando a escolha, ou já valendo e com conta de outra autorização que vence antes (renovar).
+                  (c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length) || (c.status === 'ativa' && escolhiveis(c, existentes).some((o) => o.renovar))
+                    ? () => setDialogo({ tipo: 'escolher', conexao: c })
+                    : null
+                }
                 aoReconectar={() => setDialogo({ tipo: 'conectar', marca: c.brand_id })}
                 aoProcurar={() => disparar(procurar(c))}
                 aoRevogar={() => setDialogo({ tipo: 'revogar', conexao: c })}

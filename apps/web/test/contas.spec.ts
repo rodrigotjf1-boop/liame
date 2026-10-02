@@ -17,6 +17,7 @@ import {
   escoposDoRegem,
   faixaDaVolta,
   faixaDoRegem,
+  contasExistentes,
   lojaSugerida,
   lojasRepetidas,
   naPlataforma,
@@ -111,6 +112,35 @@ describe('volta da autorização', () => {
     expect(faixaDaVolta({ conexao: ID, erro: null }, conexao({ provider: 'meta', discovered: d }), 'Casa Brasa', { existentes })?.tipo).toBe('escolher');
     // A conta já é desta autorização: nada a reconectar.
     expect(escolhiveis(conexao({ discovered: d }), [{ ...existentes[0]!, connection_id: ID }])).toEqual([]);
+  });
+
+  it('renovar (Google em fase de teste): a conta lida por uma autorização que vence ANTES desta entra na escolha (ERR-052)', () => {
+    const d = [descoberta('google_ads', '7984811811', 'Mister', true), descoberta('ga4', '333444555', 'Site', true)];
+    const antiga = conexao({ id: 'antiga', status: 'ativa', refresh_expires_at: local(29, 9), accounts: [] });
+    // As contas ligadas saem da lista de conexões já com o vencimento da autorização que as lê.
+    const contas = [
+      { provider: 'google_ads', external_id: '7984811811', status: 'ativa', connection_id: 'antiga', disconnected_at: null },
+      { provider: 'ga4', external_id: '333444555', status: 'ativa', connection_id: 'antiga', disconnected_at: null },
+    ] as ConnectionResponse['accounts'];
+    const existentes = contasExistentes([{ ...antiga, accounts: contas }]);
+    expect(existentes.map((e) => e.vence_em)).toEqual([local(29, 9), local(29, 9)]);
+
+    // A nova vence depois (ou não vence): as duas contas viram escolhíveis, como renovação.
+    const nova = conexao({ discovered: d, refresh_expires_at: new Date(2026, 9, 4, 9).toISOString() });
+    expect(escolhiveis(nova, existentes)).toEqual([
+      { conta: d[0], reconectar: true, renovar: true },
+      { conta: d[1], reconectar: true, renovar: true },
+    ]);
+    expect(escolhiveis(conexao({ discovered: d, refresh_expires_at: null }), existentes).map((o) => o.renovar)).toEqual([true, true]);
+    expect(faixaDaVolta({ conexao: ID, erro: null }, nova, 'Mister Burgers', { existentes })?.tipo).toBe('escolher');
+
+    // A nova vence ANTES da que já lê (ou a que lê não vence, como na Meta): fica travada, como sempre.
+    expect(escolhiveis(conexao({ discovered: d, refresh_expires_at: local(28, 9) }), existentes)).toEqual([]);
+    expect(escolhiveis(nova, existentes.map((e) => ({ ...e, vence_em: null })))).toEqual([]);
+    // A própria autorização que vence não "renova" as contas dela.
+    expect(escolhiveis({ ...nova, id: 'antiga' }, existentes)).toEqual([]);
+    // Conta já desligada não conta.
+    expect(escolhiveis(nova, existentes.map((e) => ({ ...e, disconnected_at: local(27, 8) })))).toEqual([]);
   });
 
   it('descobertas agrupadas na ordem Meta, Google Ads, GA4, e o botão de ligar', () => {

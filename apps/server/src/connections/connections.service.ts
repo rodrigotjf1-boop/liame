@@ -327,16 +327,20 @@ export class ConnectionsService {
         lojaDe.set(chave, unitId);
       }
     }
-    // Lojas do Regem que hoje estão ligadas por OUTRA autorização: esta troca o token delas (o Regem revoga o
-    // antigo quando o novo nasce). A autorização que ficar sem loja nenhuma é encerrada no fim.
-    const lojasTrocadas = escolhidas.filter((d) => d.provider === 'regem').map((d) => d.external_id);
-    const antigas = lojasTrocadas.length
+    // Contas que hoje estão ligadas por OUTRA autorização da mesma marca: esta assume. No Regem, o token antigo
+    // deixa de valer quando o novo nasce; no Google em fase de teste, é assim que "conectar de novo antes" renova
+    // a leitura (ERR-052). A autorização que ficar sem conta nenhuma é encerrada no fim.
+    const antigas = escolhidas.length
       ? (
-          await tx.execute<{ connection_id: string }>(sql`
-            select distinct connection_id from liame.connected_account
-             where provider = 'regem' and brand_id = ${c.brand_id} and disconnected_at is null
-               and connection_id is not null and connection_id <> ${c.id} and external_id in ${lojasTrocadas}`)
-        ).rows.map((l) => l.connection_id)
+          await tx.execute<{ connection_id: string; provider: string }>(sql`
+            select distinct a.connection_id, o.provider
+              from liame.connected_account a
+              join liame.oauth_connection o on o.id = a.connection_id
+              join jsonb_to_recordset(${JSON.stringify(escolhidas.map((d) => ({ provider: d.provider, external_id: d.external_id })))}::jsonb)
+                   as x (provider text, external_id text) on x.provider = a.provider and x.external_id = a.external_id
+             where a.brand_id = ${c.brand_id} and a.disconnected_at is null
+               and a.connection_id is not null and a.connection_id <> ${c.id}`)
+        ).rows
       : [];
     const linhas = escolhidas.map((d) => ({
       id: uuidv7(),
@@ -369,13 +373,16 @@ export class ConnectionsService {
     if (inseridas.rows.length) {
       await tx.execute(sql`update liame.oauth_connection set status = 'ativa', completed_at = coalesce(completed_at, now()), updated_at = now() where id = ${c.id}`);
     }
-    // A autorização antiga do Regem que perdeu todas as lojas para esta: o token dela já não vale lá; aqui a
-    // credencial sai do cofre e ela deixa de aparecer como se ainda valesse (ficava na tela com "0 lojas").
+    // A autorização antiga que perdeu todas as contas para esta: a credencial sai do cofre e ela deixa de aparecer
+    // como se ainda valesse (ficava na tela com "0 contas"). No Regem, o token dela já não vale lá. Nas outras
+    // plataformas ela é encerrada SÓ AQUI, sem revogar na origem, por precaução: no Google a revogação vale para
+    // o acesso do app à conta da pessoa, e pode levar junto a autorização nova que acabou de assumir as contas
+    // (não confirmado na documentação). O token antigo deixa de ser nosso (fora do cofre) e vence sozinho.
     const encerradas: string[] = [];
     for (const antiga of antigas) {
-      const resta = await tx.execute(sql`select 1 from liame.connected_account where connection_id = ${antiga} and disconnected_at is null limit 1`);
+      const resta = await tx.execute(sql`select 1 from liame.connected_account where connection_id = ${antiga.connection_id} and disconnected_at is null limit 1`);
       if (resta.rows.length) continue;
-      if (await this.encerrar(antiga)) encerradas.push(antiga);
+      if (await this.encerrar(antiga.connection_id, { revogarNaOrigem: antiga.provider === 'regem' })) encerradas.push(antiga.connection_id);
     }
     auditDetail({
       resourceId: c.id,
@@ -457,8 +464,11 @@ export class ConnectionsService {
   /**
    * O miolo da revogação (sem a auditoria, que é de quem chama): a credencial sai do cofre, as contas da
    * autorização param e o token é revogado na origem depois do commit. `null` = já estava revogada.
+   * `revogarNaOrigem: false` = a autorização foi substituída por outra da mesma pessoa, que assumiu as
+   * contas: sai do cofre e da tela, mas a plataforma não é chamada (por precaução: no Google, revogar um
+   * token pode levar junto o consentimento da autorização nova).
    */
-  private async encerrar(id: string): Promise<{ antes: string; contas: number } | null> {
+  private async encerrar(id: string, { revogarNaOrigem = true }: { revogarNaOrigem?: boolean } = {}): Promise<{ antes: string; contas: number } | null> {
     const tx = currentTx();
     const r = await tx.execute<{ provider: string; credential_secret_id: string | null; inbox_secret_id: string | null; status: string }>(sql`
       select provider, credential_secret_id, inbox_secret_id, status from liame.oauth_connection where id = ${id} for update`);
@@ -480,6 +490,8 @@ export class ConnectionsService {
        where connection_id = ${id} and disconnected_at is null returning id`);
     await tx.execute(sql`
       update liame.oauth_connection set status = 'revogada', revoked_at = now(), code_enc = null, pkce_verifier_enc = null, updated_at = now() where id = ${id}`);
+    // Substituída por outra autorização que assumiu as contas: encerra só aqui (ver `ligarContas`).
+    if (!revogarNaOrigem) return { antes: c.status, contas: contas.rows.length };
     if (tokensRegem.length && this.database) {
       // Revoga cada token da loja no Regem depois do commit (o token já saiu do cofre do Liame).
       const cliente = new ClienteConector(this.database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 2 });
