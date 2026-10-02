@@ -1,0 +1,243 @@
+{
+  "brand_id": "0199a700-0000-7000-8000-000000000001",
+  "week": {
+    "from": "2026-09-21",
+    "to": "2026-09-27"
+  },
+  "previous_week": {
+    "from": "2026-09-14",
+    "to": "2026-09-20"
+  },
+  "timezone": "America/Sao_Paulo",
+  "currency": "BRL",
+  "generated_at": "2026-09-28T08:10:00.000Z",
+  "totals": [
+    {
+      "kind": "investimento",
+      "campaign": null,
+      "unit": "dinheiro",
+      "before": "1180000000",
+      "now": "1214300000",
+      "change_pct": "+2.9"
+    },
+    {
+      "kind": "pedidos_de_anuncios",
+      "campaign": null,
+      "unit": "contagem",
+      "before": "47",
+      "now": "53",
+      "change_pct": "+12.8"
+    },
+    {
+      "kind": "receita_confirmada",
+      "campaign": null,
+      "unit": "dinheiro",
+      "before": "3068000000",
+      "now": "3471000000",
+      "change_pct": "+13.1"
+    },
+    {
+      "kind": "roas_confirmado",
+      "campaign": null,
+      "unit": "razao",
+      "before": "2.60",
+      "now": "2.86",
+      "change_pct": "+10.0"
+    }
+  ],
+  "verdict": "empata",
+  "campaigns": [
+    {
+      "campaign_id": "0199a700-0000-7000-8000-000000000101",
+      "provider": "meta_ads",
+      "name": "Combo sexta",
+      "status": "ativa",
+      "spend_micros": "404100000",
+      "orders": 26,
+      "revenue_micros": "1716000000",
+      "roas": "4.25",
+      "verdict": "lucro"
+    },
+    {
+      "campaign_id": "0199a700-0000-7000-8000-000000000102",
+      "provider": "google_ads",
+      "name": "Busca perto",
+      "status": "ativa",
+      "spend_micros": "386200000",
+      "orders": 12,
+      "revenue_micros": "804000000",
+      "roas": "2.08",
+      "verdict": "empata"
+    },
+    {
+      "campaign_id": "0199a700-0000-7000-8000-000000000103",
+      "provider": "meta_ads",
+      "name": "Smash em dobro",
+      "status": "ativa",
+      "spend_micros": "274000000",
+      "orders": 9,
+      "revenue_micros": "612000000",
+      "roas": "2.23",
+      "verdict": "empata"
+    },
+    {
+      "campaign_id": "0199a700-0000-7000-8000-000000000104",
+      "provider": "meta_ads",
+      "name": "Delivery noite",
+      "status": "ativa",
+      "spend_micros": "150000000",
+      "orders": 2,
+      "revenue_micros": "114000000",
+      "roas": "0.76",
+      "verdict": "prejuizo"
+    }
+  ],
+  "platform_only": [
+    {
+      "provider": "meta_ads",
+      "orders": 4,
+      "revenue_micros": "1029000000"
+    }
+  ],
+  "improved": [
+    {
+      "kind": "pedidos_de_anuncios",
+      "campaign": null,
+      "unit": "contagem",
+      "before": "47",
+      "now": "53",
+      "change_pct": "+12.8"
+    },
+    {
+      "kind": "receita_confirmada",
+      "campaign": null,
+      "unit": "dinheiro",
+      "before": "3068000000",
+      "now": "3471000000",
+      "change_pct": "+13.1"
+    },
+    {
+      "kind": "roas_da_campanha",
+      "campaign": {
+        "id": "0199a700-0000-7000-8000-000000000101",
+        "name": "Combo sexta",
+        "provider": "meta_ads"
+      },
+      "unit": "razao",
+      "before": "4.02",
+      "now": "4.25",
+      "change_pct": "+5.7"
+    },
+    {
+      "kind": "roas_da_campanha",
+      "campaign": {
+        "id": "0199a700-0000-7000-8000-000000000103",
+        "name": "Smash em dobro",
+        "provider": "meta_ads"
+      },
+      "unit": "razao",
+      "before": "2.05",
+      "now": "2.23",
+      "change_pct": "+8.8"
+    }
+  ],
+  "worsened": [
+    {
+      "kind": "roas_da_campanha",
+      "campaign": {
+        "id": "0199a700-0000-7000-8000-000000000104",
+        "name": "Delivery noite",
+        "provider": "meta_ads"
+      },
+      "unit": "razao",
+      "before": "1.12",
+      "now": "0.76",
+      "change_pct": "-32.1"
+    },
+    {
+      "kind": "pedidos_sem_origem",
+      "campaign": null,
+      "unit": "contagem",
+      "before": "41",
+      "now": "44",
+      "change_pct": "+7.3"
+    }
+  ],
+  "decisions": [
+    {
+      "kind": "prejuizo_seguido",
+      "severity": "atencao",
+      "title": "Delivery noite deu prejuízo nas duas últimas semanas",
+      "detail": "R$ 114,00 de receita para R$ 150,00 investidos na semana.",
+      "action": "Veja a campanha em Resultados e decida se ela continua como está.",
+      "connected_account_id": null,
+      "campaign_id": "0199a700-0000-7000-8000-000000000104",
+      "provider": "meta_ads",
+      "brand_id": "0199a700-0000-7000-8000-000000000001"
+    }
+  ],
+  "reading": {
+    "source": "lia",
+    "reason": null,
+    "explanation": {
+      "what_happened": [
+        {
+          "text": "Na semana, os anúncios trouxeram ",
+          "number": null
+        },
+        {
+          "text": "53",
+          "number": 0
+        },
+        {
+          "text": " pedidos confirmados no caixa.",
+          "number": null
+        }
+      ],
+      "reasons": [
+        [
+          {
+            "text": "Combo sexta segue como a campanha que dá lucro.",
+            "number": null
+          }
+        ]
+      ],
+      "risk": "medio",
+      "risk_reason": [
+        {
+          "text": "no total, a semana empata.",
+          "number": null
+        }
+      ],
+      "what_to_do": [
+        [
+          {
+            "text": "Decida o que fazer com a Delivery noite.",
+            "number": null
+          }
+        ]
+      ]
+    },
+    "numbers": [
+      {
+        "value": "53",
+        "sources": [
+          "Regem · pedidos confirmados com origem provada em campanha · 21/09/2026 a 27/09/2026"
+        ]
+      }
+    ],
+    "period": {
+      "from": "21/09/2026",
+      "to": "27/09/2026"
+    },
+    "compared_to": {
+      "from": "14/09/2026",
+      "to": "20/09/2026"
+    },
+    "stale_sources": [],
+    "usage_id": "0199a700-0000-7000-8000-000000000050",
+    "retry_at": null,
+    "budget_window": null,
+    "generated_at": "2026-09-28T08:10:00.000Z"
+  }
+}

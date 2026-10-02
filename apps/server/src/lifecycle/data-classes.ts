@@ -111,4 +111,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   shadow_state: { class: 'INTERNAL', retention: 'com a marca' },
   readiness_snapshot: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
   human_override: { class: 'PERSONAL', retention: 'com a empresa (quem discordou e o motivo)' },
+  // Revisão da semana (A3, I7): os números da marca numa semana fechada, como foram gerados (sem cliente da
+  // loja); quem recebeu o e-mail é dado da pessoa (o endereço não fica aqui, só o vínculo).
+  weekly_review: { class: 'CONFIDENTIAL', retention: 'com a marca' },
+  weekly_review_delivery: { class: 'PERSONAL', retention: 'com a revisão e com a pessoa (some com qualquer uma das duas)' },
+  weekly_review_state: { class: 'INTERNAL', retention: 'com a marca' },
 };

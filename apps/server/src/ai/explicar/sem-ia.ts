@@ -10,7 +10,12 @@ const sobe = (v: string | null) => v !== null && v.startsWith('+');
 const cai = (v: string | null) => v !== null && v.startsWith('-');
 const movimento = (v: string | null) => (sobe(v) ? `subiu ${v!.slice(1)}` : cai(v) ? `caiu ${v!.slice(1)}` : 'ficou igual');
 
-export function explicacaoSemIa(c: ContextoDaExplicacao): Explicacao {
+/**
+ * `semana`: a explicação é a leitura da revisão da semana (I7), e o texto diz "a semana" e "à semana
+ * anterior"; sem ela, "o período" e "ao período anterior", como na tela Resultados.
+ */
+export function explicacaoSemIa(c: ContextoDaExplicacao, opcoes: { semana?: boolean } = {}): Explicacao {
+  const [oPeriodo, anterior] = opcoes.semana ? ['a semana', 'à semana anterior'] : ['o período', 'ao período anterior'];
   const t = c.resultado.totais;
   const origem = t.com_origem_provada;
   const periodo = `De ${c.resultado.periodo.de} a ${c.resultado.periodo.ate}`;
@@ -27,7 +32,7 @@ export function explicacaoSemIa(c: ContextoDaExplicacao): Explicacao {
       cmp.investimento.variacao ? `o investimento ${movimento(cmp.investimento.variacao)}` : null,
       cmp.receita_com_origem.variacao ? `a receita com origem provada ${movimento(cmp.receita_com_origem.variacao)}` : null,
     ].filter((p): p is string => p !== null);
-    aconteceu.push(`Em relação ao período anterior, ${partes.join(' e ')}.`);
+    aconteceu.push(`Em relação ${anterior}, ${partes.join(' e ')}.`);
   }
 
   const motivos: string[] = [];
@@ -44,22 +49,22 @@ export function explicacaoSemIa(c: ContextoDaExplicacao): Explicacao {
   if (t.sem_origem.pedidos && t.sem_origem.pedidos !== '0') {
     motivos.push(`${t.sem_origem.pedidos} pedido(s) dos canais com clique ficaram sem origem provada${t.sem_origem.parte_dos_pedidos_com_clique ? ` (${t.sem_origem.parte_dos_pedidos_com_clique})` : ''}: não dá para dizer de que campanha vieram.`);
   }
-  if (!motivos.length) motivos.push('Ainda não há campanha com investimento e pedido confirmado neste período para comparar.');
+  if (!motivos.length) motivos.push(`Ainda não há campanha com investimento e pedido confirmado ${opcoes.semana ? 'nesta semana' : 'neste período'} para comparar.`);
 
   // O risco e o porquê dele, pela regra do sistema (a mesma do veredito da tela Resultados).
   const piorou = sobe(cmp?.investimento.variacao ?? null) && cai(cmp?.receita_com_origem.variacao ?? null);
   const [risco, porque]: [Explicacao['risco'], string] =
     origem.resultado === 'prejuízo'
-      ? ['alto', 'o período deu prejuízo depois de pagar os anúncios.']
+      ? ['alto', `${oPeriodo} deu prejuízo depois de pagar os anúncios.`]
       : origem.resultado === 'lucro'
-        ? ['baixo', 'o período deu lucro depois de pagar os anúncios.']
+        ? ['baixo', `${oPeriodo} deu lucro depois de pagar os anúncios.`]
         : origem.resultado === 'empata'
-          ? ['medio', 'o período empata: a margem conhecida fica perto do investimento.']
+          ? ['medio', `${oPeriodo} empata: a margem conhecida fica perto do investimento.`]
           : piorou
             ? ['alto', 'o investimento subiu e a receita com origem provada caiu.']
             : semInvestimento
               ? ['medio', 'sem investimento em anúncios lido, não há retorno para avaliar.']
-              : ['medio', 'falta custo cadastrado para dizer se o período deu lucro.'];
+              : ['medio', `falta custo cadastrado para dizer se ${oPeriodo} deu lucro.`];
 
   const fazer: string[] = [];
   if (c.fontes_fora_do_dia.length) fazer.push('Confira em Contas conectadas as fontes que não estão em dia antes de decidir com estes números.');

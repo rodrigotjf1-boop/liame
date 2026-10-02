@@ -150,6 +150,7 @@ export {
   PlatformResult,
   SourceFreshness,
 } from './results.js';
+export { WeeklyReview, WeeklyReviewCampaign, WeeklyReviewChange, WeeklyReviewQuery, WeeklyReviewResponse } from './reports.js';
 export {
   CouponCampaign,
   CouponCode,

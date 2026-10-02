@@ -1,4 +1,4 @@
-import type { AttentionItem } from '@liame/contracts';
+import type { AttentionItem, ClosedLoopResponse } from '@liame/contracts';
 import type { Database } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -20,6 +20,9 @@ import { type ExplicacaoMarcada, marcarNumeros } from './fontes.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS, TAREFA_EXPLICAR_RESULTADOS } from './prompt.js';
 import { conferirExplicacao, Explicacao, type Recusa } from './resposta.js';
 import { explicacaoSemIa } from './sem-ia.js';
+
+/** O nome, em `ai_usage.workflow`, da leitura da revisão da semana: a chamada é do sistema, sem pessoa. */
+export const WORKFLOW_DA_REVISAO = 'revisao.semanal';
 
 /** Por que a explicação é a do código e não a da IA. */
 export type MotivoSemIa = AiErrorCode | Recusa | 'dado_velho' | 'funcionario_desligado' | 'conteudo_politico';
@@ -86,6 +89,23 @@ export class ExplicarService {
     }));
     const contexto = contextoDosResultados(lido.atual, lido.anterior);
     return this.explicar(ctx, q.brand_id, contexto, 'resultados.explicar', lido.ativo, () => explicacaoSemIa(contexto));
+  }
+
+  /**
+   * A leitura de uma semana fechada, para a revisão da semana (A3, I7). Quem chama é a rotina do worker, que
+   * já leu os resultados das duas semanas (os mesmos números vão para a revisão) e se o Analista está ativo;
+   * aqui não há transação aberta: é a chamada ao modelo, com a mesma tarefa, o mesmo prompt e a mesma
+   * conferência do Explicar. Sem a LIA, a leitura é a do sistema, com o motivo.
+   */
+  async daSemana(ctx: ContextoDaLeitura, brandId: string, lido: { atual: ClosedLoopResponse; anterior: ClosedLoopResponse | null; ativo: boolean }): Promise<ExplicacaoPronta> {
+    this.exigirVendas(ctx);
+    const contexto = contextoDosResultados(lido.atual, lido.anterior);
+    return this.explicar(ctx, brandId, contexto, WORKFLOW_DA_REVISAO, lido.ativo, () => explicacaoSemIa(contexto, { semana: true }));
+  }
+
+  /** O Analista está ativo para esta marca? Roda na transação de quem chama. */
+  analistaLigado(ctx: ContextoDaLeitura, brandId: string | null): Promise<boolean> {
+    return this.analistaAtivo(ctx, brandId);
   }
 
   /** Um aviso da Atenção, com os resultados dos últimos 7 dias completos da marca. */
