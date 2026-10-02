@@ -138,6 +138,8 @@ Os funcionários de IA nascem desligados para todas as empresas (flag `ia`). Sem
 
 **Ligar para uma empresa:** o mesmo comando das outras flags, com `--flag ia` (seção Produtos DMS). Além da flag, a tarefa precisa de uma rota ativa em `ai_model_route` (publicada depois do eval, I3) e o modelo, de preço em `ai_model_price`: modelo sem preço cadastrado não roda. **Parar tudo:** kill switch de provider `ai` (distribuição) ou a parada da própria empresa.
 
+**Sombra de verdade (A3, I5):** a flag `sombra` nasce desligada e não depende da chave do fornecedor (a primeira sombra é por regra, sem modelo). Com ela ligada para a empresa (`--flag sombra`), o worker registra uma vez por dia, depois da leitura da manhã, o que o Liame recomendaria para cada campanha e, depois, compara com o que aconteceu. Nada aparece para a empresa ainda (a tela é a Sua equipe, I13) e nada é executado em plataforma nenhuma.
+
 **Conferência do custo (A3-2):** o total do mês em `ai_usage.cost_usd_micros` é comparado com a fatura do fornecedor; a diferença esperada vem de chamada cortada pelo prazo (o fornecedor pode cobrar o que já tinha gerado).
 
 ## Cofre (ADR-011, ADR-014)
