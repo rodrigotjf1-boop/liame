@@ -51,9 +51,14 @@ export async function chamar<T>(fn: () => Promise<{ data?: T; error?: unknown; r
   }
 }
 
-/** Texto para a pessoa: o primeiro campo inválido, senão o detalhe, senão o título. */
+/**
+ * Texto para a pessoa: o primeiro campo inválido, senão o detalhe, senão o título. No erro do nosso lado
+ * (5xx) vai junto o código de rastreio: o texto da API pede para informá-lo ao suporte, e é com ele que o
+ * suporte acha o que houve.
+ */
 export function mensagemDe(p: Problema): string {
-  return p.errors?.[0]?.message ?? p.detail ?? p.title;
+  const texto = p.errors?.[0]?.message ?? p.detail ?? p.title;
+  return p.status >= 500 && p.trace_id ? `${texto} Código de rastreio: ${p.trace_id}` : texto;
 }
 
 /** Chave de idempotência por tentativa de envio: repetir o mesmo clique não duplica o convite. */
