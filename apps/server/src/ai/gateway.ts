@@ -1,7 +1,7 @@
 import { type Database, type Tx, uuidv7, withContext } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
-import { APICallError, generateText, type LanguageModel, type LanguageModelUsage, NoObjectGeneratedError, Output, RetryError } from 'ai';
+import { APICallError, dynamicTool, generateText, type LanguageModel, type LanguageModelUsage, type ModelMessage, NoObjectGeneratedError, Output, RetryError, type ToolSet } from 'ai';
 import { sql } from 'drizzle-orm';
 import type { z } from 'zod';
 import { APP_CONFIG, type AppConfig } from '../config.js';
@@ -17,7 +17,8 @@ import { type Gasto, situacaoDoTeto, virouDeFaixa } from './teto.js';
 // flag `ia` da empresa → trava (kill switch do provider `ai`) → rota ativa da tarefa → limite por pessoa
 // → teto de custo → remoção de dado pessoal → modelo (com reserva só da rota) → custo → `ai_usage`.
 // Nada disso roda dentro da transação da requisição: a chamada ao modelo leva segundos, e o custo
-// precisa ficar gravado mesmo que a requisição desista.
+// precisa ficar gravado mesmo que a requisição desista. Com ferramentas (`agent`), o laço é daqui: uma
+// chamada ao modelo por rodada, o teto conferido de novo a cada uma e cada rodada registrada.
 //
 // Quem monta o contexto manda os números já formatados ("R$ 1.250,00", "12.500 cliques"): número cru
 // de 10 dígitos ou mais parece telefone ou CPF e sai na limpeza (`pii_removed` mostra quando aconteceu).
@@ -80,6 +81,32 @@ export interface StructuredResult<T> extends Omit<GenerateResult, 'text'> {
   object: T;
 }
 
+/**
+ * Ferramenta como o gateway a enxerga: já presa à empresa e à pessoa do pedido (quem monta a lista é o
+ * registro de ferramentas, que confere a permissão e abre a transação da empresa). O gateway não conhece
+ * permissão nem banco de negócio.
+ */
+export interface FerramentaIa {
+  name: string;
+  description: string;
+  input: z.ZodType;
+  executar(input: unknown): Promise<{ ok: true; valor: unknown } | { ok: false; erro: string }>;
+}
+
+export interface AgentRequest extends GenerateRequest {
+  ferramentas: FerramentaIa[];
+  /** Quantas chamadas ao modelo o pedido pode fazer (cada rodada pode usar ferramentas). Padrão 6, no máximo 12. */
+  maxRodadas?: number;
+}
+
+export interface AgentResult extends GenerateResult {
+  rodadas: number;
+  ferramentas: Array<{ name: string; ok: boolean }>;
+}
+
+const RODADAS_PADRAO = 6;
+const RODADAS_MAXIMO = 12;
+
 type ServidoPor = 'principal' | 'reserva' | 'economico';
 
 interface Candidato {
@@ -117,6 +144,23 @@ interface Tentativa {
   traceId: string | null;
   /** Quando a tentativa terminou (ms): a ordem das tentativas de um pedido fica no registro. */
   em: number;
+  /** Ferramentas que o modelo pediu nesta chamada, e quantas falharam. */
+  toolCalls: number;
+  toolFailures: number;
+}
+
+interface Resposta {
+  text: string;
+  object: unknown;
+  finishReason: string;
+  /** O que o modelo escreveu e o resultado das ferramentas, do jeito que volta para ele na rodada seguinte. */
+  mensagens: ModelMessage[];
+}
+
+interface Opcoes {
+  schema: z.ZodType<unknown> | null;
+  ferramentas: FerramentaIa[];
+  maxRodadas: number;
 }
 
 const SEM_TOKENS: TokensUsados = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 };
@@ -142,17 +186,32 @@ export class AiGateway {
 
   /** Texto livre. */
   async generate(req: GenerateRequest): Promise<GenerateResult> {
-    const r = await this.run(req, null);
+    const r = await this.run(req, { schema: null, ferramentas: [], maxRodadas: 1 });
     return { ...r.base, text: r.text };
   }
 
   /** Resposta no formato do schema: o que não valida conta como falha e passa para a reserva da rota. */
   async structured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
-    const r = await this.run(req, req.schema);
+    const r = await this.run(req, { schema: req.schema, ferramentas: [], maxRodadas: 1 });
     return { ...r.base, object: r.object as T };
   }
 
-  private async run(req: GenerateRequest, schema: z.ZodType<unknown> | null): Promise<{ base: Omit<GenerateResult, 'text'>; text: string; object: unknown }> {
+  /**
+   * Laço com ferramentas: o modelo pede uma leitura, o código executa (com a permissão e o isolamento da
+   * empresa) e devolve o resultado, até o modelo responder em texto. A cada rodada o teto é conferido de
+   * novo, e cada chamada ao modelo vira uma linha de `ai_usage`.
+   */
+  async agent(req: AgentRequest): Promise<AgentResult> {
+    const maxRodadas = Math.min(Math.max(req.maxRodadas ?? RODADAS_PADRAO, 1), RODADAS_MAXIMO);
+    const r = await this.run(req, { schema: null, ferramentas: req.ferramentas, maxRodadas });
+    return { ...r.base, text: r.text, rodadas: r.rodadas, ferramentas: r.usadas };
+  }
+
+  private async run(
+    req: GenerateRequest,
+    opcoes: Opcoes,
+  ): Promise<{ base: Omit<GenerateResult, 'text'>; text: string; object: unknown; rodadas: number; usadas: Array<{ name: string; ok: boolean }> }> {
+    const { schema } = opcoes;
     const contexto = { tenantId: req.tenantId, userId: req.userId ?? null };
     if (!(await this.flags.isEnabled('ia', this.flags.context({ ...contexto, brandId: req.brandId ?? null })))) {
       throw new AiError('desligada', 'ia: desligada para esta empresa');
@@ -175,7 +234,14 @@ export class AiGateway {
     const tentativas: Tentativa[] = [];
     // Duas tentativas no mesmo milissegundo não trocam de ordem no registro.
     const guardar = (t: Tentativa) => tentativas.push({ ...t, em: Math.max(t.em, (tentativas[tentativas.length - 1]?.em ?? 0) + 1) });
-    let resposta: { text: string; object: unknown; finishReason: string } | null = null;
+    const conversa: ModelMessage[] = [...enviado.messages];
+    const usadas: Array<{ name: string; ok: boolean }> = [];
+    const pedir = (candidato: Candidato, model: LanguageModel, preco: PrecoModelo) =>
+      this.chamar(req, rota, candidato, model, preco, { instructions: enviado.instructions, messages: conversa }, { schema, ferramentas: opcoes.ferramentas, usadas });
+
+    // Primeira rodada: o modelo da rota e, se ele falhar, a reserva da própria rota.
+    let resposta: Resposta | null = null;
+    let escolhido: { candidato: Candidato; model: LanguageModel; preco: PrecoModelo } | null = null;
     for (const candidato of candidatos) {
       const model = this.modelos.modelo(candidato.provider, candidato.model);
       const preco = precos.get(chave(candidato.provider, candidato.model));
@@ -184,16 +250,41 @@ export class AiGateway {
         guardar(this.falha(candidato, model ? 'sem_preco' : 'sem_credencial'));
         continue;
       }
-      const t = await this.chamar(req, rota, candidato, model, preco, enviado, schema);
+      const t = await pedir(candidato, model, preco);
       guardar(t.tentativa);
       if (t.resposta) {
         resposta = t.resposta;
+        escolhido = { candidato, model, preco };
         break;
       }
     }
 
+    // Rodadas seguintes: enquanto o modelo pedir ferramenta, com o mesmo modelo. O teto é conferido de
+    // novo a cada rodada, contando o que este pedido já gastou.
+    let rodadas = 1;
+    let parada: 'rodadas' | 'teto' | 'teto_da_rota' | null = null;
+    while (resposta && escolhido && resposta.finishReason === 'tool-calls') {
+      conversa.push(...resposta.mensagens);
+      const gastoAqui = tentativas.reduce((n, t) => n + t.custo, 0n);
+      if (rodadas >= opcoes.maxRodadas) parada = 'rodadas';
+      else if (situacaoDoTeto({ ...gasto, gastoDia: gasto.gastoDia + gastoAqui, gastoMes: gasto.gastoMes + gastoAqui }) === 'bloqueado') parada = 'teto';
+      else if (gastoAqui > BigInt(rota.max_cost_usd_micros)) parada = 'teto_da_rota';
+      if (parada) {
+        resposta = null;
+        break;
+      }
+      const t = await pedir(escolhido.candidato, escolhido.model, escolhido.preco);
+      guardar(t.tentativa);
+      rodadas += 1;
+      resposta = t.resposta;
+    }
+
     const ultima = tentativas[tentativas.length - 1]!;
-    const guardado = resposta ? limparJson(schema ? { object: resposta.object } : { text: resposta.text }).valor : null;
+    const guardado = resposta
+      ? limparJson(schema ? { object: resposta.object } : { text: resposta.text, ...(usadas.length ? { tools: usadas } : {}) }).valor
+      : parada
+        ? { stopped: parada, tools: usadas }
+        : null;
     try {
       await withContext(db, contexto, async (tx) => {
         for (const t of tentativas) await this.registrar(tx, req, rota, t, removidos);
@@ -211,16 +302,20 @@ export class AiGateway {
       throw new AiError('indisponivel', 'ia: não foi possível registrar o uso');
     }
 
+    const total = tentativas.reduce((n, t) => n + t.custo, 0n);
+    const faixa = virouDeFaixa(gasto, total);
+    if (faixa) this.logger.warn(`ia: a empresa ${req.tenantId} entrou na faixa "${faixa}" do teto de custo de IA`);
+    if (parada) {
+      this.logger.warn(`ia: ${req.task} parou sem resposta depois de ${rodadas} rodada(s): ${parada}`);
+      throw new AiError(parada === 'teto' ? 'teto' : 'indisponivel', `ia: laço interrompido (${parada})`);
+    }
     if (!resposta) {
       this.logger.warn(`ia: ${req.task} sem resposta (${tentativas.map((t) => `${chave(t.candidato.provider, t.candidato.model)}: ${t.errorCode}`).join('; ')})`);
       throw new AiError('indisponivel', 'ia: nenhum modelo da rota respondeu');
     }
-    const total = tentativas.reduce((n, t) => n + t.custo, 0n);
-    if (ultima.custo > BigInt(rota.max_cost_usd_micros)) {
-      this.logger.warn(`ia: ${req.task} v${rota.version} custou ${ultima.custo} micros, acima do teto da rota (${rota.max_cost_usd_micros})`);
+    if (total > BigInt(rota.max_cost_usd_micros)) {
+      this.logger.warn(`ia: ${req.task} v${rota.version} custou ${total} micros, acima do teto da rota (${rota.max_cost_usd_micros})`);
     }
-    const faixa = virouDeFaixa(gasto, total);
-    if (faixa) this.logger.warn(`ia: a empresa ${req.tenantId} entrou na faixa "${faixa}" do teto de custo de IA`);
 
     // O que sai daqui também vai limpo: se o modelo escrever um contato, ele não chega à tela.
     const limpa = limparJson({ text: resposta.text, object: resposta.object }).valor as { text: string; object: unknown };
@@ -231,12 +326,44 @@ export class AiGateway {
         provider: ultima.candidato.provider,
         model: ultima.candidato.model,
         routeVersion: rota.version,
-        costUsdMicros: Number(ultima.custo),
+        // O custo do pedido inteiro: todas as rodadas e as tentativas que falharam depois de gerar.
+        costUsdMicros: Number(total),
         finishReason: resposta.finishReason,
       },
       text: limpa.text,
       object: limpa.object,
+      rodadas,
+      usadas,
     };
+  }
+
+  /** As ferramentas no formato do SDK: a saída volta limpa de dado pessoal, e a falha vira um aviso curto para o modelo. */
+  private ferramentasDoSdk(ferramentas: FerramentaIa[], conta: { chamadas: number; falhas: number }, usadas: Array<{ name: string; ok: boolean }>): ToolSet {
+    return Object.fromEntries(
+      ferramentas.map((f) => [
+        f.name,
+        dynamicTool({
+          description: f.description,
+          inputSchema: f.input,
+          execute: async (input) => {
+            conta.chamadas += 1;
+            let r: Awaited<ReturnType<FerramentaIa['executar']>>;
+            try {
+              r = await f.executar(input);
+            } catch (err) {
+              this.logger.error(`ia: a ferramenta ${f.name} falhou: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
+              r = { ok: false, erro: 'Não foi possível ler agora.' };
+            }
+            usadas.push({ name: f.name, ok: r.ok });
+            if (!r.ok) {
+              conta.falhas += 1;
+              return { erro: r.erro };
+            }
+            return limparJson(r.valor).valor;
+          },
+        }),
+      ]),
+    );
   }
 
   /** Tudo o que se decide antes de gastar: trava, rota, limite por pessoa, teto e preços. */
@@ -315,9 +442,11 @@ export class AiGateway {
     candidato: Candidato,
     model: LanguageModel,
     preco: PrecoModelo,
-    enviado: { instructions: string; messages: AiMessage[] },
-    schema: z.ZodType<unknown> | null,
-  ): Promise<{ tentativa: Tentativa; resposta: { text: string; object: unknown; finishReason: string } | null }> {
+    enviado: { instructions: string; messages: ModelMessage[] },
+    opcoes: { schema: z.ZodType<unknown> | null; ferramentas: FerramentaIa[]; usadas: Array<{ name: string; ok: boolean }> },
+  ): Promise<{ tentativa: Tentativa; resposta: Resposta | null }> {
+    const { schema } = opcoes;
+    const conta = { chamadas: 0, falhas: 0 };
     const geo = this.modelos.geo(candidato.provider);
     const providerOptions = this.modelos.opcoes(candidato.provider, rota.effort);
     const atributos = {
@@ -351,6 +480,8 @@ export class AiGateway {
           errorCode,
           traceId,
           em: Date.now(),
+          toolCalls: conta.chamadas,
+          toolFailures: conta.falhas,
         };
       };
       try {
@@ -368,11 +499,15 @@ export class AiGateway {
         if (schema) {
           const r = await generateText({ ...comum, output: Output.object({ schema }) });
           span.setAttribute('gen_ai.response.finish_reasons', [r.finishReason]);
-          return { tentativa: tentativa('ok', r.totalUsage, null), resposta: { text: '', object: r.output, finishReason: r.finishReason } };
+          return { tentativa: tentativa('ok', r.totalUsage, null), resposta: { text: '', object: r.output, finishReason: r.finishReason, mensagens: [] } };
         }
-        const r = await generateText(comum);
+        // Com ferramentas, cada chamada é UMA rodada: o SDK executa o que o modelo pediu e devolve as mensagens
+        // (a do modelo e a do resultado) para a rodada seguinte, que quem decide se acontece é o laço daqui.
+        const r = opcoes.ferramentas.length
+          ? await generateText({ ...comum, tools: this.ferramentasDoSdk(opcoes.ferramentas, conta, opcoes.usadas) })
+          : await generateText(comum);
         span.setAttribute('gen_ai.response.finish_reasons', [r.finishReason]);
-        return { tentativa: tentativa('ok', r.totalUsage, null), resposta: { text: r.text, object: null, finishReason: r.finishReason } };
+        return { tentativa: tentativa('ok', r.totalUsage, null), resposta: { text: r.text, object: null, finishReason: r.finishReason, mensagens: r.responseMessages } };
       } catch (err) {
         const codigo = codigoDoErro(err);
         // O erro do SDK guarda o corpo enviado: nunca vai para o log nem para o span, só o código.
@@ -387,18 +522,19 @@ export class AiGateway {
   }
 
   private falha(candidato: Candidato, errorCode: string): Tentativa {
-    return { id: uuidv7(), candidato, geo: null, tokens: SEM_TOKENS, custo: 0n, latenciaMs: 0, outcome: 'erro', errorCode, traceId: null, em: Date.now() };
+    return { id: uuidv7(), candidato, geo: null, tokens: SEM_TOKENS, custo: 0n, latenciaMs: 0, outcome: 'erro', errorCode, traceId: null, em: Date.now(), toolCalls: 0, toolFailures: 0 };
   }
 
   private async registrar(tx: Tx, req: GenerateRequest, rota: Rota, t: Tentativa, removidos: number): Promise<void> {
     await tx.execute(sql`
       insert into liame.ai_usage (id, tenant_id, brand_id, user_id, workflow, task, route_version, prompt_version, provider, model, served_by,
                                   inference_geo, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, reasoning_tokens,
-                                  cost_usd_micros, latency_ms, outcome, error_code, pii_removed, trace_id, occurred_at)
+                                  cost_usd_micros, latency_ms, tool_calls, tool_failures, outcome, error_code, pii_removed, trace_id, occurred_at)
       values (${t.id}, ${req.tenantId}, ${req.brandId ?? null}, ${req.userId ?? null}, ${req.workflow}, ${req.task}, ${rota.version},
               ${req.promptVersion ?? null}, ${t.candidato.provider}, ${t.candidato.model}, ${t.candidato.servedBy}, ${t.geo},
               ${t.tokens.input}, ${t.tokens.cacheRead}, ${t.tokens.cacheWrite}, ${t.tokens.output}, ${t.tokens.reasoning},
-              ${t.custo.toString()}, ${t.latenciaMs}, ${t.outcome}, ${t.errorCode}, ${removidos}, ${t.traceId}, ${new Date(t.em).toISOString()})`);
+              ${t.custo.toString()}, ${t.latenciaMs}, ${t.toolCalls}, ${t.toolFailures}, ${t.outcome}, ${t.errorCode}, ${removidos}, ${t.traceId},
+              ${new Date(t.em).toISOString()})`);
   }
 
   /** Pedido barrado antes de chegar a um modelo: fica registrado, sem modelo e sem custo. */

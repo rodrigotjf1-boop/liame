@@ -19,6 +19,10 @@ export interface ToolPlan {
 
 export interface ToolDefinition {
   name: string;
+  /** Sobe a cada mudança de descrição, parâmetros ou risco: o registro (`tool_registry`) guarda cada versão. */
+  version: number;
+  /** Área responsável pela ferramenta. */
+  owner: string;
   description: string;
   risk: RiskLevel;
   providers: readonly string[];
@@ -71,6 +75,8 @@ const budgetOf = (s: ResourceState): number => {
 export const TOOLS: Record<string, ToolDefinition> = {
   orcamento_ajustar: {
     name: 'orcamento_ajustar',
+    version: 1,
+    owner: 'midia',
     description: 'Muda o orçamento diário de uma campanha ou conjunto.',
     risk: 'R3',
     providers: ['sandbox'],
@@ -93,6 +99,8 @@ export const TOOLS: Record<string, ToolDefinition> = {
   },
   regem_cupom_criar: {
     name: 'regem_cupom_criar',
+    version: 1,
+    owner: 'vendas',
     description: 'Cria um cupom de campanha na loja do Regem e liga à campanha.',
     risk: 'R1',
     providers: ['regem'],
@@ -126,6 +134,8 @@ export const TOOLS: Record<string, ToolDefinition> = {
   },
   anuncio_pausar: {
     name: 'anuncio_pausar',
+    version: 1,
+    owner: 'midia',
     description: 'Pausa um anúncio (reversível).',
     risk: 'R1',
     providers: ['sandbox'],

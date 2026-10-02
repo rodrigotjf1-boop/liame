@@ -1,0 +1,26 @@
+{
+  "ferramentas": {
+    "anuncio_pausar": {
+      "version": 1,
+      "hash": "975cb9031feecf6eba62d4ffcbed455f0aaa4be4268d58174dcb2eaf731da31b"
+    },
+    "atencao_avisos": {
+      "version": 1,
+      "hash": "cfb0dbd65ada075855af3bca5779b118f008fd414621ab8a52eeb7dfc4c0b0d1"
+    },
+    "fontes_frescor": {
+      "version": 1,
+      "hash": "463f9f8340f94bca5051e14250f5f687eddbe8c612e303290ba40816c61f5328"
+    },
+    "orcamento_ajustar": {
+      "version": 1,
+      "hash": "ed8b6061c8a8a799bebc6827f9c8d690b23d805281f49cb0a18bc2d4ded23021"
+    },
+    "regem_cupom_criar": {
+      "version": 1,
+      "hash": "8830915afe3639f123c207ff24630f57c437548c9d7bad9d34d421c9a74453df"
+    }
+  },
+  "prompts": {},
+  "funcionarios": {}
+}

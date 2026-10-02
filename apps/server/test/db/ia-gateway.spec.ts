@@ -8,8 +8,9 @@ import { MockLanguageModelV4 } from 'ai/test';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { AiError, AiGateway, ENTRADA_MAXIMA, type GenerateRequest } from '../../src/ai/gateway.js';
+import { AiError, AiGateway, ENTRADA_MAXIMA, type FerramentaIa, type GenerateRequest } from '../../src/ai/gateway.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
+import { FerramentasDeLeitura } from '../../src/ai/registro/leituras.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { HOSTS_DO_VIGIA } from '../../src/connectors/vigia-trechos.js';
 import { DATABASE } from '../../src/database/database.module.js';
@@ -411,6 +412,112 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     ).rejects.toMatchObject({ cause: expect.objectContaining({ code: '42501' }) });
     // O conteúdo só sai pelo expurgo (escopo de sistema): a empresa não apaga o que serve para investigar abuso.
     expect((await comoA((tx) => tx.execute(sql`delete from liame.ai_exchange where usage_id = ${r.usageId} returning usage_id`))).rows).toEqual([]);
+  });
+
+  // ------------------------------------------------------------------ laço com ferramentas (I2)
+
+  const rodada = (content: Array<{ type: 'text'; text: string } | { type: 'tool-call'; toolCallId: string; toolName: string; input: string }>) => ({
+    content,
+    finishReason: { unified: content.some((c) => c.type === 'tool-call') ? ('tool-calls' as const) : ('stop' as const), raw: undefined },
+    usage: uso(1000, 500),
+    warnings: [],
+  });
+  const pede = (toolName: string, input: unknown = {}, toolCallId = `chamada-${randomBytes(3).toString('hex')}`) => rodada([{ type: 'tool-call', toolCallId, toolName, input: JSON.stringify(input) }]);
+  const diz = (text: string) => rodada([{ type: 'text', text }]);
+  const roteiro = (...passos: Array<ReturnType<typeof rodada>>) => new MockLanguageModelV4({ doGenerate: passos });
+  const ferramentaDeTeste = (executar: FerramentaIa['executar'], name = 'ler_teste'): FerramentaIa => ({ name, description: 'Lê um dado de teste.', input: z.strictObject({ marca: z.string().optional() }), executar });
+
+  it('A3-4: o modelo pede uma leitura, o código executa com a permissão e a empresa da pessoa, e cada rodada é registrada', async () => {
+    const [a, b] = [await dono('Empresa A'), await dono('Empresa B')];
+    const marcaA = (await api.call('GET', '/v1/brands', { cookie: a.cookie })).body.items[0].id as string;
+    await ownerQuery(
+      `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone)
+       values (gen_random_uuid(), $1, $2, 'meta_ads', 'act_' || $3, 'Conta da Pizzaria A', 'BRL', 'America/Sao_Paulo')`,
+      [a.tenantId, marcaA, Math.floor(Math.random() * 1e9).toString()],
+    );
+    const leituras = api.app.get(FerramentasDeLeitura);
+    const m = await modelo(roteiro(pede('fontes_frescor', { brand_id: marcaA }), diz('A conta da Meta nunca foi lida.'), pede('fontes_frescor', { brand_id: marcaA }), diz('Não há contas.')));
+    const task = await rota(m);
+
+    // A pessoa tem `contas.ver` e não tem `campanhas.ver`: só a leitura das contas é oferecida ao modelo.
+    const ferramentas = leituras.paraPedido({ tenantId: a.tenantId, userId: a.userId, permissions: new Set(['contas.ver']) });
+    expect(ferramentas.map((f) => f.name)).toEqual(['fontes_frescor']);
+    const r = await gateway().agent({ ...pedido(a, task), ferramentas });
+    expect(r).toMatchObject({ text: 'A conta da Meta nunca foi lida.', rodadas: 2, ferramentas: [{ name: 'fontes_frescor', ok: true }], costUsdMicros: 28_000, finishReason: 'stop' });
+    expect(m.mock.doGenerateCalls[0]!.tools?.map((t) => t.name)).toEqual(['fontes_frescor']);
+    // A segunda rodada recebeu o resultado da ferramenta, com a conta DA EMPRESA A.
+    const segunda = JSON.stringify(m.mock.doGenerateCalls[1]!.prompt);
+    expect(segunda).toContain('Conta da Pizzaria A');
+    expect(segunda).toContain('nunca leu');
+    const linhas = await ownerQuery<{ id: string; tool_calls: number; tool_failures: number; cost_usd_micros: number }>(
+      `select id, tool_calls, tool_failures, cost_usd_micros::int from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`,
+      [a.tenantId, task],
+    );
+    expect(linhas.map((l) => [l.tool_calls, l.tool_failures, l.cost_usd_micros])).toEqual([[1, 0, 14_000], [0, 0, 14_000]]);
+    expect(linhas[1]!.id).toBe(r.usageId);
+    const [guardado] = await ownerQuery<{ response: unknown }>(`select response from liame.ai_exchange where usage_id = $1`, [r.usageId]);
+    expect(guardado!.response).toEqual({ text: 'A conta da Meta nunca foi lida.', tools: [{ name: 'fontes_frescor', ok: true }] });
+
+    // A empresa B pede a marca da A: o banco não entrega, e nada da A chega ao modelo.
+    const deB = leituras.paraPedido({ tenantId: b.tenantId, userId: b.userId, permissions: new Set(['contas.ver', 'campanhas.ver']) });
+    expect(deB.map((f) => f.name)).toEqual(['fontes_frescor', 'atencao_avisos']);
+    await gateway().agent({ ...pedido(b, task), ferramentas: deB });
+    const paraB = JSON.stringify(m.mock.doGenerateCalls[3]!.prompt);
+    expect(paraB).not.toContain('Conta da Pizzaria A');
+    expect(paraB).toContain('"contas":[]');
+  });
+
+  it('ferramenta que falha vira um aviso curto para o modelo, a saída volta sem dado pessoal, e o laço segue', async () => {
+    const d = await dono();
+    const m = await modelo(roteiro(pede('ler_teste'), rodada([{ type: 'tool-call', toolCallId: 'c2', toolName: 'quebra', input: '{}' }, { type: 'tool-call', toolCallId: 'c3', toolName: 'recusa', input: '{}' }]), diz('Pronto.')));
+    const task = await rota(m);
+    const r = await gateway().agent({
+      ...pedido(d, task),
+      ferramentas: [
+        ferramentaDeTeste(async () => ({ ok: true, valor: { contato: 'fale com dono@loja.com', pedidos: '38 pedidos' } })),
+        ferramentaDeTeste(async () => {
+          throw new Error('erro interno com detalhe que o modelo não precisa ver');
+        }, 'quebra'),
+        ferramentaDeTeste(async () => ({ ok: false, erro: 'Marca não encontrada nesta empresa.' }), 'recusa'),
+      ],
+    });
+    expect(r).toMatchObject({ text: 'Pronto.', rodadas: 3, ferramentas: [{ name: 'ler_teste', ok: true }, { name: 'quebra', ok: false }, { name: 'recusa', ok: false }] });
+    const [segunda, terceira] = [JSON.stringify(m.mock.doGenerateCalls[1]!.prompt), JSON.stringify(m.mock.doGenerateCalls[2]!.prompt)];
+    expect(segunda).toContain('fale com [email]');
+    expect(segunda).toContain('38 pedidos');
+    expect(terceira).toContain('Não foi possível ler agora.');
+    expect(terceira).toContain('Marca não encontrada nesta empresa.');
+    expect(terceira).not.toContain('erro interno');
+    expect((await ownerQuery<{ c: number; f: number }>(`select tool_calls as c, tool_failures as f from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`, [d.tenantId, task])).map((l) => [l.c, l.f])).toEqual([[1, 0], [2, 2], [0, 0]]);
+  });
+
+  it('A3-9: o laço para no limite de rodadas e no teto da empresa, com tudo registrado', async () => {
+    const d = await dono();
+    const insistente = () => roteiro(...Array.from({ length: 8 }, () => pede('ler_teste')));
+    const ferramentas = [ferramentaDeTeste(async () => ({ ok: true, valor: { ok: true } }))];
+
+    const m = await modelo(insistente());
+    const task = await rota(m, { maxCost: 1_000_000 });
+    expect(await falha(gateway().agent({ ...pedido(d, task), ferramentas, maxRodadas: 3 }))).toBe('indisponivel');
+    expect(m.mock.doGenerateCalls).toHaveLength(3);
+    const linhas = await usos(d.tenantId, task);
+    expect(linhas.map((u) => u.outcome)).toEqual(['ok', 'ok', 'ok']);
+    const [guardado] = await ownerQuery<{ response: { stopped: string; tools: unknown[] } }>(`select response from liame.ai_exchange where usage_id = $1`, [linhas[2]!.id]);
+    expect(guardado!.response).toMatchObject({ stopped: 'rodadas' });
+    expect(guardado!.response.tools).toHaveLength(3);
+
+    // Teto de US$ 0,06 no dia: o que este pedido já gastou conta a cada rodada (3 × US$ 0,014 já gastos + 2 rodadas).
+    await ownerQuery(`insert into liame.ai_budget (tenant_id, daily_usd_micros, monthly_usd_micros, set_by) values ($1, 60000, 1000000, 'testes')`, [d.tenantId]);
+    const outro = await modelo(insistente());
+    const outra = await rota(outro, { maxCost: 1_000_000 });
+    expect(await falha(gateway().agent({ ...pedido(d, outra), ferramentas }))).toBe('teto');
+    expect(outro.mock.doGenerateCalls).toHaveLength(2);
+
+    // Teto de custo da própria rota (US$ 0,02 por pedido): para na rodada em que passa dele.
+    const [e, cara] = [await dono(), await modelo(insistente())];
+    const curta = await rota(cara, { maxCost: 20_000 });
+    expect(await falha(gateway().agent({ ...pedido(e, curta), ferramentas }))).toBe('indisponivel');
+    expect(cara.mock.doGenerateCalls).toHaveLength(2);
   });
 
   it('o conteúdo sai em 30 dias e fica só o registro técnico do uso', async () => {

@@ -97,6 +97,8 @@ Registro versionado de toda ferramenta disponível a agentes internos, MCP, UI d
 
 **Agent Registry (catálogo de funcionários):** cada funcionário da agência é uma definição versionada que referencia ferramentas deste registro, políticas, modos de autonomia e rotas de modelo (`ai-architecture.md` §1). A ferramenta só é oferecida ao funcionário se a definição dele permitir **e** a política do tenant autorizar.
 
+**No código (A3, I2):** as ferramentas de escrita (`actions/tools.ts`) e as de leitura dos funcionários de IA (`ai/registro/leituras.defs.ts`) formam um registro só, espelhado na tabela `tool_registry` com versão, risco, permissão exigida, descrição e formato dos parâmetros. A leitura (R0) só é oferecida a quem tem a permissão da rota equivalente e roda pelo mesmo serviço de domínio, na transação da empresa; o modelo recebe uma visão já formatada (datas no fuso da empresa, dinheiro em reais). Leituras prontas: `fontes_frescor` e `atencao_avisos`; resultados do ciclo fechado, métricas de mídia, cupons e links entram na sequência.
+
 O OpenAPI (`x-mcp`) alimenta parte desses campos, mas **a fonte é o registro**. A exposição MCP é só um adapter por cima:
 
 ```text

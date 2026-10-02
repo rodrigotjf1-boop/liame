@@ -6,6 +6,7 @@ import { ActionsController } from './actions/actions.controller.js';
 import { BudgetService } from './actions/budget.service.js';
 import { AiGateway } from './ai/gateway.js';
 import { ModelosIa } from './ai/modelos.js';
+import { FerramentasDeLeitura } from './ai/registro/leituras.js';
 import { AuditController } from './audit/audit.controller.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ConnectionsController } from './connections/connections.controller.js';
@@ -41,6 +42,6 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
   controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, ModelosIa, AiGateway],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, ModelosIa, AiGateway, FerramentasDeLeitura],
 })
 export class AppModule {}

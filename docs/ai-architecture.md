@@ -20,6 +20,8 @@ Infra         AI Gateway (adapters) · Tool Registry · AI Usage Ledger · Evals
 
 **Cada funcionário é uma definição no Agent Registry, não um runtime:** `agent_id, versão, cargo, responsabilidades, skills, ferramentas permitidas (subconjunto do Tool Registry), políticas e modos de autonomia, rotas de modelo por tarefa, workflows que possui, KPIs, eval_score, status`. Criar um funcionário novo é criar uma definição, passar no eval dela e publicar uma versão. Nada de código de runtime novo. Ativar um funcionário para um cliente é uma permissão por plano e por marca.
 
+**No código (A3, I2, 02/10/2026):** as definições ficam em `apps/server/src/ai/registro` (ferramentas de leitura, prompts, funcionários) e em `actions/tools.ts` (ferramentas de escrita), cada uma com **versão explícita**. O arquivo `apps/server/ia-registro.lock.json` guarda a versão e o hash de cada uma: o teste reprova conteúdo que mudou sem subir a versão, e `pnpm --filter @liame/server ia:lock` atualiza a trava no mesmo PR. Na subida, o worker grava cada versão em `tool_registry`, `prompt_version` e `agent_definition` (a anterior fica "aposentada"; mesma versão com conteúdo diferente é recusada). `agent_activation` diz qual funcionário trabalha para qual empresa ou marca; sem linha, vale o padrão da definição. Os prompts e os funcionários entram com o primeiro uso de cada um (o Analista, na I4).
+
 ## 2. AI Gateway (`apps/server/src/ai`)
 
 Nenhum módulo chama SDK de provedor diretamente. A interface é da DMS:
@@ -40,7 +42,7 @@ interface AiGateway {
 
 Adapters: `AnthropicAdapter` (primeiro), `OpenAIAdapter`, `GoogleAdapter`, `FutureProviderAdapter`. O gateway aplica, em toda chamada: **sanitização de PII** (classificação de dados), orçamento do AI Usage Ledger, timeout, trace `gen_ai.*`, registro de versões e custo. Se a base de baixo nível é o SDK oficial de cada provider ou um SDK agregador, é decidido no ADR-006 (pesquisa + spike). Em qualquer caso, **a semântica interna é da DMS**.
 
-**No código (A3, I1, 02/10/2026):** `generate` e `structured` estão prontos; `stream` entra com a Conversa (I10) e `agent`, com o registro de ferramentas (I2), para nascerem junto do primeiro uso real. Em toda chamada, nesta ordem: flag `ia` da empresa → trava (kill switch global, do provider `ai`, da empresa ou da marca) → rota ativa da tarefa → limite de chamadas por pessoa → teto de custo → remoção de dado pessoal → modelo da rota, com reserva só da própria rota → custo → `ai_usage` (uma linha por tentativa) e `ai_exchange` (o conteúdo, por 30 dias).
+**No código (A3, I1, 02/10/2026):** `generate` e `structured` estão prontos desde a I1 e `agent` (o laço com ferramentas, ainda sem transmissão ao vivo) desde a I2; `stream` entra com a Conversa (I10), junto do primeiro uso real. Em toda chamada, nesta ordem: flag `ia` da empresa → trava (kill switch global, do provider `ai`, da empresa ou da marca) → rota ativa da tarefa → limite de chamadas por pessoa → teto de custo → remoção de dado pessoal → modelo da rota, com reserva só da própria rota → custo → `ai_usage` (uma linha por tentativa) e `ai_exchange` (o conteúdo, por 30 dias).
 
 - A chamada **não roda dentro da transação da requisição**: leva segundos, e o custo fica gravado mesmo que a requisição desista.
 - **Toda falha é um erro só** (`AiError`: desligada, travada, sem rota, entrada grande demais, limite da pessoa, teto, indisponível). Quem chama cai no caminho sem IA.
@@ -48,6 +50,7 @@ Adapters: `AnthropicAdapter` (primeiro), `OpenAIAdapter`, `GoogleAdapter`, `Futu
 - **Dado pessoal** (e-mail, telefone, CPF, CNPJ, CEP) sai do que é enviado, do que é devolvido a quem chamou e do que fica guardado. Quem monta o contexto manda os números já formatados: número cru com 10 dígitos ou mais parece telefone ou CPF e sai na limpeza.
 - **Modelo sem credencial ou sem preço cadastrado não roda:** custo que não se mede não se gasta.
 - **Trace:** um span `chat {modelo}` com atributos `gen_ai.*` só técnicos (fornecedor, modelo, tokens). A telemetria do próprio SDK fica desligada, porque ela grava entrada e saída. O erro do SDK guarda o corpo enviado: só o código do motivo vai para o log e para o registro.
+- **Laço com ferramentas (`agent`, I2):** o modelo pede uma leitura, o código executa e devolve o resultado, até vir a resposta em texto. Cada rodada é uma chamada registrada em `ai_usage` (com `tool_calls` e `tool_failures`); o teto da empresa é conferido de novo a cada rodada, contando o que o pedido já gastou; há limite de rodadas (6 por padrão, 12 no máximo) e o teto de custo da rota vale para o pedido inteiro. A reserva da rota só entra na primeira rodada. Ferramenta que falha vira um aviso curto para o modelo, nunca o erro interno, e a saída de toda ferramenta passa pela limpeza de dado pessoal.
 
 ## 3. Model routing por tarefa
 
