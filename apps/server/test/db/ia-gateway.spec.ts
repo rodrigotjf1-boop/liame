@@ -8,7 +8,7 @@ import { MockLanguageModelV4 } from 'ai/test';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { AiError, AiGateway, ENTRADA_MAXIMA, type FerramentaIa, type GenerateRequest } from '../../src/ai/gateway.js';
+import { AiError, AiGateway, ENTRADA_MAXIMA, type FerramentaIa, type GenerateRequest, SAIDA_DA_FERRAMENTA_MAXIMA } from '../../src/ai/gateway.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
 import { FerramentasDeLeitura } from '../../src/ai/registro/leituras.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
@@ -460,7 +460,7 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
 
     // A empresa B pede a marca da A: o banco não entrega, e nada da A chega ao modelo.
     const deB = leituras.paraPedido({ tenantId: b.tenantId, userId: b.userId, permissions: new Set(['contas.ver', 'campanhas.ver']) });
-    expect(deB.map((f) => f.name)).toEqual(['fontes_frescor', 'atencao_avisos']);
+    expect(deB.map((f) => f.name)).toEqual(['fontes_frescor', 'atencao_avisos', 'midia_entrega']);
     await gateway().agent({ ...pedido(b, task), ferramentas: deB });
     const paraB = JSON.stringify(m.mock.doGenerateCalls[3]!.prompt);
     expect(paraB).not.toContain('Conta da Pizzaria A');
@@ -469,7 +469,9 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
 
   it('ferramenta que falha vira um aviso curto para o modelo, a saída volta sem dado pessoal, e o laço segue', async () => {
     const d = await dono();
-    const m = await modelo(roteiro(pede('ler_teste'), rodada([{ type: 'tool-call', toolCallId: 'c2', toolName: 'quebra', input: '{}' }, { type: 'tool-call', toolCallId: 'c3', toolName: 'recusa', input: '{}' }]), diz('Pronto.')));
+    const m = await modelo(
+      roteiro(pede('ler_teste'), rodada([{ type: 'tool-call', toolCallId: 'c2', toolName: 'quebra', input: '{}' }, { type: 'tool-call', toolCallId: 'c3', toolName: 'recusa', input: '{}' }]), pede('gigante'), diz('Pronto.')),
+    );
     const task = await rota(m);
     const r = await gateway().agent({
       ...pedido(d, task),
@@ -479,16 +481,25 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
           throw new Error('erro interno com detalhe que o modelo não precisa ver');
         }, 'quebra'),
         ferramentaDeTeste(async () => ({ ok: false, erro: 'Marca não encontrada nesta empresa.' }), 'recusa'),
+        // Saída maior que o máximo: não volta ao modelo (ela seria entrada paga da rodada seguinte).
+        ferramentaDeTeste(async () => ({ ok: true, valor: { linhas: 'linha repetida '.repeat(SAIDA_DA_FERRAMENTA_MAXIMA / 10) } }), 'gigante'),
       ],
     });
-    expect(r).toMatchObject({ text: 'Pronto.', rodadas: 3, ferramentas: [{ name: 'ler_teste', ok: true }, { name: 'quebra', ok: false }, { name: 'recusa', ok: false }] });
+    expect(r).toMatchObject({
+      text: 'Pronto.',
+      rodadas: 4,
+      ferramentas: [{ name: 'ler_teste', ok: true }, { name: 'quebra', ok: false }, { name: 'recusa', ok: false }, { name: 'gigante', ok: false }],
+    });
+    const quarta = JSON.stringify(m.mock.doGenerateCalls[3]!.prompt);
+    expect(quarta).toContain('O resultado é grande demais');
+    expect(quarta).not.toContain('linha repetida linha repetida');
     const [segunda, terceira] = [JSON.stringify(m.mock.doGenerateCalls[1]!.prompt), JSON.stringify(m.mock.doGenerateCalls[2]!.prompt)];
     expect(segunda).toContain('fale com [email]');
     expect(segunda).toContain('38 pedidos');
     expect(terceira).toContain('Não foi possível ler agora.');
     expect(terceira).toContain('Marca não encontrada nesta empresa.');
     expect(terceira).not.toContain('erro interno');
-    expect((await ownerQuery<{ c: number; f: number }>(`select tool_calls as c, tool_failures as f from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`, [d.tenantId, task])).map((l) => [l.c, l.f])).toEqual([[1, 0], [2, 2], [0, 0]]);
+    expect((await ownerQuery<{ c: number; f: number }>(`select tool_calls as c, tool_failures as f from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`, [d.tenantId, task])).map((l) => [l.c, l.f])).toEqual([[1, 0], [2, 2], [1, 1], [0, 0]]);
   });
 
   it('A3-9: o laço para no limite de rodadas e no teto da empresa, com tudo registrado', async () => {

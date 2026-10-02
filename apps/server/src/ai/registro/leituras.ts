@@ -3,14 +3,21 @@ import { type Database, withContext } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { currentTx, requestStore } from '../../context/request-context.js';
+import { CouponsService } from '../../coupons/coupons.service.js';
 import { DATABASE } from '../../database/database.module.js';
 import { AppProblem } from '../../errors/problems.js';
+import { LinksService } from '../../links/links.service.js';
 import { MediaService } from '../../media/media.service.js';
 import { AtencaoCicloService } from '../../results/atencao-ciclo.service.js';
+import { ResultsService } from '../../results/results.service.js';
 import type { FerramentaIa } from '../gateway.js';
 import type { FerramentaDef } from './definicoes.js';
 import { LEITURAS } from './leituras.defs.js';
 import { visaoDoFrescor, visaoDosAvisos } from './leituras.visoes.js';
+import { visaoDoCicloFechado } from './visoes/ciclo-fechado.js';
+import { visaoDosCupons } from './visoes/cupons.js';
+import { visaoDosLinks } from './visoes/links.js';
+import { visaoDaEntrega } from './visoes/midia.js';
 
 /** Quem pediu: a empresa, a pessoa e as permissões dela. `sistema` é a rotina sem pessoa (relatório noturno). */
 export interface ContextoDaLeitura {
@@ -20,7 +27,8 @@ export interface ContextoDaLeitura {
   agora?: Date;
 }
 
-type Leitor = (ctx: ContextoDaLeitura, input: Record<string, unknown>) => Promise<unknown>;
+// Os parâmetros chegam aqui já validados pelo schema da definição (`leituras.defs.ts`).
+type Leitor = (ctx: ContextoDaLeitura, input: { brand_id?: string; unit_id?: string; from?: string; to?: string }) => Promise<unknown>;
 
 const pode = (ctx: ContextoDaLeitura, permissao: string | null): boolean => !permissao || ctx.permissions === 'sistema' || ctx.permissions.has(permissao);
 
@@ -37,16 +45,26 @@ export class FerramentasDeLeitura {
     @Inject(DATABASE) private readonly database: Database | null,
     media: MediaService,
     ciclo: AtencaoCicloService,
+    resultados: ResultsService,
+    cupons: CouponsService,
+    links: LinksService,
   ) {
     this.leitores = {
-      fontes_frescor: async (ctx, input) => visaoDoFrescor(await media.frescor(input.brand_id as string | undefined, ctx.agora), await fuso(ctx)),
+      fontes_frescor: async (ctx, input) => visaoDoFrescor(await media.frescor(input.brand_id, ctx.agora), await fuso(ctx)),
       atencao_avisos: async (ctx, input) => {
-        const marca = input.brand_id as string | undefined;
-        const midia = await media.atencao(marca, ctx.agora);
+        const midia = await media.atencao(input.brand_id, ctx.agora);
         // Os avisos de vendas pedem a permissão de vendas, como na rota deles.
-        const vendas: AttentionItem[] = pode(ctx, 'vendas.ver') ? (await ciclo.atencao(marca, ctx.agora)).items : [];
+        const vendas: AttentionItem[] = pode(ctx, 'vendas.ver') ? (await ciclo.atencao(input.brand_id, ctx.agora)).items : [];
         return visaoDosAvisos([...midia.items, ...vendas], midia.generated_at, await fuso(ctx));
       },
+      resultados_ciclo_fechado: async (ctx, input) =>
+        visaoDoCicloFechado(
+          await resultados.closedLoop({ brand_id: input.brand_id!, from: input.from!, to: input.to!, ...(input.unit_id ? { unit_id: input.unit_id } : {}) }, ctx.agora),
+        ),
+      midia_entrega: async (_ctx, input) => visaoDaEntrega(await media.entrega({ brand_id: input.brand_id, from: input.from!, to: input.to! })),
+      cupons_campanha: async (ctx, input) => visaoDosCupons(await cupons.list({ tenantId: ctx.tenantId, userId: ctx.userId }, input.brand_id!, ctx.agora)),
+      links_rastreio: async (ctx, input) =>
+        visaoDosLinks(await links.list({ brand_id: input.brand_id! }, ctx.agora), await links.trackingCheck(input.brand_id!, ctx.agora)),
     };
   }
 
@@ -69,7 +87,7 @@ export class FerramentasDeLeitura {
         try {
           // A mesma unidade de trabalho de uma rota: transação da empresa, contexto da RLS e o serviço de domínio.
           const valor = await withContext(this.database.db, { tenantId: ctx.tenantId, userId: ctx.userId }, (tx) =>
-            requestStore.run({ tx, afterCommit: [] }, () => ler(ctx, input.data as Record<string, unknown>)),
+            requestStore.run({ tx, afterCommit: [] }, () => ler(ctx, input.data as Parameters<Leitor>[1])),
           );
           return { ok: true, valor };
         } catch (err) {

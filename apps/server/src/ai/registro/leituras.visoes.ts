@@ -12,6 +12,8 @@ const GRAVIDADE = ['critica', 'atencao', 'info'];
 export const AVISOS_MAXIMO = 40;
 
 export const plataforma = (provider: string | null): string | null => (provider ? (PLATAFORMA[provider] ?? provider) : null);
+/** `fresh` → "em dia", `delayed` → "atrasado", `stale` → "parado", `unknown` → "nunca leu". */
+export const frescorDe = (frescor: string): string => FRESCOR[frescor] ?? frescor;
 
 /** "02/10/2026 01:54" no fuso da empresa; nulo fica nulo. */
 export function quando(iso: string | null, fuso: string): string | null {

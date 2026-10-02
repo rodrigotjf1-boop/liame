@@ -106,6 +106,8 @@ export interface AgentResult extends GenerateResult {
 
 const RODADAS_PADRAO = 6;
 const RODADAS_MAXIMO = 12;
+/** Tamanho máximo do que uma ferramenta devolve ao modelo, em caracteres (a maior leitura de hoje fica abaixo de 20 mil). */
+export const SAIDA_DA_FERRAMENTA_MAXIMA = 60_000;
 
 type ServidoPor = 'principal' | 'reserva' | 'economico';
 
@@ -354,12 +356,18 @@ export class AiGateway {
               this.logger.error(`ia: a ferramenta ${f.name} falhou: ${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}`);
               r = { ok: false, erro: 'Não foi possível ler agora.' };
             }
+            // A saída também tem tamanho máximo: ela volta ao modelo como entrada da rodada seguinte, e paga.
+            const limpo = r.ok ? limparJson(r.valor).valor : null;
+            if (r.ok && JSON.stringify(limpo).length > SAIDA_DA_FERRAMENTA_MAXIMA) {
+              this.logger.warn(`ia: a ferramenta ${f.name} devolveu mais de ${SAIDA_DA_FERRAMENTA_MAXIMA} caracteres`);
+              r = { ok: false, erro: 'O resultado é grande demais. Peça um período menor ou uma marca só.' };
+            }
             usadas.push({ name: f.name, ok: r.ok });
             if (!r.ok) {
               conta.falhas += 1;
               return { erro: r.erro };
             }
-            return limparJson(r.valor).valor;
+            return limpo;
           },
         }),
       ]),

@@ -8,9 +8,21 @@
       "version": 1,
       "hash": "cfb0dbd65ada075855af3bca5779b118f008fd414621ab8a52eeb7dfc4c0b0d1"
     },
+    "cupons_campanha": {
+      "version": 1,
+      "hash": "94b85d7d2058b93314856dac8f27046694b323e5c93a3fc4ea578218ec6f46d6"
+    },
     "fontes_frescor": {
       "version": 1,
       "hash": "463f9f8340f94bca5051e14250f5f687eddbe8c612e303290ba40816c61f5328"
+    },
+    "links_rastreio": {
+      "version": 1,
+      "hash": "6f981dd73662bac3b88205137f27da3052598ea319f4f8b296318f88cecf4e04"
+    },
+    "midia_entrega": {
+      "version": 1,
+      "hash": "d369a08516c8ba47f3b57e6c85e39fc4890340399eb045ccd242931a3aa4e968"
     },
     "orcamento_ajustar": {
       "version": 1,
@@ -19,6 +31,10 @@
     "regem_cupom_criar": {
       "version": 1,
       "hash": "8830915afe3639f123c207ff24630f57c437548c9d7bad9d34d421c9a74453df"
+    },
+    "resultados_ciclo_fechado": {
+      "version": 1,
+      "hash": "b6f5e0f98b3bf73b03314bc04e7f43c02ef46d90d0aede9b0dff3cf31c2b1a48"
     }
   },
   "prompts": {},

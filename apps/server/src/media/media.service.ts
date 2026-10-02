@@ -48,6 +48,39 @@ type LinhaMetrica = {
   last_success_at: Date | string | null;
 };
 
+/** Entrega de uma campanha no período: somas das métricas que somam entre dias, e as razões calculadas aqui. */
+export type EntregaDaCampanha = {
+  campaign_id: string;
+  provider: string;
+  name: string;
+  status: string;
+  currency: string | null;
+  /** Na moeda da conta, com duas casas ("1250.00"); nulo sem leitura da métrica no período. */
+  spend: string | null;
+  impressions: string | null;
+  clicks: string | null;
+  /** Só a Meta separa o clique no link dos demais cliques. */
+  link_clicks: string | null;
+  /** Cliques ÷ impressões, em %, com duas casas. */
+  ctr_pct: string | null;
+  /** Investimento ÷ cliques. */
+  cpc: string | null;
+  /** Investimento ÷ impressões × 1000. */
+  cpm: string | null;
+};
+
+export type EntregaDoDia = { date: string; currency: string | null; spend: string | null; impressions: string | null; clicks: string | null };
+
+export interface EntregaDeMidia {
+  from: string;
+  to: string;
+  /** As de maior investimento primeiro; no máximo `ENTREGA_CAMPANHAS_MAXIMO`. */
+  campaigns: EntregaDaCampanha[];
+  days: EntregaDoDia[];
+}
+
+export const ENTREGA_CAMPANHAS_MAXIMO = 30;
+
 @Injectable()
 export class MediaService {
   /** Frescor de cada conta ligada (e de cada conjunto de dados dela). */
@@ -123,6 +156,55 @@ export class MediaService {
       })),
       has_more: r.rows.length > q.limit,
     };
+  }
+
+  /**
+   * Entrega por campanha e por dia (A3, I2): investimento, impressões e cliques somados no período, com
+   * CTR, custo por clique e custo por mil impressões calculados aqui (a IA recebe o número pronto). Só
+   * métricas que somam entre dias e sem janela de atribuição; o que depende de janela (conversões, valor)
+   * está nos resultados do ciclo fechado. A Meta é lida por anúncio e sobe para a campanha; o Google Ads já
+   * vem por campanha (o mesmo corte dos resultados).
+   */
+  async entrega(q: { brand_id?: string | undefined; from: string; to: string }): Promise<EntregaDeMidia> {
+    const dias = (Date.parse(`${q.to}T00:00:00Z`) - Date.parse(`${q.from}T00:00:00Z`)) / 86_400_000 + 1;
+    if (!(dias >= 1 && dias <= MAX_DIAS)) {
+      throw new AppProblem(422, 'periodo-invalido', 'Período inválido', `O período vai de 1 a ${MAX_DIAS} dias, com o início antes do fim.`);
+    }
+    const tx = currentTx();
+    const pontos = sql`
+      select coalesce(g.campaign_id, cd.id) as campaign_id, ml.metric_date, ml.metric_name, ml.metric_value, a.currency
+        from liame.metric_latest ml
+        join liame.connected_account a on a.id = ml.connected_account_id and a.disconnected_at is null
+        left join liame.ad an on ml.level = 'ad' and an.id = ml.entity_id
+        left join liame.ad_group g on g.id = an.ad_group_id
+        left join liame.campaign cd on ml.level = 'campaign' and cd.id = ml.entity_id
+       where ml.metric_date between ${q.from}::date and ${q.to}::date
+         and ((a.provider = 'meta_ads' and ml.level = 'ad') or (a.provider = 'google_ads' and ml.level = 'campaign'))
+         and ml.attribution_window = '' and ml.metric_name in ('spend', 'impressions', 'clicks', 'link_clicks')
+         ${q.brand_id ? sql`and ml.brand_id = ${q.brand_id}` : sql``}`;
+    const soma = (metrica: string) => sql`sum(p.metric_value) filter (where p.metric_name = ${metrica})`;
+    const campanhas = await tx.execute<EntregaDaCampanha>(sql`
+      select c.id as campaign_id, c.provider, c.name, c.status, max(p.currency) as currency,
+             round(${soma('spend')}, 2)::text as spend,
+             round(${soma('impressions')})::text as impressions,
+             round(${soma('clicks')})::text as clicks,
+             round(${soma('link_clicks')})::text as link_clicks,
+             round(${soma('clicks')} / nullif(${soma('impressions')}, 0) * 100, 2)::text as ctr_pct,
+             round(${soma('spend')} / nullif(${soma('clicks')}, 0), 2)::text as cpc,
+             round(${soma('spend')} / nullif(${soma('impressions')}, 0) * 1000, 2)::text as cpm
+        from (${pontos}) p join liame.campaign c on c.id = p.campaign_id
+       group by c.id, c.provider, c.name, c.status
+       order by ${soma('spend')} desc nulls last, c.name, c.id
+       limit ${ENTREGA_CAMPANHAS_MAXIMO}`);
+    const porDia = await tx.execute<EntregaDoDia>(sql`
+      select p.metric_date::text as date, p.currency,
+             round(${soma('spend')}, 2)::text as spend,
+             round(${soma('impressions')})::text as impressions,
+             round(${soma('clicks')})::text as clicks
+        from (${pontos}) p
+       group by p.metric_date, p.currency
+       order by p.metric_date, p.currency`);
+    return { from: q.from, to: q.to, campaigns: campanhas.rows, days: porDia.rows };
   }
 
   /**

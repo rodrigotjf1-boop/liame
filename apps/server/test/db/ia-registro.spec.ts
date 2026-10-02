@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { type Database, runMigrations, withContext } from '@liame/database';
@@ -167,10 +167,18 @@ describe.skipIf(!hasDb)('registros da IA no banco, ativação por empresa e ferr
 
     // Permissões: nenhuma, uma de cada, e a rotina do sistema (sem pessoa) com todas.
     expect(de(a).map((f) => f.name)).toEqual([]);
-    expect(de(a, 'vendas.ver').map((f) => f.name)).toEqual([]);
+    expect(de(a, 'cupons.criar').map((f) => f.name)).toEqual([]);
     expect(de(a, 'contas.ver').map((f) => f.name)).toEqual(['fontes_frescor']);
-    expect(de(a, 'campanhas.ver').map((f) => f.name)).toEqual(['atencao_avisos']);
-    expect(leituras.paraPedido({ tenantId: a.tenantId, userId: null, permissions: 'sistema' }).map((f) => f.name)).toEqual(['fontes_frescor', 'atencao_avisos']);
+    expect(de(a, 'campanhas.ver').map((f) => f.name)).toEqual(['atencao_avisos', 'midia_entrega']);
+    expect(de(a, 'vendas.ver').map((f) => f.name)).toEqual(['resultados_ciclo_fechado', 'cupons_campanha', 'links_rastreio']);
+    expect(leituras.paraPedido({ tenantId: a.tenantId, userId: null, permissions: 'sistema' }).map((f) => f.name)).toEqual([
+      'fontes_frescor',
+      'atencao_avisos',
+      'resultados_ciclo_fechado',
+      'midia_entrega',
+      'cupons_campanha',
+      'links_rastreio',
+    ]);
     expect(leituras.paraPedido({ tenantId: a.tenantId, userId: null, permissions: 'sistema' }, ['atencao_avisos']).map((f) => f.name)).toEqual(['atencao_avisos']);
 
     // A lê a conta dela; B não vê a conta da A, nem pedindo a marca da A pelo id.
@@ -193,5 +201,93 @@ describe.skipIf(!hasDb)('registros da IA no banco, ativação por empresa e ferr
     // Parâmetro fora do formato não chega ao serviço.
     expect(await usar(de(a, 'contas.ver'), 'fontes_frescor', { brand_id: 'não é um id' })).toEqual({ ok: false, erro: 'Parâmetros inválidos para esta ferramenta.' });
     expect(await usar(de(a, 'contas.ver'), 'fontes_frescor', { brand_id: a.brandId, outro: 1 })).toEqual({ ok: false, erro: 'Parâmetros inválidos para esta ferramenta.' });
+  });
+
+  it('A3-4: entrega de mídia somada por campanha e por dia, com as razões calculadas pelo código; outra empresa não vê', async () => {
+    const [a, b] = [await dono('Empresa A'), await dono('Empresa B')];
+    const conta = randomUUID();
+    await ownerQuery(
+      `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'meta_ads', 'act_' || $4, 'Conta da A', 'BRL', 'America/Sao_Paulo')`,
+      [conta, a.tenantId, a.brandId, Math.floor(Math.random() * 1e9).toString()],
+    );
+    // Duas campanhas da Meta (lida por anúncio); a primeira com dois anúncios, que somam na campanha.
+    const anuncios: Record<string, string> = {};
+    for (const [campanha, nomes] of [['Delivery noite', ['Combo', 'Pizza grande']], ['Almoço executivo', ['Prato do dia']]] as const) {
+      const [c, g] = [randomUUID(), randomUUID()];
+      await ownerQuery(`insert into liame.campaign (id, tenant_id, connected_account_id, provider, external_id, name, status) values ($1, $2, $3, 'meta_ads', $4, $5, 'ativa')`, [c, a.tenantId, conta, `c_${c.slice(0, 8)}`, campanha]);
+      await ownerQuery(`insert into liame.ad_group (id, tenant_id, connected_account_id, campaign_id, provider, external_id, name, status) values ($1, $2, $3, $4, 'meta_ads', $5, 'Grupo', 'ativa')`, [g, a.tenantId, conta, c, `g_${g.slice(0, 8)}`]);
+      for (const nome of nomes) {
+        const ad = randomUUID();
+        anuncios[nome] = ad;
+        await ownerQuery(`insert into liame.ad (id, tenant_id, connected_account_id, ad_group_id, provider, external_id, name, status) values ($1, $2, $3, $4, 'meta_ads', $5, $6, 'ativa')`, [ad, a.tenantId, conta, g, `a_${ad.slice(0, 8)}`, nome]);
+      }
+    }
+    const ponto = (anuncio: string, dia: string, metrica: string, valor: number, janela = '') =>
+      ownerQuery(
+        `insert into liame.metric_latest (connected_account_id, level, external_entity_id, metric_date, metric_name, attribution_window, tenant_id, brand_id, provider, entity_id, metric_value, currency, observed_at, changed_at)
+         values ($1, 'ad', $2, $3, $4, $5, $6, $7, 'meta_ads', $8, $9, $10, now(), now())`,
+        [conta, `a_${anuncios[anuncio]!.slice(0, 8)}`, dia, metrica, janela, a.tenantId, a.brandId, anuncios[anuncio], valor, metrica === 'spend' ? 'BRL' : null],
+      );
+    await ponto('Combo', '2026-09-01', 'spend', 100.5);
+    await ponto('Combo', '2026-09-01', 'impressions', 10_000);
+    await ponto('Combo', '2026-09-01', 'clicks', 150);
+    await ponto('Combo', '2026-09-01', 'link_clicks', 120);
+    await ponto('Pizza grande', '2026-09-02', 'spend', 899.5);
+    await ponto('Pizza grande', '2026-09-02', 'impressions', 90_000);
+    await ponto('Pizza grande', '2026-09-02', 'clicks', 850);
+    await ponto('Prato do dia', '2026-09-02', 'spend', 40);
+    await ponto('Prato do dia', '2026-09-02', 'impressions', 1_234_567);
+    // Fora do recorte: métrica com janela de atribuição e dia fora do período.
+    await ponto('Combo', '2026-09-01', 'purchases', 9, '7d_click');
+    await ponto('Combo', '2026-08-31', 'spend', 5000);
+
+    const de = (quem: typeof a) => leituras.paraPedido({ tenantId: quem.tenantId, userId: quem.userId, permissions: new Set(['campanhas.ver']) }).find((f) => f.name === 'midia_entrega')!;
+    expect(await de(a).executar({ brand_id: a.brandId, from: '2026-09-01', to: '2026-09-30' })).toEqual({
+      ok: true,
+      valor: {
+        periodo: { de: '01/09/2026', ate: '30/09/2026' },
+        campanhas: [
+          // 1.000,00 ÷ 1.000 cliques = 1,00 por clique; 1.000 ÷ 100.000 impressões = 1,00%; 10,00 por mil impressões.
+          { plataforma: 'Meta', campanha: 'Delivery noite', situacao: 'ativa', investimento: 'R$ 1.000,00', impressoes: '100.000', cliques: '1.000', cliques_no_link: '120', ctr: '1,00%', custo_por_clique: 'R$ 1,00', custo_por_mil_impressoes: 'R$ 10,00' },
+          // Sem clique lido: sem CTR e sem custo por clique (não vira zero).
+          { plataforma: 'Meta', campanha: 'Almoço executivo', situacao: 'ativa', investimento: 'R$ 40,00', impressoes: '1.234.567', custo_por_mil_impressoes: 'R$ 0,03' },
+        ],
+        por_dia: [
+          { dia: '01/09/2026', investimento: 'R$ 100,50', impressoes: '10.000', cliques: '150' },
+          { dia: '02/09/2026', investimento: 'R$ 939,50', impressoes: '1.324.567', cliques: '850' },
+        ],
+      },
+    });
+    // A empresa B, pedindo a marca da A ou tudo o que é dela: nada.
+    expect(await de(b).executar({ brand_id: a.brandId, from: '2026-09-01', to: '2026-09-30' })).toMatchObject({ ok: true, valor: { campanhas: [], por_dia: [] } });
+    expect(await de(b).executar({ from: '2026-09-01', to: '2026-09-30' })).toMatchObject({ ok: true, valor: { campanhas: [], por_dia: [] } });
+    // Período ao contrário ou longo demais: o erro de domínio vira o texto curto.
+    expect(await de(a).executar({ from: '2026-09-30', to: '2026-09-01' })).toEqual({ ok: false, erro: 'O período vai de 1 a 92 dias, com o início antes do fim.' });
+    expect(await de(a).executar({ from: '2026-01-01', to: '2026-09-01' })).toMatchObject({ ok: false });
+    expect(await de(a).executar({ from: '01/09/2026', to: '2026-09-30' })).toEqual({ ok: false, erro: 'Parâmetros inválidos para esta ferramenta.' });
+  });
+
+  it('A3-4: resultados, cupons e links leem a marca da própria empresa; a de outra empresa não existe para a ferramenta', async () => {
+    const [a, b] = [await dono('Empresa A'), await dono('Empresa B')];
+    const de = (quem: typeof a) => leituras.paraPedido({ tenantId: quem.tenantId, userId: quem.userId, permissions: new Set(['vendas.ver']) });
+    const usar = (quem: typeof a, nome: string, input: unknown) => de(quem).find((f) => f.name === nome)!.executar(input);
+    const periodo = { from: '2026-09-01', to: '2026-09-30' };
+
+    // Empresa sem conta conectada: a leitura funciona e diz que não há nada (não inventa número).
+    expect(await usar(a, 'resultados_ciclo_fechado', { brand_id: a.brandId, ...periodo })).toMatchObject({
+      ok: true,
+      valor: { periodo: { de: '01/09/2026', ate: '30/09/2026' }, totais: { investimento: 'R$ 0,00', pedidos_confirmados: '0', receita_confirmada: 'R$ 0,00' }, plataformas: [], campanhas: [], fontes: [] },
+    });
+    expect(await usar(a, 'cupons_campanha', { brand_id: a.brandId })).toMatchObject({ ok: true, valor: { lojas: [], total_de_cupons: 0, cupons: [], pedidos_de_criacao: [], criar_cupom_pelo_liame: 'desligado' } });
+    expect(await usar(a, 'links_rastreio', { brand_id: a.brandId })).toMatchObject({ ok: true, valor: { rastreio_dos_anuncios: { anuncios_ativos: '0' }, total_de_links: 0, links: [] } });
+    // A rotina do sistema (sem pessoa) lê do mesmo jeito.
+    const doSistema = leituras.paraPedido({ tenantId: a.tenantId, userId: null, permissions: 'sistema' }, ['cupons_campanha'])[0]!;
+    expect(await doSistema.executar({ brand_id: a.brandId })).toMatchObject({ ok: true, valor: { total_de_cupons: 0 } });
+
+    for (const [nome, input] of [['resultados_ciclo_fechado', { brand_id: a.brandId, ...periodo }], ['cupons_campanha', { brand_id: a.brandId }], ['links_rastreio', { brand_id: a.brandId }]] as const) {
+      expect(await usar(b, nome, input), nome).toEqual({ ok: false, erro: 'Marca não encontrada nesta empresa.' });
+      // A marca é obrigatória nestas três.
+      expect(await usar(a, nome, {}), nome).toEqual({ ok: false, erro: 'Parâmetros inválidos para esta ferramenta.' });
+    }
   });
 });
