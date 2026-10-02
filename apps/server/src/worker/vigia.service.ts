@@ -27,7 +27,7 @@ export function etapaDoCalendario(dias: number): { kind: 'versao_expirando' | 'v
   return { kind: 'versao_expirada', stage: 'd+7' };
 }
 
-const NOMES: Record<string, string> = { meta_ads: 'Meta', google_ads: 'Google Ads', ga4: 'GA4' };
+const NOMES: Record<string, string> = { meta_ads: 'Meta', google_ads: 'Google Ads', ga4: 'GA4', anthropic: 'Anthropic' };
 const nome = (p: string) => NOMES[p] ?? p;
 const dataBr = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 const DIA_MS = 86_400_000;

@@ -138,6 +138,13 @@ export class LifecyclePurgeService {
       true,
     );
     await run(
+      'conteudo_ia',
+      sql`delete from liame.ai_exchange where usage_id in (
+            select usage_id from liame.ai_exchange e where e.created_at < now() - interval '30 days' and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH})
+          returning tenant_id`,
+      true,
+    );
+    await run(
       'idempotencia',
       sql`delete from liame.idempotency_key where ctid in (
             select ctid from liame.idempotency_key e where expires_at < now() ${t('e.tenant_id')} ${u('e.user_id')} limit ${BATCH})
