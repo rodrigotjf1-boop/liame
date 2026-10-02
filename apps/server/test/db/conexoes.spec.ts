@@ -309,6 +309,76 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     expect(revogados).toContain('refresh-google-1');
   });
 
+  it('Google em fase de teste: conectar de novo ANTES de vencer passa as contas para a autorização nova e encerra a antiga sem revogar no Google', async () => {
+    const e = await empresa('Casa Brasa Renovar Google');
+    const autorizar = async () => {
+      const inicio = await api.call('POST', '/v1/connections', { cookie: e.cookie, body: { provider: 'google', brand_id: e.brandId } });
+      expect(inicio.status).toBe(201);
+      const url = new URL(inicio.body.authorize_url);
+      desafios.set(url.searchParams.get('code_challenge')!, inicio.body.id);
+      expect((await voltar(e.cookie, { state: url.searchParams.get('state')!, code: 'codigo-google-bom', scope: 'x' })).status).toBe(303);
+      expect(await processador.processarLote(5, { tenantIds: [e.tenantId] })).toBe(1);
+      return inicio.body.id as string;
+    };
+    const contasDe = (id: string) =>
+      ownerQuery<{ provider: string; status: string; credential_secret_id: string }>(
+        `select provider, status, credential_secret_id from liame.connected_account where connection_id = $1 and disconnected_at is null order by provider`,
+        [id],
+      );
+
+    // A autorização de 29/09: Google Ads e GA4 ligados; vence daqui a dois dias.
+    const antiga = await autorizar();
+    const ligar = await api.call('POST', `/v1/connections/${antiga}/accounts`, {
+      cookie: e.cookie,
+      body: { accounts: [{ provider: 'google_ads', external_id: '4445556667' }, { provider: 'ga4', external_id: '333444555' }] },
+    });
+    expect(ligar.body.linked).toHaveLength(2);
+    await ownerQuery(`update liame.oauth_connection set refresh_expires_at = now() + interval '2 days' where id = $1`, [antiga]);
+    const credencialAntiga = (await conexao(antiga)).credential_secret_id;
+
+    // A pessoa conecta de novo antes de vencer: a autorização nova alcança as mesmas contas (já ligadas pela antiga).
+    const nova = await autorizar();
+    expect((await conexao(nova)).status).toBe('aguardando_escolha');
+    const credencialNova = (await conexao(nova)).credential_secret_id;
+    const antes = revogados.length;
+
+    // Só o Google Ads passa: a antiga ainda lê o GA4 e segue valendo.
+    const primeiro = await api.call('POST', `/v1/connections/${nova}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'google_ads', external_id: '4445556667' }] } });
+    expect(primeiro.status).toBe(200);
+    expect(primeiro.body.linked.map((c: { provider: string; status: string }) => [c.provider, c.status])).toEqual([['google_ads', 'ativa']]);
+    expect(primeiro.body.already_linked).toEqual([]);
+    expect(await contasDe(nova)).toEqual([{ provider: 'google_ads', status: 'ativa', credential_secret_id: credencialNova }]);
+    expect(await contasDe(antiga)).toEqual([{ provider: 'ga4', status: 'ativa', credential_secret_id: credencialAntiga }]);
+    expect((await conexao(antiga)).status).toBe('ativa');
+
+    // O GA4 também passa: a antiga fica sem conta e é encerrada aqui (credencial fora do cofre), SEM revogar no
+    // Google — por precaução: revogar o token antigo pode levar junto o consentimento da autorização nova.
+    const segundo = await api.call('POST', `/v1/connections/${nova}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'ga4', external_id: '333444555' }] } });
+    expect(segundo.body.linked.map((c: { provider: string }) => c.provider)).toEqual(['ga4']);
+    expect((await contasDe(nova)).map((c) => [c.provider, c.status, c.credential_secret_id === credencialNova])).toEqual([
+      ['ga4', 'ativa', true],
+      ['google_ads', 'ativa', true],
+    ]);
+    expect((await conexao(antiga)).status).toBe('revogada');
+    expect((await conexao(nova)).status).toBe('ativa');
+    const [segredoAntigo] = await ownerQuery<{ revoked_at: Date | null }>(`select revoked_at from liame.secret where id = $1`, [credencialAntiga]);
+    expect(segredoAntigo!.revoked_at).not.toBeNull();
+    const [segredoNovo] = await ownerQuery<{ revoked_at: Date | null }>(`select revoked_at from liame.secret where id = $1`, [credencialNova]);
+    expect(segredoNovo!.revoked_at).toBeNull();
+    await new Promise((ok) => setTimeout(ok, 300));
+    expect(revogados.length).toBe(antes);
+    const [auditoria] = await ownerQuery<{ after: { autorizacoes_encerradas?: string[] } }>(
+      `select after from liame.audit_event where tenant_id = $1 and resource_id = $2 and after ? 'autorizacoes_encerradas' order by chain_seq desc limit 1`,
+      [e.tenantId, nova],
+    );
+    expect(auditoria?.after.autorizacoes_encerradas).toEqual([antiga]);
+
+    // Revogar a que ficou continua revogando no Google (é o "sim" que vale agora).
+    expect((await api.call('DELETE', `/v1/connections/${nova}`, { cookie: e.cookie })).status).toBe(204);
+    await new Promise((ok) => setTimeout(ok, 300));
+    expect(revogados.length).toBe(antes + 1);
+  });
+
   it('recusa na plataforma, código ruim, prazo vencido e outra empresa', async () => {
     const e = await empresa('Casa Brasa Falhas');
     const estadoDe = async (provider: 'meta' | 'google') => {

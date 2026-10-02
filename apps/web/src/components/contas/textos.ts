@@ -91,16 +91,35 @@ export function naoLigadas(c: Pick<ConnectionResponse, 'discovered'>): Discovere
 }
 
 /** Conta já ligada na empresa (de `GET /v1/connections`), para saber se a autorização nova a reconecta. */
-export type ContaExistente = Pick<ConnectedAccountResponse, 'provider' | 'external_id' | 'status' | 'connection_id' | 'disconnected_at'>;
+export type ContaExistente = Pick<ConnectedAccountResponse, 'provider' | 'external_id' | 'status' | 'connection_id' | 'disconnected_at'> & {
+  /** Quando vence a autorização que hoje lê esta conta (Google em fase de teste); ausente ou nulo = não vence. */
+  vence_em?: string | null;
+};
 
-export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean };
+/** As contas já ligadas, cada uma com o vencimento da autorização que a lê hoje. */
+export function contasExistentes(conexoes: Pick<ConnectionResponse, 'accounts' | 'refresh_expires_at'>[]): ContaExistente[] {
+  return conexoes.flatMap((c) => c.accounts.map((a) => ({ ...a, vence_em: c.refresh_expires_at ?? null })));
+}
+
+export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean; renovar?: boolean };
 
 /**
  * O que a pessoa pode ligar com esta autorização: as contas novas e as que estão ligadas por outra
  * autorização que a plataforma recusou ("Desconectada"): ligar de novo passa a conta para a credencial
- * nova (a API faz isso quando a marca é a mesma). As outras já ligadas ficam travadas.
+ * nova (a API faz isso quando a marca é a mesma). Também as que são lidas por outra autorização que VENCE
+ * antes desta (Google em fase de teste): é assim que "conectar de novo antes" renova a leitura sem ela
+ * parar (ERR-052). As outras já ligadas ficam travadas.
  */
-export function escolhiveis(c: Pick<ConnectionResponse, 'id' | 'discovered'>, existentes: ContaExistente[]): Escolhivel[] {
+export function escolhiveis(
+  c: Pick<ConnectionResponse, 'id' | 'discovered'> & Partial<Pick<ConnectionResponse, 'refresh_expires_at'>>,
+  existentes: ContaExistente[],
+): Escolhivel[] {
+  const fimDesta = c.refresh_expires_at ? new Date(c.refresh_expires_at).getTime() : Number.POSITIVE_INFINITY;
+  const renovaveis = new Set(
+    existentes
+      .filter((e) => e.disconnected_at === null && e.connection_id !== c.id && !!e.vence_em && new Date(e.vence_em).getTime() < fimDesta)
+      .map((e) => `${e.provider}:${e.external_id}`),
+  );
   const recusadas = new Set(
     existentes
       .filter((e) => e.disconnected_at === null && e.status === 'desconectada' && e.connection_id !== c.id)
@@ -114,7 +133,8 @@ export function escolhiveis(c: Pick<ConnectionResponse, 'id' | 'discovered'>, ex
   return c.discovered.flatMap((d): Escolhivel[] => {
     if (!d.linked) return [{ conta: d, reconectar: false }];
     const k = `${d.provider}:${d.external_id}`;
-    return recusadas.has(k) || trocaDeToken.has(k) ? [{ conta: d, reconectar: true }] : [];
+    if (recusadas.has(k) || trocaDeToken.has(k)) return [{ conta: d, reconectar: true }];
+    return renovaveis.has(k) ? [{ conta: d, reconectar: true, renovar: true }] : [];
   });
 }
 
