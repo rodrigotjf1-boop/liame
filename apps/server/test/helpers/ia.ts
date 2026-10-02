@@ -1,0 +1,81 @@
+import { randomBytes } from 'node:crypto';
+import { APICallError } from 'ai';
+import { MockLanguageModelV4 } from 'ai/test';
+import { ModelosIa } from '../../src/ai/modelos.js';
+import type { AppConfig } from '../../src/config.js';
+import type { FlagService } from '../../src/flags/flag.service.js';
+import { ownerQuery } from './api.js';
+
+// Apoio dos testes de IA: nenhum teste chama um fornecedor de verdade. O modelo é o simulado do AI SDK
+// (`ai/test`), com o uso de tokens que o teste escolhe, e entra no lugar do adapter pelo `ModelosDeTeste`.
+
+/** Os modelos do teste: simulados, por `fornecedor/modelo`; o que não está aqui fica "sem credencial". */
+export class ModelosDeTeste extends ModelosIa {
+  constructor(
+    config: AppConfig,
+    readonly porChave = new Map<string, MockLanguageModelV4>(),
+  ) {
+    super(config);
+  }
+  override modelo(provider: string, model: string) {
+    return this.porChave.get(`${provider}/${model}`) ?? null;
+  }
+}
+
+export const uso = (input: number, output: number, cacheRead?: number, cacheWrite?: number) => ({
+  inputTokens: { total: input + (cacheRead ?? 0) + (cacheWrite ?? 0), noCache: input, cacheRead, cacheWrite },
+  outputTokens: { total: output, text: output, reasoning: undefined },
+});
+
+/** Modelo que responde sempre o mesmo texto (1.000 tokens de entrada e 500 de saída, se o teste não disser outro uso). */
+export const responde = (text: string, u = uso(1000, 500)) =>
+  new MockLanguageModelV4({
+    doGenerate: async () => ({ content: [{ type: 'text' as const, text }], finishReason: { unified: 'stop' as const, raw: undefined }, usage: u, warnings: [] }),
+  });
+
+/** Modelo que o fornecedor recusa com o status dado, sem nova tentativa. */
+export const recusa = (statusCode: number) =>
+  new MockLanguageModelV4({
+    doGenerate: async () => {
+      throw new APICallError({ message: 'recusado', url: 'https://fornecedor.test', requestBodyValues: {}, statusCode, isRetryable: false });
+    },
+  });
+
+/** Liga a flag `ia` para uma empresa (ela nasce desligada para todos). */
+export async function ligarIa(flags: FlagService, tenantId: string): Promise<void> {
+  await ownerQuery(
+    `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), 'ia', 'tenant', $1, 'true'::jsonb, 'testes')`,
+    [tenantId],
+  );
+  flags.invalidate();
+}
+
+/** Modelo simulado com preço na tabela (US$ por milhão: 4 de entrada, 20 de saída; o econômico, 1 e 5). */
+export async function modeloComPreco(modelos: ModelosDeTeste, rodada: string, mock: MockLanguageModelV4, barato = false, provider = 'teste') {
+  const model = `${rodada}_${randomBytes(3).toString('hex')}`;
+  await ownerQuery(
+    `insert into liame.ai_model_price (id, provider, model, valid_from, input_usd_micros_per_mtok, output_usd_micros_per_mtok, cache_read_usd_micros_per_mtok,
+                                       cache_write_5m_usd_micros_per_mtok, cache_write_1h_usd_micros_per_mtok, source, checked_on)
+     values (gen_random_uuid(), $1, $2, current_date - 1, $3, $4, $5, $6, $7, 'teste automatizado', current_date)`,
+    barato ? [provider, model, 1_000_000, 5_000_000, 100_000, 1_250_000, 2_000_000] : [provider, model, 4_000_000, 20_000_000, 200_000, 5_000_000, 8_000_000],
+  );
+  modelos.porChave.set(`${provider}/${model}`, mock);
+  return { provider, model, mock };
+}
+
+export type RefDeModelo = { provider: string; model: string };
+
+/** Rota ativa para a tarefa (a versão é 3 para o teste conferir que ela chega ao registro de uso). */
+export async function rotaAtiva(
+  task: string,
+  principal: RefDeModelo,
+  extra: { reserva?: RefDeModelo[]; economico?: RefDeModelo; timeoutMs?: number; effort?: string; maxCost?: number } = {},
+): Promise<string> {
+  await ownerQuery(
+    `insert into liame.ai_model_route (id, task, version, status, purpose, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros, fallback,
+                                       economy_provider, economy_model, created_by, deployed_at)
+     values (gen_random_uuid(), $1, 3, 'ativa', 'analise', $2, $3, $4, 4000, $5, $6, $7::jsonb, $8, $9, 'testes', now())`,
+    [task, principal.provider, principal.model, extra.effort ?? null, extra.timeoutMs ?? 30_000, extra.maxCost ?? 200_000, JSON.stringify(extra.reserva ?? []), extra.economico?.provider ?? null, extra.economico?.model ?? null],
+  );
+  return task;
+}

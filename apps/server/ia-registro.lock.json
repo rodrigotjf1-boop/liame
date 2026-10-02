@@ -37,6 +37,16 @@
       "hash": "b6f5e0f98b3bf73b03314bc04e7f43c02ef46d90d0aede9b0dff3cf31c2b1a48"
     }
   },
-  "prompts": {},
-  "funcionarios": {}
+  "prompts": {
+    "explicar.resultados": {
+      "version": 1,
+      "hash": "42050bd3873d61d120d0c474a2c606964d8a3c4e0af248da6194e8640bf95602"
+    }
+  },
+  "funcionarios": {
+    "analista": {
+      "version": 1,
+      "hash": "c0dd5badc7b8b72166b98eb81b70fd93d399e8da98d5c71b9d7fdc1609bc4b24"
+    }
+  }
 }

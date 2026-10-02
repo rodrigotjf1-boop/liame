@@ -1,8 +1,8 @@
 import type { AttentionItem } from '@liame/contracts';
-import { type Database, withContext } from '@liame/database';
+import type { Database } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { currentTx, requestStore } from '../../context/request-context.js';
+import { currentTx } from '../../context/request-context.js';
 import { CouponsService } from '../../coupons/coupons.service.js';
 import { DATABASE } from '../../database/database.module.js';
 import { AppProblem } from '../../errors/problems.js';
@@ -11,6 +11,7 @@ import { MediaService } from '../../media/media.service.js';
 import { AtencaoCicloService } from '../../results/atencao-ciclo.service.js';
 import { ResultsService } from '../../results/results.service.js';
 import type { FerramentaIa } from '../gateway.js';
+import { naTransacaoDaEmpresa } from '../na-empresa.js';
 import type { FerramentaDef } from './definicoes.js';
 import { LEITURAS } from './leituras.defs.js';
 import { visaoDoFrescor, visaoDosAvisos } from './leituras.visoes.js';
@@ -86,9 +87,7 @@ export class FerramentasDeLeitura {
         if (!this.database) return { ok: false, erro: 'Não foi possível ler agora.' };
         try {
           // A mesma unidade de trabalho de uma rota: transação da empresa, contexto da RLS e o serviço de domínio.
-          const valor = await withContext(this.database.db, { tenantId: ctx.tenantId, userId: ctx.userId }, (tx) =>
-            requestStore.run({ tx, afterCommit: [] }, () => ler(ctx, input.data as Parameters<Leitor>[1])),
-          );
+          const valor = await naTransacaoDaEmpresa(this.database, ctx, () => ler(ctx, input.data as Parameters<Leitor>[1]));
           return { ok: true, valor };
         } catch (err) {
           // O texto do erro de domínio é feito para o usuário (sem dado interno): serve ao modelo também.
