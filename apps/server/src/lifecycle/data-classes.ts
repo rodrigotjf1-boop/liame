@@ -94,6 +94,8 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   ai_model_price: { class: 'PUBLIC', retention: 'do produto' },
   ai_model_route: { class: 'INTERNAL', retention: 'do produto' },
   ai_budget: { class: 'INTERNAL', retention: 'com a empresa' },
+  // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, dado público, uma cotação por dia útil.
+  exchange_rate: { class: 'PUBLIC', retention: 'do produto (cotação pública do Banco Central)' },
   ai_usage: { class: 'PERSONAL', retention: 'com a empresa (registro técnico, sem conteúdo)' },
   ai_exchange: { class: 'CONFIDENTIAL', retention: '30 dias (o que foi enviado ao modelo e o que voltou)', purge: { job: 'conteudo_ia', days: 30 } },
   // O que a conferência recusou (A3, D-A3-15): o funcionário, o fluxo, o porquê e a regra; sem o texto e sem quem pediu.

@@ -111,6 +111,7 @@ function equipe(membros: TeamMember[], aiLigada = true): TeamResponse {
     brand_id: uuid(1),
     month: { from: '2026-09-01', to: '2026-09-30', timezone: FUSO },
     ai: { enabled: aiLigada, spent_usd_micros: '0', ceiling_usd_micros: '20000000', band: 'livre' },
+    usd_brl: { rate: '5.2238', date: '2026-10-02', source: 'bcb_ptax_venda' },
     stop: null,
     members: membros,
     can_manage: true,

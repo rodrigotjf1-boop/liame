@@ -37,6 +37,7 @@ import { EstrategistaService } from './estrategista.service.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { PesquisadorService } from './pesquisa.service.js';
 import { VigiaService } from './vigia.service.js';
+import { CambioService } from './cambio.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
 import { LifecyclePurgeService } from './lifecycle-purge.service.js';
@@ -98,6 +99,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     PesquisadorService,
     PesquisaLoop,
     VigiaService,
+    // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, para mostrar o custo de IA em reais.
+    CambioService,
     EventsLoopService,
     QueueService,
     TelemetryLifecycle,
