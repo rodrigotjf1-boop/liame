@@ -2,9 +2,12 @@ import { z } from 'zod';
 import { conferirTexto } from '../../policy/texto.js';
 import { conferirNumeros } from '../verificador-numeros.js';
 
-// O formato da resposta da LIA na conversa (A3, I10; protótipo P5): blocos na ordem da leitura. O schema que
-// vai ao fornecedor é o mais simples possível (lista, texto, opção); limites de tamanho e a conferência são
-// nossos, depois que a resposta volta. Recusada, a resposta não aparece: a tela mostra o aviso do sistema.
+// O formato da resposta da LIA na conversa (A3, I10; protótipo P5): blocos na ordem da leitura e, numa decisão
+// grande, a reunião de decisão. O schema que vai ao fornecedor é o mais simples possível (lista, texto, opção);
+// limites de tamanho e a conferência são nossos, depois que a resposta volta. Recusada, a resposta não aparece:
+// a tela mostra o aviso do sistema.
+
+export const VOZES_DA_REUNIAO = ['analista', 'estrategista', 'voz_contraria'] as const;
 
 export const RespostaDaLia = z.strictObject({
   blocos: z.array(
@@ -14,18 +17,28 @@ export const RespostaDaLia = z.strictObject({
       risco: z.enum(['baixo', 'medio', 'alto']).nullable(),
     }),
   ),
+  /** Só numa decisão grande (pausar campanha, mudar a verba): as vozes, com uma contrária, a recomendação e o risco. */
+  reuniao: z
+    .strictObject({
+      pauta: z.string(),
+      vozes: z.array(z.strictObject({ quem: z.enum(VOZES_DA_REUNIAO), texto: z.string() })),
+      recomendacao: z.string(),
+      risco: z.enum(['baixo', 'medio', 'alto']),
+      risco_motivo: z.string(),
+    })
+    .nullable(),
 });
 export type RespostaDaLia = z.infer<typeof RespostaDaLia>;
 
-export const LIMITES_DA_RESPOSTA = { blocos: 8, bloco: 700, total: 4000 } as const;
+export const LIMITES_DA_RESPOSTA = { blocos: 8, bloco: 700, total: 4000, pauta: 200, vozes: 4, voz: 600, recomendacao: 600, risco_motivo: 300 } as const;
 
 /** Trechos que uma resposta nunca traz: a IA sugere, quem decide é a pessoa; e não manda ninguém a lugar nenhum. */
 const PROIBIDOS = ['a ia decidiu', 'eu decidi', 'http://', 'https://', 'www.'];
 
 /**
- * `vazia`, `longa`, `formato` (risco fora do lugar), `trecho_proibido`, `compliance` (regras de texto e o que a
- * marca não diz), `numero_fora` (número que não está no que a LIA leu) e `dado_velho` (número de uma leitura com
- * fonte fora do dia).
+ * `vazia`, `longa`, `formato` (risco fora do lugar, reunião sem voz contrária), `trecho_proibido`, `compliance`
+ * (regras de texto e o que a marca não diz), `numero_fora` (número que não está no que a LIA leu) e `dado_velho`
+ * (número de uma leitura com fonte fora do dia).
  */
 export type RecusaDaConversa = 'vazia' | 'longa' | 'formato' | 'trecho_proibido' | 'compliance' | 'numero_fora' | 'dado_velho';
 
@@ -40,21 +53,45 @@ export interface PermitidosNaConversa {
   daMarca?: string[];
 }
 
-/** Os textos dos blocos, na ordem. */
-export const textosDaResposta = (r: RespostaDaLia): string[] => r.blocos.map((b) => b.texto);
+/** Os textos da resposta, na ordem da leitura: os blocos e, quando houver, a reunião. */
+export const textosDaResposta = (r: RespostaDaLia): string[] => [
+  ...r.blocos.map((b) => b.texto),
+  ...(r.reuniao ? [r.reuniao.pauta, ...r.reuniao.vozes.map((v) => v.texto), r.reuniao.recomendacao, r.reuniao.risco_motivo] : []),
+];
+
+/** A reunião no formato: de 2 a 4 vozes, com uma contrária, e cada texto dentro do limite. Devolve o problema ou nulo. */
+function problemaDaReuniao(r: NonNullable<RespostaDaLia['reuniao']>): RecusaDaConversa | null {
+  const textos = [r.pauta, ...r.vozes.map((v) => v.texto), r.recomendacao, r.risco_motivo];
+  if (textos.some((t) => !t.trim())) return 'vazia';
+  if (r.vozes.length < 2 || r.vozes.length > LIMITES_DA_RESPOSTA.vozes || !r.vozes.some((v) => v.quem === 'voz_contraria')) return 'formato';
+  if (
+    r.pauta.length > LIMITES_DA_RESPOSTA.pauta ||
+    r.vozes.some((v) => v.texto.length > LIMITES_DA_RESPOSTA.voz) ||
+    r.recomendacao.length > LIMITES_DA_RESPOSTA.recomendacao ||
+    r.risco_motivo.length > LIMITES_DA_RESPOSTA.risco_motivo
+  ) {
+    return 'longa';
+  }
+  return null;
+}
 
 /**
  * A resposta serve para a tela? Devolve o motivo da recusa (e o detalhe, para o log) ou nulo quando serve.
  * Melhor nenhuma resposta da LIA do que uma com número que o sistema não entregou (A3-5).
  */
 export function conferirResposta(r: RespostaDaLia, permitidos: PermitidosNaConversa): { recusa: RecusaDaConversa; detalhe: string[] } | null {
-  const textos = textosDaResposta(r);
-  if (!r.blocos.length || textos.some((t) => !t.trim())) return { recusa: 'vazia', detalhe: [] };
-  if (r.blocos.length > LIMITES_DA_RESPOSTA.blocos || textos.some((t) => t.length > LIMITES_DA_RESPOSTA.bloco) || textos.join('').length > LIMITES_DA_RESPOSTA.total) {
+  const blocos = r.blocos.map((b) => b.texto);
+  if (!r.blocos.length || blocos.some((t) => !t.trim())) return { recusa: 'vazia', detalhe: [] };
+  if (r.blocos.length > LIMITES_DA_RESPOSTA.blocos || blocos.some((t) => t.length > LIMITES_DA_RESPOSTA.bloco) || blocos.join('').length > LIMITES_DA_RESPOSTA.total) {
     return { recusa: 'longa', detalhe: [] };
   }
   const riscos = r.blocos.filter((b) => b.tipo === 'risco');
   if (riscos.length > 1 || r.blocos.some((b) => (b.tipo === 'risco') !== (b.risco !== null))) return { recusa: 'formato', detalhe: ['risco fora do lugar'] };
+  if (r.reuniao) {
+    const problema = problemaDaReuniao(r.reuniao);
+    if (problema) return { recusa: problema, detalhe: ['reunião'] };
+  }
+  const textos = textosDaResposta(r);
   const minusculo = textos.join(' ').toLowerCase();
   const achados = PROIBIDOS.filter((p) => minusculo.includes(p));
   if (achados.length) return { recusa: 'trecho_proibido', detalhe: achados };

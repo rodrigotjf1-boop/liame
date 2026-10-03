@@ -13,6 +13,7 @@ import {
 import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { PROPOR_CUPOM, ProporCupomInput } from '../ai/conversa/cupom.defs.js';
 import { AbrirDemandaInput, ABRIR_DEMANDA } from '../ai/conversa/demanda.defs.js';
 import { indiceDasOrigens, marcarResposta, type OrigemDosNumeros } from '../ai/conversa/fontes.js';
 import { foraDoDia, nomesDaLeitura, rotuloDaLeitura, rotuloDoPasso } from '../ai/conversa/leituras.js';
@@ -27,6 +28,7 @@ import { limparJson, limparTexto } from '../ai/sanitizar.js';
 import { RateLimitService } from '../auth/rate-limit.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { type AuthContext, currentTx } from '../context/request-context.js';
+import { CouponsService } from '../coupons/coupons.service.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { dossieParaOModelo, proibidasDaMarca } from '../marca/marca.service.js';
@@ -36,6 +38,7 @@ import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
 import { ATENDIMENTO } from '../suporte.js';
 import { DemandasService, type QuemPede } from './demandas.service.js';
+import { PropostaDeCupomService, PropostaRecusada } from './proposta-cupom.service.js';
 
 // Conversa com a LIA (A3, I10; protótipo P5, aguardando aprovação). Uma resposta é: gravar a mensagem da pessoa
 // (sem dado pessoal) e marcar a conversa como "respondendo", numa transação curta; abrir o fluxo; decidir por
@@ -91,6 +94,14 @@ type LinhaConversa = { id: string; brand_id: string; title: string; created_at: 
 const lista = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 const textoOuNulo = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
+/** O cartão guardado no formato de agora (o gravado antes de um campo existir vem com ele nulo). */
+const cartaoDaLinha = (k: Record<string, unknown>): ConversationCard => ({
+  kind: textoOuNulo(k.kind) ?? 'demanda',
+  demand: (k.demand as ConversationCard['demand']) ?? null,
+  coupon: (k.coupon as ConversationCard['coupon']) ?? null,
+  meeting: (k.meeting as ConversationCard['meeting']) ?? null,
+});
+
 /** A linha guardada como a tela recebe. O conteúdo é o de cada papel; o resto vem vazio. */
 export function mensagemDaLinha(l: LinhaMensagem): ConversationMessage {
   const c = l.content ?? {};
@@ -104,7 +115,7 @@ export function mensagemDaLinha(l: LinhaMensagem): ConversationMessage {
     blocks: lista(c.blocks),
     numbers: lista(c.numbers),
     read: lista(c.read),
-    cards: lista(c.cards),
+    cards: lista<Record<string, unknown>>(c.cards).map(cartaoDaLinha),
     economy: c.economy === true,
     usage_id: l.usage_id,
     notice: l.role === 'sistema' ? (textoOuNulo(c.notice) ?? 'fora_do_ar') : null,
@@ -125,6 +136,8 @@ interface Leitura {
 /** O que a rota resolveu antes de abrir o fluxo: a conversa marcada para esta resposta e a mensagem da pessoa gravada. */
 export interface TurnoPreparado {
   quem: QuemPede & { permissions: ReadonlySet<string> };
+  /** A sessão de quem pergunta (só em memória): a proposta de cupom passa pelo mesmo serviço da rota. */
+  auth: AuthContext & { tenantId: string };
   conversa: ConversationSummary;
   pessoa: ConversationMessage;
   /** O texto da pessoa, sem dado pessoal: é o que vai ao modelo. */
@@ -164,6 +177,8 @@ export class ConversaService {
     private readonly resultados: ResultsService,
     private readonly demandas: DemandasService,
     private readonly limite: RateLimitService,
+    private readonly cupons: CouponsService,
+    private readonly propostas: PropostaDeCupomService,
   ) {}
 
   private get db(): Database {
@@ -203,9 +218,18 @@ export class ConversaService {
        where conversation_id = ${id} and created_at > now() - make_interval(days => ${CONVERSATION_RETENTION_DAYS})
        order by created_at, id`);
     const messages = r.rows.map(mensagemDaLinha);
-    // O cartão foi gravado com a situação daquela hora: ao abrir, vale a de agora (a demanda pode ter sido cancelada).
-    const demandas = await this.demandas.porIds([...new Set(messages.flatMap((m) => m.cards.map((k) => k.demand?.id).filter((x): x is string => !!x)))]);
-    for (const m of messages) m.cards = m.cards.map((k) => (k.demand && demandas.has(k.demand.id) ? { ...k, demand: demandas.get(k.demand.id)! } : k));
+    // O cartão foi gravado com a situação daquela hora: ao abrir, vale a de agora (a demanda cancelada, o cupom
+    // aprovado, recusado ou cancelado).
+    const ids = (pegar: (k: ConversationCard) => string | undefined) => [...new Set(messages.flatMap((m) => m.cards.map(pegar).filter((x): x is string => !!x)))];
+    const demandas = await this.demandas.porIds(ids((k) => k.demand?.id));
+    const propostas = await this.cupons.pedidosPorId(ids((k) => k.coupon?.request.action_id));
+    for (const m of messages) {
+      m.cards = m.cards.map((k) => ({
+        ...k,
+        demand: k.demand ? (demandas.get(k.demand.id) ?? k.demand) : null,
+        coupon: k.coupon ? (propostas.get(k.coupon.request.action_id) ?? k.coupon) : null,
+      }));
+    }
     return { conversation: c, messages };
   }
 
@@ -217,7 +241,8 @@ export class ConversaService {
    * HTTP comum (404, 409, 422); depois disso, o fluxo já começou.
    */
   async preparar(auth: AuthContext, body: SendConversationMessageRequest, agora = new Date()): Promise<TurnoPreparado> {
-    const quem = { tenantId: this.empresa(auth), userId: auth.userId, name: auth.name, roleKey: auth.roleKey, permissions: auth.permissions };
+    const tenantId = this.empresa(auth);
+    const quem = { tenantId, userId: auth.userId, name: auth.name, roleKey: auth.roleKey, permissions: auth.permissions };
     const limpo = limparTexto(body.text);
     const texto = limpo.texto.trim();
     const max = this.config.ai.conversationMaxAnswers;
@@ -269,6 +294,7 @@ export class ConversaService {
       const fuso = await this.resultados.fusoDaMarca(marca.id);
       return {
         quem,
+        auth: { ...auth, tenantId },
         conversa: (await this.resumo(conversaId))!,
         pessoa: mensagemDaLinha(gravada.rows[0]!),
         texto,
@@ -332,7 +358,9 @@ export class ConversaService {
         return r;
       },
     }));
+    // As escritas da conversa, para quem tem a permissão da rota equivalente: abrir demanda e propor cupom.
     if (t.quem.permissions.has(ABRIR_DEMANDA.permission!)) ferramentas.push(this.ferramentaDeDemanda(t, cards, leituras));
+    if (t.quem.permissions.has(PROPOR_CUPOM.permission!)) ferramentas.push(this.ferramentaDeCupom(t, cards, leituras));
     const passo = (p: PassoDaFerramenta) =>
       io.enviar(evento('passo', { step: { id: p.id, label: rotuloDoPasso(p.nome, p.input), status: p.fase === 'inicio' ? 'lendo' : p.ok ? 'ok' : 'falhou' } }));
     const parada = (): Final => ({ role: 'lia', status: 'parada', content: { blocks: [], numbers: [], read: lidas(leituras), cards, economy: false }, usageId: null });
@@ -389,15 +417,55 @@ export class ConversaService {
     }
 
     const origens: OrigemDosNumeros[] = [
-      ...emDia.map((l) => ({ rotulo: rotuloDaLeitura(l.ferramenta, l.input) ?? 'Demanda registrada nesta resposta', valor: l.valor, comCaminho: true, ordem: 1 })),
+      ...emDia.map((l) => ({ rotulo: rotuloDaOrigem(l), valor: l.valor, comCaminho: true, ordem: 1 })),
       { rotulo: 'Você, nesta conversa', valor: [t.texto, ...t.anteriores.daPessoa], comCaminho: false, ordem: 2 },
       ...t.anteriores.numeros.flatMap((n) => n.sources.map((s) => ({ rotulo: s, valor: n.value, comCaminho: false, ordem: 3 }))),
       { rotulo: 'Liame · calendário (dia de hoje e os próximos)', valor: fixo.datas, comCaminho: false, ordem: 4 },
       { rotulo: 'Liame · "a semana" são os 7 dias completos até ontem', valor: fixo.semana, comCaminho: false, ordem: 4 },
       ...(t.dossie ? [{ rotulo: 'Minha marca · dossiê da marca', valor: t.dossie, comCaminho: false, ordem: 4 }] : []),
     ];
-    const { blocks, numbers } = marcarResposta(resposta.data, indiceDasOrigens(origens), nomes);
+    const { blocks, numbers, meeting } = marcarResposta(resposta.data, indiceDasOrigens(origens), nomes);
+    if (meeting) cards.push({ kind: 'reuniao', demand: null, coupon: null, meeting });
     return { role: 'lia', status: 'ok', content: { blocks, numbers, read: lidas(leituras), cards, economy: r.servedBy === 'economico' }, usageId: r.usageId };
+  }
+
+  /**
+   * `propor_cupom` presa a esta conversa: a marca é a da conversa; o pedido passa pelo mesmo serviço da rota da aba
+   * Cupons, com a sessão de quem pergunta. Uma proposta por resposta.
+   */
+  private ferramentaDeCupom(t: TurnoPreparado, cards: ConversationCard[], leituras: Leitura[]): FerramentaIa {
+    return {
+      name: PROPOR_CUPOM.name,
+      description: PROPOR_CUPOM.description,
+      input: PROPOR_CUPOM.input,
+      executar: async (bruto) => {
+        const input = ProporCupomInput.safeParse(bruto);
+        if (!input.success) return { ok: false, erro: 'Parâmetros inválidos para esta ferramenta.' };
+        if (cards.some((k) => k.kind === 'proposta_cupom')) return { ok: false, erro: 'Esta resposta já mandou uma proposta de cupom para Aprovações.' };
+        let proposta: Awaited<ReturnType<PropostaDeCupomService['propor']>>;
+        try {
+          proposta = await this.propostas.propor(t.auth, { brandId: t.marca.id, conversationId: t.conversa.id }, input.data);
+        } catch (err) {
+          if (err instanceof PropostaRecusada) return { ok: false, erro: err.message };
+          throw err;
+        }
+        cards.push({ kind: 'proposta_cupom', demand: null, coupon: proposta, meeting: null });
+        const p = proposta.request;
+        const valor = {
+          proposta: {
+            situacao: 'esperando aprovação em Aprovações',
+            cupom: p.code,
+            loja: proposta.store_name,
+            campanha: p.campaign?.name ?? null,
+            validade: `${dia(p.valid_from)} a ${dia(p.valid_until)}`,
+            // O prazo é um instante: vira dia no fuso da loja (V34).
+            expira_sem_aprovacao_em: dia(diaNoFuso(p.expires_at, t.marca.fuso)),
+          },
+        };
+        leituras.push({ ferramenta: PROPOR_CUPOM.name, input: bruto, valor });
+        return { ok: true, valor };
+      },
+    };
   }
 
   /** `abrir_demanda` presa a esta conversa: a marca e a mensagem são as da conversa, não as que o modelo disser. */
@@ -410,7 +478,7 @@ export class ConversaService {
         const input = AbrirDemandaInput.safeParse(bruto);
         if (!input.success) return { ok: false, erro: 'Parâmetros inválidos para esta ferramenta.' };
         const { demanda, nova } = await this.demandas.abrirPelaLia(t.quem, { brandId: t.marca.id, conversationId: t.conversa.id, messageId: t.pessoa.id }, input.data);
-        if (!cards.some((c) => c.demand?.id === demanda.id)) cards.push({ kind: 'demanda', demand: demanda });
+        if (!cards.some((c) => c.demand?.id === demanda.id)) cards.push({ kind: 'demanda', demand: demanda, coupon: null, meeting: null });
         const valor = {
           demanda: {
             titulo: demanda.title,
@@ -497,7 +565,16 @@ export class ConversaService {
 
 /** O texto de uma resposta guardada, para o histórico e para a conferência da resposta seguinte. */
 function textoDaResposta(m: ConversationMessage): string {
-  return respostaComoTexto(m.blocks.map((b) => ({ tipo: b.kind, texto: b.text.map((s) => s.text).join(''), risco: b.risk })));
+  const juntar = (segmentos: Array<{ text: string }>) => segmentos.map((s) => s.text).join('');
+  const blocos = respostaComoTexto(m.blocks.map((b) => ({ tipo: b.kind, texto: juntar(b.text), risco: b.risk })));
+  // A reunião de decisão também foi resposta: volta ao modelo (e vale como fonte de número) junto dos blocos.
+  const reunioes = m.cards
+    .filter((k) => k.meeting)
+    .map((k) => {
+      const r = k.meeting!;
+      return [`Reunião de decisão: ${juntar(r.topic)}`, ...r.voices.map((v) => `${v.name}: ${juntar(v.text)}`), `Recomendação: ${juntar(r.recommendation)}`, `Risco ${r.risk}: ${juntar(r.risk_reason)}`].join('\n');
+    });
+  return [blocos, ...reunioes].filter(Boolean).join('\n');
 }
 
 /**
@@ -549,6 +626,11 @@ export function contextoPermitido(t: Pick<TurnoPreparado, 'hoje' | 'marca' | 'do
 /** O que a LIA leu, sem repetir, na ordem. */
 function lidas(leituras: Leitura[]): string[] {
   return [...new Set(leituras.map((l) => rotuloDaLeitura(l.ferramenta, l.input)).filter((r): r is string => !!r))];
+}
+
+/** De onde veio o número, quando ele saiu do que a LIA fez (a demanda, a proposta) e não de uma leitura. */
+function rotuloDaOrigem(l: Leitura): string {
+  return rotuloDaLeitura(l.ferramenta, l.input) ?? (l.ferramenta === PROPOR_CUPOM.name ? 'Proposta de cupom enviada nesta resposta' : 'Demanda registrada nesta resposta');
 }
 
 function semRepetir(fontes: ConversationStaleSource[]): ConversationStaleSource[] {

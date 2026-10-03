@@ -488,6 +488,31 @@ export class CouponsService {
     return montarPedido(linha);
   }
 
+  /**
+   * Pedidos de criação pelo id da ação, em qualquer situação, com o nome da loja: a Conversa (I10b) mostra o cartão
+   * da proposta como ele está agora. Cancelado por quem pediu é `cancelada`; recusado por quem aprova, `recusada`.
+   */
+  async pedidosPorId(ids: string[]): Promise<Map<string, { request: CouponRequest; store_name: string }>> {
+    if (!ids.length) return new Map();
+    const r = await currentTx().execute<LinhaPedido & { store_name: string }>(sql`
+      select r.id, r.account_id, r.params, r.status, r.status_reason, r.requested_by, u.name as requester, r.created_at, r.expires_at,
+             c.id as campaign_id, c.name as campaign_name, c.provider as campaign_provider, c.status as campaign_status,
+             coalesce(un.name, a.name, '') as store_name
+        from liame.action_request r
+        join liame.app_user u on u.id = r.requested_by
+        left join liame.connected_account a on a.id::text = r.account_id
+        left join liame.unit un on un.id = a.unit_id
+        left join liame.campaign c on c.id::text = r.params->>'campaign_id'
+       where r.tool = ${FERRAMENTA_CUPOM} and r.id in ${ids}`);
+    return new Map(
+      r.rows.map((l) => {
+        const pedido = montarPedido(l);
+        const desistiu = l.status === 'cancelada' && !(l.status_reason ?? '').startsWith(PREFIXO_RECUSA);
+        return [l.id, { request: desistiu ? { ...pedido, status: 'cancelada' } : pedido, store_name: l.store_name }];
+      }),
+    );
+  }
+
   /** A ação é um pedido de cupom desta empresa (a rota de cancelar da aba Cupons não cancela outro tipo de ação). */
   private async exigirPedido(actionId: string): Promise<void> {
     const r = await currentTx().execute<{ id: string }>(sql`select id from liame.action_request where id = ${actionId} and tool = ${FERRAMENTA_CUPOM}`);

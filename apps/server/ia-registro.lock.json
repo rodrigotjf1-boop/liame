@@ -32,6 +32,10 @@
       "version": 1,
       "hash": "ed8b6061c8a8a799bebc6827f9c8d690b23d805281f49cb0a18bc2d4ded23021"
     },
+    "propor_cupom": {
+      "version": 1,
+      "hash": "2af959493bf4fd2d45ea5f954c2673c419d8e2b04cd50a277832a292fa204588"
+    },
     "regem_cupom_criar": {
       "version": 1,
       "hash": "8830915afe3639f123c207ff24630f57c437548c9d7bad9d34d421c9a74453df"
@@ -43,8 +47,8 @@
   },
   "prompts": {
     "conversa.lia": {
-      "version": 1,
-      "hash": "11e2587a5534cb7b601648079ff96de05b291030c2c2ee091a9e5185960f7dce"
+      "version": 2,
+      "hash": "64acf11cb881d88e7c11cd40e69a55ef1dcd3923489ac3aac500ce54b45baf5b"
     },
     "explicar.resultados": {
       "version": 2,
@@ -57,8 +61,8 @@
       "hash": "c0dd5badc7b8b72166b98eb81b70fd93d399e8da98d5c71b9d7fdc1609bc4b24"
     },
     "lia": {
-      "version": 1,
-      "hash": "aeb32905ad7cf2fd6f0e233d3e66facf65bb720133ee907607bb0d83e5af44c2"
+      "version": 2,
+      "hash": "c7f08003c05402682d38895c0bfe7e65da808d88580e2a5a9d740a4d819dbb75"
     }
   }
 }

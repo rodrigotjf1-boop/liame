@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ExplanationNumber, ExplanationSegment } from './ai.js';
+import { CouponRequest } from './coupons.js';
 import { ProblemDetails } from './problem.js';
 
 // Conversa com a LIA (A3, I10; protótipo P5, aguardando aprovação): a pessoa escreve, a LIA lê os números da
@@ -113,11 +114,50 @@ export const DemandResponse = z.strictObject({
 });
 export type DemandResponse = z.infer<typeof DemandResponse>;
 
-/** Um cartão dentro da resposta da LIA: o registro de algo que ela fez em nome da pessoa. */
+/** Uma voz da reunião de decisão, com o texto marcado (os números estão na mesma lista `numbers` da resposta). */
+export const ConversationMeetingVoice = z.strictObject({
+  /** `analista`, `estrategista` ou `voz_contraria`. A lista cresce. */
+  agent: Slug,
+  /** Como a tela chama a voz ("Voz contrária") e o papel dela na reunião ("discorda de propósito"). */
+  name: z.string(),
+  role: z.string(),
+  text: z.array(ExplanationSegment),
+});
+export type ConversationMeetingVoice = z.infer<typeof ConversationMeetingVoice>;
+
+/**
+ * A reunião de decisão (protótipo P5): numa decisão grande (pausar campanha, mudar a verba), as vozes da equipe,
+ * com uma contrária de propósito, a recomendação e o risco. É um ritual da resposta: quem decide é a pessoa.
+ */
+export const ConversationMeeting = z.strictObject({
+  /** A pauta ("pausar a Delivery noite?"). */
+  topic: z.array(ExplanationSegment),
+  voices: z.array(ConversationMeetingVoice),
+  recommendation: z.array(ExplanationSegment),
+  /** `baixo`, `medio` ou `alto`. */
+  risk: Slug,
+  /** Por que o risco é esse: começa em minúscula, para vir depois do selo ("Risco médio"). */
+  risk_reason: z.array(ExplanationSegment),
+});
+export type ConversationMeeting = z.infer<typeof ConversationMeeting>;
+
+/** A proposta de cupom que a LIA mandou para Aprovações: o pedido no Action Service e a loja dele. */
+export const ConversationCouponProposal = z.strictObject({
+  request: CouponRequest,
+  store_name: z.string(),
+});
+export type ConversationCouponProposal = z.infer<typeof ConversationCouponProposal>;
+
+/** Um cartão dentro da resposta da LIA: o registro de algo que ela fez em nome da pessoa, ou a reunião de decisão. */
 export const ConversationCard = z.strictObject({
-  /** `demanda` (o pedido registrado para a equipe). A lista cresce. */
+  /**
+   * `demanda` (o pedido registrado para a equipe), `proposta_cupom` (o cupom pedido, esperando aprovação em
+   * Aprovações; `cancelada` quando quem pediu desistiu) ou `reuniao` (a reunião de decisão). A lista cresce.
+   */
   kind: Slug,
   demand: DemandResponse.nullable(),
+  coupon: ConversationCouponProposal.nullable(),
+  meeting: ConversationMeeting.nullable(),
 });
 export type ConversationCard = z.infer<typeof ConversationCard>;
 
