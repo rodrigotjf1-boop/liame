@@ -37,7 +37,7 @@ export const PROMPT_ESTRATEGISTA: PromptDef = {
     '- fazer: até três passos que a pessoa faz depois de aprovar (nada é executado pelo Liame).',
     '- depois: o que acontece depois (por exemplo, o que a revisão de segunda vai mostrar).',
     '- Oferta: oferta (o que é, curto), dia (AAAA-MM-DD, de amanhã em diante), inicio e fim (HH:MM), onde (no anúncio de qual campanha, no cardápio, no balcão), texto_do_anuncio, cupom (o código que já existe, ou nulo) e como_medir.',
-    '- Pauta da semana: dias, de um a sete, cada um com o dia (AAAA-MM-DD, de amanhã em diante, em ordem) e o item do dia (para um dia sem nada, "nada novo").',
+    '- Pauta da semana: dias, de um a sete, cada um com o dia (AAAA-MM-DD, de hoje em diante, em ordem) e o item do dia (para um dia sem nada, "nada novo").',
     '- Plano de 90 dias: objetivos (de um a três, cada um com como saber se deu certo), meses (os três meses, em ordem, com o que fazer em cada um), verba_proposta (reais inteiros por mês para a Meta e para o Google; 0 no canal sem conta de anúncio) e datas (só do calendário do contexto: o dia AAAA-MM-DD, o nome igual ao da tabela e o que fazer).',
   ].join('\n'),
 };

@@ -131,7 +131,7 @@ export function respostaDoConteudo(c: PlanContent): Record<string, unknown> {
   }
 }
 
-/** Dias à frente que cada tipo de plano pode usar (a oferta e a pauta começam amanhã; o plano de 90 dias, hoje). */
+/** Dias à frente que cada tipo de plano pode usar (a oferta começa amanhã; a pauta e o plano de 90 dias, hoje). */
 export const JANELA_DO_TIPO: Record<PlanKind, number> = { oferta: 60, pauta: 14, noventa_dias: 92 };
 
 /** Trechos que um plano do Estrategista nunca traz: a IA propõe, quem decide é a pessoa; e não manda ninguém a lugar nenhum. */
@@ -187,7 +187,7 @@ export function conferirPlano(c: PlanContent, p: PermitidosNoPlano): { recusa: R
     if (c.coupon_code && !p.cupons.includes(c.coupon_code)) return { recusa: 'cupom_desconhecido', detalhe: [c.coupon_code] };
   }
   if (c.kind === 'pauta') {
-    const longe = c.days.filter((d) => fora(d.day, amanha)).map((d) => d.day);
+    const longe = c.days.filter((d) => fora(d.day, p.hoje)).map((d) => d.day);
     if (longe.length) return { recusa: 'fora_da_janela', detalhe: longe };
   }
   if (c.kind === 'noventa_dias') {

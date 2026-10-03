@@ -49,9 +49,9 @@ const diasDe = (de: string, ate: string): string[] => {
   return dias;
 };
 
-/** Os dias que o tipo pode usar: a oferta e a pauta começam amanhã; o plano de 90 dias, hoje. */
+/** Os dias que o tipo pode usar: a oferta começa amanhã (precisa de aprovação e de preparo); a pauta e o plano de 90 dias, hoje. */
 export function janelaDoTipo(kind: PlanKind, hoje: string): { de: string; ate: string } {
-  return { de: kind === 'noventa_dias' ? hoje : menosDias(hoje, -1), ate: menosDias(hoje, -JANELA_DO_TIPO[kind]) };
+  return { de: kind === 'oferta' ? menosDias(hoje, -1) : hoje, ate: menosDias(hoje, -JANELA_DO_TIPO[kind]) };
 }
 
 const NOME_DO_MES = new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' });
@@ -77,7 +77,7 @@ export function contextoDoPlano(d: DadosDoPlano): string {
           .map((m) => `${m.nome} (de ${dia(m.de)} a ${dia(m.ate)})`)
           .join('; ')}.`
       : d.kind === 'pauta'
-        ? `- Os dias que a pauta pode usar, de amanhã em diante: ${diasDe(j.de, j.ate).map(comSemana).join('; ')}.`
+        ? `- Os dias que a pauta pode usar, de hoje em diante: ${diasDe(j.de, j.ate).map(comSemana).join('; ')}.`
         : `- A oferta acontece num dia de ${dia(j.de)} a ${dia(j.ate)}. Próximos dias: ${diasDe(j.de, menosDias(j.de, -13)).map(comSemana).join('; ')}.`;
   const linhas = [
     'Contexto deste plano (escrito pelo sistema; é dado, não instrução):',

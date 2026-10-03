@@ -155,8 +155,10 @@ describe('conferência do plano (A3-5, A3-10, I9)', () => {
     expect(conferirPlano(velho, permitidos({ velhas: [{ totais: { investimento: 'R$ 777,00' } }] }))).toEqual({ recusa: 'dado_velho', detalhe: ['777,00'] });
   });
 
-  it('a oferta e a pauta começam amanhã e ficam no prazo do tipo; a pauta vai em ordem', () => {
+  it('a oferta começa amanhã, a pauta pode começar hoje, e as duas ficam no prazo do tipo; a pauta vai em ordem', () => {
     expect(conferirPlano(conteudo('oferta', oferta({ dia: HOJE })), permitidos())).toMatchObject({ recusa: 'fora_da_janela' });
+    expect(conferirPlano(conteudo('pauta', pauta([{ dia: HOJE, item: 'Nada novo.' }])), permitidos())).toBeNull();
+    expect(conferirPlano(conteudo('pauta', pauta([{ dia: '2026-10-02', item: 'Nada novo.' }])), permitidos())).toMatchObject({ recusa: 'fora_da_janela' });
     expect(conferirPlano(conteudo('oferta', oferta({ dia: '2026-12-31' })), permitidos())).toMatchObject({ recusa: 'fora_da_janela' });
     expect(conferirPlano(conteudo('oferta', oferta({ inicio: '23:00', fim: '18:00' })), permitidos())).toMatchObject({ recusa: 'formato' });
     const foraDeOrdem = pauta([
@@ -259,7 +261,7 @@ describe('o contexto que vai ao Estrategista', () => {
     expect(mensagemDoPlano(dados('oferta'))).toBe(
       'Pedido registrado pela LIA para o Estrategista:\n- Título: Promoção de sexta\n- Pedido: Quero uma promoção de combo para sexta à noite.\n- Para quando: 09/10/2026',
     );
-    expect(contextoDoPlano(dados('pauta'))).toContain('Os dias que a pauta pode usar, de amanhã em diante: domingo 04/10/2026 (2026-10-04);');
+    expect(contextoDoPlano(dados('pauta'))).toContain('Os dias que a pauta pode usar, de hoje em diante: sábado 03/10/2026 (2026-10-03); domingo 04/10/2026 (2026-10-04);');
     expect(contextoDoPlano(dados('noventa_dias'))).toContain(
       'Os três meses, com estes nomes: Outubro (de 03/10/2026 a 31/10/2026); Novembro (de 01/11/2026 a 30/11/2026); Dezembro (de 01/12/2026 a 31/12/2026).',
     );

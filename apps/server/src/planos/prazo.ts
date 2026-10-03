@@ -9,12 +9,12 @@ const PRAZO = sql.raw(`interval '72 hours'`);
 
 /**
  * Até quando o plano espera a decisão: três dias e, na oferta e na pauta, nunca depois do que o plano propõe (a oferta
- * expira na hora em que começa; a pauta, no fim do primeiro dia dela), no fuso da loja.
+ * expira na hora em que começa; a pauta, no fim do último dia dela), no fuso da loja.
  */
 export function prazoDoPlano(c: PlanContent, fuso: string, agora: Date): SQL {
   const tresDias = sql`${agora.toISOString()}::timestamptz + ${PRAZO}`;
   if (c.kind === 'oferta') return sql`least(${tresDias}, (${c.day}::date + ${c.starts_at}::time) at time zone ${fuso})`;
-  if (c.kind === 'pauta') return sql`least(${tresDias}, (${c.days[0]!.day}::date + 1)::timestamp at time zone ${fuso})`;
+  if (c.kind === 'pauta') return sql`least(${tresDias}, (${c.days[c.days.length - 1]!.day}::date + 1)::timestamp at time zone ${fuso})`;
   return tresDias;
 }
 

@@ -362,6 +362,30 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id: outra, tenantId: d.tenantId, status: 'recusado', motivo: 'data_fora_do_calendario' }]);
   });
 
+  it('a pauta da semana pode começar hoje e espera a decisão até o fim do último dia dela', async () => {
+    const d = await dono();
+    const id = await demanda(d, 'pauta', 'Pauta da semana');
+    const pautaHoje = {
+      resumo: 'O que fazer hoje e amanhã.',
+      porques: [`A Combo sexta investiu R$ 200,00 de ${br(semana.from)} a ${br(semana.to)}.`],
+      risco: 'baixo',
+      risco_motivo: 'nenhuma verba nova.',
+      fazer: [],
+      depois: 'A revisão de segunda mostra o que foi feito.',
+      dias: [
+        { dia: hoje, item: 'Pôr o rastreio nos anúncios.' },
+        { dia: amanha, item: 'Nada novo.' },
+      ],
+    };
+    responder(roteiro(pede('resultados_ciclo_fechado', { brand_id: d.brandId, ...semana }), responde(pautaHoje)));
+    expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id, tenantId: d.tenantId, status: 'proposto' }]);
+    const plano = PlanListResponse.parse((await api.call('GET', `/v1/plans?brand_id=${d.brandId}`, { cookie: d.cookie })).body).items[0]!;
+    expect(plano).toMatchObject({ kind: 'pauta', status: 'pendente', title: 'Pauta da semana' });
+    // O fim de amanhã, no fuso da loja, vem antes dos três dias: é ele que vale.
+    const fimDoUltimoDia = (await ownerQuery<{ t: Date }>(`select ($1::date + 1)::timestamp at time zone $2 as t`, [amanha, FUSO]))[0]!.t;
+    expect(new Date(plano.expires_at).getTime()).toBe(new Date(fimDoUltimoDia).getTime());
+  });
+
   it('o que não passa na conferência não vira plano: a demanda volta com espera crescente e, na quinta falha, sai da fila', async () => {
     const d = await dono();
     const id = await demanda(d, 'promocao');
