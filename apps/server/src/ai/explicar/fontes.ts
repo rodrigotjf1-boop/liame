@@ -44,7 +44,7 @@ const SEM_LUGAR = 'Liame · dado do período desta tela';
  */
 export type Medida = 'dinheiro' | 'porcento' | 'dias' | 'data' | 'decimal' | 'numero';
 
-interface Valor {
+export interface Valor {
   /** A forma em que o número é comparado (a do verificador de números). */
   forma: string;
   medida: Medida;
@@ -61,9 +61,9 @@ const DIAS = /^\sdias?(?!\p{L})/u;
 
 /**
  * Os valores de um texto, na ordem da leitura. Ficam de fora o número colado numa letra, que é parte de um
- * código ou de uma palavra ("SMASH10", "2x1"), e a hora solta ("06:12").
+ * código ou de uma palavra ("SMASH10", "2x1"), e a hora solta ("06:12"). A Conversa (I10) usa o mesmo.
  */
-function valoresDe(texto: string): Valor[] {
+export function valoresDe(texto: string): Valor[] {
   const valores: Valor[] = [];
   let fim = 0;
   for (const t of trechosDe(texto)) {

@@ -121,4 +121,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   brand_dossier_version: { class: 'CONFIDENTIAL', retention: 'com a marca (as versões não se apagam enquanto ela existir)' },
   brand_dossier_suggestion: { class: 'CONFIDENTIAL', retention: 'com a marca' },
   knowledge_item: { class: 'INTERNAL', retention: 'do produto (histórico das versões)' },
+  // Conversa com a LIA (A3, I10): o que a pessoa escreveu (já sem dado pessoal de cliente) e o que a LIA respondeu
+  // (D-A3-4: 30 dias). A demanda é o pedido registrado para a equipe: fica com a marca, com quem pediu.
+  conversation: { class: 'PERSONAL', retention: '30 dias depois da última mensagem', purge: { job: 'conversa', days: 30 } },
+  conversation_message: { class: 'PERSONAL', retention: '30 dias', purge: { job: 'conversa_mensagem', days: 30 } },
+  demand: { class: 'PERSONAL', retention: 'com a marca (fica depois que a conversa some)' },
 };

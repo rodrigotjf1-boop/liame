@@ -134,7 +134,8 @@ Os funcionários de IA nascem desligados para todas as empresas (flag `ia`). Sem
 | `ANTHROPIC_API_KEY` **S** | Chave de API da Anthropic, da conta da distribuição (com limite de gasto definido no painel deles). Vai no ambiente do `liame-api` **e** do `liame-worker`. O endereço da API é fixo no código | vazio |
 | `AI_INFERENCE_GEO` | Onde o modelo roda: `us` (só Estados Unidos, preço 10% maior) ou `global` (padrão do fornecedor: qualquer região disponível). Decisão D-A3-13 do `plano-a3.md` | `us` |
 | `AI_DAILY_LIMIT_USD` · `AI_MONTHLY_LIMIT_USD` | Teto de custo de IA **por empresa**, em dólar, para a empresa que não tem um próprio em `ai_budget`. Em 70% avisa no log, em 80% troca para o modelo econômico da rota, em 100% barra. O do mês não pode ser menor que o do dia | `2` · `20` |
-| `AI_USER_HOURLY_CALLS` | Chamadas a modelo que uma pessoa pode disparar por hora | `30` |
+| `AI_USER_HOURLY_CALLS` | Chamadas a modelo que uma pessoa pode disparar por hora. Na Conversa, cada resposta da LIA usa de uma a cinco (uma por rodada de leituras) | `30` |
+| `AI_CONVERSATION_MAX_ANSWERS` | Respostas da LIA numa mesma conversa: chegou nisso, a pessoa começa outra (limite por conversa, A3-9). Vai no `liame-api` | `20` |
 
 **Ligar para uma empresa:** o mesmo comando das outras flags, com `--flag ia` (seção Produtos DMS). Além da flag, a tarefa precisa de uma rota ativa em `ai_model_route` (publicada depois do eval, I3) e o modelo, de preço em `ai_model_price`: modelo sem preço cadastrado não roda. **Parar tudo:** kill switch de provider `ai` (distribuição) ou a parada da própria empresa.
 

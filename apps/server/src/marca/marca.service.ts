@@ -102,6 +102,18 @@ export async function proibidasDaMarca(brandId: string): Promise<string[]> {
   return r.rows[0]?.itens ?? [];
 }
 
+/**
+ * O dossiê como o modelo lê, pela versão atual (sem as provas do sistema, que pedem a leitura das vendas); nulo
+ * sem dossiê. Roda na transação de quem chama (a Conversa, I10).
+ */
+export async function dossieParaOModelo(brandId: string, nomeDaMarca: string): Promise<string | null> {
+  const r = await currentTx().execute<{ content: unknown; content_version: number }>(sql`
+    select content, content_version from liame.brand_dossier_version where brand_id = ${brandId} order by version desc limit 1`);
+  const l = r.rows[0];
+  if (!l || l.content_version > DOSSIER_CONTENT_VERSION) return null;
+  return textoDoDossie(nomeDaMarca, BrandDossierContent.parse(l.content), []);
+}
+
 @Injectable()
 export class MarcaService {
   constructor(private readonly resultados: ResultsService) {}

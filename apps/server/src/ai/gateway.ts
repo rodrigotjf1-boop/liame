@@ -22,8 +22,13 @@ import { type Gasto, situacaoDoTeto, virouDeFaixa } from './teto.js';
 //
 // Quem monta o contexto manda os números já formatados ("R$ 1.250,00", "12.500 cliques"): número cru
 // de 10 dígitos ou mais parece telefone ou CPF e sai na limpeza (`pii_removed` mostra quando aconteceu).
+//
+// O `stream` do plano (I10) é este laço com aviso de cada passo e com "Parar": a resposta só aparece depois
+// da conferência (A3-5), então o que corre em tempo real são as leituras, não os tokens. Parar não corta a
+// chamada que já está no fornecedor (o custo dela existe e precisa ser registrado, A3-2): impede a rodada
+// seguinte e qualquer ferramenta que ainda não rodou.
 
-export type AiErrorCode = 'desligada' | 'entrada-grande' | 'travada' | 'sem-rota' | 'limite-usuario' | 'teto' | 'indisponivel';
+export type AiErrorCode = 'desligada' | 'entrada-grande' | 'travada' | 'sem-rota' | 'limite-usuario' | 'teto' | 'indisponivel' | 'parada';
 
 /**
  * Tamanho máximo da entrada (instruções + mensagens), em caracteres. O teto de custo é conferido antes
@@ -102,13 +107,36 @@ export interface FerramentaIa {
   executar(input: unknown): Promise<{ ok: true; valor: unknown } | { ok: false; erro: string }>;
 }
 
+/** Uma ferramenta pedida pelo modelo: quando começa e quando termina (é o "Lendo os resultados…" da tela). */
+export interface PassoDaFerramenta {
+  /** O id da chamada da ferramenta, igual no começo e no fim. */
+  id: string;
+  nome: string;
+  /** Os parâmetros como o modelo mandou (validados pela ferramenta ao rodar). */
+  input: unknown;
+  fase: 'inicio' | 'fim';
+  /** No fim: a ferramenta respondeu ou falhou. */
+  ok?: boolean;
+}
+
 export interface AgentRequest extends GenerateRequest {
   ferramentas: FerramentaIa[];
   /** Quantas chamadas ao modelo o pedido pode fazer (cada rodada pode usar ferramentas). Padrão 6, no máximo 12. */
   maxRodadas?: number;
+  /** A resposta final no formato do schema, com as ferramentas na mesma chamada; sem ele, texto livre. */
+  schema?: z.ZodType<unknown>;
+  /**
+   * Pedido para parar (a pessoa tocou em "Parar" ou fechou a conversa): nenhuma rodada nova começa e nenhuma
+   * ferramenta roda depois dele. A chamada que já está no fornecedor termina e é registrada. Termina em `parada`.
+   */
+  parar?: AbortSignal;
+  /** Cada ferramenta que o modelo pede, ao começar e ao terminar. Erro aqui não interrompe o laço. */
+  aoUsarFerramenta?: (passo: PassoDaFerramenta) => void;
 }
 
 export interface AgentResult extends GenerateResult {
+  /** Com `schema`: a resposta no formato pedido; sem ele, nulo. */
+  object: unknown;
   rodadas: number;
   ferramentas: Array<{ name: string; ok: boolean }>;
 }
@@ -175,6 +203,8 @@ interface Opcoes {
   schema: z.ZodType<unknown> | null;
   ferramentas: FerramentaIa[];
   maxRodadas: number;
+  parar?: AbortSignal;
+  aoUsarFerramenta?: (passo: PassoDaFerramenta) => void;
 }
 
 const SEM_TOKENS: TokensUsados = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0, reasoning: 0 };
@@ -222,8 +252,8 @@ export class AiGateway {
    */
   async agent(req: AgentRequest): Promise<AgentResult> {
     const maxRodadas = Math.min(Math.max(req.maxRodadas ?? RODADAS_PADRAO, 1), RODADAS_MAXIMO);
-    const r = await this.run(req, { schema: null, ferramentas: req.ferramentas, maxRodadas });
-    return { ...r.base, text: r.text, rodadas: r.rodadas, ferramentas: r.usadas };
+    const r = await this.run(req, { schema: req.schema ?? null, ferramentas: req.ferramentas, maxRodadas, parar: req.parar, aoUsarFerramenta: req.aoUsarFerramenta });
+    return { ...r.base, text: r.text, object: req.schema ? r.object : null, rodadas: r.rodadas, ferramentas: r.usadas };
   }
 
   private async run(
@@ -232,6 +262,8 @@ export class AiGateway {
   ): Promise<{ base: Omit<GenerateResult, 'text'>; text: string; object: unknown; rodadas: number; usadas: Array<{ name: string; ok: boolean }> }> {
     const { schema } = opcoes;
     const contexto = { tenantId: req.tenantId, userId: req.userId ?? null };
+    // Parou antes de começar: nada foi chamado, nada a registrar.
+    if (opcoes.parar?.aborted) throw new AiError('parada', 'ia: parada antes da primeira chamada');
     if (!(await this.flags.isEnabled('ia', this.flags.context({ ...contexto, brandId: req.brandId ?? null })))) {
       throw new AiError('desligada', 'ia: desligada para esta empresa');
     }
@@ -256,7 +288,7 @@ export class AiGateway {
     const conversa: ModelMessage[] = [...enviado.messages];
     const usadas: Array<{ name: string; ok: boolean }> = [];
     const pedir = (candidato: Candidato, model: LanguageModel, preco: PrecoModelo) =>
-      this.chamar(req, rota, candidato, model, preco, { instructions: enviado.instructions, messages: conversa }, { schema, ferramentas: opcoes.ferramentas, usadas });
+      this.chamar(req, rota, candidato, model, preco, { instructions: enviado.instructions, messages: conversa }, { schema, ferramentas: opcoes.ferramentas, usadas, parar: opcoes.parar, aoUsarFerramenta: opcoes.aoUsarFerramenta });
 
     // Primeira rodada: o modelo da rota e, se ele falhar, a reserva da própria rota.
     let resposta: Resposta | null = null;
@@ -281,11 +313,12 @@ export class AiGateway {
     // Rodadas seguintes: enquanto o modelo pedir ferramenta, com o mesmo modelo. O teto é conferido de
     // novo a cada rodada, contando o que este pedido já gastou.
     let rodadas = 1;
-    let parada: 'rodadas' | 'teto' | 'teto_da_rota' | null = null;
+    let parada: 'rodadas' | 'teto' | 'teto_da_rota' | 'pessoa' | null = null;
     while (resposta && escolhido && resposta.finishReason === 'tool-calls') {
       conversa.push(...resposta.mensagens);
       const gastoAqui = tentativas.reduce((n, t) => n + t.custo, 0n);
-      if (rodadas >= opcoes.maxRodadas) parada = 'rodadas';
+      if (opcoes.parar?.aborted) parada = 'pessoa';
+      else if (rodadas >= opcoes.maxRodadas) parada = 'rodadas';
       else if (situacaoDoTeto({ ...gasto, gastoDia: gasto.gastoDia + gastoAqui, gastoMes: gasto.gastoMes + gastoAqui }) === 'bloqueado') parada = 'teto';
       else if (gastoAqui > BigInt(rota.max_cost_usd_micros)) parada = 'teto_da_rota';
       if (parada) {
@@ -300,7 +333,7 @@ export class AiGateway {
 
     const ultima = tentativas[tentativas.length - 1]!;
     const guardado = resposta
-      ? limparJson(schema ? { object: resposta.object } : { text: resposta.text, ...(usadas.length ? { tools: usadas } : {}) }).valor
+      ? limparJson({ ...(schema ? { object: resposta.object } : { text: resposta.text }), ...(usadas.length ? { tools: usadas } : {}) }).valor
       : parada
         ? { stopped: parada, tools: usadas }
         : null;
@@ -325,6 +358,8 @@ export class AiGateway {
     const faixa = virouDeFaixa(gasto, total);
     if (faixa) this.logger.warn(`ia: a empresa ${req.tenantId} entrou na faixa "${faixa}" do teto de custo de IA`);
     if (parada) {
+      // A pessoa parou: não é falha. O uso das rodadas que aconteceram já está registrado.
+      if (parada === 'pessoa') throw new AiError('parada', `ia: parada pela pessoa depois de ${rodadas} rodada(s)`);
       this.logger.warn(`ia: ${req.task} parou sem resposta depois de ${rodadas} rodada(s): ${parada}`);
       if (parada === 'teto') throw new AiError('teto', 'ia: laço interrompido (teto)', { teto: qualTeto({ ...gasto, gastoDia: gasto.gastoDia + total, gastoMes: gasto.gastoMes + total }) });
       throw new AiError('indisponivel', `ia: laço interrompido (${parada})`);
@@ -358,15 +393,30 @@ export class AiGateway {
   }
 
   /** As ferramentas no formato do SDK: a saída volta limpa de dado pessoal, e a falha vira um aviso curto para o modelo. */
-  private ferramentasDoSdk(ferramentas: FerramentaIa[], conta: { chamadas: number; falhas: number }, usadas: Array<{ name: string; ok: boolean }>): ToolSet {
+  private ferramentasDoSdk(
+    ferramentas: FerramentaIa[],
+    conta: { chamadas: number; falhas: number },
+    usadas: Array<{ name: string; ok: boolean }>,
+    opcoes: { parar?: AbortSignal; aoUsarFerramenta?: (passo: PassoDaFerramenta) => void } = {},
+  ): ToolSet {
+    const avisar = (passo: PassoDaFerramenta) => {
+      try {
+        opcoes.aoUsarFerramenta?.(passo);
+      } catch (err) {
+        this.logger.error(`ia: o aviso do passo ${passo.nome} falhou: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    };
     return Object.fromEntries(
       ferramentas.map((f) => [
         f.name,
         dynamicTool({
           description: f.description,
           inputSchema: f.input,
-          execute: async (input) => {
+          execute: async (input, { toolCallId }) => {
+            // Depois de "Parar", nada mais roda (nem leitura, nem a abertura de uma demanda).
+            if (opcoes.parar?.aborted) return { erro: 'A pessoa parou a resposta.' };
             conta.chamadas += 1;
+            avisar({ id: toolCallId, nome: f.name, input, fase: 'inicio' });
             let r: Awaited<ReturnType<FerramentaIa['executar']>>;
             try {
               r = await f.executar(input);
@@ -381,6 +431,7 @@ export class AiGateway {
               r = { ok: false, erro: 'O resultado é grande demais. Peça um período menor ou uma marca só.' };
             }
             usadas.push({ name: f.name, ok: r.ok });
+            avisar({ id: toolCallId, nome: f.name, input, fase: 'fim', ok: r.ok });
             if (!r.ok) {
               conta.falhas += 1;
               return { erro: r.erro };
@@ -475,7 +526,13 @@ export class AiGateway {
     model: LanguageModel,
     preco: PrecoModelo,
     enviado: { instructions: string; messages: ModelMessage[] },
-    opcoes: { schema: z.ZodType<unknown> | null; ferramentas: FerramentaIa[]; usadas: Array<{ name: string; ok: boolean }> },
+    opcoes: {
+      schema: z.ZodType<unknown> | null;
+      ferramentas: FerramentaIa[];
+      usadas: Array<{ name: string; ok: boolean }>;
+      parar?: AbortSignal;
+      aoUsarFerramenta?: (passo: PassoDaFerramenta) => void;
+    },
   ): Promise<{ tentativa: Tentativa; resposta: Resposta | null }> {
     const { schema } = opcoes;
     const conta = { chamadas: 0, falhas: 0 };
@@ -528,18 +585,26 @@ export class AiGateway {
           telemetry: { isEnabled: false },
           ...(providerOptions ? { providerOptions } : {}),
         };
-        if (schema) {
-          const r = await generateText({ ...comum, output: Output.object({ schema }) });
-          span.setAttribute('gen_ai.response.finish_reasons', [r.finishReason]);
-          return { tentativa: tentativa('ok', r.totalUsage, null), resposta: { text: '', object: r.output, finishReason: r.finishReason, mensagens: [] } };
-        }
         // Com ferramentas, cada chamada é UMA rodada: o SDK executa o que o modelo pediu e devolve as mensagens
-        // (a do modelo e a do resultado) para a rodada seguinte, que quem decide se acontece é o laço daqui.
-        const r = opcoes.ferramentas.length
-          ? await generateText({ ...comum, tools: this.ferramentasDoSdk(opcoes.ferramentas, conta, opcoes.usadas) })
-          : await generateText(comum);
+        // (a do modelo e a do resultado) para a rodada seguinte, que quem decide se acontece é o laço daqui. Com
+        // schema, a resposta final vem no formato pedido; a rodada que pede ferramenta não tem resposta ainda.
+        const r = await generateText({
+          ...comum,
+          ...(opcoes.ferramentas.length ? { tools: this.ferramentasDoSdk(opcoes.ferramentas, conta, opcoes.usadas, opcoes) } : {}),
+          ...(schema ? { output: Output.object({ schema }) } : {}),
+        });
         span.setAttribute('gen_ai.response.finish_reasons', [r.finishReason]);
-        return { tentativa: tentativa('ok', r.totalUsage, null), resposta: { text: r.text, object: null, finishReason: r.finishReason, mensagens: r.responseMessages } };
+        let object: unknown = null;
+        if (schema && r.finishReason !== 'tool-calls') {
+          try {
+            object = r.output;
+          } catch {
+            // Terminou sem texto nenhum (o limite de saída, por exemplo): não há objeto, mas o uso foi cobrado.
+            span.setStatus({ code: SpanStatusCode.ERROR, message: 'resposta_invalida' });
+            return { tentativa: tentativa('erro', r.totalUsage, 'resposta_invalida'), resposta: null };
+          }
+        }
+        return { tentativa: tentativa('ok', r.totalUsage, null), resposta: { text: schema ? '' : r.text, object, finishReason: r.finishReason, mensagens: r.responseMessages } };
       } catch (err) {
         const codigo = codigoDoErro(err);
         // O erro do SDK guarda o corpo enviado: nunca vai para o log nem para o span, só o código.

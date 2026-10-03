@@ -32,7 +32,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 | --- | --- |
 | **Cadastro:** nome, e-mail, telefone, cargo; dados da empresa (razão social, CNPJ, endereço) | Você |
 | **Acesso e segurança:** senha (guardada só como resumo criptográfico), segundo fator, sessões, endereço IP, data e hora de acesso, aparelho e navegador | Gerados pelo uso |
-| **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê; e, quando a IA for ligada, as avaliações que você fizer das explicações dela | Gerados pelo uso |
+| **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê; e, quando a IA for ligada, as avaliações que você fizer das explicações dela e os pedidos que a LIA registrar para a equipe a seu pedido | Gerados pelo uso |
 | **Pessoas convidadas:** nome, e-mail e nível de acesso de quem o Dono convidou | O Dono da conta |
 | **Cobrança:** plano, valores, notas fiscais e status de pagamento. Os dados do cartão são tratados pelo processador de pagamento; o Liame não os guarda | Você e o processador de pagamento |
 | **Atendimento:** mensagens trocadas com a LIA e com o suporte, inclusive pelo WhatsApp | Você |
@@ -107,6 +107,8 @@ Respondemos em até 15 dias. Se algum dado precisar ser guardado por obrigação
 
 7.5. Quando você avalia uma explicação da IA ("Fez sentido" ou "Discordo", com o motivo), a avaliação fica guardada **no Liame**, ligada à sua conta, e serve para revisarmos e melhorarmos as explicações. **Ela não é enviada ao fornecedor do modelo.** O comentário que você escrever passa pela mesma remoção de dados pessoais do item 7.1; mesmo assim, não escreva nele nome, telefone nem outro dado de cliente.
 
+7.6. **Conversa com a LIA dentro do Liame.** O que você escreve para a LIA e o que ela responde ficam guardados por **30 dias depois da última mensagem** da conversa, e, dentro da empresa, **só você vê as suas conversas**. Antes de guardar a mensagem e de enviá-la ao modelo, o Liame tira telefone, e-mail, CPF, CNPJ e CEP, trocando cada um por uma marca como "[telefone]". A LIA lê os números da empresa com as permissões que você tem, e a resposta dela passa por uma conferência antes de aparecer. Quando você pede que ela registre um pedido para a equipe (uma demanda), o pedido fica com a empresa depois que a conversa some, com o seu nome como quem pediu.
+
 ## 8. Com quem compartilhamos
 
 Compartilhamos dados apenas com fornecedores que nos ajudam a prestar o serviço, pelo mínimo necessário e com contrato que os obriga a proteger os dados.
@@ -160,6 +162,8 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | Registros técnicos (logs) | 30 dias |
 | Conteúdo das conversas com modelos de IA (quando ligados) | 30 dias; depois, só metadados |
 | Avaliações que você faz das explicações da IA (quando ligadas) | enquanto durar o contrato; se a sua conta for excluída, a avaliação fica sem autor |
+| Conversas com a LIA no Liame, sem os dados pessoais retirados antes (quando ligada) | 30 dias depois da última mensagem |
+| Pedidos que a LIA registra para a equipe a seu pedido, as demandas (quando ligada) | enquanto durar o contrato; se a sua conta for excluída, o pedido fica sem autor |
 | Dados brutos recebidos das plataformas | 30 dias |
 | Campanhas, peças e tarefas arquivadas | 12 meses após arquivar; estatísticas sem dados pessoais ficam |
 | Dados de contatos dos clientes (como operador) | enquanto a empresa cliente tiver finalidade e base legal; pedido de exclusão ou saída da lista, em até 15 dias |

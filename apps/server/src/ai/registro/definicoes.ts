@@ -2,6 +2,8 @@ import type { RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { TOOLS } from '../../actions/tools.js';
 import { canonicalJson, sha256 } from '../../audit/audit.js';
+import { ABRIR_DEMANDA } from '../conversa/demanda.defs.js';
+import { LIA, PROMPT_CONVERSA_LIA } from '../conversa/prompt.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
 import { LEITURAS } from './leituras.defs.js';
 
@@ -48,13 +50,16 @@ export interface FuncionarioDef {
  * Os prompts e os funcionários entram com o primeiro uso real de cada um. Estar aqui não põe ninguém para
  * trabalhar: sem rota de modelo ativa para a tarefa (publicada só depois do eval, I3), a tela usa o texto sem IA.
  */
-export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS];
-export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA];
+export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA];
+export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA];
 
-/** Todas as ferramentas: as de escrita (Action Service) e as de leitura dos funcionários de IA. */
+/**
+ * Todas as ferramentas: as de escrita em plataforma (Action Service), as de leitura dos funcionários de IA e a
+ * escrita da conversa no próprio Liame (abrir uma demanda, I10), que a rota confere pela permissão da pessoa.
+ */
 export function ferramentas(): FerramentaDef[] {
   const escrita = Object.values(TOOLS).map((t): FerramentaDef => ({ name: t.name, version: t.version, description: t.description, risk: t.risk, permission: null, owner: t.owner, input: t.params }));
-  return [...escrita, ...LEITURAS];
+  return [...escrita, ...LEITURAS, ABRIR_DEMANDA];
 }
 
 export interface Registro {

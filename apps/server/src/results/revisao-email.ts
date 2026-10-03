@@ -1,6 +1,7 @@
 import type { ExplanationSegment, WeeklyReview, WeeklyReviewChange } from '@liame/contracts';
 import { dia, dinheiro, inteiro, razao } from '../ai/registro/formatos.js';
 import { plataforma } from '../ai/registro/leituras.visoes.js';
+import { ATENDIMENTO } from '../suporte.js';
 
 // O e-mail da revisão da semana (A3, I7): os mesmos números da tela, em texto simples, como os outros
 // e-mails do Liame. Nenhum número é calculado aqui: tudo vem da revisão guardada. Sem dado pessoal além do
@@ -11,7 +12,7 @@ export const NIVEIS_QUE_RECEBEM = ['dono', 'administrador', 'so_relatorios'] as 
 const NIVEL: Record<string, string> = { dono: 'Dono', administrador: 'Administrador', so_relatorios: 'Só relatórios por e-mail' };
 const VEREDITO: Record<string, string> = { lucro: 'dá lucro', empata: 'empata', prejuizo: 'dá prejuízo' };
 const RISCO: Record<string, string> = { baixo: 'Risco baixo', medio: 'Risco médio', alto: 'Risco alto' };
-const SUPORTE = 'suporte@agencialiame.com';
+const SUPORTE = ATENDIMENTO.email;
 
 /** O conteúdo guardado de uma revisão: o contrato sem o que vem das colunas (o id e o envio). */
 export type ConteudoDaRevisao = Omit<WeeklyReview, 'id' | 'email'>;

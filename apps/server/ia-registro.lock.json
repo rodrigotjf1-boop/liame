@@ -1,5 +1,9 @@
 {
   "ferramentas": {
+    "abrir_demanda": {
+      "version": 1,
+      "hash": "7fac956a642bf61ddb11d745a8e52ddfc5a9dffc54634d43e79ee287fba30114"
+    },
     "anuncio_pausar": {
       "version": 1,
       "hash": "975cb9031feecf6eba62d4ffcbed455f0aaa4be4268d58174dcb2eaf731da31b"
@@ -38,6 +42,10 @@
     }
   },
   "prompts": {
+    "conversa.lia": {
+      "version": 1,
+      "hash": "11e2587a5534cb7b601648079ff96de05b291030c2c2ee091a9e5185960f7dce"
+    },
     "explicar.resultados": {
       "version": 2,
       "hash": "daa0520c360446f1c41aab0795c8eff32ef405e4a6d71e434e0d407772ca06c4"
@@ -47,6 +55,10 @@
     "analista": {
       "version": 1,
       "hash": "c0dd5badc7b8b72166b98eb81b70fd93d399e8da98d5c71b9d7fdc1609bc4b24"
+    },
+    "lia": {
+      "version": 1,
+      "hash": "aeb32905ad7cf2fd6f0e233d3e66facf65bb720133ee907607bb0d83e5af44c2"
     }
   }
 }

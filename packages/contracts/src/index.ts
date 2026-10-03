@@ -176,6 +176,23 @@ export {
   UseBrandDossierSuggestionRequest,
 } from './marca.js';
 export {
+  CONVERSATION_MESSAGE_MAX,
+  CONVERSATION_RETENTION_DAYS,
+  ConversationBlock,
+  ConversationCard,
+  ConversationListQuery,
+  ConversationListResponse,
+  ConversationMessage,
+  ConversationResponse,
+  ConversationStaleSource,
+  ConversationStep,
+  ConversationStreamEvent,
+  ConversationSummary,
+  DemandResponse,
+  SendConversationMessageRequest,
+  SupportContact,
+} from './conversa.js';
+export {
   CouponCampaign,
   CouponCode,
   CouponItem,
