@@ -18,7 +18,7 @@ import { ResultsService } from '../../src/results/results.service.js';
 import { EstrategistaLoop, TENTATIVAS } from '../../src/worker/estrategista-loop.js';
 import { EstrategistaService } from '../../src/worker/estrategista.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
-import { ligarIa, ModelosDeTeste, modeloComPreco, rotaAtiva, uso } from '../helpers/ia.js';
+import { ligarIa, ModelosDeTeste, rotaCompartilhada, uso } from '../helpers/ia.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // Planos do Estrategista (A3, I11): a demanda que a LIA registrou vira plano pela fila do worker, com o modelo simulado;
@@ -28,7 +28,6 @@ import { hasDb, OWNER_URL } from './env.js';
 const FUSO = 'America/Sao_Paulo';
 
 describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, versões, prazo e isolamento (A3, I11)', () => {
-  const RODADA = `teste_${randomBytes(4).toString('hex')}`;
   let api: TestApi;
   let database: Database;
   let config: AppConfig;
@@ -174,14 +173,12 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     // A fila do worker com o gateway e as leituras da aplicação (os mesmos serviços das rotas).
     const servico = new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService));
     loop = new EstrategistaLoop(database, flags, servico);
-    await ownerQuery(`delete from liame.ai_model_route where task = $1 and created_by = 'testes'`, [TAREFA_ESTRATEGISTA]);
-    alvo = await modeloComPreco(modelos, RODADA, roteiro(responde(oferta())));
-    await rotaAtiva(TAREFA_ESTRATEGISTA, alvo, { maxCost: 1_000_000 });
+    // A tarefa do Estrategista também é usada por `planos-agenda.spec.ts`, que roda em outro processo: a rota é a
+    // compartilhada (ninguém apaga a do outro), e o modelo simulado é o deste arquivo.
+    alvo = await rotaCompartilhada(modelos, TAREFA_ESTRATEGISTA, roteiro(responde(oferta())));
   });
   beforeEach(resetIpRateLimits);
   afterAll(async () => {
-    await ownerQuery(`delete from liame.ai_model_route where task = $1 and created_by = 'testes'`, [TAREFA_ESTRATEGISTA]);
-    await ownerQuery(`delete from liame.ai_model_price where model like $1`, [`${RODADA}%`]);
     await api?.close();
   });
 

@@ -4,7 +4,7 @@ import { ANALISTA } from '../ai/explicar/prompt.js';
 import { PESQUISADOR } from '../ai/pesquisador/prompt.js';
 import type { FuncionarioDef } from '../ai/registro/definicoes.js';
 
-// A equipe da A3 (I13b; protótipo P7, aguardando aprovação): quem trabalha para a marca. Os funcionários de IA têm
+// A equipe da A3 (I13b; protótipo P7, aprovado em 03/10/2026): quem trabalha para a marca. Os funcionários de IA têm
 // definição no registro (`ai/registro/definicoes.ts`) e a ativação da distribuição; Relatórios, Compliance e o Gestor
 // de tráfego trabalham por regra (sem modelo próprio) e entram aqui pela chave. A descrição de cada um (o que faz e o
 // que nunca faz) é da tela. Os da fase seguinte não estão aqui: a tela mostra com a fase deles.
