@@ -238,10 +238,16 @@ export {
   PauseTeamMemberRequest,
   ResumeTeamMemberRequest,
   TEAM_MEMBERS,
+  TeamActivityItem,
+  TeamActivityQuery,
+  TeamActivityResponse,
   TeamMember,
   TeamMemberKey,
   TeamQuery,
   TeamResponse,
+  TeamShadowDecision,
+  TeamShadowQuery,
+  TeamShadowResponse,
   TeamStat,
 } from './equipe.js';
 export { SummaryQuery, SummaryResponse } from './resumo.js';

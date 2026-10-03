@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { type Database, runMigrations } from '@liame/database';
 import { MockLanguageModelV4 } from 'ai/test';
@@ -15,7 +15,7 @@ import { DIAS_ENTRE_PLANOS_DE_90, EstrategistaAgenda } from '../../src/worker/es
 import { EstrategistaLoop } from '../../src/worker/estrategista-loop.js';
 import { EstrategistaService } from '../../src/worker/estrategista.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
-import { ligarIa, ModelosDeTeste, modeloComPreco, rotaAtiva, uso } from '../helpers/ia.js';
+import { ligarIa, ModelosDeTeste, rotaCompartilhada, uso } from '../helpers/ia.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // Planos agendados do Estrategista (A3, I11b): na segunda-feira, a partir das 9h no fuso da loja, a rotina pede a pauta
@@ -27,7 +27,6 @@ const segunda = (hora: number) => new Date(Date.UTC(2026, 9, 5, hora + 3));
 const SEGUNDA = '2026-10-05';
 
 describe.skipIf(!hasDb)('Planos agendados: a pauta de segunda e o plano de 90 dias pela rotina (A3, I11b)', () => {
-  const RODADA = `teste_${randomBytes(4).toString('hex')}`;
   let api: TestApi;
   let database: Database;
   let config: AppConfig;
@@ -83,14 +82,12 @@ describe.skipIf(!hasDb)('Planos agendados: a pauta de segunda e o plano de 90 di
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
     agenda = new EstrategistaAgenda(database, flags);
     loop = new EstrategistaLoop(database, flags, new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService)));
-    await ownerQuery(`delete from liame.ai_model_route where task = $1 and created_by = 'testes'`, [TAREFA_ESTRATEGISTA]);
-    alvo = await modeloComPreco(modelos, RODADA, new MockLanguageModelV4({ doGenerate: [] }));
-    await rotaAtiva(TAREFA_ESTRATEGISTA, alvo, { maxCost: 1_000_000 });
+    // A tarefa do Estrategista também é usada por `planos.spec.ts`, que roda em outro processo: a rota é a
+    // compartilhada (ninguém apaga a do outro), e o modelo simulado é o deste arquivo.
+    alvo = await rotaCompartilhada(modelos, TAREFA_ESTRATEGISTA, new MockLanguageModelV4({ doGenerate: [] }));
   });
   beforeEach(resetIpRateLimits);
   afterAll(async () => {
-    await ownerQuery(`delete from liame.ai_model_route where task = $1 and created_by = 'testes'`, [TAREFA_ESTRATEGISTA]);
-    await ownerQuery(`delete from liame.ai_model_price where model like $1`, [`${RODADA}%`]);
     await api?.close();
   });
 
