@@ -244,6 +244,7 @@ export {
   TeamResponse,
   TeamStat,
 } from './equipe.js';
+export { SummaryQuery, SummaryResponse } from './resumo.js';
 export {
   CouponCampaign,
   CouponCode,
