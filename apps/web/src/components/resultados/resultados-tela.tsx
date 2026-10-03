@@ -3,13 +3,14 @@
 import type { BrandResponse, ClosedLoopResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { liaLigada } from '@/components/explicar/pedir';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
 import type { ConsultaDePedidos } from './cartao-pedidos';
-import { ResultadosConteudo } from './resultados-conteudo';
+import { type ExplicarResultados, ResultadosConteudo } from './resultados-conteudo';
 import { FUSO_PADRAO, fusoValido, intervaloDo, localDe, type Loja, lojasDoRegem, montarTela, nadaConectado, PERIODOS, type Periodo, rotuloDoPeriodo } from './textos';
 
 // "Resultados" (mockups/prototipo-resultados.html, P1 aprovado em 29/09/2026): o ROAS que cada plataforma
@@ -36,6 +37,7 @@ export function ResultadosTela() {
   const [buscando, setBuscando] = useState(false);
   const [tentativa, setTentativa] = useState(0);
   const [anuncio, setAnuncio] = useState('');
+  const [lia, setLia] = useState<{ marca: string; ligada: boolean } | null>(null);
   // Fuso da loja: corta o dia dos pedidos (a API diz qual é; até a primeira resposta, o padrão dela).
   const fuso = useRef(FUSO_PADRAO);
   // Só a resposta mais nova vale (trocar de período no meio de uma leitura não mistura números).
@@ -54,6 +56,20 @@ export function ResultadosTela() {
   useEffect(() => {
     if (podeVer) disparar(carregarMarcas());
   }, [podeVer, carregarMarcas]);
+
+  // A LIA responde para esta marca? Decide o botão "Explicar": o da LIA ou o neutro (resumo do sistema).
+  useEffect(() => {
+    if (!marca || !podeVer) return;
+    let vivo = true;
+    disparar(
+      liaLigada(marca).then((ligada) => {
+        if (vivo) setLia({ marca, ligada });
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [marca, podeVer]);
 
   // Lojas do Regem da marca, para escolher uma (só quem vê as contas; sem isso, todas as lojas).
   useEffect(() => {
@@ -120,6 +136,18 @@ export function ResultadosTela() {
     setPeriodo(p);
   }
 
+  // "Explicar" (A3 · I4): só com o que explicar. Em "Hoje" o gasto do dia ainda não chegou; sem o Regem
+  // ou sem pedido com origem não há resultado confirmado. O botão espera saber se a LIA responde.
+  const confirmado = dados?.dados.totals.confirmed;
+  const explicar: ExplicarResultados | null =
+    dados && tela && lia && lia.marca === dados.marca && !tela.base.hoje && !tela.base.semRegem && confirmado && confirmado.orders > 0 && confirmado.roas !== null
+      ? {
+          pedido: { de: 'resultados', brand_id: dados.marca, from: dados.dados.period.from, to: dados.dados.period.to, ...(dados.loja ? { unit_id: dados.loja } : {}) },
+          lia: lia.ligada,
+          semOrigemAlta: Number(dados.dados.totals.without_origin.share_pct ?? 0) > 30,
+        }
+      : null;
+
   const regem = dados ? dados.dados.sources.filter((s) => s.provider === 'regem') : [];
   const lojaDoPedido = lojaEscolhida?.nome ?? (regem.length === 1 ? regem[0]!.name : null);
   const consulta: ConsultaDePedidos | null =
@@ -165,7 +193,7 @@ export function ResultadosTela() {
   } else {
     corpo = (
       <div className={buscando ? 'res-corpo recarregando' : 'res-corpo'} aria-busy={buscando}>
-        <ResultadosConteudo tela={tela} modelo={dados.dados.model} consulta={consulta} loja={lojaDoPedido} podeVerContas={podeVerContas} reserva={titulo} />
+        <ResultadosConteudo tela={tela} modelo={dados.dados.model} consulta={consulta} loja={lojaDoPedido} podeVerContas={podeVerContas} reserva={titulo} explicar={explicar} />
       </div>
     );
   }

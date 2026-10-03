@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { detalheDoPedido, contarPedidos, filtrarPedidos, numeroDoPedido, origemDoPedido, confiancaDe, tempoAntes, textoDoModelo } from '@/components/resultados/pedidos';
-import { ResultadosConteudo } from '@/components/resultados/resultados-conteudo';
+import { type ExplicarResultados, ResultadosConteudo } from '@/components/resultados/resultados-conteudo';
 import {
   deslocamentoDoFuso,
   fontesDe,
@@ -636,7 +636,7 @@ describe('pedido a pedido e a origem de cada pedido', () => {
 });
 
 describe('desenho da tela (o mesmo componente do navegador)', () => {
-  const desenhar = (r: ClosedLoopResponse, periodo: 'hoje' | '7' | '30', modo: 'lite' | 'pro', local: string | null = 'Loja Centro') =>
+  const desenhar = (r: ClosedLoopResponse, periodo: 'hoje' | '7' | '30', modo: 'lite' | 'pro', local: string | null = 'Loja Centro', explicar: ExplicarResultados | null = null) =>
     renderToStaticMarkup(
       createElement(ModoProvider, {
         inicial: modo,
@@ -647,6 +647,7 @@ describe('desenho da tela (o mesmo componente do navegador)', () => {
           loja: local,
           podeVerContas: true,
           reserva: { current: null },
+          explicar,
         }),
       }),
     );
@@ -706,6 +707,21 @@ describe('desenho da tela (o mesmo componente do navegador)', () => {
     expect(html).toContain('<caption class="sr-only">Pedidos dos canais sem clique no período</caption>');
     expect(html).toContain('Meta · sem campanha identificada');
     expect(html).toContain('janelas diferentes');
+  });
+
+  it('"Explicar" (A3 · I4): o botão entra no cabeçalho do número principal, o da LIA ou o neutro; sem o que explicar, não aparece', () => {
+    const r = base7();
+    const pedido = { de: 'resultados' as const, brand_id: uuid(900), from: r.period.from, to: r.period.to };
+    const comLia = desenhar(r, '7', 'lite', 'Loja Centro', { pedido, lia: true, semOrigemAlta: true });
+    semLixo(comLia);
+    // O botão fica dentro do cartão do ROAS, fechado (sem apontar para um bloco que ainda não está na tela).
+    const heroi = comLia.slice(comLia.indexOf('class="card res-hero"'), comLia.indexOf('</article>'));
+    expect(heroi).toContain('<button class="ia-bt" type="button" aria-expanded="false">');
+    expect(heroi).toContain('>Explicar</button>');
+    // Fechada, a explicação não está na tela (ela abre logo abaixo do número, a pedido).
+    expect(comLia).not.toContain('id="exp-resultados"');
+    expect(desenhar(r, '7', 'pro', 'Loja Centro', { pedido, lia: false, semOrigemAlta: false })).toContain('<button class="ia-bt ia-bt--neutro" type="button" aria-expanded="false"');
+    expect(desenhar(r, '7', 'lite')).not.toContain('ia-bt');
   });
 });
 

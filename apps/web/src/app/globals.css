@@ -8,6 +8,7 @@
 @import "../styles/resultados.css";
 @import "../styles/links.css";
 @import "../styles/aprovacoes.css";
+@import "../styles/explicar.css";
 
 /* Tema escuro manual (data-theme) além do automático do sistema (base §15, Tailwind 4.3). */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
@@ -65,6 +66,7 @@
   --logo-ink: light-dark(#0B0D17, #F4F2EC);
   --logo-pin: light-dark(#7B61FF, #FFFFFF);
   --marca-violeta: #7B61FF;
+  --marca-branco: #FFFFFF;
   --marca-ciano: #2DD4DE;
   --marca-lavanda: #A08FFF;
   --marca-lavanda-clara: #CFC6FF;

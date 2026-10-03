@@ -1,7 +1,13 @@
 'use client';
 
 import type { ClosedLoopResponse } from '@liame/contracts';
-import type { RefObject } from 'react';
+import Link from 'next/link';
+import { type RefObject, useRef } from 'react';
+import { BlocoExplicacao } from '@/components/explicar/bloco-explicacao';
+import { BotaoExplicar } from '@/components/explicar/botao-explicar';
+import type { PedidoDeExplicacao } from '@/components/explicar/pedir';
+import { useExplicacao } from '@/components/explicar/use-explicacao';
+import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { AvisosResultados } from './avisos-resultados';
 import { CartaoCampanhas } from './cartao-campanhas';
@@ -14,7 +20,16 @@ import { ContextoResultados } from './contexto-resultados';
 import type { TelaDeResultados } from './textos';
 
 // O corpo da tela de Resultados com os dados já lidos (o que o protótipo P1 desenha abaixo do cabeçalho).
-// Separado da busca para ser desenhado igual no teste e no navegador.
+// Separado da busca para ser desenhado igual no teste e no navegador. O "Explicar" (protótipo P4) entra
+// pelo número principal: o botão no cabeçalho dele e o bloco logo abaixo.
+
+/** O que o "Explicar" dos resultados precisa: o pedido (os mesmos números da tela) e se a LIA responde. */
+export type ExplicarResultados = {
+  pedido: PedidoDeExplicacao;
+  lia: boolean;
+  /** Muitos pedidos sem origem provada: a explicação oferece o caminho para Links e cupons. */
+  semOrigemAlta: boolean;
+};
 
 type Props = {
   tela: TelaDeResultados;
@@ -25,16 +40,68 @@ type Props = {
   loja: string | null;
   podeVerContas: boolean;
   reserva: RefObject<HTMLElement | null>;
+  /** Nulo quando não há o que explicar (hoje, sem o Regem, sem pedido com origem) ou antes de saber se a LIA responde. */
+  explicar?: ExplicarResultados | null;
 };
 
-export function ResultadosConteudo({ tela, modelo, consulta, loja, podeVerContas, reserva }: Props) {
+/** "Ver por campanha": leva ao cartão das campanhas e, no Lite, abre os detalhes dele (como no protótipo). */
+function verPorCampanha() {
+  const titulo = document.getElementById('t-camp');
+  const cartao = titulo?.closest('article');
+  if (!titulo || !cartao) return;
+  cartao.querySelector<HTMLButtonElement>('.detalhes-bt[aria-expanded="false"]')?.click();
+  const parado = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  cartao.scrollIntoView({ block: 'start', behavior: parado ? 'auto' : 'smooth' });
+  titulo.setAttribute('tabindex', '-1');
+  titulo.focus({ preventScroll: true });
+}
+
+export function ResultadosConteudo({ tela, modelo, consulta, loja, podeVerContas, reserva, explicar = null }: Props) {
   const pro = useModo().modo === 'pro';
+  const explicacao = useExplicacao(explicar?.pedido ?? null);
+  const botao = useRef<HTMLButtonElement>(null);
+
+  function fechar() {
+    explicacao.fechar();
+    botao.current?.focus();
+  }
+
   return (
     <>
       <ContextoResultados contexto={tela.contexto} fontes={tela.fontes} pro={pro} />
       <AvisosResultados avisos={tela.avisos} podeVerContas={podeVerContas} />
       <div className={pro ? 'res-grid res-grid--pro' : 'res-grid'}>
-        <CartaoRoas roas={tela.roas} />
+        <CartaoRoas
+          roas={tela.roas}
+          explicar={
+            explicar && (
+              <BotaoExplicar ref={botao} lia={explicar.lia} aberto={explicacao.aberta} controla="exp-resultados" aoClicar={() => (explicacao.aberta ? fechar() : disparar(explicacao.pedir()))} />
+            )
+          }
+        />
+        {explicar && explicacao.estado.tipo !== 'fechada' && (
+          <BlocoExplicacao
+            id="resultados"
+            estado={explicacao.estado}
+            lia={explicar.lia}
+            sobre="tela"
+            podeVerContas={podeVerContas}
+            aoFechar={fechar}
+            aoPedirDeNovo={() => disparar(explicacao.pedir())}
+            acoes={
+              <>
+                <button className="btn btn--sm" type="button" onClick={verPorCampanha}>
+                  Ver por campanha
+                </button>
+                {explicar.semOrigemAlta && (
+                  <Link className="btn btn--sm" href="/links">
+                    Abrir Links e cupons
+                  </Link>
+                )}
+              </>
+            }
+          />
+        )}
         {pro && <CartaoFontes fontes={tela.fontes} />}
         <CartaoCiclo ciclo={tela.ciclo} rotuloPeriodo={tela.base.rotuloPeriodo} datas={tela.contexto.datas} />
         <CartaoCampanhas campanhas={tela.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} />

@@ -1,0 +1,109 @@
+/* ===== "Explicar" (A3 · I4; mockups/prototipo-explicar.html, P4 aprovado em 02/10/2026) =====
+   O botão da LIA, o bloco da explicação (logo abaixo do que ele explica), os números com a fonte e o
+   retorno da pessoa. Violeta IA só no que é da IA; o resumo do sistema fica em cinza. */
+
+/* Botão da LIA: o mesmo do protótipo geral aprovado. */
+.ia-bt { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px 0 10px; border: 1px solid color-mix(in srgb, var(--ai-fill) 30%, transparent); border-radius: var(--radius-full); background: var(--ai-soft); color: var(--ai); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; cursor: pointer; transition: border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.ia-bt:hover { border-color: var(--ai-fill); }
+.ia-bt:active { transform: translateY(1px); }
+.ia-bt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ia-bt .ic { width: 14px; height: 14px; }
+.ia-bt[aria-expanded="true"] { border-color: var(--ai-fill); }
+.ia-bt--neutro { border-color: var(--border); background: var(--surface); color: var(--text-muted); }
+.ia-bt--neutro:hover { border-color: var(--border-strong); color: var(--text); }
+.ia-bt--neutro[aria-expanded="true"] { border-color: var(--border-strong); color: var(--text); }
+
+.av-lia { width: 32px; height: 32px; flex: none; display: block; }
+.av-lia svg { display: block; width: 100%; height: 100%; }
+.av-sistema { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--bg-subtle); color: var(--text-muted); }
+
+/* O bloco da explicação. */
+.explica { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; border: 1px solid color-mix(in srgb, var(--ai-fill) 32%, var(--border)); animation: surgir .3s var(--ease) both; }
+.explica--sistema { border-color: var(--border-strong); }
+.explica-cab { display: flex; align-items: center; gap: var(--sp-3); }
+.explica-quem { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.explica-quem h2, .explica-quem h3 { margin: 0; font-size: var(--text-md); font-weight: 600; outline: none; }
+.explica-quem p { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text-muted); }
+.st--ia { background: var(--ai-soft); color: var(--ai); }
+.st--ia .ic { width: 12px; height: 12px; }
+.explica-corpo { display: grid; gap: var(--sp-4); max-width: 74ch; }
+.explica-texto { font-size: var(--text-md); line-height: 1.6; }
+.explica-sec { display: grid; gap: var(--sp-2); }
+.explica-sec > h3, .explica-sec > h4 { margin: 0; font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text-subtle); }
+.explica-lista { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.explica-lista li { position: relative; padding-left: 18px; line-height: 1.55; }
+.explica-lista li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+.explica-lista--fazer li::before { background: var(--fio); }
+.explica-risco { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.explica-risco > span:last-child { flex: 1; min-width: min(100%, 220px); }
+.explica-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* Por que a explicação é a do sistema (dado velho, LIA fora do ar, limite, desligada). */
+.explica-aviso { display: flex; flex-wrap: wrap; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--warning-soft); color: var(--text); font-size: var(--text-sm); line-height: 1.5; }
+.explica-aviso .ic { flex: none; margin-top: 2px; color: var(--warning); }
+.explica-aviso--neutro { background: var(--bg-subtle); }
+.explica-aviso--neutro .ic { color: var(--text-muted); }
+.explica-aviso b { display: block; font-size: var(--text-base); }
+.explica-aviso-txt { flex: 1; min-width: min(100%, 220px); }
+.explica-aviso .btn { flex: none; align-self: center; background: var(--surface); }
+.explica-aviso .btn .ic { margin-top: 0; color: inherit; }
+
+/* Número com a fonte: sublinhado pontilhado; tocar no número abre "De onde vêm os números" na linha dele. */
+.nf { appearance: none; display: inline; margin: 0; padding: 0 1px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; font-family: var(--font-mono); font-weight: 600; white-space: nowrap; text-decoration: underline dotted color-mix(in srgb, var(--fio) 80%, transparent); text-underline-offset: 4px; cursor: pointer; }
+.nf:hover { background: var(--primary-soft); }
+.nf:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.fontes-num { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+.fontes-num summary { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm); list-style: none; }
+.fontes-num summary::-webkit-details-marker { display: none; }
+.fontes-num summary:hover { color: var(--text); }
+.fontes-num summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.fontes-num summary .ic { transition: transform var(--dur) var(--ease); }
+.fontes-num[open] summary .ic { transform: rotate(180deg); }
+.fontes-num dl { display: grid; gap: var(--sp-2); margin: var(--sp-2) 0 0; }
+.fontes-num dl div { display: grid; grid-template-columns: minmax(0, 9.5rem) minmax(0, 1fr); gap: 2px var(--sp-3); padding: 4px 6px; margin: 0 -6px; border-radius: var(--radius-sm); font-size: var(--text-sm); transition: background var(--dur) var(--ease); }
+.fontes-num dl div.destaque { background: var(--primary-soft); }
+.fontes-num dt { font-family: var(--font-mono); font-weight: 600; overflow-wrap: anywhere; }
+.fontes-num dd { grid-column: 2; margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
+
+.explica-rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.explica-nota { font-size: var(--text-xs); color: var(--text-subtle); line-height: 1.5; }
+.explica-rodape .explica-nota { flex: 1 1 260px; }
+.explica-nota .link-bt { font-size: inherit; font-weight: 500; white-space: nowrap; }
+.explica-opiniao { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+/* "Motivo registrado" recebe o foco para quem ouve a tela; não é controle, então não ganha o contorno. */
+.explica-opiniao[tabindex="-1"]:focus { outline: none; }
+.explica-opiniao .btn .ic { width: 15px; height: 15px; }
+.explica-opiniao .btn[aria-pressed="true"] { border-color: var(--fio); background: var(--primary-soft); color: var(--text); }
+
+/* Discordar: os motivos e o campo livre abrem logo abaixo do botão que os abre. */
+.discordar { display: grid; gap: var(--sp-3); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.disc-ops { display: grid; gap: 2px; }
+.disc-op { display: flex; align-items: flex-start; gap: var(--sp-2); min-height: 32px; padding: 5px 0; font-size: var(--text-sm); font-weight: 400; cursor: pointer; }
+.disc-op input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--fio); }
+.area { min-height: 84px; width: 100%; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); resize: vertical; outline: none; }
+.area:focus-visible { border-color: var(--foco); box-shadow: var(--focus-ring); }
+.discordar-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+.explica-esq { display: grid; gap: var(--sp-3); }
+.explica-esq .esqueleto { display: block; height: 14px; max-width: 100%; }
+.explica-esq .esqueleto--curto { width: 38%; }
+.explica-esq .esqueleto--medio { width: 62%; }
+
+/* Resultados: o botão fica no cabeçalho do número principal, e o bloco vem logo depois dele. No Pro largo,
+   o número principal divide a linha com as fontes: o bloco ocupa a linha de baixo, e as fontes sobem para
+   o lado do número (preenchimento denso da grade), sem mudar a ordem de leitura. */
+.res-grid > .explica { grid-column: 1 / -1; }
+.res-grid--pro { grid-auto-flow: row dense; }
+
+/* Atenção: o botão na linha de ações do aviso, e a explicação dentro do próprio aviso (sem moldura dupla). */
+.aviso-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-1); }
+.aviso-midia .explica { margin-top: var(--sp-2); padding: var(--sp-4); border-radius: var(--radius); background: var(--surface-2); }
+
+@container pagina (max-width: 699px) {
+  .fontes-num dl div { grid-template-columns: minmax(0, 1fr); }
+  .fontes-num dd { grid-column: 1; }
+}
+@media (max-width: 480px) {
+  .explica-rodape { align-items: stretch; }
+  .explica-opiniao .btn { flex: 1; }
+}
