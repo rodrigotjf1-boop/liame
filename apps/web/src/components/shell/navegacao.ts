@@ -1,4 +1,5 @@
 import type { NomeIcone } from '@/components/ui/icone';
+import type { Modo } from '@/lib/modo';
 
 // Itens do menu na ordem do protótipo aprovado. Só entram as telas que já existem: as outras chegam
 // com as suas fases (roadmap). Cada item some para quem não tem a permissão da tela; os itens de
@@ -14,10 +15,19 @@ export type ItemNav = {
   icone: NomeIcone;
   /** Sem permissão = tela da própria pessoa (Segurança da conta). */
   permissao?: string;
-  /** Mostra ao lado um número: os avisos de mídia (crítico + atenção) ou os pedidos esperando aprovação. */
-  contador?: 'atencao' | 'aprovacoes';
+  /**
+   * Mostra ao lado um número: os avisos (crítico + atenção), os pedidos esperando aprovação ou, no Resumo, os
+   * pontos que pedem a pessoa (os avisos e, havendo pedido esperando, mais um).
+   */
+  contador?: 'atencao' | 'aprovacoes' | 'resumo';
   /** A tela tem as duas visões (Lite e Pro): o seletor de modo aparece no topo. */
   modos?: boolean;
+  /**
+   * Item de um modo só: a página inicial muda com ele (Resumo no Lite, Atenção no Pro; protótipo P8). No outro
+   * modo, o item aparece se o grupo não tem nenhum item daquele modo para a pessoa (sem ver as vendas, não há
+   * Resumo, e a Atenção fica no Lite também).
+   */
+  soNo?: Modo;
 };
 export type GrupoNav = {
   id: string;
@@ -33,7 +43,8 @@ export const NAVEGACAO: GrupoNav[] = [
     id: 'agencia',
     rotulo: 'Agência',
     itens: [
-      { href: '/atencao', rotulo: 'Atenção', titulo: 'Atenção de mídia', icone: 'atencao', permissao: 'campanhas.ver', contador: 'atencao' },
+      { href: '/resumo', rotulo: 'Resumo', icone: 'home', permissao: 'vendas.ver', contador: 'resumo', modos: true, soNo: 'lite' },
+      { href: '/atencao', rotulo: 'Atenção', titulo: 'Atenção de mídia', icone: 'atencao', permissao: 'campanhas.ver', contador: 'atencao', modos: true, soNo: 'pro' },
       { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check-circle', permissao: 'campanhas.ver', contador: 'aprovacoes', modos: true },
       { href: '/resultados', rotulo: 'Resultados', icone: 'chart', permissao: 'vendas.ver', modos: true },
       { href: '/contas', rotulo: 'Contas conectadas', icone: 'plug', permissao: 'contas.ver' },
@@ -79,9 +90,15 @@ export function rotaPessoal(caminho: string): boolean {
   return NAVEGACAO.some((g) => g.pessoal && g.itens.some((i) => itemAtual(caminho, i.href)));
 }
 
-/** Itens que a pessoa vê no grupo: some o que exige permissão que ela não tem (o servidor também barra). */
-export function itensVisiveis(grupo: GrupoNav, pode: (permissao: string) => boolean): ItemNav[] {
-  return grupo.itens.filter((i) => !i.permissao || pode(i.permissao));
+/**
+ * Itens que a pessoa vê no grupo: some o que exige permissão que ela não tem (o servidor também barra) e, com o
+ * modo dado, o item do outro modo (salvo quando o grupo não tem nenhum item deste modo para ela).
+ */
+export function itensVisiveis(grupo: GrupoNav, pode: (permissao: string) => boolean, modo?: Modo): ItemNav[] {
+  const permitidos = grupo.itens.filter((i) => !i.permissao || pode(i.permissao));
+  if (!modo) return permitidos;
+  const temDoModo = permitidos.some((i) => i.soNo === modo);
+  return permitidos.filter((i) => !i.soNo || i.soNo === modo || !temDoModo);
 }
 
 /** A tela aberta está num grupo de ferramentas ("Mais ferramentas" começa aberto nela). */
