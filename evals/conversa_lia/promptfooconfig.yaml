@@ -1,0 +1,15 @@
+# Eval da tarefa `conversa_lia` (A3, I10c; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto do pedido, as ferramentas e o formato
+# da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do servidor
+# (apoio/conferir.mjs), com a mesma conferência da produção. Rodar: ver evals/README.md.
+description: 'Liame · conversa_lia: número só do que leu, injeção, vazamento, política, demanda, cupom e reunião'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: conversa_lia
+
+tests: file://testes.mjs

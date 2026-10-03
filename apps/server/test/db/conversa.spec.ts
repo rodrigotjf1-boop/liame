@@ -249,6 +249,13 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     expect(v).toMatchObject({ role: 'sistema', notice: 'dado_velho' });
     expect(v.stale_sources).toEqual([expect.objectContaining({ platform: 'Meta', name: 'Conta da Hamburgueria' })]);
     expect(v.stale_sources[0]!.freshness).not.toBe('em dia');
+
+    // Sem analisar, a LIA pode dizer qual fonte está atrasada e desde quando: isso não é número velho.
+    const desde = v.stale_sources[0]!.last_read!;
+    responder(roteiro(pede('resultados_ciclo_fechado', { brand_id: velho.brandId, ...PERIODO }), responde(['paragrafo', `A conta da Meta não é lida desde ${desde}: a análise espera a próxima leitura.`])));
+    const semAnalise = mensagemFinal((await conversar(velho.cookie, { brand_id: velho.brandId, text: 'E agora, como está?' })).eventos);
+    expect(semAnalise).toMatchObject({ role: 'lia', status: 'ok' });
+    expect(semAnalise.numbers).toEqual([{ value: desde, sources: ['Liame · fonte fora do dia, com a última leitura'] }]);
   });
 
   it('por regra, sem IA: falar com uma pessoa, pedido político, LIA desligada; o dado pessoal sai antes de tudo', async () => {

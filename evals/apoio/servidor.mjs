@@ -18,12 +18,20 @@ export async function servidor() {
   return carregado;
 }
 
+/** A tarefa do servidor (como ler os casos, a saída gravada, avaliar e chamar o modelo). */
+export async function tarefaDe(nome) {
+  const { TAREFAS } = await servidor();
+  const t = TAREFAS[nome];
+  if (!t) throw new Error(`evals: tarefa "${nome}" não existe no servidor (veja apps/server/src/ai/evals/tarefas.ts)`);
+  return t;
+}
+
 const casosPorTarefa = new Map();
-/** Os casos de uma tarefa (`evals/<tarefa>/casos.jsonl`), lidos uma vez. */
+/** Os casos de uma tarefa (`evals/<tarefa>/casos.jsonl`), lidos uma vez, pelo formato daquela tarefa. */
 export async function casosDa(tarefa) {
   if (!casosPorTarefa.has(tarefa)) {
-    const { carregarCasos } = await servidor();
-    casosPorTarefa.set(tarefa, carregarCasos(fileURLToPath(new URL(`evals/${tarefa}/casos.jsonl`, raiz))));
+    const t = await tarefaDe(tarefa);
+    casosPorTarefa.set(tarefa, t.carregar(fileURLToPath(new URL(`evals/${tarefa}/casos.jsonl`, raiz))));
   }
   return casosPorTarefa.get(tarefa);
 }
