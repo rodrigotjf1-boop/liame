@@ -166,6 +166,14 @@ describe('conferência da resposta da IA: o que não serve para a tela', () => {
     expect(conferirExplicacao(boa, contexto)).toBeNull();
   });
 
+  it('recusa o que a marca nunca diz (dossiê, I8), mas não o nome de uma campanha da empresa', () => {
+    const comMarca = { ...boa, o_que_fazer: ['Destaque o hambúrguer gourmet no anúncio.'] };
+    expect(conferirExplicacao(comMarca, contexto)).toBeNull();
+    expect(conferirExplicacao(comMarca, contexto, { daMarca: ['Gourmet'] })).toEqual({ recusa: 'compliance', detalhe: ['regra_da_marca: gourmet'] });
+    // "Tráfego | Cardápio" é o nome de uma campanha do contexto: citá-lo não bate na regra da marca.
+    expect(conferirExplicacao(boa, contexto, { daMarca: ['cardápio'] })).toBeNull();
+  });
+
   it('recusa número inventado ou calculado, texto vazio, resposta longa e trecho proibido', () => {
     expect(conferirExplicacao({ ...boa, motivos: ['Cada pedido custou R$ 25,30 e a queda foi de 176 reais.'] }, contexto)).toEqual({ recusa: 'numero_fora', detalhe: ['25,30', '176'] });
     expect(conferirExplicacao({ ...boa, o_que_aconteceu: '   ' }, contexto)).toEqual({ recusa: 'vazia', detalhe: [] });

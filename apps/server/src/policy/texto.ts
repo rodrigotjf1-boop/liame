@@ -7,10 +7,11 @@ import { limparTexto } from '../ai/sanitizar.js';
 // político e eleitoral proibido nos Termos; CDC arts. 36 a 38 e CONAR: promessa de resultado; políticas de
 // anúncio da Meta e do Google: categorias que derrubam conta). Funções puras.
 
-/** Muda junto com qualquer lista abaixo. */
-export const REGRAS_DE_TEXTO_VERSAO = 1;
+/** Muda junto com qualquer lista abaixo (2: entra a regra da marca, I8). */
+export const REGRAS_DE_TEXTO_VERSAO = 2;
 
-export type RegraDeTexto = 'politico_eleitoral' | 'promessa_de_resultado' | 'categoria_proibida' | 'dado_pessoal' | 'texto_longo';
+/** `regra_da_marca`: frase que a própria marca disse que nunca usa ("o que não pode dizer", I8). */
+export type RegraDeTexto = 'politico_eleitoral' | 'promessa_de_resultado' | 'categoria_proibida' | 'dado_pessoal' | 'texto_longo' | 'regra_da_marca';
 
 export interface AchadoDeTexto {
   regra: RegraDeTexto;
@@ -49,12 +50,24 @@ function casar(regra: RegraDeTexto, formato: RegExp, texto: string, achados: Map
   for (const m of texto.matchAll(formato)) achados.set(`${regra}:${m[1]}`, { regra, trecho: m[1]! });
 }
 
+/** A frase aparece no texto como palavras inteiras ("gourmet" não casa com "gourmetizado")? Ambos normalizados. */
+function contemFrase(texto: string, frase: string): boolean {
+  for (let i = texto.indexOf(frase); i >= 0; i = texto.indexOf(frase, i + 1)) {
+    const antes = i === 0 ? '' : texto[i - 1]!;
+    const depois = texto[i + frase.length] ?? '';
+    if (!/[a-z0-9]/.test(antes) && !/[a-z0-9]/.test(depois)) return true;
+  }
+  return false;
+}
+
 /**
  * O texto pode aparecer? Devolve o que cada regra achou (vazio = pode). `ignorar` são os nomes que vieram
  * dos dados da própria empresa (campanha, conta): citar o nome de uma campanha não é a IA falando de
- * política; para esses nomes existe `nomesPoliticos`, que decide se a IA é chamada.
+ * política; para esses nomes existe `nomesPoliticos`, que decide se a IA é chamada. `daMarca` é o que a
+ * marca nunca diz (o dossiê, I8): vale como as regras da Liame, também fora dos nomes ignorados.
  */
-export function conferirTexto(textos: string | string[], opcoes: { ignorar?: string[] } = {}): AchadoDeTexto[] {
+export function conferirTexto(textos: string | string[], opcoes: { ignorar?: string[]; daMarca?: string[] } = {}): AchadoDeTexto[] {
+  const daMarca = [...new Set((opcoes.daMarca ?? []).map((f) => normalizar(f).trim()).filter((f) => f.length >= 3))];
   const achados = new Map<string, AchadoDeTexto>();
   for (const original of Array.isArray(textos) ? textos : [textos]) {
     if (original.length > TEXTO_MAXIMO) {
@@ -71,6 +84,7 @@ export function conferirTexto(textos: string | string[], opcoes: { ignorar?: str
     casar('politico_eleitoral', POLITICO, texto, achados);
     casar('promessa_de_resultado', PROMESSA, texto, achados);
     casar('categoria_proibida', PROIBIDA, texto, achados);
+    for (const frase of daMarca) if (contemFrase(texto, frase)) achados.set(`regra_da_marca:${frase}`, { regra: 'regra_da_marca', trecho: frase });
   }
   return [...achados.values()];
 }

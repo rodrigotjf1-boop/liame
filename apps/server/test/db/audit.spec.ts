@@ -33,6 +33,8 @@ const WITHOUT_AUDIT = [
   'POST /v1/ai/explain/results',
   'POST /v1/ai/feedback',
   'POST /v1/auth/password/forgot',
+  // Minha marca (A3, I8): testar uma frase nas regras não muda dado e não guarda nada.
+  'POST /v1/brand-dossier/check',
   'POST /v1/inbox/:provider',
   'POST /v1/inbox/:provider/:connectionId',
   'POST /v1/invitations/preview',

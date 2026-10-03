@@ -116,4 +116,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   weekly_review: { class: 'CONFIDENTIAL', retention: 'com a marca' },
   weekly_review_delivery: { class: 'PERSONAL', retention: 'com a revisão e com a pessoa (some com qualquer uma das duas)' },
   weekly_review_state: { class: 'INTERNAL', retention: 'com a marca' },
+  // Minha marca (A3, I8): o dossiê é dado da empresa, sem dado pessoal de cliente (recusado ao salvar); as
+  // versões não se apagam enquanto a marca existir. A base da agência é do produto.
+  brand_dossier_version: { class: 'CONFIDENTIAL', retention: 'com a marca (as versões não se apagam enquanto ela existir)' },
+  brand_dossier_suggestion: { class: 'CONFIDENTIAL', retention: 'com a marca' },
+  knowledge_item: { class: 'INTERNAL', retention: 'do produto (histórico das versões)' },
 };

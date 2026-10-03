@@ -10,6 +10,7 @@ import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
 import { Mailer, maskEmail } from '../mail/mailer.js';
+import { proibidasDaMarca } from '../marca/marca.service.js';
 import { MediaService } from '../media/media.service.js';
 import { AtencaoCicloService } from '../results/atencao-ciclo.service.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
@@ -114,13 +115,20 @@ export class RevisaoSemanalService {
       const anterior = temMovimento(semanaAntes, null) ? semanaAntes : null;
       const avisos = [...(await this.media.atencao(brandId, agora)).items, ...(await this.ciclo.atencao(brandId, agora)).items];
       const ativo = await this.explicar.analistaLigado(ctx, brandId);
-      return { ...base, situacao: 'gerar' as const, atual, anterior, emDia, avisos, ativo };
+      // O que a marca nunca diz (dossiê, I8): a leitura da LIA passa pela mesma conferência do Explicar.
+      const daMarca = await proibidasDaMarca(brandId);
+      return { ...base, situacao: 'gerar' as const, atual, anterior, emDia, avisos, ativo, daMarca };
     });
     if (lido.situacao !== 'gerar') return { status: lido.situacao, fuso: lido.fuso, semana: lido.semana.from };
     const { fuso, semana, atual, anterior } = lido;
 
     // ---- 2. a leitura da semana, sem transação aberta (é a chamada ao modelo, quando a LIA está ligada)
-    const leitura = await this.explicar.daSemana(ctx, brandId, { atual: lido.emDia ? atual : comAtrasoMarcado(atual, semana, fuso), anterior, ativo: lido.ativo });
+    const leitura = await this.explicar.daSemana(ctx, brandId, {
+      atual: lido.emDia ? atual : comAtrasoMarcado(atual, semana, fuso),
+      anterior,
+      ativo: lido.ativo,
+      daMarca: lido.daMarca,
+    });
 
     // ---- 3. a revisão, como a tela e o e-mail vão mostrar
     const { improved, worsened } = oQueMudou(atual, anterior);

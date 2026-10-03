@@ -34,6 +34,9 @@ export const PERMISSIONS = [
   'atribuicao.gerenciar',
   'links.gerenciar',
   'cupons.criar',
+  // Minha marca: o dossiê da marca (A3, I8, migration 0033).
+  'dossie.ver',
+  'dossie.editar',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

@@ -142,7 +142,7 @@ Nunca concatenar texto externo ao system prompt. Remover caracteres invisíveis 
 
 ## 7. Conhecimento plugável
 
-O dossiê da marca é **estruturado**: `brand_identity, voice, personas, products, offers, proof, forbidden_claims, competitors, geo, seasonality, policies`. A versão textual para o modelo é gerada sob demanda, em ordem estável (bom para cache de prompt). A base de conhecimento da agência (as skills MIT/Apache adaptadas para Brasil, WhatsApp e LGPD) é versionada na distribuição, com NOTICE de licença.
+O dossiê da marca é **estruturado** (contrato `BrandDossierContent`, I8): `identity` (o que é, para quem, o que diferencia, desde), `voice`, `products`, `offers`, `proof` (as informadas; as do sistema são calculadas na hora), `forbidden` (o que a marca nunca diz), `competitors`, `region` e `seasonality`; o público entrou em `identity` e as políticas são as do Policy Engine. Fica em versões imutáveis (`brand_dossier_version`). A versão textual para o modelo é gerada sob demanda, em ordem estável e com hash (bom para cache de prompt), sem nome de pessoa. "O que a marca nunca diz" vale no Compliance junto com as regras da Liame. A base de conhecimento da agência (as skills MIT/Apache adaptadas para Brasil, WhatsApp e LGPD) é versionada na distribuição, com NOTICE de licença.
 
 ## 8. Governança: versão, reprodutibilidade, explicação
 
