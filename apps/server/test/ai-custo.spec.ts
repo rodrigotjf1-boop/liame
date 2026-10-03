@@ -104,9 +104,24 @@ describe('motivo da falha de uma chamada (sem o texto do fornecedor)', () => {
 
 describe('configuração da IA', () => {
   it('sem chave do fornecedor a API sobe (a IA fica indisponível); o padrão roda nos Estados Unidos, com teto baixo', () => {
-    expect(loadConfig({ NODE_ENV: 'test' }).ai).toEqual({ anthropicApiKey: null, inferenceGeo: 'us', dailyLimitUsdMicros: 2_000_000, monthlyLimitUsdMicros: 20_000_000, userHourlyCalls: 30 });
-    const c = loadConfig({ NODE_ENV: 'test', ANTHROPIC_API_KEY: ` ${'x'.repeat(40)} `, AI_INFERENCE_GEO: 'global', AI_DAILY_LIMIT_USD: '0.5', AI_MONTHLY_LIMIT_USD: '7.25', AI_USER_HOURLY_CALLS: '5' });
-    expect(c.ai).toEqual({ anthropicApiKey: 'x'.repeat(40), inferenceGeo: 'global', dailyLimitUsdMicros: 500_000, monthlyLimitUsdMicros: 7_250_000, userHourlyCalls: 5 });
+    expect(loadConfig({ NODE_ENV: 'test' }).ai).toEqual({
+      anthropicApiKey: null,
+      inferenceGeo: 'us',
+      dailyLimitUsdMicros: 2_000_000,
+      monthlyLimitUsdMicros: 20_000_000,
+      userHourlyCalls: 30,
+      conversationMaxAnswers: 20,
+    });
+    const c = loadConfig({
+      NODE_ENV: 'test',
+      ANTHROPIC_API_KEY: ` ${'x'.repeat(40)} `,
+      AI_INFERENCE_GEO: 'global',
+      AI_DAILY_LIMIT_USD: '0.5',
+      AI_MONTHLY_LIMIT_USD: '7.25',
+      AI_USER_HOURLY_CALLS: '5',
+      AI_CONVERSATION_MAX_ANSWERS: '8',
+    });
+    expect(c.ai).toEqual({ anthropicApiKey: 'x'.repeat(40), inferenceGeo: 'global', dailyLimitUsdMicros: 500_000, monthlyLimitUsdMicros: 7_250_000, userHourlyCalls: 5, conversationMaxAnswers: 8 });
   });
 
   it('recusa subir com teto do mês menor que o do dia, região desconhecida ou limite zerado', () => {
@@ -114,6 +129,7 @@ describe('configuração da IA', () => {
     expect(() => loadConfig({ NODE_ENV: 'test', AI_INFERENCE_GEO: 'br' })).toThrow();
     expect(() => loadConfig({ NODE_ENV: 'test', AI_DAILY_LIMIT_USD: '0' })).toThrow();
     expect(() => loadConfig({ NODE_ENV: 'test', AI_USER_HOURLY_CALLS: '0' })).toThrow();
+    expect(() => loadConfig({ NODE_ENV: 'test', AI_CONVERSATION_MAX_ANSWERS: '0' })).toThrow();
   });
 });
 

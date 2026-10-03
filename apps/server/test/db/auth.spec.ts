@@ -90,15 +90,15 @@ describe.skipIf(!hasDb)('identidade: cadastro, e-mail, sessão, senha e empresa 
 
   it('muitas tentativas no mesmo e-mail: 429 com Retry-After', async () => {
     const { email } = await signupAndLogin(api);
-    let last = 0;
-    let retryAfter: string | null = null;
-    for (let i = 0; i < 12; i++) {
-      const r = await api.call('POST', '/v1/auth/login', { body: { email, password: 'frase errada de novo aqui' } });
-      last = r.status;
-      retryAfter = r.headers.get('retry-after');
+    // O limite é de 10 por janela FIXA de 15 minutos: se as tentativas cruzarem a virada da janela, a conta
+    // recomeça e o 429 não vem na 11ª (ERR-073). Em até 21 tentativas, uma das duas janelas passa de 10.
+    let r: Awaited<ReturnType<typeof api.call>> | null = null;
+    for (let i = 0; i < 21 && r?.status !== 429; i++) {
+      r = await api.call('POST', '/v1/auth/login', { body: { email, password: 'frase errada de novo aqui' } });
+      expect([401, 429]).toContain(r.status);
     }
-    expect(last).toBe(429);
-    expect(Number(retryAfter)).toBeGreaterThan(0);
+    expect(r?.status).toBe(429);
+    expect(Number(r?.headers.get('retry-after'))).toBeGreaterThan(0);
   });
 
   it('o cadastro grava a versão dos termos vigentes; sem ela, ou com outra, recusa', async () => {

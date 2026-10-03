@@ -646,6 +646,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 02/10/2026 | §15.2 nova: **resposta em fluxo de eventos** para a Conversa (I10): os limites de conexão da Cloudflare, conferidos na documentação oficial (leitura da origem parada: 125 s, erro 524; muda só no Enterprise), e o "Parar" (fechar a leitura) no Node, medido nos testes. Daí a linha a cada 15 s no fluxo. |
 | 02/10/2026 | §16.5 nova: **calendário comercial** (feriados nacionais pela Lei 662/1949 com a redação da Lei 10.607/2002, pela Lei 6.802/1980 e pela Lei 14.759/2023; Black Friday de 2026 em 27/11), conferido antes do protótipo P8 (`mockups/prototipo-resumo.html`): as datas do Estrategista vêm de uma tabela do sistema, com a fonte. |
 | 02/10/2026 | §16.1: **equipe, prontidão e autonomia** (HubSpot Agent Hub, Salesforce Agentforce, aplicar recomendações automaticamente do Google Ads, Intercom Fin), pesquisado antes do protótipo P7 (`mockups/prototipo-equipe.html`): autonomia por tipo de ação, ligada por uma pessoa e desligável, com histórico; acerto e custo por agente. |
 | 02/10/2026 | §16.4 (nova): **dossiê da marca** nos produtos de marketing (HubSpot Brand Voice e Brand Knowledge, Klaviyo, Jasper IQ, Canva), pesquisado antes do protótipo P6 (`mockups/prototipo-marca.html`): voz separada dos fatos e das regras, a IA sugere a partir do que já existe e a pessoa confere, versões guardadas. |
@@ -994,6 +995,15 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Imagem base** [O, registry do Docker Hub, 26/09/2026]: `node:24-bookworm-slim` = Node 24.21.0, criada em 19/09/2026, índice `sha256:0e0ff40c…f9b6`. **Syft 1.52.0** e **Grype 0.119.0** (17/09/2026), checksums no arquivo `<nome>_<versão>_checksums.txt` da release. `pnpm sbom --sbom-format cyclonedx --lockfile-only` gera CycloneDX 1.7 sem precisar do store; `pnpm --filter <pkg> deploy --prod <dir>` do pnpm 12 funciona sem `injectWorkspacePackages` e leva os pacotes do workspace com os `files` deles.
 - **Semgrep CE 1.178.0 no Windows** [O, 26/09/2026]: instala por `pip` num venv do Python 3.14 e roda com `PYTHONUTF8=1`, com o mesmo resultado do CI (229 regras). `zizmor` 1.30.1 idem (`--offline`).
 - **Actions do CI (conferidas por `git ls-remote`):** `actions/checkout` v7.0.1 `3d3c42e`, `actions/setup-node` v7.0.0 `8207627`, `pnpm/action-setup` v6.1.0 `ea17c68` (suporte ao pnpm 12 desde essa versão).
+
+### 15.2 Resposta em fluxo de eventos (Conversa, I10)
+
+*Fontes: documentação oficial da Cloudflare (páginas "Connection limits" e "Error 524", atualizadas em 23/07/2026, lidas em 02/10/2026) e os testes da Conversa (`apps/server/test/db/conversa.spec.ts`), executados no Node 22.23 com Express 5.*
+
+- **Cloudflare, entre ela e a origem** [O, 02/10/2026]: "Proxy Read Timeout" de **125 s** (erro 524; muda só no plano Enterprise, até 6.000 s), "Proxy Idle Timeout" de 900 s e "Proxy Write Timeout" de 30 s (sem mudança). Entre o navegador e a Cloudflare, a conexão HTTP/1.1 parada fecha em 400 s. As páginas não falam de fluxo de eventos (SSE). O número de 100 s, que aparece em textos antigos, não é o da página atual. Fontes: https://developers.cloudflare.com/fundamentals/reference/connection-limits/ e https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-524/
+- **Consequência no código:** a resposta da Conversa manda os cabeçalhos na hora (`flushHeaders`) e uma linha de comentário (`: segue`) a cada 15 s enquanto o modelo pensa: nem a Cloudflare nem outro proxy no caminho veem a origem parada.
+- **Node + Express 5 (Nest 12, `@Res()`)** [O, testes de 02/10/2026]: o `close` da resposta dispara quando quem lê fecha a conexão antes do fim (o "Parar" da tela), e `writableFinished` diz se a resposta já tinha terminado. O tipo `ServerResponse` do `node:http` basta (o projeto não tem `@types/express`).
+- **Ler o fluxo no navegador:** `EventSource` só faz GET; a mensagem vai por POST, então a tela lê com `fetch` e o leitor do corpo (`response.body.getReader()`), e "Parar" é `AbortController.abort()`.
 
 ---
 

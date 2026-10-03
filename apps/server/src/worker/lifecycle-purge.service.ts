@@ -144,6 +144,22 @@ export class LifecyclePurgeService {
           returning tenant_id`,
       true,
     );
+    // Conversa com a LIA (D-A3-4): a conversa parada há 30 dias sai inteira; na que segue, saem as mensagens de
+    // mais de 30 dias. A demanda que saiu dela fica (a referência vira nula).
+    await run(
+      'conversa',
+      sql`delete from liame.conversation where id in (
+            select id from liame.conversation e where e.last_message_at < now() - interval '30 days' and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH})
+          returning tenant_id`,
+      true,
+    );
+    await run(
+      'conversa_mensagem',
+      sql`delete from liame.conversation_message where id in (
+            select id from liame.conversation_message e where e.created_at < now() - interval '30 days' and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH})
+          returning tenant_id`,
+      true,
+    );
     await run(
       'idempotencia',
       sql`delete from liame.idempotency_key where ctid in (

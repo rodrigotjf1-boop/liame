@@ -37,6 +37,9 @@ export const PERMISSIONS = [
   // Minha marca: o dossiê da marca (A3, I8, migration 0033).
   'dossie.ver',
   'dossie.editar',
+  // Conversa com a LIA e demandas (A3, I10, migration 0034).
+  'conversa.usar',
+  'demanda.abrir',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

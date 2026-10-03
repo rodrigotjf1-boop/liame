@@ -70,6 +70,8 @@ const Env = z.object({
   AI_MONTHLY_LIMIT_USD: z.coerce.number().positive().max(100_000).default(20),
   /** Chamadas de IA que uma pessoa pode disparar por hora (custo disparado de fora, security-model). */
   AI_USER_HOURLY_CALLS: z.coerce.number().int().min(1).max(10_000).default(30),
+  /** Respostas da LIA numa conversa: passou disso, a pessoa começa outra (limite por conversa, A3-9). */
+  AI_CONVERSATION_MAX_ANSWERS: z.coerce.number().int().min(1).max(200).default(20),
 });
 
 export type AppConfig = {
@@ -112,6 +114,8 @@ export type AppConfig = {
     dailyLimitUsdMicros: number;
     monthlyLimitUsdMicros: number;
     userHourlyCalls: number;
+    /** Respostas da LIA numa conversa (limite por conversa). */
+    conversationMaxAnswers: number;
   };
 };
 
@@ -229,6 +233,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       dailyLimitUsdMicros: Math.round(env.AI_DAILY_LIMIT_USD * 1_000_000),
       monthlyLimitUsdMicros: Math.round(env.AI_MONTHLY_LIMIT_USD * 1_000_000),
       userHourlyCalls: env.AI_USER_HOURLY_CALLS,
+      conversationMaxAnswers: env.AI_CONVERSATION_MAX_ANSWERS,
     },
   };
 }

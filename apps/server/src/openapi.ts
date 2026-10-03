@@ -31,7 +31,23 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('cupons', 'Cupons de campanha: os do Regem e os de outra plataforma de pedidos, ligados a campanhas, e onde cada loja recebe os pedidos online (A2.5)')
     .addTag('ia', 'Inteligência artificial: o "Explicar" dos resultados e de um aviso da Atenção, com a fonte de cada número, e o retorno da pessoa (A3)')
     .addTag('marca', 'Minha marca: o dossiê que os funcionários de IA leem, com versões, o teste de frase e as sugestões do sistema (A3)')
+    .addTag('conversa', 'Conversa com a LIA: a resposta em fluxo de eventos, conferida pelo código antes de aparecer, e as demandas que ela registra para a equipe (A3)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .build();
-  return SwaggerModule.createDocument(app, config);
+  return comFluxos(SwaggerModule.createDocument(app, config));
+}
+
+/**
+ * A rota que responde por fluxo de eventos declara `x-liame-fluxo`: a resposta 200 dela é `text/event-stream`
+ * (cada evento com o JSON do schema), e os erros, antes do fluxo, seguem em JSON como em toda rota.
+ */
+function comFluxos(doc: OpenAPIObject): OpenAPIObject {
+  for (const caminho of Object.values(doc.paths)) {
+    for (const op of Object.values(caminho) as Array<{ 'x-liame-fluxo'?: unknown; responses?: Record<string, { content?: Record<string, unknown> }> }>) {
+      const ok = op?.['x-liame-fluxo'] ? op.responses?.['200'] : undefined;
+      const json = ok?.content?.['application/json'];
+      if (ok && json) ok.content = { 'text/event-stream': json };
+    }
+  }
+  return doc;
 }

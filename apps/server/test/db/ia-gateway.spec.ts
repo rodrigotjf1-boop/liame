@@ -484,6 +484,58 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     expect(cara.mock.doGenerateCalls).toHaveLength(2);
   });
 
+  it('I10: com ferramentas e schema, a resposta final vem no formato; cada ferramenta avisa o começo e o fim; "Parar" impede a rodada seguinte', async () => {
+    const d = await dono();
+    const Formato = z.strictObject({ blocos: z.array(z.string()) });
+    const m = await modelo(roteiro(pede('ler_teste', {}, 'c1'), diz(JSON.stringify({ blocos: ['Pronto: 38 pedidos.'] }))));
+    const task = await rota(m);
+    const passos: unknown[] = [];
+    const r = await gateway().agent({
+      ...pedido(d, task),
+      schema: Formato,
+      ferramentas: [ferramentaDeTeste(async () => ({ ok: true, valor: { pedidos: '38 pedidos' } }))],
+      aoUsarFerramenta: (p) => {
+        passos.push(p);
+        // Erro em quem escuta os passos não derruba o laço.
+        throw new Error('a tela caiu');
+      },
+    });
+    expect(r).toMatchObject({ object: { blocos: ['Pronto: 38 pedidos.'] }, text: '', rodadas: 2, ferramentas: [{ name: 'ler_teste', ok: true }] });
+    expect(passos).toEqual([
+      { id: 'c1', nome: 'ler_teste', input: {}, fase: 'inicio' },
+      { id: 'c1', nome: 'ler_teste', input: {}, fase: 'fim', ok: true },
+    ]);
+    const [guardado] = await ownerQuery<{ response: unknown }>(`select response from liame.ai_exchange where usage_id = $1`, [r.usageId]);
+    expect(guardado!.response).toEqual({ object: { blocos: ['Pronto: 38 pedidos.'] }, tools: [{ name: 'ler_teste', ok: true }] });
+
+    // Parou antes de começar: nada é chamado nem registrado.
+    const parado = new AbortController();
+    parado.abort();
+    const antes = (await usos(d.tenantId, task)).length;
+    expect(await falha(gateway().agent({ ...pedido(d, task), ferramentas: [], parar: parado.signal }))).toBe('parada');
+    expect(await usos(d.tenantId, task)).toHaveLength(antes);
+
+    // Parou durante a primeira rodada: a ferramenta pedida não roda, a rodada seguinte não começa e o uso fica registrado.
+    const meio = new AbortController();
+    const rodou = vi.fn(async () => ({ ok: true as const, valor: { ok: true } }));
+    const insistente = await modelo(
+      new MockLanguageModelV4({
+        doGenerate: async () => {
+          meio.abort();
+          return pede('ler_teste', {}, 'c2');
+        },
+      }),
+    );
+    const outra = await rota(insistente);
+    expect(await falha(gateway().agent({ ...pedido(d, outra), ferramentas: [ferramentaDeTeste(rodou)], parar: meio.signal }))).toBe('parada');
+    expect(rodou).not.toHaveBeenCalled();
+    expect(insistente.mock.doGenerateCalls).toHaveLength(1);
+    const linhas = await usos(d.tenantId, outra);
+    expect(linhas.map((u) => u.outcome)).toEqual(['ok']);
+    const [parada] = await ownerQuery<{ response: { stopped: string } }>(`select response from liame.ai_exchange where usage_id = $1`, [linhas[0]!.id]);
+    expect(parada!.response).toMatchObject({ stopped: 'pessoa' });
+  });
+
   it('o conteúdo sai em 30 dias e fica só o registro técnico do uso', async () => {
     const d = await dono();
     const m = await modelo(responde('ok'));
