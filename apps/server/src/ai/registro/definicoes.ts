@@ -5,6 +5,7 @@ import { canonicalJson, sha256 } from '../../audit/audit.js';
 import { PROPOR_CUPOM } from '../conversa/cupom.defs.js';
 import { ABRIR_DEMANDA } from '../conversa/demanda.defs.js';
 import { LIA, PROMPT_CONVERSA_LIA } from '../conversa/prompt.js';
+import { ESTRATEGISTA, PROMPT_ESTRATEGISTA } from '../estrategista/prompt.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
 import { LEITURAS } from './leituras.defs.js';
 
@@ -51,8 +52,8 @@ export interface FuncionarioDef {
  * Os prompts e os funcionários entram com o primeiro uso real de cada um. Estar aqui não põe ninguém para
  * trabalhar: sem rota de modelo ativa para a tarefa (publicada só depois do eval, I3), a tela usa o texto sem IA.
  */
-export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA];
-export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA];
+export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA];
+export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA];
 
 /**
  * Todas as ferramentas: as de escrita em plataforma (Action Service), as de leitura dos funcionários de IA e as

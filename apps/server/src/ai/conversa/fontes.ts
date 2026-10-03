@@ -22,7 +22,7 @@ export interface OrigemDosNumeros {
   ordem: number;
 }
 
-interface Lugar {
+export interface Lugar {
   descricao: string;
   ordem: number;
   /** Os nomes da empresa no caminho (a campanha, a conta, a loja, o cupom): é o que decide se o lugar serve para a frase. */
@@ -153,16 +153,18 @@ export const VOZES: Record<string, { name: string; role: string }> = {
 };
 
 /**
- * Os blocos da resposta (e a reunião de decisão, quando houver) com cada número marcado e a lista "De onde vêm
- * os números", na ordem da leitura. O mesmo valor com as mesmas fontes, escrito duas vezes, aponta para a mesma
- * linha. Número de nome da empresa ou colado numa letra ("SMASH10") fica como texto: a conferência vale para
- * ele, só não ganha fonte.
+ * Um marcador de números: cada texto passado por `marcar` sai com os números marcados, e `numbers` acumula a lista
+ * "De onde vêm os números", na ordem em que os textos foram marcados. O mesmo valor com as mesmas fontes, escrito
+ * duas vezes, aponta para a mesma linha. Número de nome da empresa ou colado numa letra ("SMASH10") fica como
+ * texto: a conferência vale para ele, só não ganha fonte. A Conversa e os planos do Estrategista usam o mesmo;
+ * `comFonte` marca um valor inteiro com a fonte que o código já sabe (a verba de hoje de um plano), e `semLugar` é o
+ * que vai na fonte do número que não está em lugar nenhum.
  */
-export function marcarResposta(
-  r: RespostaDaLia,
+export function criarMarcador(
   lugares: Map<string, Lugar[]>,
   nomes: string[],
-): { blocks: ConversationBlock[]; numbers: ExplanationNumber[]; meeting: ConversationMeeting | null } {
+  semLugar = SEM_LUGAR,
+): { marcar: (texto: string) => ConversationBlock['text']; comFonte: (valor: string, sources: string[]) => ConversationBlock['text']; numbers: ExplanationNumber[] } {
   // Sem lugar com a mesma medida ("960 reais", sem o "R$"), vale o valor em qualquer medida.
   const emQualquerMedida = new Map<string, Lugar[]>();
   for (const [chave, l] of lugares) {
@@ -173,6 +175,15 @@ export function marcarResposta(
   }
   const numbers: ExplanationNumber[] = [];
   const posicao = new Map<string, number>();
+  const linha = (chave: string, valor: string, sources: string[]): number => {
+    let n = posicao.get(chave);
+    if (n === undefined) {
+      n = numbers.length;
+      posicao.set(chave, n);
+      numbers.push({ value: valor, sources });
+    }
+    return n;
+  };
   const marcar = (texto: string): ConversationBlock['text'] => {
     const saida: ConversationBlock['text'] = [];
     const faixas = faixasDosNomes(texto, nomes);
@@ -190,20 +201,27 @@ export function marcarResposta(
       if (v.inicio > fim) saida.push({ text: texto.slice(fim, v.inicio), number: null });
       const valor = texto.slice(v.inicio, v.fim);
       const todos = lugares.get(`${v.medida}|${v.forma}`) ?? emQualquerMedida.get(v.forma);
-      const sources = todos?.length ? daFrase(todos).slice(0, FONTES_POR_NUMERO).map((l) => l.descricao) : [SEM_LUGAR];
-      const chave = `${v.medida}|${v.forma}|${sources.join('|')}`;
-      let n = posicao.get(chave);
-      if (n === undefined) {
-        n = numbers.length;
-        posicao.set(chave, n);
-        numbers.push({ value: valor, sources });
-      }
-      saida.push({ text: valor, number: n });
+      const sources = todos?.length ? daFrase(todos).slice(0, FONTES_POR_NUMERO).map((l) => l.descricao) : [semLugar];
+      saida.push({ text: valor, number: linha(`${v.medida}|${v.forma}|${sources.join('|')}`, valor, sources) });
       fim = v.fim;
     }
     if (fim < texto.length) saida.push({ text: texto.slice(fim), number: null });
     return saida;
   };
+  const comFonte = (valor: string, sources: string[]): ConversationBlock['text'] => [{ text: valor, number: linha(`fixo|${valor}|${sources.join('|')}`, valor, sources) }];
+  return { marcar, comFonte, numbers };
+}
+
+/**
+ * Os blocos da resposta (e a reunião de decisão, quando houver) com cada número marcado e a lista "De onde vêm
+ * os números", na ordem da leitura.
+ */
+export function marcarResposta(
+  r: RespostaDaLia,
+  lugares: Map<string, Lugar[]>,
+  nomes: string[],
+): { blocks: ConversationBlock[]; numbers: ExplanationNumber[]; meeting: ConversationMeeting | null } {
+  const { marcar, numbers } = criarMarcador(lugares, nomes);
   // A ordem das chamadas é a da leitura (os blocos, depois a reunião): é ela que numera a lista.
   const blocks = r.blocos.map((b) => ({ kind: TIPO[b.tipo] ?? 'paragrafo', text: marcar(b.texto), risk: b.tipo === 'risco' ? b.risco : null }));
   const reuniao = r.reuniao;

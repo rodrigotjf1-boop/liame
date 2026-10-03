@@ -196,6 +196,26 @@ export {
   SupportContact,
 } from './conversa.js';
 export {
+  ApprovePlanRequest,
+  EditPlanRequest,
+  NinetyDaysPlanContent,
+  OfferPlanContent,
+  PLAN_KINDS,
+  PLAN_REJECT_REASONS,
+  PlanBudget,
+  PlanContent,
+  PlanDecision,
+  PlanKind,
+  PlanListQuery,
+  PlanListResponse,
+  PlanMarkedText,
+  PlanResponse,
+  PlanSummary,
+  ReanalyzePlanRequest,
+  RejectPlanRequest,
+  WeekPlanContent,
+} from './planos.js';
+export {
   CouponCampaign,
   CouponCode,
   CouponItem,

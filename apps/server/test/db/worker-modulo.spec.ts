@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { ExplicarService } from '../../src/ai/explicar/explicar.service.js';
+import { EstrategistaLoop } from '../../src/worker/estrategista-loop.js';
+import { EstrategistaService } from '../../src/worker/estrategista.service.js';
 import { RevisaoSemanalLoop } from '../../src/worker/revisao-semanal-loop.js';
 import { RevisaoSemanalService } from '../../src/worker/revisao-semanal.service.js';
 import { SombraLoop } from '../../src/worker/sombra-loop.js';
@@ -12,13 +14,15 @@ import { hasDb } from './env.js';
 // `onApplicationBootstrap` não é chamado.
 
 describe.skipIf(!hasDb)('módulo do worker: todas as dependências se resolvem', () => {
-  it('monta os provedores, com a revisão da semana e o que ela usa (resultados, avisos, Explicar e o gateway de IA)', async () => {
+  it('monta os provedores, com a revisão da semana, a fila do Estrategista e o que elas usam (resultados, avisos, leituras da IA e o gateway)', async () => {
     const modulo = await Test.createTestingModule({ imports: [WorkerModule] }).compile();
     try {
       expect(modulo.get(RevisaoSemanalLoop)).toBeInstanceOf(RevisaoSemanalLoop);
       expect(modulo.get(RevisaoSemanalService)).toBeInstanceOf(RevisaoSemanalService);
       expect(modulo.get(ExplicarService)).toBeInstanceOf(ExplicarService);
       expect(modulo.get(SombraLoop)).toBeInstanceOf(SombraLoop);
+      expect(modulo.get(EstrategistaLoop)).toBeInstanceOf(EstrategistaLoop);
+      expect(modulo.get(EstrategistaService)).toBeInstanceOf(EstrategistaService);
     } finally {
       await modulo.close();
     }

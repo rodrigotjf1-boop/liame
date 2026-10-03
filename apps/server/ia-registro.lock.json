@@ -50,6 +50,10 @@
       "version": 2,
       "hash": "64acf11cb881d88e7c11cd40e69a55ef1dcd3923489ac3aac500ce54b45baf5b"
     },
+    "estrategista.plano": {
+      "version": 1,
+      "hash": "c0d96e6c9b16276708eee9823a705bdb4e7445e3e60d3f0d3281e3cbdf76c2ac"
+    },
     "explicar.resultados": {
       "version": 2,
       "hash": "daa0520c360446f1c41aab0795c8eff32ef405e4a6d71e434e0d407772ca06c4"
@@ -59,6 +63,10 @@
     "analista": {
       "version": 1,
       "hash": "c0dd5badc7b8b72166b98eb81b70fd93d399e8da98d5c71b9d7fdc1609bc4b24"
+    },
+    "estrategista": {
+      "version": 1,
+      "hash": "7bb35609a8adce156ed0b9f98678cddf482ae20e712e9523dd00875700a4ac4a"
     },
     "lia": {
       "version": 2,

@@ -1,6 +1,12 @@
 import { Module } from '@nestjs/common';
+import { ActionService } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
 import { EscritaRegem } from '../actions/escrita-regem.provider.js';
+import { FerramentasDeLeitura } from '../ai/registro/leituras.js';
+import { MfaService } from '../auth/mfa.service.js';
+import { RateLimitService } from '../auth/rate-limit.service.js';
+import { CouponsService } from '../coupons/coupons.service.js';
+import { PolicyService } from '../policy/policy.service.js';
 import { APP_CONFIG, type AppConfig, loadConfig } from '../config.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -25,6 +31,8 @@ import { SombraLoop } from './sombra-loop.js';
 import { SombraService } from './sombra.service.js';
 import { eventoDoRegem, VendasLoop } from './vendas-loop.js';
 import { ConversasLoop } from './conversas-loop.js';
+import { EstrategistaLoop } from './estrategista-loop.js';
+import { EstrategistaService } from './estrategista.service.js';
 import { VigiaService } from './vigia.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
@@ -71,6 +79,16 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ExplicarService,
     RevisaoSemanalService,
     RevisaoSemanalLoop,
+    // Estrategista (A3, I11): as leituras da IA pelos mesmos serviços das rotas (os cupons pedem o Action Service, que
+    // pede a política e o segundo fator; nada disso escreve aqui) e a fila das demandas e das novas análises.
+    PolicyService,
+    RateLimitService,
+    MfaService,
+    ActionService,
+    CouponsService,
+    FerramentasDeLeitura,
+    EstrategistaService,
+    EstrategistaLoop,
     VigiaService,
     EventsLoopService,
     QueueService,

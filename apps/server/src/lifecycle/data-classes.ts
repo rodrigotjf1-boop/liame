@@ -126,4 +126,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   conversation: { class: 'PERSONAL', retention: '30 dias depois da última mensagem', purge: { job: 'conversa', days: 30 } },
   conversation_message: { class: 'PERSONAL', retention: '30 dias', purge: { job: 'conversa_mensagem', days: 30 } },
   demand: { class: 'PERSONAL', retention: 'com a marca (fica depois que a conversa some)' },
+  // Planos do Estrategista (A3, I11): o plano, as versões (o que a IA propôs e o que a pessoa editou, com a fonte de cada
+  // número; sem cliente da loja) e as decisões (quem decidiu e o motivo). O calendário comercial é do produto.
+  plan: { class: 'PERSONAL', retention: 'com a marca (quem pediu fica ligado ao plano)' },
+  plan_version: { class: 'PERSONAL', retention: 'com o plano (as versões não se apagam enquanto ele existir)' },
+  plan_decision: { class: 'PERSONAL', retention: 'com o plano (quem decidiu e o motivo)' },
+  commercial_date: { class: 'PUBLIC', retention: 'do produto (feriados nacionais e datas do varejo, com a fonte)' },
 };

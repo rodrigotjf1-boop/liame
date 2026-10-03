@@ -646,6 +646,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 03/10/2026 | §16.5: a **tabela do calendário comercial** que a I11 criou (31 datas, de 12/10/2026 a 31/12/2027), com as datas do varejo de 2027 calculadas pela regra de cada uma e conferidas por script, e o lembrete de renovar a semente antes de dezembro de 2027. |
 | 02/10/2026 | §15.2 nova: **resposta em fluxo de eventos** para a Conversa (I10): os limites de conexão da Cloudflare, conferidos na documentação oficial (leitura da origem parada: 125 s, erro 524; muda só no Enterprise), e o "Parar" (fechar a leitura) no Node, medido nos testes. Daí a linha a cada 15 s no fluxo. |
 | 02/10/2026 | §16.5 nova: **calendário comercial** (feriados nacionais pela Lei 662/1949 com a redação da Lei 10.607/2002, pela Lei 6.802/1980 e pela Lei 14.759/2023; Black Friday de 2026 em 27/11), conferido antes do protótipo P8 (`mockups/prototipo-resumo.html`): as datas do Estrategista vêm de uma tabela do sistema, com a fonte. |
 | 02/10/2026 | §16.1: **equipe, prontidão e autonomia** (HubSpot Agent Hub, Salesforce Agentforce, aplicar recomendações automaticamente do Google Ads, Intercom Fin), pesquisado antes do protótipo P7 (`mockups/prototipo-equipe.html`): autonomia por tipo de ação, ligada por uma pessoa e desligável, com histórico; acerto e custo por agente. |
@@ -1079,6 +1080,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Black Friday de 2026: 27/11** (a sexta depois do Dia de Ação de Graças dos EUA), e a Cyber Monday em 30/11 **[S]**.
 - **Feriado estadual e municipal** muda de lugar para lugar: entra pelo endereço da loja, quando houver, e não pela tabela nacional **[NC]**.
 - **Consequência para a I11:** as datas que o Estrategista usa vêm de uma **tabela do sistema** (feriados nacionais e datas do varejo, cada uma com a fonte), nunca da memória do modelo; o modelo só escolhe quais datas usar e o que fazer em cada uma.
+- **Na tabela (I11, 03/10/2026):** `commercial_date` (migration 0035) tem 31 datas, de 12/10/2026 a 31/12/2027. As datas do varejo de 2027 foram calculadas pela regra de cada uma e conferidas por script **[S]**: Carnaval em 09/02 (a terça 47 dias antes da Páscoa), Páscoa em 28/03, Dia das Mães em 09/05 (segundo domingo de maio), Dia dos Pais em 08/08 (segundo domingo de agosto), Black Friday em 26/11 e Cyber Monday em 29/11. Carnaval não é feriado nacional: entra como data do varejo. **Renovar a semente antes de dezembro de 2027** (migration nova com 2028), ou o plano de 90 dias fica sem datas.
 
 ---
 
