@@ -34,6 +34,20 @@ export function dinheiroDoPlano(c: PlanContent): string | null {
 /** O hash do conteúdo, em JSON canônico (o jsonb reordena as chaves): é o que a aprovação assina. */
 export const hashDoConteudo = (c: PlanContent): string => sha256(canonicalJson(c));
 
+/** Os códigos dos cupons ativos que o Estrategista leu (só eles podem entrar numa oferta). A geração e o eval usam a mesma. */
+export function cuponsAtivos(leituras: Array<{ ferramenta: string; valor: unknown }>): string[] {
+  const codigos = new Set<string>();
+  for (const l of leituras) {
+    if (l.ferramenta !== 'cupons_campanha') continue;
+    const cupons = (l.valor as { cupons?: unknown })?.cupons;
+    if (!Array.isArray(cupons)) continue;
+    for (const c of cupons as Array<Record<string, unknown>>) {
+      if (c && typeof c.codigo === 'string' && c.situacao === 'ativo') codigos.add(c.codigo.toUpperCase());
+    }
+  }
+  return [...codigos];
+}
+
 /** O título do plano que a rotina gera sem demanda, e o de reserva quando a demanda não tem um que sirva. */
 export const TITULO_DO_TIPO: Record<PlanKind, string> = { noventa_dias: 'Plano de 90 dias', pauta: 'Pauta da semana', oferta: 'Oferta' };
 

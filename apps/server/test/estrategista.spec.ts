@@ -2,11 +2,10 @@ import { type ClosedLoopResponse, PlanContent } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
 import { indiceDasOrigens } from '../src/ai/conversa/fontes.js';
 import { contextoDoPlano, type DadosDoPlano, fontesDaVerba, mensagemDoPlano, mesesDoPlano, origensDoPlano, permitidoNoContexto } from '../src/ai/estrategista/contexto.js';
-import { contasDaVerba, dinheiroDoPlano, hashDoConteudo, marcarPlano, propostaDoPlano, textosDoPlano, verbaDeHoje } from '../src/ai/estrategista/plano.js';
+import { contasDaVerba, cuponsAtivos, dinheiroDoPlano, hashDoConteudo, marcarPlano, propostaDoPlano, textosDoPlano, verbaDeHoje } from '../src/ai/estrategista/plano.js';
 import { ESTRATEGISTA, PROMPT_ESTRATEGISTA, TAREFA_ESTRATEGISTA } from '../src/ai/estrategista/prompt.js';
 import { conferirEdicao, conferirPlano, conteudoDaResposta, type PermitidosNoPlano, respostaDoConteudo } from '../src/ai/estrategista/resposta.js';
 import { conferirRegistro, registroAtual } from '../src/ai/registro/definicoes.js';
-import { cuponsAtivos } from '../src/worker/estrategista.service.js';
 
 // O Estrategista (A3, I11): o que o código decide sem banco nem modelo. O formato da resposta e o mapeamento para o
 // contrato, a verba de hoje (calculada aqui), a conferência do plano (dias, calendário, cupom, Compliance, números),
