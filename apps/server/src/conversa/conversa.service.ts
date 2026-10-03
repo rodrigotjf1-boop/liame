@@ -23,6 +23,7 @@ import { contextoDoPedido, contextoPermitido, historicoParaOModelo, querFalarCom
 import { conferirResposta, RespostaDaLia } from '../ai/conversa/resposta.js';
 import { AiError, type AiMessage, AiGateway, type FerramentaIa, type PassoDaFerramenta } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
+import { registrarRecusa } from '../ai/recusas.js';
 import { dia } from '../ai/registro/formatos.js';
 import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import { FerramentasDeLeitura } from '../ai/registro/leituras.js';
@@ -34,7 +35,7 @@ import { CouponsService } from '../coupons/coupons.service.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { dossieParaOModelo, proibidasDaMarca } from '../marca/marca.service.js';
-import { conferirTexto } from '../policy/texto.js';
+import { conferirTexto, REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
 import { ATENDIMENTO } from '../suporte.js';
@@ -324,6 +325,22 @@ export class ConversaService {
     io.enviar(evento('fim', { conversation: gravado.conversa }));
   }
 
+  /** A resposta que a conferência recusou entra na contagem de Sua equipe, sem o texto (D-A3-15). */
+  private async anotarRecusa(t: TurnoPreparado, usageId: string, kind: string, regras?: readonly string[]): Promise<void> {
+    if (!this.database) return;
+    await registrarRecusa(this.database, {
+      tenantId: t.quem.tenantId,
+      brandId: t.marca.id,
+      userId: t.quem.userId,
+      usageId,
+      member: LIA.key,
+      workflow: WORKFLOW,
+      kind,
+      rules: regras,
+      rulesVersion: regras?.length ? REGRAS_DE_TEXTO_VERSAO : null,
+    });
+  }
+
   private async turno(t: TurnoPreparado, io: { enviar: (e: ConversationStreamEvent) => void; parar: AbortSignal }): Promise<Final> {
     const aviso = (notice: string, extra: Record<string, unknown> = {}): Final => ({ role: 'sistema', status: 'ok', content: { notice, ...extra }, usageId: null });
     // O que se decide por regra, sem chamar a IA.
@@ -385,6 +402,7 @@ export class ConversaService {
     const resposta = RespostaDaLia.safeParse(r.object);
     if (!resposta.success) {
       this.logger.warn(`conversa: resposta da LIA fora do formato; uso ${r.usageId}`);
+      await this.anotarRecusa(t, r.usageId, 'formato');
       return aviso('recusada');
     }
     const velhas = leituras.filter((l) => foraDoDia(l.ferramenta, l.valor).length > 0);
@@ -402,6 +420,7 @@ export class ConversaService {
     if (recusa) {
       // O que foi recusado e por quê fica no log (números não são dado pessoal) e no conteúdo guardado da chamada.
       this.logger.warn(`conversa: resposta da LIA recusada (${recusa.recusa}${recusa.detalhe.length ? `: ${recusa.detalhe.slice(0, 8).join(' | ')}` : ''}); uso ${r.usageId}`);
+      await this.anotarRecusa(t, r.usageId, recusa.recusa, recusa.regras);
       if (recusa.recusa === 'dado_velho') return aviso('dado_velho', { stale_sources: atrasadas });
       return aviso('recusada');
     }

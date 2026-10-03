@@ -101,7 +101,7 @@ Respondemos em até 15 dias. Se algum dado precisar ser guardado por obrigação
 
 7.2. Só contratamos fornecedores de IA que **não usam os dados enviados para treinar os modelos deles**.
 
-7.3. O conteúdo das conversas com os modelos fica guardado por **30 dias**, para investigar erros e abusos; depois, só informações técnicas (horário, custo, versão do modelo), sem o conteúdo.
+7.3. O conteúdo das conversas com os modelos fica guardado por **30 dias**, para investigar erros e abusos; depois, só informações técnicas (horário, custo, versão do modelo), sem o conteúdo. Quando a conferência do Liame não deixa um texto da IA aparecer (por uma regra de texto, pelos números ou pelo formato), fica guardada **só a contagem**: qual funcionário escreveu, quando e qual regra barrou, **sem o texto** e sem ligar a recusa a uma pessoa. É com ela que a tela Sua equipe mostra quantos textos o Compliance barrou.
 
 7.4. A IA sugere; **ações relevantes dependem de aprovação humana**, dentro dos limites que a empresa cliente define.
 
