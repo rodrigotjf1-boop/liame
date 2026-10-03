@@ -416,6 +416,15 @@ function aplicarNaSecao(c: BrandDossierContent, secao: DossierSection, itens: Br
       return { ...c, seasonality: { items: aplicarItens(c.seasonality.items, itens) } };
     case 'voz':
       return { ...c, voice: { ...c.voice, rules: aplicarItens(c.voice.rules, itens) } };
+    case 'concorrentes': {
+      // O concorrente guarda o porquê junto (de onde veio a informação): o da sugestão, quando é dele que nasce.
+      const textos = aplicarItens(
+        c.competitors.items.map((x) => x.text),
+        itens,
+      );
+      const motivo = new Map([...c.competitors.items.map((x) => [x.text, x.why] as const), ...itens.map((i) => [i.text, i.why.slice(0, 200)] as const)]);
+      return { ...c, competitors: { items: textos.map((text) => ({ text, why: motivo.get(text) ?? '' })) } };
+    }
     default:
       // As outras partes ainda não recebem sugestão (a LIA e o Pesquisador chegam com a IA).
       throw new AppProblem(422, 'sugestao-sem-aplicacao', 'Esta sugestão não se aplica', `A parte "${secao}" ainda não recebe sugestão.`);

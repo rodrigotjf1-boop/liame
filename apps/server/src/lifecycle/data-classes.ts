@@ -132,4 +132,7 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   plan_version: { class: 'PERSONAL', retention: 'com o plano (as versões não se apagam enquanto ele existir)' },
   plan_decision: { class: 'PERSONAL', retention: 'com o plano (quem decidiu e o motivo)' },
   commercial_date: { class: 'PUBLIC', retention: 'do produto (feriados nacionais e datas do varejo, com a fonte)' },
+  // Pesquisador (A3, I12): o pedido de leitura de uma página pública (quem pediu, o endereço, a situação) e os rótulos
+  // conferidos (produtos, preços, ofertas). A página não é guardada; o dado pessoal sai antes de ir ao modelo.
+  research_request: { class: 'PERSONAL', retention: 'com a marca (o pedido e os rótulos; a página não fica)' },
 };

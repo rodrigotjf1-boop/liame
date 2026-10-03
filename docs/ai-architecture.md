@@ -142,6 +142,13 @@ Untrusted Reader (modelo sem NENHUMA ferramenta de escrita ou saída)
 
 Nunca concatenar texto externo ao system prompt. Remover caracteres invisíveis e markup e nunca devolver links montados. Os evals incluem ataques de injeção.
 
+**No código (I12, 03/10/2026): o Pesquisador.** A pessoa informa uma página (o site ou o cardápio da marca, a página de um concorrente; `POST /v1/brand-dossier/research`), e a fila do worker a lê:
+
+- **Antes do modelo, o código:** respeita o robots.txt pelo nome `Liame` (RFC 9309; 5xx é "não sabe" e tenta mais tarde); lê com o cliente seguro (`events/safe-http.ts`: só https, nenhum endereço da rede interna na hora da conexão, redirecionamento seguido à mão e conferido a cada passo, 2 MB descomprimidos, 15 s); tira o texto numa varredura linear (sem script, estilo, comentário, link nem caractere invisível); recusa a página sem texto, a que não é página e a que tem texto que tenta dar ordens a uma IA (regra), sem chamar o modelo.
+- **O leitor em quarentena:** o funcionário `pesquisador` não tem ferramenta nenhuma; o texto da página vai na mensagem, entre marcas, nunca nas instruções; ele devolve só rótulos no schema (o negócio, produtos com preço, ofertas, diferenciais e se achou ordens na página). Se ele achar ordens, nada da página é usado.
+- **Depois do modelo, o código:** cada rótulo só fica se está escrito na página (sem diferença de acento ou espaço), sem dado pessoal, sem link, sem regra do Compliance e com os números da página. O que sobra vira sugestão em Minha marca (produtos e ofertas da marca; o concorrente, na página de um concorrente), que uma pessoa confere. Mesmo enganado, o modelo só consegue escolher trechos da própria página, e nada entra no dossiê sem a pessoa.
+- **A página não é guardada:** ficam o pedido, a situação e os rótulos conferidos (`research_request`); o texto enviado ao modelo segue os 30 dias de `ai_exchange`.
+
 ## 7. Conhecimento plugável
 
 O dossiê da marca é **estruturado** (contrato `BrandDossierContent`, I8): `identity` (o que é, para quem, o que diferencia, desde), `voice`, `products`, `offers`, `proof` (as informadas; as do sistema são calculadas na hora), `forbidden` (o que a marca nunca diz), `competitors`, `region` e `seasonality`; o público entrou em `identity` e as políticas são as do Policy Engine. Fica em versões imutáveis (`brand_dossier_version`). A versão textual para o modelo é gerada sob demanda, em ordem estável e com hash (bom para cache de prompt), sem nome de pessoa. "O que a marca nunca diz" vale no Compliance junto com as regras da Liame. A base de conhecimento da agência (as skills MIT/Apache adaptadas para Brasil, WhatsApp e LGPD) é versionada na distribuição, com NOTICE de licença.
