@@ -646,6 +646,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 02/10/2026 | §16.5 nova: **calendário comercial** (feriados nacionais pela Lei 662/1949 com a redação da Lei 10.607/2002, pela Lei 6.802/1980 e pela Lei 14.759/2023; Black Friday de 2026 em 27/11), conferido antes do protótipo P8 (`mockups/prototipo-resumo.html`): as datas do Estrategista vêm de uma tabela do sistema, com a fonte. |
 | 02/10/2026 | §16.1: **equipe, prontidão e autonomia** (HubSpot Agent Hub, Salesforce Agentforce, aplicar recomendações automaticamente do Google Ads, Intercom Fin), pesquisado antes do protótipo P7 (`mockups/prototipo-equipe.html`): autonomia por tipo de ação, ligada por uma pessoa e desligável, com histórico; acerto e custo por agente. |
 | 02/10/2026 | §16.4 (nova): **dossiê da marca** nos produtos de marketing (HubSpot Brand Voice e Brand Knowledge, Klaviyo, Jasper IQ, Canva), pesquisado antes do protótipo P6 (`mockups/prototipo-marca.html`): voz separada dos fatos e das regras, a IA sugere a partir do que já existe e a pessoa confere, versões guardadas. |
 | 02/10/2026 | §16.1: **conversa com o assistente** (HubSpot Breeze Assistant, Shopify Sidekick e o admin novo de 24/09/2026, Google Ads Advisor, Meta AI Business Assistant, Intercom Fin, Triple Whale Moby), pesquisada antes do protótipo P5 (`mockups/prototipo-conversa.html`): painel ao lado do trabalho, fonte em toda resposta, revisão por uma pessoa antes de aplicar, marca de IA em cada mensagem, caminho para uma pessoa e limite dito na tela. |
@@ -752,6 +753,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - help.klaviyo.com/hc/en-us/articles/35873068949147 (06/08/2025) · jasper.ai/blog · canva.com/help/brand-voice (secundárias)
   - support.google.com/google-ads/answer/10276359 (aplicar recomendações automaticamente) · hubspot.com/spotlight (Agent Hub)
   - salesforce.com/news/press-releases/2025/06/23/agentforce-3-announcement · fin.ai (secundárias para métricas)
+  - planalto.gov.br/ccivil_03/leis/2002/l10607.htm · planalto.gov.br/ccivil_03/_ato2023-2026/2023/lei/l14759.htm (feriados nacionais)
+  - blackfriday.com.br (data da Black Friday de 2026, secundária)
 
 ---
 
@@ -1056,6 +1059,16 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Jasper IQ** **[S]**: voz, guia de estilo (com as "palavras proibidas"), base de fatos e públicos num mesmo contexto que toda geração lê.
 - **Canva** **[S]**: voz da marca no Brand Kit (missão, tom), usada pelo gerador de texto ("gerar nesta voz").
 - **Consequência para o P6:** separar **como fala** (voz, com exemplos e regras) dos **fatos** (produtos, ofertas, provas, região, datas) e das **regras** (o que não pode dizer); a IA **sugere a partir do que já existe** e a pessoa confere antes de valer; ao contrário da HubSpot, **guardar as versões** e permitir voltar a uma anterior, como o plano pede.
+
+### 16.5 Calendário comercial do Estrategista
+
+*Conferido em 02/10/2026, antes do protótipo P8 (`mockups/prototipo-resumo.html`).*
+
+- **Feriados nacionais** **[O, via busca]**: Lei 662/1949 com a redação da Lei 10.607/2002 (1º/1, 21/4, 1º/5, 7/9, **2/11**, **15/11** e **25/12**); Lei 6.802/1980 (**12/10**, Nossa Senhora Aparecida, o mesmo dia do Dia das Crianças no varejo); Lei 14.759, de 21/12/2023 (**20/11**, Dia Nacional de Zumbi e da Consciência Negra).
+- **Em 2026** (pelo calendário): 12/10 é segunda; 2/11, segunda; 15/11, domingo; 20/11, sexta; 25/12, sexta.
+- **Black Friday de 2026: 27/11** (a sexta depois do Dia de Ação de Graças dos EUA), e a Cyber Monday em 30/11 **[S]**.
+- **Feriado estadual e municipal** muda de lugar para lugar: entra pelo endereço da loja, quando houver, e não pela tabela nacional **[NC]**.
+- **Consequência para a I11:** as datas que o Estrategista usa vêm de uma **tabela do sistema** (feriados nacionais e datas do varejo, cada uma com a fonte), nunca da memória do modelo; o modelo só escolhe quais datas usar e o que fazer em cada uma.
 
 ---
 
