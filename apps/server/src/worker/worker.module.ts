@@ -34,6 +34,8 @@ import { ConversasLoop } from './conversas-loop.js';
 import { EstrategistaAgenda } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { EstrategistaService } from './estrategista.service.js';
+import { PesquisaLoop } from './pesquisa-loop.js';
+import { PesquisadorService } from './pesquisa.service.js';
 import { VigiaService } from './vigia.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
@@ -92,6 +94,9 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     EstrategistaLoop,
     // Os planos agendados (I11b): a pauta de segunda-feira e o plano de 90 dias a cada 12 semanas, como demandas da rotina.
     EstrategistaAgenda,
+    // Pesquisador (A3, I12): lê as páginas que a empresa informa (leitor em quarentena) e sugere para Minha marca.
+    PesquisadorService,
+    PesquisaLoop,
     VigiaService,
     EventsLoopService,
     QueueService,

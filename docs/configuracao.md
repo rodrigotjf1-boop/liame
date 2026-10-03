@@ -180,6 +180,7 @@ Devoluções permanentes e reclamações: a lista de supressão da conta vem lig
 | Variável | Para quê | Padrão |
 | --- | --- | --- |
 | `WEBHOOK_ALLOW_PRIVATE_NETWORK` | Webhook de saída para rede privada/loopback. Só desenvolvimento e testes; `true` é recusado em produção (SSRF) | `false` |
+| `PESQUISA_ALLOW_PRIVATE_NETWORK` | Página que o Pesquisador lê (I12) em rede privada/loopback ou por `http`. Só desenvolvimento e testes; `true` é recusado em produção (SSRF). Não precisa estar no EasyPanel | `false` |
 | `INBOX_SECRETS` **S** | Provedores da inbox e seus segredos Standard Webhooks: `regem:whsec_...,regemcast:whsec_...`. Provedor fora da lista recebe 404 | vazio |
 
 ## Auditoria e âncora (ADR-011, security-model §7)

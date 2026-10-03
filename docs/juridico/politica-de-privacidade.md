@@ -32,7 +32,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 | --- | --- |
 | **Cadastro:** nome, e-mail, telefone, cargo; dados da empresa (razão social, CNPJ, endereço) | Você |
 | **Acesso e segurança:** senha (guardada só como resumo criptográfico), segundo fator, sessões, endereço IP, data e hora de acesso, aparelho e navegador | Gerados pelo uso |
-| **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê; e, quando a IA for ligada, as avaliações que você fizer das explicações dela, os pedidos que a LIA registrar para a equipe a seu pedido e as suas decisões sobre os planos do Estrategista | Gerados pelo uso |
+| **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê; e, quando a IA for ligada, as avaliações que você fizer das explicações dela, os pedidos que a LIA registrar para a equipe a seu pedido, as suas decisões sobre os planos do Estrategista e os endereços de página que você pedir para o Pesquisador ler | Gerados pelo uso |
 | **Pessoas convidadas:** nome, e-mail e nível de acesso de quem o Dono convidou | O Dono da conta |
 | **Cobrança:** plano, valores, notas fiscais e status de pagamento. Os dados do cartão são tratados pelo processador de pagamento; o Liame não os guarda | Você e o processador de pagamento |
 | **Atendimento:** mensagens trocadas com a LIA e com o suporte, inclusive pelo WhatsApp | Você |
@@ -111,6 +111,8 @@ Respondemos em até 15 dias. Se algum dado precisar ser guardado por obrigação
 
 7.7. **Planos do Estrategista.** Quando a LIA registra um pedido de promoção, de pauta da semana ou de plano para os próximos meses, o Estrategista (um funcionário de IA) monta um plano com os números da empresa, lidos como a rotina do sistema, e o manda para Aprovações. Com a IA ligada, ele também monta, por conta própria, a pauta da semana toda segunda-feira e, a cada 12 semanas, o plano dos 90 dias seguintes; esses planos não têm uma pessoa como autora do pedido. O plano é uma proposta: **nada é executado pelo Liame**, e ele só vale com a decisão de uma pessoa da empresa com permissão. Aprovar pede o código do app autenticador. O plano, as versões (inclusive a que alguém editar) e as decisões (quem aprovou, recusou ou pediu uma nova análise, com o motivo e o comentário) ficam com a empresa. O comentário e o pedido de nova análise passam pela mesma remoção de dados pessoais do item 7.1 antes de serem guardados e enviados ao modelo.
 
+7.8. **Páginas que o Pesquisador lê.** Quando alguém da empresa com permissão informa o endereço de uma página pública (o site ou o cardápio da marca, ou a página de um concorrente), o Liame a lê para tirar dela produtos, preços, ofertas e o que o negócio diz de si, e manda isso para Minha marca como sugestão, que uma pessoa confere antes de usar. O Liame se identifica como `Liame` e respeita o arquivo robots.txt do site; não lê páginas fechadas por senha nem endereços da rede interna. **A página não fica guardada**: ficam o pedido (quem pediu, o endereço, a situação) e os rótulos que passaram na conferência. Antes de ir ao modelo, o texto da página passa pela remoção de dados pessoais do item 7.1, e o que vai e volta do modelo segue o prazo do item 7.3. Não informe páginas que não são públicas.
+
 ## 8. Com quem compartilhamos
 
 Compartilhamos dados apenas com fornecedores que nos ajudam a prestar o serviço, pelo mínimo necessário e com contrato que os obriga a proteger os dados.
@@ -167,6 +169,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | Conversas com a LIA no Liame, sem os dados pessoais retirados antes (quando ligada) | 30 dias depois da última mensagem |
 | Pedidos que a LIA registra para a equipe a seu pedido, as demandas (quando ligada) | enquanto durar o contrato; se a sua conta for excluída, o pedido fica sem autor |
 | Planos do Estrategista, com as versões e as decisões (quando ligado) | enquanto durar o contrato; se a sua conta for excluída, a decisão e a versão que você editou ficam sem autor |
+| Pedidos de leitura de página do Pesquisador e os rótulos tirados dela (quando ligado); a página em si não é guardada | enquanto durar o contrato; se a sua conta for excluída, o pedido fica sem autor |
 | Dados brutos recebidos das plataformas | 30 dias |
 | Campanhas, peças e tarefas arquivadas | 12 meses após arquivar; estatísticas sem dados pessoais ficam |
 | Dados de contatos dos clientes (como operador) | enquanto a empresa cliente tiver finalidade e base legal; pedido de exclusão ou saída da lista, em até 15 dias |

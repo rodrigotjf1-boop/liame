@@ -646,6 +646,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 03/10/2026 | §16.6 nova: **leitura de páginas pelo Pesquisador** (I12): SSRF com destino livre (OWASP), robots.txt (RFC 9309) e dado pessoal de acesso público (LGPD art. 7º, pelo Serpro; o Planalto não abriu). Daí: só a página informada, robots.txt respeitado, a página não é guardada, só os rótulos conferidos. |
 | 03/10/2026 | §16.5: a **tabela do calendário comercial** que a I11 criou (31 datas, de 12/10/2026 a 31/12/2027), com as datas do varejo de 2027 calculadas pela regra de cada uma e conferidas por script, e o lembrete de renovar a semente antes de dezembro de 2027. |
 | 02/10/2026 | §15.2 nova: **resposta em fluxo de eventos** para a Conversa (I10): os limites de conexão da Cloudflare, conferidos na documentação oficial (leitura da origem parada: 125 s, erro 524; muda só no Enterprise), e o "Parar" (fechar a leitura) no Node, medido nos testes. Daí a linha a cada 15 s no fluxo. |
 | 02/10/2026 | §16.5 nova: **calendário comercial** (feriados nacionais pela Lei 662/1949 com a redação da Lei 10.607/2002, pela Lei 6.802/1980 e pela Lei 14.759/2023; Black Friday de 2026 em 27/11), conferido antes do protótipo P8 (`mockups/prototipo-resumo.html`): as datas do Estrategista vêm de uma tabela do sistema, com a fonte. |
@@ -1081,6 +1082,33 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Feriado estadual e municipal** muda de lugar para lugar: entra pelo endereço da loja, quando houver, e não pela tabela nacional **[NC]**.
 - **Consequência para a I11:** as datas que o Estrategista usa vêm de uma **tabela do sistema** (feriados nacionais e datas do varejo, cada uma com a fonte), nunca da memória do modelo; o modelo só escolhe quais datas usar e o que fazer em cada uma.
 - **Na tabela (I11, 03/10/2026):** `commercial_date` (migration 0035) tem 31 datas, de 12/10/2026 a 31/12/2027. As datas do varejo de 2027 foram calculadas pela regra de cada uma e conferidas por script **[S]**: Carnaval em 09/02 (a terça 47 dias antes da Páscoa), Páscoa em 28/03, Dia das Mães em 09/05 (segundo domingo de maio), Dia dos Pais em 08/08 (segundo domingo de agosto), Black Friday em 26/11 e Cyber Monday em 29/11. Carnaval não é feriado nacional: entra como data do varejo. **Renovar a semente antes de dezembro de 2027** (migration nova com 2028), ou o plano de 90 dias fica sem datas.
+
+### 16.6 Leitura de páginas pelo Pesquisador
+
+*Conferido em 03/10/2026, antes da I12.*
+
+- **SSRF, quando o destino é qualquer site informado pela pessoa** **[O]** (OWASP, *Server-Side Request Forgery Prevention Cheat Sheet*, caso 2):
+  - só `http`/`https`;
+  - resolver **todos** os endereços do nome (A e AAAA) e recusar os privados, de loopback, link-local e o de metadados (`169.254.169.254`), na hora da conexão, contra DNS rebinding;
+  - "don't forget to disable the support for redirection" no cliente;
+  - limitar o tamanho e o tipo da resposta, não devolver a resposta crua a quem pediu, e usar tempo máximo.
+  - Fonte: cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html.
+- **robots.txt (RFC 9309)** **[O]**:
+  - vale para "automated clients known as crawlers" e "These rules are not a form of access authorization";
+  - o grupo do robô é achado pelo nome do produto, sem diferenciar maiúsculas; vale a regra mais específica (a de mais octetos);
+  - resposta 4xx: "the crawler MAY access any resources"; 5xx ou fora do ar: "MUST assume complete disallow";
+  - não usar a cópia guardada por mais de 24 horas;
+  - ler pelo menos 500 KiB do arquivo e seguir pelo menos 5 redirecionamentos dele.
+  - Fonte: rfc-editor.org/rfc/rfc9309.
+- **Dado pessoal de acesso público (LGPD, art. 7º, §§ 3º, 4º e 7º)** **[S]** (Serpro, "Dados públicos — LGPD"; o texto da lei no Planalto não abriu nesta conferência):
+  - o tratamento considera "a finalidade, a boa-fé e o interesse público" que justificaram a disponibilização;
+  - o que o titular tornou manifestamente público dispensa novo consentimento, preservados os direitos e os princípios.
+- **Consequência para a I12:**
+  - o Pesquisador lê só a página que a empresa informa (site, cardápio, concorrente; D-A3-8);
+  - respeita o robots.txt pelo nome `Liame`;
+  - **não guarda a página**, só os rótulos conferidos (produtos e preços, ofertas, diferenciais);
+  - tira dado pessoal antes do modelo e de gravar;
+  - o redirecionamento só é seguido depois de conferir o destino de novo.
 
 ---
 

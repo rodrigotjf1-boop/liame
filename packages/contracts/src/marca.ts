@@ -9,6 +9,8 @@ import { z } from 'zod';
 // O dossiê guardado é lido por este mesmo contrato: campo novo aqui nasce OPCIONAL ou com valor padrão, para a
 // versão antiga continuar abrindo.
 
+const Slug = z.string().regex(/^[a-z0-9_]+$/).max(60);
+
 /** As nove partes, na ordem da tela e do texto para o modelo. */
 export const DOSSIER_SECTIONS = ['identidade', 'voz', 'produtos', 'ofertas', 'provas', 'proibido', 'concorrentes', 'regiao', 'datas'] as const;
 export const DossierSection = z.enum(DOSSIER_SECTIONS);
@@ -204,3 +206,44 @@ export const UseBrandDossierSuggestionRequest = z.strictObject({
   items: z.array(z.number().int().min(0).max(19)).min(1).max(20),
 });
 export type UseBrandDossierSuggestionRequest = z.infer<typeof UseBrandDossierSuggestionRequest>;
+
+// O Pesquisador (A3, I12): a pessoa informa uma página (o site ou o cardápio da marca, a página de um concorrente), o
+// Liame lê e o que serve vira sugestão no dossiê. A página não fica guardada: só o pedido, a situação e os rótulos
+// conferidos. Sem tela ainda (o P6 espera a aprovação).
+
+export const RESEARCH_KINDS = ['site', 'cardapio', 'concorrente'] as const;
+export const ResearchKind = z.enum(RESEARCH_KINDS);
+export type ResearchKind = z.infer<typeof ResearchKind>;
+
+export const CreateResearchRequest = z.strictObject({
+  brand_id: z.uuid(),
+  kind: ResearchKind,
+  /** O endereço da página, como a pessoa copia do navegador (https). */
+  url: z.string().trim().min(9).max(2048),
+});
+export type CreateResearchRequest = z.infer<typeof CreateResearchRequest>;
+
+export const ResearchListQuery = z.strictObject({ brand_id: z.uuid() });
+export type ResearchListQuery = z.infer<typeof ResearchListQuery>;
+
+export const ResearchResponse = z.strictObject({
+  id: z.uuid(),
+  brand_id: z.uuid(),
+  /** `site`, `cardapio` ou `concorrente`. */
+  kind: Slug,
+  url: z.string(),
+  host: z.string(),
+  /** `pendente`, `lendo`, `concluida`, `recusada` (robots.txt, texto que tenta dar ordens, página sem texto) ou `falhou`. */
+  status: Slug,
+  /** O porquê, quando recusada ou falhou: `robots`, `instrucao_na_pagina`, `sem_texto`, `nao_e_pagina`, `grande_demais`, `fora_do_ar`, `nao_achou`, `rede_interna`… */
+  reason: Slug.nullable(),
+  /** As partes do dossiê que ganharam sugestão com esta leitura (vazia quando não havia nada novo). */
+  sections: z.array(Slug),
+  requested_by: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
+  created_at: z.string(),
+  finished_at: z.string().nullable(),
+});
+export type ResearchResponse = z.infer<typeof ResearchResponse>;
+
+export const ResearchListResponse = z.strictObject({ items: z.array(ResearchResponse) });
+export type ResearchListResponse = z.infer<typeof ResearchListResponse>;

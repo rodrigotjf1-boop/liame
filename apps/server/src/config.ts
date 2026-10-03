@@ -21,6 +21,8 @@ const Env = z.object({
   SES_CONFIGURATION_SET: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
   /** Webhooks de saída para rede privada/loopback: só em desenvolvimento e testes (SSRF). */
   WEBHOOK_ALLOW_PRIVATE_NETWORK: z.enum(['true', 'false']).default('false'),
+  /** Leitura de página pelo Pesquisador em rede privada/loopback e por http: só em desenvolvimento e testes (SSRF). */
+  PESQUISA_ALLOW_PRIVATE_NETWORK: z.enum(['true', 'false']).default('false'),
   /** Segredos Standard Webhooks por provedor da inbox: `regem:whsec_...,regemcast:whsec_...`. */
   INBOX_SECRETS: z.string().default(''),
   /** Sal interno da raiz diária da auditoria (ADR-011). Em produção, obrigatório e secreto. */
@@ -84,6 +86,8 @@ export type AppConfig = {
   /** Remetente e SES (usados só com `mailTransport = 'ses'`). */
   mail: { from: string; fromAddress: string; region: string; configurationSet: string | null };
   webhookAllowPrivateNetwork: boolean;
+  /** O Pesquisador lê página em rede privada e por http (só desenvolvimento e testes). */
+  pesquisaAllowPrivateNetwork: boolean;
   /** Provedor da inbox → segredo de assinatura. Provedor fora daqui recebe 404. */
   inboxSecrets: ReadonlyMap<string, string>;
   auditAnchor: {
@@ -134,6 +138,9 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   }
   if (env.NODE_ENV === 'production' && env.WEBHOOK_ALLOW_PRIVATE_NETWORK === 'true') {
     throw new Error('config: em produção, webhook para rede privada não é permitido (SSRF)');
+  }
+  if (env.NODE_ENV === 'production' && env.PESQUISA_ALLOW_PRIVATE_NETWORK === 'true') {
+    throw new Error('config: em produção, a leitura de página na rede privada não é permitida (SSRF)');
   }
   if (env.NODE_ENV === 'production' && (!env.AUDIT_ANCHOR_SALT || !env.REKOR_URL || !env.AUDIT_ANCHOR_SIGNING_KEY || !env.TSA_URL)) {
     throw new Error('config: em produção, a âncora da auditoria precisa de AUDIT_ANCHOR_SALT, REKOR_URL, AUDIT_ANCHOR_SIGNING_KEY e TSA_URL');
@@ -207,6 +214,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     mailTransport: env.MAIL_TRANSPORT,
     mail: { from: env.MAIL_FROM, fromAddress, region: env.AWS_REGION, configurationSet: env.SES_CONFIGURATION_SET ?? null },
     webhookAllowPrivateNetwork: env.WEBHOOK_ALLOW_PRIVATE_NETWORK === 'true',
+    pesquisaAllowPrivateNetwork: env.PESQUISA_ALLOW_PRIVATE_NETWORK === 'true',
     inboxSecrets,
     auditAnchor: {
       // Fora de produção, um sal fixo e conhecido: as raízes precisam se repetir entre execuções.

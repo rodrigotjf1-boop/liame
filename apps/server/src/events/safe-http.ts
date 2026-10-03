@@ -2,10 +2,12 @@ import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { BlockList, isIP } from 'node:net';
+import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
 
-// POST para URL de terceiro (webhook de saída) sem virar porta para a rede interna (SSRF,
-// security-model): só http(s), sem redirecionamento, e o endereço resolvido não pode ser privado,
-// de loopback, link-local ou reservado — checado na hora da conexão (vale contra DNS rebinding).
+// Chamada a URL de terceiro (o POST do webhook de saída; o GET da página que o Pesquisador lê) sem virar porta
+// para a rede interna (SSRF, security-model): só http(s), e o endereço resolvido não pode ser privado, de
+// loopback, link-local ou reservado — checado na hora da conexão (vale contra DNS rebinding). O POST não segue
+// redirecionamento; o GET segue à mão, conferindo cada destino.
 
 const PRIVATE = new BlockList();
 for (const [net, prefix] of [
@@ -83,16 +85,15 @@ export function assertSafeUrl(raw: string, allowPrivateNetwork: boolean): URL {
   return url;
 }
 
-export async function safePost(rawUrl: string, body: string, headers: Record<string, string>, options: SafePostOptions): Promise<SafePostResult> {
-  const url = assertSafeUrl(rawUrl, options.allowPrivateNetwork);
-  const guardedLookup = (
-    hostname: string,
-    opts: { all?: boolean },
-    callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void,
-  ) => {
+/**
+ * A resolução de nomes da conexão: só os endereços públicos do nome (A e AAAA), conferidos na hora de conectar (vale
+ * contra DNS rebinding). Nenhum público: a conexão falha com `UnsafeUrlError`.
+ */
+function guardedLookup(allowPrivateNetwork: boolean) {
+  return (hostname: string, opts: { all?: boolean }, callback: (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void) => {
     dnsLookup(hostname, { ...opts, all: true }, (err, addresses) => {
       if (err) return callback(err, opts.all ? [] : '');
-      const allowed = options.allowPrivateNetwork ? addresses : addresses.filter((a) => !isPrivateAddress(a.address));
+      const allowed = allowPrivateNetwork ? addresses : addresses.filter((a) => !isPrivateAddress(a.address));
       if (!allowed.length) {
         return callback(Object.assign(new UnsafeUrlError('o nome resolve para a rede interna'), { code: 'EACCES' }), opts.all ? [] : '');
       }
@@ -100,6 +101,11 @@ export async function safePost(rawUrl: string, body: string, headers: Record<str
       return callback(null, allowed[0]!.address, allowed[0]!.family);
     });
   };
+}
+
+export async function safePost(rawUrl: string, body: string, headers: Record<string, string>, options: SafePostOptions): Promise<SafePostResult> {
+  const url = assertSafeUrl(rawUrl, options.allowPrivateNetwork);
+  const lookup = guardedLookup(options.allowPrivateNetwork);
   const send = url.protocol === 'https:' ? httpsRequest : httpRequest;
   return new Promise((resolve, reject) => {
     const req = send(
@@ -107,7 +113,7 @@ export async function safePost(rawUrl: string, body: string, headers: Record<str
       {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body).toString(), 'user-agent': 'Liame-Webhooks/1', ...headers },
-        lookup: guardedLookup as never,
+        lookup: lookup as never,
         timeout: options.timeoutMs ?? 10_000,
       },
       (res) => {
@@ -125,5 +131,110 @@ export async function safePost(rawUrl: string, body: string, headers: Record<str
     req.on('timeout', () => req.destroy(new Error('tempo esgotado')));
     req.on('error', reject);
     req.end(body);
+  });
+}
+
+export interface SafeGetOptions {
+  allowPrivateNetwork: boolean;
+  /** Tempo máximo da leitura inteira: conexões, redirecionamentos e corpo. */
+  timeoutMs: number;
+  /** Tamanho máximo do corpo, contado depois de descomprimido. */
+  maxBytes: number;
+  /** Quantos redirecionamentos seguir; cada destino é conferido de novo. */
+  maxRedirects: number;
+  userAgent: string;
+  accept: string;
+}
+
+export interface SafeGetResult {
+  status: number;
+  /** O endereço que respondeu, depois dos redirecionamentos. */
+  url: string;
+  contentType: string | null;
+  body: Buffer;
+}
+
+export class ResponseTooLargeError extends Error {}
+
+/**
+ * GET em URL de terceiro (a página que a pessoa informou, o robots.txt), com as mesmas travas do POST. O
+ * redirecionamento é seguido à mão, até o limite, com o destino conferido de novo a cada passo (OWASP SSRF, base
+ * §16.6): o cliente nunca segue sozinho. O corpo é descomprimido (gzip, deflate, br) e o tamanho máximo vale para o
+ * que sai da descompressão (contra a bomba de compressão).
+ */
+export async function safeGet(rawUrl: string, options: SafeGetOptions): Promise<SafeGetResult> {
+  const prazo = Date.now() + options.timeoutMs;
+  let url = assertSafeUrl(rawUrl, options.allowPrivateNetwork);
+  for (let saltos = 0; ; saltos++) {
+    const r = await getUmaVez(url, options, prazo);
+    if (r.redirect === null) return { status: r.status, url: url.toString(), contentType: r.contentType, body: r.body };
+    if (saltos >= options.maxRedirects) throw new UnsafeUrlError('redirecionamentos demais');
+    let proxima: URL;
+    try {
+      proxima = new URL(r.redirect, url);
+    } catch {
+      throw new UnsafeUrlError('redirecionamento inválido');
+    }
+    url = assertSafeUrl(proxima.toString(), options.allowPrivateNetwork);
+  }
+}
+
+function getUmaVez(url: URL, options: SafeGetOptions, prazo: number): Promise<{ status: number; redirect: string | null; contentType: string | null; body: Buffer }> {
+  const send = url.protocol === 'https:' ? httpsRequest : httpRequest;
+  return new Promise((resolve, reject) => {
+    const restante = prazo - Date.now();
+    if (restante <= 0) {
+      reject(new Error('tempo esgotado'));
+      return;
+    }
+    let timer: NodeJS.Timeout | undefined;
+    const req = send(
+      url,
+      {
+        method: 'GET',
+        headers: { 'user-agent': options.userAgent, accept: options.accept, 'accept-encoding': 'gzip, deflate, br' },
+        lookup: guardedLookup(options.allowPrivateNetwork) as never,
+        timeout: restante,
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        const location = res.headers.location;
+        if (status >= 300 && status < 400 && location) {
+          res.resume();
+          resolve({ status, redirect: location, contentType: null, body: Buffer.alloc(0) });
+          return;
+        }
+        const codificacao = String(res.headers['content-encoding'] ?? '').toLowerCase();
+        const corpo =
+          codificacao === 'gzip' ? res.pipe(createGunzip()) : codificacao === 'deflate' ? res.pipe(createInflate()) : codificacao === 'br' ? res.pipe(createBrotliDecompress()) : res;
+        const partes: Buffer[] = [];
+        let total = 0;
+        timer = setTimeout(() => req.destroy(new Error('tempo esgotado')), Math.max(1, prazo - Date.now()));
+        corpo.on('data', (chunk: Buffer) => {
+          total += chunk.length;
+          if (total > options.maxBytes) {
+            clearTimeout(timer);
+            reject(new ResponseTooLargeError('a resposta passou do tamanho máximo'));
+            req.destroy();
+            return;
+          }
+          partes.push(chunk);
+        });
+        corpo.on('end', () => {
+          clearTimeout(timer);
+          resolve({ status, redirect: null, contentType: typeof res.headers['content-type'] === 'string' ? res.headers['content-type'] : null, body: Buffer.concat(partes) });
+        });
+        corpo.on('error', (err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error('tempo esgotado')));
+    req.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    req.end();
   });
 }

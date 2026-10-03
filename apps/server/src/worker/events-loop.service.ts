@@ -4,6 +4,7 @@ import { ConexaoProcessor } from './conexao-processor.js';
 import { ConversasLoop } from './conversas-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
+import { PesquisaLoop } from './pesquisa-loop.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
@@ -13,7 +14,7 @@ import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana e montar os planos do Estrategista. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, montar os planos do Estrategista e ler as páginas pedidas ao Pesquisador. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -37,6 +38,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly revisao: RevisaoSemanalLoop,
     private readonly estrategista: EstrategistaLoop,
     private readonly agenda: EstrategistaAgenda,
+    private readonly pesquisa: PesquisaLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -55,6 +57,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('estrategista', 3, 60_000, async (n) => (await this.estrategista.executarLote(n)).length),
       // A rotina de segunda passa por todas as marcas devidas numa volta; repete em 10 minutos.
       this.loop('estrategista-agenda', MARCAS_POR_VOLTA, 600_000, async () => (await this.agenda.agendarLote()).length),
+      this.loop('pesquisa', 3, 30_000, async (n) => (await this.pesquisa.executarLote(n)).length),
     );
   }
 

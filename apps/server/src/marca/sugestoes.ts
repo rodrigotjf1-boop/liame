@@ -33,7 +33,7 @@ export interface CupomDeCampanha {
 const MAX_TEXTO = 160;
 const cortar = (t: string) => (t.length > MAX_TEXTO ? `${t.slice(0, MAX_TEXTO - 1)}…` : t);
 /** Um nome cobre o outro (o dossiê diz "Combo sexta: smash e batata"; a venda, "Combo Sexta")? */
-const cobre = (a: string, b: string) => {
+export const cobre = (a: string, b: string) => {
   const x = chave(a);
   const y = chave(b);
   return x.length > 0 && y.length > 0 && (x.includes(y) || y.includes(x));

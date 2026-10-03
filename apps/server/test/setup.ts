@@ -9,8 +9,10 @@ if (existsSync(envLocal)) process.loadEnvFile(envLocal);
 // A checagem de senha vazada chama um serviço externo: tem teste próprio com fetch simulado.
 process.env.BREACHED_PASSWORD_CHECK ??= 'off';
 
-// O receptor de webhooks dos testes roda em 127.0.0.1; em produção a rede privada é recusada.
+// O receptor de webhooks e as páginas que o Pesquisador lê nos testes rodam em 127.0.0.1; em produção a rede privada
+// é recusada.
 process.env.WEBHOOK_ALLOW_PRIVATE_NETWORK ??= 'true';
+process.env.PESQUISA_ALLOW_PRIVATE_NETWORK ??= 'true';
 if (!process.env.INBOX_SECRETS) {
   const { randomBytes } = await import('node:crypto');
   process.env.INBOX_SECRETS = `teste:whsec_${randomBytes(32).toString('base64')}`;

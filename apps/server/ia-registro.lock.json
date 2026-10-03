@@ -57,6 +57,10 @@
     "explicar.resultados": {
       "version": 2,
       "hash": "daa0520c360446f1c41aab0795c8eff32ef405e4a6d71e434e0d407772ca06c4"
+    },
+    "pesquisador.pagina": {
+      "version": 1,
+      "hash": "26535f0e3fe2c6b1d7006c5d7e4345e9d469dcb78834e37f6d85c74932680c49"
     }
   },
   "funcionarios": {
@@ -71,6 +75,10 @@
     "lia": {
       "version": 2,
       "hash": "c7f08003c05402682d38895c0bfe7e65da808d88580e2a5a9d740a4d819dbb75"
+    },
+    "pesquisador": {
+      "version": 1,
+      "hash": "53f2fd3448fcda22b2f51a40c4619017b4a1c1883d28b9a668acd766c96a77a6"
     }
   }
 }
