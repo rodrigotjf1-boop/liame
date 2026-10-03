@@ -75,3 +75,12 @@ O dono decidiu em 29/09/2026 que o cupom vive no Regem: o Liame puxa os cupons c
 - O Liame sai testado **antes** das rotas existirem, contra respostas gravadas no formato do contrato; a conferência real acontece no piloto.
 - Revogar a conexão interrompe a leitura na hora, e o que já foi lido segue o prazo da D-A2.5-10.
 - Um provider novo que implemente o contrato de cupons entra como configuração da distribuição, não como conector novo.
+
+## Emendas
+
+- **02/10/2026, decisão do dono: com o RegemCast, a integração é pelo MCP dele** (emenda da ADR-008, mesma data).
+  - **Item 1, só para o RegemCast:** a leitura das conversas abertas por anúncio é a ferramenta `conversas_anuncio_listar`, e não uma rota REST. A resposta é a mesma da versão 1 do contrato ([`integracoes/regemcast.md`](../integracoes/regemcast.md), versão 2). Com o Regem, segue REST.
+  - **Itens 2 e 3:** o token do piloto é emitido no console do RegemCast, **a pedido do dono da conta** (a política de privacidade do RegemCast, §14, desde 02/10/2026), e gravado no cofre do Liame pelo `conectar-produto --produto regemcast`. Revogar no Liame tira o token do cofre e chama `integracao_revogar` no RegemCast (o próprio token se desliga, desde o #116 de lá); revogado no RegemCast, a próxima chamada volta 401 e a conta fica "desconectada" aqui.
+  - **Item 5:** o RegemCast não manda aviso; a leitura é só pelo cursor, a cada 15 minutos.
+  - **Item 4:** o RegemCast tem escopos além de `conversas.anuncio.ler`: leitura (`conta.ler`, `campanhas.ler`, `publicos.ler`, `modelos.ler`, `orcamento.ler`), rascunho (`modelos.rascunhar`, `campanhas.rascunhar`) e disparo (`campanhas.disparar`, só produto da DMS). Na A2.5 o Liame usa só `conversas.anuncio.ler` (F7); o resto entra pelo Action Service, com plano próprio.
+  - **Lembrete da emenda da ADR-020 (29/09):** o token do Regem do piloto saiu sem `clientes.telefone.ler`. Sem o telefone no pedido, a conversa lida do RegemCast entra como toque mas **não liga a pedido nenhum**, até esse escopo ser liberado no Regem.

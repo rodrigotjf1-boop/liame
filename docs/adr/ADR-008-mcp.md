@@ -30,3 +30,11 @@ A especificação MCP atual é a **2026-07-28**: sem estado, sem handshake `init
 ## Nota de conformidade (30/09/2026)
 
 A política do Google Ads de 31/08/2026 proíbe o **"programmatic proxy"**: interface hospedada por terceiro, API secundária, serviço de *wrapper* ou servidor MCP que **só replique, embrulhe ou reexponha** capacidades do Google Ads (base de conhecimento §3). As ferramentas do `/mcp/liame` expõem capacidades do Liame (resultados, aprovações, planos), nunca operações do Google Ads repassadas; a escrita nas plataformas continua só pelo Action Service. Os MCPs oficiais das plataformas não aceleram a integração (mesma API e mesmas revisões) e não servem à sincronização agendada — ver a análise na base §8.1.
+
+## Emendas
+
+- **02/10/2026, decisão do dono: "MCP do RegemCast agora, hub depois".**
+  - O RegemCast publica a própria porta MCP já, sem o hub: `https://castapi.dmsregem.com/api/v1/mcp`, com **token por conta** (`rct_it_…`, com escopos, guardado só em hash lá e cifrado no cofre do Liame). É exceção ao item 3 ("enquanto o hub não existir, nada de MCP em produção"), **só para o RegemCast**.
+  - As regras do item 4 valem lá: sem estado (2026-07-28); ferramentas curadas, em snake_case; `tools/list` filtrada pelo escopo; nenhum token de usuário repassado; disparo em dois passos (planejar → executar com a confirmação do plano), **só para produto da DMS** e só com o orçamento de disparos da conta definido.
+  - Quando o hub e o DMS ID existirem, muda o endereço (`/mcp/regemcast`); as ferramentas e os escopos ficam.
+  - O Liame é **cliente** dessa porta, do lado do servidor (worker), como é de qualquer plataforma. O item 1 não muda: os agentes internos do Liame continuam no Tool Registry, e o conector do RegemCast é um conector, não um barramento.
