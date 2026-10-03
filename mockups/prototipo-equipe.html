@@ -11,10 +11,12 @@ base: prototipo-explicar.html (P4, aprovado em 02/10/2026), com a tela de equipe
 o que tem: os funcionários da A3 (LIA, Analista de dados, Relatórios, Compliance, Estrategista, Pesquisador) e o Gestor
            de tráfego em sombra; para cada um, o que faz, acerto, custo do mês, o que pode e não pode e o que fez; no
            Gestor, o que ele teria feito × o que você fez, a prontidão por conta e ação (os cinco portões da I5, sem nota
-           inventada) e a proposta de promoção de Sombra para Sugerir, que uma pessoa aprova; desligar e parar a equipe.
+           inventada) e a proposta de promoção de Sombra para Sugerir, que uma pessoa aprova; desligar e parar a equipe;
+           no Pro, o modelo de IA de cada finalidade, escolhido dentro do catálogo da Liame (ADR-016), com desfazer.
 estados: seletor "Sua equipe" na faixa do topo: funcionário ativo, em sombra, prontidão com o que falta, proposta de
          promoção, promoção aprovada, desligado, desligar, fase futura, custo perto do teto, equipe parada, IA desligada
-         para a empresa, carregando e erro. Lite e Pro pelo seletor do topo.
+         para a empresa, os modelos de IA (o de cada finalidade, trocar e trocado), carregando e erro. Lite e Pro pelo
+         seletor do topo.
 regras: nesta fase ninguém mexe em campanha (isso é a A4); a promoção é proposta pelo sistema e aprovada por uma pessoa,
         com versão; o Compliance não desliga; dados fictícios (Mister Burgers · Loja Centro).
 conferência: os cenários `p7-*` em window.uiuxCenarios (1440, 1024, 768 e 375 px, claro e escuro).
@@ -931,6 +933,22 @@ select.input { padding-right: var(--sp-2); }
 .tabela .ok-txt { color: var(--success); font-weight: 600; }
 .tabela .falta-txt { color: var(--warning); font-weight: 600; }
 .eqp-bloco .tabela td:last-child { min-width: 200px; white-space: normal; }
+/* Modelos de IA por finalidade (só no Pro; ADR-016) */
+.mdl-atual { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-3); }
+.mdl-atual b { font-weight: 600; }
+.mdl-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.mdl-form { display: grid; gap: var(--sp-3); }
+.mdl-opcoes { display: grid; gap: var(--sp-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.mdl-opcoes legend { margin-bottom: var(--sp-2); padding: 0; font-size: var(--text-sm); font-weight: 600; }
+.mdl-op { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 2px var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.mdl-op:hover { border-color: var(--border-strong); }
+.mdl-op:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.mdl-op input { margin: 3px 0 0; accent-color: var(--foco); }
+.mdl-op input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.mdl-op-nome { font-weight: 600; }
+.mdl-op-meta { grid-column: 2; font-size: var(--text-xs); color: var(--text-muted); }
+.mdl-depois { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.mdl-depois li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px var(--sp-3); font-size: var(--text-sm); }
 
 @container pagina (max-width: 899px) {
   .eqp-grade { grid-template-columns: minmax(0, 1fr); }
@@ -946,7 +964,7 @@ select.input { padding-right: var(--sp-2); }
   .eqp-det { padding: var(--sp-4); }
   .eqp-bloco { padding: var(--sp-4); }
 }
-@media (prefers-reduced-motion: reduce) { .st--trabalhando .dot { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .st--trabalhando .dot { animation: none; } .mdl-op { transition: none; } }
 </style>
 </head>
 <body data-pagina="resultados">
@@ -2810,6 +2828,11 @@ const ESTADOS_EQUIPE = {
     parada: 'Equipe parada por você',
     'ia-desligada': 'IA desligada para a empresa',
   },
+  'Modelos de IA (só no Pro)': {
+    modelos: 'O modelo de cada finalidade',
+    'modelos-trocar': 'Trocar o modelo de uma finalidade',
+    'modelos-trocado': 'Modelo trocado, com desfazer',
+  },
   'A tela': { carregando: 'Carregando', erro: 'Erro ao carregar' },
 };
 const TODOS_EQUIPE = Object.assign({}, ...Object.values(ESTADOS_EQUIPE));
@@ -2887,7 +2910,23 @@ const SOMBRA_DECISOES = [
   ['14/09', 'Delivery noite', 'Pausar a campanha', 'Manteve no ar', 'teria rendido R$ 6,10 a menos'],
 ];
 
-const eq = { estado: 'equipe', sel: 'analista', mostraDetalhe: false, pagina: null, funcs: equipeBase(), pront: prontidaoBase(), parada: false, iaOff: false, custoAlto: false, promovido: false, recusa: false };
+/* Modelos por finalidade (ADR-016): catálogo curado pela Liame; no Lite, automático; no Pro, a pessoa escolhe vendo custo,
+   velocidade e nota no teste da finalidade. O custo estimado usa o uso de setembro e a razão entre os preços da tabela
+   de preços (I1); as notas são de exemplo. */
+const FINALIDADES = {
+  conversa: { rot: 'Conversa e atendimento', quem: 'LIA', base: 9.40, usos: '61 respostas em setembro', modelos: [
+    { id: 'haiku', nome: 'Claude Haiku 4.5', fator: 0.5, vel: 'mais rápido', nota: 88 },
+    { id: 'sonnet', nome: 'Claude Sonnet 5.5', fator: 1, vel: 'rápido', nota: 94, rec: true },
+    { id: 'opus', nome: 'Claude Opus 5.5', fator: 2, vel: 'mais lento', nota: 95 },
+  ] },
+  analise: { rot: 'Análise e decisão', quem: 'Analista de dados, Relatórios e Estrategista', base: 13.26, usos: '52 explicações, 1 revisão e 3 planos em setembro', modelos: [
+    { id: 'sonnet', nome: 'Claude Sonnet 5.5', fator: 0.5, vel: 'rápido', nota: 90 },
+    { id: 'opus', nome: 'Claude Opus 5.5', fator: 1, vel: 'médio', nota: 96, rec: true },
+    { id: 'fable', nome: 'Claude Fable 5.1', fator: 2.5, vel: 'mais lento', nota: 97 },
+  ] },
+};
+const modelosBase = () => ({ conversa: { escolha: 'auto', anterior: null, quando: null, editando: false }, analise: { escolha: 'auto', anterior: null, quando: null, editando: false } });
+const eq = { estado: 'equipe', sel: 'analista', mostraDetalhe: false, pagina: null, funcs: equipeBase(), pront: prontidaoBase(), parada: false, iaOff: false, custoAlto: false, promovido: false, recusa: false, modelos: modelosBase() };
 const passaTudo = (p) => PORTOES_ROT.every(([, , , ok]) => ok(p));
 const quantos = (p) => PORTOES_ROT.filter(([, , , ok]) => ok(p)).length;
 
@@ -2923,7 +2962,45 @@ function htmlLista() {
     ${g('Em sombra', ids.filter((id) => eq.funcs[id].grupo === 'sombra'))}
     ${g('Desligados', ids.filter((id) => eq.funcs[id].status === 'desligado'))}
     ${g('Chegam nas próximas fases', ids.filter((id) => eq.funcs[id].grupo === 'depois'))}
+    <div class="eqp-grupo so-pro"><p class="eqp-grupo-rot rotulo-marca"><span>Configuração da equipe</span></p><ul class="eqp-itens"><li><button class="eqp-item" type="button" data-eqp-func="modelos"${eq.sel === 'modelos' ? ' aria-current="true"' : ''}><span class="av-func" aria-hidden="true">${ic('i-sparkles')}</span><span class="eqp-txt"><b>Modelos de IA</b><span>${esc(resumoModelos())}</span></span></button></li></ul></div>
   </nav>`;
+}
+function resumoModelos() {
+  const escolhidos = Object.values(eq.modelos).filter((m) => m.escolha !== 'auto').length;
+  return escolhidos ? `${escolhidos} de ${Object.keys(FINALIDADES).length} escolhidos por você` : 'Automático nas finalidades em uso';
+}
+
+/* ---------- modelos de IA por finalidade (só no Pro) ---------- */
+const recDe = (fin) => FINALIDADES[fin].modelos.find((m) => m.rec);
+const modeloDe = (fin, escolha) => (escolha === 'auto' ? recDe(fin) : FINALIDADES[fin].modelos.find((m) => m.id === escolha));
+const custoDe = (fin, m) => moeda(FINALIDADES[fin].base * (m.fator / recDe(fin).fator));
+function blocoFinalidade(fin) {
+  const F = FINALIDADES[fin], st = eq.modelos[fin], atual = modeloDe(fin, st.escolha);
+  const atualTxt = st.escolha === 'auto'
+    ? `<span><b>Automático (recomendado):</b> ${esc(atual.nome)}</span><span class="eixo-nota">${custoDe(fin, atual)} estimados no mês · nota ${atual.nota}% no teste</span>`
+    : `<span><b>${esc(atual.nome)}</b>, escolhido por Rodrigo (Dono) ${esc(st.quando)}</span><span class="eixo-nota">${custoDe(fin, atual)} estimados no mês · nota ${atual.nota}% no teste</span>`;
+  const op = (valor, nome, meta) => `<label class="mdl-op"><input type="radio" name="mdl-${fin}" value="${valor}"${st.escolha === valor ? ' checked' : ''}><span class="mdl-op-nome">${esc(nome)}</span><span class="mdl-op-meta">${meta}</span></label>`;
+  const editar = st.editando ? `<form class="mdl-form" data-mdl-form="${fin}" novalidate><fieldset class="mdl-opcoes"><legend>Modelo para ${esc(F.rot.toLowerCase())}</legend>
+      ${op('auto', 'Automático (recomendado)', `a Liame escolhe pelo teste da finalidade; hoje, ${esc(recDe(fin).nome)}`)}
+      ${F.modelos.map((m) => op(m.id, m.nome, `${custoDe(fin, m)} estimados no mês · ${esc(m.vel)} · nota ${m.nota}% no teste`)).join('')}
+    </fieldset><div class="mdl-acoes"><button class="btn btn--primary btn--sm" type="submit">Salvar a troca</button><button class="btn btn--sm" type="button" data-mdl-cancelar="${fin}">Cancelar</button></div></form>` : '';
+  const acoes = st.editando ? '' : `<div class="mdl-acoes"><button class="btn btn--sm" type="button" data-mdl-trocar="${fin}">Trocar o modelo</button>${st.anterior ? `<button class="btn btn--sm btn--ghost" type="button" data-mdl-desfazer="${fin}">${ic('i-undo', 'ic ic-sm')}Desfazer a troca</button>` : ''}</div>`;
+  return `<div class="eqp-bloco" id="mdl-${fin}"><div class="eqp-bloco-cab"><h3>${esc(F.rot)}</h3><span class="eixo-nota">${esc(F.quem)}</span></div>
+    <p class="mdl-atual">${atualTxt}</p><p class="card-sub">Base da estimativa: ${esc(F.usos)}.</p>${acoes}${editar}</div>`;
+}
+function htmlModelos() {
+  const voltar = `<button class="btn btn--ghost btn--sm eqp-voltar" type="button" data-eqp-lista>${ic('i-chevron-left', 'ic ic-sm')}Voltar para a equipe</button>`;
+  const cab = `<div class="eqp-cab"><span class="av-func av-func--lg" aria-hidden="true">${ic('i-sparkles')}</span><div class="eqp-cab-txt"><h2 id="eqp-det-t" tabindex="-1">Modelos de IA</h2><p>O modelo de cada finalidade, dentro do catálogo da Liame</p></div></div>`;
+  return `${voltar}${cab}<p class="eqp-resumo">No Lite, tudo fica no automático, que é o recomendado. Aqui você pode escolher o modelo de cada finalidade, vendo o custo estimado, a velocidade e a nota no teste da Liame. A troca vale a partir da próxima resposta, fica registrada na auditoria e pode ser desfeita.</p>
+    ${eq.iaOff ? `<div class="faixa"><span class="faixa-ic">${ic('i-info')}</span><div class="faixa-txt"><b>A IA está desligada nesta empresa</b><span>A escolha fica guardada e vale quando a Liame ligar de novo.</span></div></div>` : ''}
+    ${blocoFinalidade('conversa')}${blocoFinalidade('analise')}
+    <div class="eqp-bloco"><div class="eqp-bloco-cab"><h3>Chegam depois</h3></div><ul class="mdl-depois"><li><span>Texto criativo</span><span class="eixo-nota">com o Criativo, na fase A4</span></li><li><span>Imagem</span><span class="eixo-nota">com o Criativo, na fase A4</span></li><li><span>Vídeo curto</span><span class="eixo-nota">quando o fornecedor sair do experimental</span></li><li><span>Voz</span><span class="eixo-nota">fase posterior</span></li></ul></div>
+    <div class="eqp-bloco"><div class="eqp-bloco-cab"><h3>Regras do catálogo</h3></div><ul class="eqp-lite">
+      <li>Um modelo só entra numa finalidade depois de passar no teste dela, com contrato que proíbe treinar com os seus dados.</li>
+      <li>Se o modelo escolhido cair, entra o próximo aprovado da mesma finalidade.</li>
+      <li>O custo entra no teto de uso de IA da empresa.</li>
+      <li>Sem chave própria: a conta com o fornecedor é da Liame. Só Dono e Administrador trocam o modelo.</li>
+    </ul></div>`;
 }
 function blocoNumeros(titulo, pares, rodape = '') {
   return `<div class="eqp-bloco"><div class="eqp-bloco-cab"><h3>${titulo}</h3></div><div class="eqp-numeros">${pares.filter(([v]) => v !== '—').map(([v, rot]) => `<p class="eqp-num"><b>${esc(v)}</b><span>${esc(rot)}</span></p>`).join('')}</div>${rodape}</div>`;
@@ -2990,6 +3067,7 @@ function blocoProntidao() {
 
 /* ---------- detalhe ---------- */
 function htmlDetalhe() {
+  if (eq.sel === 'modelos') return htmlModelos();
   const id = eq.sel, f = eq.funcs[id];
   const voltar = `<button class="btn btn--ghost btn--sm eqp-voltar" type="button" data-eqp-lista>${ic('i-chevron-left', 'ic ic-sm')}Voltar para a equipe</button>`;
   const cab = `<div class="eqp-cab">${avatarFunc(id, true)}<div class="eqp-cab-txt"><h2 id="eqp-det-t" tabindex="-1">${esc(f.nome)}</h2><p>${esc(f.cargo)}${f.desde ? ` · na equipe desde ${esc(f.desde)}` : ''}</p><div class="eqp-tags">${statusChip(f)}${modoChip(f)}</div></div></div>`;
@@ -3026,8 +3104,10 @@ function desenharEquipe() {
   if (!r) return;
   if (eq.pagina === 'carregando') { cab.innerHTML = ''; r.innerHTML = '<div class="eqp-grade" aria-busy="true"><p class="sr-only">Carregando…</p><div class="card"><span class="esqueleto"></span><span class="esqueleto"></span><span class="esqueleto esqueleto--medio"></span></div><div class="card"><span class="esqueleto esqueleto--curto"></span><span class="esqueleto"></span><span class="esqueleto esqueleto--bloco"></span></div></div>'; return; }
   if (eq.pagina === 'erro') { cab.innerHTML = ''; r.innerHTML = `<div class="card"><div class="vazio" role="alert"><div class="vazio-ic vazio-ic--perigo">${ic('i-alert-circle')}</div><h2>Não foi possível carregar a equipe</h2><p>A conexão com o servidor do Liame falhou. Nada foi perdido, e nenhum funcionário parou por isso.</p><div class="vazio-acoes"><button class="btn btn--primary" type="button" data-eqp-recarregar>${ic('i-refresh')}Tentar de novo</button></div></div></div>`; return; }
+  if (shell.modo === 'lite' && eq.sel === 'modelos') eq.sel = 'analista'; // a escolha de modelo é só do Pro
   const custo = eq.custoAlto ? 'R$ 108,40' : 'R$ 22,66';
-  cab.innerHTML = `<span class="lite-chip">IA em setembro: ${custo} de R$ 150,00</span>${eq.iaOff ? '' : eq.parada ? `<button class="btn btn--sm btn--primary" type="button" data-eqp-retomar>${ic('i-play', 'ic ic-sm')}Retomar a equipe</button>` : `<button class="btn btn--sm btn--perigo" type="button" data-eqp-parar>${ic('i-pause', 'ic ic-sm')}Parar a equipe</button>`}`;
+  const auto = Object.values(eq.modelos).every((m) => m.escolha === 'auto');
+  cab.innerHTML = `<span class="lite-chip">IA em setembro: ${custo} de R$ 150,00</span><span class="lite-chip so-lite">Modelos de IA: ${auto ? 'automático' : 'escolhidos no Pro'}</span>${eq.iaOff ? '' : eq.parada ? `<button class="btn btn--sm btn--primary" type="button" data-eqp-retomar>${ic('i-play', 'ic ic-sm')}Retomar a equipe</button>` : `<button class="btn btn--sm btn--perigo" type="button" data-eqp-parar>${ic('i-pause', 'ic ic-sm')}Parar a equipe</button>`}`;
   const faixas = [];
   if (eq.iaOff) faixas.push(`<div class="faixa" role="status"><span class="faixa-ic">${ic('i-info')}</span><div class="faixa-txt"><b>A IA está desligada nesta empresa</b><span>Nenhum funcionário de IA trabalha. As telas, os avisos, a revisão da semana e as aprovações seguem funcionando, com os textos montados pelo sistema. Quem liga é a Liame, a pedido do dono.</span></div></div>`);
   if (eq.parada) faixas.push(`<div class="faixa faixa--perigo" role="status"><span class="faixa-ic">${ic('i-pause')}</span><div class="faixa-txt"><b>A equipe está parada desde hoje, 14:52, por Rodrigo (Dono)</b><span>Nenhum funcionário de IA trabalha até você retomar. As telas, os números e as aprovações seguem funcionando.</span></div></div>`);
@@ -3039,13 +3119,19 @@ function selecionarFunc(id) {
   eq.sel = id; eq.mostraDetalhe = true;
   desenharEquipe();
   $('#eqp-det-t')?.focus({ preventScroll: true });
-  anunciar(eq.funcs[id].nome);
+  anunciar(id === 'modelos' ? 'Modelos de IA' : eq.funcs[id].nome);
 }
 
 /* ---------- os estados do seletor ---------- */
 function definirEquipe(v, { focar = false } = {}) {
   if (!TODOS_EQUIPE[v]) v = 'equipe';
-  Object.assign(eq, { estado: v, sel: 'analista', mostraDetalhe: false, pagina: null, funcs: equipeBase(), pront: prontidaoBase(), parada: false, iaOff: false, custoAlto: false, recusa: false });
+  Object.assign(eq, { estado: v, sel: 'analista', mostraDetalhe: false, pagina: null, funcs: equipeBase(), pront: prontidaoBase(), parada: false, iaOff: false, custoAlto: false, recusa: false, modelos: modelosBase() });
+  if (v.startsWith('modelos')) {
+    eq.sel = 'modelos'; eq.mostraDetalhe = true;
+    if (shell.modo !== 'pro') definirModo('pro', { silencioso: true });
+    if (v === 'modelos-trocar') eq.modelos.conversa.editando = true;
+    if (v === 'modelos-trocado') Object.assign(eq.modelos.conversa, { escolha: 'opus', anterior: 'auto', quando: 'hoje, 14:40' });
+  }
   if (p4.tela !== 'equipe') irParaTela('equipe');
   if (['sombra', 'prontidao', 'promocao', 'promovido'].includes(v)) eq.sel = 'trafego';
   if (v === 'promocao' || v === 'promovido') Object.assign(eq.pront[0], { amostra: 31, conc: 84, piora: 6, arrep: 'R$ 58,90 melhor que você', arrepOk: true, conf: 77 });
@@ -3062,6 +3148,7 @@ function definirEquipe(v, { focar = false } = {}) {
   if (selEquipe.value !== v) selEquipe.value = v;
   if (v === 'prontidao' || v === 'promocao' || v === 'promovido') $('#eqp-prontidao')?.scrollIntoView({ block: 'start' });
   if (v === 'desligar') $('[data-eqp-desligar]')?.click();
+  if (v === 'modelos-trocar') $('#mdl-conversa input:checked')?.focus({ preventScroll: true });
   if (focar) (eq.mostraDetalhe ? $('#eqp-det-t') : $('#h-equipe'))?.focus({ preventScroll: true });
 }
 
@@ -3104,7 +3191,29 @@ document.addEventListener('click', (e) => {
     confirmarNaLinha(rec, { texto: 'Recusar a promoção? Ele segue em sombra nessa ação.', rotulo: 'Recusar', voltar: 'Cancelar', aoConfirmar: () => { eq.recusa = true; desenharEquipe(); toast('Promoção recusada. Ele segue em sombra.'); $('#eqp-det-t')?.focus({ preventScroll: true }); } });
     return;
   }
-  if (b('[data-eqp-voltar-sombra]')) { eq.pront[0].modo = 'Sombra'; eq.funcs.trafego.modo = 'Sombra'; eq.recusa = true; desenharEquipe(); toast('De volta para sombra. Nada mais aparece na Atenção por ele.'); $('#eqp-det-t')?.focus({ preventScroll: true }); }
+  if (b('[data-eqp-voltar-sombra]')) { eq.pront[0].modo = 'Sombra'; eq.funcs.trafego.modo = 'Sombra'; eq.recusa = true; desenharEquipe(); toast('De volta para sombra. Nada mais aparece na Atenção por ele.'); $('#eqp-det-t')?.focus({ preventScroll: true }); return; }
+  const tr = b('[data-mdl-trocar]');
+  if (tr) { const fin = tr.dataset.mdlTrocar; eq.modelos[fin].editando = true; desenharEquipe(); $(`#mdl-${fin} input:checked`)?.focus(); return; }
+  const ca = b('[data-mdl-cancelar]');
+  if (ca) { const fin = ca.dataset.mdlCancelar; eq.modelos[fin].editando = false; desenharEquipe(); $(`[data-mdl-trocar="${fin}"]`)?.focus(); return; }
+  const de = b('[data-mdl-desfazer]');
+  if (de) {
+    const fin = de.dataset.mdlDesfazer, st = eq.modelos[fin];
+    Object.assign(st, { escolha: st.anterior, anterior: null, quando: st.anterior === 'auto' ? null : st.quando });
+    desenharEquipe();
+    toast(`Troca desfeita: ${FINALIDADES[fin].rot.toLowerCase()} volta para ${st.escolha === 'auto' ? 'o automático' : modeloDe(fin, st.escolha).nome}. Ficou registrado na auditoria.`);
+    $(`[data-mdl-trocar="${fin}"]`)?.focus();
+  }
+});
+document.addEventListener('submit', (e) => {
+  const f = e.target instanceof Element ? e.target.closest('[data-mdl-form]') : null; if (!f) return;
+  e.preventDefault();
+  const fin = f.dataset.mdlForm, st = eq.modelos[fin], novo = f.querySelector('input:checked')?.value;
+  if (!novo || novo === st.escolha) { st.editando = false; desenharEquipe(); toast('Nada mudou: segue o mesmo modelo.'); $(`[data-mdl-trocar="${fin}"]`)?.focus(); return; }
+  Object.assign(st, { anterior: st.escolha, escolha: novo, quando: novo === 'auto' ? null : 'hoje, 14:40', editando: false });
+  desenharEquipe();
+  toast(novo === 'auto' ? 'De volta ao automático. A troca ficou registrada na auditoria.' : `${modeloDe(fin, novo).nome} em ${FINALIDADES[fin].rot.toLowerCase()}. Vale a partir da próxima resposta; a troca ficou registrada na auditoria.`);
+  $(`[data-mdl-desfazer="${fin}"]`)?.focus();
 });
 selEquipe.addEventListener('change', () => definirEquipe(selEquipe.value, { focar: true }));
 const aoMudarModoP4eq = window.aoMudarModo;
@@ -3175,6 +3284,21 @@ window.aoMudarModo = (modo) => { if (typeof aoMudarModoP4eq === 'function') aoMu
       $('[data-eqp-lista]').click(); await esperar(200);
       exige(document.activeElement?.getAttribute('data-eqp-func') === 'trafego', 'o foco não voltou ao item da lista');
     }
+  } };
+  window.uiuxCenarios['p7-fluxo-modelo'] = { larguras: pontas, executar: async () => {
+    await abrir('modelos');
+    exige(shell.modo === 'pro' && !!$('#mdl-conversa') && !!$('#mdl-analise'), 'os modelos não abriram no Pro');
+    $('[data-mdl-trocar="conversa"]').click(); await esperar(150);
+    exige(document.activeElement?.name === 'mdl-conversa', 'o foco não foi para as opções');
+    $('#mdl-conversa input[value="opus"]').click(); $('[data-mdl-form="conversa"]').requestSubmit(); await esperar(200);
+    exige(eq.modelos.conversa.escolha === 'opus' && !!$('[data-mdl-desfazer="conversa"]') && $('#mdl-conversa').textContent.includes('18,80'), 'a troca não entrou com o custo novo');
+    $('[data-mdl-desfazer="conversa"]').click(); await esperar(200);
+    exige(eq.modelos.conversa.escolha === 'auto' && !$('[data-mdl-desfazer="conversa"]'), 'o desfazer não voltou ao automático');
+  } };
+  window.uiuxCenarios['p7-fluxo-modelo-lite'] = { larguras: [1440, 375], executar: async () => {
+    await abrir('modelos-trocado');
+    definirModo('lite', { silencioso: true }); await esperar(200);
+    exige(eq.sel !== 'modelos' && $('#equipe-cab').textContent.includes('escolhidos no Pro'), 'no Lite, a escolha de modelo continuou aberta ou o aviso sumiu');
   } };
   window.uiuxCenarios['p7-fluxo-menu'] = { larguras: [1440, 375], executar: async () => {
     await abrir('equipe'); irParaTela('resultados'); await esperar(200);
