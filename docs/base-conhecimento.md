@@ -646,6 +646,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 02/10/2026 | §16.1: **conversa com o assistente** (HubSpot Breeze Assistant, Shopify Sidekick e o admin novo de 24/09/2026, Google Ads Advisor, Meta AI Business Assistant, Intercom Fin, Triple Whale Moby), pesquisada antes do protótipo P5 (`mockups/prototipo-conversa.html`): painel ao lado do trabalho, fonte em toda resposta, revisão por uma pessoa antes de aplicar, marca de IA em cada mensagem, caminho para uma pessoa e limite dito na tela. |
 | 02/10/2026 | §8.1: o formato de uma chamada MCP 2026-07-28 no fio, medido com o SDK cliente 2.3.0 contra o servidor do RegemCast. §11: o RegemCast tem porta MCP (token por conta, leitura, conversas por anúncio, rascunhos, disparo para produto da DMS) e o envio com cabeçalho de mídia, botões, LTO e carrossel. Fonte: repo `regemcast` (`docs/mcp.md`, PRs #96 e #110 a #116). |
 | 01/10/2026 | §2.1: onde fica o link do anúncio feito de publicação que já existia (`object_story_id`, `effective_object_story_id`, `url_tags` "appended to urls clicked from page post ads"), conferido na referência oficial do AdCreative, com a medição do piloto (14 de 18 anúncios sem link no criativo e sem `url_tags`). |
 | 30/09/2026 | Pesquisa de MCP das plataformas (pergunta do dono: "é mais rápido integrar por MCP?"): §2 MCP de anúncios da Meta reconferido (beta aberto, 91 ferramentas, permissões com `ads_mcp_management`, não dispensa App Review, sem `url_tags` nem relatório assíncrono, CLI em Python com token de usuário de sistema, User-Agent de agente), MCPs de WhatsApp e devtools, terceiros; §3 MCP do Google Ads 0.0.4 (só leitura, só self-hosted), **política de "programmatic proxy" de 31/08/2026**, developer token ignorado e níveis de acesso, fim da v22 em 07/10; §3.3 MCP do GA4 0.7.0; §8.1 MCPs remotos do Google Cloud e a análise "MCP × objetivos do Liame". |
@@ -740,6 +741,11 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - linear.app/changelog/2026-03-24-introducing-linear-agent
   - react.dev/blog/2026/09/09/react-19-3 · github.com/react/react/issues/37614
   - web-platform-dx.github.io/web-features-explorer (view-transitions, starting-style, light-dark, container-queries, inert, scroll-driven-animations)
+  - knowledge.hubspot.com/ai/use-breeze-assistant (conversa, citações e fontes; 16/09/2026)
+  - help.shopify.com/en/manual/shopify-admin/productivity-tools/sidekick · shopify.com/blog/admin-new-look (24/09/2026)
+  - business.google.com/us/accelerate/announcements/google-ai-advisors-agentic-tools-to-drive-impact-and-insights (11/2025)
+  - intercom.com/changes/en/96733-let-your-customers-know-they-re-speaking-with-an-ai-agent (11/07/2025)
+  - mediapost.com/publications/article/414547 (Meta AI Business Assistant, 24/04/2026; secundária) · kb.triplewhale.com (Moby; lida só pelo resumo da busca)
 
 ---
 
@@ -984,7 +990,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 ## 16. Interface: padrões de mercado e plataforma web
 
-*Verificado em 25/09/2026, para escolher o modelo de interface (`docs/ux-modelo-interface.md`). Referências de layout mais amplas ficam no catálogo da skill `ui-ux-proprio` (`referencias/03-catalogo-mercado.md`, verificado em 24/09/2026).*
+*Verificado em 25/09/2026, para escolher o modelo de interface (`docs/ux-modelo-interface.md`); a §16.1 foi ampliada em 02/10/2026 (conversa com o assistente), antes do protótipo P5. Referências de layout mais amplas ficam no catálogo da skill `ui-ux-proprio` (`referencias/03-catalogo-mercado.md`, verificado em 24/09/2026).*
 
 ### 16.1 Como os produtos de marketing mostram agentes
 
@@ -995,6 +1001,16 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Painéis de agentes de código** (Claude Code na web, aba Agents do GitHub) **[O]**: lista de execuções à esquerda, detalhe à direita, **passos visíveis** e **corrigir o rumo no meio da execução**.
 - O **ChatGPT Canvas** saiu do GPT-5.5 em 05/2026 **[S]**: interface de "documento ao lado do chat" não é garantia de padrão estável.
 - **Consequência para o Liame:** a aprovação é o centro (fila com motivo, antes e depois, risco e prazo); os agentes aparecem como **equipe com status ao vivo e histórico**; a IA conversa num painel próprio (Ctrl+J), sem substituir as telas de operação.
+
+**Conversa com o assistente (pesquisado em 02/10/2026, antes do protótipo P5, `mockups/prototipo-conversa.html`):**
+
+- **HubSpot Breeze Assistant** **[O]** (base de ajuda, atualizada em 16/09/2026): abre pela barra do topo, num **painel** que pode ir a tela cheia; a resposta traz **citações numeradas** (o detalhe aparece ao passar o cursor; o clique leva ao registro) e uma seção **Sources** com tudo o que foi usado; um painel de contexto mostra arquivos, conectores e memórias da conversa; histórico ligado por padrão; polegar para cima e para baixo; limite de uso documentado (na geração de conteúdo, 30 por minuto e 1.000 por dia).
+- **Shopify Sidekick** **[O]**: conversa em qualquer página do admin, no computador e no celular; **mostra a mudança para revisão antes de aplicar**; tarefa longa segue em segundo plano e avisa quando está pronta para revisão. No admin novo (blog oficial, 24/09/2026), o campo fica **no pé de toda página** para perguntas curtas e **abre o painel lateral** para trabalho longo.
+- **Google Ads Advisor** **[O]** (anúncio oficial, 11/2025): fica dentro da conta e, **com a revisão e a aprovação do anunciante**, aplica a mudança que sugeriu. Chegou a todas as contas em inglês em 12/2025 **[S]**.
+- **Meta AI Business Assistant** **[S]** (imprensa, 24/04/2026): liberado a todos os anunciantes no Gerenciador de Anúncios, no Business Suite e na central de suporte; responde perguntas de conta e de campanha em linguagem comum. Em teste desde o fim de 2025 **[O]**. Atendimento em português: **[NC]**.
+- **Intercom Fin** **[O]** (novidades do produto, 11/07/2025): selo **"AI Agent"** ao lado do nome **em cada mensagem**, ligado nas configurações; oferece passar para uma pessoa quando o cliente pede ou em assunto de risco, levando a conversa junto **[S]**.
+- **Triple Whale Moby** **[S]** (a base de ajuda recusou a leitura automática em 02/10/2026): responde perguntas sobre os dados com tabelas e gráficos dentro da conversa, mostra a consulta que fez, tem um modo rápido e um de investigação, e guarda o histórico.
+- **Consequência para o P5:** (1) a conversa fica **ao lado do trabalho**, num painel, e não numa tela à parte; (2) **toda resposta diz de onde veio** (citação por número e lista de fontes); (3) o assistente **prepara e uma pessoa aprova** antes de qualquer mudança; (4) a marca de IA aparece **em cada mensagem**, não só no topo; (5) há caminho para uma pessoa; (6) o limite de uso é dito na tela.
 
 ### 16.2 Plataforma web (Baseline)
 
