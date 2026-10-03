@@ -1,8 +1,9 @@
-import { redactCounting } from '@liame/telemetry';
+import { redactCounting, withIdsPreserved } from '@liame/telemetry';
 
 // Remoção de dado pessoal antes de qualquer envio a um modelo (D-A3-4, Política 7.1). É a segunda
 // barreira: quem monta o contexto já não inclui dado de cliente. Os padrões de e-mail, telefone, CPF e
-// CNPJ são os mesmos da redação dos spans (um lugar só); aqui entra também o CEP.
+// CNPJ são os mesmos da redação dos spans (um lugar só); aqui entra também o CEP. Os ids do sistema (UUID)
+// passam intactos: o modelo usa o da marca nas ferramentas.
 
 const CEP = /(?<!\d)\d{5}-\d{3}(?!\d)/g;
 
@@ -12,11 +13,15 @@ export interface TextoLimpo {
 }
 
 export function limparTexto(texto: string): TextoLimpo {
-  const base = redactCounting(texto);
-  let removidos = base.removed;
-  const limpo = base.text.replace(CEP, () => {
-    removidos += 1;
-    return '[cep]';
+  let removidos = 0;
+  // Os UUIDs ficam de lado também para o CEP: `a1b12345-678c-…` parece um CEP.
+  const limpo = withIdsPreserved(texto, (t) => {
+    const base = redactCounting(t);
+    removidos = base.removed;
+    return base.text.replace(CEP, () => {
+      removidos += 1;
+      return '[cep]';
+    });
   });
   return { texto: limpo, removidos };
 }
