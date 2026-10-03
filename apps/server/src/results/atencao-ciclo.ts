@@ -21,7 +21,11 @@ export type TipoCiclo =
   // Fora do normal (A3, I6): as regras estão em `fora-do-normal.ts`.
   | 'vendas_fora_do_normal'
   | 'gasto_da_campanha_fora_do_normal'
-  | 'custo_por_pedido_fora_do_normal';
+  | 'custo_por_pedido_fora_do_normal'
+  // A recomendação da sombra numa ação em Sugerir (A3, I13): o texto está em `sugestoes-da-sombra.ts`.
+  | 'sugestao_pausar_campanha'
+  | 'sugestao_reduzir_verba'
+  | 'sugestao_aumentar_verba';
 
 export type ItemCiclo = {
   kind: TipoCiclo;
@@ -328,6 +332,9 @@ const PRIORIDADE: TipoCiclo[] = [
   'campanha_sem_pedido',
   'gasto_da_campanha_fora_do_normal',
   'custo_por_pedido_fora_do_normal',
+  'sugestao_pausar_campanha',
+  'sugestao_reduzir_verba',
+  'sugestao_aumentar_verba',
   'cupom_sem_uso',
   'margem_desconhecida',
   'vendas_nao_conectadas',

@@ -111,6 +111,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   shadow_state: { class: 'INTERNAL', retention: 'com a marca' },
   readiness_snapshot: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
   human_override: { class: 'PERSONAL', retention: 'com a empresa (quem discordou e o motivo)' },
+  // Promoção de autonomia (A3, I13): a proposta do sistema e a decisão da pessoa (quem, quando e a versão da
+  // política); o motivo é limpo de dado pessoal antes de gravar.
+  autonomy_proposal: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
   // Revisão da semana (A3, I7): os números da marca numa semana fechada, como foram gerados (sem cliente da
   // loja); quem recebeu o e-mail é dado da pessoa (o endereço não fica aqui, só o vínculo).
   weekly_review: { class: 'CONFIDENTIAL', retention: 'com a marca' },

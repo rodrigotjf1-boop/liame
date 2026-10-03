@@ -12,6 +12,8 @@ import { FerramentasDeLeitura } from './ai/registro/leituras.js';
 import { RetornoService } from './ai/retorno.service.js';
 import { AuditController } from './audit/audit.controller.js';
 import { AuthModule } from './auth/auth.module.js';
+import { AutonomiaController } from './autonomia/autonomia.controller.js';
+import { AutonomiaService } from './autonomia/autonomia.service.js';
 import { ConnectionsController } from './connections/connections.controller.js';
 import { ConnectionsService } from './connections/connections.service.js';
 import { ConversaController, DemandasController } from './conversa/conversa.controller.js';
@@ -55,7 +57,7 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
-  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController, PesquisaController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService],
+  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController, PesquisaController, AutonomiaController],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService],
 })
 export class AppModule {}

@@ -5,6 +5,10 @@ import { MODELO_PADRAO } from '../attribution/motor.js';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { LinksService } from '../links/links.service.js';
+import type { LoadedPolicy } from '../policy/engine.js';
+import { carregarPoliticas } from '../policy/policy.service.js';
+import { modoDaAcao, mostraNaAtencao } from '../sombra/autonomia.js';
+import type { AcaoSombra } from '../sombra/regras.js';
 import {
   avisoAnunciosSemRastreio,
   avisoCampanhaSemPedido,
@@ -22,6 +26,7 @@ import {
   plataformaIntegrada,
 } from './atencao-ciclo.js';
 import { avisoCustoPorPedido, avisoGastoDaCampanha, avisoVendasForaDoNormal, DIAS_DA_SERIE, diaNoFuso, lidaHoje, menosDias, type VendasDoDia } from './fora-do-normal.js';
+import { avisoDaSugestao, type SugestaoDaSombra } from './sugestoes-da-sombra.js';
 
 // Atenção do ciclo fechado (A2.5, F9): calculada na hora, na transação da requisição e sob a RLS da empresa,
 // em poucas consultas de conjunto para todas as marcas pedidas (só a conferência do rastreio é por marca, e só
@@ -50,10 +55,11 @@ export class AtencaoCicloService {
 
   async atencao(brandId: string | undefined, agora = new Date()): Promise<ClosedLoopAttentionResponse> {
     const tx = currentTx();
-    const marcas = (
-      await tx.execute<{ id: string }>(sql`
-        select id from liame.brand where archived_at is null ${brandId ? sql`and id = ${brandId}` : sql``} order by created_at, id`)
-    ).rows.map((m) => m.id);
+    const linhasDasMarcas = (
+      await tx.execute<{ id: string; tenant_id: string }>(sql`
+        select id, tenant_id from liame.brand where archived_at is null ${brandId ? sql`and id = ${brandId}` : sql``} order by created_at, id`)
+    ).rows;
+    const marcas = linhasDasMarcas.map((m) => m.id);
     if (brandId && !marcas.length) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
     if (!marcas.length) return { items: [], generated_at: agora.toISOString() };
     // A janela dos avisos de campanha são os últimos 7 dias COMPLETOS, os mesmos da explicação (I4): o gasto
@@ -213,6 +219,29 @@ export class AtencaoCicloService {
     );
     const primeiroDia = <T>(serie: Map<string, T> | undefined) => (serie?.size ? [...serie.keys()].sort()[0]! : null);
 
+    // 6. Sugerir (A3, I13): as recomendações em aberto da sombra (dos últimos 7 dias, sem a pessoa ter mexido na
+    //    campanha ainda), com as políticas das marcas que têm alguma, para saber se a ação saiu de Sombra.
+    const sugestoes = await tx.execute<{
+      brand_id: string;
+      tool: AcaoSombra;
+      campaign_id: string;
+      connected_account_id: string;
+      provider: string;
+      params: { percent?: number | null };
+      state_snapshot: SugestaoDaSombra['retrato'];
+    }>(sql`
+      select d.brand_id, d.tool, d.campaign_id, d.connected_account_id, d.provider, d.params, d.state_snapshot
+        from liame.shadow_decision d
+        join liame.connected_account a on a.id = d.connected_account_id and a.disconnected_at is null
+        join liame.campaign c on c.id = d.campaign_id and c.status = 'ativa'
+       where d.brand_id in ${marcas} and d.status = 'aberta' and d.human_action is null
+         and d.decided_on >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias - 1}::int
+       order by d.decided_on desc, d.id`);
+    const politicasDaMarca = new Map<string, LoadedPolicy[]>();
+    for (const m of linhasDasMarcas) {
+      if (sugestoes.rows.some((s) => s.brand_id === m.id)) politicasDaMarca.set(m.id, (await carregarPoliticas(tx, m.tenant_id, m.id)).policies);
+    }
+
     const itens: ItemCiclo[] = [];
     // A marca de cada aviso: é com ela que a tela pede a explicação (I4). Os avisos saem das regras sem
     // marca; aqui cada um fica com a da volta em que nasceu.
@@ -220,6 +249,19 @@ export class AtencaoCicloService {
     for (const marca of marcas) {
       const inicio = itens.length;
       try {
+        // Sugerir (I13): a recomendação da sombra cuja ação, nesta conta, saiu de Sombra. Nada é executado.
+        for (const s of sugestoes.rows) {
+          if (s.brand_id !== marca) continue;
+          const percent = s.params.percent ?? null;
+          const verba = s.state_snapshot.campanha?.verba_diaria_micros;
+          const atual = verba ? Number(verba) : null;
+          const nova = atual !== null && percent ? Math.round((atual * (100 + (s.tool === 'orcamento_aumentar' ? percent : -percent))) / 100) : null;
+          const alvo = { tool: s.tool, brandId: marca, provider: s.provider, accountId: s.connected_account_id, valorAtualMicros: atual, valorMicros: nova };
+          if (!mostraNaAtencao(modoDaAcao(politicasDaMarca.get(marca) ?? [], alvo).mode)) continue;
+          const aviso = avisoDaSugestao({ tool: s.tool, campaignId: s.campaign_id, connectedAccountId: s.connected_account_id, provider: s.provider, percent, retrato: s.state_snapshot });
+          if (aviso) itens.push(aviso);
+        }
+
         const lojasDaMarca = lojas.rows.filter((l) => l.brand_id === marca);
         const campanhasDaMarca = campanhas.rows.filter((c) => c.brand_id === marca);
         if (!lojasDaMarca.length) {
