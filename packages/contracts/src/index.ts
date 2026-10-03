@@ -222,6 +222,19 @@ export {
   WeekPlanContent,
 } from './planos.js';
 export {
+  AutonomyItem,
+  AutonomyProposalSummary,
+  AutonomyQuery,
+  AutonomyReadiness,
+  AutonomyResponse,
+  AutonomyThresholds,
+  READINESS_GATES,
+  RejectAutonomyRequest,
+  SHADOW_TOOLS,
+  ShadowTool,
+  UndoAutonomyRequest,
+} from './autonomia.js';
+export {
   CouponCampaign,
   CouponCode,
   CouponItem,

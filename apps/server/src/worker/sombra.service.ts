@@ -21,6 +21,7 @@ import {
   REGRAS_VERSAO,
   type RotuloDoArrependimento,
 } from '../sombra/regras.js';
+import { proporPromocoes } from './autonomia-propostas.js';
 
 // A rotina da sombra de uma marca (A3, I5). Fica na pasta do worker porque grava em escopo de sistema, e
 // só os jobs do worker podem (regra `liame-escopo-sistema`). Uma vez por dia da loja, depois da leitura
@@ -28,7 +29,7 @@ import {
 //   1. olha as recomendações em aberto e registra o que a pessoa fez na plataforma;
 //   2. avalia as que já completaram a janela: resultado posterior e arrependimento;
 //   3. registra as recomendações novas, com os números da tela Resultados nos últimos 7 dias completos;
-//   4. atualiza os sinais de prontidão por conta e ferramenta.
+//   4. atualiza os sinais de prontidão por conta e ferramenta e, com eles, as propostas de promoção (I13).
 // Lê como a empresa (mesma RLS e mesmas contas da tela) e grava em escopo de sistema, com a empresa
 // explícita em cada instrução. Nada é executado em plataforma nenhuma.
 
@@ -313,5 +314,7 @@ export class SombraService {
          set rule_version = excluded.rule_version, sample_size = excluded.sample_size, agreement_rate = excluded.agreement_rate,
              worse_rate = excluded.worse_rate, regret_sum_micros = excluded.regret_sum_micros, confidence_avg = excluded.confidence_avg,
              missing = excluded.missing`);
+    // Com o retrato novo, a vez das propostas de promoção (I13): o sistema propõe, uma pessoa aprova.
+    await proporPromocoes(tx, alvo);
   }
 }

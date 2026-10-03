@@ -89,7 +89,8 @@ export const AttentionItem = z.strictObject({
    * `provider` `regem`, e `vendas_nao_conectadas`, `plataforma_nao_informada`, `anuncio_sem_rastreio`,
    * `campanha_sem_cupom`, `vendas_nao_medidas`, `campanha_sem_pedido`, `cupom_sem_uso`, `margem_desconhecida`
    * ou `plataforma_x_caixa`. Fora do normal (A3, I6): `vendas_fora_do_normal`,
-   * `gasto_da_campanha_fora_do_normal` e `custo_por_pedido_fora_do_normal`.
+   * `gasto_da_campanha_fora_do_normal` e `custo_por_pedido_fora_do_normal`. A recomendação da sombra numa ação
+   * que saiu de Sombra (A3, I13): `sugestao_pausar_campanha`, `sugestao_reduzir_verba` e `sugestao_aumentar_verba`.
    */
   kind: Slug,
   /** `critica`, `atencao` ou `info`. */

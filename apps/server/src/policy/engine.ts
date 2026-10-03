@@ -146,33 +146,50 @@ function autonomyMatch(rule: Extract<PolicyRule, { type: 'autonomy' }>, p: Actio
   return score;
 }
 
+/** O modo escolhido e a política de onde ele veio (nula: nenhuma regra casou, vale o padrão). */
+export interface ModoEscolhido {
+  mode: AutonomyMode;
+  source: PolicySource | null;
+  version: number | null;
+}
+
+/**
+ * O modo da proposta: a regra de autonomia mais específica (a da marca vence a da empresa no empate);
+ * ESCALATE vence sempre; sem regra, SHADOW.
+ */
+export function chooseMode(policies: LoadedPolicy[], p: ActionProposal): ModoEscolhido {
+  let best: (ModoEscolhido & { score: number }) | null = null;
+  let escalate: ModoEscolhido | null = null;
+  for (const policy of policies) {
+    for (const rule of policy.document.rules) {
+      if (rule.type !== 'autonomy') continue;
+      const score = autonomyMatch(rule, p);
+      if (score === null) continue;
+      if (rule.mode === 'ESCALATE' && !escalate) escalate = { mode: 'ESCALATE', source: policy.source, version: policy.version };
+      const weighted = score * 100 + SOURCE_WEIGHT[policy.source];
+      if (!best || weighted >= best.score) best = { mode: rule.mode, source: policy.source, version: policy.version, score: weighted };
+    }
+  }
+  if (escalate) return escalate;
+  return best ? { mode: best.mode, source: best.source, version: best.version } : { mode: DEFAULT_MODE, source: null, version: null };
+}
+
 /**
  * Avalia a proposta contra a política da distribuição, a da empresa e a da marca. Qualquer violação
- * nega. O modo vem da regra de autonomia mais específica (a da marca vence a da empresa no empate);
- * ESCALATE vence sempre; sem regra, SHADOW.
+ * nega. O modo vem de `chooseMode`.
  */
 export function evaluatePolicy(policies: LoadedPolicy[], p: ActionProposal, ctx: { at: Date; timezone: string }): PolicyDecision {
   const violations: PolicyViolation[] = [];
-  let best: { mode: AutonomyMode; score: number } | null = null;
-  let escalate = false;
   for (const policy of policies) {
     policy.document.rules.forEach((rule, index) => {
-      if (rule.type === 'autonomy') {
-        const score = autonomyMatch(rule, p);
-        if (score === null) return;
-        if (rule.mode === 'ESCALATE') escalate = true;
-        const weighted = score * 100 + SOURCE_WEIGHT[policy.source];
-        if (!best || weighted >= best.score) best = { mode: rule.mode, score: weighted };
-        return;
-      }
+      if (rule.type === 'autonomy') return;
       const message = violationOf(rule, p, ctx);
       if (message) violations.push({ source: policy.source, rule_index: index, type: rule.type, message });
     });
   }
-  const chosen = best as { mode: AutonomyMode; score: number } | null;
   return {
     allowed: violations.length === 0,
-    mode: escalate ? 'ESCALATE' : (chosen?.mode ?? DEFAULT_MODE),
+    mode: chooseMode(policies, p).mode,
     violations,
     versions: policies.map((x) => `${x.source === 'platform' ? 'plataforma' : x.source === 'tenant' ? 'empresa' : 'marca'}@${x.version}`),
   };

@@ -32,7 +32,7 @@ export class ResultsController {
   @ApiOperation({
     summary: 'Atenção do ciclo fechado',
     description:
-      'O que precisa de alguém agora entre a mídia e as vendas, mais grave primeiro: Regem desconectado ou com os pedidos atrasados, loja sem a plataforma de pedidos informada, anúncios ativos sem rastreio, campanhas sem cupom exclusivo, campanha medida pelo clique com gasto e sem pedido confirmado em 7 dias, cupom exclusivo sem uso com a campanha gastando, margem desconhecida acima de 20% da receita atribuída e plataforma × caixa muito distantes (informativo). Calculado na hora, com o motivo e o que fazer, no formato dos avisos de mídia.',
+      'O que precisa de alguém agora entre a mídia e as vendas, mais grave primeiro: Regem desconectado ou com os pedidos atrasados, loja sem a plataforma de pedidos informada, anúncios ativos sem rastreio, campanhas sem cupom exclusivo, campanha medida pelo clique com gasto e sem pedido confirmado em 7 dias, cupom exclusivo sem uso com a campanha gastando, margem desconhecida acima de 20% da receita atribuída e plataforma × caixa muito distantes (informativo); e a recomendação da sombra (pausar a campanha, reduzir ou aumentar a verba) quando a ação, naquela conta, saiu de Sombra (`sugestao_*`; nada é executado). Calculado na hora, com o motivo e o que fazer, no formato dos avisos de mídia.',
   })
   @ApiOkResponse({ standardSchema: ClosedLoopAttentionResponse })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
