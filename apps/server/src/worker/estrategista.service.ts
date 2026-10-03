@@ -5,7 +5,7 @@ import { sql } from 'drizzle-orm';
 import { indiceDasOrigens } from '../ai/conversa/fontes.js';
 import { foraDoDia, nomesDaLeitura, rotuloDaLeitura } from '../ai/conversa/leituras.js';
 import { contextoDoPlano, type DadosDoPlano, fontesDaVerba, mensagemDoPlano, origensDoPlano, type PedidoDoPlano, permitidoNoContexto } from '../ai/estrategista/contexto.js';
-import { dinheiroDoPlano, hashDoConteudo, marcarPlano, TITULO_DO_TIPO, verbaDeHoje } from '../ai/estrategista/plano.js';
+import { cuponsAtivos, dinheiroDoPlano, hashDoConteudo, marcarPlano, TITULO_DO_TIPO, verbaDeHoje } from '../ai/estrategista/plano.js';
 import { ESTRATEGISTA, PROMPT_ESTRATEGISTA, TAREFA_ESTRATEGISTA } from '../ai/estrategista/prompt.js';
 import { conferirPlano, conteudoDaResposta, JANELA_DO_TIPO, RESPOSTA_DO_TIPO } from '../ai/estrategista/resposta.js';
 import { AiError, type AiErrorCode, AiGateway, type FerramentaIa } from '../ai/gateway.js';
@@ -294,20 +294,6 @@ export class EstrategistaService {
     });
     return { status: 'proposto', planId, version: versao };
   }
-}
-
-/** Os códigos dos cupons ativos que o Estrategista leu (só eles podem entrar numa oferta). */
-export function cuponsAtivos(leituras: Array<{ ferramenta: string; valor: unknown }>): string[] {
-  const codigos = new Set<string>();
-  for (const l of leituras) {
-    if (l.ferramenta !== 'cupons_campanha') continue;
-    const cupons = (l.valor as { cupons?: unknown })?.cupons;
-    if (!Array.isArray(cupons)) continue;
-    for (const c of cupons as Array<Record<string, unknown>>) {
-      if (c && typeof c.codigo === 'string' && c.situacao === 'ativo') codigos.add(c.codigo.toUpperCase());
-    }
-  }
-  return [...codigos];
 }
 
 function semRepetir(fontes: ConversationStaleSource[]): ConversationStaleSource[] {

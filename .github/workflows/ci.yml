@@ -109,8 +109,8 @@ jobs:
       - name: Testes, verificação das dependências e do rastreio
         run: pnpm test
 
-      # Evals (A3, I3 e I10c; evals/README.md): o caminho do promptfoo e o portão, com as respostas gravadas nos
-      # casos, para cada tarefa. Sem chave de fornecedor e sem custo: prova que a resposta boa aprova e que a
+      # Evals (A3, I3, I10c e I11c; evals/README.md): o caminho do promptfoo e o portão, com as respostas gravadas
+      # nos casos, para cada tarefa. Sem chave de fornecedor e sem custo: prova que a resposta boa aprova e que a
       # ruim reprova.
       - name: Evals em modo gravado (promptfoo 0.123.1) - as respostas boas aprovam
         env:
@@ -118,7 +118,7 @@ jobs:
           PROMPTFOO_DISABLE_UPDATE: '1'
           PROMPTFOO_FAILED_TEST_EXIT_CODE: '0'
         run: |
-          for tarefa in explicar_resultados conversa_lia; do
+          for tarefa in explicar_resultados conversa_lia estrategista_plano; do
             (cd "evals/$tarefa" && npx --yes promptfoo@0.123.1 eval -c promptfooconfig.yaml --no-cache --no-progress-bar --no-table -o "$RUNNER_TEMP/eval-$tarefa-boa.json")
             node evals/apoio/portao.mjs "$RUNNER_TEMP/eval-$tarefa-boa.json"
           done
@@ -130,7 +130,7 @@ jobs:
           PROMPTFOO_FAILED_TEST_EXIT_CODE: '0'
           EVAL_GRAVADO: ruim
         run: |
-          for tarefa in explicar_resultados conversa_lia; do
+          for tarefa in explicar_resultados conversa_lia estrategista_plano; do
             (cd "evals/$tarefa" && npx --yes promptfoo@0.123.1 eval -c promptfooconfig.yaml --no-cache --no-progress-bar --no-table -o "$RUNNER_TEMP/eval-$tarefa-ruim.json")
             if node evals/apoio/portao.mjs "$RUNNER_TEMP/eval-$tarefa-ruim.json"; then
               echo "o portão aprovou respostas que deveria reprovar ($tarefa)"

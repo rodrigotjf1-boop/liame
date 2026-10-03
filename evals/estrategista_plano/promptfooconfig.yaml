@@ -1,0 +1,15 @@
+# Eval da tarefa `estrategista_plano` (A3, I11c; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto do plano, as leituras e o formato da
+# resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do servidor
+# (apoio/conferir.mjs), com a mesma conferência da produção. Rodar: ver evals/README.md.
+description: 'Liame · estrategista_plano: número só do que leu, datas da tabela, cupom que existe, verba do sistema, injeção e política'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: estrategista_plano
+
+tests: file://testes.mjs

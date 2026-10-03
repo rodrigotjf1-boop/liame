@@ -143,6 +143,8 @@ export function permitidoNoContexto(d: DadosDoPlano): unknown {
   const j = janelaDoTipo(d.kind, d.hoje);
   return {
     ...fixo,
+    // "o plano de 90 dias": o número do tipo pode aparecer ("nos próximos 90 dias").
+    tipo: NOME_DO_TIPO[d.kind],
     janela: diasDe(d.hoje, j.ate).map((x) => dia(x)),
     semana_de_onde_vem_a_verba: [dia(d.semana.from), dia(d.semana.to)],
     calendario: d.calendario.flatMap((c) => [dia(c.day), c.name]),
@@ -181,6 +183,7 @@ export function origensDoPlano(d: DadosDoPlano, x: { leituras: LeituraDoPlano[];
       : []),
     { rotulo: 'Liame · calendário comercial (feriados nacionais e datas do varejo)', valor: d.calendario.map((c) => `${dia(c.day)} ${c.name}`), comCaminho: false, ordem: 4 },
     { rotulo: 'Liame · "a semana" são os 7 dias completos até ontem', valor: [fixo.semana, ...semana], comCaminho: false, ordem: 4 },
+    { rotulo: 'Liame · o tipo do plano pedido', valor: NOME_DO_TIPO[d.kind], comCaminho: false, ordem: 4 },
     { rotulo: 'Liame · calendário (os dias que o plano pode usar)', valor: janela, comCaminho: false, ordem: 5 },
     ...(d.dossie ? [{ rotulo: 'Minha marca · dossiê da marca', valor: d.dossie, comCaminho: false, ordem: 4 }] : []),
   ];
