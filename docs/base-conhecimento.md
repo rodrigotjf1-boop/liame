@@ -646,6 +646,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 02/10/2026 | §16.1: **equipe, prontidão e autonomia** (HubSpot Agent Hub, Salesforce Agentforce, aplicar recomendações automaticamente do Google Ads, Intercom Fin), pesquisado antes do protótipo P7 (`mockups/prototipo-equipe.html`): autonomia por tipo de ação, ligada por uma pessoa e desligável, com histórico; acerto e custo por agente. |
 | 02/10/2026 | §16.4 (nova): **dossiê da marca** nos produtos de marketing (HubSpot Brand Voice e Brand Knowledge, Klaviyo, Jasper IQ, Canva), pesquisado antes do protótipo P6 (`mockups/prototipo-marca.html`): voz separada dos fatos e das regras, a IA sugere a partir do que já existe e a pessoa confere, versões guardadas. |
 | 02/10/2026 | §16.1: **conversa com o assistente** (HubSpot Breeze Assistant, Shopify Sidekick e o admin novo de 24/09/2026, Google Ads Advisor, Meta AI Business Assistant, Intercom Fin, Triple Whale Moby), pesquisada antes do protótipo P5 (`mockups/prototipo-conversa.html`): painel ao lado do trabalho, fonte em toda resposta, revisão por uma pessoa antes de aplicar, marca de IA em cada mensagem, caminho para uma pessoa e limite dito na tela. |
 | 02/10/2026 | §8.1: o formato de uma chamada MCP 2026-07-28 no fio, medido com o SDK cliente 2.3.0 contra o servidor do RegemCast. §11: o RegemCast tem porta MCP (token por conta, leitura, conversas por anúncio, rascunhos, disparo para produto da DMS) e o envio com cabeçalho de mídia, botões, LTO e carrossel. Fonte: repo `regemcast` (`docs/mcp.md`, PRs #96 e #110 a #116). |
@@ -749,6 +750,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - mediapost.com/publications/article/414547 (Meta AI Business Assistant, 24/04/2026; secundária) · kb.triplewhale.com (Moby; lida só pelo resumo da busca)
   - knowledge.hubspot.com/branding/set-up-brand-voice-using-ai (14/09/2026) · community.hubspot.com/t/june-2026-product-updates/151744 (lida pelo resumo da busca)
   - help.klaviyo.com/hc/en-us/articles/35873068949147 (06/08/2025) · jasper.ai/blog · canva.com/help/brand-voice (secundárias)
+  - support.google.com/google-ads/answer/10276359 (aplicar recomendações automaticamente) · hubspot.com/spotlight (Agent Hub)
+  - salesforce.com/news/press-releases/2025/06/23/agentforce-3-announcement · fin.ai (secundárias para métricas)
 
 ---
 
@@ -1014,6 +1017,14 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Intercom Fin** **[O]** (novidades do produto, 11/07/2025): selo **"AI Agent"** ao lado do nome **em cada mensagem**, ligado nas configurações; oferece passar para uma pessoa quando o cliente pede ou em assunto de risco, levando a conversa junto **[S]**.
 - **Triple Whale Moby** **[S]** (a base de ajuda recusou a leitura automática em 02/10/2026): responde perguntas sobre os dados com tabelas e gráficos dentro da conversa, mostra a consulta que fez, tem um modo rápido e um de investigação, e guarda o histórico.
 - **Consequência para o P5:** (1) a conversa fica **ao lado do trabalho**, num painel, e não numa tela à parte; (2) **toda resposta diz de onde veio** (citação por número e lista de fontes); (3) o assistente **prepara e uma pessoa aprova** antes de qualquer mudança; (4) a marca de IA aparece **em cada mensagem**, não só no topo; (5) há caminho para uma pessoa; (6) o limite de uso é dito na tela.
+
+**Equipe, prontidão e autonomia (pesquisado em 02/10/2026, antes do protótipo P7, `mockups/prototipo-equipe.html`):**
+
+- **HubSpot Agent Hub** **[O, via busca]** (Spotlight do outono de 2026): uma tela com todos os agentes de marketing, vendas e atendimento: o que está ativo, o que está fazendo e o que produziu. O conhecimento que eles leem fica em outro lugar (Context Home).
+- **Salesforce Agentforce** **[S]** (Agentforce 3, 06/2025, e a observabilidade que veio depois): saúde de cada agente, desempenho ao longo do tempo, assuntos e ações que não funcionam, registro de cada interação e alerta de erro; o custo não entra na otimização.
+- **Google Ads, aplicar recomendações automaticamente** **[O]** (ajuda): o anunciante liga **por tipo de recomendação** (ou em pacotes); a aba de histórico mostra quando cada tipo foi ligado e por quem, quantas vezes foi aplicado na semana e a última vez; desliga por tipo, a qualquer momento.
+- **Intercom Fin** **[S]**: o agente é medido pela taxa de resolução, por uma nota de qualidade de cada conversa e pelo custo por resolução.
+- **Consequência para o P7:** a equipe numa tela, com o que cada um faz, está fazendo e já fez; autonomia **por tipo de ação**, ligada por uma pessoa, com o histórico de quem ligou e quando, e desligável a qualquer momento (como no Google); cada funcionário com o acerto e o custo; e o motivo de ainda não poder fazer mais, à vista.
 
 ### 16.2 Plataforma web (Baseline)
 
