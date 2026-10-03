@@ -10,7 +10,7 @@ import {
 import type { Tx } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { limparTexto } from '../ai/sanitizar.js';
+import { motivoSemDadoPessoal } from '../ai/sanitizar.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import type { PolicySource } from '../policy/engine.js';
@@ -123,7 +123,7 @@ export class AutonomiaService {
     const p = await this.pendente(tx, id);
     const retrato = await this.ultimoRetrato(tx, p.connected_account_id, p.tool);
     const proxima = Math.max(p.sample_size, retrato?.sample_size ?? 0) + AMOSTRA_DEPOIS_DA_RECUSA;
-    const motivo = body.reason ? motivoLimpo(body.reason) : null;
+    const motivo = body.reason ? motivoSemDadoPessoal(body.reason) : null;
     await tx.execute(sql`
       update liame.autonomy_proposal
          set status = 'recusada', decided_by = ${auth.userId}, decided_at = now(), reason = ${motivo}, next_sample_size = ${proxima}, updated_at = now()
@@ -155,7 +155,7 @@ export class AutonomiaService {
       );
     }
     const retrato = await this.ultimoRetrato(tx, body.connected_account_id, body.tool);
-    const motivo = body.reason ? motivoLimpo(body.reason) : null;
+    const motivo = body.reason ? motivoSemDadoPessoal(body.reason) : null;
     const desfeita = await tx.execute<{ id: string }>(sql`
       update liame.autonomy_proposal
          set status = 'desfeita', undone_by = ${auth.userId}, undone_at = now(), undone_policy_version = ${politica.version}, reason = ${motivo},
@@ -319,10 +319,4 @@ function propostaDaLinha(l: Linha, modo: AutonomyMode, missing: string[] | null)
     reason,
     next_sample_size: l.p_next_sample_size,
   };
-}
-
-/** O motivo escrito pela pessoa, sem dado pessoal. */
-function motivoLimpo(texto: string): string | null {
-  const limpo = limparTexto(texto).texto.trim().slice(0, 300);
-  return limpo.length >= 3 ? limpo : null;
 }

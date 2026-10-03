@@ -235,6 +235,16 @@ export {
   UndoAutonomyRequest,
 } from './autonomia.js';
 export {
+  PauseTeamMemberRequest,
+  ResumeTeamMemberRequest,
+  TEAM_MEMBERS,
+  TeamMember,
+  TeamMemberKey,
+  TeamQuery,
+  TeamResponse,
+  TeamStat,
+} from './equipe.js';
+export {
   CouponCampaign,
   CouponCode,
   CouponItem,

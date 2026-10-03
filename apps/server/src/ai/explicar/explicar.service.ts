@@ -24,6 +24,9 @@ import { explicacaoSemIa } from './sem-ia.js';
 
 /** O nome, em `ai_usage.workflow`, da leitura da revisão da semana: a chamada é do sistema, sem pessoa. */
 export const WORKFLOW_DA_REVISAO = 'revisao.semanal';
+/** Os nomes, em `ai_usage.workflow`, do Explicar dos resultados e do Explicar de um aviso da Atenção. */
+export const WORKFLOW_DOS_RESULTADOS = 'resultados.explicar';
+export const WORKFLOW_DO_AVISO = 'atencao.explicar';
 
 /** Por que a explicação é a do código e não a da IA. */
 export type MotivoSemIa = AiErrorCode | Recusa | 'dado_velho' | 'funcionario_desligado' | 'conteudo_politico';
@@ -90,7 +93,7 @@ export class ExplicarService {
       daMarca: await proibidasDaMarca(q.brand_id),
     }));
     const contexto = contextoDosResultados(lido.atual, lido.anterior);
-    return this.explicar(ctx, q.brand_id, contexto, 'resultados.explicar', lido, () => explicacaoSemIa(contexto));
+    return this.explicar(ctx, q.brand_id, contexto, WORKFLOW_DOS_RESULTADOS, lido, () => explicacaoSemIa(contexto));
   }
 
   /**
@@ -142,7 +145,7 @@ export class ExplicarService {
       return { item, campanha, atual, anterior, ativo: await this.analistaAtivo(ctx, q.brand_id), daMarca: await proibidasDaMarca(q.brand_id) };
     });
     const contexto: ContextoDoAviso = { aviso: avisoNoContexto(lido.item, lido.campanha), ...contextoDosResultados(lido.atual, lido.anterior) };
-    return this.explicar({ ...ctx, agora }, q.brand_id, contexto, 'atencao.explicar', lido, () => explicacaoDoAvisoSemIa(contexto));
+    return this.explicar({ ...ctx, agora }, q.brand_id, contexto, WORKFLOW_DO_AVISO, lido, () => explicacaoDoAvisoSemIa(contexto));
   }
 
   /**

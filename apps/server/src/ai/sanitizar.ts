@@ -26,6 +26,15 @@ export function limparTexto(texto: string): TextoLimpo {
   return { texto: limpo, removidos };
 }
 
+/**
+ * O motivo que uma pessoa escreve numa decisão (recusar uma promoção, desligar um funcionário), sem dado pessoal e
+ * no tamanho que o banco guarda (de 3 a 300 caracteres); curto demais depois da limpeza, nulo.
+ */
+export function motivoSemDadoPessoal(texto: string): string | null {
+  const limpo = limparTexto(texto).texto.trim().slice(0, 300);
+  return limpo.length >= 3 ? limpo : null;
+}
+
 /** Limpa todo texto de um valor JSON (a resposta estruturada que vai para a guarda de 30 dias). */
 export function limparJson(valor: unknown): { valor: unknown; removidos: number } {
   let removidos = 0;

@@ -1,7 +1,9 @@
 import { type Database, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { desligadoPelaEmpresa } from '../ai/registro/ativacao.js';
 import { DATABASE } from '../database/database.module.js';
+import { GESTOR_DE_TRAFEGO } from '../equipe/membros.js';
 import { FlagService } from '../flags/flag.service.js';
 import { type ResultadoDaSombra, SombraService } from './sombra.service.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
@@ -9,20 +11,23 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 /** Reserva da marca: se o worker cair no meio, ela volta para a fila depois disto. */
 const RESERVA = '30 minutes';
 /** Quando a marca volta, conforme o que aconteceu na vez dela. */
-const VOLTA: Record<ResultadoDaSombra['status'] | 'desligada', string> = {
+const VOLTA: Record<ResultadoDaSombra['status'] | 'desligada' | 'desligada_pela_empresa', string> = {
   feito: '3 hours',
   ja_rodou: '3 hours',
   // A leitura da manhã ainda não chegou (ou uma fonte está parada): tenta de novo em uma hora.
   dado_velho: '1 hour',
   desligada: '6 hours',
+  // A empresa desligou o Gestor de tráfego nesta marca (I13b): ligado de novo, a vez volta em até uma hora.
+  desligada_pela_empresa: '1 hour',
 };
 
-export type VezDaSombra = { brandId: string; tenantId: string; status: ResultadoDaSombra['status'] | 'desligada' | 'falhou' };
+export type VezDaSombra = { brandId: string; tenantId: string; status: ResultadoDaSombra['status'] | 'desligada' | 'desligada_pela_empresa' | 'falhou' };
 
 /**
  * A sombra de verdade (A3, I5), marca por marca: reserva as marcas com conta de anúncio cuja vez chegou,
  * com SKIP LOCKED na mesma linha que a reserva altera (`shadow_state`, V35), a mais atrasada primeiro.
- * Só roda para a empresa com a flag `sombra` ligada; a rotina em si está em `SombraService`.
+ * Só roda para a empresa com a flag `sombra` ligada e com o Gestor de tráfego ligado na marca (a empresa pode
+ * desligá-lo, I13b); a rotina em si está em `SombraService`.
  */
 @Injectable()
 export class SombraLoop {
@@ -73,6 +78,11 @@ export class SombraLoop {
         if (!(await this.flags.isEnabled('sombra', this.flags.context({ tenantId: m.tenant_id })))) {
           await this.fechar(m.brand_id, 'desligada', null, referencia);
           vezes.push({ ...alvo, status: 'desligada' });
+          continue;
+        }
+        if (await withSystem(db, (tx) => desligadoPelaEmpresa(tx, { tenantId: m.tenant_id, brandId: m.brand_id, agentKey: GESTOR_DE_TRAFEGO }))) {
+          await this.fechar(m.brand_id, 'desligada_pela_empresa', null, referencia);
+          vezes.push({ ...alvo, status: 'desligada_pela_empresa' });
           continue;
         }
         const r = await this.sombra.rodarMarca({ ...alvo, ultimoDia: m.last_run_on }, agora);
