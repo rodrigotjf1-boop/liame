@@ -26,15 +26,15 @@ const MATRIX: Record<string, string[]> = {
     'pessoas.alterar_nivel', 'auditoria.ver', 'acoes.aprovar', 'campanhas.ver', 'campanhas.operar', 'relatorios.ver',
     'agentes.gerenciar', 'parada.acionar', 'webhooks.gerenciar', 'politicas.gerenciar',
     'orcamento.gerenciar', 'contas.ver', 'contas.conectar', 'vendas.ver', 'atribuicao.gerenciar', 'links.gerenciar', 'cupons.criar',
-    'dossie.ver', 'dossie.editar', 'conversa.usar', 'demanda.abrir',
+    'dossie.ver', 'dossie.editar', 'conversa.usar', 'demanda.abrir', 'planos.ver', 'planos.decidir',
   ],
   gestor: [
     'empresa.ver', 'marcas.ver', 'pessoas.ver', 'acoes.aprovar', 'campanhas.ver', 'campanhas.operar', 'relatorios.ver',
     'agentes.gerenciar', 'parada.acionar', 'contas.ver', 'contas.conectar', 'vendas.ver', 'atribuicao.gerenciar', 'links.gerenciar',
-    'cupons.criar', 'dossie.ver', 'conversa.usar', 'demanda.abrir',
+    'cupons.criar', 'dossie.ver', 'conversa.usar', 'demanda.abrir', 'planos.ver', 'planos.decidir',
   ],
-  aprovador: ['empresa.ver', 'marcas.ver', 'acoes.aprovar', 'campanhas.ver', 'relatorios.ver', 'contas.ver', 'vendas.ver', 'dossie.ver', 'conversa.usar'],
-  somente_leitura: ['empresa.ver', 'marcas.ver', 'campanhas.ver', 'relatorios.ver', 'contas.ver', 'vendas.ver', 'dossie.ver', 'conversa.usar'],
+  aprovador: ['empresa.ver', 'marcas.ver', 'acoes.aprovar', 'campanhas.ver', 'relatorios.ver', 'contas.ver', 'vendas.ver', 'dossie.ver', 'conversa.usar', 'planos.ver', 'planos.decidir'],
+  somente_leitura: ['empresa.ver', 'marcas.ver', 'campanhas.ver', 'relatorios.ver', 'contas.ver', 'vendas.ver', 'dossie.ver', 'conversa.usar', 'planos.ver'],
   so_relatorios: [],
 };
 const APPROVERS = new Set(['administrador', 'gestor', 'aprovador']);

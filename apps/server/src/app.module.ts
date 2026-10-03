@@ -37,6 +37,8 @@ import { LinksService } from './links/links.service.js';
 import { MarcaController } from './marca/marca.controller.js';
 import { MarcaService } from './marca/marca.service.js';
 import { PeopleController } from './people/people.controller.js';
+import { PlanosController } from './planos/planos.controller.js';
+import { PlanosService } from './planos/planos.service.js';
 import { PolicyController } from './policy/policy.controller.js';
 import { AtencaoCicloService } from './results/atencao-ciclo.service.js';
 import { ResultsController } from './results/results.controller.js';
@@ -51,7 +53,7 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
-  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService],
+  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService],
 })
 export class AppModule {}

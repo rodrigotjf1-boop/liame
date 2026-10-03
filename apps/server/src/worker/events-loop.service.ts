@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShut
 import { ActionExecutor } from './action-executor.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConversasLoop } from './conversas-loop.js';
+import { EstrategistaLoop } from './estrategista-loop.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
@@ -11,7 +12,7 @@ import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca e gerar e enviar a revisão da semana. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana e montar os planos do Estrategista. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -33,6 +34,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly sombra: SombraLoop,
     private readonly conversas: ConversasLoop,
     private readonly revisao: RevisaoSemanalLoop,
+    private readonly estrategista: EstrategistaLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -48,6 +50,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('sombra', 3, 60_000, async (n) => (await this.sombra.executarLote(n)).length),
       this.loop('revisao-semanal', 3, 60_000, async (n) => (await this.revisao.executarLote(n)).length),
       this.loop('revisao-email', 3, 60_000, async (n) => (await this.revisao.enviarLote(n)).length),
+      this.loop('estrategista', 3, 60_000, async (n) => (await this.estrategista.executarLote(n)).length),
     );
   }
 

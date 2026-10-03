@@ -40,6 +40,9 @@ export const PERMISSIONS = [
   // Conversa com a LIA e demandas (A3, I10, migration 0034).
   'conversa.usar',
   'demanda.abrir',
+  // Planos do Estrategista (A3, I11, migration 0035).
+  'planos.ver',
+  'planos.decidir',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
