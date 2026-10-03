@@ -527,6 +527,12 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - annotations **não são controle de segurança**;
   - a escolha da ferramenta degrada acima de 30–50 ferramentas → busca de ferramentas.
 - **SDK TypeScript v2:** `@modelcontextprotocol/server` 2.1.0 (a v1 está em 1.30.1); `@rekog/mcp-nest` 2.0.7 com suporte a Nest 12. **Registry oficial em preview**, sem servidores privados.
+- **No fio, 2026-07-28** [O] *(medido em 02/10/2026 com `@modelcontextprotocol/client` 2.3.0 contra o servidor do RegemCast, `@modelcontextprotocol/server` 2.3.0)*:
+  - cada chamada é um `POST` com um pedido JSON-RPC; a resposta vem em `application/json`, sem sessão;
+  - cabeçalhos `Mcp-Method` (e `Mcp-Name` em `tools/call`) e `MCP-Protocol-Version: 2026-07-28`; `Accept: application/json, text/event-stream`;
+  - `params._meta` com `io.modelcontextprotocol/protocolVersion`, `io.modelcontextprotocol/clientInfo` e `io.modelcontextprotocol/clientCapabilities`;
+  - o SDK cliente manda um `server/discover` antes da primeira chamada; o resultado da ferramenta traz `resultType: "complete"` e `_meta` com `io.modelcontextprotocol/serverInfo`;
+  - cliente sem negociar versão (padrão do SDK) cai na geração 2025: `initialize`, `notifications/initialized` e resposta em SSE de uma mensagem — o servidor sem estado do RegemCast atende os dois.
 - **Governança:** MCP doado à Agentic AI Foundation (Linux Foundation) em 09/12/2025.
 - **MCPs remotos gerenciados pelo Google Cloud** *(verificado em 30/09/2026, docs.cloud.google.com/mcp/release-notes)* [O]: GA em 01/05/2026; spec 2026-07-28 desde 14/09; autenticação IAM (Cloud) ou OAuth (Workspace). O catálogo **não inclui** Google Ads, Analytics, Search Console, Business Profile nem YouTube. **Merchant API MCP** em alpha (`merchantapi.googleapis.com/mcp`, 14 ferramentas, quase só leitura, divide a cota da Merchant API). A **Data Manager API** não tem MCP, só "agent skills".
 - **MCP das plataformas × objetivos do Liame** *(análise de 30/09/2026)*:
@@ -611,9 +617,9 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 ## 11. Ecossistema DMS
 
-*Verificado no código em 24/09/2026 (a `origin/main` é a fonte da verdade no Regem).*
+*Verificado no código em 24/09/2026 (a `origin/main` é a fonte da verdade no Regem); RegemCast atualizado em 02/10/2026.*
 
-- **Nenhum produto DMS tem servidor MCP.**
+- **Só o RegemCast tem servidor MCP** (desde 02/10/2026, decisão do dono; emendas da ADR-008 e da ADR-019).
 - **Regem:**
   - tem clientes (com `opt_out_marketing`; `consentimento_lgpd` é boolean **sem prova**), pedidos (`pedido_externo`), cupons, fidelidade, cashback, produtos (**preço de custo, promo, destaque**), funil do cardápio (`cardapio_evento`), `dia_especial`;
   - **não tem** UTM/pixel, data de nascimento, evento de saída genérico, telefone único em E.164 (grava com e sem o 55);
@@ -622,8 +628,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - As tabelas `api_client` e `webhook_subscription` (mig 002) estão sem uso.
 - **RegemCast:**
   - guard global fail-closed; RLS desde o dia 1 (`app.conta_id`, role sem `bypassrls`): **molde do Liame**;
-  - **sem autenticação de serviço** (só login humano, e o `SomenteWebGuard` barra o app);
-  - sem `Idempotency-Key`; **sem webhook de saída**; o envio só monta o `body` do modelo (cabeçalho de mídia, botões, LTO e carrossel não vão);
+  - **porta MCP desde 02/10/2026** [O]: `POST https://castapi.dmsregem.com/api/v1/mcp`, token de integração por conta (`rct_it_…`, hash sha-256, escopos, classe `dms` ou `externo`, revogável, 120 chamadas por minuto); ferramentas de leitura (conta, campanhas com custo na Meta, públicos, modelos, orçamento), conversas abertas por anúncio (com o telefone, sem conteúdo; só guardadas com aplicativo conectado, por 180 dias), rascunho de modelo e de campanha (`chaveIdempotencia` obrigatória) e disparo em dois passos só para produto da DMS; autor `integracao` na auditoria (`integracao_situacao` com o id e o fuso da conta, e `integracao_revogar` para o próprio token se desligar; repo `regemcast`, `docs/mcp.md`, PRs #110 a #116);
+  - **sem webhook de saída**; desde 01/10/2026 o envio monta cabeçalho de mídia, botões, LTO e carrossel (#96);
   - worker `@Interval(5000)` + `FOR UPDATE SKIP LOCKED`; BullMQ declarado e não usado;
   - importação de até 5.000 contatos por lote com `consentimento: true`; até 500 destinatários diretos por campanha;
   - reconcilia status por `wamid`; opt-out automático por botão ou texto.
@@ -640,6 +646,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 02/10/2026 | §8.1: o formato de uma chamada MCP 2026-07-28 no fio, medido com o SDK cliente 2.3.0 contra o servidor do RegemCast. §11: o RegemCast tem porta MCP (token por conta, leitura, conversas por anúncio, rascunhos, disparo para produto da DMS) e o envio com cabeçalho de mídia, botões, LTO e carrossel. Fonte: repo `regemcast` (`docs/mcp.md`, PRs #96 e #110 a #116). |
 | 01/10/2026 | §2.1: onde fica o link do anúncio feito de publicação que já existia (`object_story_id`, `effective_object_story_id`, `url_tags` "appended to urls clicked from page post ads"), conferido na referência oficial do AdCreative, com a medição do piloto (14 de 18 anúncios sem link no criativo e sem `url_tags`). |
 | 30/09/2026 | Pesquisa de MCP das plataformas (pergunta do dono: "é mais rápido integrar por MCP?"): §2 MCP de anúncios da Meta reconferido (beta aberto, 91 ferramentas, permissões com `ads_mcp_management`, não dispensa App Review, sem `url_tags` nem relatório assíncrono, CLI em Python com token de usuário de sistema, User-Agent de agente), MCPs de WhatsApp e devtools, terceiros; §3 MCP do Google Ads 0.0.4 (só leitura, só self-hosted), **política de "programmatic proxy" de 31/08/2026**, developer token ignorado e níveis de acesso, fim da v22 em 07/10; §3.3 MCP do GA4 0.7.0; §8.1 MCPs remotos do Google Cloud e a análise "MCP × objetivos do Liame". |
 | 30/09/2026 | §2.1: perguntas de tratamento de dados da Meta sobre **pedidos de autoridades públicas** (revisão da legalidade, contestação do pedido ilegal, mínimo necessário, documentação com resposta e fundamento), conferidas na página oficial, para a Política de Privacidade 8. |
