@@ -76,6 +76,15 @@ describe('remoção de dado pessoal antes do envio ao modelo (A3-3)', () => {
     expect(limparTexto(texto)).toEqual({ texto, removidos: 0 });
   });
 
+  it('o id da marca chega inteiro ao modelo: UUID não vira telefone nem CEP', () => {
+    // `4557551391fc` parece telefone; `a1b12345-678c` parece CEP. O CEP de verdade, fora do id, sai.
+    const texto = 'Marca (brand_id 01a10077-dc70-7e58-a180-4557551391fc) e loja a1b12345-678c-4d5e-8f90-1a2b3c4d5e6f, CEP 20040-020.';
+    expect(limparTexto(texto)).toEqual({
+      texto: 'Marca (brand_id 01a10077-dc70-7e58-a180-4557551391fc) e loja a1b12345-678c-4d5e-8f90-1a2b3c4d5e6f, CEP [cep].',
+      removidos: 1,
+    });
+  });
+
   it('limpa os textos de uma resposta estruturada, em qualquer nível', () => {
     const r = limparJson({ resumo: 'fale com joao@loja.com', itens: [{ nota: 'zap 11 98765-4321' }, { nota: 'ok' }], total: 3, vazio: null });
     expect(r).toEqual({ valor: { resumo: 'fale com [email]', itens: [{ nota: 'zap [telefone]' }, { nota: 'ok' }], total: 3, vazio: null }, removidos: 2 });

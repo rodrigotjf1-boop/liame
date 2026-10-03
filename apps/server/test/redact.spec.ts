@@ -1,4 +1,4 @@
-import { maskIp, redactAttributes, redactString } from '@liame/telemetry';
+import { maskIp, redactAttributes, redactCounting, redactString, withIdsPreserved } from '@liame/telemetry';
 import { describe, expect, it } from 'vitest';
 
 describe('redação de dado pessoal nos spans (ADR-010, LGPD)', () => {
@@ -13,6 +13,18 @@ describe('redação de dado pessoal nos spans (ADR-010, LGPD)', () => {
     expect(redactString('occurred 1790424000123 ms')).toBe('occurred 1790424000123 ms');
     expect(redactString('/v1/actions/0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a')).toBe('/v1/actions/0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a');
     expect(redactString('SELECT id FROM liame.brand WHERE tenant_id = $1')).toBe('SELECT id FROM liame.brand WHERE tenant_id = $1');
+  });
+
+  it('não corta id do sistema (UUID) que tem trecho parecido com telefone ou CPF', () => {
+    // O caso que apareceu no CI: o grupo final `4557551391fc` tem 10 dígitos seguidos.
+    const marca = '01a10077-dc70-7e58-a180-4557551391fc';
+    expect(redactCounting(`brand_id ${marca}, tel (21) 99876-5432`)).toEqual({ text: `brand_id ${marca}, tel [telefone]`, removed: 1 });
+    // 11 dígitos seguidos de letra (parece CPF) e 12 dígitos começando por 55 (parece telefone com o país).
+    for (const id of ['6f1b2c3d-1a2b-4c5d-8e9f-12345678909a', '0192f1d4-3c1a-7b2e-9a10-552199876543']) {
+      expect(redactCounting(`id ${id}`)).toEqual({ text: `id ${id}`, removed: 0 });
+    }
+    // Dentro de outra chamada, os marcadores da de fora ficam como estão.
+    expect(withIdsPreserved(`a ${marca} b`, (t) => redactString(t))).toBe(`a ${marca} b`);
   });
 
   it('limpa parâmetros sensíveis da URL', () => {

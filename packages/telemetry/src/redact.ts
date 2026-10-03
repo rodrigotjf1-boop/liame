@@ -21,6 +21,21 @@ const IP_KEYS = new Set(['client.address', 'net.peer.ip', 'http.client_ip', 'net
 /** Atributos que nunca saem, qualquer que seja o valor. */
 const DROP_KEYS = new Set(['http.request.header.cookie', 'http.request.header.authorization', 'enduser.id', 'user.email']);
 
+// Ids do sistema (UUID) passam intactos: um trecho de dígitos dentro deles (`…-a180-4557551391fc`) não é
+// telefone, CPF nem CEP, e um id cortado quebra quem o usa (a ferramenta que a IA chama com o id da marca).
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const GUARDADO = /\u0000(\d+)\u0000/g;
+
+/**
+ * Aplica `fn` ao texto com os UUIDs guardados de lado (no lugar de cada um fica um marcador com o caractere nulo,
+ * que texto válido não tem) e os devolve no lugar depois. Chamada dentro de outra, não mexe nos marcadores dela.
+ */
+export function withIdsPreserved(value: string, fn: (text: string) => string): string {
+  const ids: string[] = [];
+  const guardado = value.replace(UUID, (id) => `\u0000${ids.push(id) - 1}\u0000`);
+  return fn(guardado).replace(GUARDADO, (marcador, i: string) => ids[Number(i)] ?? marcador);
+}
+
 /** O mesmo texto sem dado pessoal, e quantos trechos saíram (o AI Gateway registra a contagem). */
 export function redactCounting(value: string): { text: string; removed: number } {
   let removed = 0;
@@ -28,12 +43,14 @@ export function redactCounting(value: string): { text: string; removed: number }
     removed += 1;
     return label;
   };
-  const text = value
-    .replace(SENSITIVE_PARAMS, (_m, param: string) => swap(`${param}[removido]`)())
-    .replace(EMAIL, swap('[email]'))
-    .replace(CNPJ, swap('[cnpj]'))
-    .replace(CPF, swap('[cpf]'))
-    .replace(PHONE, (m) => (m.replace(/\D/g, '').length >= 10 ? swap('[telefone]')() : m));
+  const text = withIdsPreserved(value, (v) =>
+    v
+      .replace(SENSITIVE_PARAMS, (_m, param: string) => swap(`${param}[removido]`)())
+      .replace(EMAIL, swap('[email]'))
+      .replace(CNPJ, swap('[cnpj]'))
+      .replace(CPF, swap('[cpf]'))
+      .replace(PHONE, (m) => (m.replace(/\D/g, '').length >= 10 ? swap('[telefone]')() : m)),
+  );
   return { text, removed };
 }
 

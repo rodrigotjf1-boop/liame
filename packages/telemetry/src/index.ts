@@ -7,7 +7,7 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { BatchSpanProcessor, NoopSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { RedactingSpanExporter } from './redact.js';
 
-export { maskIp, RedactingSpanExporter, redactAttributes, redactCounting, redactSpan, redactString } from './redact.js';
+export { maskIp, RedactingSpanExporter, redactAttributes, redactCounting, redactSpan, redactString, withIdsPreserved } from './redact.js';
 
 export interface TelemetryOptions {
   /** `liame-api`, `liame-worker` ou `liame-web` (ADR-010). */
