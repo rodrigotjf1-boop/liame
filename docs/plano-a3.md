@@ -1,6 +1,6 @@
 # Liame — Plano da fase A3 · Camada de inteligência
 
-> **Aprovado pelo dono em 02/10/2026** ("2 autorizado"), com as decisões D-A3-1 a D-A3-12 como recomendadas. Ficaram em aberto com ele: o valor do teto de custo do piloto (D-A3-3), a conta de API na Anthropic e a D-A3-13, que nasceu da reconferência da base. A A3 é quando "os funcionários pensam" (roadmap §2): a LIA explica os números, a revisão semanal chega pronta, o que fugiu do normal vem com o motivo, e cada funcionário aparece em "Sua equipe" com o que fez e o quanto já dá para confiar nele. **A IA não escreve em plataforma de anúncio nesta fase** (A4) e **não calcula número final**: ROAS, receita, margem e custo continuam vindo do código (`ai-architecture.md` §8). Tudo o que a IA recomendar sobre anúncio roda em **sombra** (registrado e comparado com o que a pessoa fez), para medir a prontidão antes da A4. A única escrita externa continua sendo o cupom no Regem, sempre com aprovação. O produto segue funcionando com a IA fora do ar (especificação §5, item 5).
+> **Aprovado pelo dono em 02/10/2026** ("2 autorizado"), com as decisões D-A3-1 a D-A3-12 como recomendadas. **Em 03/10/2026** o dono aprovou, também como recomendadas, o teto do piloto (D-A3-3), a D-A3-13 e as três decisões que nasceram na I13 (D-A3-14 a D-A3-16), e os protótipos P5 a P8; a conta de API na Anthropic foi criada no mesmo dia. A A3 é quando "os funcionários pensam" (roadmap §2): a LIA explica os números, a revisão semanal chega pronta, o que fugiu do normal vem com o motivo, e cada funcionário aparece em "Sua equipe" com o que fez e o quanto já dá para confiar nele. **A IA não escreve em plataforma de anúncio nesta fase** (A4) e **não calcula número final**: ROAS, receita, margem e custo continuam vindo do código (`ai-architecture.md` §8). Tudo o que a IA recomendar sobre anúncio roda em **sombra** (registrado e comparado com o que a pessoa fez), para medir a prontidão antes da A4. A única escrita externa continua sendo o cupom no Regem, sempre com aprovação. O produto segue funcionando com a IA fora do ar (especificação §5, item 5).
 
 ## 1. De onde partimos (código e documentos lidos em 01/10/2026)
 
@@ -49,13 +49,13 @@ Cada entrega é um PR com CI verde. **Migrations em negrito**: testadas no local
 
 Ordem: I1 → I2 → I3 → I4 (primeiro valor visível, menor risco) → I5 (junta amostra desde cedo) → I6 → I7 → I8 → I9 → I10 → I11 → I12 → I13. Tudo sai testado contra respostas gravadas do provedor antes de gastar com chamadas reais; os evals pagos rodam só quando o que eles protegem muda.
 
-## 4. Decisões (aprovadas pelo dono em 02/10/2026; a D-A3-13 aguarda)
+## 4. Decisões (aprovadas pelo dono em 02/10/2026; o valor da D-A3-3 e as D-A3-13 a D-A3-16 em 03/10/2026)
 
 | # | Decisão | Recomendação | Por quê |
 | --- | --- | --- | --- |
 | D-A3-1 | **Fornecedor de IA na largada** | **Só a Anthropic** na A3, com fallback entre modelos dela que passarem no eval da tarefa; OpenAI e Google entram quando uma finalidade pedir (imagem, na A4). O modelo de cada finalidade é escolhido **pelo eval**, não por preferência; a lista e os preços são reconferidos na fonte antes de fixar (seção 8) | `ai-architecture.md` §2 já põe o adapter da Anthropic primeiro; um fornecedor só reduz contrato, custo de eval e superfície de dados |
 | D-A3-2 | **Onde a LIA conversa** | **Só dentro do Liame** (tela Conversa). WhatsApp fica para quando o RegemCast tiver a API de serviço (C2, A5) | WhatsApp só sai pelo RegemCast (base §2.4); conversa pública é o maior risco de custo e de injeção |
-| D-A3-3 | **Teto de custo de IA por empresa** | Teto diário e mensal definidos pela distribuição, com alarme em 70% e degradação antes de bloquear. **Valor inicial do piloto: você define**; sem medição ainda, sugiro começar baixo e recalibrar depois de duas semanas de uso real | Nenhum SDK informa custo em dinheiro; o custo por resposta só se conhece medindo (I1) |
+| D-A3-3 | **Teto de custo de IA por empresa** | Teto diário e mensal definidos pela distribuição, com alarme em 70% e degradação antes de bloquear. **Valor inicial do piloto (aprovado em 03/10/2026): US$ 2 por dia e US$ 20 por mês por empresa** (o padrão de `AI_DAILY_LIMIT_USD` e `AI_MONTHLY_LIMIT_USD`), recalibrado depois de duas semanas de uso real; o workspace da Liame no Console da Anthropic tem o próprio teto mensal, acima deste, como segunda trava | Nenhum SDK informa custo em dinheiro; o custo por resposta só se conhece medindo (I1) |
 | D-A3-4 | **O que vai ao modelo** | Números agregados, nomes de campanha, anúncio, produto e cupom, e o dossiê da marca. **Nunca** telefone, e-mail, endereço ou identificador de cliente; nome de pessoa da equipe vira papel ("o Dono", "um Gestor"). Nunca duas empresas no mesmo pedido ou lote. Conteúdo guardado por 30 dias | Política 7.1 e 7.3; `ai-architecture.md` §11 |
 | D-A3-5 | **O que a IA pode fazer na A3** | Explicar, resumir, planejar e **propor**. Em anúncio, tudo em **sombra**. A única proposta que vira ação é o cupom no Regem, que já pede aprovação pela política (`cupom.criar`) | A escrita na Meta e no Google é a A4, com o trilho completo |
 | D-A3-6 | **Transparência** | A LIA e os funcionários se apresentam como assistentes de IA, com nome configurável e caminho para uma pessoa; todo texto gerado leva a marca "feito com IA" na tela | Especificação §4 e §5 (itens 3 e 10); Termos 6.3 |
@@ -65,7 +65,10 @@ Ordem: I1 → I2 → I3 → I4 (primeiro valor visível, menor risco) → I5 (ju
 | D-A3-10 | **Portões da prontidão** | Os de `ai-architecture.md` §4.2 como ponto de partida (30 decisões comparáveis, concordância ≥ 80%, zero violação de política, dado fresco em ≥ 95%); o piloto tem uma loja, então o prazo é o que a amostra pedir | Promover sem amostra é palpite |
 | D-A3-11 | **Observabilidade de IA** | Usar o nosso OpenTelemetry e o `ai_usage`; **não contratar o Langfuse agora** (segue como "previsto" nos documentos) | Um fornecedor a menos enquanto o volume é de piloto |
 | D-A3-12 | **Escolha de modelo pelo cliente** | Lite fica em "Automático"; a escolha por finalidade no Pro entra na I13, só com modelos do catálogo que passaram no eval. Sem chave própria do cliente | ADR-016 |
-| D-A3-13 | **Onde o modelo roda** (nova, 02/10/2026; **aguarda o dono**) | Fixar `inference_geo: "us"` em toda chamada, pagando 10% a mais | A Anthropic não tem região no Brasil; o padrão (`global`) pode rodar em qualquer região disponível, e os nossos documentos dizem "Estados Unidos". Fixar torna a frase verdadeira e verificável. O Haiku 4.5 não aceita o parâmetro: fica fora das rotas |
+| D-A3-13 | **Onde o modelo roda** (nova, 02/10/2026; aprovada em 03/10/2026) | Fixar `inference_geo: "us"` em toda chamada, pagando 10% a mais | A Anthropic não tem região no Brasil; o padrão (`global`) pode rodar em qualquer região disponível, e os nossos documentos dizem "Estados Unidos". Fixar torna a frase verdadeira e verificável. O Haiku 4.5 não aceita o parâmetro: fica fora das rotas |
+| D-A3-14 | **Custo de IA em reais** (nova, 03/10/2026, da I13; aprovada no mesmo dia) | O custo continua medido e limitado em **dólar** (a moeda do fornecedor e do teto); a tela mostra o valor **aproximado em reais pela PTAX de venda do Banco Central** do último dia útil, com a data da cotação ao lado. O worker lê a PTAX uma vez por dia útil nos dados abertos do Banco Central e guarda a cotação; sem cotação nova, vale a última, com a data dela; sem nenhuma, a tela mostra só o dólar | A PTAX é a cotação de referência oficial e verificável; câmbio fixo envelhece, e converter o teto mudaria o limite a cada dia |
+| D-A3-15 | **Textos barrados pelo Compliance** (nova, 03/10/2026, da I13; aprovada no mesmo dia) | **Registrar cada texto barrado, sem o texto**: quando, a marca, o funcionário e o fluxo que escreveram, a regra que barrou (ou o revisor, com a categoria) e a versão das regras. Sua equipe mostra os números do Compliance a partir daí | O P7 aprovado mostra o acerto do Compliance pelos textos barrados; guardar o texto repetiria o que foi barrado (às vezes dado pessoal) |
+| D-A3-16 | **Onde aparece a opinião do revisor de IA** (nova, 03/10/2026, da I9; aprovada no mesmo dia) | **Em nenhum bloco próprio:** o revisor é um portão depois das regras. Se ele aponta problema de tom, clareza ou alegação, o texto não aparece e a tela mostra o resumo do sistema, como já acontece com a recusa da conferência; o caso entra nos textos barrados (D-A3-15) com a categoria, e Sua equipe mostra a conta. O revisor nunca libera o que a regra barrou e nunca aprova sozinho | Não pede tela nova (os protótipos aprovados já têm a recusa e o resumo do sistema); a categoria, e não o texto do revisor, evita guardar o conteúdo barrado |
 
 ## 5. Protótipos para aprovação (antes do código de tela)
 
@@ -134,10 +137,10 @@ Fornecedor novo de verdade: **Anthropic** (suboperador, Estados Unidos). Reimpor
 
 | Para | Preciso de |
 | --- | --- |
-| Começar | Aceite deste plano e das decisões da seção 4 |
-| I1 | Conta de API na Anthropic no nome da empresa, com limite de gasto no painel deles; a chave vai direto para o EasyPanel (`liame-api` e `liame-worker`), nunca para a conversa |
-| I1 | O valor do teto de custo de IA do piloto (D-A3-3) |
-| Telas | Aprovar P4 a P8 |
+| Começar | ✅ Aceite deste plano e das decisões da seção 4 (02/10/2026) |
+| I1 | Conta de API na Anthropic no nome da empresa (✅ criada em 03/10/2026), com limite de gasto no painel deles (workspace próprio da Liame); a chave vai direto para o EasyPanel (`liame-api` e `liame-worker`), nunca para a conversa |
+| I1 | ✅ O valor do teto de custo de IA do piloto (D-A3-3, 03/10/2026) |
+| Telas | ✅ Aprovar P4 a P8 (P4 em 02/10/2026; P5 a P8 em 03/10/2026) |
 | I8 | Preencher o dossiê da Mister Burgers (uns 20 minutos, com a LIA sugerindo) |
 | Jurídico | Ler as mudanças da seção 7 antes de ligar a IA para o piloto; reimportar as páginas no site |
 | Nuvem | Digitar a senha do banco no arquivo `.env.nuvem` quando eu pedir, para cada migration (0028 a 0035), uma por vez, antes de cada merge (a migration do Liame roda pelo `migrate.js`, não pelo acesso de leitura) |
