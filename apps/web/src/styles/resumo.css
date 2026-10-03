@@ -1,0 +1,94 @@
+/* Resumo (A3 · P8, aprovado em 03/10/2026): a página inicial do Lite, a visão do dono. As classes são as do protótipo
+   (mockups/prototipo-resumo.html); os números com fonte usam as do Explicar (.nf, .fontes-num). */
+
+.dono-topo { display: grid; gap: var(--sp-2); padding: var(--sp-2) 0 var(--sp-5); }
+.dono-topo h1 { margin: 0; font-size: clamp(1.6rem, 2.7vw, 2.25rem); outline: none; text-wrap: balance; }
+.dono-topo h1 .sub { display: block; color: var(--text-muted); font-weight: 500; }
+.dono-topo .resumo-marca { justify-self: start; }
+.dono-topo .esqueleto--curto { width: 38%; }
+.dono-topo .esqueleto--medio { width: 62%; height: 28px; }
+
+.stats3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); }
+.stat { display: grid; align-content: start; gap: 4px; min-width: 0; padding: var(--sp-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.stat--foco { border-color: color-mix(in srgb, var(--success) 45%, var(--border)); background: color-mix(in srgb, var(--success-soft) 45%, var(--surface)); }
+.stat--vazio { border-style: dashed; background: var(--surface-2); }
+.stat-rot { margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.stat-val { margin: 0; font-family: var(--font-mono); font-size: clamp(1.7rem, 3vw, 2.2rem); font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; white-space: nowrap; }
+.stat-val .nf { font-size: inherit; }
+.stat-val--txt { font-family: var(--font-sans); font-size: var(--text-lg); color: var(--text-subtle); white-space: normal; }
+.stat-delta { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--text-xs); font-weight: 500; }
+.stat-delta .ic { width: 15px; height: 15px; flex: none; }
+.stat-delta span { min-width: 0; }
+.stat-delta--bom { color: var(--success); }
+.stat-delta--ruim { color: var(--danger); }
+.stat-delta--neutro { color: var(--text-muted); }
+.stat .esqueleto--medio { width: 62%; }
+.stat .esqueleto--alto { width: 50%; height: 36px; }
+
+.dono-veredito { display: grid; gap: var(--sp-3); margin: var(--sp-5) 0 var(--sp-6); padding: var(--sp-4) var(--sp-5); border-radius: var(--radius-lg); background: var(--ai-soft); }
+.dono-veredito .lite-frase { margin: 0; }
+.ia-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+
+.resumo-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--sp-4); }
+.resumo-grid > * { min-width: 0; }
+/* As linhas do protótipo: "Pergunte à LIA" (span 5) chega com a Conversa (P5); até lá, "Precisa de você" ocupa a linha. */
+.r-precisa { grid-column: 1 / -1; }
+.r-pedidos, .r-canais { grid-column: span 6; }
+.r-equipe { grid-column: span 7; }
+/* Sem o par da linha (a equipe some para quem não vê as campanhas; o convite, para quem não convida), ocupa a linha. */
+.resumo-grid > .r-cheio { grid-column: 1 / -1; }
+.r-cta { grid-column: span 5; display: grid; justify-items: start; gap: var(--sp-3); border-color: color-mix(in srgb, var(--ai-fill) 35%, var(--border)); background: color-mix(in srgb, var(--ai-soft) 55%, var(--surface)); }
+.r-cta h2 { margin: 0; font-size: var(--text-lg); }
+.r-cta .lite-frase { margin: 0; max-width: 65ch; }
+.r-cta { justify-content: center; }
+
+.dono-lista { display: grid; margin: 0; padding: 0; list-style: none; }
+.dono-item { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.dono-item:last-child { border-bottom: 0; }
+.dono-sev { width: 10px; height: 10px; border-radius: 50%; }
+.dono-sev--urgente { background: var(--danger); }
+.dono-sev--atencao { background: var(--warning); }
+.dono-sev--decisao { background: var(--ai-fill); }
+.dono-tit { margin: 0; font-weight: 600; line-height: 1.35; }
+.dono-tit .ic { vertical-align: -2px; color: var(--success); }
+.dono-sub { margin: 2px 0 0; font-size: var(--text-sm); color: var(--text-muted); }
+.dono-sub b { color: var(--text); font-weight: 600; }
+.r-vazio { display: grid; gap: var(--sp-3); }
+
+.mini-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); margin: 0; }
+.mini-stats div { min-width: 0; padding: var(--sp-3); border-radius: var(--radius); background: var(--surface-2); }
+.mini-stats dt { font-size: var(--text-xs); color: var(--text-muted); }
+.mini-stats dd { margin: 0; font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; }
+.mini-stats dd .nf { font-size: inherit; }
+
+.canais { display: grid; gap: var(--sp-4); margin: 0; padding: 0; list-style: none; }
+.canal-linha { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-sm); }
+.canal-nome { font-weight: 600; }
+.canal-num { color: var(--text-muted); white-space: nowrap; }
+.canal-barra { height: 10px; margin: 6px 0 4px; border-radius: 4px; background: var(--chart-grade); overflow: hidden; }
+.canal-barra span { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--chart-foco); }
+.canal-sub { margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+
+.feito-lista { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.feito-lista li { display: flex; align-items: flex-start; gap: var(--sp-3); font-size: var(--text-sm); color: var(--text-muted); }
+.feito-lista li p { margin: 4px 0 0; }
+.feito-lista li b { color: var(--text); font-weight: 600; }
+.av-func { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--ai-soft); color: var(--ai); }
+.av-func .ic { width: 15px; height: 15px; }
+.av-func--lg { width: 52px; height: 52px; border-radius: 15px; }
+.av-func--lg .ic { width: 24px; height: 24px; }
+
+.resumo-corpo > .fontes-num { margin-top: var(--sp-6); }
+
+@container pagina (max-width: 999px) {
+  .resumo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .r-precisa, .r-equipe, .r-cta { grid-column: 1 / -1; }
+  .r-pedidos, .r-canais { grid-column: span 1; }
+}
+@container pagina (max-width: 599px) {
+  .stats3 { grid-template-columns: minmax(0, 1fr); }
+  .resumo-grid { grid-template-columns: minmax(0, 1fr); }
+  .r-pedidos, .r-canais, .r-equipe { grid-column: 1 / -1; }
+  .dono-item { grid-template-columns: 10px minmax(0, 1fr); }
+  .dono-item .btn { grid-column: 2; justify-self: start; }
+}

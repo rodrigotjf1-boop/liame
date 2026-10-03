@@ -2,6 +2,7 @@
 
 import type { BrandResponse } from '@liame/contracts';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DialogoConectar } from '@/components/contas/dialogo-conectar';
 import { liaLigada } from '@/components/explicar/pedir';
@@ -15,6 +16,7 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { useContadorAtencao } from '@/lib/contador-atencao';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
+import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
 import { type Avisos, buscarAvisos } from './buscar-avisos';
 import { ItemAviso } from './item-aviso';
@@ -47,6 +49,15 @@ export function AtencaoTela() {
   const podeConectar = pode('contas.conectar');
   const podeVerVendas = pode('vendas.ver');
   const { definir } = contador;
+  const { modo, versao } = useModo();
+  const router = useRouter();
+  const versaoAoAbrir = useRef(versao);
+
+  // A Atenção é a página inicial do Pro (protótipo P8): trocar para o Lite aqui leva ao Resumo, a do Lite. Quem
+  // chega à Atenção já no Lite (por "Ver todos os avisos") fica nela.
+  useEffect(() => {
+    if (versao !== versaoAoAbrir.current && modo === 'lite' && podeVerVendas) router.replace('/resumo');
+  }, [modo, versao, podeVerVendas, router]);
 
   /** Carrega os avisos; devolve se deu certo. */
   const carregar = useCallback(async (): Promise<boolean> => {

@@ -296,10 +296,10 @@ describe('telas', () => {
     expect(html).not.toContain('Aprovar');
   });
 
-  it('menu: "Aprovações" fica depois de Atenção, para quem vê as campanhas, com o contador e os modos Lite e Pro', () => {
+  it('menu: "Aprovações" fica depois da página inicial (Resumo ou Atenção), para quem vê as campanhas, com o contador e os modos Lite e Pro', () => {
     const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
-    expect(agencia.itens.map((i) => i.href).slice(0, 2)).toEqual(['/atencao', '/aprovacoes']);
-    const item = agencia.itens[1]!;
+    expect(agencia.itens.map((i) => i.href).slice(0, 3)).toEqual(['/resumo', '/atencao', '/aprovacoes']);
+    const item = agencia.itens[2]!;
     expect(item).toMatchObject({ rotulo: 'Aprovações', icone: 'check-circle', permissao: 'campanhas.ver', contador: 'aprovacoes' });
     expect(itensVisiveis(agencia, (p) => p === 'pessoas.ver').map((i) => i.href)).not.toContain('/aprovacoes');
     expect(tituloDa('/aprovacoes')).toBe('Aprovações');

@@ -10,6 +10,7 @@ import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
 import { pendentesFalados } from '@/components/aprovacoes/textos';
 import { avisosFalados } from '@/components/atencao/textos';
+import { contadorDoResumo, pontosFalados } from '@/components/resumo/textos';
 import { useContadorAprovacoes } from '@/lib/contador-aprovacoes';
 import { useContadorAtencao } from '@/lib/contador-atencao';
 import { useModo } from '@/lib/modo';
@@ -35,7 +36,7 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
   const lite = modo === 'lite';
 
   const grupoNav = (grupo: GrupoNav) => {
-    const itens = itensVisiveis(grupo, pode);
+    const itens = itensVisiveis(grupo, pode, modo);
     if (!itens.length) return null;
     return (
       <div className="nav-grupo" key={grupo.id}>
@@ -45,8 +46,15 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
         <ul className="nav-lista" aria-labelledby={`g-${grupo.id}`}>
           {itens.map((item) => {
             const atual = itemAtual(caminho, item.href);
-            const n = item.contador === 'atencao' ? (contador.total ?? 0) : item.contador === 'aprovacoes' ? (aprovacoes.total ?? 0) : 0;
-            const falado = n ? (item.contador === 'aprovacoes' ? pendentesFalados(n) : avisosFalados(n)) : '';
+            const n =
+              item.contador === 'atencao'
+                ? (contador.total ?? 0)
+                : item.contador === 'aprovacoes'
+                  ? (aprovacoes.total ?? 0)
+                  : item.contador === 'resumo'
+                    ? contadorDoResumo(contador.total, aprovacoes.total)
+                    : 0;
+            const falado = n ? (item.contador === 'aprovacoes' ? pendentesFalados(n) : item.contador === 'resumo' ? pontosFalados(n) : avisosFalados(n)) : '';
             return (
               <li key={item.href}>
                 <Link
