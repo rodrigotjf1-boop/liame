@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
+import { WORKFLOW_DA_REVISAO } from './explicar/explicar.service.js';
 import { limparTexto } from './sanitizar.js';
 
 /**
@@ -16,11 +17,14 @@ import { limparTexto } from './sanitizar.js';
 export class RetornoService {
   async gravar(auth: { tenantId: string | null; userId: string }, pedido: AiFeedbackRequest): Promise<AiFeedbackResponse> {
     const tx = currentTx();
-    // Só sobre uma explicação que a própria pessoa pediu, nesta empresa (a RLS já corta as de outra).
+    // Só sobre uma explicação que a própria pessoa pediu, nesta empresa (a RLS já corta as de outra), ou
+    // sobre a leitura da revisão da semana, que o sistema gera para a empresa inteira (sem pessoa).
     const uso = await tx.execute<{ id: string }>(sql`
-      select id from liame.ai_usage where id = ${pedido.usage_id} and user_id = ${auth.userId} and outcome = 'ok' and model is not null`);
+      select id from liame.ai_usage
+       where id = ${pedido.usage_id} and outcome = 'ok' and model is not null
+         and (user_id = ${auth.userId} or (user_id is null and workflow = ${WORKFLOW_DA_REVISAO}))`);
     if (!uso.rows.length) {
-      throw new AppProblem(404, 'explicacao-nao-encontrada', 'Não encontramos esta explicação', 'O retorno vale para uma explicação da LIA que você pediu.');
+      throw new AppProblem(404, 'explicacao-nao-encontrada', 'Não encontramos esta explicação', 'O retorno vale para uma explicação da LIA que você pediu ou para a leitura da revisão da semana.');
     }
     const discordo = pedido.verdict === 'discordo';
     const motivos = discordo ? [...new Set(pedido.reasons)] : [];

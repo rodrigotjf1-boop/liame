@@ -12,7 +12,15 @@ import { ActionExecutor } from './action-executor.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
+import { ExplicarService } from '../ai/explicar/explicar.service.js';
+import { AiGateway } from '../ai/gateway.js';
+import { ModelosIa } from '../ai/modelos.js';
+import { LinksService } from '../links/links.service.js';
+import { MediaService } from '../media/media.service.js';
+import { AtencaoCicloService } from '../results/atencao-ciclo.service.js';
 import { ResultsService } from '../results/results.service.js';
+import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
+import { RevisaoSemanalService } from './revisao-semanal.service.js';
 import { SombraLoop } from './sombra-loop.js';
 import { SombraService } from './sombra.service.js';
 import { eventoDoRegem, VendasLoop } from './vendas-loop.js';
@@ -54,6 +62,15 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ResultsService,
     SombraService,
     SombraLoop,
+    // Revisão da semana (A3, I7): os números da tela Resultados, os avisos e a leitura do Explicar (a LIA, quando ligada).
+    MediaService,
+    LinksService,
+    AtencaoCicloService,
+    ModelosIa,
+    AiGateway,
+    ExplicarService,
+    RevisaoSemanalService,
+    RevisaoSemanalLoop,
     VigiaService,
     EventsLoopService,
     QueueService,

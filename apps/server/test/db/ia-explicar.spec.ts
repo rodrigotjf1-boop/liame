@@ -9,6 +9,7 @@ import { ExplicarService } from '../../src/ai/explicar/explicar.service.js';
 import { PROMPT_EXPLICAR_RESULTADOS, TAREFA_EXPLICAR_RESULTADOS } from '../../src/ai/explicar/prompt.js';
 import type { Explicacao } from '../../src/ai/explicar/resposta.js';
 import { AiGateway } from '../../src/ai/gateway.js';
+import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
 import { dia } from '../../src/ai/registro/formatos.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
@@ -453,6 +454,47 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect((await api.call('POST', '/v1/ai/explain/attention', { cookie: (await dono()).cookie, body: pedido })).status).toBe(404);
   });
 
+  // ---------------------------------------------------------------- leitura da revisão da semana (I7)
+
+  it('a leitura da revisão da semana: a mesma tarefa e o mesmo prompt, pedida pelo sistema (sem pessoa); quem vê as vendas dá o retorno', async () => {
+    const d = await dono();
+    responder(responde(JSON.stringify(BOA)));
+    const resultados = api.app.get(ResultsService);
+    const sistema = (tenantId: string) => ({ tenantId, userId: null, permissions: 'sistema' as const });
+    // O worker lê os resultados das duas semanas como a empresa; a leitura é pedida depois, fora da transação.
+    const ler = (e: Dono) =>
+      naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, async () => ({
+        atual: await resultados.closedLoop({ brand_id: e.brandId, ...PERIODO }),
+        anterior: await resultados.closedLoop({ brand_id: e.brandId, from: '2026-09-04', to: '2026-09-17' }),
+        ativo: await explicar.analistaLigado(sistema(e.tenantId), e.brandId),
+      }));
+
+    const r = await explicar.daSemana(sistema(d.tenantId), d.brandId, await ler(d));
+    expect(r).toMatchObject({ origem: 'ia', motivo_sem_ia: null, explicacao: BOA, periodo: { de: '18/09/2026', ate: '01/10/2026' }, comparado_com: { de: '04/09/2026', ate: '17/09/2026' } });
+    expect(await usos(d.tenantId)).toEqual([
+      { workflow: 'revisao.semanal', task: TAREFA_EXPLICAR_RESULTADOS, prompt_version: `${PROMPT_EXPLICAR_RESULTADOS.key}@${PROMPT_EXPLICAR_RESULTADOS.version}`, outcome: 'ok', cost: 14_000 },
+    ]);
+    // A chamada é do sistema: a linha de uso não tem pessoa.
+    expect(await ownerQuery<{ user_id: string | null }>(`select user_id from liame.ai_usage where id = $1`, [r.usage_id])).toEqual([{ user_id: null }]);
+
+    // O retorno sobre a leitura da revisão é de quem vê as vendas na empresa (ninguém "pediu" essa leitura); de outra empresa, 404.
+    const mandar = (cookie: string, body: Record<string, unknown>) => api.call('POST', '/v1/ai/feedback', { cookie, body });
+    const sim = await mandar(d.cookie, { usage_id: r.usage_id, verdict: 'discordo', reasons: ['faltou'] });
+    expect([sim.status, sim.body.verdict, sim.body.reasons]).toEqual([200, 'discordo', ['faltou']]);
+    expect(await ownerQuery<{ user_id: string }>(`select user_id from liame.ai_feedback where usage_id = $1`, [r.usage_id])).toEqual([{ user_id: d.userId }]);
+    const outra = await dono();
+    expect((await mandar(outra.cookie, { usage_id: r.usage_id, verdict: 'fez_sentido' })).status).toBe(404);
+
+    // Sem a LIA, a leitura é a do sistema e fala da semana: "à semana anterior", e não "ao período anterior".
+    const desligada = await dono({ ia: false });
+    const semIa = await explicar.daSemana(sistema(desligada.tenantId), desligada.brandId, await ler(desligada));
+    expect(semIa).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'desligada', usage_id: null });
+    expect(semIa.explicacao.o_que_aconteceu).toContain('Em relação à semana anterior, o investimento subiu 100,0%.');
+    expect(JSON.stringify(semIa.explicacao)).not.toContain('período anterior');
+    // A mesma permissão da tela: uma leitura pedida por uma pessoa sem `vendas.ver` é recusada.
+    await expect(explicar.daSemana({ tenantId: d.tenantId, userId: d.userId, permissions: new Set(['campanhas.ver']) }, d.brandId, await ler(d))).rejects.toMatchObject({ status: 403 });
+  });
+
   // ---------------------------------------------------------------- retorno da pessoa
 
   it('retorno "Fez sentido" ou "Discordo": fica ligado à explicação, é só de quem pediu, regrava a mesma linha e não guarda dado pessoal', async () => {
@@ -488,12 +530,12 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect((await mandar(d.cookie, { usage_id: usageId, verdict: 'fez_sentido', reasons: ['motivo'], comment: 'não entra' })).body).toMatchObject({ verdict: 'fez_sentido', reasons: [], comment: null });
     expect(await retornos()).toEqual([{ verdict: 'fez_sentido', reasons: [], comment: null, user_id: d.userId, tenant_id: d.tenantId }]);
 
-    // Só sobre uma explicação que a própria pessoa pediu: nem a de outra empresa, nem a de uma rotina do sistema, nem uma que não existe.
+    // Só sobre uma explicação que a própria pessoa pediu: nem a de outra empresa, nem a de outra rotina do sistema, nem uma que não existe.
     const outra = await dono();
     expect([(await mandar(outra.cookie, { usage_id: usageId, verdict: 'discordo', reasons: ['motivo'] })).status, (await mandar(d.cookie, { usage_id: randomUUID(), verdict: 'fez_sentido' })).status]).toEqual([404, 404]);
     const doSistema = randomUUID();
     await ownerQuery(
-      `insert into liame.ai_usage (id, tenant_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome) values ($1, $2, 'relatorio.semanal', 'teste_semente', 'teste', 'semente', 'principal', 0, 'ok')`,
+      `insert into liame.ai_usage (id, tenant_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome) values ($1, $2, 'sombra.rotina', 'teste_semente', 'teste', 'semente', 'principal', 0, 'ok')`,
       [doSistema, d.tenantId],
     );
     expect((await mandar(d.cookie, { usage_id: doSistema, verdict: 'fez_sentido' })).body).toMatchObject({ status: 404, code: 'explicacao-nao-encontrada' });

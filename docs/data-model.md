@@ -161,6 +161,9 @@ Opt-in amarrado à **finalidade**. Opt-out vale na hora para envios pendentes. C
 | `shadow_decision` | Recomendação em sombra (ferramenta, regra e versão, parâmetros), confiança, retrato do estado, janela olhada, ação da pessoa vista pela leitura diária, resultado posterior e `action_regret_micros` com o rótulo; uma em aberto por campanha (0030) |
 | `shadow_state` | A vez de cada marca na rotina da sombra: último dia rodado e quando volta (0030) |
 | `human_override` | Quando a pessoa discorda na tela: recomendada × executada, código do motivo e texto; a pessoa grava só em nome dela (0030; a rota chega com a tela Sua equipe) |
+| `weekly_review` | A revisão da semana de uma marca (A3, I7): a semana (de segunda a domingo, no fuso da loja), quando foi gerada, quem escreveu a leitura (`lia` ou `sistema`, com o motivo), a linha de uso da IA, o conteúdo como a tela e o e-mail mostram (com a versão) e a situação do envio por e-mail; uma por marca e semana (0032) |
+| `weekly_review_delivery` | Quem recebeu a revisão por e-mail: pessoa, nível na hora do envio, enviado ou falhou (com o tipo do erro, sem o endereço) e as tentativas; uma linha por pessoa e revisão (0032) |
+| `weekly_review_state` | A vez de cada marca na rotina da revisão: última situação, última semana com revisão e quando volta (0032) |
 | `kill_switch` | Nível (global, provider, tenant, marca, conta, ferramenta), escopo, quem, quando |
 | `feature_flag` / `flag_override` | Flags por ambiente, plano, tenant, marca, conta, usuário |
 

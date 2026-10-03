@@ -1,9 +1,20 @@
-import { ClosedLoopAttentionQuery, ClosedLoopAttentionResponse, ClosedLoopQuery, ClosedLoopResponse, OrderOriginQuery, OrderOriginResponse, ProblemDetails } from '@liame/contracts';
+import {
+  ClosedLoopAttentionQuery,
+  ClosedLoopAttentionResponse,
+  ClosedLoopQuery,
+  ClosedLoopResponse,
+  OrderOriginQuery,
+  OrderOriginResponse,
+  ProblemDetails,
+  WeeklyReviewQuery,
+  WeeklyReviewResponse,
+} from '@liame/contracts';
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiCookieAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
 import { Permissao } from '../auth/access.js';
 import { AtencaoCicloService } from './atencao-ciclo.service.js';
 import { ResultsService } from './results.service.js';
+import { RevisaoService } from './revisao.service.js';
 
 // Resultados do ciclo fechado (A2.5, F8): o ROAS da plataforma ao lado do confirmado no caixa.
 @ApiTags('results')
@@ -13,6 +24,7 @@ export class ResultsController {
   constructor(
     private readonly results: ResultsService,
     private readonly ciclo: AtencaoCicloService,
+    private readonly revisao: RevisaoService,
   ) {}
 
   @Get('attention')
@@ -57,5 +69,20 @@ export class ResultsController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   orders(@Query({ schema: OrderOriginQuery }) query: OrderOriginQuery): Promise<OrderOriginResponse> {
     return this.results.orders(query);
+  }
+
+  @Get('weekly-review')
+  @Permissao('vendas.ver')
+  @ApiOperation({
+    summary: 'Revisão da semana',
+    description:
+      'A revisão de uma semana fechada da loja (de segunda a domingo, no fuso dela), como foi gerada na segunda-feira de manhã: os quatro números do topo ao lado dos da semana anterior, o que cada campanha trouxe no caixa, o que melhorou, o que piorou, o que precisa de decisão e a leitura da semana (da LIA ou, sem ela, do sistema, com o motivo), no formato do Explicar. Sem `week`, a mais recente; `week` é a segunda-feira da semana pedida. Sem revisão ainda, `review` vem nulo e `next_review_on` diz quando sai a primeira. A revisão não é recalculada: a tela e o e-mail mostram os mesmos números.',
+  })
+  @ApiOkResponse({ standardSchema: WeeklyReviewResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  weeklyReview(@Query({ schema: WeeklyReviewQuery }) query: WeeklyReviewQuery): Promise<WeeklyReviewResponse> {
+    return this.revisao.daMarca(query);
   }
 }
