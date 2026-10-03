@@ -1,6 +1,6 @@
 # Liame — Plano da fase A4 · Escrita na Meta
 
-> **PROPOSTA de 03/10/2026 — aguarda a aprovação do dono.** Nada desta fase começa sem o aceite do plano e das decisões da seção 4. A A4 é quando "a agência executa com trilho" (roadmap §2): o Gestor de tráfego, que na A3 só registra em sombra e sugere, passa a **pedir a mudança na Meta para uma pessoa aprovar**, e o Liame a faz: mexe na verba, pausa e cria campanha (sempre pausada), confere antes com a validação da própria Meta e confere depois. O Criativo entra com texto e imagem, conferidos pelo Compliance, para aprovar. **Nada é executado sem aprovação humana nesta fase** (`LIMITED_AUTO` e `AUTO` ficam para a A7), **mudança feita por uma pessoa na Meta nunca é sobrescrita**, e o Google continua só lendo (escrita no Google é a A5).
+> **Aprovado pelo dono em 03/10/2026** ("plano aprovado"), com as decisões D-A4-1 a D-A4-11 como recomendadas (seção 4). Seguem com ele os itens da seção 9: `ads_management` na configuração do login da Meta, o teto por ação e o envelope do mês do piloto (antes da X2), a conta no fornecedor de imagem (X7), os protótipos P9 a P11 e ligar a flag `meta_write`. A A4 é quando "a agência executa com trilho" (roadmap §2): o Gestor de tráfego, que na A3 só registra em sombra e sugere, passa a **pedir a mudança na Meta para uma pessoa aprovar**, e o Liame a faz: mexe na verba, pausa e cria campanha (sempre pausada), confere antes com a validação da própria Meta e confere depois. O Criativo entra com texto e imagem, conferidos pelo Compliance, para aprovar. **Nada é executado sem aprovação humana nesta fase** (`LIMITED_AUTO` e `AUTO` ficam para a A7), **mudança feita por uma pessoa na Meta nunca é sobrescrita**, e o Google continua só lendo (escrita no Google é a A5).
 
 ## 1. De onde partimos (código e documentos lidos em 03/10/2026)
 
@@ -43,7 +43,7 @@ Cada entrega é um PR com CI verde. **Migrations em negrito**: testadas no local
 
 Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 → X5 → X8 (as telas entram com cada parte, pelo protótipo aprovado).
 
-## 4. Decisões (recomendações; aguardam o dono)
+## 4. Decisões (aprovadas pelo dono em 03/10/2026, como recomendadas)
 
 | # | Decisão | Recomendação | Por quê |
 | --- | --- | --- | --- |
@@ -107,7 +107,7 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 
 | Para | Preciso de |
 | --- | --- |
-| Começar | Aceite deste plano e das decisões da seção 4 |
+| Começar | ✅ Aceite deste plano e das decisões da seção 4 (03/10/2026) |
 | X1 | Acrescentar `ads_management` na configuração do login da Meta (eu passo o caminho conferido) e conectar a Meta de novo no Liame |
 | Clientes de fora | Enviar o App Review de `ads_management` (com o vídeo da aprovação e da execução, que eu roteirizo) depois do X2 |
 | X2 | O teto por ação e o envelope do mês do piloto (quanto o Liame pode comprometer) |
