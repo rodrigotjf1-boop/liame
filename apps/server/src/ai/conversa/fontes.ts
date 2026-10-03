@@ -1,4 +1,4 @@
-import type { ConversationBlock, ExplanationNumber } from '@liame/contracts';
+import type { ConversationBlock, ConversationMeeting, ExplanationNumber } from '@liame/contracts';
 import { valoresDe } from '../explicar/fontes.js';
 import type { RespostaDaLia } from './resposta.js';
 
@@ -145,12 +145,24 @@ function faixasDosNomes(texto: string, nomes: string[]): Array<[number, number]>
 
 const TIPO: Record<string, string> = { paragrafo: 'paragrafo', item: 'item', risco: 'risco', fazer: 'fazer' };
 
+/** Como a tela chama cada voz da reunião de decisão (protótipo P5) e o papel dela. */
+export const VOZES: Record<string, { name: string; role: string }> = {
+  analista: { name: 'Analista', role: 'os números' },
+  estrategista: { name: 'Estrategista', role: 'o plano' },
+  voz_contraria: { name: 'Voz contrária', role: 'discorda de propósito' },
+};
+
 /**
- * Os blocos da resposta com cada número marcado e a lista "De onde vêm os números", na ordem da leitura. O
- * mesmo valor com as mesmas fontes, escrito duas vezes, aponta para a mesma linha. Número de nome da empresa
- * ou colado numa letra ("SMASH10") fica como texto: a conferência vale para ele, só não ganha fonte.
+ * Os blocos da resposta (e a reunião de decisão, quando houver) com cada número marcado e a lista "De onde vêm
+ * os números", na ordem da leitura. O mesmo valor com as mesmas fontes, escrito duas vezes, aponta para a mesma
+ * linha. Número de nome da empresa ou colado numa letra ("SMASH10") fica como texto: a conferência vale para
+ * ele, só não ganha fonte.
  */
-export function marcarResposta(r: RespostaDaLia, lugares: Map<string, Lugar[]>, nomes: string[]): { blocks: ConversationBlock[]; numbers: ExplanationNumber[] } {
+export function marcarResposta(
+  r: RespostaDaLia,
+  lugares: Map<string, Lugar[]>,
+  nomes: string[],
+): { blocks: ConversationBlock[]; numbers: ExplanationNumber[]; meeting: ConversationMeeting | null } {
   // Sem lugar com a mesma medida ("960 reais", sem o "R$"), vale o valor em qualquer medida.
   const emQualquerMedida = new Map<string, Lugar[]>();
   for (const [chave, l] of lugares) {
@@ -192,6 +204,17 @@ export function marcarResposta(r: RespostaDaLia, lugares: Map<string, Lugar[]>, 
     if (fim < texto.length) saida.push({ text: texto.slice(fim), number: null });
     return saida;
   };
+  // A ordem das chamadas é a da leitura (os blocos, depois a reunião): é ela que numera a lista.
   const blocks = r.blocos.map((b) => ({ kind: TIPO[b.tipo] ?? 'paragrafo', text: marcar(b.texto), risk: b.tipo === 'risco' ? b.risco : null }));
-  return { blocks, numbers };
+  const reuniao = r.reuniao;
+  const meeting = reuniao
+    ? {
+        topic: marcar(reuniao.pauta),
+        voices: reuniao.vozes.map((v) => ({ agent: v.quem, ...(VOZES[v.quem] ?? { name: v.quem, role: '' }), text: marcar(v.texto) })),
+        recommendation: marcar(reuniao.recomendacao),
+        risk: reuniao.risco,
+        risk_reason: marcar(reuniao.risco_motivo),
+      }
+    : null;
+  return { blocks, numbers, meeting };
 }

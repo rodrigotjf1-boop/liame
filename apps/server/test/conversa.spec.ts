@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ConversationMessage } from '@liame/contracts';
 import { indiceDasOrigens, marcarResposta } from '../src/ai/conversa/fontes.js';
 import { foraDoDia, nomesDaLeitura, rotuloDaLeitura, rotuloDoPasso } from '../src/ai/conversa/leituras.js';
+import { reaisParaMicros } from '../src/ai/conversa/cupom.defs.js';
 import { LIA, PROMPT_CONVERSA_LIA } from '../src/ai/conversa/prompt.js';
 import { conferirResposta, type PermitidosNaConversa, respostaComoTexto, type RespostaDaLia } from '../src/ai/conversa/resposta.js';
 import { conferirRegistro, registroAtual } from '../src/ai/registro/definicoes.js';
@@ -24,7 +25,21 @@ const CICLO_VELHO = { ...CICLO, totais: { investimento: 'R$ 777,00' }, fontes: [
 
 const resposta = (...blocos: Array<[RespostaDaLia['blocos'][number]['tipo'], string, ('baixo' | 'medio' | 'alto')?]>): RespostaDaLia => ({
   blocos: blocos.map(([tipo, texto, risco]) => ({ tipo, texto, risco: risco ?? null })),
+  reuniao: null,
 });
+/** Uma reunião de decisão no formato, para os testes mexerem num campo de cada vez. */
+const REUNIAO: NonNullable<RespostaDaLia['reuniao']> = {
+  pauta: 'Pausar a Delivery noite 2?',
+  vozes: [
+    { quem: 'analista', texto: 'A Delivery noite 2 trouxe 3 pedidos e R$ 120,00 no caixa.' },
+    { quem: 'estrategista', texto: 'É a única campanha da noite: antes de pausar, vale testar outra oferta.' },
+    { quem: 'voz_contraria', texto: 'Com 3 pedidos, a amostra é pequena para concluir que dá prejuízo.' },
+  ],
+  recomendacao: 'Não pausar ainda: ver por que ela parou de entregar e olhar de novo na semana que vem.',
+  risco: 'medio',
+  risco_motivo: 'manter custa o investimento da campanha; pausar sem ver a causa pode esconder um anúncio reprovado.',
+};
+const comReuniao = (r: Partial<NonNullable<RespostaDaLia['reuniao']>> = {}): RespostaDaLia => ({ ...resposta(['paragrafo', 'Levei a pergunta para a reunião de decisão.']), reuniao: { ...REUNIAO, ...r } });
 const permitidos = (extra: Partial<PermitidosNaConversa> = {}): PermitidosNaConversa => ({
   emDia: [CICLO, 'Como foi a semana?', A_SEMANA],
   velhas: [],
@@ -60,7 +75,7 @@ describe('conferência da resposta da LIA (A3-5, I9, I8)', () => {
 
   it('formato: risco só no bloco de risco, no máximo um; resposta vazia ou longa demais não aparece', () => {
     expect(conferirResposta(resposta(['risco', 'a semana empata.']), permitidos())?.recusa).toBe('formato');
-    expect(conferirResposta({ blocos: [{ tipo: 'paragrafo', texto: 'Ok.', risco: 'alto' }] }, permitidos())?.recusa).toBe('formato');
+    expect(conferirResposta({ blocos: [{ tipo: 'paragrafo', texto: 'Ok.', risco: 'alto' }], reuniao: null }, permitidos())?.recusa).toBe('formato');
     expect(conferirResposta(resposta(['risco', 'a.', 'alto'], ['risco', 'b.', 'baixo']), permitidos())?.recusa).toBe('formato');
     expect(conferirResposta(resposta(), permitidos())?.recusa).toBe('vazia');
     expect(conferirResposta(resposta(['paragrafo', ' ']), permitidos())?.recusa).toBe('vazia');
@@ -74,6 +89,17 @@ describe('conferência da resposta da LIA (A3-5, I9, I8)', () => {
     expect(conferirResposta(resposta(['paragrafo', 'Vote em quem apoia o comércio local.']), permitidos())?.recusa).toBe('compliance');
     expect(conferirResposta(resposta(['paragrafo', 'Com o cupom, o lucro certo vem.']), permitidos())?.recusa).toBe('compliance');
     expect(conferirResposta(resposta(['paragrafo', 'O hambúrguer gourmet vende bem.']), permitidos({ daMarca: ['gourmet'] }))?.recusa).toBe('compliance');
+  });
+
+  it('reunião de decisão: de 2 a 4 vozes, sempre com a contrária; os textos dela passam pela mesma conferência', () => {
+    expect(conferirResposta(comReuniao(), permitidos())).toBeNull();
+    expect(conferirResposta(comReuniao({ vozes: REUNIAO.vozes.filter((v) => v.quem !== 'voz_contraria') }), permitidos())?.recusa).toBe('formato');
+    expect(conferirResposta(comReuniao({ vozes: [REUNIAO.vozes[2]!] }), permitidos())?.recusa).toBe('formato');
+    expect(conferirResposta(comReuniao({ recomendacao: ' ' }), permitidos())?.recusa).toBe('vazia');
+    expect(conferirResposta(comReuniao({ pauta: 'p'.repeat(201) }), permitidos())?.recusa).toBe('longa');
+    // Número inventado numa voz derruba a resposta inteira, como num bloco.
+    expect(conferirResposta(comReuniao({ recomendacao: 'Pausar e economizar R$ 500,00 por semana.' }), permitidos())).toEqual({ recusa: 'numero_fora', detalhe: ['500,00'] });
+    expect(conferirResposta(comReuniao({ risco_motivo: 'o lucro certo vem com a pausa.' }), permitidos())?.recusa).toBe('compliance');
   });
 
   it('o histórico volta ao modelo como texto, com o risco e o que fazer marcados', () => {
@@ -143,6 +169,23 @@ describe('de onde vem cada número (P5: "De onde vêm os números")', () => {
     ]);
   });
 
+  it('a reunião sai marcada como os blocos: as vozes com nome e papel, e a numeração segue depois dos blocos', () => {
+    const { blocks, numbers, meeting } = marcarResposta(comReuniao(), lugares, nomes);
+    expect(blocks).toHaveLength(1);
+    expect(meeting?.voices.map((v) => [v.agent, v.name, v.role])).toEqual([
+      ['analista', 'Analista', 'os números'],
+      ['estrategista', 'Estrategista', 'o plano'],
+      ['voz_contraria', 'Voz contrária', 'discorda de propósito'],
+    ]);
+    expect(meeting?.risk).toBe('medio');
+    // "3" e "R$ 120,00" da campanha citada: a fonte é a da Delivery noite 2 (o "2" do nome é nome, não valor).
+    expect(numbers).toEqual([
+      { value: '3', sources: ['Resultados de 25/09 a 01/10 · campanha "Delivery noite 2" · confirmado no caixa · pedidos'] },
+      { value: 'R$ 120,00', sources: ['Resultados de 25/09 a 01/10 · campanha "Delivery noite 2" · confirmado no caixa · receita'] },
+    ]);
+    expect(meeting?.voices[2]!.text.filter((t) => t.number !== null).map((t) => t.number)).toEqual([0]);
+  });
+
   it('o mesmo valor com a mesma fonte, escrito duas vezes, é uma linha só; o bloco de risco leva o nível', () => {
     const { blocks, numbers } = marcarResposta(resposta(['paragrafo', 'Foram 38 pedidos.'], ['risco', 'com 38 pedidos, a amostra é pequena.', 'medio']), lugares, nomes);
     expect(numbers).toHaveLength(1);
@@ -157,6 +200,8 @@ describe('o que a tela mostra de cada leitura (P5)', () => {
     expect(rotuloDoPasso('midia_entrega', { from: 'quebrado', to: '2026-10-01' })).toBe('Lendo a entrega dos anúncios');
     expect(rotuloDoPasso('fontes_frescor', {})).toBe('Conferindo se as fontes estão em dia');
     expect(rotuloDoPasso('abrir_demanda', {})).toBe('Registrando a demanda');
+    expect(rotuloDoPasso('propor_cupom', {})).toBe('Enviando a proposta para Aprovações');
+    expect(rotuloDaLeitura('propor_cupom', {})).toBeNull();
     expect(rotuloDaLeitura('abrir_demanda', {})).toBeNull();
     expect(rotuloDoPasso('outra_coisa', {})).toBe('Lendo os dados');
   });
@@ -217,11 +262,23 @@ describe('o que se decide por regra e o que volta ao modelo', () => {
   });
 });
 
+describe('a proposta de cupom: o valor em reais vira micros pelo código', () => {
+  it('"R$ 10,00", "1.250,5" e "10" valem; o resto não é valor em reais', () => {
+    expect(reaisParaMicros('R$ 10,00')).toBe('10000000');
+    expect(reaisParaMicros('R$ 1.250,50')).toBe('1250500000');
+    expect(reaisParaMicros('1.250,5')).toBe('1250500000');
+    expect(reaisParaMicros('10')).toBe('10000000');
+    expect(reaisParaMicros('0,99')).toBe('990000');
+    for (const ruim of ['10,123', 'dez reais', '1.25', '-5,00', 'R$', '', '1.2345,00']) expect(reaisParaMicros(ruim)).toBeNull();
+  });
+});
+
 describe('a LIA no registro (I2)', () => {
-  it('prompt e funcionário registrados, com as seis leituras e a demanda', () => {
+  it('prompt e funcionário registrados, com as seis leituras, a demanda e a proposta de cupom', () => {
     expect(conferirRegistro(registroAtual())).toEqual([]);
     expect(PROMPT_CONVERSA_LIA.task).toBe('conversa_lia');
-    expect(LIA.ferramentas).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'abrir_demanda']);
+    expect([PROMPT_CONVERSA_LIA.version, LIA.version]).toEqual([2, 2]);
+    expect(LIA.ferramentas).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'abrir_demanda', 'propor_cupom']);
     // Ela se apresenta como assistente de IA e oferece falar com uma pessoa (D-A3-6).
     expect(PROMPT_CONVERSA_LIA.content).toContain('assistente de inteligência artificial');
     expect(PROMPT_CONVERSA_LIA.content).toContain('Falar com uma pessoa');

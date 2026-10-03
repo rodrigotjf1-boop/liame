@@ -6,10 +6,13 @@ import { MockLanguageModelV4 } from 'ai/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { TAREFA_CONVERSA } from '../../src/ai/conversa/prompt.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
+import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
+import { afterCommit } from '../../src/context/request-context.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { Mailer } from '../../src/mail/mailer.js';
+import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { LifecyclePurgeService } from '../../src/worker/lifecycle-purge.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
@@ -43,7 +46,10 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
   });
   const pede = (toolName: string, input: unknown, toolCallId = `chamada-${randomBytes(3).toString('hex')}`) => rodada([{ type: 'tool-call', toolCallId, toolName, input: JSON.stringify(input) }]);
   const responde = (...blocos: Array<[string, string, string?]>) =>
-    rodada([{ type: 'text', text: JSON.stringify({ blocos: blocos.map(([tipo, texto, risco]) => ({ tipo, texto, risco: risco ?? null })) }) }]);
+    rodada([{ type: 'text', text: JSON.stringify({ blocos: blocos.map(([tipo, texto, risco]) => ({ tipo, texto, risco: risco ?? null })), reuniao: null }) }]);
+  /** Resposta com a reunião de decisão (I10b). */
+  const respondeComReuniao = (bloco: string, reuniao: Record<string, unknown>) =>
+    rodada([{ type: 'text', text: JSON.stringify({ blocos: [{ tipo: 'paragrafo', texto: bloco, risco: null }], reuniao }) }]);
   const roteiro = (...passos: Array<ReturnType<typeof rodada>>) => new MockLanguageModelV4({ doGenerate: passos });
 
   type Dono = { cookie: string; tenantId: string; userId: string; brandId: string };
@@ -198,13 +204,13 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
 
     // O modelo recebeu o prompt registrado, o contexto do pedido e só as ferramentas da pessoa (o dono tem todas).
     expect(mock.doGenerateCalls).toHaveLength(2);
-    expect(mock.doGenerateCalls[0]!.tools?.map((t) => t.name)).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'abrir_demanda']);
+    expect(mock.doGenerateCalls[0]!.tools?.map((t) => t.name)).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'abrir_demanda', 'propor_cupom']);
     expect(enviado(mock, 0)).toContain('Você é a LIA, a assistente de inteligência artificial da Liame');
     expect(enviado(mock, 0)).toContain(`brand_id ${d.brandId}`);
     expect(enviado(mock, 1)).toContain('R$ 200,00');
     expect(await usosDaConversa(d.tenantId)).toEqual([
-      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@1', outcome: 'ok' },
-      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@1', outcome: 'ok' },
+      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@2', outcome: 'ok' },
+      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@2', outcome: 'ok' },
     ]);
     // O retorno da pessoa ("Fez sentido") vale para a resposta da conversa, como para o Explicar.
     const retorno = await api.call('POST', '/v1/ai/feedback', { cookie: d.cookie, body: { usage_id: m.usage_id, verdict: 'fez_sentido' } });
@@ -312,12 +318,136 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     expect(reaberta.body.messages[1].cards[0].demand).toMatchObject({ id: demanda.id, status: 'cancelada' });
     expect(reaberta.body.messages[1].cards[0].demand.cancelled_at).not.toBeNull();
 
-    // Somente leitura conversa, mas não registra demanda: a ferramenta nem é oferecida.
+    // Somente leitura conversa, mas não registra demanda nem propõe cupom: as ferramentas nem são oferecidas.
     const leitor = await membro(d, 'somente_leitura');
     const outro = responder(roteiro(responde(['paragrafo', 'Quem pode fazer esse pedido é o dono, o administrador ou o gestor.'])));
     await conversar(leitor.cookie, { brand_id: d.brandId, text: 'Monta uma promoção?' });
     expect(outro.doGenerateCalls[0]!.tools?.map((t) => t.name)).not.toContain('abrir_demanda');
+    expect(outro.doGenerateCalls[0]!.tools?.map((t) => t.name)).not.toContain('propor_cupom');
     expect((await api.call('POST', `/v1/demands/${demanda.id}/cancel`, { cookie: leitor.cookie, body: {} })).status).toBe(403);
+  });
+
+  /** Loja com o Regem conectado (e "criar cupom de campanha" liberado), com a escrita no Regem ligada para a empresa (I10b). */
+  async function comLojaQueCriaCupom(d: Dono, opcoes: { escrita?: boolean } = {}) {
+    const unidade = randomUUID();
+    await ownerQuery(`insert into liame.unit (id, tenant_id, brand_id, name) values ($1, $2, $3, 'Loja Centro')`, [unidade, d.tenantId, d.brandId]);
+    await ownerQuery(
+      `insert into liame.connected_account (id, tenant_id, brand_id, unit_id, provider, external_id, name, currency, timezone, provider_attributes)
+       values (gen_random_uuid(), $1, $2, $3, 'regem', $4, 'Mister Burgers — Loja Centro', 'BRL', 'America/Sao_Paulo', '{"escopos":["pedidos.ler","cupons.ler","cupons.criar"]}'::jsonb)`,
+      [d.tenantId, d.brandId, unidade, randomUUID()],
+    );
+    if (opcoes.escrita !== false) {
+      await ownerQuery(
+        `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, rollout_percent, created_by) values (gen_random_uuid(), 'regem_write', 'tenant', $1, 'true'::jsonb, null, 'testes')`,
+        [d.tenantId],
+      );
+      flags.invalidate();
+    }
+  }
+
+  it('I10b: a LIA propõe o cupom (o mesmo pedido da aba Cupons, em nome da pessoa, auditado como agente); a recusa da regra volta para ela', async () => {
+    const d = await dono();
+    await comLojaQueCriaCupom(d);
+    const hoje = diaNoFuso(new Date(), 'America/Sao_Paulo');
+    const proposta = { loja: 'loja centro', campanha: 'Combo Sexta', codigo: 'SEXTA10', tipo: 'percentual', percentual: 10, valido_de: hoje, valido_ate: menosDias(hoje, -7), exclusivo: true };
+    const mock = responder(
+      roteiro(
+        pede('propor_cupom', { ...proposta, loja: 'Loja Norte' }, 'c1'),
+        pede('propor_cupom', proposta, 'c2'),
+        responde(['paragrafo', 'Montei a proposta do cupom SEXTA10 e mandei para Aprovações: o cupom só nasce no Regem quando uma pessoa com permissão aprovar.']),
+      ),
+    );
+    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Proponha um cupom exclusivo de 10% para a Combo sexta' });
+    const m = mensagemFinal(r.eventos);
+    expect(m).toMatchObject({ role: 'lia', status: 'ok' });
+    expect(r.eventos.filter((e) => e.type === 'passo').map((e) => [e.step!.label, e.step!.status])).toEqual([
+      ['Enviando a proposta para Aprovações', 'lendo'],
+      ['Enviando a proposta para Aprovações', 'falhou'],
+      ['Enviando a proposta para Aprovações', 'lendo'],
+      ['Enviando a proposta para Aprovações', 'ok'],
+    ]);
+    // A primeira tentativa errou a loja: a LIA recebeu o motivo, com as lojas que existem.
+    expect(enviado(mock, 1)).toContain('Não achei a loja');
+    expect(enviado(mock, 1)).toContain('Loja Centro');
+    expect(m.cards.map((k) => k.kind)).toEqual(['proposta_cupom']);
+    const { request, store_name } = m.cards[0]!.coupon!;
+    expect(store_name).toBe('Loja Centro');
+    expect(request).toMatchObject({ code: 'SEXTA10', kind: 'percentual', percent: 10, status: 'aguardando_aprovacao', exclusive: true, campaign: { name: 'Combo sexta' }, requested_by: { id: d.userId } });
+    // É o mesmo pedido da aba Cupons: aparece lá, esperando aprovação.
+    const cupons = await api.call('GET', `/v1/coupons?brand_id=${d.brandId}`, { cookie: d.cookie });
+    expect(cupons.body.requests.map((p: { action_id: string }) => p.action_id)).toEqual([request.action_id]);
+    const [evento] = await ownerQuery<{ actor_type: string; agent: string; actor_label: string; resource_id: string; after: Record<string, unknown> }>(
+      `select actor_type, agent, actor_label, resource_id, after from liame.audit_event where tenant_id = $1 and action = 'cupom.pedir_criacao'`,
+      [d.tenantId],
+    );
+    expect(evento).toMatchObject({ actor_type: 'agent', agent: 'lia', resource_id: request.action_id, after: { requested_by: d.userId } });
+    expect(evento!.actor_label).toMatch(/^LIA, a pedido de /);
+    // Quem pediu desiste na aba Cupons: ao reabrir a conversa, o cartão mostra a proposta cancelada.
+    expect((await api.call('POST', `/v1/coupons/regem/${request.action_id}/cancel`, { cookie: d.cookie })).status).toBe(204);
+    const reaberta = await api.call('GET', `/v1/conversations/${r.eventos[0]!.conversation!.id}`, { cookie: d.cookie });
+    expect(reaberta.body.messages[1].cards[0].coupon.request.status).toBe('cancelada');
+
+    // Com a escrita no Regem desligada para a empresa, a proposta é recusada pela regra e a LIA recebe o motivo.
+    const sem = await dono();
+    await comLojaQueCriaCupom(sem, { escrita: false });
+    const recusada = responder(roteiro(pede('propor_cupom', proposta), responde(['paragrafo', 'A criação de cupom pelo Liame não está liberada nesta empresa.'])));
+    const r2 = mensagemFinal((await conversar(sem.cookie, { brand_id: sem.brandId, text: 'Proponha um cupom' })).eventos);
+    expect(r2.cards).toEqual([]);
+    expect(enviado(recusada, 1)).toContain('não está liberada');
+    expect(await ownerQuery(`select id from liame.action_request where tenant_id = $1`, [sem.tenantId])).toEqual([]);
+  });
+
+  it('I10b: decisão grande vira a reunião de decisão (vozes, recomendação e risco, com os números conferidos)', async () => {
+    const d = await dono();
+    const reuniao = {
+      pauta: 'Pausar a Combo sexta?',
+      vozes: [
+        { quem: 'analista', texto: 'De 18/09/2026 a 01/10/2026, a Combo sexta recebeu R$ 200,00 e o caixa ainda não confirmou pedido dela.' },
+        { quem: 'estrategista', texto: 'Antes de pausar, vale conferir se o anúncio leva o link com rastreio.' },
+        { quem: 'voz_contraria', texto: 'Sem o link com rastreio, o pedido pode ter vindo e ficado sem origem: a campanha pode estar melhor do que parece.' },
+      ],
+      recomendacao: 'Não pausar ainda: conferir o link do anúncio e olhar de novo na semana que vem.',
+      risco: 'medio',
+      risco_motivo: 'manter custa o que a campanha gasta; pausar sem conferir o link pode cortar uma campanha que vende.',
+    };
+    const leitura = () => pede('resultados_ciclo_fechado', { brand_id: d.brandId, ...PERIODO });
+    responder(roteiro(leitura(), respondeComReuniao('Pausar campanha é decisão grande: levei a pergunta para a reunião de decisão.', reuniao)));
+    const m = mensagemFinal((await conversar(d.cookie, { brand_id: d.brandId, text: 'Vale pausar a Combo sexta?' })).eventos);
+    expect(m).toMatchObject({ role: 'lia', status: 'ok' });
+    expect(m.cards.map((k) => k.kind)).toEqual(['reuniao']);
+    const card = m.cards[0]!.meeting!;
+    expect(card.voices.map((v) => [v.agent, v.name])).toEqual([['analista', 'Analista'], ['estrategista', 'Estrategista'], ['voz_contraria', 'Voz contrária']]);
+    expect(card.risk).toBe('medio');
+    expect(m.numbers.find((n) => n.value === 'R$ 200,00')!.sources[0]).toMatch(/^Resultados de 18\/09 a 01\/10 · campanha "Combo sexta"/);
+
+    // A reunião também é conferida: número inventado numa voz derruba a resposta inteira.
+    responder(roteiro(leitura(), respondeComReuniao('Levei a pergunta para a reunião.', { ...reuniao, recomendacao: 'Pausar economiza R$ 70,00 por semana.' })));
+    expect(mensagemFinal((await conversar(d.cookie, { brand_id: d.brandId, text: 'E agora, pauso?' })).eventos)).toMatchObject({ role: 'sistema', notice: 'recusada' });
+  });
+
+  it('fora da rota, o que o serviço agenda para depois do commit roda depois do commit; desfeita a transação, não roda', async () => {
+    const d = await dono({ ia: false });
+    const rodou: string[] = [];
+    await naTransacaoDaEmpresa(database, d, async () => {
+      afterCommit(async () => {
+        rodou.push('gravou');
+      });
+    });
+    await expect(
+      naTransacaoDaEmpresa(database, d, async () => {
+        afterCommit(async () => {
+          rodou.push('desfeita');
+        });
+        throw new Error('falhou');
+      }),
+    ).rejects.toThrow('falhou');
+    // O efeito que falha só é registrado: não derruba quem chamou.
+    await naTransacaoDaEmpresa(database, d, async () => {
+      afterCommit(async () => {
+        throw new Error('o e-mail caiu');
+      });
+    });
+    expect(rodou).toEqual(['gravou']);
   });
 
   it('A3-9: conversa cheia, uma resposta por vez, mensagem repetida e o limite da pessoa', async () => {

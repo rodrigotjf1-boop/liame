@@ -1,5 +1,5 @@
 import type { ConversationStaleSource } from '@liame/contracts';
-import { FERRAMENTA_ABRIR_DEMANDA } from './prompt.js';
+import { FERRAMENTA_ABRIR_DEMANDA, FERRAMENTA_PROPOR_CUPOM } from './prompt.js';
 
 // O que a tela diz de cada ferramenta que a LIA usa (protótipo P5): o passo enquanto ela lê ("Lendo os
 // resultados de 22/09 a 28/09") e a lista "A LIA leu". E o que o código tira de cada leitura: as fontes fora
@@ -38,6 +38,8 @@ export function rotuloDoPasso(ferramenta: string, input: unknown): string {
       return 'Lendo os links e a conferência do rastreio';
     case FERRAMENTA_ABRIR_DEMANDA:
       return 'Registrando a demanda';
+    case FERRAMENTA_PROPOR_CUPOM:
+      return 'Enviando a proposta para Aprovações';
     default:
       return 'Lendo os dados';
   }

@@ -2,6 +2,7 @@ import type { RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { TOOLS } from '../../actions/tools.js';
 import { canonicalJson, sha256 } from '../../audit/audit.js';
+import { PROPOR_CUPOM } from '../conversa/cupom.defs.js';
 import { ABRIR_DEMANDA } from '../conversa/demanda.defs.js';
 import { LIA, PROMPT_CONVERSA_LIA } from '../conversa/prompt.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
@@ -54,12 +55,13 @@ export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA
 export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA];
 
 /**
- * Todas as ferramentas: as de escrita em plataforma (Action Service), as de leitura dos funcionários de IA e a
- * escrita da conversa no próprio Liame (abrir uma demanda, I10), que a rota confere pela permissão da pessoa.
+ * Todas as ferramentas: as de escrita em plataforma (Action Service), as de leitura dos funcionários de IA e as
+ * escritas da conversa (abrir uma demanda, I10; propor um cupom, que vira pedido no Action Service, I10b), que a
+ * conversa oferece pela permissão da pessoa.
  */
 export function ferramentas(): FerramentaDef[] {
   const escrita = Object.values(TOOLS).map((t): FerramentaDef => ({ name: t.name, version: t.version, description: t.description, risk: t.risk, permission: null, owner: t.owner, input: t.params }));
-  return [...escrita, ...LEITURAS, ABRIR_DEMANDA];
+  return [...escrita, ...LEITURAS, ABRIR_DEMANDA, PROPOR_CUPOM];
 }
 
 export interface Registro {
