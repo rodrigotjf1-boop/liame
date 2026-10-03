@@ -152,6 +152,30 @@ export {
 } from './results.js';
 export { WeeklyReview, WeeklyReviewCampaign, WeeklyReviewChange, WeeklyReviewQuery, WeeklyReviewResponse } from './reports.js';
 export {
+  BrandDossierContent,
+  BrandDossierQuery,
+  BrandDossierResponse,
+  BrandDossierSuggestion,
+  BrandDossierSuggestionItem,
+  BrandDossierSuggestionListResponse,
+  BrandDossierVersionListResponse,
+  BrandDossierVersionMeta,
+  BrandDossierVersionResponse,
+  BrandPhraseHit,
+  CheckBrandPhraseRequest,
+  CheckBrandPhraseResponse,
+  DOSSIER_CONTENT_VERSION,
+  DOSSIER_SECTIONS,
+  DossierSection,
+  DossierSectionStatus,
+  DossierVersionNumber,
+  DossierVersionSource,
+  RestoreBrandDossierRequest,
+  SaveBrandDossierRequest,
+  SystemProof,
+  UseBrandDossierSuggestionRequest,
+} from './marca.js';
+export {
   CouponCampaign,
   CouponCode,
   CouponItem,

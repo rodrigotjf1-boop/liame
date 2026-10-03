@@ -249,6 +249,18 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(mock.doGenerateCalls).toHaveLength(0);
   });
 
+  it('I8: a resposta da IA com uma frase que a marca nunca diz cai na explicação do sistema (Compliance)', async () => {
+    const d = await dono();
+    // O dossiê da marca, salvo pela rota: "o que não pode dizer" inclui "link com rastreio".
+    const salvo = await api.call('PUT', '/v1/brand-dossier', {
+      cookie: d.cookie,
+      body: { brand_id: d.brandId, base_version: 0, content: { forbidden: { items: [{ text: 'link com rastreio', why: 'aqui é "link do Liame"' }] } } },
+    });
+    expect(salvo.status).toBe(200);
+    responder(responde(JSON.stringify(BOA)));
+    expect(await pedir(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'compliance', usage_id: null });
+  });
+
   it('A3-15: campanha com nome político ou eleitoral não vai para a IA; a explicação do código segue', async () => {
     const d = await dono();
     await ownerQuery(`update liame.campaign set name = 'Vote 45 | Vereador do bairro' where connected_account_id = $1`, [d.contaId]);

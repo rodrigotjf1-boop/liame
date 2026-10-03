@@ -88,3 +88,24 @@ describe('regras de texto: promessa de resultado, categoria proibida e dado pess
     expect(normalizar('  ELEIÇÕES\n\tMunicipais ')).toBe(' eleicoes municipais ');
   });
 });
+
+describe('regras de texto: o que a marca nunca diz (dossiê, I8)', () => {
+  const daMarca = (texto: string, lista: string[], ignorar?: string[]) => conferirTexto(texto, { daMarca: lista, ignorar });
+
+  it('barra a frase da marca como palavras inteiras, sem olhar acento nem maiúscula', () => {
+    expect(daMarca('O MELHOR HAMBURGUER DO RIO, sexta!', ['o melhor hambúrguer do Rio'])).toEqual([{ regra: 'regra_da_marca', trecho: 'o melhor hamburguer do rio' }]);
+    expect(daMarca('Smash gourmet na sexta.', ['Gourmet'])).toEqual([{ regra: 'regra_da_marca', trecho: 'gourmet' }]);
+    expect(daMarca('Entrega em 20 minutos no Centro.', ['entrega em 20 minutos'])).toEqual([{ regra: 'regra_da_marca', trecho: 'entrega em 20 minutos' }]);
+  });
+
+  it('não barra pedaço de outra palavra, frase curta demais nem o nome de campanha da própria empresa', () => {
+    expect(daMarca('Um molho gourmetizado de verdade.', ['gourmet'])).toEqual([]);
+    expect(daMarca('Ok, é isso.', ['ok', 'é'])).toEqual([]);
+    expect(daMarca('A campanha Burger Gourmet trouxe 27 pedidos.', ['gourmet'], ['Burger Gourmet'])).toEqual([]);
+  });
+
+  it('soma com as regras da Liame, sem repetir a mesma frase', () => {
+    const achados = daMarca('Resultado garantido: o melhor do Rio, o melhor do Rio!', ['o melhor do Rio', 'O MELHOR DO RIO']);
+    expect(achados.map((a) => a.regra).sort()).toEqual(['promessa_de_resultado', 'regra_da_marca']);
+  });
+});

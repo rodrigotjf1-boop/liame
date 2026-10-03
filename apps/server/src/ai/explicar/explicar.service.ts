@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { currentTx } from '../../context/request-context.js';
 import { DATABASE } from '../../database/database.module.js';
 import { AppProblem } from '../../errors/problems.js';
+import { proibidasDaMarca } from '../../marca/marca.service.js';
 import { MediaService } from '../../media/media.service.js';
 import { nomesPoliticos } from '../../policy/texto.js';
 import { AtencaoCicloService } from '../../results/atencao-ciclo.service.js';
@@ -86,9 +87,10 @@ export class ExplicarService {
       atual: await this.resultados.closedLoop(q, ctx.agora),
       anterior: await this.resultados.closedLoop({ ...q, ...antes }, ctx.agora),
       ativo: await this.analistaAtivo(ctx, q.brand_id),
+      daMarca: await proibidasDaMarca(q.brand_id),
     }));
     const contexto = contextoDosResultados(lido.atual, lido.anterior);
-    return this.explicar(ctx, q.brand_id, contexto, 'resultados.explicar', lido.ativo, () => explicacaoSemIa(contexto));
+    return this.explicar(ctx, q.brand_id, contexto, 'resultados.explicar', lido, () => explicacaoSemIa(contexto));
   }
 
   /**
@@ -97,10 +99,14 @@ export class ExplicarService {
    * aqui não há transação aberta: é a chamada ao modelo, com a mesma tarefa, o mesmo prompt e a mesma
    * conferência do Explicar. Sem a LIA, a leitura é a do sistema, com o motivo.
    */
-  async daSemana(ctx: ContextoDaLeitura, brandId: string, lido: { atual: ClosedLoopResponse; anterior: ClosedLoopResponse | null; ativo: boolean }): Promise<ExplicacaoPronta> {
+  async daSemana(
+    ctx: ContextoDaLeitura,
+    brandId: string,
+    lido: { atual: ClosedLoopResponse; anterior: ClosedLoopResponse | null; ativo: boolean; daMarca?: string[] },
+  ): Promise<ExplicacaoPronta> {
     this.exigirVendas(ctx);
     const contexto = contextoDosResultados(lido.atual, lido.anterior);
-    return this.explicar(ctx, brandId, contexto, WORKFLOW_DA_REVISAO, lido.ativo, () => explicacaoSemIa(contexto, { semana: true }));
+    return this.explicar(ctx, brandId, contexto, WORKFLOW_DA_REVISAO, lido, () => explicacaoSemIa(contexto, { semana: true }));
   }
 
   /** O Analista está ativo para esta marca? Roda na transação de quem chama. */
@@ -133,10 +139,10 @@ export class ExplicarService {
       if (item.campaign_id && !campanha) {
         campanha = (await currentTx().execute<{ name: string }>(sql`select name from liame.campaign where id = ${item.campaign_id}`)).rows[0]?.name ?? null;
       }
-      return { item, campanha, atual, anterior, ativo: await this.analistaAtivo(ctx, q.brand_id) };
+      return { item, campanha, atual, anterior, ativo: await this.analistaAtivo(ctx, q.brand_id), daMarca: await proibidasDaMarca(q.brand_id) };
     });
     const contexto: ContextoDoAviso = { aviso: avisoNoContexto(lido.item, lido.campanha), ...contextoDosResultados(lido.atual, lido.anterior) };
-    return this.explicar({ ...ctx, agora }, q.brand_id, contexto, 'atencao.explicar', lido.ativo, () => explicacaoDoAvisoSemIa(contexto));
+    return this.explicar({ ...ctx, agora }, q.brand_id, contexto, 'atencao.explicar', lido, () => explicacaoDoAvisoSemIa(contexto));
   }
 
   /**
@@ -157,7 +163,16 @@ export class ExplicarService {
     return funcionarioAtivo(currentTx(), { tenantId: ctx.tenantId, brandId, agentKey: ANALISTA.key, ativoPorPadrao: ANALISTA.ativoPorPadrao });
   }
 
-  private async explicar(ctx: ContextoDaLeitura, brandId: string, contexto: ContextoComAviso, workflow: string, ativo: boolean, semIaDe: () => Explicacao): Promise<ExplicacaoPronta> {
+  /** `lido.daMarca`: o que a marca nunca diz (dossiê, I8), lido na mesma transação curta dos números. */
+  private async explicar(
+    ctx: ContextoDaLeitura,
+    brandId: string,
+    contexto: ContextoComAviso,
+    workflow: string,
+    lido: { ativo: boolean; daMarca?: string[] },
+    semIaDe: () => Explicacao,
+  ): Promise<ExplicacaoPronta> {
+    const ativo = lido.ativo;
     const gerada = (ctx.agora ?? new Date()).toISOString();
     const pronta = (origem: 'ia' | 'sem_ia', motivo: MotivoSemIa | null, explicacao: Explicacao, usageId: string | null, detalhe: AiErrorDetail = {}): ExplicacaoPronta => ({
       origem,
@@ -196,7 +211,7 @@ export class ExplicarService {
         messages: [{ role: 'user', content: JSON.stringify(contexto) }],
         schema: Explicacao,
       });
-      const recusa = conferirExplicacao(r.object, contexto);
+      const recusa = conferirExplicacao(r.object, contexto, { daMarca: lido.daMarca });
       if (recusa) {
         // O que foi recusado e por quê fica no log (números não são dado pessoal) e no conteúdo guardado da chamada.
         this.logger.warn(`explicação da IA recusada (${recusa.recusa}${recusa.detalhe.length ? `: ${recusa.detalhe.slice(0, 8).join(' | ')}` : ''}); uso ${r.usageId}`);

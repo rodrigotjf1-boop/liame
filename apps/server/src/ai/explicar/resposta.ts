@@ -32,9 +32,9 @@ export type Recusa = 'vazia' | 'longa' | 'numero_fora' | 'trecho_proibido' | 'co
 /**
  * A resposta da IA serve para a tela? Devolve o motivo da recusa (e, no caso dos números, quais), ou nulo
  * quando serve. Recusada, a tela mostra o texto sem IA: melhor nenhuma explicação da IA do que uma com
- * número que o sistema não calculou (A3-5).
+ * número que o sistema não calculou (A3-5). `daMarca`: o que a marca nunca diz (dossiê, I8).
  */
-export function conferirExplicacao(e: Explicacao, contexto: ContextoComAviso): { recusa: Recusa; detalhe: string[] } | null {
+export function conferirExplicacao(e: Explicacao, contexto: ContextoComAviso, opcoes: { daMarca?: string[] } = {}): { recusa: Recusa; detalhe: string[] } | null {
   const textos = [e.o_que_aconteceu, ...e.motivos, e.risco_motivo, ...e.o_que_fazer];
   if (!e.motivos.length || !e.o_que_fazer.length || textos.some((t) => !t.trim())) return { recusa: 'vazia', detalhe: [] };
   if (
@@ -51,8 +51,9 @@ export function conferirExplicacao(e: Explicacao, contexto: ContextoComAviso): {
   const achados = PROIBIDOS.filter((p) => minusculo.includes(p));
   if (achados.length) return { recusa: 'trecho_proibido', detalhe: achados };
   // Compliance (I9): o código decide antes de qualquer revisor de IA. O nome de uma campanha ou conta da
-  // própria empresa pode ser citado; o que se confere é o que a IA escreveu em volta.
-  const regras = conferirTexto(textos, { ignorar: nomesDoContexto(contexto) });
+  // própria empresa pode ser citado; o que se confere é o que a IA escreveu em volta. O que a marca nunca diz
+  // (dossiê, I8) vale do mesmo jeito.
+  const regras = conferirTexto(textos, { ignorar: nomesDoContexto(contexto), daMarca: opcoes.daMarca });
   if (regras.length) return { recusa: 'compliance', detalhe: regras.map((r) => `${r.regra}: ${r.trecho}`) };
   const numeros = conferirNumeros(textos, contexto);
   if (!numeros.ok) return { recusa: 'numero_fora', detalhe: numeros.fora };

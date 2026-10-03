@@ -30,6 +30,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('links', 'Links de campanha: o link do cardápio da loja com rastreio, os parâmetros para colar no anúncio, o QR e a conferência dos anúncios ativos (A2.5)')
     .addTag('cupons', 'Cupons de campanha: os do Regem e os de outra plataforma de pedidos, ligados a campanhas, e onde cada loja recebe os pedidos online (A2.5)')
     .addTag('ia', 'Inteligência artificial: o "Explicar" dos resultados e de um aviso da Atenção, com a fonte de cada número, e o retorno da pessoa (A3)')
+    .addTag('marca', 'Minha marca: o dossiê que os funcionários de IA leem, com versões, o teste de frase e as sugestões do sistema (A3)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .build();
   return SwaggerModule.createDocument(app, config);
