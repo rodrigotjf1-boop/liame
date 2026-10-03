@@ -31,6 +31,7 @@ import { SombraLoop } from './sombra-loop.js';
 import { SombraService } from './sombra.service.js';
 import { eventoDoRegem, VendasLoop } from './vendas-loop.js';
 import { ConversasLoop } from './conversas-loop.js';
+import { EstrategistaAgenda } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { EstrategistaService } from './estrategista.service.js';
 import { VigiaService } from './vigia.service.js';
@@ -89,6 +90,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     FerramentasDeLeitura,
     EstrategistaService,
     EstrategistaLoop,
+    // Os planos agendados (I11b): a pauta de segunda-feira e o plano de 90 dias a cada 12 semanas, como demandas da rotina.
+    EstrategistaAgenda,
     VigiaService,
     EventsLoopService,
     QueueService,

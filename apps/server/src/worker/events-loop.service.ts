@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShut
 import { ActionExecutor } from './action-executor.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConversasLoop } from './conversas-loop.js';
+import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
@@ -35,6 +36,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly conversas: ConversasLoop,
     private readonly revisao: RevisaoSemanalLoop,
     private readonly estrategista: EstrategistaLoop,
+    private readonly agenda: EstrategistaAgenda,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -51,6 +53,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('revisao-semanal', 3, 60_000, async (n) => (await this.revisao.executarLote(n)).length),
       this.loop('revisao-email', 3, 60_000, async (n) => (await this.revisao.enviarLote(n)).length),
       this.loop('estrategista', 3, 60_000, async (n) => (await this.estrategista.executarLote(n)).length),
+      // A rotina de segunda passa por todas as marcas devidas numa volta; repete em 10 minutos.
+      this.loop('estrategista-agenda', MARCAS_POR_VOLTA, 600_000, async () => (await this.agenda.agendarLote()).length),
     );
   }
 
