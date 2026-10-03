@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { ExplicarService } from '../../src/ai/explicar/explicar.service.js';
+import { EstrategistaAgenda } from '../../src/worker/estrategista-agenda.js';
 import { EstrategistaLoop } from '../../src/worker/estrategista-loop.js';
 import { EstrategistaService } from '../../src/worker/estrategista.service.js';
 import { RevisaoSemanalLoop } from '../../src/worker/revisao-semanal-loop.js';
@@ -23,6 +24,7 @@ describe.skipIf(!hasDb)('módulo do worker: todas as dependências se resolvem',
       expect(modulo.get(SombraLoop)).toBeInstanceOf(SombraLoop);
       expect(modulo.get(EstrategistaLoop)).toBeInstanceOf(EstrategistaLoop);
       expect(modulo.get(EstrategistaService)).toBeInstanceOf(EstrategistaService);
+      expect(modulo.get(EstrategistaAgenda)).toBeInstanceOf(EstrategistaAgenda);
     } finally {
       await modulo.close();
     }
