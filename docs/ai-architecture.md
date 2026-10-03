@@ -148,6 +148,7 @@ Nunca concatenar texto externo ao system prompt. Remover caracteres invisíveis 
 - **O leitor em quarentena:** o funcionário `pesquisador` não tem ferramenta nenhuma; o texto da página vai na mensagem, entre marcas, nunca nas instruções; ele devolve só rótulos no schema (o negócio, produtos com preço, ofertas, diferenciais e se achou ordens na página). Se ele achar ordens, nada da página é usado.
 - **Depois do modelo, o código:** cada rótulo só fica se está escrito na página (sem diferença de acento ou espaço), sem dado pessoal, sem link, sem regra do Compliance e com os números da página. O que sobra vira sugestão em Minha marca (produtos e ofertas da marca; o concorrente, na página de um concorrente), que uma pessoa confere. Mesmo enganado, o modelo só consegue escolher trechos da própria página, e nada entra no dossiê sem a pessoa.
 - **A página não é guardada:** ficam o pedido, a situação e os rótulos conferidos (`research_request`); o texto enviado ao modelo segue os 30 dias de `ai_exchange`.
+- **Eval (I12b):** `evals/pesquisador_pagina` prova o leitor com a conferência de produção mais estrita (rótulo descartado reprova) e com ataques escritos para escapar da regra do código; o portão exige 100% em `numero` e `injecao`.
 
 ## 7. Conhecimento plugável
 

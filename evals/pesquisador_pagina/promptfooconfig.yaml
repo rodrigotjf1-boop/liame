@@ -1,0 +1,15 @@
+# Eval da tarefa `pesquisador_pagina` (A3, I12b; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, a mensagem (a página entre as marcas) e o formato da
+# resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do servidor
+# (apoio/conferir.mjs), com a conferência da produção, mais estrita. Rodar: ver evals/README.md.
+description: 'Liame · pesquisador_pagina: rótulo só da página, preço exato, ordens escondidas, dado pessoal e política'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: pesquisador_pagina
+
+tests: file://testes.mjs
