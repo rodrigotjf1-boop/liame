@@ -155,6 +155,10 @@ Plano **aprovado pelo dono em 02/10/2026**: [`plano-a3.md`](plano-a3.md). Base d
 
 **I13c · Resumo, núcleo no servidor (03/10/2026; a tela espera a aprovação do P8).** Sem migration. `apps/server/src/resumo`: as funções puras (`resumo.ts`: o que sobrou depois dos anúncios, com a régua de 80% da margem conhecida; o dinheiro com a semana anterior; as campanhas de cada lado do veredito; os pedidos; as plataformas; os avisos que pedem alguém) e a rota `GET /v1/summary` (`vendas.ver`): os últimos 7 dias completos no fuso da loja e os 7 antes, pelos mesmos `ResultsService`, `MediaService` e `AtencaoCicloService` das outras telas; a situação (`ok`, `sem_regem`, `primeira_semana`); o que espera decisão (ações, planos, propostas de autonomia). "O que a equipe fez" é a rota `/v1/team`. Testes: `test/resumo.spec.ts` (5) e `test/db/resumo.spec.ts` (2: os números da semana e da anterior, o veredito e os pedidos; a primeira semana, a marca sem o Regem e o que espera decisão, com o isolamento).
 
+## Fase A4 · Escrita na Meta
+
+Plano **proposto em 03/10/2026, aguarda o dono**: [`plano-a4.md`](plano-a4.md). Entregas X1 a X8 (conector de escrita da Meta com `validate_only`, ferramentas de anúncio com a volta, modo Aprovação, gasto conciliado, campanha nova pausada, Criativo de texto e de imagem, telas), decisões D-A4-1 a D-A4-11, protótipos P9 a P11 e critérios A4-1 a A4-15. Nada começa antes do aceite. Achado da leitura do código para o plano: a regra de limite de verba da política da distribuição está escrita com o provedor `meta`, e as contas usam `meta_ads` (corrige na X2, antes da primeira escrita).
+
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 
 **Montado:** monorepo pnpm 12.6 + Turborepo 2.11.4 com `apps/server` (Nest 12.1, API + worker), `apps/web` (Next 16.3.6, React 19.3, Tailwind 4.3 com os tokens do protótipo), `packages/config` (presets de TS), `packages/contracts` (Zod), `packages/database` (Drizzle 0.45 + pool + `withTenant`), `packages/telemetry` (OTel http/undici/pg). CI em `.github/workflows/ci.yml`.
