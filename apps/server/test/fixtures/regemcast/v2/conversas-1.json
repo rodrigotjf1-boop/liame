@@ -1,0 +1,42 @@
+{
+  "itens": [
+    {
+      "id": "0b2d6c1a-9e1f-4b3a-8c2d-1f0e9a8b7c61",
+      "versao": 1,
+      "atualizado_em": "2026-09-28T10:00:05.123456Z",
+      "numero_loja": "+5521900000000",
+      "telefone": "+5521988887777",
+      "aberta_em": "2026-09-28T10:00:00.000Z",
+      "anuncio_id": "120215566771111",
+      "tipo_origem": "ad",
+      "ctwa_clid": "ARAkLkA8rmlFeiCktEJQ-teste-1",
+      "url_origem": "https://fb.me/teste-combo"
+    },
+    {
+      "id": "0b2d6c1a-9e1f-4b3a-8c2d-1f0e9a8b7c62",
+      "versao": 1,
+      "atualizado_em": "2026-09-28T10:30:05.000001Z",
+      "numero_loja": "+5521900000000",
+      "telefone": "+5521977776666",
+      "aberta_em": "2026-09-28T10:30:00.000Z",
+      "anuncio_id": "120215566771111",
+      "tipo_origem": "ad",
+      "ctwa_clid": null,
+      "url_origem": null
+    },
+    {
+      "id": "0b2d6c1a-9e1f-4b3a-8c2d-1f0e9a8b7c63",
+      "versao": 1,
+      "atualizado_em": "2026-09-28T10:45:05.000001Z",
+      "numero_loja": "+5521900000000",
+      "telefone": "+5521966665555",
+      "aberta_em": "2026-09-28T10:45:00.000Z",
+      "anuncio_id": "998877665544",
+      "tipo_origem": "post",
+      "ctwa_clid": null,
+      "url_origem": "https://fb.me/teste-publicacao"
+    }
+  ],
+  "proximo_cursor": "cv-c1",
+  "tem_mais": true
+}

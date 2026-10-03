@@ -402,11 +402,13 @@ export class ResultsService {
       expected_every_minutes: number | null;
     }>(sql`
       select a.id, a.provider, a.name, a.status, a.timezone,
-             case when a.provider in ('regem', 'regemcast') then 'pedidos' else 'metricas' end as dataset,
+             -- O frescor de cada fonte é o do conjunto que ela alimenta: pedidos (Regem), conversas abertas por
+             -- anúncio (RegemCast, F7) ou métricas (plataformas de anúncio).
+             case a.provider when 'regem' then 'pedidos' when 'regemcast' then 'conversas_anuncio' else 'metricas' end as dataset,
              s.last_success_at, s.expected_every_minutes
         from liame.connected_account a
         left join liame.sync_state s on s.connected_account_id = a.id
-             and s.dataset = case when a.provider in ('regem', 'regemcast') then 'pedidos' else 'metricas' end
+             and s.dataset = case a.provider when 'regem' then 'pedidos' when 'regemcast' then 'conversas_anuncio' else 'metricas' end
        where a.brand_id = ${brandId} and a.disconnected_at is null and a.provider in ('meta_ads', 'google_ads', 'regem', 'regemcast')
              ${unitId ? sql`and (a.provider not in ('regem', 'regemcast') or a.unit_id = ${unitId})` : sql``}
        order by a.provider, a.name, a.id`);

@@ -1,0 +1,16 @@
+{
+  "contaId": "7d1c0b6e-2f4a-4c8e-9b1d-5a3e6f8c2d41",
+  "conta": "Mister Burgers",
+  "fuso": "America/Sao_Paulo",
+  "produto": "liame",
+  "classe": "dms",
+  "token": "Liame — piloto",
+  "permissoes": [
+    {
+      "id": "conversas.anuncio.ler",
+      "rotulo": "Conversas abertas por anúncio",
+      "descricao": "Ver quais conversas começaram por um anúncio, com o telefone de quem escreveu. Sem o conteúdo das mensagens."
+    }
+  ],
+  "limitePorMinuto": 120
+}
