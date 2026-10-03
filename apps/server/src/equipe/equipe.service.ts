@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { ativoPeloPlano } from '../ai/registro/ativacao.js';
 import { motivoSemDadoPessoal } from '../ai/sanitizar.js';
 import { situacaoDoTeto } from '../ai/teto.js';
+import { ultimaCotacao } from '../cambio/cotacao.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
@@ -177,6 +178,8 @@ export class EquipeService {
       brand_id: brandId,
       month: { from: org.de, to: org.ate, timezone: org.fuso },
       ai: { enabled: ia, spent_usd_micros: gasto.mes, ceiling_usd_micros: org.teto_mes, band: situacaoDoTeto(teto) },
+      // O custo e o teto seguem em dólar; a cotação é só para a tela mostrar o valor aproximado em reais (D-A3-14).
+      usd_brl: await ultimaCotacao(tx),
       stop: parada
         ? {
             id: parada.id,

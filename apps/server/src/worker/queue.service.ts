@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { PgBoss } from 'pg-boss';
 import { AuditAnchorService } from './audit-anchor.service.js';
+import { CambioService } from './cambio.service.js';
 import { LifecyclePurgeService } from './lifecycle-purge.service.js';
 import { VigiaService } from './vigia.service.js';
 
@@ -11,6 +12,11 @@ export const PURGE_QUEUE = 'ciclo-de-vida';
 export const PURGE_REPORT_QUEUE = 'ciclo-de-vida-relatorio';
 /** Vigia de integrações (06:10 UTC): fontes oficiais e calendário de versões (A2, G8; ADR-015). */
 export const VIGIA_QUEUE = 'vigia-integracoes';
+/**
+ * Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central. O boletim de fechamento sai pouco depois das
+ * 13h de Brasília; a rotina lê às 13:40 e, de novo, às 18:40 (16:40 e 21:40 UTC), para o dia em que a primeira falhar.
+ */
+export const CAMBIO_QUEUE = 'cambio-ptax';
 
 /**
  * Dono do pg-boss no worker. O pg-boss usa conexão direta ou em modo sessão (LISTEN/NOTIFY e
@@ -25,6 +31,7 @@ export class QueueService implements OnApplicationBootstrap, OnApplicationShutdo
     private readonly anchor: AuditAnchorService,
     private readonly purge: LifecyclePurgeService,
     private readonly vigia: VigiaService,
+    private readonly cambio: CambioService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -57,6 +64,18 @@ export class QueueService implements OnApplicationBootstrap, OnApplicationShutdo
     await boss.work(VIGIA_QUEUE, async () => {
       const r = await this.vigia.rodar();
       this.logger.log(`vigia: ${r.lidas}/${r.fontes} fontes lidas, ${r.mudancas} trechos mudaram, ${r.alertas} alertas novos`);
+    });
+    await boss.createQueue(CAMBIO_QUEUE);
+    await boss.schedule(CAMBIO_QUEUE, '40 16,21 * * *', null, { tz: 'UTC' });
+    await boss.work(CAMBIO_QUEUE, async () => {
+      try {
+        const r = await this.cambio.atualizar();
+        this.logger.log(`câmbio: ${r.lidas} cotações lidas, ${r.novas} novas; a mais recente é de ${r.ultima ?? 'nenhum dia'}`);
+      } catch (err) {
+        // O motivo fica no log do worker; a falha segue para o pg-boss, que tenta de novo e guarda o erro no job.
+        this.logger.error(`câmbio: a leitura da PTAX falhou (${err instanceof Error ? err.message : 'erro desconhecido'}); a cotação guardada continua valendo`);
+        throw err;
+      }
     });
     this.boss = boss;
   }

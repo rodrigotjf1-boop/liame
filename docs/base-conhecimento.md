@@ -613,6 +613,40 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Custo real:** existe a API de administração de uso e custo (`usage-cost-api`) para a reconciliação mensal (A3-2) [O, não testada].
 - Preços de OpenAI e Google: [pendente de pesquisa; só quando uma finalidade pedir].
 
+### 10.1 Câmbio de referência (PTAX do Banco Central)
+
+*Conferido em 03/10/2026 no portal de dados abertos do Banco Central e chamando o serviço.* Serve à D-A3-14: o custo de IA é medido e limitado em dólar; a tela mostra o valor aproximado em reais, com a data da cotação.
+
+- **Conjunto de dados** **[O]** (`dadosabertos.bcb.gov.br`, "Dólar comercial (venda e compra) - cotações diárias"; autor: Banco Central do Brasil, Departamento das Reservas Internacionais; fonte: Sistema Ptax):
+  - atualização **diária**; série desde 28/11/1984;
+  - licença **Open Data Commons Open Database License (ODbL)**: uso livre com a fonte citada (a tela diz "PTAX de venda do Banco Central" e o dia do boletim);
+  - desde 01/07/2011 a PTAX é a média aritmética das taxas de quatro consultas diárias aos dealers de câmbio.
+- **Serviço** (medido em 03/10/2026): `https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/`, sem credencial e sem cadastro, com dois recursos:
+  - `CotacaoDolarDia(dataCotacao=@dataCotacao)` e `CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)`;
+  - as datas vão entre aspas simples, no formato **`'MM-DD-AAAA'`**; `$format=json` e `$select` funcionam;
+  - resposta: `{ "value": [ { "cotacaoCompra", "cotacaoVenda", "dataHoraCotacao" } ] }`; os valores são números em reais por dólar, com quatro casas (o JSON traz um zero a mais: `5.22380`), e `dataHoraCotacao` vem como `"AAAA-MM-DD HH:MM:SS.ffffff"`, no horário de Brasília;
+  - **um boletim por dia útil** (o de fechamento), pouco depois das 13h de Brasília (13:03 a 13:11 nos cinco dias medidos);
+  - **fim de semana e feriado não têm boletim:** a consulta devolve `"value": []`, que é resposta válida (medido no sábado 03/10/2026).
+- **Medido** (venda): 28/09/2026 = 5,2132; 29/09 = 5,2204; 30/09 = 5,1809; 01/10 = 5,2079; 02/10 = 5,2238 (compra de 02/10: 5,2232).
+- **Consequência para o código** (`apps/server/src/cambio/ptax.ts`, `worker/cambio.service.ts`, migration 0041):
+  - endereço fixo no código (não há destino configurável), sem seguir redirecionamento, prazo de 15 s e resposta de até 64 KB;
+  - a resposta é conferida antes de virar cotação (número entre 0,5 e 100; data no formato);
+  - a rotina pede os últimos 10 dias, duas vezes por dia (13:40 e 18:40 de Brasília), guarda uma cotação por dia útil e não altera a que já guardou;
+  - o pedido leva só o período de datas; a conta dólar → real é feita em inteiros.
+
+### 10.2 Console da Anthropic: workspaces, chaves e limites
+
+*Conferido em 03/10/2026 na documentação oficial (`platform.claude.com/docs/en/manage-claude/workspaces`), antes de o dono criar a chave de produção.* **[O]**
+
+- Toda organização tem um **Default Workspace**, que não pode ser renomeado, arquivado nem apagado, e **não aceita limites**.
+- **Criar:** no Console, **Settings > Workspaces** (`platform.claude.com/settings/workspaces`), **Create workspace**, nome e cor, **Create**. Só administrador da organização cria. Até 100 workspaces por organização. A troca de workspace é pelo seletor **Workspaces**, no canto superior esquerdo.
+- **Limites por workspace**, em duas abas das configurações dele: **Spend limits** (teto de gasto por mês e alertas por faixa) e **Rate limits** (por faixa de modelo: pedidos por minuto, tokens de entrada, tokens de saída). Só podem ser **menores** que os da organização; sem valor, valem os da organização; os da organização valem sempre.
+- **Chaves:** todo pedido roda em exatamente um workspace. Tipos: chave de workspace (legada, sem dono), chave pessoal e chave de conta de serviço; a de um workspace só sempre roda nele. A resposta da API traz o cabeçalho `anthropic-workspace-id` (`wrkspc_…`).
+- **Arquivar** um workspace arquiva todas as chaves dele em segundos e **não se desfaz**.
+- **Workspace "Claude Code":** criado sozinho quando alguém da organização entra no Claude Code com a conta do Console; não aceita chave criada à mão.
+- **Uso e custo por workspace:** a API de uso e custo agrupa por `workspace_id` (o Default aparece como `null`).
+- **Consequência para o Liame:** um workspace de produção com teto mensal próprio (com recarga automática ligada na organização, quem segura o gasto é o teto do workspace) e a chave só nele, guardada no EasyPanel (`liame-api` e `liame-worker`); outra chave, em outro workspace, para os evals locais. O teto por empresa segue sendo o do Liame (`ai_budget`, D-A3-3).
+
 ---
 
 ## 11. Ecossistema DMS
@@ -646,6 +680,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 03/10/2026 | §10.1 nova: **câmbio de referência** (D-A3-14): a PTAX de venda do Banco Central pelos dados abertos (sem credencial, licença ODbL, um boletim por dia útil), conferida no portal e chamando o serviço. §10.2 nova: **workspaces, chaves e limites no Console da Anthropic**, conferidos na documentação oficial antes de o dono criar a chave de produção. |
 | 03/10/2026 | §16.6 nova: **leitura de páginas pelo Pesquisador** (I12): SSRF com destino livre (OWASP), robots.txt (RFC 9309) e dado pessoal de acesso público (LGPD art. 7º, pelo Serpro; o Planalto não abriu). Daí: só a página informada, robots.txt respeitado, a página não é guardada, só os rótulos conferidos. |
 | 03/10/2026 | §16.5: a **tabela do calendário comercial** que a I11 criou (31 datas, de 12/10/2026 a 31/12/2027), com as datas do varejo de 2027 calculadas pela regra de cada uma e conferidas por script, e o lembrete de renovar a semente antes de dezembro de 2027. |
 | 02/10/2026 | §15.2 nova: **resposta em fluxo de eventos** para a Conversa (I10): os limites de conexão da Cloudflare, conferidos na documentação oficial (leitura da origem parada: 125 s, erro 524; muda só no Enterprise), e o "Parar" (fechar a leitura) no Node, medido nos testes. Daí a linha a cada 15 s no fluxo. |

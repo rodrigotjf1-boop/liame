@@ -73,6 +73,8 @@ ser os oficiais, senão a API não sobe; fora dela, os testes apontam para uma p
 
 A versão de cada API não é variável: vem do Capability Registry (`connector_capability`, migration 0018).
 
+**Câmbio de referência (A3, D-A3-14):** a PTAX de venda do Banco Central não tem variável nem credencial. O endereço (`olinda.bcb.gov.br`) é fixo no código, e o worker lê duas vezes por dia (fila `cambio-ptax`, 16:40 e 21:40 UTC). Os testes não chamam o Banco Central: a leitura é trocada por uma simulada.
+
 ### Apps OAuth (G3, da distribuição)
 
 A empresa não cria app nem manuseia segredo: ela só autoriza. Os apps são do Liame, configurados no EasyPanel.
