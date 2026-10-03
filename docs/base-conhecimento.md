@@ -646,6 +646,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 02/10/2026 | §16.4 (nova): **dossiê da marca** nos produtos de marketing (HubSpot Brand Voice e Brand Knowledge, Klaviyo, Jasper IQ, Canva), pesquisado antes do protótipo P6 (`mockups/prototipo-marca.html`): voz separada dos fatos e das regras, a IA sugere a partir do que já existe e a pessoa confere, versões guardadas. |
 | 02/10/2026 | §16.1: **conversa com o assistente** (HubSpot Breeze Assistant, Shopify Sidekick e o admin novo de 24/09/2026, Google Ads Advisor, Meta AI Business Assistant, Intercom Fin, Triple Whale Moby), pesquisada antes do protótipo P5 (`mockups/prototipo-conversa.html`): painel ao lado do trabalho, fonte em toda resposta, revisão por uma pessoa antes de aplicar, marca de IA em cada mensagem, caminho para uma pessoa e limite dito na tela. |
 | 02/10/2026 | §8.1: o formato de uma chamada MCP 2026-07-28 no fio, medido com o SDK cliente 2.3.0 contra o servidor do RegemCast. §11: o RegemCast tem porta MCP (token por conta, leitura, conversas por anúncio, rascunhos, disparo para produto da DMS) e o envio com cabeçalho de mídia, botões, LTO e carrossel. Fonte: repo `regemcast` (`docs/mcp.md`, PRs #96 e #110 a #116). |
 | 01/10/2026 | §2.1: onde fica o link do anúncio feito de publicação que já existia (`object_story_id`, `effective_object_story_id`, `url_tags` "appended to urls clicked from page post ads"), conferido na referência oficial do AdCreative, com a medição do piloto (14 de 18 anúncios sem link no criativo e sem `url_tags`). |
@@ -746,6 +747,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - business.google.com/us/accelerate/announcements/google-ai-advisors-agentic-tools-to-drive-impact-and-insights (11/2025)
   - intercom.com/changes/en/96733-let-your-customers-know-they-re-speaking-with-an-ai-agent (11/07/2025)
   - mediapost.com/publications/article/414547 (Meta AI Business Assistant, 24/04/2026; secundária) · kb.triplewhale.com (Moby; lida só pelo resumo da busca)
+  - knowledge.hubspot.com/branding/set-up-brand-voice-using-ai (14/09/2026) · community.hubspot.com/t/june-2026-product-updates/151744 (lida pelo resumo da busca)
+  - help.klaviyo.com/hc/en-us/articles/35873068949147 (06/08/2025) · jasper.ai/blog · canva.com/help/brand-voice (secundárias)
 
 ---
 
@@ -1032,6 +1035,16 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - Aprovação vale para **uma versão do plano**: ajustou o valor, muda a versão e o hash, e a aprovação é nova.
 - Dica de gráfico **complementa, nunca esconde**: o valor também aparece em texto ou tabela.
 - Cor de texto derivada para contraste AA no tema claro (ciano e violeta da marca são fundo e destaque; ver `docs/ux-modelo-interface.md` §6).
+
+### 16.4 Dossiê da marca nos produtos de marketing
+
+*Pesquisado em 02/10/2026, antes do protótipo P6 (`mockups/prototipo-marca.html`).*
+
+- **HubSpot Brand Voice** **[O]** (base de ajuda, atualizada em 14/09/2026): gerada a partir de textos de exemplo (pelo menos 500 palavras) e do conteúdo do site; a pessoa escolhe até quatro características, a missão, os termos a evitar e as regras de inclusão; **gerar de novo substitui a anterior**, sem histórico; fica em Marketing › Brand › Brand Voice. Em 06/2026 a página de marca passou a ter três partes, Brand Kit, Brand Voice e **Brand Knowledge** (produtos, concorrentes, cliente ideal), usadas pela IA **[O, via busca]**.
+- **Klaviyo** **[O]** (ajuda, 06/08/2025): Conteúdo › Imagens e marca › Voz; **descritores de voz** com exemplos e **regras de escrita** com quando valem; a Klaviyo sugere os dois a partir dos e-mails já enviados, e a pessoa ajusta. O Composer usa a voz, as regras de conteúdo e as de conformidade **[S]**.
+- **Jasper IQ** **[S]**: voz, guia de estilo (com as "palavras proibidas"), base de fatos e públicos num mesmo contexto que toda geração lê.
+- **Canva** **[S]**: voz da marca no Brand Kit (missão, tom), usada pelo gerador de texto ("gerar nesta voz").
+- **Consequência para o P6:** separar **como fala** (voz, com exemplos e regras) dos **fatos** (produtos, ofertas, provas, região, datas) e das **regras** (o que não pode dizer); a IA **sugere a partir do que já existe** e a pessoa confere antes de valer; ao contrário da HubSpot, **guardar as versões** e permitir voltar a uma anterior, como o plano pede.
 
 ---
 
