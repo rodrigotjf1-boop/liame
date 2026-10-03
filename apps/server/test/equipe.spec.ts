@@ -28,6 +28,7 @@ const vazio: ContagensDoMes = {
   comparaveis: 0,
   mesmaDirecao: 0,
   arrependimentoMicros: 0n,
+  recusasPorMembro: new Map(),
 };
 
 describe('Sua equipe (A3, I13b)', () => {
@@ -91,17 +92,27 @@ describe('Sua equipe (A3, I13b)', () => {
       comparaveis: 19,
       mesmaDirecao: 15,
       arrependimentoMicros: -41_200_000n,
+      // O que a conferência recusou: 9 textos barrados pelo Compliance (de três funcionários) e 4 retirados por outro motivo.
+      recusasPorMembro: new Map([
+        ['lia', { doCompliance: 4, outras: 1 }],
+        ['analista', { doCompliance: 3, outras: 2 }],
+        ['relatorios', { doCompliance: 1, outras: 0 }],
+        ['pesquisador', { doCompliance: 1, outras: 1 }],
+      ]),
     };
     const ver = (m: (typeof MEMBROS)[number]) => Object.fromEntries(numerosDoMembro(EQUIPE[m], c).map((x) => [x.key, `${x.value} ${x.unit}`]));
-    expect(ver('lia')).toEqual({ respostas: '61 qtd', fez_sentido: '28 qtd', discordo: '5 qtd', demandas: '2 qtd' });
+    expect(ver('lia')).toEqual({ respostas: '61 qtd', fez_sentido: '28 qtd', discordo: '5 qtd', demandas: '2 qtd', retiradas_na_conferencia: '5 qtd' });
     // O Analista soma o Explicar dos resultados e o de um aviso; a leitura da revisão é do Relatórios.
-    expect(ver('analista')).toEqual({ explicacoes: '52 qtd', fez_sentido: '34 qtd', discordo: '3 qtd' });
+    expect(ver('analista')).toEqual({ explicacoes: '52 qtd', fez_sentido: '34 qtd', discordo: '3 qtd', retiradas_na_conferencia: '5 qtd' });
     expect(ver('relatorios')).toEqual({ revisoes: '4 qtd', com_leitura_da_ia: '3 qtd', so_do_sistema: '1 qtd' });
-    expect(ver('compliance')).toEqual({});
-    expect(ver('estrategista')).toEqual({ planos_aprovados: '2 qtd', planos_recusados: '1 qtd', planos_esperando: '1 qtd', em_preparo: '1 qtd' });
-    expect(ver('pesquisador')).toEqual({ paginas_lidas: '3 qtd', recusadas: '1 qtd', sugestoes: '2 qtd' });
+    // D-A3-15: conferidos = todo texto de IA que chegou à conferência (as respostas atendidas de todos os fluxos);
+    // barrados = os que uma regra de texto barrou, de qualquer funcionário (sem o texto, só a contagem).
+    expect(ver('compliance')).toEqual({ textos_conferidos: '114 qtd', textos_barrados: '9 qtd' });
+    expect(ver('estrategista')).toEqual({ planos_aprovados: '2 qtd', planos_recusados: '1 qtd', planos_esperando: '1 qtd', em_preparo: '1 qtd', retiradas_na_conferencia: '0 qtd' });
+    expect(ver('pesquisador')).toEqual({ paginas_lidas: '3 qtd', recusadas: '1 qtd', sugestoes: '2 qtd', retiradas_na_conferencia: '2 qtd' });
     expect(ver('trafego')).toEqual({ recomendacoes: '26 qtd', comparaveis: '19 qtd', mesma_direcao: '15 qtd', arrependimento: '-41200000 brl_micros' });
     // Sem nada no mês, tudo zero (e nada de buraco na lista).
-    expect(numerosDoMembro(EQUIPE.lia, vazio).map((x) => x.value)).toEqual(['0', '0', '0', '0']);
+    expect(numerosDoMembro(EQUIPE.lia, vazio).map((x) => x.value)).toEqual(['0', '0', '0', '0', '0']);
+    expect(numerosDoMembro(EQUIPE.compliance, vazio).map((x) => `${x.key}=${x.value}`)).toEqual(['textos_conferidos=0', 'textos_barrados=0']);
   });
 });

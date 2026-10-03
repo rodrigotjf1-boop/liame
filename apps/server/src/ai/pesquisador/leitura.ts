@@ -75,10 +75,12 @@ const LINK = /https?:|www\.|\.(?:com|net|org|br|app|io|me)(?:\/|\b)/i;
  * Confere os rótulos contra o texto da página. Cada rótulo fica só se: está escrito na página; tem até 80 caracteres;
  * não tem dado pessoal nem link; não cai numa regra do Compliance; e todo número dele está na página. Repetidos saem.
  */
-export function conferirLeitura(l: LeituraDaPagina, pagina: string): { rotulos: RotulosConferidos; descartes: DescartesDaLeitura } {
+export function conferirLeitura(l: LeituraDaPagina, pagina: string): { rotulos: RotulosConferidos; descartes: DescartesDaLeitura; regras: string[] } {
   const descartes: DescartesDaLeitura = { fora_da_pagina: 0, dado_pessoal: 0, link: 0, compliance: 0, numero: 0, longo: 0 };
   const naPagina = compacto(pagina);
   const vistos = new Set<string>();
+  // As regras de texto que barraram algum rótulo (os nomes, para a contagem de Sua equipe).
+  const regras = new Set<string>();
   const descartar = (motivo: keyof DescartesDaLeitura): null => {
     descartes[motivo] += 1;
     return null;
@@ -89,7 +91,11 @@ export function conferirLeitura(l: LeituraDaPagina, pagina: string): { rotulos: 
     if (t.length > LIMITES_DA_LEITURA.rotulo) return descartar('longo');
     if (LINK.test(t)) return descartar('link');
     if (limparTexto(t).removidos > 0) return descartar('dado_pessoal');
-    if (conferirTexto(t).length) return descartar('compliance');
+    const achados = conferirTexto(t);
+    if (achados.length) {
+      for (const a of achados) regras.add(a.regra);
+      return descartar('compliance');
+    }
     if (!conferirNumeros(t, pagina).ok) return descartar('numero');
     if (!naPagina.includes(compacto(t))) return descartar('fora_da_pagina');
     return t;
@@ -120,6 +126,7 @@ export function conferirLeitura(l: LeituraDaPagina, pagina: string): { rotulos: 
   return {
     rotulos: { negocio: serve(l.negocio), produtos, ofertas: lista(l.ofertas, LIMITES_DA_LEITURA.ofertas), diferenciais: lista(l.diferenciais, LIMITES_DA_LEITURA.diferenciais) },
     descartes,
+    regras: [...regras],
   };
 }
 

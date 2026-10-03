@@ -77,6 +77,17 @@ export class EquipeService {
          group by u.workflow`)
     ).rows;
 
+    // O que a conferência recusou no mês, por funcionário que escreveu (D-A3-15): sem o texto, só a contagem.
+    const recusas = (
+      await tx.execute<{ member: string; do_compliance: number; outras: number }>(sql`
+        select member,
+               coalesce(sum(items) filter (where kind in ('compliance', 'revisor')), 0)::int as do_compliance,
+               coalesce(sum(items) filter (where kind not in ('compliance', 'revisor')), 0)::int as outras
+          from liame.ai_refusal
+         where tenant_id = ${tenantId} and brand_id = ${brandId} and created_at >= ${inicio}::timestamptz
+         group by member`)
+    ).rows;
+
     // O que cada um fez no mês (e o que está em andamento agora).
     const n = (
       await tx.execute<Record<string, number | string>>(sql`
@@ -117,6 +128,7 @@ export class EquipeService {
       comparaveis: Number(n.comparaveis),
       mesmaDirecao: Number(n.mesma_direcao),
       arrependimentoMicros: BigInt(n.arrependimento as string),
+      recusasPorMembro: new Map(recusas.map((r) => [r.member, { doCompliance: Number(r.do_compliance), outras: Number(r.outras) }])),
     };
 
     // As chaves: a da empresa (pausas), a da distribuição (plano e flags) e a parada.

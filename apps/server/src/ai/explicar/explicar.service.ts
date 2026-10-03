@@ -7,12 +7,13 @@ import { DATABASE } from '../../database/database.module.js';
 import { AppProblem } from '../../errors/problems.js';
 import { proibidasDaMarca } from '../../marca/marca.service.js';
 import { MediaService } from '../../media/media.service.js';
-import { nomesPoliticos } from '../../policy/texto.js';
+import { nomesPoliticos, REGRAS_DE_TEXTO_VERSAO } from '../../policy/texto.js';
 import { AtencaoCicloService } from '../../results/atencao-ciclo.service.js';
 import { diaNoFuso, menosDias } from '../../results/fora-do-normal.js';
 import { ResultsService } from '../../results/results.service.js';
 import { AiError, type AiErrorCode, type AiErrorDetail, AiGateway } from '../gateway.js';
 import { naTransacaoDaEmpresa } from '../na-empresa.js';
+import { registrarRecusa } from '../recusas.js';
 import { funcionarioAtivo } from '../registro/ativacao.js';
 import type { ContextoDaLeitura } from '../registro/leituras.js';
 import { AVISOS_EXPLICAVEIS, avisoNoContexto, DIAS_DO_AVISO, explicacaoDoAvisoSemIa } from './aviso.js';
@@ -218,6 +219,20 @@ export class ExplicarService {
       if (recusa) {
         // O que foi recusado e por quê fica no log (números não são dado pessoal) e no conteúdo guardado da chamada.
         this.logger.warn(`explicação da IA recusada (${recusa.recusa}${recusa.detalhe.length ? `: ${recusa.detalhe.slice(0, 8).join(' | ')}` : ''}); uso ${r.usageId}`);
+        // A recusa entra na contagem de Sua equipe, sem o texto (D-A3-15): a leitura da revisão é do Relatórios; o resto, do Analista.
+        if (this.database) {
+          await registrarRecusa(this.database, {
+            tenantId: ctx.tenantId,
+            brandId,
+            userId: ctx.userId,
+            usageId: r.usageId,
+            member: workflow === WORKFLOW_DA_REVISAO ? 'relatorios' : ANALISTA.key,
+            workflow,
+            kind: recusa.recusa,
+            rules: recusa.regras,
+            rulesVersion: recusa.regras?.length ? REGRAS_DE_TEXTO_VERSAO : null,
+          });
+        }
         return semIa(recusa.recusa);
       }
       return pronta('ia', null, r.object, r.usageId);

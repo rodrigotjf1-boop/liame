@@ -108,7 +108,9 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     });
     expect(t).toMatchObject({ ai: { enabled: false, spent_usd_micros: '0', band: 'livre' }, stop: null, can_manage: true, can_stop: true });
     expect(t.month.from <= hoje && hoje <= t.month.to).toBe(true);
-    expect(doMembro(t, 'compliance')).toMatchObject({ kind: 'regra', can_pause: false, stats: [] });
+    // O Compliance trabalha por regra e não desliga; os números dele são contagens (D-A3-15), zeradas sem nada no mês.
+    expect(doMembro(t, 'compliance')).toMatchObject({ kind: 'regra', can_pause: false });
+    expect(numeros(t, 'compliance')).toEqual({ textos_conferidos: '0', textos_barrados: '0' });
 
     await ligarIa(flags, e.tenantId);
     await ligarSombra(e.tenantId);
@@ -166,11 +168,37 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
       );
     }
 
+    // O que a conferência recusou no mês (D-A3-15): dois textos da LIA barrados pelo Compliance, uma resposta do Analista
+    // retirada pelos números e três rótulos do Pesquisador barrados numa leitura só. De outra marca, nada entra.
+    const outraMarca = (await api.call('POST', '/v1/brands', { cookie: e.cookie, body: { name: 'Segunda marca' } })).body.id as string;
+    for (const [marca, member, workflow, kind, rules, items] of [
+      [e.brandId, 'lia', 'conversa.lia', 'compliance', '["promessa_de_resultado"]', 1],
+      [e.brandId, 'lia', 'conversa.lia', 'compliance', '["regra_da_marca"]', 1],
+      [e.brandId, 'analista', 'resultados.explicar', 'numero_fora', '[]', 1],
+      [e.brandId, 'pesquisador', 'pesquisador.pagina', 'compliance', '["dado_pessoal"]', 3],
+      [outraMarca, 'lia', 'conversa.lia', 'compliance', '["promessa_de_resultado"]', 5],
+    ] as const) {
+      await ownerQuery(`insert into liame.ai_refusal (id, tenant_id, brand_id, member, workflow, kind, rules, items) values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`, [
+        uuidv7(),
+        e.tenantId,
+        marca,
+        member,
+        workflow,
+        kind,
+        rules,
+        items,
+      ]);
+    }
+
     const t = await ver(e, e.brandId);
     expect(doMembro(t, 'lia').cost).toEqual({ usd_micros: '210000', calls: 3 });
-    expect(numeros(t, 'lia')).toEqual({ respostas: '2', fez_sentido: '1', discordo: '0', demandas: '1' });
+    expect(numeros(t, 'lia')).toEqual({ respostas: '2', fez_sentido: '1', discordo: '0', demandas: '1', retiradas_na_conferencia: '2' });
     expect(doMembro(t, 'analista').cost).toEqual({ usd_micros: '80000', calls: 2 });
-    expect(numeros(t, 'analista')).toEqual({ explicacoes: '2', fez_sentido: '0', discordo: '1' });
+    expect(numeros(t, 'analista')).toEqual({ explicacoes: '2', fez_sentido: '0', discordo: '1', retiradas_na_conferencia: '1' });
+    // O Compliance: conferidos = as respostas atendidas da marca (5: duas da LIA, duas do Analista e a da revisão);
+    // barrados = só o que uma regra de texto barrou (2 + 3), e a recusa pelos números não entra aqui.
+    expect(numeros(t, 'compliance')).toEqual({ textos_conferidos: '5', textos_barrados: '5' });
+    expect(numeros(t, 'pesquisador')).toMatchObject({ retiradas_na_conferencia: '3' });
     expect(doMembro(t, 'relatorios').cost).toEqual({ usd_micros: '20000', calls: 1 });
     expect(numeros(t, 'estrategista')).toMatchObject({ em_preparo: '1' });
     expect(numeros(t, 'trafego')).toEqual({ recomendacoes: '2', comparaveis: '1', mesma_direcao: '1', arrependimento: '-18400000' });

@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
-// Sua equipe (A3, I13b; protótipo P7, aguardando aprovação): quem trabalha para a marca, em que situação, quanto a IA
-// dele custou no mês e o que ele fez, contado pelo código. A descrição de cada funcionário (o que faz e o que nunca
-// faz) e os da fase seguinte são da tela. O custo de IA vai em micros de dólar (texto): é a moeda do fornecedor e do
-// teto da empresa. Parar a equipe inteira é a parada da empresa (`/v1/kill-switches`, nível `tenant`). Listas que
-// crescem vão como texto (V23); no pedido, a lista fechada.
+// Sua equipe (A3, I13b; protótipo P7, aprovado em 03/10/2026): quem trabalha para a marca, em que situação, quanto a IA
+// dele custou no mês e o que ele fez, contado pelo código (inclusive o que a conferência recusou, sem o texto). A
+// descrição de cada funcionário (o que faz e o que nunca faz) e os da fase seguinte são da tela. O custo de IA vai em
+// micros de dólar (texto): é a moeda do fornecedor e do teto da empresa. Parar a equipe inteira é a parada da empresa
+// (`/v1/kill-switches`, nível `tenant`). Listas que crescem vão como texto (V23); no pedido, a lista fechada.
 
 const Slug = z.string().regex(/^[a-z0-9_]+$/).max(60);
 /** Inteiro em texto (cabe em bigint): contagem ou micros de moeda. */
@@ -21,8 +21,11 @@ export const TeamStat = z.strictObject({
    * O que foi contado no mês. LIA: `respostas`, `fez_sentido`, `discordo`, `demandas`. Analista: `explicacoes`,
    * `fez_sentido`, `discordo`. Relatórios: `revisoes`, `com_leitura_da_ia`, `so_do_sistema`. Estrategista:
    * `planos_aprovados`, `planos_recusados`, `planos_esperando`, `em_preparo`. Pesquisador: `paginas_lidas`,
-   * `recusadas`, `sugestoes`. Gestor de tráfego: `recomendacoes`, `comparaveis`, `mesma_direcao` e
-   * `arrependimento` (em micros de real; negativo: as recomendações teriam feito melhor que o que foi feito).
+   * `recusadas`, `sugestoes`. LIA, Analista, Estrategista e Pesquisador levam também `retiradas_na_conferencia`
+   * (os textos deles que a conferência não deixou aparecer). Compliance: `textos_conferidos` (todo texto de IA que
+   * chegou à conferência) e `textos_barrados` (os que uma regra de texto, ou o revisor de IA, barrou). Gestor de
+   * tráfego: `recomendacoes`, `comparaveis`, `mesma_direcao` e `arrependimento` (em micros de real; negativo: as
+   * recomendações teriam feito melhor que o que foi feito).
    */
   key: Slug,
   value: Inteiro,

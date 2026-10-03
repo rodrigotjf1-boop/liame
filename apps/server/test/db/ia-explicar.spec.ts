@@ -17,6 +17,7 @@ import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js';
 import { MediaService } from '../../src/media/media.service.js';
+import { REGRAS_DE_TEXTO_VERSAO } from '../../src/policy/texto.js';
 import { AtencaoCicloService } from '../../src/results/atencao-ciclo.service.js';
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { ResultsService } from '../../src/results/results.service.js';
@@ -147,6 +148,13 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
       [tenantId],
     );
 
+  /** O que a conferência recusou (D-A3-15): a linha não tem o texto, só o funcionário, o fluxo, o porquê e a regra. */
+  const recusas = (tenantId: string) =>
+    ownerQuery<{ member: string; workflow: string; kind: string; rules: string[]; rules_version: number | null; items: number; com_uso: boolean }>(
+      `select member, workflow, kind, rules, rules_version, items, usage_id is not null as com_uso from liame.ai_refusal where tenant_id = $1 order by created_at, id`,
+      [tenantId],
+    );
+
   const BOA: Explicacao = {
     o_que_aconteceu: 'O investimento em anúncios dobrou: foi de R$ 100,00 para R$ 200,00 (+100,0%), e o caixa ainda não confirmou pedido com origem em campanha.',
     motivos: ['A campanha "Delivery noite" recebeu R$ 200,00 no período e não tem pedido confirmado no caixa.'],
@@ -218,6 +226,8 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(JSON.stringify(r.explicacao)).not.toContain('3,10');
     // A chamada foi feita e paga: fica registrada, mesmo recusada.
     expect((await usos(d.tenantId)).map((u) => [u.outcome, u.cost])).toEqual([['ok', 14_000]]);
+    // D-A3-15: a recusa fica contada para Sua equipe, ligada à chamada, sem o texto e sem regra (não foi o Compliance).
+    expect(await recusas(d.tenantId)).toEqual([{ member: 'analista', workflow: 'resultados.explicar', kind: 'numero_fora', rules: [], rules_version: null, items: 1, com_uso: true }]);
   });
 
   it('A3-6: com a IA desligada, fora do ar ou devolvendo fora do formato, a explicação continua, sem a IA', async () => {
@@ -234,6 +244,9 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(await pedir(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'indisponivel' });
     responder(responde(JSON.stringify({ ...BOA, o_que_fazer: ['Leia https://exemplo.com/guia antes de decidir.'] })));
     expect(await pedir(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'trecho_proibido' });
+    // Só a resposta que chegou à conferência e foi recusada entra na contagem; a IA fora do ar não é recusa.
+    expect((await recusas(d.tenantId)).map((r) => r.kind)).toEqual(['trecho_proibido']);
+    expect(await recusas(desligada.tenantId)).toEqual([]);
   });
 
   it('não explica com dado velho nem com o funcionário desligado para a empresa: nem chama o modelo', async () => {
@@ -259,6 +272,10 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(salvo.status).toBe(200);
     responder(responde(JSON.stringify(BOA)));
     expect(await pedir(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'compliance', usage_id: null });
+    // D-A3-15: o texto barrado pelo Compliance fica contado com o NOME da regra e a versão das regras; a frase não é guardada.
+    const barrado = await recusas(d.tenantId);
+    expect(barrado).toEqual([{ member: 'analista', workflow: 'resultados.explicar', kind: 'compliance', rules: ['regra_da_marca'], rules_version: REGRAS_DE_TEXTO_VERSAO, items: 1, com_uso: true }]);
+    expect(JSON.stringify(barrado)).not.toContain('rastreio');
   });
 
   it('A3-15: campanha com nome político ou eleitoral não vai para a IA; a explicação do código segue', async () => {
@@ -275,6 +292,9 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     const normal = await dono();
     responder(responde(JSON.stringify({ ...BOA, o_que_fazer: ['Dobre a verba: é retorno garantido.'] })));
     expect(await pedir(normal)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'compliance' });
+    expect((await recusas(normal.tenantId)).map((r) => [r.kind, r.rules])).toEqual([['compliance', ['promessa_de_resultado']]]);
+    // A campanha de nome político nem chegou à IA: não há texto recusado.
+    expect(await recusas(d.tenantId)).toEqual([]);
   });
 
   it('A3-4: só explica para quem vê os resultados, e a marca de outra empresa não existe', async () => {
