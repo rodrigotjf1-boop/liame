@@ -217,6 +217,7 @@ export class MediaService {
     const marca = brandId ? sql`and a.brand_id = ${brandId}` : sql``;
     const contas = await tx.execute<{
       id: string;
+      brand_id: string;
       name: string;
       provider: string;
       currency: string | null;
@@ -229,7 +230,7 @@ export class MediaService {
       connection_id: string | null;
       connection_provider: string | null;
     }>(sql`
-      select a.id, a.name, a.provider, a.currency, a.timezone, a.status, a.status_reason, s.last_success_at, s.expected_every_minutes, c.refresh_expires_at,
+      select a.id, a.brand_id, a.name, a.provider, a.currency, a.timezone, a.status, a.status_reason, s.last_success_at, s.expected_every_minutes, c.refresh_expires_at,
              a.connection_id, c.provider as connection_provider
         from liame.connected_account a
         left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'metricas'
@@ -360,6 +361,12 @@ export class MediaService {
         });
       }
     }
-    return { items: ordenar(itens), generated_at: agora.toISOString() };
+    // A marca de cada aviso é a da conta dele: é com ela que a tela pede a explicação (I4). O aviso da
+    // autorização (que pode cobrir contas de várias marcas) e o da versão de API não têm marca.
+    const marcaDaConta = new Map(contas.rows.map((c) => [c.id, c.brand_id]));
+    return {
+      items: ordenar(itens).map((i) => ({ ...i, brand_id: i.connected_account_id ? (marcaDaConta.get(i.connected_account_id) ?? null) : null })),
+      generated_at: agora.toISOString(),
+    };
   }
 }

@@ -147,6 +147,9 @@ describe.skipIf(!hasDb)('atenção de mídia pela API', () => {
     expect(itens.find((i: { kind: string }) => i.kind === 'reconectar_em_breve')).toMatchObject({ provider: 'google', connected_account_id: null, title: 'A autorização do Google vence logo', detail: expect.stringContaining('2 contas param de ler') });
     expect(r.body.items.find((i: { kind: string }) => i.kind === 'campanha_parou')).toMatchObject({ campaign_id: campanha, connected_account_id: meta, title: 'A campanha "Delivery noite" parou de entregar' });
     expect(itens.find((i: { kind: string }) => i.kind === 'versao_api')).toMatchObject({ title: `A Meta Ads vai desligar a versão ${versaoTeste} da API`, detail: 'Data de fim: 20/10/2026.', action: 'Nada a fazer: o Liame atualiza a integração antes.' });
+    // Cada aviso de uma conta leva a marca dela (é com ela que a tela pede a explicação, I4); o da autorização
+    // e o da versão da API não são de uma conta só.
+    expect(itens.map((i: { kind: string; brand_id: string | null }) => i.brand_id)).toEqual([brandId, brandId, brandId, brandId, null, null]);
 
     const outra = await signupAndLogin(api, undefined, 'Outra Casa Atenção');
     await enableMfa(api, outra.cookie);

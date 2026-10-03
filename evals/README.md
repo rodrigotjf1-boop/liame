@@ -16,7 +16,7 @@ evals/
 
 O promptfoo só percorre os casos e junta o relatório. O que importa está no servidor, coberto por testes (`apps/server/src/ai/evals` e `apps/server/test/ai-evals.spec.ts`):
 
-- **O contexto** de cada caso é montado pelo código de produção, a partir da resposta da rota guardada no caso.
+- **O contexto** de cada caso é montado pelo código de produção, a partir da resposta da rota guardada no caso. O caso de um aviso leva também `aviso` (o aviso como a tela o recebe, mais o nome da campanha): o código o põe na frente do contexto, e `atual` e `anterior` são os 7 dias completos antes dele e os 7 anteriores.
 - **O prompt e o formato da resposta** são os registrados (`apps/server/src/ai/explicar/prompt.ts`).
 - **O avaliador é determinístico**: confere a resposta sem modelo nenhum. É a mesma conferência que, em produção, decide se a explicação da IA vai para a tela.
 
@@ -24,7 +24,7 @@ O promptfoo só percorre os casos e junta o relatório. O que importa está no s
 
 | Tarefa | Casos | O que os grupos provam |
 | --- | --- | --- |
-| `explicar_resultados` | 17 | `referencia`: cenários do dia a dia, com o risco esperado · `numero`: o contexto não traz um número e a IA não pode calcular nem inventar · `injecao`: nome de campanha ou de conta com instrução escondida · `politica`: campanha com nome eleitoral, com respostas ruins de pedido de voto, promessa de resultado e dado pessoal (regras de texto, I9) · `dado_parcial`: sem investimento, sem pedido com origem ou sem margem |
+| `explicar_resultados` | 23 | `referencia`: cenários do dia a dia, com o risco esperado · `numero`: o contexto não traz um número e a IA não pode calcular nem inventar · `injecao`: nome de campanha ou de conta com instrução escondida · `politica`: campanha com nome eleitoral, com respostas ruins de pedido de voto, promessa de resultado e dado pessoal (regras de texto, I9) · `dado_parcial`: sem investimento, sem pedido com origem ou sem margem · **casos de aviso da Atenção** (I4; `id` começando por `aviso-`, espalhados pelos grupos): cupom sem uso, vendas abaixo do normal (crítico: risco baixo reprova), custo por pedido (sem calcular a diferença), nome de campanha com instrução, gasto acima do normal (sem supor o motivo) e plataforma × caixa |
 
 Vazamento entre empresas não é caso desta tarefa: o contexto de uma chamada só tem uma empresa, por construção (teste `A3-4` em `apps/server/test/db`). Ele entra nos evals da Conversa (I10), em que a pessoa escreve texto livre.
 
@@ -71,7 +71,9 @@ Onde o modelo roda segue `AI_INFERENCE_GEO` (padrão `us`), como em produção.
 1. Copie uma linha de `casos.jsonl` e mude o `id`.
 2. Ajuste `atual` e `anterior` (o formato é o da rota `GET /v1/results/closed-loop`; valores em micros, em texto) e o `espera`.
 3. Escreva a resposta `boa` (precisa passar) e, se der, uma `ruim` com o código da falha esperada (`numero_fora`, `risco`, `citou`, `nao_citou`, `formato`…).
-4. Rode `pnpm --filter @liame/server exec vitest run test/ai-evals.spec.ts`: ele valida o arquivo inteiro, prova cada resposta gravada e confere que a explicação sem IA serve em todo caso.
+4. Rode `pnpm --filter @liame/server exec vitest run test/ai-evals.spec.ts`: ele valida o arquivo inteiro, prova cada resposta gravada, confere que a explicação sem IA serve em todo caso e que cada número da resposta boa tem fonte no contexto.
+
+No texto de um aviso, o dinheiro vem com o espaço que não quebra, como a tela o recebe; no arquivo ele fica escrito como `\u00a0`, para aparecer na revisão.
 
 Só números fictícios. Nenhum dado de cliente entra aqui.
 

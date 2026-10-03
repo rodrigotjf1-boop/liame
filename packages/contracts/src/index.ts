@@ -112,6 +112,19 @@ export {
   UnitSummary,
 } from './connections.js';
 export {
+  AI_FEEDBACK_REASONS,
+  AiFeedbackRequest,
+  AiFeedbackResponse,
+  AiStatusQuery,
+  AiStatusResponse,
+  EXPLAINABLE_ATTENTION_KINDS,
+  ExplainAttentionRequest,
+  ExplainResultsRequest,
+  ExplanationNumber,
+  ExplanationResponse,
+  ExplanationSegment,
+} from './ai.js';
+export {
   AccountFreshness,
   AttentionItem,
   DatasetFreshness,

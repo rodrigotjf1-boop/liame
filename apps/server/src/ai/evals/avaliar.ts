@@ -1,5 +1,7 @@
-import { contextoDosResultados } from '../explicar/contexto.js';
+import { avisoNoContexto, explicacaoDoAvisoSemIa } from '../explicar/aviso.js';
+import { type ContextoComAviso, contextoDosResultados } from '../explicar/contexto.js';
 import { conferirExplicacao, Explicacao } from '../explicar/resposta.js';
+import { explicacaoSemIa } from '../explicar/sem-ia.js';
 import type { CasoDeEval } from './casos.js';
 
 // Avaliador determinístico do "Explicar" (A3-5, A3-8, A3-15): confere a resposta de um modelo contra o
@@ -12,8 +14,17 @@ export interface Avaliacao {
   falhas: string[];
 }
 
-/** O contexto do caso, montado pelo mesmo código de produção. */
-export const contextoDoCaso = (caso: CasoDeEval) => contextoDosResultados(caso.atual, caso.anterior);
+/** O contexto do caso, montado pelo mesmo código de produção: o do aviso leva o aviso na frente. */
+export function contextoDoCaso(caso: CasoDeEval): ContextoComAviso {
+  const resultados = contextoDosResultados(caso.atual, caso.anterior);
+  return caso.aviso ? { aviso: avisoNoContexto(caso.aviso, caso.aviso.campaign), ...resultados } : resultados;
+}
+
+/** A explicação do sistema para o caso (A3-6): a do aviso, quando o caso é de um aviso. */
+export function semIaDoCaso(caso: CasoDeEval): Explicacao {
+  const resultados = contextoDosResultados(caso.atual, caso.anterior);
+  return caso.aviso ? explicacaoDoAvisoSemIa({ aviso: avisoNoContexto(caso.aviso, caso.aviso.campaign), ...resultados }) : explicacaoSemIa(resultados);
+}
 
 export function avaliarExplicacao(caso: CasoDeEval, bruto: unknown): Avaliacao {
   let valor = bruto;

@@ -56,7 +56,12 @@ export class AtencaoCicloService {
     ).rows.map((m) => m.id);
     if (brandId && !marcas.length) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
     if (!marcas.length) return { items: [], generated_at: agora.toISOString() };
-    const desde = new Date(agora.getTime() - LIMIARES.dias * 86_400_000).toISOString();
+    // A janela dos avisos de campanha são os últimos 7 dias COMPLETOS, os mesmos da explicação (I4): o gasto
+    // de cada dia fechado da conta de anúncio e os pedidos do começo desse primeiro dia (no fuso da loja) até
+    // agora. O pedido de hoje já conta: um uso do cupom hoje desfaz o aviso.
+    const instante = agora.toISOString();
+    /** Limite que o índice de `confirmed_at` usa; o corte exato, por dia, vem na condição seguinte de cada consulta. */
+    const desdeAmplo = new Date(agora.getTime() - (LIMIARES.dias + 2) * 86_400_000).toISOString();
 
     // 1. As lojas do Regem (com a leitura dos pedidos e a plataforma informada) e as marcas com conta de anúncio.
     const lojas = await tx.execute<LinhaLoja>(sql`
@@ -76,7 +81,7 @@ export class AtencaoCicloService {
       ).rows.map((l) => l.brand_id),
     );
 
-    // 2. Campanhas ativas, com o gasto e o que a plataforma informa na janela (no dia da conta de anúncio).
+    // 2. Campanhas ativas, com o gasto e o que a plataforma informa nos 7 dias completos (no dia da conta de anúncio).
     const campanhas = await tx.execute<{ id: string; name: string; provider: string; brand_id: string; conta: string; gasto: string; valor: string }>(sql`
       with metricas as (
         select coalesce(g.campaign_id, cd.id) as campaign_id, ml.metric_name, sum(ml.metric_value) as total
@@ -90,7 +95,8 @@ export class AtencaoCicloService {
            and ((ml.metric_name = 'spend' and ml.attribution_window = '')
              or (a.provider = 'meta_ads' and ml.attribution_window = '7d_click' and ml.metric_name = 'purchase_value')
              or (a.provider = 'google_ads' and ml.attribution_window = 'padrao' and ml.metric_name = 'conversions_value'))
-           and ml.metric_date > (${agora.toISOString()}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int
+           and ml.metric_date >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int
+           and ml.metric_date < (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
          group by 1, 2
       )
       select c.id, c.name, c.provider, a.brand_id, a.id as conta,
@@ -110,7 +116,9 @@ export class AtencaoCicloService {
       select cp.code, cc.campaign_id, cc.linked_at, a.brand_id,
              (select count(*)::int from liame.order_fact o
                where o.tenant_id = cp.tenant_id and o.coupon_code = cp.code and o.connected_account_id = cp.connected_account_id
-                 and o.status = 'confirmado' and o.confirmed_at >= ${desde}::timestamptz) as usos
+                 and o.status = 'confirmado' and o.confirmed_at >= ${desdeAmplo}::timestamptz
+                 and (o.confirmed_at at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
+                     >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int) as usos
         from liame.campaign_coupon cc
         join liame.coupon cp on cp.id = cc.coupon_id
         join liame.connected_account a on a.id = cp.connected_account_id
@@ -123,7 +131,10 @@ export class AtencaoCicloService {
       with pedidos as (
         select o.id, o.brand_id, o.revenue_micros - o.refunded_micros as liquido
           from liame.order_fact o
-         where o.brand_id in ${marcas} and o.status = 'confirmado' and o.confirmed_at >= ${desde}::timestamptz
+          join liame.connected_account a on a.id = o.connected_account_id
+         where o.brand_id in ${marcas} and o.status = 'confirmado' and o.confirmed_at >= ${desdeAmplo}::timestamptz
+           and (o.confirmed_at at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
+               >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int
       ),
       custos as (
         select i.order_id, bool_and(i.cost_known) as conhecido, count(*) as n
@@ -189,123 +200,135 @@ export class AtencaoCicloService {
         await tx.execute<{ campaign_id: string; n: number }>(sql`
           select r.campaign_id, count(*)::int as n
             from liame.order_fact o
+            join liame.connected_account a on a.id = o.connected_account_id
             join liame.attribution_result r on r.order_id = o.id and r.model_id = ${MODELO_PADRAO} and r.counted
            where o.brand_id in ${marcas} and o.status = 'confirmado' and r.campaign_id is not null
-             and o.confirmed_at >= ${new Date(agora.getTime() - (LIMIARES.dias + 28) * 86_400_000).toISOString()}::timestamptz
-             and o.confirmed_at < ${desde}::timestamptz
+             and o.confirmed_at >= ${new Date(agora.getTime() - (LIMIARES.dias + 30) * 86_400_000).toISOString()}::timestamptz
+             and (o.confirmed_at at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
+                 >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias + 28}::int
+             and (o.confirmed_at at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date
+                 < (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias}::int
            group by 1`)
       ).rows.map((l) => [l.campaign_id, Number(l.n)]),
     );
     const primeiroDia = <T>(serie: Map<string, T> | undefined) => (serie?.size ? [...serie.keys()].sort()[0]! : null);
 
     const itens: ItemCiclo[] = [];
+    // A marca de cada aviso: é com ela que a tela pede a explicação (I4). Os avisos saem das regras sem
+    // marca; aqui cada um fica com a da volta em que nasceu.
+    const marcaDoAviso = new Map<ItemCiclo, string>();
     for (const marca of marcas) {
-      const lojasDaMarca = lojas.rows.filter((l) => l.brand_id === marca);
-      const campanhasDaMarca = campanhas.rows.filter((c) => c.brand_id === marca);
-      if (!lojasDaMarca.length) {
-        if (comMidia.has(marca) && !itens.some((i) => i.kind === 'vendas_nao_conectadas')) itens.push(avisoSemRegem());
-        continue;
-      }
+      const inicio = itens.length;
+      try {
+        const lojasDaMarca = lojas.rows.filter((l) => l.brand_id === marca);
+        const campanhasDaMarca = campanhas.rows.filter((c) => c.brand_id === marca);
+        if (!lojasDaMarca.length) {
+          if (comMidia.has(marca) && !itens.some((i) => i.kind === 'vendas_nao_conectadas')) itens.push(avisoSemRegem());
+          continue;
+        }
 
-      // Fonte das vendas e como cada loja mede.
-      const plataformas = new Set<string>();
-      for (const l of lojasDaMarca) {
-        const loja = { id: l.id, nome: l.unit_name ?? l.name };
-        itens.push(...avisosDaFonte({ ...loja, status: l.status, statusReason: l.status_reason, fuso: l.timezone, pedidosLidosEm: l.pedidos_lidos_em }, agora));
-        // Vendas de ontem fora do normal: só com os pedidos lidos hoje (dado velho não gera aviso).
-        const fusoDaLoja = l.timezone ?? FUSO_PADRAO;
-        if (l.status === 'ativa' && l.pedidos_lidos_em && lidaHoje(l.pedidos_lidos_em, agora, fusoDaLoja)) {
-          const serie = serieDaLoja.get(l.id) ?? new Map<string, VendasDoDia>();
-          const aviso = avisoVendasForaDoNormal({ ...loja, fuso: fusoDaLoja, lidoEm: l.pedidos_lidos_em, desde: primeiroDia(serie), porDia: serie }, menosDias(diaNoFuso(agora, fusoDaLoja), 1));
-          if (aviso) itens.push(aviso);
+        // Fonte das vendas e como cada loja mede.
+        const plataformas = new Set<string>();
+        for (const l of lojasDaMarca) {
+          const loja = { id: l.id, nome: l.unit_name ?? l.name };
+          itens.push(...avisosDaFonte({ ...loja, status: l.status, statusReason: l.status_reason, fuso: l.timezone, pedidosLidosEm: l.pedidos_lidos_em }, agora));
+          // Vendas de ontem fora do normal: só com os pedidos lidos hoje (dado velho não gera aviso).
+          const fusoDaLoja = l.timezone ?? FUSO_PADRAO;
+          if (l.status === 'ativa' && l.pedidos_lidos_em && lidaHoje(l.pedidos_lidos_em, agora, fusoDaLoja)) {
+            const serie = serieDaLoja.get(l.id) ?? new Map<string, VendasDoDia>();
+            const aviso = avisoVendasForaDoNormal({ ...loja, fuso: fusoDaLoja, lidoEm: l.pedidos_lidos_em, desde: primeiroDia(serie), porDia: serie }, menosDias(diaNoFuso(agora, fusoDaLoja), 1));
+            if (aviso) itens.push(aviso);
+          }
+          if (!comMidia.has(marca)) continue;
+          if (!l.order_platform) itens.push(avisoPlataformaNaoInformada(loja));
+          else if (l.order_platform === 'regem' || plataformaIntegrada(l.order_platform)) plataformas.add(l.order_platform);
+          else itens.push(avisoVendasNaoMedidas(loja, l.order_platform));
         }
         if (!comMidia.has(marca)) continue;
-        if (!l.order_platform) itens.push(avisoPlataformaNaoInformada(loja));
-        else if (l.order_platform === 'regem' || plataformaIntegrada(l.order_platform)) plataformas.add(l.order_platform);
-        else itens.push(avisoVendasNaoMedidas(loja, l.order_platform));
-      }
-      if (!comMidia.has(marca)) continue;
 
-      const cuponsDaMarca = cupons.rows.filter((c) => c.brand_id === marca);
-      const comCupom = new Set(cuponsDaMarca.map((c) => c.campaign_id));
-      const pedidosDaCampanha = new Map<string, number>();
-      for (const c of caixa.rows) if (c.brand_id === marca && c.campaign_id) pedidosDaCampanha.set(c.campaign_id, (pedidosDaCampanha.get(c.campaign_id) ?? 0) + Number(c.n));
+        const cuponsDaMarca = cupons.rows.filter((c) => c.brand_id === marca);
+        const comCupom = new Set(cuponsDaMarca.map((c) => c.campaign_id));
+        const pedidosDaCampanha = new Map<string, number>();
+        for (const c of caixa.rows) if (c.brand_id === marca && c.campaign_id) pedidosDaCampanha.set(c.campaign_id, (pedidosDaCampanha.get(c.campaign_id) ?? 0) + Number(c.n));
 
-      // Loja no cardápio do Regem: os anúncios ativos precisam dos parâmetros; a campanha medida pelo clique
-      // que gastou e não vendeu vira aviso.
-      if (plataformas.has('regem')) {
-        const rastreio = await this.links.rastreioPorCampanha(marca, agora);
-        const comAnuncioSemRastreio = [...rastreio.campanhas.values()].filter((c) => c.semRastreio > 0).length;
-        const aviso = avisoAnunciosSemRastreio(rastreio.resumo.without_tracking, comAnuncioSemRastreio);
-        if (aviso) itens.push(aviso);
-        for (const c of campanhasDaMarca) {
-          if (!campanhaAtiva.has(c.id)) continue;
-          const semPedido = avisoCampanhaSemPedido({
-            id: c.id,
-            name: c.name,
-            provider: c.provider,
-            connectedAccountId: c.conta,
-            gastoMicros: BigInt(c.gasto),
-            pedidos: pedidosDaCampanha.get(c.id) ?? 0,
-            anunciosComRastreio: rastreio.campanhas.get(c.id)?.comRastreio ?? 0,
-            temCupomExclusivo: comCupom.has(c.id),
-          });
-          if (semPedido) itens.push(semPedido);
+        // Loja no cardápio do Regem: os anúncios ativos precisam dos parâmetros; a campanha medida pelo clique
+        // que gastou e não vendeu vira aviso.
+        if (plataformas.has('regem')) {
+          const rastreio = await this.links.rastreioPorCampanha(marca, agora);
+          const comAnuncioSemRastreio = [...rastreio.campanhas.values()].filter((c) => c.semRastreio > 0).length;
+          const aviso = avisoAnunciosSemRastreio(rastreio.resumo.without_tracking, comAnuncioSemRastreio);
+          if (aviso) itens.push(aviso);
+          for (const c of campanhasDaMarca) {
+            if (!campanhaAtiva.has(c.id)) continue;
+            const semPedido = avisoCampanhaSemPedido({
+              id: c.id,
+              name: c.name,
+              provider: c.provider,
+              connectedAccountId: c.conta,
+              gastoMicros: BigInt(c.gasto),
+              pedidos: pedidosDaCampanha.get(c.id) ?? 0,
+              anunciosComRastreio: rastreio.campanhas.get(c.id)?.comRastreio ?? 0,
+              temCupomExclusivo: comCupom.has(c.id),
+            });
+            if (semPedido) itens.push(semPedido);
+          }
         }
-      }
-      // Loja em plataforma de pedidos integrada: cada campanha ativa precisa de um cupom exclusivo.
-      const integrada = [...plataformas].find(plataformaIntegrada);
-      if (integrada) {
-        const semCupom = campanhasDaMarca.filter((c) => campanhaAtiva.has(c.id) && !comCupom.has(c.id)).length;
-        const aviso = avisoCampanhasSemCupom(semCupom, integrada);
-        if (aviso) itens.push(aviso);
-      }
+        // Loja em plataforma de pedidos integrada: cada campanha ativa precisa de um cupom exclusivo.
+        const integrada = [...plataformas].find(plataformaIntegrada);
+        if (integrada) {
+          const semCupom = campanhasDaMarca.filter((c) => campanhaAtiva.has(c.id) && !comCupom.has(c.id)).length;
+          const aviso = avisoCampanhasSemCupom(semCupom, integrada);
+          if (aviso) itens.push(aviso);
+        }
 
-      // Cupom exclusivo sem uso, com a campanha gastando.
-      for (const cupom of cuponsDaMarca) {
-        const campanha = campanhasDaMarca.find((c) => c.id === cupom.campaign_id);
-        if (!campanha) continue;
-        const aviso = avisoCupomSemUso(
-          { code: cupom.code, campaignId: campanha.id, campaignName: campanha.name, provider: campanha.provider, connectedAccountId: campanha.conta, ligadoEm: cupom.linked_at, usos: Number(cupom.usos), gastoMicros: BigInt(campanha.gasto) },
-          agora,
-        );
-        if (aviso) itens.push(aviso);
-      }
+        // Cupom exclusivo sem uso, com a campanha gastando.
+        for (const cupom of cuponsDaMarca) {
+          const campanha = campanhasDaMarca.find((c) => c.id === cupom.campaign_id);
+          if (!campanha) continue;
+          const aviso = avisoCupomSemUso(
+            { code: cupom.code, campaignId: campanha.id, campaignName: campanha.name, provider: campanha.provider, connectedAccountId: campanha.conta, ligadoEm: cupom.linked_at, usos: Number(cupom.usos), gastoMicros: BigInt(campanha.gasto) },
+            agora,
+          );
+          if (aviso) itens.push(aviso);
+        }
 
-      // Fora do normal por campanha (I6): o gasto de ontem e o custo por pedido, só com a plataforma lida hoje.
-      for (const c of campanhasDaMarca) {
-        const contaDeAnuncio = contasDeAnuncio.get(c.conta);
-        if (!campanhaAtiva.has(c.id) || !contaDeAnuncio || !contaDeAnuncio.lidas_em || !lidaHoje(contaDeAnuncio.lidas_em, agora, contaDeAnuncio.fuso)) continue;
-        const serie = serieDaCampanha.get(c.id) ?? new Map<string, bigint>();
-        const hoje = diaNoFuso(agora, contaDeAnuncio.fuso);
-        const base = { id: c.id, name: c.name, provider: c.provider, connectedAccountId: c.conta };
-        const gasto = avisoGastoDaCampanha({ ...base, fuso: contaDeAnuncio.fuso, lidoEm: contaDeAnuncio.lidas_em, desde: primeiroDia(serie), gastoPorDia: serie }, menosDias(hoje, 1));
-        if (gasto) itens.push(gasto);
-        // As 4 semanas antes dos últimos 7 dias.
-        let gastoDaHistoria = 0n;
-        for (let d = LIMIARES.dias; d < LIMIARES.dias + 28; d++) gastoDaHistoria += serie.get(menosDias(hoje, d)) ?? 0n;
-        const custo = avisoCustoPorPedido({
-          ...base,
-          semana: { gastoMicros: BigInt(c.gasto), pedidos: pedidosDaCampanha.get(c.id) ?? 0 },
-          historia: { gastoMicros: gastoDaHistoria, pedidos: pedidosDaHistoria.get(c.id) ?? 0 },
-        });
-        if (custo) itens.push(custo);
-      }
+        // Fora do normal por campanha (I6): o gasto de ontem e o custo por pedido, só com a plataforma lida hoje.
+        for (const c of campanhasDaMarca) {
+          const contaDeAnuncio = contasDeAnuncio.get(c.conta);
+          if (!campanhaAtiva.has(c.id) || !contaDeAnuncio || !contaDeAnuncio.lidas_em || !lidaHoje(contaDeAnuncio.lidas_em, agora, contaDeAnuncio.fuso)) continue;
+          const serie = serieDaCampanha.get(c.id) ?? new Map<string, bigint>();
+          const hoje = diaNoFuso(agora, contaDeAnuncio.fuso);
+          const base = { id: c.id, name: c.name, provider: c.provider, connectedAccountId: c.conta };
+          const gasto = avisoGastoDaCampanha({ ...base, fuso: contaDeAnuncio.fuso, lidoEm: contaDeAnuncio.lidas_em, desde: primeiroDia(serie), gastoPorDia: serie }, menosDias(hoje, 1));
+          if (gasto) itens.push(gasto);
+          // As 4 semanas antes dos últimos 7 dias completos (de 8 a 35 dias atrás).
+          let gastoDaHistoria = 0n;
+          for (let d = LIMIARES.dias + 1; d <= LIMIARES.dias + 28; d++) gastoDaHistoria += serie.get(menosDias(hoje, d)) ?? 0n;
+          const custo = avisoCustoPorPedido({
+            ...base,
+            semana: { gastoMicros: BigInt(c.gasto), pedidos: pedidosDaCampanha.get(c.id) ?? 0 },
+            historia: { gastoMicros: gastoDaHistoria, pedidos: pedidosDaHistoria.get(c.id) ?? 0 },
+          });
+          if (custo) itens.push(custo);
+        }
 
-      // Margem desconhecida na receita atribuída e plataforma × caixa, por plataforma de anúncio.
-      const caixaDaMarca = caixa.rows.filter((c) => c.brand_id === marca);
-      const receita = caixaDaMarca.reduce((s, c) => s + BigInt(c.receita), 0n);
-      const semMargem = caixaDaMarca.reduce((s, c) => s + BigInt(c.sem_margem), 0n);
-      const liberaCusto = lojasDaMarca.some((l) => (l.escopos ?? []).includes('custos.ler'));
-      const margem = avisoMargemDesconhecida(receita, semMargem, liberaCusto);
-      if (margem) itens.push(margem);
-      for (const provider of ['meta_ads', 'google_ads']) {
-        const informado = campanhasDaMarca.filter((c) => c.provider === provider).reduce((s, c) => s + BigInt(c.valor), 0n);
-        const confirmado = caixaDaMarca.filter((c) => c.provider === provider).reduce((s, c) => s + BigInt(c.receita), 0n);
-        const aviso = avisoPlataformaCaixa(provider, informado, confirmado);
-        if (aviso) itens.push(aviso);
+        // Margem desconhecida na receita atribuída e plataforma × caixa, por plataforma de anúncio.
+        const caixaDaMarca = caixa.rows.filter((c) => c.brand_id === marca);
+        const receita = caixaDaMarca.reduce((s, c) => s + BigInt(c.receita), 0n);
+        const semMargem = caixaDaMarca.reduce((s, c) => s + BigInt(c.sem_margem), 0n);
+        const liberaCusto = lojasDaMarca.some((l) => (l.escopos ?? []).includes('custos.ler'));
+        const margem = avisoMargemDesconhecida(receita, semMargem, liberaCusto);
+        if (margem) itens.push(margem);
+        for (const provider of ['meta_ads', 'google_ads']) {
+          const informado = campanhasDaMarca.filter((c) => c.provider === provider).reduce((s, c) => s + BigInt(c.valor), 0n);
+          const confirmado = caixaDaMarca.filter((c) => c.provider === provider).reduce((s, c) => s + BigInt(c.receita), 0n);
+          const aviso = avisoPlataformaCaixa(provider, informado, confirmado);
+          if (aviso) itens.push(aviso);
+        }
+      } finally {
+        for (let k = inicio; k < itens.length; k++) marcaDoAviso.set(itens[k]!, marca);
       }
     }
-    return { items: ordenarCiclo(itens), generated_at: agora.toISOString() };
+    return { items: ordenarCiclo(itens).map((i) => ({ ...i, brand_id: marcaDoAviso.get(i) ?? null })), generated_at: agora.toISOString() };
   }
 }

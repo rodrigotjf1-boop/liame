@@ -45,13 +45,36 @@ export interface ContextoDaExplicacao {
     receita_com_origem: Comparado;
     roas_confirmado: Comparado;
   } | null;
-  /** Fontes que não estão em dia: com alguma aqui, a explicação é a do código, não a da IA. */
-  fontes_fora_do_dia: Array<{ plataforma: string | null; conta: string; frescor: string }>;
+  /** Fontes que não estão em dia (com a última leitura, quando houve): com alguma aqui, a explicação é a do código, não a da IA. */
+  fontes_fora_do_dia: Array<{ plataforma: string | null; conta: string; frescor: string; ultima_leitura: string | null }>;
 }
 
+/**
+ * O aviso da Atenção que está sendo explicado, como a tela o mostra. Vai na frente do contexto: a IA
+ * explica o aviso com os números do período; o número que estiver no texto do aviso também pode ser citado.
+ */
+export interface AvisoNoContexto {
+  /** `critica`, `atencao` ou `info`. */
+  gravidade: string;
+  tipo: string;
+  plataforma?: string;
+  /** Nome da campanha do aviso, para a IA achar os números dela em `resultado.campanhas`. */
+  campanha?: string;
+  titulo: string;
+  detalhe: string;
+  o_que_fazer: string;
+  /** De quando são os números de `resultado` que acompanham o aviso: "últimos 7 dias completos". */
+  resultados_de: string;
+}
+
+/** O contexto de um aviso: o aviso e os resultados dos últimos 7 dias completos da marca. */
+export type ContextoDoAviso = { aviso: AvisoNoContexto } & ContextoDaExplicacao;
+/** O que a explicação recebe: os resultados e, quando é de um aviso, ele. */
+export type ContextoComAviso = ContextoDaExplicacao & { aviso?: AvisoNoContexto };
+
 /** Os nomes que vieram dos dados da empresa (campanhas e contas): a IA pode citá-los, e são eles que dizem se o assunto é político. */
-export function nomesDoContexto(c: ContextoDaExplicacao): string[] {
-  return [...c.resultado.campanhas.map((x) => x.campanha), ...c.resultado.fontes.map((f) => f.conta)].filter((n): n is string => typeof n === 'string' && n.length > 0);
+export function nomesDoContexto(c: ContextoComAviso): string[] {
+  return [...c.resultado.campanhas.map((x) => x.campanha), ...c.resultado.fontes.map((f) => f.conta), c.aviso?.campanha].filter((n): n is string => typeof n === 'string' && n.length > 0);
 }
 
 export interface Comparado {
@@ -87,6 +110,8 @@ export function contextoDosResultados(atual: ClosedLoopResponse, anterior: Close
             },
           }
         : null,
-    fontes_fora_do_dia: resultado.fontes.filter((f) => f.frescor !== 'em dia').map((f) => ({ plataforma: f.plataforma ?? null, conta: f.conta ?? '', frescor: f.frescor ?? '' })),
+    fontes_fora_do_dia: resultado.fontes
+      .filter((f) => f.frescor !== 'em dia')
+      .map((f) => ({ plataforma: f.plataforma ?? null, conta: f.conta ?? '', frescor: f.frescor ?? '', ultima_leitura: f.ultima_leitura ?? null })),
   };
 }

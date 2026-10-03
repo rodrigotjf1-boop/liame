@@ -101,6 +101,8 @@ export const AttentionItem = z.strictObject({
   connected_account_id: z.uuid().nullable(),
   campaign_id: z.uuid().nullable(),
   provider: Slug.nullable(),
+  /** A marca do aviso: é com ela que a tela pede a explicação (`POST /v1/ai/explain/attention`). Nula no aviso da empresa inteira (autorização vencendo, versão de API). */
+  brand_id: z.uuid().nullable(),
 });
 export type AttentionItem = z.infer<typeof AttentionItem>;
 

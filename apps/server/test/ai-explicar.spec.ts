@@ -99,7 +99,7 @@ describe('contexto da explicação: a comparação com o período anterior é do
     vazio.totals.orders_confirmed = 0;
     expect(contextoDosResultados(resultado(), vazio).comparacao).toBeNull();
     // Fonte atrasada aparece para a explicação não sair com dado velho.
-    expect(contextoDosResultados(resultado({ frescor: 'stale' }), null).fontes_fora_do_dia).toEqual([{ plataforma: 'Meta', conta: 'CA - Pizzaria', frescor: 'parado' }]);
+    expect(contextoDosResultados(resultado({ frescor: 'stale' }), null).fontes_fora_do_dia).toEqual([{ plataforma: 'Meta', conta: 'CA - Pizzaria', frescor: 'parado', ultima_leitura: '02/10/2026 01:54' }]);
     // Nada no contexto parece dado pessoal para a limpeza do gateway.
     expect(limparTexto(JSON.stringify(c)).removidos).toBe(0);
   });
@@ -135,15 +135,18 @@ describe('explicação sem IA (A3-6): o mesmo formato, por regra, sempre com nú
       'A Meta informa ROAS de 12,56; o caixa confirma 2,60. Para decidir, vale o do caixa.',
       '410 pedido(s) dos canais com clique ficaram sem origem provada (61,2%): não dá para dizer de que campanha vieram.',
     ]);
-    expect(e.risco).toBe('baixo');
-    expect(explicacaoSemIa(contextoDosResultados(resultado({ verdict: 'prejuizo' }), anterior())).risco).toBe('alto');
+    // O risco vem com o porquê, pela regra do sistema (a mesma do veredito da tela).
+    expect([e.risco, e.risco_motivo]).toEqual(['baixo', 'pela regra do sistema, o período deu lucro depois de pagar os anúncios.']);
+    expect(explicacaoSemIa(contextoDosResultados(resultado({ verdict: 'prejuizo' }), anterior()))).toMatchObject({ risco: 'alto', risco_motivo: 'pela regra do sistema, o período deu prejuízo depois de pagar os anúncios.' });
+    expect(explicacaoSemIa(contextoDosResultados(resultado({ verdict: 'empata' }), anterior()))).toMatchObject({ risco: 'medio', risco_motivo: 'pela regra do sistema, o período empata: a margem conhecida fica perto do investimento.' });
     // Sem veredito do caixa, investimento subindo e receita caindo é risco alto; sem comparação, médio.
-    expect(explicacaoSemIa(contextoDosResultados(resultado({ verdict: null }), anterior())).risco).toBe('alto');
-    expect(explicacaoSemIa(contextoDosResultados(resultado({ verdict: null }), null)).risco).toBe('medio');
+    expect(explicacaoSemIa(contextoDosResultados(resultado({ verdict: null }), anterior()))).toMatchObject({ risco: 'alto', risco_motivo: 'pela regra do sistema, o investimento subiu e a receita com origem provada caiu.' });
+    expect(explicacaoSemIa(contextoDosResultados(resultado({ verdict: null }), null))).toMatchObject({ risco: 'medio', risco_motivo: 'pela regra do sistema, falta custo cadastrado para dizer se o período deu lucro.' });
     expect(explicacaoSemIa(contextoDosResultados(resultado({ spend: '0', orders: 0, revenue: '0', roas: null, verdict: null, campanhas: false, semOrigem: 0 }), null))).toEqual({
       o_que_aconteceu: 'De 18/09/2026 a 01/10/2026 não houve investimento em anúncios lido pelo Liame.',
       motivos: ['Ainda não há campanha com investimento e pedido confirmado neste período para comparar.'],
       risco: 'medio',
+      risco_motivo: 'pela regra do sistema, sem investimento em anúncios lido, não há retorno para avaliar.',
       o_que_fazer: ['Acompanhe os avisos da Atenção: eles apontam o que precisa de você.'],
     });
   });
@@ -155,6 +158,7 @@ describe('conferência da resposta da IA: o que não serve para a tela', () => {
     o_que_aconteceu: 'O investimento subiu 22,4% (de R$ 784,00 para R$ 960,00) e a receita com origem provada caiu 34,2%.',
     motivos: ['A Meta informa ROAS de 12,56, mas o caixa confirma 2,60.', 'Só 38 pedidos têm origem provada; 410 ficaram sem origem.'],
     risco: 'alto',
+    risco_motivo: 'o investimento subiu 22,4% e a receita com origem provada caiu 34,2%.',
     o_que_fazer: ['Revise a campanha "Tráfego | Cardápio" antes de aumentar a verba.'],
   };
 
@@ -167,6 +171,10 @@ describe('conferência da resposta da IA: o que não serve para a tela', () => {
     expect(conferirExplicacao({ ...boa, o_que_aconteceu: '   ' }, contexto)).toEqual({ recusa: 'vazia', detalhe: [] });
     expect(conferirExplicacao({ ...boa, motivos: [] }, contexto)).toEqual({ recusa: 'vazia', detalhe: [] });
     expect(conferirExplicacao({ ...boa, o_que_fazer: ['ok', ''] }, contexto)).toEqual({ recusa: 'vazia', detalhe: [] });
+    // O porquê do risco é conferido como o resto: não pode vir vazio, longo nem com número de fora.
+    expect(conferirExplicacao({ ...boa, risco_motivo: ' ' }, contexto)).toEqual({ recusa: 'vazia', detalhe: [] });
+    expect(conferirExplicacao({ ...boa, risco_motivo: 'a'.repeat(LIMITES.risco_motivo + 1) }, contexto)).toEqual({ recusa: 'longa', detalhe: [] });
+    expect(conferirExplicacao({ ...boa, risco_motivo: 'a queda foi de 57% no mês.' }, contexto)).toEqual({ recusa: 'numero_fora', detalhe: ['57'] });
     expect(conferirExplicacao({ ...boa, o_que_aconteceu: 'a'.repeat(LIMITES.o_que_aconteceu + 1) }, contexto)).toEqual({ recusa: 'longa', detalhe: [] });
     expect(conferirExplicacao({ ...boa, motivos: Array.from({ length: LIMITES.motivos + 1 }, () => 'Motivo sem número.') }, contexto)).toEqual({ recusa: 'longa', detalhe: [] });
     expect(conferirExplicacao({ ...boa, o_que_fazer: ['Veja em https://exemplo.com como arrumar.'] }, contexto)).toEqual({ recusa: 'trecho_proibido', detalhe: ['https://'] });

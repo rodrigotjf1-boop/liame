@@ -67,6 +67,34 @@ export function numerosDe(texto: string): string[] {
   return fichasDe(texto).map((f) => f.forma);
 }
 
+/** Uma data ou um número, o que vier primeiro na leitura (a data antes: ela conta inteira). */
+const FICHA = /\d{2}\/\d{2}\/\d{4}(?: \d{2}:\d{2})?|\d[\d.,]*\d|\d/g;
+
+export interface Trecho {
+  texto: string;
+  /** A forma em que o trecho é comparado, quando ele é uma data ou um número; nula no texto comum. */
+  forma: string | null;
+}
+
+/**
+ * O texto na ordem em que se lê, partido em trechos: cada data e cada número num trecho próprio, e o
+ * texto comum entre eles. É o que a tela usa para mostrar de onde veio cada número; a conferência
+ * (`conferirNumeros`) continua sendo a de cima.
+ */
+export function trechosDe(texto: string): Trecho[] {
+  if (texto.length > TEXTO_MAXIMO) throw new Error('verificador de números: texto grande demais');
+  const trechos: Trecho[] = [];
+  let fim = 0;
+  for (const m of texto.matchAll(FICHA)) {
+    const bruto = m[0];
+    if (m.index > fim) trechos.push({ texto: texto.slice(fim, m.index), forma: null });
+    trechos.push({ texto: bruto, forma: bruto.includes('/') ? `data:${bruto}` : formaDoNumero(bruto) });
+    fim = m.index + bruto.length;
+  }
+  if (fim < texto.length) trechos.push({ texto: texto.slice(fim), forma: null });
+  return trechos;
+}
+
 /** Todo texto de um valor (objeto, lista ou texto), junto. */
 function textosDe(valor: unknown): string[] {
   if (typeof valor === 'string') return [valor];

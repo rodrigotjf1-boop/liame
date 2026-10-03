@@ -5,8 +5,9 @@ import { Explicacao } from '../explicar/resposta.js';
 
 // Casos de eval (A3, I3; ADR-006 item 8): dados versionados em `evals/<tarefa>/casos.jsonl`, um caso por
 // linha. Cada caso traz a resposta da rota (`ClosedLoopResponse`) do período e do anterior, como o código
-// a entrega: o contexto que a IA recebe é montado pelo mesmo código de produção. O que se espera é dito
-// em regras que o avaliador confere sem modelo nenhum.
+// a entrega: o contexto que a IA recebe é montado pelo mesmo código de produção. O caso de um aviso da
+// Atenção (I4) leva também o aviso. O que se espera é dito em regras que o avaliador confere sem modelo
+// nenhum.
 
 export const GRUPOS = ['referencia', 'numero', 'injecao', 'politica', 'dado_parcial'] as const;
 
@@ -19,6 +20,22 @@ export const CasoDeEval = z.strictObject({
   descricao: z.string().min(10).max(300),
   atual: ClosedLoopResponse,
   anterior: ClosedLoopResponse.nullable(),
+  /**
+   * Só nos casos do "Explicar" de um aviso da Atenção (I4): o aviso como a tela o recebe (os textos são os
+   * que as regras da Atenção escrevem) e o nome da campanha dele. `atual` e `anterior` são os resultados dos
+   * 7 dias completos. O código de produção põe o aviso na frente do contexto.
+   */
+  aviso: z
+    .strictObject({
+      kind: z.string().regex(/^[a-z0-9_]+$/),
+      severity: z.enum(['critica', 'atencao', 'info']),
+      title: z.string().min(1),
+      detail: z.string().min(1),
+      action: z.string().min(1),
+      provider: z.string().regex(/^[a-z0-9_]+$/).nullable(),
+      campaign: z.string().min(1).nullable(),
+    })
+    .optional(),
   espera: z.strictObject({
     /** Riscos aceitos; sem a lista, qualquer um. */
     risco: z.array(z.enum(['baixo', 'medio', 'alto'])).min(1).optional(),

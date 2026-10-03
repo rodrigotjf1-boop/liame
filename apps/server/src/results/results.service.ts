@@ -357,6 +357,15 @@ export class ResultsService {
     };
   }
 
+  /** O fuso que corta o dia da marca (o da primeira loja; sem loja, o padrão). 404 se a marca não é desta empresa. */
+  async fusoDaMarca(brandId: string): Promise<string> {
+    const r = await currentTx().execute<{ fuso: string | null }>(sql`
+      select (select u.timezone from liame.unit u where u.brand_id = b.id order by u.created_at, u.id limit 1) as fuso
+        from liame.brand b where b.id = ${brandId} and b.archived_at is null`);
+    if (!r.rows.length) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+    return r.rows[0]!.fuso ?? FUSO_PADRAO;
+  }
+
   /** Marca da empresa, loja (se veio), fuso que corta o dia e o modelo de atribuição em uso. */
   private async contexto(q: { brand_id: string; unit_id?: string; from: string; to: string }) {
     if (q.from > q.to) throw new AppProblem(422, 'periodo-invalido', 'Período inválido', 'A data inicial vem depois da final.');

@@ -31,11 +31,20 @@ export type AiErrorCode = 'desligada' | 'entrada-grande' | 'travada' | 'sem-rota
  */
 export const ENTRADA_MAXIMA = 200_000;
 
+/** O que a tela precisa para dizer quando a IA volta: qual teto barrou e quando o limite da pessoa libera. */
+export interface AiErrorDetail {
+  /** No `teto`: o do dia ou o do mês. */
+  teto?: 'dia' | 'mes';
+  /** No `limite-usuario`: quando a chamada mais antiga da janela de uma hora sai dela. */
+  voltaEm?: Date;
+}
+
 /** Toda falha da IA é esta. Quem chama cai no caminho sem IA: tela, aviso e relatório seguem (A3-6). */
 export class AiError extends Error {
   constructor(
     readonly code: AiErrorCode,
     message: string,
+    readonly detalhe: AiErrorDetail = {},
   ) {
     super(message);
     this.name = 'AiError';
@@ -131,8 +140,11 @@ type Rota = {
 };
 
 type Preparo =
-  | { barrado: 'travada' | 'sem-rota' | 'limite-usuario' | 'teto' }
+  | { barrado: 'travada' | 'sem-rota' | 'limite-usuario' | 'teto'; detalhe?: AiErrorDetail }
   | { barrado: null; rota: Rota; gasto: Gasto; candidatos: Candidato[]; precos: Map<string, PrecoModelo> };
+
+/** Qual teto barrou: o do mês, quando ele está cheio; senão, o do dia. */
+const qualTeto = (g: Gasto): 'dia' | 'mes' => (g.gastoMes >= g.tetoMes ? 'mes' : 'dia');
 
 interface Tentativa {
   id: string;
@@ -186,6 +198,11 @@ export class AiGateway {
     return this.database.db;
   }
 
+  /** A IA está ligada para esta empresa (flag `ia`)? É o que a tela pergunta antes de oferecer a LIA; não gasta nada. */
+  ligada(quem: { tenantId: string; userId?: string | null; brandId?: string | null }): Promise<boolean> {
+    return this.flags.isEnabled('ia', this.flags.context({ tenantId: quem.tenantId, userId: quem.userId ?? null, brandId: quem.brandId ?? null }));
+  }
+
   /** Texto livre. */
   async generate(req: GenerateRequest): Promise<GenerateResult> {
     const r = await this.run(req, { schema: null, ferramentas: [], maxRodadas: 1 });
@@ -225,7 +242,7 @@ export class AiGateway {
     }
     const db = this.db;
     const preparo = await withContext(db, contexto, (tx) => this.preparar(tx, req));
-    if (preparo.barrado) throw new AiError(preparo.barrado, `ia: ${preparo.barrado}`);
+    if (preparo.barrado) throw new AiError(preparo.barrado, `ia: ${preparo.barrado}`, preparo.detalhe);
     const { rota, gasto, candidatos, precos } = preparo;
 
     const instrucoes = limparTexto(req.instructions);
@@ -309,7 +326,8 @@ export class AiGateway {
     if (faixa) this.logger.warn(`ia: a empresa ${req.tenantId} entrou na faixa "${faixa}" do teto de custo de IA`);
     if (parada) {
       this.logger.warn(`ia: ${req.task} parou sem resposta depois de ${rodadas} rodada(s): ${parada}`);
-      throw new AiError(parada === 'teto' ? 'teto' : 'indisponivel', `ia: laço interrompido (${parada})`);
+      if (parada === 'teto') throw new AiError('teto', 'ia: laço interrompido (teto)', { teto: qualTeto({ ...gasto, gastoDia: gasto.gastoDia + total, gastoMes: gasto.gastoMes + total }) });
+      throw new AiError('indisponivel', `ia: laço interrompido (${parada})`);
     }
     if (!resposta) {
       this.logger.warn(`ia: ${req.task} sem resposta (${tentativas.map((t) => `${chave(t.candidato.provider, t.candidato.model)}: ${t.errorCode}`).join('; ')})`);
@@ -391,8 +409,14 @@ export class AiGateway {
         select count(*)::int as n from liame.ai_usage
          where tenant_id = ${req.tenantId} and user_id = ${req.userId} and model is not null and occurred_at > now() - interval '1 hour'`);
       if ((r.rows[0]?.n ?? 0) >= this.config.ai.userHourlyCalls) {
+        // O limite libera quando a chamada que completa a conta sai da janela de uma hora.
+        const limiar = await tx.execute<{ em: Date | string }>(sql`
+          select occurred_at as em from liame.ai_usage
+           where tenant_id = ${req.tenantId} and user_id = ${req.userId} and model is not null and occurred_at > now() - interval '1 hour'
+           order by occurred_at desc offset ${this.config.ai.userHourlyCalls - 1} limit 1`);
+        const em = limiar.rows[0]?.em;
         await this.registrarBarrado(tx, req, rota, 'limite_usuario');
-        return { barrado: 'limite-usuario' };
+        return { barrado: 'limite-usuario', detalhe: em ? { voltaEm: new Date(new Date(em).getTime() + 3_600_000) } : {} };
       }
     }
 
@@ -413,7 +437,7 @@ export class AiGateway {
     const situacao = situacaoDoTeto(gasto);
     if (situacao === 'bloqueado') {
       await this.registrarBarrado(tx, req, rota, 'teto');
-      return { barrado: 'teto' };
+      return { barrado: 'teto', detalhe: { teto: qualTeto(gasto) } };
     }
 
     // A partir de 80% do teto, só o modelo econômico da rota (quando ela tem um, com eval aprovado).

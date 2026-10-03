@@ -27,6 +27,11 @@ import { hasDb, OWNER_URL } from './env.js';
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Mutações sem auditoria, com motivo revisado: rota nova aqui é decisão consciente. */
 const WITHOUT_AUDIT = [
+  // IA (A3, I4): pedir uma explicação não muda dado da empresa (o uso fica em `ai_usage`), e o retorno é a
+  // opinião da própria pessoa, guardada com quem e quando.
+  'POST /v1/ai/explain/attention',
+  'POST /v1/ai/explain/results',
+  'POST /v1/ai/feedback',
   'POST /v1/auth/password/forgot',
   'POST /v1/inbox/:provider',
   'POST /v1/inbox/:provider/:connectionId',

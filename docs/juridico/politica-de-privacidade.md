@@ -32,7 +32,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 | --- | --- |
 | **Cadastro:** nome, e-mail, telefone, cargo; dados da empresa (razão social, CNPJ, endereço) | Você |
 | **Acesso e segurança:** senha (guardada só como resumo criptográfico), segundo fator, sessões, endereço IP, data e hora de acesso, aparelho e navegador | Gerados pelo uso |
-| **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê | Gerados pelo uso |
+| **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê; e, quando a IA for ligada, as avaliações que você fizer das explicações dela | Gerados pelo uso |
 | **Pessoas convidadas:** nome, e-mail e nível de acesso de quem o Dono convidou | O Dono da conta |
 | **Cobrança:** plano, valores, notas fiscais e status de pagamento. Os dados do cartão são tratados pelo processador de pagamento; o Liame não os guarda | Você e o processador de pagamento |
 | **Atendimento:** mensagens trocadas com a LIA e com o suporte, inclusive pelo WhatsApp | Você |
@@ -52,6 +52,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 | Avisar sobre mudanças, segurança e funcionamento do serviço | Execução do contrato (V) |
 | Enviar novidades e ofertas do próprio Liame | Legítimo interesse (IX), com opção de sair em cada envio, ou consentimento (I) quando exigido |
 | Melhorar o produto com estatísticas agregadas, sem identificar pessoas | Legítimo interesse (IX) |
+| Revisar e melhorar as explicações da IA com as avaliações que você envia | Legítimo interesse (IX) |
 | Defender direitos em processos | Exercício regular de direitos (VI) |
 
 ## 6. Contas conectadas (Meta, Google e outras)
@@ -103,6 +104,8 @@ Respondemos em até 15 dias. Se algum dado precisar ser guardado por obrigação
 7.3. O conteúdo das conversas com os modelos fica guardado por **30 dias**, para investigar erros e abusos; depois, só informações técnicas (horário, custo, versão do modelo), sem o conteúdo.
 
 7.4. A IA sugere; **ações relevantes dependem de aprovação humana**, dentro dos limites que a empresa cliente define.
+
+7.5. Quando você avalia uma explicação da IA ("Fez sentido" ou "Discordo", com o motivo), a avaliação fica guardada **no Liame**, ligada à sua conta, e serve para revisarmos e melhorarmos as explicações. **Ela não é enviada ao fornecedor do modelo.** O comentário que você escrever passa pela mesma remoção de dados pessoais do item 7.1; mesmo assim, não escreva nele nome, telefone nem outro dado de cliente.
 
 ## 8. Com quem compartilhamos
 
@@ -156,6 +159,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | Registros de acesso à aplicação | 6 meses (Marco Civil da Internet, art. 15) |
 | Registros técnicos (logs) | 30 dias |
 | Conteúdo das conversas com modelos de IA (quando ligados) | 30 dias; depois, só metadados |
+| Avaliações que você faz das explicações da IA (quando ligadas) | enquanto durar o contrato; se a sua conta for excluída, a avaliação fica sem autor |
 | Dados brutos recebidos das plataformas | 30 dias |
 | Campanhas, peças e tarefas arquivadas | 12 meses após arquivar; estatísticas sem dados pessoais ficam |
 | Dados de contatos dos clientes (como operador) | enquanto a empresa cliente tiver finalidade e base legal; pedido de exclusão ou saída da lista, em até 15 dias |
