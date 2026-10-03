@@ -63,6 +63,42 @@ export async function modeloComPreco(modelos: ModelosDeTeste, rodada: string, mo
   return { provider, model, mock };
 }
 
+/**
+ * Rota de teste COMPARTILHADA de uma tarefa, para quando dois arquivos de teste usam a mesma tarefa. Cada arquivo roda
+ * no seu processo, com o seu modelo simulado, mas a tabela de rotas é uma só (do produto, sem empresa): se cada um
+ * apaga e cria a rota, um derruba a do outro no meio do teste (`sem-rota`, ou o modelo que só o outro processo conhece).
+ * Aqui os arquivos usam o MESMO nome de modelo, fixo por tarefa: a rota e o preço entram uma vez e ninguém apaga; cada
+ * processo liga esse nome ao próprio simulado. Rota que sobrou de uma rodada antiga é apontada para o nome fixo.
+ */
+export async function rotaCompartilhada(modelos: ModelosDeTeste, task: string, mock: MockLanguageModelV4, maxCost = 1_000_000) {
+  const provider = 'teste';
+  const model = `compartilhado_${task}`;
+  await ownerQuery(
+    `insert into liame.ai_model_price (id, provider, model, valid_from, input_usd_micros_per_mtok, output_usd_micros_per_mtok, cache_read_usd_micros_per_mtok,
+                                       cache_write_5m_usd_micros_per_mtok, cache_write_1h_usd_micros_per_mtok, source, checked_on)
+     values (gen_random_uuid(), $1, $2, date '2026-01-01', 4000000, 20000000, 200000, 5000000, 8000000, 'teste automatizado', current_date)
+     on conflict (provider, model, valid_from) do nothing`,
+    [provider, model],
+  );
+  // Dois passos, porque a tabela tem duas chaves únicas (tarefa ativa; tarefa e versão): com `do nothing` sem alvo,
+  // dois arquivos chegando juntos não se derrubam (um insere, o outro não faz nada); depois, a rota fica igual.
+  await ownerQuery(
+    `insert into liame.ai_model_route (id, task, version, status, purpose, provider, model, max_output_tokens, timeout_ms, max_cost_usd_micros, created_by, deployed_at)
+     values (gen_random_uuid(), $1, 3, 'ativa', 'analise', $2, $3, 4000, 30000, $4, 'testes', now())
+     on conflict do nothing`,
+    [task, provider, model, maxCost],
+  );
+  await ownerQuery(
+    `update liame.ai_model_route
+        set provider = $2, model = $3, max_cost_usd_micros = $4, timeout_ms = 30000, fallback = '[]'::jsonb, economy_provider = null, economy_model = null, effort = null
+      where task = $1 and status = 'ativa' and created_by = 'testes'
+        and (provider, model, max_cost_usd_micros, timeout_ms) is distinct from ($2::text, $3::text, $4::bigint, 30000)`,
+    [task, provider, model, maxCost],
+  );
+  modelos.porChave.set(`${provider}/${model}`, mock);
+  return { provider, model, mock };
+}
+
 export type RefDeModelo = { provider: string; model: string };
 
 /** Rota ativa para a tarefa (a versão é 3 para o teste conferir que ela chega ao registro de uso). */
