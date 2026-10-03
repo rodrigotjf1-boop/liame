@@ -307,6 +307,10 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     expect(cancelar.status).toBe(200);
     expect(cancelar.body).toMatchObject({ status: 'cancelada' });
     expect((await api.call('POST', `/v1/demands/${demanda.id}/cancel`, { cookie: d.cookie, body: {} })).body.code).toBe('demanda-nao-aberta');
+    // Ao reabrir a conversa, o cartão mostra a situação de agora, não a da hora da resposta.
+    const reaberta = await api.call('GET', `/v1/conversations/${r.eventos[0]!.conversation!.id}`, { cookie: d.cookie });
+    expect(reaberta.body.messages[1].cards[0].demand).toMatchObject({ id: demanda.id, status: 'cancelada' });
+    expect(reaberta.body.messages[1].cards[0].demand.cancelled_at).not.toBeNull();
 
     // Somente leitura conversa, mas não registra demanda: a ferramenta nem é oferecida.
     const leitor = await membro(d, 'somente_leitura');

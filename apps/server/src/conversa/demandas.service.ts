@@ -121,6 +121,13 @@ export class DemandasService {
     return this.porId(id);
   }
 
+  /** As demandas pedidas, como estão agora (na transação de quem chama). A que não existe mais fica de fora. */
+  async porIds(ids: string[]): Promise<Map<string, DemandResponse>> {
+    if (!ids.length) return new Map();
+    const r = await currentTx().execute<LinhaDemanda>(sql`select ${COLUNAS} from liame.demand d left join liame.app_user u on u.id = d.requested_by where d.id in ${ids}`);
+    return new Map(r.rows.map((l) => [l.id, respostaDaDemanda(l)]));
+  }
+
   private async porId(id: string): Promise<DemandResponse> {
     const r = await currentTx().execute<LinhaDemanda>(sql`select ${COLUNAS} from liame.demand d left join liame.app_user u on u.id = d.requested_by where d.id = ${id}`);
     return respostaDaDemanda(r.rows[0]!);

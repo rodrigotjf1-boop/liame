@@ -202,7 +202,11 @@ export class ConversaService {
       select id, role, status, content, usage_id, created_at from liame.conversation_message
        where conversation_id = ${id} and created_at > now() - make_interval(days => ${CONVERSATION_RETENTION_DAYS})
        order by created_at, id`);
-    return { conversation: c, messages: r.rows.map(mensagemDaLinha) };
+    const messages = r.rows.map(mensagemDaLinha);
+    // O cartão foi gravado com a situação daquela hora: ao abrir, vale a de agora (a demanda pode ter sido cancelada).
+    const demandas = await this.demandas.porIds([...new Set(messages.flatMap((m) => m.cards.map((k) => k.demand?.id).filter((x): x is string => !!x)))]);
+    for (const m of messages) m.cards = m.cards.map((k) => (k.demand && demandas.has(k.demand.id) ? { ...k, demand: demandas.get(k.demand.id)! } : k));
+    return { conversation: c, messages };
   }
 
   // ------------------------------------------------------------------ uma resposta (fora da transação da rota)
