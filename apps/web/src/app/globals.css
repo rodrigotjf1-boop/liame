@@ -9,6 +9,7 @@
 @import "../styles/links.css";
 @import "../styles/aprovacoes.css";
 @import "../styles/explicar.css";
+@import "../styles/revisao.css";
 
 /* Tema escuro manual (data-theme) além do automático do sistema (base §15, Tailwind 4.3). */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));

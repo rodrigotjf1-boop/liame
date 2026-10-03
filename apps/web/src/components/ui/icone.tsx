@@ -159,6 +159,19 @@ const DESENHOS = {
       <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
     </>
   ),
+  // Revisão da semana (protótipo P4): o que melhorou e o que piorou.
+  'trend-up': (
+    <>
+      <path d="M22 7 13.5 15.5 8.5 10.5 2 17" />
+      <path d="M16 7h6v6" />
+    </>
+  ),
+  'trend-down': (
+    <>
+      <path d="M22 17 13.5 8.5 8.5 13.5 2 7" />
+      <path d="M16 17h6v-6" />
+    </>
+  ),
   qr: (
     <>
       <rect width="5" height="5" x="3" y="3" rx="1" />
