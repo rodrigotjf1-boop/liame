@@ -113,7 +113,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   human_override: { class: 'PERSONAL', retention: 'com a empresa (quem discordou e o motivo)' },
   // Promoção de autonomia (A3, I13): a proposta do sistema e a decisão da pessoa (quem, quando e a versão da
   // política); o motivo é limpo de dado pessoal antes de gravar.
-  autonomy_proposal: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  autonomy_proposal: { class: 'PERSONAL', retention: 'com a conta conectada (quem decidiu e o motivo)' },
+  // Sua equipe (A3, I13b): quem desligou um funcionário numa marca, quando e o motivo (limpo de dado pessoal).
+  agent_pause: { class: 'PERSONAL', retention: 'com a marca (quem desligou, quem ligou e o motivo; o histórico fica)' },
   // Revisão da semana (A3, I7): os números da marca numa semana fechada, como foram gerados (sem cliente da
   // loja); quem recebeu o e-mail é dado da pessoa (o endereço não fica aqui, só o vínculo).
   weekly_review: { class: 'CONFIDENTIAL', retention: 'com a marca' },

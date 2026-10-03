@@ -48,7 +48,7 @@ import { PropostaDeCupomService, PropostaRecusada } from './proposta-cupom.servi
 // resposta ou o aviso e liberar a conversa, em outra transação curta. Nenhuma transação fica aberta durante a
 // chamada ao modelo. O que não passou na conferência não sai daqui: vira o aviso "a resposta foi retirada".
 
-const WORKFLOW = 'conversa.lia';
+export const WORKFLOW = 'conversa.lia';
 /** Mensagens anteriores que voltam ao modelo a cada resposta (as mais recentes). */
 const HISTORICO_MAXIMO = 10;
 /** Chamadas ao modelo numa resposta (cada uma pode pedir leituras, várias de uma vez). */

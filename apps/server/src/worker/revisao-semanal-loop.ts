@@ -128,6 +128,8 @@ export class RevisaoSemanalLoop {
       aguardando_leitura: sql`${referencia} + ${ESPERA_DA_LEITURA}::interval`,
       sem_fontes: sql`${referencia} + ${SEM_O_QUE_REVISAR}::interval`,
       sem_movimento: sql`${referencia} + ${SEM_O_QUE_REVISAR}::interval`,
+      // Relatórios desligado pela empresa nesta marca (I13b): ligado de novo, a vez volta em até uma hora.
+      desligada_pela_empresa: sql`${referencia} + interval '1 hour'`,
     };
     const comRevisao = r.status === 'gerada' || r.status === 'ja_tem';
     await withSystem(this.database!.db, (tx) =>

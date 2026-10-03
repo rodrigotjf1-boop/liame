@@ -32,7 +32,7 @@ import { ResultsService } from '../results/results.service.js';
 // Nada é executado em plataforma nenhuma. Quem decide o que acontece com a demanda depois de cada vez é a fila
 // (`estrategista-loop.ts`).
 
-const WORKFLOW = 'estrategista.plano';
+export const WORKFLOW = 'estrategista.plano';
 /** Chamadas ao modelo num plano (cada uma pode pedir leituras, várias de uma vez). */
 const RODADAS = 6;
 const SEM_LUGAR = 'Liame · dado lido pelo Estrategista';

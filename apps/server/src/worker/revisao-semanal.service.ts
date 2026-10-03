@@ -4,10 +4,12 @@ import { sql } from 'drizzle-orm';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
 import { respostaDaExplicacao } from '../ai/explicar/saida.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
+import { desligadoPelaEmpresa } from '../ai/registro/ativacao.js';
 import type { ContextoDaLeitura } from '../ai/registro/leituras.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
+import { RELATORIOS } from '../equipe/membros.js';
 import { FlagService } from '../flags/flag.service.js';
 import { Mailer, maskEmail } from '../mail/mailer.js';
 import { proibidasDaMarca } from '../marca/marca.service.js';
@@ -55,7 +57,7 @@ const TENTATIVAS_POR_PESSOA = 3;
 const NOVA_TENTATIVA = '30 minutes';
 
 export type ResultadoDaRevisao = {
-  status: 'gerada' | 'ja_tem' | 'cedo' | 'aguardando_leitura' | 'sem_fontes' | 'sem_movimento';
+  status: 'gerada' | 'ja_tem' | 'cedo' | 'aguardando_leitura' | 'sem_fontes' | 'sem_movimento' | 'desligada_pela_empresa';
   fuso: string;
   /** A segunda-feira da semana olhada. */
   semana: string;
@@ -101,6 +103,8 @@ export class RevisaoSemanalService {
       const base = { fuso, semana };
       const existe = await currentTx().execute(sql`select 1 from liame.weekly_review where brand_id = ${brandId} and week_from = ${semana.from}::date`);
       if (existe.rows.length) return { ...base, situacao: 'ja_tem' as const };
+      // A empresa desligou o Relatórios nesta marca (I13b): a revisão não é gerada enquanto ele estiver desligado.
+      if (await desligadoPelaEmpresa(currentTx(), { tenantId, brandId, agentKey: RELATORIOS })) return { ...base, situacao: 'desligada_pela_empresa' as const };
       // No dia da revisão, ela espera a hora de gerar e, até a hora limite, a leitura que traz o domingo inteiro.
       const ehODia = hoje === diaDaRevisao(semana);
       const hora = horaNoFuso(agora, fuso);

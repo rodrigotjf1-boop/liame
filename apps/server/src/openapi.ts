@@ -34,6 +34,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('conversa', 'Conversa com a LIA: a resposta em fluxo de eventos, conferida pelo código antes de aparecer, e as demandas que ela registra para a equipe (A3)')
     .addTag('planos', 'Planos do Estrategista: a oferta, a pauta da semana e o plano de 90 dias, com a fonte de cada número, para aprovar, editar, recusar ou pedir nova análise; nada é executado (A3)')
     .addTag('autonomia', 'Autonomia por conta e ação: a prontidão pelos cinco portões e a promoção de Sombra para Sugerir, que o sistema propõe e uma pessoa aprova; nada é executado (A3)')
+    .addTag('equipe', 'Sua equipe: quem trabalha para a marca, a situação, o custo de IA e o que fez no mês; desligar e ligar um funcionário (A3)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .build();
   return comFluxos(SwaggerModule.createDocument(app, config));

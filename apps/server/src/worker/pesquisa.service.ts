@@ -40,7 +40,7 @@ const REDIRECIONAMENTOS = 5;
 const ROBOTS_VALE_MS = 24 * 3_600_000;
 /** Sites guardados no máximo (a memória do worker não cresce sem fim). */
 const ROBOTS_GUARDADOS = 1_000;
-const WORKFLOW = 'pesquisador.pagina';
+export const WORKFLOW = 'pesquisador.pagina';
 const DIA_MS = 86_400_000;
 
 type Decidida = { section: DossierSection; status: string; items: BrandDossierSuggestionItem[]; used: number[] | null };
