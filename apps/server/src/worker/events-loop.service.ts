@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { ActionExecutor } from './action-executor.js';
 import { ConexaoProcessor } from './conexao-processor.js';
+import { ConversasLoop } from './conversas-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
 import { VendasLoop } from './vendas-loop.js';
@@ -9,7 +10,7 @@ import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem e rodar a sombra de cada marca. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast e rodar a sombra de cada marca. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -29,6 +30,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly sincronizacao: SincronizacaoLoop,
     private readonly vendas: VendasLoop,
     private readonly sombra: SombraLoop,
+    private readonly conversas: ConversasLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -40,6 +42,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('conexoes', 5, 2_000, (n) => this.conexoes.processarLote(n)),
       this.loop('sincronizacao', 3, 30_000, async (n) => (await this.sincronizacao.executarLote(n)).length),
       this.loop('vendas', 3, 30_000, async (n) => (await this.vendas.executarLote(n)).length),
+      this.loop('conversas', 3, 30_000, async (n) => (await this.conversas.executarLote(n)).length),
       this.loop('sombra', 3, 60_000, async (n) => (await this.sombra.executarLote(n)).length),
     );
   }

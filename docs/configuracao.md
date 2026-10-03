@@ -106,7 +106,7 @@ Contratos em `docs/integracoes/`. O endereço de cada produto é da distribuiç�
 | `REGEM_API_URL` | Rotas de integração do Regem (só da nuvem); em produção, só o oficial | `https://api.dmsregem.com/api/v1/integracao` |
 | `REGEM_AUTH_URL` | Onde o presidente da loja autoriza o Liame (C1b); em produção, só o oficial | `https://app.dmsregem.com` |
 | `REGEM_CLIENT_ID` · `REGEM_CLIENT_SECRET` | Credencial do Liame como cliente do Regem, para trocar o código pelo token da loja. Sem elas, "Conectar Regem" responde 503 e só vale o registro pela distribuição. O `REGEM_CLIENT_ID` é `liame`; o segredo (32 caracteres ou mais) é o MESMO valor posto no Regem em `INTEGRACAO_LIAME_CLIENT_SECRET` (ambiente do `regem-api`). Com as duas, `GET /v1/connections` passa a listar `regem` em `available` e a tela oferece "Conectar o Regem". | vazio |
-| `REGEMCAST_API_URL` | Rotas do RegemCast (C2b) | vazio |
+| `REGEMCAST_API_URL` | API do RegemCast: o conector chama `{valor}/mcp` (MCP 2026-07-28, conversas abertas por anúncio, F7; contrato `integracoes/regemcast.md` v2); em produção, só o oficial e com `https`. Vazio = nenhuma conversa é lida | `https://castapi.dmsregem.com/api/v1` |
 
 **Piloto (D-A2.5-4):** a distribuição emite o token da loja no Regem e o grava no cofre do Liame, dentro do contêiner da API. O token entra pela entrada padrão, nunca pela linha de comando:
 

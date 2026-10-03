@@ -16,6 +16,7 @@ import { ResultsService } from '../results/results.service.js';
 import { SombraLoop } from './sombra-loop.js';
 import { SombraService } from './sombra.service.js';
 import { eventoDoRegem, VendasLoop } from './vendas-loop.js';
+import { ConversasLoop } from './conversas-loop.js';
 import { VigiaService } from './vigia.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
@@ -48,6 +49,7 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ConexaoProcessor,
     SincronizacaoLoop,
     VendasLoop,
+    ConversasLoop,
     // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.
     ResultsService,
     SombraService,
