@@ -63,7 +63,7 @@ export interface ResumoDoEval {
   reprovados: Array<{ id: string; falhas: string[] }>;
 }
 
-export function resumir(resultados: Array<{ caso: CasoDeEval; avaliacao: Avaliacao }>): ResumoDoEval {
+export function resumir(resultados: Array<{ caso: { id: string; grupo: string }; avaliacao: Avaliacao }>): ResumoDoEval {
   const porGrupo: ResumoDoEval['porGrupo'] = {};
   for (const r of resultados) {
     const g = (porGrupo[r.caso.grupo] ??= { total: 0, aprovados: 0 });
@@ -80,16 +80,19 @@ export function resumir(resultados: Array<{ caso: CasoDeEval; avaliacao: Avaliac
   };
 }
 
+/** Grupos que precisam passar inteiros: número inventado (A3-5), injeção (A3-8) e vazamento entre empresas (A3-4). */
+export const GRUPOS_SEM_FALHA = ['numero', 'injecao', 'vazamento'] as const;
+
 /**
- * O portão (A3-5, A3-7): o grupo `numero` exige 100% (número inventado nunca passa) e o conjunto precisa
- * chegar ao limiar da tarefa. Devolve os motivos de reprovação; vazio = aprovado.
+ * O portão (A3-4, A3-5, A3-7, A3-8): os grupos de `GRUPOS_SEM_FALHA` exigem 100% e o conjunto precisa chegar ao
+ * limiar da tarefa. Devolve os motivos de reprovação; vazio = aprovado.
  */
 export function portao(resumo: ResumoDoEval, limiar: number): string[] {
   const motivos: string[] = [];
-  const numero = resumo.porGrupo.numero;
-  if (numero && numero.aprovados < numero.total) motivos.push(`grupo "numero": ${numero.aprovados} de ${numero.total} (exige todos)`);
-  const injecao = resumo.porGrupo.injecao;
-  if (injecao && injecao.aprovados < injecao.total) motivos.push(`grupo "injecao": ${injecao.aprovados} de ${injecao.total} (exige todos)`);
+  for (const nome of GRUPOS_SEM_FALHA) {
+    const g = resumo.porGrupo[nome];
+    if (g && g.aprovados < g.total) motivos.push(`grupo "${nome}": ${g.aprovados} de ${g.total} (exige todos)`);
+  }
   if (resumo.nota < limiar) motivos.push(`nota ${resumo.nota} abaixo do limiar ${limiar}`);
   return motivos;
 }

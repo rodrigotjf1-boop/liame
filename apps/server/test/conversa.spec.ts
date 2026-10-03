@@ -6,7 +6,7 @@ import { reaisParaMicros } from '../src/ai/conversa/cupom.defs.js';
 import { LIA, PROMPT_CONVERSA_LIA } from '../src/ai/conversa/prompt.js';
 import { conferirResposta, type PermitidosNaConversa, respostaComoTexto, type RespostaDaLia } from '../src/ai/conversa/resposta.js';
 import { conferirRegistro, registroAtual } from '../src/ai/registro/definicoes.js';
-import { A_SEMANA, contextoDoPedido, contextoPermitido, historicoParaOModelo, querFalarComPessoa } from '../src/conversa/conversa.service.js';
+import { A_SEMANA, contextoDoPedido, contextoPermitido, historicoParaOModelo, querFalarComPessoa } from '../src/ai/conversa/contexto.js';
 
 // Conversa com a LIA (A3, I10): o que o código decide sem modelo nenhum. A conferência da resposta (números,
 // dado velho, Compliance, formato), a fonte de cada número, os passos que a tela mostra, o pedido de falar com
@@ -240,10 +240,12 @@ describe('o que se decide por regra e o que volta ao modelo', () => {
   });
 
   it('o contexto diz o dia (com o da semana), a semana fechada, os próximos dias e o brand_id', () => {
+    // A conversa passa a pessoa inteira (com o nome): o contexto só pode usar o nível.
+    const quem = { tenantId: 't', userId: 'u', name: 'Ana', roleKey: 'dono' as const, permissions: new Set<string>() };
     const c = contextoDoPedido({
       hoje: '2026-10-02',
       marca: { id: '0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a', nome: 'Mister Burgers', fuso: 'America/Sao_Paulo' },
-      quem: { tenantId: 't', userId: 'u', name: 'Ana', roleKey: 'dono', permissions: new Set() },
+      quem,
       dossie: null,
     });
     expect(c).toContain('Hoje é sexta-feira, 02/10/2026');

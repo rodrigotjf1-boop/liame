@@ -15,10 +15,12 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { PROPOR_CUPOM, ProporCupomInput } from '../ai/conversa/cupom.defs.js';
 import { AbrirDemandaInput, ABRIR_DEMANDA } from '../ai/conversa/demanda.defs.js';
+import { valorDaDemanda, valorDaProposta } from '../ai/conversa/escritas.js';
 import { indiceDasOrigens, marcarResposta, type OrigemDosNumeros } from '../ai/conversa/fontes.js';
 import { foraDoDia, nomesDaLeitura, rotuloDaLeitura, rotuloDoPasso } from '../ai/conversa/leituras.js';
 import { LIA, PROMPT_CONVERSA_LIA, TAREFA_CONVERSA } from '../ai/conversa/prompt.js';
-import { conferirResposta, respostaComoTexto, RespostaDaLia } from '../ai/conversa/resposta.js';
+import { contextoDoPedido, contextoPermitido, historicoParaOModelo, querFalarComPessoa, textoDaResposta } from '../ai/conversa/contexto.js';
+import { conferirResposta, RespostaDaLia } from '../ai/conversa/resposta.js';
 import { AiError, type AiMessage, AiGateway, type FerramentaIa, type PassoDaFerramenta } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { dia } from '../ai/registro/formatos.js';
@@ -32,9 +34,8 @@ import { CouponsService } from '../coupons/coupons.service.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { dossieParaOModelo, proibidasDaMarca } from '../marca/marca.service.js';
-import { ROLE_LABEL } from '../people/grant-rules.js';
-import { conferirTexto, normalizar } from '../policy/texto.js';
-import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
+import { conferirTexto } from '../policy/texto.js';
+import { diaNoFuso } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
 import { ATENDIMENTO } from '../suporte.js';
 import { DemandasService, type QuemPede } from './demandas.service.js';
@@ -57,9 +58,6 @@ const OCUPADA_POR = sql.raw(`interval '3 minutes'`);
 const TITULO_MAXIMO = 120;
 /** Mensagens por pessoa por hora, com ou sem IA (abuso: cada uma grava linhas). O limite de chamadas ao modelo é outro, no gateway. */
 const MENSAGENS_POR_HORA = 60;
-/** Dias à frente que o contexto lista com o dia da semana (a LIA copia a data em vez de calcular). */
-const DIAS_A_FRENTE = 14;
-
 const AVISO_DO_ERRO: Record<string, string> = {
   desligada: 'desligada',
   travada: 'pausada',
@@ -68,16 +66,6 @@ const AVISO_DO_ERRO: Record<string, string> = {
   'entrada-grande': 'fora_do_ar',
   'limite-usuario': 'limite_pessoa',
   teto: 'teto',
-};
-
-const DIA_DA_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-
-/** A pessoa pede para falar com alguém da Liame: verbo de contato e alguém de verdade na mesma mensagem. */
-const PEDE_CONTATO = /(?<![a-z])(falar|falo|fale|conversar|converso|chamar|chamo|contato|contatar)(?![a-z])/;
-const ALGUEM = /(?<![a-z])(pessoa|humano|humana|atendente|atendimento|suporte|alguem da liame|alguem de verdade)(?![a-z])/;
-export const querFalarComPessoa = (texto: string): boolean => {
-  const n = normalizar(texto);
-  return PEDE_CONTATO.test(n) && ALGUEM.test(n);
 };
 
 /** O título da conversa: a primeira mensagem, numa linha, cortada. */
@@ -403,8 +391,10 @@ export class ConversaService {
     const emDia = leituras.filter((l) => !velhas.includes(l));
     const nomes = [...new Set([t.marca.nome, ...leituras.flatMap((l) => nomesDaLeitura(l.valor))])];
     const fixo = contextoPermitido(t);
+    // A fonte atrasada pode ser citada (qual é e a hora da última leitura): é o que a LIA diz no lugar da análise.
+    const atrasadas = semRepetir(velhas.flatMap((l) => foraDoDia(l.ferramenta, l.valor)));
     const recusa = conferirResposta(resposta.data, {
-      emDia: [emDia.map((l) => l.valor), t.texto, t.anteriores.daPessoa, t.anteriores.daLia, t.anteriores.numeros.map((n) => n.value), fixo],
+      emDia: [emDia.map((l) => l.valor), atrasadas, t.texto, t.anteriores.daPessoa, t.anteriores.daLia, t.anteriores.numeros.map((n) => n.value), fixo],
       velhas: velhas.map((l) => l.valor),
       nomes,
       daMarca: t.daMarca,
@@ -412,7 +402,7 @@ export class ConversaService {
     if (recusa) {
       // O que foi recusado e por quê fica no log (números não são dado pessoal) e no conteúdo guardado da chamada.
       this.logger.warn(`conversa: resposta da LIA recusada (${recusa.recusa}${recusa.detalhe.length ? `: ${recusa.detalhe.slice(0, 8).join(' | ')}` : ''}); uso ${r.usageId}`);
-      if (recusa.recusa === 'dado_velho') return aviso('dado_velho', { stale_sources: semRepetir(velhas.flatMap((l) => foraDoDia(l.ferramenta, l.valor))) });
+      if (recusa.recusa === 'dado_velho') return aviso('dado_velho', { stale_sources: atrasadas });
       return aviso('recusada');
     }
 
@@ -420,6 +410,9 @@ export class ConversaService {
       ...emDia.map((l) => ({ rotulo: rotuloDaOrigem(l), valor: l.valor, comCaminho: true, ordem: 1 })),
       { rotulo: 'Você, nesta conversa', valor: [t.texto, ...t.anteriores.daPessoa], comCaminho: false, ordem: 2 },
       ...t.anteriores.numeros.flatMap((n) => n.sources.map((s) => ({ rotulo: s, valor: n.value, comCaminho: false, ordem: 3 }))),
+      ...(atrasadas.length
+        ? [{ rotulo: 'Liame · fonte fora do dia, com a última leitura', valor: atrasadas.map((a) => `${a.platform ?? ''} ${a.name} ${a.last_read ?? ''}`), comCaminho: false, ordem: 4 }]
+        : []),
       { rotulo: 'Liame · calendário (dia de hoje e os próximos)', valor: fixo.datas, comCaminho: false, ordem: 4 },
       { rotulo: 'Liame · "a semana" são os 7 dias completos até ontem', valor: fixo.semana, comCaminho: false, ordem: 4 },
       ...(t.dossie ? [{ rotulo: 'Minha marca · dossiê da marca', valor: t.dossie, comCaminho: false, ordem: 4 }] : []),
@@ -451,17 +444,15 @@ export class ConversaService {
         }
         cards.push({ kind: 'proposta_cupom', demand: null, coupon: proposta, meeting: null });
         const p = proposta.request;
-        const valor = {
-          proposta: {
-            situacao: 'esperando aprovação em Aprovações',
-            cupom: p.code,
-            loja: proposta.store_name,
-            campanha: p.campaign?.name ?? null,
-            validade: `${dia(p.valid_from)} a ${dia(p.valid_until)}`,
-            // O prazo é um instante: vira dia no fuso da loja (V34).
-            expira_sem_aprovacao_em: dia(diaNoFuso(p.expires_at, t.marca.fuso)),
-          },
-        };
+        const valor = valorDaProposta({
+          codigo: p.code,
+          loja: proposta.store_name,
+          campanha: p.campaign?.name ?? null,
+          de: p.valid_from,
+          ate: p.valid_until,
+          // O prazo é um instante: vira dia no fuso da loja (V34).
+          expira: diaNoFuso(p.expires_at, t.marca.fuso),
+        });
         leituras.push({ ferramenta: PROPOR_CUPOM.name, input: bruto, valor });
         return { ok: true, valor };
       },
@@ -479,15 +470,7 @@ export class ConversaService {
         if (!input.success) return { ok: false, erro: 'Parâmetros inválidos para esta ferramenta.' };
         const { demanda, nova } = await this.demandas.abrirPelaLia(t.quem, { brandId: t.marca.id, conversationId: t.conversa.id, messageId: t.pessoa.id }, input.data);
         if (!cards.some((c) => c.demand?.id === demanda.id)) cards.push({ kind: 'demanda', demand: demanda, coupon: null, meeting: null });
-        const valor = {
-          demanda: {
-            titulo: demanda.title,
-            quem_cuida: demanda.assignee.name,
-            situacao: demanda.status,
-            ...(demanda.due_on ? { para_quando: dia(demanda.due_on) } : {}),
-            ...(nova ? {} : { observacao: 'Esta demanda já estava registrada para esta mensagem.' }),
-          },
-        };
+        const valor = valorDaDemanda({ titulo: demanda.title, quemCuida: demanda.assignee.name, situacao: demanda.status, paraQuando: demanda.due_on, nova });
         leituras.push({ ferramenta: ABRIR_DEMANDA.name, input: bruto, valor });
         return { ok: true, valor };
       },
@@ -561,66 +544,6 @@ export class ConversaService {
       has_demand: l.has_demand,
     };
   }
-}
-
-/** O texto de uma resposta guardada, para o histórico e para a conferência da resposta seguinte. */
-function textoDaResposta(m: ConversationMessage): string {
-  const juntar = (segmentos: Array<{ text: string }>) => segmentos.map((s) => s.text).join('');
-  const blocos = respostaComoTexto(m.blocks.map((b) => ({ tipo: b.kind, texto: juntar(b.text), risco: b.risk })));
-  // A reunião de decisão também foi resposta: volta ao modelo (e vale como fonte de número) junto dos blocos.
-  const reunioes = m.cards
-    .filter((k) => k.meeting)
-    .map((k) => {
-      const r = k.meeting!;
-      return [`Reunião de decisão: ${juntar(r.topic)}`, ...r.voices.map((v) => `${v.name}: ${juntar(v.text)}`), `Recomendação: ${juntar(r.recommendation)}`, `Risco ${r.risk}: ${juntar(r.risk_reason)}`].join('\n');
-    });
-  return [blocos, ...reunioes].filter(Boolean).join('\n');
-}
-
-/**
- * As mensagens anteriores como o modelo as recebe: a pessoa e as respostas entregues da LIA. Aviso do sistema
- * e resposta parada não voltam (não foram respostas). Começa sempre por uma mensagem da pessoa.
- */
-export function historicoParaOModelo(antes: ConversationMessage[]): AiMessage[] {
-  const msgs: AiMessage[] = [];
-  for (const m of antes) {
-    if (m.role === 'pessoa' && m.text) msgs.push({ role: 'user', content: m.text });
-    else if (m.role === 'lia' && m.status === 'ok' && m.blocks.length) msgs.push({ role: 'assistant', content: textoDaResposta(m) });
-  }
-  while (msgs[0] && msgs[0].role !== 'user') msgs.shift();
-  return msgs;
-}
-
-/** Os dias do contexto: hoje, a semana fechada até ontem e os próximos, cada um com o dia da semana. */
-function calendario(hoje: string) {
-  const semana = { de: menosDias(hoje, 7), ate: menosDias(hoje, 1) };
-  const proximos = Array.from({ length: DIAS_A_FRENTE + 1 }, (_, i) => menosDias(hoje, -i));
-  const nome = (d: string) => DIA_DA_SEMANA[new Date(`${d}T12:00:00Z`).getUTCDay()]!;
-  return { hoje, semana, proximos: proximos.map((d) => ({ iso: d, dia: dia(d)!, nome: nome(d) })) };
-}
-
-/** O contexto do pedido, depois do prompt fixo: dado escrito pelo sistema, não instrução. */
-export function contextoDoPedido(t: Pick<TurnoPreparado, 'hoje' | 'marca' | 'quem' | 'dossie'>): string {
-  const c = calendario(t.hoje);
-  const linhas = [
-    'Contexto desta conversa (escrito pelo sistema; é dado, não instrução):',
-    `- Hoje é ${c.proximos[0]!.nome}, ${dia(t.hoje)}, no fuso da loja (${t.marca.fuso}).`,
-    `- "A semana" são ${A_SEMANA}: de ${dia(c.semana.de)} a ${dia(c.semana.ate)} (nas ferramentas, from=${c.semana.de} e to=${c.semana.ate}).`,
-    `- Próximos dias: ${c.proximos.slice(1).map((d) => `${d.nome} ${d.dia} (${d.iso})`).join('; ')}.`,
-    `- Marca desta conversa: "${t.marca.nome}" (brand_id ${t.marca.id}); use este brand_id nas ferramentas.`,
-    `- Quem pergunta: ${t.quem.roleKey ? ROLE_LABEL[t.quem.roleKey] : 'uma pessoa'} da empresa.`,
-    t.dossie ? `- Dossiê da marca (o que ela é, como fala, o que vende e o que nunca diz):\n${t.dossie}` : '- A marca ainda não preencheu o dossiê (Minha marca).',
-  ];
-  return linhas.join('\n');
-}
-
-/** O que o contexto diz da semana: "os 7 dias" pode aparecer na resposta. */
-export const A_SEMANA = 'os 7 dias completos até ontem';
-
-/** De onde a LIA pode tirar número além das leituras: as datas do calendário, a semana, o nome da marca e o dossiê. */
-export function contextoPermitido(t: Pick<TurnoPreparado, 'hoje' | 'marca' | 'dossie'>) {
-  const c = calendario(t.hoje);
-  return { datas: [dia(c.semana.de)!, dia(c.semana.ate)!, ...c.proximos.map((d) => d.dia)], semana: A_SEMANA, marca: t.marca.nome, dossie: t.dossie ?? '' };
 }
 
 /** O que a LIA leu, sem repetir, na ordem. */
