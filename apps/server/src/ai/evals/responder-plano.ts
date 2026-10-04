@@ -20,7 +20,8 @@ const RODADAS = 6;
 export async function responderPlano(modelos: ModelosIa, alvo: AlvoDoEval, caso: CasoDoPlano): Promise<RespostaDoEval> {
   const model = modelos.modelo(alvo.provider, alvo.model);
   if (!model) throw new Error(`eval: sem credencial para ${alvo.provider}`);
-  const providerOptions = modelos.opcoes(alvo.provider, alvo.effort ?? null);
+  if (!modelos.atendeARegiao(alvo.provider, alvo.model)) throw new Error(`eval: ${alvo.model} não aceita rodar só nos Estados Unidos (AI_INFERENCE_GEO=us)`);
+  const providerOptions = modelos.opcoes(alvo.provider, alvo.model, alvo.effort ?? null);
   const chamadas: Array<{ ferramenta: string; input: Record<string, unknown> }> = [];
   const tools: ToolSet = Object.fromEntries(
     LEITURAS.filter((d) => ESTRATEGISTA.ferramentas.includes(d.name)).map((d) => [

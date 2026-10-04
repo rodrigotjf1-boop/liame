@@ -23,7 +23,8 @@ const MARCA_DO_EVAL = '0199a300-0000-7000-8000-00000000b001';
 export async function responderConversa(modelos: ModelosIa, alvo: AlvoDoEval, caso: CasoDaConversa): Promise<RespostaDoEval> {
   const model = modelos.modelo(alvo.provider, alvo.model);
   if (!model) throw new Error(`eval: sem credencial para ${alvo.provider}`);
-  const providerOptions = modelos.opcoes(alvo.provider, alvo.effort ?? null);
+  if (!modelos.atendeARegiao(alvo.provider, alvo.model)) throw new Error(`eval: ${alvo.model} não aceita rodar só nos Estados Unidos (AI_INFERENCE_GEO=us)`);
+  const providerOptions = modelos.opcoes(alvo.provider, alvo.model, alvo.effort ?? null);
   const oferecidas = new Set(ferramentasDoPapel(caso.papel));
   const chamadas: Array<{ ferramenta: string; input: Record<string, unknown> }> = [];
   const tools: ToolSet = Object.fromEntries(
