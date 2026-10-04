@@ -309,6 +309,8 @@ describe('Resumo: a tela', () => {
     expect(html).toContain('href="/aprovacoes"');
     expect(html).toContain('Ver todos os avisos');
     expect(html).toContain('O que a sua equipe fez');
+    // O cartão da equipe leva à tela Sua equipe (P7).
+    expect(html).toContain('href="/equipe"');
     expect(html).toContain('Convidar uma pessoa');
     expect(html).not.toContain('Conectar o Regem');
   });
@@ -336,9 +338,9 @@ describe('menu: o Resumo é a página inicial do Lite, a Atenção a do Pro', ()
   const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
 
   it('no Lite, o Resumo e não a Atenção; no Pro, o contrário; sem ver as vendas, a Atenção fica no Lite também', () => {
-    expect(itensVisiveis(agencia, tudoPode, 'lite').map((i) => i.href)).toEqual(['/resumo', '/aprovacoes', '/resultados', '/marca', '/contas', '/pessoas']);
-    expect(itensVisiveis(agencia, tudoPode, 'pro').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/resultados', '/marca', '/contas', '/pessoas']);
-    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver', 'lite').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, tudoPode, 'lite').map((i) => i.href)).toEqual(['/resumo', '/aprovacoes', '/resultados', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, tudoPode, 'pro').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/resultados', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver', 'lite').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/equipe', '/marca', '/contas', '/pessoas']);
     expect(agencia.itens[0]).toMatchObject({ href: '/resumo', rotulo: 'Resumo', icone: 'home', permissao: 'vendas.ver', contador: 'resumo', soNo: 'lite' });
   });
 
