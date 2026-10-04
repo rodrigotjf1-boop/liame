@@ -6,8 +6,8 @@ import type { ResourceState } from './tools.js';
 
 // Connectors (arquitetura §6): um por provedor, com a mesma interface. Na A1 só existia o sandbox
 // (no próprio banco). O primeiro de verdade é o do Regem (A2.5, F6 parte 2): criar cupom de campanha.
-// O da Meta chegou na A4 (X1): situação e verba diária de campanha, conjunto e anúncio; nenhuma ferramenta
-// o usa antes da X2. O do Google chega na A5. Todos passam pelo mesmo Action Service.
+// O da Meta chegou na A4 (X1): situação e verba diária de campanha, conjunto e anúncio; as ferramentas de
+// anúncio o usam desde a X2. O do Google chega na A5. Todos passam pelo mesmo Action Service.
 
 export interface ResourceRef {
   tenantId: string;
@@ -34,6 +34,11 @@ export interface Connector {
   readonly provider: string;
   /** Flag de escrita do provedor (ADR-012); nula = sem flag (sandbox). */
   readonly writeFlag: string | null;
+  /**
+   * O provedor gasta dinheiro de mídia de verdade (A4, D-A4-6): aumentar verba ou voltar a gastar nele só com os
+   * limites que a empresa define (o teto por ação e o envelope do mês). Sem eles, o pedido é negado.
+   */
+  readonly requiresSpendLimits: boolean;
   read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null>;
   /**
    * Aplica o estado desejado se a versão ainda for a esperada (concorrência otimista). O que é passageiro (limite de
@@ -45,6 +50,7 @@ export interface Connector {
 export class SandboxConnector implements Connector {
   readonly provider = 'sandbox';
   readonly writeFlag = null;
+  readonly requiresSpendLimits = false;
 
   async read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null> {
     const r = await tx.execute<{ state: ResourceState; version: number }>(sql`

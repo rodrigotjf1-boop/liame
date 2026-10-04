@@ -56,6 +56,8 @@ export type PedidoConector = {
   apiVersion: string;
   /** Custo em fichas (leitura = 1, como na Meta). */
   custo?: number;
+  /** Tempo limite só desta chamada (a que tem uma pessoa esperando a resposta); sem ele, vale o do cliente. */
+  tempoLimiteMs?: number;
 };
 
 export type RespostaConector<T> = { status: number; corpo: T; cabecalhos: Headers; uso: UsoDeCota | null };
@@ -108,7 +110,7 @@ export class ClienteConector {
           headers: { accept: 'application/json', ...(p.corpo === undefined ? {} : { 'content-type': 'application/json' }), ...p.cabecalhos },
           body: p.corpo === undefined ? undefined : JSON.stringify(p.corpo),
           redirect: 'error',
-          signal: AbortSignal.timeout(this.cfg.tempoLimiteMs),
+          signal: AbortSignal.timeout(p.tempoLimiteMs ?? this.cfg.tempoLimiteMs),
         });
       } catch (err) {
         ultimoErro = new ErroConector('transitorio', p.provider, `sem resposta: ${err instanceof Error ? err.name : 'erro'}`);

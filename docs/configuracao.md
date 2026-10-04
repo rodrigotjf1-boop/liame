@@ -127,7 +127,7 @@ node --env-file=.env.nuvem apps/server/dist/scripts/ligar-flag.js --url-env NUVE
 
 Para desligar, `--desligar` no lugar de `--ligar` (a regra da empresa é apagada e ela volta ao padrão da flag). Vale em até 15 segundos, na API e no worker. Para `regem_write` valer numa loja, a loja também precisa ter liberado "Criar cupom de campanha" na autorização do Regem.
 
-**`meta_write` (A4):** o conector de escrita da Meta existe desde a X1 (04/10/2026), mas nenhuma ferramenta o usa antes da X2: ligar a flag antes disso não muda nada. Para valer numa conta, a autorização da Meta precisa incluir a permissão de gerenciar anúncios (`ads_management`) na configuração do login do app, e a conta precisa ser conectada de novo depois disso; sem ela, a validação da Meta recusa a mudança e o pedido falha com o motivo, sem escrever nada.
+**`meta_write` (A4):** com a flag ligada para a empresa, as ferramentas de anúncio (X2: verba diária, pausar e retomar) passam a aceitar pedidos na Meta; cada pedido espera a aprovação de uma pessoa com o código do app, e aumentar ou retomar pedem o teto por ação e o envelope do mês da empresa. Com ela desligada, o pedido é recusado antes de qualquer leitura na Meta. Para valer numa conta, a autorização da Meta precisa incluir a permissão de gerenciar anúncios (`ads_management`) na configuração do login do app, e a conta precisa ser conectada de novo depois disso; sem ela, a validação da Meta recusa a mudança e o pedido falha com o motivo, sem escrever nada.
 
 ## IA (A3, ADR-006)
 

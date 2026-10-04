@@ -1,5 +1,6 @@
 import type { BudgetImpact, RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
+import { emMenorUnidade } from '../connectors/meta/verba.js';
 
 // Registro de ferramentas (arquitetura §6, ADR-007): cada ferramenta declara risco, impacto financeiro,
 // estratégia de compensação e o formato dos parâmetros. Ferramenta nova só entra com isso e com testes.
@@ -30,6 +31,12 @@ export interface ToolDefinition {
   params: z.ZodType<Record<string, unknown>>;
   /** Do estado atual e dos parâmetros, o plano. Função pura: a mesma entrada dá o mesmo plano. */
   plan(before: ResourceState, params: Record<string, unknown>): ToolPlan;
+  /**
+   * A volta (A4, X2): a ferramenta e os parâmetros que desfazem a ação, a partir do estado de ANTES dela. A volta é um
+   * pedido novo, pelo mesmo trilho (política, aprovação, validação), e só é aceita se ninguém mexeu no objeto depois.
+   * Sem esta função, a ação não tem volta pelo Liame.
+   */
+  undo?(before: ResourceState): { tool: string; params: Record<string, unknown> };
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -72,6 +79,89 @@ const budgetOf = (s: ResourceState): number => {
   return v;
 };
 
+// ---- objetos de anúncio (A4, X2): o estado vem do conector da plataforma (`actions/meta-anuncios.ts`), com o tipo do
+// objeto (`campanha`, `conjunto` ou `anuncio`) e a situação (`ativo`, `pausado`, `arquivado`…). O estado do sandbox não
+// tem tipo: para ele, as ferramentas seguem como eram.
+
+type TipoDeAnuncio = 'campanha' | 'conjunto' | 'anuncio';
+const NOME: Record<TipoDeAnuncio, { o: string; um: string; a: 'a' | 'o' }> = {
+  campanha: { o: 'a campanha', um: 'campanha', a: 'a' },
+  conjunto: { o: 'o conjunto', um: 'conjunto de anúncios', a: 'o' },
+  anuncio: { o: 'o anúncio', um: 'anúncio', a: 'o' },
+};
+const tipoDe = (s: ResourceState): TipoDeAnuncio | null => (s.tipo === 'campanha' || s.tipo === 'conjunto' || s.tipo === 'anuncio' ? s.tipo : null);
+
+/** A ferramenta vale para um tipo de objeto: pedir com outro é engano de quem pede. */
+function exigirTipo(before: ResourceState, aceitos: TipoDeAnuncio[]): TipoDeAnuncio | null {
+  const tipo = tipoDe(before);
+  if (tipo && !aceitos.includes(tipo)) {
+    throw new PlanoRecusado(`Esta ferramenta é para ${aceitos.map((t) => NOME[t].um).join(' ou ')}; o pedido aponta para ${NOME[tipo].um}.`);
+  }
+  return tipo;
+}
+
+/** O objeto de anúncio que foi arquivado ou removido na plataforma não muda mais. */
+function exigirVivo(before: ResourceState, tipo: TipoDeAnuncio): void {
+  const { o, a } = NOME[tipo];
+  if (before.status !== 'ativo' && before.status !== 'pausado') throw new PlanoRecusado(`${maiuscula(o)} foi arquivad${a} ou removid${a} na plataforma: não dá para mudar.`);
+}
+const maiuscula = (s: string) => s.charAt(0).toLocaleUpperCase('pt-BR') + s.slice(1);
+
+/** A verba diária do objeto, quando ela mora nele (em micros); nula em anúncio e em quem tem a verba em outro nível. */
+const verbaDiaria = (s: ResourceState): number | null => (typeof s.daily_budget_micros === 'number' && s.daily_budget_micros > 0 ? s.daily_budget_micros : null);
+
+/** Pausar: o objeto ativo passa a pausado. Reduz gasto: nada a reservar. */
+function planoDePausa(before: ResourceState, alvo: TipoDeAnuncio): ToolPlan {
+  const tipo = exigirTipo(before, [alvo]);
+  if (tipo) {
+    exigirVivo(before, tipo);
+    if (before.status === 'pausado') throw new PlanoRecusado(`${maiuscula(NOME[tipo].o)} já está em pausa.`);
+  }
+  return { action: `${alvo}.pausar`, budgetImpact: 'decrease', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: { ...before, status: 'pausado' } };
+}
+
+/** Retomar: o objeto pausado volta a ativo. Volta a gastar: reserva um dia da verba dele, quando a verba mora nele. */
+function planoDeRetomada(before: ResourceState, alvo: TipoDeAnuncio): ToolPlan {
+  const tipo = exigirTipo(before, [alvo]);
+  if (!tipo) throw new PlanoRecusado('Retomar vale para campanha, conjunto e anúncio de uma plataforma conectada.');
+  exigirVivo(before, tipo);
+  if (before.status !== 'pausado') throw new PlanoRecusado(`Só dá para retomar o que está em pausa, e ${NOME[tipo].o} está ativ${NOME[tipo].a}.`);
+  const verba = verbaDiaria(before);
+  return { action: `${alvo}.retomar`, budgetImpact: 'new_spend', valueMicros: verba, currentValueMicros: null, reserveMicros: verba ?? 0, desiredState: { ...before, status: 'ativo' } };
+}
+
+const pausa = (alvo: TipoDeAnuncio, providers: readonly string[], version = 1): ToolDefinition => ({
+  name: `${alvo}_pausar`,
+  version,
+  owner: 'midia',
+  description: alvo === 'anuncio' ? 'Pausa um anúncio (reversível).' : alvo === 'conjunto' ? 'Pausa um conjunto de anúncios; os anúncios dele param de rodar (reversível).' : 'Pausa uma campanha; os conjuntos e anúncios dela param de rodar (reversível).',
+  risk: 'R1',
+  providers,
+  compensation: 'reativar_se_inalterado',
+  params: NoParams,
+  plan: (before) => planoDePausa(before, alvo),
+  undo: () => ({ tool: `${alvo}_retomar`, params: {} }),
+});
+
+const retomada = (alvo: TipoDeAnuncio): ToolDefinition => ({
+  name: `${alvo}_retomar`,
+  version: 1,
+  owner: 'midia',
+  description:
+    alvo === 'anuncio'
+      ? 'Retoma um anúncio em pausa: ele volta a rodar e a gastar.'
+      : alvo === 'conjunto'
+        ? 'Retoma um conjunto de anúncios em pausa: os anúncios ativos dele voltam a rodar e a gastar.'
+        : 'Retoma uma campanha em pausa: os conjuntos e anúncios ativos dela voltam a rodar e a gastar.',
+  // Volta a gastar: exige a aprovação de uma pessoa, como ativar o que nasceu pausado (D-A4-3).
+  risk: 'R2',
+  providers: ['meta_ads'],
+  compensation: 'pausar_se_inalterado',
+  params: NoParams,
+  plan: (before) => planoDeRetomada(before, alvo),
+  undo: () => ({ tool: `${alvo}_pausar`, params: {} }),
+});
+
 export const TOOLS: Record<string, ToolDefinition> = {
   orcamento_ajustar: {
     name: 'orcamento_ajustar',
@@ -79,11 +169,20 @@ export const TOOLS: Record<string, ToolDefinition> = {
     owner: 'midia',
     description: 'Muda o orçamento diário de uma campanha ou conjunto.',
     risk: 'R3',
-    providers: ['sandbox'],
+    providers: ['sandbox', 'meta_ads'],
     compensation: 'restaurar_orcamento_anterior_se_inalterado',
     params: BudgetParams,
     plan(before, params) {
       const { daily_budget_micros: value } = BudgetParams.parse(params);
+      // Na plataforma de anúncio, a verba diária mora na campanha (orçamento de campanha) ou no conjunto, nunca no anúncio.
+      const tipo = exigirTipo(before, ['campanha', 'conjunto']);
+      if (tipo) {
+        exigirVivo(before, tipo);
+        const verba = verbaDiaria(before);
+        if (verba === null) throw new PlanoRecusado(`${maiuscula(NOME[tipo].o)} não tem verba diária própria: a verba fica em outro nível, ou é de período.`);
+        if (value === verba) throw new PlanoRecusado('A verba pedida é igual à de agora.');
+        if (emMenorUnidade(value, typeof before.moeda === 'string' ? before.moeda : null) === null) throw new PlanoRecusado('A verba diária não pode ter fração de centavo.');
+      }
       const current = budgetOf(before);
       const increase = value > current;
       return {
@@ -96,6 +195,8 @@ export const TOOLS: Record<string, ToolDefinition> = {
         desiredState: { ...before, daily_budget_micros: value },
       };
     },
+    // A volta devolve a verba de antes (se ninguém mexeu depois).
+    undo: (before) => ({ tool: 'orcamento_ajustar', params: { daily_budget_micros: budgetOf(before) } }),
   },
   regem_cupom_criar: {
     name: 'regem_cupom_criar',
@@ -132,24 +233,12 @@ export const TOOLS: Record<string, ToolDefinition> = {
       };
     },
   },
-  anuncio_pausar: {
-    name: 'anuncio_pausar',
-    version: 1,
-    owner: 'midia',
-    description: 'Pausa um anúncio (reversível).',
-    risk: 'R1',
-    providers: ['sandbox'],
-    compensation: 'reativar_se_inalterado',
-    params: NoParams,
-    plan(before) {
-      return {
-        action: 'anuncio.pausar',
-        budgetImpact: 'decrease',
-        valueMicros: null,
-        currentValueMicros: null,
-        reserveMicros: 0,
-        desiredState: { ...before, status: 'pausado' },
-      };
-    },
-  },
+  // Pausar e retomar (A4, X2): uma ferramenta por tipo de objeto, para o pedido dizer o que vai parar. Pausar a campanha
+  // para os conjuntos e os anúncios dela; pausar o conjunto para os anúncios dele (base §2.1).
+  anuncio_pausar: pausa('anuncio', ['sandbox', 'meta_ads']),
+  conjunto_pausar: pausa('conjunto', ['meta_ads']),
+  campanha_pausar: pausa('campanha', ['meta_ads']),
+  anuncio_retomar: retomada('anuncio'),
+  conjunto_retomar: retomada('conjunto'),
+  campanha_retomar: retomada('campanha'),
 };

@@ -6,7 +6,7 @@ import { sql } from 'drizzle-orm';
 import { canonicalJson, sha256 } from '../audit/audit.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
-import { orcamentoEmMicros, SEM_DECIMAIS } from '../connectors/meta/conector-meta.js';
+import { emMenorUnidade, orcamentoEmMicros } from '../connectors/meta/verba.js';
 import type { ApplyOptions, ApplyResult, Connector, ReadResult, ResourceRef } from './connectors.js';
 import type { ResourceState } from './tools.js';
 
@@ -75,12 +75,8 @@ export function versaoDoEstado(e: Pick<EstadoDoObjeto, 'status' | 'daily_budget_
   return (Number.parseInt(hash.slice(0, 12), 16) % 2_147_483_646) + 1;
 }
 
-/** Micros → a menor unidade da moeda, como a Meta recebe a verba (centavos no real). Nulo se sobrar fração. */
-export function emMenorUnidade(micros: number, moeda: string | null): number | null {
-  if (!Number.isSafeInteger(micros) || micros <= 0) return null;
-  const divisor = moeda && SEM_DECIMAIS.has(moeda) ? 1_000_000 : 10_000;
-  return micros % divisor === 0 ? micros / divisor : null;
-}
+// A conta da verba mora em `connectors/meta/verba.ts`; sai por aqui também, para quem já importava.
+export { emMenorUnidade };
 
 export type Mudanca =
   /** O objeto já está como o pedido queria. */
@@ -130,7 +126,12 @@ export type DependenciasDaEscritaMeta = {
   versao: (capacidade: 'entity_state' | 'entity_update') => Promise<string>;
   /** Quanto esperar para ler de novo quando a leitura depois da escrita ainda não mostra a mudança. */
   esperaDaConferenciaMs?: number;
+  /** Quanto a leitura da hora do pedido espera a Meta (há uma pessoa esperando, com a transação da requisição aberta). */
+  tempoDaLeituraDoPedidoMs?: number;
 };
+
+/** A leitura da hora do pedido não espera a Meta mais que isto: passou, a pessoa recebe "tente de novo", e nada é pedido. */
+const TEMPO_DA_LEITURA_DO_PEDIDO_MS = 10_000;
 
 type Conta = { id: string; external_id: string; currency: string | null; credential_secret_id: string | null };
 type ObjetoNaMeta = { id?: string; name?: string; status?: string; effective_status?: string; daily_budget?: string; lifetime_budget?: string; account_id?: string };
@@ -177,6 +178,7 @@ const verba = (valor: string | undefined, moeda: string | null): number | null =
 export class MetaAnunciosConnector implements Connector {
   readonly provider = PROVIDER;
   readonly writeFlag = 'meta_write';
+  readonly requiresSpendLimits = true;
   private readonly logger = new Logger('escrita-meta');
   private deps: DependenciasDaEscritaMeta | null = null;
 
@@ -217,7 +219,7 @@ export class MetaAnunciosConnector implements Connector {
   }
 
   /** Lê o objeto na Meta. Nulo quando a Meta não o tem (ou não o mostra) nesta conta. */
-  private async lerNaMeta(deps: DependenciasDaEscritaMeta, conta: Conta, token: string, objeto: Objeto): Promise<Lido | null> {
+  private async lerNaMeta(deps: DependenciasDaEscritaMeta, conta: Conta, token: string, objeto: Objeto, tempoLimiteMs?: number): Promise<Lido | null> {
     const versao = await deps.versao('entity_state');
     let o: ObjetoNaMeta;
     let usoPct = 0;
@@ -230,6 +232,7 @@ export class MetaAnunciosConnector implements Connector {
         endpoint: 'entity_state',
         apiVersion: versao,
         cabecalhos: { authorization: `Bearer ${token}` },
+        ...(tempoLimiteMs ? { tempoLimiteMs } : {}),
       });
       o = r.corpo ?? {};
       usoPct = r.uso?.maiorPct ?? 0;
@@ -254,19 +257,20 @@ export class MetaAnunciosConnector implements Connector {
   }
 
   /** O objeto do pedido, lido na Meta com o token da empresa. Nulo quando a conta ou o objeto não é desta empresa, ou sumiu. */
-  private async alvo(tx: Tx, ref: ResourceRef, deps: DependenciasDaEscritaMeta): Promise<Alvo | null> {
+  private async alvo(tx: Tx, ref: ResourceRef, deps: DependenciasDaEscritaMeta, tempoLimiteMs?: number): Promise<Alvo | null> {
     const objeto = objetoDoRecurso(ref.resourceId);
     const conta = objeto ? await this.conta(tx, ref, objeto) : null;
     if (!objeto || !conta) return null;
     const token = await this.token(tx, conta, deps);
-    const lido = await this.lerNaMeta(deps, conta, token, objeto);
+    const lido = await this.lerNaMeta(deps, conta, token, objeto, tempoLimiteMs);
     return lido ? { lido, conta, token, objeto, deps } : null;
   }
 
+  /** A leitura da hora do pedido, com o tempo curto de quem tem uma pessoa esperando. A do executor é a de `apply`. */
   async read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null> {
     // Sem as dependências ligadas (erro de montagem do app), não há o que ler: melhor estourar do que dizer "não existe".
     if (!this.deps) throw new Error('escrita na Meta: dependências não ligadas');
-    const alvo = await this.alvo(tx, ref, this.deps);
+    const alvo = await this.alvo(tx, ref, this.deps, this.deps.tempoDaLeituraDoPedidoMs ?? TEMPO_DA_LEITURA_DO_PEDIDO_MS);
     return alvo ? { state: alvo.lido.estado, version: alvo.lido.versao } : null;
   }
 
@@ -320,7 +324,10 @@ export class MetaAnunciosConnector implements Connector {
     // Confere depois: lê de novo e compara com o pedido. A Meta já aceitou; se a leitura ainda não mostra, fica anotado.
     const depois = await this.conferir(deps, conta, token, objeto, desired);
     if (!depois.conferido) this.logger.warn(`ação em ${objeto.tipo} ${objeto.externalId}: a Meta aceitou, mas a leitura depois não confirmou a mudança`);
-    return { ok: true, state: { ...depois.estado, conferido: depois.conferido }, version: versaoDoEstado(depois.estado) };
+    // A versão em que a ação deixa o objeto: é com ela que a volta confere se alguém mexeu depois. Sem a confirmação da
+    // leitura, vale a do estado pedido (a Meta aceitou a escrita), e não a de uma leitura atrasada.
+    const aceito = { ...lido.estado, status: desired.status as SituacaoDoObjeto, daily_budget_micros: (desired.daily_budget_micros ?? null) as number | null };
+    return { ok: true, state: { ...depois.estado, conferido: depois.conferido }, version: versaoDoEstado(depois.conferido ? depois.estado : aceito) };
   }
 
   /** Lê depois da escrita, até duas vezes. Falha de leitura aqui não desfaz nada: a mudança foi aceita. */

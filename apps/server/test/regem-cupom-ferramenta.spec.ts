@@ -108,8 +108,10 @@ describe('política da plataforma para a criação de cupom', () => {
   const em = { at: new Date('2026-10-01T15:00:00Z'), timezone: 'America/Sao_Paulo' };
 
   it('`cupom.criar` pede aprovação mesmo sem regra da empresa; o resto continua em sombra', () => {
-    expect(PLATFORM_POLICY.version).toBe(2);
-    expect(evaluatePolicy([PLATFORM_POLICY], proposta('cupom.criar'), em)).toMatchObject({ allowed: true, mode: 'APPROVAL', versions: ['plataforma@2'] });
+    // A regra do cupom entrou na versão 2 e segue na 3 (A4, X2), sem depender de quem pede.
+    expect(PLATFORM_POLICY.version).toBe(3);
+    expect(evaluatePolicy([PLATFORM_POLICY], proposta('cupom.criar'), em)).toMatchObject({ allowed: true, mode: 'APPROVAL', versions: ['plataforma@3'] });
+    expect(evaluatePolicy([PLATFORM_POLICY], { ...proposta('cupom.criar'), actor: 'human' }, em)).toMatchObject({ mode: 'APPROVAL' });
     expect(evaluatePolicy([PLATFORM_POLICY], proposta('anuncio.pausar'), em)).toMatchObject({ mode: 'SHADOW' });
   });
 });

@@ -85,7 +85,7 @@ Tarefas iniciais: `strategic_plan`, `creative_generation`, `comment_classificati
 
 `SHADOW` · `SUGGEST` · `APPROVAL` · `LIMITED_AUTO` · `AUTO` · `ESCALATE`
 
-Configuráveis por **tenant, marca, conta, ferramenta, tipo de ação, faixa de valor e nível de risco**. A regra mais específica vence, e `ESCALATE` vence sempre. O padrão de uma ferramenta nova é `SHADOW`. Exemplo de política:
+Configuráveis por **tenant, marca, conta, ferramenta, tipo de ação, faixa de valor, nível de risco e quem pede** (`actor`: uma pessoa ou um funcionário de IA; desde a A4). A regra mais específica vence, e `ESCALATE` vence sempre. O padrão de uma ferramenta nova é `SHADOW`. O ator separa a quem a regra se aplica e não conta como especificidade: o modo de um funcionário numa conta (regra com `actor: agent`, a da promoção) não muda o que uma pessoa pede, e na Meta o pedido de uma pessoa espera aprovação pela regra da distribuição (`actor: human`). Exemplo de política:
 
 ```yaml
 autonomia:

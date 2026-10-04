@@ -4517,6 +4517,11 @@
                                         "type": "string",
                                         "pattern": "^[a-z_]+\\.([a-z_]+|\\*)$"
                                       },
+                                      "provider": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
                                       "max_micros": {
                                         "type": "integer",
                                         "minimum": 0,
@@ -4541,6 +4546,11 @@
                                       "action": {
                                         "type": "string",
                                         "pattern": "^[a-z_]+\\.([a-z_]+|\\*)$"
+                                      },
+                                      "provider": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
                                       },
                                       "max_percent": {
                                         "type": "number",
@@ -4737,6 +4747,13 @@
                                         "maxLength": 60,
                                         "pattern": "^[a-z0-9_]+$"
                                       },
+                                      "per": {
+                                        "type": "string",
+                                        "enum": [
+                                          "account",
+                                          "resource"
+                                        ]
+                                      },
                                       "max": {
                                         "type": "integer",
                                         "minimum": 1,
@@ -4772,6 +4789,21 @@
                                         "type": "string",
                                         "maxLength": 60,
                                         "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "provider": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "actor": {
+                                        "type": "string",
+                                        "enum": [
+                                          "human",
+                                          "agent",
+                                          "integration",
+                                          "system",
+                                          "partner"
+                                        ]
                                       },
                                       "account": {
                                         "type": "string",
@@ -4882,6 +4914,11 @@
                                           "type": "string",
                                           "pattern": "^[a-z_]+\\.([a-z_]+|\\*)$"
                                         },
+                                        "provider": {
+                                          "type": "string",
+                                          "maxLength": 60,
+                                          "pattern": "^[a-z0-9_]+$"
+                                        },
                                         "max_micros": {
                                           "type": "integer",
                                           "minimum": 0,
@@ -4906,6 +4943,11 @@
                                         "action": {
                                           "type": "string",
                                           "pattern": "^[a-z_]+\\.([a-z_]+|\\*)$"
+                                        },
+                                        "provider": {
+                                          "type": "string",
+                                          "maxLength": 60,
+                                          "pattern": "^[a-z0-9_]+$"
                                         },
                                         "max_percent": {
                                           "type": "number",
@@ -5102,6 +5144,13 @@
                                           "maxLength": 60,
                                           "pattern": "^[a-z0-9_]+$"
                                         },
+                                        "per": {
+                                          "type": "string",
+                                          "enum": [
+                                            "account",
+                                            "resource"
+                                          ]
+                                        },
                                         "max": {
                                           "type": "integer",
                                           "minimum": 1,
@@ -5137,6 +5186,21 @@
                                           "type": "string",
                                           "maxLength": 60,
                                           "pattern": "^[a-z0-9_]+$"
+                                        },
+                                        "provider": {
+                                          "type": "string",
+                                          "maxLength": 60,
+                                          "pattern": "^[a-z0-9_]+$"
+                                        },
+                                        "actor": {
+                                          "type": "string",
+                                          "enum": [
+                                            "human",
+                                            "agent",
+                                            "integration",
+                                            "system",
+                                            "partner"
+                                          ]
                                         },
                                         "account": {
                                           "type": "string",
@@ -5266,6 +5330,11 @@
                                   "type": "string",
                                   "pattern": "^[a-z_]+\\.([a-z_]+|\\*)$"
                                 },
+                                "provider": {
+                                  "type": "string",
+                                  "maxLength": 60,
+                                  "pattern": "^[a-z0-9_]+$"
+                                },
                                 "max_micros": {
                                   "type": "integer",
                                   "minimum": 0,
@@ -5290,6 +5359,11 @@
                                 "action": {
                                   "type": "string",
                                   "pattern": "^[a-z_]+\\.([a-z_]+|\\*)$"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "maxLength": 60,
+                                  "pattern": "^[a-z0-9_]+$"
                                 },
                                 "max_percent": {
                                   "type": "number",
@@ -5485,6 +5559,13 @@
                                   "maxLength": 60,
                                   "pattern": "^[a-z0-9_]+$"
                                 },
+                                "per": {
+                                  "type": "string",
+                                  "enum": [
+                                    "account",
+                                    "resource"
+                                  ]
+                                },
                                 "max": {
                                   "type": "integer",
                                   "minimum": 1,
@@ -5520,6 +5601,21 @@
                                   "type": "string",
                                   "maxLength": 60,
                                   "pattern": "^[a-z0-9_]+$"
+                                },
+                                "provider": {
+                                  "type": "string",
+                                  "maxLength": 60,
+                                  "pattern": "^[a-z0-9_]+$"
+                                },
+                                "actor": {
+                                  "type": "string",
+                                  "enum": [
+                                    "human",
+                                    "agent",
+                                    "integration",
+                                    "system",
+                                    "partner"
+                                  ]
                                 },
                                 "account": {
                                   "type": "string",
@@ -5635,6 +5731,11 @@
                                     "type": "string",
                                     "pattern": "^[a-z_]+\\.([a-z_]+|\\*)$"
                                   },
+                                  "provider": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
                                   "max_micros": {
                                     "type": "integer",
                                     "minimum": 0,
@@ -5659,6 +5760,11 @@
                                   "action": {
                                     "type": "string",
                                     "pattern": "^[a-z_]+\\.([a-z_]+|\\*)$"
+                                  },
+                                  "provider": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
                                   },
                                   "max_percent": {
                                     "type": "number",
@@ -5855,6 +5961,13 @@
                                     "maxLength": 60,
                                     "pattern": "^[a-z0-9_]+$"
                                   },
+                                  "per": {
+                                    "type": "string",
+                                    "enum": [
+                                      "account",
+                                      "resource"
+                                    ]
+                                  },
                                   "max": {
                                     "type": "integer",
                                     "minimum": 1,
@@ -5890,6 +6003,21 @@
                                     "type": "string",
                                     "maxLength": 60,
                                     "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "provider": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "actor": {
+                                    "type": "string",
+                                    "enum": [
+                                      "human",
+                                      "agent",
+                                      "integration",
+                                      "system",
+                                      "partner"
+                                    ]
                                   },
                                   "account": {
                                     "type": "string",
@@ -6200,6 +6328,19 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  "actor": {
+                    "type": "string",
+                    "enum": [
+                      "human",
+                      "agent",
+                      "integration",
+                      "system",
+                      "partner"
+                    ]
+                  },
+                  "undo": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -6301,7 +6442,7 @@
     },
     "/v1/actions": {
       "post": {
-        "description": "Ferramenta + alvo + parâmetros. O servidor lê o estado no provedor, aplica trava, política e orçamento (reserva) e devolve o plano com o hash que a aprovação precisa. Risco e impacto vêm do registro de ferramentas.",
+        "description": "Ferramenta + alvo + parâmetros. O servidor lê o estado no provedor, aplica trava, política e orçamento (reserva) e devolve o plano com o hash que a aprovação precisa. Risco e impacto vêm do registro de ferramentas. Numa plataforma de anúncio, o estado é lido nela na hora do pedido: se ela não responde, o pedido não é criado (502 `plataforma-indisponivel`).",
         "operationId": "ActionsController_create",
         "parameters": [],
         "requestBody": {
@@ -6478,6 +6619,45 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "undoes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "undone_by": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "sombra",
+                            "aguardando_aprovacao",
+                            "aprovada",
+                            "executando",
+                            "executada",
+                            "falhou",
+                            "cancelada",
+                            "expirada"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": false
                     },
                     "policy": {
                       "type": "object",
@@ -6726,6 +6906,8 @@
                     "status_reason",
                     "attempts",
                     "next_attempt_at",
+                    "undoes",
+                    "undone_by",
                     "policy",
                     "approvals",
                     "workflow",
@@ -6870,6 +7052,70 @@
             }
           },
           "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "502": {
             "description": "",
             "content": {
               "application/json": {
@@ -7094,6 +7340,45 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "undoes": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "undone_by": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "sombra",
+                                  "aguardando_aprovacao",
+                                  "aprovada",
+                                  "executando",
+                                  "executada",
+                                  "falhou",
+                                  "cancelada",
+                                  "expirada"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "status"
+                            ],
+                            "additionalProperties": false
                           },
                           "policy": {
                             "type": "object",
@@ -7342,6 +7627,8 @@
                           "status_reason",
                           "attempts",
                           "next_attempt_at",
+                          "undoes",
+                          "undone_by",
                           "policy",
                           "approvals",
                           "workflow",
@@ -7514,6 +7801,45 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "undoes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "undone_by": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "sombra",
+                            "aguardando_aprovacao",
+                            "aprovada",
+                            "executando",
+                            "executada",
+                            "falhou",
+                            "cancelada",
+                            "expirada"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": false
                     },
                     "policy": {
                       "type": "object",
@@ -7762,6 +8088,8 @@
                     "status_reason",
                     "attempts",
                     "next_attempt_at",
+                    "undoes",
+                    "undone_by",
                     "policy",
                     "approvals",
                     "workflow",
@@ -8010,6 +8338,45 @@
                         "null"
                       ]
                     },
+                    "undoes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "undone_by": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "sombra",
+                            "aguardando_aprovacao",
+                            "aprovada",
+                            "executando",
+                            "executada",
+                            "falhou",
+                            "cancelada",
+                            "expirada"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
                     "policy": {
                       "type": "object",
                       "properties": {
@@ -8257,6 +8624,8 @@
                     "status_reason",
                     "attempts",
                     "next_attempt_at",
+                    "undoes",
+                    "undone_by",
                     "policy",
                     "approvals",
                     "workflow",
@@ -8512,6 +8881,45 @@
                         "null"
                       ]
                     },
+                    "undoes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "undone_by": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "sombra",
+                            "aguardando_aprovacao",
+                            "aprovada",
+                            "executando",
+                            "executada",
+                            "falhou",
+                            "cancelada",
+                            "expirada"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
                     "policy": {
                       "type": "object",
                       "properties": {
@@ -8759,6 +9167,8 @@
                     "status_reason",
                     "attempts",
                     "next_attempt_at",
+                    "undoes",
+                    "undone_by",
                     "policy",
                     "approvals",
                     "workflow",
@@ -9079,6 +9489,45 @@
                         "null"
                       ]
                     },
+                    "undoes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "undone_by": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "sombra",
+                            "aguardando_aprovacao",
+                            "aprovada",
+                            "executando",
+                            "executada",
+                            "falhou",
+                            "cancelada",
+                            "expirada"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
                     "policy": {
                       "type": "object",
                       "properties": {
@@ -9326,6 +9775,8 @@
                     "status_reason",
                     "attempts",
                     "next_attempt_at",
+                    "undoes",
+                    "undone_by",
                     "policy",
                     "approvals",
                     "workflow",
@@ -9684,6 +10135,45 @@
                         "null"
                       ]
                     },
+                    "undoes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "undone_by": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "sombra",
+                            "aguardando_aprovacao",
+                            "aprovada",
+                            "executando",
+                            "executada",
+                            "falhou",
+                            "cancelada",
+                            "expirada"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
                     "policy": {
                       "type": "object",
                       "properties": {
@@ -9931,6 +10421,8 @@
                     "status_reason",
                     "attempts",
                     "next_attempt_at",
+                    "undoes",
+                    "undone_by",
                     "policy",
                     "approvals",
                     "workflow",
@@ -10017,6 +10509,716 @@
           }
         ],
         "summary": "Cancelar",
+        "tags": [
+          "actions"
+        ]
+      }
+    },
+    "/v1/actions/{id}/undo": {
+      "post": {
+        "description": "Pede a volta de uma ação executada: um pedido novo, com a ferramenta inversa (a verba de antes, retomar o que foi pausado, pausar o que foi retomado), pelo mesmo trilho do pedido comum: trava, política, reserva, aprovação com o código do app, validação e escrita. Só é aceito se o objeto está como a ação o deixou: se alguém mexeu depois, nada é desfeito (409 `estado-mudou`). O pedido novo traz `undoes`; a ação original passa a trazer `undone_by`.",
+        "operationId": "ActionsController_undo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "tool": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "brand_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "account_id": {
+                      "type": "string"
+                    },
+                    "resource_id": {
+                      "type": "string"
+                    },
+                    "params": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "risk_level": {
+                      "type": "string",
+                      "enum": [
+                        "R0",
+                        "R1",
+                        "R2",
+                        "R3"
+                      ]
+                    },
+                    "budget_impact": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "increase",
+                        "decrease",
+                        "new_spend"
+                      ]
+                    },
+                    "value_micros": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "current_value_micros": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "reserved_micros": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "plan_hash": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "SHADOW",
+                        "SUGGEST",
+                        "APPROVAL",
+                        "LIMITED_AUTO",
+                        "AUTO",
+                        "ESCALATE"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "sombra",
+                        "aguardando_aprovacao",
+                        "aprovada",
+                        "executando",
+                        "executada",
+                        "falhou",
+                        "cancelada",
+                        "expirada"
+                      ]
+                    },
+                    "status_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "next_attempt_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "undoes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "undone_by": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "sombra",
+                            "aguardando_aprovacao",
+                            "aprovada",
+                            "executando",
+                            "executada",
+                            "falhou",
+                            "cancelada",
+                            "expirada"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "allowed": {
+                          "type": "boolean"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "SHADOW",
+                            "SUGGEST",
+                            "APPROVAL",
+                            "LIMITED_AUTO",
+                            "AUTO",
+                            "ESCALATE"
+                          ]
+                        },
+                        "violations": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "platform",
+                                  "tenant",
+                                  "brand"
+                                ]
+                              },
+                              "rule_index": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "rule_index",
+                              "type",
+                              "message"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "versions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "allowed",
+                        "mode",
+                        "violations",
+                        "versions"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "approvals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "approved_by": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "approver_name": {
+                            "type": "string"
+                          },
+                          "approver_role": {
+                            "type": "string"
+                          },
+                          "sufficient": {
+                            "type": "boolean"
+                          },
+                          "current_plan": {
+                            "type": "boolean"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "approved_by",
+                          "approver_name",
+                          "approver_role",
+                          "sufficient",
+                          "current_plan",
+                          "created_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "workflow": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "em_andamento",
+                            "aguardando",
+                            "concluido",
+                            "falhou",
+                            "cancelado"
+                          ]
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "aguardando",
+                                  "concluido",
+                                  "falhou",
+                                  "pulado"
+                                ]
+                              },
+                              "attempts": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "finished_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "status",
+                              "attempts",
+                              "finished_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "steps"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "expires_at": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "requested_by": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "account_name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "campaign": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "provider",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "tool",
+                    "action",
+                    "brand_id",
+                    "provider",
+                    "account_id",
+                    "resource_id",
+                    "params",
+                    "risk_level",
+                    "budget_impact",
+                    "value_micros",
+                    "current_value_micros",
+                    "reserved_micros",
+                    "plan_hash",
+                    "mode",
+                    "status",
+                    "status_reason",
+                    "attempts",
+                    "next_attempt_at",
+                    "undoes",
+                    "undone_by",
+                    "policy",
+                    "approvals",
+                    "workflow",
+                    "expires_at",
+                    "created_at",
+                    "updated_at",
+                    "requested_by",
+                    "account_name",
+                    "campaign"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Desfazer (pedir a volta)",
         "tags": [
           "actions"
         ]

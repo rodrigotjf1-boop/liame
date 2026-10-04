@@ -1,6 +1,6 @@
 import { ActionProposal, type PolicyDocument } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { changePercent, evaluatePolicy, type LoadedPolicy, localClock, PLATFORM_POLICY } from '../src/policy/engine.js';
+import { changePercent, evaluatePolicy, type LoadedPolicy, localClock, PLATFORM_POLICY, rateLimitsFor } from '../src/policy/engine.js';
 
 const TZ = 'America/Sao_Paulo';
 // Sábado, 26/09/2026, 15:00 em São Paulo (18:00 UTC).
@@ -24,7 +24,7 @@ const run = (policies: LoadedPolicy[], p = proposal(), at = AT) => evaluatePolic
 
 describe('A1-11: motor de políticas determinístico', () => {
   it('sem política da empresa: permitido, em SHADOW (ferramenta nova começa em sombra), com a versão da plataforma', () => {
-    expect(run([])).toEqual({ allowed: true, mode: 'SHADOW', violations: [], versions: ['plataforma@2'] });
+    expect(run([])).toEqual({ allowed: true, mode: 'SHADOW', violations: [], versions: ['plataforma@3'] });
   });
 
   it('teto por ação', () => {
@@ -34,6 +34,10 @@ describe('A1-11: motor de políticas determinístico', () => {
     expect(d.violations).toEqual([{ source: 'tenant', rule_index: 0, type: 'max_value', message: expect.stringMatching(/R\$\s?110,00 passa do teto de R\$\s?100,00/) }]);
     expect(run([tenant(doc)], proposal({ value_micros: 100_000_000 })).allowed).toBe(true);
     expect(run([tenant(doc)], proposal({ action: 'anuncio.pausar', value_micros: null })).allowed).toBe(true);
+    // O teto vale para o que faz o gasto subir: baixar uma verba para um valor ainda acima dele é a direção segura.
+    const baixar = proposal({ action: 'orcamento.reduzir', budget_impact: 'decrease', value_micros: 160_000_000, current_value_micros: 200_000_000 });
+    expect(run([tenant(doc)], baixar).allowed).toBe(true);
+    expect(run([tenant(doc)], { ...baixar, action: 'orcamento.aumentar', budget_impact: 'increase', current_value_micros: 150_000_000 }).allowed).toBe(false);
   });
 
   it('variação máxima: aumento por padrão; redução só quando pedida', () => {
@@ -85,10 +89,95 @@ describe('A1-11: motor de políticas determinístico', () => {
     expect(run([tenant(doc)], proposal({ text: 'Pizza no forno a lenha' })).allowed).toBe(true);
   });
 
-  it('limite de frequência da plataforma na Meta (abaixo das 4 por hora da Meta)', () => {
-    expect(run([], proposal({ recent_count: 2 })).allowed).toBe(true);
-    expect(run([], proposal({ recent_count: 3 })).violations[0]).toMatchObject({ source: 'platform', type: 'rate_limit' });
-    expect(run([], proposal({ provider: 'google', recent_count: 10 })).allowed).toBe(true);
+  it('limite de frequência da plataforma na Meta: 3 mudanças de verba por hora por objeto (abaixo das 4 da Meta)', () => {
+    const naMeta = (over: Partial<ActionProposal> = {}) => proposal({ provider: 'meta_ads', ...over });
+    expect(run([], naMeta({ recent_count: 2 })).allowed).toBe(true);
+    expect(run([], naMeta({ recent_count: 3 })).violations).toEqual([
+      { source: 'platform', rule_index: 1, type: 'rate_limit', message: 'Limite de 3 execuções a cada 60 min atingido neste objeto.' },
+    ]);
+    // A regra é da Meta, com o nome que as contas conectadas usam (na versão 2 ela dizia `meta`, e nunca casaria).
+    expect(run([], proposal({ provider: 'google_ads', recent_count: 10 })).allowed).toBe(true);
+    expect(run([], proposal({ provider: 'meta', recent_count: 10 })).allowed).toBe(true);
+    // Só a verba entra na conta: pausar, não.
+    expect(run([], naMeta({ action: 'anuncio.pausar', value_micros: null, current_value_micros: null, recent_count: 10 })).allowed).toBe(true);
+  });
+
+  it('a contagem de cada regra de frequência vem de quem pede; sem ela, vale a da proposta', () => {
+    const daEmpresa: PolicyDocument = { rules: [{ type: 'rate_limit', action: 'orcamento.aumentar', max: 1, window_minutes: 1440 }] };
+    const politicas = [PLATFORM_POLICY, tenant(daEmpresa)];
+    const p = proposal({ provider: 'meta_ads' });
+    const regras = rateLimitsFor(politicas, p);
+    expect(regras.map((r) => [r.per ?? 'account', r.max])).toEqual([
+      ['resource', 3],
+      ['account', 1],
+    ]);
+    const avaliar = (contas: number[]) => evaluatePolicy(politicas, p, { at: AT, timezone: TZ, recent: new Map(regras.map((r, i) => [r, contas[i]!])) });
+    expect(avaliar([2, 0]).allowed).toBe(true);
+    expect(avaliar([3, 0]).violations.map((v) => [v.source, v.type])).toEqual([['platform', 'rate_limit']]);
+    expect(avaliar([0, 1]).violations).toEqual([{ source: 'tenant', rule_index: 0, type: 'rate_limit', message: 'Limite de 1 execução a cada 1440 min atingido.' }]);
+    // A regra de outra ação ou de outro provedor não entra na conta.
+    expect(rateLimitsFor(politicas, proposal({ provider: 'meta_ads', action: 'anuncio.pausar' }))).toEqual([]);
+    expect(rateLimitsFor(politicas, proposal({ provider: 'sandbox' }))).toHaveLength(1);
+  });
+
+  it('na Meta, a plataforma limita a variação da verba a 20% por pedido, para cima e para baixo; a volta fica fora', () => {
+    const naMeta = (valor: number, over: Partial<ActionProposal> = {}) => proposal({ provider: 'meta_ads', value_micros: valor, current_value_micros: 100_000_000, ...over });
+    expect(run([], naMeta(120_000_000)).allowed).toBe(true);
+    expect(run([], naMeta(80_000_000)).allowed).toBe(true);
+    expect(run([], naMeta(120_010_000)).violations).toEqual([{ source: 'platform', rule_index: 2, type: 'max_change_percent', message: 'A variação de 20,01% passa do máximo de 20%.' }]);
+    expect(run([], naMeta(79_990_000)).allowed).toBe(false);
+    // Fora da Meta a regra não vale (o sandbox segue só com a política da empresa).
+    expect(run([], proposal({ value_micros: 200_000_000 })).allowed).toBe(true);
+
+    // A volta de uma ação devolve o valor de antes: fica fora da variação máxima e do teto por ação.
+    const teto: PolicyDocument = { rules: [{ type: 'max_value', action: 'orcamento.*', max_micros: 90_000_000 }] };
+    const volta = naMeta(100_000_000, { current_value_micros: 80_000_000, undo: true });
+    expect(run([tenant(teto)], { ...volta, undo: false }).violations.map((v) => v.type)).toEqual(['max_change_percent', 'max_value']);
+    expect(run([tenant(teto)], volta).allowed).toBe(true);
+    // O limite de frequência continua valendo para ela.
+    expect(run([tenant(teto)], { ...volta, recent_count: 3 }).violations.map((v) => v.type)).toEqual(['rate_limit']);
+  });
+
+  it('teto com provedor: a regra só vale para as ações naquele provedor', () => {
+    const doc: PolicyDocument = { rules: [{ type: 'max_value', action: 'orcamento.*', provider: 'meta_ads', max_micros: 100_000_000 }] };
+    expect(run([tenant(doc)]).allowed).toBe(true);
+    expect(run([tenant(doc)], proposal({ provider: 'meta_ads' })).violations.map((v) => v.type)).toEqual(['max_value']);
+  });
+
+  it('quem pede: na Meta, o pedido de uma pessoa espera aprovação; o modo do funcionário de IA é outra regra', () => {
+    const pessoa = proposal({ provider: 'meta_ads', actor: 'human' });
+    const agente = proposal({ provider: 'meta_ads', actor: 'agent' });
+    expect(run([], pessoa).mode).toBe('APPROVAL');
+    expect(run([], agente).mode).toBe('SHADOW');
+    // Sem o ator na proposta, só casam as regras sem esse seletor; fora da Meta, a ferramenta nova segue em sombra.
+    expect(run([], proposal({ provider: 'meta_ads' })).mode).toBe('SHADOW');
+    expect(run([], proposal({ actor: 'human' })).mode).toBe('SHADOW');
+
+    // A regra do funcionário (a da promoção) não muda o que a pessoa pede; a volta dele para Sombra também não.
+    const promovida: PolicyDocument = { rules: [{ type: 'autonomy', action: 'orcamento.aumentar', actor: 'agent', account: 'act_1', mode: 'SUGGEST' }] };
+    expect(run([brand(promovida)], agente).mode).toBe('SUGGEST');
+    expect(run([brand(promovida)], pessoa).mode).toBe('APPROVAL');
+    const emSombra: PolicyDocument = { rules: [{ type: 'autonomy', action: 'orcamento.aumentar', actor: 'agent', account: 'act_1', mode: 'SHADOW' }] };
+    expect(run([brand(emSombra)], pessoa).mode).toBe('APPROVAL');
+
+    // A regra sem ator vale para os dois: a da empresa, tão específica quanto a da plataforma, vence para a pessoa também
+    // (em Sugerir, o pedido de uma pessoa continua esperando aprovação); a regra sem seletor nenhum perde; ESCALATE vence sempre.
+    const larga: PolicyDocument = { rules: [{ type: 'autonomy', action: 'orcamento.*', mode: 'SUGGEST' }] };
+    expect(run([tenant(larga)], pessoa).mode).toBe('SUGGEST');
+    expect(run([tenant(larga)], agente).mode).toBe('SUGGEST');
+    const geral: PolicyDocument = { rules: [{ type: 'autonomy', mode: 'SHADOW' }] };
+    expect(run([tenant(geral)], pessoa).mode).toBe('APPROVAL');
+    const escala: PolicyDocument = { rules: [{ type: 'autonomy', action: 'orcamento.*', mode: 'ESCALATE' }] };
+    expect(run([tenant(escala)], pessoa).mode).toBe('ESCALATE');
+    expect(run([tenant(escala)], agente).mode).toBe('ESCALATE');
+    // O ator separa a quem a regra se aplica, mas não desempata: a regra com mais um seletor continua vencendo a da promoção.
+    const comRisco: PolicyDocument = {
+      rules: [
+        { type: 'autonomy', action: 'orcamento.aumentar', account: 'act_1', risk: 'R3', mode: 'SHADOW' },
+        { type: 'autonomy', action: 'orcamento.aumentar', actor: 'agent', account: 'act_1', mode: 'SUGGEST' },
+      ],
+    };
+    expect(run([brand(comRisco)], agente).mode).toBe('SHADOW');
   });
 
   it('autonomia: a regra mais específica vence, a da marca vence a da empresa, ESCALATE vence sempre', () => {
@@ -105,7 +194,7 @@ describe('A1-11: motor de políticas determinístico', () => {
     expect(run([tenant(doc)], proposal({ value_micros: 400_000_000, current_value_micros: 380_000_000 })).mode).toBe('APPROVAL');
     expect(run([tenant(doc)], proposal({ action: 'anuncio.pausar', value_micros: null })).mode).toBe('AUTO');
     const daMarca: PolicyDocument = { rules: [{ type: 'autonomy', action: 'orcamento.aumentar', up_to_percent: 10, mode: 'APPROVAL' }] };
-    expect(run([tenant(doc), brand(daMarca)], proposal({ value_micros: 110_000_000 }))).toMatchObject({ mode: 'APPROVAL', versions: ['plataforma@2', 'empresa@1', 'marca@1'] });
+    expect(run([tenant(doc), brand(daMarca)], proposal({ value_micros: 110_000_000 }))).toMatchObject({ mode: 'APPROVAL', versions: ['plataforma@3', 'empresa@1', 'marca@1'] });
     // A plataforma manda escalar o apagar, mesmo que a empresa diga AUTO.
     const auto: PolicyDocument = { rules: [{ type: 'autonomy', action: 'campanha.apagar', mode: 'AUTO' }] };
     expect(run([tenant(auto)], proposal({ action: 'campanha.apagar', value_micros: null })).mode).toBe('ESCALATE');

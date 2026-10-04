@@ -8,9 +8,29 @@
       "version": 1,
       "hash": "975cb9031feecf6eba62d4ffcbed455f0aaa4be4268d58174dcb2eaf731da31b"
     },
+    "anuncio_retomar": {
+      "version": 1,
+      "hash": "cc086fe9a77943b87c69c3f6b835876613d835059ada82adf99e07c11f3537bf"
+    },
     "atencao_avisos": {
       "version": 1,
       "hash": "cfb0dbd65ada075855af3bca5779b118f008fd414621ab8a52eeb7dfc4c0b0d1"
+    },
+    "campanha_pausar": {
+      "version": 1,
+      "hash": "205d193e3500871f763fbf2e50cf5d643466ae2cd5b2ba2ac95adf3312456009"
+    },
+    "campanha_retomar": {
+      "version": 1,
+      "hash": "1525ff57fca98f55c7ff3826830b5f40107d2ef5fba383c8f9d6ce7dfeb17499"
+    },
+    "conjunto_pausar": {
+      "version": 1,
+      "hash": "c77666b2e511f41065a9753c9b4728dd6dcf9a9afb165ff8868fcf8b8cdab9e2"
+    },
+    "conjunto_retomar": {
+      "version": 1,
+      "hash": "17d99113f23ae8ea2c3ea5edb6d5535154db0f60c7abbaa555901513f55838b2"
     },
     "cupons_campanha": {
       "version": 1,

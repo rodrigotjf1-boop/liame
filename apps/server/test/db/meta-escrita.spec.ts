@@ -1,130 +1,63 @@
-import { randomInt, randomUUID } from 'node:crypto';
-import { createServer, type IncomingMessage, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BudgetService } from '../../src/actions/budget.service.js';
 import type { ReadResult } from '../../src/actions/connectors.js';
-import { type EstadoDoObjeto, metaAnunciosConnector, USO_PARA_ESPERAR_PCT } from '../../src/actions/meta-anuncios.js';
+import { type EstadoDoObjeto, USO_PARA_ESPERAR_PCT } from '../../src/actions/meta-anuncios.js';
 import { canonicalJson, sha256 } from '../../src/audit/audit.js';
-import { ClienteConector } from '../../src/connectors/cliente-http.js';
-import { versaoRegistrada } from '../../src/connectors/tipos.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js';
-import { VaultService } from '../../src/vault/vault.service.js';
 import { ActionExecutor, MAX_ADIAMENTOS } from '../../src/worker/action-executor.js';
-import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import { ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import {
+  type EmpresaComMeta,
+  empresaComMeta,
+  lerNaMetaDeMentira,
+  ligarConectorNaMetaDeMentira,
+  ligarEscritaNaMeta,
+  MetaDeMentira,
+  type ObjetoNaMeta,
+  objetoLido,
+  SEGREDO_DO_APP_DA_META,
+  type TipoDeObjeto,
+  TOKEN_DA_META,
+} from '../helpers/meta-de-mentira.js';
 import { hasDb, OWNER_URL } from './env.js';
 
-// A4 · X1: o conector de escrita da Meta contra uma Graph API local, que segue a referência conferida em 04/10/2026
-// (`POST /{id}` com `status` e `daily_budget` na menor unidade da moeda; `execution_options=["validate_only"]` não
-// muda nada; resposta `{"success": true}`; erros com `code`, `error_subcode` e `error_user_msg`; cabeçalho de uso).
-// Nenhuma ferramenta aceita `meta_ads` antes da X2: aqui o pedido aprovado entra direto no banco, e o caminho
-// provado é o do executor (flag, aprovação, validação, escrita, conferência e espera).
+// A4 · X1: o conector de escrita da Meta contra uma Graph API local (`helpers/meta-de-mentira.ts`), que segue a
+// referência conferida em 04/10/2026 (`POST /{id}` com `status` e `daily_budget` na menor unidade da moeda;
+// `execution_options=["validate_only"]` não muda nada; resposta `{"success": true}`; erros com `code`, `error_subcode`
+// e `error_user_msg`; cabeçalho de uso). Aqui o pedido aprovado entra direto no banco, e o caminho provado é o do
+// executor (flag, aprovação, validação, escrita, conferência e espera). O caminho pela API (pedido, política,
+// aprovação com o código do app e a volta) é o de `meta-ferramentas.spec.ts` (X2).
 
 const REAL = 1_000_000;
-const TOKEN = 'token-de-sistema-da-meta-para-o-teste';
-const SEGREDO_DO_APP = 'segredo-do-app-da-meta-de-teste';
 
-type Objeto = { id: string; name: string; status: string; effective_status: string; daily_budget?: string; lifetime_budget?: string; account_id: string };
-type Chamada = { metodo: string; id: string; params: Record<string, string>; validar: boolean };
-type Falha = { status: number; corpo: unknown; cabecalhos?: Record<string, string>; aplicaAntes?: boolean };
 type Acao = { status: string; status_reason: string | null; attempts: number; next_attempt_at: string | null; workflow: { status: string; steps: { name: string; status: string; attempts: number }[] } };
 
 describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () => {
   let api: TestApi;
   let database: Database;
   let executor: ActionExecutor;
-  let flags: FlagService;
   let budget: BudgetService;
-  let meta: Server;
-  let base = '';
-  let e: { cookie: string; userId: string; tenantId: string; brandId: string; conta: string; contaSemToken: string };
+  let e: EmpresaComMeta;
 
-  // ---- a Meta de mentira
-  // Uma conta de anúncios por execução do arquivo: o balde e o disjuntor do cliente ficam no banco, por conta.
-  const CONTA = String(randomInt(1_000_000_000, 9_999_999_999));
-  const OUTRA_CONTA = String(randomInt(1_000_000_000, 9_999_999_999));
-  const objetos = new Map<string, Objeto>();
-  const chamadas: Chamada[] = [];
-  /** O que a Meta responde às próximas escritas (na ordem), antes de voltar ao normal. */
-  let falhasDaEscrita: Falha[] = [];
-  /** O mesmo, para as próximas leituras. */
-  let falhasDaLeitura: Falha[] = [];
-  /** Cabeçalho de uso devolvido em toda resposta enquanto estiver definido. */
-  let uso: string | null = null;
-  /** O que apareceu de errado no pedido (token na URL, sem a prova do segredo do app). */
-  const defeitos: string[] = [];
-
-  const erro = (code: number, message: string, extra: Record<string, unknown> = {}) => ({ error: { message, type: 'OAuthException', code, fbtrace_id: 'AbCdEf', ...extra } });
-
-  function responder(req: IncomingMessage): { status: number; corpo: unknown; cabecalhos?: Record<string, string> } {
-    const url = new URL(req.url ?? '/', base);
-    const token = (req.headers.authorization ?? '').replace('Bearer ', '');
-    if (url.searchParams.has('access_token') || (req.url ?? '').includes(TOKEN)) defeitos.push('token na URL');
-    if (!url.searchParams.get('appsecret_proof')) defeitos.push('sem appsecret_proof');
-    const id = /^\/graph\/v26\.0\/(\d+)$/.exec(url.pathname)?.[1];
-    if (!id) return { status: 404, corpo: erro(100, 'Unknown path') };
-    const params = Object.fromEntries([...url.searchParams].filter(([k]) => k !== 'appsecret_proof'));
-    const validar = (params.execution_options ?? '') === '["validate_only"]';
-    chamadas.push({ metodo: req.method ?? 'GET', id, params, validar });
-    if (token !== TOKEN) return { status: 400, corpo: erro(190, 'Error validating access token: Session has expired') };
-    const o = objetos.get(id);
-    if (!o) return { status: 400, corpo: erro(100, `Unsupported get request. Object with ID '${id}' does not exist, cannot be loaded due to missing permissions, or does not support this operation`, { error_subcode: 33 }) };
-    if (req.method === 'GET') return falhasDaLeitura.shift() ?? { status: 200, corpo: o };
-
-    const aplicar = () => {
-      if (params.status) o.status = o.effective_status = params.status;
-      if (params.daily_budget) o.daily_budget = params.daily_budget;
-    };
-    const falha = falhasDaEscrita.shift();
-    if (falha) {
-      // "A Meta aceitou, mas a resposta se perdeu": a mudança acontece e quem pediu não fica sabendo.
-      if (falha.aplicaAntes && !validar) aplicar();
-      return falha;
-    }
-    // As regras da própria Meta, que a validação aplica sem mudar nada.
-    if (params.daily_budget !== undefined && Number(params.daily_budget) < 600) {
-      return {
-        status: 400,
-        corpo: erro(100, 'Invalid parameter', { error_subcode: 1885272, error_user_title: 'Orçamento baixo demais', error_user_msg: 'O orçamento diário precisa ser de pelo menos R$ 6,00.' }),
-      };
-    }
-    if (params.daily_budget !== undefined && o.daily_budget === undefined) {
-      return { status: 400, corpo: erro(100, 'Invalid parameter', { error_user_msg: 'O orçamento fica na campanha: não dá para definir no conjunto.' }) };
-    }
-    if (!validar) aplicar();
-    return { status: 200, corpo: { success: true } };
-  }
-
-  const chamadasDe = (id: string) => chamadas.filter((c) => c.id === id);
-  const escritasDe = (id: string) => chamadasDe(id).filter((c) => c.metodo === 'POST');
-  const resumo = (id: string) => chamadasDe(id).map((c) => (c.metodo === 'GET' ? 'ler' : c.validar ? 'validar' : 'escrever'));
+  // ---- a Meta de mentira (uma conta de anúncios por execução do arquivo)
+  const meta = new MetaDeMentira();
+  const { objetos, chamadas, defeitos } = meta;
+  const CONTA = meta.conta;
+  const OUTRA_CONTA = meta.outraConta;
+  const erro = (code: number, message: string, extra: Record<string, unknown> = {}) => meta.erro(code, message, extra);
+  const chamadasDe = (id: string) => meta.chamadasDe(id);
+  const escritasDe = (id: string) => meta.escritasDe(id);
+  const resumo = (id: string) => meta.resumo(id);
 
   // ---- o Liame do teste
-  let seq = 0;
   /** Um objeto novo na Meta e na lista que o Liame leu da conta. */
-  async function objeto(tipo: 'campanha' | 'conjunto' | 'anuncio', extra: Partial<Objeto> = {}, opcoes: { conta?: string; semLinha?: boolean } = {}): Promise<{ id: string; recurso: string }> {
-    seq += 1;
-    const id = `12021${String(Date.now()).slice(-8)}${String(seq).padStart(4, '0')}`;
-    objetos.set(id, { id, name: `${tipo} ${seq}`, status: 'ACTIVE', effective_status: 'ACTIVE', account_id: CONTA, ...(tipo === 'anuncio' ? {} : { daily_budget: '3000' }), ...extra });
-    if (!opcoes.semLinha) {
-      const tabela = { campanha: 'campaign', conjunto: 'ad_group', anuncio: 'ad' }[tipo];
-      await ownerQuery(`insert into liame.${tabela} (id, tenant_id, connected_account_id, provider, external_id, name, status) values ($1, $2, $3, 'meta_ads', $4, $5, 'ativa')`, [
-        randomUUID(),
-        e.tenantId,
-        opcoes.conta ?? e.conta,
-        id,
-        `${tipo} ${seq}`,
-      ]);
-    }
-    return { id, recurso: `${tipo}:${id}` };
-  }
-
-  const ler = (recurso: string, conta = e.conta, tenantId = e.tenantId) =>
-    withTenant(database.db, tenantId, (tx) => metaAnunciosConnector.read(tx, { tenantId, accountId: conta, resourceId: recurso }));
+  const objeto = (tipo: TipoDeObjeto, extra: Partial<ObjetoNaMeta> = {}, opcoes: { conta?: string; semLinha?: boolean } = {}) => objetoLido(meta, e, tipo, extra, opcoes);
+  const ler = (recurso: string, conta = e.conta, tenantId = e.tenantId) => lerNaMetaDeMentira(api, tenantId, conta, recurso);
 
   /** O pedido aprovado, como o Action Service o grava: o estado lido na Meta, a versão dele e o estado desejado. */
   async function pedidoAprovado(
@@ -183,74 +116,28 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
   const livroDe = async (id: string) =>
     (await ownerQuery<{ kind: string; amount_micros: string }>(`select kind, amount_micros::text from liame.budget_ledger_entry where action_request_id = $1 order by created_at, id`, [id])).map((l) => [l.kind, Number(l.amount_micros)]);
 
-  async function ligarFlag(valor: boolean) {
-    await ownerQuery(`delete from liame.feature_flag_rule where flag_key = 'meta_write' and scope_type = 'tenant' and scope_id = $1`, [e.tenantId]);
-    if (valor) {
-      await ownerQuery(
-        `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, rollout_percent, created_by)
-         values (gen_random_uuid(), 'meta_write', 'tenant', $1, 'true'::jsonb, null, 'testes')`,
-        [e.tenantId],
-      );
-    }
-    flags.invalidate();
-  }
+  const ligarFlag = (valor: boolean) => ligarEscritaNaMeta(api, e.tenantId, valor);
 
   beforeAll(async () => {
     await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
-    meta = createServer((req, res) => {
-      req.resume();
-      req.on('end', () => {
-        const r = responder(req);
-        res.writeHead(r.status, { 'content-type': 'application/json', ...(uso ? { 'x-business-use-case-usage': uso } : {}), ...r.cabecalhos });
-        res.end(JSON.stringify(r.corpo));
-      });
-    });
-    await new Promise<void>((ok) => meta.listen(0, '127.0.0.1', ok));
-    base = `http://127.0.0.1:${(meta.address() as AddressInfo).port}`;
-
+    await meta.ligar();
     api = await startApi();
     await resetIpRateLimits();
     database = api.app.get(DATABASE);
-    flags = api.app.get(FlagService);
     budget = api.app.get(BudgetService);
-    executor = new ActionExecutor(database, budget, api.app.get(KillSwitchService), flags);
-    const vault = api.app.get(VaultService);
-    // O conector apontado para a Meta de mentira, com a conferência sem espera e um balde folgado (o teste escreve muito).
-    metaAnunciosConnector.ligar({
-      lerSegredo: (tx, secretId) => vault.readSecret(tx, secretId),
-      cliente: () => new ClienteConector(database.db, { enderecos: { meta_ads: [`${base}/graph`] }, tentativas: 1, balde: { capacidade: 10_000, porSegundo: 1_000 } }),
-      graphUrl: `${base}/graph`,
-      appSecret: SEGREDO_DO_APP,
-      versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
-      esperaDaConferenciaMs: 0,
-    });
-
-    const s = await signupAndLogin(api, undefined, 'Mister Burgers Escrita na Meta');
-    await enableMfa(api, s.cookie);
-    const tenantId = s.me.active_organization_id as string;
-    const brandId = (await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [tenantId]))[0]!.id;
-    const segredo = await withTenant(database.db, tenantId, (tx) =>
-      vault.putSecret(tx, { tenantId, purpose: 'oauth_meta', plaintext: JSON.stringify({ tipo: 'meta', access_token: TOKEN, obtido_em: new Date().toISOString(), expira_em: null }) }),
-    );
-    const [conta, contaSemToken] = [randomUUID(), randomUUID()];
-    await ownerQuery(
-      `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone, credential_secret_id)
-       values ($1, $3, $4, 'meta_ads', $5, 'CA - Mister Burgers', 'BRL', 'America/Sao_Paulo', $7),
-              ($2, $3, $4, 'meta_ads', $6, 'CA - sem autorização', 'BRL', 'America/Sao_Paulo', null)`,
-      [conta, contaSemToken, tenantId, brandId, `act_${CONTA}`, `act_${OUTRA_CONTA}`, segredo],
-    );
-    e = { cookie: s.cookie, userId: s.me.user.id as string, tenantId, brandId, conta, contaSemToken };
+    executor = new ActionExecutor(database, budget, api.app.get(KillSwitchService), api.app.get(FlagService));
+    ligarConectorNaMetaDeMentira(api, meta);
+    e = await empresaComMeta(api, meta, 'Mister Burgers Escrita na Meta');
     await ligarFlag(true);
-  });
+    // Cadastro, app autenticador e cofre: com a suíte inteira rodando junto, pode passar do prazo padrão dos ganchos.
+  }, 120_000);
   beforeEach(() => {
-    falhasDaEscrita = [];
-    falhasDaLeitura = [];
-    uso = null;
+    meta.normalizar();
   });
   afterAll(async () => {
     if (e) await ligarFlag(false);
     await api?.close();
-    await new Promise((ok) => meta?.close(ok));
+    await meta.desligar();
   });
 
   it('o estado é lido na Meta, com a versão tirada dele; o que não é da conta, não é da empresa ou sumiu não existe', async () => {
@@ -284,16 +171,6 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     // O token foi no cabeçalho, com a prova do segredo do app, em toda chamada.
     expect(defeitos).toEqual([]);
     expect(chamadas.every((x) => x.metodo === 'GET')).toBe(true);
-  });
-
-  it('nenhuma ferramenta usa o conector antes da X2: o pedido pela API é recusado', async () => {
-    const c = await objeto('campanha');
-    const r = await api.call('POST', '/v1/actions', {
-      cookie: e.cookie,
-      body: { tool: 'orcamento_ajustar', provider: 'meta_ads', account_id: e.conta, resource_id: c.recurso, params: { daily_budget_micros: 24 * REAL } },
-    });
-    expect([r.status, r.body.code]).toEqual([400, 'provedor-nao-suportado']);
-    expect(chamadasDe(c.id)).toEqual([]);
   });
 
   it('A4-1: valida na Meta antes, escreve depois e confere; a verba vai em centavos', async () => {
@@ -403,7 +280,7 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
   it('a Meta recusa de vez: sem permissão de gerenciar anúncios, autorização vencida e objeto apagado', async () => {
     const c = await objeto('campanha');
     const semPermissao = await pedidoAprovado(c.recurso, { daily_budget_micros: 24 * REAL });
-    falhasDaEscrita = [{ status: 400, corpo: erro(200, '(#200) Requires ads_management permission to manage the object') }];
+    meta.falhasDaEscrita = [{ status: 400, corpo: erro(200, '(#200) Requires ads_management permission to manage the object') }];
     await ciclo();
     const a1 = await acao(semPermissao.id);
     expect(a1.status).toBe('falhou');
@@ -430,7 +307,7 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     // A leitura antes de mudar deu um erro definitivo que não é "o objeto não existe": o motivo aparece, e nada é escrito.
     const campo = await objeto('campanha');
     const pc = await pedidoAprovado(campo.recurso, { daily_budget_micros: 24 * REAL });
-    falhasDaLeitura = [{ status: 400, corpo: erro(100, '(#100) Tried accessing nonexisting field (account_id) on node type (Campaign)') }];
+    meta.falhasDaLeitura = [{ status: 400, corpo: erro(100, '(#100) Tried accessing nonexisting field (account_id) on node type (Campaign)') }];
     await ciclo();
     expect((await acao(pc.id)).status_reason).toBe('A Meta não deixou ler o objeto antes de mudar: (#100) Tried accessing nonexisting field (account_id) on node type (Campaign). Nada foi mudado.');
     expect(escritasDe(campo.id)).toEqual([]);
@@ -447,7 +324,7 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     const c = await objeto('campanha');
     const { id } = await pedidoAprovado(c.recurso, { daily_budget_micros: 33 * REAL }, { reserva: 3 * REAL, acao: 'orcamento.aumentar' });
     // "User request limit reached", com o tempo para voltar a ter acesso no cabeçalho de uso (12 minutos).
-    falhasDaEscrita = [
+    meta.falhasDaEscrita = [
       {
         status: 400,
         corpo: erro(17, 'User request limit reached', { error_subcode: 2446079 }),
@@ -488,7 +365,7 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     const s = await objeto('conjunto');
     const { id } = await pedidoAprovado(s.recurso, { daily_budget_micros: 27 * REAL });
     // A validação passa; a escrita bate no limite de 4 mudanças de verba por hora do conjunto.
-    falhasDaEscrita = [{ status: 200, corpo: { success: true } }, { status: 400, corpo: erro(613, 'You can only change your ad set budget 4 times per hour', { error_subcode: 1487632 }) }];
+    meta.falhasDaEscrita = [{ status: 200, corpo: { success: true } }, { status: 400, corpo: erro(613, 'You can only change your ad set budget 4 times per hour', { error_subcode: 1487632 }) }];
     await ciclo();
     expect(await acao(id)).toMatchObject({ status: 'aprovada', attempts: 1 });
     expect(await esperaEmMinutos(id)).toBe(60);
@@ -497,14 +374,14 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     // Uso da conta no limite, visto na leitura: a escrita nem é tentada.
     const c = await objeto('campanha');
     const p = await pedidoAprovado(c.recurso, { status: 'pausado' });
-    uso = JSON.stringify({ [CONTA]: [{ type: 'ads_management', call_count: USO_PARA_ESPERAR_PCT + 2, total_cputime: 10, total_time: 10, estimated_time_to_regain_access: 0 }] });
+    meta.uso = JSON.stringify({ [CONTA]: [{ type: 'ads_management', call_count: USO_PARA_ESPERAR_PCT + 2, total_cputime: 10, total_time: 10, estimated_time_to_regain_access: 0 }] });
     chamadas.length = 0;
     await ciclo();
     expect(resumo(c.id)).toEqual(['ler']);
     expect(await acao(p.id)).toMatchObject({ status: 'aprovada', status_reason: 'a Meta pediu para esperar (limite de uso da conta)', attempts: 1 });
     expect(await esperaEmMinutos(p.id)).toBe(5);
     // Com o uso de volta ao normal, executa.
-    uso = null;
+    meta.uso = null;
     await naHora(p.id);
     await ciclo();
     expect((await acao(p.id)).status).toBe('executada');
@@ -514,7 +391,7 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
   it('a Meta aceitou, mas a resposta se perdeu: a ação é adiada e, na volta, vê que já está feito, sem escrever de novo', async () => {
     const c = await objeto('campanha');
     const { id } = await pedidoAprovado(c.recurso, { daily_budget_micros: 24 * REAL });
-    falhasDaEscrita = [{ status: 200, corpo: { success: true } }, { status: 500, corpo: erro(2, 'Service temporarily unavailable'), aplicaAntes: true }];
+    meta.falhasDaEscrita = [{ status: 200, corpo: { success: true } }, { status: 500, corpo: erro(2, 'Service temporarily unavailable'), aplicaAntes: true }];
     chamadas.length = 0;
     await ciclo();
     expect(objetos.get(c.id)!.daily_budget).toBe('2400');
@@ -533,7 +410,7 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     const c = await objeto('campanha');
     const { id } = await pedidoAprovado(c.recurso, { daily_budget_micros: 24 * REAL });
     // A validação passa e a escrita "dá certo" sem mudar nada (leitura atrasada do lado da Meta).
-    falhasDaEscrita = [{ status: 200, corpo: { success: true } }, { status: 200, corpo: { success: true } }];
+    meta.falhasDaEscrita = [{ status: 200, corpo: { success: true } }, { status: 200, corpo: { success: true } }];
     chamadas.length = 0;
     await ciclo();
     expect(resumo(c.id)).toEqual(['ler', 'validar', 'ler', 'escrever', 'ler', 'ler']);
@@ -543,7 +420,7 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     // Resposta sem o `success`: não é dada como feita.
     const outro = await objeto('campanha');
     const p = await pedidoAprovado(outro.recurso, { daily_budget_micros: 24 * REAL });
-    falhasDaEscrita = [{ status: 200, corpo: { success: true } }, { status: 200, corpo: {} }];
+    meta.falhasDaEscrita = [{ status: 200, corpo: { success: true } }, { status: 200, corpo: {} }];
     await ciclo();
     expect(await acao(p.id)).toMatchObject({ status: 'falhou', status_reason: 'A Meta não confirmou a mudança. Nada foi dado como feito: confira o objeto na Meta.' });
   });
@@ -553,7 +430,7 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     const { id } = await pedidoAprovado(c.recurso, { daily_budget_micros: 36 * REAL }, { reserva: 6 * REAL, acao: 'orcamento.aumentar' });
     const esperas: number[] = [];
     for (let tentativa = 1; tentativa <= MAX_ADIAMENTOS; tentativa++) {
-      falhasDaEscrita = [{ status: 400, corpo: erro(80004, 'There have been too many calls to this ad-account') }];
+      meta.falhasDaEscrita = [{ status: 400, corpo: erro(80004, 'There have been too many calls to this ad-account') }];
       await naHora(id);
       await ciclo();
       const a = await acao(id);
@@ -598,7 +475,7 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     );
     const auditoria = await ownerQuery<{ texto: string }>(`select coalesce("before"::text, '') || coalesce("after"::text, '') as texto from liame.audit_event where tenant_id = $1`, [e.tenantId]);
     expect(linhas.length).toBeGreaterThan(10);
-    for (const l of [...linhas, ...auditoria]) expect(l.texto.includes(TOKEN) || l.texto.includes(SEGREDO_DO_APP)).toBe(false);
+    for (const l of [...linhas, ...auditoria]) expect(l.texto.includes(TOKEN_DA_META) || l.texto.includes(SEGREDO_DO_APP_DA_META)).toBe(false);
     expect(defeitos).toEqual([]);
   });
 });

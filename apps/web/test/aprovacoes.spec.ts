@@ -54,6 +54,8 @@ const acao = (o: Partial<ActionResponse> = {}): ActionResponse => ({
   status_reason: null,
   attempts: 0,
   next_attempt_at: null,
+  undoes: null,
+  undone_by: null,
   policy: { allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@2'] },
   approvals: [],
   workflow: null,

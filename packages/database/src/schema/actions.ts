@@ -45,6 +45,8 @@ export const actionRequest = liame.table('action_request', {
   // A execução que a plataforma mandou esperar: quantas vezes e quando tenta de novo (0044).
   attempts: integer('attempts').notNull().default(0),
   nextAttemptAt: ts('next_attempt_at'),
+  // A ação que este pedido desfaz (a volta; 0045).
+  compensatesActionId: uuid('compensates_action_id'),
   actorType: text('actor_type').notNull().default('human'),
   requestedBy: uuid('requested_by').notNull(),
   traceContext: text('trace_context'),

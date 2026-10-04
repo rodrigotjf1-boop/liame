@@ -1,7 +1,7 @@
 import type { ActionProposal, AutonomyMode, PolicyDecision, PolicyDocument, PolicyRule, PolicyViolation } from '@liame/contracts';
 
 // Motor de políticas determinístico (ADR-007, A1-11). Função pura: a mesma proposta com as mesmas
-// políticas e o mesmo instante dá sempre a mesma decisão. A IA nunca decide aqui.
+// políticas, o mesmo instante e as mesmas contagens dá sempre a mesma decisão. A IA nunca decide aqui.
 
 export type PolicySource = 'platform' | 'tenant' | 'brand';
 
@@ -17,17 +17,25 @@ export interface LoadedPolicy {
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 2,
+  version: 3,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
       { type: 'forbidden_categories', categories: ['politica'] },
       // A Meta aceita até 4 mudanças de orçamento por hora por conjunto; o nosso limite fica abaixo (ADR-007).
-      { type: 'rate_limit', action: 'orcamento.*', provider: 'meta', max: 3, window_minutes: 60 },
+      // v3 (A4, X2): o provedor é `meta_ads`, como nas contas conectadas (na v2 estava `meta`, e a regra nunca casaria),
+      // e a conta é por objeto (o mesmo conjunto, a mesma campanha), que é como a Meta conta.
+      { type: 'rate_limit', action: 'orcamento.*', provider: 'meta_ads', per: 'resource', max: 3, window_minutes: 60 },
+      // v3 (A4, D-A4-6): na Meta, cada pedido mexe no máximo 20% da verba, para cima ou para baixo.
+      { type: 'max_change_percent', action: 'orcamento.*', provider: 'meta_ads', max_percent: 20, direction: 'both' },
       // Apagar é sempre com um humano olhando.
       { type: 'autonomy', action: 'campanha.apagar', mode: 'ESCALATE' },
       // Cupom de campanha no Regem (v2, 01/10/2026): sempre com a aprovação de alguém da empresa (plano da A2.5, F6).
       { type: 'autonomy', action: 'cupom.criar', mode: 'APPROVAL' },
+      // v3 (A4, D-A4-4 e D-A4-7): o que uma PESSOA pede na Meta espera a aprovação com o código do app. O modo do
+      // funcionário de IA em cada conta (Sombra, Sugerir, Aprovação) é outra regra, com `actor: 'agent'`: esta não o
+      // muda. Os modos automáticos seguem presos pela flag `autopilot`.
+      { type: 'autonomy', provider: 'meta_ads', actor: 'human', mode: 'APPROVAL' },
     ],
   },
 };
@@ -41,6 +49,11 @@ export function actionMatches(pattern: string | undefined, action: string): bool
   if (!pattern) return true;
   if (pattern.endsWith('.*')) return action.startsWith(pattern.slice(0, -1));
   return pattern === action;
+}
+
+/** A regra com provedor só vale para a proposta daquele provedor; sem provedor, vale para todos. */
+function providerMatches(provider: string | undefined, p: Pick<ActionProposal, 'provider'>): boolean {
+  return !provider || provider === p.provider;
 }
 
 /** Variação em % do valor atual para o pedido (nula se faltar um dos dois ou o atual for zero). */
@@ -63,21 +76,40 @@ export function localClock(at: Date, timezone: string): { day: number; minute: n
 
 const toMinute = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 const brl = (micros: number) => (micros / 1_000_000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+/** "20,0" e, quando a primeira casa não mostra a diferença, "20,01" (para não dizer que 20,0% passa de 20%). */
+const pct = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2, useGrouping: false });
+
+type RateLimitRule = Extract<PolicyRule, { type: 'rate_limit' }>;
+
+/**
+ * As regras de frequência que valem para a proposta. Quem pede conta as execuções recentes de cada uma (no alcance e
+ * na janela dela) e entrega em `recent`; sem essa conta, vale o `recent_count` da proposta.
+ */
+export function rateLimitsFor(policies: LoadedPolicy[], p: Pick<ActionProposal, 'action' | 'provider'>): RateLimitRule[] {
+  return policies.flatMap((policy) => policy.document.rules.filter((r): r is RateLimitRule => r.type === 'rate_limit' && actionMatches(r.action, p.action) && providerMatches(r.provider, p)));
+}
+
+/** O que a avaliação precisa além da proposta e das políticas: o instante, o fuso e as contagens das regras de frequência. */
+export interface PolicyContext {
+  at: Date;
+  timezone: string;
+  recent?: ReadonlyMap<PolicyRule, number>;
+}
 
 /** Checa uma regra de restrição; devolve a mensagem da violação ou nulo. */
-function violationOf(rule: PolicyRule, p: ActionProposal, ctx: { at: Date; timezone: string }): string | null {
+function violationOf(rule: PolicyRule, p: ActionProposal, ctx: PolicyContext): string | null {
   switch (rule.type) {
     case 'max_value':
-      if (!actionMatches(rule.action, p.action) || p.value_micros == null) return null;
+      // O teto vale para o que faz o gasto subir. Reduzir para um valor ainda acima dele é a direção segura (a verba
+      // que alguém definiu acima do teto precisa poder baixar), e a volta devolve o valor que já estava lá antes da ação.
+      if (p.undo || p.budget_impact === 'decrease' || !actionMatches(rule.action, p.action) || !providerMatches(rule.provider, p) || p.value_micros == null) return null;
       return p.value_micros > rule.max_micros ? `O valor ${brl(p.value_micros)} passa do teto de ${brl(rule.max_micros)} por ação.` : null;
     case 'max_change_percent': {
-      if (!actionMatches(rule.action, p.action)) return null;
+      if (p.undo || !actionMatches(rule.action, p.action) || !providerMatches(rule.provider, p)) return null;
       const change = changePercent(p);
       if (change === null) return null;
       const counts = rule.direction === 'both' || (rule.direction === 'increase' ? change > 0 : change < 0);
-      return counts && Math.abs(change) > rule.max_percent
-        ? `A variação de ${Math.abs(change).toFixed(1).replace('.', ',')}% passa do máximo de ${String(rule.max_percent).replace('.', ',')}%.`
-        : null;
+      return counts && Math.abs(change) > rule.max_percent ? `A variação de ${pct(Math.abs(change))}% passa do máximo de ${String(rule.max_percent).replace('.', ',')}%.` : null;
     }
     case 'allowed_hours': {
       if (!actionMatches(rule.action, p.action)) return null;
@@ -108,8 +140,10 @@ function violationOf(rule: PolicyRule, p: ActionProposal, ctx: { at: Date; timez
       return hit.length ? `Texto com termo proibido: ${hit.join(', ')}.` : null;
     }
     case 'rate_limit':
-      if (!actionMatches(rule.action, p.action) || (rule.provider && rule.provider !== p.provider)) return null;
-      return p.recent_count >= rule.max ? `Limite de ${rule.max} execuções a cada ${rule.window_minutes} min atingido.` : null;
+      if (!actionMatches(rule.action, p.action) || !providerMatches(rule.provider, p)) return null;
+      return (ctx.recent?.get(rule) ?? p.recent_count) >= rule.max
+        ? `Limite de ${rule.max} ${rule.max === 1 ? 'execução' : 'execuções'} a cada ${rule.window_minutes} min atingido${rule.per === 'resource' ? ' neste objeto' : ''}.`
+        : null;
     case 'autonomy':
       return null;
   }
@@ -126,6 +160,13 @@ function autonomyMatch(rule: Extract<PolicyRule, { type: 'autonomy' }>, p: Actio
     if (rule.tool !== p.tool) return null;
     score += 2;
   }
+  if (rule.provider) {
+    if (rule.provider !== p.provider) return null;
+    score += 1;
+  }
+  // Quem pede separa a quem a regra se aplica (pessoa ou funcionário de IA); não entra na conta de especificidade, para
+  // a regra com ator pesar o mesmo que pesava antes de o seletor existir.
+  if (rule.actor && rule.actor !== p.actor) return null;
   if (rule.account) {
     if (rule.account !== p.account_id) return null;
     score += 3;
@@ -178,7 +219,7 @@ export function chooseMode(policies: LoadedPolicy[], p: ActionProposal): ModoEsc
  * Avalia a proposta contra a política da distribuição, a da empresa e a da marca. Qualquer violação
  * nega. O modo vem de `chooseMode`.
  */
-export function evaluatePolicy(policies: LoadedPolicy[], p: ActionProposal, ctx: { at: Date; timezone: string }): PolicyDecision {
+export function evaluatePolicy(policies: LoadedPolicy[], p: ActionProposal, ctx: PolicyContext): PolicyDecision {
   const violations: PolicyViolation[] = [];
   for (const policy of policies) {
     policy.document.rules.forEach((rule, index) => {
