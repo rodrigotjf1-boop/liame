@@ -2,6 +2,7 @@ import type { AttentionItem, SourceFreshness, SummaryResponse, TeamMember, TeamR
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { ConversaProvider } from '@/components/conversa/contexto';
 import { ResumoConteudo } from '@/components/resumo/resumo-conteudo';
 import {
   canaisDo,
@@ -297,6 +298,28 @@ describe('Resumo: pedidos, canais e a equipe', () => {
 describe('Resumo: a tela', () => {
   const desenhar = (r: SummaryResponse, t: TeamResponse | null = null, pode: (p: string) => boolean = tudoPode) =>
     renderToStaticMarkup(createElement(AvisosProvider, { children: createElement(ResumoConteudo, { r, equipe: t, nomePessoa: 'Rodrigo de Oliveira', nomeMarca: 'Mister Burgers', agora: AGORA, pode }) }));
+
+  it('com a conversa disponível: "Pergunte à LIA" e as perguntas prontas do veredito; sem ela, nada disso aparece', () => {
+    const tela = (disponivel: boolean) =>
+      renderToStaticMarkup(
+        createElement(AvisosProvider, {
+          children: createElement(ConversaProvider, {
+            disponivel,
+            children: createElement(ResumoConteudo, { r: resumo(), equipe: null, nomePessoa: 'Rodrigo de Oliveira', nomeMarca: 'Mister Burgers', agora: AGORA, pode: tudoPode }),
+          }),
+        }),
+      );
+    const com = tela(true);
+    expect(com).toContain('Pergunte à LIA');
+    expect(com).toContain('Por que sobrou pouco?');
+    expect(com).toContain('O que eu faço primeiro?');
+    expect(com).toContain('Como foi a semana?');
+    expect(com).toContain('r-precisa--com-lia');
+    const sem = tela(false);
+    expect(sem).not.toContain('Pergunte à LIA');
+    expect(sem).not.toContain('Por que sobrou pouco?');
+    expect(sem).not.toContain('r-precisa--com-lia');
+  });
 
   it('semana normal: saudação, os três números com fonte, o veredito, o que precisa de você e a lista das fontes', () => {
     const html = desenhar(resumo({ needs_you: { critical: 1, attention: 0, items: [aviso({})], approvals: { actions: 1, plans: 0, autonomy: 0 } } }), equipe([membro('lia', { stats: [stat('respostas', 3)] })]));

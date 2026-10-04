@@ -33,6 +33,11 @@
 .resumo-grid > * { min-width: 0; }
 /* As linhas do protótipo: "Pergunte à LIA" (span 5) chega com a Conversa (P5); até lá, "Precisa de você" ocupa a linha. */
 .r-precisa { grid-column: 1 / -1; }
+/* Com a conversa disponível, "Precisa de você" divide a linha com "Pergunte à LIA" (protótipo P8). */
+.resumo-grid > .r-precisa--com-lia { grid-column: span 7; }
+.r-lia { grid-column: span 5; }
+.r-lia .card-cab { flex-wrap: nowrap; align-items: center; }
+.r-lia .card-cab > div { min-width: 0; }
 .r-pedidos, .r-canais { grid-column: span 6; }
 .r-equipe { grid-column: span 7; }
 /* Sem o par da linha (a equipe some para quem não vê as campanhas; o convite, para quem não convida), ocupa a linha. */
@@ -82,7 +87,7 @@
 
 @container pagina (max-width: 999px) {
   .resumo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .r-precisa, .r-equipe, .r-cta { grid-column: 1 / -1; }
+  .r-precisa, .resumo-grid > .r-precisa--com-lia, .r-lia, .r-equipe, .r-cta { grid-column: 1 / -1; }
   .r-pedidos, .r-canais { grid-column: span 1; }
 }
 @container pagina (max-width: 599px) {
