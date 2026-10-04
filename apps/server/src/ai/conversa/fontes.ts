@@ -61,6 +61,45 @@ const PALAVRAS: Record<string, string> = {
   desconto_maximo: 'desconto máximo',
   valido_ate: 'válido até',
   o_que_fazer: 'o que fazer',
+  // Sua equipe (`equipe_trabalho`).
+  mes: 'mês',
+  no_mes: 'no mês',
+  ia_da_empresa: 'IA da empresa',
+  gasto_no_mes: 'gasto no mês',
+  teto_do_mes: 'teto do mês',
+  situacao_do_teto: 'situação do teto',
+  custo_de_ia_no_mes: 'custo de IA no mês',
+  chamadas_ao_modelo_no_mes: 'chamadas ao modelo no mês',
+  respostas_que_chegaram_a_pessoa: 'respostas que chegaram à pessoa',
+  explicacoes_que_chegaram_a_pessoa: 'explicações que chegaram à pessoa',
+  marcadas_fez_sentido: 'marcadas "Fez sentido"',
+  marcadas_discordo: 'marcadas "Discordo"',
+  respostas_retiradas_na_conferencia: 'respostas retiradas na conferência',
+  textos_retirados_na_conferencia: 'textos retirados na conferência',
+  revisoes_da_semana: 'revisões da semana',
+  revisoes_com_a_leitura_da_lia: 'revisões com a leitura da LIA',
+  revisoes_sem_a_leitura_da_lia: 'revisões sem a leitura da LIA',
+  planos_esperando_a_decisao: 'planos esperando a decisão',
+  paginas_lidas: 'páginas lidas',
+  paginas_que_nao_pode_ler: 'páginas que não pôde ler',
+  sugestoes_para_minha_marca: 'sugestões para Minha marca',
+  recomendacoes_em_sombra: 'recomendações em sombra',
+  recomendacoes_que_ja_da_para_comparar: 'recomendações que já dá para comparar',
+  em_que_a_empresa_fez_o_mesmo_ou_foi_na_mesma_direcao: 'em que a empresa fez o mesmo ou foi na mesma direção',
+  comparacao_com_o_que_foi_feito: 'comparação com o que foi feito',
+  motivo_de_estar_desligado: 'motivo de estar desligado',
+  acontecimentos_desde: 'acontecimentos desde',
+  ultimos_acontecimentos: 'últimos acontecimentos',
+  equipe_parada: 'equipe parada',
+  // Os acontecimentos de um funcionário.
+  quantos_textos: 'textos',
+  pessoas_que_receberam: 'pessoas que receberam',
+  versao_do_plano: 'versão do plano',
+  tipo_de_plano: 'tipo de plano',
+  partes_de_minha_marca_com_sugestao: 'partes de Minha marca com sugestão',
+  decisoes_comparaveis: 'decisões comparáveis',
+  recomendacao: 'recomendação',
+  acao: 'ação',
 };
 const palavra = (chave: string): string => PALAVRAS[chave] ?? chave.replace(/_/g, ' ');
 
@@ -79,13 +118,19 @@ function nomeDoItem(item: unknown): { rotulo: string; nome: string | null } | nu
   if (conta) return { rotulo: `conta "${conta}"`, nome: conta };
   const nome = s(o.nome);
   if (nome) return { rotulo: `"${nome}"`, nome };
-  // Aviso, canal e plataforma descrevem o lugar, mas não são nome da empresa.
+  // O funcionário da equipe, o aviso, o canal e a plataforma descrevem o lugar, mas não são nome da empresa.
+  const funcionario = s(o.funcionario);
+  if (funcionario) return { rotulo: funcionario, nome: null };
   const titulo = s(o.titulo);
   if (titulo) return { rotulo: `aviso "${titulo}"`, nome: null };
   const canal = s(o.canal);
   if (canal) return { rotulo: `canal ${canal}`, nome: null };
   const plataforma = s(o.plataforma);
   if (plataforma) return { rotulo: plataforma, nome: null };
+  // Um acontecimento de "O que fez" (a leitura da equipe): o que foi e quando, no lugar da posição na lista.
+  const oQue = s(o.o_que);
+  const quando = s(o.quando);
+  if (oQue && quando) return { rotulo: `${quando}, ${oQue}`, nome: null };
   return null;
 }
 

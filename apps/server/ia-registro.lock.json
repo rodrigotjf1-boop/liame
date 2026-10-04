@@ -16,6 +16,10 @@
       "version": 1,
       "hash": "94b85d7d2058b93314856dac8f27046694b323e5c93a3fc4ea578218ec6f46d6"
     },
+    "equipe_trabalho": {
+      "version": 1,
+      "hash": "d4bddcc9586105857200db52b5550c20e2bbc39fe3ad1678f84fa89a4874b53e"
+    },
     "fontes_frescor": {
       "version": 1,
       "hash": "463f9f8340f94bca5051e14250f5f687eddbe8c612e303290ba40816c61f5328"
@@ -51,8 +55,8 @@
       "hash": "5c8a9a16ae4f142b7379426c381d722d970bf2f177f2f2b67bf972a7c612b883"
     },
     "conversa.lia": {
-      "version": 2,
-      "hash": "64acf11cb881d88e7c11cd40e69a55ef1dcd3923489ac3aac500ce54b45baf5b"
+      "version": 3,
+      "hash": "7548969bae56656384403cb7e980fe55f131d73e323da6e5cfb612dc5e2a9c76"
     },
     "estrategista.plano": {
       "version": 1,
@@ -77,8 +81,8 @@
       "hash": "7bb35609a8adce156ed0b9f98678cddf482ae20e712e9523dd00875700a4ac4a"
     },
     "lia": {
-      "version": 2,
-      "hash": "c7f08003c05402682d38895c0bfe7e65da808d88580e2a5a9d740a4d819dbb75"
+      "version": 3,
+      "hash": "622c01d5f4ab4a1cc0529b08202131e4fe9c1f673d696c778634529070212188"
     },
     "pesquisador": {
       "version": 1,
