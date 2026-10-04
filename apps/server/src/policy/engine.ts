@@ -12,6 +12,12 @@ export interface LoadedPolicy {
 }
 
 /**
+ * Quanto um pedido pode mexer na verba diária de uma vez, em % (A4, D-A4-6). O plano dizia 20; o dono baixou para 10 em
+ * 04/10/2026. O passo da recomendação da sombra (`sombra/regras.ts`) usa o mesmo número, para a recomendação caber no pedido.
+ */
+export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
+
+/**
  * Política da distribuição: vale para todas as empresas, antes das delas, e não pode ser removida.
  * Mudar é uma versão nova no código, com revisão (política como dado, versionada no repositório).
  */
@@ -26,8 +32,8 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // v3 (A4, X2): o provedor é `meta_ads`, como nas contas conectadas (na v2 estava `meta`, e a regra nunca casaria),
       // e a conta é por objeto (o mesmo conjunto, a mesma campanha), que é como a Meta conta.
       { type: 'rate_limit', action: 'orcamento.*', provider: 'meta_ads', per: 'resource', max: 3, window_minutes: 60 },
-      // v3 (A4, D-A4-6): na Meta, cada pedido mexe no máximo 20% da verba, para cima ou para baixo.
-      { type: 'max_change_percent', action: 'orcamento.*', provider: 'meta_ads', max_percent: 20, direction: 'both' },
+      // v3 (A4, D-A4-6): na Meta, cada pedido mexe no máximo 10% da verba, para cima ou para baixo.
+      { type: 'max_change_percent', action: 'orcamento.*', provider: 'meta_ads', max_percent: VARIACAO_MAXIMA_DA_VERBA_PCT, direction: 'both' },
       // Apagar é sempre com um humano olhando.
       { type: 'autonomy', action: 'campanha.apagar', mode: 'ESCALATE' },
       // Cupom de campanha no Regem (v2, 01/10/2026): sempre com a aprovação de alguém da empresa (plano da A2.5, F6).
@@ -76,7 +82,7 @@ export function localClock(at: Date, timezone: string): { day: number; minute: n
 
 const toMinute = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 const brl = (micros: number) => (micros / 1_000_000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-/** "20,0" e, quando a primeira casa não mostra a diferença, "20,01" (para não dizer que 20,0% passa de 20%). */
+/** "10,0" e, quando a primeira casa não mostra a diferença, "10,01" (para não dizer que 10,0% passa de 10%). */
 const pct = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2, useGrouping: false });
 
 type RateLimitRule = Extract<PolicyRule, { type: 'rate_limit' }>;

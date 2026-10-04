@@ -1,6 +1,6 @@
 import { ActionProposal, type PolicyDocument } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { changePercent, evaluatePolicy, type LoadedPolicy, localClock, PLATFORM_POLICY, rateLimitsFor } from '../src/policy/engine.js';
+import { changePercent, evaluatePolicy, type LoadedPolicy, localClock, PLATFORM_POLICY, rateLimitsFor, VARIACAO_MAXIMA_DA_VERBA_PCT } from '../src/policy/engine.js';
 
 const TZ = 'America/Sao_Paulo';
 // Sábado, 26/09/2026, 15:00 em São Paulo (18:00 UTC).
@@ -120,12 +120,15 @@ describe('A1-11: motor de políticas determinístico', () => {
     expect(rateLimitsFor(politicas, proposal({ provider: 'sandbox' }))).toHaveLength(1);
   });
 
-  it('na Meta, a plataforma limita a variação da verba a 20% por pedido, para cima e para baixo; a volta fica fora', () => {
+  it('na Meta, a plataforma limita a variação da verba a 10% por pedido, para cima e para baixo; a volta fica fora', () => {
+    expect(VARIACAO_MAXIMA_DA_VERBA_PCT).toBe(10);
     const naMeta = (valor: number, over: Partial<ActionProposal> = {}) => proposal({ provider: 'meta_ads', value_micros: valor, current_value_micros: 100_000_000, ...over });
-    expect(run([], naMeta(120_000_000)).allowed).toBe(true);
-    expect(run([], naMeta(80_000_000)).allowed).toBe(true);
-    expect(run([], naMeta(120_010_000)).violations).toEqual([{ source: 'platform', rule_index: 2, type: 'max_change_percent', message: 'A variação de 20,01% passa do máximo de 20%.' }]);
-    expect(run([], naMeta(79_990_000)).allowed).toBe(false);
+    expect(run([], naMeta(110_000_000)).allowed).toBe(true);
+    expect(run([], naMeta(90_000_000)).allowed).toBe(true);
+    expect(run([], naMeta(110_010_000)).violations).toEqual([{ source: 'platform', rule_index: 2, type: 'max_change_percent', message: 'A variação de 10,01% passa do máximo de 10%.' }]);
+    expect(run([], naMeta(89_990_000)).allowed).toBe(false);
+    // 20% de uma vez (o que o plano permitia até 04/10/2026) não passa mais.
+    expect(run([], naMeta(120_000_000)).allowed).toBe(false);
     // Fora da Meta a regra não vale (o sandbox segue só com a política da empresa).
     expect(run([], proposal({ value_micros: 200_000_000 })).allowed).toBe(true);
 

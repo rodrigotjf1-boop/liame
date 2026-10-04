@@ -302,7 +302,8 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     const r = await api.call('GET', `/v1/team/shadow?brand_id=${e.brandId}`, { cookie: e.cookie });
     expect(r.status).toBe(200);
     const sombra = TeamShadowResponse.parse(r.body);
-    expect(sombra).toMatchObject({ rule_version: 1, last_run: { on: hoje, status: 'feito' }, has_more: false });
+    // A versão das regras da sombra em vigor (2 desde 04/10/2026: o passo da verba passou de 20% para 10%).
+    expect(sombra).toMatchObject({ rule_version: 2, last_run: { on: hoje, status: 'feito' }, has_more: false });
     expect(sombra.items).toEqual([
       {
         id: aberta,

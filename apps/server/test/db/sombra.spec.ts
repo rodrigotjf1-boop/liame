@@ -183,7 +183,7 @@ describe.skipIf(!hasDb)('sombra de verdade: recomenda, observa a pessoa e calcul
     const d = await decisoes(e);
     expect(d.map((x) => [x.campaign_id, x.tool, x.rule_key, x.params, x.confidence, x.status])).toEqual([
       [e.noite, 'campanha_pausar', 'prejuizo_forte', {}, '0.925', 'aberta'],
-      [e.combo, 'orcamento_aumentar', 'lucro_no_limite', { percent: 20 }, '1.000', 'aberta'],
+      [e.combo, 'orcamento_aumentar', 'lucro_no_limite', { percent: 10 }, '1.000', 'aberta'],
     ]);
     expect(d[0]).toMatchObject({ decided_on: DIA, window_from: '2026-09-08', window_to: '2026-09-14', evaluate_on: '2026-09-22', human_action: null, regret_label: null });
     // O retrato guarda os mesmos números da tela Resultados e o frescor de cada fonte.
@@ -226,8 +226,8 @@ describe.skipIf(!hasDb)('sombra de verdade: recomenda, observa a pessoa e calcul
     d = await decisoes(e);
     // A pessoa fez o que o Liame recomendaria: sem diferença.
     expect(d[0]).toMatchObject({ status: 'avaliada', human_action: 'pausou', agreement: 'igual', regret: '0', regret_label: 'igual' });
-    // Aumentar 20% numa semana que sobrou R$ 60 teria trazido mais R$ 12 (estimativa linear).
-    expect(d[1]).toMatchObject({ status: 'avaliada', human_action: 'nenhuma', agreement: 'nenhuma', regret: '-12000000', regret_label: 'teria_melhorado' });
+    // Aumentar 10% numa semana que sobrou R$ 60 teria trazido mais R$ 6 (estimativa linear).
+    expect(d[1]).toMatchObject({ status: 'avaliada', human_action: 'nenhuma', agreement: 'nenhuma', regret: '-6000000', regret_label: 'teria_melhorado' });
     expect(d[1]!.outcome).toMatchObject({
       janela: { de: '2026-09-15', ate: '2026-09-21' },
       campanha: { situacao: 'ativa', verba_diaria_micros: '30000000' },
@@ -244,7 +244,7 @@ describe.skipIf(!hasDb)('sombra de verdade: recomenda, observa a pessoa e calcul
     );
     expect(prontidao).toEqual([
       { tool: 'campanha_pausar', sample_size: 1, agreement_rate: '1.0000', worse_rate: '0.0000', regret: '0', confidence_avg: '0.925', missing: ['amostra'], computed_on: '2026-09-22' },
-      { tool: 'orcamento_aumentar', sample_size: 1, agreement_rate: '0.0000', worse_rate: '0.0000', regret: '-12000000', confidence_avg: '1.000', missing: ['amostra', 'concordancia'], computed_on: '2026-09-22' },
+      { tool: 'orcamento_aumentar', sample_size: 1, agreement_rate: '0.0000', worse_rate: '0.0000', regret: '-6000000', confidence_avg: '1.000', missing: ['amostra', 'concordancia'], computed_on: '2026-09-22' },
     ]);
   });
 

@@ -95,7 +95,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
   it('A4-2: a pessoa pede, a política manda esperar a aprovação com o código do app, e só então o Liame valida e escreve na Meta', async () => {
     const c = await objetoLido(meta, e, 'campanha', { name: 'Delivery noite' });
     meta.chamadas.length = 0;
-    const p = await pedir(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 24 * REAL });
+    const p = await pedir(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 27 * REAL });
     expect(p.status).toBe(201);
     expect(p.body).toMatchObject({
       tool: 'orcamento_ajustar',
@@ -106,7 +106,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
       resource_id: c.recurso,
       risk_level: 'R3',
       budget_impact: 'decrease',
-      value_micros: 24 * REAL,
+      value_micros: 27 * REAL,
       current_value_micros: 30 * REAL,
       reserved_micros: 0,
       mode: 'APPROVAL',
@@ -128,8 +128,8 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     expect(await ver(e, p.body.id)).toMatchObject({ status: 'executada', status_reason: null, workflow: { status: 'concluido' } });
     // Na execução: lê e valida; lê, escreve e confere.
     expect(meta.resumo(c.id)).toEqual(['ler', 'ler', 'validar', 'ler', 'escrever', 'ler']);
-    expect(meta.escritasDe(c.id).map((x) => x.params)).toEqual([{ daily_budget: '2400', execution_options: '["validate_only"]' }, { daily_budget: '2400' }]);
-    expect(meta.objetos.get(c.id)!.daily_budget).toBe('2400');
+    expect(meta.escritasDe(c.id).map((x) => x.params)).toEqual([{ daily_budget: '2700', execution_options: '["validate_only"]' }, { daily_budget: '2700' }]);
+    expect(meta.objetos.get(c.id)!.daily_budget).toBe('2700');
 
     const trilha = await ownerQuery<{ action: string; actor_type: string; origin: string }>(
       `select action, actor_type, origin from liame.audit_event where chain_key = $1 and resource_id = $2 order by chain_seq`,
@@ -190,7 +190,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     expect((await pedir(e, 'anuncio_retomar', a.recurso)).body).toMatchObject({ budget_impact: 'new_spend', reserved_micros: 0, status: 'aguardando_aprovacao' });
   });
 
-  it('D-A4-6: aumentar verba e voltar a gastar só com o teto por ação e o envelope que a empresa define; cada pedido mexe no máximo 20%', async () => {
+  it('D-A4-6: aumentar verba e voltar a gastar só com o teto por ação e o envelope que a empresa define; cada pedido mexe no máximo 10%', async () => {
     const sem = await empresaSemLimites();
     const c = await objetoLido(meta, sem, 'campanha');
     const pausada = await objetoLido(meta, sem, 'campanha', { status: 'PAUSED', effective_status: 'PAUSED' });
@@ -203,36 +203,38 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     await cancelar(sem, reduz.body.id);
 
     // Aumentar: falta o teto por ação. O teto de outro provedor não serve.
-    const semTeto = await verba(36);
+    const semTeto = await verba(33);
     expect([semTeto.status, semTeto.body.code]).toEqual([422, 'teto-nao-definido']);
     expect(semTeto.body.detail).toBe('Para aumentar verba na Meta, a política da empresa (ou da marca) precisa ter o teto por ação. Sem ele, o Liame não aumenta verba.');
     expect((await politica(sem, [{ type: 'max_value', action: 'orcamento.*', provider: 'google_ads', max_micros: 500 * REAL }])).status).toBe(201);
-    expect((await verba(36)).body.code).toBe('teto-nao-definido');
+    expect((await verba(33)).body.code).toBe('teto-nao-definido');
 
     // Com o teto, falta o envelope do mês: nem aumentar, nem retomar.
-    expect((await politica(sem, [{ type: 'max_value', action: 'orcamento.*', max_micros: 35 * REAL }])).status).toBe(201);
-    const semEnvelope = await verba(35);
+    expect((await politica(sem, [{ type: 'max_value', action: 'orcamento.*', max_micros: 32 * REAL }])).status).toBe(201);
+    const semEnvelope = await verba(32);
     expect([semEnvelope.status, semEnvelope.body.code]).toEqual([422, 'envelope-nao-definido']);
     expect((await pedir(sem, 'campanha_retomar', pausada.recurso)).body.code).toBe('envelope-nao-definido');
     expect(await pedidosDe(sem)).toBe(antes + 1);
     expect((await envelope(sem, 100)).status).toBe(204);
 
-    // Dentro do teto e dos 20%: passa, reservando a diferença de um dia.
-    const ok = await verba(35);
-    expect(ok.body).toMatchObject({ action: 'orcamento.aumentar', status: 'aguardando_aprovacao', reserved_micros: 5 * REAL, policy: { versions: ['plataforma@3', 'empresa@2'] } });
+    // Dentro do teto e dos 10%: passa, reservando a diferença de um dia.
+    const ok = await verba(32);
+    expect(ok.body).toMatchObject({ action: 'orcamento.aumentar', status: 'aguardando_aprovacao', reserved_micros: 2 * REAL, policy: { versions: ['plataforma@3', 'empresa@2'] } });
     await cancelar(sem, ok.body.id);
-    // 20% cravados, mas acima do teto da empresa.
-    const acima = await verba(36);
+    // 10% cravados, mas acima do teto da empresa.
+    const acima = await verba(33);
     expect([acima.status, acima.body.code]).toEqual([422, 'politica-negou']);
-    expect(acima.body.errors).toEqual([{ path: 'politica.tenant.0', message: expect.stringMatching(/R\$\s36,00 passa do teto de R\$\s35,00 por ação/) }]);
-    // Mais de 20% de uma vez, para baixo (o teto não entra na redução) e para cima (aqui, com o teto também).
-    const menos = await verba(23);
-    expect(menos.body.errors).toEqual([{ path: 'politica.platform.2', message: 'A variação de 23,33% passa do máximo de 20%.' }]);
-    expect((await verba(37)).body.errors.map((x: { path: string }) => x.path)).toEqual(['politica.platform.2', 'politica.tenant.0']);
+    expect(acima.body.errors).toEqual([{ path: 'politica.tenant.0', message: expect.stringMatching(/R\$\s33,00 passa do teto de R\$\s32,00 por ação/) }]);
+    // Mais de 10% de uma vez, para baixo (o teto não entra na redução) e para cima (aqui, com o teto também).
+    const menos = await verba(26);
+    expect(menos.body.errors).toEqual([{ path: 'politica.platform.2', message: 'A variação de 13,33% passa do máximo de 10%.' }]);
+    expect((await verba(34)).body.errors.map((x: { path: string }) => x.path)).toEqual(['politica.platform.2', 'politica.tenant.0']);
+    // Os 20% que o plano permitia até 04/10/2026 também não passam mais.
+    expect((await verba(24)).body.errors.map((x: { path: string }) => x.path)).toEqual(['politica.platform.2']);
 
     // Envelope menor que a reserva: negado pelo orçamento do mês.
-    await envelope(sem, 4);
-    const semSaldo = await verba(35);
+    await envelope(sem, 1);
+    const semSaldo = await verba(32);
     expect([semSaldo.status, semSaldo.body.code]).toEqual([422, 'orcamento-insuficiente']);
     // Nada disso chamou a escrita da Meta.
     expect(meta.escritasDe(c.id)).toEqual([]);
@@ -241,7 +243,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
   it('o teto da empresa não barra a redução: baixar uma verba que já está acima do teto é a direção segura', async () => {
     // Alguém definiu R$ 200,00 por dia na Meta; o teto por ação da empresa é R$ 150,00.
     const c = await objetoLido(meta, e, 'campanha', { daily_budget: '20000' });
-    const p = await pedir(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 160 * REAL });
+    const p = await pedir(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 180 * REAL });
     expect([p.status, p.body.action, p.body.status]).toEqual([201, 'orcamento.reduzir', 'aguardando_aprovacao']);
     await cancelar(e, p.body.id);
     // Aumentar acima do teto, não.
@@ -267,24 +269,24 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     expect((await pedir(e, 'orcamento_ajustar', a.recurso, { daily_budget_micros: 21 * REAL })).status).toBe(201);
   });
 
-  it('A4-5: a volta devolve a verba de antes pelo mesmo trilho; fica fora do teto e dos 20%, e não se pede duas vezes', async () => {
-    // R$ 200,00 por dia (acima do teto de R$ 150,00 da empresa: alguém definiu na Meta). O Liame reduz 20%.
+  it('A4-5: a volta devolve a verba de antes pelo mesmo trilho; fica fora do teto e dos 10%, e não se pede duas vezes', async () => {
+    // R$ 200,00 por dia (acima do teto de R$ 150,00 da empresa: alguém definiu na Meta). O Liame reduz 10%.
     const c = await objetoLido(meta, e, 'campanha', { daily_budget: '20000' });
-    const feita = await executar(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 160 * REAL });
+    const feita = await executar(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 180 * REAL });
     expect(feita.status).toBe('executada');
-    expect(meta.objetos.get(c.id)!.daily_budget).toBe('16000');
+    expect(meta.objetos.get(c.id)!.daily_budget).toBe('18000');
 
     const volta = await desfazer(e, feita.id);
     expect(volta.status).toBe(201);
-    // De R$ 160,00 para R$ 200,00 são 25%, e acima do teto: a volta devolve o que já estava lá, então passa.
+    // De R$ 180,00 para R$ 200,00 são 11,1%, e acima do teto: a volta devolve o que já estava lá, então passa.
     expect(volta.body).toMatchObject({
       tool: 'orcamento_ajustar',
       action: 'orcamento.aumentar',
       resource_id: c.recurso,
       params: { daily_budget_micros: 200 * REAL },
       value_micros: 200 * REAL,
-      current_value_micros: 160 * REAL,
-      reserved_micros: 40 * REAL,
+      current_value_micros: 180 * REAL,
+      reserved_micros: 20 * REAL,
       mode: 'APPROVAL',
       status: 'aguardando_aprovacao',
       undoes: feita.id,
@@ -300,7 +302,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
 
     // Sem a aprovação, nada muda na Meta; com ela, a verba volta.
     await ciclo(e);
-    expect(meta.objetos.get(c.id)!.daily_budget).toBe('16000');
+    expect(meta.objetos.get(c.id)!.daily_budget).toBe('18000');
     expect((await aprovar(e, volta.body)).body.status).toBe('aprovada');
     await ciclo(e);
     expect((await ver(e, volta.body.id)).status).toBe('executada');
@@ -358,7 +360,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
 
     // (2) A volta foi pedida e aprovada com tudo como a ação deixou; antes de executar, alguém mudou a verba na Meta.
     const c = await objetoLido(meta, e, 'campanha');
-    const reduzida = await executar(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 24 * REAL });
+    const reduzida = await executar(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 27 * REAL });
     const volta = await desfazer(e, reduzida.id);
     expect(volta.status).toBe(201);
     await aprovar(e, volta.body);
@@ -370,8 +372,8 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     expect(await ver(e, volta.body.id)).toMatchObject({ status: 'falhou', status_reason: 'o recurso mudou desde o pedido; nada foi sobrescrito' });
     // A reserva da volta voltou ao envelope, a ação original mostra a volta que falhou, e pedir de novo não adianta.
     expect(await livroDe(volta.body.id)).toEqual([
-      ['reserva', 6 * REAL],
-      ['liberacao', 6 * REAL],
+      ['reserva', 3 * REAL],
+      ['liberacao', 3 * REAL],
     ]);
     expect((await ver(e, reduzida.id)).undone_by).toEqual({ id: volta.body.id, status: 'falhou' });
     expect((await desfazer(e, reduzida.id)).body.code).toBe('estado-mudou');
@@ -397,7 +399,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
 
   it('a Meta aceitou sem a leitura confirmar: a volta confere pelo estado que a ação pediu, não pela leitura atrasada', async () => {
     const c = await objetoLido(meta, e, 'campanha');
-    const p = await pedir(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 24 * REAL });
+    const p = await pedir(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 27 * REAL });
     await aprovar(e, p.body);
     // A validação passa e a escrita "dá certo", mas a leitura logo depois ainda mostra a verba de antes.
     meta.falhasDaEscrita = [
@@ -409,7 +411,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     // Enquanto a Meta não mostra a mudança, a volta não tem sobre o que agir.
     expect((await desfazer(e, p.body.id)).body.code).toBe('estado-mudou');
     // Quando a mudança aparece, o objeto está como a ação pediu: a volta vale.
-    meta.objetos.get(c.id)!.daily_budget = '2400';
+    meta.objetos.get(c.id)!.daily_budget = '2700';
     const volta = await desfazer(e, p.body.id);
     expect([volta.status, volta.body.params]).toEqual([201, { daily_budget_micros: 30 * REAL }]);
   });

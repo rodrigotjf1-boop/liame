@@ -110,7 +110,7 @@ const COMPARACAO: Record<string, string> = {
   sem_dado: 'sem dado para comparar',
 };
 
-/** "reduzir a verba em 20%", "pausar a campanha", "aumentar a verba em 20%". */
+/** "reduzir a verba em 10%", "pausar a campanha", "aumentar a verba em 10%". */
 function acaoDa(ferramenta: string | null, percentual: number | null): string {
   const quanto = percentual ? ` em ${inteiro(percentual)}%` : '';
   if (ferramenta === 'orcamento_reduzir') return `reduzir a verba${quanto}`;
