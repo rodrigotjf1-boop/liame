@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useId, useState } from 'react';
+import { ID_DO_PAINEL, useConversa } from '@/components/conversa/contexto';
 import { LogoCompleto, Simbolo } from '@/components/marca/logo';
 import { Icone } from '@/components/ui/icone';
 import { iniciais } from '@/lib/formato';
@@ -20,8 +21,9 @@ import { SeletorEmpresa } from './seletor-empresa';
 import { SeletorModo } from './seletor-modo';
 import { disparar } from '@/lib/disparar';
 
-export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () => void; modos: boolean }) {
+export function MenuLateral({ id, aoFechar, modos, inerte = false }: { id: string; aoFechar: () => void; modos: boolean; /** O painel da conversa está por cima da tela. */ inerte?: boolean }) {
   const { me, empresa, pode, sair } = useSessao();
+  const conversa = useConversa();
   const contador = useContadorAtencao();
   const aprovacoes = useContadorAprovacoes();
   const caminho = usePathname();
@@ -35,6 +37,29 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
   const nFerramentas = ferramentas.reduce((n, g) => n + itensVisiveis(g, pode).length, 0);
   const lite = modo === 'lite';
 
+  // "Conversa" não é uma tela: abre o painel da LIA, que fica ao lado (ou por cima) de qualquer tela (protótipo P5).
+  const itemConversa = conversa.disponivel ? (
+    <li key="conversa">
+      <button
+        className="nav-item"
+        type="button"
+        aria-controls={ID_DO_PAINEL}
+        aria-expanded={conversa.aberta}
+        title="Conversa com a LIA (Ctrl J)"
+        onClick={() => {
+          aoFechar();
+          conversa.abrir();
+        }}
+      >
+        <Icone nome="message" />
+        <span className="rot">Conversa</span>
+        <span className="atalho-mini" aria-hidden="true">
+          Ctrl J
+        </span>
+      </button>
+    </li>
+  ) : null;
+
   const grupoNav = (grupo: GrupoNav) => {
     const itens = itensVisiveis(grupo, pode, modo);
     if (!itens.length) return null;
@@ -44,7 +69,7 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
           {grupo.rotulo}
         </p>
         <ul className="nav-lista" aria-labelledby={`g-${grupo.id}`}>
-          {itens.map((item) => {
+          {itens.map((item, posicao) => {
             const atual = itemAtual(caminho, item.href);
             const n =
               item.contador === 'atencao'
@@ -55,7 +80,7 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
                     ? contadorDoResumo(contador.total, aprovacoes.total)
                     : 0;
             const falado = n ? (item.contador === 'aprovacoes' ? pendentesFalados(n) : item.contador === 'resumo' ? pontosFalados(n) : avisosFalados(n)) : '';
-            return (
+            const link = (
               <li key={item.href}>
                 <Link
                   className="nav-item"
@@ -78,6 +103,8 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
                 </Link>
               </li>
             );
+            // A Conversa vem logo depois da página inicial (Resumo ou Atenção), como no protótipo.
+            return grupo.id === 'agencia' && posicao === 0 && itemConversa ? [link, itemConversa] : link;
           })}
         </ul>
       </div>
@@ -85,7 +112,7 @@ export function MenuLateral({ id, aoFechar, modos }: { id: string; aoFechar: () 
   };
 
   return (
-    <aside className="sidebar" id={id} aria-label="Menu">
+    <aside className="sidebar" id={id} aria-label="Menu" inert={inerte}>
       <div className="sb-logo">
         <LogoCompleto />
         <Simbolo />

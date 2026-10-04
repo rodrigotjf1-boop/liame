@@ -255,6 +255,23 @@ export function vereditoDo(r: SummaryResponse): Veredito {
   }
 }
 
+/** As perguntas prontas debaixo do veredito (protótipo P8), para a LIA: só quando há o que explicar. */
+export function perguntasDoVeredito(r: SummaryResponse): string[] {
+  if (r.state !== 'ok') return [];
+  const m = r.money;
+  if (BigInt(m.spend_micros.now) === 0n || r.orders.marketing === 0) return [];
+  const porque =
+    m.verdict === 'lucro' ? 'Por que deu lucro?' : m.verdict === 'empata' ? 'Por que sobrou pouco?' : m.verdict === 'prejuizo' ? 'Por que o marketing não se pagou?' : 'O que falta para saber se sobrou?';
+  return [porque, 'O que eu faço primeiro?'];
+}
+
+/** As perguntas prontas do cartão "Pergunte à LIA", conforme o que a semana tem para mostrar. */
+export function perguntasDoResumo(r: SummaryResponse): string[] {
+  if (r.state === 'primeira_semana') return ['O que o Liame já leu?', 'Quando sai a primeira revisão?'];
+  if (r.state === 'sem_regem') return ['Por que preciso do Regem?', 'Vale pausar alguma campanha?'];
+  return ['Como foi a semana?', 'Por que tem pedido sem origem?', 'Vale pausar alguma campanha?'];
+}
+
 function maiuscula(s: string): string {
   return s ? `${s.charAt(0).toLocaleUpperCase('pt-BR')}${s.slice(1)}` : s;
 }

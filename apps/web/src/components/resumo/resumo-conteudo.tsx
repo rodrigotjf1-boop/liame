@@ -2,10 +2,12 @@
 
 import type { SummaryResponse, TeamResponse } from '@liame/contracts';
 import Link from 'next/link';
-import { type ReactNode, type Ref, useMemo } from 'react';
+import { type FormEvent, type ReactNode, type Ref, useMemo, useState } from 'react';
+import { useConversa } from '@/components/conversa/contexto';
+import { IconeLia } from '@/components/marca/logo';
 import { Icone } from '@/components/ui/icone';
 import { ListaDeFontes, NumeroComFonte, TextoComNumeros, useFontes } from './numeros';
-import { canaisDo, equipeDo, Fontes, hojeEscrito, pedidosDo, precisaDe, primeiroNome, saudacao, type Stat, statsDo, vereditoDo } from './textos';
+import { canaisDo, equipeDo, Fontes, hojeEscrito, pedidosDo, perguntasDoResumo, perguntasDoVeredito, precisaDe, primeiroNome, saudacao, type Stat, statsDo, vereditoDo } from './textos';
 
 // O Resumo (A3 · P8, aprovado em 03/10/2026): a página inicial do Lite, a visão do dono. Os números são os de
 // Resultados (`GET /v1/summary`), com a fonte de cada um; o que a equipe fez vem de `/v1/team`. Desenhado a
@@ -42,6 +44,17 @@ export function ResumoConteudo({ r, equipe, nomePessoa, nomeMarca, agora, pode, 
   const semRegem = r.state === 'sem_regem';
   const aoTocar = fontes.mostrar;
   const convite = pode('pessoas.convidar');
+  // A conversa com a LIA é do shell: fora dele (ou sem a permissão), os atalhos para ela não aparecem.
+  const conversa = useConversa();
+  const [pergunta, setPergunta] = useState('');
+  const doVeredito = conversa.disponivel ? perguntasDoVeredito(r) : [];
+  function perguntar(evento: FormEvent) {
+    evento.preventDefault();
+    const t = pergunta.trim();
+    if (!t) return;
+    setPergunta('');
+    conversa.abrir({ pergunta: t });
+  }
   const nf = (texto: Parameters<typeof TextoComNumeros>[0]['texto']) => <TextoComNumeros texto={texto} lista={dados.lista} aoTocar={aoTocar} />;
 
   return (
@@ -74,10 +87,20 @@ export function ResumoConteudo({ r, equipe, nomePessoa, nomeMarca, agora, pode, 
             </Link>
           </div>
         )}
+        {doVeredito.length > 0 && (
+          <div className="ia-linha" role="group" aria-label="Perguntar à LIA sobre a semana">
+            {doVeredito.map((q) => (
+              <button className="ia-bt" type="button" key={q} onClick={() => conversa.abrir({ pergunta: q })}>
+                <Icone nome="sparkles" />
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="resumo-grid">
-        <article className="card r-precisa" aria-labelledby="rp-t">
+        <article className={conversa.disponivel ? 'card r-precisa r-precisa--com-lia' : 'card r-precisa'} aria-labelledby="rp-t">
           <div className="card-cab">
             <div>
               <h2 id="rp-t">Precisa de você</h2>
@@ -119,6 +142,36 @@ export function ResumoConteudo({ r, equipe, nomePessoa, nomeMarca, agora, pode, 
             </div>
           )}
         </article>
+
+        {conversa.disponivel && (
+          <article className="card r-lia" aria-labelledby="rl-t">
+            <div className="card-cab">
+              <div>
+                <h2 id="rl-t">Pergunte à LIA</h2>
+                <p className="card-sub">Ela responde em palavras simples, com os números por trás.</p>
+              </div>
+              <IconeLia />
+            </div>
+            <form className="pergunte" onSubmit={perguntar}>
+              <label className="sr-only" htmlFor="in-pergunte">
+                Pergunta para a LIA
+              </label>
+              <input className="input" id="in-pergunte" autoComplete="off" maxLength={2000} placeholder="Ex.: por que sobrou pouco esta semana?" value={pergunta} onChange={(e) => setPergunta(e.target.value)} />
+              <button className="btn btn--primary btn--icon" type="submit" aria-label="Perguntar à LIA">
+                <Icone nome="send" />
+              </button>
+            </form>
+            <div className="ia-linha" role="group" aria-label="Perguntas prontas">
+              {perguntasDoResumo(r).map((q) => (
+                <button className="ia-bt" type="button" key={q} onClick={() => conversa.abrir({ pergunta: q })}>
+                  <Icone nome="sparkles" />
+                  {q}
+                </button>
+              ))}
+            </div>
+            <p className="explica-nota">A LIA é uma assistente de IA. Ela lê os números do sistema; quem decide é você.</p>
+          </article>
+        )}
 
         <article className="card r-pedidos" aria-labelledby="rpd-t">
           <div className="card-cab">

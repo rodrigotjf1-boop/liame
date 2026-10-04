@@ -77,7 +77,7 @@ Sem protótipo aprovado não se inventa tela (`CLAUDE.md` §2). As vistas do pro
 | # | Protótipo | Estados que precisa mostrar |
 | --- | --- | --- |
 | P4 | **Explicar** (bloco em Resultados e Atenção) e **Revisão semanal** | Carregando; resposta com motivos e fonte de cada número; dado velho ("não explico com dado de ontem"); IA fora do ar (texto sem IA); teto de custo atingido; discordar e dizer o motivo |
-| P5 | **Conversa** (Lite e Pro) | Primeira conversa; resposta em tempo real; pedido que virou demanda; proposta que foi para Aprovações; "falar com uma pessoa"; limite atingido; IA desligada para a empresa |
+| P5 | **Conversa** (Lite e Pro; tela entregue em 03/10/2026) | Primeira conversa; resposta em tempo real; pedido que virou demanda; proposta que foi para Aprovações; "falar com uma pessoa"; limite atingido; IA desligada para a empresa |
 | P6 | **Minha marca** | Vazio; preenchimento guiado; sugestão da LIA a confirmar; "o que não pode dizer"; versão anterior |
 | P7 | **Sua equipe** (tela entregue em 03/10/2026) | Funcionário ativo, em sombra e desligado; prontidão com o que falta; proposta de promoção para aprovar; custo do mês; histórico |
 | P8 | **Resumo** (página inicial do Lite) e **Plano do Estrategista** | Sem dados ainda; semana normal; algo precisa de você; plano para aprovar, editar ou recusar |
