@@ -282,7 +282,7 @@ describe('precisa de decisão: o Liame aponta, quem decide é a pessoa', () => {
   });
 });
 
-describe('o e-mail da revisão: os mesmos números da tela, em texto', () => {
+describe('o e-mail da revisão: os mesmos números da tela, em texto e em HTML', () => {
   const leitura = (source: 'lia' | 'sistema', reason: string | null, extra: Partial<ExplanationResponse> = {}): ExplanationResponse => ({
     source,
     reason,
@@ -321,7 +321,8 @@ describe('o e-mail da revisão: os mesmos números da tela, em texto', () => {
       reading,
     };
   };
-  const quem = { marca: 'Mister Burgers', empresa: 'Mister Burgers Ltda', nivel: 'so_relatorios', link: 'https://app.agencialiame.com/resultados/revisao?marca=x&semana=2026-09-21' };
+  const imagens = { logo: 'https://app.agencialiame.com/email/liame-logo.png', lia: 'https://app.agencialiame.com/email/lia.png' };
+  const quem = { marca: 'Mister Burgers', empresa: 'Mister Burgers Ltda', nivel: 'so_relatorios', link: 'https://app.agencialiame.com/resultados/revisao?marca=x&semana=2026-09-21', imagens };
 
   it('assunto, os quatro números, a leitura da LIA com o aviso de IA, a tabela, o que mudou, a decisão e o porquê do e-mail', () => {
     const e = emailDaRevisao(conteudo(leitura('lia', null)), quem);
@@ -385,6 +386,129 @@ describe('o e-mail da revisão: os mesmos números da tela, em texto', () => {
     expect(e.text).not.toContain('comparada com');
     for (const titulo of ['O QUE MELHOROU', 'O QUE PIOROU', 'PRECISA DE DECISÃO', 'O QUE CADA CAMPANHA TROUXE NO CAIXA']) expect(e.text, titulo).not.toContain(titulo);
     expect(linhaDaMudanca({ kind: 'pedidos_de_anuncios', campaign: null, unit: 'contagem', before: '0', now: '12', change_pct: null }, 'BRL')).toBe('Pedidos de anúncios: de 0 para 12');
+  });
+
+  it('a versão em HTML leva o mesmo conteúdo: a marca, os números em destaque, as barras por campanha, a leitura, o que mudou, a decisão e o botão', () => {
+    const e = emailDaRevisao(conteudo(leitura('lia', null)), quem);
+    expect(e.html.startsWith('<!doctype html><html lang="pt-BR">')).toBe(true);
+    expect(e.html).toContain('<title>Liame: revisão da semana da Mister Burgers (21/09 a 27/09)</title>');
+    // A marca no topo, no tamanho certo, com o texto que aparece quando a imagem é bloqueada.
+    expect(e.html).toContain('<img src="https://app.agencialiame.com/email/liame-logo.png" width="184" height="75" alt="Liame"');
+    // Os quatro números: subir é bom nos pedidos e na receita (verde, com a seta); no investimento, é neutro; o ROAS não leva porcentagem.
+    for (const pedaco of [
+      '>Mister Burgers</h1>',
+      'Semana de <b style="color:#0B0D17;">21/09/2026 a 27/09/2026</b>, comparada com 14/09/2026 a 20/09/2026.',
+      '>R$ 1.214,30</p>',
+      '<span style="color:#4B5066;font-weight:600;">▲ +2,9%</span> · era R$ 1.180,00',
+      '>53</p>',
+      '<span style="color:#0A6C75;font-weight:600;">▲ +12,8%</span> · eram 47',
+      '<span style="color:#0A6C75;font-weight:600;">▲ +13,1%</span> · era R$ 3.068,00',
+      '>2,86</p>',
+      'color:#4B5066;">era 2,60</p>',
+      // As campanhas: o nome, a plataforma, o resultado em palavra e as duas barras com o valor ao lado.
+      'Combo sexta <span style="font-weight:400;color:#4B5066;">· Meta</span>',
+      '>dá lucro</span>',
+      '>empata</span>',
+      '>dá prejuízo</span>',
+      '26 pedidos · ROAS no caixa 4,25',
+      '2 pedidos · ROAS no caixa 0,76',
+      'Meta, sem campanha identificada: 4 pedidos, R$ 1.029,00 (conta no total).',
+      // A leitura da LIA, com o rosto dela e o aviso de IA.
+      '<img src="https://app.agencialiame.com/email/lia.png" width="36" height="36" alt="LIA"',
+      'Leitura da semana, pela LIA',
+      'Feito com IA · números do sistema',
+      'Na semana, os anúncios trouxeram 53 pedidos confirmados no caixa.',
+      'Combo sexta segue como a campanha que dá lucro.',
+      '<b>Risco médio:</b> no total, a semana empata.',
+      'Decida o que fazer com a Delivery noite.',
+      'A LIA é uma assistente de IA: ela só escreve. Os números são do sistema, conferidos antes de aparecer, e a decisão é sua.',
+      'Pedidos de anúncios: de 47 para 53 (+12,8%)',
+      'Delivery noite: ROAS no caixa de 1,12 para 0,76',
+      'Delivery noite deu prejuízo nas duas últimas semanas',
+      'Faltaram R$ 122,64 para a margem dos pedidos pagar o anúncio: R$ 114,00 de receita para R$ 150,00 investidos na semana.',
+      'O Liame aponta; quem decide é você. Nada muda nas campanhas por aqui.',
+      // O botão: o endereço vai escapado dentro do atributo.
+      '<a href="https://app.agencialiame.com/resultados/revisao?marca=x&amp;semana=2026-09-21"',
+      'Abrir a revisão no Liame</a>',
+      'Você recebe este e-mail porque tem acesso à Mister Burgers Ltda no Liame como Só relatórios por e-mail. Para deixar de receber, escreva para suporte@agencialiame.com.',
+      '<b style="color:#0B0D17;">Liame</b> · um produto DMS Tecnologias',
+    ]) {
+      expect(e.html, pedaco).toContain(pedaco);
+    }
+    // As barras são proporcionais ao maior valor da tabela (a receita da Combo sexta, R$ 1.716,00): investido R$ 404,10 = 24%.
+    expect(e.html).toContain('<td width="24%" height="12" bgcolor="#7B61FF"');
+    expect(e.html).toContain('<td width="100%" height="12" bgcolor="#1BA8B8"');
+    // O texto ao lado do assunto, no programa de e-mail.
+    expect(e.html).toContain('>Investido R$ 1.214,30 · 53 pedidos · R$ 3.471,00 confirmados no caixa · ROAS 2,86</div>');
+    // Os mesmos números nas duas versões: todo valor em reais do texto está no HTML.
+    const reais = e.text.match(/R\$ [\d.]+,\d{2}/g) ?? [];
+    expect(reais.length).toBeGreaterThan(10);
+    for (const v of reais) expect(e.html, v).toContain(v);
+    // É e-mail: sem script, sem folha de estilo de fora, sem imagem de rastreio (só a marca e o rosto da LIA, do endereço do Liame).
+    expect(e.html).not.toMatch(/<script|<link|javascript:|http:\/\//i);
+    expect(e.html.match(/<img /g)).toHaveLength(2);
+    expect([...e.html.matchAll(/src="([^"]+)"/g)].map((m) => m[1])).toEqual(['https://app.agencialiame.com/email/liame-logo.png', 'https://app.agencialiame.com/email/lia.png']);
+    expect(e.html).not.toMatch(/undefined|null|NaN|\[object/);
+  });
+
+  it('no HTML, texto de fora nunca vira marcação: nome de campanha, de marca e de empresa são escapados', () => {
+    const c = conteudo(leitura('sistema', 'desligada'));
+    const ataque = '<img src=x onerror=alert(1)>"\'&';
+    c.campaigns = c.campaigns.map((x, i) => (i === 0 ? { ...x, name: ataque } : x));
+    c.decisions = c.decisions.map((d, i) => (i === 0 ? { ...d, title: `Campanha ${ataque}`, detail: '</td><script>alert(2)</script>' } : d));
+    c.reading = { ...c.reading, explanation: { ...c.reading.explanation, what_happened: [{ text: `Texto <b>da leitura</b> ${ataque}`, number: null }] } };
+    const e = emailDaRevisao(c, { ...quem, marca: 'Burger & "Cia" <b>', empresa: "Empresa d'Água <i>", link: 'https://app.agencialiame.com/r?a=1&b="2"' });
+    expect(e.html).toContain('&lt;img src=x onerror=alert(1)&gt;&quot;&#39;&amp;');
+    expect(e.html).toContain('Burger &amp; &quot;Cia&quot; &lt;b&gt;</h1>');
+    expect(e.html).toContain('Empresa d&#39;Água &lt;i&gt;');
+    expect(e.html).toContain('&lt;/td&gt;&lt;script&gt;alert(2)&lt;/script&gt;');
+    expect(e.html).toContain('Texto &lt;b&gt;da leitura&lt;/b&gt;');
+    expect(e.html).toContain('href="https://app.agencialiame.com/r?a=1&amp;b=&quot;2&quot;"');
+    expect(e.html).not.toMatch(/<script|<img src=x|onerror=alert\(1\)>|<i>|<b>da leitura/);
+    // Sem a LIA, a única imagem é a marca.
+    expect(e.html.match(/<img /g)).toHaveLength(1);
+  });
+
+  it('no HTML: sem a LIA, a leitura é do sistema; com dado velho, o aviso da fonte; sem comparação e sem listas, só o que há', () => {
+    const doSistema = emailDaRevisao(conteudo(leitura('sistema', 'desligada')), quem);
+    expect(doSistema.html).toContain('>Leitura da semana</h2>');
+    expect(doSistema.html).toContain('Pelo sistema · sem IA');
+    expect(doSistema.html).not.toContain('/email/lia.png');
+    expect(doSistema.html).not.toContain('assistente de IA');
+    expect(doSistema.html).not.toContain('estava atrasada');
+    const velho = emailDaRevisao(conteudo(leitura('sistema', 'dado_velho', { stale_sources: [{ platform: 'Meta', name: 'CA - Hamburgueria', freshness: 'atrasado', last_read: '27/09/2026 05:02' }] })), quem);
+    expect(velho.html).toContain('Na hora de gerar, uma fonte estava atrasada (Meta · CA - Hamburgueria, última leitura em 27/09/2026 05:02). Os números valem até essa hora.');
+
+    const a = atual();
+    const vazio: ConteudoDaRevisao = { ...conteudo(leitura('sistema', 'desligada')), totals: totaisDaSemana(a, null), improved: [], worsened: [], decisions: [], campaigns: [], platform_only: [] };
+    const e = emailDaRevisao(vazio, quem);
+    expect(e.html).toContain('Semana de <b style="color:#0B0D17;">21/09/2026 a 27/09/2026</b>.');
+    expect(e.html).not.toContain('comparada com');
+    for (const titulo of ['O que melhorou', 'O que piorou', 'Precisa de decisão', 'O que cada campanha trouxe no caixa']) expect(e.html, titulo).not.toContain(titulo);
+    // Sem semana anterior, o cartão do número fica só com o número (sem seta, sem "era").
+    expect(e.html).not.toMatch(/▲|▼|>era |>eram /);
+    expect(e.html).not.toMatch(/undefined|null|NaN|\[object/);
+  });
+
+  it('no HTML, as barras: valor zero ainda aparece (1% da largura) e tabela só com zeros não divide por zero', () => {
+    const c = conteudo(leitura('sistema', 'desligada'));
+    const [primeira] = c.campaigns;
+    c.campaigns = [{ ...primeira!, revenue_micros: '0', orders: 0, roas: '0.00', verdict: null }];
+    const zero = emailDaRevisao(c, quem).html;
+    expect(zero).toContain('<td width="100%" height="12" bgcolor="#7B61FF"');
+    expect(zero).toContain('<td width="1%" height="12" bgcolor="#1BA8B8"');
+    expect(zero).toContain('<td width="99%" height="12"');
+    expect(zero).toContain('0 pedidos · ROAS no caixa 0,00');
+    c.campaigns = [{ ...primeira!, spend_micros: '0', revenue_micros: '0', orders: 1, roas: '0.00', verdict: null }];
+    const tudoZero = emailDaRevisao(c, quem).html;
+    expect(tudoZero).toContain('1 pedido · ROAS no caixa 0,00');
+    expect(tudoZero).not.toMatch(/NaN|Infinity/);
+    // Queda: a seta para baixo e o vermelho só onde cair é ruim (pedidos e receita).
+    const caiu = conteudo(leitura('sistema', 'desligada'));
+    caiu.totals = caiu.totals.map((m) => (m.kind === 'pedidos_de_anuncios' ? { ...m, before: '60', now: '53', change_pct: '-11.7' } : m.kind === 'investimento' ? { ...m, change_pct: '0.0' } : m));
+    const queda = emailDaRevisao(caiu, quem).html;
+    expect(queda).toContain('<span style="color:#B3261E;font-weight:600;">▼ -11,7%</span> · eram 60');
+    expect(queda).toContain('<span style="color:#4B5066;font-weight:600;">0,0%</span> · era R$ 1.180,00');
   });
 
   it('a revisão guardada na versão 1 continua abrindo pelo contrato de agora', () => {

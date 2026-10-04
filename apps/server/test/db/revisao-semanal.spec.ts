@@ -403,6 +403,14 @@ describe.skipIf(!hasDb)('revisão da semana: gerada na segunda-feira, guardada c
       expect(linhas, linha).toContain(linha);
     }
     expect(carteiro.enviados.find((m) => m.to === e.dono)!.text).toContain('no Liame como Dono.');
+    // A versão em HTML vai junto: os mesmos números, a marca servida pelo webapp, o botão para a revisão e o porquê de cada pessoa.
+    const appUrl = api.app.get<AppConfig>(APP_CONFIG).appUrl;
+    expect(doRelatorio.html).toContain(`<img src="${appUrl}/email/liame-logo.png"`);
+    expect(doRelatorio.html).toContain('R$ 1.120,00');
+    expect(doRelatorio.html).toContain('Pelo sistema · sem IA');
+    expect(doRelatorio.html).toContain(`<a href="${appUrl}/resultados/revisao?marca=${e.brandId}&amp;semana=${SEMANA.from}"`);
+    expect(doRelatorio.html).toContain('no Liame como Só relatórios por e-mail.');
+    expect(carteiro.enviados.find((m) => m.to === e.dono)!.html).toContain('no Liame como Dono.');
     expect((await entregas(e)).map((d) => [d.role_key, d.status, d.attempts, d.error])).toEqual([
       ['administrador', 'enviado', 1, null],
       ['dono', 'enviado', 1, null],
