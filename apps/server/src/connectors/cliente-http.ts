@@ -19,7 +19,13 @@ export type TipoErroConector =
   | 'definitivo' //       pedido errado: tentar de novo não resolve
   | 'circuito_aberto'; // muitas falhas seguidas: paramos de insistir por um tempo
 
+/** O que a plataforma disse além do código: o subcódigo (Meta: `error_subcode`) e o texto que ela escreve para a pessoa (`error_user_msg`). */
+export type DetalheDoErro = { subcodigo?: string | null; mensagemUsuario?: string | null };
+
 export class ErroConector extends Error {
+  readonly subcodigo: string | null;
+  readonly mensagemUsuario: string | null;
+
   constructor(
     readonly tipo: TipoErroConector,
     readonly provider: string,
@@ -27,9 +33,12 @@ export class ErroConector extends Error {
     readonly status: number | null = null,
     readonly esperarMs: number | null = null,
     readonly codigoProvider: string | null = null,
+    detalhe: DetalheDoErro = {},
   ) {
     super(mensagem);
     this.name = 'ErroConector';
+    this.subcodigo = detalhe.subcodigo ?? null;
+    this.mensagemUsuario = detalhe.mensagemUsuario ?? null;
   }
 }
 
@@ -189,6 +198,15 @@ function tentarJson(texto: string): unknown {
 }
 
 /**
+ * Meta, erro 613 com o subcódigo 1487632: a verba de um conjunto só muda 4 vezes por hora, e a quinta bloqueia as
+ * mudanças dele por uma hora (base §2.1, conferido na página de limites em 04/10/2026).
+ */
+const META_VERBA_POR_HORA = '1487632';
+const UMA_HORA_MS = 3_600_000;
+
+const textoCurto = (v: unknown, max: number): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+
+/**
  * Classifica o erro pelo status e pelo corpo de cada plataforma. Meta: `error.code` 4, 17, 32, 613 e
  * 80000–80014 são limite; 190 é token inválido; 10 e 200–299 são permissão (base §2.1). Google:
  * RESOURCE_EXHAUSTED (429) é limite; UNAUTHENTICATED (401); PERMISSION_DENIED (403).
@@ -204,19 +222,24 @@ export function classificar(provider: string, status: number, corpo: unknown, h:
     typeof erro.message === 'string' ? erro.message.slice(0, 300) : typeof problema?.detail === 'string' ? problema.detail.slice(0, 300) : `HTTP ${status}`;
   const esperaPedida = lerRetryAfter(h) ?? (uso?.esperarMs ? uso.esperarMs : null);
   const cod = codigo === null ? NaN : Number(codigo);
+  // Meta: o subcódigo diz qual limite ou qual regra; `error_user_msg` é o texto que ela escreve para a pessoa.
+  const subcodigo = typeof erro.error_subcode === 'number' || typeof erro.error_subcode === 'string' ? String(erro.error_subcode) : null;
+  const detalhe = { subcodigo, mensagemUsuario: textoCurto(erro.error_user_msg, 500) ?? textoCurto(erro.error_user_title, 200) };
+  const codigoDoErro = codigo ?? statusGoogle ?? tipoProblema;
 
   const ehLimiteMeta = [4, 17, 32, 613].includes(cod) || (cod >= 80000 && cod <= 80014);
   if (status === 429 || ehLimiteMeta || statusGoogle === 'RESOURCE_EXHAUSTED') {
-    return new ErroConector('limite', provider, mensagem, status, esperaPedida ?? 60_000, codigo ?? statusGoogle ?? tipoProblema);
+    const espera = cod === 613 && subcodigo === META_VERBA_POR_HORA ? Math.max(esperaPedida ?? 0, UMA_HORA_MS) : (esperaPedida ?? 60_000);
+    return new ErroConector('limite', provider, mensagem, status, espera, codigoDoErro, detalhe);
   }
   if (status === 401 || cod === 190 || statusGoogle === 'UNAUTHENTICATED') {
-    return new ErroConector('autenticacao', provider, mensagem, status, null, codigo ?? statusGoogle ?? tipoProblema);
+    return new ErroConector('autenticacao', provider, mensagem, status, null, codigoDoErro, detalhe);
   }
   if (status === 403 || cod === 10 || (cod >= 200 && cod <= 299) || statusGoogle === 'PERMISSION_DENIED') {
-    return new ErroConector('permissao', provider, mensagem, status, null, codigo ?? statusGoogle ?? tipoProblema);
+    return new ErroConector('permissao', provider, mensagem, status, null, codigoDoErro, detalhe);
   }
   if (status >= 500 || status === 408 || cod === 1 || cod === 2) {
-    return new ErroConector('transitorio', provider, mensagem, status, esperaPedida, codigo ?? statusGoogle ?? tipoProblema);
+    return new ErroConector('transitorio', provider, mensagem, status, esperaPedida, codigoDoErro, detalhe);
   }
-  return new ErroConector('definitivo', provider, mensagem, status, null, codigo ?? statusGoogle ?? tipoProblema);
+  return new ErroConector('definitivo', provider, mensagem, status, null, codigoDoErro, detalhe);
 }

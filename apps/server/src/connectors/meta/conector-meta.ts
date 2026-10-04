@@ -43,7 +43,7 @@ export type OpcoesMeta = {
 const PADRAO: Required<OpcoesMeta> = { diasSincrono: 14, intervaloRelatorioMs: 5_000, prazoRelatorioMs: 10 * 60_000 };
 
 /** Moedas sem casas decimais: o "menor unidade" da Meta já é a unidade. */
-const SEM_DECIMAIS = new Set(['JPY', 'KRW', 'CLP', 'PYG', 'VND', 'ISK', 'HUF', 'TWD', 'COP', 'IDR', 'UGX']);
+export const SEM_DECIMAIS = new Set(['JPY', 'KRW', 'CLP', 'PYG', 'VND', 'ISK', 'HUF', 'TWD', 'COP', 'IDR', 'UGX']);
 
 /** Orçamento da Meta vem na menor unidade da moeda (centavos no BRL) → micros (1 unidade = 1.000.000). */
 export function orcamentoEmMicros(valor: string | undefined, moeda: string | null): number | null {

@@ -42,6 +42,9 @@ export const actionRequest = liame.table('action_request', {
   policyDecision: jsonb('policy_decision').notNull(),
   status: text('status').notNull(),
   statusReason: text('status_reason'),
+  // A execução que a plataforma mandou esperar: quantas vezes e quando tenta de novo (0044).
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: ts('next_attempt_at'),
   actorType: text('actor_type').notNull().default('human'),
   requestedBy: uuid('requested_by').notNull(),
   traceContext: text('trace_context'),

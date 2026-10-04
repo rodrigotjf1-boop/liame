@@ -5,6 +5,7 @@ import type { ActionRow } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
 import { type ApplyResult, CONNECTORS } from '../actions/connectors.js';
 import { writeAudit } from '../audit/audit.js';
+import { ErroConector } from '../connectors/cliente-http.js';
 import { DATABASE } from '../database/database.module.js';
 import { emitEvent } from '../events/outbox.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -16,7 +17,36 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 /** Execução travada por mais que isto (worker caiu no meio) volta para a fila. */
 const STUCK_MINUTES = 10;
 
-type Outcome = { status: 'executada' | 'falhou' | 'estado_mudou' | 'bloqueada'; reason: string | null; result?: Record<string, unknown>; version?: number };
+/** Quantas vezes a execução espera a plataforma (limite de uso, fora do ar) antes de encerrar a ação. */
+export const MAX_ADIAMENTOS = 6;
+const ESPERA_MINIMA_MS = 60_000;
+const ESPERA_MAXIMA_MS = 2 * 3_600_000;
+
+/** O que a plataforma manda esperar: limite de uso, falha passageira e o disjuntor aberto. O resto é recusa ou defeito. */
+const ADIA = new Set(['limite', 'transitorio', 'circuito_aberto']);
+const NOME_DO_PROVEDOR: Record<string, string> = { meta_ads: 'a Meta', regem: 'o Regem' };
+
+/**
+ * Quanto esperar até a próxima tentativa: o que a plataforma pediu, ou 1 minuto dobrando a cada vez; no máximo 2 horas.
+ * Nunca menos que o recuo da vez, para a ação não bater de novo em seguida.
+ */
+export function esperaDoAdiamento(esperarMs: number | null, tentativa: number): number {
+  const recuo = ESPERA_MINIMA_MS * 2 ** Math.max(0, tentativa - 1);
+  return Math.min(ESPERA_MAXIMA_MS, Math.max(esperarMs && esperarMs > 0 ? esperarMs : 0, recuo));
+}
+
+/** Por que a execução esperou, em palavras (sem o texto da plataforma: ele pode trazer o que não é para a tela). */
+function motivoDoAdiamento(err: ErroConector): string {
+  const quem = NOME_DO_PROVEDOR[err.provider] ?? 'a plataforma';
+  if (err.tipo === 'limite') return `${quem} pediu para esperar (limite de uso da conta)`;
+  if (err.tipo === 'circuito_aberto') return `${quem} falhou várias vezes seguidas`;
+  return `${quem} não respondeu`;
+}
+
+type Outcome =
+  | { status: 'executada' | 'falhou' | 'estado_mudou' | 'bloqueada'; reason: string | null; result?: Record<string, unknown>; version?: number }
+  /** A plataforma mandou esperar: nada foi dado como feito, e a ação volta para a fila com a hora da próxima tentativa. */
+  | { status: 'adiada'; reason: string; esperarMs: number | null; result?: undefined; version?: undefined };
 
 /** O connector não aplicou: alguém mexeu no recurso desde o pedido, ou o provedor recusou de vez. */
 function recusa(r: Exclude<ApplyResult, { ok: true }>): Outcome {
@@ -55,9 +85,10 @@ export class ActionExecutor {
 
   async executeBatch(limit = 20, scope: JobScope = {}): Promise<number> {
     const claimed = await withSystem(this.db, async (tx) => {
+      // A ação que a plataforma mandou esperar só volta quando chega a hora dela.
       const r = await tx.execute<{ id: string; tenant_id: string; trace_context: string | null; tool: string; provider: string }>(sql`
         select id, tenant_id, trace_context, tool, provider from liame.action_request
-         where status = 'aprovada' ${tenantFilter(scope, sql`tenant_id`)}
+         where status = 'aprovada' and (next_attempt_at is null or next_attempt_at <= now()) ${tenantFilter(scope, sql`tenant_id`)}
          order by updated_at limit ${limit}
          for update skip locked`);
       if (r.rows.length) {
@@ -85,7 +116,16 @@ export class ActionExecutor {
       if (!row) return;
       const startedAt = new Date().toISOString();
       const approval = await this.validApproval(tx, row);
-      const outcome = await this.run(tx, row, approval);
+      let outcome = await this.run(tx, row, approval);
+      const tentativas = Number(row.attempts ?? 0) + 1;
+      // Esperou vezes demais: a ação se encerra e a reserva volta ao envelope. Pode ter sobrado uma tentativa sem
+      // resposta, então quem pediu confere na plataforma antes de pedir de novo.
+      if (outcome.status === 'adiada' && tentativas >= MAX_ADIAMENTOS) {
+        outcome = {
+          status: 'falhou',
+          reason: `${outcome.reason}; depois de ${MAX_ADIAMENTOS} tentativas, a ação foi encerrada. Confira o objeto na plataforma e peça de novo, se ainda fizer sentido.`,
+        };
+      }
 
       await tx.execute(sql`
         insert into liame.action_execution (id, tenant_id, action_request_id, plan_hash, expected_state, expected_version, observed_state,
@@ -96,9 +136,14 @@ export class ActionExecutor {
                 ${outcome.status === 'executada' ? JSON.stringify(outcome.result ?? null) : null}::jsonb,
                 ${outcome.version ?? null}, ${outcome.status}, ${outcome.reason}, ${startedAt})`);
 
+      if (outcome.status === 'adiada') {
+        await this.adiar(tx, row, approval, outcome.reason, esperaDoAdiamento(outcome.esperarMs, tentativas), tentativas);
+        return;
+      }
+
       const ok = outcome.status === 'executada';
       await tx.execute(sql`
-        update liame.action_request set status = ${ok ? 'executada' : 'falhou'}, status_reason = ${outcome.reason}, updated_at = now()
+        update liame.action_request set status = ${ok ? 'executada' : 'falhou'}, status_reason = ${outcome.reason}, next_attempt_at = null, updated_at = now()
          where id = ${id}`);
       if (ok) {
         await this.budget.executed(tx, { tenantId, brandId: row.brand_id, actionId: id, amountMicros: Number(row.reserved_micros) });
@@ -157,11 +202,49 @@ export class ActionExecutor {
     const expected = row.before_version ?? 0;
     // Primeiro valida (quando o provedor oferece), depois aplica.
     const attrs = { 'liame.provider': row.provider, 'liame.tool': row.tool };
-    const check = await inSpan('conector.validar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { validateOnly: true, requestedBy: row.requested_by }));
-    if (!check.ok) return recusa(check);
-    const applied = await inSpan('conector.aplicar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { requestedBy: row.requested_by }));
-    if (!applied.ok) return recusa(applied);
-    return { status: 'executada', reason: null, result: applied.state, version: applied.version };
+    try {
+      const check = await inSpan('conector.validar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { validateOnly: true, requestedBy: row.requested_by }));
+      if (!check.ok) return recusa(check);
+      const applied = await inSpan('conector.aplicar', attrs, () => connector.apply(tx, ref, row.desired_state, expected, { requestedBy: row.requested_by }));
+      if (!applied.ok) return recusa(applied);
+      return { status: 'executada', reason: null, result: applied.state, version: applied.version };
+    } catch (err) {
+      // A plataforma mandou esperar (limite de uso) ou não respondeu: a ação é adiada, em vez de insistir (A4-3).
+      // O erro vem do cliente HTTP, fora do banco: a transação segue boa para gravar a espera.
+      if (err instanceof ErroConector && ADIA.has(err.tipo)) return { status: 'adiada', reason: motivoDoAdiamento(err), esperarMs: err.esperarMs };
+      throw err;
+    }
+  }
+
+  /** A ação volta para a fila, aprovada, com a hora da próxima tentativa; a reserva do envelope fica. */
+  private async adiar(tx: Tx, row: ActionRow, approvalId: string | null, motivo: string, esperaMs: number, tentativas: number): Promise<void> {
+    const segundos = Math.ceil(esperaMs / 1000);
+    await tx.execute(sql`
+      update liame.action_request
+         set status = 'aprovada', status_reason = ${motivo}, attempts = ${tentativas},
+             next_attempt_at = now() + make_interval(secs => ${segundos}), updated_at = now()
+       where id = ${row.id}`);
+    await advance(tx, {
+      tenantId: row.tenant_id,
+      kind: 'acao',
+      subjectId: row.id,
+      steps: [{ name: 'execucao', status: 'aguardando', output: { adiada: true, motivo, tentativa: tentativas } }],
+      run: 'em_andamento',
+    });
+    await writeAudit(tx, {
+      tenantId: row.tenant_id,
+      actorType: 'system',
+      actorId: null,
+      actorLabel: 'Liame (execução)',
+      action: 'acao.adiar',
+      resourceType: 'action_request',
+      resourceId: row.id,
+      after: { motivo, tentativa: tentativas, espera_segundos: segundos },
+      approvalId,
+      tool: row.tool,
+      origin: 'worker',
+    });
+    this.logger.warn(`ação ${row.id} adiada por ${segundos} s (tentativa ${tentativas} de ${MAX_ADIAMENTOS}): ${motivo}`);
   }
 
   /** Aprovação suficiente para o hash atual do plano, ou nula. */

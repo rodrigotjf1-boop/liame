@@ -6468,6 +6468,17 @@
                         "null"
                       ]
                     },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "next_attempt_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "policy": {
                       "type": "object",
                       "properties": {
@@ -6713,6 +6724,8 @@
                     "mode",
                     "status",
                     "status_reason",
+                    "attempts",
+                    "next_attempt_at",
                     "policy",
                     "approvals",
                     "workflow",
@@ -7071,6 +7084,17 @@
                               "null"
                             ]
                           },
+                          "attempts": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "next_attempt_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "policy": {
                             "type": "object",
                             "properties": {
@@ -7316,6 +7340,8 @@
                           "mode",
                           "status",
                           "status_reason",
+                          "attempts",
+                          "next_attempt_at",
                           "policy",
                           "approvals",
                           "workflow",
@@ -7473,6 +7499,17 @@
                       ]
                     },
                     "status_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "next_attempt_at": {
                       "type": [
                         "string",
                         "null"
@@ -7723,6 +7760,8 @@
                     "mode",
                     "status",
                     "status_reason",
+                    "attempts",
+                    "next_attempt_at",
                     "policy",
                     "approvals",
                     "workflow",
@@ -7960,6 +7999,17 @@
                         "null"
                       ]
                     },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "next_attempt_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "policy": {
                       "type": "object",
                       "properties": {
@@ -8205,6 +8255,8 @@
                     "mode",
                     "status",
                     "status_reason",
+                    "attempts",
+                    "next_attempt_at",
                     "policy",
                     "approvals",
                     "workflow",
@@ -8449,6 +8501,17 @@
                         "null"
                       ]
                     },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "next_attempt_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "policy": {
                       "type": "object",
                       "properties": {
@@ -8694,6 +8757,8 @@
                     "mode",
                     "status",
                     "status_reason",
+                    "attempts",
+                    "next_attempt_at",
                     "policy",
                     "approvals",
                     "workflow",
@@ -9003,6 +9068,17 @@
                         "null"
                       ]
                     },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "next_attempt_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "policy": {
                       "type": "object",
                       "properties": {
@@ -9248,6 +9324,8 @@
                     "mode",
                     "status",
                     "status_reason",
+                    "attempts",
+                    "next_attempt_at",
                     "policy",
                     "approvals",
                     "workflow",
@@ -9595,6 +9673,17 @@
                         "null"
                       ]
                     },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "next_attempt_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "policy": {
                       "type": "object",
                       "properties": {
@@ -9840,6 +9929,8 @@
                     "mode",
                     "status",
                     "status_reason",
+                    "attempts",
+                    "next_attempt_at",
                     "policy",
                     "approvals",
                     "workflow",

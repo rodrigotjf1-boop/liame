@@ -193,6 +193,10 @@ export function resultadoDe(a: ActionResponse): { ok: boolean; texto: string } {
   const quem = aprovacao ? `Aprovado por ${aprovacao.approver_name} às ${horaDe(aprovacao.created_at)}` : 'Aprovado pela política (dentro dos limites)';
   if (a.status === 'falhou') return { ok: false, texto: `${quem}, mas não foi executado: ${a.status_reason ?? 'a execução falhou'}.`.replace('..', '.') };
   if (a.status === 'executada') return { ok: true, texto: `${quem} e executado às ${horaDe(a.updated_at)}.` };
+  // A plataforma mandou esperar (limite de uso da conta, fora do ar): o Liame adia, em vez de insistir.
+  if (a.next_attempt_at) {
+    return { ok: true, texto: `${quem}. Ainda não foi executado: ${a.status_reason ?? 'a plataforma pediu para esperar'}. O Liame tenta de novo às ${horaDe(a.next_attempt_at)}.` };
+  }
   return { ok: true, texto: `${quem}. O Liame executa em instantes.` };
 }
 

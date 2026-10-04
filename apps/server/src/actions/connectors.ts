@@ -1,11 +1,13 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { metaAnunciosConnector } from './meta-anuncios.js';
 import { regemCupomConnector } from './regem-cupom.js';
 import type { ResourceState } from './tools.js';
 
 // Connectors (arquitetura §6): um por provedor, com a mesma interface. Na A1 só existia o sandbox
 // (no próprio banco). O primeiro de verdade é o do Regem (A2.5, F6 parte 2): criar cupom de campanha.
-// Meta e Google chegam na A4 e passam pelo mesmo Action Service.
+// O da Meta chegou na A4 (X1): situação e verba diária de campanha, conjunto e anúncio; nenhuma ferramenta
+// o usa antes da X2. O do Google chega na A5. Todos passam pelo mesmo Action Service.
 
 export interface ResourceRef {
   tenantId: string;
@@ -33,7 +35,10 @@ export interface Connector {
   /** Flag de escrita do provedor (ADR-012); nula = sem flag (sandbox). */
   readonly writeFlag: string | null;
   read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null>;
-  /** Aplica o estado desejado se a versão ainda for a esperada (concorrência otimista). */
+  /**
+   * Aplica o estado desejado se a versão ainda for a esperada (concorrência otimista). O que é passageiro (limite de
+   * uso da plataforma, fora do ar) sobe como `ErroConector`: quem executa adia a ação, em vez de insistir.
+   */
   apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options?: ApplyOptions): Promise<ApplyResult>;
 }
 
@@ -64,4 +69,4 @@ export class SandboxConnector implements Connector {
   }
 }
 
-export const CONNECTORS: Record<string, Connector> = { sandbox: new SandboxConnector(), regem: regemCupomConnector };
+export const CONNECTORS: Record<string, Connector> = { sandbox: new SandboxConnector(), regem: regemCupomConnector, meta_ads: metaAnunciosConnector };
