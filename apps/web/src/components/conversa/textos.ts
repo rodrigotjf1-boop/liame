@@ -1,4 +1,4 @@
-import type { ConversationBlock, ConversationMessage, ConversationSummary, CouponRequest, DemandResponse, ExplanationSegment, SupportContact } from '@liame/contracts';
+import type { ConversationBlock, ConversationCard, ConversationMessage, ConversationSummary, CouponRequest, DemandResponse, ExplanationSegment, SupportContact } from '@liame/contracts';
 import type { NomeIcone } from '@/components/ui/icone';
 import { diasAte, horaDe, inteiro, quandoComHora } from '@/lib/formato';
 import type { Modo } from '@/lib/modo';
@@ -196,6 +196,19 @@ export function avisoDoSistema(m: Pick<ConversationMessage, 'notice' | 'retry_at
 }
 
 /** "O atendimento responde em até 1 dia útil, de segunda a sexta-feira, das 9h às 18h (horário de Brasília)." */
+/**
+ * A frase do aviso quando a LIA já tinha registrado algo antes de a resposta ser retirada (ou de ela ficar fora do
+ * ar): o registro continua valendo e aparece logo abaixo. Nula quando não há registro.
+ */
+export function registradoNoAviso(cards: ConversationCard[]): string | null {
+  if (!cards.length) return null;
+  const demandas = cards.every((c) => c.kind === 'demanda');
+  const propostas = cards.every((c) => c.kind === 'proposta_cupom');
+  if (demandas) return cards.length === 1 ? 'A demanda que a LIA registrou nesta resposta continua valendo: está logo abaixo.' : 'As demandas que a LIA registrou nesta resposta continuam valendo: estão logo abaixo.';
+  if (propostas) return 'A proposta de cupom que a LIA mandou para Aprovações nesta resposta continua valendo: está logo abaixo.';
+  return 'O que a LIA registrou nesta resposta continua valendo: está logo abaixo.';
+}
+
 export function prazoDoAtendimento(c: SupportContact): string {
   return `O atendimento responde ${c.response_time}, ${c.hours}.`;
 }

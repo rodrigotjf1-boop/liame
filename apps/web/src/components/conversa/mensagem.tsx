@@ -11,13 +11,14 @@ import { horaDe } from '@/lib/formato';
 import type { Modo } from '@/lib/modo';
 import { type AcoesDosCartoes, CartaoDaConversa, ContatoDoAtendimento } from './cartoes';
 import { RetornoDaMensagem } from './retorno-da-mensagem';
-import { avisoDoSistema, caminhosDa, gruposDe, textoDaResposta } from './textos';
+import { avisoDoSistema, caminhosDa, gruposDe, registradoNoAviso, textoDaResposta } from './textos';
 
 // As mensagens da conversa (protótipo P5). A da pessoa, como foi guardada (sem dado pessoal); a da LIA, em blocos já
 // conferidos, com a fonte de cada número, o que ela leu e o que ela registrou; e o aviso do sistema, que nunca é
 // escrito por IA. Durante a resposta, aparece o que a LIA está lendo.
 
-type AvisoDoServidor = Pick<ConversationMessage, 'notice' | 'retry_at' | 'budget_window' | 'stale_sources' | 'contact'>;
+/** O aviso que ficou no lugar de uma resposta. `cards`: o que a LIA já tinha registrado antes dele (a demanda, a proposta de cupom). */
+type AvisoDoServidor = Pick<ConversationMessage, 'notice' | 'retry_at' | 'budget_window' | 'stale_sources' | 'contact' | 'cards'>;
 
 export type Item =
   | { de: 'eu'; id: string; em: string; texto: string; nota: string | null }
@@ -261,17 +262,22 @@ export function MensagemDoSistema({
   podeVerContas,
   ultima,
   contato,
+  cartoes,
   aoTentarDeNovo,
 }: {
   item: Extract<Item, { de: 'sistema' }>;
   podeVerContas: boolean;
   ultima: boolean;
+  cartoes: AcoesDosCartoes;
   /** O contato do atendimento (da lista de conversas), para o aviso que não trouxe o dele. */
   contato: SupportContact | null;
   aoTentarDeNovo: () => void;
 }) {
   const a = avisoDoSistema(item.m);
   const doAtendimento = item.m.contact ?? contato;
+  // O texto da LIA não apareceu, mas o que ela registrou antes disso (a demanda, a proposta) continua valendo: o aviso
+  // mostra o cartão e não oferece tentar de novo (a mesma pergunta registraria outro pedido).
+  const registrado = registradoNoAviso(item.m.cards);
   return (
     <li className="msg msg--sistema" id={`msg-${item.id}`}>
       <div className="msg-cab">
@@ -291,9 +297,10 @@ export function MensagemDoSistema({
           {a.paragrafos.map((p) => (
             <p key={p}>{p}</p>
           ))}
+          {registrado && <p>{registrado}</p>}
         </div>
         {a.acao === 'contato' && doAtendimento && <ContatoDoAtendimento contato={doAtendimento} focarAoAparecer={item.focar} />}
-        {a.acao === 'tentar' && ultima && (
+        {a.acao === 'tentar' && ultima && !registrado && (
           <div className="artefato-acoes">
             <button className="btn btn--sm" type="button" onClick={aoTentarDeNovo}>
               <Icone nome="refresh" pequeno />
@@ -309,6 +316,13 @@ export function MensagemDoSistema({
           </div>
         )}
       </div>
+      {registrado && (
+        <div className="msg-corpo">
+          {item.m.cards.map((c, i) => (
+            <CartaoDaConversa key={`${c.kind}-${i}`} cartao={c} numeros={[]} aoTocarNumero={() => {}} acoes={cartoes} />
+          ))}
+        </div>
+      )}
     </li>
   );
 }

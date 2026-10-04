@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandResponse, ConversationListResponse, ConversationMessage, ConversationStep, ConversationSummary } from '@liame/contracts';
+import type { BrandResponse, ConversationCard, ConversationListResponse, ConversationMessage, ConversationStep, ConversationSummary } from '@liame/contracts';
 import { type FormEvent, type KeyboardEvent as TeclaDoReact, useCallback, useEffect, useRef, useState } from 'react';
 import { IconeLia } from '@/components/marca/logo';
 import { useAvisar } from '@/components/ui/avisos';
@@ -27,7 +27,15 @@ import { contaDaMensagem, diaDaMensagem, faixaDa, MENSAGEM_MAXIMA, notaDeDadoPes
 
 type Lista = { tipo: 'vazia' } | { tipo: 'carregando' } | { tipo: 'ok'; dados: ConversationListResponse } | { tipo: 'erro'; problema: Problema };
 
-const AVISO_VAZIO = { retry_at: null, budget_window: null, stale_sources: [], contact: null };
+const AVISO_VAZIO = { retry_at: null, budget_window: null, stale_sources: [], contact: null, cards: [] };
+
+/** Troca os cartões de toda mensagem que os tem: a resposta da LIA e o aviso que ficou no lugar de uma. */
+const trocarCartoes = (itens: Item[], trocar: (c: ConversationCard) => ConversationCard): Item[] =>
+  itens.map((i) => {
+    if (i.de === 'lia' && (i.fase === 'pronta' || i.fase === 'parada')) return { ...i, m: { ...i.m, cards: i.m.cards.map(trocar) } };
+    if (i.de === 'sistema') return { ...i, m: { ...i.m, cards: i.m.cards.map(trocar) } };
+    return i;
+  });
 
 /** A mensagem guardada, do jeito que a lista mostra. */
 function itemDa(m: ConversationMessage): Item {
@@ -329,9 +337,7 @@ export function PainelDaLia({ modal }: { modal: boolean }) {
     const r = await chamar(() => api.POST('/v1/demands/{id}/cancel', { params: { path: { id } } }));
     setCancelando(null);
     if (!r.ok) return avisar(mensagemDe(r.problema), { tipo: 'perigo' });
-    setItens((atuais) =>
-      atuais.map((i) => (i.de === 'lia' && (i.fase === 'pronta' || i.fase === 'parada') ? { ...i, m: { ...i.m, cards: i.m.cards.map((c) => (c.demand?.id === id ? { ...c, demand: r.data } : c)) } } : i)),
-    );
+    setItens((atuais) => trocarCartoes(atuais, (c) => (c.demand?.id === id ? { ...c, demand: r.data } : c)));
     avisar('Demanda cancelada. Nada foi feito.');
     setAnuncio('Demanda cancelada.');
     focarNaConversa();
@@ -342,13 +348,7 @@ export function PainelDaLia({ modal }: { modal: boolean }) {
     const r = await chamar(() => api.POST('/v1/coupons/regem/{id}/cancel', { params: { path: { id: acaoId } } }));
     setCancelando(null);
     if (!r.ok) return avisar(mensagemDe(r.problema), { tipo: 'perigo' });
-    setItens((atuais) =>
-      atuais.map((i) =>
-        i.de === 'lia' && (i.fase === 'pronta' || i.fase === 'parada')
-          ? { ...i, m: { ...i.m, cards: i.m.cards.map((c) => (c.coupon?.request.action_id === acaoId ? { ...c, coupon: { ...c.coupon, request: { ...c.coupon.request, status: 'cancelada' } } } : c)) } }
-          : i,
-      ),
-    );
+    setItens((atuais) => trocarCartoes(atuais, (c) => (c.coupon?.request.action_id === acaoId ? { ...c, coupon: { ...c.coupon, request: { ...c.coupon.request, status: 'cancelada' } } } : c)));
     aprovacoes.recarregar();
     avisar('Pedido de cupom cancelado. Nada foi criado no Regem.');
     setAnuncio('Pedido de cupom cancelado.');
@@ -580,7 +580,7 @@ export function PainelDaLia({ modal }: { modal: boolean }) {
             ) : item.de === 'lia' ? (
               <MensagemDaLia key={item.id} item={item} modo={modo} pode={pode} cartoes={cartoes} ultima={ultima} aoPerguntarDeNovo={tentarDeNovo} />
             ) : (
-              <MensagemDoSistema key={item.id} item={item} podeVerContas={pode('contas.ver')} ultima={ultima} contato={dados?.contact ?? null} aoTentarDeNovo={tentarDeNovo} />
+              <MensagemDoSistema key={item.id} item={item} podeVerContas={pode('contas.ver')} ultima={ultima} contato={dados?.contact ?? null} cartoes={cartoes} aoTentarDeNovo={tentarDeNovo} />
             );
           return separador ? [separador, mensagem] : mensagem;
         })}
