@@ -93,7 +93,7 @@ cd ../.. && node evals/apoio/portao.mjs /tmp/eval.json --limiar 0.95 --resumo /t
 
 O `resumo.json` traz a nota (de 0 a 1), o resultado por grupo, os casos reprovados com o motivo e os tokens gastos. A nota é a que vai para `eval_score` quando a rota da tarefa for publicada.
 
-Onde o modelo roda segue `AI_INFERENCE_GEO` (padrão `us`), como em produção.
+Onde o modelo roda segue `AI_INFERENCE_GEO` (padrão `us`), como em produção. Modelo que não aceita rodar só nos Estados Unidos (anterior ao Claude 4.6, como o Haiku 4.5) não é avaliado com `us`: a chamada falha com o motivo, sem gasto, como o gateway faz em produção (`fora_da_regiao`).
 
 ## Acrescentar um caso
 

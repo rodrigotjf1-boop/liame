@@ -71,6 +71,8 @@ Configuração versionada (dado, não código):
 
 Tarefas iniciais: `strategic_plan`, `creative_generation`, `comment_classification`, `weekly_summary`, `anomaly_explanation`, `campaign_decision`, `compliance_review`, `client_conversation`. A escolha é por **qualidade medida, custo, latência e disponibilidade**, nunca por preferência de fornecedor.
 
+**Região (D-A3-13).** Enquanto a regra for rodar só nos Estados Unidos (`AI_INFERENCE_GEO=us`), só entra em rota o modelo que aceita essa opção (na Anthropic, do Claude 4.6 em diante). O gateway confere a cada chamada (`aceitaGeo`, em `ai/modelos.ts`): o modelo que não aceita não é chamado, a tentativa fica em `ai_usage` com `fora_da_regiao` e a rota segue para a reserva. O eval da tarefa recusa o mesmo modelo, com o motivo, antes de qualquer gasto.
+
 ### 3.1 Perfis por finalidade e escolha do cliente (ADR-016)
 
 - **Finalidades:** conversa e atendimento · análise e decisão · texto criativo · imagem · vídeo curto · voz (depois). Cada `task_type` pertence a uma finalidade.

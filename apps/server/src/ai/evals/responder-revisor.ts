@@ -13,7 +13,8 @@ import { type CasoDoRevisor, textoDoCaso } from './revisor.js';
 export async function responderParecer(modelos: ModelosIa, alvo: AlvoDoEval, caso: CasoDoRevisor): Promise<RespostaDoEval> {
   const model = modelos.modelo(alvo.provider, alvo.model);
   if (!model) throw new Error(`eval: sem credencial para ${alvo.provider}`);
-  const providerOptions = modelos.opcoes(alvo.provider, alvo.effort ?? null);
+  if (!modelos.atendeARegiao(alvo.provider, alvo.model)) throw new Error(`eval: ${alvo.model} não aceita rodar só nos Estados Unidos (AI_INFERENCE_GEO=us)`);
+  const providerOptions = modelos.opcoes(alvo.provider, alvo.model, alvo.effort ?? null);
   try {
     const r = await generateText({
       model,

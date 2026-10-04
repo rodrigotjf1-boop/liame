@@ -3,6 +3,7 @@ import { join, relative, resolve } from 'node:path';
 import { APICallError } from 'ai';
 import { describe, expect, it } from 'vitest';
 import { codigoDoErro } from '../src/ai/gateway.js';
+import { aceitaGeo, ModelosIa } from '../src/ai/modelos.js';
 import { custoMicros, type PrecoModelo, tokensDe } from '../src/ai/precos.js';
 import { limparJson, limparTexto } from '../src/ai/sanitizar.js';
 import { loadConfig } from '../src/config.js';
@@ -122,6 +123,36 @@ describe('configuração da IA', () => {
       AI_CONVERSATION_MAX_ANSWERS: '8',
     });
     expect(c.ai).toEqual({ anthropicApiKey: 'x'.repeat(40), inferenceGeo: 'global', dailyLimitUsdMicros: 500_000, monthlyLimitUsdMicros: 7_250_000, userHourlyCalls: 5, conversationMaxAnswers: 8 });
+  });
+
+  it('rodar só nos Estados Unidos só vai ao modelo que aceita a opção: do Claude 4.6 em diante', () => {
+    // Os quatro modelos com preço publicado (migration 0028): o Haiku 4.5 é o único anterior ao 4.6.
+    expect(aceitaGeo('anthropic', 'claude-haiku-4-5-20251001')).toBe(false);
+    expect(aceitaGeo('anthropic', 'claude-sonnet-5-5')).toBe(true);
+    expect(aceitaGeo('anthropic', 'claude-opus-5-5')).toBe(true);
+    expect(aceitaGeo('anthropic', 'claude-fable-5-1')).toBe(true);
+    // A fronteira é o 4.6, com data no fim do id ou sem ela; o que não dá para ler não aceita.
+    expect(['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-opus-4-7', 'claude-opus-5', 'claude-opus-4-6-20260101'].map((m) => aceitaGeo('anthropic', m))).toEqual([true, true, true, true, true]);
+    expect(['claude-opus-4-5-20251101', 'claude-sonnet-4-5-20250929', 'claude-opus-4-1-20250805', 'claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022', 'modelo-novo', ''].map((m) => aceitaGeo('anthropic', m))).toEqual([
+      false, false, false, false, false, false, false,
+    ]);
+    expect(aceitaGeo('outro', 'claude-opus-5-5')).toBe(false);
+
+    const us = new ModelosIa(loadConfig({ NODE_ENV: 'test' }));
+    const global = new ModelosIa(loadConfig({ NODE_ENV: 'test', AI_INFERENCE_GEO: 'global' }));
+    // Quem aceita: a opção vai no pedido e a região entra no custo.
+    expect(us.atendeARegiao('anthropic', 'claude-sonnet-5-5')).toBe(true);
+    expect(us.geo('anthropic', 'claude-sonnet-5-5')).toBe('us');
+    expect(us.opcoes('anthropic', 'claude-sonnet-5-5', 'low')).toEqual({ anthropic: { inferenceGeo: 'us', effort: 'low' } });
+    // Quem não aceita: com a regra de rodar só nos Estados Unidos, não é chamado; e a opção nunca vai no pedido (daria 400).
+    expect(us.atendeARegiao('anthropic', 'claude-haiku-4-5-20251001')).toBe(false);
+    expect(us.opcoes('anthropic', 'claude-haiku-4-5-20251001', null)).toBeUndefined();
+    expect(global.atendeARegiao('anthropic', 'claude-haiku-4-5-20251001')).toBe(true);
+    expect(global.geo('anthropic', 'claude-haiku-4-5-20251001')).toBe('global');
+    expect(global.opcoes('anthropic', 'claude-haiku-4-5-20251001', null)).toBeUndefined();
+    expect(global.opcoes('anthropic', 'claude-sonnet-5-5', 'medium')).toEqual({ anthropic: { effort: 'medium' } });
+    // Outro fornecedor não tem a opção: nada no pedido, nada no custo, e a regra não o barra.
+    expect([us.atendeARegiao('teste', 'eco'), us.geo('teste', 'eco'), us.opcoes('teste', 'eco', 'low')]).toEqual([true, null, undefined]);
   });
 
   it('recusa subir com teto do mês menor que o do dia, região desconhecida ou limite zerado', () => {

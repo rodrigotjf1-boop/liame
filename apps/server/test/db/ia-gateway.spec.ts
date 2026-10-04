@@ -166,6 +166,36 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     modelos.porChave.delete('anthropic/claude-opus-5-5');
   });
 
+  it('A3-2: o modelo que não aceita rodar só nos Estados Unidos (Haiku 4.5) não é chamado enquanto essa for a regra; com a regra global, vai sem a opção e sem os 10%', async () => {
+    const d = await dono();
+    // Os preços são os da tabela publicada (migration 0028): o Haiku a US$ 1 e US$ 5 por milhão; o Opus a US$ 4 e US$ 20.
+    const haiku = responde('do haiku');
+    const opus = responde('da reserva');
+    modelos.porChave.set('anthropic/claude-haiku-4-5-20251001', haiku);
+    modelos.porChave.set('anthropic/claude-opus-5-5', opus);
+    const task = await rota({ provider: 'anthropic', model: 'claude-haiku-4-5-20251001' }, { reserva: [{ provider: 'anthropic', model: 'claude-opus-5-5' }] });
+
+    // Só nos Estados Unidos: o Haiku rodaria em qualquer região, então fica de fora (sem chamada e sem custo) e a reserva atende.
+    const us = await gateway({ inferenceGeo: 'us' }).generate(pedido(d, task));
+    expect(us.text).toBe('da reserva');
+    expect(haiku.doGenerateCalls).toHaveLength(0);
+    expect(opus.doGenerateCalls[0]!.providerOptions).toEqual({ anthropic: { inferenceGeo: 'us' } });
+
+    // Global: o Haiku atende, sem a opção no pedido (ela devolveria 400) e sem os 10% no custo.
+    const global = await gateway({ inferenceGeo: 'global' }).generate(pedido(d, task));
+    expect(global.text).toBe('do haiku');
+    expect(haiku.doGenerateCalls[0]!.providerOptions).toBeUndefined();
+    expect(global.costUsdMicros).toBe(3_500);
+
+    expect((await usos(d.tenantId, task)).map((u) => [u.model, u.served_by, u.inference_geo, u.outcome, u.error_code, u.cost_usd_micros])).toEqual([
+      ['claude-haiku-4-5-20251001', 'principal', null, 'erro', 'fora_da_regiao', 0],
+      ['claude-opus-5-5', 'reserva', 'us', 'ok', null, 15_400],
+      ['claude-haiku-4-5-20251001', 'principal', 'global', 'ok', null, 3_500],
+    ]);
+    modelos.porChave.delete('anthropic/claude-haiku-4-5-20251001');
+    modelos.porChave.delete('anthropic/claude-opus-5-5');
+  });
+
   it('A3-3: dado pessoal sai antes do envio e não fica no banco, na resposta nem no span', async () => {
     const d = await dono();
     const m = await modelo(responde('Ligue para (21) 98888-7777 e confirme com maria@cliente.com.'));

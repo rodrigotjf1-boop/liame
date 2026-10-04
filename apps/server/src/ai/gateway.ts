@@ -301,6 +301,11 @@ export class AiGateway {
         guardar(this.falha(candidato, model ? 'sem_preco' : 'sem_credencial'));
         continue;
       }
+      // Modelo que não aceita rodar só nos Estados Unidos não é chamado enquanto essa for a regra do ambiente (D-A3-13).
+      if (!this.modelos.atendeARegiao(candidato.provider, candidato.model)) {
+        guardar(this.falha(candidato, 'fora_da_regiao'));
+        continue;
+      }
       const t = await pedir(candidato, model, preco);
       guardar(t.tentativa);
       if (t.resposta) {
@@ -538,8 +543,8 @@ export class AiGateway {
   ): Promise<{ tentativa: Tentativa; resposta: Resposta | null }> {
     const { schema } = opcoes;
     const conta = { chamadas: 0, falhas: 0 };
-    const geo = this.modelos.geo(candidato.provider);
-    const providerOptions = this.modelos.opcoes(candidato.provider, rota.effort);
+    const geo = this.modelos.geo(candidato.provider, candidato.model);
+    const providerOptions = this.modelos.opcoes(candidato.provider, candidato.model, rota.effort);
     const atributos = {
       'gen_ai.operation.name': 'chat',
       'gen_ai.provider.name': candidato.provider,
