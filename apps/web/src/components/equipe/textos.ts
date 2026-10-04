@@ -98,9 +98,9 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
     icone: 'lia',
     modo: 'Conversa',
     resumo:
-      'A única da equipe que conversa com as pessoas: responde com os números do sistema, registra pedidos como demanda e leva propostas de cupom para Aprovações. Não mexe em campanha.',
-    faz: ['Responde com os números do sistema', 'Abre demanda para a equipe', 'Propõe cupom (vai para Aprovações)'],
-    nunca: ['Mexer em campanha', 'Aprovar gasto'],
+      'A única da equipe que conversa com as pessoas: responde com os números do sistema, conta o que a equipe fez, registra pedidos como demanda e leva propostas de cupom para Aprovações. Não mexe em campanha.',
+    faz: ['Responde com os números do sistema', 'Conta o que a equipe fez, como esta tela mostra', 'Abre demanda para a equipe', 'Propõe cupom (vai para Aprovações)'],
+    nunca: ['Mexer em campanha', 'Aprovar gasto', 'Ligar ou desligar funcionário'],
   },
   analista: {
     nome: 'Analista de dados',
@@ -129,7 +129,7 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
     modo: 'Política',
     resumo:
       'Confere todo texto feito por IA antes de aparecer: conteúdo político, promessa de resultado, categoria proibida, dado pessoal e as regras da sua marca. Quem decide é o código; ele nunca aprova sozinho.',
-    faz: ['Barra texto que fere uma regra'],
+    faz: ['Barra texto que fere uma regra', 'Com o revisor de IA ligado para a empresa, confere também o tom, a clareza e as alegações'],
     nunca: ['Aprovar sozinho o que é sensível', 'Ser desligado: sem ele, nenhum texto de IA aparece'],
   },
   estrategista: {

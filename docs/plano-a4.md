@@ -45,7 +45,7 @@ Cada entrega é um PR com CI verde. **Migrations em negrito**: testadas no local
 
 Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 → X5 → X8 (as telas entram com cada parte, pelo protótipo aprovado).
 
-**Andamento:** X1 entregue em 04/10/2026, com a reconferência da seção 8 para a escrita de situação e verba (base §2.1): o conector `meta_ads` (lê o estado na Meta, valida com `validate_only`, escreve, confere), a espera da execução quando a Meta manda esperar (`next_attempt_at` no pedido) e a migration **0044**. Detalhe em `andamento.md`. **X2 entregue em 04/10/2026:** as ferramentas de anúncio na Meta (verba diária, pausar e retomar campanha, conjunto e anúncio), a política da distribuição na versão 3 (limite de frequência por objeto com o provedor certo, ±10% por pedido, o pedido de uma pessoa esperando aprovação), os limites da empresa fechados por padrão, a leitura na hora do pedido com o motivo quando a Meta falha, e a volta (`POST /v1/actions/{id}/undo`), com a migration **0045**. Com a flag `meta_write` desligada para todos, nada escreve na Meta. As decisões tomadas na entrega estão na seção 4 (D-A4-12 a D-A4-17), para o dono confirmar. **Login da Meta para a escrita (04/10/2026):** a configuração de escrita é outra (`META_LOGIN_CONFIG_ID_ESCRITA`), escolhida pela flag `meta_write` da empresa (D-A4-18); sem migration.
+**Andamento:** X1 entregue em 04/10/2026, com a reconferência da seção 8 para a escrita de situação e verba (base §2.1): o conector `meta_ads` (lê o estado na Meta, valida com `validate_only`, escreve, confere), a espera da execução quando a Meta manda esperar (`next_attempt_at` no pedido) e a migration **0044**. Detalhe em `andamento.md`. **X2 entregue em 04/10/2026:** as ferramentas de anúncio na Meta (verba diária, pausar e retomar campanha, conjunto e anúncio), a política da distribuição na versão 3 (limite de frequência por objeto com o provedor certo, ±10% por pedido, o pedido de uma pessoa esperando aprovação), os limites da empresa fechados por padrão, a leitura na hora do pedido com o motivo quando a Meta falha, e a volta (`POST /v1/actions/{id}/undo`), com a migration **0045**. Com a flag `meta_write` desligada para todos, nada escreve na Meta. As decisões tomadas na entrega estão na seção 4 (D-A4-12 a D-A4-17), aprovadas pelo dono em 04/10/2026. **Login da Meta para a escrita (04/10/2026):** a configuração de escrita é outra (`META_LOGIN_CONFIG_ID_ESCRITA`), escolhida pela flag `meta_write` da empresa (D-A4-18, aprovada em 04/10/2026); sem migration.
 
 ## 4. Decisões (aprovadas pelo dono em 03/10/2026, como recomendadas)
 
@@ -63,7 +63,7 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 | D-A4-10 | **Onde a peça fica** | No armazenamento do Liame (o mesmo cofre de mídia), da empresa; vai para a Meta só depois de aprovada | A empresa vê e decide antes de publicar |
 | D-A4-11 | **Google** | Continua só leitura na A4; a escrita entra na A5 (roadmap) | Um canal por vez, com o trilho provado |
 
-**Decisões tomadas na X2 (04/10/2026), pela recomendação, para o dono confirmar ou mudar:**
+**Decisões tomadas na X2 e no login de escrita (04/10/2026), pela recomendação, e aprovadas pelo dono no mesmo dia ("tudo aprovado e seguir o recomendado"):**
 
 | # | Decisão | O que foi feito | Por quê |
 | --- | --- | --- | --- |
@@ -127,7 +127,7 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 | X1 | Criar a configuração de **escrita** do login da Meta, com `ads_management` (a de leitura fica como está; eu passo o caminho, um print por vez), pôr o ID dela em `META_LOGIN_CONFIG_ID_ESCRITA` no EasyPanel (`liame-api`) e, com a flag `meta_write` ligada, conectar a Meta de novo no Liame |
 | Clientes de fora | Enviar o App Review de `ads_management` (com o vídeo da aprovação e da execução, que eu roteirizo) depois do X2 |
 | X2 | O teto por ação e o envelope do mês do piloto (quanto o Liame pode comprometer). Sem eles, o Liame só reduz verba e pausa na Meta; aumentar e retomar ficam negados. A tela para definir os dois chega com a X4 |
-| X2 | Confirmar ou mudar as decisões D-A4-12 a D-A4-18 (seção 4) |
+| X2 | ✅ Decisões D-A4-12 a D-A4-18 aprovadas (04/10/2026) |
 | X7 | Conta no fornecedor de imagem escolhido no eval; a chave vai direto para o EasyPanel (`liame-api` e `liame-worker`), nunca para a conversa |
 | Telas | Aprovar P9 a P11 |
 | Ligar | Decidir quando ligar a flag `meta_write` para a Mister Burgers (comando `ligar-flag`) |
