@@ -38,7 +38,13 @@ export function ResumoConteudo({ r, equipe, nomePessoa, nomeMarca, agora, pode, 
   }, [r, agora]);
   const fontes = useFontes(dados.lista);
   const veredito = vereditoDo(r);
-  const itens = precisaDe(r, pode('vendas.ver'), pode('contas.ver'), pode('acoes.aprovar'));
+  // O que a pessoa decide: as ações e os planos, na tela Aprovações (de quem acompanha as campanhas); a promoção de um funcionário, em Sua equipe.
+  const verCampanhas = pode('campanhas.ver');
+  const itens = precisaDe(r, pode('vendas.ver'), pode('contas.ver'), {
+    acoes: verCampanhas && pode('acoes.aprovar'),
+    planos: verCampanhas && pode('planos.decidir'),
+    autonomia: verCampanhas && pode('politicas.gerenciar'),
+  });
   const linhasDaEquipe = equipe ? equipeDo(equipe) : [];
   const primeira = r.state === 'primeira_semana';
   const semRegem = r.state === 'sem_regem';

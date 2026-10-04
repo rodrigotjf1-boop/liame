@@ -1,42 +1,60 @@
 'use client';
 
-import type { ActionResponse } from '@liame/contracts';
+import type { ActionResponse, BrandResponse, PlanContent, PlanResponse, PlanSummary } from '@liame/contracts';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { destinoInicial } from '@/components/shell/inicio';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
-import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
+import { api, chamar, mensagemDe, type Problema, type Resultado } from '@/lib/api';
 import { useContadorAprovacoes } from '@/lib/contador-aprovacoes';
 import { disparar } from '@/lib/disparar';
 import { iniciais } from '@/lib/formato';
 import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
-import { type Decisao, DetalhePedido } from './detalhe-pedido';
-import { agrupar, apresentar, avisoDepoisDeAprovar, erroDaDecisao, etiquetaDoDecidido, type Grupo, grupoDe, pedidoDaUrl, prazoDe, riscoDe, ROTULO_GRUPO, ROTULO_RISCO } from './textos';
+import type { Decisao } from './barra-da-decisao';
+import { marcasAtivas, planosDasMarcas } from './buscar-planos';
+import { DetalhePedido } from './detalhe-pedido';
+import { DetalhePlano } from './detalhe-plano';
+import { chaveDaAcao, chaveDoPlano, type ItemDaLista, montarLista, pendentesDe } from './lista';
+import { dinheiroDoPlano, erroDoPlano, etiquetaDoPlano, type MotivoDaRecusa, riscoDoPlano } from './planos-textos';
+import { apresentar, avisoDepoisDeAprovar, erroDaDecisao, etiquetaDoDecidido, type Grupo, grupoDe, pedidoDaUrl, prazoDe, riscoDe, ROTULO_GRUPO, ROTULO_RISCO } from './textos';
 
-// "Aprovações" (mockups/prototipo-app.html, vista "aprovacoes"): à esquerda, os pedidos que esperam alguém,
-// o que a política fez sozinha e o que foi decidido hoje; à direita, o pedido aberto. Aprovar pede o código do
-// app autenticador e vale só para o plano mostrado; recusar pede um motivo (`GET /v1/actions`,
-// `POST /v1/actions/{id}/approve` e `/reject`; decidir exige `acoes.aprovar`).
+// "Aprovações" (mockups/prototipo-app.html, vista "aprovacoes"; os planos, mockups/prototipo-resumo.html, P8): à
+// esquerda, o que espera alguém, o que a política fez sozinha e o que foi decidido hoje; à direita, o pedido aberto.
+// Dois tipos de pedido na mesma fila: a ação que alguém pediu (`/v1/actions`; decidir exige `acoes.aprovar`) e o
+// plano do Estrategista (`/v1/plans`, por marca; decidir exige `planos.decidir`). Aprovar pede o código do app
+// autenticador e vale só para o que está na tela (o hash); recusar pede um motivo.
 
-type Carga = { tipo: 'carregando' } | { tipo: 'ok'; itens: ActionResponse[] } | { tipo: 'erro'; problema: Problema };
+type Carga =
+  | { tipo: 'carregando' }
+  | { tipo: 'ok'; acoes: ActionResponse[]; planos: PlanSummary[]; marcas: BrandResponse[]; planosFalharam: boolean }
+  | { tipo: 'erro'; problema: Problema };
+type PlanoAberto = { id: string; estado: 'carregando' } | { id: string; estado: 'ok'; dados: PlanResponse } | { id: string; estado: 'erro'; problema: Problema };
 
 const GRUPOS: Grupo[] = ['pendente', 'auto', 'feito'];
-/** A fila anda sozinha: outra pessoa pode decidir, o worker executa, o prazo vence. */
+/** A fila anda sozinha: outra pessoa pode decidir, o worker executa, o Estrategista manda a versão nova, o prazo vence. */
 const ATUALIZAR_MS = 30_000;
 
 export function AprovacoesTela() {
   const { me, pode } = useSessao();
-  // O link do e-mail ("uma ação espera a sua aprovação") e a faixa da aba Cupons abrem a tela já no pedido.
-  const inicial = pedidoDaUrl(useSearchParams().get('pedido'));
+  // O link do e-mail ("uma ação espera a sua aprovação"), a faixa da aba Cupons e o Resumo abrem a tela já no pedido.
+  const parametros = useSearchParams();
+  const acaoInicial = pedidoDaUrl(parametros.get('pedido'));
+  const planoInicial = pedidoDaUrl(parametros.get('plano'));
+  const inicial = acaoInicial ? chaveDaAcao(acaoInicial) : planoInicial ? chaveDoPlano(planoInicial) : null;
   const avisar = useAvisar();
-  const pro = useModo().modo === 'pro';
+  const { modo } = useModo();
+  const pro = modo === 'pro';
   const definirContador = useContadorAprovacoes().definir;
   const podeVer = pode('campanhas.ver');
   const podeDecidir = pode('acoes.aprovar');
+  const podeVerPlanos = pode('planos.ver') && pode('vendas.ver') && pode('marcas.ver');
+  const podeDecidirPlanos = podeVerPlanos && pode('planos.decidir');
+  const podeConferirTexto = pode('dossie.ver');
   const temApp = me.mfa !== 'not_configured';
   const tituloDoDetalhe = useRef<HTMLHeadingElement>(null);
   const campoCodigo = useRef<HTMLInputElement>(null);
@@ -44,26 +62,46 @@ export function AprovacoesTela() {
   const [carga, setCarga] = useState<Carga>({ tipo: 'carregando' });
   /** O pedido do endereço (`/aprovacoes?pedido={id}`) que não veio na lista dos mais recentes. */
   const [avulso, setAvulso] = useState<ActionResponse | null>(null);
-  const [sel, setSel] = useState<string | null>(inicial ?? null);
+  const [sel, setSel] = useState<string | null>(inicial);
   /** No celular a tela é uma coluna só: a lista, ou o pedido aberto. */
   const [noDetalhe, setNoDetalhe] = useState(Boolean(inicial));
   const [tentativa, setTentativa] = useState(0);
+  /** O plano aberto, lido por inteiro (a lista só traz o resumo de cada um). */
+  const [planoAberto, setPlanoAberto] = useState<PlanoAberto | null>(null);
+  const [relerPlano, setRelerPlano] = useState(0);
   const agora = useAgora(60_000, carga);
   const seq = useRef(0);
 
   const carregar = useCallback(async () => {
     const id = ++seq.current;
-    const r = await chamar(() => api.GET('/v1/actions'));
+    const lerPlanos = async (): Promise<Resultado<{ marcas: BrandResponse[]; planos: PlanSummary[] }>> => {
+      const marcas = await marcasAtivas();
+      if (!marcas.ok) return marcas;
+      const planos = await planosDasMarcas(marcas.data);
+      return planos.ok ? { ok: true, data: { marcas: marcas.data, planos: planos.data } } : planos;
+    };
+    const [acoes, planos] = await Promise.all([chamar(() => api.GET('/v1/actions')), podeVerPlanos ? lerPlanos() : null]);
     if (id !== seq.current) return;
-    if (!r.ok) return setCarga((c) => (c.tipo === 'ok' ? c : { tipo: 'erro', problema: r.problema }));
-    setCarga({ tipo: 'ok', itens: r.data.items });
-    definirContador(r.data.items.filter((a) => a.status === 'aguardando_aprovacao').length);
-    if (inicial && !r.data.items.some((a) => a.id === inicial)) {
-      const um = await chamar(() => api.GET('/v1/actions/{id}', { params: { path: { id: inicial } } }));
+    if (!acoes.ok) return setCarga((c) => (c.tipo === 'ok' ? c : { tipo: 'erro', problema: acoes.problema }));
+    // Os planos que não vieram agora não derrubam a tela: ficam os da leitura anterior, com o aviso.
+    setCarga((c) => {
+      const anterior = c.tipo === 'ok' ? c : null;
+      return {
+        tipo: 'ok',
+        acoes: acoes.data.items,
+        planos: planos?.ok ? planos.data.planos : (anterior?.planos ?? []),
+        marcas: planos?.ok ? planos.data.marcas : (anterior?.marcas ?? []),
+        planosFalharam: Boolean(planos && !planos.ok),
+      };
+    });
+    // O número do menu só muda com a leitura inteira (sem os planos, ficaria menor do que é).
+    if (!planos || planos.ok) definirContador(pendentesDe(montarLista(acoes.data.items, planos?.ok ? planos.data.planos : [], new Date()), podeDecidir, podeDecidirPlanos));
+    if (acaoInicial && !acoes.data.items.some((a) => a.id === acaoInicial)) {
+      const um = await chamar(() => api.GET('/v1/actions/{id}', { params: { path: { id: acaoInicial } } }));
       if (id === seq.current) setAvulso(um.ok ? um.data : null);
     }
-    // `definirContador` é estável (o `setState` do provedor); `inicial` vem da rota.
-  }, [inicial, definirContador]);
+    // `definirContador` é estável (o `setState` do provedor); os iniciais vêm da rota.
+  }, [acaoInicial, definirContador, podeVerPlanos, podeDecidir, podeDecidirPlanos]);
 
   useEffect(() => {
     if (!podeVer) return;
@@ -72,14 +110,42 @@ export function AprovacoesTela() {
     return () => clearInterval(t);
   }, [podeVer, carregar, tentativa]);
 
-  const itens = carga.tipo === 'ok' ? carga.itens : [];
-  const grupos = agrupar(itens, agora);
+  const acoes = carga.tipo === 'ok' ? carga.acoes : [];
+  const planos = carga.tipo === 'ok' ? carga.planos : [];
+  const marcas = carga.tipo === 'ok' ? carga.marcas : [];
+  const grupos = montarLista(acoes, planos, agora);
   const ordem = GRUPOS.flatMap((g) => grupos[g]);
-  const aberta = ordem.find((a) => a.id === sel) ?? (avulso && avulso.id === sel ? avulso : null) ?? grupos.pendente[0] ?? null;
-  const grupoDaAberta = aberta ? grupoDe(aberta, agora) : null;
+  // O que veio pelo endereço e não está na lista (decidido em outro dia): a ação avulsa ou o plano já lido por inteiro.
+  const planoDoEndereco = planoInicial && planoAberto?.id === planoInicial && planoAberto.estado === 'ok' ? planoAberto.dados.plan : null;
+  const foraDaLista: ItemDaLista | null =
+    avulso && chaveDaAcao(avulso.id) === sel
+      ? { chave: chaveDaAcao(avulso.id), tipo: 'acao', grupo: grupoDe(avulso, agora) ?? 'feito', acao: avulso, expira: avulso.expires_at, mexido: avulso.updated_at }
+      : planoDoEndereco && chaveDoPlano(planoDoEndereco.id) === sel
+        ? { chave: chaveDoPlano(planoDoEndereco.id), tipo: 'plano', grupo: 'feito', plano: planoDoEndereco, expira: planoDoEndereco.expires_at, mexido: planoDoEndereco.updated_at }
+        : null;
+  // O plano do endereço que não está na lista é lido antes de aparecer: enquanto isso, a fila não abre outro pedido no lugar dele.
+  const planoForaDaLista = carga.tipo === 'ok' && planoInicial && sel === chaveDoPlano(planoInicial) && !ordem.some((i) => i.chave === sel) ? planoInicial : null;
+  const aberta = ordem.find((i) => i.chave === sel) ?? foraDaLista ?? (planoForaDaLista ? null : grupos.pendente[0]) ?? null;
 
-  const abrir = useCallback((id: string, focar: boolean) => {
-    setSel(id);
+  // O plano aberto é lido por inteiro; de novo quando a lista mostra outra versão ou outra situação dele.
+  const idDoPlano = planoForaDaLista ?? (aberta?.tipo === 'plano' ? aberta.plano.id : null);
+  const marcaDoPlano = aberta?.tipo === 'plano' ? `${aberta.plano.content_hash}:${aberta.plano.status}` : '';
+  useEffect(() => {
+    if (!idDoPlano) return;
+    let vivo = true;
+    setPlanoAberto((d) => (d?.id === idDoPlano && d.estado === 'ok' ? d : { id: idDoPlano, estado: 'carregando' }));
+    disparar(
+      chamar(() => api.GET('/v1/plans/{id}', { params: { path: { id: idDoPlano } } })).then((r) => {
+        if (vivo) setPlanoAberto(r.ok ? { id: idDoPlano, estado: 'ok', dados: r.data } : { id: idDoPlano, estado: 'erro', problema: r.problema });
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [idDoPlano, marcaDoPlano, relerPlano]);
+
+  const abrir = useCallback((chave: string, focar: boolean) => {
+    setSel(chave);
     setNoDetalhe(true);
     if (focar) requestAnimationFrame(() => tituloDoDetalhe.current?.focus({ preventScroll: true }));
   }, []);
@@ -91,11 +157,11 @@ export function AprovacoesTela() {
       if (e.metaKey || e.ctrlKey || e.altKey || alvo?.closest('input, textarea, select, dialog, [contenteditable]')) return;
       const k = e.key.toLowerCase();
       if (k === 'j' || k === 'k') {
-        const i = ordem.findIndex((a) => a.id === aberta?.id);
+        const i = ordem.findIndex((x) => x.chave === aberta?.chave);
         const novo = ordem[Math.max(0, Math.min(ordem.length - 1, i + (k === 'j' ? 1 : -1)))];
-        if (!novo || novo.id === aberta?.id) return;
+        if (!novo || novo.chave === aberta?.chave) return;
         e.preventDefault();
-        setSel(novo.id);
+        setSel(novo.chave);
         requestAnimationFrame(() => lista.current?.querySelector<HTMLElement>('.ap-item[aria-current="true"]')?.focus());
       } else if (k === 'a' && campoCodigo.current) {
         e.preventDefault();
@@ -114,12 +180,14 @@ export function AprovacoesTela() {
     );
   }
 
+  const focarOTitulo = () => requestAnimationFrame(() => tituloDoDetalhe.current?.focus({ preventScroll: true }));
+
   /** Depois de decidir: a lista volta a ler, a fila anda para o próximo pedido e o foco vai para o título dele. */
-  async function depoisDeDecidir(decidida: ActionResponse) {
-    const proximo = grupos.pendente.find((a) => a.id !== decidida.id);
-    setSel(proximo?.id ?? decidida.id);
+  async function depoisDeDecidir(chaveDecidida: string, opcoes: { fica?: boolean } = {}) {
+    const proximo = opcoes.fica ? null : grupos.pendente.find((i) => i.chave !== chaveDecidida);
+    setSel(proximo?.chave ?? chaveDecidida);
     await carregar();
-    requestAnimationFrame(() => tituloDoDetalhe.current?.focus({ preventScroll: true }));
+    focarOTitulo();
   }
 
   function recusaDoServidor(problema: Problema): Decisao {
@@ -132,7 +200,7 @@ export function AprovacoesTela() {
     const r = await chamar(() => api.POST('/v1/actions/{id}/approve', { params: { path: { id: acao.id } }, body: { plan_hash: acao.plan_hash, code: codigo } }));
     if (!r.ok) return recusaDoServidor(r.problema);
     avisar(avisoDepoisDeAprovar(apresentar(acao), r.data));
-    await depoisDeDecidir(acao);
+    await depoisDeDecidir(chaveDaAcao(acao.id));
     return { ok: true };
   }
 
@@ -140,23 +208,108 @@ export function AprovacoesTela() {
     const r = await chamar(() => api.POST('/v1/actions/{id}/reject', { params: { path: { id: acao.id } }, body: { plan_hash: acao.plan_hash, reason: motivo } }));
     if (!r.ok) return recusaDoServidor(r.problema);
     avisar('Recusado. Quem pediu vê o motivo, e nada foi executado.');
-    await depoisDeDecidir(acao);
+    await depoisDeDecidir(chaveDaAcao(acao.id));
     return { ok: true };
   }
 
-  const item = (a: ActionResponse, g: Grupo) => {
+  // ---- os planos do Estrategista: a resposta de cada decisão já é o plano como ficou.
+  function recusaDoPlano(problema: Problema): Decisao {
+    const erro = erroDoPlano(problema);
+    if (erro.recarregar) {
+      setTentativa((n) => n + 1);
+      setRelerPlano((n) => n + 1);
+    }
+    return { ok: false, texto: problema.errors?.length ? mensagemDe(problema) : erro.texto, noCodigo: erro.noCodigo };
+  }
+
+  async function aprovarPlano(plano: PlanSummary, codigo: string): Promise<Decisao> {
+    const r = await chamar(() => api.POST('/v1/plans/{id}/approve', { params: { path: { id: plano.id } }, body: { plan_hash: plano.content_hash, code: codigo } }));
+    if (!r.ok) return recusaDoPlano(r.problema);
+    setPlanoAberto({ id: plano.id, estado: 'ok', dados: r.data });
+    avisar(`Aprovado (versão ${r.data.plan.version}). Nada foi publicado: o que fazer está no plano.`);
+    // No plano aprovado, o detalhe fica nele: é ali que está o que fazer.
+    await depoisDeDecidir(chaveDoPlano(plano.id), { fica: true });
+    return { ok: true };
+  }
+
+  async function recusarPlano(plano: PlanSummary, motivo: MotivoDaRecusa): Promise<Decisao> {
+    const r = await chamar(() => api.POST('/v1/plans/{id}/reject', { params: { path: { id: plano.id } }, body: { plan_hash: plano.content_hash, reasons: [motivo] } }));
+    if (!r.ok) return recusaDoPlano(r.problema);
+    setPlanoAberto({ id: plano.id, estado: 'ok', dados: r.data });
+    avisar('Recusado. O Estrategista vê o motivo, e nada foi executado.');
+    await depoisDeDecidir(chaveDoPlano(plano.id));
+    return { ok: true };
+  }
+
+  async function pedirNovaAnalise(plano: PlanSummary, pedido: string): Promise<Decisao> {
+    const r = await chamar(() => api.POST('/v1/plans/{id}/reanalyze', { params: { path: { id: plano.id } }, body: { plan_hash: plano.content_hash, request: pedido } }));
+    if (!r.ok) return recusaDoPlano(r.problema);
+    setPlanoAberto({ id: plano.id, estado: 'ok', dados: r.data });
+    avisar('Pedido enviado. O Estrategista refaz o plano e manda a versão nova para cá.');
+    await depoisDeDecidir(chaveDoPlano(plano.id));
+    return { ok: true };
+  }
+
+  async function editarPlano(plano: PlanSummary, novo: PlanContent): Promise<Decisao> {
+    const r = await chamar(() => api.PUT('/v1/plans/{id}', { params: { path: { id: plano.id } }, body: { base_version: plano.version, content: novo } }));
+    if (!r.ok) return recusaDoPlano(r.problema);
+    setPlanoAberto({ id: plano.id, estado: 'ok', dados: r.data });
+    avisar(`Versão ${r.data.plan.version} salva. A aprovação passa a valer só para ela.`);
+    setSel(chaveDoPlano(plano.id));
+    await carregar();
+    // A versão nova espera a decisão: o foco vai para o código do app (ou para o título, sem o app).
+    requestAnimationFrame(() => (campoCodigo.current ?? tituloDoDetalhe.current)?.focus({ preventScroll: true }));
+    return { ok: true };
+  }
+
+  const nomeDaMarca = (id: string) => (marcas.length > 1 ? (marcas.find((m) => m.id === id)?.name ?? null) : null);
+
+  const item = (i: ItemDaLista) => {
+    const atual = i.chave === aberta?.chave ? 'true' : undefined;
+    if (i.tipo === 'plano') {
+      const risco = riscoDoPlano(i.plano.risk);
+      const marca = nomeDaMarca(i.plano.brand_id);
+      return (
+        <li key={i.chave}>
+          <button className="ap-item" type="button" aria-current={atual} onClick={() => abrir(i.chave, true)}>
+            <span className="ap-av ap-av--func" aria-hidden="true">
+              <Icone nome="compass" />
+            </span>
+            <span>
+              <span className="ap-titulo">{i.plano.title}</span>
+              <span className="ap-meta">
+                {i.grupo === 'pendente' ? (
+                  <>
+                    <span className="dinheiro">{dinheiroDoPlano(i.plano.money_micros)}</span>
+                    <span className={`risco risco--${risco}`}>{ROTULO_RISCO[risco]}</span>
+                    <span>{prazoDe(i.plano, agora)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Estrategista</span>
+                    <span>{etiquetaDoPlano(i.plano.status)}</span>
+                  </>
+                )}
+                {marca && <span>{marca}</span>}
+              </span>
+            </span>
+          </button>
+        </li>
+      );
+    }
+    const a = i.acao;
     const p = apresentar(a);
     const risco = riscoDe(a);
     return (
-      <li key={a.id}>
-        <button className="ap-item" type="button" aria-current={a.id === aberta?.id ? 'true' : undefined} onClick={() => abrir(a.id, true)}>
+      <li key={i.chave}>
+        <button className="ap-item" type="button" aria-current={atual} onClick={() => abrir(i.chave, true)}>
           <span className="ap-av" aria-hidden="true">
             {iniciais(a.requested_by.name)}
           </span>
           <span>
             <span className="ap-titulo">{p.titulo}</span>
             <span className="ap-meta">
-              {g === 'pendente' ? (
+              {i.grupo === 'pendente' ? (
                 <>
                   {p.impacto && <span className="dinheiro">{p.impacto}</span>}
                   <span className={`risco risco--${risco}`}>{ROTULO_RISCO[risco]}</span>
@@ -174,6 +327,126 @@ export function AprovacoesTela() {
       </li>
     );
   };
+
+  const voltarParaALista = () => {
+    setNoDetalhe(false);
+    // O foco volta ao pedido que estava aberto (ou ao primeiro da lista).
+    requestAnimationFrame(() => (lista.current?.querySelector<HTMLElement>('.ap-item[aria-current="true"]') ?? lista.current?.querySelector<HTMLElement>('.ap-item'))?.focus());
+  };
+  const botaoVoltar = (
+    <button className="btn btn--ghost btn--sm voltar" type="button" onClick={voltarParaALista}>
+      <Icone nome="chevron-left" />
+      Voltar para a lista
+    </button>
+  );
+  const inicio = destinoInicial(modo, pode, true);
+  const nomeDoInicio = inicio === '/resumo' ? 'o Resumo' : inicio === '/atencao' ? 'Atenção' : null;
+  const decide = podeDecidir || podeDecidirPlanos;
+
+  let detalhe;
+  if (aberta?.tipo === 'acao') {
+    detalhe = (
+      <DetalhePedido
+        acao={aberta.acao}
+        grupo={grupoDe(aberta.acao, agora)}
+        agora={agora}
+        pro={pro}
+        podeDecidir={podeDecidir}
+        temApp={temApp}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+      />
+    );
+  } else if (idDoPlano) {
+    const plano = aberta?.tipo === 'plano' ? aberta.plano : null;
+    const lido = planoAberto?.id === idDoPlano ? planoAberto : null;
+    if (lido?.estado === 'ok') {
+      const resumo = lido.dados.plan;
+      detalhe = (
+        <DetalhePlano
+          key={`${resumo.id}:${resumo.content_hash}:${resumo.status}`}
+          r={lido.dados}
+          agora={agora}
+          pro={pro}
+          euId={me.user.id}
+          podeDecidir={podeDecidirPlanos}
+          temApp={temApp}
+          podeConferirTexto={podeConferirTexto}
+          titulo={tituloDoDetalhe}
+          campoCodigo={campoCodigo}
+          aoVoltar={voltarParaALista}
+          aoAprovar={(codigo) => aprovarPlano(resumo, codigo)}
+          aoRecusar={(motivo) => recusarPlano(resumo, motivo)}
+          aoEditar={(novo) => editarPlano(resumo, novo)}
+          aoPedirNovaAnalise={(pedido) => pedirNovaAnalise(resumo, pedido)}
+          aoAvisar={avisar}
+        />
+      );
+    } else {
+      detalhe = (
+        <>
+          {botaoVoltar}
+          <div className="det-cab">
+            <span>
+              <b>Estrategista</b> propôs
+            </span>
+          </div>
+          <h2 className="det-titulo" id="ap-det-titulo" ref={tituloDoDetalhe} tabIndex={-1}>
+            {plano?.title ?? 'Plano do Estrategista'}
+          </h2>
+          {lido?.estado === 'erro' ? (
+            <div className="plano-espera" role="alert">
+              <p className="nota">
+                <Icone nome="alert-circle" />
+                <span>Não foi possível abrir o plano. {mensagemDe(lido.problema)}</span>
+              </p>
+              <div className="vazio-acoes">
+                <button className="btn btn--sm" type="button" onClick={() => setRelerPlano((n) => n + 1)}>
+                  <Icone nome="refresh" pequeno />
+                  Tentar de novo
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="plano-espera" aria-busy="true">
+              <p className="sr-only">Abrindo o plano…</p>
+              <span className="esqueleto esqueleto--curto" aria-hidden="true" />
+              <span className="esqueleto" aria-hidden="true" />
+              <span className="esqueleto esqueleto--medio" aria-hidden="true" />
+            </div>
+          )}
+        </>
+      );
+    }
+  } else {
+    detalhe = (
+      <>
+        <button className="btn btn--ghost btn--sm voltar" type="button" onClick={() => setNoDetalhe(false)}>
+          <Icone nome="chevron-left" />
+          Voltar para a lista
+        </button>
+        <div className="vazio">
+          <span className="vazio-ic vazio-ic--ok" aria-hidden="true">
+            <Icone nome="check" />
+          </span>
+          <h2 id="ap-det-titulo" ref={tituloDoDetalhe} tabIndex={-1}>
+            Tudo em dia
+          </h2>
+          <p>{decide ? 'Nada espera o seu ok agora. Quando alguém pedir uma ação que precisa de aprovação, ou o Estrategista mandar um plano, aparece aqui.' : 'Nenhum pedido espera aprovação agora.'}</p>
+          {nomeDoInicio && (
+            <div className="vazio-acoes">
+              <Link className="btn" href={inicio}>
+                Voltar para {nomeDoInicio}
+              </Link>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
     <section aria-labelledby="h-aprov">
@@ -228,55 +501,21 @@ export function AprovacoesTela() {
               return (
                 <div className="ap-grupo" key={g}>
                   <p className="ap-grupo-rot rotulo-marca">
-                    <span>{g === 'pendente' && !podeDecidir ? 'Esperando aprovação' : ROTULO_GRUPO[g]}</span>
+                    <span>{g === 'pendente' && !decide ? 'Esperando aprovação' : ROTULO_GRUPO[g]}</span>
                     <span>{doGrupo.length}</span>
                   </p>
-                  {doGrupo.length ? <ul>{doGrupo.map((a) => item(a, g))}</ul> : <p className="ap-vazio-mini">{podeDecidir ? 'Nada esperando você agora.' : 'Nenhum pedido esperando aprovação.'}</p>}
+                  {doGrupo.length ? <ul>{doGrupo.map(item)}</ul> : <p className="ap-vazio-mini">{decide ? 'Nada esperando você agora.' : 'Nenhum pedido esperando aprovação.'}</p>}
                 </div>
               );
             })}
+            {carga.planosFalharam && (
+              <p className="ap-vazio-mini" role="status">
+                Os planos do Estrategista não carregaram agora. A tela tenta de novo sozinha.
+              </p>
+            )}
           </div>
           <article className="card inbox-det" aria-labelledby="ap-det-titulo">
-            {aberta ? (
-              <DetalhePedido
-                acao={aberta}
-                grupo={grupoDaAberta}
-                agora={agora}
-                pro={pro}
-                podeDecidir={podeDecidir}
-                temApp={temApp}
-                titulo={tituloDoDetalhe}
-                campoCodigo={campoCodigo}
-                aoVoltar={() => {
-                  setNoDetalhe(false);
-                  // O foco volta ao pedido que estava aberto (ou ao primeiro da lista).
-                  requestAnimationFrame(() => (lista.current?.querySelector<HTMLElement>('.ap-item[aria-current="true"]') ?? lista.current?.querySelector<HTMLElement>('.ap-item'))?.focus());
-                }}
-                aoAprovar={aprovar}
-                aoRecusar={recusar}
-              />
-            ) : (
-              <>
-                <button className="btn btn--ghost btn--sm voltar" type="button" onClick={() => setNoDetalhe(false)}>
-                  <Icone nome="chevron-left" />
-                  Voltar para a lista
-                </button>
-                <div className="vazio">
-                  <span className="vazio-ic vazio-ic--ok" aria-hidden="true">
-                    <Icone nome="check" />
-                  </span>
-                  <h2 id="ap-det-titulo" ref={tituloDoDetalhe} tabIndex={-1}>
-                    Tudo em dia
-                  </h2>
-                  <p>{podeDecidir ? 'Nada espera o seu ok agora. Quando alguém pedir uma ação que precisa de aprovação, ela aparece aqui.' : 'Nenhum pedido espera aprovação agora.'}</p>
-                  <div className="vazio-acoes">
-                    <Link className="btn" href="/atencao">
-                      Voltar para Atenção
-                    </Link>
-                  </div>
-                </div>
-              </>
-            )}
+            {detalhe}
           </article>
         </div>
       )}

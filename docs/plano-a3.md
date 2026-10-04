@@ -80,7 +80,7 @@ Sem protótipo aprovado não se inventa tela (`CLAUDE.md` §2). As vistas do pro
 | P5 | **Conversa** (Lite e Pro; tela entregue em 03/10/2026) | Primeira conversa; resposta em tempo real; pedido que virou demanda; proposta que foi para Aprovações; "falar com uma pessoa"; limite atingido; IA desligada para a empresa |
 | P6 | **Minha marca** | Vazio; preenchimento guiado; sugestão da LIA a confirmar; "o que não pode dizer"; versão anterior |
 | P7 | **Sua equipe** (tela entregue em 03/10/2026) | Funcionário ativo, em sombra e desligado; prontidão com o que falta; proposta de promoção para aprovar; custo do mês; histórico |
-| P8 | **Resumo** (página inicial do Lite) e **Plano do Estrategista** | Sem dados ainda; semana normal; algo precisa de você; plano para aprovar, editar ou recusar |
+| P8 | **Resumo** (página inicial do Lite) e **Plano do Estrategista** (telas entregues em 03/10/2026) | Sem dados ainda; semana normal; algo precisa de você; plano para aprovar, editar ou recusar |
 
 > **P4 aprovado pelo dono em 02/10/2026:** `mockups/prototipo-explicar.html`, com os seletores "Tela" (Resultados, Atenção, Revisão semanal) e "Explicação" (os estados) na faixa do topo. A aprovação libera a rota e a tela do Explicar (I4) e a revisão semanal (I7). As escolhas aprovadas estão no changelog de `decisoes-design.md`; **segue em aberto para onde leva "Falar com uma pessoa"**.
 >

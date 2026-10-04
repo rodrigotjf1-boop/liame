@@ -295,7 +295,7 @@ export function cartaoDaDemanda(d: DemandResponse, euId: string, agora: Date): C
   ];
   if (!cancelada) {
     if (d.due_on) linhas.push(['Para quando', diaPorExtenso(d.due_on)]);
-    linhas.push(['Próximo passo', d.status === 'entregue' ? 'o plano está pronto para você decidir' : 'o plano chega para você decidir']);
+    linhas.push(['Próximo passo', d.status === 'entregue' ? 'o plano está em Aprovações, para você decidir' : 'o plano chega em Aprovações, para você decidir']);
   }
   return {
     icone: 'file',
