@@ -57,7 +57,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 
 ## 6. Contas conectadas (Meta, Google e outras)
 
-6.1. Quando a empresa cliente conecta uma conta, o Liame recebe **apenas as permissões que ela aprova** na própria plataforma, para: mostrar campanhas, métricas, páginas e públicos; analisar resultados; e executar as ações que ela configurou e aprovou. Quando uma pessoa da empresa aprova uma mudança num anúncio (pausar, retomar ou mudar a verba diária), o Liame envia à plataforma só essa mudança, sem dado pessoal.
+6.1. Quando a empresa cliente conecta uma conta, o Liame recebe **apenas as permissões que ela aprova** na própria plataforma, para: mostrar campanhas, métricas, páginas e públicos; analisar resultados; e executar as ações que ela configurou e aprovou. Quando uma pessoa da empresa aprova uma mudança num anúncio (pausar, retomar ou mudar a verba diária), o Liame envia à plataforma só essa mudança, sem dado pessoal. Na Meta, a permissão de gerenciar anúncios só é pedida à empresa para a qual a função de mudar anúncios foi ligada; às outras, o Liame pede só a de leitura.
 
 6.2. Os dados recebidos dessas plataformas **não são vendidos, não são usados para publicidade do Liame e não são usados para treinar modelos de IA de uso geral**. As credenciais de acesso ficam cifradas, com a chave guardada fora do nosso banco de dados. Os dados dos anúncios da Meta servem só para mostrar e avaliar as campanhas da própria empresa cliente, nunca são misturados com os de outros anunciantes e não são levados ao Google nem a outra rede de anúncios, nem agregados (Padrões de Publicidade da Meta).
 

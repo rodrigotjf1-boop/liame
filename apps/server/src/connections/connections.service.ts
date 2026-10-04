@@ -23,7 +23,18 @@ import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
 import { revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
 import { DATABASE } from '../database/database.module.js';
-import { type CredencialGuardada, type CredencialRegem, enderecoDeVolta, hashEstado, novoEstado, novoVerificador, type ProvedorOAuth, revogarGoogle, urlDeAutorizacao } from './oauth.js';
+import {
+  configuracaoDaMeta,
+  type CredencialGuardada,
+  type CredencialRegem,
+  enderecoDeVolta,
+  hashEstado,
+  novoEstado,
+  novoVerificador,
+  type ProvedorOAuth,
+  revogarGoogle,
+  urlDeAutorizacao,
+} from './oauth.js';
 
 // Conectar contas (A2, G3), lado da API: tudo na transação curta da requisição. A troca do código e a
 // descoberta das contas (chamadas externas) ficam com o worker (ConexaoProcessor), nunca aqui.
@@ -146,6 +157,18 @@ export class ConnectionsService {
     const marca = await tx.execute<{ id: string }>(sql`select id from liame.brand where id = ${body.brand_id} and archived_at is null`);
     if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
 
+    // Meta: a empresa com a escrita ligada (a mesma flag que o Action Service confere) autoriza pela configuração que
+    // também pede para gerenciar anúncios; as outras seguem na de leitura. Quem já estava conectado só passa a
+    // escrever depois de conectar de novo: a autorização nova assume as contas (`ligarContas`).
+    const metaDaDistribuicao = provedor === 'meta' ? this.config.oauth.meta! : null;
+    const meta = metaDaDistribuicao
+      ? configuracaoDaMeta(
+          metaDaDistribuicao,
+          metaDaDistribuicao.writeConfigId !== null &&
+            (await this.flags.isEnabled('meta_write', this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id }))),
+        )
+      : null;
+
     const id = uuidv7();
     const estado = novoEstado();
     const verificador = provedor === 'google' || provedor === 'regem' ? novoVerificador() : null;
@@ -157,10 +180,10 @@ export class ConnectionsService {
       values (${id}, ${tenantId}, ${body.brand_id}, ${provedor}, ${auth.userId}, ${hashEstado(estado)}, ${redirectUri}, ${verificadorCifrado},
               now() + make_interval(mins => ${VALIDADE_MIN}))
       returning expires_at`);
-    auditDetail({ resourceId: id, after: { provider: provedor, brand_id: body.brand_id } });
+    auditDetail({ resourceId: id, after: { provider: provedor, brand_id: body.brand_id, ...(meta ? { acesso: meta.acesso } : {}) } });
     return {
       id,
-      authorize_url: urlDeAutorizacao(provedor, this.config, { estado, redirectUri, verificador: verificador ?? undefined, versaoMeta }),
+      authorize_url: urlDeAutorizacao(provedor, this.config, { estado, redirectUri, verificador: verificador ?? undefined, versaoMeta, configMeta: meta?.configId }),
       expires_at: iso(r.rows[0]!.expires_at),
     };
   }

@@ -45,7 +45,7 @@ Cada entrega é um PR com CI verde. **Migrations em negrito**: testadas no local
 
 Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 → X5 → X8 (as telas entram com cada parte, pelo protótipo aprovado).
 
-**Andamento:** X1 entregue em 04/10/2026, com a reconferência da seção 8 para a escrita de situação e verba (base §2.1): o conector `meta_ads` (lê o estado na Meta, valida com `validate_only`, escreve, confere), a espera da execução quando a Meta manda esperar (`next_attempt_at` no pedido) e a migration **0044**. Detalhe em `andamento.md`. **X2 entregue em 04/10/2026:** as ferramentas de anúncio na Meta (verba diária, pausar e retomar campanha, conjunto e anúncio), a política da distribuição na versão 3 (limite de frequência por objeto com o provedor certo, ±10% por pedido, o pedido de uma pessoa esperando aprovação), os limites da empresa fechados por padrão, a leitura na hora do pedido com o motivo quando a Meta falha, e a volta (`POST /v1/actions/{id}/undo`), com a migration **0045**. Com a flag `meta_write` desligada para todos, nada escreve na Meta. As decisões tomadas na entrega estão na seção 4 (D-A4-12 a D-A4-17), para o dono confirmar.
+**Andamento:** X1 entregue em 04/10/2026, com a reconferência da seção 8 para a escrita de situação e verba (base §2.1): o conector `meta_ads` (lê o estado na Meta, valida com `validate_only`, escreve, confere), a espera da execução quando a Meta manda esperar (`next_attempt_at` no pedido) e a migration **0044**. Detalhe em `andamento.md`. **X2 entregue em 04/10/2026:** as ferramentas de anúncio na Meta (verba diária, pausar e retomar campanha, conjunto e anúncio), a política da distribuição na versão 3 (limite de frequência por objeto com o provedor certo, ±10% por pedido, o pedido de uma pessoa esperando aprovação), os limites da empresa fechados por padrão, a leitura na hora do pedido com o motivo quando a Meta falha, e a volta (`POST /v1/actions/{id}/undo`), com a migration **0045**. Com a flag `meta_write` desligada para todos, nada escreve na Meta. As decisões tomadas na entrega estão na seção 4 (D-A4-12 a D-A4-17), para o dono confirmar. **Login da Meta para a escrita (04/10/2026):** a configuração de escrita é outra (`META_LOGIN_CONFIG_ID_ESCRITA`), escolhida pela flag `meta_write` da empresa (D-A4-18); sem migration.
 
 ## 4. Decisões (aprovadas pelo dono em 03/10/2026, como recomendadas)
 
@@ -73,6 +73,7 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 | D-A4-15 | **Limite de frequência por objeto** | No máximo 3 mudanças de verba por hora na mesma campanha ou no mesmo conjunto, somando aumentar e reduzir | É como a Meta conta (4 por hora por conjunto); contar na conta inteira travava quem cuida de vários conjuntos |
 | D-A4-16 | **O teto não barra a redução** | O teto por ação vale para o que faz o gasto subir. Reduzir uma verba que já está acima do teto é permitido | Baixar o gasto é a direção segura; sem isso, a recomendação mais comum da sombra (reduzir a verba) seria negada em campanha grande |
 | D-A4-17 | **Retomar reserva um dia de verba** | Retomar é risco R2 e conta como gasto novo: reserva no envelope um dia da verba que mora no objeto; anúncio e objeto sem verba própria não reservam | Aproximação declarada, como a do aumento (um dia da diferença); o gasto real conciliado vem na X4 |
+| D-A4-18 | **Login da Meta para a escrita** | Uma **segunda configuração** do Facebook Login for Business, com a permissão de gerenciar anúncios (`META_LOGIN_CONFIG_ID_ESCRITA`); a de leitura não muda. O Liame manda autorizar pela de escrita só a empresa com a flag `meta_write` ligada, e a autorização nova assume as contas que a empresa já tinha | A configuração de leitura está em análise na Meta (`ads_read`), e a página oficial não diz o que a edição de uma configuração faz com os tokens já emitidos (base §2.1); pedir a escrita só a quem vai usar é a permissão mínima |
 
 ## 5. Protótipos para aprovação (antes do código de tela)
 
@@ -123,10 +124,10 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 | Para | Preciso de |
 | --- | --- |
 | Começar | ✅ Aceite deste plano e das decisões da seção 4 (03/10/2026) |
-| X1 | Acrescentar `ads_management` na configuração do login da Meta (eu passo o caminho conferido) e conectar a Meta de novo no Liame |
+| X1 | Criar a configuração de **escrita** do login da Meta, com `ads_management` (a de leitura fica como está; eu passo o caminho, um print por vez), pôr o ID dela em `META_LOGIN_CONFIG_ID_ESCRITA` no EasyPanel (`liame-api`) e, com a flag `meta_write` ligada, conectar a Meta de novo no Liame |
 | Clientes de fora | Enviar o App Review de `ads_management` (com o vídeo da aprovação e da execução, que eu roteirizo) depois do X2 |
 | X2 | O teto por ação e o envelope do mês do piloto (quanto o Liame pode comprometer). Sem eles, o Liame só reduz verba e pausa na Meta; aumentar e retomar ficam negados. A tela para definir os dois chega com a X4 |
-| X2 | Confirmar ou mudar as decisões D-A4-12 a D-A4-17 (seção 4) |
+| X2 | Confirmar ou mudar as decisões D-A4-12 a D-A4-18 (seção 4) |
 | X7 | Conta no fornecedor de imagem escolhido no eval; a chave vai direto para o EasyPanel (`liame-api` e `liame-worker`), nunca para a conversa |
 | Telas | Aprovar P9 a P11 |
 | Ligar | Decidir quando ligar a flag `meta_write` para a Mister Burgers (comando `ligar-flag`) |
