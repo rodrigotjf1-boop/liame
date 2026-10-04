@@ -234,6 +234,7 @@ O texto da conversa continua em HTML (lido por leitor de tela); a expressão só
 6. **A home não tem filtro de período:** Atenção é o agora; o período fica em Resultados, onde filtra tudo o que está abaixo dele.
 7. **Barra inferior do celular:** Resumo (ou Atenção, no Pro), Aprovações, LIA no centro, Resultados e Menu.
 8. **Template novo na skill** `ui-ux-proprio`: `t11-central-agentes`, a partir da tela Sua equipe, depois da aprovação.
+9. **Fichas em Sua equipe (04/10/2026, aprovado pelo dono):** a ficha da LIA ganha "conta o que a equipe fez" e "não liga nem desliga funcionário"; a do Compliance, "com o revisor de IA ligado para a empresa, confere também o tom, a clareza e as alegações". O resto do texto é o do protótipo P7.
 
 ## 9. Verificação feita
 
