@@ -342,7 +342,12 @@ function feitosDo(m: TeamMember): string {
 
 /** O bloco "Custo em <mês>": o valor (em reais pela cotação, ou em dólar) e o que foi feito com ele. */
 export function custoDo(m: TeamMember, t: TeamResponse): Numero {
-  if (m.key === 'compliance') return { valor: custoNaTela('0', t.usd_brl), rotulo: 'as regras rodam no código' };
+  if (m.key === 'compliance') {
+    // As regras de texto rodam no código, sem custo. Com o revisor de IA ligado para a empresa, o custo é o dele.
+    return m.cost.calls > 0
+      ? { valor: custoNaTela(m.cost.usd_micros, t.usd_brl), rotulo: `${vezes(m.cost.calls, 'chamada', 'chamadas')} ao revisor de IA; as regras rodam no código` }
+      : { valor: custoNaTela('0', t.usd_brl), rotulo: 'as regras rodam no código' };
+  }
   if (m.key === 'trafego') return { valor: custoNaTela('0', t.usd_brl), rotulo: 'nesta fase, as recomendações são por regra' };
   return { valor: custoNaTela(m.cost.usd_micros, t.usd_brl), rotulo: feitosDo(m) };
 }
@@ -455,8 +460,15 @@ const PAGINA_FALHOU: Record<string, string> = {
   sem_ia: 'A IA não estava disponível.',
   formato: 'A resposta veio fora do formato.',
 };
+/** As categorias do revisor de IA do Compliance (`ai/revisor/parecer.ts`), como a pessoa lê; vêm no mesmo campo das regras. */
+const DO_REVISOR: Record<string, string> = {
+  tom: 'o tom',
+  clareza: 'a clareza',
+  alegacao: 'uma alegação que ninguém pode provar',
+};
 const RETIRADA: Record<string, string> = {
   revisor: 'Barrado pelo revisor de IA.',
+  revisor_sem_resposta: 'O revisor de IA não respondeu, e sem a revisão dele o texto não aparece.',
   numero_fora: 'Citava um número que o sistema não calculou.',
   dado_velho: 'Os dados não estavam em dia.',
   formato: 'A resposta veio fora do formato.',
@@ -469,7 +481,13 @@ const COMPARACAO: Record<string, string> = {
 };
 
 const nomeDaRegra = (r: string) => REGRAS[r] ?? r.replaceAll('_', ' ');
-const regrasDe = (rules: string[]) => (rules.length ? `Regra: ${rules.map(nomeDaRegra).join(', ')}. ` : '');
+const emLista = (itens: string[]) => (itens.length < 2 ? itens.join('') : `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`);
+/** Por que o Compliance barrou: a regra de texto que bateu ou, quando foi o revisor de IA, o que ele apontou. */
+function regrasDe(rules: string[]): string {
+  if (!rules.length) return '';
+  if (rules.every((r) => Object.hasOwn(DO_REVISOR, r))) return `O revisor de IA apontou ${emLista(rules.map((r) => DO_REVISOR[r]!))}. `;
+  return `Regra: ${rules.map(nomeDaRegra).join(', ')}. `;
+}
 
 /** "reduzir a verba em 20%", "pausar a campanha", "aumentar a verba em 20%". */
 export function acaoDa(tool: string | null, percent: number | null): string {
@@ -537,7 +555,9 @@ export function historicoDo(i: TeamActivityItem, agora: Date): LinhaDoHistorico 
         texto: `${regrasDe(i.rules)}${n > 1 ? 'Eles não apareceram' : 'Ele não apareceu'}: ficou o que o sistema escreve.`,
       };
     case 'retirada_na_conferencia': {
-      const motivo = i.detail === 'compliance' ? `Barrado pelo Compliance. ${regrasDe(i.rules)}`.trim() : (RETIRADA[i.detail ?? ''] ?? 'Não passou na conferência do código.');
+      // O Compliance barra por regra de texto (`compliance`) ou pelo revisor de IA (`revisor`): a regra, ou o que ele apontou.
+      const doCompliance = i.detail === 'compliance' || (i.detail === 'revisor' && i.rules.length > 0);
+      const motivo = doCompliance ? `Barrado pelo Compliance. ${regrasDe(i.rules)}`.trim() : (RETIRADA[i.detail ?? ''] ?? 'Não passou na conferência do código.');
       return { quando, titulo: n > 1 ? `${inteiro(n)} textos não passaram na conferência` : 'Um texto não passou na conferência', texto: `${motivo} Ficou o que o sistema escreve.` };
     }
     case 'recebeu_demanda':

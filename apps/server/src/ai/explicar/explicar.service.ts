@@ -16,6 +16,8 @@ import { naTransacaoDaEmpresa } from '../na-empresa.js';
 import { registrarRecusa } from '../recusas.js';
 import { funcionarioAtivo } from '../registro/ativacao.js';
 import type { ContextoDaLeitura } from '../registro/leituras.js';
+import { textoDaExplicacao } from '../revisor/parecer.js';
+import { RECUSA_DO_REVISOR, RevisorService } from '../revisor/revisor.service.js';
 import { AVISOS_EXPLICAVEIS, avisoNoContexto, DIAS_DO_AVISO, explicacaoDoAvisoSemIa } from './aviso.js';
 import { type ContextoComAviso, type ContextoDaExplicacao, type ContextoDoAviso, contextoDosResultados, nomesDoContexto, periodoAnterior } from './contexto.js';
 import { type ExplicacaoMarcada, marcarNumeros } from './fontes.js';
@@ -29,8 +31,8 @@ export const WORKFLOW_DA_REVISAO = 'revisao.semanal';
 export const WORKFLOW_DOS_RESULTADOS = 'resultados.explicar';
 export const WORKFLOW_DO_AVISO = 'atencao.explicar';
 
-/** Por que a explicação é a do código e não a da IA. */
-export type MotivoSemIa = AiErrorCode | Recusa | 'dado_velho' | 'funcionario_desligado' | 'conteudo_politico';
+/** Por que a explicação é a do código e não a da IA. `revisor`: passou nas regras, e o revisor de IA apontou problema (D-A3-16). */
+export type MotivoSemIa = AiErrorCode | Recusa | typeof RECUSA_DO_REVISOR | 'dado_velho' | 'funcionario_desligado' | 'conteudo_politico';
 
 export interface ExplicacaoPronta {
   origem: 'ia' | 'sem_ia';
@@ -80,6 +82,7 @@ export class ExplicarService {
     private readonly resultados: ResultsService,
     private readonly media: MediaService,
     private readonly ciclo: AtencaoCicloService,
+    private readonly revisor: RevisorService,
   ) {}
 
   /** Os resultados de um período (o número principal da tela Resultados). */
@@ -202,6 +205,12 @@ export class ExplicarService {
       this.logger.warn(`explicação sem IA: campanha ou conta com nome político ou eleitoral (empresa ${ctx.tenantId})`);
       return semIa('conteudo_politico');
     }
+    // O revisor de IA, para a empresa que o tem ligado (D-A3-16): se ele não tem como responder, o texto não
+    // apareceria de qualquer jeito, então a IA que escreve nem é chamada (nenhum custo jogado fora).
+    const revisor = await this.revisor.situacao({ tenantId: ctx.tenantId, brandId, userId: ctx.userId });
+    if (revisor === 'sem_rota') return semIa('sem-rota');
+    // A leitura da revisão da semana é do Relatórios; o resto, do Analista (é quem aparece em Sua equipe).
+    const membro = workflow === WORKFLOW_DA_REVISAO ? 'relatorios' : ANALISTA.key;
 
     try {
       const r = await this.gateway.structured({
@@ -219,14 +228,14 @@ export class ExplicarService {
       if (recusa) {
         // O que foi recusado e por quê fica no log (números não são dado pessoal) e no conteúdo guardado da chamada.
         this.logger.warn(`explicação da IA recusada (${recusa.recusa}${recusa.detalhe.length ? `: ${recusa.detalhe.slice(0, 8).join(' | ')}` : ''}); uso ${r.usageId}`);
-        // A recusa entra na contagem de Sua equipe, sem o texto (D-A3-15): a leitura da revisão é do Relatórios; o resto, do Analista.
+        // A recusa entra na contagem de Sua equipe, sem o texto (D-A3-15).
         if (this.database) {
           await registrarRecusa(this.database, {
             tenantId: ctx.tenantId,
             brandId,
             userId: ctx.userId,
             usageId: r.usageId,
-            member: workflow === WORKFLOW_DA_REVISAO ? 'relatorios' : ANALISTA.key,
+            member: membro,
             workflow,
             kind: recusa.recusa,
             rules: recusa.regras,
@@ -234,6 +243,13 @@ export class ExplicarService {
           });
         }
         return semIa(recusa.recusa);
+      }
+      // Passou nas regras: o revisor de IA olha o tom, a clareza e as alegações. Ele só vê o que as regras deixaram
+      // passar; se aponta, a recusa já ficou registrada por ele, com a categoria.
+      if (revisor === 'pronto') {
+        const revisao = await this.revisor.revisar(textoDaExplicacao(r.object), { tenantId: ctx.tenantId, brandId, userId: ctx.userId, usageId: r.usageId, member: membro, workflow });
+        if (revisao.situacao === 'apontou') return semIa(RECUSA_DO_REVISOR);
+        if (revisao.situacao === 'indisponivel') return semIa(revisao.erro.code, revisao.erro.detalhe);
       }
       return pronta('ia', null, r.object, r.usageId);
     } catch (err) {

@@ -21,6 +21,7 @@ import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
 import { AiGateway } from '../ai/gateway.js';
 import { ModelosIa } from '../ai/modelos.js';
+import { RevisorService } from '../ai/revisor/revisor.service.js';
 import { LinksService } from '../links/links.service.js';
 import { MediaService } from '../media/media.service.js';
 import { AtencaoCicloService } from '../results/atencao-ciclo.service.js';
@@ -80,6 +81,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     AtencaoCicloService,
     ModelosIa,
     AiGateway,
+    // O revisor de IA do Compliance (I9): o segundo olhar da leitura da revisão e dos planos, com a flag `revisor`.
+    RevisorService,
     ExplicarService,
     RevisaoSemanalService,
     RevisaoSemanalLoop,

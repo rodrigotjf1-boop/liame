@@ -1,0 +1,15 @@
+# Eval da tarefa `compliance_revisao` (A3, I9; ADR-006 item 8): o revisor de IA do Compliance.
+# O promptfoo só percorre os casos e junta o relatório: o prompt, a mensagem (o texto em partes) e o formato do parecer
+# são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do servidor (apoio/conferir.mjs).
+# Rodar: ver evals/README.md.
+description: 'Liame · compliance_revisao: texto bom passa; tom, clareza e alegação são apontados; ordem dentro do texto não abre o portão'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: compliance_revisao
+
+tests: file://testes.mjs

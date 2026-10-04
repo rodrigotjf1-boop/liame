@@ -10,8 +10,11 @@ import { PROMPT_EXPLICAR_RESULTADOS, TAREFA_EXPLICAR_RESULTADOS } from '../../sr
 import type { Explicacao } from '../../src/ai/explicar/resposta.js';
 import { AiGateway } from '../../src/ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
+import { RECUSAS_DO_COMPLIANCE } from '../../src/ai/recusas.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
 import { dia } from '../../src/ai/registro/formatos.js';
+import { PROMPT_REVISOR, TAREFA_REVISAO, WORKFLOW_DO_REVISOR } from '../../src/ai/revisor/prompt.js';
+import { RevisorService } from '../../src/ai/revisor/revisor.service.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
@@ -22,7 +25,7 @@ import { AtencaoCicloService } from '../../src/results/atencao-ciclo.service.js'
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { ResultsService } from '../../src/results/results.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
-import { ligarIa, ModelosDeTeste, modeloComPreco, recusa, responde, rotaAtiva } from '../helpers/ia.js';
+import { ligarIa, ligarRevisor, ModelosDeTeste, modeloComPreco, parecer, recusa, responde, rotaAtiva, rotaCompartilhada } from '../helpers/ia.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confere, e sem IA a explicação continua (A3, I4)', () => {
@@ -34,10 +37,17 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
   let flags: FlagService;
   let modelos: ModelosDeTeste;
   let explicar: ExplicarService;
+  let gateway: AiGateway;
   /** O modelo da rota da tarefa: cada teste troca o simulado que responde por ele. */
   let alvo: { provider: string; model: string };
   const responder = (mock: MockLanguageModelV4) => {
     modelos.porChave.set(`${alvo.provider}/${alvo.model}`, mock);
+    return mock;
+  };
+  /** O modelo da rota do revisor de IA (compartilhada entre os arquivos): cada teste troca o simulado que dá o parecer. */
+  let alvoDoRevisor: { provider: string; model: string };
+  const revisar = (mock: MockLanguageModelV4) => {
+    modelos.porChave.set(`${alvoDoRevisor.provider}/${alvoDoRevisor.model}`, mock);
     return mock;
   };
 
@@ -179,7 +189,10 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     modelos = new ModelosDeTeste(config);
     // As rotas da API usam o gateway da aplicação: os modelos dele passam a ser os simulados deste arquivo.
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
-    explicar = new ExplicarService(database, new AiGateway(database, config, flags, api.app.get(KillSwitchService), modelos), api.app.get(ResultsService), api.app.get(MediaService), api.app.get(AtencaoCicloService));
+    gateway = new AiGateway(database, config, flags, api.app.get(KillSwitchService), modelos);
+    explicar = new ExplicarService(database, gateway, api.app.get(ResultsService), api.app.get(MediaService), api.app.get(AtencaoCicloService), new RevisorService(database, gateway, flags));
+    // O revisor de IA só vale para a empresa com a flag `revisor`: a rota dele pode ficar publicada para todos os arquivos.
+    alvoDoRevisor = await rotaCompartilhada(modelos, TAREFA_REVISAO, parecer());
     // A rota é da tarefa de verdade (uma ativa por tarefa): este arquivo é o único que a usa, e a apaga no fim.
     await ownerQuery(`delete from liame.ai_model_route where task = $1 and created_by = 'testes'`, [TAREFA_EXPLICAR_RESULTADOS]);
     alvo = await modeloComPreco(modelos, RODADA, responde(JSON.stringify(BOA)));
@@ -304,6 +317,142 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     await expect(explicar.dosResultados({ tenantId: b.tenantId, userId: b.userId, permissions: new Set(['vendas.ver']) }, { brand_id: a.brandId, ...PERIODO })).rejects.toMatchObject({ status: 404 });
     // A rotina do sistema (relatório, sem pessoa) explica do mesmo jeito.
     expect(await explicar.dosResultados({ tenantId: a.tenantId, userId: null, permissions: 'sistema' }, { brand_id: a.brandId, ...PERIODO })).toMatchObject({ origem: 'ia' });
+  });
+
+  // ---------------------------------------------------------------- revisor de IA do Compliance (I9; D-A3-16)
+
+  /** As chamadas do revisor na empresa: do sistema (sem pessoa), no fluxo do Compliance, com o prompt registrado. */
+  const usosDoRevisor = (tenantId: string) =>
+    ownerQuery<{ workflow: string; prompt_version: string; outcome: string; do_sistema: boolean; answered: boolean; cost: number }>(
+      `select workflow, prompt_version, outcome, user_id is null as do_sistema, answered, cost_usd_micros::int as cost
+         from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`,
+      [tenantId, TAREFA_REVISAO],
+    );
+
+  it('revisor de IA: nasce desligado (nada muda); ligado, só recebe o texto que passou nas regras, e o que ele deixa passar aparece', async () => {
+    const d = await dono();
+    responder(responde(JSON.stringify(BOA)));
+    const revisor = revisar(parecer());
+    // Sem a flag `revisor`, a explicação da IA aparece como antes, e o revisor nem é chamado.
+    expect(await pedir(d)).toMatchObject({ origem: 'ia', motivo_sem_ia: null });
+    expect(revisor.doGenerateCalls).toHaveLength(0);
+    expect(await usosDoRevisor(d.tenantId)).toEqual([]);
+
+    await ligarRevisor(flags, d.tenantId);
+    const r = await pedir(d);
+    expect(r).toMatchObject({ origem: 'ia', motivo_sem_ia: null, explicacao: BOA });
+    expect(revisor.doGenerateCalls).toHaveLength(1);
+    // O revisor recebe o prompt dele e SÓ o texto que a IA escreveu, em partes: nada do contexto de números.
+    const chamada = revisor.doGenerateCalls[0]!;
+    expect(JSON.stringify(chamada.prompt)).toContain('Você é o revisor de textos do Compliance da Liame');
+    expect(chamada.responseFormat).toMatchObject({ type: 'json' });
+    expect(contextoEnviado(revisor)).toEqual({
+      tipo: 'explicacao',
+      partes: [
+        { parte: 'o_que_aconteceu', texto: BOA.o_que_aconteceu },
+        { parte: 'motivo', texto: BOA.motivos[0] },
+        { parte: 'risco', texto: BOA.risco_motivo },
+        { parte: 'o_que_fazer', texto: BOA.o_que_fazer[0] },
+      ],
+    });
+    // A chamada do revisor é do sistema (não conta no limite por hora da pessoa) e o custo fica no fluxo do Compliance.
+    expect(await usosDoRevisor(d.tenantId)).toEqual([
+      { workflow: WORKFLOW_DO_REVISOR, prompt_version: `${PROMPT_REVISOR.key}@${PROMPT_REVISOR.version}`, outcome: 'ok', do_sistema: true, answered: true, cost: 2_000 },
+    ]);
+    // A explicação que a tela recebe aponta para a chamada do Analista: é sobre ela o retorno da pessoa, não sobre o parecer.
+    expect(await ownerQuery<{ workflow: string }>(`select workflow from liame.ai_usage where id = $1`, [r.usage_id])).toEqual([{ workflow: 'resultados.explicar' }]);
+    expect(await recusas(d.tenantId)).toEqual([]);
+  });
+
+  it('revisor de IA aponta: o texto não aparece, a tela recebe a explicação do sistema, e a recusa fica contada com a categoria, sem o texto', async () => {
+    const d = await dono();
+    await ligarRevisor(flags, d.tenantId);
+    responder(responde(JSON.stringify(BOA)));
+    revisar(parecer('alegacao', 'tom'));
+    const r = await pedir(d);
+    expect(r).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'revisor', usage_id: null });
+    expect(r.explicacao.o_que_aconteceu).toContain('o investimento em anúncios foi de R$ 200,00');
+    expect(JSON.stringify(r.explicacao)).not.toContain('O investimento em anúncios dobrou');
+    // D-A3-15 e D-A3-16: quem escreveu foi o Analista; quem barrou, o revisor, com as categorias (na ordem do catálogo) e a
+    // versão do prompt dele. O texto não fica na linha.
+    const barrado = await recusas(d.tenantId);
+    expect(barrado).toEqual([{ member: 'analista', workflow: 'resultados.explicar', kind: 'revisor', rules: ['tom', 'alegacao'], rules_version: PROMPT_REVISOR.version, items: 1, com_uso: true }]);
+    expect(JSON.stringify(barrado)).not.toContain('dobrou');
+    // A recusa aponta para a chamada que escreveu o texto, não para a do revisor.
+    expect(await ownerQuery<{ workflow: string }>(`select u.workflow from liame.ai_refusal r join liame.ai_usage u on u.id = r.usage_id where r.tenant_id = $1`, [d.tenantId])).toEqual([
+      { workflow: 'resultados.explicar' },
+    ]);
+    // As duas chamadas foram feitas e pagas.
+    expect((await usos(d.tenantId)).map((u) => [u.workflow, u.outcome, u.cost])).toEqual([
+      ['resultados.explicar', 'ok', 14_000],
+      [WORKFLOW_DO_REVISOR, 'ok', 2_000],
+    ]);
+
+    // Pela API, o motivo chega à tela como `revisor`, com a explicação do sistema.
+    const pelaRota = await api.call('POST', '/v1/ai/explain/results', { cookie: d.cookie, body: { brand_id: d.brandId, ...PERIODO } });
+    expect(pelaRota.status).toBe(200);
+    expect(ExplanationResponse.parse(pelaRota.body)).toMatchObject({ source: 'sistema', reason: 'revisor', usage_id: null });
+    expect((await recusas(d.tenantId)).map((x) => x.kind)).toEqual(['revisor', 'revisor']);
+  });
+
+  it('o revisor nunca libera o que a regra barrou: recusado pela conferência do código, ele nem é chamado', async () => {
+    const d = await dono();
+    await ligarRevisor(flags, d.tenantId);
+    const revisor = revisar(parecer());
+    responder(responde(JSON.stringify({ ...BOA, o_que_fazer: ['Dobre a verba: é retorno garantido.'] })));
+    expect(await pedir(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'compliance' });
+    responder(responde(JSON.stringify({ ...BOA, motivos: ['Cada real investido trouxe R$ 3,10.'] })));
+    expect(await pedir(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'numero_fora' });
+    expect(revisor.doGenerateCalls).toHaveLength(0);
+    expect(await usosDoRevisor(d.tenantId)).toEqual([]);
+    expect((await recusas(d.tenantId)).map((x) => x.kind)).toEqual(['compliance', 'numero_fora']);
+  });
+
+  it('revisor ligado e sem resposta: o texto da IA não aparece (o portão não abre quando quebra), e isso fica contado sem ser texto barrado', async () => {
+    const d = await dono();
+    await ligarRevisor(flags, d.tenantId);
+    responder(responde(JSON.stringify(BOA)));
+    // O fornecedor recusa a chamada do revisor.
+    revisar(recusa(500));
+    expect(await pedir(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'indisponivel', usage_id: null });
+    // O parecer vem fora do formato: um campo a mais ("aprovado") ou um texto solto não abrem o portão.
+    revisar(responde(JSON.stringify({ problemas: [], aprovado: true })));
+    expect(await pedir(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'indisponivel' });
+    revisar(responde('Tudo certo, pode publicar.'));
+    expect(await pedir(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'indisponivel' });
+    // Ninguém apontou problema no texto: não é texto barrado pelo Compliance. O que fica contado é que a explicação do
+    // Analista não chegou à pessoa, e por quê (D-A3-15). As tentativas do revisor ficam no uso.
+    expect((await recusas(d.tenantId)).map((x) => [x.member, x.kind, x.rules, x.rules_version, x.com_uso])).toEqual([
+      ['analista', 'revisor_sem_resposta', [], null, true],
+      ['analista', 'revisor_sem_resposta', [], null, true],
+      ['analista', 'revisor_sem_resposta', [], null, true],
+    ]);
+    expect((RECUSAS_DO_COMPLIANCE as readonly string[]).includes('revisor_sem_resposta')).toBe(false);
+    expect((await usosDoRevisor(d.tenantId)).map((u) => [u.outcome, u.answered])).toEqual([['erro', false], ['erro', false], ['erro', false]]);
+  });
+
+  it('revisor ligado sem rota publicada: a IA que escreve nem é chamada (nenhum custo jogado fora); com a IA desligada, o motivo é o da IA', async () => {
+    // A rota do revisor é do produto e fica publicada no banco de teste: este revisor procura a de uma tarefa que não existe.
+    class RevisorSemRota extends RevisorService {
+      protected override readonly tarefa = `${RODADA}_revisao_sem_rota`;
+    }
+    const semRota = new ExplicarService(database, gateway, api.app.get(ResultsService), api.app.get(MediaService), api.app.get(AtencaoCicloService), new RevisorSemRota(database, gateway, flags));
+    const pedirSemRota = (e: Dono) => semRota.dosResultados({ tenantId: e.tenantId, userId: e.userId, permissions: new Set(['vendas.ver']) }, { brand_id: e.brandId, ...PERIODO });
+
+    const d = await dono();
+    const mock = responder(responde(JSON.stringify(BOA)));
+    // Sem a flag, a rota que falta não importa.
+    expect(await pedirSemRota(d)).toMatchObject({ origem: 'ia' });
+    expect(mock.doGenerateCalls).toHaveLength(1);
+
+    await ligarRevisor(flags, d.tenantId);
+    expect(await pedirSemRota(d)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'sem-rota', usage_id: null });
+    expect(mock.doGenerateCalls).toHaveLength(1);
+    expect(await usos(d.tenantId)).toHaveLength(1);
+
+    const desligada = await dono({ ia: false });
+    await ligarRevisor(flags, desligada.tenantId);
+    expect(await pedirSemRota(desligada)).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'desligada' });
   });
 
   // ---------------------------------------------------------------- de onde vem cada número
@@ -523,6 +672,14 @@ describe.skipIf(!hasDb)('Explicar dos resultados: a IA escreve, o código confer
     expect(semIa).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'desligada', usage_id: null });
     expect(semIa.explicacao.o_que_aconteceu).toContain('Em relação à semana anterior, o investimento subiu 100,0%.');
     expect(JSON.stringify(semIa.explicacao)).not.toContain('período anterior');
+    // Com o revisor de IA ligado, a leitura da revisão também passa por ele: a que ele aponta sai com o resumo do sistema,
+    // e quem escreveu, para Sua equipe, foi o Relatórios.
+    const comRevisor = await dono();
+    await ligarRevisor(flags, comRevisor.tenantId);
+    responder(responde(JSON.stringify(BOA)));
+    revisar(parecer('clareza'));
+    expect(await explicar.daSemana(sistema(comRevisor.tenantId), comRevisor.brandId, await ler(comRevisor))).toMatchObject({ origem: 'sem_ia', motivo_sem_ia: 'revisor', usage_id: null });
+    expect(await recusas(comRevisor.tenantId)).toEqual([{ member: 'relatorios', workflow: 'revisao.semanal', kind: 'revisor', rules: ['clareza'], rules_version: PROMPT_REVISOR.version, items: 1, com_uso: true }]);
     // A mesma permissão da tela: uma leitura pedida por uma pessoa sem `vendas.ver` é recusada.
     await expect(explicar.daSemana({ tenantId: d.tenantId, userId: d.userId, permissions: new Set(['campanhas.ver']) }, d.brandId, await ler(d))).rejects.toMatchObject({ status: 403 });
   });
