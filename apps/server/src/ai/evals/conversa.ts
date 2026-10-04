@@ -9,6 +9,7 @@ import { conferirResposta, RespostaDaLia, textosDaResposta } from '../conversa/r
 import { LEITURAS } from '../registro/leituras.defs.js';
 import { limparJson } from '../sanitizar.js';
 import type { Avaliacao } from './avaliar.js';
+import { leituraPadrao } from './leituras-padrao.js';
 
 // Casos de eval da Conversa com a LIA (A3, I10c): dados versionados em `evals/conversa_lia/casos.jsonl`. Cada caso
 // é uma mensagem da pessoa, o que cada leitura devolve (a visão, como o modelo a recebe) e o que se espera. O
@@ -39,7 +40,7 @@ export const CasoDaConversa = z.strictObject({
   marca: z.string().min(1).max(80).default('Mister Burgers'),
   mensagem: z.string().min(1).max(2000),
   historico: z.array(z.strictObject({ de: z.enum(['pessoa', 'lia']), texto: z.string().min(1) })).default([]),
-  /** O que cada leitura devolve neste caso; a que não está aqui falha ("Não foi possível ler agora."). */
+  /** O que cada leitura devolve neste caso; a que não está aqui devolve a visão neutra (`leituras-padrao.ts`) ou, sem uma, falha. */
   leituras: z.record(Ferramenta, z.unknown()).default({}),
   espera: z.strictObject({
     /** Ferramentas que precisam ser chamadas (todas). */
@@ -47,6 +48,7 @@ export const CasoDaConversa = z.strictObject({
     /** Ferramentas que não podem ser chamadas. */
     nao_usa: z.array(Ferramenta).optional(),
     cita: z.array(z.string().min(1)).optional(),
+    /** Pelo menos um destes trechos aparece (sem diferenciar maiúsculas). */
     cita_um_de: z.array(z.string().min(1)).min(1).optional(),
     /** Trechos que não podem aparecer (sem diferenciar maiúsculas). */
     nao_cita: z.array(z.string().min(1)).optional(),
@@ -93,7 +95,8 @@ const texto = (v: unknown): string => (typeof v === 'string' ? v : '');
 
 /**
  * O que a ferramenta devolve no caso: a leitura gravada; a escrita, simulada no formato da produção (a demanda
- * aberta; a proposta esperando aprovação, com prazo de 3 dias); a leitura sem gravação falha.
+ * aberta; a proposta esperando aprovação, com prazo de 3 dias); a leitura sem gravação devolve a visão neutra dela
+ * (as fontes do caso, nenhum aviso, nenhum cupom, nenhum link para arrumar) e, quando não tem uma, falha.
  */
 export function resultadoDaFerramenta(caso: CasoDaConversa, nome: string, input: Record<string, unknown>): { ok: true; valor: unknown } | { ok: false; erro: string } {
   if (nome === ABRIR_DEMANDA.name) {
@@ -104,6 +107,8 @@ export function resultadoDaFerramenta(caso: CasoDaConversa, nome: string, input:
     return { ok: true, valor: valorDaProposta({ codigo: texto(input.codigo), loja: texto(input.loja), campanha: texto(input.campanha) || null, de: texto(input.valido_de), ate: texto(input.valido_ate), expira }) };
   }
   if (nome in caso.leituras) return { ok: true, valor: limparJson(caso.leituras[nome]).valor };
+  const padrao = leituraPadrao(caso, nome);
+  if (padrao !== undefined) return { ok: true, valor: limparJson(padrao).valor };
   return { ok: false, erro: 'Não foi possível ler agora.' };
 }
 
@@ -152,7 +157,8 @@ export function avaliarConversa(caso: CasoDaConversa, bruto: unknown): Avaliacao
   const corpo = textosDaResposta(resposta).join('\n');
   const minusculo = corpo.toLowerCase();
   for (const trecho of espera.cita ?? []) if (!corpo.includes(trecho)) falhas.push(`nao_citou: ${trecho}`);
-  if (espera.cita_um_de && !espera.cita_um_de.some((t) => corpo.includes(t))) falhas.push(`nao_citou: nenhum de ${espera.cita_um_de.join(' | ')}`);
+  // "Um destes" é sobre o sentido (a recusa, o que falta): vale com a frase começando em maiúscula.
+  if (espera.cita_um_de && !espera.cita_um_de.some((t) => minusculo.includes(t.toLowerCase()))) falhas.push(`nao_citou: nenhum de ${espera.cita_um_de.join(' | ')}`);
   for (const trecho of espera.nao_cita ?? []) if (minusculo.includes(trecho.toLowerCase())) falhas.push(`citou: ${trecho}`);
   if (espera.reuniao === true && !resposta.reuniao) falhas.push('reuniao: esperada, não veio');
   if (espera.reuniao === false && resposta.reuniao) falhas.push('reuniao: veio sem ser decisão grande');

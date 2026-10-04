@@ -59,6 +59,19 @@ describe('verificador de números (A3-5): a IA só cita o que o código entregou
     expect(conferirNumeros('Desde 17/09/2026 e em 18/09.', contexto)).toEqual({ ok: false, fora: ['17/09/2026', '18', '09'] });
   });
 
+  it('a hora solta vale quando o contexto traz essa hora, sozinha ou junto de uma data; a que não está lá reprova inteira', () => {
+    const contexto = { ultima_leitura: '03/10/2026 14:05', oferta: { inicio: '18:00', fim: '23:00' } };
+    // "em 03/10/2026 às 14:05": a data e a hora estão nos dados, só separadas por uma palavra (é como o modelo de verdade escreve).
+    expect(conferirNumeros('Lido em 03/10/2026 às 14:05; a oferta vai das 18:00 às 23:00.', contexto)).toEqual({ ok: true, fora: [] });
+    // A hora solta do contexto segue autorizando os números dela ("às 18h"); a hora de uma data com hora, não ("14 pedidos").
+    expect(conferirNumeros('A oferta começa às 18h e vai até as 23h.', contexto)).toEqual({ ok: true, fora: [] });
+    expect(conferirNumeros('Foram 14 pedidos.', contexto)).toEqual({ ok: false, fora: ['14'] });
+    // A hora que o contexto não traz reprova como uma ficha só; com os dois números dela no contexto, passa como antes.
+    expect(conferirNumeros('Lido às 09:12.', contexto)).toEqual({ ok: false, fora: ['09:12'] });
+    expect(conferirNumeros('Abre às 09:12.', { abre: 'das 9 às 12' })).toEqual({ ok: true, fora: [] });
+    expect(numerosDe('Lido em 03/10/2026 às 14:05, das 18:00 às 23:00, com 38 pedidos.')).toEqual(['data:03/10/2026', 'hora:14:05', 'hora:18:00', 'hora:23:00', '38']);
+  });
+
   it('passa quando todo número está no contexto, em qualquer formato equivalente, e aponta os que não estão', () => {
     const contexto = { investimento: 'R$ 960,00', pedidos: '38', roas: '2,60', variacao: '+22,4%', periodo: { de: '18/09/2026' }, lista: [{ receita: 'R$ 2.496,00' }], janela_em_dias: 7 };
     expect(conferirNumeros('O investimento de R$ 960,00 trouxe 38 pedidos e R$ 2.496 de receita; ROAS de 2,6 desde 18/09/2026, em 7 dias.', contexto)).toEqual({ ok: true, fora: [] });

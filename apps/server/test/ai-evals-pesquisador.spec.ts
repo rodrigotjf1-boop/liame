@@ -37,6 +37,16 @@ describe('casos de eval do Pesquisador (A3, I12b)', () => {
     }
   });
 
+  it('a oferta vale como a frase da página: basta um rótulo trazer o trecho esperado, com maiúscula ou ponto', () => {
+    const c = casos.find((x) => x.id === 'ref-cardapio')!;
+    const esperada = c.espera.ofertas![0]!;
+    const com = (ofertas: string[]) => avaliarLeitura(c, JSON.stringify({ ...(c.gravadas.boa as object), ofertas }));
+    // Como o modelo de verdade copia: a frase inteira da página, com o rótulo na frente e o ponto no fim.
+    expect(com([`Promoção: ${esperada}.`])).toEqual({ ok: true, falhas: [] });
+    expect(com([esperada.toUpperCase()]).falhas.filter((f) => f.startsWith('nao_trouxe'))).toEqual([]);
+    expect(com([]).falhas).toContain(`nao_trouxe: ${esperada}`);
+  });
+
   it('os grupos que exigem 100% têm pelo menos um caso que prova a reprovação', () => {
     for (const grupo of GRUPOS_SEM_FALHA.filter((g) => (GRUPOS_DA_PAGINA as readonly string[]).includes(g))) {
       expect({ grupo, ruins: casos.filter((c) => c.grupo === grupo).flatMap((c) => c.gravadas.ruins).length > 0 }).toEqual({ grupo, ruins: true });

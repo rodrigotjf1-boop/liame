@@ -19,9 +19,10 @@ const Periodo = { from: Dia, to: Dia };
 export const LEITURAS: FerramentaDef[] = [
   {
     name: 'fontes_frescor',
-    version: 1,
+    // v2 (04/10/2026): não manda mais ler antes de todo número; os resultados e os cupons já trazem o frescor deles.
+    version: 2,
     description:
-      'Situação das contas conectadas (Meta, Google Ads, GA4, Regem) e o frescor de cada conjunto de dados: quando foi a última leitura e se está em dia, atrasada ou parada. Use antes de comentar números, para dizer de quando eles são.',
+      'Situação das contas conectadas (Meta, Google Ads, GA4, Regem) e o frescor de cada conjunto de dados: quando foi a última leitura e se está em dia, atrasada ou parada. Use quando a pergunta for sobre as contas conectadas ou sobre de quando são os dados; as leituras dos resultados e dos cupons já trazem o frescor das fontes delas.',
     risk: 'R0',
     permission: 'contas.ver',
     owner: 'midia',

@@ -279,7 +279,7 @@ describe('a LIA no registro (I2)', () => {
   it('prompt e funcionário registrados, com as leituras (os números da marca e o trabalho da equipe), a demanda e a proposta de cupom', () => {
     expect(conferirRegistro(registroAtual())).toEqual([]);
     expect(PROMPT_CONVERSA_LIA.task).toBe('conversa_lia');
-    expect([PROMPT_CONVERSA_LIA.version, LIA.version]).toEqual([3, 3]);
+    expect([PROMPT_CONVERSA_LIA.version, LIA.version]).toEqual([4, 3]);
     expect(LIA.ferramentas).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'equipe_trabalho', 'abrir_demanda', 'propor_cupom']);
     // "Conversar sobre ele" (P7): ela lê Sua equipe, e não liga nem desliga ninguém.
     expect(PROMPT_CONVERSA_LIA.content).toContain('`equipe_trabalho`');
