@@ -5,6 +5,7 @@ import { type Database, runMigrations, uuidv7 } from '@liame/database';
 import { MockLanguageModelV4 } from 'ai/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { TAREFA_CONVERSA } from '../../src/ai/conversa/prompt.js';
+import { PROMPT_REVISOR, TAREFA_REVISAO, WORKFLOW_DO_REVISOR } from '../../src/ai/revisor/prompt.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
 import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
 import { afterCommit } from '../../src/context/request-context.js';
@@ -16,7 +17,7 @@ import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { LifecyclePurgeService } from '../../src/worker/lifecycle-purge.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
-import { ligarIa, ModelosDeTeste, modeloComPreco, rotaAtiva, uso } from '../helpers/ia.js';
+import { ligarIa, ligarRevisor, ModelosDeTeste, modeloComPreco, parecer, recusa, rotaAtiva, rotaCompartilhada, uso } from '../helpers/ia.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // Conversa com a LIA (A3, I10): pela rota, com o modelo simulado. A resposta só aparece depois da conferência;
@@ -36,6 +37,12 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
   /** Cada teste escolhe o roteiro do modelo da rota da tarefa. */
   const responder = (mock: MockLanguageModelV4) => {
     modelos.porChave.set(`${alvo.provider}/${alvo.model}`, mock);
+    return mock;
+  };
+  /** O modelo da rota do revisor de IA (compartilhada entre os arquivos): o teste escolhe o parecer. */
+  let alvoDoRevisor: { provider: string; model: string };
+  const revisar = (mock: MockLanguageModelV4) => {
+    modelos.porChave.set(`${alvoDoRevisor.provider}/${alvoDoRevisor.model}`, mock);
     return mock;
   };
   const rodada = (content: Array<{ type: 'text'; text: string } | { type: 'tool-call'; toolCallId: string; toolName: string; input: string }>) => ({
@@ -164,6 +171,8 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     await ownerQuery(`delete from liame.ai_model_route where task = $1 and created_by = 'testes'`, [TAREFA_CONVERSA]);
     alvo = await modeloComPreco(modelos, RODADA, roteiro(responde(['paragrafo', 'Oi.'])));
     await rotaAtiva(TAREFA_CONVERSA, alvo, { maxCost: 1_000_000 });
+    // O revisor de IA só vale para a empresa com a flag `revisor`: a rota dele pode ficar publicada para todos os arquivos.
+    alvoDoRevisor = await rotaCompartilhada(modelos, TAREFA_REVISAO, parecer());
   });
   beforeEach(resetIpRateLimits);
   afterAll(async () => {
@@ -276,6 +285,75 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     const semAnalise = mensagemFinal((await conversar(velho.cookie, { brand_id: velho.brandId, text: 'E agora, como está?' })).eventos);
     expect(semAnalise).toMatchObject({ role: 'lia', status: 'ok' });
     expect(semAnalise.numbers).toEqual([{ value: desde, sources: ['Liame · fonte fora do dia, com a última leitura'] }]);
+  });
+
+  it('I9: com o revisor de IA ligado, a resposta que passou nas regras ainda passa por ele; apontada, vira o aviso `recusada`; sem ele, a LIA fica fora do ar', async () => {
+    const d = await dono();
+    await ligarRevisor(flags, d.tenantId);
+    const leitura = () => pede('resultados_ciclo_fechado', { brand_id: d.brandId, ...PERIODO });
+    const TEXTO = 'De 18/09/2026 a 01/10/2026, o investimento na Meta foi de R$ 200,00.';
+    const boa = () => responde(['paragrafo', TEXTO], ['fazer', 'Confira o link com rastreio no anúncio.']);
+    const recusasDaEmpresa = () =>
+      ownerQuery<{ member: string; workflow: string; kind: string; rules: string[]; rules_version: number | null }>(
+        `select member, workflow, kind, rules, rules_version from liame.ai_refusal where tenant_id = $1 order by created_at, id`,
+        [d.tenantId],
+      );
+
+    // O revisor deixa passar: a resposta chega. Ele recebeu só o texto da LIA, em partes; a chamada dele é do sistema.
+    responder(roteiro(leitura(), boa()));
+    const revisor = revisar(parecer());
+    const primeira = await conversar(d.cookie, { brand_id: d.brandId, text: 'Como foi a semana?' });
+    expect(mensagemFinal(primeira.eventos)).toMatchObject({ role: 'lia', status: 'ok' });
+    expect(primeira.eventos.at(-1)!.conversation).toMatchObject({ lia_answers: 1 });
+    expect(revisor.doGenerateCalls).toHaveLength(1);
+    const mensagem = revisor.doGenerateCalls[0]!.prompt.find((m) => m.role === 'user')!;
+    expect(JSON.parse((mensagem.content as Array<{ type: string; text?: string }>).map((p) => p.text ?? '').join(''))).toEqual({
+      tipo: 'conversa',
+      partes: [
+        { parte: 'paragrafo', texto: TEXTO },
+        { parte: 'fazer', texto: 'Confira o link com rastreio no anúncio.' },
+      ],
+    });
+    expect(
+      await ownerQuery<{ workflow: string; prompt_version: string; do_sistema: boolean; answered: boolean }>(
+        `select workflow, prompt_version, user_id is null as do_sistema, answered from liame.ai_usage where tenant_id = $1 and task = $2`,
+        [d.tenantId, TAREFA_REVISAO],
+      ),
+    ).toEqual([{ workflow: WORKFLOW_DO_REVISOR, prompt_version: `${PROMPT_REVISOR.key}@${PROMPT_REVISOR.version}`, do_sistema: true, answered: true }]);
+    const conversaId = primeira.eventos[0]!.conversation!.id;
+
+    // O revisor aponta: a pessoa vê o aviso do sistema, a resposta não conta na conversa e a recusa fica com a categoria.
+    responder(roteiro(boa()));
+    revisar(parecer('tom'));
+    const apontada = await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'E agora?' });
+    expect(mensagemFinal(apontada.eventos)).toMatchObject({ role: 'sistema', notice: 'recusada', blocks: [], numbers: [], usage_id: null });
+    expect(apontada.eventos.at(-1)!.conversation).toMatchObject({ lia_answers: 1 });
+    expect(await recusasDaEmpresa()).toEqual([{ member: 'lia', workflow: 'conversa.lia', kind: 'revisor', rules: ['tom'], rules_version: PROMPT_REVISOR.version }]);
+
+    // O revisor não responde: o portão não abre. A pessoa vê "fora do ar", e o texto não é contado como barrado.
+    responder(roteiro(boa()));
+    revisar(recusa(500));
+    const semRevisor = await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'E a campanha?' });
+    expect(mensagemFinal(semRevisor.eventos)).toMatchObject({ role: 'sistema', notice: 'fora_do_ar', usage_id: null });
+    expect((await recusasDaEmpresa()).map((r) => r.kind)).toEqual(['revisor', 'revisor_sem_resposta']);
+
+    // Recusada pela conferência do código, a resposta nem chega ao revisor.
+    responder(roteiro(leitura(), responde(['paragrafo', 'O investimento foi de R$ 250,00.'])));
+    const naoChamado = revisar(parecer());
+    const pelaRegra = await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'Quanto investi?' });
+    expect(mensagemFinal(pelaRegra.eventos)).toMatchObject({ role: 'sistema', notice: 'recusada' });
+    expect(naoChamado.doGenerateCalls).toHaveLength(0);
+    expect((await recusasDaEmpresa()).map((r) => r.kind)).toEqual(['revisor', 'revisor_sem_resposta', 'numero_fora']);
+
+    // Sua equipe: uma resposta chegou à pessoa e três foram retiradas; o custo do revisor é do Compliance, que barrou um
+    // texto (o apontado) de quatro conferidos; as chamadas do próprio revisor não são texto para conferir.
+    const equipe = TeamResponse.parse((await api.call('GET', `/v1/team?brand_id=${d.brandId}`, { cookie: d.cookie })).body);
+    const membro = (key: string) => equipe.members.find((m) => m.key === key)!;
+    const numeros = (key: string) => Object.fromEntries(membro(key).stats.map((s) => [s.key, s.value]));
+    expect(numeros('lia')).toMatchObject({ respostas: '1', retiradas_na_conferencia: '3' });
+    expect(membro('lia').cost.calls).toBe(6);
+    expect(numeros('compliance')).toEqual({ textos_conferidos: '4', textos_barrados: '1' });
+    expect(membro('compliance')).toMatchObject({ kind: 'regra', status: 'ativo', cost: { usd_micros: '4000', calls: 3 } });
   });
 
   it('por regra, sem IA: falar com uma pessoa, pedido político, LIA desligada; o dado pessoal sai antes de tudo', async () => {

@@ -7,6 +7,7 @@ import { TAREFA_ESTRATEGISTA } from '../../src/ai/estrategista/prompt.js';
 import { AiGateway } from '../../src/ai/gateway.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
 import { FerramentasDeLeitura } from '../../src/ai/registro/leituras.js';
+import { RevisorService } from '../../src/ai/revisor/revisor.service.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
@@ -81,7 +82,7 @@ describe.skipIf(!hasDb)('Planos agendados: a pauta de segunda e o plano de 90 di
     modelos = new ModelosDeTeste(config);
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
     agenda = new EstrategistaAgenda(database, flags);
-    loop = new EstrategistaLoop(database, flags, new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService)));
+    loop = new EstrategistaLoop(database, flags, new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService), api.app.get(RevisorService)));
     // A tarefa do Estrategista também é usada por `planos.spec.ts`, que roda em outro processo: a rota é a
     // compartilhada (ninguém apaga a do outro), e o modelo simulado é o deste arquivo.
     alvo = await rotaCompartilhada(modelos, TAREFA_ESTRATEGISTA, new MockLanguageModelV4({ doGenerate: [] }));

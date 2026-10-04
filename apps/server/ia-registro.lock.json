@@ -46,6 +46,10 @@
     }
   },
   "prompts": {
+    "compliance.revisor": {
+      "version": 1,
+      "hash": "5c8a9a16ae4f142b7379426c381d722d970bf2f177f2f2b67bf972a7c612b883"
+    },
     "conversa.lia": {
       "version": 2,
       "hash": "64acf11cb881d88e7c11cd40e69a55ef1dcd3923489ac3aac500ce54b45baf5b"

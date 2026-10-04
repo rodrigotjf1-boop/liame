@@ -27,6 +27,8 @@ import { registrarRecusa } from '../ai/recusas.js';
 import { dia } from '../ai/registro/formatos.js';
 import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import { FerramentasDeLeitura } from '../ai/registro/leituras.js';
+import { textoDaConversa } from '../ai/revisor/parecer.js';
+import { RevisorService } from '../ai/revisor/revisor.service.js';
 import { limparJson, limparTexto } from '../ai/sanitizar.js';
 import { RateLimitService } from '../auth/rate-limit.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
@@ -168,6 +170,7 @@ export class ConversaService {
     private readonly limite: RateLimitService,
     private readonly cupons: CouponsService,
     private readonly propostas: PropostaDeCupomService,
+    private readonly revisor: RevisorService,
   ) {}
 
   private get db(): Database {
@@ -350,6 +353,17 @@ export class ConversaService {
       return aviso('politico');
     }
     if (!t.liaAtiva) return aviso('desligada', { contact: ATENDIMENTO });
+    // A falha da IA (da LIA ou do revisor) como a tela a mostra.
+    const avisoDoErro = (err: AiError): Final =>
+      aviso(AVISO_DO_ERRO[err.code] ?? 'fora_do_ar', {
+        ...(err.detalhe.voltaEm ? { retry_at: err.detalhe.voltaEm.toISOString() } : {}),
+        ...(err.detalhe.teto ? { budget_window: err.detalhe.teto } : {}),
+        ...(err.code === 'desligada' ? { contact: ATENDIMENTO } : {}),
+      });
+    // O revisor de IA, para a empresa que o tem ligado (D-A3-16): se ele não tem como responder, a resposta não
+    // apareceria de qualquer jeito, então a LIA nem é chamada (nenhum custo jogado fora, nenhuma demanda aberta à toa).
+    const revisor = await this.revisor.situacao({ tenantId: t.quem.tenantId, brandId: t.marca.id, userId: t.quem.userId });
+    if (revisor === 'sem_rota') return aviso('fora_do_ar');
 
     const leituras: Leitura[] = [];
     const cards: ConversationCard[] = [];
@@ -390,11 +404,7 @@ export class ConversaService {
     } catch (err) {
       if (!(err instanceof AiError)) throw err;
       if (err.code === 'parada') return parada();
-      return aviso(AVISO_DO_ERRO[err.code] ?? 'fora_do_ar', {
-        ...(err.detalhe.voltaEm ? { retry_at: err.detalhe.voltaEm.toISOString() } : {}),
-        ...(err.detalhe.teto ? { budget_window: err.detalhe.teto } : {}),
-        ...(err.code === 'desligada' ? { contact: ATENDIMENTO } : {}),
-      });
+      return avisoDoErro(err);
     }
     // Parou enquanto a última chamada terminava: o custo está registrado; a resposta não é entregue.
     if (io.parar.aborted) return parada();
@@ -423,6 +433,22 @@ export class ConversaService {
       await this.anotarRecusa(t, r.usageId, recusa.recusa, recusa.regras);
       if (recusa.recusa === 'dado_velho') return aviso('dado_velho', { stale_sources: atrasadas });
       return aviso('recusada');
+    }
+    // Passou nas regras: o revisor de IA olha o tom, a clareza e as alegações. Se aponta, a recusa já ficou registrada
+    // por ele, com a categoria, e a tela mostra o mesmo aviso da conferência ("a resposta foi retirada").
+    if (revisor === 'pronto') {
+      const revisao = await this.revisor.revisar(textoDaConversa(resposta.data), {
+        tenantId: t.quem.tenantId,
+        brandId: t.marca.id,
+        userId: t.quem.userId,
+        usageId: r.usageId,
+        member: LIA.key,
+        workflow: WORKFLOW,
+      });
+      // Parou enquanto o revisor lia: a resposta não é entregue.
+      if (io.parar.aborted) return parada();
+      if (revisao.situacao === 'apontou') return aviso('recusada');
+      if (revisao.situacao === 'indisponivel') return avisoDoErro(revisao.erro);
     }
 
     const origens: OrigemDosNumeros[] = [

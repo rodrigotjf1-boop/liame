@@ -2,6 +2,7 @@ import { LIA } from '../ai/conversa/prompt.js';
 import { ESTRATEGISTA } from '../ai/estrategista/prompt.js';
 import { ANALISTA } from '../ai/explicar/prompt.js';
 import { PESQUISADOR } from '../ai/pesquisador/prompt.js';
+import { WORKFLOW_DO_REVISOR } from '../ai/revisor/prompt.js';
 import type { FuncionarioDef } from '../ai/registro/definicoes.js';
 
 // A equipe da A3 (I13b; protótipo P7, aprovado em 03/10/2026): quem trabalha para a marca. Os funcionários de IA têm
@@ -11,7 +12,10 @@ import type { FuncionarioDef } from '../ai/registro/definicoes.js';
 
 /** Relatórios: a revisão da semana (a leitura dela usa o mesmo prompt do Analista). */
 export const RELATORIOS = 'relatorios';
-/** Compliance: as regras de texto no código; não desliga. */
+/**
+ * Compliance: as regras de texto no código; não desliga. Para a empresa com a flag `revisor`, depois das regras vem o
+ * revisor de IA: o custo dele é o do Compliance (o fluxo abaixo), e sem a IA só as regras trabalham.
+ */
 export const COMPLIANCE = 'compliance';
 /** Gestor de tráfego: a sombra por regra (I5), sem modelo. */
 export const GESTOR_DE_TRAFEGO = 'trafego';
@@ -38,7 +42,7 @@ export const EQUIPE: Record<Membro, DefinicaoDoMembro> = {
   lia: { key: 'lia', kind: 'ia', funcionario: LIA, fluxos: ['conversa.lia'], desligavel: true },
   analista: { key: 'analista', kind: 'ia', funcionario: ANALISTA, fluxos: ['resultados.explicar', 'atencao.explicar'], desligavel: true },
   relatorios: { key: RELATORIOS, kind: 'regra', funcionario: null, fluxos: ['revisao.semanal'], desligavel: true },
-  compliance: { key: COMPLIANCE, kind: 'regra', funcionario: null, fluxos: [], desligavel: false },
+  compliance: { key: COMPLIANCE, kind: 'regra', funcionario: null, fluxos: [WORKFLOW_DO_REVISOR], desligavel: false },
   estrategista: { key: 'estrategista', kind: 'ia', funcionario: ESTRATEGISTA, fluxos: ['estrategista.plano'], desligavel: true },
   pesquisador: { key: 'pesquisador', kind: 'ia', funcionario: PESQUISADOR, fluxos: ['pesquisador.pagina'], desligavel: true },
   trafego: { key: GESTOR_DE_TRAFEGO, kind: 'regra', funcionario: null, fluxos: [], desligavel: true },

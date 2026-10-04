@@ -9,6 +9,7 @@ import { ExplicarService } from './ai/explicar/explicar.service.js';
 import { AiGateway } from './ai/gateway.js';
 import { ModelosIa } from './ai/modelos.js';
 import { FerramentasDeLeitura } from './ai/registro/leituras.js';
+import { RevisorService } from './ai/revisor/revisor.service.js';
 import { RetornoService } from './ai/retorno.service.js';
 import { AuditController } from './audit/audit.controller.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -62,6 +63,6 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
   controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController, PesquisaController, AutonomiaController, EquipeController, ResumoController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService, EquipeService, ResumoService],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, BudgetService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, RevisorService, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService, EquipeService, ResumoService],
 })
 export class AppModule {}

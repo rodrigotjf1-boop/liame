@@ -22,8 +22,9 @@ export const TeamStat = z.strictObject({
    * `fez_sentido`, `discordo`. Relatórios: `revisoes`, `com_leitura_da_ia`, `so_do_sistema`. Estrategista:
    * `planos_aprovados`, `planos_recusados`, `planos_esperando`, `em_preparo`. Pesquisador: `paginas_lidas`,
    * `recusadas`, `sugestoes`. LIA, Analista, Estrategista e Pesquisador levam também `retiradas_na_conferencia`
-   * (os textos deles que a conferência não deixou aparecer). Compliance: `textos_conferidos` (todo texto de IA que
-   * chegou à conferência) e `textos_barrados` (os que uma regra de texto, ou o revisor de IA, barrou). Gestor de
+   * (os textos deles que a conferência não deixou aparecer); `respostas` e `explicacoes` são as que chegaram à pessoa,
+   * sem as retiradas. Compliance: `textos_conferidos` (todo texto de IA que chegou à conferência, entregue ou
+   * retirado) e `textos_barrados` (os que uma regra de texto, ou o revisor de IA, barrou). Gestor de
    * tráfego: `recomendacoes`, `comparaveis`, `mesma_direcao` e `arrependimento` (em micros de real; negativo: as
    * recomendações teriam feito melhor que o que foi feito).
    */
@@ -36,7 +37,10 @@ export type TeamStat = z.infer<typeof TeamStat>;
 
 export const TeamMember = z.strictObject({
   key: Slug,
-  /** `ia` (usa modelo: tem custo e para com a IA desligada ou com a parada) ou `regra` (trabalha por regra). */
+  /**
+   * `ia` (usa modelo: tem custo e para com a IA desligada ou com a parada) ou `regra` (trabalha por regra). O
+   * Compliance é `regra` e pode ter custo: o do revisor de IA, para a empresa que o tem ligado.
+   */
   kind: Slug,
   /**
    * `ativo`; `sombra` (o Gestor de tráfego registra e compara, sem mostrar nem mexer); `desligado` (pela empresa,
@@ -50,7 +54,7 @@ export const TeamMember = z.strictObject({
   can_pause: z.boolean(),
   /** Quem desligou, quando e por quê, enquanto estiver desligado pela empresa. */
   paused: z.strictObject({ by: Pessoa, at: z.iso.datetime(), reason: z.string().nullable() }).nullable(),
-  /** O custo de IA nesta marca no mês (micros de dólar) e as chamadas ao modelo. */
+  /** O custo de IA nesta marca no mês (micros de dólar) e as chamadas ao modelo (todas, não só as que viraram resposta). */
   cost: z.strictObject({ usd_micros: Inteiro, calls: z.int().min(0) }),
   stats: z.array(TeamStat),
 });
@@ -117,7 +121,10 @@ export const TeamActivityItem = z.strictObject({
    * barrados de uma vez, a versão do plano, o percentual da verba recomendado.
    */
   count: z.int().nullable(),
-  /** As regras de texto que barraram (`barrou_texto` e `retirada_na_conferencia`), pelo nome. */
+  /**
+   * As regras de texto que barraram (`barrou_texto` e `retirada_na_conferencia`), pelo nome. Quando quem barrou foi o
+   * revisor de IA do Compliance, as categorias que ele apontou: `tom`, `clareza`, `alegacao`.
+   */
   rules: z.array(Slug),
   /**
    * Quem pediu ou decidiu. Nas respostas e explicações da IA, só quando foi a própria pessoa (o que os outros perguntam

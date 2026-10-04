@@ -13,6 +13,8 @@ import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { registrarRecusa } from '../ai/recusas.js';
 import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import { FerramentasDeLeitura } from '../ai/registro/leituras.js';
+import { textoDoPlano } from '../ai/revisor/parecer.js';
+import { RECUSA_DO_REVISOR, RevisorService } from '../ai/revisor/revisor.service.js';
 import { limparJson } from '../ai/sanitizar.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { currentTx } from '../context/request-context.js';
@@ -75,7 +77,13 @@ export class EstrategistaService {
     private readonly gateway: AiGateway,
     private readonly leituras: FerramentasDeLeitura,
     private readonly resultados: ResultsService,
+    private readonly revisor: RevisorService,
   ) {}
+
+  /** A falha da IA (do Estrategista ou do revisor): fora do ar conta como tentativa; o resto volta para a fila sem contar. */
+  private semResposta(err: AiError): ResultadoDoEstrategista {
+    return err.code === 'indisponivel' || err.code === 'entrada-grande' ? { status: 'recusado', motivo: err.code } : { status: 'sem_ia', motivo: err.code, voltaEm: err.detalhe.voltaEm };
+  }
 
   /** O plano que a conferência recusou entra na contagem de Sua equipe, sem o texto (D-A3-15). */
   private async anotarRecusa(item: ItemDoEstrategista, usageId: string, kind: string, regras?: readonly string[]): Promise<void> {
@@ -108,6 +116,10 @@ export class EstrategistaService {
       this.logger.warn(`plano sem IA: campanha ou conta com nome político ou eleitoral (empresa ${item.tenantId})`);
       return { status: 'recusado', motivo: 'conteudo_politico' };
     }
+    // O revisor de IA, para a empresa que o tem ligado (D-A3-16): se ele não tem como responder, o plano não chegaria a
+    // Aprovações de qualquer jeito, então o Estrategista nem é chamado. O item volta para a fila, sem contar tentativa.
+    const revisor = await this.revisor.situacao({ tenantId: item.tenantId, brandId: item.brandId });
+    if (revisor === 'sem_rota') return { status: 'sem_ia', motivo: 'sem-rota' };
 
     // ---- 2. o Estrategista, sem transação aberta
     const leituras: Leitura[] = [];
@@ -139,7 +151,7 @@ export class EstrategistaService {
       });
     } catch (err) {
       if (!(err instanceof AiError)) throw err;
-      return err.code === 'indisponivel' || err.code === 'entrada-grande' ? { status: 'recusado', motivo: err.code } : { status: 'sem_ia', motivo: err.code, voltaEm: err.detalhe.voltaEm };
+      return this.semResposta(err);
     }
 
     // ---- 3. conferência
@@ -169,6 +181,14 @@ export class EstrategistaService {
       this.logger.warn(`plano do Estrategista recusado (${recusa.recusa}${recusa.detalhe.length ? `: ${recusa.detalhe.slice(0, 8).join(' | ')}` : ''}); uso ${r.usageId}`);
       await this.anotarRecusa(item, r.usageId, recusa.recusa, recusa.regras);
       return { status: 'recusado', motivo: recusa.recusa };
+    }
+    // Passou nas regras: o revisor de IA olha o tom, a clareza e as alegações (o texto do anúncio vai para a rua). Se
+    // aponta, a recusa já ficou registrada por ele, com a categoria, e o plano não vai para Aprovações: conta como
+    // tentativa, e o Estrategista monta outro.
+    if (revisor === 'pronto') {
+      const revisao = await this.revisor.revisar(textoDoPlano(content), { tenantId: item.tenantId, brandId: item.brandId, userId: null, usageId: r.usageId, member: ESTRATEGISTA.key, workflow: WORKFLOW });
+      if (revisao.situacao === 'apontou') return { status: 'recusado', motivo: RECUSA_DO_REVISOR };
+      if (revisao.situacao === 'indisponivel') return this.semResposta(revisao.erro);
     }
 
     // ---- 4. a fonte de cada número, dita pelo código

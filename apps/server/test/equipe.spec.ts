@@ -1,6 +1,7 @@
 import { TEAM_MEMBERS } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
 import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DOS_RESULTADOS } from '../src/ai/explicar/explicar.service.js';
+import { WORKFLOW_DO_REVISOR } from '../src/ai/revisor/prompt.js';
 import { WORKFLOW as WORKFLOW_DA_CONVERSA } from '../src/conversa/conversa.service.js';
 import { EQUIPE, MEMBROS } from '../src/equipe/membros.js';
 import { type ContagensDoMes, type FatosDoMembro, numerosDoMembro, situacaoDoMembro } from '../src/equipe/numeros.js';
@@ -40,7 +41,8 @@ describe('Sua equipe (A3, I13b)', () => {
     expect(EQUIPE.relatorios.fluxos).toEqual([WORKFLOW_DA_REVISAO]);
     expect(EQUIPE.estrategista.fluxos).toEqual([WORKFLOW_DO_ESTRATEGISTA]);
     expect(EQUIPE.pesquisador.fluxos).toEqual([WORKFLOW_DO_PESQUISADOR]);
-    expect(EQUIPE.compliance).toMatchObject({ kind: 'regra', desligavel: false, fluxos: [] });
+    // O Compliance segue por regra e não desliga; o fluxo dele é o do revisor de IA (o custo, quando a empresa o tem).
+    expect(EQUIPE.compliance).toMatchObject({ kind: 'regra', desligavel: false, fluxos: [WORKFLOW_DO_REVISOR] });
     expect(MEMBROS.filter((m) => EQUIPE[m].kind === 'ia')).toEqual(['lia', 'analista', 'estrategista', 'pesquisador']);
     for (const m of MEMBROS) expect(EQUIPE[m].funcionario?.key ?? m).toBe(m);
   });
@@ -75,12 +77,15 @@ describe('Sua equipe (A3, I13b)', () => {
         [WORKFLOW_DOS_RESULTADOS, 44],
         [WORKFLOW_DO_AVISO, 13],
         [WORKFLOW_DA_REVISAO, 2],
+        // Os pareceres do revisor de IA são chamadas do Compliance, não textos para conferir.
+        [WORKFLOW_DO_REVISOR, 120],
       ]),
       entreguesPorFluxo: new Map([
         [WORKFLOW_DA_CONVERSA, 61],
         [WORKFLOW_DOS_RESULTADOS, 40],
         [WORKFLOW_DO_AVISO, 12],
         [WORKFLOW_DA_REVISAO, 1],
+        [WORKFLOW_DO_REVISOR, 120],
       ]),
       retornoPorFluxo: new Map([
         [WORKFLOW_DA_CONVERSA, { fezSentido: 28, discordo: 5 }],

@@ -8,8 +8,10 @@ import { type AlvoDoEval, type RespostaDoEval, responderExplicacao } from './res
 import { responderConversa } from './responder-conversa.js';
 import { responderLeitura } from './responder-pagina.js';
 import { responderPlano } from './responder-plano.js';
+import { responderParecer } from './responder-revisor.js';
+import { avaliarParecer, type CasoDoRevisor, carregarCasosDoRevisor } from './revisor.js';
 
-// As tarefas com eval (A3, I3, I10c, I11c e I12b): como ler os casos, qual é a saída gravada (a boa ou a primeira ruim), como
+// As tarefas com eval (A3, I3, I9, I10c, I11c e I12b): como ler os casos, qual é a saída gravada (a boa ou a primeira ruim), como
 // avaliar e como chamar um modelo de verdade. Os arquivos do promptfoo (`evals/apoio`) escolhem pelo nome da tarefa.
 
 export interface TarefaDeEval<C extends { id: string; grupo: string }> {
@@ -54,9 +56,17 @@ const pagina: TarefaDeEval<CasoDaPagina> = {
   responder: responderLeitura,
 };
 
+const revisor: TarefaDeEval<CasoDoRevisor> = {
+  carregar: carregarCasosDoRevisor,
+  gravada: (caso, qual) => (qual === 'ruim' ? (caso.gravadas.ruins[0]?.resposta ?? caso.gravadas.boa) : caso.gravadas.boa),
+  avaliar: avaliarParecer,
+  responder: responderParecer,
+};
+
 export const TAREFAS: Record<string, TarefaDeEval<{ id: string; grupo: string }>> = {
   explicar_resultados: explicar as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   conversa_lia: conversa as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   estrategista_plano: plano as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   pesquisador_pagina: pagina as unknown as TarefaDeEval<{ id: string; grupo: string }>,
+  compliance_revisao: revisor as unknown as TarefaDeEval<{ id: string; grupo: string }>,
 };

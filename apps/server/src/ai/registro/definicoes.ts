@@ -8,6 +8,7 @@ import { LIA, PROMPT_CONVERSA_LIA } from '../conversa/prompt.js';
 import { ESTRATEGISTA, PROMPT_ESTRATEGISTA } from '../estrategista/prompt.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
 import { PESQUISADOR, PROMPT_PESQUISADOR } from '../pesquisador/prompt.js';
+import { PROMPT_REVISOR } from '../revisor/prompt.js';
 import { LEITURAS } from './leituras.defs.js';
 
 // Registros da IA (arquitetura §3, `ai-architecture.md` §1 e §8): ferramenta, prompt e funcionário são
@@ -52,8 +53,10 @@ export interface FuncionarioDef {
 /**
  * Os prompts e os funcionários entram com o primeiro uso real de cada um. Estar aqui não põe ninguém para
  * trabalhar: sem rota de modelo ativa para a tarefa (publicada só depois do eval, I3), a tela usa o texto sem IA.
+ * O revisor de IA do Compliance tem prompt e não é funcionário do registro: o Compliance trabalha por regra e não
+ * desliga; o revisor é o segundo olhar dele, para a empresa com a flag `revisor` (I9).
  */
-export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA, PROMPT_PESQUISADOR];
+export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA, PROMPT_PESQUISADOR, PROMPT_REVISOR];
 export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR];
 
 /**

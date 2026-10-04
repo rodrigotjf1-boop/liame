@@ -148,6 +148,9 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     // A explicação retirada pelos números, também.
     const retirada = await chamada(e, 'resultados.explicar', 25_000);
     await chamada(e, 'revisao.semanal', 20_000);
+    // O revisor de IA do Compliance deu dois pareceres: custam, e não são texto para conferir.
+    await chamada(e, 'compliance.revisor', 2_000);
+    await chamada(e, 'compliance.revisor', 2_000);
     await ownerQuery(`insert into liame.ai_feedback (id, tenant_id, usage_id, user_id, verdict) values ($1, $2, $3, $4, 'fez_sentido'), ($5, $2, $6, $4, 'discordo')`, [
       uuidv7(),
       e.tenantId,
@@ -213,12 +216,14 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     // revisão; a rodada de leitura e a tentativa que falhou não são texto para conferir); barrados = só o que uma regra
     // de texto barrou (2 + 3), e a recusa pelos números não entra aqui.
     expect(numeros(t, 'compliance')).toEqual({ textos_conferidos: '8', textos_barrados: '5' });
+    // O custo do Compliance é o do revisor de IA; as regras de texto rodam no código, sem custo.
+    expect(doMembro(t, 'compliance')).toMatchObject({ kind: 'regra', status: 'ativo', can_pause: false, cost: { usd_micros: '4000', calls: 2 } });
     expect(numeros(t, 'pesquisador')).toMatchObject({ retiradas_na_conferencia: '3' });
     expect(doMembro(t, 'relatorios').cost).toEqual({ usd_micros: '20000', calls: 1 });
     expect(numeros(t, 'estrategista')).toMatchObject({ em_preparo: '1' });
     expect(numeros(t, 'trafego')).toEqual({ recomendacoes: '2', comparaveis: '1', mesma_direcao: '1', arrependimento: '-18400000' });
     // O gasto da empresa no mês soma todas as chamadas; o teto vem da configuração.
-    expect(t.ai.spent_usd_micros).toBe('405000');
+    expect(t.ai.spent_usd_micros).toBe('409000');
 
     // Outra empresa não vê esta marca, e a marca dela não mostra o custo desta.
     const outra = await empresa();
