@@ -9,6 +9,7 @@ import { CouponsService } from '../coupons/coupons.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { APP_CONFIG, type AppConfig, loadConfig } from '../config.js';
 import { DatabaseModule } from '../database/database.module.js';
+import { EquipeService } from '../equipe/equipe.service.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { createMailer, Mailer } from '../mail/mailer.js';
@@ -93,6 +94,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     MfaService,
     ActionService,
     CouponsService,
+    // As leituras da IA incluem a de Sua equipe (só da conversa): o serviço dela entra aqui pela injeção, sem rota.
+    EquipeService,
     FerramentasDeLeitura,
     EstrategistaService,
     EstrategistaLoop,

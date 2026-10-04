@@ -17,7 +17,7 @@ import type { Avaliacao } from './avaliar.js';
 // (ferramentas usadas, o que cita, reunião). As escritas (demanda, proposta de cupom) são simuladas, sem banco,
 // no mesmo formato da produção (`conversa/escritas.ts`).
 
-export const GRUPOS_DA_CONVERSA = ['referencia', 'numero', 'injecao', 'vazamento', 'politica', 'demanda', 'cupom', 'reuniao', 'dado_velho'] as const;
+export const GRUPOS_DA_CONVERSA = ['referencia', 'numero', 'injecao', 'vazamento', 'politica', 'demanda', 'cupom', 'reuniao', 'dado_velho', 'equipe'] as const;
 
 /** Níveis que conversam; as escritas (demanda e cupom) são só do dono, do administrador e do gestor (migrations 0026 e 0034). */
 const PAPEIS = ['dono', 'administrador', 'gestor', 'aprovador', 'somente_leitura'] as const;

@@ -2,6 +2,7 @@
 
 import type { AutonomyResponse, TeamMember, TeamResponse, TeamShadowResponse } from '@liame/contracts';
 import { useState } from 'react';
+import { useConversa } from '@/components/conversa/contexto';
 import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import type { Modo } from '@/lib/modo';
@@ -9,7 +10,7 @@ import { BlocoHistorico, type Historico } from './bloco-historico';
 import { type AcoesDaProntidao, BlocoProntidao } from './bloco-prontidao';
 import { BlocoRodada, BlocoSombra } from './bloco-sombra';
 import { Avatar, BlocoNumeros, ConfirmaNaLinha, SeloDaSituacao } from './pecas';
-import { acertoDo, type ChaveDoMembro, custoDo, FICHAS, mesDe, modoDo, notaDaCotacao, PROXIMAS_FASES, quandoNaFrase } from './textos';
+import { acertoDo, type ChaveDoMembro, custoDo, FICHAS, mesDe, modoDo, notaDaCotacao, perguntaSobre, podeConversarSobre, PROXIMAS_FASES, quandoNaFrase } from './textos';
 
 // O detalhe de um funcionário (protótipo P7): quem é, a situação, o que pode e não pode, o acerto e o custo do mês e
 // o que fez. O Gestor de tráfego mostra a sombra e a prontidão no lugar do acerto.
@@ -69,19 +70,30 @@ export function DetalheDaProximaFase({ chave, nomeDaMarca, aoVoltar }: { chave: 
 function AcoesDoFuncionario({ m, chave, t, acoes }: { m: TeamMember; chave: ChaveDoMembro; t: TeamResponse; acoes: AcoesDoMembro }) {
   const f = FICHAS[chave];
   const [motivo, setMotivo] = useState('');
+  const conversa = useConversa();
+  // "Conversar sobre ele" (P7): abre a conversa com a LIA já com a pergunta sobre o trabalho deste funcionário.
+  const conversar = podeConversarSobre(chave, t, conversa.disponivel) ? (
+    <button className="btn" type="button" id="eqp-bt-conversar" onClick={() => conversa.abrir({ pergunta: perguntaSobre(chave) })}>
+      <Icone nome="message" pequeno />
+      Conversar sobre ele
+    </button>
+  ) : null;
+  const soConversar = conversar ? <div className="eqp-acoes">{conversar}</div> : null;
   // Com a IA desligada para a empresa, não há o que ligar ou desligar aqui (como no protótipo).
   if (!t.ai.enabled) return null;
   if (!m.can_pause) {
     return (
       <div className="eqp-acoes">
+        {conversar}
         <span className="eixo-nota">O Compliance não desliga: sem ele, nenhum texto de IA aparece.</span>
       </div>
     );
   }
-  if (!t.can_manage) return null;
+  if (!t.can_manage) return soConversar;
   if (m.status === 'desligado') {
     return (
       <div className="eqp-acoes">
+        {conversar}
         <button className="btn btn--primary" type="button" id="eqp-bt-ligar" onClick={() => acoes.aoLigar(chave)} disabled={acoes.ocupado !== null} aria-busy={acoes.ocupado === `ligar:${chave}`}>
           <Icone nome="power" pequeno />
           {acoes.ocupado === `ligar:${chave}` ? 'Ligando…' : 'Ligar de novo'}
@@ -90,7 +102,7 @@ function AcoesDoFuncionario({ m, chave, t, acoes }: { m: TeamMember; chave: Chav
     );
   }
   // Desligado pela Liame (fora do plano, ou a sombra ainda não ligada): desligar aqui não mudaria nada.
-  if (m.status === 'desligado_pela_liame') return null;
+  if (m.status === 'desligado_pela_liame') return soConversar;
   if (acoes.desligando === chave) {
     const curto = motivo.trim().length > 0 && motivo.trim().length < 3;
     return (
@@ -114,6 +126,7 @@ function AcoesDoFuncionario({ m, chave, t, acoes }: { m: TeamMember; chave: Chav
   }
   return (
     <div className="eqp-acoes">
+      {conversar}
       <button className="btn btn--perigo" type="button" id="eqp-bt-desligar" onClick={() => acoes.aoPedirDesligar(chave)} disabled={acoes.ocupado !== null}>
         <Icone nome="power" pequeno />
         Desligar este funcionário

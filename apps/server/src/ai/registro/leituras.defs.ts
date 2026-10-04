@@ -1,3 +1,4 @@
+import { TEAM_MEMBERS } from '@liame/contracts';
 import { z } from 'zod';
 import type { FerramentaDef } from './definicoes.js';
 
@@ -76,4 +77,21 @@ export const LEITURAS: FerramentaDef[] = [
     owner: 'vendas',
     input: SoDaMarca,
   },
+  {
+    name: 'equipe_trabalho',
+    version: 1,
+    description:
+      'O trabalho da equipe do Liame para uma marca, como a tela Sua equipe mostra: a situação de cada funcionário (ativo, em sombra, desligado, parado), o que cada um fez no mês contado pelo sistema (respostas, explicações, revisões da semana, planos, páginas lidas, textos barrados, recomendações em sombra), o custo de IA de cada um e o gasto e o limite de IA da empresa no mês. Com `funcionario` (`lia`, `analista` para o Analista de dados, `relatorios`, `compliance`, `estrategista`, `pesquisador` ou `trafego` para o Gestor de tráfego), traz só esse funcionário e os últimos acontecimentos dele (o que fez e quando). Use quando a pessoa perguntar sobre o trabalho, a situação ou o custo de um funcionário ou da equipe.',
+    risk: 'R0',
+    // A rota de Sua equipe pede também `vendas.ver` e uma pessoa na sessão: `EXIGE`, em `leituras.ts`.
+    permission: 'campanhas.ver',
+    owner: 'equipe',
+    input: z.strictObject({ brand_id: z.uuid(), funcionario: z.enum(TEAM_MEMBERS).optional() }),
+  },
 ];
+
+/**
+ * As leituras dos números da marca (frescor, avisos, resultados, entrega, cupons e links): as que o Estrategista usa
+ * para montar um plano. A leitura da equipe é só da conversa.
+ */
+export const LEITURAS_DE_DADOS = ['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio'] as const;
