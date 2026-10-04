@@ -9,6 +9,8 @@ import { TAREFA_ESTRATEGISTA } from '../../src/ai/estrategista/prompt.js';
 import { AiGateway } from '../../src/ai/gateway.js';
 import { ModelosIa } from '../../src/ai/modelos.js';
 import { FerramentasDeLeitura } from '../../src/ai/registro/leituras.js';
+import { PROMPT_REVISOR, TAREFA_REVISAO, WORKFLOW_DO_REVISOR } from '../../src/ai/revisor/prompt.js';
+import { RevisorService } from '../../src/ai/revisor/revisor.service.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { DATABASE } from '../../src/database/database.module.js';
@@ -18,7 +20,7 @@ import { ResultsService } from '../../src/results/results.service.js';
 import { EstrategistaLoop, TENTATIVAS } from '../../src/worker/estrategista-loop.js';
 import { EstrategistaService } from '../../src/worker/estrategista.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
-import { ligarIa, ModelosDeTeste, rotaCompartilhada, uso } from '../helpers/ia.js';
+import { ligarIa, ligarRevisor, ModelosDeTeste, parecer, recusa, rotaCompartilhada, uso } from '../helpers/ia.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // Planos do Estrategista (A3, I11): a demanda que a LIA registrou vira plano pela fila do worker, com o modelo simulado;
@@ -36,14 +38,23 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
   let alvo: { provider: string; model: string };
   let loop: EstrategistaLoop;
 
-  // Datas relativas ao dia em que o teste roda: a verba de hoje lê os 7 dias completos até ontem.
-  const hoje = diaNoFuso(new Date(), FUSO);
+  // Datas relativas ao dia em que o teste roda: a verba de hoje lê os 7 dias completos até ontem. O relógio é um só,
+  // o da carga do arquivo, e a fila roda com ele: se a suíte cruzar a meia-noite, "amanhã" do teste e do Estrategista
+  // continuam sendo o mesmo dia (V34).
+  const AGORA = new Date();
+  const hoje = diaNoFuso(AGORA, FUSO);
   const semana = { from: menosDias(hoje, 7), to: menosDias(hoje, 1) };
   const amanha = menosDias(hoje, -1);
   const br = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
 
   const responder = (mock: MockLanguageModelV4) => {
     modelos.porChave.set(`${alvo.provider}/${alvo.model}`, mock);
+    return mock;
+  };
+  /** O modelo da rota do revisor de IA (compartilhada entre os arquivos): o teste escolhe o parecer. */
+  let alvoDoRevisor: { provider: string; model: string };
+  const revisar = (mock: MockLanguageModelV4) => {
+    modelos.porChave.set(`${alvoDoRevisor.provider}/${alvoDoRevisor.model}`, mock);
     return mock;
   };
   const rodada = (content: Array<{ type: 'text'; text: string } | { type: 'tool-call'; toolCallId: string; toolName: string; input: string }>) => ({
@@ -130,7 +141,7 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     return id;
   }
 
-  const rodarFila = (d: Dono) => loop.executarLote(10, { tenantIds: [d.tenantId] });
+  const rodarFila = (d: Dono) => loop.executarLote(10, { tenantIds: [d.tenantId] }, AGORA);
   const ver = async (d: { cookie: string }, id: string) => {
     const r = await api.call('GET', `/v1/plans/${id}`, { cookie: d.cookie });
     expect(r.status).toBe(200);
@@ -143,8 +154,9 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
   };
   const demandaNoBanco = async (id: string) =>
     (await ownerQuery<{ status: string; attempts: number; last_error: string | null; espera_min: number | null }>(
-      `select status, attempts, last_error, round(extract(epoch from (next_attempt_at - now())) / 60)::int as espera_min from liame.demand where id = $1`,
-      [id],
+      // A espera é contada do relógio da fila (o injetado), não do relógio do banco.
+      `select status, attempts, last_error, round(extract(epoch from (next_attempt_at - $2::timestamptz)) / 60)::int as espera_min from liame.demand where id = $1`,
+      [id, AGORA.toISOString()],
     ))[0]!;
   const usos = (tenantId: string) =>
     ownerQuery<{ workflow: string; user_id: string | null; prompt_version: string }>(`select workflow, user_id, prompt_version from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`, [
@@ -171,11 +183,13 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     modelos = new ModelosDeTeste(config);
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
     // A fila do worker com o gateway e as leituras da aplicação (os mesmos serviços das rotas).
-    const servico = new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService));
+    const servico = new EstrategistaService(database, api.app.get(AiGateway), api.app.get(FerramentasDeLeitura), api.app.get(ResultsService), api.app.get(RevisorService));
     loop = new EstrategistaLoop(database, flags, servico);
     // A tarefa do Estrategista também é usada por `planos-agenda.spec.ts`, que roda em outro processo: a rota é a
     // compartilhada (ninguém apaga a do outro), e o modelo simulado é o deste arquivo.
     alvo = await rotaCompartilhada(modelos, TAREFA_ESTRATEGISTA, roteiro(responde(oferta())));
+    // O revisor de IA só vale para a empresa com a flag `revisor`: a rota dele também é compartilhada.
+    alvoDoRevisor = await rotaCompartilhada(modelos, TAREFA_REVISAO, parecer());
   });
   beforeEach(resetIpRateLimits);
   afterAll(async () => {
@@ -397,8 +411,7 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     ).toEqual([{ member: 'estrategista', workflow: 'estrategista.plano', kind: 'numero_fora', rules: [], items: 1 }]);
     const depois = await demandaNoBanco(id);
     expect(depois).toMatchObject({ status: 'aberta', attempts: 1, last_error: 'numero_fora' });
-    expect(depois.espera_min).toBeGreaterThanOrEqual(14);
-    expect(depois.espera_min).toBeLessThanOrEqual(15);
+    expect(depois.espera_min).toBe(15);
     expect(await ownerQuery(`select 1 from liame.plan where demand_id = $1`, [id])).toHaveLength(0);
     // Ainda não é a vez dela.
     expect(await rodarFila(d)).toEqual([]);
@@ -413,13 +426,71 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     expect((await api.call('POST', `/v1/demands/${id}/cancel`, { cookie: d.cookie })).status).toBe(200);
   });
 
+  it('I9: com o revisor de IA ligado, o plano que passou na conferência ainda passa por ele; apontado, não vai para Aprovações e conta como tentativa', async () => {
+    const d = await dono();
+    await ligarRevisor(flags, d.tenantId);
+    const id = await demanda(d, 'promocao');
+    const plano = () => roteiro(pede('resultados_ciclo_fechado', { brand_id: d.brandId, ...semana }), responde(oferta()));
+    const recusasDaEmpresa = () =>
+      ownerQuery<{ member: string; workflow: string; kind: string; rules: string[]; rules_version: number | null }>(
+        `select member, workflow, kind, rules, rules_version from liame.ai_refusal where tenant_id = $1 order by created_at, id`,
+        [d.tenantId],
+      );
+
+    // O revisor aponta: nada vai para Aprovações; a demanda volta à fila com a tentativa contada, e o Estrategista monta outro.
+    responder(plano());
+    const revisor = revisar(parecer('alegacao'));
+    expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id, tenantId: d.tenantId, status: 'recusado', motivo: 'revisor' }]);
+    expect(await ownerQuery(`select 1 from liame.plan where demand_id = $1`, [id])).toHaveLength(0);
+    expect(await demandaNoBanco(id)).toMatchObject({ status: 'aberta', attempts: 1, last_error: 'revisor' });
+    expect(await recusasDaEmpresa()).toEqual([{ member: 'estrategista', workflow: 'estrategista.plano', kind: 'revisor', rules: ['alegacao'], rules_version: PROMPT_REVISOR.version }]);
+    // O revisor recebeu só os textos do plano, na ordem da tela, com o texto do anúncio dito pelo nome.
+    const mensagem = revisor.doGenerateCalls[0]!.prompt.find((m) => m.role === 'user')!;
+    const recebido = JSON.parse((mensagem.content as Array<{ type: string; text?: string }>).map((p) => p.text ?? '').join('')) as { tipo: string; partes: Array<{ parte: string; texto: string }> };
+    expect(recebido.tipo).toBe('plano');
+    expect(recebido.partes.map((p) => p.parte)).toEqual(['resumo', 'porque', 'oferta', 'onde', 'texto_do_anuncio', 'como_medir', 'risco', 'fazer', 'depois']);
+    expect(recebido.partes.find((p) => p.parte === 'texto_do_anuncio')!.texto).toBe('Sexta é dia de combo: smash, batata e refri.');
+
+    // O revisor não responde: o portão não abre. Conta como tentativa (fornecedor fora), e o plano não vai para Aprovações.
+    await ownerQuery(`update liame.demand set next_attempt_at = null where id = $1`, [id]);
+    responder(plano());
+    revisar(recusa(500));
+    expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id, tenantId: d.tenantId, status: 'recusado', motivo: 'indisponivel' }]);
+    expect(await demandaNoBanco(id)).toMatchObject({ status: 'aberta', attempts: 2, last_error: 'indisponivel' });
+    expect(await ownerQuery(`select 1 from liame.plan where demand_id = $1`, [id])).toHaveLength(0);
+    expect((await recusasDaEmpresa()).map((r) => r.kind)).toEqual(['revisor', 'revisor_sem_resposta']);
+
+    // O revisor deixa passar: o plano chega a Aprovações, para uma pessoa decidir (o revisor nunca aprova sozinho).
+    await ownerQuery(`update liame.demand set next_attempt_at = null where id = $1`, [id]);
+    responder(plano());
+    revisar(parecer());
+    expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id, tenantId: d.tenantId, status: 'proposto' }]);
+    expect((await demandaNoBanco(id)).status).toBe('entregue');
+    const lista = PlanListResponse.parse((await api.call('GET', `/v1/plans?brand_id=${d.brandId}&status=pendente`, { cookie: d.cookie })).body);
+    expect(lista.items.map((p) => [p.demand_id, p.status])).toEqual([[id, 'pendente']]);
+    // As três chamadas do revisor são do sistema, no fluxo do Compliance: o custo do plano segue de quem pediu.
+    expect(
+      await ownerQuery<{ workflow: string; n: number; do_sistema: boolean }>(
+        `select workflow, count(*)::int as n, bool_and(user_id is null) as do_sistema from liame.ai_usage where tenant_id = $1 and task = $2 group by workflow`,
+        [d.tenantId, TAREFA_REVISAO],
+      ),
+    ).toEqual([{ workflow: WORKFLOW_DO_REVISOR, n: 3, do_sistema: true }]);
+
+    // Barrado pela conferência do código, o plano nem chega ao revisor.
+    const outra = await demanda(d, 'promocao', 'Outra promoção');
+    responder(roteiro(pede('resultados_ciclo_fechado', { brand_id: d.brandId, ...semana }), responde(oferta({ texto_do_anuncio: 'Combo com resultado garantido.' }))));
+    const naoChamado = revisar(parecer());
+    expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id: outra, tenantId: d.tenantId, status: 'recusado', motivo: 'compliance' }]);
+    expect(naoChamado.doGenerateCalls).toHaveLength(0);
+  });
+
   it('A3-6: sem a IA ligada, com o Estrategista desligado ou com campanha de nome político, o modelo não é chamado', async () => {
     const semIa = await dono({ ia: false });
     const id = await demanda(semIa, 'promocao');
     expect(await rodarFila(semIa)).toEqual([{ tipo: 'demanda', id, tenantId: semIa.tenantId, status: 'sem_ia', motivo: 'ia_desligada' }]);
     const volta = await demandaNoBanco(id);
     expect(volta).toMatchObject({ status: 'aberta', attempts: 0, last_error: 'ia_desligada' });
-    expect(volta.espera_min).toBeGreaterThanOrEqual(59);
+    expect(volta.espera_min).toBe(60);
     expect(await usos(semIa.tenantId)).toEqual([]);
 
     const desligado = await dono();

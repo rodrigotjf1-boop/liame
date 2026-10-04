@@ -42,6 +42,10 @@ async function main(): Promise<void> {
     const r = await definirFlagDaEmpresa(database.db, { flag: flag.data, tenantId: empresa.data, ligada: values.ligar, por: values.por, motivo: values.motivo });
     const estado = r.valeAgora ? 'LIGADA' : 'DESLIGADA';
     console.log(r.mudou ? `${flag.data} agora está ${estado} para ${r.empresa}. Vale em até 15 segundos.` : `${flag.data} já estava ${estado} para ${r.empresa}: nada mudou.`);
+    // O revisor de IA é uma flag à parte (I9): quem liga a IA decide também se os textos passam por ele.
+    if (flag.data === 'ia' && r.valeAgora) {
+      console.log('Lembrete: o revisor de IA do Compliance é a flag `revisor`, separada. Sem ela, os textos da IA passam só pelas regras de texto do código.');
+    }
   } finally {
     await database.close();
   }

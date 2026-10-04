@@ -50,6 +50,22 @@ export async function ligarIa(flags: FlagService, tenantId: string): Promise<voi
   flags.invalidate();
 }
 
+/**
+ * Liga a flag `revisor` para UMA empresa (o revisor de IA do Compliance nasce desligado para todos). A rota da tarefa
+ * dele é do produto e compartilhada entre os arquivos (`rotaCompartilhada`): é a flag, por empresa, que decide quem
+ * passa pelo revisor, e o teste de um arquivo não muda o dos outros (V36, V76).
+ */
+export async function ligarRevisor(flags: FlagService, tenantId: string): Promise<void> {
+  await ownerQuery(
+    `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), 'revisor', 'tenant', $1, 'true'::jsonb, 'testes')`,
+    [tenantId],
+  );
+  flags.invalidate();
+}
+
+/** O parecer do revisor de IA como o modelo o devolve: sem categorias, o texto passa. */
+export const parecer = (...problemas: string[]) => responde(JSON.stringify({ problemas }), uso(400, 20));
+
 /** Modelo simulado com preço na tabela (US$ por milhão: 4 de entrada, 20 de saída; o econômico, 1 e 5). */
 export async function modeloComPreco(modelos: ModelosDeTeste, rodada: string, mock: MockLanguageModelV4, barato = false, provider = 'teste') {
   const model = `${rodada}_${randomBytes(3).toString('hex')}`;

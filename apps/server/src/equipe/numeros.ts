@@ -91,9 +91,10 @@ export function numerosDoMembro(def: DefinicaoDoMembro, c: ContagensDoMes): Team
     case 'relatorios':
       return [qtd('revisoes', c.revisoes), qtd('com_leitura_da_ia', c.revisoesComLeituraDaIa), qtd('so_do_sistema', c.revisoes - c.revisoesComLeituraDaIa)];
     case 'compliance': {
-      // Conferidos: todo texto de IA que chegou à conferência (cada resposta atendida). Barrados: os que uma regra de
-      // texto (ou o revisor de IA) não deixou aparecer, de qualquer funcionário.
-      const conferidos = [...c.respostasPorFluxo.values()].reduce((n, x) => n + x, 0);
+      // Conferidos: todo texto de IA que chegou à conferência (cada resposta atendida de quem escreve; as chamadas do
+      // próprio revisor de IA, que são os fluxos do Compliance, não são texto para conferir). Barrados: os que uma regra
+      // de texto (ou o revisor de IA) não deixou aparecer, de qualquer funcionário.
+      const conferidos = [...c.respostasPorFluxo.entries()].filter(([fluxo]) => !def.fluxos.includes(fluxo)).reduce((n, [, x]) => n + x, 0);
       const barrados = [...c.recusasPorMembro.values()].reduce((n, x) => n + x.doCompliance, 0);
       return [qtd('textos_conferidos', conferidos), qtd('textos_barrados', barrados)];
     }

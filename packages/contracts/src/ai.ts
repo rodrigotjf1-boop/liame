@@ -84,7 +84,8 @@ export const ExplanationResponse = z.strictObject({
    * não está ligada para a empresa), `travada`, `sem_rota`, `dado_velho`, `conteudo_politico`,
    * `limite_usuario` (ver `retry_at`), `teto` (ver `budget_window`), `indisponivel`, `entrada_grande` e, com a
    * resposta da LIA recusada na conferência: `numero_fora`, `trecho_proibido`, `compliance`, `risco`, `vazia`,
-   * `longa`. A lista cresce: motivo desconhecido se trata como `indisponivel`.
+   * `longa` e `revisor` (passou nas regras, e o revisor de IA do Compliance apontou tom, clareza ou alegação). A lista
+   * cresce: motivo desconhecido se trata como `indisponivel`.
    */
   reason: Slug.nullable(),
   explanation: z.strictObject({
