@@ -345,7 +345,10 @@ export class ConversaService {
   }
 
   private async turno(t: TurnoPreparado, io: { enviar: (e: ConversationStreamEvent) => void; parar: AbortSignal }): Promise<Final> {
-    const aviso = (notice: string, extra: Record<string, unknown> = {}): Final => ({ role: 'sistema', status: 'ok', content: { notice, ...extra }, usageId: null });
+    // O que a LIA registrou nesta resposta (a demanda, a proposta de cupom). Fica valendo mesmo que o texto dela não
+    // apareça: o aviso que entra no lugar leva os cartões, para a pessoa saber e não pedir de novo.
+    const cards: ConversationCard[] = [];
+    const aviso = (notice: string, extra: Record<string, unknown> = {}): Final => ({ role: 'sistema', status: 'ok', content: { notice, ...extra, ...(cards.length ? { cards } : {}) }, usageId: null });
     // O que se decide por regra, sem chamar a IA.
     if (querFalarComPessoa(t.texto)) return aviso('pessoa', { contact: ATENDIMENTO });
     if (conferirTexto(t.texto).some((a) => a.regra === 'politico_eleitoral')) {
@@ -366,7 +369,6 @@ export class ConversaService {
     if (revisor === 'sem_rota') return aviso('fora_do_ar');
 
     const leituras: Leitura[] = [];
-    const cards: ConversationCard[] = [];
     const ctx = { tenantId: t.quem.tenantId, userId: t.quem.userId, permissions: t.quem.permissions };
     // As leituras que ESTA pessoa pode fazer, cada uma guardada como o modelo a recebeu (é o que vale na conferência).
     const ferramentas: FerramentaIa[] = this.leituras.paraPedido(ctx).map((f) => ({

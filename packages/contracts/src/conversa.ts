@@ -192,7 +192,11 @@ export const ConversationMessage = z.strictObject({
   numbers: z.array(ExplanationNumber),
   /** Da LIA: o que ela leu para responder ("Resultados de 22/09/2026 a 28/09/2026"). */
   read: z.array(z.string()),
-  /** Da LIA: o que ela fez em nome da pessoa (a demanda aberta). */
+  /**
+   * Da LIA: o que ela fez em nome da pessoa (a demanda aberta, a proposta de cupom, a reunião de decisão). No aviso do
+   * sistema que ficou no lugar de uma resposta: o que ela já tinha registrado antes (a demanda, a proposta), que
+   * continua valendo.
+   */
   cards: z.array(ConversationCard),
   /** Da LIA: respondeu com o modelo econômico (perto do limite de uso do dia; a tela avisa que as respostas estão mais curtas). */
   economy: z.boolean(),

@@ -450,6 +450,43 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     }
   }
 
+  it('a resposta retirada depois de a LIA registrar a demanda: o aviso leva o cartão do que ficou registrado, na hora e ao reabrir', async () => {
+    const d = await dono();
+    const pedido = { tipo: 'promocao', titulo: 'Promoção de sexta com o combo', pedido: 'Quero uma promoção para sexta-feira com o combo.', para_quando: '2026-10-09' };
+    const demandasDaEmpresa = () => ownerQuery<{ id: string; status: string }>(`select id, status from liame.demand where tenant_id = $1 order by created_at`, [d.tenantId]);
+
+    // A LIA registra a demanda e, no texto, cita um número que não leu: o texto é retirado, a demanda fica.
+    responder(roteiro(pede('abrir_demanda', pedido), responde(['paragrafo', 'Registrei o seu pedido. A campanha investiu R$ 999,00 na semana.'])));
+    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Quero uma promoção para sexta-feira com o combo. Pode montar?' });
+    const aviso = mensagemFinal(r.eventos);
+    expect(aviso).toMatchObject({ role: 'sistema', notice: 'recusada', blocks: [], numbers: [], usage_id: null });
+    // A pessoa fica sabendo do que foi registrado: sem isso, ela pediria de novo e abriria outra demanda.
+    expect(aviso.cards).toHaveLength(1);
+    expect(aviso.cards[0]).toMatchObject({ kind: 'demanda', demand: { title: 'Promoção de sexta com o combo', status: 'aberta', opened_by_agent: 'lia' } });
+    expect(await demandasDaEmpresa()).toEqual([{ id: aviso.cards[0]!.demand!.id, status: 'aberta' }]);
+    expect(r.eventos.at(-1)!.conversation).toMatchObject({ has_demand: true, lia_answers: 0 });
+
+    // Ao reabrir a conversa, o aviso guardado traz o cartão com a situação de agora (a demanda cancelada).
+    const conversaId = r.eventos[0]!.conversation!.id;
+    expect((await api.call('POST', `/v1/demands/${aviso.cards[0]!.demand!.id}/cancel`, { cookie: d.cookie, body: {} })).status).toBe(200);
+    const aberta = ConversationResponse.parse((await api.call('GET', `/v1/conversations/${conversaId}`, { cookie: d.cookie })).body);
+    expect(aberta.messages.map((m) => [m.role, m.notice, m.cards.map((c) => c.demand?.status)])).toEqual([
+      ['pessoa', null, []],
+      ['sistema', 'recusada', ['cancelada']],
+    ]);
+
+    // O fornecedor cai na rodada seguinte à do registro: o aviso é "fora do ar", e o cartão vem do mesmo jeito.
+    responder(new MockLanguageModelV4({ doGenerate: [pede('abrir_demanda', { ...pedido, titulo: 'Promoção de sábado' })] }));
+    const caiu = await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'E uma promoção para sábado?' });
+    const foraDoAr = mensagemFinal(caiu.eventos);
+    expect(foraDoAr).toMatchObject({ role: 'sistema', notice: 'fora_do_ar' });
+    expect(foraDoAr.cards.map((c) => c.demand?.title)).toEqual(['Promoção de sábado']);
+
+    // O aviso que vem antes de qualquer registro (por regra, sem IA) continua sem cartão.
+    const semIa = mensagemFinal((await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'Quero falar com uma pessoa.' })).eventos);
+    expect(semIa).toMatchObject({ role: 'sistema', notice: 'pessoa', cards: [] });
+  });
+
   it('I10b: a LIA propõe o cupom (o mesmo pedido da aba Cupons, em nome da pessoa, auditado como agente); a recusa da regra volta para ela', async () => {
     const d = await dono();
     await comLojaQueCriaCupom(d);
