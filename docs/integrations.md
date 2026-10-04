@@ -30,6 +30,7 @@ Ver `arquitetura.md` §6. A escrita só acontece por `execute()` chamado pelo Ac
 | TikTok Content Posting | — | publicação | sem auditoria só publica privado | A6 |
 | YouTube, Google Business Profile, Search Console | métricas | upload/posts/avaliações | GBP: acesso restrito (perfil com 60+ dias, começa com 0 QPM) → **pedir na A0** | A6 |
 | E-mail (SES/Resend), SMS (Zenvia) | — | envio | — | A5/A6 |
+| **Banco Central (PTAX)** | cotação de venda do dólar, uma por dia útil | — | Dados abertos, sem credencial; licença ODbL (a tela cita a fonte e o dia); endereço fixo no código; o pedido leva só o período de datas (base §10.1) | A3 |
 | LinkedIn, Pinterest, Microsoft, Snap, Spotify, Amazon, Mercado Ads, X | — | — | sob demanda | A8 |
 | Canais sem API aberta (Kwai, portais, iFood Ads, influenciadores, rádio, mídia exterior) | — | **pacote pronto** + medição por UTM, cupom ou QR | — | A6+ |
 

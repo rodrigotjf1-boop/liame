@@ -65,6 +65,12 @@ export const TeamResponse = z.strictObject({
   month: z.strictObject({ from: z.iso.date(), to: z.iso.date(), timezone: z.string() }),
   /** A IA da empresa no mês (todas as marcas): ligada, o gasto, o teto e a faixa (`livre`, `alerta`, `economico`, `bloqueado`). */
   ai: z.strictObject({ enabled: z.boolean(), spent_usd_micros: Inteiro, ceiling_usd_micros: Inteiro, band: Slug }),
+  /**
+   * A cotação de referência para a tela mostrar o custo em reais (D-A3-14): a PTAX de venda do Banco Central do dia útil
+   * mais recente que o Liame leu (`rate` = reais por dólar; `date` = o dia do boletim). O custo e o teto seguem medidos e
+   * limitados em dólar. Nula antes da primeira leitura: a tela mostra só o dólar.
+   */
+  usd_brl: z.strictObject({ rate: z.string().regex(/^\d{1,4}\.\d{1,6}$/), date: z.iso.date(), source: Slug }).nullable(),
   /** A parada que vale para a marca agora (da empresa ou da Liame), ou nula. */
   stop: z.strictObject({ id: z.uuid(), level: Slug, by_company: z.boolean(), since: z.iso.datetime(), reason: z.string(), by: Pessoa }).nullable(),
   members: z.array(TeamMember),
