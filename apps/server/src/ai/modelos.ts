@@ -1,6 +1,6 @@
 import { type AnthropicLanguageModelOptions, createAnthropic } from '@ai-sdk/anthropic';
 import { Inject, Injectable } from '@nestjs/common';
-import type { JSONValue, LanguageModel } from 'ai';
+import type { JSONValue, LanguageModel, SystemModelMessage } from 'ai';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 
 export type Esforco = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -20,6 +20,9 @@ export function aceitaGeo(provider: string, model: string): boolean {
   const menor = Number(m[2] ?? 0);
   return maior > 4 || (maior === 4 && menor >= 6);
 }
+
+/** O cache de prompt de 5 minutos (o prazo é renovado a cada leitura): escrever custa 1,25× a entrada; ler, 0,1×. */
+const CACHE_DE_5_MINUTOS = { type: 'ephemeral' as const };
 
 /**
  * Adapters dos fornecedores (ADR-006): o único lugar que cria um modelo e que conhece as opções de
@@ -57,13 +60,32 @@ export class ModelosIa {
     return this.config.ai.inferenceGeo === 'us' && aceitaGeo(provider, model) ? 'us' : 'global';
   }
 
-  /** Opções próprias do fornecedor. O `global` é o padrão dele: só o `us` precisa ser pedido, e só a quem o aceita. */
-  opcoes(provider: string, model: string, esforco: Esforco | null): Record<string, Record<string, JSONValue>> | undefined {
+  /**
+   * Opções próprias do fornecedor. O `global` é o padrão dele: só o `us` precisa ser pedido, e só a quem o aceita.
+   * `cache`: o cache de prompt automático da Anthropic, com o ponto no fim do pedido (ele anda com a conversa): a
+   * rodada seguinte do laço relê por um décimo do preço o que a anterior escreveu (base de conhecimento §10.2).
+   */
+  opcoes(provider: string, model: string, esforco: Esforco | null, extra: { cache?: boolean } = {}): Record<string, Record<string, JSONValue>> | undefined {
     if (provider !== 'anthropic') return undefined;
     const anthropic = {
       ...(this.geo(provider, model) === 'us' ? { inferenceGeo: 'us' as const } : {}),
       ...(esforco ? { effort: esforco } : {}),
+      ...(extra.cache ? { cacheControl: CACHE_DE_5_MINUTOS } : {}),
     } satisfies AnthropicLanguageModelOptions;
     return Object.keys(anthropic).length ? { anthropic } : undefined;
+  }
+
+  /**
+   * As instruções do pedido como o fornecedor as recebe. Sem cache (ou em fornecedor sem a opção), um texto só, com o
+   * contexto depois das instruções. Com cache, dois blocos: as instruções, que são iguais em todo pedido da tarefa, com
+   * um ponto de cache no fim (o fornecedor guarda as ferramentas e as instruções, e todo pedido seguinte as relê, de
+   * qualquer empresa); e o contexto do pedido (a data, a marca, o dossiê), que muda e fica depois do ponto.
+   */
+  sistema(provider: string, instrucoes: string, contexto: string | null, cache: boolean): string | SystemModelMessage[] {
+    if (!cache || provider !== 'anthropic') return contexto ? `${instrucoes}\n\n${contexto}` : instrucoes;
+    return [
+      { role: 'system', content: instrucoes, providerOptions: { anthropic: { cacheControl: CACHE_DE_5_MINUTOS } } },
+      ...(contexto ? [{ role: 'system' as const, content: contexto }] : []),
+    ];
   }
 }

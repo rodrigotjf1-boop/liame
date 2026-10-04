@@ -71,7 +71,14 @@ export interface GenerateRequest {
   /** Tarefa: escolhe a rota de modelo (`ai_model_route`). */
   task: string;
   promptVersion?: string | null;
+  /** As instruções da tarefa: o texto que é igual em todo pedido dela (o prompt registrado). */
   instructions: string;
+  /**
+   * O que muda a cada pedido e vem DEPOIS das instruções (a data, a marca, o dossiê). Separado por causa do cache de
+   * prompt: no laço com ferramentas, o fornecedor guarda o começo do pedido (ferramentas + instruções), e o contexto
+   * fica depois do ponto de cache. Sem ele, as instruções vão sozinhas.
+   */
+  context?: string | null;
   messages: AiMessage[];
 }
 
@@ -267,7 +274,7 @@ export class AiGateway {
     if (!(await this.flags.isEnabled('ia', this.flags.context({ ...contexto, brandId: req.brandId ?? null })))) {
       throw new AiError('desligada', 'ia: desligada para esta empresa');
     }
-    const tamanho = req.instructions.length + req.messages.reduce((n, m) => n + m.content.length, 0);
+    const tamanho = req.instructions.length + (req.context?.length ?? 0) + req.messages.reduce((n, m) => n + m.content.length, 0);
     if (tamanho > ENTRADA_MAXIMA) {
       this.logger.warn(`ia: ${req.task} (${req.workflow}) com entrada de ${tamanho} caracteres, acima do máximo de ${ENTRADA_MAXIMA}`);
       throw new AiError('entrada-grande', 'ia: entrada grande demais');
@@ -278,9 +285,14 @@ export class AiGateway {
     const { rota, gasto, candidatos, precos } = preparo;
 
     const instrucoes = limparTexto(req.instructions);
+    const contextoDoPedido = req.context ? limparTexto(req.context) : null;
     const mensagens = req.messages.map((m) => ({ role: m.role, ...limparTexto(m.content) }));
-    const removidos = instrucoes.removidos + mensagens.reduce((n, m) => n + m.removidos, 0);
-    const enviado = { instructions: instrucoes.texto, messages: mensagens.map((m) => ({ role: m.role, content: m.texto })) };
+    const removidos = instrucoes.removidos + (contextoDoPedido?.removidos ?? 0) + mensagens.reduce((n, m) => n + m.removidos, 0);
+    const enviado = {
+      instructions: instrucoes.texto,
+      ...(contextoDoPedido ? { context: contextoDoPedido.texto } : {}),
+      messages: mensagens.map((m) => ({ role: m.role, content: m.texto })),
+    };
 
     const tentativas: Tentativa[] = [];
     // Duas tentativas no mesmo milissegundo não trocam de ordem no registro.
@@ -288,7 +300,7 @@ export class AiGateway {
     const conversa: ModelMessage[] = [...enviado.messages];
     const usadas: Array<{ name: string; ok: boolean }> = [];
     const pedir = (candidato: Candidato, model: LanguageModel, preco: PrecoModelo) =>
-      this.chamar(req, rota, candidato, model, preco, { instructions: enviado.instructions, messages: conversa }, { schema, ferramentas: opcoes.ferramentas, usadas, parar: opcoes.parar, aoUsarFerramenta: opcoes.aoUsarFerramenta });
+      this.chamar(req, rota, candidato, model, preco, { instructions: enviado.instructions, context: enviado.context ?? null, messages: conversa }, { schema, ferramentas: opcoes.ferramentas, usadas, parar: opcoes.parar, aoUsarFerramenta: opcoes.aoUsarFerramenta });
 
     // Primeira rodada: o modelo da rota e, se ele falhar, a reserva da própria rota.
     let resposta: Resposta | null = null;
@@ -532,7 +544,7 @@ export class AiGateway {
     candidato: Candidato,
     model: LanguageModel,
     preco: PrecoModelo,
-    enviado: { instructions: string; messages: ModelMessage[] },
+    enviado: { instructions: string; context: string | null; messages: ModelMessage[] },
     opcoes: {
       schema: z.ZodType<unknown> | null;
       ferramentas: FerramentaIa[];
@@ -544,7 +556,10 @@ export class AiGateway {
     const { schema } = opcoes;
     const conta = { chamadas: 0, falhas: 0 };
     const geo = this.modelos.geo(candidato.provider, candidato.model);
-    const providerOptions = this.modelos.opcoes(candidato.provider, candidato.model, rota.effort);
+    // O cache de prompt vale no laço com ferramentas: cada rodada reenvia o começo do pedido, e a seguinte o relê por um
+    // décimo do preço. Na chamada única (explicar, revisar, ler uma página) só custaria a escrita.
+    const comCache = opcoes.ferramentas.length > 0;
+    const providerOptions = this.modelos.opcoes(candidato.provider, candidato.model, rota.effort, { cache: comCache });
     const atributos = {
       'gen_ai.operation.name': 'chat',
       'gen_ai.provider.name': candidato.provider,
@@ -583,7 +598,7 @@ export class AiGateway {
       try {
         const comum = {
           model,
-          instructions: enviado.instructions,
+          instructions: this.modelos.sistema(candidato.provider, enviado.instructions, enviado.context, comCache),
           messages: enviado.messages,
           maxOutputTokens: rota.max_output_tokens,
           abortSignal: AbortSignal.timeout(rota.timeout_ms),

@@ -41,11 +41,14 @@ console.log(`eval: ${provider}`);
 console.log(`nota: ${resumo.nota} (${resumo.aprovados} de ${resumo.total}); limiar ${limiar}`);
 for (const [grupo, g] of Object.entries(resumo.porGrupo)) console.log(`  ${grupo}: ${g.aprovados} de ${g.total}`);
 for (const r of resumo.reprovados) console.log(`  reprovado ${r.id}: ${r.falhas.join('; ')}`);
-console.log(`tokens: ${uso.prompt ?? 0} de entrada, ${uso.completion ?? 0} de saída`);
+// Com o cache de prompt: quanto da entrada foi lido do cache (0,1× o preço) e quanto foi escrito nele (1,25×).
+const escrito = linhas.reduce((n, r) => n + (r.response?.metadata?.escritoNoCache ?? 0), 0);
+const cache = uso.cached || escrito ? ` (${uso.cached ?? 0} lidos do cache, ${escrito} escritos nele)` : '';
+console.log(`tokens: ${uso.prompt ?? 0} de entrada${cache}, ${uso.completion ?? 0} de saída`);
 
 const caminhoDoResumo = opcao('--resumo', null);
 if (caminhoDoResumo) {
-  writeFileSync(caminhoDoResumo, `${JSON.stringify({ provider, limiar, aprovado: motivos.length === 0, motivos, ...resumo, tokens: { entrada: uso.prompt ?? 0, saida: uso.completion ?? 0 } }, null, 2)}\n`, 'utf8');
+  writeFileSync(caminhoDoResumo, `${JSON.stringify({ provider, limiar, aprovado: motivos.length === 0, motivos, ...resumo, tokens: { entrada: uso.prompt ?? 0, saida: uso.completion ?? 0, lido_do_cache: uso.cached ?? 0, escrito_no_cache: escrito } }, null, 2)}\n`, 'utf8');
 }
 if (motivos.length) {
   console.error(`REPROVADO: ${motivos.join('; ')}`);

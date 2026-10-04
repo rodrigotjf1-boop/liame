@@ -155,6 +155,24 @@ describe('configuração da IA', () => {
     expect([us.atendeARegiao('teste', 'eco'), us.geo('teste', 'eco'), us.opcoes('teste', 'eco', 'low')]).toEqual([true, null, undefined]);
   });
 
+  it('cache de prompt: a opção só entra quando pedida; as instruções levam o ponto de cache e o contexto vai depois', () => {
+    const m = new ModelosIa(loadConfig({ NODE_ENV: 'test' }));
+    const PONTO = { anthropic: { cacheControl: { type: 'ephemeral' } } };
+    expect(m.opcoes('anthropic', 'claude-sonnet-5-5', 'low', { cache: true })).toEqual({ anthropic: { inferenceGeo: 'us', effort: 'low', cacheControl: { type: 'ephemeral' } } });
+    expect(m.opcoes('anthropic', 'claude-sonnet-5-5', 'low')).toEqual({ anthropic: { inferenceGeo: 'us', effort: 'low' } });
+    expect(m.opcoes('teste', 'eco', null, { cache: true })).toBeUndefined();
+    // Sem cache (ou em fornecedor sem a opção): um texto só, com o contexto depois das instruções.
+    expect(m.sistema('anthropic', 'INSTRUÇÕES', 'CONTEXTO', false)).toBe('INSTRUÇÕES\n\nCONTEXTO');
+    expect(m.sistema('anthropic', 'INSTRUÇÕES', null, false)).toBe('INSTRUÇÕES');
+    expect(m.sistema('teste', 'INSTRUÇÕES', 'CONTEXTO', true)).toBe('INSTRUÇÕES\n\nCONTEXTO');
+    // Com cache: as instruções (iguais em todo pedido da tarefa) com o ponto, e o contexto do pedido depois dele.
+    expect(m.sistema('anthropic', 'INSTRUÇÕES', 'CONTEXTO', true)).toEqual([
+      { role: 'system', content: 'INSTRUÇÕES', providerOptions: PONTO },
+      { role: 'system', content: 'CONTEXTO' },
+    ]);
+    expect(m.sistema('anthropic', 'INSTRUÇÕES', null, true)).toEqual([{ role: 'system', content: 'INSTRUÇÕES', providerOptions: PONTO }]);
+  });
+
   it('recusa subir com teto do mês menor que o do dia, região desconhecida ou limite zerado', () => {
     expect(() => loadConfig({ NODE_ENV: 'test', AI_DAILY_LIMIT_USD: '10', AI_MONTHLY_LIMIT_USD: '5' })).toThrow('AI_MONTHLY_LIMIT_USD');
     expect(() => loadConfig({ NODE_ENV: 'test', AI_INFERENCE_GEO: 'br' })).toThrow();

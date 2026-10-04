@@ -490,6 +490,56 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     expect((await ownerQuery<{ c: number; f: number }>(`select tool_calls as c, tool_failures as f from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`, [d.tenantId, task])).map((l) => [l.c, l.f])).toEqual([[1, 0], [2, 2], [1, 1], [0, 0]]);
   });
 
+  it('cache de prompt: no laço da Anthropic as instruções levam o ponto de cache, o contexto vai depois, e o lido e o escrito entram no custo; na chamada única, nada de cache', async () => {
+    const d = await dono();
+    // O Sonnet 5.5 da tabela publicada (migration 0028), por milhão: US$ 2 de entrada, US$ 10 de saída, US$ 0,20 de
+    // cache lido e US$ 2,50 de cache escrito (5 minutos).
+    const passo = (content: ReturnType<typeof rodada>['content'], usage: ReturnType<typeof uso>) => ({ ...rodada(content), usage });
+    const mock = new MockLanguageModelV4({
+      doGenerate: [
+        // 1ª rodada: escreve o começo do pedido no cache e pede a leitura.
+        passo([{ type: 'tool-call', toolCallId: 'c1', toolName: 'ler_teste', input: '{}' }], uso(4, 60, 0, 9000)),
+        // 2ª rodada: relê o começo e escreve só o que entrou depois (a chamada da ferramenta e o resultado).
+        passo([{ type: 'text', text: 'Foram 38 pedidos.' }], uso(2, 60, 9000, 300)),
+        // A chamada única, sem ferramenta.
+        passo([{ type: 'text', text: 'ok' }], uso(1000, 500)),
+      ],
+    });
+    modelos.porChave.set('anthropic/claude-sonnet-5-5', mock);
+    const task = await rota({ provider: 'anthropic', model: 'claude-sonnet-5-5' }, { effort: 'low' });
+    const comContexto = { instructions: 'INSTRUÇÕES DA TAREFA', context: 'Hoje é 04/10/2026. Marca: Pizzaria da IA.' };
+
+    const r = await gateway({ inferenceGeo: 'us' }).agent({
+      ...pedido(d, task, comContexto),
+      ferramentas: [ferramentaDeTeste(async () => ({ ok: true, valor: { pedidos: '38' } }))],
+    });
+    expect(r).toMatchObject({ text: 'Foram 38 pedidos.', rodadas: 2, costUsdMicros: 28_889 });
+    const PONTO = { anthropic: { cacheControl: { type: 'ephemeral' } } };
+    for (const chamada of mock.doGenerateCalls.slice(0, 2)) {
+      // O ponto automático, no fim do pedido, anda com a conversa: a rodada seguinte relê o que esta escreveu.
+      expect(chamada.providerOptions).toEqual({ anthropic: { inferenceGeo: 'us', effort: 'low', cacheControl: { type: 'ephemeral' } } });
+      // As instruções com o ponto de cache; o contexto do pedido, depois dele.
+      expect(chamada.prompt.filter((p) => p.role === 'system')).toEqual([
+        { role: 'system', content: 'INSTRUÇÕES DA TAREFA', providerOptions: PONTO },
+        { role: 'system', content: 'Hoje é 04/10/2026. Marca: Pizzaria da IA.' },
+      ]);
+    }
+    // O custo conta o cache: escrever sai a 1,25× a entrada e ler, a 0,1×. As mesmas duas rodadas sem cache dariam 41.594.
+    expect((await usos(d.tenantId, task)).map((u) => [u.input_tokens, u.cache_read_tokens, u.cache_write_tokens, u.cost_usd_micros])).toEqual([
+      [4, 0, 9000, 25_419],
+      [2, 9000, 300, 3_470],
+    ]);
+    const [guardado] = await ownerQuery<{ request: { instructions: string; context: string } }>(`select request from liame.ai_exchange where usage_id = $1`, [r.usageId]);
+    expect(guardado!.request).toMatchObject(comContexto);
+
+    // Na chamada única não há rodada seguinte para reler: sem a opção, e as instruções e o contexto vão num texto só.
+    await gateway({ inferenceGeo: 'us' }).generate(pedido(d, task, comContexto));
+    const unica = mock.doGenerateCalls[2]!;
+    expect(unica.providerOptions).toEqual({ anthropic: { inferenceGeo: 'us', effort: 'low' } });
+    expect(unica.prompt.filter((p) => p.role === 'system')).toEqual([{ role: 'system', content: 'INSTRUÇÕES DA TAREFA\n\nHoje é 04/10/2026. Marca: Pizzaria da IA.' }]);
+    modelos.porChave.delete('anthropic/claude-sonnet-5-5');
+  });
+
   it('A3-9: o laço para no limite de rodadas e no teto da empresa, com tudo registrado', async () => {
     const d = await dono();
     const insistente = () => roteiro(...Array.from({ length: 8 }, () => pede('ler_teste')));

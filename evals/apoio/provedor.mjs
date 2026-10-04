@@ -28,7 +28,12 @@ export default class ProvedorLiame {
     modelos ??= new ModelosIa(loadConfig());
     try {
       const r = await tarefa.responder(modelos, a, caso);
-      return { output: r.saida, tokenUsage: { total: r.tokens.entrada + r.tokens.saida, prompt: r.tokens.entrada, completion: r.tokens.saida } };
+      // `cached`: a parte da entrada lida do cache de prompt. A parte escrita no cache vai em `metadata` (o promptfoo não a soma).
+      return {
+        output: r.saida,
+        tokenUsage: { total: r.tokens.entrada + r.tokens.saida, prompt: r.tokens.entrada, completion: r.tokens.saida, cached: r.tokens.lidoDoCache ?? 0 },
+        metadata: { escritoNoCache: r.tokens.escritoNoCache ?? 0 },
+      };
     } catch (err) {
       // Só o nome e o código: a mensagem do fornecedor pode repetir o que foi enviado.
       return { error: `chamada ao modelo falhou: ${err?.name ?? 'erro'}${err?.statusCode ? ` (HTTP ${err.statusCode})` : ''}` };

@@ -146,11 +146,11 @@ O que o modelo de verdade fazia e a resposta gravada não fazia, e o que mudou:
 
 E o que era régua estreita, não erro do modelo: a oferta copiada com o resto da frase da página, a recusa dita com outras palavras, usar outro cupom ativo no lugar do vencido, dizer que o cupom inventado não existe (o que não pode é usá-lo ou pô-lo no anúncio) e manter a verba num plano de 90 dias (risco baixo).
 
-Custo, pelos preços publicados: a Conversa é a tarefa cara (o prompt, as ferramentas e o formato somam perto de 10 mil tokens de entrada **por rodada** do laço, e cada leitura é uma rodada). O cache de prompt ainda não está ligado no gateway: é o próximo ganho de custo.
+Custo, pelos preços publicados: a Conversa é a tarefa cara (o prompt, as ferramentas e o formato somam perto de 10 mil tokens de entrada **por rodada** do laço, e cada leitura é uma rodada). Com o **cache de prompt** ligado no laço (no mesmo dia), a rodada inteira da Conversa caiu de US$ 1,12 para US$ 0,36 e a do Estrategista, de US$ 0,73 para US$ 0,37, com a mesma nota; os evals mandam o pedido como a produção (as instruções com o ponto de cache e o contexto depois), e o portão diz quanto da entrada foi lido do cache e quanto foi escrito.
 
 ## O que ainda falta
 
-- Ligar o cache de prompt no gateway (as rotas de modelo foram publicadas com a nota desta rodada: migration 0046).
+- Dividir as instruções das tarefas de chamada única para o cache valer entre empresas quando houver volume (hoje o cache fica só no laço da Conversa e do Estrategista).
 - O passo do CI que roda o eval pago só quando o PR mexe em prompt, ferramenta, modelo ou política.
 - Juiz por modelo barato para tom e clareza nos evals das tarefas que escrevem (em produção, esse olhar é o do revisor de IA do Compliance, que tem o eval dele: `compliance_revisao`).
 - Uma rodada só não mede a variação do modelo: repetir a rodada inteira quando mudar prompt, ferramenta, modelo ou política, e antes de trocar o esforço da rota.

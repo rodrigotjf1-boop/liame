@@ -21,7 +21,8 @@ export interface AlvoDoEval {
 export interface RespostaDoEval {
   /** O JSON da explicação, ou o texto cru quando o modelo saiu do formato (o avaliador reprova por `formato`). */
   saida: string;
-  tokens: { entrada: number; saida: number };
+  /** `entrada` é o total enviado; com o cache de prompt, parte dela foi lida do cache (0,1×) e parte escrita nele (1,25×). */
+  tokens: { entrada: number; saida: number; lidoDoCache?: number; escritoNoCache?: number };
 }
 
 export async function responderExplicacao(modelos: ModelosIa, alvo: AlvoDoEval, caso: CasoDeEval): Promise<RespostaDoEval> {
