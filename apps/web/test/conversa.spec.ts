@@ -16,6 +16,7 @@ import {
   gruposDe,
   notaDeDadoPessoal,
   prazoDoAtendimento,
+  registradoNoAviso,
   saudacaoDa,
   situacaoDaProposta,
   SUGESTOES,
@@ -369,18 +370,48 @@ describe('Conversa: as mensagens na tela', () => {
 
   it('o aviso do sistema: o contato para falar com uma pessoa; tentar de novo só na última mensagem', () => {
     const pessoa: Item = { de: 'sistema', id: 's-1', em: '2026-10-03T17:33:00.000Z', m: mensagem({ role: 'sistema', notice: 'pessoa', contact: CONTATO, usage_id: null }) };
-    const html = desenhar(createElement(MensagemDoSistema, { item: pessoa, podeVerContas: true, ultima: true, contato: null, aoTentarDeNovo: nada }));
+    const html = desenhar(createElement(MensagemDoSistema, { item: pessoa, podeVerContas: true, ultima: true, contato: null, cartoes: CARTOES, aoTentarDeNovo: nada }));
     expect(html).toContain('Aviso do sistema');
     expect(html).toContain('Sem IA');
     expect(html).toContain('suporte@agencialiame.com');
     expect(html).toContain('Copiar o e-mail');
     expect(html).toContain('href="mailto:suporte@agencialiame.com"');
     const recusada: Item = { de: 'sistema', id: 's-2', em: '2026-10-03T17:33:00.000Z', m: mensagem({ role: 'sistema', notice: 'recusada', usage_id: null }) };
-    expect(desenhar(createElement(MensagemDoSistema, { item: recusada, podeVerContas: true, ultima: true, contato: CONTATO, aoTentarDeNovo: nada }))).toContain('Tentar de novo');
-    expect(desenhar(createElement(MensagemDoSistema, { item: recusada, podeVerContas: true, ultima: false, contato: CONTATO, aoTentarDeNovo: nada }))).not.toContain('Tentar de novo');
+    expect(desenhar(createElement(MensagemDoSistema, { item: recusada, podeVerContas: true, ultima: true, contato: CONTATO, cartoes: CARTOES, aoTentarDeNovo: nada }))).toContain('Tentar de novo');
+    expect(desenhar(createElement(MensagemDoSistema, { item: recusada, podeVerContas: true, ultima: false, contato: CONTATO, cartoes: CARTOES, aoTentarDeNovo: nada }))).not.toContain('Tentar de novo');
     const velho: Item = { de: 'sistema', id: 's-3', em: '2026-10-03T17:33:00.000Z', m: mensagem({ role: 'sistema', notice: 'dado_velho', usage_id: null }) };
-    expect(desenhar(createElement(MensagemDoSistema, { item: velho, podeVerContas: true, ultima: true, contato: CONTATO, aoTentarDeNovo: nada }))).toContain('href="/contas"');
-    expect(desenhar(createElement(MensagemDoSistema, { item: velho, podeVerContas: false, ultima: true, contato: CONTATO, aoTentarDeNovo: nada }))).not.toContain('href="/contas"');
+    expect(desenhar(createElement(MensagemDoSistema, { item: velho, podeVerContas: true, ultima: true, contato: CONTATO, cartoes: CARTOES, aoTentarDeNovo: nada }))).toContain('href="/contas"');
+    expect(desenhar(createElement(MensagemDoSistema, { item: velho, podeVerContas: false, ultima: true, contato: CONTATO, cartoes: CARTOES, aoTentarDeNovo: nada }))).not.toContain('href="/contas"');
+  });
+
+  it('o aviso que ficou no lugar de uma resposta mostra o que a LIA já tinha registrado, e não oferece tentar de novo', () => {
+    const aviso = (notice: string, cards: ConversationCard[]): Item => ({ de: 'sistema', id: 's-9', em: '2026-10-03T17:33:00.000Z', m: mensagem({ role: 'sistema', notice, usage_id: null, cards }) });
+    const desenharAviso = (item: Item) => desenhar(createElement(MensagemDoSistema, { item: item as Extract<Item, { de: 'sistema' }>, podeVerContas: true, ultima: true, contato: CONTATO, cartoes: CARTOES, aoTentarDeNovo: nada }));
+    const demanda: ConversationCard = { kind: 'demanda', demand: DEMANDA, coupon: null, meeting: null };
+    const proposta: ConversationCard = { kind: 'proposta_cupom', demand: null, coupon: { request: PEDIDO, store_name: 'Loja Centro' }, meeting: null };
+
+    // A resposta foi retirada na conferência depois de a LIA abrir a demanda: a demanda vale, e a pessoa a vê.
+    const retirada = desenharAviso(aviso('recusada', [demanda]));
+    expect(retirada).toContain('A resposta foi retirada na conferência');
+    expect(retirada).toContain('A demanda que a LIA registrou nesta resposta continua valendo: está logo abaixo.');
+    expect(retirada).toContain('Demanda aberta');
+    expect(retirada).toContain('Cancelar a demanda');
+    // A mesma pergunta registraria outro pedido.
+    expect(retirada).not.toContain('Tentar de novo');
+    // Sem registro, o aviso é o de sempre.
+    const semRegistro = desenharAviso(aviso('recusada', []));
+    expect(semRegistro).toContain('Tentar de novo');
+    expect(semRegistro).not.toContain('continua valendo');
+
+    // A LIA caiu depois de mandar a proposta de cupom para Aprovações: a proposta está lá.
+    const foraDoAr = desenharAviso(aviso('fora_do_ar', [proposta]));
+    expect(foraDoAr).toContain('A proposta de cupom que a LIA mandou para Aprovações nesta resposta continua valendo: está logo abaixo.');
+    expect(foraDoAr).toContain('href="/aprovacoes"');
+    expect(foraDoAr).not.toContain('Tentar de novo');
+
+    expect(registradoNoAviso([])).toBeNull();
+    expect(registradoNoAviso([demanda, demanda])).toBe('As demandas que a LIA registrou nesta resposta continuam valendo: estão logo abaixo.');
+    expect(registradoNoAviso([demanda, proposta])).toBe('O que a LIA registrou nesta resposta continua valendo: está logo abaixo.');
   });
 });
 
