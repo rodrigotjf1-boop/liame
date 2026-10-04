@@ -255,6 +255,7 @@ const DESENHOS = {
     </>
   ),
   play: <path d="m6 3 14 9-14 9V3z" />,
+  stop: <rect width="12" height="12" x="6" y="6" rx="2" />,
   image: (
     <>
       <rect width="18" height="18" x="3" y="3" rx="2" />

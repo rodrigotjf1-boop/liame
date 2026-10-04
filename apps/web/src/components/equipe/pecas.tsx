@@ -1,12 +1,15 @@
 'use client';
 
 import type { TeamMember } from '@liame/contracts';
-import { type ReactNode, useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { IconeLia } from '@/components/marca/logo';
 import { Icone, type NomeIcone } from '@/components/ui/icone';
 import { type Numero, situacaoDo } from './textos';
 
-// Peças pequenas da tela Sua equipe (protótipo P7): o avatar, o selo da situação, a confirmação na linha e o bloco de números.
+// Peças pequenas da tela Sua equipe (protótipo P7): o avatar, o selo da situação e o bloco de números. A confirmação
+// na linha é a do app (`components/ui/confirma-na-linha`).
+
+export { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 
 /** O avatar do funcionário: o ícone da LIA ou o ícone de traço do cargo. Apagado quando ele não está trabalhando. */
 export function Avatar({ icone, grande = false, apagado = false }: { icone: NomeIcone | 'lia'; grande?: boolean; apagado?: boolean }) {
@@ -24,48 +27,6 @@ export function SeloDaSituacao({ m }: { m: TeamMember }) {
     <span className={s.classe}>
       {s.ponto && <span className="dot" aria-hidden="true" />}
       {s.rotulo}
-    </span>
-  );
-}
-
-/**
- * Confirmação na própria linha (o padrão das telas do app): o que vai acontecer, o botão que confirma e o que desiste.
- * O foco vai para o botão que confirma; quem desiste volta ao botão de origem (quem chama cuida disso).
- */
-export function ConfirmaNaLinha({
-  texto,
-  rotulo,
-  rotuloOcupado,
-  ocupado,
-  impedido = false,
-  aoConfirmar,
-  aoCancelar,
-  children,
-}: {
-  texto: string;
-  rotulo: string;
-  rotuloOcupado: string;
-  ocupado: boolean;
-  /** O que foi digitado ainda não pode ser enviado. */
-  impedido?: boolean;
-  aoConfirmar: () => void;
-  aoCancelar: () => void;
-  children?: ReactNode;
-}) {
-  const confirmar = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    confirmar.current?.focus();
-  }, []);
-  return (
-    <span className="confirma-linha">
-      <span className="confirma-txt">{texto}</span>
-      {children}
-      <button ref={confirmar} className="btn btn--sm btn--perigo-cheio" type="button" onClick={aoConfirmar} disabled={ocupado || impedido} aria-busy={ocupado}>
-        {ocupado ? rotuloOcupado : rotulo}
-      </button>
-      <button className="btn btn--sm" type="button" onClick={aoCancelar} disabled={ocupado}>
-        Cancelar
-      </button>
     </span>
   );
 }

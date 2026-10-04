@@ -2,7 +2,7 @@
 
 import type { MeResponse } from '@liame/contracts';
 import { usePathname, useRouter } from 'next/navigation';
-import { createContext, Fragment, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, Fragment, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from './api';
@@ -38,38 +38,60 @@ export function SessaoProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const caminho = usePathname();
   const [estado, setEstado] = useState<Estado>({ tipo: 'carregando' });
+  // A tela de agora, para a volta depois da entrada, sem refazer as funções a cada troca de tela.
+  const caminhoAtual = useRef(caminho);
+  caminhoAtual.current = caminho;
+  // Cada leitura da sessão tem a sua vez: a conferência em segundo plano não passa por cima de uma leitura mais nova.
+  const vez = useRef(0);
 
-  const irPara = useCallback(
-    (rota: string) => router.replace(`${rota}?volta=${encodeURIComponent(caminho)}`),
-    [router, caminho],
-  );
+  const irPara = useCallback((rota: string) => router.replace(`${rota}?volta=${encodeURIComponent(caminhoAtual.current)}`), [router]);
 
   const aplicar = useCallback(
     (me: MeResponse) => {
       // O segundo fator vem antes de qualquer tela (ADR-013).
       if (me.mfa === 'required') return irPara(ROTAS.segundoFator);
       if (me.mfa_enrollment_required) return irPara(ROTAS.ativarApp);
-      setEstado({ tipo: 'ok', me });
+      // A mesma sessão de antes não redesenha as telas.
+      setEstado((atual) => (atual.tipo === 'ok' && JSON.stringify(atual.me) === JSON.stringify(me) ? atual : { tipo: 'ok', me }));
     },
     [irPara],
   );
 
-  const carregar = useCallback(async () => {
-    setEstado({ tipo: 'carregando' });
-    const r = await chamar(() => api.GET('/v1/me'));
-    if (r.ok) return aplicar(r.data);
-    if (r.problema.status === 401) return irPara(ROTAS.entrar);
-    setEstado({ tipo: 'erro', problema: r.problema });
-  }, [aplicar, irPara]);
+  /**
+   * Lê a sessão. `emSegundoPlano`: ela já está aberta e a tela fica como está enquanto é conferida de novo; se a
+   * conferência falhar por rede ou erro do nosso lado, a tela segue (cada chamada dela mostra o próprio erro).
+   */
+  const carregar = useCallback(
+    async (emSegundoPlano = false) => {
+      const minha = ++vez.current;
+      if (!emSegundoPlano) setEstado({ tipo: 'carregando' });
+      const r = await chamar(() => api.GET('/v1/me'));
+      if (emSegundoPlano && minha !== vez.current) return;
+      if (r.ok) return aplicar(r.data);
+      if (r.problema.status === 401) return irPara(ROTAS.entrar);
+      if (!emSegundoPlano) setEstado({ tipo: 'erro', problema: r.problema });
+    },
+    [aplicar, irPara],
+  );
 
   useEffect(() => {
     disparar(carregar());
   }, [carregar]);
 
+  // A cada troca de tela a sessão é conferida de novo (expirou? pede o segundo fator?), sem desmontar o que está
+  // aberto: o shell guarda o que não pode se perder na navegação (a conversa com a LIA, que fica ao lado da tela).
+  const conferido = useRef(caminho);
+  useEffect(() => {
+    if (conferido.current === caminho) return;
+    conferido.current = caminho;
+    disparar(carregar(true));
+  }, [caminho, carregar]);
+
   const trocarEmpresa = useCallback(
     async (id: string) => {
       const r = await chamar(() => api.PUT('/v1/me/active-organization', { body: { organization_id: id } }));
       if (!r.ok) return r.problema;
+      vez.current += 1;
       aplicar(r.data);
       return null;
     },
