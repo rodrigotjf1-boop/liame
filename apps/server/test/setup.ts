@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { esperaDaVirada } from './helpers/virada.js';
 
 // Banco local de testes em C:\Liame\.env.local (fora do git). No CI, as variáveis vêm do workflow.
 const envLocal = resolve(process.cwd(), '../../.env.local');
@@ -31,4 +32,12 @@ if (process.env.TEST_DATABASE_URL) {
 } else {
   delete process.env.DATABASE_URL;
   delete process.env.DATABASE_URL_JOBS;
+}
+
+// Perto da virada do dia, o arquivo espera ela passar antes de carregar (V89, ERR-092): quem guarda "hoje" na carga
+// para semear e conferir termina no mesmo dia em que começou. Longe da meia-noite, não espera nada.
+const espera = esperaDaVirada(new Date());
+if (espera > 0) {
+  console.log(`[testes] a ${Math.round(espera / 1000)} s da virada do dia: este arquivo espera a meia-noite antes de carregar`);
+  await new Promise((pronto) => setTimeout(pronto, espera));
 }
