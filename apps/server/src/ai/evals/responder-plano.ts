@@ -21,7 +21,8 @@ export async function responderPlano(modelos: ModelosIa, alvo: AlvoDoEval, caso:
   const model = modelos.modelo(alvo.provider, alvo.model);
   if (!model) throw new Error(`eval: sem credencial para ${alvo.provider}`);
   if (!modelos.atendeARegiao(alvo.provider, alvo.model)) throw new Error(`eval: ${alvo.model} não aceita rodar só nos Estados Unidos (AI_INFERENCE_GEO=us)`);
-  const providerOptions = modelos.opcoes(alvo.provider, alvo.model, alvo.effort ?? null);
+  // Como o Estrategista em produção: o laço usa o cache de prompt, e o contexto vai depois das instruções.
+  const providerOptions = modelos.opcoes(alvo.provider, alvo.model, alvo.effort ?? null, { cache: true });
   const chamadas: Array<{ ferramenta: string; input: Record<string, unknown> }> = [];
   const tools: ToolSet = Object.fromEntries(
     LEITURAS.filter((d) => ESTRATEGISTA.ferramentas.includes(d.name)).map((d) => [
@@ -44,7 +45,7 @@ export async function responderPlano(modelos: ModelosIa, alvo: AlvoDoEval, caso:
   try {
     const r = await generateText({
       model,
-      instructions: limparTexto(`${PROMPT_ESTRATEGISTA.content}\n\n${contextoDoPlano(dados)}`).texto,
+      instructions: modelos.sistema(alvo.provider, limparTexto(PROMPT_ESTRATEGISTA.content).texto, limparTexto(contextoDoPlano(dados)).texto, true),
       messages: [{ role: 'user', content: limparTexto(mensagemDoPlano(dados)).texto }],
       tools,
       stopWhen: isStepCount(RODADAS),
@@ -55,7 +56,15 @@ export async function responderPlano(modelos: ModelosIa, alvo: AlvoDoEval, caso:
       telemetry: { isEnabled: false },
       ...(providerOptions ? { providerOptions } : {}),
     });
-    return { saida: JSON.stringify({ chamadas, resposta: r.output }), tokens: { entrada: r.totalUsage.inputTokens ?? 0, saida: r.totalUsage.outputTokens ?? 0 } };
+    return {
+      saida: JSON.stringify({ chamadas, resposta: r.output }),
+      tokens: {
+        entrada: r.totalUsage.inputTokens ?? 0,
+        saida: r.totalUsage.outputTokens ?? 0,
+        lidoDoCache: r.totalUsage.inputTokenDetails?.cacheReadTokens ?? 0,
+        escritoNoCache: r.totalUsage.inputTokenDetails?.cacheWriteTokens ?? 0,
+      },
+    };
   } catch (err) {
     // Fora do formato: o avaliador reprova por `formato`, com o que o modelo escreveu.
     if (NoObjectGeneratedError.isInstance(err)) {
