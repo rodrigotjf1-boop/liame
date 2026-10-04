@@ -134,6 +134,13 @@ Para desligar, `--desligar` no lugar de `--ligar` (a regra da empresa é apagada
 
 Os funcionários de IA nascem desligados para todas as empresas (flag `ia`). Sem a chave do fornecedor, a API e o worker sobem normalmente e tudo o que depende de IA cai no caminho sem IA.
 
+**Para a IA funcionar numa empresa, quatro coisas precisam estar certas, nesta ordem:**
+
+1. **A chave do fornecedor** (`ANTHROPIC_API_KEY`) no ambiente do `liame-api` e do `liame-worker`. No painel da Anthropic, a chave é de uma **conta de serviço**, presa a um **workspace só da produção**, com **teto de gasto mensal** no workspace (o workspace padrão não aceita teto). Chave sem workspace exige um cabeçalho a mais em toda chamada e devolve 400 sem ele: a do Liame nasce presa ao workspace. Os evals com modelo de verdade usam **outra** chave, de outro workspace, com teto próprio, e ela nunca vai para o ambiente de produção.
+2. **A rota de modelo da tarefa** em `liame.ai_model_route`, publicada por migration com a nota do eval da tarefa (a 0046 publicou as cinco: `explicar_resultados`, `conversa_lia`, `estrategista_plano`, `pesquisador_pagina` e `compliance_revisao`, todas no Sonnet 5.5 com esforço baixo). Sem rota, a tarefa segue no caminho sem IA. Trocar o modelo, o esforço ou o prompt de uma tarefa pede o eval dela de novo e uma versão nova da rota.
+3. **O aviso à empresa e os documentos.** A Anthropic é suboperadora "prevista": o Contrato de Tratamento de Dados (cláusula 6.2) pede aviso com 30 dias de antecedência antes de ela tratar dados do cliente, e a Política de Privacidade publicada no site precisa dizer que a IA é ligada empresa por empresa (seção 7) e trazer a Anthropic entre os fornecedores em uso (seção 8). No dia em que a `ia` é ligada para a primeira empresa, os textos de `docs/juridico` mudam no mesmo PR, e o site é publicado com a versão nova (`TERMS_VERSION`).
+4. **A flag `ia` da empresa**, ligada pela distribuição (comando `ligar-flag`, com quem decidiu e o motivo na auditoria da empresa). O revisor de IA do Compliance pede também a flag `revisor`.
+
 | Variável | O que é | Padrão |
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` **S** | Chave de API da Anthropic, da conta da distribuição (com limite de gasto definido no painel deles). Vai no ambiente do `liame-api` **e** do `liame-worker`. O endereço da API é fixo no código | vazio |

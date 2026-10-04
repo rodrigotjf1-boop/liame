@@ -150,7 +150,7 @@ Custo, pelos preços publicados: a Conversa é a tarefa cara (o prompt, as ferra
 
 ## O que ainda falta
 
-- Publicar as rotas de modelo com a nota desta rodada (`ai_model_route.eval_score`) e ligar o cache de prompt.
+- Ligar o cache de prompt no gateway (as rotas de modelo foram publicadas com a nota desta rodada: migration 0046).
 - O passo do CI que roda o eval pago só quando o PR mexe em prompt, ferramenta, modelo ou política.
 - Juiz por modelo barato para tom e clareza nos evals das tarefas que escrevem (em produção, esse olhar é o do revisor de IA do Compliance, que tem o eval dele: `compliance_revisao`).
 - Uma rodada só não mede a variação do modelo: repetir a rodada inteira quando mudar prompt, ferramenta, modelo ou política, e antes de trocar o esforço da rota.

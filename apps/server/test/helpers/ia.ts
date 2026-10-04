@@ -89,6 +89,7 @@ export async function modeloComPreco(modelos: ModelosDeTeste, rodada: string, mo
 export async function rotaCompartilhada(modelos: ModelosDeTeste, task: string, mock: MockLanguageModelV4, maxCost = 1_000_000) {
   const provider = 'teste';
   const model = `compartilhado_${task}`;
+  await aposentarRotaDaDistribuicao(task);
   await ownerQuery(
     `insert into liame.ai_model_price (id, provider, model, valid_from, input_usd_micros_per_mtok, output_usd_micros_per_mtok, cache_read_usd_micros_per_mtok,
                                        cache_write_5m_usd_micros_per_mtok, cache_write_1h_usd_micros_per_mtok, source, checked_on)
@@ -117,12 +118,22 @@ export async function rotaCompartilhada(modelos: ModelosDeTeste, task: string, m
 
 export type RefDeModelo = { provider: string; model: string };
 
+/**
+ * A rota que a distribuição publicou para a tarefa (migration 0046) sai do caminho no banco de TESTE: só pode haver uma
+ * ativa por tarefa, e o teste usa a dele, com o modelo simulado. A linha fica (aposentada), para o teste que confere o
+ * que a migration publicou. Sem rota da distribuição ativa, não faz nada.
+ */
+export async function aposentarRotaDaDistribuicao(task: string): Promise<void> {
+  await ownerQuery(`update liame.ai_model_route set status = 'aposentada' where task = $1 and status = 'ativa' and created_by <> 'testes'`, [task]);
+}
+
 /** Rota ativa para a tarefa (a versão é 3 para o teste conferir que ela chega ao registro de uso). */
 export async function rotaAtiva(
   task: string,
   principal: RefDeModelo,
   extra: { reserva?: RefDeModelo[]; economico?: RefDeModelo; timeoutMs?: number; effort?: string; maxCost?: number } = {},
 ): Promise<string> {
+  await aposentarRotaDaDistribuicao(task);
   await ownerQuery(
     `insert into liame.ai_model_route (id, task, version, status, purpose, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros, fallback,
                                        economy_provider, economy_model, created_by, deployed_at)
