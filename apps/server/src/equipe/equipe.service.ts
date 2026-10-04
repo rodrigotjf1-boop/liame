@@ -72,15 +72,19 @@ export class EquipeService {
           from liame.ai_usage where tenant_id = ${tenantId} and occurred_at >= ${inicio}::timestamptz`)
     ).rows[0]!;
 
-    // O uso de IA da marca no mês, por fluxo, e o retorno das pessoas.
+    // O uso de IA da marca no mês, por fluxo, e o retorno das pessoas. Uma resposta com leituras faz várias chamadas
+    // ao modelo: o custo e as chamadas contam todas; a resposta é a chamada que a entregou (`answered`), e a que a
+    // conferência recusou não chegou à pessoa.
     const usos = new Map(
       (
-        await tx.execute<{ workflow: string; custo: string; chamadas: number; ok: number }>(sql`
-          select workflow, coalesce(sum(cost_usd_micros), 0)::text as custo,
-                 (count(*) filter (where model is not null))::int as chamadas, (count(*) filter (where outcome = 'ok'))::int as ok
-            from liame.ai_usage
-           where tenant_id = ${tenantId} and brand_id = ${brandId} and occurred_at >= ${inicio}::timestamptz
-           group by workflow`)
+        await tx.execute<{ workflow: string; custo: string; chamadas: number; respostas: number; entregues: number }>(sql`
+          select u.workflow, coalesce(sum(u.cost_usd_micros), 0)::text as custo,
+                 (count(*) filter (where u.model is not null))::int as chamadas,
+                 (count(*) filter (where u.answered))::int as respostas,
+                 (count(*) filter (where u.answered and not exists (select 1 from liame.ai_refusal r where r.usage_id = u.id)))::int as entregues
+            from liame.ai_usage u
+           where u.tenant_id = ${tenantId} and u.brand_id = ${brandId} and u.occurred_at >= ${inicio}::timestamptz
+           group by u.workflow`)
       ).rows.map((u) => [u.workflow, u]),
     );
     const retornos = (
@@ -126,7 +130,8 @@ export class EquipeService {
             where brand_id = ${brandId} and decided_on >= ${org.de}::date and status = 'avaliada' and regret_label <> 'sem_dado')::text as arrependimento`)
     ).rows[0]!;
     const contagens: ContagensDoMes = {
-      respostasPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.ok)])),
+      respostasPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.respostas)])),
+      entreguesPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.entregues)])),
       retornoPorFluxo: new Map(retornos.map((r) => [r.workflow, { fezSentido: Number(r.fez_sentido), discordo: Number(r.discordo) }])),
       demandasDaLia: Number(n.demandas_da_lia),
       revisoes: Number(n.revisoes),

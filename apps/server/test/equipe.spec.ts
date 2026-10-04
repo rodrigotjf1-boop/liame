@@ -13,6 +13,7 @@ import { WORKFLOW as WORKFLOW_DO_PESQUISADOR } from '../src/worker/pesquisa.serv
 const tudoLigado: FatosDoMembro = { pausado: false, peloPlano: true, ia: true, sombra: true, parada: false };
 const vazio: ContagensDoMes = {
   respostasPorFluxo: new Map(),
+  entreguesPorFluxo: new Map(),
   retornoPorFluxo: new Map(),
   demandasDaLia: 0,
   revisoes: 0,
@@ -67,7 +68,15 @@ describe('Sua equipe (A3, I13b)', () => {
   it('o que cada um fez no mês, com as chaves do contrato', () => {
     const c: ContagensDoMes = {
       ...vazio,
+      // O que chegou à conferência (a chamada que respondeu, uma por pedido) e, disso, o que chegou à pessoa: a
+      // diferença são as respostas que a conferência retirou (5 da LIA, 5 do Analista e 1 da leitura da revisão).
       respostasPorFluxo: new Map([
+        [WORKFLOW_DA_CONVERSA, 66],
+        [WORKFLOW_DOS_RESULTADOS, 44],
+        [WORKFLOW_DO_AVISO, 13],
+        [WORKFLOW_DA_REVISAO, 2],
+      ]),
+      entreguesPorFluxo: new Map([
         [WORKFLOW_DA_CONVERSA, 61],
         [WORKFLOW_DOS_RESULTADOS, 40],
         [WORKFLOW_DO_AVISO, 12],
@@ -105,9 +114,10 @@ describe('Sua equipe (A3, I13b)', () => {
     // O Analista soma o Explicar dos resultados e o de um aviso; a leitura da revisão é do Relatórios.
     expect(ver('analista')).toEqual({ explicacoes: '52 qtd', fez_sentido: '34 qtd', discordo: '3 qtd', retiradas_na_conferencia: '5 qtd' });
     expect(ver('relatorios')).toEqual({ revisoes: '4 qtd', com_leitura_da_ia: '3 qtd', so_do_sistema: '1 qtd' });
-    // D-A3-15: conferidos = todo texto de IA que chegou à conferência (as respostas atendidas de todos os fluxos);
-    // barrados = os que uma regra de texto barrou, de qualquer funcionário (sem o texto, só a contagem).
-    expect(ver('compliance')).toEqual({ textos_conferidos: '114 qtd', textos_barrados: '9 qtd' });
+    // D-A3-15: conferidos = todo texto de IA que chegou à conferência (as respostas atendidas de todos os fluxos,
+    // entregues ou retiradas); barrados = os que uma regra de texto barrou, de qualquer funcionário (sem o texto, só a
+    // contagem).
+    expect(ver('compliance')).toEqual({ textos_conferidos: '125 qtd', textos_barrados: '9 qtd' });
     expect(ver('estrategista')).toEqual({ planos_aprovados: '2 qtd', planos_recusados: '1 qtd', planos_esperando: '1 qtd', em_preparo: '1 qtd', retiradas_na_conferencia: '0 qtd' });
     expect(ver('pesquisador')).toEqual({ paginas_lidas: '3 qtd', recusadas: '1 qtd', sugestoes: '2 qtd', retiradas_na_conferencia: '2 qtd' });
     expect(ver('trafego')).toEqual({ recomendacoes: '26 qtd', comparaveis: '19 qtd', mesma_direcao: '15 qtd', arrependimento: '-41200000 brl_micros' });
