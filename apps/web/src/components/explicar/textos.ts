@@ -72,6 +72,8 @@ export function avisoSemIa(r: Pick<ExplanationResponse, 'source' | 'reason' | 'r
       };
     case 'trecho_proibido':
     case 'compliance':
+    // O revisor de IA do Compliance apontou tom, clareza ou alegação: para a pessoa, é a mesma conferência.
+    case 'revisor':
     case 'risco':
     case 'vazia':
     case 'longa':

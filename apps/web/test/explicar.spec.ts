@@ -112,7 +112,7 @@ describe('"Explicar": regras da tela', () => {
       texto: 'Ela citou um número que não está nos dados desta tela, então o texto não foi mostrado. Este resumo foi montado pelo sistema.',
       acao: 'de-novo',
     });
-    for (const motivo of ['trecho_proibido', 'compliance', 'risco', 'vazia', 'longa']) {
+    for (const motivo of ['trecho_proibido', 'compliance', 'revisor', 'risco', 'vazia', 'longa']) {
       expect(avisoSemIa(doSistema(motivo)), motivo).toMatchObject({ icone: 'shield', titulo: 'A resposta da LIA não passou na conferência', acao: 'de-novo' });
     }
   });

@@ -252,6 +252,10 @@ describe('Sua equipe: acerto e custo do mês', () => {
     const t = equipe();
     expect(custoDo(membro('analista', { cost: { usd_micros: '1310000', calls: 52 }, stats: [stat('explicacoes', 52)] }), t)).toEqual({ valor: nbsp('R$ 6,84'), rotulo: '52 explicações' });
     expect(custoDo(membro('compliance'), t)).toEqual({ valor: nbsp('R$ 0,00'), rotulo: 'as regras rodam no código' });
+    // Com o revisor de IA ligado para a empresa, o custo do Compliance é o dele; as regras seguem sem custo.
+    const comRevisor = custoDo(membro('compliance', { cost: { usd_micros: '1310000', calls: 130 } }), t);
+    expect(comRevisor).toEqual({ valor: nbsp('R$ 6,84'), rotulo: '130 chamadas ao revisor de IA; as regras rodam no código' });
+    expect(custoDo(membro('compliance', { cost: { usd_micros: '0', calls: 1 } }), t).rotulo).toBe('1 chamada ao revisor de IA; as regras rodam no código');
     expect(custoDo(membro('trafego'), t).rotulo).toBe('nesta fase, as recomendações são por regra');
     expect(custoDo(membro('lia', { cost: { usd_micros: '1800000', calls: 61 }, stats: [stat('respostas', 61)] }), equipe({ usd_brl: null }))).toEqual({ valor: nbsp('US$ 1,80'), rotulo: '61 respostas' });
   });
@@ -303,6 +307,23 @@ describe('Sua equipe: "O que fez" em frases', () => {
       texto: 'Regra: promessa de resultado. Ele não apareceu: ficou o que o sistema escreve.',
     });
     expect(linha({ kind: 'barrou_texto', detail: 'pesquisador', count: 3, rules: ['dado_pessoal'] }).titulo).toBe('Barrou 3 textos do Pesquisador');
+    // O revisor de IA: as categorias dele vêm no campo das regras, e a tela diz o que ele apontou.
+    expect(linha({ kind: 'barrou_texto', detail: 'lia', count: 1, rules: ['tom'] })).toMatchObject({
+      titulo: 'Barrou um texto da LIA',
+      texto: 'O revisor de IA apontou o tom. Ele não apareceu: ficou o que o sistema escreve.',
+    });
+    expect(linha({ kind: 'barrou_texto', detail: 'estrategista', count: 1, rules: ['tom', 'clareza', 'alegacao'] }).texto).toBe(
+      'O revisor de IA apontou o tom, a clareza e uma alegação que ninguém pode provar. Ele não apareceu: ficou o que o sistema escreve.',
+    );
+    expect(linha({ kind: 'retirada_na_conferencia', detail: 'revisor', count: 1, rules: ['alegacao'] }).texto).toBe(
+      'Barrado pelo Compliance. O revisor de IA apontou uma alegação que ninguém pode provar. Ficou o que o sistema escreve.',
+    );
+    expect(linha({ kind: 'retirada_na_conferencia', detail: 'revisor', count: 1 }).texto).toBe('Barrado pelo revisor de IA. Ficou o que o sistema escreve.');
+    expect(linha({ kind: 'retirada_na_conferencia', detail: 'revisor_sem_resposta', count: 1 }).texto).toBe(
+      'O revisor de IA não respondeu, e sem a revisão dele o texto não aparece. Ficou o que o sistema escreve.',
+    );
+    // Categoria que a tela ainda não conhece junto de outra: cai no texto das regras, sem inventar.
+    expect(linha({ kind: 'barrou_texto', detail: 'lia', count: 1, rules: ['tom', 'categoria_nova'] }).texto).toBe('Regra: tom, categoria nova. Ele não apareceu: ficou o que o sistema escreve.');
     expect(linha({ kind: 'retirada_na_conferencia', detail: 'numero_fora', count: 1 })).toMatchObject({
       titulo: 'Um texto não passou na conferência',
       texto: 'Citava um número que o sistema não calculou. Ficou o que o sistema escreve.',
