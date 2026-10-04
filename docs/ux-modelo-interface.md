@@ -230,7 +230,7 @@ O texto da conversa continua em HTML (lido por leitor de tela); a expressão só
 2. **Lite e Pro substituem Agência e Gestor.** O Lite tem todos os recursos (pedido do dono), então não sobra o que o modo agência escondia. "Sua equipe" fica no menu principal nos dois modos, porque é o que materializa a agência.
 3. **Peso 600** da Poppins em título de cartão e números.
 4. **Ajustes de contraste** e **tokens novos** da §6.
-5. **Editar antes de aprovar** aparece como ajuste de valor (redução da verba de 5% a 20%); editar texto ou peça fica para as fases de criativos.
+5. **Editar antes de aprovar** aparece como ajuste de valor (redução da verba de 5% a 10%, o limite por pedido desde 04/10/2026; o protótipo mostra até 20%); editar texto ou peça fica para as fases de criativos.
 6. **A home não tem filtro de período:** Atenção é o agora; o período fica em Resultados, onde filtra tudo o que está abaixo dele.
 7. **Barra inferior do celular:** Resumo (ou Atenção, no Pro), Aprovações, LIA no centro, Resultados e Menu.
 8. **Template novo na skill** `ui-ux-proprio`: `t11-central-agentes`, a partir da tela Sua equipe, depois da aprovação.

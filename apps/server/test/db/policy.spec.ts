@@ -68,7 +68,10 @@ describe.skipIf(!hasDb)('políticas versionadas e @Politica (A1-11)', () => {
     expect(marca.body).toMatchObject({ version: 1, brand_id: dono.brandId });
 
     const lista = await api.call('GET', '/v1/policies', { cookie: dono.cookie });
-    expect(lista.body.platform.version).toBe(2);
+    expect(lista.body.platform.version).toBe(3);
+    // A política da distribuição vai inteira na resposta: quem vê as regras da empresa vê também as que valem acima delas.
+    expect(lista.body.platform.document.rules).toContainEqual({ type: 'autonomy', provider: 'meta_ads', actor: 'human', mode: 'APPROVAL' });
+    expect(lista.body.platform.document.rules).toContainEqual({ type: 'rate_limit', action: 'orcamento.*', provider: 'meta_ads', per: 'resource', max: 3, window_minutes: 60 });
     expect(lista.body.items.map((p: { version: number; status: string; brand_id: string | null }) => [p.brand_id === null ? 'empresa' : 'marca', p.version, p.status])).toEqual([
       ['empresa', 2, 'ativa'],
       ['empresa', 1, 'arquivada'],
@@ -111,7 +114,7 @@ describe.skipIf(!hasDb)('políticas versionadas e @Politica (A1-11)', () => {
       },
     });
     const sim = (body: Record<string, unknown>) => api.call('POST', '/v1/policies/evaluate', { cookie: dono.cookie, body: { action: 'orcamento.aumentar', ...base, ...body } });
-    expect((await sim({})).body).toEqual({ allowed: true, mode: 'LIMITED_AUTO', violations: [], versions: ['plataforma@2', 'empresa@1'] });
+    expect((await sim({})).body).toEqual({ allowed: true, mode: 'LIMITED_AUTO', violations: [], versions: ['plataforma@3', 'empresa@1'] });
     expect((await sim({ value_micros: 600_000_000 })).body).toMatchObject({ allowed: false, violations: [{ source: 'tenant', type: 'max_value' }] });
     expect((await sim({ categories: ['politica'] })).body.violations[0]).toMatchObject({ source: 'platform', type: 'forbidden_categories' });
 
@@ -119,7 +122,7 @@ describe.skipIf(!hasDb)('políticas versionadas e @Politica (A1-11)', () => {
       cookie: dono.cookie,
       body: { brand_id: dono.brandId, document: { rules: [{ type: 'autonomy', action: 'orcamento.aumentar', up_to_percent: 10, mode: 'APPROVAL' }] } },
     });
-    expect((await sim({ brand_id: dono.brandId })).body).toMatchObject({ mode: 'APPROVAL', versions: ['plataforma@2', 'empresa@1', 'marca@1'] });
+    expect((await sim({ brand_id: dono.brandId })).body).toMatchObject({ mode: 'APPROVAL', versions: ['plataforma@3', 'empresa@1', 'marca@1'] });
 
     const outra = await owner('Outra empresa');
     expect((await sim({ brand_id: outra.brandId })).status).toBe(404);

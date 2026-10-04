@@ -18,6 +18,7 @@ import {
   textoDeUrl,
   versaoRegistrada,
 } from '../tipos.js';
+import { orcamentoEmMicros, SEM_DECIMAIS } from './verba.js';
 
 // Conector de LEITURA da Meta Marketing API (A2, G4; base de conhecimento §2.1). Versão vinda do
 // Capability Registry. O token vai no cabeçalho (fora da URL, dos logs e dos traces); com o segredo do
@@ -42,16 +43,8 @@ export type OpcoesMeta = {
 
 const PADRAO: Required<OpcoesMeta> = { diasSincrono: 14, intervaloRelatorioMs: 5_000, prazoRelatorioMs: 10 * 60_000 };
 
-/** Moedas sem casas decimais: o "menor unidade" da Meta já é a unidade. */
-export const SEM_DECIMAIS = new Set(['JPY', 'KRW', 'CLP', 'PYG', 'VND', 'ISK', 'HUF', 'TWD', 'COP', 'IDR', 'UGX']);
-
-/** Orçamento da Meta vem na menor unidade da moeda (centavos no BRL) → micros (1 unidade = 1.000.000). */
-export function orcamentoEmMicros(valor: string | undefined, moeda: string | null): number | null {
-  if (valor === undefined || valor === null || valor === '') return null;
-  const n = Number(valor);
-  if (!Number.isFinite(n)) return null;
-  return moeda && SEM_DECIMAIS.has(moeda) ? n * 1_000_000 : n * 10_000;
-}
+// A conta da verba (menor unidade da moeda ↔ micros) mora em `verba.ts`; sai por aqui também, para quem já importava.
+export { orcamentoEmMicros, SEM_DECIMAIS };
 
 function statusCanonico(status: string | undefined): StatusCanonico {
   switch (status) {

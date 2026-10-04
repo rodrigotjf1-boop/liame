@@ -38,6 +38,7 @@ describe('autonomia das ações da sombra (A3, I13)', () => {
       current_value_micros: 30_000_000,
       categories: [],
       recent_count: 0,
+      actor: 'agent',
     });
     expect(propostaDaAcao({ ...alvo, tool: 'campanha_pausar' })).toMatchObject({ tool: 'campanha_pausar', action: 'campanha.pausar', risk_level: 'R1', value_micros: null });
   });
@@ -54,6 +55,19 @@ describe('autonomia das ações da sombra (A3, I13)', () => {
     expect(modoDaAcao([PLATFORM_POLICY, larga, deVolta], alvo)).toEqual({ mode: 'SHADOW', source: 'brand', version: 4 });
     const escala = politica('tenant', 5, [{ type: 'autonomy', action: 'orcamento.*', mode: 'ESCALATE' }]);
     expect(modoDaAcao([PLATFORM_POLICY, escala, promovida], alvo)).toEqual({ mode: 'ESCALATE', source: 'tenant', version: 5 });
+  });
+
+  it('o modo do funcionário de IA e o pedido de uma pessoa são regras separadas (A4, X2)', () => {
+    // Na Meta, a plataforma manda o pedido de uma pessoa esperar aprovação; isso não tira o funcionário da Sombra.
+    const daPessoa = { ...propostaDaAcao(alvo), actor: 'human' as const };
+    expect(chooseMode([PLATFORM_POLICY], daPessoa)).toEqual({ mode: 'APPROVAL', source: 'platform', version: 3 });
+    expect(modoDaAcao([PLATFORM_POLICY], alvo).mode).toBe('SHADOW');
+    // A regra que a promoção e a volta para Sombra escrevem é do funcionário: o pedido da pessoa segue em aprovação.
+    for (const mode of ['SUGGEST', 'SHADOW'] as const) {
+      const daMarca = politica('brand', 6, comRegraDaConta(null, { action: 'orcamento.reduzir', account: CONTA, mode }).rules);
+      expect(modoDaAcao([PLATFORM_POLICY, daMarca], alvo).mode).toBe(mode);
+      expect(chooseMode([PLATFORM_POLICY, daMarca], daPessoa).mode).toBe('APPROVAL');
+    }
   });
 
   it('o modo escolhido é o mesmo que a avaliação da política dá (a extração não mudou o motor)', () => {
@@ -73,22 +87,31 @@ describe('autonomia das ações da sombra (A3, I13)', () => {
 
   it('a promoção troca só a regra da ação na conta; as outras ficam, na mesma ordem', () => {
     expect(comRegraDaConta(null, { action: 'orcamento.reduzir', account: CONTA, mode: 'SUGGEST' })).toEqual({
-      rules: [{ type: 'autonomy', action: 'orcamento.reduzir', account: CONTA, mode: 'SUGGEST' }],
+      rules: [{ type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: CONTA, mode: 'SUGGEST' }],
     });
     const doc: PolicyDocument = {
       rules: [
         { type: 'forbidden_words', words: ['grátis'] },
+        // Escrita antes da A4, sem o ator: é a mesma regra, e sai na troca.
         { type: 'autonomy', action: 'orcamento.reduzir', account: CONTA, mode: 'SUGGEST' },
         // Com outro seletor é outra regra: não é a da promoção.
         { type: 'autonomy', action: 'orcamento.reduzir', account: CONTA, risk: 'R3', mode: 'APPROVAL' },
-        { type: 'autonomy', action: 'orcamento.aumentar', account: CONTA, mode: 'SUGGEST' },
+        // A do pedido de uma pessoa também é outra.
+        { type: 'autonomy', action: 'orcamento.reduzir', actor: 'human', account: CONTA, mode: 'ESCALATE' },
+        { type: 'autonomy', action: 'orcamento.aumentar', actor: 'agent', account: CONTA, mode: 'SUGGEST' },
       ],
     };
-    expect(comRegraDaConta(doc, { action: 'orcamento.reduzir', account: CONTA, mode: 'SHADOW' }).rules).toEqual([
+    const trocada = comRegraDaConta(doc, { action: 'orcamento.reduzir', account: CONTA, mode: 'SHADOW' });
+    expect(trocada.rules).toEqual([
       { type: 'forbidden_words', words: ['grátis'] },
       { type: 'autonomy', action: 'orcamento.reduzir', account: CONTA, risk: 'R3', mode: 'APPROVAL' },
-      { type: 'autonomy', action: 'orcamento.aumentar', account: CONTA, mode: 'SUGGEST' },
-      { type: 'autonomy', action: 'orcamento.reduzir', account: CONTA, mode: 'SHADOW' },
+      { type: 'autonomy', action: 'orcamento.reduzir', actor: 'human', account: CONTA, mode: 'ESCALATE' },
+      { type: 'autonomy', action: 'orcamento.aumentar', actor: 'agent', account: CONTA, mode: 'SUGGEST' },
+      { type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: CONTA, mode: 'SHADOW' },
+    ]);
+    // Trocar de novo não empilha: a regra com o ator também é reconhecida.
+    expect(comRegraDaConta(trocada, { action: 'orcamento.reduzir', account: CONTA, mode: 'SUGGEST' }).rules.filter((r) => r.type === 'autonomy' && r.action === 'orcamento.reduzir' && r.actor === 'agent')).toEqual([
+      { type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: CONTA, mode: 'SUGGEST' },
     ]);
   });
 

@@ -61,6 +61,8 @@ export function propostaDaAcao(a: AlvoDaAcao): ActionProposal {
     current_value_micros: a.valorAtualMicros ?? null,
     categories: [],
     recent_count: 0,
+    // Quem decide aqui é o funcionário de IA: a regra do que uma pessoa pede (`actor: 'human'`) não casa.
+    actor: 'agent',
   };
 }
 
@@ -75,21 +77,26 @@ export function modoDaAcao(policies: LoadedPolicy[], a: AlvoDaAcao): ModoEscolhi
  */
 export const mostraNaAtencao = (mode: AutonomyMode): boolean => mode !== 'SHADOW';
 
-/** É a regra só desta ação nesta conta (sem outro seletor)? É ela que a promoção e a volta para Sombra trocam. */
+/**
+ * É a regra só desta ação nesta conta (sem outro seletor)? É ela que a promoção e a volta para Sombra trocam. Desde a
+ * A4 a regra leva `actor: 'agent'` (é o modo do funcionário de IA, não o do pedido de uma pessoa); a escrita antes
+ * disso, sem o ator, também é ela e sai na troca.
+ */
 function ehRegraDaConta(rule: PolicyRule, action: string, account: string): boolean {
   if (rule.type !== 'autonomy') return false;
-  const { type: _tipo, mode: _modo, action: acao, account: conta, ...outros } = rule;
-  return acao === action && conta === account && Object.values(outros).every((v) => v === undefined);
+  const { type: _tipo, mode: _modo, action: acao, account: conta, actor, ...outros } = rule;
+  return acao === action && conta === account && (actor === undefined || actor === 'agent') && Object.values(outros).every((v) => v === undefined);
 }
 
 /**
  * O documento da política da marca com a regra desta ação nesta conta trocada pelo modo novo. As outras regras
  * ficam como estão, na mesma ordem; a regra nova vai no fim. Voltar para Sombra escreve Sombra (e não apaga a
- * regra): assim a regra da marca, mais específica, vence uma regra mais larga da empresa.
+ * regra): assim a regra da marca, mais específica, vence uma regra mais larga da empresa. A regra vale só para o
+ * funcionário de IA (`actor: 'agent'`): voltar para Sombra não põe em sombra o que uma pessoa pede.
  */
 export function comRegraDaConta(doc: PolicyDocument | null, alvo: { action: string; account: string; mode: 'SHADOW' | 'SUGGEST' }): PolicyDocument {
   const regras = (doc?.rules ?? []).filter((r) => !ehRegraDaConta(r, alvo.action, alvo.account));
-  return { rules: [...regras, { type: 'autonomy', action: alvo.action, account: alvo.account, mode: alvo.mode }] };
+  return { rules: [...regras, { type: 'autonomy', action: alvo.action, actor: 'agent', account: alvo.account, mode: alvo.mode }] };
 }
 
 export type VezDaProposta = 'propor' | 'retirar' | 'encerrar' | 'nada';

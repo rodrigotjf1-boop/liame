@@ -511,7 +511,7 @@ function regrasDe(rules: string[]): string {
   return `Regra: ${rules.map(nomeDaRegra).join(', ')}. `;
 }
 
-/** "reduzir a verba em 20%", "pausar a campanha", "aumentar a verba em 20%". */
+/** "reduzir a verba em 10%", "pausar a campanha", "aumentar a verba em 10%". */
 export function acaoDa(tool: string | null, percent: number | null): string {
   const quanto = percent ? ` em ${percent}%` : '';
   if (tool === 'orcamento_reduzir') return `reduzir a verba${quanto}`;

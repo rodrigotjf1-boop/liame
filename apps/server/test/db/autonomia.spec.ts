@@ -161,7 +161,8 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
     const item = AutonomyItem.parse(ok.body);
     expect(item).toMatchObject({ mode: 'SUGGEST', mode_source: { policy: 'marca', version: 1 }, proposal: { status: 'aprovada', policy_version: 1, decided_by: { name: expect.any(String) } } });
     expect(await politicas(e)).toEqual([
-      { version: 1, status: 'ativa', document: { rules: [{ type: 'autonomy', action: 'orcamento.reduzir', account: e.conta, mode: 'SUGGEST' }] } },
+      // A regra é do funcionário de IA (`actor: 'agent'`): não muda o que uma pessoa pede pelo Liame (A4, X2).
+      { version: 1, status: 'ativa', document: { rules: [{ type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: e.conta, mode: 'SUGGEST' }] } },
     ]);
     expect((await auditoria(e, 'autonomia.promover')).map((a) => a.after)).toEqual([
       { mode: 'SUGGEST', connected_account_id: e.conta, tool: 'orcamento_reduzir', action: 'orcamento.reduzir', policy_version: 1, sample_size: 31 },
@@ -183,8 +184,8 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
     expect(volta.status).toBe(200);
     expect(AutonomyItem.parse(volta.body)).toMatchObject({ mode: 'SHADOW', mode_source: { policy: 'marca', version: 2 }, proposal: { status: 'desfeita', policy_version: 1, next_sample_size: 61 } });
     expect((await politicas(e)).map((p) => [p.version, p.status, p.document.rules])).toEqual([
-      [1, 'arquivada', [{ type: 'autonomy', action: 'orcamento.reduzir', account: e.conta, mode: 'SUGGEST' }]],
-      [2, 'ativa', [{ type: 'autonomy', action: 'orcamento.reduzir', account: e.conta, mode: 'SHADOW' }]],
+      [1, 'arquivada', [{ type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: e.conta, mode: 'SUGGEST' }]],
+      [2, 'ativa', [{ type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: e.conta, mode: 'SHADOW' }]],
     ]);
     expect(await sugestoes(e)).toEqual([]);
     expect((await api.call('POST', '/v1/autonomy/undo', { cookie: e.cookie, body: { connected_account_id: e.conta, tool: 'orcamento_reduzir' } })).body.code).toBe('ja-em-sombra');

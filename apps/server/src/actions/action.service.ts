@@ -6,6 +6,7 @@ import type {
   AutonomyMode,
   CreateActionRequest,
   PolicyDecision,
+  PolicyRule,
   RejectActionRequest,
   SandboxResourceRequest,
   SandboxResourceResponse,
@@ -18,18 +19,19 @@ import { z } from 'zod';
 import { canonicalJson, sha256 } from '../audit/audit.js';
 import { MfaService } from '../auth/mfa.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { ErroConector } from '../connectors/cliente-http.js';
 import { afterCommit, type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, issuesToErrors, ValidationProblem } from '../errors/problems.js';
 import { emitEvent } from '../events/outbox.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { Mailer } from '../mail/mailer.js';
-import { actionMatches, evaluatePolicy } from '../policy/engine.js';
+import { actionMatches, evaluatePolicy, type LoadedPolicy, rateLimitsFor } from '../policy/engine.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { currentTraceparent, inSpan } from '../observability/trace.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { BudgetService } from './budget.service.js';
-import { CONNECTORS, type Connector } from './connectors.js';
+import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { PlanoRecusado, type ResourceState, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
 
 /** Pedido que ninguém aprova expira (e devolve a reserva). */
@@ -63,6 +65,8 @@ export type ActionRow = {
   /** A execução que a plataforma mandou esperar: quantas vezes e quando tenta de novo (migration 0044). */
   attempts: number;
   next_attempt_at: Date | string | null;
+  /** A ação que este pedido desfaz (a volta; migration 0045). */
+  compensates_action_id: string | null;
   requested_by: string;
   expires_at: Date | string;
   created_at: Date | string;
@@ -70,7 +74,13 @@ export type ActionRow = {
 };
 
 /** O que a tela mostra de cada pedido e não mora na linha dele: quem pediu, a conta do alvo e a campanha citada. */
-type Apresentacao = { pessoas: Map<string, string>; contas: Map<string, string>; campanhas: Map<string, NonNullable<ActionResponse['campaign']>> };
+type Apresentacao = {
+  pessoas: Map<string, string>;
+  contas: Map<string, string>;
+  campanhas: Map<string, NonNullable<ActionResponse['campaign']>>;
+  /** O pedido de volta mais recente de cada ação. */
+  voltas: Map<string, NonNullable<ActionResponse['undone_by']>>;
+};
 
 /** Como a recusa fica gravada no motivo do pedido (a aba Cupons e a tela Aprovações reconhecem por aqui). */
 export const PREFIXO_RECUSA = 'recusada por ';
@@ -87,6 +97,9 @@ type ApprovalRow = {
 };
 
 const notFound = () => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Ação não encontrada nesta empresa.');
+/** Como a pessoa chama cada provedor, na frase. */
+const PLATAFORMA: Record<string, string> = { meta_ads: 'A Meta', regem: 'O Regem' };
+const NA_PLATAFORMA: Record<string, string> = { meta_ads: 'na Meta', regem: 'no Regem' };
 const micros = (v: string | null) => (v === null ? null : Number(v));
 const brl = (m: number) => (m / 1_000_000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -106,55 +119,123 @@ export class ActionService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  async create(auth: AuthContext, input: CreateActionRequest): Promise<ActionResponse> {
+  create(auth: AuthContext, input: CreateActionRequest): Promise<ActionResponse> {
+    return this.pedir(auth, input, null);
+  }
+
+  /**
+   * A volta de uma ação executada (A4, X2; A4-5): um pedido novo, com a ferramenta inversa, pelo mesmo trilho (trava,
+   * flag, política, reserva, aprovação com o código do app, validação e escrita). Só é aceita se o objeto está como a
+   * ação o deixou: se alguém mexeu depois, a mudança humana vence e nada é desfeito.
+   */
+  async undo(auth: AuthContext, id: string): Promise<ActionResponse> {
+    const tx = currentTx();
+    const tenantId = tenantOf(auth);
+    const row = await this.lock(tx, tenantId, id);
+    if (row.status !== 'executada') throw new AppProblem(409, 'acao-nao-desfaz', 'Não dá para desfazer', 'Só dá para desfazer uma ação que foi executada.');
+    const semVolta = (detalhe: string) => new AppProblem(409, 'acao-sem-volta', 'Esta ação não tem volta', detalhe);
+    const volta = TOOLS[row.tool]?.undo;
+    if (!volta || !row.before_state) throw semVolta('Esta ação não tem volta pelo Liame.');
+    const { tool: inversa, params } = volta(row.before_state);
+    if (!TOOLS[inversa]?.providers.includes(row.provider)) throw semVolta('Esta ação não tem volta pelo Liame neste provedor.');
+    const jaPedida = await tx.execute<{ id: string }>(sql`
+      select id from liame.action_request
+       where tenant_id = ${tenantId} and compensates_action_id = ${id} and status in ('aguardando_aprovacao', 'aprovada', 'executando', 'executada')
+       limit 1`);
+    if (jaPedida.rows[0]) throw new AppProblem(409, 'volta-ja-pedida', 'A volta já foi pedida', 'Já existe um pedido de volta para esta ação.');
+    const exec = await tx.execute<{ provider_version: number | null; result_state: Record<string, unknown> | null }>(sql`
+      select provider_version, result_state from liame.action_execution
+       where action_request_id = ${id} and status = 'executada' order by finished_at desc limit 1`);
+    const feita = exec.rows[0];
+    if (!feita || feita.provider_version === null) throw semVolta('O Liame não tem o registro de como esta ação deixou o objeto.');
+    // O objeto já estava como o pedido queria (alguém fez antes): o Liame não mudou nada, e não desfaz o que não fez.
+    if (feita.result_state?.sem_escrita === true) {
+      throw semVolta('O objeto já estava assim quando o Liame foi executar: o Liame não mudou nada, então não há o que desfazer por aqui.');
+    }
+    return this.pedir(
+      auth,
+      { tool: inversa, brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, params },
+      { de: id, versaoDepois: feita.provider_version },
+    );
+  }
+
+  /** O pedido, do começo ao fim. `volta`: a ação que este pedido desfaz e a versão em que ela deixou o objeto. */
+  private async pedir(auth: AuthContext, input: CreateActionRequest, volta: { de: string; versaoDepois: number } | null): Promise<ActionResponse> {
     const tx = currentTx();
     const tenantId = tenantOf(auth);
     const { tool, connector } = this.resolve(input.tool, input.provider);
     if (input.brand_id) await this.assertBrand(tx, tenantId, input.brand_id);
-    const target = { tenantId, provider: input.provider, brandId: input.brand_id ?? null, accountId: input.account_id, tool: tool.name };
+    const brandId = await this.marcaDoPedido(tx, tenantId, input);
+    const target = { tenantId, provider: input.provider, brandId, accountId: input.account_id, tool: tool.name };
     await this.assertNotStopped(tx, target);
-    await this.assertWriteEnabled(auth, connector, input.brand_id ?? null, input.account_id);
+    await this.assertWriteEnabled(auth, connector, brandId, input.account_id);
 
     const params = this.parseParams(tool, input.params);
-    const read = await connector.read(tx, { tenantId, accountId: input.account_id, resourceId: input.resource_id });
-    if (!read) throw new AppProblem(404, 'recurso-nao-encontrado', 'Recurso não encontrado', 'A conta ou o recurso não existe no provedor.');
+    const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: input.account_id, resourceId: input.resource_id });
+    // A volta só vale sobre o que a ação deixou: outra versão é sinal de que alguém mexeu depois.
+    if (volta && read.version !== volta.versaoDepois) {
+      throw new AppProblem(409, 'estado-mudou', 'Alguém mexeu depois', 'O objeto mudou depois desta ação. A volta não é feita, para não sobrescrever o que foi mudado.');
+    }
     const plan = this.planejar(tool, read.state, params);
     const decision = await inSpan('politica.avaliar', { 'liame.tool': tool.name, 'liame.action': plan.action }, () =>
-      this.decide(tx, tenantId, input.brand_id ?? null, tool, input, plan),
+      this.decide(tx, tenantId, brandId, tool, connector, input, plan, Boolean(volta)),
     );
 
     const id = uuidv7();
-    const { mode, status, reason } = await this.statusFor(decision.mode, auth, input.brand_id ?? null);
+    const { mode, status, reason } = await this.statusFor(decision.mode, auth, brandId);
     const fingerprint = sha256(canonicalJson({ tenantId, tool: tool.name, provider: input.provider, account: input.account_id, resource: input.resource_id }));
-    const planHash = planHashOf({ ...input, tool: tool.name, params }, plan, read.version);
+    const planHash = planHashOf({ ...input, brand_id: brandId, tool: tool.name, params }, plan, read.version);
     try {
       await tx.execute(sql`
         insert into liame.action_request (id, tenant_id, brand_id, tool, action, provider, account_id, resource_id, params, risk_level,
                                           budget_impact, value_micros, current_value_micros, reserved_micros, before_state, before_version,
                                           desired_state, plan_hash, action_fingerprint, mode, policy_decision, status, status_reason,
-                                          requested_by, expires_at, trace_context)
-        values (${id}, ${tenantId}, ${input.brand_id ?? null}, ${tool.name}, ${plan.action}, ${input.provider}, ${input.account_id},
+                                          requested_by, expires_at, trace_context, compensates_action_id)
+        values (${id}, ${tenantId}, ${brandId}, ${tool.name}, ${plan.action}, ${input.provider}, ${input.account_id},
                 ${input.resource_id}, ${JSON.stringify(params)}::jsonb, ${tool.risk}, ${plan.budgetImpact}, ${plan.valueMicros},
                 ${plan.currentValueMicros}, ${status === 'sombra' ? 0 : plan.reserveMicros}, ${JSON.stringify(read.state)}::jsonb,
                 ${read.version}, ${JSON.stringify(plan.desiredState)}::jsonb, ${planHash}, ${fingerprint}, ${mode},
                 ${JSON.stringify(decision)}::jsonb, ${status}, ${reason}, ${auth.userId},
-                now() + make_interval(hours => ${ACTION_TTL_HOURS}), ${currentTraceparent()})`);
+                now() + make_interval(hours => ${ACTION_TTL_HOURS}), ${currentTraceparent()}, ${volta?.de ?? null})`);
     } catch (err) {
+      const causa = (err as { cause?: { code?: string; constraint?: string } }).cause;
+      // Duas voltas da mesma ação ao mesmo tempo (a trava da ação original já barra; o índice é a segunda barreira).
+      if (causa?.code === '23505' && causa.constraint === 'uq_action_volta_viva') {
+        throw new AppProblem(409, 'volta-ja-pedida', 'A volta já foi pedida', 'Já existe um pedido de volta para esta ação.');
+      }
       // Outro pedido ativo para a mesma ferramenta no mesmo recurso (A1-8): inclusive dois ao mesmo tempo.
-      if ((err as { cause?: { code?: string } }).cause?.code === '23505') {
+      if (causa?.code === '23505') {
         throw new AppProblem(409, 'acao-duplicada', 'Já existe um pedido igual', 'Já há um pedido ativo desta ferramenta para este recurso. Aprove, altere ou cancele o que existe.');
       }
       throw err;
     }
     if (status !== 'sombra') {
       await inSpan('orcamento.reservar', { 'liame.action_id': id }, () =>
-        this.budget.reserve(tx, { tenantId, brandId: input.brand_id ?? null, actionId: id, amountMicros: plan.reserveMicros }),
+        this.budget.reserve(tx, { tenantId, brandId, actionId: id, amountMicros: plan.reserveMicros }),
       );
     }
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
     await emitEvent(tx, { tenantId, type: 'liame.action.requested', subject: id, data: { action_id: id, tool: tool.name, action: plan.action, mode, status } });
-    auditDetail({ resourceId: id, after: { tool: tool.name, action: plan.action, mode, status, plan_hash: planHash, reserved_micros: plan.reserveMicros } });
+    auditDetail({ resourceId: id, after: { tool: tool.name, action: plan.action, mode, status, plan_hash: planHash, reserved_micros: plan.reserveMicros, ...(volta ? { volta_de: volta.de } : {}) } });
     return this.get(auth, id);
+  }
+
+  /**
+   * A marca do pedido. Quando o alvo é uma conta conectada, é a marca dela: o pedido não escolhe outra (nem nenhuma),
+   * para a política, o envelope, a trava e as flags da marca valerem sempre. No sandbox (conta de mentira), é a do pedido.
+   */
+  private async marcaDoPedido(tx: Tx, tenantId: string, input: Pick<CreateActionRequest, 'brand_id' | 'account_id'>): Promise<string | null> {
+    const pedida = input.brand_id ?? null;
+    if (!ehUuid(input.account_id)) return pedida;
+    const r = await tx.execute<{ brand_id: string }>(sql`
+      select brand_id from liame.connected_account where id = ${input.account_id} and tenant_id = ${tenantId} and disconnected_at is null`);
+    const daConta = r.rows[0]?.brand_id;
+    // Conta que a empresa não tem: segue como veio, e o conector responde "não existe".
+    if (!daConta) return pedida;
+    if (pedida && pedida !== daConta) {
+      throw new AppProblem(422, 'marca-nao-confere', 'A conta é de outra marca', 'A conta deste pedido pertence a outra marca da empresa. Peça pela marca da conta.');
+    }
+    return daConta;
   }
 
   /** Mudar os parâmetros gera plano novo: a aprovação dada ao plano anterior deixa de valer. */
@@ -165,13 +246,14 @@ export class ActionService {
     if (row.status !== 'aguardando_aprovacao' && row.status !== 'sombra') {
       throw new AppProblem(409, 'acao-nao-altera', 'Não dá para alterar', 'Só se altera um pedido que ainda espera aprovação.');
     }
+    // A volta devolve o que estava antes: não tem parâmetro para escolher. Para mudar de ideia, cancela-se a volta.
+    if (row.compensates_action_id) throw new AppProblem(409, 'acao-nao-altera', 'Não dá para alterar', 'O pedido de volta não se altera: cancele e peça outra ação.');
     const { tool, connector } = this.resolve(row.tool, row.provider);
     const params = this.parseParams(tool, input.params);
-    const read = await connector.read(tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
-    if (!read) throw new AppProblem(404, 'recurso-nao-encontrado', 'Recurso não encontrado', 'A conta ou o recurso não existe no provedor.');
+    const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
     const plan = this.planejar(tool, read.state, params);
     const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params };
-    const decision = await this.decide(tx, tenantId, row.brand_id, tool, request, plan);
+    const decision = await this.decide(tx, tenantId, row.brand_id, tool, connector, request, plan);
     const { mode, status, reason } = await this.statusFor(decision.mode, auth, row.brand_id);
     const planHash = planHashOf(request, plan, read.version);
 
@@ -366,28 +448,100 @@ export class ActionService {
     if (!on) throw new AppProblem(403, 'escrita-desligada', 'Escrita desligada', `A escrita em ${connector.provider} não está liberada para esta conta.`);
   }
 
+  /**
+   * Lê o estado do recurso no provedor. Com conector de plataforma (Meta), a leitura é uma chamada de verdade e pode
+   * falhar: cada falha vira um problema que a pessoa entende, em vez de um erro interno.
+   */
+  private async lerNoProvedor(connector: Connector, tx: Tx, ref: ResourceRef): Promise<ReadResult> {
+    let read: ReadResult | null;
+    try {
+      read = await connector.read(tx, ref);
+    } catch (err) {
+      if (!(err instanceof ErroConector)) throw err;
+      const quem = PLATAFORMA[connector.provider] ?? 'A plataforma';
+      if (err.tipo === 'autenticacao') {
+        throw new AppProblem(409, 'conta-desconectada', 'Conecte a conta de novo', `${quem} recusou o acesso desta conta (a autorização foi revogada ou venceu). Conecte de novo em Contas conectadas.`);
+      }
+      if (err.tipo === 'permissao') {
+        throw new AppProblem(409, 'sem-permissao-na-plataforma', 'Falta permissão na plataforma', `${quem} não deu ao Liame a permissão para ler este objeto. Conecte a conta de novo em Contas conectadas.`);
+      }
+      if (err.tipo === 'definitivo') {
+        throw new AppProblem(422, 'plataforma-recusou', 'A plataforma recusou a leitura', `${quem} não deixou ler o objeto: ${err.mensagemUsuario ?? err.message}`);
+      }
+      // Limite de uso, fora do ar ou muitas falhas seguidas: nada foi pedido; é tentar de novo daqui a pouco.
+      throw new AppProblem(502, 'plataforma-indisponivel', 'A plataforma não respondeu', `${quem} não respondeu agora, ou pediu para esperar. Nada foi pedido: tente de novo em alguns minutos.`);
+    }
+    if (!read) throw new AppProblem(404, 'recurso-nao-encontrado', 'Recurso não encontrado', 'A conta ou o recurso não existe no provedor.');
+    return read;
+  }
+
+  /**
+   * No provedor que gasta dinheiro de mídia de verdade (a Meta), aumentar a verba ou voltar a gastar pede dois limites
+   * que só a empresa define (A4, D-A4-6): o teto por ação e o envelope do mês. Sem eles, o pedido é negado, em vez de
+   * seguir sem limite. A volta de uma ação fica fora do teto (devolve o valor de antes), mas não do envelope.
+   */
+  private async exigirLimitesDaEmpresa(tx: Tx, tenantId: string, brandId: string | null, connector: Connector, plan: ToolPlan, policies: LoadedPolicy[], volta: boolean): Promise<void> {
+    if (!connector.requiresSpendLimits || (plan.budgetImpact !== 'increase' && plan.budgetImpact !== 'new_spend')) return;
+    const onde = NA_PLATAFORMA[connector.provider] ?? 'na plataforma';
+    if (plan.budgetImpact === 'increase' && !volta) {
+      const temTeto = policies.some(
+        (p) =>
+          p.source !== 'platform' &&
+          p.document.rules.some((r) => r.type === 'max_value' && actionMatches(r.action, plan.action) && (!r.provider || r.provider === connector.provider)),
+      );
+      if (!temTeto) {
+        throw new AppProblem(422, 'teto-nao-definido', 'Falta o teto por ação', `Para aumentar verba ${onde}, a política da empresa (ou da marca) precisa ter o teto por ação. Sem ele, o Liame não aumenta verba.`);
+      }
+    }
+    const envelope = await tx.execute(sql`select 1 from liame.budget_policy where tenant_id = ${tenantId} and (brand_id is null or brand_id = ${brandId}) limit 1`);
+    if (!envelope.rows[0]) {
+      throw new AppProblem(
+        422,
+        'envelope-nao-definido',
+        'Falta o envelope do mês',
+        `Para o Liame aumentar verba ou retomar anúncios ${onde}, a empresa precisa definir o envelope do mês (quanto o Liame pode comprometer).`,
+      );
+    }
+  }
+
+  /**
+   * As execuções recentes que contam para cada regra de frequência que vale para a ação: as ações do padrão da regra
+   * (`orcamento.*` conta aumentar e reduzir), na janela dela, na conta ou só no mesmo recurso (`per`).
+   */
+  private async execucoesRecentes(
+    tx: Tx,
+    tenantId: string,
+    policies: LoadedPolicy[],
+    alvo: { provider: string; account_id: string; resource_id: string },
+    action: string,
+  ): Promise<Map<PolicyRule, number>> {
+    const recent = new Map<PolicyRule, number>();
+    for (const rule of rateLimitsFor(policies, { action, provider: alvo.provider })) {
+      const daAcao = !rule.action ? sql`` : rule.action.endsWith('.*') ? sql`and starts_with(action, ${rule.action.slice(0, -1)})` : sql`and action = ${rule.action}`;
+      const doRecurso = rule.per === 'resource' ? sql`and resource_id = ${alvo.resource_id}` : sql``;
+      const r = await tx.execute<{ n: number }>(sql`
+        select count(*)::int as n from liame.action_request
+         where tenant_id = ${tenantId} and provider = ${alvo.provider} and account_id = ${alvo.account_id} ${doRecurso} ${daAcao}
+           and status in ('executada', 'executando', 'aprovada') and updated_at > now() - make_interval(mins => ${rule.window_minutes})`);
+      recent.set(rule, r.rows[0]?.n ?? 0);
+    }
+    return recent;
+  }
+
   /** Política (plataforma + empresa + marca) com a contagem recente para os limites de frequência. */
   private async decide(
     tx: Tx,
     tenantId: string,
     brandId: string | null,
     tool: ToolDefinition,
-    input: { provider: string; account_id: string },
+    connector: Connector,
+    input: { provider: string; account_id: string; resource_id: string },
     plan: ToolPlan,
+    volta = false,
   ): Promise<PolicyDecision> {
     const { policies, timezone } = await this.policies.load(tx, tenantId, brandId);
-    // Conta na maior janela entre as regras que casam (lado seguro para as janelas menores).
-    const windows = policies
-      .flatMap((p) => p.document.rules)
-      .filter((r) => r.type === 'rate_limit' && actionMatches(r.action, plan.action) && (!r.provider || r.provider === input.provider))
-      .map((r) => (r.type === 'rate_limit' ? r.window_minutes : 0));
-    const window = windows.length ? Math.max(...windows) : 0;
-    const recent = window
-      ? await tx.execute<{ n: number }>(sql`
-          select count(*)::int as n from liame.action_request
-           where tenant_id = ${tenantId} and action = ${plan.action} and provider = ${input.provider} and account_id = ${input.account_id}
-             and status in ('executada', 'executando', 'aprovada') and updated_at > now() - make_interval(mins => ${window})`)
-      : null;
+    await this.exigirLimitesDaEmpresa(tx, tenantId, brandId, connector, plan, policies, volta);
+    const recent = await this.execucoesRecentes(tx, tenantId, policies, input, plan.action);
     const proposal: ActionProposal = {
       tool: tool.name,
       action: plan.action,
@@ -400,9 +554,12 @@ export class ActionService {
       current_value_micros: plan.currentValueMicros,
       categories: [],
       text: null,
-      recent_count: recent?.rows[0]?.n ?? 0,
+      recent_count: Math.max(0, ...recent.values()),
+      // Por esta porta, quem pede é uma pessoa (o pedido do funcionário de IA chega com o modo Aprovação, na X3).
+      actor: 'human',
+      ...(volta ? { undo: true } : {}),
     };
-    const decision = evaluatePolicy(policies, proposal, { at: new Date(), timezone });
+    const decision = evaluatePolicy(policies, proposal, { at: new Date(), timezone, recent });
     if (!decision.allowed) {
       throw new AppProblem(
         422,
@@ -441,8 +598,14 @@ export class ActionService {
 
   /** Os nomes que a tela precisa, lidos de uma vez para a página inteira (sob a RLS da empresa). */
   private async apresentacaoDe(tx: Tx, rows: ActionRow[]): Promise<Apresentacao> {
-    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map() };
+    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map() };
     if (!rows.length) return ap;
+    // O pedido de volta mais recente de cada ação (a volta cancelada ou que falhou também aparece: é a história dela).
+    const voltas = await tx.execute<{ id: string; status: ActionStatus; compensates_action_id: string }>(sql`
+      select distinct on (compensates_action_id) id, status, compensates_action_id from liame.action_request
+       where tenant_id = ${rows[0]!.tenant_id} and compensates_action_id in ${rows.map((r) => r.id)}
+       order by compensates_action_id, created_at desc, id desc`);
+    for (const v of voltas.rows) ap.voltas.set(v.compensates_action_id, { id: v.id, status: v.status });
     const pessoas = [...new Set(rows.map((r) => r.requested_by))];
     const contas = [...new Set(rows.map((r) => r.account_id).filter(ehUuid))];
     const campanhas = [...new Set(rows.map((r) => r.params.campaign_id).filter(ehUuid))];
@@ -552,6 +715,8 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     status_reason: row.status_reason,
     attempts: Number(row.attempts ?? 0),
     next_attempt_at: row.next_attempt_at ? new Date(row.next_attempt_at).toISOString() : null,
+    undoes: row.compensates_action_id ?? null,
+    undone_by: ap.voltas.get(row.id) ?? null,
     policy: row.policy_decision,
     approvals: approvals
       .filter((a) => a.action_request_id === row.id)

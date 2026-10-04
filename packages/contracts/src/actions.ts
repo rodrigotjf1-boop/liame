@@ -76,6 +76,10 @@ export const ActionResponse = z.strictObject({
   attempts: z.int().min(0),
   /** Quando a execução tenta de novo; nulo quando não está esperando. */
   next_attempt_at: z.string().nullable(),
+  /** A ação que este pedido desfaz (a volta), ou nulo. */
+  undoes: z.uuid().nullable(),
+  /** O pedido de volta mais recente desta ação (em qualquer situação), ou nulo. */
+  undone_by: z.strictObject({ id: z.uuid(), status: ActionStatus }).nullable(),
   policy: PolicyDecision,
   approvals: z.array(ActionApproval),
   /** Estado durável do fluxo (ADR-005): política → orçamento → aprovação → execução. */

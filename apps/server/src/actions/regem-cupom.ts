@@ -73,6 +73,8 @@ function recusaDoRegem(erro: ErroConector): string {
 export class RegemCupomConnector implements Connector {
   readonly provider = 'regem';
   readonly writeFlag = 'regem_write';
+  // O cupom não mexe em verba de mídia: o desconto sai do caixa da loja.
+  readonly requiresSpendLimits = false;
   private deps: DependenciasDaEscritaRegem | null = null;
 
   ligar(deps: DependenciasDaEscritaRegem): void {

@@ -14,7 +14,7 @@
 
 Ver `arquitetura.md` §6. A escrita só acontece por `execute()` chamado pelo Action Service, com `validateOnly` quando o provider oferecer e **criação sempre pausada**.
 
-**Escrita na Meta (A4, X1, 04/10/2026):** situação (ativar e pausar) e verba diária de campanha, conjunto e anúncio, por `POST /{id}` na versão do Capability Registry (`entity_update`), depois de ler o estado na Meta (`entity_state`) e de validar com `execution_options=["validate_only"]`. Mudança feita por uma pessoa na Meta nunca é sobrescrita; limite de uso adia a execução (base §2.1). Atrás da flag `meta_write`, desligada; as ferramentas que a usam entram na X2.
+**Escrita na Meta (A4, X1, 04/10/2026):** situação (ativar e pausar) e verba diária de campanha, conjunto e anúncio, por `POST /{id}` na versão do Capability Registry (`entity_update`), depois de ler o estado na Meta (`entity_state`) e de validar com `execution_options=["validate_only"]`. Mudança feita por uma pessoa na Meta nunca é sobrescrita; limite de uso adia a execução (base §2.1). Atrás da flag `meta_write`, desligada. **Ferramentas (X2):** `orcamento_ajustar` (campanha com orçamento de campanha, ou conjunto), `campanha_pausar`, `conjunto_pausar`, `anuncio_pausar` e as três de retomar. Limites da política da distribuição na Meta: no máximo 10% da verba por pedido e 3 mudanças de verba por hora por objeto; aumentar e retomar só com o teto por ação e o envelope do mês da empresa. O Liame não cria nem apaga objeto e não toca o limite de gastos da conta (`spend_cap`).
 
 ## 3. Plataformas (MVP em negrito)
 

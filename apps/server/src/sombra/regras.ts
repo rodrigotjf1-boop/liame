@@ -3,17 +3,21 @@
 // que a pessoa fez na plataforma e, passada a janela, compara o resultado: "se tivesse sido autorizado,
 // teria melhorado ou piorado?". Tudo por regra, sem modelo de IA, com os mesmos números da tela Resultados.
 // Funções puras; dinheiro em micros com BigInt.
+import { VARIACAO_MAXIMA_DA_VERBA_PCT } from '../policy/engine.js';
 
-/** Versão do conjunto de regras: muda junto com qualquer limiar abaixo, e fica gravada em cada decisão. */
-export const REGRAS_VERSAO = 1;
+/**
+ * Versão do conjunto de regras: muda junto com qualquer limiar abaixo, e fica gravada em cada decisão.
+ * 2 (04/10/2026): o passo da verba passa de 20% para 10%, junto com o limite por pedido da política.
+ */
+export const REGRAS_VERSAO = 2;
 /** Dias completos olhados para decidir e, depois, para comparar o resultado. */
 export const JANELA_DIAS = 7;
 
 export const LIMIARES_SOMBRA = {
   /** Gasto mínimo da campanha na janela para haver recomendação (R$ 50). */
   gastoMinimoMicros: 50_000_000n,
-  /** Variação da verba recomendada, em porcento. */
-  passoDaVerba: 20,
+  /** Variação da verba recomendada, em porcento: o mesmo limite por pedido da política, para a recomendação caber no pedido. */
+  passoDaVerba: VARIACAO_MAXIMA_DA_VERBA_PCT,
   /** "No limite da verba": gasto da janela em pelo menos 80% da verba diária × dias. */
   usoDaVerbaPorMil: 800n,
   /** Lucro folgado: margem conhecida de pelo menos 1,5 vez o investimento. */

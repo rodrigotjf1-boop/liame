@@ -18,7 +18,7 @@
 
 ## 2. O que muda para quem usa
 
-1. **A sugestão do Gestor de tráfego vira um pedido:** "reduzir a verba da Delivery noite de R$ 30 para R$ 24", com o motivo e os números; a pessoa aprova com o código do app e o Liame faz na Meta, confere e avisa.
+1. **A sugestão do Gestor de tráfego vira um pedido:** "reduzir a verba da Delivery noite de R$ 30 para R$ 27", com o motivo e os números; a pessoa aprova com o código do app e o Liame faz na Meta, confere e avisa.
 2. **Pausar e retomar** campanha, conjunto e anúncio pelo Liame, com aprovação.
 3. **Campanha nova nasce pausada:** o Estrategista ou a pessoa monta (objetivo, público, verba, criativo), a Meta valida antes, o Liame cria pausada; ativar é outra aprovação.
 4. **Peças do Criativo:** texto e imagem feitos a partir do que já vendeu e do dossiê da marca, conferidos pelo Compliance, com a marca "feito com IA", para aprovar antes de ir para a Meta.
@@ -33,7 +33,7 @@ Cada entrega é um PR com CI verde. **Migrations em negrito**: testadas no local
 | # | Entrega | O que fica pronto | Critérios | Migrations |
 | --- | --- | --- | --- | --- |
 | **X1** | **Conector de escrita da Meta** | Conector `meta_ads` na interface que já existe: lê o estado do objeto (situação e verba diária, com a versão tirada do próprio estado) e aplica **primeiro com `validate_only`** e só então de verdade; recusa da Meta na validação vira "recusado" com o motivo, sem tentar de novo; os limites da conta (cabeçalhos de uso, erros 17, 613 e 80000–80014) adiam a execução em vez de insistir; flag `meta_write`, desligada; token do cofre por empresa; auditoria e trace | A4-1, A4-2, A4-3 | **0044** `escrita_meta` (capacidades de escrita no registro e a espera da execução) |
-| **X2** | **Ferramentas de anúncio** | `orcamento_ajustar` (campanha com orçamento de campanha, ou conjunto) e `anuncio_pausar` passam a aceitar `meta_ads`; entram `conjunto_pausar`, `campanha_pausar` e as de **retomar** (que reativam o que estava ativo); cada uma com risco, permissão, política e compensação (verba anterior se ninguém mexeu; reativar só o que o Liame pausou). Limites da política da distribuição: verba ±20% por ação e o teto por ação; o `spend_cap` da conta nunca é tocado. **Achado na leitura do código (03/10/2026):** a regra de limite da política da distribuição (`plataforma@2`) está escrita com o provedor `meta`, e as contas usam `meta_ads`: do jeito que está, ela nunca casaria com uma ação da Meta; a correção (versão 3 da política, com teste) entra aqui, antes da primeira escrita | A4-2, A4-4, A4-5 | **nova:** recursos de anúncio no Action Service (se o retrato do pedido precisar de coluna nova) |
+| **X2** | **Ferramentas de anúncio** | `orcamento_ajustar` (campanha com orçamento de campanha, ou conjunto) e `anuncio_pausar` passam a aceitar `meta_ads`; entram `conjunto_pausar`, `campanha_pausar` e as de **retomar** (que reativam o que estava ativo); cada uma com risco, permissão, política e compensação (verba anterior se ninguém mexeu; reativar só o que o Liame pausou). Limites da política da distribuição: verba ±10% por ação (era ±20%; o dono baixou em 04/10/2026) e o teto por ação; o `spend_cap` da conta nunca é tocado. **Achado na leitura do código (03/10/2026):** a regra de limite da política da distribuição (`plataforma@2`) está escrita com o provedor `meta`, e as contas usam `meta_ads`: do jeito que está, ela nunca casaria com uma ação da Meta; a correção (versão 3 da política, com teste) entra aqui, antes da primeira escrita | A4-2, A4-4, A4-5 | **0045** `volta_da_acao` (o pedido que desfaz outro) |
 | **X3** | **Modo Aprovação** | Na ação em Aprovação, a recomendação da sombra cria o pedido no Action Service (o motivo, os números do retrato e o estado lido) em vez de só aparecer na Atenção; a sombra continua medindo; os portões para propor Aprovação (os cinco da A3 mais execuções sem erro e taxa de aprovação) e a promoção, proposta pelo sistema e aprovada por uma pessoa, como a de Sugerir | A4-6, A4-7 | **nova:** portões e proposta de Aprovação (se precisar além da 0038) |
 | **X4** | **Dinheiro do mês completo** | O gasto real lido da Meta todo dia conciliado com o que o Liame executou (`execução → informado → gasto real`), por ação e por conta; diferença acima do limite vira aviso; envelope do mês na tela | A4-8 | **nova:** gasto conciliado |
 | **X5** | **Campanha nova, pausada** | Montagem da campanha (objetivo, conjunto com público e verba, anúncio com o criativo aprovado e o rastreio do Liame nos parâmetros de URL); `validate_only` antes; criada **pausada**; ativar é ação à parte, com aprovação e código; apagar continua sempre escalando | A4-2, A4-9 | — |
@@ -45,7 +45,7 @@ Cada entrega é um PR com CI verde. **Migrations em negrito**: testadas no local
 
 Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 → X5 → X8 (as telas entram com cada parte, pelo protótipo aprovado).
 
-**Andamento:** X1 entregue em 04/10/2026, com a reconferência da seção 8 para a escrita de situação e verba (base §2.1): o conector `meta_ads` (lê o estado na Meta, valida com `validate_only`, escreve, confere), a espera da execução quando a Meta manda esperar (`next_attempt_at` no pedido) e a migration **0044**. Nenhuma ferramenta aceita `meta_ads` antes da X2, então nada escreve na Meta ainda, mesmo com a flag ligada. Detalhe em `andamento.md`.
+**Andamento:** X1 entregue em 04/10/2026, com a reconferência da seção 8 para a escrita de situação e verba (base §2.1): o conector `meta_ads` (lê o estado na Meta, valida com `validate_only`, escreve, confere), a espera da execução quando a Meta manda esperar (`next_attempt_at` no pedido) e a migration **0044**. Detalhe em `andamento.md`. **X2 entregue em 04/10/2026:** as ferramentas de anúncio na Meta (verba diária, pausar e retomar campanha, conjunto e anúncio), a política da distribuição na versão 3 (limite de frequência por objeto com o provedor certo, ±10% por pedido, o pedido de uma pessoa esperando aprovação), os limites da empresa fechados por padrão, a leitura na hora do pedido com o motivo quando a Meta falha, e a volta (`POST /v1/actions/{id}/undo`), com a migration **0045**. Com a flag `meta_write` desligada para todos, nada escreve na Meta. As decisões tomadas na entrega estão na seção 4 (D-A4-12 a D-A4-17), para o dono confirmar.
 
 ## 4. Decisões (aprovadas pelo dono em 03/10/2026, como recomendadas)
 
@@ -56,12 +56,23 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 | D-A4-3 | **Nada nasce ativo** | Campanha, conjunto e anúncio criados pelo Liame nascem **pausados**; ativar é ação R2 com aprovação e código | O mesmo que o conector oficial da Meta faz; gastar exige um "sim" explícito |
 | D-A4-4 | **Modos na A4** | Sombra → Sugerir → **Aprovação**; nada além disso | `LIMITED_AUTO` e `AUTO` dependem do envelope com teto (A7) |
 | D-A4-5 | **Mudança humana vence** | O conector lê antes de aplicar e compara com o estado do pedido; se mudou, não aplica (e a volta também não sobrescreve) | ADR-007, compensação; quem está na Meta manda |
-| D-A4-6 | **Limites por ação** | Verba: no máximo ±20% por ação e o teto por ação da política; no máximo 3 mudanças por hora por conjunto (a Meta permite 4); nunca mexer no `spend_cap` da conta | Base §2.1; passo pequeno é mais fácil de medir e desfazer |
+| D-A4-6 | **Limites por ação** | Verba: no máximo **±10% por ação** (a recomendação era ±20%; **o dono baixou para 10% em 04/10/2026**, e o passo da recomendação do Gestor de tráfego acompanha) e o teto por ação da política; no máximo 3 mudanças por hora por conjunto (a Meta permite 4); nunca mexer no `spend_cap` da conta | Base §2.1; passo pequeno é mais fácil de medir e desfazer |
 | D-A4-7 | **Aprovação de anúncio** | Sempre com o código do app, como o cupom e o plano | Dinheiro e publicação: a mesma régua |
 | D-A4-8 | **Acesso à Meta** | Piloto com o dono como testador (acesso padrão, pelo papel dele no app); empresas de fora só com `ads_management` aprovado no App Review | A permissão de escrita para contas de terceiros exige acesso avançado (base §2.1) |
 | D-A4-9 | **Imagem** | Um fornecedor na largada, escolhido por eval entre os que não treinam com os dados enviados; sem rosto de pessoa real, sem logo de terceiro, sem texto que a marca não diz; C2PA quando houver; "feito com IA" na tela e onde a Meta pedir | ADR-016; catálogo curado; menos contrato e superfície de dados |
 | D-A4-10 | **Onde a peça fica** | No armazenamento do Liame (o mesmo cofre de mídia), da empresa; vai para a Meta só depois de aprovada | A empresa vê e decide antes de publicar |
 | D-A4-11 | **Google** | Continua só leitura na A4; a escrita entra na A5 (roadmap) | Um canal por vez, com o trilho provado |
+
+**Decisões tomadas na X2 (04/10/2026), pela recomendação, para o dono confirmar ou mudar:**
+
+| # | Decisão | O que foi feito | Por quê |
+| --- | --- | --- | --- |
+| D-A4-12 | **Quem pede** | O que uma pessoa pede na Meta espera aprovação com o código do app (regra da distribuição, `actor: human`). O modo do funcionário de IA em cada conta (Sombra, Sugerir e, na X3, Aprovação) é outra regra (`actor: agent`) | As duas coisas usavam a mesma regra: liberar o pedido da pessoa tirava o Gestor de tráfego da Sombra, e voltar o funcionário para Sombra travaria o pedido da pessoa |
+| D-A4-13 | **Limites da empresa, fechados por padrão** | Na Meta, aumentar verba só com o teto por ação definido pela empresa (ou pela marca); aumentar e retomar só com o envelope do mês definido. Sem eles, o Liame nega o pedido | "Sem limite definido" não pode querer dizer "sem limite" |
+| D-A4-14 | **A volta** | É um pedido novo, com a mesma aprovação. Fica fora do teto e dos 10% (devolve o valor que já estava lá), mas dentro do envelope do mês e do limite de frequência. Só vale se ninguém mexeu no objeto depois; uma por vez; não desfaz o que o Liame não escreveu | Desfazer não pode ser um atalho sem aprovação, nem passar por cima do que uma pessoa mudou na Meta |
+| D-A4-15 | **Limite de frequência por objeto** | No máximo 3 mudanças de verba por hora na mesma campanha ou no mesmo conjunto, somando aumentar e reduzir | É como a Meta conta (4 por hora por conjunto); contar na conta inteira travava quem cuida de vários conjuntos |
+| D-A4-16 | **O teto não barra a redução** | O teto por ação vale para o que faz o gasto subir. Reduzir uma verba que já está acima do teto é permitido | Baixar o gasto é a direção segura; sem isso, a recomendação mais comum da sombra (reduzir a verba) seria negada em campanha grande |
+| D-A4-17 | **Retomar reserva um dia de verba** | Retomar é risco R2 e conta como gasto novo: reserva no envelope um dia da verba que mora no objeto; anúncio e objeto sem verba própria não reservam | Aproximação declarada, como a do aumento (um dia da diferença); o gasto real conciliado vem na X4 |
 
 ## 5. Protótipos para aprovação (antes do código de tela)
 
@@ -114,7 +125,8 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 | Começar | ✅ Aceite deste plano e das decisões da seção 4 (03/10/2026) |
 | X1 | Acrescentar `ads_management` na configuração do login da Meta (eu passo o caminho conferido) e conectar a Meta de novo no Liame |
 | Clientes de fora | Enviar o App Review de `ads_management` (com o vídeo da aprovação e da execução, que eu roteirizo) depois do X2 |
-| X2 | O teto por ação e o envelope do mês do piloto (quanto o Liame pode comprometer) |
+| X2 | O teto por ação e o envelope do mês do piloto (quanto o Liame pode comprometer). Sem eles, o Liame só reduz verba e pausa na Meta; aumentar e retomar ficam negados. A tela para definir os dois chega com a X4 |
+| X2 | Confirmar ou mudar as decisões D-A4-12 a D-A4-17 (seção 4) |
 | X7 | Conta no fornecedor de imagem escolhido no eval; a chave vai direto para o EasyPanel (`liame-api` e `liame-worker`), nunca para a conversa |
 | Telas | Aprovar P9 a P11 |
 | Ligar | Decidir quando ligar a flag `meta_write` para a Mister Burgers (comando `ligar-flag`) |
@@ -124,7 +136,7 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 
 | Risco | Mitigação |
 | --- | --- |
-| Gastar dinheiro por engano | Aprovação com código; `validate_only`; passo de ±20%; teto por ação; envelope do mês com reserva; parada da empresa; nada nasce ativo |
+| Gastar dinheiro por engano | Aprovação com código; `validate_only`; passo de ±10%; teto por ação; envelope do mês com reserva; parada da empresa; nada nasce ativo |
 | Sobrescrever o que alguém mudou na Meta | Leitura antes de aplicar e versão do estado; a volta também confere |
 | Limite de uso da Meta | Adiar em vez de insistir; poucas escritas por ação; leitura em lote |
 | App Review de escrita negado ou demorado | Piloto pelo acesso padrão; o resto do produto não depende da escrita |

@@ -15,6 +15,7 @@ import {
 } from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import {
+  ApiBadGatewayResponse,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCookieAuth,
@@ -51,12 +52,13 @@ export class ActionsController {
   @ApiOperation({
     summary: 'Pedir uma ação',
     description:
-      'Ferramenta + alvo + parâmetros. O servidor lê o estado no provedor, aplica trava, política e orçamento (reserva) e devolve o plano com o hash que a aprovação precisa. Risco e impacto vêm do registro de ferramentas.',
+      'Ferramenta + alvo + parâmetros. O servidor lê o estado no provedor, aplica trava, política e orçamento (reserva) e devolve o plano com o hash que a aprovação precisa. Risco e impacto vêm do registro de ferramentas. Numa plataforma de anúncio, o estado é lido nela na hora do pedido: se ela não responde, o pedido não é criado (502 `plataforma-indisponivel`).',
   })
   @ApiCreatedResponse({ standardSchema: ActionResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
   @ApiConflictResponse({ standardSchema: ProblemDetails })
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  @ApiBadGatewayResponse({ standardSchema: ProblemDetails })
   create(@Auth() auth: AuthContext, @Body({ schema: CreateActionRequest }) body: CreateActionRequest): Promise<ActionResponse> {
     return this.actions.create(auth, body);
   }
@@ -128,6 +130,24 @@ export class ActionsController {
   @ApiConflictResponse({ standardSchema: ProblemDetails })
   cancel(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<ActionResponse> {
     return this.actions.cancel(auth, id);
+  }
+
+  @Post('actions/:id/undo')
+  @Permissao('campanhas.operar')
+  @Auditar('acao.desfazer', { recurso: 'action_request' })
+  @HttpCode(201)
+  @ApiOperation({
+    summary: 'Desfazer (pedir a volta)',
+    description:
+      'Pede a volta de uma ação executada: um pedido novo, com a ferramenta inversa (a verba de antes, retomar o que foi pausado, pausar o que foi retomado), pelo mesmo trilho do pedido comum: trava, política, reserva, aprovação com o código do app, validação e escrita. Só é aceito se o objeto está como a ação o deixou: se alguém mexeu depois, nada é desfeito (409 `estado-mudou`). O pedido novo traz `undoes`; a ação original passa a trazer `undone_by`.',
+  })
+  @ApiCreatedResponse({ standardSchema: ActionResponse })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  @ApiBadGatewayResponse({ standardSchema: ProblemDetails })
+  undo(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<ActionResponse> {
+    return this.actions.undo(auth, id);
   }
 
   @Get('budget')

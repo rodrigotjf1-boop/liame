@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { VARIACAO_MAXIMA_DA_VERBA_PCT } from '../src/policy/engine.js';
 import {
   acaoHumana,
   arrependimento,
@@ -35,15 +36,18 @@ describe('sombra: o que o Liame recomendaria (A3, I5)', () => {
     expect(recomendar(campanha({ dailyBudgetMicros: null }))?.tool).toBe('campanha_pausar');
   });
 
-  it('prejuízo moderado recomenda reduzir a verba em 20%, e só com a verba na campanha', () => {
+  it('prejuízo moderado recomenda reduzir a verba em 10% (o limite por pedido), e só com a verba na campanha', () => {
     const moderado = campanha({ marginKnownMicros: R(150) });
     expect(recomendar(moderado)).toMatchObject({ tool: 'orcamento_reduzir', rule: 'prejuizo', percent: LIMIARES_SOMBRA.passoDaVerba });
     expect(recomendar({ ...moderado, dailyBudgetMicros: null })).toBeNull();
   });
 
-  it('lucro folgado com a verba no limite recomenda aumentar 20%; lucro com verba sobrando, nada', () => {
+  it('lucro folgado com a verba no limite recomenda aumentar 10%; lucro com verba sobrando, nada', () => {
     const lucro = campanha({ verdict: 'lucro', marginKnownMicros: R(320), spendMicros: R(200), dailyBudgetMicros: R(30) });
-    expect(recomendar(lucro)).toMatchObject({ tool: 'orcamento_aumentar', rule: 'lucro_no_limite', percent: 20 });
+    expect(recomendar(lucro)).toMatchObject({ tool: 'orcamento_aumentar', rule: 'lucro_no_limite', percent: 10 });
+    // O passo é o limite por pedido da política: a recomendação cabe no pedido que ela vira.
+    expect(LIMIARES_SOMBRA.passoDaVerba).toBe(VARIACAO_MAXIMA_DA_VERBA_PCT);
+    expect(REGRAS_VERSAO).toBe(2);
     // Gastou R$ 200 de R$ 420 possíveis: não está no limite.
     expect(recomendar({ ...lucro, dailyBudgetMicros: R(60) })).toBeNull();
     // Margem de 1,2 vez o investimento: lucro, mas não folgado.

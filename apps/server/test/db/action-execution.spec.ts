@@ -174,6 +174,66 @@ describe.skipIf(!hasDb)('execução de ações no worker e workflow durável (A1
     expect((await getAction(dono, travada.id)).body.status).toBe('executada');
   });
 
+  it('A4-5 no sandbox: a volta da verba é um pedido novo, pelo mesmo trilho; se alguém mexeu depois, não é aceita', async () => {
+    const dono = await owner();
+    const aprovar = async (pedido: { id: string; plan_hash: string }) => {
+      await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [dono.userId]);
+      return api.call('POST', `/v1/actions/${pedido.id}/approve`, { cookie: dono.cookie, body: { plan_hash: pedido.plan_hash, code: totpCode(dono.secret, currentStep()) } });
+    };
+    const desfazer = (id: string) => api.call('POST', `/v1/actions/${id}/undo`, { cookie: dono.cookie });
+
+    await sandbox(dono, 'v1');
+    const feita = await requestAndApprove(dono, 130 * REAL, 'v1');
+    // Antes de executar não há o que desfazer.
+    expect((await desfazer(feita.id)).body.code).toBe('acao-nao-desfaz');
+    await cycle(dono);
+
+    const volta = await desfazer(feita.id);
+    expect(volta.status).toBe(201);
+    expect(volta.body).toMatchObject({
+      tool: 'orcamento_ajustar',
+      action: 'orcamento.reduzir',
+      params: { daily_budget_micros: 100 * REAL },
+      value_micros: 100 * REAL,
+      current_value_micros: 130 * REAL,
+      mode: 'APPROVAL',
+      status: 'aguardando_aprovacao',
+      undoes: feita.id,
+      undone_by: null,
+    });
+    expect((await desfazer(feita.id)).body.code).toBe('volta-ja-pedida');
+    expect((await aprovar(volta.body)).body.status).toBe('aprovada');
+    await cycle(dono);
+    const [res] = await ownerQuery<{ state: { daily_budget_micros: number }; version: number }>(
+      `select state, version from liame.sandbox_resource where tenant_id = $1 and resource_id = 'v1'`,
+      [dono.tenantId],
+    );
+    expect(res).toMatchObject({ state: { daily_budget_micros: 100 * REAL }, version: 3 });
+    expect((await getAction(dono, feita.id)).body.undone_by).toEqual({ id: volta.body.id, status: 'executada' });
+    const [audit] = await ownerQuery<{ action: string; after: { volta_de?: string } }>(
+      `select action, "after" from liame.audit_event where chain_key = $1 and resource_id = $2 order by chain_seq limit 1`,
+      [dono.tenantId, volta.body.id],
+    );
+    expect([audit!.action, audit!.after.volta_de]).toEqual(['acao.desfazer', feita.id]);
+
+    // Alguém mexeu no recurso depois da ação: a volta não é aceita, e nenhum pedido é criado.
+    await sandbox(dono, 'v2');
+    const outra = await requestAndApprove(dono, 120 * REAL, 'v2');
+    await cycle(dono);
+    await sandbox(dono, 'v2', 90 * REAL);
+    const recusada = await desfazer(outra.id);
+    expect([recusada.status, recusada.body.code]).toEqual([409, 'estado-mudou']);
+    expect((await getAction(dono, outra.id)).body.undone_by).toBeNull();
+
+    // Pausar no sandbox não tem a ferramenta inversa neste provedor (retomar é só de plataforma conectada).
+    await sandbox(dono, 'ad_1');
+    const pausa = await api.call('POST', '/v1/actions', { cookie: dono.cookie, body: { tool: 'anuncio_pausar', provider: 'sandbox', account_id: 'act_1', resource_id: 'ad_1', params: {} } });
+    await aprovar(pausa.body);
+    await cycle(dono);
+    expect((await getAction(dono, pausa.body.id)).body.status).toBe('executada');
+    expect((await desfazer(pausa.body.id)).body).toMatchObject({ status: 409, code: 'acao-sem-volta', detail: 'Esta ação não tem volta pelo Liame neste provedor.' });
+  });
+
   it('dois workers ao mesmo tempo executam a ação uma vez só (SKIP LOCKED)', async () => {
     const dono = await owner();
     await sandbox(dono);
