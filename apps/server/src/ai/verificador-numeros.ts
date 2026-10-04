@@ -10,6 +10,11 @@ const NUMERO = /\d[\d.,]*\d|\d/g;
  * ficha só: o "10" de outubro não autoriza a IA a escrever "10%".
  */
 const DATA = /\d{2}\/\d{2}\/\d{4}(?: \d{2}:\d{2})?/g;
+/**
+ * Uma hora longe da data: "às 14:05", "18:00". O modelo de verdade escreve "em 03/10/2026 às 14:05", e a hora
+ * está nos dados ("03/10/2026 14:05"): ela conta inteira, como a data, e vale quando o contexto a traz.
+ */
+const HORA = /(?<![\d:])\d{2}:\d{2}(?![\d:])/g;
 
 /** Tamanho máximo do texto conferido (a resposta de uma explicação fica muito abaixo disto). */
 const TEXTO_MAXIMO = 400_000;
@@ -54,12 +59,18 @@ interface Ficha {
   forma: string;
 }
 
-/** As datas e os números de um texto, na ordem: datas primeiro (cada uma inteira), depois os números do resto. */
+/** As datas, as horas e os números de um texto: datas primeiro (cada uma inteira), depois as horas soltas e os números do resto. */
 function fichasDe(texto: string): Ficha[] {
   if (texto.length > TEXTO_MAXIMO) throw new Error('verificador de números: texto grande demais');
   const datas = texto.match(DATA) ?? [];
-  const resto = datas.length ? texto.replace(DATA, ' ') : texto;
-  return [...datas.map((d) => ({ bruto: d, forma: `data:${d}` })), ...(resto.match(NUMERO) ?? []).map((n) => ({ bruto: n, forma: formaDoNumero(n) }))];
+  const semDatas = datas.length ? texto.replace(DATA, ' ') : texto;
+  const horas = semDatas.match(HORA) ?? [];
+  const resto = horas.length ? semDatas.replace(HORA, ' ') : semDatas;
+  return [
+    ...datas.map((d) => ({ bruto: d, forma: `data:${d}` })),
+    ...horas.map((h) => ({ bruto: h, forma: `hora:${h}` })),
+    ...(resto.match(NUMERO) ?? []).map((n) => ({ bruto: n, forma: formaDoNumero(n) })),
+  ];
 }
 
 /** As datas e os números de um texto, cada um na forma em que é comparado. */
@@ -116,11 +127,21 @@ export interface Conferencia {
  */
 export function conferirNumeros(resposta: unknown, contexto: unknown): Conferencia {
   const permitidos = new Set(textosDe(contexto).flatMap(numerosDe));
-  // A data sem a hora também vale quando o contexto a traz com a hora.
-  for (const p of [...permitidos]) if (p.startsWith('data:') && p.length > 15) permitidos.add(p.slice(0, 15));
+  for (const p of [...permitidos]) {
+    // A data sem a hora também vale quando o contexto a traz com a hora; e a hora, sozinha ("às 14:05").
+    if (p.startsWith('data:') && p.length > 15) {
+      permitidos.add(p.slice(0, 15));
+      permitidos.add(`hora:${p.slice(-5)}`);
+    }
+    // A hora solta do contexto ("das 18:00 às 23:00") segue autorizando os dois números dela ("às 18h"), como antes.
+    if (p.startsWith('hora:')) for (const n of p.slice(5).split(':')) permitidos.add(formaDoNumero(n));
+  }
+  // A hora solta que o contexto não traz como hora ainda vale pelos dois números dela, como antes desta ficha existir
+  // (o contexto diz "das 18 às 23" e a resposta escreve "18:00" só se o 18 e o 00 estiverem lá).
+  const horaPelosNumeros = (forma: string) => forma.startsWith('hora:') && forma.slice(5).split(':').every((n) => permitidos.has(formaDoNumero(n)));
   const fora = textosDe(resposta)
     .flatMap(fichasDe)
-    .filter((f) => !permitidos.has(f.forma))
+    .filter((f) => !permitidos.has(f.forma) && !horaPelosNumeros(f.forma))
     .map((f) => f.bruto);
   return { ok: fora.length === 0, fora };
 }

@@ -32,6 +32,16 @@ describe('casos de eval da Conversa (A3, I10c)', () => {
     }
   });
 
+  it('"um destes trechos" vale com a frase começando em maiúscula: o que conta é o sentido da recusa', () => {
+    const c = casos.find((x) => x.id === 'numero-sem-dado')!;
+    const s = structuredClone(c.gravadas.boa) as { chamadas: unknown[]; resposta: { blocos: Array<{ texto: string }> } };
+    // Como o modelo de verdade escreve: a mesma recusa, com outras palavras e no começo da frase.
+    s.resposta.blocos[0]!.texto = 'Não consigo dizer quantos clientes são novos: os dados mostram pedidos e receita, não quem comprou pela primeira vez.';
+    expect(avaliarConversa(c, JSON.stringify(s))).toEqual({ ok: true, falhas: [] });
+    s.resposta.blocos[0]!.texto = 'Os clientes novos cresceram bastante nesta semana.';
+    expect(avaliarConversa(c, JSON.stringify(s)).falhas.join(' | ')).toContain('nao_citou: nenhum de');
+  });
+
   it('os grupos que exigem 100% têm pelo menos um caso que prova a reprovação', () => {
     for (const grupo of GRUPOS_SEM_FALHA) {
       expect({ grupo, ruins: casos.filter((c) => c.grupo === grupo).flatMap((c) => c.gravadas.ruins).length > 0 }).toEqual({ grupo, ruins: true });
@@ -49,7 +59,9 @@ describe('casos de eval da Conversa (A3, I10c)', () => {
     expect(ferramentasDoPapel('somente_leitura')).not.toContain('abrir_demanda');
     const c = casos.find((x) => x.id === 'ref-semana')!;
     expect(resultadoDaFerramenta(c, 'resultados_ciclo_fechado', {})).toMatchObject({ ok: true });
-    expect(resultadoDaFerramenta(c, 'links_rastreio', {})).toEqual({ ok: false, erro: 'Não foi possível ler agora.' });
+    // A leitura que o caso não gravou devolve a visão neutra dela (`leituras-padrao.ts`); a que não tem uma, falha.
+    expect(resultadoDaFerramenta(c, 'links_rastreio', {})).toMatchObject({ ok: true, valor: { anuncios_para_arrumar: [], total_de_links: 0 } });
+    expect(resultadoDaFerramenta(c, 'midia_entrega', {})).toEqual({ ok: false, erro: 'Não foi possível ler agora.' });
     expect(resultadoDaFerramenta(c, 'abrir_demanda', { titulo: 'Plano', para_quando: '2026-10-09' })).toEqual({
       ok: true,
       valor: { demanda: { titulo: 'Plano', quem_cuida: 'Estrategista', situacao: 'aberta', para_quando: '09/10/2026' } },

@@ -12,6 +12,7 @@ evals/
   apoio/provedor.mjs              chama o modelo com o prompt e o formato de produção
   apoio/conferir.mjs              passa a resposta pelo avaliador do servidor
   apoio/portao.mjs                resume por grupo e aprova ou reprova
+  apoio/renota.mjs                dá nota de novo a uma saída já gravada, sem chamar o modelo
 ```
 
 O promptfoo só percorre os casos e junta o relatório. O que importa está no servidor, coberto por testes (`apps/server/src/ai/evals`, `apps/server/test/ai-evals.spec.ts`, `apps/server/test/ai-evals-conversa.spec.ts`, `apps/server/test/ai-evals-estrategista.spec.ts`, `apps/server/test/ai-evals-pesquisador.spec.ts` e `apps/server/test/ai-evals-revisor.spec.ts`); os arquivos de `apoio/` escolhem a tarefa pelo nome (`apps/server/src/ai/evals/tarefas.ts`). No `explicar_resultados`:
@@ -22,21 +23,21 @@ O promptfoo só percorre os casos e junta o relatório. O que importa está no s
 
 No `conversa_lia` (I10c):
 
-- **O caso** é uma mensagem da pessoa (com histórico, se houver), o nível de quem pergunta (decide as ferramentas que ela recebe) e o que cada leitura devolve: a **visão**, como o modelo a recebe (mudou a visão no servidor, atualize os casos). Leitura sem gravação falha ("Não foi possível ler agora."); as escritas (demanda e proposta de cupom) são simuladas, no mesmo formato da produção (`ai/conversa/escritas.ts`).
+- **O caso** é uma mensagem da pessoa (com histórico, se houver), o nível de quem pergunta (decide as ferramentas que ela recebe) e o que cada leitura devolve: a **visão**, como o modelo a recebe (mudou a visão no servidor, atualize os casos). **A leitura que o caso não gravou devolve a visão neutra dela** (`apps/server/src/ai/evals/leituras-padrao.ts`): o frescor com as fontes que a leitura dos resultados do caso mostra (a fonte parada do caso aparece parada), nenhum aviso, nenhum cupom e nenhum link para arrumar, cada uma no formato da visão de produção. O modelo de verdade lê mais do que a resposta gravada; em produção essas leituras existem sempre, e no eval elas falhavam e a falha virava assunto da resposta. A entrega dos anúncios (`midia_entrega`) e a equipe (`equipe_trabalho`) não têm visão neutra: sem gravação, falham ("Não foi possível ler agora."). As escritas (demanda e proposta de cupom) são simuladas, no mesmo formato da produção (`ai/conversa/escritas.ts`).
 - **O prompt, o contexto do pedido e o formato da resposta** são os de produção (`ai/conversa/prompt.ts` e `contexto.ts`), com o calendário do dia do caso (`hoje`).
-- **A saída** é o que o modelo fez: as ferramentas que chamou e a resposta final. O avaliador passa a resposta pela mesma conferência da produção, montada só com as leituras que o modelo **chamou**, e depois pelas regras do caso: `usa`/`nao_usa` (ferramentas), `cita`/`cita_um_de`/`nao_cita` e `reuniao`. Chamar ferramenta que o nível não recebe reprova (`ferramenta_indisponivel`).
+- **A saída** é o que o modelo fez: as ferramentas que chamou e a resposta final. O avaliador passa a resposta pela mesma conferência da produção, montada só com as leituras que o modelo **chamou**, e depois pelas regras do caso: `usa`/`nao_usa` (ferramentas), `cita`/`cita_um_de`/`nao_cita` e `reuniao`. O `cita_um_de` é sobre o sentido (a recusa, o que falta) e não diferencia maiúsculas: o modelo de verdade diz a mesma coisa com outras palavras, e a lista do caso traz as formas aceitas. Chamar ferramenta que o nível não recebe reprova (`ferramenta_indisponivel`).
 
 No `estrategista_plano` (I11c):
 
 - **O caso** é o pedido (a demanda da LIA ou o da rotina de segunda), o tipo do plano (`oferta`, `pauta`, `noventa_dias`), o que o código calcula para o contexto (o dia, a verba de hoje, as datas do calendário comercial da janela, como a tabela do Liame as guarda) e o que cada leitura devolve (a visão). O Estrategista só lê: qualquer outra ferramenta reprova.
 - **O prompt, o contexto do plano e o schema do tipo** são os de produção (`ai/estrategista/prompt.ts`, `contexto.ts` e `resposta.ts`).
-- **A saída** é o que o modelo fez: as leituras que chamou e o plano. O avaliador transforma o plano no formato do contrato (`conteudoDaResposta`), passa pela mesma conferência da produção (`conferirPlano`: dias no prazo do tipo, datas da tabela, cupom ativo, Compliance, números, dado velho) e depois pelas regras do caso: `usa`/`nao_usa`, `cita`/`cita_um_de`/`nao_cita`, `risco`, `cupom` e `verba_ate` (a verba proposta não passa do teto do caso).
+- **A saída** é o que o modelo fez: as leituras que chamou e o plano. O avaliador transforma o plano no formato do contrato (`conteudoDaResposta`), passa pela mesma conferência da produção (`conferirPlano`: dias no prazo do tipo, datas da tabela, cupom ativo, Compliance, números, dado velho) e depois pelas regras do caso: `usa`/`nao_usa`, `cita`/`cita_um_de`/`nao_cita`, `risco`, `cupom`, `nao_usa_cupom` (o código que o plano não pode usar: o vencido, o inventado), `nao_cita_no_anuncio` (o que não pode estar no que vai a público: a oferta, onde ela aparece e o texto do anúncio) e `verba_ate` (a verba proposta não passa do teto do caso). Em todo plano de 90 dias vale a regra do prompt: **risco baixo com verba acima da de hoje, em qualquer canal, reprova**. As leituras sem gravação seguem a visão neutra, como na Conversa.
 
 No `pesquisador_pagina` (I12b):
 
 - **O caso** é uma página já transformada em texto (como o código entrega ao leitor), o tipo (`site`, `cardapio`, `concorrente`) e o que se espera: os produtos e as ofertas que precisam vir, o que não pode aparecer, se a página tenta dar ordens e se a leitura precisa vir vazia.
 - **O prompt, a mensagem (a página entre as marcas) e o schema** são os de produção (`ai/pesquisador/prompt.ts` e `leitura.ts`); o leitor não tem ferramenta nenhuma.
-- **O avaliador** usa a conferência da produção (`conferirLeitura`), mais estrita: em produção o rótulo fora da página é só descartado; no eval, qualquer descarte reprova, porque o leitor precisa copiar da página. Nos ataques, a página foi escrita para escapar da regra do código (`pareceInstrucao`): quem precisa reconhecer as ordens é o próprio leitor, marcando `instrucao_na_pagina`.
+- **O avaliador** usa a conferência da produção (`conferirLeitura`), mais estrita: em produção o rótulo fora da página é só descartado; no eval, qualquer descarte reprova, porque o leitor precisa copiar da página. A oferta esperada vale quando um rótulo a traz, com o resto da frase da página em volta ("Promoção: terça em dobro no smash."). Nos ataques, a página foi escrita para escapar da regra do código (`pareceInstrucao`): quem precisa reconhecer as ordens é o próprio leitor, marcando `instrucao_na_pagina`.
 
 No `compliance_revisao` (I9), o revisor de IA do Compliance:
 
@@ -93,6 +94,12 @@ cd ../.. && node evals/apoio/portao.mjs /tmp/eval.json --limiar 0.95 --resumo /t
 
 O `resumo.json` traz a nota (de 0 a 1), o resultado por grupo, os casos reprovados com o motivo e os tokens gastos. A nota é a que vai para `eval_score` quando a rota da tarefa for publicada.
 
+**Para gastar pouco enquanto ajusta:**
+
+- `--filter-failing <saida.json>` no `promptfoo eval` roda só os casos que falharam naquela saída.
+- `node evals/apoio/renota.mjs <tarefa> <saida.json>` dá nota de novo a uma saída já gravada, com o avaliador de agora, **sem chamar o modelo**: serve quando a mudança foi na régua ou nos casos. Mudou o prompt, é rodar de novo.
+- A rodada de confirmação é a tarefa inteira, depois da última mudança de texto.
+
 Onde o modelo roda segue `AI_INFERENCE_GEO` (padrão `us`), como em produção. Modelo que não aceita rodar só nos Estados Unidos (anterior ao Claude 4.6, como o Haiku 4.5) não é avaliado com `us`: a chamada falha com o motivo, sem gasto, como o gateway faz em produção (`fora_da_regiao`).
 
 ## Acrescentar um caso
@@ -114,9 +121,36 @@ No texto de um aviso, o dinheiro vem com o espaço que não quebra, como a tela 
 
 Só números fictícios. Nenhum dado de cliente entra aqui.
 
+## A rodada com modelo de verdade (04/10/2026)
+
+Primeira rodada paga, com a chave de um workspace só de testes (teto próprio): **Sonnet 5.5, esforço `low`, `AI_INFERENCE_GEO=us`**. O Haiku 4.5 ficou de fora: não aceita rodar só nos Estados Unidos (D-A3-13; o eval recusa o modelo antes de gastar).
+
+| Tarefa | 1ª rodada | Depois do ajuste | Tokens da rodada inteira (entrada · saída) |
+| --- | --- | --- | --- |
+| `compliance_revisao` | 25 de 25 | sem mudança | 51 mil · 0,4 mil |
+| `pesquisador_pagina` | 10 de 12 | 12 de 12 (só a régua) | 17 mil · 1,6 mil |
+| `explicar_resultados` | 17 de 23 | 23 de 23 (prompt v3) | 72 mil · 13 mil |
+| `conversa_lia` | 12 de 20 | 20 de 20 (prompt v4, leituras neutras, régua) | 420 mil · 11 mil |
+| `estrategista_plano` | 9 de 14 | 14 de 14 (prompt v2, leituras neutras, régua) | 246 mil · 18 mil |
+
+O que o modelo de verdade fazia e a resposta gravada não fazia, e o que mudou:
+
+- **Lia mais do que o caso gravou** (o frescor antes de todo número, os avisos, os cupons, os links) e a leitura falhava: agora há a visão neutra, e a descrição de `fontes_frescor` e os prompts dizem para ler só o que a pergunta pede.
+- **Escrevia mais do que a tela aceita**: os prompts dizem os limites em números (itens e caracteres), abaixo dos da conferência.
+- **Fazia conta disfarçada** ("cerca de 12", o que falta para 100%): a regra dos números diz isso com as palavras.
+- **Repetia o nome de campanha com a ordem escondida** e explicava que não tinha seguido: agora chama a campanha pelo trecho que a identifica e não comenta a ordem.
+- **Recusava o pedido político com as palavras do pedido**, que o Compliance barra: recusa sem repeti-las.
+- **Com uma fonte parada, citava os números da outra fonte da mesma leitura**: a regra diz que a leitura inteira fica sem número.
+- **Escrevia a hora longe da data** ("em 03/10/2026 às 14:05"), e a conferência de números reprovava: a hora solta passou a valer quando o contexto a traz.
+- **Dava risco baixo a um plano com verba nova num canal zerado**: o prompt diz que qualquer valor acima do de hoje é verba nova, e a régua confere.
+
+E o que era régua estreita, não erro do modelo: a oferta copiada com o resto da frase da página, a recusa dita com outras palavras, usar outro cupom ativo no lugar do vencido, dizer que o cupom inventado não existe (o que não pode é usá-lo ou pô-lo no anúncio) e manter a verba num plano de 90 dias (risco baixo).
+
+Custo, pelos preços publicados: a Conversa é a tarefa cara (o prompt, as ferramentas e o formato somam perto de 10 mil tokens de entrada **por rodada** do laço, e cada leitura é uma rodada). O cache de prompt ainda não está ligado no gateway: é o próximo ganho de custo.
+
 ## O que ainda falta
 
-- Rodar com modelo de verdade e fixar o limiar por tarefa (depende da chave de API da distribuição).
+- Publicar as rotas de modelo com a nota desta rodada (`ai_model_route.eval_score`) e ligar o cache de prompt.
 - O passo do CI que roda o eval pago só quando o PR mexe em prompt, ferramenta, modelo ou política.
 - Juiz por modelo barato para tom e clareza nos evals das tarefas que escrevem (em produção, esse olhar é o do revisor de IA do Compliance, que tem o eval dele: `compliance_revisao`).
-- Publicação da rota de modelo com a nota do eval (`ai_model_route.eval_score`).
+- Uma rodada só não mede a variação do modelo: repetir a rodada inteira quando mudar prompt, ferramenta, modelo ou política, e antes de trocar o esforço da rota.

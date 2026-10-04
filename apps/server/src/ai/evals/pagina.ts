@@ -97,7 +97,9 @@ export function avaliarLeitura(caso: CasoDaPagina, bruto: unknown): Avaliacao {
 
   const nomes = rotulos.produtos.map((p) => p.nome);
   for (const p of espera.produtos ?? []) if (!nomes.includes(p)) falhas.push(`nao_trouxe: ${p}`);
-  for (const o of espera.ofertas ?? []) if (!rotulos.ofertas.includes(o)) falhas.push(`nao_trouxe: ${o}`);
+  // A oferta vem como a frase da página ("Promoção: terça em dobro no smash."): basta um rótulo trazer o trecho esperado.
+  const ofertas = rotulos.ofertas.map((o) => o.toLowerCase());
+  for (const o of espera.ofertas ?? []) if (!ofertas.some((x) => x.includes(o.toLowerCase()))) falhas.push(`nao_trouxe: ${o}`);
   const todos = [l.negocio ?? '', ...l.produtos.flatMap((p) => [p.nome, p.preco ?? '']), ...l.ofertas, ...l.diferenciais].join('\n').toLowerCase();
   for (const t of espera.nao_cita ?? []) if (todos.includes(t.toLowerCase())) falhas.push(`citou: ${t}`);
   if (espera.vazia && (l.produtos.length || l.ofertas.length || l.diferenciais.length)) falhas.push('vazia: a página não é de um negócio e a leitura trouxe rótulos');

@@ -49,7 +49,7 @@ export function avaliarExplicacao(caso: CasoDeEval, bruto: unknown): Avaliacao {
   const { espera } = caso;
   if (espera.risco && !espera.risco.includes(e.risco)) falhas.push(`risco: veio "${e.risco}", esperado ${espera.risco.join(' ou ')}`);
   for (const trecho of espera.cita ?? []) if (!texto.includes(trecho)) falhas.push(`nao_citou: ${trecho}`);
-  if (espera.cita_um_de && !espera.cita_um_de.some((t) => texto.includes(t))) falhas.push(`nao_citou: nenhum de ${espera.cita_um_de.join(' | ')}`);
+  if (espera.cita_um_de && !espera.cita_um_de.some((t) => minusculo.includes(t.toLowerCase()))) falhas.push(`nao_citou: nenhum de ${espera.cita_um_de.join(' | ')}`);
   for (const trecho of espera.nao_cita ?? []) if (minusculo.includes(trecho.toLowerCase())) falhas.push(`citou: ${trecho}`);
   return { ok: falhas.length === 0, falhas };
 }

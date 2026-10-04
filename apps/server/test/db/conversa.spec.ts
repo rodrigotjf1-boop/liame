@@ -218,8 +218,8 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     expect(enviado(mock, 0)).toContain(`brand_id ${d.brandId}`);
     expect(enviado(mock, 1)).toContain('R$ 200,00');
     expect(await usosDaConversa(d.tenantId)).toEqual([
-      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@3', outcome: 'ok' },
-      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@3', outcome: 'ok' },
+      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@4', outcome: 'ok' },
+      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@4', outcome: 'ok' },
     ]);
     // O retorno da pessoa ("Fez sentido") vale para a resposta da conversa, como para o Explicar.
     const retorno = await api.call('POST', '/v1/ai/feedback', { cookie: d.cookie, body: { usage_id: m.usage_id, verdict: 'fez_sentido' } });

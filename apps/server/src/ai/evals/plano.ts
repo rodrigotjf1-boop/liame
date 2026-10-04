@@ -8,6 +8,7 @@ import { conferirPlano, conteudoDaResposta } from '../estrategista/resposta.js';
 import { ESTRATEGISTA } from '../estrategista/prompt.js';
 import { limparJson } from '../sanitizar.js';
 import type { Avaliacao } from './avaliar.js';
+import { leituraPadrao } from './leituras-padrao.js';
 
 // Casos de eval do Estrategista (A3, I11c): dados versionados em `evals/estrategista_plano/casos.jsonl`. Cada caso é um
 // pedido (a demanda que a LIA registrou, ou o da rotina de segunda), o tipo do plano, o que o código calcula para o
@@ -55,6 +56,10 @@ export const CasoDoPlano = z.strictObject({
     risco: z.array(z.enum(['baixo', 'medio', 'alto'])).min(1).optional(),
     /** Na oferta: o cupom esperado (nulo = sem cupom). */
     cupom: z.string().nullable().optional(),
+    /** Na oferta: códigos que não podem ser o cupom do plano (o vencido, o inventado), sem diferenciar maiúsculas. */
+    nao_usa_cupom: z.array(z.string().min(1)).optional(),
+    /** Na oferta: trechos que não podem estar no que vai a público (a oferta, onde ela aparece e o texto do anúncio). */
+    nao_cita_no_anuncio: z.array(z.string().min(1)).optional(),
     /** No plano de 90 dias: a verba proposta não pode passar destes valores, por canal. */
     verba_ate: z.strictObject({ meta: z.int().min(0), google: z.int().min(0) }).optional(),
   }),
@@ -108,9 +113,15 @@ export function dadosDoCaso(caso: CasoDoPlano): DadosDoPlano {
   };
 }
 
-/** O que a leitura devolve no caso: a gravada; a que não foi gravada falha. Só leituras: o Estrategista não escreve. */
+/**
+ * O que a leitura devolve no caso: a gravada; sem gravação, a visão neutra dela (`leituras-padrao.ts`: as fontes do
+ * caso, nenhum aviso, nenhum cupom, nenhum link para arrumar); a que não tem visão neutra falha. Só leituras: o
+ * Estrategista não escreve.
+ */
 export function leituraDoCaso(caso: CasoDoPlano, nome: string): { ok: true; valor: unknown } | { ok: false; erro: string } {
   if (nome in caso.leituras) return { ok: true, valor: limparJson(caso.leituras[nome]).valor };
+  const padrao = leituraPadrao(caso, nome);
+  if (padrao !== undefined) return { ok: true, valor: limparJson(padrao).valor };
   return { ok: false, erro: 'Não foi possível ler agora.' };
 }
 
@@ -163,10 +174,21 @@ export function avaliarPlano(caso: CasoDoPlano, bruto: unknown): Avaliacao {
     .join('\n');
   const minusculo = corpo.toLowerCase();
   for (const trecho of espera.cita ?? []) if (!corpo.includes(trecho)) falhas.push(`nao_citou: ${trecho}`);
-  if (espera.cita_um_de && !espera.cita_um_de.some((t) => corpo.includes(t))) falhas.push(`nao_citou: nenhum de ${espera.cita_um_de.join(' | ')}`);
+  if (espera.cita_um_de && !espera.cita_um_de.some((t) => minusculo.includes(t.toLowerCase()))) falhas.push(`nao_citou: nenhum de ${espera.cita_um_de.join(' | ')}`);
   for (const trecho of espera.nao_cita ?? []) if (minusculo.includes(trecho.toLowerCase())) falhas.push(`citou: ${trecho}`);
   if (espera.risco && !espera.risco.includes(content.risk)) falhas.push(`risco: veio "${content.risk}", esperado ${espera.risco.join(' ou ')}`);
+  // A regra do prompt, em qualquer caso: risco baixo é de plano que não pede verba nova.
+  if (content.kind === 'noventa_dias' && content.risk === 'baixo' && (content.budget.proposal.meta > content.budget.today.meta || content.budget.proposal.google > content.budget.today.google)) {
+    falhas.push('risco: veio "baixo" num plano que pede verba nova');
+  }
   if (espera.cupom !== undefined && content.kind === 'oferta' && content.coupon_code !== espera.cupom) falhas.push(`cupom: veio ${content.coupon_code ?? 'nenhum'}, esperado ${espera.cupom ?? 'nenhum'}`);
+  if (content.kind === 'oferta' && content.coupon_code && espera.nao_usa_cupom?.some((c) => c.toLowerCase() === content.coupon_code!.toLowerCase())) {
+    falhas.push(`cupom: veio ${content.coupon_code}, que o plano não pode usar`);
+  }
+  if (content.kind === 'oferta' && espera.nao_cita_no_anuncio) {
+    const publico = [content.offer, content.where, content.ad_text].join('\n').toLowerCase();
+    for (const trecho of espera.nao_cita_no_anuncio) if (publico.includes(trecho.toLowerCase())) falhas.push(`citou no anúncio: ${trecho}`);
+  }
   if (espera.verba_ate && content.kind === 'noventa_dias') {
     const { meta, google } = content.budget.proposal;
     if (meta > espera.verba_ate.meta || google > espera.verba_ate.google) falhas.push(`verba: proposta ${meta}/${google}, acima de ${espera.verba_ate.meta}/${espera.verba_ate.google}`);
