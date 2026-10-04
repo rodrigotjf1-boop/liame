@@ -1,6 +1,6 @@
 import { type PlanBudget, PlanContent, type PlanKind } from '@liame/contracts';
 import { z } from 'zod';
-import { conferirTexto, normalizar } from '../../policy/texto.js';
+import { conferirTexto, normalizar, type RegraDeTexto } from '../../policy/texto.js';
 import { menosDias } from '../../results/fora-do-normal.js';
 import { conferirNumeros } from '../verificador-numeros.js';
 import { contasDaVerba, propostaDoPlano, textosDoPlano } from './plano.js';
@@ -176,7 +176,7 @@ function problemaDosCampos(c: PlanContent): string | null {
  * O plano serve para Aprovações? Devolve o motivo da recusa (e o detalhe, para o log) ou nulo quando serve. Melhor
  * nenhum plano do que um com número que o sistema não entregou ou com data que não está no calendário (A3-5).
  */
-export function conferirPlano(c: PlanContent, p: PermitidosNoPlano): { recusa: RecusaDoPlano; detalhe: string[] } | null {
+export function conferirPlano(c: PlanContent, p: PermitidosNoPlano): { recusa: RecusaDoPlano; detalhe: string[]; regras?: RegraDeTexto[] } | null {
   const campos = problemaDosCampos(c);
   if (campos) return { recusa: 'formato', detalhe: [campos] };
   const amanha = menosDias(p.hoje, -1);
@@ -202,7 +202,7 @@ export function conferirPlano(c: PlanContent, p: PermitidosNoPlano): { recusa: R
   if (achados.length) return { recusa: 'trecho_proibido', detalhe: achados };
   // Compliance (I9): o código decide antes de qualquer revisor de IA. O que a marca não diz (I8) vale igual.
   const regras = conferirTexto(textos, { ignorar: p.nomes, daMarca: p.daMarca });
-  if (regras.length) return { recusa: 'compliance', detalhe: regras.map((x) => `${x.regra}: ${x.trecho}`) };
+  if (regras.length) return { recusa: 'compliance', detalhe: regras.map((x) => `${x.regra}: ${x.trecho}`), regras: [...new Set(regras.map((x) => x.regra))] };
   // O que o plano propõe nos campos e as contas da verba (feitas pelo código) também podem aparecer nos textos.
   const doPlano = [propostaDoPlano(c), c.kind === 'noventa_dias' ? contasDaVerba(c.budget) : []];
   const numeros = conferirNumeros(textos, [p.emDia, doPlano]);

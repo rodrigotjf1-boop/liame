@@ -391,6 +391,13 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     const id = await demanda(d, 'promocao');
     responder(roteiro(pede('resultados_ciclo_fechado', { brand_id: d.brandId, ...semana }), responde(oferta({ porques: ['A Combo sexta trouxe 11 pedidos.'] }))));
     expect(await rodarFila(d)).toEqual([{ tipo: 'demanda', id, tenantId: d.tenantId, status: 'recusado', motivo: 'numero_fora' }]);
+    // D-A3-15: o plano que a conferência recusou fica contado para Sua equipe, sem o texto.
+    expect(
+      await ownerQuery<{ member: string; workflow: string; kind: string; rules: string[]; items: number }>(
+      `select member, workflow, kind, rules, items from liame.ai_refusal where tenant_id = $1 order by kind`,
+      [d.tenantId],
+    ),
+    ).toEqual([{ member: 'estrategista', workflow: 'estrategista.plano', kind: 'numero_fora', rules: [], items: 1 }]);
     const depois = await demandaNoBanco(id);
     expect(depois).toMatchObject({ status: 'aberta', attempts: 1, last_error: 'numero_fora' });
     expect(depois.espera_min).toBeGreaterThanOrEqual(14);

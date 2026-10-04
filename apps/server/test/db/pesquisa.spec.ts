@@ -160,6 +160,16 @@ describe.skipIf(!hasDb)('Pesquisador: pedido, robots.txt, leitura, quarentena e 
     // O que fica: os rótulos conferidos e as contas do que saiu; a página, não.
     const [linha] = await ownerQuery<{ result: Record<string, unknown> }>(`select result from liame.research_request where id = $1`, [p.id]);
     expect(linha!.result).toMatchObject({ descartes: { numero: 1, fora_da_pagina: 1 } });
+    // D-A3-15: os rótulos descartados ficam contados para Sua equipe, uma linha por motivo, sem o texto.
+    expect(
+      await ownerQuery<{ member: string; workflow: string; kind: string; rules: string[]; items: number }>(
+      `select member, workflow, kind, rules, items from liame.ai_refusal where tenant_id = $1 order by kind`,
+      [d.tenantId],
+    ),
+    ).toEqual([
+      { member: 'pesquisador', workflow: 'pesquisador.pagina', kind: 'fora_da_pagina', rules: [], items: 1 },
+      { member: 'pesquisador', workflow: 'pesquisador.pagina', kind: 'numero_fora', rules: [], items: 1 },
+    ]);
     expect(JSON.stringify(linha!.result)).not.toContain('Pedidos pelo nosso site');
     // O texto da página foi ao modelo só na mensagem, entre as marcas; as instruções são as do prompt.
     const [troca] = await ownerQuery<{ request: { instructions: string; messages: Array<{ content: string }> } }>(

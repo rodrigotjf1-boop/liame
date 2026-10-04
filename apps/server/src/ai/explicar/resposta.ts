@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { conferirTexto } from '../../policy/texto.js';
+import { conferirTexto, type RegraDeTexto } from '../../policy/texto.js';
 import { conferirNumeros } from '../verificador-numeros.js';
 import { type ContextoComAviso, nomesDoContexto } from './contexto.js';
 
@@ -34,7 +34,11 @@ export type Recusa = 'vazia' | 'longa' | 'numero_fora' | 'trecho_proibido' | 'co
  * quando serve. Recusada, a tela mostra o texto sem IA: melhor nenhuma explicação da IA do que uma com
  * número que o sistema não calculou (A3-5). `daMarca`: o que a marca nunca diz (dossiê, I8).
  */
-export function conferirExplicacao(e: Explicacao, contexto: ContextoComAviso, opcoes: { daMarca?: string[] } = {}): { recusa: Recusa; detalhe: string[] } | null {
+export function conferirExplicacao(
+  e: Explicacao,
+  contexto: ContextoComAviso,
+  opcoes: { daMarca?: string[] } = {},
+): { recusa: Recusa; detalhe: string[]; regras?: RegraDeTexto[] } | null {
   const textos = [e.o_que_aconteceu, ...e.motivos, e.risco_motivo, ...e.o_que_fazer];
   if (!e.motivos.length || !e.o_que_fazer.length || textos.some((t) => !t.trim())) return { recusa: 'vazia', detalhe: [] };
   if (
@@ -54,7 +58,8 @@ export function conferirExplicacao(e: Explicacao, contexto: ContextoComAviso, op
   // própria empresa pode ser citado; o que se confere é o que a IA escreveu em volta. O que a marca nunca diz
   // (dossiê, I8) vale do mesmo jeito.
   const regras = conferirTexto(textos, { ignorar: nomesDoContexto(contexto), daMarca: opcoes.daMarca });
-  if (regras.length) return { recusa: 'compliance', detalhe: regras.map((r) => `${r.regra}: ${r.trecho}`) };
+  // `regras`: só os nomes das regras que bateram, para a contagem de Sua equipe (o trecho fica no log, não no banco).
+  if (regras.length) return { recusa: 'compliance', detalhe: regras.map((r) => `${r.regra}: ${r.trecho}`), regras: [...new Set(regras.map((r) => r.regra))] };
   const numeros = conferirNumeros(textos, contexto);
   if (!numeros.ok) return { recusa: 'numero_fora', detalhe: numeros.fora };
   // O aviso crítico já foi classificado pelas regras da Atenção: a explicação não o rebaixa.

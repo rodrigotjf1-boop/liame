@@ -10,6 +10,7 @@ import { ESTRATEGISTA, PROMPT_ESTRATEGISTA, TAREFA_ESTRATEGISTA } from '../ai/es
 import { conferirPlano, conteudoDaResposta, JANELA_DO_TIPO, RESPOSTA_DO_TIPO } from '../ai/estrategista/resposta.js';
 import { AiError, type AiErrorCode, AiGateway, type FerramentaIa } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
+import { registrarRecusa } from '../ai/recusas.js';
 import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import { FerramentasDeLeitura } from '../ai/registro/leituras.js';
 import { limparJson } from '../ai/sanitizar.js';
@@ -18,7 +19,7 @@ import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { dossieParaOModelo, proibidasDaMarca } from '../marca/marca.service.js';
 import { nomesDaMarca, prazoDoPlano } from '../planos/prazo.js';
-import { nomesPoliticos } from '../policy/texto.js';
+import { nomesPoliticos, REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
 
@@ -76,6 +77,22 @@ export class EstrategistaService {
     private readonly resultados: ResultsService,
   ) {}
 
+  /** O plano que a conferência recusou entra na contagem de Sua equipe, sem o texto (D-A3-15). */
+  private async anotarRecusa(item: ItemDoEstrategista, usageId: string, kind: string, regras?: readonly string[]): Promise<void> {
+    if (!this.database) return;
+    await registrarRecusa(this.database, {
+      tenantId: item.tenantId,
+      brandId: item.brandId,
+      userId: null,
+      usageId,
+      member: ESTRATEGISTA.key,
+      workflow: WORKFLOW,
+      kind,
+      rules: regras,
+      rulesVersion: regras?.length ? REGRAS_DE_TEXTO_VERSAO : null,
+    });
+  }
+
   /** Gera o plano do item. O relógio injetado vale para a operação inteira (V34). */
   async gerar(item: ItemDoEstrategista, agora = new Date()): Promise<ResultadoDoEstrategista> {
     if (!this.database) throw new Error('estrategista: sem banco');
@@ -129,6 +146,7 @@ export class EstrategistaService {
     const mapeado = conteudoDaResposta(item.kind, r.object, dados.verbaDeHoje);
     if (!mapeado.ok) {
       this.logger.warn(`plano do Estrategista fora do formato (${mapeado.detalhe.join(' | ')}); uso ${r.usageId}`);
+      await this.anotarRecusa(item, r.usageId, 'formato');
       return { status: 'recusado', motivo: 'formato' };
     }
     const content = mapeado.content;
@@ -149,6 +167,7 @@ export class EstrategistaService {
     if (recusa) {
       // O que foi recusado e por quê fica no log (números não são dado pessoal) e no conteúdo guardado da chamada.
       this.logger.warn(`plano do Estrategista recusado (${recusa.recusa}${recusa.detalhe.length ? `: ${recusa.detalhe.slice(0, 8).join(' | ')}` : ''}); uso ${r.usageId}`);
+      await this.anotarRecusa(item, r.usageId, recusa.recusa, recusa.regras);
       return { status: 'recusado', motivo: recusa.recusa };
     }
 

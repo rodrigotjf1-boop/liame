@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { conferirTexto } from '../../policy/texto.js';
+import { conferirTexto, type RegraDeTexto } from '../../policy/texto.js';
 import { conferirNumeros } from '../verificador-numeros.js';
 
 // O formato da resposta da LIA na conversa (A3, I10; protótipo P5): blocos na ordem da leitura e, numa decisão
@@ -79,7 +79,7 @@ function problemaDaReuniao(r: NonNullable<RespostaDaLia['reuniao']>): RecusaDaCo
  * A resposta serve para a tela? Devolve o motivo da recusa (e o detalhe, para o log) ou nulo quando serve.
  * Melhor nenhuma resposta da LIA do que uma com número que o sistema não entregou (A3-5).
  */
-export function conferirResposta(r: RespostaDaLia, permitidos: PermitidosNaConversa): { recusa: RecusaDaConversa; detalhe: string[] } | null {
+export function conferirResposta(r: RespostaDaLia, permitidos: PermitidosNaConversa): { recusa: RecusaDaConversa; detalhe: string[]; regras?: RegraDeTexto[] } | null {
   const blocos = r.blocos.map((b) => b.texto);
   if (!r.blocos.length || blocos.some((t) => !t.trim())) return { recusa: 'vazia', detalhe: [] };
   if (r.blocos.length > LIMITES_DA_RESPOSTA.blocos || blocos.some((t) => t.length > LIMITES_DA_RESPOSTA.bloco) || blocos.join('').length > LIMITES_DA_RESPOSTA.total) {
@@ -97,7 +97,7 @@ export function conferirResposta(r: RespostaDaLia, permitidos: PermitidosNaConve
   if (achados.length) return { recusa: 'trecho_proibido', detalhe: achados };
   // Compliance (I9): o código decide antes de qualquer revisor de IA. O que a marca não diz (I8) vale igual.
   const regras = conferirTexto(textos, { ignorar: permitidos.nomes, daMarca: permitidos.daMarca });
-  if (regras.length) return { recusa: 'compliance', detalhe: regras.map((x) => `${x.regra}: ${x.trecho}`) };
+  if (regras.length) return { recusa: 'compliance', detalhe: regras.map((x) => `${x.regra}: ${x.trecho}`), regras: [...new Set(regras.map((x) => x.regra))] };
   const numeros = conferirNumeros(textos, permitidos.emDia);
   if (!numeros.ok) {
     // O número está numa leitura com fonte atrasada: não é invenção, mas a LIA não analisa dado velho.

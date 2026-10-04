@@ -242,6 +242,13 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     // A resposta recusada não conta no limite da conversa; o custo dela está registrado.
     expect(r.eventos.at(-1)!.conversation).toMatchObject({ lia_answers: 0 });
     expect(await usosDaConversa(d.tenantId)).toHaveLength(2);
+    // D-A3-15: a recusa fica contada para Sua equipe (a LIA, pelos números), sem o texto.
+    expect(
+      await ownerQuery<{ member: string; workflow: string; kind: string; rules: string[]; items: number }>(
+      `select member, workflow, kind, rules, items from liame.ai_refusal where tenant_id = $1 order by kind`,
+      [d.tenantId],
+    ),
+    ).toEqual([{ member: 'lia', workflow: 'conversa.lia', kind: 'numero_fora', rules: [], items: 1 }]);
 
     const velho = await dono({ lidaHaHoras: 96 });
     responder(roteiro(pede('resultados_ciclo_fechado', { brand_id: velho.brandId, ...PERIODO }), responde(['paragrafo', 'O investimento foi de R$ 200,00.'])));

@@ -4,6 +4,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { AiError, type AiErrorCode, AiGateway } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
+import { registrarRecusa } from '../ai/recusas.js';
 import { conferirLeitura, type DescartesDaLeitura, LeituraDaPagina, mensagemDaPagina, type RotulosConferidos, type TipoDePagina } from '../ai/pesquisador/leitura.js';
 import { PESQUISADOR, PROMPT_PESQUISADOR, TAREFA_PESQUISADOR } from '../ai/pesquisador/prompt.js';
 import { ITENS_POR_SUGESTAO, juntarItens, type SugestoesDaLeitura, sugestoesDaLeitura } from '../ai/pesquisador/sugestoes.js';
@@ -15,6 +16,7 @@ import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { ResponseTooLargeError, safeGet, UnsafeUrlError } from '../events/safe-http.js';
 import { DOSSIE_VAZIO } from '../marca/dossie.js';
+import { REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { DIAS_DA_RECUSA, recusados } from '../marca/sugestoes.js';
 import { decodificarCorpo, ehPagina, pareceInstrucao, TEXTO_MINIMO, textoDaPagina } from '../pesquisa/pagina.js';
 import { NOME_DO_ROBO, podeLer, type RegraDoRobots, regrasDoRobots, ROBOTS_MAXIMO } from '../pesquisa/robots.js';
@@ -179,7 +181,25 @@ export class PesquisadorService {
     }
 
     // ---- 5. a conferência e as sugestões
-    const { rotulos, descartes } = conferirLeitura(leitura.data, tudo);
+    const { rotulos, descartes, regras } = conferirLeitura(leitura.data, tudo);
+    // Os rótulos que a conferência descartou entram na contagem de Sua equipe, sem o texto (D-A3-15): uma linha por
+    // motivo, com quantos foram. Dado pessoal e regra de texto são do Compliance.
+    for (const [motivo, n] of Object.entries(descartes)) {
+      if (!n) continue;
+      const doCompliance = motivo === 'compliance' || motivo === 'dado_pessoal';
+      await registrarRecusa(this.database, {
+        tenantId: p.tenantId,
+        brandId: p.brandId,
+        userId: p.requestedBy,
+        usageId: r.usageId,
+        member: PESQUISADOR.key,
+        workflow: WORKFLOW,
+        kind: doCompliance ? 'compliance' : motivo === 'numero' ? 'numero_fora' : motivo,
+        rules: motivo === 'dado_pessoal' ? ['dado_pessoal'] : motivo === 'compliance' ? regras : [],
+        rulesVersion: doCompliance ? REGRAS_DE_TEXTO_VERSAO : null,
+        items: n,
+      });
+    }
     const sugestoes = sugestoesDaLeitura(p.kind, rotulos, lido.dossie, (s) => recusados(lido.decididas.filter((d) => d.section === s)), {
       host: final.hostname,
       dia: dia(diaNoFuso(agora, lido.fuso))!,

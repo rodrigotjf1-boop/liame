@@ -57,6 +57,11 @@ export interface ContagensDoMes {
   mesmaDirecao: number;
   /** Soma do arrependimento das comparáveis, em micros de real (negativo: as recomendações teriam feito melhor). */
   arrependimentoMicros: bigint;
+  /**
+   * O que a conferência recusou, por funcionário que escreveu (`ai_refusal`, D-A3-15): os textos barrados pelo
+   * Compliance (regra de texto ou revisor de IA) e as outras recusas (número, formato, dado velho).
+   */
+  recusasPorMembro: Map<string, { doCompliance: number; outras: number }>;
 }
 
 const qtd = (key: string, n: number): TeamStat => ({ key, value: String(n), unit: 'qtd' });
@@ -69,20 +74,27 @@ export function numerosDoMembro(def: DefinicaoDoMembro, c: ContagensDoMes): Team
     { fezSentido: 0, discordo: 0 },
   );
   const chave: Membro = def.key;
+  // O que a conferência não deixou aparecer, do que este funcionário escreveu (por qualquer motivo).
+  const recusas = c.recusasPorMembro.get(chave);
+  const retiradas = qtd('retiradas_na_conferencia', (recusas?.doCompliance ?? 0) + (recusas?.outras ?? 0));
   switch (chave) {
     case 'lia':
-      return [qtd('respostas', soma(c.respostasPorFluxo)), qtd('fez_sentido', retorno.fezSentido), qtd('discordo', retorno.discordo), qtd('demandas', c.demandasDaLia)];
+      return [qtd('respostas', soma(c.respostasPorFluxo)), qtd('fez_sentido', retorno.fezSentido), qtd('discordo', retorno.discordo), qtd('demandas', c.demandasDaLia), retiradas];
     case 'analista':
-      return [qtd('explicacoes', soma(c.respostasPorFluxo)), qtd('fez_sentido', retorno.fezSentido), qtd('discordo', retorno.discordo)];
+      return [qtd('explicacoes', soma(c.respostasPorFluxo)), qtd('fez_sentido', retorno.fezSentido), qtd('discordo', retorno.discordo), retiradas];
     case 'relatorios':
       return [qtd('revisoes', c.revisoes), qtd('com_leitura_da_ia', c.revisoesComLeituraDaIa), qtd('so_do_sistema', c.revisoes - c.revisoesComLeituraDaIa)];
-    case 'compliance':
-      // As regras rodam no código e a recusa ainda não fica registrada por texto: sem números por enquanto.
-      return [];
+    case 'compliance': {
+      // Conferidos: todo texto de IA que chegou à conferência (cada resposta atendida). Barrados: os que uma regra de
+      // texto (ou o revisor de IA) não deixou aparecer, de qualquer funcionário.
+      const conferidos = [...c.respostasPorFluxo.values()].reduce((n, x) => n + x, 0);
+      const barrados = [...c.recusasPorMembro.values()].reduce((n, x) => n + x.doCompliance, 0);
+      return [qtd('textos_conferidos', conferidos), qtd('textos_barrados', barrados)];
+    }
     case 'estrategista':
-      return [qtd('planos_aprovados', c.planosAprovados), qtd('planos_recusados', c.planosRecusados), qtd('planos_esperando', c.planosEsperando), qtd('em_preparo', c.emPreparo)];
+      return [qtd('planos_aprovados', c.planosAprovados), qtd('planos_recusados', c.planosRecusados), qtd('planos_esperando', c.planosEsperando), qtd('em_preparo', c.emPreparo), retiradas];
     case 'pesquisador':
-      return [qtd('paginas_lidas', c.paginasLidas), qtd('recusadas', c.paginasRecusadas), qtd('sugestoes', c.sugestoesDoPesquisador)];
+      return [qtd('paginas_lidas', c.paginasLidas), qtd('recusadas', c.paginasRecusadas), qtd('sugestoes', c.sugestoesDoPesquisador), retiradas];
     case 'trafego':
       return [
         qtd('recomendacoes', c.recomendacoes),

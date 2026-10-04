@@ -96,6 +96,8 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   ai_budget: { class: 'INTERNAL', retention: 'com a empresa' },
   ai_usage: { class: 'PERSONAL', retention: 'com a empresa (registro técnico, sem conteúdo)' },
   ai_exchange: { class: 'CONFIDENTIAL', retention: '30 dias (o que foi enviado ao modelo e o que voltou)', purge: { job: 'conteudo_ia', days: 30 } },
+  // O que a conferência recusou (A3, D-A3-15): o funcionário, o fluxo, o porquê e a regra; sem o texto e sem quem pediu.
+  ai_refusal: { class: 'INTERNAL', retention: 'com a empresa e a marca (a contagem do que foi recusado, sem conteúdo)' },
   // Retorno da pessoa sobre uma explicação (A3, I4): quem avaliou, o veredito e o motivo. Fica no Liame,
   // nunca vai ao fornecedor do modelo, e o comentário é limpo de dado pessoal antes de gravar.
   ai_feedback: { class: 'PERSONAL', retention: 'com a empresa (some com a linha de uso da explicação)' },

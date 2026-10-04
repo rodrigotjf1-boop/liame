@@ -169,7 +169,7 @@ describe('conferência da resposta da IA: o que não serve para a tela', () => {
   it('recusa o que a marca nunca diz (dossiê, I8), mas não o nome de uma campanha da empresa', () => {
     const comMarca = { ...boa, o_que_fazer: ['Destaque o hambúrguer gourmet no anúncio.'] };
     expect(conferirExplicacao(comMarca, contexto)).toBeNull();
-    expect(conferirExplicacao(comMarca, contexto, { daMarca: ['Gourmet'] })).toEqual({ recusa: 'compliance', detalhe: ['regra_da_marca: gourmet'] });
+    expect(conferirExplicacao(comMarca, contexto, { daMarca: ['Gourmet'] })).toEqual({ recusa: 'compliance', detalhe: ['regra_da_marca: gourmet'], regras: ['regra_da_marca'] });
     // "Tráfego | Cardápio" é o nome de uma campanha do contexto: citá-lo não bate na regra da marca.
     expect(conferirExplicacao(boa, contexto, { daMarca: ['cardápio'] })).toBeNull();
   });
@@ -190,11 +190,11 @@ describe('conferência da resposta da IA: o que não serve para a tela', () => {
   });
 
   it('A3-15 · compliance: as regras de texto recusam antes de qualquer revisor (político, promessa, categoria proibida, dado pessoal)', () => {
-    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Vote em quem apoia o comércio do bairro.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['politico_eleitoral: vote em'] });
-    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Aumente a verba: é retorno garantido.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['promessa_de_resultado: retorno garantido'] });
-    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Faça um sorteio pelo jogo do bicho.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['categoria_proibida: jogo do bicho'] });
+    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Vote em quem apoia o comércio do bairro.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['politico_eleitoral: vote em'], regras: ['politico_eleitoral'] });
+    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Aumente a verba: é retorno garantido.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['promessa_de_resultado: retorno garantido'], regras: ['promessa_de_resultado'] });
+    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Faça um sorteio pelo jogo do bicho.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['categoria_proibida: jogo do bicho'], regras: ['categoria_proibida'] });
     // O dado pessoal é recusado antes da conferência dos números, e o log não repete o dado.
-    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Ligue para o cliente no (21) 98888-7777.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['dado_pessoal: dado pessoal no texto'] });
+    expect(conferirExplicacao({ ...boa, o_que_fazer: ['Ligue para o cliente no (21) 98888-7777.'] }, contexto)).toEqual({ recusa: 'compliance', detalhe: ['dado_pessoal: dado pessoal no texto'], regras: ['dado_pessoal'] });
   });
 
   it('o nome de uma campanha da empresa pode ser citado, mesmo com palavra de política; o resto do texto é conferido', () => {
