@@ -297,12 +297,19 @@ function destinoDe(item: AttentionItem, podeVerVendas: boolean, podeVerContas: b
   return { rotulo: 'Ver', href: '/atencao' };
 }
 
+/** O que a pessoa pode decidir: as ações e os planos (em Aprovações) e a promoção de um funcionário (em Sua equipe). */
+export interface QuemDecide {
+  acoes: boolean;
+  planos: boolean;
+  autonomia: boolean;
+}
+
 /**
- * Os avisos que pedem alguém (críticos primeiro), com o pedido de decisão depois dos críticos, como no protótipo.
- * As aprovações contadas aqui são as que a tela Aprovações mostra (as ações); planos e autonomia entram com as
- * telas deles.
+ * Os avisos que pedem alguém (críticos primeiro), com os pedidos de decisão depois dos críticos, como no protótipo:
+ * o que espera em Aprovações (as ações e os planos do Estrategista que a pessoa pode decidir) e, à parte, a proposta
+ * de um funcionário passar a sugerir (decidida em Sua equipe).
  */
-export function precisaDe(r: SummaryResponse, podeVerVendas: boolean, podeVerContas: boolean, podeAprovar: boolean): ItemPrecisa[] {
+export function precisaDe(r: SummaryResponse, podeVerVendas: boolean, podeVerContas: boolean, decide: QuemDecide): ItemPrecisa[] {
   const avisos = r.needs_you.items.map((a, i): ItemPrecisa => {
     const g = gravidadeDe(a.severity);
     const destino = destinoDe(a, podeVerVendas, podeVerContas);
@@ -315,18 +322,36 @@ export function precisaDe(r: SummaryResponse, podeVerVendas: boolean, podeVerCon
       botao: { ...destino, primario: false },
     };
   });
-  const acoes = r.needs_you.approvals.actions;
-  if (!acoes || !podeAprovar) return avisos;
-  const decisao: ItemPrecisa = {
-    chave: 'decisao',
-    gravidade: 'decisao',
-    falado: 'Decisão',
-    titulo: acoes === 1 ? '1 pedido espera a sua decisão' : `${inteiro(acoes)} pedidos esperam a sua decisão`,
-    sub: [{ t: 'Nada vai ao ar sem você.' }],
-    botao: { rotulo: 'Decidir', href: '/aprovacoes', primario: true },
-  };
+  const acoes = decide.acoes ? r.needs_you.approvals.actions : 0;
+  const planos = decide.planos ? r.needs_you.approvals.plans : 0;
+  const autonomia = decide.autonomia ? r.needs_you.approvals.autonomy : 0;
+  const decisoes: ItemPrecisa[] = [];
+  if (acoes + planos > 0) {
+    const pedidos = acoes + planos;
+    // Com os dois tipos, a frase diz quantos de cada; só com planos, diz que são do Estrategista.
+    const quais = acoes && planos ? `${acoes === 1 ? '1 ação' : `${inteiro(acoes)} ações`} e ${planos === 1 ? '1 plano do Estrategista' : `${inteiro(planos)} planos do Estrategista`}. ` : planos ? `${planos === 1 ? 'Um plano' : `${inteiro(planos)} planos`} do Estrategista. ` : '';
+    decisoes.push({
+      chave: 'decisao',
+      gravidade: 'decisao',
+      falado: 'Decisão',
+      titulo: pedidos === 1 ? '1 pedido espera a sua decisão' : `${inteiro(pedidos)} pedidos esperam a sua decisão`,
+      sub: [{ t: `${quais}Nada vai ao ar sem você.` }],
+      botao: { rotulo: 'Decidir', href: '/aprovacoes', primario: true },
+    });
+  }
+  if (autonomia > 0) {
+    decisoes.push({
+      chave: 'autonomia',
+      gravidade: 'decisao',
+      falado: 'Decisão',
+      titulo: 'O Gestor de tráfego espera a sua decisão',
+      sub: [{ t: `Em sombra, ele mostrou que acerta. Você decide se ele passa a sugerir mudanças (${autonomia === 1 ? '1 proposta' : `${inteiro(autonomia)} propostas`}).` }],
+      botao: { rotulo: 'Ver', href: '/equipe', primario: false },
+    });
+  }
+  if (!decisoes.length) return avisos;
   const criticos = avisos.filter((a) => a.gravidade === 'urgente');
-  return [...criticos, decisao, ...avisos.filter((a) => a.gravidade !== 'urgente')];
+  return [...criticos, ...decisoes, ...avisos.filter((a) => a.gravidade !== 'urgente')];
 }
 
 /** O número ao lado de "Resumo" no menu: os avisos que pedem alguém e, havendo pedido esperando, mais um. */

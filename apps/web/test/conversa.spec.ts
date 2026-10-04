@@ -248,8 +248,9 @@ describe('Conversa: os cartões do que a LIA registrou', () => {
       ['Quem cuida', 'Estrategista (assistente de IA)'],
       ['Pedido por', `você, ${quandoComHora(DEMANDA.created_at, AGORA)}`],
       ['Para quando', 'sexta-feira, 09/10'],
-      ['Próximo passo', 'o plano chega para você decidir'],
+      ['Próximo passo', 'o plano chega em Aprovações, para você decidir'],
     ]);
+    expect(cartaoDaDemanda({ ...DEMANDA, status: 'entregue' }, uuid(9), AGORA).linhas.at(-1)).toEqual(['Próximo passo', 'o plano está em Aprovações, para você decidir']);
     const cancelada = cartaoDaDemanda({ ...DEMANDA, status: 'cancelada', cancelled_at: '2026-10-03T14:00:00.000Z' }, uuid(8), AGORA);
     expect(cancelada).toMatchObject({ titulo: 'Demanda cancelada', nota: 'Nada foi feito. Se precisar, é só pedir de novo.' });
     expect(cancelada.linhas.map((l) => l[0])).toEqual(['Pedido', 'Quem cuida', 'Pedido por']);

@@ -1,30 +1,16 @@
 'use client';
 
 import type { ActionResponse } from '@liame/contracts';
-import Link from 'next/link';
-import { type FormEvent, type RefObject, useEffect, useId, useRef, useState } from 'react';
+import { type RefObject, useEffect, useId, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
-import { disparar } from '@/lib/disparar';
-import {
-  apresentar,
-  aprovacaoParcial,
-  cabecalhoDe,
-  erroDoCodigo,
-  type Grupo,
-  identidadeDoPlano,
-  MOTIVOS_DA_RECUSA,
-  politicaDe,
-  prazoDe,
-  resultadoDe,
-  riscoDe,
-  ROTULO_RISCO,
-} from './textos';
+import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
+import { apresentar, aprovacaoParcial, cabecalhoDe, type Grupo, identidadeDoPlano, MOTIVOS_DA_RECUSA, politicaDe, prazoDe, resultadoDe, riscoDe, ROTULO_RISCO } from './textos';
 
 // O pedido aberto (protótipo aprovado): quem pediu e quando, o que muda, o risco e os limites, e a decisão.
 // Aprovar pede o código do app autenticador agora (ADR-007) e vale só para o plano mostrado (o hash); recusar
 // pede um motivo. No Lite, a frase do que acontece e "Ver detalhes"; no Pro, tudo aberto.
 
-export type Decisao = { ok: true } | { ok: false; texto: string; noCodigo: boolean };
+export type { Decisao };
 
 type Props = {
   acao: ActionResponse;
@@ -42,14 +28,11 @@ type Props = {
   aoRecusar: (acao: ActionResponse, motivo: string) => Promise<Decisao>;
 };
 
+const MOTIVOS = MOTIVOS_DA_RECUSA.map((m) => ({ valor: m, rotulo: m }));
+
 export function DetalhePedido({ acao, grupo, agora, pro, podeDecidir, temApp, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar }: Props) {
   const ids = useId();
-  const primeiroMotivo = useRef<HTMLButtonElement>(null);
   const [aberto, setAberto] = useState(false);
-  const [codigo, setCodigo] = useState('');
-  const [erro, setErro] = useState<{ texto: string; noCodigo: boolean } | null>(null);
-  const [recusando, setRecusando] = useState(false);
-  const [ocupado, setOcupado] = useState<'aprovar' | 'recusar' | null>(null);
   const p = apresentar(acao);
   const cab = cabecalhoDe(acao, agora);
   const plano = identidadeDoPlano(acao);
@@ -57,44 +40,10 @@ export function DetalhePedido({ acao, grupo, agora, pro, podeDecidir, temApp, ti
   const prazo = prazoDe(acao, agora);
   const detalhado = pro || aberto;
 
-  // Outro pedido aberto: o código digitado, o erro e os detalhes abertos eram do anterior.
+  // Outro pedido aberto: os detalhes abertos eram do anterior (o código e o erro saem com a barra, pela `key`).
   useEffect(() => {
-    setCodigo('');
-    setErro(null);
-    setRecusando(false);
     setAberto(false);
   }, [acao.id, acao.plan_hash]);
-
-  useEffect(() => {
-    if (recusando) primeiroMotivo.current?.focus();
-  }, [recusando]);
-
-  // Código recusado pelo servidor: o foco volta ao campo quando ele já está liberado de novo (durante o envio
-  // o campo fica desativado, e campo desativado não recebe foco).
-  useEffect(() => {
-    if (erro?.noCodigo && ocupado === null) campoCodigo.current?.focus();
-  }, [erro, ocupado, campoCodigo]);
-
-  async function aprovar(e: FormEvent) {
-    e.preventDefault();
-    const invalido = erroDoCodigo(codigo);
-    if (invalido) return setErro({ texto: invalido, noCodigo: true });
-    setErro(null);
-    setOcupado('aprovar');
-    const r = await aoAprovar(acao, codigo.trim());
-    setOcupado(null);
-    if (r.ok) return;
-    if (r.noCodigo) setCodigo('');
-    setErro(r);
-  }
-
-  async function recusar(motivo: string) {
-    setErro(null);
-    setOcupado('recusar');
-    const r = await aoRecusar(acao, motivo);
-    setOcupado(null);
-    if (!r.ok) setErro(r);
-  }
 
   const voltar = (
     <button className="btn btn--ghost btn--sm voltar" type="button" onClick={aoVoltar}>
@@ -211,61 +160,16 @@ export function DetalhePedido({ acao, grupo, agora, pro, podeDecidir, temApp, ti
         </p>
       )}
       {podeDecidir ? (
-        <form className="acoes-plano" onSubmit={(e) => disparar(aprovar(e))} noValidate>
-          {erro && (
-            <p className="campo-erro ap-erro" id={`${ids}-erro`} role="alert">
-              {erro.texto}
-            </p>
-          )}
-          {temApp ? (
-            <label className="ap-codigo">
-              <span>Código do app</span>
-              <input
-                ref={campoCodigo}
-                className="input mono"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                placeholder="000000"
-                value={codigo}
-                onChange={(e) => {
-                  setCodigo(e.target.value.replace(/\D/g, ''));
-                  setErro(null);
-                }}
-                disabled={ocupado !== null}
-                aria-invalid={erro?.noCodigo ? true : undefined}
-                aria-describedby={erro ? `${ids}-erro` : `${ids}-dica`}
-              />
-            </label>
-          ) : (
-            <p className="ap-sem-app">
-              Para aprovar, ative o app autenticador em <Link href="/seguranca">Segurança da conta</Link>.
-            </p>
-          )}
-          <button className="btn btn--primary ap-aprovar" type="submit" disabled={!temApp || ocupado !== null} aria-busy={ocupado === 'aprovar'}>
-            <Icone nome="check" />
-            {ocupado === 'aprovar' ? 'Aprovando…' : 'Aprovar'}
-            <kbd className="kbd" aria-hidden="true">
-              A
-            </kbd>
-          </button>
-          <button className="btn" type="button" aria-expanded={recusando} aria-controls={`${ids}-motivos`} onClick={() => setRecusando((x) => !x)} disabled={ocupado !== null}>
-            <Icone nome="x" />
-            Recusar
-          </button>
-          {temApp && (
-            <p className="ap-dica" id={`${ids}-dica`}>
-              O código de 6 números que o app autenticador mostra agora. A aprovação vale só para este plano.
-            </p>
-          )}
-          <div className="motivos" id={`${ids}-motivos`} hidden={!recusando} role="group" aria-label="Motivo da recusa">
-            {MOTIVOS_DA_RECUSA.map((m, i) => (
-              <button key={m} ref={i === 0 ? primeiroMotivo : undefined} className="chip-sug" type="button" onClick={() => disparar(recusar(m))} disabled={ocupado !== null}>
-                {m}
-              </button>
-            ))}
-          </div>
-        </form>
+        <BarraDaDecisao
+          key={`${acao.id}:${acao.plan_hash}`}
+          ids={ids}
+          temApp={temApp}
+          campoCodigo={campoCodigo}
+          motivos={MOTIVOS}
+          dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale só para este plano."
+          aoAprovar={(codigo) => aoAprovar(acao, codigo)}
+          aoRecusar={(motivo) => aoRecusar(acao, motivo)}
+        />
       ) : (
         <p className="nota ap-so-leitura">
           <Icone nome="lock" />
