@@ -1,4 +1,14 @@
-import type { PauseTeamMemberRequest, ResumeTeamMemberRequest, TeamMember, TeamResponse } from '@liame/contracts';
+import type {
+  PauseTeamMemberRequest,
+  ResumeTeamMemberRequest,
+  TeamActivityQuery,
+  TeamActivityResponse,
+  TeamMember,
+  TeamResponse,
+  TeamShadowDecision,
+  TeamShadowQuery,
+  TeamShadowResponse,
+} from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -11,12 +21,15 @@ import { type AuthContext, auditDetail, currentTx } from '../context/request-con
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
+import { REGRAS_VERSAO } from '../sombra/regras.js';
+import { atividadeDoMembro, DIAS_DA_ATIVIDADE } from './atividade.js';
 import { EQUIPE, ehMembro, type Membro, MEMBROS } from './membros.js';
 import { type ContagensDoMes, numerosDoMembro, situacaoDoMembro } from './numeros.js';
 
-// Sua equipe (A3, I13b; protótipo P7, aguardando aprovação; sem tela ainda). Na requisição, sob a RLS da empresa: quem
+// Sua equipe (A3, I13b; protótipo P7, aprovado em 03/10/2026). Na requisição, sob a RLS da empresa: quem
 // trabalha para a marca, a situação de cada um, o custo de IA e o que fez no mês. A empresa desliga e liga um membro
-// nesta marca (`agent_pause`); parar a equipe inteira é a parada da empresa (`/v1/kill-switches`).
+// nesta marca (`agent_pause`); parar a equipe inteira é a parada da empresa (`/v1/kill-switches`). O histórico de
+// cada um ("O que fez") e a lista da sombra do Gestor de tráfego são lidos do que já está guardado.
 
 type Pausa = { agent_key: string; paused_by: string | null; name: string | null; paused_at: Date | string; reason: string | null };
 
@@ -194,6 +207,90 @@ export class EquipeService {
       members: membros,
       can_manage: auth.permissions.has('agentes.gerenciar'),
       can_stop: auth.permissions.has('parada.acionar'),
+      generated_at: agora.toISOString(),
+    };
+  }
+
+  /** "O que fez": os acontecimentos do membro nesta marca nos últimos 90 dias, do mais novo para o mais antigo. */
+  async atividade(auth: AuthContext, key: string, query: TeamActivityQuery, agora = new Date()): Promise<TeamActivityResponse> {
+    const tenantId = this.empresa(auth);
+    if (!ehMembro(key)) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Este funcionário não faz parte da equipe.');
+    await this.exigirMarca(query.brand_id);
+    const desde = new Date(agora.getTime() - DIAS_DA_ATIVIDADE * 86_400_000).toISOString();
+    const { items, hasMore } = await atividadeDoMembro(
+      currentTx(),
+      key,
+      {
+        tenantId,
+        brandId: query.brand_id,
+        userId: auth.userId,
+        desde,
+        podePlanos: auth.permissions.has('planos.ver'),
+        podeDossie: auth.permissions.has('dossie.ver'),
+      },
+      query.limit,
+    );
+    return { brand_id: query.brand_id, member: key, since: desde, items, has_more: hasMore, generated_at: agora.toISOString() };
+  }
+
+  /** A sombra do Gestor de tráfego nesta marca: o que ele teria feito, o que a pessoa fez e o resultado da comparação. */
+  async sombra(auth: AuthContext, query: TeamShadowQuery, agora = new Date()): Promise<TeamShadowResponse> {
+    const tenantId = this.empresa(auth);
+    await this.exigirMarca(query.brand_id);
+    const tx = currentTx();
+    const linhas = (
+      await tx.execute<{
+        id: string;
+        decided_on: string;
+        campaign_id: string;
+        campaign_name: string;
+        provider: string;
+        tool: string;
+        percent: number | string | null;
+        confidence_pct: string;
+        status: string;
+        evaluate_on: string;
+        human_action: string | null;
+        human_action_on: string | null;
+        agreement: string | null;
+        regret_label: string | null;
+        regret_micros: string | null;
+      }>(sql`
+        select d.id, d.decided_on::text as decided_on, d.campaign_id, c.name as campaign_name, d.provider, d.tool,
+               (d.params->>'percent')::numeric::integer as percent, to_char(d.confidence * 100, 'FM990.0') as confidence_pct, d.status,
+               d.evaluate_on::text as evaluate_on, d.human_action, d.human_action_on::text as human_action_on, d.agreement, d.regret_label,
+               d.action_regret_micros::text as regret_micros
+          from liame.shadow_decision d join liame.campaign c on c.id = d.campaign_id
+         where d.tenant_id = ${tenantId} and d.brand_id = ${query.brand_id}
+         order by d.decided_on desc, d.id desc
+         limit ${query.limit + 1}`)
+    ).rows;
+    const vez = (
+      await tx.execute<{ last_run_on: string | null; last_status: string | null; last_attempt_at: Date | string | null }>(sql`
+        select last_run_on::text as last_run_on, last_status, last_attempt_at
+          from liame.shadow_state where tenant_id = ${tenantId} and brand_id = ${query.brand_id}`)
+    ).rows[0];
+    const items: TeamShadowDecision[] = linhas.slice(0, query.limit).map((d) => ({
+      id: d.id,
+      decided_on: d.decided_on,
+      campaign: { id: d.campaign_id, name: d.campaign_name, provider: d.provider },
+      tool: d.tool,
+      percent: d.percent === null ? null : Number(d.percent),
+      confidence_pct: d.confidence_pct,
+      status: d.status,
+      evaluate_on: d.evaluate_on,
+      human_action: d.human_action,
+      human_action_on: d.human_action_on,
+      agreement: d.agreement,
+      regret_label: d.regret_label,
+      regret_micros: d.regret_micros,
+    }));
+    return {
+      brand_id: query.brand_id,
+      rule_version: REGRAS_VERSAO,
+      last_run: vez ? { on: vez.last_run_on, status: vez.last_status, at: vez.last_attempt_at ? iso(vez.last_attempt_at) : null } : null,
+      items,
+      has_more: linhas.length > query.limit,
       generated_at: agora.toISOString(),
     };
   }

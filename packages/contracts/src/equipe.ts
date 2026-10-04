@@ -82,6 +82,123 @@ export const TeamResponse = z.strictObject({
 });
 export type TeamResponse = z.infer<typeof TeamResponse>;
 
+// ---------------------------------------------------------------- o que cada um fez
+
+export const TeamActivityQuery = z.strictObject({ brand_id: z.uuid(), limit: z.coerce.number().int().min(1).max(50).default(20) });
+export type TeamActivityQuery = z.infer<typeof TeamActivityQuery>;
+
+export const TeamActivityItem = z.strictObject({
+  at: z.iso.datetime(),
+  /**
+   * O que aconteceu (lista que cresce; o que a tela não conhece, mostra de forma genérica). LIA: `respondeu`,
+   * `abriu_demanda`. Analista: `explicou_resultados`, `explicou_aviso`. Relatórios: `gerou_revisao`, `enviou_revisao`.
+   * Compliance: `barrou_texto`. Estrategista: `recebeu_demanda`, `montou_plano`, `plano_aprovado`, `plano_recusado`,
+   * `plano_nova_analise`. Pesquisador: `leu_pagina`, `pagina_recusada`, `pagina_falhou`. Gestor de tráfego:
+   * `recomendou`, `comparou`, `promocao_proposta`, `promocao_aprovada`, `promocao_recusada`, `promocao_retirada`,
+   * `voltou_para_sombra`. De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
+   * aparecer), `desligado` e `ligado` (pela empresa, nesta marca).
+   */
+  kind: Slug,
+  /**
+   * O nome do que foi tratado, quando a pessoa pode vê-lo na tela de origem: o título da conversa (só a própria), da
+   * demanda ou do plano, o site lido, a campanha, a conta de anúncio. Nulo quando não há ou quando falta a permissão.
+   */
+  subject: z.string().nullable(),
+  /**
+   * Um código que completa o `kind` (lista que cresce): o tipo da demanda ou do plano; quem escreveu a leitura da
+   * revisão (`lia` ou `sistema`); o funcionário que escreveu o texto barrado; o porquê da retirada, da recusa ou da
+   * falha; a ação recomendada ou promovida (`orcamento_reduzir`…); o resultado da comparação (`teria_melhorado`…).
+   */
+  detail: Slug.nullable(),
+  /** A semana da revisão. */
+  period: z.strictObject({ from: z.iso.date(), to: z.iso.date() }).nullable(),
+  /**
+   * Um número do acontecimento: as pessoas que receberam o e-mail, as partes do dossiê que ganharam sugestão, os textos
+   * barrados de uma vez, a versão do plano, o percentual da verba recomendado.
+   */
+  count: z.int().nullable(),
+  /** As regras de texto que barraram (`barrou_texto` e `retirada_na_conferencia`), pelo nome. */
+  rules: z.array(Slug),
+  /**
+   * Quem pediu ou decidiu. Nas respostas e explicações da IA, só quando foi a própria pessoa (o que os outros perguntam
+   * não aparece); nulo em rotina do sistema.
+   */
+  by: Pessoa,
+  /** Foi a própria pessoa que pediu ou decidiu. */
+  mine: z.boolean(),
+  /** O retorno das pessoas sobre aquele texto: `fez_sentido` ou `discordo` (o mais recente); nulo sem retorno. */
+  feedback: Slug.nullable(),
+});
+export type TeamActivityItem = z.infer<typeof TeamActivityItem>;
+
+export const TeamActivityResponse = z.strictObject({
+  brand_id: z.uuid(),
+  member: Slug,
+  /** Desde quando a lista olha (os últimos 90 dias). */
+  since: z.iso.datetime(),
+  /** Do mais novo para o mais antigo. */
+  items: z.array(TeamActivityItem),
+  /** Há mais acontecimentos no período do que os devolvidos. */
+  has_more: z.boolean(),
+  generated_at: z.iso.datetime(),
+});
+export type TeamActivityResponse = z.infer<typeof TeamActivityResponse>;
+
+// ---------------------------------------------------------------- a sombra do Gestor de tráfego
+
+export const TeamShadowQuery = z.strictObject({ brand_id: z.uuid(), limit: z.coerce.number().int().min(1).max(100).default(30) });
+export type TeamShadowQuery = z.infer<typeof TeamShadowQuery>;
+
+export const TeamShadowDecision = z.strictObject({
+  id: z.uuid(),
+  /** O dia da recomendação, no fuso da loja. */
+  decided_on: z.iso.date(),
+  campaign: z.strictObject({ id: z.uuid(), name: z.string(), provider: Slug }),
+  /** O que ele faria: `orcamento_reduzir`, `campanha_pausar` ou `orcamento_aumentar`. Nada é executado. */
+  tool: Slug,
+  /** O percentual da mudança de verba recomendada; nulo ao pausar. */
+  percent: z.int().nullable(),
+  /** A confiança da recomendação, em % com uma casa. */
+  confidence_pct: z.string().regex(/^\d{1,3}\.\d$/),
+  /** `aberta` (ainda não dá para comparar), `avaliada` ou `descartada` (ficou sem dado para comparar). */
+  status: Slug,
+  /** O primeiro dia em que dá para comparar. */
+  evaluate_on: z.iso.date(),
+  /**
+   * O que a pessoa fez na plataforma depois, visto pela leitura diária: `pausou`, `reduziu_verba`, `aumentou_verba` ou
+   * `nenhuma`; nulo enquanto nada foi visto.
+   */
+  human_action: Slug.nullable(),
+  human_action_on: z.iso.date().nullable(),
+  /** `igual`, `mesma_direcao`, `contraria` ou `nenhuma`; nulo antes de a pessoa agir ou de comparar. */
+  agreement: Slug.nullable(),
+  /** `teria_melhorado`, `teria_piorado`, `igual` ou `sem_dado`; nulo antes de comparar. */
+  regret_label: Slug.nullable(),
+  /**
+   * O resultado de verdade menos o estimado com a recomendação, em micros de real: negativo, a recomendação teria
+   * rendido mais; nulo sem dado para comparar.
+   */
+  regret_micros: Inteiro.nullable(),
+});
+export type TeamShadowDecision = z.infer<typeof TeamShadowDecision>;
+
+export const TeamShadowResponse = z.strictObject({
+  brand_id: z.uuid(),
+  /** A versão das regras da sombra em uso. */
+  rule_version: z.int().min(1),
+  /**
+   * A vez mais recente da sombra nesta marca: o último dia da loja em que a rotina terminou (`on`), como terminou a
+   * última tentativa (`feito`, `dado_velho`, `ja_rodou`, `desligada`, `desligada_pela_empresa`) e quando foi; nula
+   * antes da primeira.
+   */
+  last_run: z.strictObject({ on: z.iso.date().nullable(), status: Slug.nullable(), at: z.iso.datetime().nullable() }).nullable(),
+  /** Da mais nova para a mais antiga. */
+  items: z.array(TeamShadowDecision),
+  has_more: z.boolean(),
+  generated_at: z.iso.datetime(),
+});
+export type TeamShadowResponse = z.infer<typeof TeamShadowResponse>;
+
 export const PauseTeamMemberRequest = z.strictObject({ brand_id: z.uuid(), reason: z.string().trim().min(3).max(300).optional() });
 export type PauseTeamMemberRequest = z.infer<typeof PauseTeamMemberRequest>;
 
