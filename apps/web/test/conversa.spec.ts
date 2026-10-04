@@ -194,6 +194,9 @@ describe('Conversa: o que a tela escreve em volta da resposta', () => {
     expect(caminhosDa(['Cupons', 'Links e rastreio'], tudoPode)).toEqual([{ href: '/links', rotulo: 'Ver links e cupons' }]);
     expect(caminhosDa(RESPOSTA.read, (p) => p !== 'vendas.ver')).toEqual([{ href: '/atencao', rotulo: 'Ver os avisos' }]);
     expect(caminhosDa(['Frescor das fontes'], tudoPode)).toEqual([]);
+    // A leitura de Sua equipe leva à tela, para quem tem as duas permissões dela.
+    expect(caminhosDa(['Sua equipe'], tudoPode)).toEqual([{ href: '/equipe', rotulo: 'Ver em Sua equipe' }]);
+    expect(caminhosDa(['Sua equipe'], (p) => p !== 'vendas.ver')).toEqual([]);
   });
 });
 

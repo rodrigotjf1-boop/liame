@@ -1,4 +1,5 @@
 import type { ConversationStaleSource } from '@liame/contracts';
+import { DO_MEMBRO } from '../registro/visoes/equipe.js';
 import { FERRAMENTA_ABRIR_DEMANDA, FERRAMENTA_PROPOR_CUPOM } from './prompt.js';
 
 // O que a tela diz de cada ferramenta que a LIA usa (protótipo P5): o passo enquanto ela lê ("Lendo os
@@ -36,6 +37,11 @@ export function rotuloDoPasso(ferramenta: string, input: unknown): string {
       return 'Lendo os cupons da marca';
     case 'links_rastreio':
       return 'Lendo os links e a conferência do rastreio';
+    case 'equipe_trabalho': {
+      const funcionario = (input && typeof input === 'object' ? (input as { funcionario?: unknown }).funcionario : null) as string | null | undefined;
+      const deQuem = typeof funcionario === 'string' ? DO_MEMBRO[funcionario] : undefined;
+      return deQuem ? `Lendo o trabalho ${deQuem} em Sua equipe` : 'Lendo o trabalho da equipe';
+    }
     case FERRAMENTA_ABRIR_DEMANDA:
       return 'Registrando a demanda';
     case FERRAMENTA_PROPOR_CUPOM:
@@ -60,6 +66,8 @@ export function rotuloDaLeitura(ferramenta: string, input: unknown): string | nu
       return 'Cupons';
     case 'links_rastreio':
       return 'Links e rastreio';
+    case 'equipe_trabalho':
+      return 'Sua equipe';
     default:
       return null;
   }
@@ -90,7 +98,9 @@ export function foraDoDia(ferramenta: string, valor: unknown): ConversationStale
 }
 
 /** Campos que guardam um nome vindo dos dados da empresa (não texto do sistema). */
-const CAMPOS_DE_NOME = new Set(['campanha', 'conta', 'loja', 'nome', 'codigo']);
+// Na leitura da equipe, o nome do que um funcionário tratou: a conversa, a demanda, o plano e o site (`assunto`, no
+// acontecimento que a visão ainda não conhece).
+const CAMPOS_DE_NOME = new Set(['campanha', 'conta', 'loja', 'nome', 'codigo', 'conversa', 'demanda', 'plano', 'site', 'assunto']);
 
 /** Os nomes da empresa numa leitura (campanha, conta, loja, cupom), para o Compliance e para não marcar número de nome. */
 export function nomesDaLeitura(valor: unknown): string[] {

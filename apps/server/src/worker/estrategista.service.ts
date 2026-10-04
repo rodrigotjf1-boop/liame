@@ -125,7 +125,7 @@ export class EstrategistaService {
     const leituras: Leitura[] = [];
     const ctx = { tenantId: item.tenantId, userId: null, permissions: 'sistema' as const, agora };
     // As leituras da rotina, cada uma guardada como o modelo a recebeu (é o que vale na conferência).
-    const ferramentas: FerramentaIa[] = this.leituras.paraPedido(ctx).map((f) => ({
+    const ferramentas: FerramentaIa[] = this.leituras.paraPedido(ctx, ESTRATEGISTA.ferramentas).map((f) => ({
       ...f,
       executar: async (input) => {
         const r = await f.executar(input);

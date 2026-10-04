@@ -276,11 +276,14 @@ describe('a proposta de cupom: o valor em reais vira micros pelo código', () =>
 });
 
 describe('a LIA no registro (I2)', () => {
-  it('prompt e funcionário registrados, com as seis leituras, a demanda e a proposta de cupom', () => {
+  it('prompt e funcionário registrados, com as leituras (os números da marca e o trabalho da equipe), a demanda e a proposta de cupom', () => {
     expect(conferirRegistro(registroAtual())).toEqual([]);
     expect(PROMPT_CONVERSA_LIA.task).toBe('conversa_lia');
-    expect([PROMPT_CONVERSA_LIA.version, LIA.version]).toEqual([2, 2]);
-    expect(LIA.ferramentas).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'abrir_demanda', 'propor_cupom']);
+    expect([PROMPT_CONVERSA_LIA.version, LIA.version]).toEqual([3, 3]);
+    expect(LIA.ferramentas).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'equipe_trabalho', 'abrir_demanda', 'propor_cupom']);
+    // "Conversar sobre ele" (P7): ela lê Sua equipe, e não liga nem desliga ninguém.
+    expect(PROMPT_CONVERSA_LIA.content).toContain('`equipe_trabalho`');
+    expect(PROMPT_CONVERSA_LIA.content).toContain('Você não liga nem desliga ninguém');
     // Ela se apresenta como assistente de IA e oferece falar com uma pessoa (D-A3-6).
     expect(PROMPT_CONVERSA_LIA.content).toContain('assistente de inteligência artificial');
     expect(PROMPT_CONVERSA_LIA.content).toContain('Falar com uma pessoa');

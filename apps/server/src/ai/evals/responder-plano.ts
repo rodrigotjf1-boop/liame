@@ -1,7 +1,7 @@
 import { dynamicTool, generateText, isStepCount, NoObjectGeneratedError, Output, type ToolSet } from 'ai';
 import type { z } from 'zod';
 import { contextoDoPlano, mensagemDoPlano } from '../estrategista/contexto.js';
-import { PROMPT_ESTRATEGISTA } from '../estrategista/prompt.js';
+import { ESTRATEGISTA, PROMPT_ESTRATEGISTA } from '../estrategista/prompt.js';
 import { RESPOSTA_DO_TIPO } from '../estrategista/resposta.js';
 import type { ModelosIa } from '../modelos.js';
 import { LEITURAS } from '../registro/leituras.defs.js';
@@ -23,7 +23,7 @@ export async function responderPlano(modelos: ModelosIa, alvo: AlvoDoEval, caso:
   const providerOptions = modelos.opcoes(alvo.provider, alvo.effort ?? null);
   const chamadas: Array<{ ferramenta: string; input: Record<string, unknown> }> = [];
   const tools: ToolSet = Object.fromEntries(
-    LEITURAS.map((d) => [
+    LEITURAS.filter((d) => ESTRATEGISTA.ferramentas.includes(d.name)).map((d) => [
       d.name,
       dynamicTool({
         description: d.description,

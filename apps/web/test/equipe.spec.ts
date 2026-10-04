@@ -2,6 +2,7 @@ import type { AutonomyItem, AutonomyResponse, TeamActivityItem, TeamActivityResp
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { ConversaProvider } from '@/components/conversa/contexto';
 import type { Historico } from '@/components/equipe/bloco-historico';
 import { EquipeConteudo } from '@/components/equipe/equipe-conteudo';
 import {
@@ -22,6 +23,8 @@ import {
   mesDe,
   modoDo,
   notaDaCotacao,
+  perguntaSobre,
+  podeConversarSobre,
   porcento,
   portoesDe,
   quandoNaFrase,
@@ -139,9 +142,12 @@ function desenhar(over: {
   parando?: boolean;
   desligando?: string | null;
   recusando?: string | null;
+  /** A pessoa conversa com a LIA (o painel do shell em volta da tela). */
+  comConversa?: boolean;
 }): string {
+  const dentro = (tela: ReturnType<typeof createElement>) => (over.comConversa ? createElement(ConversaProvider, { disponivel: true, children: tela }) : tela);
   return renderToStaticMarkup(
-    createElement(EquipeConteudo, {
+    dentro(createElement(EquipeConteudo, {
       t: over.t ?? equipe(),
       autonomia: over.autonomia === undefined ? autonomia([]) : over.autonomia,
       sombra: over.sombra === undefined ? sombra([]) : over.sombra,
@@ -156,7 +162,7 @@ function desenhar(over: {
       prontidao: { ocupado: null, recusando: over.recusando ?? null, aoAprovar: nada, aoPedirRecusa: nada, aoRecusar: nada, aoVoltarParaSombra: nada },
       aoEscolher: nada,
       aoVoltar: nada,
-    }),
+    })),
   );
 }
 const historico = (items: TeamActivityItem[], hasMore = false): Historico => ({
@@ -543,5 +549,37 @@ describe('menu: "Sua equipe" depois de Resultados, para quem acompanha as campan
     expect(itensVisiveis(agencia, (p) => p !== 'campanhas.ver', 'lite').map((x) => x.href)).not.toContain('/equipe');
     expect(tituloDa('/equipe')).toBe('Sua equipe');
     expect(temModos('/equipe', () => true)).toBe(true);
+  });
+});
+
+describe('Sua equipe: "Conversar sobre ele" (P7)', () => {
+  it('a pergunta que abre a conversa já fala do funcionário, com o nome da tela', () => {
+    expect(perguntaSobre('analista')).toBe('Quero falar sobre o trabalho do Analista de dados: o que ele fez este mês?');
+    expect(perguntaSobre('relatorios')).toBe('Quero falar sobre o trabalho de Relatórios: o que ele fez este mês?');
+    expect(perguntaSobre('trafego')).toBe('Quero falar sobre o trabalho do Gestor de tráfego: o que ele fez este mês?');
+  });
+
+  it('o botão aparece para quem conversa com a LIA, com ela ativa; sobre a própria LIA, não', () => {
+    const t = equipe();
+    expect(podeConversarSobre('analista', t, true)).toBe(true);
+    expect(podeConversarSobre('compliance', t, true)).toBe(true);
+    expect(podeConversarSobre('lia', t, true)).toBe(false);
+    // Sem a conversa (quem não tem `conversa.usar`, ou fora do shell), com a IA desligada ou com a LIA desligada nesta marca.
+    expect(podeConversarSobre('analista', t, false)).toBe(false);
+    expect(podeConversarSobre('analista', equipe({ ai: { ...t.ai, enabled: false } }), true)).toBe(false);
+    expect(podeConversarSobre('analista', equipe({}, { lia: { status: 'desligado' } }), true)).toBe(false);
+  });
+
+  it('na tela: ao lado de desligar; no Compliance, antes da nota; sem a conversa, a tela fica como era', () => {
+    const analista = desenhar({ escolhido: 'analista', comConversa: true });
+    expect(analista).toContain('id="eqp-bt-conversar"');
+    expect(analista).toContain('Conversar sobre ele');
+    expect(analista.indexOf('Conversar sobre ele')).toBeLessThan(analista.indexOf('Desligar este funcionário'));
+    const compliance = desenhar({ escolhido: 'compliance', comConversa: true });
+    expect(compliance.indexOf('Conversar sobre ele')).toBeLessThan(compliance.indexOf('O Compliance não desliga'));
+    expect(desenhar({ escolhido: 'lia', comConversa: true })).not.toContain('Conversar sobre ele');
+    expect(desenhar({ escolhido: 'analista' })).not.toContain('Conversar sobre ele');
+    // Confirmando o desligamento, a linha é só da confirmação.
+    expect(desenhar({ escolhido: 'analista', comConversa: true, desligando: 'analista' })).not.toContain('Conversar sobre ele');
   });
 });

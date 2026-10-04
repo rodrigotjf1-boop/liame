@@ -5,7 +5,7 @@ import { foraDoDia, nomesDaLeitura } from '../conversa/leituras.js';
 import { type DadosDoPlano, permitidoNoContexto } from '../estrategista/contexto.js';
 import { cuponsAtivos, textosDoPlano } from '../estrategista/plano.js';
 import { conferirPlano, conteudoDaResposta } from '../estrategista/resposta.js';
-import { LEITURAS } from '../registro/leituras.defs.js';
+import { ESTRATEGISTA } from '../estrategista/prompt.js';
 import { limparJson } from '../sanitizar.js';
 import type { Avaliacao } from './avaliar.js';
 
@@ -133,7 +133,7 @@ export function avaliarPlano(caso: CasoDoPlano, bruto: unknown): Avaliacao {
   const falhas: string[] = [];
 
   // Só as leituras existem para o Estrategista: chamar outra coisa é ferramenta que ele não recebe.
-  const oferecidas = new Set(LEITURAS.map((l) => l.name));
+  const oferecidas = new Set(ESTRATEGISTA.ferramentas);
   for (const c of chamadas) if (!oferecidas.has(c.ferramenta)) falhas.push(`ferramenta_indisponivel: ${c.ferramenta}`);
 
   // A mesma conferência da produção, com o que o modelo leu de fato.

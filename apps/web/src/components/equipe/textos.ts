@@ -165,6 +165,33 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
 
 export const ORDEM: ChaveDoMembro[] = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'trafego'];
 
+/** "do Analista de dados", "de Relatórios": o funcionário na frase. */
+const DO_MEMBRO: Record<ChaveDoMembro, string> = {
+  lia: 'da LIA',
+  analista: 'do Analista de dados',
+  relatorios: 'de Relatórios',
+  compliance: 'do Compliance',
+  estrategista: 'do Estrategista',
+  pesquisador: 'do Pesquisador',
+  trafego: 'do Gestor de tráfego',
+};
+
+/**
+ * "Conversar sobre ele" (protótipo P7): a pergunta que abre a conversa com a LIA, já sobre o trabalho do funcionário.
+ * A LIA responde lendo Sua equipe (a leitura `equipe_trabalho`), com os mesmos números desta tela.
+ */
+export function perguntaSobre(chave: ChaveDoMembro): string {
+  return `Quero falar sobre o trabalho ${DO_MEMBRO[chave]}: o que ele fez este mês?`;
+}
+
+/**
+ * O botão "Conversar sobre ele" aparece para quem conversa com a LIA, quando ela está trabalhando nesta marca. Sobre
+ * a própria LIA não há o que perguntar por aqui: a conversa com ela é o botão do topo.
+ */
+export function podeConversarSobre(chave: ChaveDoMembro, t: TeamResponse, conversaDisponivel: boolean): boolean {
+  return chave !== 'lia' && conversaDisponivel && t.ai.enabled && t.members.some((m) => m.key === 'lia' && m.status === 'ativo');
+}
+
 export const ehMembro = (chave: string): chave is ChaveDoMembro => (ORDEM as string[]).includes(chave);
 
 /** Os funcionários das fases seguintes do roadmap: aparecem na lista, sem trabalhar ainda. */
@@ -431,13 +458,8 @@ export function avisosDa(t: TeamResponse, agora: Date): AvisoDoTopo[] {
 
 const TIPO_DE_DEMANDA: Record<string, string> = { promocao: 'promoção', plano: 'plano', pauta: 'pauta', analise: 'análise', outro: 'outro assunto' };
 const TIPO_DE_PLANO: Record<string, string> = { noventa_dias: 'Plano de 90 dias', pauta: 'Pauta da semana', oferta: 'Oferta' };
-const DE_QUEM: Record<string, string> = {
-  lia: 'da LIA',
-  analista: 'do Analista de dados',
-  relatorios: 'de Relatórios',
-  estrategista: 'do Estrategista',
-  pesquisador: 'do Pesquisador',
-};
+/** De quem era o texto barrado, na frase; o que a tela não conhece vira "da equipe". */
+const deQuem = (chave: string | null): string => (chave && ehMembro(chave) ? DO_MEMBRO[chave] : 'da equipe');
 /** As regras de texto do servidor (`policy/texto.ts`), como a pessoa lê; nome novo aparece sem os traços. */
 const REGRAS: Record<string, string> = {
   politico_eleitoral: 'conteúdo político ou eleitoral',
@@ -551,7 +573,7 @@ export function historicoDo(i: TeamActivityItem, agora: Date): LinhaDoHistorico 
     case 'barrou_texto':
       return {
         quando,
-        titulo: `${n > 1 ? `Barrou ${inteiro(n)} textos` : 'Barrou um texto'} ${DE_QUEM[i.detail ?? ''] ?? 'da equipe'}`,
+        titulo: `${n > 1 ? `Barrou ${inteiro(n)} textos` : 'Barrou um texto'} ${deQuem(i.detail)}`,
         texto: `${regrasDe(i.rules)}${n > 1 ? 'Eles não apareceram' : 'Ele não apareceu'}: ficou o que o sistema escreve.`,
       };
     case 'retirada_na_conferencia': {

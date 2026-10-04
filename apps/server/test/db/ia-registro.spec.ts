@@ -171,6 +171,8 @@ describe.skipIf(!hasDb)('registros da IA no banco, ativação por empresa e ferr
     expect(de(a, 'contas.ver').map((f) => f.name)).toEqual(['fontes_frescor']);
     expect(de(a, 'campanhas.ver').map((f) => f.name)).toEqual(['atencao_avisos', 'midia_entrega']);
     expect(de(a, 'vendas.ver').map((f) => f.name)).toEqual(['resultados_ciclo_fechado', 'cupons_campanha', 'links_rastreio']);
+    // A leitura de Sua equipe pede as DUAS permissões da rota dela, e uma pessoa: com uma só, ou na rotina do sistema, não é oferecida.
+    expect(de(a, 'campanhas.ver', 'vendas.ver').map((f) => f.name)).toEqual(['atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'equipe_trabalho']);
     expect(leituras.paraPedido({ tenantId: a.tenantId, userId: null, permissions: 'sistema' }).map((f) => f.name)).toEqual([
       'fontes_frescor',
       'atencao_avisos',
@@ -186,6 +188,21 @@ describe.skipIf(!hasDb)('registros da IA no banco, ativação por empresa e ferr
     expect(daA).toMatchObject({ ok: true, valor: { fuso: 'America/Sao_Paulo', contas: [{ plataforma: 'Meta', conta: 'Conta só da A', dados: [{ conjunto: 'metricas', frescor: 'nunca leu' }] }] } });
     expect(await usar(de(b, 'contas.ver'), 'fontes_frescor', { brand_id: a.brandId })).toEqual({ ok: true, valor: { fuso: 'America/Sao_Paulo', contas: [] } });
     expect(await usar(de(b, 'contas.ver'), 'fontes_frescor', {})).toEqual({ ok: true, valor: { fuso: 'America/Sao_Paulo', contas: [] } });
+
+    // Sua equipe: A lê a equipe da marca dela (os sete, pelo nome da tela); B, pedindo a marca da A, não acha a marca.
+    const equipeDaA = await usar(de(a, 'campanhas.ver', 'vendas.ver'), 'equipe_trabalho', { brand_id: a.brandId });
+    expect(equipeDaA).toMatchObject({ ok: true, valor: { ia_da_empresa: { ligada: 'não' } } });
+    expect((equipeDaA as { valor: { equipe: Array<{ funcionario: string }> } }).valor.equipe.map((m) => m.funcionario)).toEqual([
+      'LIA',
+      'Analista de dados',
+      'Relatórios',
+      'Compliance',
+      'Estrategista',
+      'Pesquisador',
+      'Gestor de tráfego',
+    ]);
+    expect(await usar(de(b, 'campanhas.ver', 'vendas.ver'), 'equipe_trabalho', { brand_id: a.brandId })).toEqual({ ok: false, erro: 'Marca não encontrada nesta empresa.' });
+    expect(await usar(de(a, 'campanhas.ver', 'vendas.ver'), 'equipe_trabalho', { brand_id: a.brandId, funcionario: 'diretor' })).toEqual({ ok: false, erro: 'Parâmetros inválidos para esta ferramenta.' });
 
     // Avisos: os de vendas só entram para quem tem `vendas.ver`, como na rota deles.
     const vendas = vi.spyOn(api.app.get(AtencaoCicloService), 'atencao');
