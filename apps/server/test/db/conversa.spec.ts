@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { type ConversationMessage, ConversationResponse, type ConversationStreamEvent, ConversationStreamEvent as EventoDoFluxo } from '@liame/contracts';
+import { type ConversationMessage, ConversationResponse, type ConversationStreamEvent, ConversationStreamEvent as EventoDoFluxo, TeamActivityResponse, TeamResponse } from '@liame/contracts';
 import { type Database, runMigrations, uuidv7 } from '@liame/database';
 import { MockLanguageModelV4 } from 'ai/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -232,6 +232,19 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     expect(mensagemFinal(r2.eventos)).toMatchObject({ role: 'lia', status: 'ok' });
     expect(enviado(segundo, 0)).toContain('Como foi a semana?');
     expect(enviado(segundo, 0)).toContain('o investimento na Meta foi de R$ 200,00');
+
+    // Sua equipe conta respostas, não chamadas ao modelo: foram duas respostas em três chamadas (a primeira leu antes de
+    // responder). O custo e as chamadas seguem contando as três.
+    const equipe = await api.call('GET', `/v1/team?brand_id=${d.brandId}`, { cookie: d.cookie });
+    expect(equipe.status).toBe(200);
+    const daEquipe = (key: string) => TeamResponse.parse(equipe.body).members.find((x) => x.key === key)!;
+    const numeros = (key: string) => Object.fromEntries(daEquipe(key).stats.map((s) => [s.key, s.value]));
+    expect(numeros('lia')).toMatchObject({ respostas: '2' });
+    expect(daEquipe('lia').cost.calls).toBe(3);
+    expect(numeros('compliance')).toMatchObject({ textos_conferidos: '2' });
+    const feito = await api.call('GET', `/v1/team/members/lia/activity?brand_id=${d.brandId}`, { cookie: d.cookie });
+    expect(feito.status).toBe(200);
+    expect(TeamActivityResponse.parse(feito.body).items.filter((i) => i.kind === 'respondeu')).toHaveLength(2);
   });
 
   it('A3-5: número fora do que ela leu derruba a resposta (aviso `recusada`); dado velho vira `dado_velho`, com a fonte', async () => {
