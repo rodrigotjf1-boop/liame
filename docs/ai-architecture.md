@@ -71,6 +71,8 @@ Configuração versionada (dado, não código):
 
 Tarefas iniciais: `strategic_plan`, `creative_generation`, `comment_classification`, `weekly_summary`, `anomaly_explanation`, `campaign_decision`, `compliance_review`, `client_conversation`. A escolha é por **qualidade medida, custo, latência e disponibilidade**, nunca por preferência de fornecedor.
 
+**Rotas publicadas (migration 0046, 04/10/2026).** As cinco tarefas da A3 têm rota ativa: `explicar_resultados`, `conversa_lia`, `estrategista_plano`, `pesquisador_pagina` e `compliance_revisao`, todas com `anthropic` · `claude-sonnet-5-5` · esforço `low`, a nota do eval de 04/10/2026 (`eval_score` 1,0000; limiar 0,95), sem reserva e sem modelo econômico (nenhum outro modelo tem eval aprovado nessas tarefas). O teto de custo é o de uma chamada (uma rodada do laço). `test/db/ia-rotas.spec.ts` confere que toda tarefa de IA do código tem rota, com modelo que tem preço e aceita a regra da região. A rota só é usada na empresa com a flag `ia` ligada.
+
 **Região (D-A3-13).** Enquanto a regra for rodar só nos Estados Unidos (`AI_INFERENCE_GEO=us`), só entra em rota o modelo que aceita essa opção (na Anthropic, do Claude 4.6 em diante). O gateway confere a cada chamada (`aceitaGeo`, em `ai/modelos.ts`): o modelo que não aceita não é chamado, a tentativa fica em `ai_usage` com `fora_da_regiao` e a rota segue para a reserva. O eval da tarefa recusa o mesmo modelo, com o motivo, antes de qualquer gasto.
 
 ### 3.1 Perfis por finalidade e escolha do cliente (ADR-016)
