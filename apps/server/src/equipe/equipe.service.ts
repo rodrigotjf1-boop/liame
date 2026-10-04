@@ -33,6 +33,9 @@ import { type ContagensDoMes, numerosDoMembro, situacaoDoMembro } from './numero
 
 type Pausa = { agent_key: string; paused_by: string | null; name: string | null; paused_at: Date | string; reason: string | null };
 
+/** Quem vê a equipe: a sessão da rota ou, na conversa com a LIA, a pessoa que pergunta (a leitura `equipe_trabalho`). */
+export type QuemVeAEquipe = Pick<AuthContext, 'tenantId' | 'userId' | 'permissions'>;
+
 const iso = (v: Date | string) => new Date(v).toISOString();
 const quem = (id: string | null, nome: string | null) => (id ? { id, name: nome ?? 'Pessoa removida' } : null);
 
@@ -44,7 +47,7 @@ export class EquipeService {
     private readonly switches: KillSwitchService,
   ) {}
 
-  async ver(auth: AuthContext, brandId: string, agora = new Date()): Promise<TeamResponse> {
+  async ver(auth: QuemVeAEquipe, brandId: string, agora = new Date()): Promise<TeamResponse> {
     const tenantId = this.empresa(auth);
     await this.exigirMarca(brandId);
     const tx = currentTx();
@@ -217,7 +220,7 @@ export class EquipeService {
   }
 
   /** "O que fez": os acontecimentos do membro nesta marca nos últimos 90 dias, do mais novo para o mais antigo. */
-  async atividade(auth: AuthContext, key: string, query: TeamActivityQuery, agora = new Date()): Promise<TeamActivityResponse> {
+  async atividade(auth: QuemVeAEquipe, key: string, query: TeamActivityQuery, agora = new Date()): Promise<TeamActivityResponse> {
     const tenantId = this.empresa(auth);
     if (!ehMembro(key)) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Este funcionário não faz parte da equipe.');
     await this.exigirMarca(query.brand_id);
@@ -344,7 +347,7 @@ export class EquipeService {
     if (!b.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
   }
 
-  private empresa(auth: AuthContext): string {
+  private empresa(auth: QuemVeAEquipe): string {
     if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
     return auth.tenantId;
   }

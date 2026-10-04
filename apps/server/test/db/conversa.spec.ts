@@ -213,13 +213,13 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
 
     // O modelo recebeu o prompt registrado, o contexto do pedido e só as ferramentas da pessoa (o dono tem todas).
     expect(mock.doGenerateCalls).toHaveLength(2);
-    expect(mock.doGenerateCalls[0]!.tools?.map((t) => t.name)).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'abrir_demanda', 'propor_cupom']);
+    expect(mock.doGenerateCalls[0]!.tools?.map((t) => t.name)).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'equipe_trabalho', 'abrir_demanda', 'propor_cupom']);
     expect(enviado(mock, 0)).toContain('Você é a LIA, a assistente de inteligência artificial da Liame');
     expect(enviado(mock, 0)).toContain(`brand_id ${d.brandId}`);
     expect(enviado(mock, 1)).toContain('R$ 200,00');
     expect(await usosDaConversa(d.tenantId)).toEqual([
-      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@2', outcome: 'ok' },
-      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@2', outcome: 'ok' },
+      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@3', outcome: 'ok' },
+      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@3', outcome: 'ok' },
     ]);
     // O retorno da pessoa ("Fez sentido") vale para a resposta da conversa, como para o Explicar.
     const retorno = await api.call('POST', '/v1/ai/feedback', { cookie: d.cookie, body: { usage_id: m.usage_id, verdict: 'fez_sentido' } });
@@ -354,6 +354,54 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     expect(membro('lia').cost.calls).toBe(6);
     expect(numeros('compliance')).toEqual({ textos_conferidos: '4', textos_barrados: '1' });
     expect(membro('compliance')).toMatchObject({ kind: 'regra', status: 'ativo', cost: { usd_micros: '4000', calls: 3 } });
+  });
+
+  it('"Conversar sobre ele": a LIA lê Sua equipe (`equipe_trabalho`) com os números da tela e diz de onde veio cada um', async () => {
+    const d = await dono();
+    // O mês do Analista, como o gateway grava: três explicações que chegaram à pessoa e uma retirada na conferência.
+    const explicacao = () =>
+      ownerQuery<{ id: string }>(
+        `insert into liame.ai_usage (id, tenant_id, brand_id, user_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome, answered)
+         values (gen_random_uuid(), $1, $2, $3, 'resultados.explicar', 'explicar_resultados', 'teste', 'modelo', 'principal', 50000, 'ok', true)
+         returning id`,
+        [d.tenantId, d.brandId, d.userId],
+      );
+    for (let i = 0; i < 3; i += 1) await explicacao();
+    const [retirada] = await explicacao();
+    await ownerQuery(`insert into liame.ai_refusal (id, tenant_id, brand_id, usage_id, member, workflow, kind) values (gen_random_uuid(), $1, $2, $3, 'analista', 'resultados.explicar', 'numero_fora')`, [d.tenantId, d.brandId, retirada!.id]);
+
+    const mock = responder(
+      roteiro(
+        pede('equipe_trabalho', { brand_id: d.brandId, funcionario: 'analista' }, 'equipe-1'),
+        responde(['paragrafo', 'Neste mês, o Analista de dados fez 3 explicações que chegaram até você e teve 1 resposta retirada na conferência.'], ['paragrafo', 'Ele está ativo e trabalha com um modelo de IA.']),
+      ),
+    );
+    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Quero falar sobre o trabalho do Analista de dados: o que ele fez este mês?' });
+    expect(r.eventos.filter((e) => e.type === 'passo').map((e) => e.step!.label)).toEqual(['Lendo o trabalho do Analista de dados em Sua equipe', 'Lendo o trabalho do Analista de dados em Sua equipe']);
+    const m = mensagemFinal(r.eventos);
+    expect(m).toMatchObject({ role: 'lia', status: 'ok', read: ['Sua equipe'], cards: [] });
+    // Quem diz de onde veio cada número é o código: o lugar na leitura da equipe.
+    expect(m.numbers.find((n) => n.value === '3')!.sources).toEqual(['Sua equipe · Analista de dados · no mês · explicações que chegaram à pessoa']);
+    expect(m.numbers.find((n) => n.value === '1')!.sources).toEqual(['Sua equipe · Analista de dados · no mês · respostas retiradas na conferência']);
+
+    // O que o modelo recebeu da leitura: só o Analista, com os nomes da tela e sem o nome de ninguém da empresa.
+    const lido = JSON.stringify(mock.doGenerateCalls[1]!.prompt.filter((p) => p.role === 'tool'));
+    expect(lido).toContain('Analista de dados');
+    expect(lido).toContain('explicacoes_que_chegaram_a_pessoa');
+    expect(lido).toContain('ultimos_acontecimentos');
+    // O que ela pediu aparece como dela ("você"), e o que a conferência retirou, com o motivo em palavras.
+    expect(lido).toContain('explicou os resultados');
+    expect(lido).toContain('citava um número que o sistema não calculou');
+    expect(lido).not.toContain('Estrategista');
+    const eu = (await api.call('GET', '/v1/me', { cookie: d.cookie })).body.user.name as string;
+    expect(lido).not.toContain(eu);
+    // A leitura está entre as ferramentas de quem pode ver Sua equipe.
+    expect(mock.doGenerateCalls[0]!.tools?.map((t) => t.name)).toContain('equipe_trabalho');
+
+    // Número que não está na leitura da equipe derruba a resposta, como em qualquer leitura.
+    responder(roteiro(pede('equipe_trabalho', { brand_id: d.brandId }), responde(['paragrafo', 'A equipe fez 250 explicações neste mês.'])));
+    const inventou = await conversar(d.cookie, { brand_id: d.brandId, text: 'E a equipe toda?' });
+    expect(mensagemFinal(inventou.eventos)).toMatchObject({ role: 'sistema', notice: 'recusada' });
   });
 
   it('por regra, sem IA: falar com uma pessoa, pedido político, LIA desligada; o dado pessoal sai antes de tudo', async () => {

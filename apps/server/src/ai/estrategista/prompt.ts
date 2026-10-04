@@ -1,4 +1,4 @@
-import { LEITURAS } from '../registro/leituras.defs.js';
+import { LEITURAS_DE_DADOS } from '../registro/leituras.defs.js';
 import type { FuncionarioDef, PromptDef } from '../registro/definicoes.js';
 
 // O Estrategista (A3, I11; protótipo P8, aguardando aprovação). Mudou uma vírgula? Sobe a versão e roda `ia:lock`:
@@ -53,7 +53,8 @@ export const ESTRATEGISTA: FuncionarioDef = {
     'Propor a verba por canal e usar as datas do calendário comercial do Liame, sem mudar nada nas plataformas',
     'Refazer o plano quando a pessoa pede uma nova análise, dizendo o que mudou',
   ],
-  ferramentas: LEITURAS.map((l) => l.name),
+  // As leituras dos números da marca. A leitura da equipe (`equipe_trabalho`) é só da conversa com a LIA.
+  ferramentas: [...LEITURAS_DE_DADOS],
   tarefas: [{ task: TAREFA_ESTRATEGISTA, prompt: 'estrategista.plano' }],
   ativoPorPadrao: true,
 };
