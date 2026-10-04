@@ -212,8 +212,11 @@ describe('Resumo: o veredito', () => {
 describe('Resumo: precisa de você', () => {
   const itens = [aviso({}), aviso({ kind: 'cupom_sem_uso', severity: 'atencao', title: 'O cupom SMASH10 não foi usado', campaign_id: uuid(12) }), aviso({ kind: 'anuncio_sem_rastreio', severity: 'atencao', title: '3 anúncios estão sem o rastreio do Liame', campaign_id: null })];
 
+  const TUDO = { acoes: true, planos: true, autonomia: true };
+  const NADA = { acoes: false, planos: false, autonomia: false };
+
   it('os críticos primeiro, depois o pedido de decisão, depois os de atenção; cada um leva à tela onde se resolve', () => {
-    const lista = precisaDe(resumo({ needs_you: { critical: 1, attention: 2, items: itens, approvals: { actions: 2, plans: 0, autonomy: 0 } } }), true, true, true);
+    const lista = precisaDe(resumo({ needs_you: { critical: 1, attention: 2, items: itens, approvals: { actions: 2, plans: 0, autonomy: 0 } } }), true, true, TUDO);
     expect(lista.map((i) => [i.gravidade, i.titulo, i.botao?.href])).toEqual([
       ['urgente', 'A Delivery noite parou de aparecer para as pessoas', '/atencao'],
       ['decisao', '2 pedidos esperam a sua decisão', '/aprovacoes'],
@@ -225,9 +228,36 @@ describe('Resumo: precisa de você', () => {
 
   it('sem poder aprovar, não há o pedido de decisão; sem ver as vendas, os avisos do caixa levam à Atenção', () => {
     const r = resumo({ needs_you: { critical: 0, attention: 1, items: [itens[1]!], approvals: { actions: 3, plans: 0, autonomy: 0 } } });
-    expect(precisaDe(r, true, true, false).map((i) => i.chave)).not.toContain('decisao');
-    expect(precisaDe(r, false, true, false)[0]!.botao!.href).toBe('/atencao');
-    expect(textoCorrido(precisaDe(resumo({ needs_you: { critical: 0, attention: 0, items: [], approvals: { actions: 1, plans: 0, autonomy: 0 } } }), true, true, true)[0]!.sub)).toBe('Nada vai ao ar sem você.');
+    expect(precisaDe(r, true, true, NADA).map((i) => i.chave)).not.toContain('decisao');
+    expect(precisaDe(r, false, true, NADA)[0]!.botao!.href).toBe('/atencao');
+    expect(textoCorrido(precisaDe(resumo({ needs_you: { critical: 0, attention: 0, items: [], approvals: { actions: 1, plans: 0, autonomy: 0 } } }), true, true, TUDO)[0]!.sub)).toBe('Nada vai ao ar sem você.');
+  });
+
+  it('o pedido de decisão junta as ações e os planos do Estrategista que a pessoa pode decidir', () => {
+    const r = resumo({ needs_you: { critical: 0, attention: 0, items: [], approvals: { actions: 2, plans: 1, autonomy: 0 } } });
+    const juntos = precisaDe(r, true, true, TUDO);
+    expect(juntos.map((i) => [i.chave, i.titulo, i.botao?.href])).toEqual([['decisao', '3 pedidos esperam a sua decisão', '/aprovacoes']]);
+    expect(textoCorrido(juntos[0]!.sub)).toBe('2 ações e 1 plano do Estrategista. Nada vai ao ar sem você.');
+    // Quem só decide planos vê só os planos; quem só aprova ações, só as ações.
+    const soPlanos = precisaDe(r, true, true, { ...NADA, planos: true });
+    expect(soPlanos[0]!.titulo).toBe('1 pedido espera a sua decisão');
+    expect(textoCorrido(soPlanos[0]!.sub)).toBe('Um plano do Estrategista. Nada vai ao ar sem você.');
+    expect(precisaDe(r, true, true, { ...NADA, acoes: true })[0]!.titulo).toBe('2 pedidos esperam a sua decisão');
+    const varios = precisaDe(resumo({ needs_you: { critical: 0, attention: 0, items: [], approvals: { actions: 0, plans: 3, autonomy: 0 } } }), true, true, TUDO);
+    expect(textoCorrido(varios[0]!.sub)).toBe('3 planos do Estrategista. Nada vai ao ar sem você.');
+  });
+
+  it('a proposta de um funcionário passar a sugerir é um pedido à parte, decidido em Sua equipe', () => {
+    const r = resumo({ needs_you: { critical: 1, attention: 1, items: [itens[0]!, itens[1]!], approvals: { actions: 1, plans: 0, autonomy: 2 } } });
+    const lista = precisaDe(r, true, true, TUDO);
+    expect(lista.map((i) => i.chave)).toEqual([expect.stringContaining(''), 'decisao', 'autonomia', expect.stringContaining('')]);
+    expect(lista.map((i) => i.gravidade)).toEqual(['urgente', 'decisao', 'decisao', 'atencao']);
+    const autonomia = lista[2]!;
+    expect(autonomia.titulo).toBe('O Gestor de tráfego espera a sua decisão');
+    expect(textoCorrido(autonomia.sub)).toBe('Em sombra, ele mostrou que acerta. Você decide se ele passa a sugerir mudanças (2 propostas).');
+    expect(autonomia.botao).toEqual({ rotulo: 'Ver', href: '/equipe', primario: false });
+    // Quem não gerencia as políticas não vê a proposta.
+    expect(precisaDe(r, true, true, { ...TUDO, autonomia: false }).map((i) => i.chave)).not.toContain('autonomia');
   });
 
   it('o número do menu: os avisos e, havendo pedido esperando, mais um', () => {
