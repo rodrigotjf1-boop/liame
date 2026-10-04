@@ -54,12 +54,17 @@ function ramo(c: Colunas, origem: SQL): SQL {
       ${origem}`;
 }
 
-/** Uma resposta atendida da IA num fluxo. Quem pediu só aparece para a própria pessoa. */
+/**
+ * Uma resposta da IA que chegou à pessoa, num fluxo: a chamada que respondeu (`answered`; as rodadas de leitura antes
+ * dela não são respostas) e que a conferência não recusou (a recusada aparece em `retiradas`). Quem pediu só aparece
+ * para a própria pessoa.
+ */
 const usoDeIa = (q: QuemOlha, fluxo: string, kind: string): SQL =>
   ramo(
     { at: sql`u.occurred_at`, kind, ref: sql`u.id`, by: sql`case when u.user_id = ${q.userId} then u.user_id end` },
     sql`from liame.ai_usage u
-        where u.tenant_id = ${q.tenantId} and u.brand_id = ${q.brandId} and u.workflow = ${fluxo} and u.outcome = 'ok' and u.occurred_at >= ${q.desde}::timestamptz`,
+        where u.tenant_id = ${q.tenantId} and u.brand_id = ${q.brandId} and u.workflow = ${fluxo} and u.answered
+          and not exists (select 1 from liame.ai_refusal r where r.usage_id = u.id) and u.occurred_at >= ${q.desde}::timestamptz`,
   );
 
 /** Os textos do membro que a conferência não deixou aparecer (D-A3-15): sem o texto, só o porquê. */

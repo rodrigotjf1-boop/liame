@@ -38,8 +38,13 @@ export function situacaoDoMembro(def: DefinicaoDoMembro, f: FatosDoMembro): Situ
 
 /** As contagens do mês que o serviço leu (zero quando não há). */
 export interface ContagensDoMes {
-  /** Respostas com `outcome = ok` em `ai_usage`, por fluxo. */
+  /**
+   * Respostas do modelo, por fluxo: as chamadas que entregaram a resposta de um pedido (`ai_usage.answered`). Uma
+   * resposta com leituras faz várias chamadas; só a última conta. É o que chegou à conferência.
+   */
   respostasPorFluxo: Map<string, number>;
+  /** As respostas que chegaram à pessoa, por fluxo: as de cima, menos as que a conferência recusou. */
+  entreguesPorFluxo: Map<string, number>;
   /** "Fez sentido" e "Discordo" das pessoas, por fluxo. */
   retornoPorFluxo: Map<string, { fezSentido: number; discordo: number }>;
   demandasDaLia: number;
@@ -78,10 +83,11 @@ export function numerosDoMembro(def: DefinicaoDoMembro, c: ContagensDoMes): Team
   const recusas = c.recusasPorMembro.get(chave);
   const retiradas = qtd('retiradas_na_conferencia', (recusas?.doCompliance ?? 0) + (recusas?.outras ?? 0));
   switch (chave) {
+    // Respostas e explicações são as que chegaram à pessoa; as que a conferência retirou vêm ao lado, em `retiradas`.
     case 'lia':
-      return [qtd('respostas', soma(c.respostasPorFluxo)), qtd('fez_sentido', retorno.fezSentido), qtd('discordo', retorno.discordo), qtd('demandas', c.demandasDaLia), retiradas];
+      return [qtd('respostas', soma(c.entreguesPorFluxo)), qtd('fez_sentido', retorno.fezSentido), qtd('discordo', retorno.discordo), qtd('demandas', c.demandasDaLia), retiradas];
     case 'analista':
-      return [qtd('explicacoes', soma(c.respostasPorFluxo)), qtd('fez_sentido', retorno.fezSentido), qtd('discordo', retorno.discordo), retiradas];
+      return [qtd('explicacoes', soma(c.entreguesPorFluxo)), qtd('fez_sentido', retorno.fezSentido), qtd('discordo', retorno.discordo), retiradas];
     case 'relatorios':
       return [qtd('revisoes', c.revisoes), qtd('com_leitura_da_ia', c.revisoesComLeituraDaIa), qtd('so_do_sistema', c.revisoes - c.revisoesComLeituraDaIa)];
     case 'compliance': {

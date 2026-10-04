@@ -61,13 +61,18 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     flags.invalidate();
   }
 
-  /** Uma chamada ao modelo registrada no mês, como o AI Gateway grava. */
-  async function chamada(e: Empresa, workflow: string, custo: number, outcome = 'ok'): Promise<string> {
+  /**
+   * Uma chamada ao modelo registrada no mês, como o AI Gateway grava. `respondeu`: a chamada que entregou a resposta do
+   * pedido (a atendida, se o teste não disser outra coisa); a rodada em que o modelo só pediu uma leitura não respondeu.
+   */
+  async function chamada(e: Empresa, workflow: string, custo: number, o: { outcome?: string; respondeu?: boolean } = {}): Promise<string> {
     const id = uuidv7();
+    const outcome = o.outcome ?? 'ok';
+    const respondeu = o.respondeu ?? outcome === 'ok';
     await ownerQuery(
-      `insert into liame.ai_usage (id, tenant_id, brand_id, user_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome)
-       values ($1, $2, $3, $4, $5, 'teste', 'teste', 'modelo', 'principal', $6, $7)`,
-      [id, e.tenantId, e.brandId, e.userId, workflow, custo, outcome],
+      `insert into liame.ai_usage (id, tenant_id, brand_id, user_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome, tool_calls, answered)
+       values ($1, $2, $3, $4, $5, 'teste', 'teste', 'modelo', 'principal', $6, $7, $8, $9)`,
+      [id, e.tenantId, e.brandId, e.userId, workflow, custo, outcome, outcome === 'ok' && !respondeu ? 1 : 0, respondeu],
     );
     return id;
   }
@@ -132,10 +137,16 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     await ligarIa(flags, e.tenantId);
     const resposta = await chamada(e, 'conversa.lia', 120_000);
     await chamada(e, 'conversa.lia', 80_000);
+    // A rodada em que a LIA só leu os dados custa e é uma chamada, mas a resposta é a chamada seguinte.
+    await chamada(e, 'conversa.lia', 40_000, { respondeu: false });
     // A tentativa que falhou também custa, mas não conta como resposta.
-    await chamada(e, 'conversa.lia', 10_000, 'erro');
+    await chamada(e, 'conversa.lia', 10_000, { outcome: 'erro' });
+    // As duas respostas que o Compliance barrou chegaram à conferência, não à pessoa.
+    const barradas = [await chamada(e, 'conversa.lia', 15_000), await chamada(e, 'conversa.lia', 15_000)];
     const explicacao = await chamada(e, 'resultados.explicar', 50_000);
     await chamada(e, 'atencao.explicar', 30_000);
+    // A explicação retirada pelos números, também.
+    const retirada = await chamada(e, 'resultados.explicar', 25_000);
     await chamada(e, 'revisao.semanal', 20_000);
     await ownerQuery(`insert into liame.ai_feedback (id, tenant_id, usage_id, user_id, verdict) values ($1, $2, $3, $4, 'fez_sentido'), ($5, $2, $6, $4, 'discordo')`, [
       uuidv7(),
@@ -171,14 +182,14 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     // O que a conferência recusou no mês (D-A3-15): dois textos da LIA barrados pelo Compliance, uma resposta do Analista
     // retirada pelos números e três rótulos do Pesquisador barrados numa leitura só. De outra marca, nada entra.
     const outraMarca = (await api.call('POST', '/v1/brands', { cookie: e.cookie, body: { name: 'Segunda marca' } })).body.id as string;
-    for (const [marca, member, workflow, kind, rules, items] of [
-      [e.brandId, 'lia', 'conversa.lia', 'compliance', '["promessa_de_resultado"]', 1],
-      [e.brandId, 'lia', 'conversa.lia', 'compliance', '["regra_da_marca"]', 1],
-      [e.brandId, 'analista', 'resultados.explicar', 'numero_fora', '[]', 1],
-      [e.brandId, 'pesquisador', 'pesquisador.pagina', 'compliance', '["dado_pessoal"]', 3],
-      [outraMarca, 'lia', 'conversa.lia', 'compliance', '["promessa_de_resultado"]', 5],
+    for (const [marca, member, workflow, kind, rules, items, uso] of [
+      [e.brandId, 'lia', 'conversa.lia', 'compliance', '["promessa_de_resultado"]', 1, barradas[0]],
+      [e.brandId, 'lia', 'conversa.lia', 'compliance', '["regra_da_marca"]', 1, barradas[1]],
+      [e.brandId, 'analista', 'resultados.explicar', 'numero_fora', '[]', 1, retirada],
+      [e.brandId, 'pesquisador', 'pesquisador.pagina', 'compliance', '["dado_pessoal"]', 3, null],
+      [outraMarca, 'lia', 'conversa.lia', 'compliance', '["promessa_de_resultado"]', 5, null],
     ] as const) {
-      await ownerQuery(`insert into liame.ai_refusal (id, tenant_id, brand_id, member, workflow, kind, rules, items) values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`, [
+      await ownerQuery(`insert into liame.ai_refusal (id, tenant_id, brand_id, member, workflow, kind, rules, items, usage_id) values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)`, [
         uuidv7(),
         e.tenantId,
         marca,
@@ -187,23 +198,27 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
         kind,
         rules,
         items,
+        uso,
       ]);
     }
 
     const t = await ver(e, e.brandId);
-    expect(doMembro(t, 'lia').cost).toEqual({ usd_micros: '210000', calls: 3 });
+    // O custo e as chamadas contam tudo o que foi ao modelo (6 da LIA: duas respostas, a rodada de leitura, a que falhou
+    // e as duas barradas); as respostas são só as que chegaram à pessoa.
+    expect(doMembro(t, 'lia').cost).toEqual({ usd_micros: '280000', calls: 6 });
     expect(numeros(t, 'lia')).toEqual({ respostas: '2', fez_sentido: '1', discordo: '0', demandas: '1', retiradas_na_conferencia: '2' });
-    expect(doMembro(t, 'analista').cost).toEqual({ usd_micros: '80000', calls: 2 });
+    expect(doMembro(t, 'analista').cost).toEqual({ usd_micros: '105000', calls: 3 });
     expect(numeros(t, 'analista')).toEqual({ explicacoes: '2', fez_sentido: '0', discordo: '1', retiradas_na_conferencia: '1' });
-    // O Compliance: conferidos = as respostas atendidas da marca (5: duas da LIA, duas do Analista e a da revisão);
-    // barrados = só o que uma regra de texto barrou (2 + 3), e a recusa pelos números não entra aqui.
-    expect(numeros(t, 'compliance')).toEqual({ textos_conferidos: '5', textos_barrados: '5' });
+    // O Compliance: conferidos = as respostas que chegaram à conferência (8: quatro da LIA, três do Analista e a da
+    // revisão; a rodada de leitura e a tentativa que falhou não são texto para conferir); barrados = só o que uma regra
+    // de texto barrou (2 + 3), e a recusa pelos números não entra aqui.
+    expect(numeros(t, 'compliance')).toEqual({ textos_conferidos: '8', textos_barrados: '5' });
     expect(numeros(t, 'pesquisador')).toMatchObject({ retiradas_na_conferencia: '3' });
     expect(doMembro(t, 'relatorios').cost).toEqual({ usd_micros: '20000', calls: 1 });
     expect(numeros(t, 'estrategista')).toMatchObject({ em_preparo: '1' });
     expect(numeros(t, 'trafego')).toEqual({ recomendacoes: '2', comparaveis: '1', mesma_direcao: '1', arrependimento: '-18400000' });
     // O gasto da empresa no mês soma todas as chamadas; o teto vem da configuração.
-    expect(t.ai.spent_usd_micros).toBe('310000');
+    expect(t.ai.spent_usd_micros).toBe('405000');
 
     // Outra empresa não vê esta marca, e a marca dela não mostra o custo desta.
     const outra = await empresa();

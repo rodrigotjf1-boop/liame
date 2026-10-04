@@ -68,7 +68,7 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
   const usos = (tenantId: string, task: string) =>
     ownerQuery<Record<string, any>>(
       `select id, user_id, workflow, route_version, prompt_version, provider, model, served_by, inference_geo, input_tokens::int, cache_read_tokens::int,
-              cache_write_tokens::int, output_tokens::int, cost_usd_micros::int, outcome, error_code, pii_removed, trace_id
+              cache_write_tokens::int, output_tokens::int, cost_usd_micros::int, outcome, error_code, pii_removed, trace_id, answered
          from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`,
       [tenantId, task],
     );
@@ -140,6 +140,8 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
       outcome: 'ok',
       error_code: null,
       pii_removed: 0,
+      // A chamada única de um pedido atendido é a que respondeu (migration 0042).
+      answered: true,
     });
     // O limite de saída e o prazo da rota chegam ao modelo; a tentativa extra do SDK é uma só.
     expect(m.mock.doGenerateCalls[0]).toMatchObject({ maxOutputTokens: 4000 });
@@ -300,9 +302,10 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     const task = await rota(principal, { reserva: [reserva] });
     const r = await gateway().generate(pedido(d, task));
     expect(r).toMatchObject({ servedBy: 'reserva', model: reserva.model, text: 'resposta da reserva', costUsdMicros: 14_000 });
-    expect((await usos(d.tenantId, task)).map((u) => [u.model, u.served_by, u.outcome, u.error_code, u.cost_usd_micros])).toEqual([
-      [principal.model, 'principal', 'erro', 'http_400', 0],
-      [reserva.model, 'reserva', 'ok', null, 14_000],
+    // Quem respondeu foi a reserva: a tentativa que falhou fica registrada, sem ser a resposta.
+    expect((await usos(d.tenantId, task)).map((u) => [u.model, u.served_by, u.outcome, u.error_code, u.cost_usd_micros, u.answered])).toEqual([
+      [principal.model, 'principal', 'erro', 'http_400', 0, false],
+      [reserva.model, 'reserva', 'ok', null, 14_000, true],
     ]);
 
     // Fornecedor fora do ar, sem credencial e sem preço: quem chama recebe um só erro e cai no caminho sem IA.
@@ -312,6 +315,7 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     expect(await falha(gateway().generate(pedido(d, fora)))).toBe('indisponivel');
     const linhas = await usos(d.tenantId, fora);
     expect(linhas.map((u) => [u.outcome, u.error_code, u.cost_usd_micros])).toEqual([['erro', 'http_400', 0], ['erro', 'sem_credencial', 0], ['erro', 'sem_preco', 0]]);
+    expect(linhas.some((u) => u.answered)).toBe(false);
     expect(modelos.porChave.get(`teste/${semPreco}`)!.doGenerateCalls).toHaveLength(0);
     const [guardado] = await ownerQuery<{ response: unknown; request: { messages: unknown[] } }>(`select request, response from liame.ai_exchange where usage_id = $1`, [linhas[2]!.id]);
     expect(guardado).toMatchObject({ response: null, request: { messages: [{ role: 'user' }] } });
@@ -402,11 +406,12 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     const segunda = JSON.stringify(m.mock.doGenerateCalls[1]!.prompt);
     expect(segunda).toContain('Conta da Pizzaria A');
     expect(segunda).toContain('nunca leu');
-    const linhas = await ownerQuery<{ id: string; tool_calls: number; tool_failures: number; cost_usd_micros: number }>(
-      `select id, tool_calls, tool_failures, cost_usd_micros::int from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`,
+    const linhas = await ownerQuery<{ id: string; tool_calls: number; tool_failures: number; cost_usd_micros: number; answered: boolean }>(
+      `select id, tool_calls, tool_failures, cost_usd_micros::int, answered from liame.ai_usage where tenant_id = $1 and task = $2 order by occurred_at, id`,
       [a.tenantId, task],
     );
-    expect(linhas.map((l) => [l.tool_calls, l.tool_failures, l.cost_usd_micros])).toEqual([[1, 0, 14_000], [0, 0, 14_000]]);
+    // Duas chamadas, uma resposta: a rodada da leitura custa e fica registrada; quem respondeu foi a segunda.
+    expect(linhas.map((l) => [l.tool_calls, l.tool_failures, l.cost_usd_micros, l.answered])).toEqual([[1, 0, 14_000, false], [0, 0, 14_000, true]]);
     expect(linhas[1]!.id).toBe(r.usageId);
     const [guardado] = await ownerQuery<{ response: unknown }>(`select response from liame.ai_exchange where usage_id = $1`, [r.usageId]);
     expect(guardado!.response).toEqual({ text: 'A conta da Meta nunca foi lida.', tools: [{ name: 'fontes_frescor', ok: true }] });
@@ -465,7 +470,8 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
     expect(await falha(gateway().agent({ ...pedido(d, task), ferramentas, maxRodadas: 3 }))).toBe('indisponivel');
     expect(m.mock.doGenerateCalls).toHaveLength(3);
     const linhas = await usos(d.tenantId, task);
-    expect(linhas.map((u) => u.outcome)).toEqual(['ok', 'ok', 'ok']);
+    // As três rodadas foram atendidas, e nenhuma respondeu: o laço parou antes da resposta.
+    expect(linhas.map((u) => [u.outcome, u.answered])).toEqual([['ok', false], ['ok', false], ['ok', false]]);
     const [guardado] = await ownerQuery<{ response: { stopped: string; tools: unknown[] } }>(`select response from liame.ai_exchange where usage_id = $1`, [linhas[2]!.id]);
     expect(guardado!.response).toMatchObject({ stopped: 'rodadas' });
     expect(guardado!.response.tools).toHaveLength(3);

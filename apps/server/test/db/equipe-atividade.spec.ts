@@ -54,13 +54,18 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     return { cookie: s.cookie, userId: eu.body.user.id as string };
   }
 
-  /** Uma chamada ao modelo, como o AI Gateway grava. */
-  async function chamada(e: Empresa, o: { fluxo: string; quem: string | null; quando: string; outcome?: string; marca?: string }): Promise<string> {
+  /**
+   * Uma chamada ao modelo, como o AI Gateway grava. `respondeu`: a chamada que entregou a resposta do pedido (a
+   * atendida, se o teste não disser outra coisa); a rodada em que o modelo só pediu uma leitura não respondeu.
+   */
+  async function chamada(e: Empresa, o: { fluxo: string; quem: string | null; quando: string; outcome?: string; marca?: string; respondeu?: boolean }): Promise<string> {
     const id = uuidv7();
+    const outcome = o.outcome ?? 'ok';
+    const respondeu = o.respondeu ?? outcome === 'ok';
     await ownerQuery(
-      `insert into liame.ai_usage (id, tenant_id, brand_id, user_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome, occurred_at)
-       values ($1, $2, $3, $4, $5, 'teste', 'teste', 'modelo', 'principal', 1000, $6, $7)`,
-      [id, e.tenantId, o.marca ?? e.brandId, o.quem, o.fluxo, o.outcome ?? 'ok', o.quando],
+      `insert into liame.ai_usage (id, tenant_id, brand_id, user_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome, occurred_at, tool_calls, answered)
+       values ($1, $2, $3, $4, $5, 'teste', 'teste', 'modelo', 'principal', 1000, $6, $7, $8, $9)`,
+      [id, e.tenantId, o.marca ?? e.brandId, o.quem, o.fluxo, outcome, o.quando, outcome === 'ok' && !respondeu ? 1 : 0, respondeu],
     );
     return id;
   }
@@ -104,6 +109,10 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     await chamada(e, { fluxo: 'conversa.lia', quem: e.userId, quando: ha(5), outcome: 'erro' });
     const outraMarca = (await api.call('POST', '/v1/brands', { cookie: e.cookie, body: { name: 'Segunda marca' } })).body.id as string;
     await chamada(e, { fluxo: 'conversa.lia', quem: e.userId, quando: ha(1), marca: outraMarca });
+    // A rodada em que a LIA só leu os dados (antes de responder à pergunta do dono) é uma chamada, não uma resposta.
+    await chamada(e, { fluxo: 'conversa.lia', quem: e.userId, quando: ha(11), respondeu: false });
+    // A resposta que a conferência retirou não chegou à pessoa: aparece só como retirada.
+    const barrada = await chamada(e, { fluxo: 'conversa.lia', quem: e.userId, quando: ha(41) });
     await ownerQuery(`insert into liame.ai_feedback (id, tenant_id, usage_id, user_id, verdict) values ($1, $2, $3, $4, 'fez_sentido')`, [uuidv7(), e.tenantId, minha, e.userId]);
     await ownerQuery(
       `insert into liame.demand (id, tenant_id, brand_id, kind, title, detail, assignee_agent, requested_by, opened_by_agent, created_at)
@@ -111,8 +120,9 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
       [uuidv7(), e.tenantId, e.brandId, e.userId, ha(30)],
     );
     await ownerQuery(
-      `insert into liame.ai_refusal (id, tenant_id, brand_id, member, workflow, kind, rules, created_at) values ($1, $2, $3, 'lia', 'conversa.lia', 'compliance', '["promessa_de_resultado"]'::jsonb, $4)`,
-      [uuidv7(), e.tenantId, e.brandId, ha(40)],
+      `insert into liame.ai_refusal (id, tenant_id, brand_id, usage_id, member, workflow, kind, rules, created_at)
+       values ($1, $2, $3, $4, 'lia', 'conversa.lia', 'compliance', '["promessa_de_resultado"]'::jsonb, $5)`,
+      [uuidv7(), e.tenantId, e.brandId, barrada, ha(40)],
     );
 
     const dono = await atividade(e, e.brandId, 'lia');
@@ -143,12 +153,12 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     const explicacao = await chamada(e, { fluxo: 'resultados.explicar', quem: e.userId, quando: ha(10) });
     await chamada(e, { fluxo: 'atencao.explicar', quem: e.userId, quando: ha(20) });
     await ownerQuery(`insert into liame.ai_feedback (id, tenant_id, usage_id, user_id, verdict, reasons) values ($1, $2, $3, $4, 'discordo', '{motivo}')`, [uuidv7(), e.tenantId, explicacao, e.userId]);
-    await ownerQuery(`insert into liame.ai_refusal (id, tenant_id, brand_id, member, workflow, kind, created_at) values ($1, $2, $3, 'analista', 'resultados.explicar', 'numero_fora', $4)`, [
-      uuidv7(),
-      e.tenantId,
-      e.brandId,
-      ha(25),
-    ]);
+    // A explicação que a conferência retirou (o número fora) não aparece como explicação: só como retirada.
+    const retirada = await chamada(e, { fluxo: 'resultados.explicar', quem: e.userId, quando: ha(26) });
+    await ownerQuery(
+      `insert into liame.ai_refusal (id, tenant_id, brand_id, usage_id, member, workflow, kind, created_at) values ($1, $2, $3, $4, 'analista', 'resultados.explicar', 'numero_fora', $5)`,
+      [uuidv7(), e.tenantId, e.brandId, retirada, ha(25)],
+    );
     await ownerQuery(
       `insert into liame.ai_refusal (id, tenant_id, brand_id, member, workflow, kind, rules, items, created_at) values ($1, $2, $3, 'pesquisador', 'pesquisador.pagina', 'compliance', '["dado_pessoal"]'::jsonb, 3, $4)`,
       [uuidv7(), e.tenantId, e.brandId, ha(35)],
