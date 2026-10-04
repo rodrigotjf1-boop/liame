@@ -154,8 +154,8 @@ Opt-in amarrado à **finalidade**. Opt-out vale na hora para envios pendentes. C
 | `plan_decision` | Cada decisão sobre um plano: a versão e o hash vistos, `aprovado` (com o código do app), `recusado` (com os motivos) ou `nova_analise` (com o pedido), o comentário sem dado pessoal e quem decidiu; a aplicação só lê e insere (0035) |
 | `commercial_date` | O calendário comercial (do produto): feriados nacionais e datas do varejo, cada uma com a lei ou a regra de onde vem; a semente vai de outubro de 2026 a dezembro de 2027; só a rotina do sistema grava (0035) |
 | `approval` | Quem, quando, canal, `plan_hash` aprovado, expiração; invalidada se o plano mudar |
-| `action_request` | Ação proposta: ferramenta, parâmetros, `risk_level`, `budget_impact`, `action_fingerprint` (UNIQUE entre as ativas) |
-| `action_execution` | `before_state`, `expected_state`, `desired_state`, `provider_version`, `executed_at`, ator, aprovação, `compensation_strategy`, resultado |
+| `action_request` | Ação proposta: ferramenta, parâmetros, `risk_level`, `budget_impact`, `action_fingerprint` (UNIQUE entre as ativas); quando a plataforma manda esperar, a aprovada volta para a fila com `next_attempt_at` e conta as esperas em `attempts` (0044) |
+| `action_execution` | `before_state`, `expected_state`, `desired_state`, `provider_version`, `executed_at`, ator, aprovação, `compensation_strategy`, resultado; uma linha por tentativa, inclusive a `adiada` (a plataforma mandou esperar: nada foi escrito; 0044) |
 | `tool_execution` | Cada chamada de ferramenta (entrada sem PII, saída resumida, duração, erro) |
 | `budget_policy` | Limites por marca, conta e período |
 | `budget_ledger_entry` | `requested → reserved → executed → reported → actual_spend`, com lock por conta; orçamento configurado ≠ gasto real |

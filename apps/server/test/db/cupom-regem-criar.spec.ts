@@ -128,7 +128,8 @@ describe.skipIf(!hasDb)('criar cupom no Regem com aprovação (A2.5 · F6 parte 
       body: { unit_id: e.centro, code: 'SEXTA15', kind: 'percentual', percent: 15, valid_from: hoje, valid_until: fim, campaign_id: e.C1, exclusive: true, ...over },
     });
   const cancelar = (id: string, cookie = e.cookie) => api.call('POST', `/v1/coupons/regem/${id}/cancel`, { cookie });
-  const acao = async (id: string) => (await api.call('GET', `/v1/actions/${id}`, { cookie: e.cookie })).body as { status: string; status_reason: string | null; plan_hash: string; mode: string };
+  const acao = async (id: string) =>
+    (await api.call('GET', `/v1/actions/${id}`, { cookie: e.cookie })).body as { status: string; status_reason: string | null; plan_hash: string; mode: string; attempts: number; next_attempt_at: string | null };
   const ciclo = () => executor.runCycle(20, { tenantIds: [e.tenantId] });
   const pedidosDaLista = async () => (await listar()).body.requests as Pedido[];
   const itemDe = async (codigo: string) => ((await listar()).body.items as Item[]).find((i) => i.code === codigo);
@@ -395,10 +396,14 @@ describe.skipIf(!hasDb)('criar cupom no Regem com aprovação (A2.5 · F6 parte 
     const id = r.body.request.action_id as string;
     await aprovar(id);
     await ciclo();
-    // Erro passageiro: nada gravado, a ação fica travada em execução até o prazo de devolver à fila.
-    expect((await acao(id)).status).toBe('executando');
+    // Erro passageiro: nada gravado; a ação volta para a fila, aprovada, com a hora da próxima tentativa (1 minuto).
+    expect(await acao(id)).toMatchObject({ status: 'aprovada', status_reason: 'o Regem não respondeu', attempts: 1 });
+    expect((await acao(id)).next_attempt_at).not.toBeNull();
     expect(await itemDe('CAIU10')).toBeUndefined();
-    await ownerQuery(`update liame.action_request set updated_at = now() - interval '11 minutes' where id = $1`, [id]);
+    // Antes da hora, o worker não insiste.
+    await ciclo();
+    expect(chamadasDe('CAIU10')).toHaveLength(1);
+    await ownerQuery(`update liame.action_request set next_attempt_at = now() where id = $1`, [id]);
     await ciclo();
     expect((await acao(id)).status).toBe('executada');
     const feitas = chamadasDe('CAIU10');
@@ -414,7 +419,7 @@ describe.skipIf(!hasDb)('criar cupom no Regem com aprovação (A2.5 · F6 parte 
     const id = r.body.request.action_id as string;
     await aprovar(id);
     await ciclo();
-    expect((await acao(id)).status).toBe('executando');
+    expect((await acao(id)).status).toBe('aprovada');
     expect(criados.has('PERDEU20')).toBe(true);
 
     // A leitura periódica dos cupons traz o cupom que o Regem criou (ainda sem campanha no Liame).
@@ -422,9 +427,9 @@ describe.skipIf(!hasDb)('criar cupom no Regem com aprovação (A2.5 · F6 parte 
     await withTenant(database.db, e.tenantId, (tx) => gravarCupons(tx, { tenantId: e.tenantId, brandId: e.brandId, connectedAccountId: e.contaCentro }, [doRegem]));
     expect(await itemDe('PERDEU20')).toMatchObject({ link: null });
 
-    await ownerQuery(`update liame.action_request set updated_at = now() - interval '11 minutes' where id = $1`, [id]);
+    await ownerQuery(`update liame.action_request set next_attempt_at = now() where id = $1`, [id]);
     await ciclo();
-    expect(await acao(id)).toMatchObject({ status: 'executada', status_reason: null });
+    expect(await acao(id)).toMatchObject({ status: 'executada', status_reason: null, next_attempt_at: null });
     expect(await itemDe('PERDEU20')).toMatchObject({ percent: 20, link: { campaign: { id: e.C1 }, exclusive: true } });
     const [n] = await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.coupon where connected_account_id = $1 and code = 'PERDEU20'`, [e.contaCentro]);
     expect(n!.n).toBe('1');

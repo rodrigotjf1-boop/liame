@@ -52,6 +52,8 @@ const acao = (o: Partial<ActionResponse> = {}): ActionResponse => ({
   mode: 'APPROVAL',
   status: 'aguardando_aprovacao',
   status_reason: null,
+  attempts: 0,
+  next_attempt_at: null,
   policy: { allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@2'] },
   approvals: [],
   workflow: null,
@@ -169,6 +171,12 @@ describe('grupos da lista e o que aconteceu com cada pedido', () => {
     const ap = [aprovacao()];
     const casos: [Partial<ActionResponse>, string, string][] = [
       [{ status: 'aprovada', approvals: ap }, 'Aprovado', 'Aprovado por Ana Aprovadora às 11:05. O Liame executa em instantes.'],
+      // A plataforma mandou esperar: o pedido segue aprovado, com a hora da próxima tentativa.
+      [
+        { status: 'aprovada', approvals: ap, attempts: 1, next_attempt_at: local(1, 12, 10), status_reason: 'a Meta pediu para esperar (limite de uso da conta)' },
+        'Aprovado',
+        'Aprovado por Ana Aprovadora às 11:05. Ainda não foi executado: a Meta pediu para esperar (limite de uso da conta). O Liame tenta de novo às 12:10.',
+      ],
       [{ status: 'executada', approvals: ap, updated_at: local(1, 11, 6) }, 'Executado', 'Aprovado por Ana Aprovadora às 11:05 e executado às 11:06.'],
       [{ status: 'falhou', approvals: ap, status_reason: 'Já existe um cupom com este código no Regem. Escolha outro código.' }, 'Não executado', 'Aprovado por Ana Aprovadora às 11:05, mas não foi executado: Já existe um cupom com este código no Regem. Escolha outro código.'],
       [{ status: 'cancelada', status_reason: 'recusada por Ana Aprovadora: Não é o momento' }, 'Recusado', 'Recusado por Ana Aprovadora: “Não é o momento”. Nada foi executado.'],

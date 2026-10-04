@@ -69,6 +69,13 @@ export const ActionResponse = z.strictObject({
   mode: AutonomyMode,
   status: ActionStatus,
   status_reason: z.string().nullable(),
+  /**
+   * Quantas vezes a execução esperou a plataforma (limite de uso da conta, fora do ar). A ação aprovada volta para a
+   * fila com a hora da próxima tentativa, em vez de insistir; depois de seis esperas, falha.
+   */
+  attempts: z.int().min(0),
+  /** Quando a execução tenta de novo; nulo quando não está esperando. */
+  next_attempt_at: z.string().nullable(),
   policy: PolicyDecision,
   approvals: z.array(ActionApproval),
   /** Estado durável do fluxo (ADR-005): política → orçamento → aprovação → execução. */

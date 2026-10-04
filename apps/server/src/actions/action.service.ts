@@ -60,6 +60,9 @@ export type ActionRow = {
   policy_decision: PolicyDecision;
   status: ActionStatus;
   status_reason: string | null;
+  /** A execução que a plataforma mandou esperar: quantas vezes e quando tenta de novo (migration 0044). */
+  attempts: number;
+  next_attempt_at: Date | string | null;
   requested_by: string;
   expires_at: Date | string;
   created_at: Date | string;
@@ -547,6 +550,8 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     mode: row.mode,
     status: row.status,
     status_reason: row.status_reason,
+    attempts: Number(row.attempts ?? 0),
+    next_attempt_at: row.next_attempt_at ? new Date(row.next_attempt_at).toISOString() : null,
     policy: row.policy_decision,
     approvals: approvals
       .filter((a) => a.action_request_id === row.id)

@@ -14,6 +14,8 @@
 
 Ver `arquitetura.md` §6. A escrita só acontece por `execute()` chamado pelo Action Service, com `validateOnly` quando o provider oferecer e **criação sempre pausada**.
 
+**Escrita na Meta (A4, X1, 04/10/2026):** situação (ativar e pausar) e verba diária de campanha, conjunto e anúncio, por `POST /{id}` na versão do Capability Registry (`entity_update`), depois de ler o estado na Meta (`entity_state`) e de validar com `execution_options=["validate_only"]`. Mudança feita por uma pessoa na Meta nunca é sobrescrita; limite de uso adia a execução (base §2.1). Atrás da flag `meta_write`, desligada; as ferramentas que a usam entram na X2.
+
 ## 3. Plataformas (MVP em negrito)
 
 | Provider | Leitura | Escrita | Acesso e aprovação | Fase |

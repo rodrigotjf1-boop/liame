@@ -146,6 +146,8 @@ interface Connector {
 
 Resiliência por provider: **circuit breaker** (para de insistir, enfileira, backoff, alerta), **token bucket por app × conta** e **escalonamento justo entre tenants**, porque as cotas das plataformas são do app e compartilhadas.
 
+**No código (A4, X1):** a interface de escrita é `read` e `apply` com `validateOnly` (`actions/connectors.ts`), com um connector por provedor: o sandbox, o do Regem (cupom) e o da Meta (`actions/meta-anuncios.ts`: situação e verba diária de campanha, conjunto e anúncio). O executor valida, aplica e, quando a plataforma manda esperar (limite de uso, fora do ar), devolve a ação aprovada à fila com a hora da próxima tentativa, em vez de insistir.
+
 **Vigia de integrações (ADR-015):** funcionário da distribuição que lê, todo dia, as fontes oficiais de mudança (changelogs e páginas de versão, releases de SDKs e servidores MCP, cabeçalhos `Deprecation`/`Sunset` das respostas), cruza com o Capability Registry e agenda tarefas com data: na vigência, D+1 e D+7, e alertas 60, 30 e 7 dias antes de uma versão expirar. Propõe atualização da base de conhecimento e do registry; nunca muda código sozinho.
 
 ## 7. Contratos
