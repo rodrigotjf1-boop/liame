@@ -22,11 +22,23 @@ export const desafioPkce = (verificador: string): string => createHash('sha256')
 /** Endereço de volta registrado nos apps das plataformas. */
 export const enderecoDeVolta = (config: Pick<AppConfig, 'apiUrl'>): string => `${config.apiUrl}/v1/oauth/callback`;
 
-/** Para onde mandar a pessoa autorizar. */
+/** O que a autorização da Meta pede: só ler, ou também gerenciar anúncios (A4). */
+export type AcessoMeta = 'leitura' | 'escrita';
+
+/**
+ * A configuração do Facebook Login for Business que a empresa vai autorizar. A de escrita é outra configuração do
+ * mesmo app (a de leitura não muda: a análise da Meta usa ela) e só entra para a empresa com a escrita ligada
+ * (flag `meta_write`); sem a de escrita configurada, todo mundo autoriza pela de leitura.
+ */
+export function configuracaoDaMeta(meta: NonNullable<AppConfig['oauth']['meta']>, escritaLigada: boolean): { configId: string; acesso: AcessoMeta } {
+  return escritaLigada && meta.writeConfigId ? { configId: meta.writeConfigId, acesso: 'escrita' } : { configId: meta.configId, acesso: 'leitura' };
+}
+
+/** Para onde mandar a pessoa autorizar. `configMeta`: a configuração escolhida por `configuracaoDaMeta` (sem ela, a de leitura). */
 export function urlDeAutorizacao(
   provedor: ProvedorOAuth,
   config: Pick<AppConfig, 'oauth'>,
-  p: { estado: string; redirectUri: string; verificador?: string; versaoMeta: string },
+  p: { estado: string; redirectUri: string; verificador?: string; versaoMeta: string; configMeta?: string },
 ): string {
   if (provedor === 'meta') {
     const meta = config.oauth.meta!;
@@ -34,7 +46,7 @@ export function urlDeAutorizacao(
       client_id: meta.appId,
       redirect_uri: p.redirectUri,
       state: p.estado,
-      config_id: meta.configId,
+      config_id: p.configMeta ?? meta.configId,
       response_type: 'code',
       override_default_response_type: 'true',
     });

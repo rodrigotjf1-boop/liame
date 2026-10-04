@@ -9,6 +9,7 @@ import { loadConfig } from '../../src/config.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { ConexaoProcessor } from '../../src/worker/conexao-processor.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import { ligarEscritaNaMeta } from '../helpers/meta-de-mentira.js';
 import { APP_URL, hasDb } from './env.js';
 
 // A2 · G3: conectar contas de ponta a ponta contra uma "plataforma" local (Meta, OAuth do Google,
@@ -18,6 +19,9 @@ import { APP_URL, hasDb } from './env.js';
 const FIX = resolve(import.meta.dirname, '../fixtures');
 const API_PUBLICA = 'http://api.liame.test';
 const VOLTA = `${API_PUBLICA}/v1/oauth/callback`;
+/** As duas configurações do login da Meta: a de leitura (todo mundo) e a de escrita (só a empresa com `meta_write`). */
+const CONFIG_LEITURA = '99887766554433';
+const CONFIG_ESCRITA = '11223344556677';
 
 describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
   let api: TestApi;
@@ -100,7 +104,8 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
       API_URL: API_PUBLICA,
       META_APP_ID: '1234567890123',
       META_APP_SECRET: 'segredo-do-app-meta-teste',
-      META_LOGIN_CONFIG_ID: '99887766554433',
+      META_LOGIN_CONFIG_ID: CONFIG_LEITURA,
+      META_LOGIN_CONFIG_ID_ESCRITA: CONFIG_ESCRITA,
       META_DIALOG_URL: `${base}/dialog`,
       META_GRAPH_URL: `${base}/graph`,
       GOOGLE_OAUTH_CLIENT_ID: 'cliente-google-teste.apps.googleusercontent.com',
@@ -156,7 +161,8 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     expect(`${autorizar.origin}${autorizar.pathname}`).toBe(`${base}/dialog/v26.0/dialog/oauth`);
     expect(Object.fromEntries(autorizar.searchParams)).toMatchObject({
       client_id: '1234567890123',
-      config_id: '99887766554433',
+      // Sem a escrita ligada para a empresa, a configuração de leitura (mesmo com a de escrita configurada).
+      config_id: CONFIG_LEITURA,
       redirect_uri: VOLTA,
       response_type: 'code',
       override_default_response_type: 'true',
@@ -236,6 +242,51 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
 
     const acoes = await ownerQuery<{ action: string }>(`select action from liame.audit_event where tenant_id = $1 order by chain_seq`, [e.tenantId]);
     expect(acoes.map((a) => a.action)).toEqual(expect.arrayContaining(['conexao.iniciar', 'conexao.autorizar', 'conexao.concluir', 'conta.conectar', 'conta.desconectar']));
+  });
+
+  it('Meta: com a escrita ligada para a empresa, conectar de novo vai pela configuração de escrita e a autorização nova assume a conta', async () => {
+    const e = await empresa('Casa Brasa Escrita na Meta');
+    const vizinha = await empresa('Casa Brasa Só Leitura');
+    const iniciar = async (quem: { cookie: string; brandId: string }) => {
+      const r = await api.call('POST', '/v1/connections', { cookie: quem.cookie, body: { provider: 'meta', brand_id: quem.brandId } });
+      expect(r.status).toBe(201);
+      const url = new URL(r.body.authorize_url);
+      return { id: r.body.id as string, config: url.searchParams.get('config_id'), estado: url.searchParams.get('state')! };
+    };
+    /** O que a auditoria guardou do pedido de conexão: por qual acesso a empresa foi mandada autorizar. */
+    const acessoPedido = async (tenantId: string, id: string) =>
+      (await ownerQuery<{ acesso: string | null }>(`select "after" ->> 'acesso' as acesso from liame.audit_event where tenant_id = $1 and action = 'conexao.iniciar' and resource_id = $2`, [tenantId, id]))[0]?.acesso;
+    const concluir = async (c: { id: string; estado: string }) => {
+      expect((await voltar(e.cookie, { state: c.estado, code: 'codigo-meta-bom' })).status).toBe(303);
+      expect(await processador.processarLote(5, { tenantIds: [e.tenantId] })).toBe(1);
+      return api.call('POST', `/v1/connections/${c.id}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'meta_ads', external_id: 'act_2233445566' }] } });
+    };
+
+    // A função nasce desligada: a empresa conecta pela configuração de leitura e liga a conta.
+    const leitura = await iniciar(e);
+    expect(leitura.config).toBe(CONFIG_LEITURA);
+    expect(await acessoPedido(e.tenantId, leitura.id)).toBe('leitura');
+    const primeira = await concluir(leitura);
+    expect(primeira.body.linked).toEqual([expect.objectContaining({ connection_id: leitura.id, status: 'ativa' })]);
+
+    // Ligada para a empresa (e só para ela): conectar de novo manda autorizar pela configuração de escrita.
+    await ligarEscritaNaMeta(api, e.tenantId, true);
+    const escrita = await iniciar(e);
+    expect(escrita.config).toBe(CONFIG_ESCRITA);
+    expect(await acessoPedido(e.tenantId, escrita.id)).toBe('escrita');
+    const daVizinha = await iniciar(vizinha);
+    expect(daVizinha.config).toBe(CONFIG_LEITURA);
+    expect(await acessoPedido(vizinha.tenantId, daVizinha.id)).toBe('leitura');
+
+    // A autorização nova assume a conta (a mesma linha, com a credencial nova) e a antiga, sem conta, é encerrada.
+    const segunda = await concluir(escrita);
+    expect(segunda.body.linked).toEqual([expect.objectContaining({ id: primeira.body.linked[0].id, connection_id: escrita.id, status: 'ativa' })]);
+    expect((await conexao(leitura.id)).status).toBe('revogada');
+    expect((await conexao(escrita.id)).status).toBe('ativa');
+
+    // Desligada de novo, a próxima conexão volta para a configuração de leitura.
+    await ligarEscritaNaMeta(api, e.tenantId, false);
+    expect((await iniciar(e)).config).toBe(CONFIG_LEITURA);
   });
 
   it('Google: PKCE, Google Ads e GA4 na mesma autorização, procurar de novo pelo refresh token e revogar', async () => {

@@ -121,7 +121,12 @@ describe('fail-fast da configuração em produção', () => {
     expect(() => loadConfig({ ...prod, ...meta, API_URL: 'http://api.agencialiame.com' })).toThrow('API_URL');
     const ok = loadConfig({ ...prod, ...meta, API_URL: 'https://api.agencialiame.com/' });
     expect(ok.apiUrl).toBe('https://api.agencialiame.com');
-    expect(ok.oauth.meta).toEqual({ appId: meta.META_APP_ID, appSecret: meta.META_APP_SECRET, configId: meta.META_LOGIN_CONFIG_ID, dialogUrl: 'https://www.facebook.com' });
+    expect(ok.oauth.meta).toEqual({ appId: meta.META_APP_ID, appSecret: meta.META_APP_SECRET, configId: meta.META_LOGIN_CONFIG_ID, writeConfigId: null, dialogUrl: 'https://www.facebook.com' });
+    // A configuração de escrita da Meta (A4) é opcional: soma à de leitura, não a substitui nem liga a Meta sozinha.
+    const escrita = { META_LOGIN_CONFIG_ID_ESCRITA: '11223344556677' };
+    expect(loadConfig({ ...prod, ...meta, ...escrita, API_URL: 'https://api.agencialiame.com' }).oauth.meta).toMatchObject({ configId: meta.META_LOGIN_CONFIG_ID, writeConfigId: '11223344556677' });
+    expect(loadConfig({ ...prod, META_APP_ID: meta.META_APP_ID, META_APP_SECRET: meta.META_APP_SECRET, ...escrita }).oauth.meta).toBeNull();
+    expect(() => loadConfig({ ...prod, ...meta, API_URL: 'https://api.agencialiame.com', META_LOGIN_CONFIG_ID_ESCRITA: 'liame-escrita' })).toThrow('META_LOGIN_CONFIG_ID_ESCRITA');
     expect(() => loadConfig({ ...prod, META_DIALOG_URL: 'https://www.facebook.com.outro.site' })).toThrow('endereço oficial');
     expect(() => loadConfig({ ...prod, GOOGLE_TOKEN_URL: 'https://oauth2.outro.site' })).toThrow('endereço oficial');
     // Produtos DMS (A2.5): o endereço do Regem é o oficial em produção, e o cliente liga só com as duas peças.

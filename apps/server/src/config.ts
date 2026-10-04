@@ -48,6 +48,8 @@ const Env = z.object({
   /** App da Meta (da distribuição) e a configuração do Facebook Login for Business (token de usuário do sistema). */
   META_APP_ID: z.string().regex(/^\d{5,25}$/).optional(),
   META_LOGIN_CONFIG_ID: z.string().regex(/^\d{5,25}$/).optional(),
+  /** Outra configuração do mesmo login, que também pede para gerenciar anúncios (A4): só a empresa com a flag `meta_write` autoriza por ela. */
+  META_LOGIN_CONFIG_ID_ESCRITA: z.string().regex(/^\d{5,25}$/).optional(),
   META_DIALOG_URL: z.url().default('https://www.facebook.com'),
   /** Cliente OAuth do Google (da distribuição): Google Ads e GA4 na mesma autorização. */
   GOOGLE_OAUTH_CLIENT_ID: z.string().min(10).optional(),
@@ -106,7 +108,8 @@ export type AppConfig = {
   apiUrl: string;
   /** Apps OAuth da distribuição; nulo = a plataforma ainda não pode ser conectada. */
   oauth: {
-    meta: { appId: string; appSecret: string; configId: string; dialogUrl: string } | null;
+    /** `writeConfigId`: a configuração do login que também pede a escrita (nulo = só existe a de leitura). */
+    meta: { appId: string; appSecret: string; configId: string; writeConfigId: string | null; dialogUrl: string } | null;
     google: { clientId: string; clientSecret: string; authUrl: string; tokenUrl: string } | null;
     /** Autorização da loja no Regem (código + PKCE, C1b); nulo = só pelo token emitido pela distribuição. */
     regem: { clientId: string; clientSecret: string; authUrl: string } | null;
@@ -163,7 +166,13 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     }
   }
   const meta = env.META_APP_ID && env.META_APP_SECRET && env.META_LOGIN_CONFIG_ID
-    ? { appId: env.META_APP_ID, appSecret: env.META_APP_SECRET, configId: env.META_LOGIN_CONFIG_ID, dialogUrl: env.META_DIALOG_URL.replace(/\/$/, '') }
+    ? {
+        appId: env.META_APP_ID,
+        appSecret: env.META_APP_SECRET,
+        configId: env.META_LOGIN_CONFIG_ID,
+        writeConfigId: env.META_LOGIN_CONFIG_ID_ESCRITA ?? null,
+        dialogUrl: env.META_DIALOG_URL.replace(/\/$/, ''),
+      }
     : null;
   const google = env.GOOGLE_OAUTH_CLIENT_ID && env.GOOGLE_OAUTH_CLIENT_SECRET
     ? { clientId: env.GOOGLE_OAUTH_CLIENT_ID, clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET, authUrl: env.GOOGLE_AUTH_URL.replace(/\/$/, ''), tokenUrl: env.GOOGLE_TOKEN_URL.replace(/\/$/, '') }
