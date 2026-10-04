@@ -339,7 +339,9 @@ export class AiGateway {
         : null;
     try {
       await withContext(db, contexto, async (tx) => {
-        for (const t of tentativas) await this.registrar(tx, req, rota, t, removidos);
+        // Quem respondeu foi a última chamada de um pedido atendido: as rodadas de leitura antes dela e as tentativas
+        // que falharam custam, mas não são a resposta (é por `answered` que Sua equipe conta respostas).
+        for (const t of tentativas) await this.registrar(tx, req, rota, t, removidos, resposta !== null && t === ultima);
         // O conteúdo (já sem dado pessoal) fica 30 dias, para investigar erro e abuso; depois, só a linha de uso.
         await tx.execute(sql`
           insert into liame.ai_exchange (usage_id, tenant_id, request, response)
@@ -622,16 +624,18 @@ export class AiGateway {
     return { id: uuidv7(), candidato, geo: null, tokens: SEM_TOKENS, custo: 0n, latenciaMs: 0, outcome: 'erro', errorCode, traceId: null, em: Date.now(), toolCalls: 0, toolFailures: 0 };
   }
 
-  private async registrar(tx: Tx, req: GenerateRequest, rota: Rota, t: Tentativa, removidos: number): Promise<void> {
+  /** `respondeu`: esta chamada entregou a resposta do pedido (migration 0042). */
+  private async registrar(tx: Tx, req: GenerateRequest, rota: Rota, t: Tentativa, removidos: number, respondeu: boolean): Promise<void> {
     await tx.execute(sql`
       insert into liame.ai_usage (id, tenant_id, brand_id, user_id, workflow, task, route_version, prompt_version, provider, model, served_by,
                                   inference_geo, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, reasoning_tokens,
-                                  cost_usd_micros, latency_ms, tool_calls, tool_failures, outcome, error_code, pii_removed, trace_id, occurred_at)
+                                  cost_usd_micros, latency_ms, tool_calls, tool_failures, outcome, error_code, pii_removed, trace_id, occurred_at,
+                                  answered)
       values (${t.id}, ${req.tenantId}, ${req.brandId ?? null}, ${req.userId ?? null}, ${req.workflow}, ${req.task}, ${rota.version},
               ${req.promptVersion ?? null}, ${t.candidato.provider}, ${t.candidato.model}, ${t.candidato.servedBy}, ${t.geo},
               ${t.tokens.input}, ${t.tokens.cacheRead}, ${t.tokens.cacheWrite}, ${t.tokens.output}, ${t.tokens.reasoning},
               ${t.custo.toString()}, ${t.latenciaMs}, ${t.toolCalls}, ${t.toolFailures}, ${t.outcome}, ${t.errorCode}, ${removidos}, ${t.traceId},
-              ${new Date(t.em).toISOString()})`);
+              ${new Date(t.em).toISOString()}, ${respondeu})`);
   }
 
   /** Pedido barrado antes de chegar a um modelo: fica registrado, sem modelo e sem custo. */
