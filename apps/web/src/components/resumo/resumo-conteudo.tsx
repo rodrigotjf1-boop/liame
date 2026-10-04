@@ -190,6 +190,9 @@ export function ResumoConteudo({ r, equipe, nomePessoa, nomeMarca, agora, pode, 
                 <h2 id="re-t">O que a sua equipe fez</h2>
                 <p className="card-sub">Neste mês. Cada funcionário é um assistente de IA ou uma regra do Liame. Ninguém mexeu em campanha.</p>
               </div>
+              <Link className="btn btn--ghost btn--sm" href="/equipe">
+                Ver a equipe
+              </Link>
             </div>
             {linhasDaEquipe.length ? (
               <ul className="feito-lista">

@@ -247,6 +247,29 @@ const DESENHOS = {
     </>
   ),
   minus: <path d="M5 12h14" />,
+  power: <path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.77.04" />,
+  pause: (
+    <>
+      <rect width="4" height="16" x="6" y="4" rx="1" />
+      <rect width="4" height="16" x="14" y="4" rx="1" />
+    </>
+  ),
+  play: <path d="m6 3 14 9-14 9V3z" />,
+  image: (
+    <>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" />
+    </>
+  ),
+  share: (
+    <>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
+    </>
+  ),
 } satisfies Record<string, ReactNode>;
 
 export type NomeIcone = keyof typeof DESENHOS;
