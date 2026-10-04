@@ -212,11 +212,13 @@ export class RevisaoSemanalService {
     }
 
     const link = `${this.config.appUrl}/resultados/revisao?marca=${revisao.brand_id}&semana=${revisao.content.week.from}`;
+    // As duas imagens do e-mail (a marca e o rosto da LIA) moram no webapp do Liame, sem código de rastreio.
+    const imagens = { logo: `${this.config.appUrl}/email/liame-logo.png`, lia: `${this.config.appUrl}/email/lia.png` };
     for (const p of pessoas) {
-      const email = emailDaRevisao(revisao.content, { marca: revisao.marca, empresa: revisao.empresa, nivel: p.role_key, link });
+      const email = emailDaRevisao(revisao.content, { marca: revisao.marca, empresa: revisao.empresa, nivel: p.role_key, link, imagens });
       let falha: string | null = null;
       try {
-        await this.mailer.send({ to: p.email, subject: email.subject, text: email.text });
+        await this.mailer.send({ to: p.email, subject: email.subject, text: email.text, html: email.html });
       } catch (err) {
         // O motivo vai para o log com o endereço mascarado; na linha da entrega fica só o tipo do erro.
         falha = (err instanceof Error ? err.name : 'Erro').slice(0, 100) || 'Erro';

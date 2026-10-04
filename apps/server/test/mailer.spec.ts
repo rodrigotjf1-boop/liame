@@ -23,6 +23,19 @@ describe('e-mail pelo SES', () => {
     ]);
   });
 
+  it('com a versão em HTML, o pedido leva as duas: o texto continua indo, para quem não mostra HTML', async () => {
+    const pedidos: SesSendInput[] = [];
+    const mailer = new SesMailer('Liame <nao-responda@agencialiame.com>', async (input) => (pedidos.push(input), { MessageId: 'm-2' }));
+    await mailer.send({ to: 'pessoa@exemplo.com.br', subject: 'Liame: revisão da semana', text: 'Revisão em texto', html: '<p>Revisão em HTML: ção</p>' });
+    expect(pedidos[0]!.Content.Simple.Body).toEqual({
+      Text: { Data: 'Revisão em texto', Charset: 'UTF-8' },
+      Html: { Data: '<p>Revisão em HTML: ção</p>', Charset: 'UTF-8' },
+    });
+    // Sem HTML (os e-mails de acesso), o campo não vai: o pedido é o de sempre.
+    await mailer.send({ to: 'pessoa@exemplo.com.br', subject: 's', text: 't' });
+    expect(pedidos[1]!.Content.Simple.Body).toEqual({ Text: { Data: 't', Charset: 'UTF-8' } });
+  });
+
   it('sem conjunto de configuração, o campo não vai; erro do SES chega a quem chamou', async () => {
     const pedidos: SesSendInput[] = [];
     await new SesMailer('nao-responda@agencialiame.com', async (input) => (pedidos.push(input), {})).send({ to: 'a@b.co', subject: 's', text: 't' });

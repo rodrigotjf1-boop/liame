@@ -4,6 +4,8 @@ export interface MailMessage {
   to: string;
   subject: string;
   text: string;
+  /** A mesma mensagem em HTML (opcional). Vai sempre junto com o texto: quem não mostra HTML lê o texto. */
+  html?: string;
 }
 
 /** Porta de envio de e-mail. Produção: Amazon SES em São Paulo (plano da A1, D-A1-4). */
@@ -42,7 +44,7 @@ export function maskEmail(email: string): string {
 export interface SesSendInput {
   FromEmailAddress: string;
   Destination: { ToAddresses: string[] };
-  Content: { Simple: { Subject: { Data: string; Charset: 'UTF-8' }; Body: { Text: { Data: string; Charset: 'UTF-8' } } } };
+  Content: { Simple: { Subject: { Data: string; Charset: 'UTF-8' }; Body: { Text: { Data: string; Charset: 'UTF-8' }; Html?: { Data: string; Charset: 'UTF-8' } } } };
   ConfigurationSetName?: string;
 }
 
@@ -73,7 +75,8 @@ export class SesMailer extends Mailer {
       Content: {
         Simple: {
           Subject: { Data: message.subject, Charset: 'UTF-8' },
-          Body: { Text: { Data: message.text, Charset: 'UTF-8' } },
+          // Com as duas versões, o SES monta a mensagem com alternativa: o programa de e-mail escolhe a que sabe mostrar.
+          Body: { Text: { Data: message.text, Charset: 'UTF-8' }, ...(message.html ? { Html: { Data: message.html, Charset: 'UTF-8' as const } } : {}) },
         },
       },
       ...(this.configurationSet ? { ConfigurationSetName: this.configurationSet } : {}),

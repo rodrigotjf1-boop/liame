@@ -29,8 +29,9 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      // Páginas: fora os arquivos do build, a otimização de imagem, os ícones e os arquivos da LIA.
-      source: '/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|lia/).*)',
+      // Páginas: fora os arquivos do build, a otimização de imagem, os ícones, os arquivos da LIA e as imagens
+      // dos e-mails (public/email: a marca e o rosto da LIA, que o programa de e-mail de quem recebe busca).
+      source: '/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|lia/|email/).*)',
       missing: [
         { type: 'header', key: 'next-router-prefetch' },
         { type: 'header', key: 'purpose', value: 'prefetch' },

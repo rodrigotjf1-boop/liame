@@ -1,67 +1,58 @@
-import type { ExplanationSegment, WeeklyReview, WeeklyReviewChange } from '@liame/contracts';
+import type { WeeklyReviewChange } from '@liame/contracts';
 import { dia, dinheiro, inteiro, razao } from '../ai/registro/formatos.js';
 import { plataforma } from '../ai/registro/leituras.visoes.js';
-import { ATENDIMENTO } from '../suporte.js';
+import { htmlDaRevisao, type ImagensDoEmail } from './revisao-email-html.js';
+import {
+  ASSINATURA,
+  AVISO_DA_DECISAO,
+  AVISO_DA_LIA,
+  type ConteudoDaRevisao,
+  curto,
+  eraDe,
+  fonteAtrasada,
+  linhaDaMudanca,
+  porQueRecebe,
+  type QuemRecebe,
+  RISCO,
+  ROTULO,
+  texto,
+  valor,
+  variacaoDe,
+  VEREDITO,
+} from './revisao-email-partes.js';
 
-// O e-mail da revisão da semana (A3, I7): os mesmos números da tela, em texto simples, como os outros
-// e-mails do Liame. Nenhum número é calculado aqui: tudo vem da revisão guardada. Sem dado pessoal além do
-// nome de quem recebe o próprio e-mail.
+// O e-mail da revisão da semana (A3, I7): os mesmos números da tela, em duas versões da mesma mensagem. A de
+// texto simples é a de sempre; a de HTML (aprovada pelo dono em 04/10/2026) leva a marca, os quatro números em
+// destaque e as barras do que cada campanha investiu e trouxe no caixa. Nenhum número é calculado aqui: tudo
+// vem da revisão guardada. Sem dado pessoal além do nome de quem recebe o próprio e-mail.
 
 /** Quem recebe a revisão por e-mail (D-A3-7). */
 export const NIVEIS_QUE_RECEBEM = ['dono', 'administrador', 'so_relatorios'] as const;
-const NIVEL: Record<string, string> = { dono: 'Dono', administrador: 'Administrador', so_relatorios: 'Só relatórios por e-mail' };
-const VEREDITO: Record<string, string> = { lucro: 'dá lucro', empata: 'empata', prejuizo: 'dá prejuízo' };
-const RISCO: Record<string, string> = { baixo: 'Risco baixo', medio: 'Risco médio', alto: 'Risco alto' };
-const SUPORTE = ATENDIMENTO.email;
 
-/** O conteúdo guardado de uma revisão: o contrato sem o que vem das colunas (o id e o envio). */
-export type ConteudoDaRevisao = Omit<WeeklyReview, 'id' | 'email'>;
-
-const curto = (d: string) => (dia(d) ?? d).slice(0, 5);
-const texto = (trechos: ExplanationSegment[]) => trechos.map((t) => t.text).join('');
-/** "+12.8" → "+12,8%". */
-const pct = (v: string | null) => (v === null ? null : `${v.replace('.', ',')}%`);
-
-function valor(m: WeeklyReviewChange, qual: 'before' | 'now', moeda: string): string {
-  const v = m[qual];
-  if (v === null) return 'sem número';
-  return m.unit === 'dinheiro' ? (dinheiro(v, moeda) ?? v) : m.unit === 'razao' ? (razao(v) ?? v) : (inteiro(v) ?? v);
-}
-
-const ROTULO: Record<string, string> = {
-  investimento: 'Investido em anúncios',
-  pedidos_de_anuncios: 'Pedidos de anúncios',
-  receita_confirmada: 'Receita confirmada no caixa',
-  roas_confirmado: 'ROAS confirmado no caixa',
-  pedidos_sem_origem: 'Pedidos sem origem',
-};
-
-/** "Pedidos de anúncios: de 47 para 53 (+12,8%)" / "Combo sexta: ROAS no caixa de 4,02 para 4,25". */
-export function linhaDaMudanca(m: WeeklyReviewChange, moeda: string): string {
-  const nome = m.campaign ? `${m.campaign.name}: ROAS no caixa` : (ROTULO[m.kind] ?? m.kind);
-  const variacao = m.unit === 'razao' ? null : pct(m.change_pct);
-  return `${nome}${m.campaign ? '' : ':'} de ${valor(m, 'before', moeda)} para ${valor(m, 'now', moeda)}${variacao ? ` (${variacao})` : ''}`;
-}
+export { type ConteudoDaRevisao, linhaDaMudanca } from './revisao-email-partes.js';
+export type { ImagensDoEmail } from './revisao-email-html.js';
 
 /** A linha de um dos quatro números do topo: "Pedidos de anúncios: 53 (+12,8%; eram 47)". */
 function linhaDoTotal(m: WeeklyReviewChange, moeda: string): string {
   const agora = valor(m, 'now', moeda);
-  if (m.before === null) return `${ROTULO[m.kind] ?? m.kind}: ${agora}`;
-  const era = `${m.unit === 'contagem' && m.before !== '1' ? 'eram' : 'era'} ${valor(m, 'before', moeda)}`;
-  const variacao = m.unit === 'razao' ? null : pct(m.change_pct);
+  const era = eraDe(m, moeda);
+  if (era === null) return `${ROTULO[m.kind] ?? m.kind}: ${agora}`;
+  const variacao = variacaoDe(m);
   return `${ROTULO[m.kind] ?? m.kind}: ${agora} (${variacao ? `${variacao}; ` : ''}${era})`;
 }
 
 export interface EmailDaRevisao {
   subject: string;
   text: string;
+  /** A mesma mensagem com a marca, os números em destaque e as barras por campanha. */
+  html: string;
 }
 
 /**
- * O e-mail de uma pessoa: assunto e texto. `link` leva à revisão na tela; `nivel` é o papel dela na empresa
- * (diz por que ela recebe).
+ * O e-mail de uma pessoa: assunto, texto e HTML. `link` leva à revisão na tela; `nivel` é o papel dela na
+ * empresa (diz por que ela recebe); `imagens` são os endereços da marca e do rosto da LIA no próprio Liame.
  */
-export function emailDaRevisao(r: ConteudoDaRevisao, quem: { marca: string; empresa: string; nivel: string; link: string }): EmailDaRevisao {
+export function emailDaRevisao(r: ConteudoDaRevisao, quem: QuemRecebe & { imagens: ImagensDoEmail }): EmailDaRevisao {
   const moeda = r.currency;
   const linhas: string[] = [];
   const secao = (titulo: string) => linhas.push('', titulo.toUpperCase());
@@ -76,16 +67,14 @@ export function emailDaRevisao(r: ConteudoDaRevisao, quem: { marca: string; empr
 
   const daLia = r.reading.source === 'lia';
   secao(daLia ? 'Leitura da semana, pela LIA (feito com IA)' : 'Leitura da semana, pelo sistema (sem IA)');
-  if (r.reading.reason === 'dado_velho' && r.reading.stale_sources.length) {
-    const fontes = r.reading.stale_sources.map((f) => `${f.platform ? `${f.platform} · ` : ''}${f.name}${f.last_read ? `, última leitura em ${f.last_read}` : ', ainda não lida'}`);
-    linhas.push(`Na hora de gerar, uma fonte estava atrasada (${fontes.join('; ')}). Os números valem até essa hora.`, '');
-  }
+  const atrasada = fonteAtrasada(r);
+  if (atrasada) linhas.push(atrasada, '');
   const e = r.reading.explanation;
   linhas.push(texto(e.what_happened));
   if (e.reasons.length) linhas.push('', 'Motivos:', ...e.reasons.map((m) => `- ${texto(m)}`));
   linhas.push('', `${RISCO[e.risk] ?? 'Risco médio'}: ${texto(e.risk_reason)}`);
   if (e.what_to_do.length) linhas.push('', 'O que fazer:', ...e.what_to_do.map((m) => `- ${texto(m)}`));
-  if (daLia) linhas.push('', 'A LIA é uma assistente de IA: ela só escreve. Os números são do sistema, conferidos antes de aparecer, e a decisão é sua.');
+  if (daLia) linhas.push('', AVISO_DA_LIA);
 
   if (r.campaigns.length || r.platform_only.length) {
     secao('O que cada campanha trouxe no caixa');
@@ -110,14 +99,11 @@ export function emailDaRevisao(r: ConteudoDaRevisao, quem: { marca: string; empr
   if (r.decisions.length) {
     secao('Precisa de decisão');
     linhas.push(...r.decisions.map((d) => `- ${d.title}. ${d.detail}`));
-    linhas.push('O Liame aponta; quem decide é você. Nada muda nas campanhas por aqui.');
+    linhas.push(AVISO_DA_DECISAO);
   }
 
   linhas.push('', `Ver a revisão completa: ${quem.link}`);
-  linhas.push(
-    '',
-    `Você recebe este e-mail porque tem acesso à ${quem.empresa} no Liame como ${NIVEL[quem.nivel] ?? quem.nivel}. Para deixar de receber, escreva para ${SUPORTE}.`,
-    'Liame · um produto DMS Tecnologias',
-  );
-  return { subject: `Liame: revisão da semana da ${quem.marca} (${curto(r.week.from)} a ${curto(r.week.to)})`, text: linhas.join('\n') };
+  linhas.push('', porQueRecebe(quem), ASSINATURA);
+  const subject = `Liame: revisão da semana da ${quem.marca} (${curto(r.week.from)} a ${curto(r.week.to)})`;
+  return { subject, text: linhas.join('\n'), html: htmlDaRevisao(r, quem, quem.imagens, subject) };
 }
