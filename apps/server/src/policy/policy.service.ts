@@ -6,6 +6,7 @@ import { type AuthContext, auditDetail, currentTx } from '../context/request-con
 import { AppProblem } from '../errors/problems.js';
 import { comRegraDaConta, type ModoDoFuncionario } from '../sombra/autonomia.js';
 import { evaluatePolicy, type LoadedPolicy, PLATFORM_POLICY } from './engine.js';
+import { comTetoDaVerba, temOTetoDaVerba } from './teto-da-verba.js';
 
 type Row = {
   id: string;
@@ -84,6 +85,26 @@ export class PolicyService {
       document: (atual) => PolicyDocument.parse(comRegraDaConta(atual, alvo)),
     });
     return { id: row.id, version: Number(row.version) };
+  }
+
+  /**
+   * O teto por campanha que a tela Verba do mês define (A4, X4; D-A4-22): a versão seguinte da política da empresa,
+   * com a regra do teto trocada e as outras como estão. Se o teto já é este, nada é publicado. Quem chama já conferiu
+   * a permissão e registra a mudança na auditoria.
+   */
+  async publicarTetoDaVerba(tx: Tx, alvo: { tenantId: string; userId: string; maxMicros: number }): Promise<{ version: number; publicada: boolean }> {
+    // O escopo é travado antes de olhar: a conferência "já está assim" e a publicação veem o mesmo documento.
+    const ativa = await tx.execute<{ version: number; document: PolicyDocument }>(sql`
+      select version, document from liame.policy where tenant_id = ${alvo.tenantId} and brand_id is null and status = 'ativa' for update`);
+    const atual = ativa.rows[0];
+    if (atual && temOTetoDaVerba(atual.document, alvo.maxMicros)) return { version: Number(atual.version), publicada: false };
+    const row = await this.publicarNoEscopo(tx, {
+      tenantId: alvo.tenantId,
+      brandId: null,
+      userId: alvo.userId,
+      document: (doc) => PolicyDocument.parse(comTetoDaVerba(doc, alvo.maxMicros)),
+    });
+    return { version: Number(row.version), publicada: true };
   }
 
   /**

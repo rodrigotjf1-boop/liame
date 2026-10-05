@@ -35,7 +35,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
   let database: Database;
   let executor: ActionExecutor;
   const meta = new MetaDeMentira();
-  /** A empresa do piloto: com o teto por ação e o envelope do mês definidos. */
+  /** A empresa do piloto: com o teto por campanha e o teto do mês definidos. */
   let e: EmpresaComMeta;
   /** Uma empresa que ainda não definiu limite nenhum: nasce no primeiro teste que precisa dela (a preparação fica leve). */
   let semLimites: EmpresaComMeta | null = null;
@@ -101,9 +101,12 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
 
     e = await empresaComMeta(api, meta, 'Mister Burgers Ferramentas de Anúncio');
     await ligarEscritaNaMeta(api, e.tenantId, true);
-    // O que a empresa define antes de o Liame aumentar verba: o teto por ação e o envelope do mês.
+    // O que a empresa define antes de o Liame aumentar verba: o teto por campanha e o teto do mês. O teto do mês conta
+    // tudo o que as contas gastam e o que os pedidos de hoje acrescentam até o fim do mês (X4, D-A4-19): aqui ele é
+    // folgado, porque o arquivo inteiro pede e executa aumentos e retomadas no mesmo dia. A conta do mês em si é
+    // provada em `verba-do-mes.spec.ts`.
     expect((await politica(e, [{ type: 'max_value', action: 'orcamento.*', provider: 'meta_ads', max_micros: 150 * REAL }])).status).toBe(201);
-    expect((await envelope(e, 500)).status).toBe(204);
+    expect((await envelope(e, 1_000_000)).status).toBe(204);
     // Cadastro, app autenticador, cofre e política: com a suíte inteira rodando junto, passa do prazo padrão dos ganchos.
   }, 120_000);
   beforeEach(async () => {
@@ -214,7 +217,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     expect((await pedir(e, 'anuncio_retomar', a.recurso)).body).toMatchObject({ budget_impact: 'new_spend', reserved_micros: 0, status: 'aguardando_aprovacao' });
   });
 
-  it('D-A4-6: aumentar verba e voltar a gastar só com o teto por ação e o envelope que a empresa define; cada pedido mexe no máximo 10%', async () => {
+  it('D-A4-6: aumentar verba e voltar a gastar só com o teto por campanha e o teto do mês que a empresa define; cada pedido mexe no máximo 10%', async () => {
     const sem = await empresaSemLimites();
     const c = await objetoLido(meta, sem, 'campanha');
     const pausada = await objetoLido(meta, sem, 'campanha', { status: 'PAUSED', effective_status: 'PAUSED' });
@@ -226,18 +229,23 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     expect([reduz.status, reduz.body.status, reduz.body.policy.versions]).toEqual([201, 'aguardando_aprovacao', ['plataforma@3']]);
     await cancelar(sem, reduz.body.id);
 
-    // Aumentar: falta o teto por ação. O teto de outro provedor não serve.
+    // Aumentar: falta o teto por campanha. O teto de outro provedor não serve.
+    const osDois = 'Para aumentar a verba, a empresa precisa definir antes o teto do mês e o teto por campanha. Reduzir e pausar não dependem deles. Quem define é o Dono ou o Administrador, em Verba do mês.';
     const semTeto = await verba(33);
-    expect([semTeto.status, semTeto.body.code]).toEqual([422, 'teto-nao-definido']);
-    expect(semTeto.body.detail).toBe('Para aumentar verba na Meta, a política da empresa (ou da marca) precisa ter o teto por ação. Sem ele, o Liame não aumenta verba.');
+    expect([semTeto.status, semTeto.body.code, semTeto.body.title]).toEqual([422, 'teto-nao-definido', 'Falta o teto por campanha']);
+    expect(semTeto.body.detail).toBe(osDois);
     expect((await politica(sem, [{ type: 'max_value', action: 'orcamento.*', provider: 'google_ads', max_micros: 500 * REAL }])).status).toBe(201);
     expect((await verba(33)).body.code).toBe('teto-nao-definido');
 
-    // Com o teto, falta o envelope do mês: nem aumentar, nem retomar.
+    // Com o teto por campanha, falta o teto do mês: nem aumentar, nem retomar.
     expect((await politica(sem, [{ type: 'max_value', action: 'orcamento.*', max_micros: 32 * REAL }])).status).toBe(201);
     const semEnvelope = await verba(32);
-    expect([semEnvelope.status, semEnvelope.body.code]).toEqual([422, 'envelope-nao-definido']);
-    expect((await pedir(sem, 'campanha_retomar', pausada.recurso)).body.code).toBe('envelope-nao-definido');
+    expect([semEnvelope.status, semEnvelope.body.code, semEnvelope.body.title, semEnvelope.body.detail]).toEqual([422, 'envelope-nao-definido', 'Falta o teto do mês', osDois]);
+    const semRetomar = await pedir(sem, 'campanha_retomar', pausada.recurso);
+    expect([semRetomar.body.code, semRetomar.body.detail]).toEqual([
+      'envelope-nao-definido',
+      'Para retomar, a empresa precisa definir antes o teto do mês. Reduzir e pausar não dependem dele. Quem define é o Dono ou o Administrador, em Verba do mês.',
+    ]);
     expect(await pedidosDe(sem)).toBe(antes + 1);
     expect((await envelope(sem, 100)).status).toBe(204);
 
@@ -248,7 +256,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     // 10% cravados, mas acima do teto da empresa.
     const acima = await verba(33);
     expect([acima.status, acima.body.code]).toEqual([422, 'politica-negou']);
-    expect(acima.body.errors).toEqual([{ path: 'politica.tenant.0', message: expect.stringMatching(/R\$\s33,00 passa do teto de R\$\s32,00 por ação/) }]);
+    expect(acima.body.errors).toEqual([{ path: 'politica.tenant.0', message: expect.stringMatching(/^A verba de R\$\s33,00 por dia passa do teto por campanha, que é de R\$\s32,00 por dia\.$/) }]);
     // Mais de 10% de uma vez, para baixo (o teto não entra na redução) e para cima (aqui, com o teto também).
     const menos = await verba(26);
     expect(menos.body.errors).toEqual([{ path: 'politica.platform.2', message: 'A variação de 13,33% passa do máximo de 10%.' }]);
@@ -256,16 +264,17 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     // Os 20% que o plano permitia até 04/10/2026 também não passam mais.
     expect((await verba(24)).body.errors.map((x: { path: string }) => x.path)).toEqual(['politica.platform.2']);
 
-    // Envelope menor que a reserva: negado pelo orçamento do mês.
+    // Teto do mês menor do que o aumento acrescenta até o fim do mês (R$ 2,00 por dia, em qualquer dia do mês): negado.
     await envelope(sem, 1);
     const semSaldo = await verba(32);
-    expect([semSaldo.status, semSaldo.body.code]).toEqual([422, 'orcamento-insuficiente']);
+    expect([semSaldo.status, semSaldo.body.code, semSaldo.body.title]).toEqual([422, 'orcamento-insuficiente', 'Não cabe na verba do mês']);
+    expect(semSaldo.body.detail).toMatch(/^Não cabe na verba de [a-zç]+: o pedido acrescenta R\$\s\d+,00 até o fim do mês, e sobram R\$\s1,00\. No ritmo atual, [a-zç]+ fecha em R\$\s0,00, e o teto da empresa é de R\$\s1,00\.$/);
     // Nada disso chamou a escrita da Meta.
     expect(meta.escritasDe(c.id)).toEqual([]);
   });
 
   it('o teto da empresa não barra a redução: baixar uma verba que já está acima do teto é a direção segura', async () => {
-    // Alguém definiu R$ 200,00 por dia na Meta; o teto por ação da empresa é R$ 150,00.
+    // Alguém definiu R$ 200,00 por dia na Meta; o teto por campanha da empresa é R$ 150,00.
     const c = await objetoLido(meta, e, 'campanha', { daily_budget: '20000' });
     const p = await pedir(e, 'orcamento_ajustar', c.recurso, { daily_budget_micros: 180 * REAL });
     expect([p.status, p.body.action, p.body.status]).toEqual([201, 'orcamento.reduzir', 'aguardando_aprovacao']);

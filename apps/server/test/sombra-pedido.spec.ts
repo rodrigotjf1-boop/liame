@@ -158,9 +158,9 @@ describe('o pedido que nasce de uma recomendação (A4, X3)', () => {
       detalhe: 'Já há um pedido ativo desta ferramenta para este recurso.',
     });
     // Na recusa da política, o motivo leva a primeira regra que negou (é ela que diz o que fazer); nos outros, não.
-    const regras = [{ message: 'O valor R$ 220,00 passa do teto de R$ 150,00 por ação.' }, { message: 'A variação de 13,33% passa do máximo de 10%.' }];
+    const regras = [{ message: 'A verba de R$ 220,00 por dia passa do teto por campanha, que é de R$ 150,00 por dia.' }, { message: 'A variação de 13,33% passa do máximo de 10%.' }];
     expect(motivoDoProblema({ code: 'politica-negou', detail: 'Esta ação fere uma regra da política.', errors: regras }).detalhe).toBe(
-      'Esta ação fere uma regra da política. O valor R$ 220,00 passa do teto de R$ 150,00 por ação.',
+      'Esta ação fere uma regra da política. A verba de R$ 220,00 por dia passa do teto por campanha, que é de R$ 150,00 por dia.',
     );
     expect(motivoDoProblema({ code: 'plano-recusado', detail: 'A campanha já está em pausa.', errors: regras }).detalhe).toBe('A campanha já está em pausa.');
     expect(motivoDoProblema({ code: 'politica-negou', detail: 'Esta ação fere uma regra da política.', errors: [] }).detalhe).toBe('Esta ação fere uma regra da política.');

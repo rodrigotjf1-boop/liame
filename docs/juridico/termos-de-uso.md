@@ -20,7 +20,7 @@ Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada a
 
 2.2. **Os funcionários são assistentes de inteligência artificial, não pessoas.** A LIA, que conversa com você, também é uma assistente de IA e se apresenta assim.
 
-2.3. **Nada que gaste o seu dinheiro acontece sem a sua regra.** Ações que mexem em verba ou publicam em seu nome seguem os limites e as aprovações que você configurar. Para o Liame aumentar a verba de um anúncio ou voltar a veicular o que estava em pausa, a sua empresa precisa ter definido antes o envelope do mês e, para um aumento novo, também o teto por ação; sem esses limites, o Liame recusa o pedido. Você pode pausar tudo a qualquer momento com o botão de parada.
+2.3. **Nada que gaste o seu dinheiro acontece sem a sua regra.** Ações que mexem em verba ou publicam em seu nome seguem os limites e as aprovações que você configurar. Para o Liame aumentar a verba de um anúncio ou voltar a veicular o que estava em pausa, a sua empresa precisa ter definido antes o teto do mês (o máximo que as suas contas de anúncio conectadas podem gastar no mês, somando as plataformas) e, para um aumento novo, também o teto por campanha (a maior verba diária que um aumento pode deixar); sem esses limites, ou quando a previsão de gasto do mês não cabe no teto, o Liame recusa o pedido. O teto do mês limita o que o Liame aceita mudar: ele não pausa os seus anúncios sozinho nem impede o gasto que você contratar direto na plataforma. Você pode pausar tudo a qualquer momento com o botão de parada.
 
 2.4. **A verba de mídia é sua e é paga diretamente às plataformas.** O Liame não recebe, não guarda e não repassa verba de anúncios, e não cobra percentual sobre o que você investe.
 

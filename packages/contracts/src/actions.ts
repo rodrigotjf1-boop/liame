@@ -172,6 +172,93 @@ export const BudgetEnvelope = z.strictObject({
 export const BudgetResponse = z.strictObject({ period: z.string(), envelopes: z.array(BudgetEnvelope) });
 export type BudgetResponse = z.infer<typeof BudgetResponse>;
 
+// ------------------------------------------------------------------ verba do mês (A4, X4)
+
+/** Dia no fuso da empresa (AAAA-MM-DD). */
+const Dia = z.iso.date();
+
+/**
+ * Os dois limites que a empresa define para o Liame mexer em verba (D-A4-22), sempre juntos: o teto do mês (tudo o que
+ * as contas conectadas podem gastar em anúncios no mês) e o teto por campanha (a maior verba diária que um aumento
+ * pode deixar numa campanha ou num conjunto). O teto por campanha é por dia e não passa do teto do mês.
+ */
+export const BudgetLimitsRequest = z.strictObject({
+  month_micros: z.int().min(1_000_000, { error: 'O teto do mês começa em R$ 1,00' }).max(Number.MAX_SAFE_INTEGER),
+  campaign_daily_micros: z.int().min(1_000_000, { error: 'O teto por campanha começa em R$ 1,00' }).max(Number.MAX_SAFE_INTEGER),
+});
+export type BudgetLimitsRequest = z.infer<typeof BudgetLimitsRequest>;
+
+/** O gasto de uma plataforma no mês, somando as contas conectadas dela. */
+export const BudgetMonthPlatform = z.strictObject({
+  provider: z.string(),
+  accounts: z.int().min(1),
+  /** Do primeiro dia do mês até `read_through`. */
+  spend_micros: Micros,
+  /** O ritmo: a média dos 7 dias inteiros mais recentes que a leitura cobre. */
+  daily_micros: Micros,
+  /** O gasto lido mais o ritmo vezes os dias que a leitura ainda não cobre, até o fim do mês. */
+  forecast_micros: Micros,
+  /** O último dia inteiro que as leituras cobrem (o mais antigo entre as contas); nulo se alguma nunca foi lida. */
+  read_through: Dia.nullable(),
+  /** Quantos dias entram na previsão pelo ritmo; nulo quando as contas da plataforma foram lidas até dias diferentes. */
+  forecast_days: z.int().min(0).nullable(),
+  /** A leitura de hoje ainda não chegou em alguma conta: o gasto vale só até `read_through`. */
+  stale: z.boolean(),
+  /** A leitura boa mais antiga entre as contas; nula se alguma nunca foi lida. */
+  last_success_at: z.iso.datetime().nullable(),
+});
+export type BudgetMonthPlatform = z.infer<typeof BudgetMonthPlatform>;
+
+/**
+ * A verba do mês (D-A4-19): o que as contas de anúncio conectadas já gastaram no mês, a previsão de fechamento pelo
+ * ritmo dos últimos 7 dias, os aumentos e as retomadas pedidos ou feitos hoje (que o ritmo ainda não mostra) e os dois
+ * limites da empresa. O pedido que faz o gasto subir só passa se a previsão, com ele, couber no teto do mês.
+ * Dinheiro em micros da moeda das contas, sempre em centavos inteiros: as parcelas somam o total que a tela mostra.
+ */
+export const BudgetMonthResponse = z.strictObject({
+  /** O mês corrente no fuso da empresa (`2026-10`). */
+  period: z.string().regex(/^\d{4}-\d{2}$/),
+  timezone: z.string(),
+  today: Dia,
+  month_start: Dia,
+  month_end: Dia,
+  /** Ontem: o último dia com gasto quando as contas foram lidas hoje. */
+  through: Dia,
+  /** De hoje ao fim do mês, contando hoje. */
+  days_left: z.int().min(1).max(31),
+  currency: z.string(),
+  spend_micros: Micros,
+  daily_micros: Micros,
+  forecast_micros: Micros,
+  /** Os dias previstos pelo ritmo, quando são os mesmos em todas as contas; senão, nulo. */
+  forecast_days: z.int().min(0).nullable(),
+  /** Aumentos e retomadas pedidos (esperando aprovação ou execução) ou feitos hoje: quanto somam por dia. */
+  pending_daily_micros: Micros,
+  /** O mesmo, até o fim do mês (`pending_daily_micros` × `days_left`). */
+  pending_micros: Micros,
+  limits: z.strictObject({
+    /** O teto do mês; nulo enquanto a empresa não define. */
+    month_micros: Micros.nullable(),
+    /** O teto por campanha (verba diária); nulo enquanto a empresa não define. */
+    campaign_daily_micros: Micros.nullable(),
+    /** Quem definiu os limites por último, e quando. */
+    set_by: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
+    set_at: z.iso.datetime().nullable(),
+  }),
+  /** O que sobra do teto do mês: teto − previsão − aumentos de hoje. Negativo quando o mês passa do teto; nulo sem teto. */
+  remaining_micros: z.int().nullable(),
+  platforms: z.array(BudgetMonthPlatform),
+  /** As regras da distribuição que a tela cita (valem para todas as empresas); nulas se a regra deixar de existir. */
+  rules: z.strictObject({
+    /** Quanto um pedido pode mexer na verba diária, em %. */
+    change_percent_max: z.number().min(0).max(1000).nullable(),
+    /** Mudanças de verba no mesmo objeto por janela. */
+    rate_limit: z.strictObject({ max: z.int().min(1), window_minutes: z.int().min(1) }).nullable(),
+  }),
+  generated_at: z.iso.datetime(),
+});
+export type BudgetMonthResponse = z.infer<typeof BudgetMonthResponse>;
+
 // ------------------------------------------------------------------ sandbox
 
 export const SandboxResourceRequest = z.strictObject({ account_id: Ref, resource_id: Ref, state: z.record(z.string(), z.unknown()) });

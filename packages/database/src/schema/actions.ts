@@ -80,6 +80,8 @@ export const budgetPolicy = liame.table('budget_policy', {
   createdBy: uuid('created_by').notNull(),
   createdAt: ts('created_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
+  // Migration 0052 (a verba do mês): quem definiu o limite por último.
+  updatedBy: uuid('updated_by'),
 });
 
 export const budgetLedgerEntry = liame.table('budget_ledger_entry', {

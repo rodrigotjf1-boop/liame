@@ -109,7 +109,11 @@ function violationOf(rule: PolicyRule, p: ActionProposal, ctx: PolicyContext): s
       // O teto vale para o que faz o gasto subir. Reduzir para um valor ainda acima dele é a direção segura (a verba
       // que alguém definiu acima do teto precisa poder baixar), e a volta devolve o valor que já estava lá antes da ação.
       if (p.undo || p.budget_impact === 'decrease' || !actionMatches(rule.action, p.action) || !providerMatches(rule.provider, p) || p.value_micros == null) return null;
-      return p.value_micros > rule.max_micros ? `O valor ${brl(p.value_micros)} passa do teto de ${brl(rule.max_micros)} por ação.` : null;
+      if (p.value_micros <= rule.max_micros) return null;
+      // Na verba diária, o teto tem nome na tela (Verba do mês): é o teto por campanha (D-A4-19).
+      return p.action.startsWith('orcamento.')
+        ? `A verba de ${brl(p.value_micros)} por dia passa do teto por campanha, que é de ${brl(rule.max_micros)} por dia.`
+        : `O valor ${brl(p.value_micros)} passa do teto de ${brl(rule.max_micros)} por ação.`;
     case 'max_change_percent': {
       if (p.undo || !actionMatches(rule.action, p.action) || !providerMatches(rule.provider, p)) return null;
       const change = changePercent(p);
