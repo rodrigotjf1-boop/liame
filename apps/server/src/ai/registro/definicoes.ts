@@ -55,8 +55,8 @@ export interface FuncionarioDef {
  * Os prompts e os funcionários entram com o primeiro uso real de cada um. Estar aqui não põe ninguém para
  * trabalhar: sem rota de modelo ativa para a tarefa (publicada só depois do eval, I3), a tela usa o texto sem IA.
  * O revisor de IA do Compliance tem prompt e não é funcionário do registro: o Compliance trabalha por regra e não
- * desliga; o revisor é o segundo olhar dele, para a empresa com a flag `revisor` (I9). O Criativo (A4, X6) está no
- * registro e ainda não trabalha para ninguém: falta a rota de modelo da tarefa dele e o serviço que o chama.
+ * desliga; o revisor é o segundo olhar dele, para a empresa com a flag `revisor` (I9). O Criativo (A4, X6) só
+ * trabalha para a empresa com as flags `ia` e `criativo`; a rota de modelo dele entrou na migration 0051.
  */
 export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA, PROMPT_PESQUISADOR, PROMPT_REVISOR, PROMPT_CRIATIVO_TEXTO];
 export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR, CRIATIVO];
