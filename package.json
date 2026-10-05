@@ -14,6 +14,7 @@
     "dev": "turbo run dev",
     "db:migrate": "node packages/database/dist/cli/migrate.js",
     "db:migrate:test": "node packages/database/dist/cli/migrate.js --url-env TEST_DATABASE_URL_OWNER",
+    "db:reset:test": "node packages/database/dist/cli/reset-test.js && node packages/database/dist/cli/migrate.js --url-env TEST_DATABASE_URL_OWNER",
     "openapi": "pnpm --filter @liame/server openapi",
     "openapi:lint": "spectral lint docs/openapi.json --ruleset .spectral.yaml --fail-severity=warn"
   },
