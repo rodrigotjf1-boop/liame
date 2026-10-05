@@ -302,6 +302,7 @@ export {
   AD_PIECE_LIMITS,
   AD_PIECE_REJECT_REASONS,
   AD_PIECE_STATUSES,
+  AdPieceAiUsage,
   AdPieceButton,
   AdPieceDecision,
   AdPieceDestination,

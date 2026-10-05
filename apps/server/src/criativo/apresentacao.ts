@@ -78,6 +78,8 @@ export type LinhaDaVersao = {
   review: AdPieceReview;
   content_hash: string;
   author: string;
+  /** A parte desta versão no custo da chamada que a escreveu, em micros de dólar; nula na versão de uma pessoa. */
+  cost_usd_micros: string | null;
   created_by: string | null;
   creator: string | null;
   created_at: Date | string;
@@ -92,6 +94,7 @@ export function versaoDaLinha(l: LinhaDaVersao): AdPieceVersion {
     review: l.review,
     content_hash: l.content_hash,
     author: l.author,
+    cost_usd_micros: l.cost_usd_micros,
     created_by: pessoa(l.created_by, l.creator),
     created_at: iso(l.created_at),
   };

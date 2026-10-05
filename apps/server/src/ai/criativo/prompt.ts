@@ -9,6 +9,8 @@ import type { FuncionarioDef, PromptDef } from '../registro/definicoes.js';
 // uma vírgula? Sobe a versão e roda `ia:lock`.
 
 export const TAREFA_CRIATIVO_TEXTO = 'criativo_texto';
+/** O nome, em `ai_usage.workflow`, das chamadas do Criativo: é por ele que o custo das peças é somado. */
+export const WORKFLOW_DO_CRIATIVO = 'criativo.peca';
 
 export const PROMPT_CRIATIVO_TEXTO: PromptDef = {
   key: 'criativo.texto',
