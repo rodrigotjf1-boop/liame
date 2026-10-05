@@ -1,6 +1,6 @@
 # ADR-021 — Onde ficam as fotos dos produtos e as imagens das peças
 
-- **Status:** Proposto · 05/10/2026 (espera a aprovação do dono)
+- **Status:** Aceito pelo dono em 05/10/2026 ("vamos de AWS") · **a construção fica para o fim do roadmap**, como pendência final, por decisão dele no mesmo dia
 - **Decide:** onde o Liame guarda arquivos de imagem (a foto do produto que a empresa envia e a imagem que o Criativo gera), como eles entram, quem os lê e quando saem
 - **Base:** base de conhecimento §17.6 · ADR-011 (a conta AWS já em uso) · ADR-014 (ciclo de vida) · ADR-016 (imagem por finalidade) · `plano-a4.md` X5 e X7, D-A4-9 e D-A4-28
 
@@ -24,13 +24,14 @@ Volume esperado: imagens de 1 a 5 MB. Uma marca com 50 fotos de produto e 100 pe
 
 ## Opções
 
-Fatos conferidos nas páginas oficiais em 05/10/2026 (base de conhecimento §17.6); o preço do S3 em São Paulo vem de fonte secundária, porque a página oficial carrega os valores na hora.
+Fatos conferidos nas páginas oficiais em 05/10/2026 (base de conhecimento §17.6); o preço do S3 em São Paulo é o da lista pública de preços da AWS, publicada em 28/09/2026.
 
 | Opção | Onde o arquivo fica | Acesso | Custo | Veredito |
 | --- | --- | --- | --- | --- |
-| **AWS S3 em São Paulo**, na conta que já tem o KMS e o SES | Brasil | permissão por bucket e por ação; URL assinada com prazo; cifra em repouso por padrão, sem custo | cerca de US$ 0,04 por GB por mês | **Escolhido** |
+| **AWS S3 em São Paulo**, na conta que já tem o KMS e o SES | Brasil | permissão por bucket e por ação; URL assinada com prazo; cifra em repouso por padrão, sem custo | US$ 0,0405 por GB por mês; os primeiros 100 GB de saída por mês são grátis | **Escolhido** |
 | Supabase Storage, no projeto do banco | Brasil | protocolo S3; a chave do servidor abre todos os buckets e passa por cima da RLS | 1 GB no plano gratuito, 100 GB no Pro; depois US$ 0,0213 por GB | Alternativa |
 | Cloudflare R2 | fora do Brasil: não há região nem jurisdição na América do Sul | protocolo S3 | US$ 0,015 por GB por mês, saída grátis | **Rejeitado:** tira o arquivo do país |
+| Backblaze B2 | fora do Brasil: regiões nos Estados Unidos, em Amsterdã e em Toronto | protocolo S3 | US$ 6,95 por TB por mês (US$ 0,007 por GB); 10 GB grátis; saída grátis até 3 vezes o guardado | **Fora por ora:** tira o arquivo do país e traz fornecedor e segredo novos |
 | Disco da VPS | Brasil | arquivo local | nenhum | **Rejeitado:** some com o contêiner, não tem cópia e não serve a dois servidores |
 | Postgres (coluna binária) | Brasil | SQL | o do banco | **Rejeitado:** incha o banco e o backup |
 
@@ -68,12 +69,13 @@ O preço do S3 é o custo de quem escolhe: o dono cria o bucket e amplia a permi
 - **Dependências novas no servidor:** o cliente do S3 e o assinador de URL, do mesmo SDK da AWS já usado para o KMS e o SES, e uma biblioteca de processamento de imagem com binário nativo (conferir no build da imagem do contêiner).
 - **Configuração nova:** o nome do bucket. A credencial é a que já existe.
 - **Jurídico, no PR do código:** a Política passa a dizer que a AWS guarda também as imagens enviadas pela empresa e as geradas (o país continua sendo o Brasil), com os prazos acima na seção 9; os Termos passam a dizer que a empresa responde pelo que envia (direito de usar a foto, sem pessoa identificável).
-- **Custo:** cerca de US$ 0,04 por GB por mês. Dez gigabytes custam perto de US$ 0,40 por mês; pedidos e tráfego são desprezíveis neste volume.
+- **Custo (lista oficial da AWS, São Paulo):** US$ 0,0405 por GB por mês. Os 2 GB do piloto custam US$ 0,08 por mês; 10 GB, US$ 0,41; 100 GB, US$ 4,05. Gravar custa US$ 0,007 por mil pedidos, e ler, US$ 0,0056 por dez mil. A saída para a internet não custa nos primeiros 100 GB do mês; depois, US$ 0,15 por GB.
+- **O Backblaze, que o dono perguntou em 05/10/2026:** é opção técnica (fala o mesmo protocolo) e é mais barato, mas a diferença só passa de US$ 3 por mês perto de 100 GB, e ele guarda fora do Brasil. Como o código fala o protocolo S3, trocar depois é configuração: vale rever se o volume chegar a centenas de gigabytes.
 - **Rever** quando o volume passar de centenas de gigabytes (classe de armazenamento mais barata para o que é antigo) ou quando houver vídeo, que é outra ordem de tamanho.
 
 ## O que o dono decide
 
-1. **Aprovar o S3 em São Paulo** (ou preferir o Supabase Storage, sabendo da chave que abre todos os buckets).
-2. **Os limites:** 10 MB por foto e 30 dias para a imagem de peça recusada.
+1. ✅ **O S3 em São Paulo, aprovado em 05/10/2026** ("vamos de AWS"), depois de comparar o custo com o do Backblaze. As alternativas eram o Supabase Storage (a chave dele abre todos os buckets) e o Backblaze (os arquivos saem do país).
+2. **Os limites:** 10 MB por foto e 30 dias para a imagem de peça recusada. Seguem como propostos e são confirmados com ele quando a construção começar.
 
-Depois da aprovação, os passos dele são dois, no console da AWS, guiados um print por vez: criar o bucket e ampliar a permissão do usuário `liame-sistema`.
+**Quando construir:** no fim do roadmap, como pendência final (decisão do dono em 05/10/2026: "não construir agora"). Até lá não existe bucket, permissão nova nem código de envio de arquivo, e a imagem do Criativo (X7) e a campanha nova (X5), que dependem das fotos guardadas, esperam junto. Na hora, os passos dele são dois, no console da AWS, guiados um print por vez: criar o bucket e ampliar a permissão do usuário `liame-sistema`. Os preços e as páginas oficiais citados aqui são conferidos de novo antes do código.

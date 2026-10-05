@@ -26,6 +26,11 @@
 | **A7 · Escala comercial** | Vender fora do piloto | Agência com várias marcas-clientes, parceiros com vínculo aceito pelo dono (ADR-017), passkeys, franquia, white-label, billing, revenda, LIMITED_AUTO (envelope), autonomia granular | A6 |
 | **A8 · Especializações** | Só depois | SEO, AI-SEO, CRO, SDR, experimentação avançada, canais adicionais, A2A com parceiro real | A7 |
 
+> **Pendências finais do roadmap** (decisões do dono; entram depois da última fase em curso, antes de dar o roadmap por concluído):
+>
+> 1. **Armazenamento de fotos e mídias** (ADR-021: AWS S3 em São Paulo, aceito em 05/10/2026, com a ordem de não construir agora). Com ele vêm a imagem do Criativo (A4 · X7) e a campanha nova, criada pausada (A4 · X5), que dependem das fotos guardadas.
+> 2. **Quem paga a IA** (05/10/2026): a distribuição, com teto por empresa, ou cada empresa cliente com a própria conta de IA, ligada pelo front. Decide-se com a conta mensal medida nos testes (`ai-architecture.md` §10).
+
 ## 3. Critérios objetivos de saída da A0
 
 A A0 termina quando **todos** os itens abaixo estiverem cumpridos e registrados:
