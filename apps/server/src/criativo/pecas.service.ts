@@ -23,9 +23,9 @@ import { FlagService } from '../flags/flag.service.js';
 import { valoresComerciais } from '../policy/anuncio.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
-import { type LinhaDaPeca, type LinhaDaVersao, type LinhaDoPedido, respostaDaPeca, respostaDoPedido } from './apresentacao.js';
+import { type LinhaDoPedido, respostaDoPedido } from './apresentacao.js';
 import { marcaDoCriativo, mensagemDoProblema } from './base.js';
-import { COLUNAS_DA_PECA, COLUNAS_DA_VERSAO, COLUNAS_DO_PEDIDO, pecaComHistorico } from './consultas.js';
+import { COLUNAS_DO_PEDIDO, pecaComHistorico, pecasComAVersaoAtual } from './consultas.js';
 
 // As peças do Criativo na API (A4, X6; protótipo P10, aguardando aprovação; sem tela ainda). A rota só confere e
 // enfileira: quem escreve as peças é o Criativo, na fila do worker (`worker/criativo.service.ts`), e cada uma só
@@ -146,26 +146,7 @@ export class PecasService {
   async lista(auth: AuthContext, query: AdPieceListQuery): Promise<AdPieceListResponse> {
     this.empresa(auth);
     await this.exigirMarca(query.brand_id);
-    const tx = currentTx();
-    const pecas = await tx.execute<LinhaDaPeca & { version: number }>(sql`
-      select ${COLUNAS_DA_PECA}, p.version
-        from liame.ad_piece p
-        join liame.ad_piece_request q on q.id = p.request_id
-        left join liame.app_user d on d.id = p.decided_by
-       where p.brand_id = ${query.brand_id} ${query.status ? sql`and p.status = ${query.status}` : sql``}
-       order by p.created_at desc, p.id desc
-       limit 100`);
-    if (!pecas.rows.length) return { items: [] };
-    // A versão atual de cada peça listada (o Drizzle abre a lista em parâmetros: `in`, nunca `= any`, V16).
-    const ids = pecas.rows.map((p) => p.id);
-    const versoes = await tx.execute<LinhaDaVersao & { piece_id: string }>(sql`
-      select v.piece_id, ${COLUNAS_DA_VERSAO}
-        from liame.ad_piece_version v
-        join liame.ad_piece p on p.id = v.piece_id and p.version = v.version
-        left join liame.app_user c on c.id = v.created_by
-       where v.piece_id in ${ids}`);
-    const atual = new Map(versoes.rows.map((v) => [v.piece_id, v]));
-    return { items: pecas.rows.filter((p) => atual.has(p.id)).map((p) => respostaDaPeca(p, atual.get(p.id)!)) };
+    return { items: await pecasComAVersaoAtual(sql`p.brand_id = ${query.brand_id} ${query.status ? sql`and p.status = ${query.status}` : sql``}`, 100) };
   }
 
   /** Uma peça, com todas as versões e as decisões (das mais novas para as mais antigas) e a conferência de cada versão. */

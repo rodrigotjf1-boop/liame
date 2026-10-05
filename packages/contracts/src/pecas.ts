@@ -177,6 +177,40 @@ export type UpdateAdPieceRequest = z.infer<typeof UpdateAdPieceRequest>;
 export const ApproveAdPieceRequest = z.strictObject({ content_hash: Hash });
 export type ApproveAdPieceRequest = z.infer<typeof ApproveAdPieceRequest>;
 
+/** Quantas peças cabem num "aprovar as que passaram". */
+export const AD_PIECE_BATCH_MAX = 20;
+
+/**
+ * Aprovar várias peças de uma vez ("as que passaram"): a mesma regra de aprovar uma, peça por peça. Cada uma vale para o
+ * hash que a pessoa viu; a que não pode ser aprovada fica como está, e as outras entram.
+ */
+export const ApproveAdPiecesRequest = z.strictObject({
+  brand_id: z.uuid(),
+  items: z
+    .array(z.strictObject({ id: z.uuid(), content_hash: Hash }))
+    .min(1)
+    .max(AD_PIECE_BATCH_MAX)
+    .refine((itens) => new Set(itens.map((i) => i.id)).size === itens.length, { error: 'A mesma peça aparece mais de uma vez' }),
+});
+export type ApproveAdPiecesRequest = z.infer<typeof ApproveAdPiecesRequest>;
+
+export const ApproveAdPiecesResponse = z.strictObject({
+  /** Quantas peças foram aprovadas agora. */
+  approved: z.number().int().min(0),
+  /** Uma linha por peça do pedido, na ordem em que vieram. */
+  items: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      approved: z.boolean(),
+      /** O porquê, quando não foi aprovada: `nao_encontrada`, `peca_decidida`, `peca_refazendo`, `peca_mudou`, `oferta_mudou` ou `peca_barrada`. */
+      reason: Slug.nullable(),
+      /** A peça como está agora, com a versão atual e a conferência dela; nula quando não existe nesta marca. */
+      piece: AdPieceResponse.nullable(),
+    }),
+  ),
+});
+export type ApproveAdPiecesResponse = z.infer<typeof ApproveAdPiecesResponse>;
+
 export const AD_PIECE_REJECT_REASONS = ['texto_nao_serve', 'nao_parece_a_marca', 'nao_preciso_mais', 'outro'] as const;
 
 /** Recusar a peça, com o motivo. */

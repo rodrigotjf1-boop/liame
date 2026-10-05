@@ -52141,6 +52141,830 @@
         ]
       }
     },
+    "/v1/ad-pieces/approve": {
+      "post": {
+        "description": "\"Aprovar as que passaram\": até 20 peças da marca, cada uma com o hash que a pessoa viu. Vale a mesma regra de aprovar uma, peça por peça: a conferência é refeita com as regras e a oferta de agora. A que não pode ser aprovada fica como está, com o motivo em `reason` (`nao_encontrada`, `peca_decidida`, `peca_refazendo`, `peca_mudou`, `oferta_mudou` ou `peca_barrada`), e as outras entram: a resposta é 200 mesmo quando nenhuma entra, com uma linha por peça, na ordem do pedido, e a peça como ficou. Não pede o código do app: nada sai do Liame.",
+        "operationId": "PecasController_aprovarVarias",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "brand_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "items": {
+                    "minItems": 1,
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "content_hash": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "content_hash"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "brand_id",
+                  "items"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "approved": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "approved": {
+                            "type": "boolean"
+                          },
+                          "reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 60,
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "piece": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "brand_id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "request_id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "status": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "offer": {
+                                "type": "string"
+                              },
+                              "destination": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "ai_generated": {
+                                "type": "boolean"
+                              },
+                              "redoing": {
+                                "type": "boolean"
+                              },
+                              "current": {
+                                "type": "object",
+                                "properties": {
+                                  "version": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "body": {
+                                    "type": "string"
+                                  },
+                                  "button": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "review": {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "items": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "item": {
+                                              "type": "string",
+                                              "maxLength": 60,
+                                              "pattern": "^[a-z0-9_]+$"
+                                            },
+                                            "status": {
+                                              "type": "string",
+                                              "maxLength": 60,
+                                              "pattern": "^[a-z0-9_]+$"
+                                            },
+                                            "findings": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "maxLength": 60,
+                                                    "pattern": "^[a-z0-9_]+$"
+                                                  },
+                                                  "field": {
+                                                    "type": "string",
+                                                    "maxLength": 60,
+                                                    "pattern": "^[a-z0-9_]+$"
+                                                  },
+                                                  "excerpt": {
+                                                    "type": "string"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "field",
+                                                  "excerpt"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            }
+                                          },
+                                          "required": [
+                                            "item",
+                                            "status",
+                                            "findings"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "cites_value": {
+                                        "type": "boolean"
+                                      },
+                                      "characters": {
+                                        "type": "object",
+                                        "properties": {
+                                          "title": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991
+                                          },
+                                          "body": {
+                                            "type": "integer",
+                                            "minimum": 0,
+                                            "maximum": 9007199254740991
+                                          }
+                                        },
+                                        "required": [
+                                          "title",
+                                          "body"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "recommended": {
+                                        "type": "object",
+                                        "properties": {
+                                          "title": {
+                                            "type": "integer",
+                                            "minimum": 1,
+                                            "maximum": 9007199254740991
+                                          },
+                                          "body": {
+                                            "type": "integer",
+                                            "minimum": 1,
+                                            "maximum": 9007199254740991
+                                          }
+                                        },
+                                        "required": [
+                                          "title",
+                                          "body"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    },
+                                    "required": [
+                                      "status",
+                                      "items",
+                                      "cites_value",
+                                      "characters",
+                                      "recommended"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "content_hash": {
+                                    "type": "string",
+                                    "pattern": "^[0-9a-f]{64}$"
+                                  },
+                                  "author": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "created_by": {
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "created_at": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "version",
+                                  "title",
+                                  "body",
+                                  "button",
+                                  "review",
+                                  "content_hash",
+                                  "author",
+                                  "created_by",
+                                  "created_at"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "versions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "version": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "title": {
+                                      "type": "string"
+                                    },
+                                    "body": {
+                                      "type": "string"
+                                    },
+                                    "button": {
+                                      "type": "string",
+                                      "maxLength": 60,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "review": {
+                                      "type": "object",
+                                      "properties": {
+                                        "status": {
+                                          "type": "string",
+                                          "maxLength": 60,
+                                          "pattern": "^[a-z0-9_]+$"
+                                        },
+                                        "items": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "item": {
+                                                "type": "string",
+                                                "maxLength": 60,
+                                                "pattern": "^[a-z0-9_]+$"
+                                              },
+                                              "status": {
+                                                "type": "string",
+                                                "maxLength": 60,
+                                                "pattern": "^[a-z0-9_]+$"
+                                              },
+                                              "findings": {
+                                                "type": "array",
+                                                "items": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "kind": {
+                                                      "type": "string",
+                                                      "maxLength": 60,
+                                                      "pattern": "^[a-z0-9_]+$"
+                                                    },
+                                                    "field": {
+                                                      "type": "string",
+                                                      "maxLength": 60,
+                                                      "pattern": "^[a-z0-9_]+$"
+                                                    },
+                                                    "excerpt": {
+                                                      "type": "string"
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "kind",
+                                                    "field",
+                                                    "excerpt"
+                                                  ],
+                                                  "additionalProperties": false
+                                                }
+                                              }
+                                            },
+                                            "required": [
+                                              "item",
+                                              "status",
+                                              "findings"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        },
+                                        "cites_value": {
+                                          "type": "boolean"
+                                        },
+                                        "characters": {
+                                          "type": "object",
+                                          "properties": {
+                                            "title": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 9007199254740991
+                                            },
+                                            "body": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 9007199254740991
+                                            }
+                                          },
+                                          "required": [
+                                            "title",
+                                            "body"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        "recommended": {
+                                          "type": "object",
+                                          "properties": {
+                                            "title": {
+                                              "type": "integer",
+                                              "minimum": 1,
+                                              "maximum": 9007199254740991
+                                            },
+                                            "body": {
+                                              "type": "integer",
+                                              "minimum": 1,
+                                              "maximum": 9007199254740991
+                                            }
+                                          },
+                                          "required": [
+                                            "title",
+                                            "body"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "required": [
+                                        "status",
+                                        "items",
+                                        "cites_value",
+                                        "characters",
+                                        "recommended"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "content_hash": {
+                                      "type": "string",
+                                      "pattern": "^[0-9a-f]{64}$"
+                                    },
+                                    "author": {
+                                      "type": "string",
+                                      "maxLength": 60,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "created_by": {
+                                      "type": [
+                                        "object",
+                                        "null"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string",
+                                          "format": "uuid",
+                                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "name"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "created_at": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "version",
+                                    "title",
+                                    "body",
+                                    "button",
+                                    "review",
+                                    "content_hash",
+                                    "author",
+                                    "created_by",
+                                    "created_at"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "decisions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "decision": {
+                                      "type": "string",
+                                      "maxLength": 60,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "version": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "reason": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ],
+                                      "maxLength": 60,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "comment": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "decided_by": {
+                                      "type": [
+                                        "object",
+                                        "null"
+                                      ],
+                                      "properties": {
+                                        "id": {
+                                          "type": "string",
+                                          "format": "uuid",
+                                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "name"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "created_at": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "decision",
+                                    "version",
+                                    "reason",
+                                    "comment",
+                                    "decided_by",
+                                    "created_at"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "decided_by": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "decided_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "created_at": {
+                                "type": "string"
+                              },
+                              "updated_at": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "brand_id",
+                              "request_id",
+                              "status",
+                              "offer",
+                              "destination",
+                              "ai_generated",
+                              "redoing",
+                              "current",
+                              "decided_by",
+                              "decided_at",
+                              "created_at",
+                              "updated_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "approved",
+                          "reason",
+                          "piece"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "approved",
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Aprovar várias peças de uma vez",
+        "tags": [
+          "pecas"
+        ]
+      }
+    },
     "/v1/ad-pieces/{id}/reject": {
       "post": {
         "description": "Com o motivo (`texto_nao_serve`, `nao_parece_a_marca`, `nao_preciso_mais` ou `outro`) e, se quiser, um comentário, guardado sem dado pessoal. Só a peça que espera decisão, pelo hash que a pessoa viu.",
