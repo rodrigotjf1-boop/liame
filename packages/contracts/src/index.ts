@@ -296,9 +296,13 @@ export {
   TrackingLinkListResponse,
 } from './links.js';
 export {
+  AD_PIECE_BUTTONS,
   AD_PIECE_DESTINATIONS,
   AD_PIECE_LIMITS,
+  AD_PIECE_REJECT_REASONS,
   AD_PIECE_STATUSES,
+  AdPieceButton,
+  AdPieceDecision,
   AdPieceDestination,
   AdPieceFinding,
   AdPieceListQuery,
@@ -314,5 +318,10 @@ export {
   AdPieceReviewItem,
   AdPieceStatus,
   AdPieceVersion,
+  ApproveAdPieceRequest,
+  ContestAdPieceRequest,
   CreateAdPieceRequest,
+  RedoAdPieceRequest,
+  RejectAdPieceRequest,
+  UpdateAdPieceRequest,
 } from './pecas.js';

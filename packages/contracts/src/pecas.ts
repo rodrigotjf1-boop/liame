@@ -14,6 +14,10 @@ export const AD_PIECE_DESTINATIONS = ['cardapio', 'whatsapp'] as const;
 export const AdPieceDestination = z.enum(AD_PIECE_DESTINATIONS);
 export type AdPieceDestination = z.infer<typeof AdPieceDestination>;
 
+export const AD_PIECE_BUTTONS = ['pedir_agora', 'ver_cardapio', 'enviar_mensagem'] as const;
+export const AdPieceButton = z.enum(AD_PIECE_BUTTONS);
+export type AdPieceButton = z.infer<typeof AdPieceButton>;
+
 export const AD_PIECE_STATUSES = ['decidir', 'aprovada', 'recusada'] as const;
 export const AdPieceStatus = z.enum(AD_PIECE_STATUSES);
 export type AdPieceStatus = z.infer<typeof AdPieceStatus>;
@@ -118,6 +122,19 @@ export const AdPieceVersion = z.strictObject({
 });
 export type AdPieceVersion = z.infer<typeof AdPieceVersion>;
 
+/** Uma decisão sobre a peça: quem decidiu, sobre qual versão e por quê. */
+export const AdPieceDecision = z.strictObject({
+  /** `aprovada`, `recusada` ou `contestada` ("a conferência errou?": guarda o motivo e não destrava a peça). */
+  decision: Slug,
+  version: z.number().int().min(1),
+  /** Na recusa: `texto_nao_serve`, `nao_parece_a_marca`, `nao_preciso_mais` ou `outro`. */
+  reason: Slug.nullable(),
+  comment: z.string().nullable(),
+  decided_by: Pessoa.nullable(),
+  created_at: z.string(),
+});
+export type AdPieceDecision = z.infer<typeof AdPieceDecision>;
+
 export const AdPieceResponse = z.strictObject({
   id: z.uuid(),
   brand_id: z.uuid(),
@@ -129,16 +146,59 @@ export const AdPieceResponse = z.strictObject({
   destination: Slug,
   /** A peça nasceu do Criativo (um funcionário de IA): a tela mostra "feito com IA". */
   ai_generated: z.boolean(),
+  /** O Criativo está refazendo esta peça (um "pedir outra" na fila): editar e decidir esperam a versão nova. */
+  redoing: z.boolean(),
   /** A versão atual. */
   current: AdPieceVersion,
   /** Todas as versões, da mais nova para a mais antiga; só no detalhe. */
   versions: z.array(AdPieceVersion).optional(),
+  /** As decisões sobre a peça, da mais nova para a mais antiga; só no detalhe. */
+  decisions: z.array(AdPieceDecision).optional(),
   decided_by: Pessoa.nullable(),
   decided_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
 });
 export type AdPieceResponse = z.infer<typeof AdPieceResponse>;
+
+const Hash = z.string().regex(/^[0-9a-f]{64}$/, { error: 'Hash inválido' });
+
+/** Editar o texto de uma peça que espera decisão: nasce uma versão nova, conferida de novo. O texto que seria barrado não é salvo. */
+export const UpdateAdPieceRequest = z.strictObject({
+  /** A versão que a pessoa estava vendo. */
+  base_version: z.number().int().min(1),
+  title: z.string().trim().min(1).max(60),
+  body: z.string().trim().min(1).max(400),
+  button: AdPieceButton,
+});
+export type UpdateAdPieceRequest = z.infer<typeof UpdateAdPieceRequest>;
+
+/** Aprovar a peça como a pessoa a viu (o hash da versão atual). Não pede o código do app: a peça só vai para a biblioteca. */
+export const ApproveAdPieceRequest = z.strictObject({ content_hash: Hash });
+export type ApproveAdPieceRequest = z.infer<typeof ApproveAdPieceRequest>;
+
+export const AD_PIECE_REJECT_REASONS = ['texto_nao_serve', 'nao_parece_a_marca', 'nao_preciso_mais', 'outro'] as const;
+
+/** Recusar a peça, com o motivo. */
+export const RejectAdPieceRequest = z.strictObject({
+  content_hash: Hash,
+  reason: z.enum(AD_PIECE_REJECT_REASONS),
+  /** O que a pessoa quiser dizer (os dados pessoais são retirados antes de guardar). */
+  comment: z.string().trim().min(1).max(500).optional(),
+});
+export type RejectAdPieceRequest = z.infer<typeof RejectAdPieceRequest>;
+
+/** Pedir outra versão ao Criativo: ele refaz a peça, diferente da atual. */
+export const RedoAdPieceRequest = z.strictObject({
+  content_hash: Hash,
+  /** O que mudar (opcional): "mais curto", "fale da retirada". Sem ela, vale a instrução do pedido original. */
+  instruction: z.string().trim().min(1).max(AD_PIECE_LIMITS.instruction_max).optional(),
+});
+export type RedoAdPieceRequest = z.infer<typeof RedoAdPieceRequest>;
+
+/** "A conferência errou?": o motivo fica guardado para a regra ser revista. Não destrava a peça. */
+export const ContestAdPieceRequest = z.strictObject({ content_hash: Hash, comment: z.string().trim().min(3).max(500) });
+export type ContestAdPieceRequest = z.infer<typeof ContestAdPieceRequest>;
 
 export const AdPieceListQuery = z.strictObject({ brand_id: z.uuid(), status: AdPieceStatus.optional() });
 export type AdPieceListQuery = z.infer<typeof AdPieceListQuery>;

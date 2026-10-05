@@ -45,9 +45,10 @@ export interface Peca extends TextoDaPeca {
 
 /**
  * O que o guia de anúncios da Meta recomenda (base §2.1): título de até 27 caracteres no Feed do Facebook (40 no do
- * Instagram) e texto principal de até 125. É recomendação: passar disso avisa, não barra.
+ * Instagram) e texto principal de até 125 (no Feed do Facebook, de 50 a 150). É recomendação: passar de 27 e de 125
+ * avisa, não barra.
  */
-export const TAMANHO_RECOMENDADO = { titulo: 27, tituloNoInstagram: 40, texto: 125 } as const;
+export const TAMANHO_RECOMENDADO = { titulo: 27, tituloNoInstagram: 40, texto: 125, textoNoFacebook: 150 } as const;
 /** O teto do Liame: acima disto não é uma peça de anúncio, e ela nem aparece. */
 export const TAMANHO_MAXIMO = { titulo: 60, texto: 400 } as const;
 /** Quantas peças um pedido pode trazer. */
@@ -174,16 +175,22 @@ const chaveDaPeca = (p: TextoDaPeca): string => normalizar(`${p.titulo}|${p.text
  * O que o código faz com a resposta do modelo. Com recusa, nenhuma peça é usada. Sem recusa, cada peça tem os espaços
  * arrumados e só fica se tem título e texto, cabe no teto do Liame, não traz dado pessoal (cru, ou já trocado pela marca
  * da limpeza do gateway; essa nem é guardada) e não
- * repete outra; ficam no máximo as pedidas. As que ficam saem conferidas: a barrada aparece, com o motivo, para a
- * pessoa corrigir ou pedir outra.
+ * repete outra (nem a versão anterior, no "pedir outra"); ficam no máximo as pedidas. As que ficam saem conferidas:
+ * a barrada aparece, com o motivo, para a pessoa corrigir ou pedir outra.
  */
-export function pecasDaResposta(r: RespostaDoCriativo, base: BaseDaPeca, variacoes: number): { recusa: RecusaDoCriativo | null; pecas: PecaConferida[]; descartes: DescartesDasPecas } {
+export function pecasDaResposta(
+  r: RespostaDoCriativo,
+  base: BaseDaPeca,
+  variacoes: number,
+  anterior: TextoDaPeca | null = null,
+): { recusa: RecusaDoCriativo | null; pecas: PecaConferida[]; descartes: DescartesDasPecas } {
   const descartes: DescartesDasPecas = { vazia: 0, longa: 0, dado_pessoal: 0, repetida: 0, a_mais: 0, com_recusa: 0 };
   if (r.recusa) {
     descartes.com_recusa = r.pecas.length;
     return { recusa: r.recusa, pecas: [], descartes };
   }
-  const vistas = new Set<string>();
+  // No "pedir outra", a peça igual à versão anterior não é outra: sai como repetida.
+  const vistas = new Set<string>(anterior ? [chaveDaPeca(anterior)] : []);
   const pecas: PecaConferida[] = [];
   for (const bruta of r.pecas) {
     const p: Peca = { titulo: arrumar(bruta.titulo), texto: arrumar(bruta.texto), botao: bruta.botao };

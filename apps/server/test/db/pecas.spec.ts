@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { AdPieceListResponse, AdPieceOptionsResponse, AdPieceRequestListResponse, AdPieceRequestResponse, AdPieceResponse } from '@liame/contracts';
 import { type Database, runMigrations } from '@liame/database';
@@ -15,7 +15,7 @@ import { ResultsService } from '../../src/results/results.service.js';
 import { CriativoLoop, TENTATIVAS_DA_GERACAO } from '../../src/worker/criativo-loop.js';
 import { CriativoService } from '../../src/worker/criativo.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
-import { ligarCriativo, ligarIa, ModelosDeTeste, modeloComPreco, recusa as recusaDoFornecedor, responde, rotaAtiva, uso } from '../helpers/ia.js';
+import { ligarCriativo, ligarIa, ModelosDeTeste, recusa as recusaDoFornecedor, responde, rotaCompartilhada, uso } from '../helpers/ia.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // As peças do Criativo (A4, X6 parte b): a pessoa pede peças para uma oferta de Minha marca; o pedido é conferido antes
@@ -38,7 +38,6 @@ const COM_AVISO = { titulo: 'Combo sexta: smash, batata e refri', texto: 'Combo 
 const BARRADA = { titulo: 'Combo gourmet por R$ 29,90', texto: 'Smash, batata e refri. Peça pelo cardápio.', botao: 'pedir_agora' };
 
 describe.skipIf(!hasDb)('Peças do Criativo: pedido, fila, conferência e leitura (A4, X6)', () => {
-  const RODADA = `teste_${randomBytes(4).toString('hex')}`;
   let api: TestApi;
   let database: Database;
   let config: AppConfig;
@@ -124,15 +123,11 @@ describe.skipIf(!hasDb)('Peças do Criativo: pedido, fila, conferência e leitur
     modelos = new ModelosDeTeste(config);
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
     loop = new CriativoLoop(database, flags, new CriativoService(database, api.app.get(AiGateway), api.app.get(ResultsService)));
-    // Só este arquivo usa a rota desta tarefa (V76).
-    await ownerQuery(`delete from liame.ai_model_route where task = $1 and created_by = 'testes'`, [TAREFA_CRIATIVO_TEXTO]);
-    alvo = await modeloComPreco(modelos, RODADA, new MockLanguageModelV4({ doGenerate: [] }));
-    await rotaAtiva(TAREFA_CRIATIVO_TEXTO, alvo, { maxCost: 1_000_000 });
+    // A rota desta tarefa é dividida com `pecas-decisoes.spec.ts`: nome fixo, ninguém apaga (V76).
+    alvo = await rotaCompartilhada(modelos, TAREFA_CRIATIVO_TEXTO, new MockLanguageModelV4({ doGenerate: [] }));
   }, 120_000);
   beforeEach(resetIpRateLimits);
   afterAll(async () => {
-    await ownerQuery(`delete from liame.ai_model_route where task = $1 and created_by = 'testes'`, [TAREFA_CRIATIVO_TEXTO]);
-    await ownerQuery(`delete from liame.ai_model_price where model like $1`, [`${RODADA}%`]);
     await api?.close();
   });
 
@@ -199,7 +194,7 @@ describe.skipIf(!hasDb)('Peças do Criativo: pedido, fila, conferência e leitur
     const lista = await pecas(d, 'decidir');
     expect(lista).toHaveLength(3);
     const por = (titulo: string) => lista.find((x) => x.current.title === titulo)!;
-    expect(por(BOA.titulo)).toMatchObject({ status: 'decidir', offer: OFERTA, destination: 'cardapio', ai_generated: true, request_id: p.id, decided_by: null, decided_at: null });
+    expect(por(BOA.titulo)).toMatchObject({ status: 'decidir', offer: OFERTA, destination: 'cardapio', ai_generated: true, redoing: false, request_id: p.id, decided_by: null, decided_at: null });
     expect(por(BOA.titulo).current).toMatchObject({ version: 1, body: BOA.texto, button: 'pedir_agora', author: 'criativo', created_by: null });
     expect(por(BOA.titulo).current.review).toMatchObject({ status: 'passou', cites_value: true, characters: { title: 20 }, recommended: { title: 27, body: 125 } });
     expect(por(BOA.titulo).current.review.items.map((i) => [i.item, i.status])).toEqual([
@@ -227,6 +222,7 @@ describe.skipIf(!hasDb)('Peças do Criativo: pedido, fila, conferência e leitur
     const detalhe = AdPieceResponse.parse((await api.call('GET', `/v1/ad-pieces/${por(BOA.titulo).id}`, { cookie: d.cookie })).body);
     expect(detalhe.versions).toHaveLength(1);
     expect(detalhe.versions![0]).toEqual(detalhe.current);
+    expect(detalhe.decisions).toEqual([]);
     expect(detalhe.current.content_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(new Set(lista.map((x) => x.current.content_hash)).size).toBe(3);
 

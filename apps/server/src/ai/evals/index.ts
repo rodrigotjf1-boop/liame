@@ -4,7 +4,7 @@ export { ModelosIa } from '../modelos.js';
 export { type Avaliacao, avaliarExplicacao, contextoDoCaso, GRUPOS_SEM_FALHA, portao, type ResumoDoEval, resumir, semIaDoCaso } from './avaliar.js';
 export { type CasoDeEval, carregarCasos, GRUPOS } from './casos.js';
 export { avaliarConversa, type CasoDaConversa, carregarCasosDaConversa, GRUPOS_DA_CONVERSA } from './conversa.js';
-export { avaliarPecas, type CasoDoCriativo, carregarCasosDoCriativo, GRUPOS_DO_CRIATIVO } from './criativo.js';
+export { avaliarPecas, type CasoDoCriativo, carregarCasosDoCriativo, GRUPOS_DO_CRIATIVO, TAMANHO_NO_EVAL } from './criativo.js';
 export { avaliarLeitura, type CasoDaPagina, carregarCasosDaPagina, GRUPOS_DA_PAGINA } from './pagina.js';
 export { avaliarPlano, type CasoDoPlano, carregarCasosDoPlano, GRUPOS_DO_PLANO } from './plano.js';
 export { type AlvoDoEval, responderExplicacao } from './responder.js';
