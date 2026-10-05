@@ -57,6 +57,7 @@ export const allTables = [
   actions.actionExecution,
   actions.workflowRun,
   actions.workflowStep,
+  actions.actionSpendCheck,
   vault.secret,
   vault.tenantKey,
   media.connectedAccount,

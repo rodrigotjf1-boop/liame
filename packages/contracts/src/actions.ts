@@ -210,6 +210,62 @@ export const BudgetMonthPlatform = z.strictObject({
 export type BudgetMonthPlatform = z.infer<typeof BudgetMonthPlatform>;
 
 /**
+ * A conferência mais recente de uma mudança (D-A4-24): o que a leitura do dia mostrou do objeto e quanto ele gastou. O
+ * gasto é conferido pela semana (os dias comparados, o gasto neles e o que a verba de cada dia permite), não pelo dia.
+ */
+export const BudgetChangeCheck = z.strictObject({
+  checked_on: Dia,
+  /**
+   * `confere`; `mudou` (a plataforma mostra outra situação ou outra verba: alguém mudou lá depois, e não é erro); ou
+   * `acima` (o objeto gastou mais do que a verba permite nos dias comparados, ou gastou depois de pausado).
+   */
+  status: z.string().regex(/^[a-z_]{1,30}$/),
+  /** Desde que dia a conferência dá este resultado, sem interrupção. */
+  since: Dia,
+  /** Como a leitura do dia mostra o objeto; a situação é nula quando ele saiu da lista da conta. */
+  informed_status: z.string().nullable(),
+  informed_daily_micros: Micros.nullable(),
+  window: z.strictObject({ from: Dia, to: Dia }),
+  window_spend_micros: Micros,
+  /** Nulo quando a verba não mora no objeto: não há com o que comparar. */
+  window_allowed_micros: Micros.nullable(),
+  /** Os dias inteiros depois do dia da mudança, e o gasto neles (a média "depois da mudança"). */
+  days_after: z.int().min(0),
+  spend_after_micros: Micros,
+});
+export type BudgetChangeCheck = z.infer<typeof BudgetChangeCheck>;
+
+/** A situação e a verba diária de um objeto de anúncio (a verba é nula quando não mora nele). */
+const BudgetChangeState = z.strictObject({ status: z.string(), daily_micros: Micros.nullable() });
+
+/** Uma mudança que o Liame executou numa plataforma de anúncio, com a conferência dela. */
+export const BudgetMonthChange = z.strictObject({
+  action_id: z.uuid(),
+  executed_at: z.iso.datetime(),
+  /** O dia da execução, no fuso da empresa. */
+  executed_on: Dia,
+  tool: z.string(),
+  /** `orcamento.aumentar`, `orcamento.reduzir`, `campanha.pausar`… */
+  action: z.string(),
+  provider: z.string(),
+  account_id: z.string(),
+  /** O objeto: `campanha`, `conjunto` ou `anuncio`, com o nome lido na hora do pedido e a campanha de que faz parte. */
+  target: z.strictObject({ kind: z.string(), name: z.string(), campaign_name: z.string().nullable() }),
+  from: BudgetChangeState,
+  to: BudgetChangeState,
+  requested_by: z.strictObject({ id: z.uuid(), name: z.string() }),
+  /** O funcionário de IA que fez o pedido (modo Aprovação); nulo no pedido de uma pessoa. */
+  agent_key: Slug.nullable(),
+  /** A ação que este pedido desfez (a volta), ou nulo. */
+  undoes: z.uuid().nullable(),
+  /** Nula enquanto a primeira conferência não roda: a mudança de hoje só tem gasto para conferir amanhã. */
+  check: BudgetChangeCheck.nullable(),
+  /** Outro pedido do Liame mudou o mesmo objeto depois: esta mudança deixou de valer e não é mais conferida. */
+  superseded_by: z.strictObject({ action_id: z.uuid(), executed_at: z.iso.datetime() }).nullable(),
+});
+export type BudgetMonthChange = z.infer<typeof BudgetMonthChange>;
+
+/**
  * A verba do mês (D-A4-19): o que as contas de anúncio conectadas já gastaram no mês, a previsão de fechamento pelo
  * ritmo dos últimos 7 dias, os aumentos e as retomadas pedidos ou feitos hoje (que o ritmo ainda não mostra) e os dois
  * limites da empresa. O pedido que faz o gasto subir só passa se a previsão, com ele, couber no teto do mês.
@@ -255,6 +311,22 @@ export const BudgetMonthResponse = z.strictObject({
     /** Mudanças de verba no mesmo objeto por janela. */
     rate_limit: z.strictObject({ max: z.int().min(1), window_minutes: z.int().min(1) }).nullable(),
   }),
+  /**
+   * O que o Liame mudou nas plataformas de anúncio neste mês e, de antes dele, o que continua valendo e sendo
+   * conferido (as 100 mudanças mais recentes, da mais nova para a mais antiga). Cada uma é conferida todo dia com o
+   * que a plataforma informa e com o que ela gastou (D-A4-24).
+   */
+  changes: z.array(BudgetMonthChange),
+  /**
+   * As mudanças que continuam valendo e cuja conferência mais recente (de hoje ou de ontem) diz que o objeto gastou
+   * mais do que a verba permite: o mesmo aviso da Atenção, já em palavras, para a faixa do topo da tela.
+   */
+  overspend: z.array(z.strictObject({ action_id: z.uuid(), title: z.string(), detail: z.string(), action: z.string() })),
+  /**
+   * A maior verba diária entre as campanhas e os conjuntos ativos das contas em que o Liame muda verba, pela leitura
+   * mais recente; nula quando nenhum tem verba diária. Ajuda a escolher o teto por campanha.
+   */
+  largest_daily_micros: Micros.nullable(),
   generated_at: z.iso.datetime(),
 });
 export type BudgetMonthResponse = z.infer<typeof BudgetMonthResponse>;

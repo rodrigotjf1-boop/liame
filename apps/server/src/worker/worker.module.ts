@@ -19,6 +19,7 @@ import { VaultModule } from '../vault/vault.module.js';
 import { ActionExecutor } from './action-executor.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { ConexaoProcessor } from './conexao-processor.js';
+import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
 import { AiGateway } from '../ai/gateway.js';
@@ -65,6 +66,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     KillSwitchService,
     BudgetService,
     ActionExecutor,
+    // O gasto conferido (A4, X4): todo dia, cada mudança executada numa conta de anúncio é conferida com a plataforma.
+    ConferenciaDoGasto,
     // O connector de escrita do Regem (criar cupom de campanha) recebe o cofre e o cliente HTTP aqui.
     EscritaRegem,
     // O da Meta (situação e verba de anúncio, A4): o cofre, o cliente HTTP e a versão da API do registro.

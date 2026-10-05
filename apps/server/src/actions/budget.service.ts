@@ -1,13 +1,14 @@
-import type { BudgetLimitsRequest, BudgetMonthResponse, BudgetPolicyRequest, BudgetResponse } from '@liame/contracts';
+import type { BudgetLimitsRequest, BudgetMonthChange, BudgetMonthResponse, BudgetPolicyRequest, BudgetResponse } from '@liame/contracts';
 import { type Tx, uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { type SQL, sql } from 'drizzle-orm';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { PLATFORM_POLICY } from '../policy/engine.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { regrasDaVerba, tetoDaVerba } from '../policy/teto-da-verba.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
+import { DIAS_CONFERINDO, nomeDaPlataforma, textoDoGastoAcima } from './conferencia-do-gasto.js';
 import { CONNECTORS } from './connectors.js';
 import { cabeNoMes, type ContaDeAnuncio, type ContaDoMes, contaDoMes, fraseDeNaoCaber, mesDe, PLATAFORMAS_DE_ANUNCIO } from './verba-do-mes.js';
 
@@ -33,6 +34,46 @@ export async function periodOf(tx: Tx, tenantId: string, at = new Date()): Promi
 const PROVEDORES_QUE_GASTAM = Object.values(CONNECTORS)
   .filter((c) => c.requiresSpendLimits)
   .map((c) => c.provider);
+/** Quantas mudanças do mês a tela recebe (as mais recentes). */
+const MUDANCAS_NA_TELA = 100;
+const EH_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Uma mudança executada, com a conferência mais recente dela e o pedido que veio depois no mesmo objeto. */
+type LinhaDaMudanca = {
+  id: string;
+  tool: string;
+  action: string;
+  provider: string;
+  account_id: string;
+  resource_id: string;
+  before_state: Record<string, unknown> | null;
+  desired_state: Record<string, unknown> | null;
+  updated_at: Date | string;
+  dia: string;
+  requested_by: string;
+  quem: string | null;
+  agent_key: string | null;
+  compensates_action_id: string | null;
+  checked_on: string | null;
+  conferencia: string | null;
+  informed_status: string | null;
+  informed_daily_micros: string | null;
+  window_from: string | null;
+  window_to: string | null;
+  spend_micros: string | null;
+  allowed_micros: string | null;
+  days_after: number | null;
+  spend_after_micros: string | null;
+  desde: string | null;
+  depois_id: string | null;
+  depois_em: Date | string | null;
+};
+
+/** A situação e a verba de um estado guardado no pedido, como a resposta mostra (verba zero ou ausente: não mora no objeto). */
+const estadoNaResposta = (estado: Record<string, unknown> | null): { status: string; daily_micros: number | null } => ({
+  status: typeof estado?.status === 'string' ? estado.status : 'desconhecido',
+  daily_micros: typeof estado?.daily_budget_micros === 'number' && estado.daily_budget_micros > 0 ? estado.daily_budget_micros : null,
+});
 
 /**
  * O dinheiro do mês (ADR-007; A4, X4). Duas contas, conforme o provedor do pedido:
@@ -172,6 +213,7 @@ export class BudgetService {
     const teto = tetoDaVerba(policies, PLATAFORMA_DA_ESCRITA);
     const regras = regrasDaVerba([PLATFORM_POLICY], PLATAFORMA_DA_ESCRITA);
     const { mes } = conta;
+    const mudancas = await this.mudancasDoMes(tx, { tenantId, fuso, inicio: mes.inicio, hoje: mes.hoje });
     return {
       period: mes.periodo,
       timezone: fuso,
@@ -206,8 +248,124 @@ export class BudgetService {
         last_success_at: p.lidoEm ? p.lidoEm.toISOString() : null,
       })),
       rules: regras,
+      changes: mudancas,
+      overspend: avisosDeGasto(mudancas, mes.ontem),
+      largest_daily_micros: await this.maiorVerbaDiaria(tx, tenantId),
       generated_at: agora.toISOString(),
     };
+  }
+
+  /**
+   * O que o Liame executou nas plataformas de anúncio desde o começo do mês (D-A4-24), com a conferência mais recente
+   * de cada mudança (`action_spend_check`, gravada todo dia pela rotina do worker), desde quando ela dá aquele
+   * resultado e o pedido que mudou o mesmo objeto depois, se houve. A ação que achou o objeto já como queria não
+   * mudou nada, e fica de fora.
+   */
+  private async mudancasDoMes(tx: Tx, e: { tenantId: string; fuso: string; inicio: string; hoje: string }): Promise<BudgetMonthChange[]> {
+    if (!PROVEDORES_QUE_GASTAM.length) return [];
+    const escreveu = (pedido: SQL) => sql`exists (select 1 from liame.action_execution x
+      where x.action_request_id = ${pedido} and x.status = 'executada' and coalesce((x.result_state->>'sem_escrita')::boolean, false) = false)`;
+    const r = await tx.execute<LinhaDaMudanca>(sql`
+      select r.id, r.tool, r.action, r.provider, r.account_id, r.resource_id, r.before_state, r.desired_state, r.updated_at,
+             (r.updated_at at time zone ${e.fuso})::date::text as dia, r.requested_by, u.name as quem, r.agent_key, r.compensates_action_id,
+             k.checked_on::text as checked_on, k.status as conferencia, k.informed_status, k.informed_daily_micros::text as informed_daily_micros,
+             k.window_from::text as window_from, k.window_to::text as window_to, k.spend_micros::text as spend_micros,
+             k.allowed_micros::text as allowed_micros, k.days_after, k.spend_after_micros::text as spend_after_micros,
+             -- Desde quando a conferência dá o resultado de agora: o primeiro dia sem outro resultado depois dele.
+             (select min(k2.checked_on)::text from liame.action_spend_check k2
+               where k2.action_request_id = r.id and k2.status = k.status
+                 and not exists (select 1 from liame.action_spend_check k3
+                                  where k3.action_request_id = r.id and k3.checked_on > k2.checked_on and k3.status <> k.status)) as desde,
+             s.id as depois_id, s.updated_at as depois_em
+        from liame.action_request r
+        left join liame.app_user u on u.id = r.requested_by
+        left join lateral (select * from liame.action_spend_check k where k.action_request_id = r.id order by k.checked_on desc limit 1) k on true
+        left join lateral (
+          select s.id, s.updated_at from liame.action_request s
+           where s.tenant_id = r.tenant_id and s.provider = r.provider and s.account_id = r.account_id and s.resource_id = r.resource_id
+             and s.status = 'executada' and (s.updated_at, s.id) > (r.updated_at, r.id) and ${escreveu(sql`s.id`)}
+           order by s.updated_at, s.id limit 1
+        ) s on true
+       where r.tenant_id = ${e.tenantId} and r.provider in ${PROVEDORES_QUE_GASTAM} and r.status = 'executada' and ${escreveu(sql`r.id`)}
+         -- As do mês e, de antes dele, as que continuam valendo e sendo conferidas (enquanto a rotina as confere).
+         and (r.updated_at >= (${e.inicio}::date)::timestamp at time zone ${e.fuso}
+              or (s.id is null and (r.updated_at at time zone ${e.fuso})::date >= ${e.hoje}::date - ${DIAS_CONFERINDO}::int))
+       order by r.updated_at desc, r.id desc
+       limit ${MUDANCAS_NA_TELA}`);
+    const campanhaDe = await this.campanhasDosObjetos(tx, r.rows);
+    return r.rows.map((l) => {
+      const [antes, depois] = [estadoNaResposta(l.before_state), estadoNaResposta(l.desired_state)];
+      const tipo = typeof l.before_state?.tipo === 'string' ? l.before_state.tipo : (l.resource_id.split(':')[0] ?? 'objeto');
+      return {
+        action_id: l.id,
+        executed_at: new Date(l.updated_at).toISOString(),
+        executed_on: l.dia,
+        tool: l.tool,
+        action: l.action,
+        provider: l.provider,
+        account_id: l.account_id,
+        target: {
+          kind: tipo,
+          name: typeof l.before_state?.nome === 'string' && l.before_state.nome ? l.before_state.nome : l.resource_id,
+          campaign_name: tipo === 'campanha' ? null : (campanhaDe.get(`${l.account_id}/${l.resource_id}`) ?? null),
+        },
+        from: antes,
+        to: depois,
+        requested_by: { id: l.requested_by, name: l.quem ?? 'Pessoa removida' },
+        agent_key: l.agent_key,
+        undoes: l.compensates_action_id,
+        check:
+          l.checked_on && l.conferencia && l.window_from && l.window_to
+            ? {
+                checked_on: l.checked_on,
+                status: l.conferencia,
+                since: l.desde ?? l.checked_on,
+                informed_status: l.informed_status,
+                informed_daily_micros: l.informed_daily_micros === null ? null : Number(l.informed_daily_micros),
+                window: { from: l.window_from, to: l.window_to },
+                window_spend_micros: Number(l.spend_micros ?? 0),
+                window_allowed_micros: l.allowed_micros === null ? null : Number(l.allowed_micros),
+                days_after: Number(l.days_after ?? 0),
+                spend_after_micros: Number(l.spend_after_micros ?? 0),
+              }
+            : null,
+        superseded_by: l.depois_id && l.depois_em ? { action_id: l.depois_id, executed_at: new Date(l.depois_em).toISOString() } : null,
+      };
+    });
+  }
+
+  /** A maior verba diária entre as campanhas e os conjuntos ativos das contas em que o Liame muda verba (a leitura mais recente). */
+  private async maiorVerbaDiaria(tx: Tx, tenantId: string): Promise<number | null> {
+    if (!PROVEDORES_QUE_GASTAM.length) return null;
+    const daConta = (tabela: SQL) => sql`
+      select o.daily_budget_micros as verba from ${tabela} o join liame.connected_account a on a.id = o.connected_account_id
+       where a.tenant_id = ${tenantId} and a.disconnected_at is null and a.provider in ${PROVEDORES_QUE_GASTAM}
+         and o.status = 'ativa' and o.daily_budget_micros > 0`;
+    const r = await tx.execute<{ maior: string | null }>(sql`
+      select max(x.verba)::text as maior from (${daConta(sql`liame.campaign`)} union all ${daConta(sql`liame.ad_group`)}) x`);
+    return r.rows[0]?.maior ? Number(r.rows[0].maior) : null;
+  }
+
+  /** A campanha de cada conjunto e de cada anúncio da lista, pelo que o Liame leu da conta (`conta/recurso` → nome). */
+  private async campanhasDosObjetos(tx: Tx, linhas: Array<Pick<LinhaDaMudanca, 'account_id' | 'resource_id'>>): Promise<Map<string, string>> {
+    const nomes = new Map<string, string>();
+    const doTipo = (tipo: 'conjunto' | 'anuncio') => linhas.flatMap((l) => (l.resource_id.startsWith(`${tipo}:`) && EH_UUID.test(l.account_id) ? [{ conta: l.account_id, externo: l.resource_id.slice(tipo.length + 1) }] : []));
+    const [conjuntos, anuncios] = [doTipo('conjunto'), doTipo('anuncio')];
+    if (conjuntos.length) {
+      const g = await tx.execute<{ conta: string; externo: string; nome: string }>(sql`
+        select g.connected_account_id::text as conta, g.external_id as externo, c.name as nome
+          from liame.ad_group g join liame.campaign c on c.id = g.campaign_id
+         where g.connected_account_id in ${[...new Set(conjuntos.map((x) => x.conta))]} and g.external_id in ${[...new Set(conjuntos.map((x) => x.externo))]}`);
+      for (const l of g.rows) nomes.set(`${l.conta}/conjunto:${l.externo}`, l.nome);
+    }
+    if (anuncios.length) {
+      const a = await tx.execute<{ conta: string; externo: string; nome: string }>(sql`
+        select ad.connected_account_id::text as conta, ad.external_id as externo, c.name as nome
+          from liame.ad ad join liame.ad_group g on g.id = ad.ad_group_id join liame.campaign c on c.id = g.campaign_id
+         where ad.connected_account_id in ${[...new Set(anuncios.map((x) => x.conta))]} and ad.external_id in ${[...new Set(anuncios.map((x) => x.externo))]}`);
+      for (const l of a.rows) nomes.set(`${l.conta}/anuncio:${l.externo}`, l.nome);
+    }
+    return nomes;
   }
 
   /**
@@ -313,6 +471,31 @@ export class BudgetService {
        where tenant_id = ${tenantId} and period = ${period} and kind = 'execucao' ${brandId ? sql`and brand_id = ${brandId}` : sql``}`);
     return Number(r.rows[0]?.n ?? 0);
   }
+}
+
+/**
+ * As mudanças que continuam valendo e cuja conferência mais recente (de hoje ou de ontem) deu "acima", em palavras:
+ * o mesmo aviso da Atenção. A conferência mais velha que ontem não avisa mais (a de hoje pode não ter rodado ainda).
+ */
+function avisosDeGasto(mudancas: BudgetMonthChange[], ontem: string): BudgetMonthResponse['overspend'] {
+  return mudancas.flatMap((m) => {
+    const c = m.check;
+    if (!c || c.status !== 'acima' || c.window_allowed_micros === null || m.superseded_by || c.checked_on < ontem) return [];
+    const texto = textoDoGastoAcima(
+      {
+        tipo: m.target.kind,
+        nome: m.target.name,
+        executadaEm: m.executed_on,
+        depois: { status: m.to.status, verbaDiaria: m.to.daily_micros === null ? null : BigInt(m.to.daily_micros) },
+        janela: { de: c.window.from, ate: c.window.to },
+        gasto: BigInt(c.window_spend_micros),
+        permitido: BigInt(c.window_allowed_micros),
+      },
+      brl,
+      nomeDaPlataforma(m.provider),
+    );
+    return [{ action_id: m.action_id, ...texto }];
+  });
 }
 
 function tenantOf(auth: AuthContext): string {
