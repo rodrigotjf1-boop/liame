@@ -105,6 +105,7 @@ export function dadosDoCaso(caso: CasoDoPlano): DadosDoPlano {
     hoje: caso.hoje,
     marca: { id: MARCA_DO_EVAL, nome: caso.marca, fuso: 'America/Sao_Paulo' },
     dossie: null,
+    fatos: null,
     calendario: caso.calendario,
     verbaDeHoje: caso.verba_de_hoje,
     semana: { from: menos(caso.hoje, 7), to: menos(caso.hoje, 1) },

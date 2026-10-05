@@ -4,6 +4,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { indiceDasOrigens } from '../ai/conversa/fontes.js';
 import { foraDoDia, nomesDaLeitura, rotuloDaLeitura } from '../ai/conversa/leituras.js';
+import { dossieDoPedido } from '../ai/conversa/contexto.js';
 import { contextoDoPlano, type DadosDoPlano, fontesDaVerba, mensagemDoPlano, origensDoPlano, type PedidoDoPlano, permitidoNoContexto } from '../ai/estrategista/contexto.js';
 import { cuponsAtivos, dinheiroDoPlano, hashDoConteudo, marcarPlano, TITULO_DO_TIPO, verbaDeHoje } from '../ai/estrategista/plano.js';
 import { ESTRATEGISTA, PROMPT_ESTRATEGISTA, TAREFA_ESTRATEGISTA } from '../ai/estrategista/prompt.js';
@@ -264,7 +265,7 @@ export class EstrategistaService {
         kind: item.kind,
         hoje,
         marca: { id: marca.id, nome: marca.name, fuso },
-        dossie: await dossieParaOModelo(marca.id, marca.name),
+        ...dossieDoPedido(await dossieParaOModelo(marca.id, marca.name)),
         calendario,
         verbaDeHoje: verbaDeHoje(await this.resultados.closedLoop({ brand_id: marca.id, ...semana }, agora)),
         semana,

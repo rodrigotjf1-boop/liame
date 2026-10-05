@@ -7,7 +7,7 @@ import { dia } from '../registro/formatos.js';
 import { respostaComoTexto } from './resposta.js';
 
 // O que a Conversa monta por regra, sem banco nem modelo (A3, I10): o contexto do pedido que vai depois do prompt
-// fixo, de onde a LIA também pode tirar número (calendário, a semana, o dossiê), o histórico que volta ao modelo e o
+// fixo, de onde a LIA também pode tirar número (calendário, a semana, os fatos da marca), o histórico que volta ao modelo e o
 // pedido de falar com uma pessoa. Funções puras: a conversa (`conversa/conversa.service.ts`) e o eval
 // (`ai/evals/conversa.ts`) usam as mesmas.
 
@@ -32,8 +32,14 @@ export interface DadosDoPedido {
   hoje: string;
   marca: { id: string; nome: string; fuso: string };
   quem: { roleKey: RoleKey | null };
+  /** O dossiê como o modelo lê, inteiro (com o que a marca nunca diz). */
   dossie: string | null;
+  /** Só o que a marca afirma de si (`fatosDoDossie`): a fonte de número da conferência. */
+  fatos: string | null;
 }
+
+/** O dossiê de um pedido: o texto que o modelo lê e os fatos que valem como fonte de número; os dois nulos sem dossiê. */
+export const dossieDoPedido = (d: { texto: string; fatos: string } | null): { dossie: string | null; fatos: string | null } => ({ dossie: d?.texto ?? null, fatos: d?.fatos ?? null });
 
 /** Os dias do contexto: hoje, a semana fechada até ontem e os próximos, cada um com o dia da semana. */
 function calendario(hoje: string) {
@@ -58,10 +64,14 @@ export function contextoDoPedido(t: DadosDoPedido): string {
   return linhas.join('\n');
 }
 
-/** De onde a LIA pode tirar número além das leituras: as datas do calendário, a semana, o nome da marca e o dossiê. */
-export function contextoPermitido(t: Pick<DadosDoPedido, 'hoje' | 'marca' | 'dossie'>) {
+/**
+ * De onde a LIA pode tirar número além das leituras: as datas do calendário, a semana, o nome da marca e o que a marca
+ * afirma de si. O dossiê inteiro não serve de fonte: ele também traz o que a marca nunca diz, e o número que só
+ * aparece ali (o "entrega em 20 minutos" que ela proibiu) não autoriza a resposta a repeti-lo (ERR-105, V102).
+ */
+export function contextoPermitido(t: Pick<DadosDoPedido, 'hoje' | 'marca' | 'fatos'>) {
   const c = calendario(t.hoje);
-  return { datas: [dia(c.semana.de)!, dia(c.semana.ate)!, ...c.proximos.map((d) => d.dia)], semana: A_SEMANA, marca: t.marca.nome, dossie: t.dossie ?? '' };
+  return { datas: [dia(c.semana.de)!, dia(c.semana.ate)!, ...c.proximos.map((d) => d.dia)], semana: A_SEMANA, marca: t.marca.nome, fatos: t.fatos ?? '' };
 }
 
 /** O texto de uma resposta guardada, para o histórico e para a conferência da resposta seguinte. */

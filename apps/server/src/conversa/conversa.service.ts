@@ -19,7 +19,7 @@ import { valorDaDemanda, valorDaProposta } from '../ai/conversa/escritas.js';
 import { indiceDasOrigens, marcarResposta, type OrigemDosNumeros } from '../ai/conversa/fontes.js';
 import { foraDoDia, nomesDaLeitura, rotuloDaLeitura, rotuloDoPasso } from '../ai/conversa/leituras.js';
 import { LIA, PROMPT_CONVERSA_LIA, TAREFA_CONVERSA } from '../ai/conversa/prompt.js';
-import { contextoDoPedido, contextoPermitido, historicoParaOModelo, querFalarComPessoa, textoDaResposta } from '../ai/conversa/contexto.js';
+import { contextoDoPedido, contextoPermitido, dossieDoPedido, historicoParaOModelo, querFalarComPessoa, textoDaResposta } from '../ai/conversa/contexto.js';
 import { conferirResposta, RespostaDaLia } from '../ai/conversa/resposta.js';
 import { AiError, type AiMessage, AiGateway, type FerramentaIa, type PassoDaFerramenta } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
@@ -138,7 +138,10 @@ export interface TurnoPreparado {
   anteriores: { daPessoa: string[]; daLia: string[]; numeros: ExplanationNumber[] };
   marca: { id: string; nome: string; fuso: string };
   hoje: string;
+  /** O dossiê como o modelo lê, inteiro. */
   dossie: string | null;
+  /** Só o que a marca afirma de si: a fonte de número da conferência (o que ela nunca diz fica de fora). */
+  fatos: string | null;
   daMarca: string[];
   liaAtiva: boolean;
 }
@@ -298,7 +301,7 @@ export class ConversaService {
         },
         marca: { id: marca.id, nome: marca.name, fuso },
         hoje: diaNoFuso(agora, fuso),
-        dossie: await dossieParaOModelo(marca.id, marca.name),
+        ...dossieDoPedido(await dossieParaOModelo(marca.id, marca.name)),
         daMarca: await proibidasDaMarca(marca.id),
         liaAtiva: liaLigada && (await funcionarioAtivo(tx, { tenantId: quem.tenantId, brandId: marca.id, agentKey: LIA.key, ativoPorPadrao: LIA.ativoPorPadrao })),
       };
@@ -463,7 +466,8 @@ export class ConversaService {
         : []),
       { rotulo: 'Liame · calendário (dia de hoje e os próximos)', valor: fixo.datas, comCaminho: false, ordem: 4 },
       { rotulo: 'Liame · "a semana" são os 7 dias completos até ontem', valor: fixo.semana, comCaminho: false, ordem: 4 },
-      ...(t.dossie ? [{ rotulo: 'Minha marca · dossiê da marca', valor: t.dossie, comCaminho: false, ordem: 4 }] : []),
+      // Só o que a marca afirma de si: o que ela nunca diz não é origem de número (ERR-105).
+      ...(t.fatos ? [{ rotulo: 'Minha marca · dossiê da marca', valor: t.fatos, comCaminho: false, ordem: 4 }] : []),
     ];
     const { blocks, numbers, meeting } = marcarResposta(resposta.data, indiceDasOrigens(origens), nomes);
     if (meeting) cards.push({ kind: 'reuniao', demand: null, coupon: null, meeting });

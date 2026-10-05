@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ConversationMessage } from '@liame/contracts';
+import { BrandDossierContent, type ConversationMessage } from '@liame/contracts';
 import { indiceDasOrigens, marcarResposta } from '../src/ai/conversa/fontes.js';
 import { foraDoDia, nomesDaLeitura, rotuloDaLeitura, rotuloDoPasso } from '../src/ai/conversa/leituras.js';
 import { reaisParaMicros } from '../src/ai/conversa/cupom.defs.js';
@@ -7,6 +7,7 @@ import { LIA, PROMPT_CONVERSA_LIA } from '../src/ai/conversa/prompt.js';
 import { conferirResposta, type PermitidosNaConversa, respostaComoTexto, type RespostaDaLia } from '../src/ai/conversa/resposta.js';
 import { conferirRegistro, registroAtual } from '../src/ai/registro/definicoes.js';
 import { A_SEMANA, contextoDoPedido, contextoPermitido, historicoParaOModelo, querFalarComPessoa } from '../src/ai/conversa/contexto.js';
+import { fatosDoDossie, textoDoDossie } from '../src/marca/dossie.js';
 
 // Conversa com a LIA (A3, I10): o que o código decide sem modelo nenhum. A conferência da resposta (números,
 // dado velho, Compliance, formato), a fonte de cada número, os passos que a tela mostra, o pedido de falar com
@@ -71,6 +72,28 @@ describe('conferência da resposta da LIA (A3-5, I9, I8)', () => {
 
   it('número que a pessoa escreveu pode voltar na resposta', () => {
     expect(conferirResposta(resposta(['paragrafo', 'Uma promoção de 15% na sexta-feira fica registrada como demanda.']), permitidos({ emDia: ['Quero uma promoção de 15% na sexta'] }))).toBeNull();
+  });
+
+  it('ERR-105: o número que só aparece no que a marca nunca diz não autoriza a resposta; a fonte são os fatos da marca', () => {
+    const conteudo = BrandDossierContent.parse({
+      identity: { summary: 'Hamburgueria de bairro', audience: '', differentiator: '', since: '2019' },
+      voice: { traits: [], rules: [], do_example: '', dont_example: 'O melhor burger para 83% dos clientes.' },
+      forbidden: { items: [{ text: 'entrega em 47 minutos', why: 'não dá para garantir o prazo' }] },
+      competitors: { items: [{ text: 'Burger do Zé, com combo a R$ 31,90', why: 'fica na mesma rua' }] },
+    });
+    const marca = { id: 'x', nome: 'Mister Burgers', fuso: 'America/Sao_Paulo' };
+    const comFonte = (fatos: string) => permitidos({ emDia: ['Fale da marca', contextoPermitido({ hoje: '2026-10-02', marca, fatos })] });
+    const fatos = fatosDoDossie(marca.nome, conteudo, []);
+    // O que a marca afirma de si pode ser citado.
+    expect(conferirResposta(resposta(['paragrafo', 'A casa existe desde 2019.']), comFonte(fatos))).toBeNull();
+    // O prazo que ela proibiu, o número do exemplo de como não escrever e o preço do concorrente não são fonte.
+    expect(conferirResposta(resposta(['paragrafo', 'O pedido chega em 47 minutos.']), comFonte(fatos))).toEqual({ recusa: 'numero_fora', detalhe: ['47'] });
+    expect(conferirResposta(resposta(['paragrafo', 'A casa agrada 83% dos clientes.']), comFonte(fatos))?.recusa).toBe('numero_fora');
+    expect(conferirResposta(resposta(['paragrafo', 'O concorrente cobra R$ 31,90 no combo.']), comFonte(fatos))?.recusa).toBe('numero_fora');
+    // Era o dossiê inteiro, que o modelo lê para saber o que não dizer, que deixava os três passarem.
+    const inteiro = textoDoDossie(marca.nome, conteudo, []);
+    expect(inteiro).toContain('NUNCA DIZER: "entrega em 47 minutos"');
+    expect(conferirResposta(resposta(['paragrafo', 'O pedido chega em 47 minutos.']), comFonte(inteiro))).toBeNull();
   });
 
   it('formato: risco só no bloco de risco, no máximo um; resposta vazia ou longa demais não aparece', () => {
@@ -247,6 +270,7 @@ describe('o que se decide por regra e o que volta ao modelo', () => {
       marca: { id: '0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a', nome: 'Mister Burgers', fuso: 'America/Sao_Paulo' },
       quem,
       dossie: null,
+      fatos: null,
     });
     expect(c).toContain('Hoje é sexta-feira, 02/10/2026');
     expect(c).toContain('de 25/09/2026 a 01/10/2026 (nas ferramentas, from=2026-09-25 e to=2026-10-01)');
@@ -256,11 +280,11 @@ describe('o que se decide por regra e o que volta ao modelo', () => {
     // Nome de pessoa da equipe não vai ao modelo (D-A3-4).
     expect(c).not.toContain('Ana');
     // O que vale como fonte de número além das leituras: as datas do calendário (não o brand_id nem as datas
-    // ISO, que o modelo não deve escrever), a semana e o dossiê.
-    const fixo = contextoPermitido({ hoje: '2026-10-02', marca: { id: 'x', nome: 'Mister Burgers', fuso: 'America/Sao_Paulo' }, dossie: 'MARCA: Mister Burgers\nDESDE: 2019' });
+    // ISO, que o modelo não deve escrever), a semana e o que a marca afirma de si.
+    const fixo = contextoPermitido({ hoje: '2026-10-02', marca: { id: 'x', nome: 'Mister Burgers', fuso: 'America/Sao_Paulo' }, fatos: 'MARCA: Mister Burgers\nDESDE: 2019' });
     expect(fixo.datas).toEqual(expect.arrayContaining(['25/09/2026', '01/10/2026', '02/10/2026', '16/10/2026']));
     expect(JSON.stringify(fixo)).not.toContain('2026-10');
-    expect(fixo.dossie).toContain('2019');
+    expect(fixo.fatos).toContain('2019');
   });
 });
 

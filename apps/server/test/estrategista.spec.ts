@@ -203,6 +203,7 @@ function dados(kind: DadosDoPlano['kind'], extra: Partial<DadosDoPlano> = {}): D
     hoje: HOJE,
     marca: { id: '0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a', nome: 'Mister Burgers', fuso: 'America/Sao_Paulo' },
     dossie: null,
+    fatos: null,
     calendario: CALENDARIO,
     verbaDeHoje: VERBA,
     semana: { from: '2026-09-26', to: '2026-10-02' },
@@ -229,6 +230,18 @@ describe('a fonte de cada número do plano (P8: "De onde vêm os números")', ()
     // Cada trecho aponta para a linha do número.
     const meta = marked.find((m) => m.path === 'budget.today.meta')!;
     expect(meta.text).toEqual([{ text: 'R$ 860,00', number: numbers.findIndex((n) => n.value === 'R$ 860,00') }]);
+  });
+
+  it('ERR-105: o que a marca nunca diz não é fonte de número do plano; o que ela afirma de si, sim', () => {
+    const fatos = 'MARCA: Mister Burgers\nDESDE: 2019';
+    const d = dados('oferta', { dossie: `${fatos}\nNUNCA DIZER: "entrega em 47 minutos"`, fatos });
+    const permitido = JSON.stringify(permitidoNoContexto(d));
+    expect(permitido).toContain('2019');
+    expect(permitido).not.toContain('47 minutos');
+    const origens = origensDoPlano(d, { leituras: [], content: conteudo('oferta', oferta()), atrasadas: [] });
+    expect(origens.find((o) => o.rotulo === 'Minha marca · dossiê da marca')?.valor).toBe(fatos);
+    // O modelo continua lendo o dossiê inteiro, com a proibição, para não dizer.
+    expect(contextoDoPlano(d)).toContain('NUNCA DIZER: "entrega em 47 minutos"');
   });
 
   it('o número que não está em lugar nenhum leva a fonte dada (na edição, quem editou)', () => {
