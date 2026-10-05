@@ -144,4 +144,11 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // Pesquisador (A3, I12): o pedido de leitura de uma página pública (quem pediu, o endereço, a situação) e os rótulos
   // conferidos (produtos, preços, ofertas). A página não é guardada; o dado pessoal sai antes de ir ao modelo.
   research_request: { class: 'PERSONAL', retention: 'com a marca (o pedido e os rótulos; a página não fica)' },
+  // Peças do Criativo (A4, X6): o pedido (quem pediu, a oferta de Minha marca e a instrução, sem dado pessoal), as peças,
+  // as versões (o que a IA escreveu e o que uma pessoa editou, com a conferência) e as decisões. Nenhum dado de cliente
+  // da loja; a peça com dado pessoal nem é gravada.
+  ad_piece_request: { class: 'PERSONAL', retention: 'com a marca (quem pediu fica ligado ao pedido)' },
+  ad_piece: { class: 'PERSONAL', retention: 'com a marca (quem decidiu fica ligado à peça)' },
+  ad_piece_version: { class: 'PERSONAL', retention: 'com a peça (as versões não se apagam enquanto ela existir)' },
+  ad_piece_decision: { class: 'PERSONAL', retention: 'com a peça (quem decidiu e o motivo)' },
 };

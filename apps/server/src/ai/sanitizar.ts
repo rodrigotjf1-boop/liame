@@ -27,6 +27,17 @@ export function limparTexto(texto: string): TextoLimpo {
 }
 
 /**
+ * As marcas que a limpeza põe no lugar do dado pessoal (aqui e na redação dos spans). O texto que já passou por ela
+ * (tudo o que sai do gateway) e traz uma destas marcas tinha dado pessoal: quem confere a saída de um modelo depois
+ * do gateway olha a marca, porque o dado em si já não está lá.
+ */
+const MARCA_DE_REMOCAO = /\[(?:email|cnpj|cpf|telefone|cep|removido)\]/;
+export const temMarcaDeRemocao = (texto: string): boolean => MARCA_DE_REMOCAO.test(texto);
+
+/** O texto tem dado pessoal (cru, ou já trocado pela marca da limpeza)? */
+export const temDadoPessoal = (texto: string): boolean => temMarcaDeRemocao(texto) || limparTexto(texto).removidos > 0;
+
+/**
  * O motivo que uma pessoa escreve numa decisão (recusar uma promoção, desligar um funcionário), sem dado pessoal e
  * no tamanho que o banco guarda (de 3 a 300 caracteres); curto demais depois da limpeza, nulo.
  */

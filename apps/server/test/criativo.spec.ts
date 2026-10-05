@@ -16,7 +16,7 @@ import {
 } from '../src/ai/criativo/peca.js';
 import { CRIATIVO, PROMPT_CRIATIVO_TEXTO, TAREFA_CRIATIVO_TEXTO } from '../src/ai/criativo/prompt.js';
 import { conferirRegistro, registroAtual } from '../src/ai/registro/definicoes.js';
-import { limparTexto } from '../src/ai/sanitizar.js';
+import { limparTexto, temDadoPessoal, temMarcaDeRemocao } from '../src/ai/sanitizar.js';
 import { concorrentesDoDossie, fatosDoDossie, proibidasDoDossie, textoDoDossie } from '../src/marca/dossie.js';
 import { bebidasAlcoolicas, gratisForaDasFontes, palavrasDeGratis, temLink, valoresComerciais, valoresForaDaOferta } from '../src/policy/anuncio.js';
 
@@ -213,6 +213,21 @@ describe('o que o código faz com a resposta do modelo', () => {
     ]);
     expect(r.descartes).toEqual({ vazia: 1, longa: 1, dado_pessoal: 1, repetida: 1, a_mais: 1, com_recusa: 0 });
     expect(r.pecas.every((p) => p.conferencia.situacao === 'passou')).toBe(true);
+  });
+
+  it('o que sai do gateway já vem limpo: a marca que a limpeza deixa no lugar do dado pessoal conta como dado pessoal', () => {
+    // Cada tipo de dado que a limpeza troca deixa uma marca que a conferência reconhece.
+    for (const cru of ['Escreva para pedidos@exemplo.com.br', 'Ligue (21) 99999-0000', 'CPF 123.456.789-09', 'CNPJ 12.345.678/0001-95', 'CEP 20040-020']) {
+      const limpo = limparTexto(cru);
+      expect({ cru, removidos: limpo.removidos, marca: temMarcaDeRemocao(limpo.texto) }).toEqual({ cru, removidos: 1, marca: true });
+      expect(temDadoPessoal(cru) && temDadoPessoal(limpo.texto)).toBe(true);
+    }
+    expect(temDadoPessoal('Combo sexta por R$ 34,90 [só às sextas]')).toBe(false);
+    const r = pecasDaResposta(resposta([{ titulo: 'Fale com a gente', texto: 'Combo por R$ 34,90. Escreva para [email].' }, BOA]), base(), 3);
+    expect(r.pecas.map((p) => p.titulo)).toEqual([BOA.titulo]);
+    expect(r.descartes.dado_pessoal).toBe(1);
+    // Na conferência (o texto que uma pessoa edita não passa pelo gateway, mas a regra é a mesma).
+    expect(achados({ texto: 'Combo por R$ 34,90. Escreva para [email].' }).regras_da_liame).toEqual(['dado_pessoal@texto:dado pessoal no texto']);
   });
 
   it('a peça barrada aparece, com o motivo: quem decide o que fazer com ela é a pessoa', () => {

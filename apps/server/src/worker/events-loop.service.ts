@@ -2,6 +2,7 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShut
 import { ActionExecutor } from './action-executor.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConversasLoop } from './conversas-loop.js';
+import { CriativoLoop } from './criativo-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
@@ -39,6 +40,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly estrategista: EstrategistaLoop,
     private readonly agenda: EstrategistaAgenda,
     private readonly pesquisa: PesquisaLoop,
+    private readonly criativo: CriativoLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -58,6 +60,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // A rotina de segunda passa por todas as marcas devidas numa volta; repete em 10 minutos.
       this.loop('estrategista-agenda', MARCAS_POR_VOLTA, 600_000, async () => (await this.agenda.agendarLote()).length),
       this.loop('pesquisa', 3, 30_000, async (n) => (await this.pesquisa.executarLote(n)).length),
+      // Quem pediu as peças está esperando: a fila do Criativo é olhada a cada 5 segundos.
+      this.loop('criativo', 3, 5_000, async (n) => (await this.criativo.executarLote(n)).length),
     );
   }
 

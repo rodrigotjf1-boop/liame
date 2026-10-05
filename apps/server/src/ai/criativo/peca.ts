@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { bebidasAlcoolicas, gratisForaDasFontes, temLink, valoresComerciais, valoresForaDaOferta } from '../../policy/anuncio.js';
 import { conferirTexto, normalizar, type RegraDeTexto } from '../../policy/texto.js';
-import { limparTexto } from '../sanitizar.js';
+import { temDadoPessoal, temMarcaDeRemocao } from '../sanitizar.js';
 import { conferirNumeros } from '../verificador-numeros.js';
 
 // A peça do Criativo e a conferência dela (A4, X6; `plano-a4.md` D-A4-28 e D-A4-29). O modelo só propõe título, texto
@@ -133,7 +133,10 @@ export function conferirPeca(peca: TextoDaPeca, base: BaseDaPeca, autor: 'ia' | 
       for (const trecho of new Set(conferirNumeros(t, fontesDosNumeros).fora)) if (!jaDitos.has(trecho)) oferta.push({ tipo: 'numero_fora', campo, trecho });
     }
     // As regras da Liame e das plataformas: as de todo texto, o link, a bebida alcoólica e o concorrente.
-    for (const a of conferirTexto(t)) if (a.regra !== 'regra_da_marca') liame.push({ tipo: a.regra, campo, trecho: a.trecho });
+    const doTexto = conferirTexto(t);
+    for (const a of doTexto) if (a.regra !== 'regra_da_marca') liame.push({ tipo: a.regra, campo, trecho: a.trecho });
+    // O que sai do gateway já vem limpo: o dado pessoal chega como a marca da limpeza ("[email]").
+    if (temMarcaDeRemocao(t) && !doTexto.some((a) => a.regra === 'dado_pessoal')) liame.push({ tipo: 'dado_pessoal', campo, trecho: 'dado pessoal no texto' });
     if (temLink(t)) liame.push({ tipo: 'link', campo, trecho: 'endereço de site no texto' });
     for (const trecho of bebidasAlcoolicas(t)) liame.push({ tipo: 'bebida_alcoolica', campo, trecho });
     for (const a of conferirTexto(t, { daMarca: base.concorrentes })) if (a.regra === 'regra_da_marca') liame.push({ tipo: 'concorrente', campo, trecho: a.trecho });
@@ -169,7 +172,8 @@ const chaveDaPeca = (p: TextoDaPeca): string => normalizar(`${p.titulo}|${p.text
 
 /**
  * O que o código faz com a resposta do modelo. Com recusa, nenhuma peça é usada. Sem recusa, cada peça tem os espaços
- * arrumados e só fica se tem título e texto, cabe no teto do Liame, não traz dado pessoal (essa nem é guardada) e não
+ * arrumados e só fica se tem título e texto, cabe no teto do Liame, não traz dado pessoal (cru, ou já trocado pela marca
+ * da limpeza do gateway; essa nem é guardada) e não
  * repete outra; ficam no máximo as pedidas. As que ficam saem conferidas: a barrada aparece, com o motivo, para a
  * pessoa corrigir ou pedir outra.
  */
@@ -185,7 +189,7 @@ export function pecasDaResposta(r: RespostaDoCriativo, base: BaseDaPeca, variaco
     const p: Peca = { titulo: arrumar(bruta.titulo), texto: arrumar(bruta.texto), botao: bruta.botao };
     if (!p.titulo || !p.texto) descartes.vazia += 1;
     else if (caracteres(p.titulo) > TAMANHO_MAXIMO.titulo || caracteres(p.texto) > TAMANHO_MAXIMO.texto) descartes.longa += 1;
-    else if (limparTexto(`${p.titulo}\n${p.texto}`).removidos > 0) descartes.dado_pessoal += 1;
+    else if (temDadoPessoal(`${p.titulo}\n${p.texto}`)) descartes.dado_pessoal += 1;
     else if (vistas.has(chaveDaPeca(p))) descartes.repetida += 1;
     else if (pecas.length >= variacoes) descartes.a_mais += 1;
     else {

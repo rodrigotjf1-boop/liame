@@ -38,6 +38,8 @@ import { ConversasLoop } from './conversas-loop.js';
 import { EstrategistaAgenda } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { EstrategistaService } from './estrategista.service.js';
+import { CriativoLoop } from './criativo-loop.js';
+import { CriativoService } from './criativo.service.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { PesquisadorService } from './pesquisa.service.js';
 import { VigiaService } from './vigia.service.js';
@@ -110,6 +112,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // Pesquisador (A3, I12): lê as páginas que a empresa informa (leitor em quarentena) e sugere para Minha marca.
     PesquisadorService,
     PesquisaLoop,
+    CriativoService,
+    CriativoLoop,
     VigiaService,
     // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, para mostrar o custo de IA em reais.
     CambioService,
