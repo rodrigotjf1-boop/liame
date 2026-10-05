@@ -9,7 +9,7 @@ import { BotaoExplicar } from '@/components/explicar/botao-explicar';
 import type { PedidoDeExplicacao } from '@/components/explicar/pedir';
 import { useExplicacao } from '@/components/explicar/use-explicacao';
 import { disparar } from '@/lib/disparar';
-import { acaoDoAviso, destinoDoAviso, gravidadeDe, oQueFazer, rotuloDaGravidade } from './textos';
+import { acaoDoAviso, destinoDoAviso, destinoPedeVendas, gravidadeDe, oQueFazer, rotuloDaGravidade } from './textos';
 
 // Um aviso (protótipo aprovado): gravidade, plataforma, o que aconteceu, o motivo e o que fazer. Os do ciclo
 // fechado (F9) levam à tela onde se resolve, para quem vê as vendas. Os de campanha, de medição e os fora do
@@ -31,7 +31,7 @@ export function ItemAviso({ item, podeVerContas, podeConectar, podeVerVendas, ao
   const g = gravidadeDe(item.severity);
   const plat = item.provider ? plataforma(item.provider) : null;
   const acao = acaoDoAviso(item.kind);
-  const destino = acao && podeVerVendas ? destinoDoAviso(acao) : null;
+  const destino = acao && (podeVerVendas || !destinoPedeVendas(acao)) ? destinoDoAviso(acao) : null;
   const abreContas = acao === 'abrir-contas' && podeVerContas;
   const reconecta = acao === 'reconectar' && podeConectar;
 

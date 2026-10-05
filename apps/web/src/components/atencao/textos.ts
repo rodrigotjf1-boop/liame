@@ -51,7 +51,7 @@ export function oQueFazer(acao: string): string {
   return acao;
 }
 
-export type AcaoDoAviso = 'abrir-contas' | 'reconectar' | 'abrir-links' | 'abrir-cupons' | 'abrir-resultados';
+export type AcaoDoAviso = 'abrir-contas' | 'reconectar' | 'abrir-links' | 'abrir-cupons' | 'abrir-resultados' | 'abrir-verba';
 
 /**
  * O botão de cada aviso, como no protótipo: conta desconectada leva a Contas; autorização vencendo reconecta.
@@ -65,6 +65,8 @@ export function acaoDoAviso(kind: string): AcaoDoAviso | null {
   if (kind === 'campanha_sem_pedido' || kind === 'margem_desconhecida' || kind === 'plataforma_x_caixa' || kind === 'vendas_nao_medidas') return 'abrir-resultados';
   // Fora do normal (A3, I6): vendas, gasto da campanha e custo por pedido se conferem em Resultados.
   if (kind === 'vendas_fora_do_normal' || kind === 'gasto_da_campanha_fora_do_normal' || kind === 'custo_por_pedido_fora_do_normal') return 'abrir-resultados';
+  // O que o Liame mudou e gastou mais do que a verba permite (A4, X4) se confere na Verba do mês.
+  if (kind === 'gasto_acima_da_verba') return 'abrir-verba';
   return null;
 }
 
@@ -73,7 +75,16 @@ export function destinoDoAviso(acao: AcaoDoAviso): { href: string; rotulo: strin
   if (acao === 'abrir-links') return { href: '/links', rotulo: 'Abrir Links e cupons' };
   if (acao === 'abrir-cupons') return { href: '/links#cupons', rotulo: 'Abrir os cupons' };
   if (acao === 'abrir-resultados') return { href: '/resultados', rotulo: 'Abrir Resultados' };
+  if (acao === 'abrir-verba') return { href: '/verba', rotulo: 'Abrir a Verba do mês' };
   return null;
+}
+
+/**
+ * A tela de destino é de quem vê as vendas (Links e cupons, Resultados)? A Verba do mês é de quem acompanha as
+ * campanhas, como a própria Atenção: o botão dela não depende de ver as vendas.
+ */
+export function destinoPedeVendas(acao: AcaoDoAviso): boolean {
+  return acao !== 'abrir-verba';
 }
 
 const PESO: Record<Gravidade, number> = { critica: 0, atencao: 1, info: 2 };

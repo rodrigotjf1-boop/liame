@@ -230,8 +230,8 @@ describe('menu: "Minha marca" abaixo de Resultados e de Sua equipe, para quem te
 
   it('o item, a permissão e o título', () => {
     const i = agencia.itens.findIndex((x) => x.href === '/marca');
-    // A ordem do protótipo geral aprovado: Resultados, Sua equipe, Minha marca.
-    expect(agencia.itens.slice(i - 2, i).map((x) => x.href)).toEqual(['/resultados', '/equipe']);
+    // A ordem do protótipo geral aprovado: Resultados, Sua equipe, Minha marca (a Verba do mês entrou depois de Resultados, no P9).
+    expect(agencia.itens.slice(i - 3, i).map((x) => x.href)).toEqual(['/resultados', '/verba', '/equipe']);
     expect(agencia.itens[i]).toEqual({ href: '/marca', rotulo: 'Minha marca', icone: 'palette', permissao: 'dossie.ver' });
     expect(itensVisiveis(agencia, (p) => p !== 'dossie.ver', 'lite').map((x) => x.href)).not.toContain('/marca');
     expect(tituloDa('/marca')).toBe('Minha marca');

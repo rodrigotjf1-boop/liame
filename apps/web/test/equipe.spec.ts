@@ -539,12 +539,12 @@ describe('Sua equipe: a tela', () => {
   });
 });
 
-describe('menu: "Sua equipe" depois de Resultados, para quem acompanha as campanhas, com Lite e Pro', () => {
+describe('menu: "Sua equipe" depois de Resultados e da Verba do mês, para quem acompanha as campanhas, com Lite e Pro', () => {
   const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
 
   it('o item, a permissão e o título', () => {
     const i = agencia.itens.findIndex((x) => x.href === '/equipe');
-    expect(agencia.itens[i - 1]!.href).toBe('/resultados');
+    expect(agencia.itens.slice(i - 2, i).map((x) => x.href)).toEqual(['/resultados', '/verba']);
     expect(agencia.itens[i]).toEqual({ href: '/equipe', rotulo: 'Sua equipe', icone: 'users', permissao: 'campanhas.ver', modos: true });
     expect(itensVisiveis(agencia, (p) => p !== 'campanhas.ver', 'lite').map((x) => x.href)).not.toContain('/equipe');
     expect(tituloDa('/equipe')).toBe('Sua equipe');

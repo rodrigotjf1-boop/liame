@@ -1,4 +1,4 @@
-import type { AttentionItem, SourceFreshness, SummaryResponse, TeamMember, TeamResponse } from '@liame/contracts';
+import type { AttentionItem, BudgetMonthResponse, SourceFreshness, SummaryResponse, TeamMember, TeamResponse } from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -387,13 +387,88 @@ describe('Resumo: a tela', () => {
   });
 });
 
+describe('Resumo: o cartão da verba do mês (P9)', () => {
+  const micros = (reais: number) => Math.round(reais * 100) * 10_000;
+  /** Setembro do protótipo: R$ 4.960,00 gastos até ontem, previsão de R$ 5.306,94 e teto de R$ 5.500,00. */
+  function verbaDoMes(over: Partial<BudgetMonthResponse> = {}, limites: Partial<BudgetMonthResponse['limits']> = {}): BudgetMonthResponse {
+    return {
+      period: '2026-09',
+      timezone: FUSO,
+      today: '2026-09-29',
+      month_start: '2026-09-01',
+      month_end: '2026-09-30',
+      through: '2026-09-28',
+      days_left: 2,
+      currency: 'BRL',
+      spend_micros: micros(4960),
+      daily_micros: micros(173.47),
+      forecast_micros: micros(5306.94),
+      forecast_days: 2,
+      pending_daily_micros: 0,
+      pending_micros: 0,
+      limits: { month_micros: micros(5500), campaign_daily_micros: micros(80), set_by: { id: uuid(1), name: 'Rodrigo' }, set_at: '2026-09-20T15:00:00.000Z', ...limites },
+      remaining_micros: micros(193.06),
+      platforms: [
+        { provider: 'meta_ads', accounts: 1, spend_micros: micros(3381.2), daily_micros: micros(120.76), forecast_micros: micros(3622.72), read_through: '2026-09-28', forecast_days: 2, stale: false, last_success_at: '2026-09-29T09:12:00.000Z' },
+      ],
+      rules: { change_percent_max: 10, rate_limit: { max: 3, window_minutes: 60 } },
+      changes: [],
+      overspend: [],
+      largest_daily_micros: micros(60),
+      generated_at: '2026-09-29T17:40:00.000Z',
+      ...over,
+    };
+  }
+  const semTeto = () => verbaDoMes({ remaining_micros: null }, { month_micros: null, campaign_daily_micros: null, set_by: null, set_at: null });
+  const desenhar = (verba: BudgetMonthResponse | null, pode: (p: string) => boolean = tudoPode, variasMarcas = false) =>
+    renderToStaticMarkup(
+      createElement(AvisosProvider, {
+        children: createElement(ResumoConteudo, { r: resumo(), equipe: null, verba, variasMarcas, nomePessoa: 'Rodrigo de Oliveira', nomeMarca: 'Mister Burgers', agora: AGORA, pode }),
+      }),
+    );
+
+  it('com o teto: quanto de quanto, a barra, a frase do mês e o caminho para a tela', () => {
+    const html = desenhar(verbaDoMes());
+    expect(html).toContain('card r-verba');
+    expect(html).toContain('Verba de setembro');
+    expect(html).toContain(nbsp('Até ontem, R$ 4.960,00 de R$ 5.500,00.'));
+    expect(html).toContain('role="img" aria-label="Gasto até ontem: 90% do teto. Previsão de fechamento: 96% do teto."');
+    expect(html).toContain('<b>Setembro deve fechar dentro do teto.</b>');
+    expect(html).toContain('href="/verba"');
+    expect(html).toContain('Ver a verba do mês');
+    expect(html).not.toContain('Definir os limites');
+  });
+
+  it('sem o teto: quem define os limites vai direto ao formulário; quem só acompanha vai à tela', () => {
+    const dono = desenhar(semTeto());
+    expect(dono).toContain('<b>Você ainda não definiu o teto do mês.</b>');
+    expect(dono).toContain('O teto que você define. O Liame não aprova nada que passe dele.');
+    expect(dono).toContain('href="/verba#limites"');
+    expect(dono).toContain('Definir os limites');
+    expect(dono).not.toContain('verba-barra');
+    const gestor = desenhar(semTeto(), (p) => p !== 'orcamento.gerenciar');
+    expect(gestor).not.toContain('Definir os limites');
+    expect(gestor).toContain('Ver a verba do mês');
+  });
+
+  it('a verba é da empresa: com mais de uma marca, o cartão diz que soma todas', () => {
+    expect(desenhar(verbaDoMes(), tudoPode, true)).toContain(nbsp('Até ontem, R$ 4.960,00 de R$ 5.500,00. Soma as contas de anúncio de todas as marcas da empresa.'));
+    expect(desenhar(verbaDoMes())).not.toContain('todas as marcas');
+  });
+
+  it('sem a leitura da verba (sem a permissão ou com a leitura falha) e sem conta de anúncio, o cartão não aparece', () => {
+    expect(desenhar(null)).not.toContain('r-verba');
+    expect(desenhar(verbaDoMes({ platforms: [] }))).not.toContain('r-verba');
+  });
+});
+
 describe('menu: o Resumo é a página inicial do Lite, a Atenção a do Pro', () => {
   const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
 
   it('no Lite, o Resumo e não a Atenção; no Pro, o contrário; sem ver as vendas, a Atenção fica no Lite também', () => {
-    expect(itensVisiveis(agencia, tudoPode, 'lite').map((i) => i.href)).toEqual(['/resumo', '/aprovacoes', '/resultados', '/equipe', '/marca', '/contas', '/pessoas']);
-    expect(itensVisiveis(agencia, tudoPode, 'pro').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/resultados', '/equipe', '/marca', '/contas', '/pessoas']);
-    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver', 'lite').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, tudoPode, 'lite').map((i) => i.href)).toEqual(['/resumo', '/aprovacoes', '/resultados', '/verba', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, tudoPode, 'pro').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/resultados', '/verba', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver', 'lite').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/verba', '/equipe', '/marca', '/contas', '/pessoas']);
     expect(agencia.itens[0]).toMatchObject({ href: '/resumo', rotulo: 'Resumo', icone: 'home', permissao: 'vendas.ver', contador: 'resumo', soNo: 'lite' });
   });
 

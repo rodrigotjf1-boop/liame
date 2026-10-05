@@ -14,6 +14,7 @@
 @import "../styles/marca.css";
 @import "../styles/equipe.css";
 @import "../styles/conversa.css";
+@import "../styles/verba.css";
 
 /* Tema escuro manual (data-theme) além do automático do sistema (base §15, Tailwind 4.3). */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));

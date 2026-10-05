@@ -1,5 +1,5 @@
 import type { AttentionItem, SourceFreshness, SummaryResponse, TeamResponse } from '@liame/contracts';
-import { acaoDoAviso, destinoDoAviso, gravidadeDe } from '@/components/atencao/textos';
+import { acaoDoAviso, destinoDoAviso, destinoPedeVendas, gravidadeDe } from '@/components/atencao/textos';
 import { inteiro, reaisDeMicros } from '@/lib/formato';
 import { diaMes, intervaloEscrito, nomesDe, porcentagem, quandoNoFuso, type Trecho } from '@/components/resultados/textos';
 
@@ -292,7 +292,7 @@ export type ItemPrecisa = {
 function destinoDe(item: AttentionItem, podeVerVendas: boolean, podeVerContas: boolean): { rotulo: string; href: string } {
   const acao = acaoDoAviso(item.kind);
   if ((acao === 'abrir-contas' || acao === 'reconectar') && podeVerContas) return { rotulo: acao === 'reconectar' ? 'Reconectar' : 'Ver', href: '/contas' };
-  const destino = acao && podeVerVendas ? destinoDoAviso(acao) : null;
+  const destino = acao && (podeVerVendas || !destinoPedeVendas(acao)) ? destinoDoAviso(acao) : null;
   if (destino) return { rotulo: 'Ver', href: destino.href };
   return { rotulo: 'Ver', href: '/atencao' };
 }

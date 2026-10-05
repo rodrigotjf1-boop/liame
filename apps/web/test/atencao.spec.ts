@@ -3,7 +3,7 @@ import type { AttentionItem } from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ItemAviso } from '@/components/atencao/item-aviso';
-import { acaoDoAviso, avisosFalados, contadorDoMenu, contagemPorGravidade, destinoDoAviso, gravidadeDe, juntarAvisos, oQueFazer, rotuloDoFiltro } from '@/components/atencao/textos';
+import { acaoDoAviso, avisosFalados, contadorDoMenu, contagemPorGravidade, destinoDoAviso, destinoPedeVendas, gravidadeDe, juntarAvisos, oQueFazer, rotuloDoFiltro } from '@/components/atencao/textos';
 import { itemAtual, rotaPessoal, tituloDa } from '@/components/shell/navegacao';
 
 // Regras puras de "Atenção de mídia" (gravidade, contagens, texto do "o que fazer") e do menu.
@@ -55,6 +55,11 @@ describe('atenção de mídia', () => {
     expect(destinoDoAviso('abrir-resultados')).toEqual({ href: '/resultados', rotulo: 'Abrir Resultados' });
     expect(destinoDoAviso('abrir-contas')).toBeNull();
     expect(destinoDoAviso('reconectar')).toBeNull();
+    // O gasto acima da verba (A4, X4) se confere na Verba do mês, que é de quem acompanha as campanhas.
+    expect(acaoDoAviso('gasto_acima_da_verba')).toBe('abrir-verba');
+    expect(destinoDoAviso('abrir-verba')).toEqual({ href: '/verba', rotulo: 'Abrir a Verba do mês' });
+    expect(['abrir-links', 'abrir-cupons', 'abrir-resultados'].map((a) => destinoPedeVendas(a as 'abrir-links'))).toEqual([true, true, true]);
+    expect(destinoPedeVendas('abrir-verba')).toBe(false);
   });
 
   it('fora do normal (A3, I6): vendas, gasto da campanha e custo por pedido se conferem em Resultados', () => {
@@ -97,6 +102,11 @@ describe('atenção de mídia', () => {
     expect(atrasado).not.toContain('href=');
     expect(cartao(aviso({ kind: 'conta_desconectada', severity: 'critica', provider: 'regem' }))).toContain('href="/contas"');
     expect(cartao(aviso({ kind: 'margem_desconhecida' }))).toContain('href="/resultados"');
+    // O gasto acima da verba leva à Verba do mês, também para quem acompanha as campanhas sem ver as vendas.
+    const gasto = aviso({ kind: 'gasto_acima_da_verba', provider: 'meta_ads', title: 'A campanha "Combo sexta" gastou mais do que a verba permite' });
+    expect(cartao(gasto)).toContain('href="/verba"');
+    expect(cartao(gasto)).toContain('Abrir a Verba do mês');
+    expect(cartao(gasto, false)).toContain('href="/verba"');
   });
 });
 
