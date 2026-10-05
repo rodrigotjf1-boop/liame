@@ -1,4 +1,4 @@
-import { bigint, boolean, integer, jsonb, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, date, integer, jsonb, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { liame } from './identity.js';
 
 // Espelho das tabelas da migration 0011 (ações, aprovação, orçamento e sandbox, ADR-007).
@@ -134,4 +134,25 @@ export const workflowStep = liame.table('workflow_step', {
   attempts: integer('attempts').notNull().default(0),
   startedAt: ts('started_at').notNull().defaultNow(),
   finishedAt: ts('finished_at'),
+});
+
+// Migration 0053 (o gasto conferido, A4 · X4): a conferência diária de cada mudança executada numa conta de anúncio.
+export const actionSpendCheck = liame.table('action_spend_check', {
+  id: uuid('id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  actionRequestId: uuid('action_request_id').notNull(),
+  connectedAccountId: uuid('connected_account_id').notNull(),
+  checkedOn: date('checked_on').notNull(),
+  expectedStatus: text('expected_status').notNull(),
+  expectedDailyMicros: money('expected_daily_micros'),
+  informedStatus: text('informed_status'),
+  informedDailyMicros: money('informed_daily_micros'),
+  windowFrom: date('window_from').notNull(),
+  windowTo: date('window_to').notNull(),
+  spendMicros: money('spend_micros').notNull(),
+  allowedMicros: money('allowed_micros'),
+  daysAfter: integer('days_after').notNull(),
+  spendAfterMicros: money('spend_after_micros').notNull(),
+  status: text('status').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
 });

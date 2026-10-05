@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { ActionExecutor } from './action-executor.js';
 import { ConexaoProcessor } from './conexao-processor.js';
+import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
 import { ConversasLoop } from './conversas-loop.js';
 import { CriativoLoop } from './criativo-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
@@ -15,7 +16,7 @@ import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, montar os planos do Estrategista e ler as páginas pedidas ao Pesquisador. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador e conferir o gasto de cada mudança feita numa conta de anúncio. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -41,6 +42,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly agenda: EstrategistaAgenda,
     private readonly pesquisa: PesquisaLoop,
     private readonly criativo: CriativoLoop,
+    private readonly conferencia: ConferenciaDoGasto,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -62,6 +64,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('pesquisa', 3, 30_000, async (n) => (await this.pesquisa.executarLote(n)).length),
       // Quem pediu as peças está esperando: a fila do Criativo é olhada a cada 5 segundos.
       this.loop('criativo', 3, 5_000, async (n) => (await this.criativo.executarLote(n)).length),
+      // O gasto de cada mudança, conferido depois da leitura da manhã: olha de 5 em 5 minutos o que falta conferir hoje.
+      this.loop('conferencia-do-gasto', 100, 300_000, async (n) => (await this.conferencia.executarLote(n)).reduce((s, c) => s + c.conferidas, 0)),
     );
   }
 

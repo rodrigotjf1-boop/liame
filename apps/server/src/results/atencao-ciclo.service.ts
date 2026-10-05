@@ -1,6 +1,7 @@
 import type { ActionStatus, AttentionRecommendation, ClosedLoopAttentionResponse } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { nomeDaPlataforma, textoDoGastoAcima, verbaDaLeitura } from '../actions/conferencia-do-gasto.js';
 import { CONNECTORS } from '../actions/connectors.js';
 import { MODELO_PADRAO } from '../attribution/motor.js';
 import { currentTx } from '../context/request-context.js';
@@ -27,6 +28,7 @@ import {
   LIMIARES,
   ordenarCiclo,
   plataformaIntegrada,
+  reais,
 } from './atencao-ciclo.js';
 import { avisoCustoPorPedido, avisoGastoDaCampanha, avisoVendasForaDoNormal, DIAS_DA_SERIE, diaNoFuso, lidaHoje, menosDias, type VendasDoDia } from './fora-do-normal.js';
 import { avisoDaSugestao, type SugestaoDaSombra } from './sugestoes-da-sombra.js';
@@ -37,6 +39,10 @@ import { avisoDaSugestao, type SugestaoDaSombra } from './sugestoes-da-sombra.js
 // para o que saiu do normal, `fora-do-normal.ts`).
 
 const FUSO_PADRAO = 'America/Sao_Paulo';
+/** Os provedores que gastam dinheiro de mídia de verdade: só as mudanças neles têm o gasto conferido (X4). */
+const PROVEDORES_QUE_GASTAM = Object.values(CONNECTORS)
+  .filter((c) => c.requiresSpendLimits)
+  .map((c) => c.provider);
 
 type LinhaLoja = {
   id: string;
@@ -275,6 +281,47 @@ export class AtencaoCicloService {
        where d.brand_id in ${marcas} and d.status = 'aberta' and d.human_action is null
          and d.decided_on >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias - 1}::int
        order by d.decided_on desc, d.id`);
+    // 7. O gasto conferido (A4, X4; D-A4-24): as mudanças que o Liame executou, que continuam valendo, e cuja
+    //    conferência mais recente (de hoje ou de ontem) diz que o objeto gastou mais do que a verba permite.
+    const gastoAcima = PROVEDORES_QUE_GASTAM.length
+      ? await tx.execute<{
+          brand_id: string;
+          conta: string;
+          provider: string;
+          resource_id: string;
+          before_state: { tipo?: string; nome?: string } | null;
+          desired_state: { status?: string; daily_budget_micros?: number | null } | null;
+          dia: string;
+          window_from: string;
+          window_to: string;
+          spend_micros: string;
+          allowed_micros: string;
+          campaign_id: string | null;
+        }>(sql`
+          select r.brand_id, a.id as conta, r.provider, r.resource_id, r.before_state, r.desired_state,
+                 (r.updated_at at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date::text as dia,
+                 k.window_from::text as window_from, k.window_to::text as window_to, k.spend_micros::text as spend_micros, k.allowed_micros::text as allowed_micros,
+                 case split_part(r.resource_id, ':', 1)
+                   when 'campanha' then (select c.id from liame.campaign c where c.connected_account_id = a.id and c.external_id = split_part(r.resource_id, ':', 2))
+                   when 'conjunto' then (select g.campaign_id from liame.ad_group g where g.connected_account_id = a.id and g.external_id = split_part(r.resource_id, ':', 2))
+                   else (select g.campaign_id from liame.ad ad join liame.ad_group g on g.id = ad.ad_group_id
+                          where ad.connected_account_id = a.id and ad.external_id = split_part(r.resource_id, ':', 2))
+                 end as campaign_id
+            from liame.action_request r
+            join liame.connected_account a on a.id::text = r.account_id and a.disconnected_at is null
+            join lateral (select * from liame.action_spend_check k where k.action_request_id = r.id order by k.checked_on desc limit 1) k on true
+           where r.brand_id in ${marcas} and r.status = 'executada' and r.provider in ${PROVEDORES_QUE_GASTAM}
+             and k.status = 'acima' and k.allowed_micros is not null
+             and k.checked_on >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - 1
+             and not exists (
+               select 1 from liame.action_request s
+                where s.tenant_id = r.tenant_id and s.provider = r.provider and s.account_id = r.account_id and s.resource_id = r.resource_id
+                  and s.status = 'executada' and (s.updated_at, s.id) > (r.updated_at, r.id)
+                  and exists (select 1 from liame.action_execution x
+                               where x.action_request_id = s.id and x.status = 'executada' and coalesce((x.result_state->>'sem_escrita')::boolean, false) = false))
+           order by k.checked_on desc, r.id`)
+      : { rows: [] };
+
     const politicasDaMarca = new Map<string, LoadedPolicy[]>();
     for (const m of linhasDasMarcas) {
       if (sugestoes.rows.some((s) => s.brand_id === m.id)) politicasDaMarca.set(m.id, (await carregarPoliticas(tx, m.tenant_id, m.id)).policies);
@@ -336,6 +383,25 @@ export class AtencaoCicloService {
               ? { not_requested: { code: s.nao_pediu, detail: s.nao_pediu_motivo, at: new Date(s.tentou_em).toISOString() } }
               : {}),
           });
+        }
+
+        // O gasto conferido (X4): a mudança do Liame que gastou mais do que a verba permite na semana conferida.
+        for (const g of gastoAcima.rows) {
+          if (g.brand_id !== marca) continue;
+          const texto = textoDoGastoAcima(
+            {
+              tipo: g.before_state?.tipo ?? g.resource_id.split(':')[0] ?? 'anuncio',
+              nome: g.before_state?.nome || g.resource_id,
+              executadaEm: g.dia,
+              depois: { status: g.desired_state?.status ?? 'ativo', verbaDiaria: verbaDaLeitura(g.desired_state?.daily_budget_micros) },
+              janela: { de: g.window_from, ate: g.window_to },
+              gasto: BigInt(g.spend_micros),
+              permitido: BigInt(g.allowed_micros),
+            },
+            reais,
+            nomeDaPlataforma(g.provider),
+          );
+          itens.push({ kind: 'gasto_acima_da_verba', severity: 'atencao', ...texto, connected_account_id: g.conta, campaign_id: g.campaign_id, provider: g.provider });
         }
 
         const lojasDaMarca = lojas.rows.filter((l) => l.brand_id === marca);

@@ -22,6 +22,8 @@ export type TipoCiclo =
   | 'vendas_fora_do_normal'
   | 'gasto_da_campanha_fora_do_normal'
   | 'custo_por_pedido_fora_do_normal'
+  // A conferência do gasto de uma mudança do Liame (A4, X4): o texto está em `actions/conferencia-do-gasto.ts`.
+  | 'gasto_acima_da_verba'
   // A recomendação da sombra numa ação em Sugerir (A3, I13): o texto está em `sugestoes-da-sombra.ts`.
   | 'sugestao_pausar_campanha'
   | 'sugestao_reduzir_verba'
@@ -330,6 +332,7 @@ const PRIORIDADE: TipoCiclo[] = [
   'anuncio_sem_rastreio',
   'campanha_sem_cupom',
   'campanha_sem_pedido',
+  'gasto_acima_da_verba',
   'gasto_da_campanha_fora_do_normal',
   'custo_por_pedido_fora_do_normal',
   'sugestao_pausar_campanha',

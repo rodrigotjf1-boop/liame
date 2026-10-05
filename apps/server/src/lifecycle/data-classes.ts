@@ -45,6 +45,7 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   budget_policy: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
   budget_ledger_entry: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
   action_execution: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  action_spend_check: { class: 'CONFIDENTIAL', retention: 'com a empresa, a conta conectada ou o pedido' },
   workflow_run: { class: 'INTERNAL', retention: 'com a empresa' },
   workflow_step: { class: 'INTERNAL', retention: 'com a empresa' },
   purge_certificate: { class: 'CONFIDENTIAL', retention: '5 anos (prova do expurgo)' },
