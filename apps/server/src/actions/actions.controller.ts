@@ -3,6 +3,8 @@ import {
   ActionListResponse,
   ActionResponse,
   ApproveActionRequest,
+  BudgetLimitsRequest,
+  BudgetMonthResponse,
   BudgetPolicyRequest,
   BudgetResponse,
   CreateActionRequest,
@@ -152,17 +154,51 @@ export class ActionsController {
 
   @Get('budget')
   @Permissao('campanhas.ver')
-  @ApiOperation({ summary: 'Orçamento do mês', description: 'Envelopes da empresa e das marcas: limite, comprometido, executado e livre.' })
+  @ApiOperation({
+    summary: 'Livro de reservas do mês',
+    description:
+      'Envelopes da empresa e das marcas pelo livro de reservas: limite, o que os pedidos reservaram por dia, o executado e a diferença. Numa plataforma de anúncio, a conta que decide o pedido é a de `GET /v1/budget/month` (o gasto inteiro das contas conectadas).',
+  })
   @ApiOkResponse({ standardSchema: BudgetResponse })
   budgetSummary(@Auth() auth: AuthContext): Promise<BudgetResponse> {
     return this.budget.summary(auth);
+  }
+
+  @Get('budget/month')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Verba do mês',
+    description:
+      'Quanto as contas de anúncio conectadas (Meta e Google) já gastaram no mês, o ritmo dos 7 dias inteiros mais recentes, a previsão de fechamento, os aumentos e as retomadas pedidos ou feitos hoje, os dois limites da empresa (o teto do mês e o teto por campanha) e o que sobra. É por esta conta que o Liame aceita ou nega o pedido que faz o gasto subir: gasto lido + ritmo × dias que a leitura não cobre + o que pesa hoje + o que o pedido acrescenta até o fim do mês não pode passar do teto do mês. A conta lida pela última vez antes de hoje entra com o gasto até onde foi lida (`stale`), e os dias que faltam entram pelo ritmo.',
+  })
+  @ApiOkResponse({ standardSchema: BudgetMonthResponse })
+  budgetMonth(@Auth() auth: AuthContext): Promise<BudgetMonthResponse> {
+    return this.budget.month(auth);
+  }
+
+  @Put('budget/limits')
+  @Permissao('orcamento.gerenciar')
+  @Auditar('orcamento.limites', { recurso: 'budget_policy' })
+  @ApiOperation({
+    summary: 'Definir os limites da empresa',
+    description:
+      'O teto do mês (tudo o que a empresa pode gastar em anúncios no mês, nas contas conectadas) e o teto por campanha (a maior verba diária que um aumento pode deixar numa campanha ou num conjunto), sempre juntos. Valem na hora, para os pedidos seguintes; reduzir verba e pausar não dependem deles. O teto por campanha entra como uma versão nova da política da empresa. Devolve a verba do mês com os limites novos.',
+  })
+  @ApiOkResponse({ standardSchema: BudgetMonthResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  setLimits(@Auth() auth: AuthContext, @Body({ schema: BudgetLimitsRequest }) body: BudgetLimitsRequest): Promise<BudgetMonthResponse> {
+    return this.budget.setLimits(auth, body);
   }
 
   @Put('budget/policies')
   @Permissao('orcamento.gerenciar')
   @Auditar('orcamento.definir', { recurso: 'budget_policy' })
   @HttpCode(204)
-  @ApiOperation({ summary: 'Definir envelope', description: 'Limite do mês para a empresa (`brand_id` nulo) ou para uma marca.' })
+  @ApiOperation({
+    summary: 'Definir envelope',
+    description: 'Limite do mês para a empresa (`brand_id` nulo) ou para uma marca. Numa plataforma de anúncio, é o teto de tudo o que as contas conectadas (da empresa ou da marca) gastam no mês.',
+  })
   @ApiNoContentResponse({ description: 'Envelope definido' })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   async setBudget(@Auth() auth: AuthContext, @Body({ schema: BudgetPolicyRequest }) body: BudgetPolicyRequest): Promise<void> {

@@ -116,7 +116,10 @@ type ApprovalRow = {
 const notFound = () => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Ação não encontrada nesta empresa.');
 /** Como a pessoa chama cada provedor, na frase. */
 const PLATAFORMA: Record<string, string> = { meta_ads: 'A Meta', regem: 'O Regem' };
-const NA_PLATAFORMA: Record<string, string> = { meta_ads: 'na Meta', regem: 'no Regem' };
+/** O que a pessoa precisa saber quando falta um limite da empresa: quem o define, e onde. */
+const ONDE_SE_DEFINE = 'Quem define é o Dono ou o Administrador, em Verba do mês.';
+/** O pedido aumenta verba ou volta a gastar numa plataforma de anúncio: passa pela conta do mês inteiro (D-A4-19). */
+const sobeOGasto = (connector: Connector, plan: ToolPlan): boolean => connector.requiresSpendLimits && (plan.budgetImpact === 'increase' || plan.budgetImpact === 'new_spend');
 const micros = (v: string | null) => (v === null ? null : Number(v));
 const brl = (m: number) => (m / 1_000_000).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -291,7 +294,7 @@ export class ActionService {
     }
     if (status !== 'sombra') {
       await inSpan('orcamento.reservar', { 'liame.action_id': id }, () =>
-        this.budget.reserve(tx, { tenantId, brandId, actionId: id, amountMicros: plan.reserveMicros }),
+        this.budget.reserve(tx, { tenantId, brandId, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) }),
       );
     }
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
@@ -388,7 +391,9 @@ export class ActionService {
              mode = ${mode}, policy_decision = ${JSON.stringify(decision)}::jsonb, status = ${status}, status_reason = ${reason},
              shadow_decision_id = ${recomendacao}, updated_at = now()
        where id = ${id} and tenant_id = ${tenantId}`);
-    if (status !== 'sombra') await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros });
+    if (status !== 'sombra') {
+      await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) });
+    }
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
     auditDetail({
       before: { plan_hash: row.plan_hash, params: row.params },
@@ -601,30 +606,28 @@ export class ActionService {
 
   /**
    * No provedor que gasta dinheiro de mídia de verdade (a Meta), aumentar a verba ou voltar a gastar pede dois limites
-   * que só a empresa define (A4, D-A4-6): o teto por ação e o envelope do mês. Sem eles, o pedido é negado, em vez de
-   * seguir sem limite. A volta de uma ação fica fora do teto (devolve o valor de antes), mas não do envelope.
+   * que só a empresa define (A4, D-A4-13 e D-A4-19): o teto por campanha e o teto do mês. Sem eles, o pedido é negado,
+   * em vez de seguir sem limite. A volta de uma ação fica fora do teto por campanha (devolve o valor de antes), mas não
+   * do teto do mês.
    */
   private async exigirLimitesDaEmpresa(tx: Tx, tenantId: string, brandId: string | null, connector: Connector, plan: ToolPlan, policies: LoadedPolicy[], volta: boolean): Promise<void> {
     if (!connector.requiresSpendLimits || (plan.budgetImpact !== 'increase' && plan.budgetImpact !== 'new_spend')) return;
-    const onde = NA_PLATAFORMA[connector.provider] ?? 'na plataforma';
-    if (plan.budgetImpact === 'increase' && !volta) {
+    const aumento = plan.budgetImpact === 'increase' && !volta;
+    const osDois = `Para aumentar a verba, a empresa precisa definir antes o teto do mês e o teto por campanha. Reduzir e pausar não dependem deles. ${ONDE_SE_DEFINE}`;
+    if (aumento) {
       const temTeto = policies.some(
         (p) =>
           p.source !== 'platform' &&
           p.document.rules.some((r) => r.type === 'max_value' && actionMatches(r.action, plan.action) && (!r.provider || r.provider === connector.provider)),
       );
-      if (!temTeto) {
-        throw new AppProblem(422, 'teto-nao-definido', 'Falta o teto por ação', `Para aumentar verba ${onde}, a política da empresa (ou da marca) precisa ter o teto por ação. Sem ele, o Liame não aumenta verba.`);
-      }
+      if (!temTeto) throw new AppProblem(422, 'teto-nao-definido', 'Falta o teto por campanha', osDois);
     }
     const envelope = await tx.execute(sql`select 1 from liame.budget_policy where tenant_id = ${tenantId} and (brand_id is null or brand_id = ${brandId}) limit 1`);
     if (!envelope.rows[0]) {
-      throw new AppProblem(
-        422,
-        'envelope-nao-definido',
-        'Falta o envelope do mês',
-        `Para o Liame aumentar verba ou retomar anúncios ${onde}, a empresa precisa definir o envelope do mês (quanto o Liame pode comprometer).`,
-      );
+      const so = volta
+        ? 'Para desfazer esta ação, a empresa precisa definir antes o teto do mês: a volta faz o gasto subir.'
+        : 'Para retomar, a empresa precisa definir antes o teto do mês. Reduzir e pausar não dependem dele.';
+      throw new AppProblem(422, 'envelope-nao-definido', 'Falta o teto do mês', aumento ? osDois : `${so} ${ONDE_SE_DEFINE}`);
     }
   }
 

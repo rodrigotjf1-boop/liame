@@ -31,7 +31,13 @@ describe('A1-11: motor de políticas determinístico', () => {
     const doc: PolicyDocument = { rules: [{ type: 'max_value', action: 'orcamento.*', max_micros: 100_000_000 }] };
     const d = run([tenant(doc)]);
     expect(d.allowed).toBe(false);
-    expect(d.violations).toEqual([{ source: 'tenant', rule_index: 0, type: 'max_value', message: expect.stringMatching(/R\$\s?110,00 passa do teto de R\$\s?100,00/) }]);
+    // Na verba diária, a recusa usa o nome que a tela dá ao limite: o teto por campanha (A4, D-A4-19).
+    expect(d.violations).toEqual([
+      { source: 'tenant', rule_index: 0, type: 'max_value', message: expect.stringMatching(/^A verba de R\$\s110,00 por dia passa do teto por campanha, que é de R\$\s100,00 por dia\.$/) },
+    ]);
+    // Em outra ação com valor, a frase segue a geral.
+    const geral: PolicyDocument = { rules: [{ type: 'max_value', max_micros: 100_000_000 }] };
+    expect(run([tenant(geral)], proposal({ action: 'lance.aumentar' })).violations[0]?.message).toMatch(/^O valor R\$\s110,00 passa do teto de R\$\s100,00 por ação\.$/);
     expect(run([tenant(doc)], proposal({ value_micros: 100_000_000 })).allowed).toBe(true);
     expect(run([tenant(doc)], proposal({ action: 'anuncio.pausar', value_micros: null })).allowed).toBe(true);
     // O teto vale para o que faz o gasto subir: baixar uma verba para um valor ainda acima dele é a direção segura.

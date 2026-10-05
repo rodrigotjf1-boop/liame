@@ -41,7 +41,7 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
   let pedidos: PedidosDoGestor;
   let actions: ActionService;
   const meta = new MetaDeMentira();
-  /** A empresa do piloto: escrita na Meta ligada, teto por ação de R$ 150,00 e envelope do mês de R$ 500,00. */
+  /** A empresa do piloto: escrita na Meta ligada, teto por campanha de R$ 150,00 e um teto do mês folgado (a conta do mês é provada em `verba-do-mes.spec.ts`). */
   let e: EmpresaComMeta;
 
   type Resposta = Awaited<ReturnType<TestApi['call']>>;
@@ -112,7 +112,7 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
     e = await empresaComMeta(api, meta, 'Mister Burgers Modo Aprovação');
     await ligarEscritaNaMeta(api, e.tenantId, true);
     expect((await politica(e, [{ type: 'max_value', action: 'orcamento.*', provider: 'meta_ads', max_micros: 150 * REAL }])).status).toBe(201);
-    expect((await api.call('PUT', '/v1/budget/policies', { cookie: e.cookie, body: { limit_micros: 500 * REAL } })).status).toBe(204);
+    expect((await api.call('PUT', '/v1/budget/policies', { cookie: e.cookie, body: { limit_micros: 1_000_000 * REAL } })).status).toBe(204);
     // Cadastro, app autenticador, cofre e política: com a suíte inteira rodando junto, passa do prazo padrão dos ganchos.
   }, 120_000);
   beforeEach(async () => {
@@ -224,13 +224,13 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
     expect(await semPedido(igual.recomendacao)).toEqual(['acao-duplicada', 'Já há um pedido ativo desta ferramenta para este recurso. Aprove, altere ou cancele o que existe.']);
     await api.call('POST', `/v1/actions/${dela.body.id}/cancel`, { cookie: e.cookie });
 
-    // (3) O limite da empresa: aumentar 10% de uma verba de R$ 200,00 passa do teto de R$ 150,00 por ação. O motivo leva a regra.
+    // (3) O limite da empresa: aumentar 10% de uma verba de R$ 200,00 passa do teto por campanha, de R$ 150,00. O motivo leva a regra.
     const teto = await campanha('orcamento_aumentar', { nome: 'Combo família' });
     await ownerQuery(`update liame.campaign set daily_budget_micros = 200000000 where id = $1`, [teto.campanha]);
     meta.objetos.get(teto.id)!.daily_budget = '20000';
     const [codigo, motivo] = await semPedido(teto.recomendacao);
     expect(codigo).toBe('politica-negou');
-    expect(motivo).toMatch(/^Esta ação fere uma regra da política da empresa ou da plataforma\. O valor R\$\s220,00 passa do teto de R\$\s150,00 por ação\.$/);
+    expect(motivo).toMatch(/^Esta ação fere uma regra da política da empresa ou da plataforma\. A verba de R\$\s220,00 por dia passa do teto por campanha, que é de R\$\s150,00 por dia\.$/);
 
     // (4) A equipe está parada (a trava da empresa): nada é lido na Meta.
     const parada = await campanha('orcamento_reduzir', { nome: 'Jantar de sexta' });
