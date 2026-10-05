@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { baseDoPedido, conferirPedido, contextoDaPeca, mensagemDaPeca, type PedidoDePeca, referenciaSegura } from '../ai/criativo/contexto.js';
 import { type DescartesDasPecas, type DestinoDaPeca, type PecaConferida, pecasDaResposta, RespostaDoCriativo, type TextoDaPeca } from '../ai/criativo/peca.js';
-import { CRIATIVO, PROMPT_CRIATIVO_TEXTO, TAREFA_CRIATIVO_TEXTO } from '../ai/criativo/prompt.js';
+import { CRIATIVO, PROMPT_CRIATIVO_TEXTO, TAREFA_CRIATIVO_TEXTO, WORKFLOW_DO_CRIATIVO } from '../ai/criativo/prompt.js';
 import { AiError, type AiErrorCode, AiGateway } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { registrarRecusa } from '../ai/recusas.js';
@@ -27,8 +27,6 @@ import { ResultsService } from '../results/results.service.js';
 //      de peças, ou a versão seguinte da mesma peça no "pedir outra". A peça barrada é gravada e aparece com o motivo;
 //      a vazia, a longa demais, a com dado pessoal e a repetida nem são gravadas.
 // Nada vai para a Meta: a peça espera a decisão de uma pessoa.
-
-export const WORKFLOW_DO_CRIATIVO = 'criativo.peca';
 
 /** O pedido que a fila reservou. */
 export interface PedidoNaFila {

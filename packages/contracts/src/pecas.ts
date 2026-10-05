@@ -8,6 +8,8 @@ import { z } from 'zod';
 
 const Slug = z.string().regex(/^[a-z0-9_]+$/).max(60);
 const Pessoa = z.strictObject({ id: z.uuid(), name: z.string() });
+/** Micros de dólar em texto (cabe em bigint): a moeda do fornecedor de IA e do teto da empresa. */
+const MicrosDeDolar = z.string().regex(/^\d+$/);
 
 /** Para onde o anúncio leva: o cardápio online da loja (com o rastreio do Liame) ou uma conversa no WhatsApp. */
 export const AD_PIECE_DESTINATIONS = ['cardapio', 'whatsapp'] as const;
@@ -117,6 +119,11 @@ export const AdPieceVersion = z.strictObject({
   content_hash: z.string().regex(/^[0-9a-f]{64}$/),
   /** `criativo` (a IA escreveu) ou `pessoa` (alguém editou). */
   author: Slug,
+  /**
+   * O custo de IA desta versão, em micros de dólar: a parte dela na chamada que a escreveu (uma chamada escreve todas
+   * as peças do pedido, e o custo é dividido entre as que ficaram). Nulo na versão que uma pessoa escreveu.
+   */
+  cost_usd_micros: MicrosDeDolar.nullable(),
   created_by: Pessoa.nullable(),
   created_at: z.string(),
 });
@@ -244,13 +251,51 @@ export type AdPieceListResponse = z.infer<typeof AdPieceListResponse>;
 export const AdPieceOfferProblem = z.strictObject({ reason: Slug, excerpt: z.string() });
 export type AdPieceOfferProblem = z.infer<typeof AdPieceOfferProblem>;
 
+/**
+ * O custo de pedir uma peça, à vista (D-A4-32): o uso de IA da empresa e a estimativa de um pedido. Tudo em micros de
+ * dólar, que é como o custo é medido e limitado; a cotação da resposta é para a tela mostrar o valor em reais.
+ */
+export const AdPieceAiUsage = z.strictObject({
+  /** `livre`, `alerta`, `economico` ou `bloqueado`: o pior entre o dia e o mês. */
+  band: Slug,
+  /** O dia e o mês da empresa (todas as marcas e todos os funcionários de IA), no fuso dela: o gasto e o limite. */
+  day: z.strictObject({ spent_usd_micros: MicrosDeDolar, ceiling_usd_micros: MicrosDeDolar }),
+  month: z.strictObject({ spent_usd_micros: MicrosDeDolar, ceiling_usd_micros: MicrosDeDolar }),
+  /** Quanto ainda cabe agora: o menor entre o que resta do dia e o que resta do mês. */
+  remaining_usd_micros: MicrosDeDolar,
+  /** Qual limite está mais perto de acabar: `dia` ou `mes`. */
+  binding: Slug,
+  /** O que as peças desta marca custaram hoje (as chamadas do Criativo, inclusive as que não viraram peça). */
+  pieces_today_usd_micros: MicrosDeDolar,
+  /**
+   * A estimativa de um pedido de peças de texto. O custo quase não muda com a quantidade de peças: a maior parte é a
+   * leitura das instruções e de Minha marca. `basis`: `historico` (a média dos pedidos atendidos da empresa, os até 20
+   * mais recentes dos últimos 30 dias; `sample` diz quantos) ou `teto_da_rota` (ainda sem histórico: o máximo que um
+   * pedido deve custar). Nula quando a tarefa não tem modelo publicado.
+   */
+  request_estimate: z.strictObject({ usd_micros: MicrosDeDolar, basis: Slug, sample: z.number().int().min(0) }).nullable(),
+  /** O pedido cabe no que resta do limite? Sem caber, pedir peça e pedir outra são negados na hora. */
+  fits: z.boolean(),
+});
+export type AdPieceAiUsage = z.infer<typeof AdPieceAiUsage>;
+
 /** O que a tela de pedir uma peça precisa: se dá para pedir agora, as ofertas de Minha marca e os anúncios que já trouxeram pedidos. */
 export const AdPieceOptionsResponse = z.strictObject({
   brand_id: z.uuid(),
   /** Dá para pedir agora? */
   available: z.boolean(),
-  /** O porquê, quando não dá: `criativo_desligado` (a IA ou o Criativo não estão ligados), `sem_dossie`, `sem_oferta` ou `lote_em_andamento`. */
+  /**
+   * O porquê, quando não dá: `criativo_desligado` (a IA ou o Criativo não estão ligados), `sem_dossie`, `sem_oferta`,
+   * `limite_de_ia` (o pedido não cabe no que resta do limite de uso de IA) ou `lote_em_andamento`.
+   */
   reason: Slug.nullable(),
+  /** O uso de IA e a estimativa do pedido, para quem pode pedir peças (`campanhas.operar`); nulo para os outros. */
+  ai: AdPieceAiUsage.nullable(),
+  /**
+   * A cotação de referência para a tela mostrar o custo em reais (D-A3-14): a PTAX de venda do Banco Central do dia útil
+   * mais recente que o Liame leu (`rate` = reais por dólar). Nula antes da primeira leitura e para quem não vê o custo.
+   */
+  usd_brl: z.strictObject({ rate: z.string().regex(/^\d{1,4}\.\d{1,6}$/), date: z.iso.date(), source: Slug }).nullable(),
   /** A versão atual de Minha marca; nula quando a marca ainda não tem dossiê. */
   dossier_version: z.number().int().min(1).nullable(),
   /** As ofertas de Minha marca, na ordem de lá. Com `problems` vazio, a oferta pode ir ao Criativo. */

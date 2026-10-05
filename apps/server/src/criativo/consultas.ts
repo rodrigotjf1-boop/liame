@@ -15,7 +15,14 @@ export const COLUNAS_DA_PECA = sql`p.id, p.brand_id, p.request_id, p.status, q.o
   exists (select 1 from liame.ad_piece_request y where y.piece_id = p.id and y.status in ('pendente', 'gerando')) as redoing,
   p.decided_by, d.name as decider, p.decided_at, p.created_at, p.updated_at`;
 
-export const COLUNAS_DA_VERSAO = sql`v.version, v.title, v.body, v.button, v.review, v.content_hash, v.author, v.created_by, c.name as creator, v.created_at`;
+/**
+ * A versão, com o custo de IA dela: a parte dela na chamada que a escreveu (uma chamada escreve todas as peças do
+ * pedido; o pedido guarda quantas ficaram). Na versão de uma pessoa não há chamada, e o custo vem nulo.
+ */
+export const COLUNAS_DA_VERSAO = sql`v.version, v.title, v.body, v.button, v.review, v.content_hash, v.author, v.created_by, c.name as creator, v.created_at,
+  (select (u.cost_usd_micros / greatest(rq.pieces, 1))::text
+     from liame.ai_usage u join liame.ad_piece_request rq on rq.id = v.request_id
+    where u.id = v.usage_id) as cost_usd_micros`;
 
 /**
  * As peças que atendem à condição (escrita sobre `p`, a peça), as mais novas primeiro, cada uma com a versão atual e a

@@ -17,6 +17,7 @@ import { AiGateway } from '../ai/gateway.js';
 import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import { MODELO_PADRAO } from '../attribution/motor.js';
 import { RateLimitService } from '../auth/rate-limit.service.js';
+import { ultimaCotacao } from '../cambio/cotacao.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, type FieldError } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -26,6 +27,7 @@ import { ResultsService } from '../results/results.service.js';
 import { type LinhaDoPedido, respostaDoPedido } from './apresentacao.js';
 import { marcaDoCriativo, mensagemDoProblema } from './base.js';
 import { COLUNAS_DO_PEDIDO, pecaComHistorico, pecasComAVersaoAtual } from './consultas.js';
+import { CustoDasPecasService, respostaDoCusto } from './custo.service.js';
 
 // As peças do Criativo na API (A4, X6; protótipo P10, aguardando aprovação; sem tela ainda). A rota só confere e
 // enfileira: quem escreve as peças é o Criativo, na fila do worker (`worker/criativo.service.ts`), e cada uma só
@@ -52,9 +54,13 @@ export class PecasService {
     private readonly flags: FlagService,
     private readonly limite: RateLimitService,
     private readonly resultados: ResultsService,
+    private readonly custo: CustoDasPecasService,
   ) {}
 
-  /** O que a tela de pedir uma peça precisa: se dá para pedir agora, as ofertas de Minha marca e os anúncios que já vendem. */
+  /**
+   * O que a tela de pedir uma peça precisa: se dá para pedir agora, as ofertas de Minha marca, os anúncios que já vendem
+   * e, para quem pode pedir, o custo à vista (o uso de IA da empresa e a estimativa do pedido, D-A4-32).
+   */
   async opcoes(auth: AuthContext, brandId: string, agora = new Date()): Promise<AdPieceOptionsResponse> {
     const tenantId = this.empresa(auth);
     const fuso = await this.resultados.fusoDaMarca(brandId);
@@ -76,11 +82,17 @@ export class PecasService {
        group by a.id, a.name, c.name
        order by orders desc, a.name, a.id
        limit ${REFERENCIAS}`);
-    const motivo = !ligado ? 'criativo_desligado' : !marca ? 'sem_dossie' : !ofertas.length ? 'sem_oferta' : emAndamento ? 'lote_em_andamento' : null;
+    // O custo é de quem pode pedir: quem só vê as campanhas não recebe o gasto de IA da empresa.
+    const custo = auth.permissions.has('campanhas.operar') ? await this.custo.ler(tenantId, brandId, agora) : null;
+    const semLimite = custo !== null && !custo.cabe;
+    const motivo = !ligado ? 'criativo_desligado' : !marca ? 'sem_dossie' : !ofertas.length ? 'sem_oferta' : semLimite ? 'limite_de_ia' : emAndamento ? 'lote_em_andamento' : null;
     return {
       brand_id: brandId,
       available: motivo === null,
       reason: motivo,
+      ai: custo ? respostaDoCusto(custo) : null,
+      // O custo e o teto seguem em dólar; a cotação é só para a tela mostrar o valor aproximado em reais (D-A3-14).
+      usd_brl: custo ? await ultimaCotacao(currentTx()) : null,
       dossier_version: marca?.versao ?? null,
       offers: ofertas.map((texto) => ({
         text: texto,
@@ -115,6 +127,8 @@ export class PecasService {
       throw new AppProblem(422, 'pedido-recusado', 'O Criativo não pode fazer este pedido', 'O pedido bate numa regra de anúncio. Veja o que mudar em cada campo.', {}, erros);
     }
     const referencia = body.reference_ad_id ? await this.anuncioDaMarca(body.brand_id, body.reference_ad_id) : null;
+    // O pedido que não cabe no que resta do limite de IA é negado na hora, antes de contar no limite de pedidos do dia.
+    await this.custo.exigirQueCaiba(tenantId, body.brand_id, agora);
     await this.limite.consume(`pecas:${body.brand_id}`, PEDIDOS_POR_DIA, 86_400);
     const id = uuidv7();
     const novo = await tx.execute<{ id: string }>(sql`

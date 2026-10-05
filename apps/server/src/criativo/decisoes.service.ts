@@ -25,6 +25,7 @@ import { ResultsService } from '../results/results.service.js';
 import { hashDaPeca, regrasDaConferencia, revisaoDaConferencia } from './apresentacao.js';
 import { type MarcaDoCriativo, marcaDoCriativo, mensagemDoAchado, mensagemDoProblema } from './base.js';
 import { pecaComHistorico, pecasComAVersaoAtual } from './consultas.js';
+import { CustoDasPecasService } from './custo.service.js';
 import { FLAG_DO_CRIATIVO, PEDIDOS_POR_DIA } from './pecas.service.js';
 
 // As decisões sobre uma peça do Criativo (A4, X6; `plano-a4.md` D-A4-29 e D-A4-30, propostas; protótipo P10, aguardando
@@ -103,6 +104,7 @@ export class DecisoesDePecaService {
     private readonly flags: FlagService,
     private readonly limite: RateLimitService,
     private readonly resultados: ResultsService,
+    private readonly custo: CustoDasPecasService,
   ) {}
 
   /** Editar o texto: nasce a versão seguinte, da pessoa, conferida de novo. O texto que seria barrado não é salvo. */
@@ -219,7 +221,8 @@ export class DecisoesDePecaService {
 
   /**
    * Pedir outra: o Criativo refaz a peça, diferente da versão atual, e a versão nova entra na mesma peça. É um pedido
-   * à IA: precisa do Criativo ligado, passa pela conferência do pedido e conta no limite do dia. Um de cada vez por peça.
+   * à IA: precisa do Criativo ligado, passa pela conferência do pedido, precisa caber no que resta do limite de uso de
+   * IA e conta no limite de pedidos do dia. Um de cada vez por peça.
    */
   async pedirOutra(auth: AuthContext, id: string, body: RedoAdPieceRequest, agora = new Date()): Promise<AdPieceResponse> {
     const tenantId = await this.exigirCriativo(auth);
@@ -237,6 +240,8 @@ export class DecisoesDePecaService {
       const erros: FieldError[] = problemas.map((x) => ({ path: x.campo === 'instrucao' ? 'instruction' : 'offer', message: mensagemDoProblema(x) }));
       throw new AppProblem(422, 'pedido-recusado', 'O Criativo não pode fazer este pedido', 'O pedido bate numa regra de anúncio. Veja o que mudar.', {}, erros);
     }
+    // A versão nova também é um pedido à IA: sem caber no que resta do limite, é negada na hora (D-A4-32).
+    await this.custo.exigirQueCaiba(tenantId, p.brand_id, agora);
     await this.limite.consume(`pecas:${p.brand_id}`, PEDIDOS_POR_DIA, 86_400);
     const pedido = uuidv7();
     const novo = await currentTx().execute<{ id: string }>(sql`

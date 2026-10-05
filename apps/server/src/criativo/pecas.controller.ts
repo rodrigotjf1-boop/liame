@@ -56,7 +56,7 @@ export class PecasController {
   @ApiOperation({
     summary: 'O que dá para pedir ao Criativo',
     description:
-      'Se dá para pedir uma peça agora (com o motivo quando não dá: o Criativo desligado, Minha marca sem dossiê ou sem oferta, ou um pedido ainda em andamento), as ofertas de Minha marca com o que impede cada uma de ir ao Criativo (política, categoria proibida, bebida alcoólica) e se ela escreve um preço, e os anúncios da marca com pedidos confirmados nos últimos 7 dias completos, do que mais vendeu para o que menos.',
+      'Se dá para pedir uma peça agora (com o motivo quando não dá: o Criativo desligado, Minha marca sem dossiê ou sem oferta, ou um pedido ainda em andamento), as ofertas de Minha marca com o que impede cada uma de ir ao Criativo (política, categoria proibida, bebida alcoólica) e se ela escreve um preço, e os anúncios da marca com pedidos confirmados nos últimos 7 dias completos, do que mais vendeu para o que menos. Para quem pode pedir peças, traz o custo à vista (`ai`): o uso de IA da empresa no dia e no mês com os limites, quanto ainda cabe, o que as peças da marca custaram hoje e a estimativa de um pedido (a média dos pedidos da própria empresa ou, sem histórico, o máximo que um pedido deve custar), em micros de dólar, com a cotação de referência para a tela mostrar em reais. Sem caber no que resta, `reason` é `limite_de_ia`.',
   })
   @ApiOkResponse({ standardSchema: AdPieceOptionsResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
@@ -73,7 +73,7 @@ export class PecasController {
   @ApiOperation({
     summary: 'Pedir peças ao Criativo',
     description:
-      'Peças de anúncio (título, texto principal e botão) para uma oferta de Minha marca, escrita no pedido exatamente como está lá. O pedido é conferido antes de ir ao Criativo: a oferta de política, de categoria proibida ou de bebida alcoólica não vai, e a instrução não bate em regra, não cita concorrente, não leva link e não muda o preço (422 `pedido-recusado`, com o que mudar em cada campo). As peças saem na fila, cada uma conferida pelo código, e esperam a decisão de uma pessoa. Precisa do Criativo ligado (409 `criativo-desligado`) e de Minha marca preenchida (409 `sem-dossie`); um pedido de peças novas por marca de cada vez (409 `lote-em-andamento`); até 30 pedidos por marca por dia (429).',
+      'Peças de anúncio (título, texto principal e botão) para uma oferta de Minha marca, escrita no pedido exatamente como está lá. O pedido é conferido antes de ir ao Criativo: a oferta de política, de categoria proibida ou de bebida alcoólica não vai, e a instrução não bate em regra, não cita concorrente, não leva link e não muda o preço (422 `pedido-recusado`, com o que mudar em cada campo). As peças saem na fila, cada uma conferida pelo código, e esperam a decisão de uma pessoa. Precisa do Criativo ligado (409 `criativo-desligado`) e de Minha marca preenchida (409 `sem-dossie`); um pedido de peças novas por marca de cada vez (409 `lote-em-andamento`); o pedido que não cabe no que resta do limite de uso de IA da empresa é negado na hora (409 `limite-de-ia`); até 30 pedidos por marca por dia (429).',
   })
   @ApiAcceptedResponse({ standardSchema: AdPieceRequestResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
@@ -120,7 +120,7 @@ export class PecasController {
   @ApiOperation({
     summary: 'Uma peça, com as versões',
     description:
-      'A peça com todas as versões, da mais nova para a mais antiga. Cada versão traz o título, o texto principal, o botão, quem escreveu (o Criativo ou uma pessoa) e a conferência, item por item: a oferta (o preço e as condições são os dela), as regras da Liame e das plataformas, as regras da marca e o tamanho que a Meta recomenda. Com um item barrado, a peça não pode ser aprovada; o tamanho só avisa.',
+      'A peça com todas as versões, da mais nova para a mais antiga. Cada versão traz o título, o texto principal, o botão, quem escreveu (o Criativo ou uma pessoa), o custo de IA dela (a parte dela na chamada que a escreveu; nulo na versão de uma pessoa) e a conferência, item por item: a oferta (o preço e as condições são os dela), as regras da Liame e das plataformas, as regras da marca e o tamanho que a Meta recomenda. Com um item barrado, a peça não pode ser aprovada; o tamanho só avisa.',
   })
   @ApiOkResponse({ standardSchema: AdPieceResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
@@ -207,7 +207,7 @@ export class PecasController {
   @ApiOperation({
     summary: 'Pedir outra versão ao Criativo',
     description:
-      'O Criativo refaz a peça, diferente da versão atual, e a versão nova entra na mesma peça (`redoing` fica verdadeiro até lá). `instruction` diz o que mudar; sem ela, vale a do pedido original. É um pedido à IA: precisa do Criativo ligado (409 `criativo-desligado`), passa pela conferência do pedido (422 `pedido-recusado`) e conta no limite de pedidos do dia (429). Um de cada vez por peça (409 `peca-refazendo`).',
+      'O Criativo refaz a peça, diferente da versão atual, e a versão nova entra na mesma peça (`redoing` fica verdadeiro até lá). `instruction` diz o que mudar; sem ela, vale a do pedido original. É um pedido à IA: precisa do Criativo ligado (409 `criativo-desligado`), passa pela conferência do pedido (422 `pedido-recusado`), precisa caber no que resta do limite de uso de IA da empresa (409 `limite-de-ia`) e conta no limite de pedidos do dia (429). Um de cada vez por peça (409 `peca-refazendo`).',
   })
   @ApiAcceptedResponse({ standardSchema: AdPieceResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
