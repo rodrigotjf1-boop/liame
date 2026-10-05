@@ -4,9 +4,12 @@ import { AutonomyItem, AutonomyResponse, ClosedLoopAttentionResponse } from '@li
 import { createDatabase, type Database, runMigrations, uuidv7, withSystem, withTenant } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
+import { AtencaoCicloService } from '../../src/results/atencao-ciclo.service.js';
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { proporPromocoes } from '../../src/worker/autonomia-propostas.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
+import { ligarEscritaNaMeta } from '../helpers/meta-de-mentira.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // A3 · I13: a promoção de autonomia. O sistema propõe (de Sombra para Sugerir) quando os cinco portões passam; uma
@@ -177,6 +180,9 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
       campaign_id: e.campanha,
       brand_id: e.brandId,
     });
+    // A sugestão leva a recomendação por trás dela (A4, X3). Sem a escrita na Meta ligada para a empresa, não há pedido
+    // a fazer pelo Liame: quem muda é a pessoa, na plataforma.
+    expect(aviso!.recommendation).toEqual({ id: expect.any(String), request: null, action: null });
     expect((await ownerQuery<{ daily_budget_micros: string }>(`select daily_budget_micros::text from liame.campaign where id = $1`, [e.campanha]))[0]!.daily_budget_micros).toBe('30000000');
     expect((await api.call('POST', `/v1/autonomy/proposals/${proposta.id}/approve`, { cookie: e.cookie })).body.code).toBe('proposta-decidida');
 
@@ -270,6 +276,42 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
     // A transação inteira volta: a política segue na versão 1 e a proposta, pendente.
     expect((await politicas(e)).map((p) => [p.version, p.status])).toEqual([[1, 'ativa']]);
     expect((await reduzir(e)).proposal?.status).toBe('pendente');
+  });
+
+  it('A4 · X3: em Sugerir, a Atenção diz como pedir a mudança a quem opera campanhas, com a escrita ligada; quem só lê vê a sugestão sem o pedido', async () => {
+    const e = await empresa();
+    // A campanha como a leitura da Meta a guarda: com o id dela na plataforma (é ele que vira o recurso do pedido).
+    const naMeta = `12021${String(Date.now()).slice(-10)}`;
+    await ownerQuery(`update liame.campaign set external_id = $2 where id = $1`, [e.campanha, naMeta]);
+    await recomendacao(e);
+    expect((await api.call('POST', '/v1/policies', { cookie: e.cookie, body: { brand_id: null, document: { rules: [{ type: 'autonomy', action: 'orcamento.*', actor: 'agent', mode: 'SUGGEST' }] } } })).status).toBe(201);
+    const leitor = await membro(e, 'somente_leitura');
+    const recomendacaoDe = async (quem: { cookie: string }) => {
+      const r = await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: quem.cookie });
+      expect(r.status).toBe(200);
+      return ClosedLoopAttentionResponse.parse(r.body).items.find((i) => i.kind === 'sugestao_reduzir_verba')!.recommendation;
+    };
+    const [decisao] = await ownerQuery<{ id: string }>(`select id from liame.shadow_decision where tenant_id = $1`, [e.tenantId]);
+
+    // A escrita na Meta nasce desligada: a sugestão vem com a recomendação, sem o pedido.
+    expect(await recomendacaoDe(e)).toEqual({ id: decisao!.id, request: null, action: null });
+    await ligarEscritaNaMeta(api, e.tenantId, true);
+    try {
+      // Ligada para a empresa: o corpo do pedido, com a verba de agora menos os 20% desta recomendação.
+      expect(await recomendacaoDe(e)).toEqual({
+        id: decisao!.id,
+        request: { tool: 'orcamento_ajustar', provider: 'meta_ads', account_id: e.conta, resource_id: `campanha:${naMeta}`, params: { daily_budget_micros: 24_000_000 } },
+        action: null,
+      });
+      // Quem só lê não pede ação: recebe a recomendação, e mais nada.
+      expect(await recomendacaoDe(leitor)).toEqual({ id: decisao!.id, request: null, action: null });
+    } finally {
+      await ligarEscritaNaMeta(api, e.tenantId, false);
+    }
+    // A leitura que não é a da tela (a revisão da semana, a IA) não leva a recomendação: só o texto do aviso.
+    const semLeitor = await naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () => api.app.get(AtencaoCicloService).atencao(e.brandId));
+    const doGestor = semLeitor.items.filter((i) => i.kind === 'sugestao_reduzir_verba');
+    expect(doGestor.map((i) => [i.campaign_id, 'recommendation' in i])).toEqual([[e.campanha, false]]);
   });
 
   it('quem vê e quem decide: o gestor vê; só quem gerencia políticas aprova, recusa ou volta para Sombra', async () => {

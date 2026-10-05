@@ -1,13 +1,16 @@
-import type { ClosedLoopAttentionResponse } from '@liame/contracts';
+import type { ActionStatus, AttentionRecommendation, ClosedLoopAttentionResponse } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { CONNECTORS } from '../actions/connectors.js';
 import { MODELO_PADRAO } from '../attribution/motor.js';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
+import { FlagService } from '../flags/flag.service.js';
 import { LinksService } from '../links/links.service.js';
 import type { LoadedPolicy } from '../policy/engine.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
 import { modoDaAcao, mostraNaAtencao } from '../sombra/autonomia.js';
+import { pedidoDaRecomendacao } from '../sombra/pedido.js';
 import type { AcaoSombra } from '../sombra/regras.js';
 import {
   avisoAnunciosSemRastreio,
@@ -49,11 +52,27 @@ type LinhaLoja = {
   pedidos_lidos_em: Date | string | null;
 };
 
+/**
+ * Quem lê a Atenção pela tela (A4, X3). Com ele, cada sugestão do Gestor de tráfego leva a recomendação por trás dela:
+ * como pedir a mudança e o pedido que já nasceu dela, conforme o que a pessoa pode. Sem ele (a revisão da semana, a
+ * leitura da IA), as sugestões vão só com o texto.
+ */
+export interface LeitorDaAtencao {
+  userId: string;
+  /** Pode pedir ação em campanha (`campanhas.operar`): só então a resposta diz como pedir. */
+  podePedir: boolean;
+  /** Vê os pedidos de ação (`campanhas.ver`). */
+  vePedidos: boolean;
+}
+
 @Injectable()
 export class AtencaoCicloService {
-  constructor(private readonly links: LinksService) {}
+  constructor(
+    private readonly links: LinksService,
+    private readonly flags: FlagService,
+  ) {}
 
-  async atencao(brandId: string | undefined, agora = new Date()): Promise<ClosedLoopAttentionResponse> {
+  async atencao(brandId: string | undefined, agora = new Date(), leitor: LeitorDaAtencao | null = null): Promise<ClosedLoopAttentionResponse> {
     const tx = currentTx();
     const linhasDasMarcas = (
       await tx.execute<{ id: string; tenant_id: string }>(sql`
@@ -221,7 +240,10 @@ export class AtencaoCicloService {
 
     // 6. Sugerir (A3, I13): as recomendações em aberto da sombra (dos últimos 7 dias, sem a pessoa ter mexido na
     //    campanha ainda), com as políticas das marcas que têm alguma, para saber se a ação saiu de Sombra.
+    //    Para a tela (X3), vêm junto o que o pedido da recomendação precisa (o id da campanha na plataforma, a verba
+    //    diária de agora e a moeda da conta) e o pedido mais recente que já nasceu dela.
     const sugestoes = await tx.execute<{
+      id: string;
       brand_id: string;
       tool: AcaoSombra;
       campaign_id: string;
@@ -229,11 +251,23 @@ export class AtencaoCicloService {
       provider: string;
       params: { percent?: number | null };
       state_snapshot: SugestaoDaSombra['retrato'];
+      campanha_externa: string;
+      verba_de_agora: string | null;
+      moeda: string | null;
+      pedido_id: string | null;
+      pedido_status: ActionStatus | null;
     }>(sql`
-      select d.brand_id, d.tool, d.campaign_id, d.connected_account_id, d.provider, d.params, d.state_snapshot
+      select d.id, d.brand_id, d.tool, d.campaign_id, d.connected_account_id, d.provider, d.params, d.state_snapshot,
+             c.external_id as campanha_externa, c.daily_budget_micros::text as verba_de_agora, a.currency as moeda,
+             p.id as pedido_id, p.status as pedido_status
         from liame.shadow_decision d
         join liame.connected_account a on a.id = d.connected_account_id and a.disconnected_at is null
         join liame.campaign c on c.id = d.campaign_id and c.status = 'ativa'
+        left join lateral (
+          select r.id, r.status from liame.action_request r
+           where r.shadow_decision_id = d.id and r.tenant_id = d.tenant_id
+           order by r.created_at desc, r.id desc limit 1
+        ) p on true
        where d.brand_id in ${marcas} and d.status = 'aberta' and d.human_action is null
          and d.decided_on >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias - 1}::int
        order by d.decided_on desc, d.id`);
@@ -246,6 +280,20 @@ export class AtencaoCicloService {
     // A marca de cada aviso: é com ela que a tela pede a explicação (I4). Os avisos saem das regras sem
     // marca; aqui cada um fica com a da volta em que nasceu.
     const marcaDoAviso = new Map<ItemCiclo, string>();
+    // A recomendação por trás de cada sugestão, só na leitura da tela (X3).
+    const recomendacaoDoAviso = new Map<ItemCiclo, AttentionRecommendation>();
+    const empresaDaMarca = new Map(linhasDasMarcas.map((m) => [m.id, m.tenant_id]));
+    /** A escrita na plataforma está ligada para esta conta? (A flag do conector, como no pedido.) Uma conta por vez na memória. */
+    const escritaLigada = new Map<string, boolean>();
+    const podeEscrever = async (marca: string, provider: string, conta: string): Promise<boolean> => {
+      const flag = CONNECTORS[provider]?.writeFlag;
+      if (!flag || !leitor) return false;
+      const ja = escritaLigada.get(conta);
+      if (ja !== undefined) return ja;
+      const ligada = await this.flags.isEnabled(flag, this.flags.context({ tenantId: empresaDaMarca.get(marca) ?? null, userId: leitor.userId, brandId: marca, accountId: conta }));
+      escritaLigada.set(conta, ligada);
+      return ligada;
+    };
     for (const marca of marcas) {
       const inicio = itens.length;
       try {
@@ -259,7 +307,27 @@ export class AtencaoCicloService {
           const alvo = { tool: s.tool, brandId: marca, provider: s.provider, accountId: s.connected_account_id, valorAtualMicros: atual, valorMicros: nova };
           if (!mostraNaAtencao(modoDaAcao(politicasDaMarca.get(marca) ?? [], alvo).mode)) continue;
           const aviso = avisoDaSugestao({ tool: s.tool, campaignId: s.campaign_id, connectedAccountId: s.connected_account_id, provider: s.provider, percent, retrato: s.state_snapshot });
-          if (aviso) itens.push(aviso);
+          if (!aviso) continue;
+          itens.push(aviso);
+          if (!leitor) continue;
+          // Como pedir: só para quem pode operar campanhas, na plataforma que o Liame escreve e com a escrita ligada
+          // para a conta. A verba do pedido sai da que a campanha tem agora (o trilho confere de novo na plataforma).
+          const pedido =
+            leitor.podePedir && (await podeEscrever(marca, s.provider, s.connected_account_id))
+              ? pedidoDaRecomendacao({
+                  tool: s.tool,
+                  provider: s.provider,
+                  campanhaExterna: s.campanha_externa,
+                  verbaDiariaMicros: s.verba_de_agora === null ? null : BigInt(s.verba_de_agora),
+                  percent,
+                  moeda: s.moeda,
+                })
+              : null;
+          recomendacaoDoAviso.set(aviso, {
+            id: s.id,
+            request: pedido ? { ...pedido, provider: s.provider, account_id: s.connected_account_id } : null,
+            action: leitor.vePedidos && s.pedido_id && s.pedido_status ? { id: s.pedido_id, status: s.pedido_status } : null,
+          });
         }
 
         const lojasDaMarca = lojas.rows.filter((l) => l.brand_id === marca);
@@ -371,6 +439,12 @@ export class AtencaoCicloService {
         for (let k = inicio; k < itens.length; k++) marcaDoAviso.set(itens[k]!, marca);
       }
     }
-    return { items: ordenarCiclo(itens).map((i) => ({ ...i, brand_id: marcaDoAviso.get(i) ?? null })), generated_at: agora.toISOString() };
+    return {
+      items: ordenarCiclo(itens).map((i) => {
+        const recomendacao = recomendacaoDoAviso.get(i);
+        return { ...i, brand_id: marcaDoAviso.get(i) ?? null, ...(recomendacao ? { recommendation: recomendacao } : {}) };
+      }),
+      generated_at: agora.toISOString(),
+    };
   }
 }

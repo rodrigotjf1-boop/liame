@@ -82,6 +82,7 @@ export {
 export {
   ActionListQuery,
   ActionListResponse,
+  ActionRecommendation,
   ActionResponse,
   ActionStatus,
   ApproveActionRequest,
@@ -127,6 +128,7 @@ export {
 export {
   AccountFreshness,
   AttentionItem,
+  AttentionRecommendation,
   DatasetFreshness,
   MediaAttentionQuery,
   MediaAttentionResponse,

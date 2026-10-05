@@ -29,6 +29,8 @@ import { Mailer } from '../mail/mailer.js';
 import { actionMatches, evaluatePolicy, type LoadedPolicy, rateLimitsFor } from '../policy/engine.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { currentTraceparent, inSpan } from '../observability/trace.js';
+import { alvoDaRecomendacao, direcaoDaRecomendacao, type FalhaDaLigacao } from '../sombra/pedido.js';
+import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { BudgetService } from './budget.service.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
@@ -67,6 +69,8 @@ export type ActionRow = {
   next_attempt_at: Date | string | null;
   /** A ação que este pedido desfaz (a volta; migration 0045). */
   compensates_action_id: string | null;
+  /** A recomendação do Gestor de tráfego de que o pedido nasceu (migration 0047). */
+  shadow_decision_id: string | null;
   requested_by: string;
   expires_at: Date | string;
   created_at: Date | string;
@@ -80,6 +84,15 @@ type Apresentacao = {
   campanhas: Map<string, NonNullable<ActionResponse['campaign']>>;
   /** O pedido de volta mais recente de cada ação. */
   voltas: Map<string, NonNullable<ActionResponse['undone_by']>>;
+  /** A recomendação de que cada pedido nasceu, pelo id dela. */
+  recomendacoes: Map<string, NonNullable<ActionResponse['recommendation']>>;
+};
+
+/** O retrato que a sombra grava com a recomendação (`shadow_decision.state_snapshot`): só o que a resposta mostra. */
+type RetratoDaRecomendacao = {
+  campanha?: { verba_diaria_micros?: string | null };
+  plataforma?: { spend_micros?: string | null };
+  caixa?: { orders?: number | null; revenue_micros?: string | null; margin_known_micros?: string | null; margin_coverage_pct?: string | null };
 };
 
 /** Como a recusa fica gravada no motivo do pedido (a aba Cupons e a tela Aprovações reconhecem por aqui). */
@@ -171,12 +184,16 @@ export class ActionService {
     await this.assertWriteEnabled(auth, connector, brandId, input.account_id);
 
     const params = this.parseParams(tool, input.params);
+    // O pedido que nasce de uma recomendação (X3): o alvo é conferido antes de gastar a leitura na plataforma.
+    const recomendacao = input.recommendation_id ? await this.recomendacaoDoPedido(tx, tenantId, input.recommendation_id, input) : null;
     const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: input.account_id, resourceId: input.resource_id });
     // A volta só vale sobre o que a ação deixou: outra versão é sinal de que alguém mexeu depois.
     if (volta && read.version !== volta.versaoDepois) {
       throw new AppProblem(409, 'estado-mudou', 'Alguém mexeu depois', 'O objeto mudou depois desta ação. A volta não é feita, para não sobrescrever o que foi mudado.');
     }
     const plan = this.planejar(tool, read.state, params);
+    // Com o estado lido, a direção: reduzir quando a recomendação é de reduzir (o valor pode ser outro).
+    if (recomendacao) naoLiga(direcaoDaRecomendacao(recomendacao.tool, plan.action));
     const decision = await inSpan('politica.avaliar', { 'liame.tool': tool.name, 'liame.action': plan.action }, () =>
       this.decide(tx, tenantId, brandId, tool, connector, input, plan, Boolean(volta)),
     );
@@ -190,13 +207,13 @@ export class ActionService {
         insert into liame.action_request (id, tenant_id, brand_id, tool, action, provider, account_id, resource_id, params, risk_level,
                                           budget_impact, value_micros, current_value_micros, reserved_micros, before_state, before_version,
                                           desired_state, plan_hash, action_fingerprint, mode, policy_decision, status, status_reason,
-                                          requested_by, expires_at, trace_context, compensates_action_id)
+                                          requested_by, expires_at, trace_context, compensates_action_id, shadow_decision_id)
         values (${id}, ${tenantId}, ${brandId}, ${tool.name}, ${plan.action}, ${input.provider}, ${input.account_id},
                 ${input.resource_id}, ${JSON.stringify(params)}::jsonb, ${tool.risk}, ${plan.budgetImpact}, ${plan.valueMicros},
                 ${plan.currentValueMicros}, ${status === 'sombra' ? 0 : plan.reserveMicros}, ${JSON.stringify(read.state)}::jsonb,
                 ${read.version}, ${JSON.stringify(plan.desiredState)}::jsonb, ${planHash}, ${fingerprint}, ${mode},
                 ${JSON.stringify(decision)}::jsonb, ${status}, ${reason}, ${auth.userId},
-                now() + make_interval(hours => ${ACTION_TTL_HOURS}), ${currentTraceparent()}, ${volta?.de ?? null})`);
+                now() + make_interval(hours => ${ACTION_TTL_HOURS}), ${currentTraceparent()}, ${volta?.de ?? null}, ${recomendacao?.id ?? null})`);
     } catch (err) {
       const causa = (err as { cause?: { code?: string; constraint?: string } }).cause;
       // Duas voltas da mesma ação ao mesmo tempo (a trava da ação original já barra; o índice é a segunda barreira).
@@ -216,8 +233,45 @@ export class ActionService {
     }
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
     await emitEvent(tx, { tenantId, type: 'liame.action.requested', subject: id, data: { action_id: id, tool: tool.name, action: plan.action, mode, status } });
-    auditDetail({ resourceId: id, after: { tool: tool.name, action: plan.action, mode, status, plan_hash: planHash, reserved_micros: plan.reserveMicros, ...(volta ? { volta_de: volta.de } : {}) } });
+    auditDetail({
+      resourceId: id,
+      after: {
+        tool: tool.name,
+        action: plan.action,
+        mode,
+        status,
+        plan_hash: planHash,
+        reserved_micros: plan.reserveMicros,
+        ...(volta ? { volta_de: volta.de } : {}),
+        ...(recomendacao ? { recommendation_id: recomendacao.id } : {}),
+      },
+    });
     return this.get(auth, id);
+  }
+
+  /**
+   * A recomendação de que o pedido diz nascer (A4, X3), lida sob a RLS da empresa: a de outra empresa não existe. Ela
+   * precisa estar em aberto e ser da conta e da campanha do pedido; a direção é conferida depois, com o plano.
+   */
+  private async recomendacaoDoPedido(
+    tx: Tx,
+    tenantId: string,
+    id: string,
+    pedido: Pick<CreateActionRequest, 'provider' | 'account_id' | 'resource_id'>,
+  ): Promise<{ id: string; tool: AcaoSombra }> {
+    const r = await tx.execute<{ id: string; tool: AcaoSombra; status: string; provider: string; connected_account_id: string; external_id: string }>(sql`
+      select d.id, d.tool, d.status, d.provider, d.connected_account_id, c.external_id
+        from liame.shadow_decision d join liame.campaign c on c.id = d.campaign_id
+       where d.id = ${id} and d.tenant_id = ${tenantId}`);
+    const d = r.rows[0];
+    if (!d) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Recomendação não encontrada nesta empresa.');
+    naoLiga(
+      alvoDaRecomendacao(
+        { tool: d.tool, status: d.status, provider: d.provider, connectedAccountId: d.connected_account_id, campanhaExterna: d.external_id },
+        { provider: pedido.provider, accountId: pedido.account_id, resourceId: pedido.resource_id },
+      ),
+    );
+    return { id: d.id, tool: d.tool };
   }
 
   /**
@@ -256,6 +310,9 @@ export class ActionService {
     const decision = await this.decide(tx, tenantId, row.brand_id, tool, connector, request, plan);
     const { mode, status, reason } = await this.statusFor(decision.mode, auth, row.brand_id);
     const planHash = planHashOf(request, plan, read.version);
+    // O pedido que nasceu de uma recomendação e passa a fazer outra coisa (de reduzir para aumentar) deixa de ser dela:
+    // a ligação sai, para a prontidão do funcionário não contar o que a pessoa decidiu por conta própria.
+    const recomendacao = row.shadow_decision_id !== null && plan.action === row.action ? row.shadow_decision_id : null;
 
     await this.budget.release(tx, tenantId, id);
     await tx.execute(sql`
@@ -265,11 +322,14 @@ export class ActionService {
              reserved_micros = ${status === 'sombra' ? 0 : plan.reserveMicros}, before_state = ${JSON.stringify(read.state)}::jsonb,
              before_version = ${read.version}, desired_state = ${JSON.stringify(plan.desiredState)}::jsonb, plan_hash = ${planHash},
              mode = ${mode}, policy_decision = ${JSON.stringify(decision)}::jsonb, status = ${status}, status_reason = ${reason},
-             updated_at = now()
+             shadow_decision_id = ${recomendacao}, updated_at = now()
        where id = ${id} and tenant_id = ${tenantId}`);
     if (status !== 'sombra') await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros });
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
-    auditDetail({ before: { plan_hash: row.plan_hash, params: row.params }, after: { plan_hash: planHash, params, mode, status } });
+    auditDetail({
+      before: { plan_hash: row.plan_hash, params: row.params },
+      after: { plan_hash: planHash, params, mode, status, ...(row.shadow_decision_id && !recomendacao ? { recommendation_unlinked: row.shadow_decision_id } : {}) },
+    });
     return this.get(auth, id);
   }
 
@@ -379,7 +439,7 @@ export class ActionService {
       select * from liame.action_request where tenant_id = ${tenantOf(auth)} ${status ? sql`and status = ${status}` : sql``}
        order by created_at desc limit 100`);
     const ids = r.rows.map((x) => x.id);
-    const [approvals, flows, ap] = [await this.approvalsOf(tx, ids), await workflowOf(tx, 'acao', ids), await this.apresentacaoDe(tx, r.rows)];
+    const [approvals, flows, ap] = [await this.approvalsOf(tx, ids), await workflowOf(tx, 'acao', ids), await this.apresentacaoDe(tx, r.rows, veVendas(auth))];
     return r.rows.map((row) => toResponse(row, approvals, flows.get(row.id) ?? null, ap));
   }
 
@@ -388,7 +448,7 @@ export class ActionService {
     const r = await tx.execute<ActionRow>(sql`select * from liame.action_request where id = ${id} and tenant_id = ${tenantOf(auth)}`);
     const row = r.rows[0];
     if (!row) throw notFound();
-    return toResponse(row, await this.approvalsOf(tx, [id]), (await workflowOf(tx, 'acao', [id])).get(id) ?? null, await this.apresentacaoDe(tx, [row]));
+    return toResponse(row, await this.approvalsOf(tx, [id]), (await workflowOf(tx, 'acao', [id])).get(id) ?? null, await this.apresentacaoDe(tx, [row], veVendas(auth)));
   }
 
   // ------------------------------------------------------------------ sandbox
@@ -596,10 +656,50 @@ export class ActionService {
     if (!b.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
   }
 
-  /** Os nomes que a tela precisa, lidos de uma vez para a página inteira (sob a RLS da empresa). */
-  private async apresentacaoDe(tx: Tx, rows: ActionRow[]): Promise<Apresentacao> {
-    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map() };
+  /**
+   * Os nomes que a tela precisa, lidos de uma vez para a página inteira (sob a RLS da empresa). `comVendas`: os números
+   * do caixa no retrato da recomendação (pedidos, receita, margem) só saem para quem vê as vendas.
+   */
+  private async apresentacaoDe(tx: Tx, rows: ActionRow[], comVendas: boolean): Promise<Apresentacao> {
+    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map(), recomendacoes: new Map() };
     if (!rows.length) return ap;
+    const recomendacoes = [...new Set(rows.map((r) => r.shadow_decision_id).filter((id): id is string => id !== null))];
+    if (recomendacoes.length) {
+      const d = await tx.execute<{
+        id: string;
+        tool: string;
+        rule_key: string;
+        rule_version: number;
+        confidence_pct: string;
+        percent: number | string | null;
+        decided_on: string;
+        window_from: string;
+        window_to: string;
+        state_snapshot: RetratoDaRecomendacao;
+      }>(sql`
+        select id, tool, rule_key, rule_version, to_char(confidence * 100, 'FM990.0') as confidence_pct, (params->>'percent')::numeric::integer as percent,
+               decided_on::text as decided_on, window_from::text as window_from, window_to::text as window_to, state_snapshot
+          from liame.shadow_decision where id in ${recomendacoes}`);
+      for (const l of d.rows) {
+        const caixa = comVendas ? l.state_snapshot.caixa : undefined;
+        ap.recomendacoes.set(l.id, {
+          id: l.id,
+          tool: l.tool,
+          rule: l.rule_key,
+          rule_version: Number(l.rule_version),
+          confidence_pct: l.confidence_pct,
+          percent: l.percent === null ? null : Number(l.percent),
+          decided_on: l.decided_on,
+          window: { from: l.window_from, to: l.window_to },
+          daily_budget_micros: l.state_snapshot.campanha?.verba_diaria_micros ?? null,
+          spend_micros: l.state_snapshot.plataforma?.spend_micros ?? null,
+          orders: caixa?.orders ?? null,
+          revenue_micros: caixa?.revenue_micros ?? null,
+          margin_known_micros: caixa?.margin_known_micros ?? null,
+          margin_coverage_pct: caixa?.margin_coverage_pct ?? null,
+        });
+      }
+    }
     // O pedido de volta mais recente de cada ação (a volta cancelada ou que falhou também aparece: é a história dela).
     const voltas = await tx.execute<{ id: string; status: ActionStatus; compensates_action_id: string }>(sql`
       select distinct on (compensates_action_id) id, status, compensates_action_id from liame.action_request
@@ -672,6 +772,16 @@ function tenantOf(auth: AuthContext): string {
   return auth.tenantId;
 }
 
+/** Pedidos, receita e margem são do ciclo fechado: só para quem vê as vendas (ADR-013). */
+const veVendas = (auth: AuthContext): boolean => auth.permissions.has('vendas.ver');
+
+/** O pedido que não confere com a recomendação citada não entra: 409 se ela já se encerrou, 422 se é de outra coisa. */
+function naoLiga(falha: FalhaDaLigacao | null): void {
+  if (!falha) return;
+  if (falha.codigo === 'recomendacao-encerrada') throw new AppProblem(409, falha.codigo, 'A recomendação se encerrou', falha.detalhe);
+  throw new AppProblem(422, falha.codigo, 'O pedido não confere com a recomendação', falha.detalhe);
+}
+
 /** Passos depois do pedido (ou da alteração): política e orçamento feitos; aprovação conforme o modo. */
 function flowAfterRequest(
   status: ActionStatus,
@@ -735,6 +845,7 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     requested_by: { id: row.requested_by, name: ap.pessoas.get(row.requested_by) ?? 'Pessoa removida' },
     account_name: ap.contas.get(row.account_id) ?? null,
     campaign: typeof campanha === 'string' ? (ap.campanhas.get(campanha) ?? null) : null,
+    recommendation: row.shadow_decision_id ? (ap.recomendacoes.get(row.shadow_decision_id) ?? null) : null,
   };
 }
 
