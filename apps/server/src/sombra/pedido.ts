@@ -67,6 +67,30 @@ export function pedidoDaRecomendacao(r: RecomendacaoParaPedir): PedidoDaRecomend
   return nova === null ? null : { tool: 'orcamento_ajustar', resource_id: recurso, params: { daily_budget_micros: Number(nova) } };
 }
 
+/** Por que o funcionário de IA não conseguiu fazer o pedido de uma recomendação (modo Aprovação), para a Atenção mostrar. */
+export interface MotivoDeNaoPedir {
+  /** O código do problema (`plataforma-indisponivel`, `teto-nao-definido`, `acao-duplicada`…). */
+  codigo: string;
+  /** O motivo em palavras, como o Action Service o escreve para quem pede. */
+  detalhe: string;
+}
+
+const CODIGO_DO_MOTIVO = /^[a-z][a-z0-9-]{1,60}$/;
+const TAMANHO_DO_MOTIVO = 300;
+
+/**
+ * O problema que o Action Service devolveu, como motivo de não pedir. Na recusa da política, o motivo leva a primeira
+ * regra que negou (é ela que diz o que fazer). Cabe na coluna da recomendação: código simples e até 300 caracteres.
+ */
+export function motivoDoProblema(p: { code: string; detail: string; errors?: ReadonlyArray<{ message: string }> | undefined }): MotivoDeNaoPedir {
+  const regra = p.code === 'politica-negou' ? p.errors?.[0]?.message : undefined;
+  const texto = (regra ? `${p.detail} ${regra}` : p.detail).trim() || 'O pedido não pôde ser feito.';
+  return {
+    codigo: CODIGO_DO_MOTIVO.test(p.code) ? p.code : 'problema',
+    detalhe: texto.length > TAMANHO_DO_MOTIVO ? `${texto.slice(0, TAMANHO_DO_MOTIVO - 1).trimEnd()}…` : texto,
+  };
+}
+
 /** O que a recomendação e o pedido têm de ter em comum para o pedido ficar ligado a ela. */
 export interface RecomendacaoDoPedido {
   tool: AcaoSombra;

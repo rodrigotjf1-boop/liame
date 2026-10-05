@@ -91,7 +91,7 @@ Amarrada ao `plan_hash`; plano alterado invalida a aprovação. Ações com risc
 - **Compensação executável (a volta):** `ToolDefinition.undo(estado de antes)` dá a ferramenta inversa e os parâmetros; `POST /v1/actions/{id}/undo` cria um pedido comum com `compensates_action_id` (migration 0045), aceito só se a versão lida no provedor é a que a execução guardou (`provider_version`). O que o Liame não escreveu (`sem_escrita`) não tem volta; a volta não muda de parâmetro; uma viva por ação (índice único).
 - **Leitura no pedido:** o conector de plataforma lê na rede, esperando no máximo 10 s; a falha vira problema com motivo (502 `plataforma-indisponivel`, 409 `conta-desconectada` ou `sem-permissao-na-plataforma`, 422 `plataforma-recusou`), e nenhum pedido é criado.
 - **Marca do pedido:** quando o alvo é uma conta conectada, a marca é a dela (o pedido com outra marca é recusado, 422 `marca-nao-confere`): política, envelope, trava e flags da marca valem sem depender do que o pedido diz.
-- **Ainda não:** o funcionário de IA como solicitante (X3, parte 2: o pedido nasce da recomendação em modo Aprovação, com `actor_type = agent`); o gasto real conciliado (X4).
+- **Ainda não:** o gasto real conciliado (X4). O funcionário de IA como solicitante chegou na X3 (abaixo).
 
 ## O pedido que nasce de uma recomendação (A4, X3 parte 1, 04/10/2026)
 
@@ -101,3 +101,12 @@ Amarrada ao `plan_hash`; plano alterado invalida a aprovação. Ações com risc
 - **Alterar** (`PATCH`) para um plano de outra ação tira a ligação, com registro na auditoria (`recommendation_unlinked`).
 - **Na resposta** (`recommendation`): a regra, a versão, a confiança, o percentual, o dia, a janela e os números do retrato. Pedidos, receita e margem só para quem tem `vendas.ver`.
 - **A conta pura** está em `apps/server/src/sombra/pedido.ts`: a verba recomendada (o percentual sobre a verba de agora, arredondado para a menor unidade da moeda sem passar do percentual), o pedido de cada recomendação e o que confere com ela.
+
+## O funcionário de IA como solicitante (A4, X3 parte 2a, 04/10/2026)
+
+- **`ActionService.pedirPeloFuncionario`** (sem rota: quem chama é a rotina do worker, na transação da empresa): o pedido do Gestor de tráfego no modo Aprovação, sempre a partir de uma recomendação dele (`recommendation_id`).
+- **O mesmo trilho:** trava, flag de escrita, estado lido no provedor, política (avaliada com `actor: agent`), limites da empresa, reserva e duplicidade. Nenhuma checagem é pulada por o solicitante ser o sistema.
+- **Só no modo Aprovação:** com a política de agora dizendo outro modo para o funcionário, 409 `modo-nao-e-aprovacao`; com a flag `modo_aprovacao` desligada para a empresa, 403 `modo-aprovacao-desligado`. O pedido nasce `aguardando_aprovacao`: quem aprova é uma pessoa, com o código do app.
+- **Quem responde:** `requested_by` é a pessoa que publicou a regra do modo (`policy.created_by` da versão ativa de onde o modo vem), conferida por `pessoaPode` (vínculo ativo, conta ativa e a permissão `campanhas.operar`). `actor_type = agent` e `agent_key` dizem qual funcionário pediu (migration 0048).
+- **Auditoria:** `acao.pedir` com `actor_type: agent`, o nome do funcionário, a origem `worker` e a pessoa em `on_behalf_of`.
+- **A tentativa:** uma por recomendação (`shadow_decision.request_attempted_at`); o que o trilho recusou fica em `request_error` e `request_error_detail` (o código e o texto do problema), e a Atenção mostra em `recommendation.not_requested`.

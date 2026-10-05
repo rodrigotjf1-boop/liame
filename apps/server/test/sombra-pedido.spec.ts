@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest';
 import type { EstadoDoObjeto } from '../src/actions/meta-anuncios.js';
 import { TOOLS } from '../src/actions/tools.js';
 import { evaluatePolicy, PLATFORM_POLICY } from '../src/policy/engine.js';
-import { alvoDaRecomendacao, direcaoDaRecomendacao, pedidoDaRecomendacao, type RecomendacaoParaPedir, recursoDaCampanha, verbaRecomendada } from '../src/sombra/pedido.js';
+import {
+  alvoDaRecomendacao,
+  direcaoDaRecomendacao,
+  motivoDoProblema,
+  pedidoDaRecomendacao,
+  type RecomendacaoParaPedir,
+  recursoDaCampanha,
+  verbaRecomendada,
+} from '../src/sombra/pedido.js';
 import { LIMIARES_SOMBRA } from '../src/sombra/regras.js';
 
 // A4 · X3: o pedido que nasce de uma recomendação (conta pura). A verba recomendada é arredondada para a menor unidade
@@ -141,6 +149,27 @@ describe('o pedido que nasce de uma recomendação (A4, X3)', () => {
     expect(alvoDaRecomendacao(r, { ...pedido, provider: 'sandbox' })).toEqual(outra);
     // A campanha sem id de plataforma que sirva de recurso não confere com pedido nenhum.
     expect(alvoDaRecomendacao({ ...r, campanhaExterna: 'c1' }, { ...pedido, resourceId: 'campanha:c1' })).toEqual(outra);
+  });
+
+  it('modo Aprovação: o problema que barrou o pedido vira o motivo que fica na recomendação', () => {
+    // O código e o texto do Action Service, como estão.
+    expect(motivoDoProblema({ code: 'acao-duplicada', detail: 'Já há um pedido ativo desta ferramenta para este recurso.' })).toEqual({
+      codigo: 'acao-duplicada',
+      detalhe: 'Já há um pedido ativo desta ferramenta para este recurso.',
+    });
+    // Na recusa da política, o motivo leva a primeira regra que negou (é ela que diz o que fazer); nos outros, não.
+    const regras = [{ message: 'O valor R$ 220,00 passa do teto de R$ 150,00 por ação.' }, { message: 'A variação de 13,33% passa do máximo de 10%.' }];
+    expect(motivoDoProblema({ code: 'politica-negou', detail: 'Esta ação fere uma regra da política.', errors: regras }).detalhe).toBe(
+      'Esta ação fere uma regra da política. O valor R$ 220,00 passa do teto de R$ 150,00 por ação.',
+    );
+    expect(motivoDoProblema({ code: 'plano-recusado', detail: 'A campanha já está em pausa.', errors: regras }).detalhe).toBe('A campanha já está em pausa.');
+    expect(motivoDoProblema({ code: 'politica-negou', detail: 'Esta ação fere uma regra da política.', errors: [] }).detalhe).toBe('Esta ação fere uma regra da política.');
+    // Cabe na coluna: até 300 caracteres (com reticências no corte), nunca vazio, e o código no formato da coluna.
+    const longo = motivoDoProblema({ code: 'plataforma-recusou', detail: `A Meta não deixou ler o objeto: ${'x'.repeat(400)}` });
+    expect([longo.detalhe.length, longo.detalhe.endsWith('…')]).toEqual([300, true]);
+    expect(motivoDoProblema({ code: 'conflito', detail: '   ' }).detalhe).toBe('O pedido não pôde ser feito.');
+    for (const code of ['Erro Estranho', '', '9começa-com-número', 'x', 'a'.repeat(62)]) expect(motivoDoProblema({ code, detail: 'Falhou.' }).codigo).toBe('problema');
+    for (const code of ['teto-nao-definido', 'sem-responsavel', 'ab']) expect(motivoDoProblema({ code, detail: 'Falhou.' }).codigo).toBe(code);
   });
 
   it('a direção: o pedido faz o que a recomendação diz (o valor pode ser outro)', () => {

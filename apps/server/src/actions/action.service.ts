@@ -16,7 +16,7 @@ import { type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { canonicalJson, sha256 } from '../audit/audit.js';
+import { activeTraceId, canonicalJson, sha256, writeAudit } from '../audit/audit.js';
 import { MfaService } from '../auth/mfa.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { ErroConector } from '../connectors/cliente-http.js';
@@ -71,6 +71,10 @@ export type ActionRow = {
   compensates_action_id: string | null;
   /** A recomendação do Gestor de tráfego de que o pedido nasceu (migration 0047). */
   shadow_decision_id: string | null;
+  /** Quem pediu: `human` ou `agent`; no pedido de um funcionário de IA, a chave dele (migration 0048). */
+  actor_type: string;
+  agent_key: string | null;
+  /** A pessoa que pediu; no pedido de um funcionário de IA, a que o deixou pedir. */
   requested_by: string;
   expires_at: Date | string;
   created_at: Date | string;
@@ -132,8 +136,56 @@ export class ActionService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  create(auth: AuthContext, input: CreateActionRequest): Promise<ActionResponse> {
-    return this.pedir(auth, input, null);
+  async create(auth: AuthContext, input: CreateActionRequest): Promise<ActionResponse> {
+    return this.get(auth, await this.pedir(pessoa(auth), input, null));
+  }
+
+  /**
+   * O pedido que um funcionário de IA faz no modo Aprovação (A4, X3; D-A4-26), a partir de uma recomendação dele. Quem
+   * chama é a rotina do worker, na transação da empresa. O pedido passa pelo mesmo trilho do de uma pessoa (trava, flag
+   * de escrita, política, limites da empresa, reserva) e só entra se o modo do funcionário para esta ação nesta conta
+   * for Aprovação; depois, espera a aprovação de uma pessoa com o código do app, como qualquer outro. `emNomeDe` é a
+   * pessoa que deixou o funcionário pedir (quem publicou a regra do modo): o funcionário nunca pode mais do que ela.
+   * A auditoria fica em nome do funcionário. Devolve o id do pedido.
+   */
+  async pedirPeloFuncionario(
+    alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string },
+    input: CreateActionRequest & { recommendation_id: string },
+  ): Promise<string> {
+    const tx = currentTx();
+    // A flag do modo é conferida aqui também (e não só por quem chama), com a marca da conta do pedido.
+    const marca = await this.marcaDoPedido(tx, alvo.tenantId, input);
+    if (!(await this.flags.isEnabled('modo_aprovacao', this.flags.context({ tenantId: alvo.tenantId, brandId: marca })))) {
+      throw new AppProblem(403, 'modo-aprovacao-desligado', 'Modo Aprovação desligado', 'O modo Aprovação não está liberado para esta empresa: o funcionário de IA não faz pedidos.');
+    }
+    const id = await this.pedir({ tenantId: alvo.tenantId, userId: alvo.emNomeDe, ator: 'agent', agentKey: alvo.agentKey }, input, null);
+    const r = await tx.execute<{ tool: string; action: string; mode: string; status: string; plan_hash: string; reserved_micros: string }>(sql`
+      select tool, action, mode, status, plan_hash, reserved_micros::text as reserved_micros from liame.action_request where id = ${id} and tenant_id = ${alvo.tenantId}`);
+    const feito = r.rows[0]!;
+    await writeAudit(tx, {
+      tenantId: alvo.tenantId,
+      actorType: 'agent',
+      actorId: null,
+      actorLabel: alvo.agentLabel,
+      action: 'acao.pedir',
+      resourceType: 'action_request',
+      resourceId: id,
+      after: {
+        tool: feito.tool,
+        action: feito.action,
+        mode: feito.mode,
+        status: feito.status,
+        plan_hash: feito.plan_hash,
+        reserved_micros: Number(feito.reserved_micros),
+        recommendation_id: input.recommendation_id,
+        agent_key: alvo.agentKey,
+        on_behalf_of: alvo.emNomeDe,
+      },
+      tool: feito.tool,
+      traceId: activeTraceId(),
+      origin: 'worker',
+    });
+    return id;
   }
 
   /**
@@ -165,23 +217,27 @@ export class ActionService {
     if (feita.result_state?.sem_escrita === true) {
       throw semVolta('O objeto já estava assim quando o Liame foi executar: o Liame não mudou nada, então não há o que desfazer por aqui.');
     }
-    return this.pedir(
-      auth,
+    const pedidoDeVolta = await this.pedir(
+      pessoa(auth),
       { tool: inversa, brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, params },
       { de: id, versaoDepois: feita.provider_version },
     );
+    return this.get(auth, pedidoDeVolta);
   }
 
-  /** O pedido, do começo ao fim. `volta`: a ação que este pedido desfaz e a versão em que ela deixou o objeto. */
-  private async pedir(auth: AuthContext, input: CreateActionRequest, volta: { de: string; versaoDepois: number } | null): Promise<ActionResponse> {
+  /**
+   * O pedido, do começo ao fim; devolve o id dele. `quem`: a pessoa que pede ou o funcionário de IA (em nome de uma
+   * pessoa). `volta`: a ação que este pedido desfaz e a versão em que ela deixou o objeto.
+   */
+  private async pedir(quem: Solicitante, input: CreateActionRequest, volta: { de: string; versaoDepois: number } | null): Promise<string> {
     const tx = currentTx();
-    const tenantId = tenantOf(auth);
+    const tenantId = quem.tenantId;
     const { tool, connector } = this.resolve(input.tool, input.provider);
     if (input.brand_id) await this.assertBrand(tx, tenantId, input.brand_id);
     const brandId = await this.marcaDoPedido(tx, tenantId, input);
     const target = { tenantId, provider: input.provider, brandId, accountId: input.account_id, tool: tool.name };
     await this.assertNotStopped(tx, target);
-    await this.assertWriteEnabled(auth, connector, brandId, input.account_id);
+    await this.assertWriteEnabled(quem, connector, brandId, input.account_id);
 
     const params = this.parseParams(tool, input.params);
     // O pedido que nasce de uma recomendação (X3): o alvo é conferido antes de gastar a leitura na plataforma.
@@ -195,11 +251,16 @@ export class ActionService {
     // Com o estado lido, a direção: reduzir quando a recomendação é de reduzir (o valor pode ser outro).
     if (recomendacao) naoLiga(direcaoDaRecomendacao(recomendacao.tool, plan.action));
     const decision = await inSpan('politica.avaliar', { 'liame.tool': tool.name, 'liame.action': plan.action }, () =>
-      this.decide(tx, tenantId, brandId, tool, connector, input, plan, Boolean(volta)),
+      this.decide(tx, tenantId, brandId, tool, connector, input, plan, Boolean(volta), quem.ator),
     );
+    // O funcionário de IA só pede no modo Aprovação (D-A4-26): em Sombra ou em Sugerir quem pede é a pessoa, e os modos
+    // automáticos não existem nesta fase. A regra é conferida aqui, com a política de agora, e não só por quem chama.
+    if (quem.ator === 'agent' && decision.mode !== 'APPROVAL') {
+      throw new AppProblem(409, 'modo-nao-e-aprovacao', 'O modo não é Aprovação', `Nesta conta, esta ação está em ${decision.mode} para o funcionário de IA: ele não faz o pedido.`);
+    }
 
     const id = uuidv7();
-    const { mode, status, reason } = await this.statusFor(decision.mode, auth, brandId);
+    const { mode, status, reason } = await this.statusFor(decision.mode, quem, brandId);
     const fingerprint = sha256(canonicalJson({ tenantId, tool: tool.name, provider: input.provider, account: input.account_id, resource: input.resource_id }));
     const planHash = planHashOf({ ...input, brand_id: brandId, tool: tool.name, params }, plan, read.version);
     try {
@@ -207,13 +268,15 @@ export class ActionService {
         insert into liame.action_request (id, tenant_id, brand_id, tool, action, provider, account_id, resource_id, params, risk_level,
                                           budget_impact, value_micros, current_value_micros, reserved_micros, before_state, before_version,
                                           desired_state, plan_hash, action_fingerprint, mode, policy_decision, status, status_reason,
-                                          requested_by, expires_at, trace_context, compensates_action_id, shadow_decision_id)
+                                          requested_by, expires_at, trace_context, compensates_action_id, shadow_decision_id,
+                                          actor_type, agent_key)
         values (${id}, ${tenantId}, ${brandId}, ${tool.name}, ${plan.action}, ${input.provider}, ${input.account_id},
                 ${input.resource_id}, ${JSON.stringify(params)}::jsonb, ${tool.risk}, ${plan.budgetImpact}, ${plan.valueMicros},
                 ${plan.currentValueMicros}, ${status === 'sombra' ? 0 : plan.reserveMicros}, ${JSON.stringify(read.state)}::jsonb,
                 ${read.version}, ${JSON.stringify(plan.desiredState)}::jsonb, ${planHash}, ${fingerprint}, ${mode},
-                ${JSON.stringify(decision)}::jsonb, ${status}, ${reason}, ${auth.userId},
-                now() + make_interval(hours => ${ACTION_TTL_HOURS}), ${currentTraceparent()}, ${volta?.de ?? null}, ${recomendacao?.id ?? null})`);
+                ${JSON.stringify(decision)}::jsonb, ${status}, ${reason}, ${quem.userId},
+                now() + make_interval(hours => ${ACTION_TTL_HOURS}), ${currentTraceparent()}, ${volta?.de ?? null}, ${recomendacao?.id ?? null},
+                ${quem.ator}, ${quem.agentKey})`);
     } catch (err) {
       const causa = (err as { cause?: { code?: string; constraint?: string } }).cause;
       // Duas voltas da mesma ação ao mesmo tempo (a trava da ação original já barra; o índice é a segunda barreira).
@@ -246,7 +309,7 @@ export class ActionService {
         ...(recomendacao ? { recommendation_id: recomendacao.id } : {}),
       },
     });
-    return this.get(auth, id);
+    return id;
   }
 
   /**
@@ -307,8 +370,9 @@ export class ActionService {
     const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
     const plan = this.planejar(tool, read.state, params);
     const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params };
+    // Quem altera é uma pessoa: o plano novo é avaliado como pedido dela, também no pedido que o funcionário de IA fez.
     const decision = await this.decide(tx, tenantId, row.brand_id, tool, connector, request, plan);
-    const { mode, status, reason } = await this.statusFor(decision.mode, auth, row.brand_id);
+    const { mode, status, reason } = await this.statusFor(decision.mode, { tenantId, userId: auth.userId }, row.brand_id);
     const planHash = planHashOf(request, plan, read.version);
     // O pedido que nasceu de uma recomendação e passa a fazer outra coisa (de reduzir para aumentar) deixa de ser dela:
     // a ligação sai, para a prontidão do funcionário não contar o que a pessoa decidiu por conta própria.
@@ -502,9 +566,9 @@ export class ActionService {
     }
   }
 
-  private async assertWriteEnabled(auth: AuthContext, connector: Connector, brandId: string | null, accountId: string): Promise<void> {
+  private async assertWriteEnabled(quem: Solicitante, connector: Connector, brandId: string | null, accountId: string): Promise<void> {
     if (!connector.writeFlag) return;
-    const on = await this.flags.isEnabled(connector.writeFlag, this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId, accountId }));
+    const on = await this.flags.isEnabled(connector.writeFlag, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId, accountId }));
     if (!on) throw new AppProblem(403, 'escrita-desligada', 'Escrita desligada', `A escrita em ${connector.provider} não está liberada para esta conta.`);
   }
 
@@ -598,6 +662,7 @@ export class ActionService {
     input: { provider: string; account_id: string; resource_id: string },
     plan: ToolPlan,
     volta = false,
+    ator: Solicitante['ator'] = 'human',
   ): Promise<PolicyDecision> {
     const { policies, timezone } = await this.policies.load(tx, tenantId, brandId);
     await this.exigirLimitesDaEmpresa(tx, tenantId, brandId, connector, plan, policies, volta);
@@ -615,8 +680,9 @@ export class ActionService {
       categories: [],
       text: null,
       recent_count: Math.max(0, ...recent.values()),
-      // Por esta porta, quem pede é uma pessoa (o pedido do funcionário de IA chega com o modo Aprovação, na X3).
-      actor: 'human',
+      // Quem pede: uma pessoa (a regra da distribuição para a Meta manda esperar aprovação) ou o funcionário de IA (vale
+      // o modo dele nesta conta, a regra com `actor: 'agent'`).
+      actor: ator,
       ...(volta ? { undo: true } : {}),
     };
     const decision = evaluatePolicy(policies, proposal, { at: new Date(), timezone, recent });
@@ -634,10 +700,10 @@ export class ActionService {
   }
 
   /** Autonomia sem o autopilot ligado volta para aprovação (ADR-012: flag de escrita nasce desligada). */
-  private async statusFor(mode: AutonomyMode, auth: AuthContext, brandId: string | null): Promise<{ mode: AutonomyMode; status: ActionStatus; reason: string | null }> {
+  private async statusFor(mode: AutonomyMode, quem: Pick<Solicitante, 'tenantId' | 'userId'>, brandId: string | null): Promise<{ mode: AutonomyMode; status: ActionStatus; reason: string | null }> {
     if (mode === 'SHADOW') return { mode, status: 'sombra', reason: 'modo sombra: registra, não executa' };
     if (mode === 'LIMITED_AUTO' || mode === 'AUTO') {
-      const autopilot = await this.flags.isEnabled('autopilot', this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId }));
+      const autopilot = await this.flags.isEnabled('autopilot', this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
       if (autopilot) return { mode, status: 'aprovada', reason: 'aprovada pela política (autonomia)' };
       return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: `autonomia ${mode} pedida, mas o autopilot está desligado` };
     }
@@ -772,6 +838,13 @@ function tenantOf(auth: AuthContext): string {
   return auth.tenantId;
 }
 
+/**
+ * Quem pede: uma pessoa (pela API) ou um funcionário de IA (pela rotina da sombra, no modo Aprovação). No pedido do
+ * funcionário, `userId` é a pessoa que o deixou pedir: é ela que fica em `requested_by`, e as flags valem como para ela.
+ */
+type Solicitante = { tenantId: string; userId: string; ator: 'human' | 'agent'; agentKey: string | null };
+const pessoa = (auth: AuthContext): Solicitante => ({ tenantId: tenantOf(auth), userId: auth.userId, ator: 'human', agentKey: null });
+
 /** Pedidos, receita e margem são do ciclo fechado: só para quem vê as vendas (ADR-013). */
 const veVendas = (auth: AuthContext): boolean => auth.permissions.has('vendas.ver');
 
@@ -846,6 +919,7 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     account_name: ap.contas.get(row.account_id) ?? null,
     campaign: typeof campanha === 'string' ? (ap.campanhas.get(campanha) ?? null) : null,
     recommendation: row.shadow_decision_id ? (ap.recomendacoes.get(row.shadow_decision_id) ?? null) : null,
+    agent_key: row.agent_key ?? null,
   };
 }
 

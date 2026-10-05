@@ -5,6 +5,7 @@ import { desligadoPelaEmpresa } from '../ai/registro/ativacao.js';
 import { DATABASE } from '../database/database.module.js';
 import { GESTOR_DE_TRAFEGO } from '../equipe/membros.js';
 import { FlagService } from '../flags/flag.service.js';
+import { PedidosDoGestor } from './pedidos-do-gestor.js';
 import { type ResultadoDaSombra, SombraService } from './sombra.service.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
@@ -27,7 +28,8 @@ export type VezDaSombra = { brandId: string; tenantId: string; status: Resultado
  * A sombra de verdade (A3, I5), marca por marca: reserva as marcas com conta de anúncio cuja vez chegou,
  * com SKIP LOCKED na mesma linha que a reserva altera (`shadow_state`, V35), a mais atrasada primeiro.
  * Só roda para a empresa com a flag `sombra` ligada e com o Gestor de tráfego ligado na marca (a empresa pode
- * desligá-lo, I13b); a rotina em si está em `SombraService`.
+ * desligá-lo, I13b); a rotina em si está em `SombraService`. Feita a rodada, o que está em Aprovação vira pedido
+ * (`PedidosDoGestor`, A4 X3), só para a empresa com a flag `modo_aprovacao`.
  */
 @Injectable()
 export class SombraLoop {
@@ -37,6 +39,7 @@ export class SombraLoop {
     @Inject(DATABASE) private readonly database: Database | null,
     private readonly flags: FlagService,
     private readonly sombra: SombraService,
+    private readonly pedidos: PedidosDoGestor,
   ) {}
 
   async executarLote(limite = 3, scope: JobScope = {}, agora?: Date): Promise<VezDaSombra[]> {
@@ -86,7 +89,13 @@ export class SombraLoop {
           continue;
         }
         const r = await this.sombra.rodarMarca({ ...alvo, ultimoDia: m.last_run_on }, agora);
+        // Aprovação (A4, X3): a recomendação nova de uma ação em Aprovação vira um pedido do Gestor de tráfego. Vem
+        // antes de fechar a vez: se o worker cair no meio, a rodada volta e ele pede só o que ainda não tentou.
+        const pedidos = r.status === 'feito' ? await this.pedidos.pedirAsDeHoje({ ...alvo, hoje: r.dia }) : null;
         await this.fechar(m.brand_id, r.status, r.status === 'feito' ? r.dia : null, referencia);
+        if (pedidos && (pedidos.pedidos || pedidos.semPedido)) {
+          this.logger.log(`marca ${m.brand_id}: ${pedidos.pedidos} pedido(s) do Gestor de tráfego, ${pedidos.semPedido} recomendação(ões) sem pedido`);
+        }
         if (r.status === 'feito' && (r.novas || r.avaliadas || r.observadas || r.descartadas)) {
           this.logger.log(`marca ${m.brand_id}: ${r.novas} nova(s), ${r.observadas} com ação da pessoa, ${r.avaliadas} avaliada(s), ${r.descartadas} descartada(s)`);
         }

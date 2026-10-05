@@ -133,7 +133,7 @@ export const ActionResponse = z.strictObject({
   created_at: z.string(),
   /** A última mudança de situação (pedido, aprovação, recusa, execução). */
   updated_at: z.string(),
-  /** Quem pediu. */
+  /** Quem pediu; no pedido de um funcionário de IA (`agent_key`), a pessoa que o deixou pedir. */
   requested_by: z.strictObject({ id: z.uuid(), name: z.string() }),
   /** A conta do alvo, para a tela: a loja do Liame (ou o nome da conta conectada); nula quando a conta não é do Liame (sandbox). */
   account_name: z.string().nullable(),
@@ -141,6 +141,11 @@ export const ActionResponse = z.strictObject({
   campaign: z.strictObject({ id: z.uuid(), name: z.string(), provider: z.string(), status: z.string() }).nullable(),
   /** A recomendação do Gestor de tráfego de que o pedido nasceu (A4, X3); nula no pedido comum. */
   recommendation: ActionRecommendation.nullable().optional(),
+  /**
+   * O funcionário de IA que fez o pedido, no modo Aprovação (a chave dele em Sua equipe: `trafego`); nulo no pedido de
+   * uma pessoa. No pedido do funcionário, `requested_by` é a pessoa que o deixou pedir (quem publicou a regra do modo).
+   */
+  agent_key: Slug.nullable().optional(),
 });
 export type ActionResponse = z.infer<typeof ActionResponse>;
 

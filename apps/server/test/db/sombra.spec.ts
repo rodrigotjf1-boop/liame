@@ -3,12 +3,14 @@ import { resolve } from 'node:path';
 import { createDatabase, type Database, runMigrations, withTenant } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ActionService } from '../../src/actions/action.service.js';
 import { atribuirPedidos } from '../../src/attribution/motor.js';
 import { gravarToques } from '../../src/attribution/toque-store.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { gravarMetricas } from '../../src/media/metric-store.js';
 import { centavosParaMicros, gravarPedidos, type PedidoLido } from '../../src/orders/order-store.js';
 import { ResultsService } from '../../src/results/results.service.js';
+import { PedidosDoGestor } from '../../src/worker/pedidos-do-gestor.js';
 import { SombraLoop } from '../../src/worker/sombra-loop.js';
 import { SombraService } from '../../src/worker/sombra.service.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
@@ -167,7 +169,7 @@ describe.skipIf(!hasDb)('sombra de verdade: recomenda, observa a pessoa e calcul
     database = createDatabase({ connectionString: APP_URL, max: 3, applicationName: 'liame-test' });
     flags = api.app.get(FlagService);
     sombra = new SombraService(database, api.app.get(ResultsService));
-    loop = new SombraLoop(database, flags, sombra);
+    loop = new SombraLoop(database, flags, sombra, new PedidosDoGestor(database, api.app.get(ActionService), flags));
   });
   afterAll(async () => {
     await database?.close();
@@ -298,6 +300,52 @@ describe.skipIf(!hasDb)('sombra de verdade: recomenda, observa a pessoa e calcul
     await lidas(e, manha(DIA));
     expect(await vez(e, manha(DIA))).toEqual([{ brandId: e.brandId, tenantId: e.tenantId, status: 'desligada' }]);
     expect(await decisoes(e)).toEqual([]);
+  });
+
+  it('A4 · X3 e A4-7: feita a rodada, a recomendação de uma ação em Aprovação vira a tentativa de pedido do Gestor de tráfego (flag `modo_aprovacao`), e a sombra continua medindo', async () => {
+    // Mais uma empresa neste arquivo: o limite de cadastros por IP (o desta API de teste) volta a zero antes.
+    await resetIpRateLimits();
+    const e = await empresa();
+    await semanaAntes(e);
+    await lidas(e, manha(DIA));
+    // A empresa pôs "pausar campanha" em Aprovação para o funcionário nesta conta; "aumentar a verba" segue em Sombra.
+    const [dono] = await ownerQuery<{ user_id: string }>(`select user_id from liame.membership where tenant_id = $1 and role_key = 'dono'`, [e.tenantId]);
+    await ownerQuery(`insert into liame.policy (id, tenant_id, brand_id, version, status, document, created_by) values (gen_random_uuid(), $1, $2, 1, 'ativa', $3, $4)`, [
+      e.tenantId,
+      e.brandId,
+      JSON.stringify({ rules: [{ type: 'autonomy', action: 'campanha.pausar', actor: 'agent', account: e.meta, mode: 'APPROVAL' }] }),
+      dono!.user_id,
+    ]);
+    await ownerQuery(`insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), 'modo_aprovacao', 'tenant', $1, 'true'::jsonb, 'testes')`, [e.tenantId]);
+    flags.invalidate();
+
+    expect(await vez(e, manha(DIA))).toEqual([{ brandId: e.brandId, tenantId: e.tenantId, status: 'feito' }]);
+    const tentativas = () =>
+      ownerQuery<{ tool: string; tentou: boolean; request_error: string | null }>(
+        `select tool, request_attempted_at is not null as tentou, request_error from liame.shadow_decision where tenant_id = $1 order by tool`,
+        [e.tenantId],
+      );
+    // A escrita na Meta não está ligada para esta empresa: o pedido não entra, e o motivo fica na recomendação.
+    const depoisDaRodada = [
+      { tool: 'campanha_pausar', tentou: true, request_error: 'escrita-desligada' },
+      { tool: 'orcamento_aumentar', tentou: false, request_error: null },
+    ];
+    expect(await tentativas()).toEqual(depoisDaRodada);
+    expect(await ownerQuery(`select 1 from liame.action_request where tenant_id = $1`, [e.tenantId])).toEqual([]);
+    // No mesmo dia a rodada não repete, e a tentativa também não.
+    expect(await vez(e, new Date(manha(DIA).getTime() + 4 * 3_600_000))).toEqual([{ brandId: e.brandId, tenantId: e.tenantId, status: 'ja_rodou' }]);
+    expect(await tentativas()).toEqual(depoisDaRodada);
+
+    // A4-7: a sombra continua medindo. Passada a janela, a recomendação que virou tentativa de pedido é avaliada como
+    // as outras (ninguém pausou a campanha, e ela não gastou na semana seguinte: sem diferença), e a tentativa fica.
+    await lidas(e, manha('2026-09-22'));
+    expect(await vez(e, manha('2026-09-22'))).toEqual([{ brandId: e.brandId, tenantId: e.tenantId, status: 'feito' }]);
+    const d = await decisoes(e);
+    expect(d.map((x) => [x.tool, x.status, x.human_action, x.regret_label])).toEqual([
+      ['campanha_pausar', 'avaliada', 'nenhuma', 'igual'],
+      ['orcamento_aumentar', 'avaliada', 'nenhuma', 'sem_dado'],
+    ]);
+    expect(await tentativas()).toEqual(depoisDaRodada);
   });
 
   it('A3-4: a empresa só lê a sombra dela, e ninguém grava fora do escopo de sistema', async () => {
