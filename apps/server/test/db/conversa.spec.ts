@@ -287,6 +287,38 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     expect(semAnalise.numbers).toEqual([{ value: desde, sources: ['Liame · fonte fora do dia, com a última leitura'] }]);
   });
 
+  it('ERR-105: o número que só aparece no que a marca nunca diz não autoriza a resposta; o que ela afirma de si pode ser citado, com a origem', async () => {
+    const d = await dono();
+    // Minha marca: existe desde 2019 e nunca diz "entrega em 47 minutos".
+    const salvo = await api.call('PUT', '/v1/brand-dossier', {
+      cookie: d.cookie,
+      body: {
+        brand_id: d.brandId,
+        base_version: 0,
+        content: {
+          identity: { summary: 'Hamburgueria de bairro', audience: 'Quem mora no Centro', differentiator: 'Pão feito na casa', since: '2019' },
+          forbidden: { items: [{ text: 'entrega em 47 minutos', why: 'não dá para garantir o prazo' }] },
+        },
+      },
+    });
+    expect(salvo.status).toBe(200);
+
+    const afirma = roteiro(responde(['paragrafo', 'A casa existe desde 2019.']));
+    responder(afirma);
+    const ok = mensagemFinal((await conversar(d.cookie, { brand_id: d.brandId, text: 'Desde quando a marca existe?' })).eventos);
+    expect(ok).toMatchObject({ role: 'lia', status: 'ok' });
+    expect(ok.numbers).toEqual([{ value: '2019', sources: ['Minha marca · dossiê da marca'] }]);
+    // O modelo lê o dossiê inteiro, com a proibição, para não dizer.
+    expect(enviado(afirma, 0)).toContain('NUNCA DIZER');
+    expect(enviado(afirma, 0)).toContain('entrega em 47 minutos');
+
+    // O 47 só está na frase que a marca proibiu: a resposta que o repete é retirada, pelos números.
+    responder(roteiro(responde(['paragrafo', 'O pedido chega em 47 minutos.'])));
+    const retirada = mensagemFinal((await conversar(d.cookie, { brand_id: d.brandId, text: 'Em quanto tempo o pedido chega?' })).eventos);
+    expect(retirada).toMatchObject({ role: 'sistema', notice: 'recusada', blocks: [], numbers: [] });
+    expect(await ownerQuery<{ kind: string }>(`select kind from liame.ai_refusal where tenant_id = $1`, [d.tenantId])).toEqual([{ kind: 'numero_fora' }]);
+  });
+
   it('I9: com o revisor de IA ligado, a resposta que passou nas regras ainda passa por ele; apontada, vira o aviso `recusada`; sem ele, a LIA fica fora do ar', async () => {
     const d = await dono();
     await ligarRevisor(flags, d.tenantId);

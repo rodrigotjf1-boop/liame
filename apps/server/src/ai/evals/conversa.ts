@@ -144,7 +144,7 @@ export function avaliarConversa(caso: CasoDaConversa, bruto: unknown): Avaliacao
   // Como na conversa: a fonte atrasada (qual é e a hora da última leitura) pode ser citada.
   const atrasadas = velhas.flatMap((l) => foraDoDia(l.ferramenta, l.r.valor));
   const recusa = conferirResposta(resposta, {
-    emDia: [emDia.map((l) => l.r.valor), atrasadas, caso.mensagem, caso.historico.map((h) => h.texto), contextoPermitido({ hoje: caso.hoje, marca: { id: '', nome: caso.marca, fuso: 'America/Sao_Paulo' }, dossie: null }), A_SEMANA],
+    emDia: [emDia.map((l) => l.r.valor), atrasadas, caso.mensagem, caso.historico.map((h) => h.texto), contextoPermitido({ hoje: caso.hoje, marca: { id: '', nome: caso.marca, fuso: 'America/Sao_Paulo' }, fatos: null }), A_SEMANA],
     velhas: velhas.map((l) => l.r.valor),
     nomes: [caso.marca, ...lidas.flatMap((l) => nomesDaLeitura(l.r.valor))],
   });

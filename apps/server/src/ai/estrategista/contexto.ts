@@ -33,7 +33,10 @@ export interface DadosDoPlano {
   /** Hoje, no fuso da loja (AAAA-MM-DD). */
   hoje: string;
   marca: { id: string; nome: string; fuso: string };
+  /** O dossiê como o modelo lê, inteiro (com o que a marca nunca diz). */
   dossie: string | null;
+  /** Só o que a marca afirma de si (`fatosDoDossie`): a fonte de número da conferência. */
+  fatos: string | null;
   calendario: DataComercial[];
   verbaDeHoje: PlanBudget['today'];
   /** Os 7 dias completos até ontem: de onde vem a verba de hoje. */
@@ -136,10 +139,11 @@ export interface LeituraDoPlano {
 
 /**
  * De onde um número do plano pode sair, além das leituras: o pedido, a versão anterior, o calendário (os dias que o
- * tipo usa e as datas comerciais), a semana, a verba de hoje e o dossiê. É o mesmo conjunto das origens, sem os rótulos.
+ * tipo usa e as datas comerciais), a semana, a verba de hoje e o que a marca afirma de si (não o dossiê inteiro: o que
+ * ela nunca diz não é fonte de número). É o mesmo conjunto das origens, sem os rótulos.
  */
 export function permitidoNoContexto(d: DadosDoPlano): unknown {
-  const fixo = contextoPermitido({ hoje: d.hoje, marca: d.marca, dossie: d.dossie });
+  const fixo = contextoPermitido({ hoje: d.hoje, marca: d.marca, fatos: d.fatos });
   const j = janelaDoTipo(d.kind, d.hoje);
   return {
     ...fixo,
@@ -160,7 +164,7 @@ export function permitidoNoContexto(d: DadosDoPlano): unknown {
  */
 export function origensDoPlano(d: DadosDoPlano, x: { leituras: LeituraDoPlano[]; content: PlanContent; atrasadas: ConversationStaleSource[] }): OrigemDosNumeros[] {
   const j = janelaDoTipo(d.kind, d.hoje);
-  const fixo = contextoPermitido({ hoje: d.hoje, marca: d.marca, dossie: d.dossie });
+  const fixo = contextoPermitido({ hoje: d.hoje, marca: d.marca, fatos: d.fatos });
   // Cada data com a fonte mais específica: a da tabela é do calendário comercial; a da semana, da semana; a que o plano
   // propõe, da proposta. A janela de dias fica só com o resto.
   const proposta = propostaDoPlano(x.content);
@@ -185,6 +189,6 @@ export function origensDoPlano(d: DadosDoPlano, x: { leituras: LeituraDoPlano[];
     { rotulo: 'Liame · "a semana" são os 7 dias completos até ontem', valor: [fixo.semana, ...semana], comCaminho: false, ordem: 4 },
     { rotulo: 'Liame · o tipo do plano pedido', valor: NOME_DO_TIPO[d.kind], comCaminho: false, ordem: 4 },
     { rotulo: 'Liame · calendário (os dias que o plano pode usar)', valor: janela, comCaminho: false, ordem: 5 },
-    ...(d.dossie ? [{ rotulo: 'Minha marca · dossiê da marca', valor: d.dossie, comCaminho: false, ordem: 4 }] : []),
+    ...(d.fatos ? [{ rotulo: 'Minha marca · dossiê da marca', valor: d.fatos, comCaminho: false, ordem: 4 }] : []),
   ];
 }

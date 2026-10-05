@@ -27,7 +27,7 @@ import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { conferirTexto, type RegraDeTexto } from '../policy/texto.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
-import { arrumarDossie, camposComDadoPessoal, chave, DOSSIE_VAZIO, hashDoTexto, mudancas, proibidasDoDossie, provaDePedidos, ROTULO_DA_SECAO, situacaoDasSecoes, textoDoDossie } from './dossie.js';
+import { arrumarDossie, camposComDadoPessoal, chave, DOSSIE_VAZIO, fatosDoDossie, hashDoTexto, mudancas, proibidasDoDossie, provaDePedidos, ROTULO_DA_SECAO, situacaoDasSecoes, textoDoDossie } from './dossie.js';
 import { aplicarItens, DIAS_DA_RECUSA, DIAS_DAS_VENDAS, recusados, SECOES_DO_SISTEMA, sugerirOfertas, sugerirProdutos } from './sugestoes.js';
 
 // Minha marca (A3, I8): o dossiê da marca, as versões, o teste de frase e as sugestões do sistema. Tudo na
@@ -102,16 +102,28 @@ export async function proibidasDaMarca(brandId: string): Promise<string[]> {
   return r.rows[0]?.itens ?? [];
 }
 
+/** O dossiê para um funcionário de IA: o que ele lê e, à parte, o que vale como fonte de número. */
+export interface DossieParaOModelo {
+  /** O dossiê como o modelo lê, inteiro: inclui o que a marca nunca diz, para ele não dizer. */
+  texto: string;
+  /**
+   * Só o que a marca afirma de si (sem o que ela nunca diz, sem os concorrentes e sem o exemplo de como não escrever):
+   * é daqui que a conferência dos números tira número. O que a marca proibiu não autoriza ninguém a escrevê-lo.
+   */
+  fatos: string;
+}
+
 /**
- * O dossiê como o modelo lê, pela versão atual (sem as provas do sistema, que pedem a leitura das vendas); nulo
- * sem dossiê. Roda na transação de quem chama (a Conversa, I10).
+ * O dossiê para o modelo, pela versão atual (sem as provas do sistema, que pedem a leitura das vendas); nulo sem
+ * dossiê. Roda na transação de quem chama (a Conversa, I10; o Estrategista, I11).
  */
-export async function dossieParaOModelo(brandId: string, nomeDaMarca: string): Promise<string | null> {
+export async function dossieParaOModelo(brandId: string, nomeDaMarca: string): Promise<DossieParaOModelo | null> {
   const r = await currentTx().execute<{ content: unknown; content_version: number }>(sql`
     select content, content_version from liame.brand_dossier_version where brand_id = ${brandId} order by version desc limit 1`);
   const l = r.rows[0];
   if (!l || l.content_version > DOSSIER_CONTENT_VERSION) return null;
-  return textoDoDossie(nomeDaMarca, BrandDossierContent.parse(l.content), []);
+  const conteudo = BrandDossierContent.parse(l.content);
+  return { texto: textoDoDossie(nomeDaMarca, conteudo, []), fatos: fatosDoDossie(nomeDaMarca, conteudo, []) };
 }
 
 /**

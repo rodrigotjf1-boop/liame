@@ -45,7 +45,7 @@ export async function responderConversa(modelos: ModelosIa, alvo: AlvoDoEval, ca
         }),
       ]),
   );
-  const contexto = contextoDoPedido({ hoje: caso.hoje, marca: { id: MARCA_DO_EVAL, nome: caso.marca, fuso: 'America/Sao_Paulo' }, quem: { roleKey: caso.papel }, dossie: null });
+  const contexto = contextoDoPedido({ hoje: caso.hoje, marca: { id: MARCA_DO_EVAL, nome: caso.marca, fuso: 'America/Sao_Paulo' }, quem: { roleKey: caso.papel }, dossie: null, fatos: null });
   const messages = [
     ...caso.historico.map((h) => ({ role: h.de === 'pessoa' ? ('user' as const) : ('assistant' as const), content: limparTexto(h.texto).texto })),
     { role: 'user' as const, content: limparTexto(caso.mensagem).texto },
