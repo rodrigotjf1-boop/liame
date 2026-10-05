@@ -147,6 +147,21 @@
 - **Formato do erro da Graph API** *(developers.facebook.com/docs/graph-api/guides/error-handling, 04/10/2026)* [O]: `message`, `type`, `code`, `error_subcode`, `error_user_title` e `error_user_msg` (o texto para mostrar à pessoa, no idioma do pedido) e `fbtrace_id`; os códigos 1, 2, 4, 17, 341 e 368 pedem "espere e tente de novo". O subcódigo 33 do erro 100 ("Unsupported get request. Object with ID … does not exist, cannot be loaded due to missing permissions…") é o que as respostas trazem para o objeto que sumiu [S: visto em respostas, não achado numa tabela oficial].
 - **`ads_management`** *(developers.facebook.com/docs/permissions, 04/10/2026)* [O]: "allows your app to both read and manage the Ads account it owns, or has been granted access to, by the Ad account owner"; depende de `pages_read_engagement` e `pages_show_list` (entram sozinhas na configuração do login); a revisão pede o caso de uso, o login completo com a permissão concedida e os dados de desempenho (impressões, conversões, gasto, cliques e alcance) aparecendo no produto.
 - **Regra do Liame para escrever na Meta (A4 · X1):** o estado é lido na Meta logo antes; a versão sai da situação e da verba (não do `updated_time`); toda escrita passa antes por `validate_only`, e a recusa dela não se repete; se alguém mexeu no objeto, nada é sobrescrito; limite de uso (os códigos acima e o cabeçalho de uso a partir de 90%) adia a execução, com 1 hora para o 613/1487632; o 368 é recusa, não espera (o Liame não insiste em ação que a Meta barrou por política); o `spend_cap` nunca é tocado. **Ferramentas (A4 · X2):** uma por tipo de objeto (campanha, conjunto e anúncio) para pausar e para retomar, e a de verba diária para campanha com orçamento de campanha ou conjunto; cada pedido mexe no máximo 10% da verba (regra do Liame; decisão do dono em 04/10/2026); no máximo 3 mudanças de verba por hora **por objeto** (a página de limites fala de 4 por hora por conjunto e não traz frase equivalente para o orçamento de campanha: o Liame aplica o mesmo limite à campanha, por cautela) [O para o conjunto; regra do Liame para a campanha]; objeto arquivado ou apagado não é mexido pelo Liame (o guia de situação diz que o arquivado só muda `name` e `status`, e o apagado, só `name`) [O]; pausar o pai passa a situação aos filhos ("all the objects below it automatically inherit that status") [O], por isso pausar a campanha para os conjuntos e os anúncios dela.
+- **Criar campanha, conjunto, criativo e anúncio** *(para a A4 · X5; referências oficiais mostradas na v25.0, lidas em 05/10/2026: developers.facebook.com/docs/marketing-api/reference/ad-account/campaigns, /adsets, /adimages, /adcreatives e /ads)* [O]:
+  - campanha: `POST /act_{id}/campaigns`; obrigatórios `objective` e `special_ad_categories` (lista: `NONE`, `EMPLOYMENT`, `HOUSING`, `CREDIT`, `ISSUES_ELECTIONS_POLITICS`, `ONLINE_GAMBLING_AND_GAMING`, `FINANCIAL_PRODUCTS_SERVICES`); objetivos atuais `OUTCOME_SALES`, `OUTCOME_LEADS`, `OUTCOME_ENGAGEMENT`, `OUTCOME_AWARENESS`, `OUTCOME_TRAFFIC` e `OUTCOME_APP_PROMOTION` (os antigos ainda aparecem na lista da página);
+  - conjunto: `POST /act_{id}/adsets`; pede `name`, `campaign_id`, `targeting` (com o país), `status`, `daily_budget` ou `lifetime_budget` maior que zero, `optimization_goal` e `billing_event`;
+  - imagem: `POST /act_{id}/adimages` com `bytes` (base64) ou `copy_from`; devolve `hash` e `url`; dá para apagar pelo `hash`. A página não diz o formato nem o tamanho aceitos (o guia de anúncios, abaixo, diz o recomendado);
+  - criativo: `POST /act_{id}/adcreatives`, com `object_story_spec`, `image_hash`, `call_to_action`, `url_tags`, `degrees_of_freedom_spec` e `authorization_category` (`NONE`, `POLITICAL`, `POLITICAL_WITH_DIGITALLY_CREATED_MEDIA`);
+  - anúncio: `POST /act_{id}/ads`; pede `name`, `creative` (o `creative_id` ou a especificação) e `adset_id`; erros documentados 100, 200, 613, 368, 80004, 194, 500, 2635, 190 e 105;
+  - em todos: `status` na criação só `ACTIVE` ou `PAUSED`; `execution_options` com `validate_only` e `include_recommendations` (no anúncio, também `synchronous_ad_review`, que "should always be specified with validate_only"); a resposta traz `id` e `success`;
+  - **não conferido** [NC]: os tipos de botão (`call_to_action.type`), os objetivos de otimização que cada objetivo de campanha aceita e como validar o conjunto e o anúncio antes de a campanha existir (a referência aceita `campaign_spec` e `adset_spec` no lugar dos ids). Conferir na versão em uso antes do código da X5.
+- **Melhorias automáticas do criativo (Advantage+ creative)** *(developers.facebook.com/docs/marketing-api/creative/advantage-creative/get-started, exemplos na v25.0, 05/10/2026)* [O]: cada recurso de `degrees_of_freedom_spec.creative_features_spec` tem `enroll_status` `OPT_IN` ou `OPT_OUT`; a página lista, entre outros, `text_optimizations`, `image_touchups`, `image_brightness_and_contrast`, `image_templates`, `add_text_overlay`, `enhance_cta`, `inline_comment`, `image_uncrop`, `image_background_gen`, `image_animation` e `adapt_to_placement` ("Default is opt-in"); os que geram conteúdo trazem "This feature is generated with AI"; o pacote `standard_enhancements` está descontinuado desde a v22.0. O padrão de cada recurso quando o campo é omitido não está dito (só o de `adapt_to_placement`) [NC]. **Regra do Liame (X5, proposta D-A4-31):** o criativo é criado com cada melhoria em `OPT_OUT`: o que vai ao ar é a peça que a pessoa aprovou, sem a Meta trocar texto, fundo ou recorte.
+- **O que o guia de anúncios recomenda para imagem e texto** *(facebook.com/business/ads-guide, páginas em português, sem data; lidas em 05/10/2026)* [O]:
+  - Feed do Facebook, imagem: JPG ou PNG; proporção 4:5; 1.440 × 1.800 pixels; "Texto principal: 50 a 150 caracteres"; "Título: 27 caracteres"; até 30 MB; largura mínima de 600 pixels;
+  - Feed do Instagram, imagem: 4:5; 1.440 × 1.800 pixels; "Texto principal: 125 caracteres"; "Título: 40 caracteres"; no máximo 30 hashtags; até 30 MB; largura mínima de 500 pixels; proporção de 400 × 500 a 191 × 100;
+  - Stories do Instagram, imagem: 9:16; 1.440 × 2.560 pixels; "Deixe cerca de 14% da parte superior, 35% da parte inferior e 6% de cada lado do ativo sem texto, logotipos ou outros elementos criativos importantes";
+  - são recomendações, não limites que a API recusa. **Regra do Liame (X6 e X7):** título de até 27 caracteres e texto principal de até 125 passam sem aviso; acima disso, a peça passa com aviso; a imagem sai em 4:5 e em 9:16, com o produto fora das faixas livres.
+- **Conteúdo feito com IA em anúncio** *(Newsroom da Meta: about.fb.com/news/2025/02/gen-ai-transparency-metas-ads-products, de 03/02/2025, e about.fb.com/news/2026/02/meta-prepares-for-2026-us-midterms, de 19/02/2026; as duas atualizadas em 01/06/2026)* [O]: a Meta põe o rótulo "AI info" no anúncio criado ou editado de forma significativa com as ferramentas de IA generativa dela; o rótulo fica no menu de três pontos e, quando há pessoa fotorrealista gerada por IA, ao lado de "Patrocinado"; para imagem feita com ferramenta de terceiros, a Meta detecta por sinais padrão do setor e mostra a informação em "About this ad"; quem anuncia tema social, eleição ou política precisa declarar o uso de IA "in certain cases" (as condições exatas vêm da política de anúncios, que não foi lida: [S]). O nome do rótulo em português e a situação no Brasil: [NC]. **Para o Liame:** anúncio político é proibido pelos Termos, então a declaração não se aplica; a peça não leva pessoa (D-A4-9), então o rótulo ao lado de "Patrocinado" não é esperado; a tela diz que a Meta pode mostrar que a imagem foi feita com IA.
 - **MCP oficial** "Meta Ads AI Connectors" (`mcp.facebook.com/ads`), beta aberto desde 29/04/2026, com cerca de 29 ferramentas no lançamento [S]:
   - o que é criado nasce pausado [S];
   - regras de governança definidas pelo dono (16/07/2026) [O];
@@ -377,7 +392,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **CONAR:**
   - identificar publicidade ("#publi");
   - anexos setoriais (bebidas, alimentos, medicamentos, apostas);
-  - sem norma específica de IA encontrada.
+  - **IA na publicidade** *(reconferido em 04/10/2026)* [O]: o "Guia de Marketing e Publicidade por Influenciadores Digitais" de 2026 (aprovado pelo Conselho do Conteúdo do CONAR, em vigor desde 01/06/2026; conar.org.br/noticias/guia-de-marketing-e-publicidade-por-influenciadores-digitais) diz, no item 1.3.1, que o Código e o Guia "aplicam-se integralmente aos conteúdos publicitários, independentemente das tecnologias de produção e divulgação utilizadas", inclusive os "gerados, editados ou segmentados" com IA; anunciantes, agências e os demais da cadeia "permanecem responsáveis pelo seu resultado e pelo conteúdo divulgado" e devem adotar "medidas de diligência na utilização de cada ferramenta, com a compreensão de suas limitações técnicas e riscos de distorção"; o anúncio não pode trazer informação, apresentação visual ou sonora, simulação, endosso ou testemunho que induza o consumidor a erro. A nota 6 diz que o texto "não cuida de diretrizes ou deveres novos" sobre conteúdo gerado com IA, "não versando em particular sobre avisos (disclosure)": **o CONAR não criou dever de aviso de IA**. Substitui o "sem norma específica de IA encontrada" de 24/09/2026.
   - Setoriais: apostas (Lei 14.790/2023), médicos (Res. CFM 2.336/2023: proibido "melhor", "#1", "garantido", "cura", "100%"), advogados (Provimento OAB 205/2021), Anvisa, **CDC arts. 36–38** (publicidade enganosa ou abusiva; escassez falsa).
 - **Eleitoral:**
   - Res. TSE 23.610/2019, alterada pela 23.732/2024: impulsionamento só por candidatos, partidos e coligações; identificação obrigatória; **proibição de deepfake e rótulo obrigatório de conteúdo feito com IA** [NC; site do TSE deu 403];
@@ -387,6 +402,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Políticas que derrubam contas:**
   - **Meta:** cloaking, atributos pessoais ("Você tem dívidas?"), promessas de saúde e antes/depois, enriquecimento rápido, apostas e cripto sem autorização, figura pública (golpe/deepfake), landing page ruim, falha de pagamento, conta nova com gasto alto.
   - **Google:** *misrepresentation* (mais comum), *circumventing systems*, pagamento suspeito, verificação de anunciante não concluída, saúde, apostas.
+
+- **Peça feita com IA: autoria e uso** *(05/10/2026)*: a Lei 9.610/1998 diz, no art. 11, que "Autor é a pessoa física criadora de obra literária, artística ou científica", com a proteção estendida a pessoas jurídicas "nos casos previstos nesta Lei" (texto atualizado no portal da Câmara: www2.camara.leg.br/legin/fed/lei/1998/lei-9610-19-fevereiro-1998-365399-normaatualizada-pl.html; o site do Planalto não respondeu) [O]; daí a leitura de que a peça feita só pela máquina pode ficar sem proteção autoral no Brasil [S: interpretação, sem decisão conferida]. O PL 2338/2023 não é lei (§6.1). Os termos da OpenAI para empresas (Services Agreement, em vigor desde 01/01/2026: openai.com/policies/services-agreement) dizem que o cliente "owns all Output" e avisam que "Output may not be unique" [O]. **Regra do Liame:** a peça é da empresa para usar (Termos 9.3), sem promessa de exclusividade; a tela diz isso em "De onde veio" (proposta D-A4-33).
 
 - **Cookies e identificadores de rastreio (ANPD)** *(Guia orientativo "Cookies e proteção de dados pessoais", v1.0, out/2022, ainda vigente; catálogo gov.br modificado em 23/01/2025; lido em 29/09/2026)* [O]:
   - vale também para "tecnologias similares de rastreamento" (cobre `_fbc`, `_gcl_*`);
@@ -459,7 +476,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 ### 7.3 Criativo e formatos
 
-- **Meta:** texto principal com 125 caracteres visíveis; headline 40; descrição 30.
+- **Meta:** texto principal de até 125 caracteres e título de até 27 (Feed do Facebook) ou 40 (Feed do Instagram), pelo guia de anúncios oficial (§2.1, 05/10/2026). O "125 visíveis; headline 40; descrição 30" das skills fica como prior: a "descrição 30" não aparece no guia [NC].
 - **TikTok:** 80 caracteres recomendados (máx. 100).
 - **LinkedIn:** intro de 150 (máx. 600).
 - **Vídeo de 15–30 s:** hook em 0–3 s; legendas sempre; texto na imagem < 20%.
@@ -705,6 +722,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 05/10/2026 | Pesquisa para o protótipo P10 (Criativos), em fontes oficiais: §2.1 **criar campanha, conjunto, criativo e anúncio** pela API (o que é obrigatório, `status` na criação, `validate_only`), as **melhorias automáticas do criativo** (cada recurso com `OPT_OUT`), **o que o guia de anúncios recomenda** para imagem e texto (27 e 125 caracteres; 4:5 e 9:16, com as faixas livres dos Stories) e o **rótulo de IA** da Meta; §6 **CONAR e IA** (guia de 2026, item 1.3.1: as regras valem para o conteúdo feito com IA e não há dever novo de aviso), no lugar do "sem norma específica" de 24/09, e a **autoria da peça feita com IA** (Lei 9.610, art. 11, pelo portal da Câmara: o Planalto não respondeu); §7.3 corrigida pelo guia oficial; §16.1 **a peça gerada** (Meta Advantage+ creative, Google Ads Asset Studio, Adobe GenStudio, Pomelli); §17.4 **fornecedores de imagem** (OpenAI e Google, com preço, uso dos dados e marca de origem; Black Forest Labs fora, por treinar com o que recebe; Adobe e Ideogram por conferir). |
 | 04/10/2026 | §16.1: **pedido de mudança em anúncio, verba do mês e desfazer** (Google Ads: o relatório de orçamento e o histórico de alterações com desfazer, nas páginas oficiais; Triple Whale Moby), pesquisado antes do protótipo P9. §2.1: **quanto a Meta gasta além da verba diária**: a página oficial de orçamentos da API diz "até 25% a mais" num dia; publicações de quem anuncia citam a Central de Ajuda com até 75% e no máximo 7 vezes a verba na semana; a Central não devolveu o texto à leitura automática **[NC]**. O Liame confere o gasto pela semana (proposta D-A4-24). |
 | 04/10/2026 | §2.1: **configuração do login da Meta para a escrita**: a página oficial reconferida (criar: Configurations → Create configuration; nome, tipo de token, ativos, permissões; acesso avançado a `public_profile` antes de ir ao vivo, para quem não tem papel no app) e o print do dono, que mostra **Editar** e **Copiar** na configuração que já existe. Regra: a configuração de leitura não é editada durante o App Review; a de escrita é outra, escolhida pela flag `meta_write`. |
 | 04/10/2026 | §2.1: **ferramentas de anúncio** para a A4 · X2, reconferidas nas páginas oficiais: o limite de 4 mudanças de verba por hora **por conjunto** (613/1487632, bloqueio de 1 hora; a página não diz nada sobre o orçamento de campanha), a verba na menor unidade da moeda (guia de orçamentos), e o guia de situação dos objetos (o pai pausado, arquivado ou apagado passa a situação aos filhos; o arquivado só muda `name` e `status`; o apagado, só `name`). Daí as regras das ferramentas (3 por hora por objeto, arquivado e apagado fora). Segue [S]: a seção "Updating" da referência do conjunto (a página continua não abrindo inteira); a validação da própria Meta (`validate_only`) cobre o que a referência não deixou conferir. |
@@ -751,6 +769,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - …/whatsapp/pricing
   - …/threads/overview
   - …/instagram/ads-api/guides/url-tags-for-tracking · …/marketing-api/reference/ad-asset-feed-spec-link-url (F5)
+  - facebook.com/business/ads-guide (imagem no Feed e nos Stories) · …/marketing-api/reference/ad-account/campaigns, adsets, adimages, adcreatives e ads · …/marketing-api/creative/advantage-creative/get-started · about.fb.com/news/2025/02/gen-ai-transparency-metas-ads-products (P10 e X5)
 - **Google:**
   - developers.google.com/google-ads/api/docs/api-policy/access-levels
   - …/release-notes
@@ -780,7 +799,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Brasil:**
   - planalto.gov.br (LGPD)
   - gov.br/anpd (guia de legítimo interesse)
-  - conar.org.br
+  - conar.org.br · conar.org.br/noticias/guia-de-marketing-e-publicidade-por-influenciadores-digitais (guia de 2026; IA no item 1.3.1)
+  - www2.camara.leg.br/legin/fed/lei/1998/lei-9610-19-fevereiro-1998-365399-normaatualizada-pl.html (Lei 9.610, art. 11)
   - facebook.com/business/help/167836590566506
   - support.google.com/adspolicy/answer/6014595
 - **Mercado:**
@@ -800,6 +820,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - rfc-editor.org/rfc/rfc9745 · RFC 8594
   - ai-sdk.dev/docs/ai-sdk-core/video-generation
   - cometapi.com/ai-image-api-pricing · buildmvpfast.com/api-costs/ai-image (secundárias)
+  - developers.openai.com (imagem: modelos, preço e uso dos dados) · openai.com/policies/services-agreement · ai.google.dev (imagem: modelos, preço e SynthID) · docs.bfl.ai/quick_start/pricing · bfl.ai/legal/flux-api-service-terms (05/10/2026)
   - modeloinicial.com.br/lei/L-12965-2014/marco-civil-internet/art-15 (secundária; o Planalto não respondeu)
   - support.google.com/google-ads/answer/9978556 (níveis) · …/7456532 (propriedade na conta de administrador) · …/7459601 (vínculo)
   - facebook.com/business/help/708679622611131 (parceiros da Meta)
@@ -822,6 +843,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - salesforce.com/news/press-releases/2025/06/23/agentforce-3-announcement · fin.ai (secundárias para métricas)
   - planalto.gov.br/ccivil_03/leis/2002/l10607.htm · planalto.gov.br/ccivil_03/_ato2023-2026/2023/lei/l14759.htm (feriados nacionais)
   - blackfriday.com.br (data da Black Friday de 2026, secundária)
+  - facebook.com/business/ads/meta-advantage-plus/creative · support.google.com/google-ads/answer/16456563 (Asset Studio) · …/17140115 (rótulo de IA) · experienceleague.adobe.com/en/docs/genstudio-for-performance-marketing/user-guide/guidelines/brand-validation · blog.google/innovation-and-ai/models-and-research/google-labs/pomelli (P10)
 
 ---
 
@@ -1112,6 +1134,14 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Triple Whale Moby** (já acima): cada ação do agente na conta de anúncios entra numa fila e espera aprovação.
 - **Consequência para o P9:** (1) a mudança é um **pedido com antes e depois**, e depois de aprovada a tela mostra o caminho (a plataforma validou, a mudança foi feita, a leitura de conferência); (2) a **verba do mês** mostra os três números que o Google mostra (o teto, o gasto até a data e a previsão), numa barra; (3) **desfazer devolve ao estado anterior** e diz quando não dá, porque alguém mexeu depois; no Liame, a volta é um pedido novo, com a mesma aprovação (D-A4-14); (4) as mudanças do mês ficam numa lista, cada uma com a situação de hoje.
 
+**A peça gerada: conferir, aprovar e levar para a campanha (pesquisado em 04 e 05/10/2026, antes do protótipo P10, `mockups/prototipo-criativos.html`):**
+
+- **Meta Advantage+ creative** **[O]** (facebook.com/business/ads/meta-advantage-plus/creative, página em português): a geração mora dentro do fluxo de criar o anúncio (gerar e expandir imagem, plano de fundo, animar, gerar texto); "Você pode ver uma prévia de alguns exemplos do seu criativo gerado e aprimorado por IA antes de publicá-lo"; a Meta recomenda conferir e aprovar as prévias e deixa desligar cada opção; "Os recursos que usam IA exibirão um logotipo de IA abaixo do nome do recurso".
+- **Google Ads Asset Studio** **[O]** (support.google.com/google-ads/answer/16456563): um lugar só para criar, editar, guardar e compartilhar recursos; parte de texto, de imagens do produto ou das diretrizes da marca; gera títulos, descrições, imagens e vídeos e edita por texto (trocar o fundo, pôr e tirar objeto, estender a borda); salva na biblioteca e leva para campanha nova ou existente. O rótulo de IA é escolha do anunciante, recurso por recurso ("Label this asset as created or edited with AI"; support.google.com/google-ads/answer/17140115), e o Google grava SynthID e C2PA no que ele gera.
+- **Adobe GenStudio for Performance Marketing** **[O]** (experienceleague.adobe.com/en/docs/genstudio-for-performance-marketing/user-guide/guidelines/brand-validation): cada variação passa por conferências contra as diretrizes da marca, as do canal (Meta) e as de acessibilidade, com o percentual do que passou; "Reviews and Approvals" manda as variações para quem aprova antes de salvar ou exportar.
+- **Pomelli (Google Labs)** **[O]** (blog.google/innovation-and-ai/models-and-research/google-labs/pomelli): lê o site e tira o "Business DNA" (tom de voz, fontes, imagens e paleta), propõe ideias de campanha e entrega um conjunto de peças da marca, que a pessoa escolhe e edita. Beta em poucos países, sem o Brasil.
+- **Consequência para o P10:** (1) a peça parte **do que a empresa já tem** (a oferta e a voz de Minha marca, a foto de verdade e o anúncio que mais vendeu), e não de um campo vazio, como no Pomelli; (2) **cada peça traz a conferência dela**, item por item e com o motivo, como no GenStudio, e a aprovação acontece antes de a peça sair do produto; (3) **a prévia vem antes de publicar** e a marca de IA fica à vista, como na Meta e no Google; (4) a peça aprovada vai para uma **biblioteca**, de onde vira campanha, como no Asset Studio; no Liame, a campanha nasce pausada e é um pedido com aprovação (D-A4-3).
+
 ### 16.2 Plataforma web (Baseline)
 
 | Recurso | Situação | Primeiras versões | Uso no Liame |
@@ -1185,7 +1215,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 ## 17. Acesso, ciclo de vida, versões de API e modelos de mídia
 
-*Verificado em 25/09/2026, para os itens novos do plano (ADR-013 a ADR-016).*
+*Verificado em 25/09/2026, para os itens novos do plano (ADR-013 a ADR-016); a §17.4 ganhou os fornecedores de imagem em 05/10/2026.*
 
 ### 17.1 Autenticação
 
@@ -1225,6 +1255,12 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - GPT Image 2 / 2.5 (OpenAI), Nano Banana 2 / Pro (Gemini 3.1 Flash Image), FLUX.2, Ideogram 3 / 4 (melhor texto dentro da arte), Midjourney v8.2;
   - cerca de US$ 0,02 a 0,24 por imagem, conforme resolução e qualidade; lote pela Batch API corta cerca de 50%;
   - só o Adobe Firefly oferece indenização de propriedade intelectual.
+- **Fornecedores de imagem para o eval da X7** *(páginas oficiais lidas em 04 e 05/10/2026)*:
+  - **OpenAI** [O] (developers.openai.com): modelos `gpt-image-2.5-sunburst` (edição precisa) e `gpt-image-2.5-flare` (rápido); tamanhos de 1.024 × 1.024 a 3.840 pixels de lado; todo pedido e toda imagem passam por moderação (erro `moderation_blocked`); "the model can still struggle with precise text placement and clarity"; preço por 1 milhão de tokens (texto US$ 5, imagem de entrada US$ 8, saída de imagem US$ 30), com 50% a menos em lote: a página não traz preço por imagem; os dados não treinam os modelos por padrão, e os registros de abuso ficam até 30 dias; residência de dados sem o Brasil; a marca de origem é verificada pela Content Provenance API (C2PA e SynthID), mas o guia de geração não diz que a imagem da API sai com C2PA [NC];
+  - **Google** [O] (ai.google.dev): Nano Banana 2 Lite (`gemini-3.1-flash-lite-image`), Nano Banana 2 (`gemini-3.1-flash-image`) e Nano Banana Pro (`gemini-3-pro-image`); "All generated images include a SynthID watermark"; proporções de 1:1 a 21:9, incluídas 4:5 e 9:16; no nível pago, US$ 0,067 por imagem de 1K no Nano Banana 2 e US$ 0,0336 no Lite, com metade em lote; no nível pago, "Content not used to improve our products"; sem nível gratuito para imagem;
+  - **Black Forest Labs (FLUX)** [O]: preços em docs.bfl.ai/quick_start/pricing (FLUX 3 Image a US$ 0,048 por imagem de cerca de 1 megapixel); **fica fora do catálogo**: os termos da API (bfl.ai/legal/flux-api-service-terms, de 04/08/2026) dizem "the Company may use Inputs and Outputs to train and improve its artificial intelligence models", sem saída nos termos (a política de privacidade manda pedir por e-mail e não vale para contrato de empresa), e a D-A4-9 só aceita quem não treina com o que é enviado;
+  - **Adobe Firefly Services** [S, pela busca; termos de 23/04/2026]: não treina com o conteúdo do cliente, oferece indenização de propriedade intelectual a empresas no plano que a inclui e grava Content Credentials; **Ideogram** [S, pela busca]: os termos da API dizem que não usa entrada nem saída para treinar, salvo conteúdo sinalizado; de US$ 0,03 a US$ 0,10 por imagem. Conferir os dois na página oficial antes de entrarem no eval;
+  - **Regra do Liame (D-A4-9 e proposta D-A4-28):** a imagem parte de uma foto de verdade do produto, enviada pela empresa (edição: fundo, luz e enquadramento), e sai **sem texto na arte**; vão ao fornecedor a foto e o pedido da peça, nunca dado de cliente.
 - **Regra do Liame:** catálogo curado por finalidade, com eval, contrato de dados e custo conhecidos; Lite automático, Pro escolhe (ADR-016).
 
 ### 17.5 Acesso delegado no mercado
