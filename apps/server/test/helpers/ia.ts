@@ -50,6 +50,15 @@ export async function ligarIa(flags: FlagService, tenantId: string): Promise<voi
   flags.invalidate();
 }
 
+/** Liga a flag `criativo` para UMA empresa (o Criativo nasce desligado para todos; ele ainda depende da flag `ia`). */
+export async function ligarCriativo(flags: FlagService, tenantId: string): Promise<void> {
+  await ownerQuery(
+    `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), 'criativo', 'tenant', $1, 'true'::jsonb, 'testes')`,
+    [tenantId],
+  );
+  flags.invalidate();
+}
+
 /**
  * Liga a flag `revisor` para UMA empresa (o revisor de IA do Compliance nasce desligado para todos). A rota da tarefa
  * dele é do produto e compartilhada entre os arquivos (`rotaCompartilhada`): é a flag, por empresa, que decide quem

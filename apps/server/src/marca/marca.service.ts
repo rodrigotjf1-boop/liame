@@ -114,6 +114,22 @@ export async function dossieParaOModelo(brandId: string, nomeDaMarca: string): P
   return textoDoDossie(nomeDaMarca, BrandDossierContent.parse(l.content), []);
 }
 
+/**
+ * As provas que o sistema calcula (nunca digitadas): os pedidos confirmados dos últimos 7 dias completos, no fuso da
+ * marca. Roda na transação de quem chama (a tela de Minha marca e o Criativo, que lê o mesmo dossiê).
+ */
+export async function provasDoSistema(brandId: string, fuso: string, agora: Date): Promise<SystemProof[]> {
+  const hoje = diaNoFuso(agora, fuso);
+  const de = menosDias(hoje, 7);
+  const r = await currentTx().execute<{ n: number }>(sql`
+    select count(*)::int as n from liame.order_fact o
+     where o.brand_id = ${brandId} and o.status = 'confirmado'
+       and o.confirmed_at >= (${de}::date)::timestamp at time zone ${fuso}
+       and o.confirmed_at < (${hoje}::date)::timestamp at time zone ${fuso}`);
+  const prova = provaDePedidos(r.rows[0]?.n ?? 0, de, menosDias(hoje, 1));
+  return prova ? [prova] : [];
+}
+
 @Injectable()
 export class MarcaService {
   constructor(private readonly resultados: ResultsService) {}
@@ -327,16 +343,8 @@ export class MarcaService {
   }
 
   /** As provas que o sistema calcula: os pedidos dos últimos 7 dias completos, no fuso da marca. */
-  private async provasDoSistema(brandId: string, fuso: string, agora: Date): Promise<SystemProof[]> {
-    const hoje = diaNoFuso(agora, fuso);
-    const de = menosDias(hoje, 7);
-    const r = await currentTx().execute<{ n: number }>(sql`
-      select count(*)::int as n from liame.order_fact o
-       where o.brand_id = ${brandId} and o.status = 'confirmado'
-         and o.confirmed_at >= (${de}::date)::timestamp at time zone ${fuso}
-         and o.confirmed_at < (${hoje}::date)::timestamp at time zone ${fuso}`);
-    const prova = provaDePedidos(r.rows[0]?.n ?? 0, de, menosDias(hoje, 1));
-    return prova ? [prova] : [];
+  private provasDoSistema(brandId: string, fuso: string, agora: Date): Promise<SystemProof[]> {
+    return provasDoSistema(brandId, fuso, agora);
   }
 
   /**
