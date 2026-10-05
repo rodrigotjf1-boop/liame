@@ -78,6 +78,10 @@
       "version": 4,
       "hash": "2a98e0beafbf312bb6683eed74a6c15d0e3100d47c51ea97c6195bc5651771d9"
     },
+    "criativo.texto": {
+      "version": 1,
+      "hash": "d2e683d66609cb70177f339bd9cb3ca58662bba0da83c3a60b844d08feecf055"
+    },
     "estrategista.plano": {
       "version": 2,
       "hash": "3578e29e668262c26ff3041afb6109ff68057ec7619b2e47474fb6e161a21a50"
@@ -95,6 +99,10 @@
     "analista": {
       "version": 1,
       "hash": "c0dd5badc7b8b72166b98eb81b70fd93d399e8da98d5c71b9d7fdc1609bc4b24"
+    },
+    "criativo": {
+      "version": 1,
+      "hash": "77c504cfac2fc3c5a7b56259b15aba2b9c31a8480343728049c06e15f329cd28"
     },
     "estrategista": {
       "version": 1,
