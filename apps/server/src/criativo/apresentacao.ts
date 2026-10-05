@@ -1,4 +1,4 @@
-import type { AdPieceRequestResponse, AdPieceResponse, AdPieceReview, AdPieceVersion } from '@liame/contracts';
+import type { AdPieceDecision, AdPieceRequestResponse, AdPieceResponse, AdPieceReview, AdPieceVersion } from '@liame/contracts';
 import { type ConferenciaDaPeca, type Peca, TAMANHO_RECOMENDADO } from '../ai/criativo/peca.js';
 import { canonicalJson, sha256 } from '../audit/audit.js';
 import { REGRAS_DE_ANUNCIO_VERSAO } from '../policy/anuncio.js';
@@ -105,6 +105,7 @@ export type LinhaDaPeca = {
   offer: string;
   destination: string;
   ai_generated: boolean;
+  redoing: boolean;
   decided_by: string | null;
   decider: string | null;
   decided_at: Date | string | null;
@@ -112,7 +113,22 @@ export type LinhaDaPeca = {
   updated_at: Date | string;
 };
 
-export function respostaDaPeca(l: LinhaDaPeca, atual: LinhaDaVersao, versoes?: LinhaDaVersao[]): AdPieceResponse {
+export type LinhaDaDecisao = {
+  decision: string;
+  version: number;
+  reason: string | null;
+  comment: string | null;
+  decided_by: string | null;
+  decider: string | null;
+  created_at: Date | string;
+};
+
+export function decisaoDaLinha(l: LinhaDaDecisao): AdPieceDecision {
+  return { decision: l.decision, version: l.version, reason: l.reason, comment: l.comment, decided_by: pessoa(l.decided_by, l.decider), created_at: iso(l.created_at) };
+}
+
+/** A peça com a versão atual; com o histórico (as versões e as decisões), é o detalhe. */
+export function respostaDaPeca(l: LinhaDaPeca, atual: LinhaDaVersao, historico?: { versoes: LinhaDaVersao[]; decisoes: LinhaDaDecisao[] }): AdPieceResponse {
   return {
     id: l.id,
     brand_id: l.brand_id,
@@ -121,8 +137,9 @@ export function respostaDaPeca(l: LinhaDaPeca, atual: LinhaDaVersao, versoes?: L
     offer: l.offer,
     destination: l.destination,
     ai_generated: l.ai_generated,
+    redoing: l.redoing,
     current: versaoDaLinha(atual),
-    ...(versoes ? { versions: versoes.map(versaoDaLinha) } : {}),
+    ...(historico ? { versions: historico.versoes.map(versaoDaLinha), decisions: historico.decisoes.map(decisaoDaLinha) } : {}),
     decided_by: pessoa(l.decided_by, l.decider),
     decided_at: l.decided_at ? iso(l.decided_at) : null,
     created_at: iso(l.created_at),

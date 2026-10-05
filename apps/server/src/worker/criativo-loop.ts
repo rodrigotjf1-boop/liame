@@ -26,6 +26,7 @@ type Reservado = {
   variations: number;
   instruction: string | null;
   reference_name: string | null;
+  piece_id: string | null;
   requested_by: string | null;
 };
 
@@ -33,7 +34,7 @@ type Reservado = {
 const codigo = (motivo: string) => motivo.replace(/[^a-z_]/g, '_').slice(0, 40);
 
 /**
- * A fila do Criativo (A4, X6): reserva os pedidos de peças novas, com SKIP LOCKED na mesma linha que a reserva altera
+ * A fila do Criativo (A4, X6): reserva os pedidos (de peças novas e de "pedir outra"), com SKIP LOCKED na mesma linha que a reserva altera
  * (V35), e gera as peças de cada um (`CriativoService`). Quem pediu está esperando, e a marca só tem um pedido na fila
  * de cada vez; por isso nada fica preso: o pedido que não pode ser atendido agora (a IA ou o Criativo desligados, sem
  * rota de modelo, limite de IA atingido) fecha como `falhou`, com o motivo, e a pessoa pede de novo quando der. A
@@ -59,7 +60,7 @@ export class CriativoLoop {
           with devidos as materialized (
             select r.id
               from liame.ad_piece_request r
-             where r.attempts < ${TENTATIVAS_DA_GERACAO} and r.piece_id is null
+             where r.attempts < ${TENTATIVAS_DA_GERACAO}
                and ((r.status = 'pendente' and (r.next_attempt_at is null or r.next_attempt_at <= ${ref}))
                  or (r.status = 'gerando' and r.next_attempt_at <= ${ref}))
                ${tenantFilter(scope, sql`r.tenant_id`)}
@@ -71,7 +72,7 @@ export class CriativoLoop {
              set status = 'gerando', next_attempt_at = ${ref} + ${RESERVA}::interval, updated_at = now()
             from devidos x
            where r.id = x.id
-          returning r.id, r.tenant_id, r.brand_id, r.offer, r.dossier_version, r.destination, r.variations, r.instruction, r.reference_name, r.requested_by`)
+          returning r.id, r.tenant_id, r.brand_id, r.offer, r.dossier_version, r.destination, r.variations, r.instruction, r.reference_name, r.piece_id, r.requested_by`)
       ).rows,
     );
 
@@ -87,6 +88,7 @@ export class CriativoLoop {
         variations: l.variations,
         instruction: l.instruction,
         referenceName: l.reference_name,
+        pieceId: l.piece_id,
         requestedBy: l.requested_by,
       };
       try {

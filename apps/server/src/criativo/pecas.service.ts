@@ -24,7 +24,8 @@ import { valoresComerciais } from '../policy/anuncio.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
 import { type LinhaDaPeca, type LinhaDaVersao, type LinhaDoPedido, respostaDaPeca, respostaDoPedido } from './apresentacao.js';
-import { type MarcaDoCriativo, marcaDoCriativo, mensagemDoProblema } from './base.js';
+import { marcaDoCriativo, mensagemDoProblema } from './base.js';
+import { COLUNAS_DA_PECA, COLUNAS_DA_VERSAO, COLUNAS_DO_PEDIDO, pecaComHistorico } from './consultas.js';
 
 // As peças do Criativo na API (A4, X6; protótipo P10, aguardando aprovação; sem tela ainda). A rota só confere e
 // enfileira: quem escreve as peças é o Criativo, na fila do worker (`worker/criativo.service.ts`), e cada uma só
@@ -41,13 +42,6 @@ const REFERENCIAS = 10;
 const DIAS_DA_REFERENCIA = 7;
 
 const CAMPO_DO_PEDIDO = { oferta: 'offer', instrucao: 'instruction', variacoes: 'variations' } as const;
-
-const COLUNAS_DO_PEDIDO = sql`r.id, r.brand_id, r.kind, r.offer, r.dossier_version, r.destination, r.variations, r.instruction, r.reference_ad_id, r.reference_name,
-  r.piece_id, r.status, r.reason, r.pieces, r.requested_by, u.name as requester, r.created_at, r.finished_at`;
-const COLUNAS_DA_PECA = sql`p.id, p.brand_id, p.request_id, p.status, q.offer, q.destination,
-  exists (select 1 from liame.ad_piece_version x where x.piece_id = p.id and x.author = 'criativo') as ai_generated,
-  p.decided_by, d.name as decider, p.decided_at, p.created_at, p.updated_at`;
-const COLUNAS_DA_VERSAO = sql`v.version, v.title, v.body, v.button, v.review, v.content_hash, v.author, v.created_by, c.name as creator, v.created_at`;
 
 const naoEncontrado = (detail: string) => new AppProblem(404, 'nao-encontrado', 'Não encontramos', detail);
 
@@ -174,26 +168,12 @@ export class PecasService {
     return { items: pecas.rows.filter((p) => atual.has(p.id)).map((p) => respostaDaPeca(p, atual.get(p.id)!)) };
   }
 
-  /** Uma peça, com todas as versões (da mais nova para a mais antiga) e a conferência de cada uma. */
+  /** Uma peça, com todas as versões e as decisões (das mais novas para as mais antigas) e a conferência de cada versão. */
   async detalhe(auth: AuthContext, id: string): Promise<AdPieceResponse> {
     this.empresa(auth);
-    const tx = currentTx();
-    const peca = (
-      await tx.execute<LinhaDaPeca & { version: number }>(sql`
-        select ${COLUNAS_DA_PECA}, p.version
-          from liame.ad_piece p
-          join liame.ad_piece_request q on q.id = p.request_id
-          left join liame.app_user d on d.id = p.decided_by
-         where p.id = ${id}`)
-    ).rows[0];
+    const peca = await pecaComHistorico(id);
     if (!peca) throw naoEncontrado('Esta peça não existe nesta empresa.');
-    const versoes = await tx.execute<LinhaDaVersao>(sql`
-      select ${COLUNAS_DA_VERSAO} from liame.ad_piece_version v left join liame.app_user c on c.id = v.created_by
-       where v.piece_id = ${id}
-       order by v.version desc`);
-    const atual = versoes.rows.find((v) => v.version === peca.version);
-    if (!atual) throw new Error(`peça ${id}: sem a versão ${peca.version}`);
-    return respostaDaPeca(peca, atual, versoes.rows);
+    return peca;
   }
 
   /** A flag do Criativo, a IA da empresa e o funcionário ativo (pelo plano e pela própria empresa). */

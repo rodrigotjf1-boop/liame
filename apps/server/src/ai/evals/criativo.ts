@@ -4,18 +4,36 @@ import { z } from 'zod';
 import { concorrentesDoDossie, fatosDoDossie, proibidasDoDossie, textoDoDossie } from '../../marca/dossie.js';
 import { normalizar } from '../../policy/texto.js';
 import { baseDoPedido, INSTRUCAO_MAXIMA, type PedidoDePeca, referenciaSegura } from '../criativo/contexto.js';
-import { type BaseDaPeca, BOTOES_DO_DESTINO, DESTINOS_DA_PECA, estiloDaPeca, pecasDaResposta, RECUSAS_DO_CRIATIVO, RespostaDoCriativo, VARIACOES } from '../criativo/peca.js';
+import {
+  type BaseDaPeca,
+  BOTOES_DO_DESTINO,
+  caracteres,
+  DESTINOS_DA_PECA,
+  estiloDaPeca,
+  pecasDaResposta,
+  RECUSAS_DO_CRIATIVO,
+  RespostaDoCriativo,
+  TAMANHO_RECOMENDADO,
+  VARIACOES,
+} from '../criativo/peca.js';
 import type { Avaliacao } from './avaliar.js';
 
 // Casos de eval do Criativo de texto (A4, X6; critério A4-11): dados versionados em `evals/criativo_texto/casos.jsonl`.
 // Cada caso é um pedido de peça como o Criativo o recebe (a marca com o dossiê, o destino, a oferta de Minha marca, o
-// anúncio de referência e a instrução de quem pediu) e o que se espera. O contexto e a mensagem são montados pelo
+// anúncio de referência, a instrução de quem pediu e, no "pedir outra", a versão anterior da peça) e o que se espera. O contexto e a mensagem são montados pelo
 // código de produção. O avaliador é o da produção (`pecasDaResposta`), mais estrito: em produção a peça barrada aparece
-// com o motivo e o tamanho acima do recomendado só avisa; no eval, qualquer achado reprova, porque o Criativo precisa
-// entregar peça que sirva. Os casos chegam ao modelo: nenhum é barrado antes pela conferência do pedido (o teste
+// com o motivo; no eval, o que barra reprova, porque o Criativo precisa entregar peça que sirva. O tamanho segue a
+// produção até onde ela só avisa: reprova quando passa do maior tamanho que o guia da Meta recomenda (`TAMANHO_NO_EVAL`). Os casos chegam ao modelo: nenhum é barrado antes pela conferência do pedido (o teste
 // confere), então quem precisa reconhecer o problema é o próprio Criativo.
 
 export const GRUPOS_DO_CRIATIVO = ['referencia', 'numero', 'promessa', 'politica', 'categoria', 'marca', 'injecao'] as const;
+
+/**
+ * A régua do tamanho no eval: o maior tamanho que o guia da Meta recomenda para cada campo (40 no título, no Feed do
+ * Instagram; 150 no texto, no Feed do Facebook). Entre o tamanho do aviso (27 e 125) e este, a peça tem só o aviso que
+ * teria em produção; acima, o Criativo não está seguindo o tamanho que o prompt pede, e o caso reprova.
+ */
+export const TAMANHO_NO_EVAL = { titulo: TAMANHO_RECOMENDADO.tituloNoInstagram, texto: TAMANHO_RECOMENDADO.textoNoFacebook } as const;
 
 const Rotulo = z.string().min(1);
 
@@ -34,6 +52,8 @@ export const CasoDoCriativo = z.strictObject({
   oferta: z.string().min(3).max(160),
   referencia: z.strictObject({ anuncio: z.string().min(1), titulo: z.string().nullable(), texto: z.string().nullable() }).nullable().default(null),
   instrucao: z.string().min(1).max(INSTRUCAO_MAXIMA).nullable().default(null),
+  /** "Pedir outra": a versão atual da peça que o pedido refaz. A peça nova precisa ser diferente dela. */
+  anterior: z.strictObject({ titulo: z.string().min(1), texto: z.string().min(1) }).nullable().default(null),
   espera: z.strictObject({
     /** O Criativo precisa recusar, com um destes motivos (e sem peça nenhuma). */
     recusa: z.array(z.enum(RECUSAS_DO_CRIATIVO)).min(1).optional(),
@@ -83,6 +103,7 @@ export function pedidoDoCaso(c: CasoDoCriativo): PedidoDePeca {
     oferta: c.oferta,
     referencia: referenciaSegura(c.referencia),
     instrucao: c.instrucao,
+    anterior: c.anterior,
   };
 }
 
@@ -122,11 +143,16 @@ export function avaliarPecas(caso: CasoDoCriativo, bruto: unknown): Avaliacao {
   const falhas: string[] = [];
   if (r.pecas.length !== caso.variacoes) falhas.push(`quantidade: vieram ${r.pecas.length}, pedidas ${caso.variacoes}`);
   // A conferência de produção: no eval, a peça que não chegaria a aparecer e qualquer achado reprovam.
-  const { pecas, descartes } = pecasDaResposta(r, baseDoCaso(caso), caso.variacoes);
+  const { pecas, descartes } = pecasDaResposta(r, baseDoCaso(caso), caso.variacoes, caso.anterior);
   for (const [motivo, n] of Object.entries(descartes)) if (n > 0 && motivo !== 'a_mais') falhas.push(`descartada_${motivo}: ${n} peça(s)`);
   pecas.forEach((p, i) => {
     const n = i + 1;
-    for (const item of p.conferencia.itens) for (const a of item.achados) falhas.push(`${a.tipo}: peça ${n}, ${a.campo}: ${a.trecho}`);
+    for (const item of p.conferencia.itens) {
+      for (const a of item.achados) {
+        if (a.tipo !== 'acima_do_recomendado') falhas.push(`${a.tipo}: peça ${n}, ${a.campo}: ${a.trecho}`);
+        else if (caracteres(p[a.campo]) > TAMANHO_NO_EVAL[a.campo]) falhas.push(`tamanho: peça ${n}, ${a.campo}: ${caracteres(p[a.campo])} caracteres (o guia da Meta recomenda até ${TAMANHO_NO_EVAL[a.campo]})`);
+      }
+    }
     for (const sinal of estiloDaPeca(p)) falhas.push(`estilo: peça ${n}: ${sinal}`);
     if (!BOTOES_DO_DESTINO[caso.destino].includes(p.botao)) falhas.push(`botao: peça ${n}: ${p.botao} não serve para o destino ${caso.destino}`);
     const texto = `${p.titulo}\n${p.texto}`;

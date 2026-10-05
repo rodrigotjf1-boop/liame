@@ -1,6 +1,7 @@
 import { BrandDossierContent, DOSSIER_CONTENT_VERSION } from '@liame/contracts';
 import { sql } from 'drizzle-orm';
 import type { ProblemaDoPedido } from '../ai/criativo/contexto.js';
+import type { AchadoDaPeca } from '../ai/criativo/peca.js';
 import { currentTx } from '../context/request-context.js';
 import { concorrentesDoDossie, fatosDoDossie, proibidasDoDossie, textoDoDossie } from '../marca/dossie.js';
 import { provasDoSistema } from '../marca/marca.service.js';
@@ -52,6 +53,38 @@ export async function marcaDoCriativo(brandId: string, fuso: string, agora: Date
 }
 
 const entreAspas = (t: string) => `"${t}"`;
+
+/** Um achado da conferência da peça, em palavras para a tela (o que barra e o que só avisa). */
+export function mensagemDoAchado(a: AchadoDaPeca): string {
+  switch (a.tipo) {
+    case 'preco_fora':
+      return `O texto traz um valor que não é o da oferta (${entreAspas(a.trecho)}). O preço da peça é o da oferta de Minha marca.`;
+    case 'numero_fora':
+      return `O texto traz um número que não está na oferta nem em Minha marca (${entreAspas(a.trecho)}).`;
+    case 'gratis_fora':
+      return `O texto promete algo de graça (${entreAspas(a.trecho)}) e a oferta não diz isso.`;
+    case 'politico_eleitoral':
+      return `Conteúdo político ou eleitoral (${entreAspas(a.trecho)}).`;
+    case 'promessa_de_resultado':
+      return `Promessa de resultado (${entreAspas(a.trecho)}).`;
+    case 'categoria_proibida':
+      return `Categoria que as plataformas de anúncio proíbem ou restringem (${entreAspas(a.trecho)}).`;
+    case 'dado_pessoal':
+      return 'Dado pessoal no texto (telefone, e-mail ou documento).';
+    case 'texto_longo':
+      return 'Texto longo demais para conferir.';
+    case 'link':
+      return 'Endereço de site no texto: o anúncio leva ao destino escolhido, sem link no texto.';
+    case 'bebida_alcoolica':
+      return `Cita bebida alcoólica (${entreAspas(a.trecho)}): o Liame ainda não faz esse anúncio.`;
+    case 'concorrente':
+      return `Cita um concorrente (${entreAspas(a.trecho)}).`;
+    case 'regra_da_marca':
+      return `Diz o que a marca não diz (${entreAspas(a.trecho)}).`;
+    case 'acima_do_recomendado':
+      return `Passa do tamanho que a Meta recomenda (${a.trecho} caracteres).`;
+  }
+}
 
 /** O que impede o pedido, em palavras para a tela: o que é, com o trecho, e o que fazer. */
 export function mensagemDoProblema(p: ProblemaDoPedido): string {
