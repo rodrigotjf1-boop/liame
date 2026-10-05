@@ -176,19 +176,27 @@ function ramosDoMembro(membro: Membro, q: QuemOlha): SQL[] {
           sql`${daSombra} and d.created_at >= ${q.desde}::timestamptz`,
         ),
         ramo({ at: sql`d.evaluated_at`, kind: 'comparou', subject: sql`c.name`, detail: sql`d.regret_label` }, sql`${daSombra} and d.status = 'avaliada' and d.evaluated_at >= ${q.desde}::timestamptz`),
-        ramo({ at: sql`a.created_at`, kind: 'promocao_proposta', subject: sql`ca.name`, detail: sql`a.tool`, n: sql`a.sample_size` }, sql`${daProposta} and a.created_at >= ${q.desde}::timestamptz`),
+        // O passo para a Aprovação (A4, X3) sai com os tipos dele: o texto de cada um diz outra coisa.
+        ramo(
+          { at: sql`a.created_at`, kind: sql`case a.to_mode when 'APPROVAL' then 'aprovacao_proposta' else 'promocao_proposta' end`, subject: sql`ca.name`, detail: sql`a.tool`, n: sql`a.sample_size` },
+          sql`${daProposta} and a.created_at >= ${q.desde}::timestamptz`,
+        ),
         ramo(
           {
             at: sql`a.decided_at`,
             // Aprovada (inclusive a que depois voltou para sombra) tem a versão da política; recusada foi uma pessoa; retirada, o sistema.
-            kind: sql`case when a.policy_version is not null then 'promocao_aprovada' when a.status = 'recusada' then 'promocao_recusada' else 'promocao_retirada' end`,
+            kind: sql`(case a.to_mode when 'APPROVAL' then 'aprovacao' else 'promocao' end) ||
+                      (case when a.policy_version is not null then '_aprovada' when a.status = 'recusada' then '_recusada' else '_retirada' end)`,
             subject: sql`ca.name`,
             detail: sql`a.tool`,
             by: sql`a.decided_by`,
           },
           sql`${daProposta} and a.decided_at >= ${q.desde}::timestamptz`,
         ),
-        ramo({ at: sql`a.undone_at`, kind: 'voltou_para_sombra', subject: sql`ca.name`, detail: sql`a.tool`, by: sql`a.undone_by` }, sql`${daProposta} and a.undone_at >= ${q.desde}::timestamptz`),
+        ramo(
+          { at: sql`a.undone_at`, kind: sql`case a.to_mode when 'APPROVAL' then 'saiu_da_aprovacao' else 'voltou_para_sombra' end`, subject: sql`ca.name`, detail: sql`a.tool`, by: sql`a.undone_by` },
+          sql`${daProposta} and a.undone_at >= ${q.desde}::timestamptz`,
+        ),
         ...pausas(q, membro),
       ];
     }

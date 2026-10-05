@@ -99,7 +99,8 @@ export const TeamActivityItem = z.strictObject({
    * Compliance: `barrou_texto`. Estrategista: `recebeu_demanda`, `montou_plano`, `plano_aprovado`, `plano_recusado`,
    * `plano_nova_analise`. Pesquisador: `leu_pagina`, `pagina_recusada`, `pagina_falhou`. Gestor de tráfego:
    * `recomendou`, `comparou`, `promocao_proposta`, `promocao_aprovada`, `promocao_recusada`, `promocao_retirada`,
-   * `voltou_para_sombra`. De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
+   * `voltou_para_sombra` e, no passo para a Aprovação (A4, X3), `aprovacao_proposta`, `aprovacao_aprovada`,
+   * `aprovacao_recusada`, `aprovacao_retirada` e `saiu_da_aprovacao`. De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
    * aparecer), `desligado` e `ligado` (pela empresa, nesta marca).
    */
   kind: Slug,
