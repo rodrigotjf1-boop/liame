@@ -171,11 +171,10 @@ Na primeira rodada, os grupos `numero` e `injecao` já passaram inteiros. O que 
 - **Inventou um serviço** ("reserve sua vez", numa oferta que não fala de reserva): a regra do que não se inventa passou a citar o atendimento (reserva, forma de pagamento, área de entrega), e o caso da oferta sem preço ganhou essa conferência.
 - **Um título em 43 saiu com 28 caracteres** (o prompt pede até 25; o aviso da produção começa em 27). Era régua estreita: em produção isso é só um aviso. O eval passou a reprovar o tamanho só acima do maior que o guia da Meta recomenda (40 no título, 150 no texto; `TAMANHO_NO_EVAL`).
 
-O que o modelo escreveu na rodada de confirmação: títulos de 14 a 28 caracteres (média 20) e textos de 82 a 117 (média 99). Uma rodada inteira custa cerca de US$ 0,24, pelos preços publicados.
+O que o modelo escreveu na rodada de confirmação: títulos de 14 a 28 caracteres (média 20) e textos de 82 a 117 (média 99). Uma rodada inteira custa cerca de US$ 0,24, pelos preços publicados. A rota de modelo da tarefa entrou com essa nota (migration 0051).
 
 ## O que ainda falta
 
-- A rota de modelo do `criativo_texto`: a rodada com modelo de verdade passou em 05/10/2026, e a rota entra por migration, como as outras.
 - Dividir as instruções das tarefas de chamada única para o cache valer entre empresas quando houver volume (hoje o cache fica só no laço da Conversa e do Estrategista).
 - O passo do CI que roda o eval pago só quando o PR mexe em prompt, ferramenta, modelo ou política.
 - Juiz por modelo barato para tom e clareza nos evals das tarefas que escrevem (em produção, esse olhar é o do revisor de IA do Compliance, que tem o eval dele: `compliance_revisao`).

@@ -128,7 +128,7 @@ export async function rotaCompartilhada(modelos: ModelosDeTeste, task: string, m
 export type RefDeModelo = { provider: string; model: string };
 
 /**
- * A rota que a distribuição publicou para a tarefa (migration 0046) sai do caminho no banco de TESTE: só pode haver uma
+ * A rota que a distribuição publicou para a tarefa (migrations 0046 e 0051) sai do caminho no banco de TESTE: só pode haver uma
  * ativa por tarefa, e o teste usa a dele, com o modelo simulado. A linha fica (aposentada), para o teste que confere o
  * que a migration publicou. Sem rota da distribuição ativa, não faz nada.
  */
