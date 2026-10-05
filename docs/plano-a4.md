@@ -45,7 +45,7 @@ Cada entrega é um PR com CI verde. **Migrations em negrito**: testadas no local
 
 Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 → X5 → X8 (as telas entram com cada parte, pelo protótipo aprovado).
 
-**Andamento:** X1 entregue em 04/10/2026, com a reconferência da seção 8 para a escrita de situação e verba (base §2.1): o conector `meta_ads` (lê o estado na Meta, valida com `validate_only`, escreve, confere), a espera da execução quando a Meta manda esperar (`next_attempt_at` no pedido) e a migration **0044**. Detalhe em `andamento.md`. **X2 entregue em 04/10/2026:** as ferramentas de anúncio na Meta (verba diária, pausar e retomar campanha, conjunto e anúncio), a política da distribuição na versão 3 (limite de frequência por objeto com o provedor certo, ±10% por pedido, o pedido de uma pessoa esperando aprovação), os limites da empresa fechados por padrão, a leitura na hora do pedido com o motivo quando a Meta falha, e a volta (`POST /v1/actions/{id}/undo`), com a migration **0045**. Com a flag `meta_write` desligada para todos, nada escreve na Meta. As decisões tomadas na entrega estão na seção 4 (D-A4-12 a D-A4-17), aprovadas pelo dono em 04/10/2026. **Login da Meta para a escrita (04/10/2026):** a configuração de escrita é outra (`META_LOGIN_CONFIG_ID_ESCRITA`), escolhida pela flag `meta_write` da empresa (D-A4-18, aprovada em 04/10/2026); sem migration.
+**Andamento:** X1 entregue em 04/10/2026, com a reconferência da seção 8 para a escrita de situação e verba (base §2.1): o conector `meta_ads` (lê o estado na Meta, valida com `validate_only`, escreve, confere), a espera da execução quando a Meta manda esperar (`next_attempt_at` no pedido) e a migration **0044**. Detalhe em `andamento.md`. **X2 entregue em 04/10/2026:** as ferramentas de anúncio na Meta (verba diária, pausar e retomar campanha, conjunto e anúncio), a política da distribuição na versão 3 (limite de frequência por objeto com o provedor certo, ±10% por pedido, o pedido de uma pessoa esperando aprovação), os limites da empresa fechados por padrão, a leitura na hora do pedido com o motivo quando a Meta falha, e a volta (`POST /v1/actions/{id}/undo`), com a migration **0045**. Com a flag `meta_write` desligada para todos, nada escreve na Meta. As decisões tomadas na entrega estão na seção 4 (D-A4-12 a D-A4-17), aprovadas pelo dono em 04/10/2026. **Login da Meta para a escrita (04/10/2026):** a configuração de escrita é outra (`META_LOGIN_CONFIG_ID_ESCRITA`), escolhida pela flag `meta_write` da empresa (D-A4-18, aprovada em 04/10/2026); sem migration. **Protótipo P9 (04/10/2026):** `mockups/prototipo-anuncios.html`, pronto para a aprovação do dono, com as decisões propostas D-A4-19 a D-A4-24 (seção 4).
 
 ## 4. Decisões (aprovadas pelo dono em 03/10/2026, como recomendadas)
 
@@ -75,6 +75,17 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 | D-A4-17 | **Retomar reserva um dia de verba** | Retomar é risco R2 e conta como gasto novo: reserva no envelope um dia da verba que mora no objeto; anúncio e objeto sem verba própria não reservam | Aproximação declarada, como a do aumento (um dia da diferença); o gasto real conciliado vem na X4 |
 | D-A4-18 | **Login da Meta para a escrita** | Uma **segunda configuração** do Facebook Login for Business, com a permissão de gerenciar anúncios (`META_LOGIN_CONFIG_ID_ESCRITA`); a de leitura não muda. O Liame manda autorizar pela de escrita só a empresa com a flag `meta_write` ligada, e a autorização nova assume as contas que a empresa já tinha | A configuração de leitura está em análise na Meta (`ads_read`), e a página oficial não diz o que a edição de uma configuração faz com os tokens já emitidos (base §2.1); pedir a escrita só a quem vai usar é a permissão mínima |
 
+**Decisões propostas com o protótipo P9 (04/10/2026), aguardam o dono:**
+
+| # | Decisão | Proposta | Por quê |
+| --- | --- | --- | --- |
+| D-A4-19 | **O teto do mês conta o gasto inteiro** | O "envelope do mês" passa a ser o teto de **tudo o que as contas conectadas gastam em anúncios no mês** (Meta e Google), e não a soma do que o Liame reservou. O pedido que faz o gasto subir só passa se couber: gasto até ontem + ritmo dos últimos 7 dias × dias que faltam + aumentos e retomadas pedidos ou feitos hoje + o que o pedido acrescenta até o fim do mês ≤ teto. Reduzir e pausar passam sempre. Com o mês acima do teto, o Liame avisa e nega aumento e retomada; não pausa nada sozinho. Na tela, o nome é **Verba do mês** (o cartão "Orçamento de setembro" do protótipo geral aprovado), e o "teto por ação" aparece como **teto por campanha** | É a conta que a pessoa faz ("quanto posso gastar em anúncio neste mês") e é o cartão que o protótipo geral já mostrava. Hoje o envelope soma só um dia da diferença de cada aumento: ele não diz se o mês vai fechar dentro do que a empresa quer gastar |
+| D-A4-20 | **Por onde o pedido nasce** | Dois caminhos, a mesma gaveta: o botão **"Pedir mudança"** em cada campanha da Meta, em Resultados (Lite e Pro), e a **recomendação do Gestor de tráfego** na Atenção ("Pedir esta mudança"; no modo Aprovação, o pedido já chega feito). A gaveta lê a campanha na Meta na hora, deixa escolher onde (a campanha, um conjunto ou um anúncio) e o quê (a verba diária, pausar ou retomar), mostra o efeito e os limites e só então cria o pedido. Um item novo no menu, **Verba do mês**, depois de Resultados | O pedido nasce onde a pessoa vê o número que a fez decidir; a A4 não tem uma tela de campanhas |
+| D-A4-21 | **O risco mostrado segue a direção** | Reduzir a verba e pausar: risco baixo. Aumentar a verba e retomar: risco médio. Hoje `orcamento_ajustar` tem risco R3 fixo, e a tela mostraria "risco alto" numa redução de 10% | O risco que a pessoa lê diz o que pode dar errado, que é gastar mais. A aprovação com o código do app não muda: é regra da distribuição para tudo o que uma pessoa pede na Meta |
+| D-A4-22 | **Quem define os limites** | Dono e Administrador definem e mudam o teto do mês e o teto por campanha, na tela Verba do mês; os outros papéis só veem. A mudança vale na hora, para os pedidos seguintes, e fica na auditoria | São os limites de dinheiro da empresa; hoje só se definem pela API |
+| D-A4-23 | **A campanha nova fica com o P10** | O estado "campanha nova pausada com a prévia", que a seção 5 punha no P9, passa para o protótipo de Criativos (P10) | A prévia de uma campanha nova é a peça (o texto e a imagem), que nasce em Criativos; a entrega dela (X5) vem depois do Criativo (X6 e X7) |
+| D-A4-24 | **O gasto é conferido pela semana** | O aviso "gastou mais do que a verba permite" compara o gasto de 7 dias com 7 vezes a verba diária (na proporção dos dias de cada verba, quando ela mudou no meio), e não um dia com a verba do dia | A verba diária da Meta é uma média: num dia ela gasta mais e em outro, menos. A página oficial da API fala em até 25% a mais num dia; quem anuncia cita a Central de Ajuda com até 75% (base §2.1). Comparar a semana não depende de qual dos dois números vale |
+
 ## 5. Protótipos para aprovação (antes do código de tela)
 
 | # | Protótipo | Estados que precisa mostrar |
@@ -82,6 +93,8 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 | P9 | **Pedido de anúncio em Aprovações** | Verba (antes × depois, motivo, números da sombra); pausar e retomar; campanha nova pausada com a prévia; validação da Meta recusou; mudou na Meta antes de executar; executado e conferido; desfeito |
 | P10 | **Criativos** | Gerar texto e imagem; conferência do Compliance (passou ou barrou, com o motivo); "feito com IA"; aprovar, pedir outra, recusar; custo da geração |
 | P11 | **Sua equipe com Aprovação** | O Gestor de tráfego por conta e ação nos três modos; proposta de Aprovação; voltar para Sugerir |
+
+> **P9 pronto para a aprovação do dono (04/10/2026):** `mockups/prototipo-anuncios.html`, com o seletor "Pedido e verba" (43 estados) na faixa do topo: pedir uma mudança numa campanha da Meta (o botão em Resultados e a recomendação do Gestor de tráfego na Atenção, com a gaveta e as recusas dela), o pedido de anúncio em Aprovações (esperando a decisão, executando, executado e conferido, a Meta pediu para esperar, a Meta recusou, alguém mudou na Meta, desfazer e desfeito) e a tela Verba do mês (o teto, o gasto, a previsão, os limites e o que o Liame mudou, conferido com a Meta). **Não mostra a campanha nova** (proposta D-A4-23: fica com o P10). As escolhas propostas são as decisões D-A4-19 a D-A4-24 (seção 4). Sem a aprovação, as telas da X2 e da X4 não têm código.
 
 ## 6. Critérios de saída da A4
 
@@ -117,7 +130,7 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 
 - **Reconferir na fonte oficial (Meta):** a escrita de verba na campanha (orçamento de campanha) e no conjunto na v26, o campo, a unidade e a resposta do `validate_only`; pausar e retomar campanha, conjunto e anúncio; criar campanha, conjunto, anúncio e criativo pausados; os limites de uso da escrita; a permissão `ads_management` na configuração do login e o que o App Review pede para ela; a regra da Meta sobre conteúdo feito com IA em anúncio e a marca "AI info".
 - **Pesquisar e registrar com [O]:** os fornecedores de imagem do catálogo (OpenAI, Google e outros): uso dos dados enviados, guarda, região, preço por imagem e C2PA; regras de propaganda com IA no Brasil (CONAR e o que estiver em vigor); direitos sobre a imagem gerada.
-- **Atualizar a §16.1** (como produtos de marketing mostram a aprovação de anúncio e a peça gerada) antes dos protótipos P9 e P10.
+- **Atualizar a §16.1** (como produtos de marketing mostram a aprovação de anúncio e a peça gerada) antes dos protótipos P9 e P10. *Feito para o P9 em 04/10/2026 (pedido de mudança, verba do mês e desfazer); a peça gerada fica para antes do P10.*
 
 ## 9. O que depende de você
 
@@ -129,7 +142,7 @@ Ordem: X1 → X2 → X4 (o dinheiro antes de mexer mais) → X3 → X6 → X7 �
 | X2 | O teto por ação e o envelope do mês do piloto (quanto o Liame pode comprometer). Sem eles, o Liame só reduz verba e pausa na Meta; aumentar e retomar ficam negados. A tela para definir os dois chega com a X4 |
 | X2 | ✅ Decisões D-A4-12 a D-A4-18 aprovadas (04/10/2026) |
 | X7 | Conta no fornecedor de imagem escolhido no eval; a chave vai direto para o EasyPanel (`liame-api` e `liame-worker`), nunca para a conversa |
-| Telas | Aprovar P9 a P11 |
+| Telas | Aprovar P9 a P11. **O P9 está pronto** (`mockups/prototipo-anuncios.html`), com as decisões propostas D-A4-19 a D-A4-24 (seção 4) |
 | Ligar | Decidir quando ligar a flag `meta_write` para a Mister Burgers (comando `ligar-flag`) |
 | Nuvem | Digitar a senha do banco no `.env.nuvem` para cada migration, antes de cada merge |
 
