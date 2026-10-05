@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { ClosedLoopAttentionResponse } from '@liame/contracts';
+import { AutonomyResponse, ClosedLoopAttentionResponse } from '@liame/contracts';
 import { type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
@@ -23,6 +23,7 @@ import {
   ligarEscritaNaMeta,
   MetaDeMentira,
 } from '../helpers/meta-de-mentira.js';
+import { semearPedidos } from '../helpers/pedidos-semeados.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // A4 · X3 (parte 2): o modo Aprovação do Gestor de tráfego, contra a Graph API local. Na rodada da manhã, a recomendação
@@ -317,6 +318,61 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
     await ligarModoAprovacao(e.tenantId, false);
     await expect(direto()).rejects.toMatchObject({ code: 'modo-aprovacao-desligado' });
     expect(await pedidosDa(r.recomendacao)).toHaveLength(1);
+  });
+
+  it('do começo ao fim (A4-6): o sistema propõe a Aprovação, uma pessoa aprova, e na rodada seguinte o pedido já chega feito, em nome de quem aprovou; voltando um passo, ele para de pedir', async () => {
+    await ligarModoAprovacao(e.tenantId, true);
+    // "Pausar campanha" em Sugerir nesta conta; as outras ações, em Sombra.
+    await modos(e, { 'campanha.pausar': 'SUGGEST' });
+    // A evidência: os cinco portões da sombra passando (o retrato da prontidão) e dez pedidos nascidos de recomendação,
+    // aprovados e executados.
+    const antiga = await campanha('campanha_pausar', { nome: 'Evidência' });
+    await ownerQuery(
+      `insert into liame.readiness_snapshot (id, tenant_id, brand_id, connected_account_id, tool, computed_on, rule_version, sample_size,
+                                             agreement_rate, worse_rate, regret_sum_micros, confidence_avg, missing)
+       values (gen_random_uuid(), $1, $2, $3, 'campanha_pausar', $4, 2, 32, 0.88, 0.03, -5000000, 0.810, '{}')`,
+      [e.tenantId, e.brandId, e.conta, hoje],
+    );
+    await semearPedidos(
+      { tenantId: e.tenantId, brandId: e.brandId, conta: e.conta, userId: e.userId, recomendacao: antiga.recomendacao },
+      Array.from({ length: 10 }, () => 'executada' as const),
+      60,
+    );
+    const pausar = async () => {
+      const r = await api.call('GET', `/v1/autonomy?brand_id=${e.brandId}`, { cookie: e.cookie });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      return AutonomyResponse.parse(r.body).items.find((i) => i.tool === 'campanha_pausar' && i.connected_account_id === e.conta)!;
+    };
+    expect((await pausar()).approval).toEqual({ sample_size: 10, approved: 10, failed: 0, missing: [], blocked_by: null });
+
+    // Em Sugerir, ele não pede (a recomendação de hoje fica na Atenção); o sistema propõe a Aprovação.
+    const emSugerir = await campanha('campanha_pausar', { nome: 'Ainda em Sugerir' });
+    expect(await rodada()).toEqual({ pedidos: 0, semPedido: 0 });
+    expect(await pedidos.proporAprovacao({ tenantId: e.tenantId, brandId: e.brandId })).toEqual({ propostas: 1, retiradas: 0, encerradas: 0 });
+    const proposta = (await pausar()).proposal!;
+    expect(proposta).toMatchObject({ status: 'pendente', from_mode: 'SUGGEST', to_mode: 'APPROVAL' });
+    // Proposta não é modo: enquanto ninguém aprova, ele segue sem pedir.
+    expect(await rodada()).toEqual({ pedidos: 0, semPedido: 0 });
+
+    // Uma pessoa aprova: a regra do modo passa a ser dela.
+    const ok = await api.call('POST', `/v1/autonomy/proposals/${proposta.id}/approve`, { cookie: e.cookie });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect((await pausar()).mode).toBe('APPROVAL');
+    // A recomendação que já estava na Atenção quando o modo mudou continua lá, e ele a pede na rodada (é de hoje).
+    expect(await rodada()).toEqual({ pedidos: 1, semPedido: 0 });
+    const [feito] = await pedidosDa(emSugerir.recomendacao);
+    expect(feito).toMatchObject({ status: 'aguardando_aprovacao', actor_type: 'agent', agent_key: 'trafego', requested_by: e.userId });
+    expect(await ver(feito!.id)).toMatchObject({ tool: 'campanha_pausar', action: 'campanha.pausar', agent_key: 'trafego', recommendation: { id: emSugerir.recomendacao } });
+    expect(meta.escritasDe(emSugerir.id)).toEqual([]);
+
+    // Voltar um passo: de Aprovação para Sugerir. O pedido que ele já fez continua esperando; o seguinte, ele não faz.
+    const volta = await api.call('POST', '/v1/autonomy/undo', { cookie: e.cookie, body: { connected_account_id: e.conta, tool: 'campanha_pausar' } });
+    expect([volta.status, volta.body.mode]).toEqual([200, 'SUGGEST']);
+    expect((await ver(feito!.id)).status).toBe('aguardando_aprovacao');
+    const depois = await campanha('campanha_pausar', { nome: 'Depois da volta' });
+    expect(await rodada()).toEqual({ pedidos: 0, semPedido: 0 });
+    expect([(await tentativa(depois.recomendacao)).tentou, await pedidosDa(depois.recomendacao)]).toEqual([false, []]);
+    await api.call('POST', `/v1/actions/${feito!.id}/cancel`, { cookie: e.cookie });
   });
 
   it('em nome de quem: a pessoa precisa estar na empresa, com o vínculo ativo e podendo pedir ações', async () => {

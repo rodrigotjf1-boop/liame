@@ -4,12 +4,16 @@ import { AutonomyItem, AutonomyResponse, ClosedLoopAttentionResponse } from '@li
 import { createDatabase, type Database, runMigrations, uuidv7, withSystem, withTenant } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ActionService } from '../../src/actions/action.service.js';
 import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
+import { FlagService } from '../../src/flags/flag.service.js';
 import { AtencaoCicloService } from '../../src/results/atencao-ciclo.service.js';
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { proporPromocoes } from '../../src/worker/autonomia-propostas.js';
+import { PedidosDoGestor } from '../../src/worker/pedidos-do-gestor.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import { ligarEscritaNaMeta } from '../helpers/meta-de-mentira.js';
+import { type PedidoSemeado, semearPedidos } from '../helpers/pedidos-semeados.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // A3 · I13: a promoção de autonomia. O sistema propõe (de Sombra para Sugerir) quando os cinco portões passam; uma
@@ -122,7 +126,17 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
     expect(await propor(e, '2026-09-22')).toEqual({ propostas: 0, retiradas: 0, encerradas: 0 });
 
     const v = await ver(e, e.brandId);
-    expect(v.thresholds).toEqual({ sample_size: 30, agreement_min_pct: 80, worse_max_pct: 10, regret_max_micros: '0', confidence_min_pct: 70, sample_after_rejection: 30 });
+    expect(v.thresholds).toEqual({
+      sample_size: 30,
+      agreement_min_pct: 80,
+      worse_max_pct: 10,
+      regret_max_micros: '0',
+      confidence_min_pct: 70,
+      sample_after_rejection: 30,
+      approval_requests: 10,
+      approval_min_approved: 8,
+      requests_after_rejection: 10,
+    });
     expect(v.can_decide).toBe(true);
     // A pendente primeiro; a outra ação, com sombra registrada, depois.
     expect(v.items.map((i) => [i.tool, i.mode, i.proposal?.status ?? null])).toEqual([
@@ -312,6 +326,230 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
     const semLeitor = await naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () => api.app.get(AtencaoCicloService).atencao(e.brandId));
     const doGestor = semLeitor.items.filter((i) => i.kind === 'sugestao_reduzir_verba');
     expect(doGestor.map((i) => [i.campaign_id, 'recommendation' in i])).toEqual([[e.campanha, false]]);
+  });
+
+  // ------------------------------------------------------------ de Sugerir para Aprovação (A4, X3)
+
+  const dez = (situacao: PedidoSemeado): PedidoSemeado[] => Array.from({ length: 10 }, () => situacao);
+  const vezDaAprovacao = (e: Empresa) => new PedidosDoGestor(database, api.app.get(ActionService), api.app.get(FlagService)).proporAprovacao({ tenantId: e.tenantId, brandId: e.brandId });
+  async function ligarModoAprovacao(tenantId: string, valor: boolean): Promise<void> {
+    await ownerQuery(`delete from liame.feature_flag_rule where flag_key = 'modo_aprovacao' and scope_type = 'tenant' and scope_id = $1`, [tenantId]);
+    if (valor) {
+      await ownerQuery(
+        `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, rollout_percent, created_by)
+         values (gen_random_uuid(), 'modo_aprovacao', 'tenant', $1, 'true'::jsonb, null, 'testes')`,
+        [tenantId],
+      );
+    }
+    api.app.get(FlagService).invalidate();
+  }
+  /** A empresa com a ação "reduzir a verba" já em Sugerir (a promoção do primeiro passo aprovada), e para quem semear pedidos. */
+  async function emSugerir(): Promise<{ e: Empresa; alvo: Parameters<typeof semearPedidos>[0] }> {
+    const e = await empresa();
+    await recomendacao(e);
+    await retrato(e, '2026-09-22', { amostra: 31 });
+    await propor(e, '2026-09-22');
+    expect((await api.call('POST', `/v1/autonomy/proposals/${(await reduzir(e)).proposal!.id}/approve`, { cookie: e.cookie })).status).toBe(200);
+    const [dono] = await ownerQuery<{ user_id: string }>(`select user_id from liame.membership where tenant_id = $1 and role_key = 'dono'`, [e.tenantId]);
+    const [decisao] = await ownerQuery<{ id: string }>(`select id from liame.shadow_decision where tenant_id = $1`, [e.tenantId]);
+    return { e, alvo: { tenantId: e.tenantId, brandId: e.brandId, conta: e.conta, userId: dono!.user_id, recomendacao: decisao!.id } };
+  }
+  const naTabela = (e: Empresa) => ownerQuery<{ to_mode: string; status: string }>(`select to_mode, status from liame.autonomy_proposal where tenant_id = $1 order by created_at, id`, [e.tenantId]);
+  const aprovarProposta = async (e: Empresa) => api.call('POST', `/v1/autonomy/proposals/${(await reduzir(e)).proposal!.id}/approve`, { cookie: e.cookie });
+  const voltar = (e: Empresa, reason?: string) => api.call('POST', '/v1/autonomy/undo', { cookie: e.cookie, body: { connected_account_id: e.conta, tool: 'orcamento_reduzir', ...(reason ? { reason } : {}) } });
+  const NADA = { propostas: 0, retiradas: 0, encerradas: 0 };
+
+  it('A4 · X3 (A4-6): de Sugerir para Aprovação só com os portões dos pedidos e uma pessoa aprovando; voltar é um passo por vez', async () => {
+    const { e, alvo } = await emSugerir();
+    try {
+      // Dez pedidos aprovados e executados, nascidos de recomendações dele. Com a flag do modo desligada (como nasce),
+      // a tela não fala em Aprovação e o sistema não propõe.
+      await semearPedidos(alvo, dez('executada'), 100);
+      expect('approval' in (await reduzir(e))).toBe(false);
+      expect(await vezDaAprovacao(e)).toEqual(NADA);
+
+      // Modo ligado para a empresa, mas a escrita na Meta não: o modo não existe nesta conta.
+      await ligarModoAprovacao(e.tenantId, true);
+      expect((await reduzir(e)).approval).toEqual({ sample_size: 10, approved: 10, failed: 0, missing: [], blocked_by: 'escrita_desligada' });
+      expect(await vezDaAprovacao(e)).toEqual(NADA);
+      await ligarEscritaNaMeta(api, e.tenantId, true);
+
+      // Um aprovado mais recente terminou em erro: barra, mesmo com todos aprovados.
+      await semearPedidos(alvo, ['falhou'], 50);
+      expect((await reduzir(e)).approval).toEqual({ sample_size: 10, approved: 10, failed: 1, missing: ['erro'], blocked_by: null });
+      expect(await vezDaAprovacao(e)).toEqual(NADA);
+      // Mais dez pedidos decididos depois (oito aprovados, um recusado, um que ninguém decidiu): o erro sai dos dez mais
+      // recentes, e oito em dez passa. O que ainda espera e o que foi retirado por quem pediu não entram na conta.
+      await semearPedidos(alvo, [...dez('executada').slice(0, 8), 'recusada', 'expirada'], 20);
+      await semearPedidos(alvo, ['aguardando', 'retirada'], 5);
+      expect((await reduzir(e)).approval).toEqual({ sample_size: 10, approved: 8, failed: 0, missing: [], blocked_by: null });
+      expect(await vezDaAprovacao(e)).toEqual({ propostas: 1, retiradas: 0, encerradas: 0 });
+      expect(await vezDaAprovacao(e)).toEqual(NADA);
+
+      const v = await ver(e, e.brandId);
+      expect(v.thresholds).toMatchObject({ approval_requests: 10, approval_min_approved: 8, requests_after_rejection: 10 });
+      expect(v.items[0]).toMatchObject({ tool: 'orcamento_reduzir', mode: 'SUGGEST', proposal: { status: 'pendente', from_mode: 'SUGGEST', to_mode: 'APPROVAL', sample_size: 31, next_request_count: null } });
+      // A rotina do primeiro passo não mexe na proposta do segundo.
+      expect(await propor(e, '2026-09-22')).toEqual(NADA);
+      expect((await reduzir(e)).proposal?.status).toBe('pendente');
+      expect((await auditoria(e, 'autonomia.propor')).map((a) => [a.actor_type, a.after?.to_mode ?? 'SUGGEST'])).toEqual([
+        ['system', 'SUGGEST'],
+        ['system', 'APPROVAL'],
+      ]);
+
+      // Uma pessoa aprova: a política da marca passa a dizer Aprovação para o funcionário, nesta conta e ação.
+      const ok = await aprovarProposta(e);
+      expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+      expect(AutonomyItem.parse(ok.body)).toMatchObject({
+        mode: 'APPROVAL',
+        mode_source: { policy: 'marca', version: 2 },
+        proposal: { status: 'aprovada', from_mode: 'SUGGEST', to_mode: 'APPROVAL', policy_version: 2, decided_by: { name: expect.any(String) } },
+      });
+      expect((await politicas(e)).map((p) => [p.version, p.status, p.document.rules])).toEqual([
+        [1, 'arquivada', [{ type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: e.conta, mode: 'SUGGEST' }]],
+        [2, 'ativa', [{ type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: e.conta, mode: 'APPROVAL' }]],
+      ]);
+      expect((await auditoria(e, 'autonomia.promover')).map((a) => a.after)).toEqual([
+        { mode: 'SUGGEST', connected_account_id: e.conta, tool: 'orcamento_reduzir', action: 'orcamento.reduzir', policy_version: 1, sample_size: 31 },
+        { mode: 'APPROVAL', connected_account_id: e.conta, tool: 'orcamento_reduzir', action: 'orcamento.reduzir', policy_version: 2, sample_size: 31, requests: { sample_size: 10, approved: 8, failed: 0 } },
+      ]);
+      // A recomendação segue na Atenção (o pedido dele é outro passo, na rodada da manhã).
+      expect((await sugestoes(e)).map((s) => s.kind)).toEqual(['sugestao_reduzir_verba']);
+
+      // Voltar um passo: de Aprovação para Sugerir. A promoção para Sugerir segue aprovada, e a próxima proposta de
+      // Aprovação pede mais dez pedidos decididos (são 21 até aqui).
+      const volta = await voltar(e, 'Quero olhar cada pedido antes');
+      expect(volta.status, JSON.stringify(volta.body)).toBe(200);
+      expect(AutonomyItem.parse(volta.body)).toMatchObject({
+        mode: 'SUGGEST',
+        mode_source: { policy: 'marca', version: 3 },
+        proposal: { status: 'desfeita', to_mode: 'APPROVAL', policy_version: 2, next_request_count: 31, reason: 'Quero olhar cada pedido antes', undone_by: { name: expect.any(String) } },
+      });
+      expect(await naTabela(e)).toEqual([
+        { to_mode: 'SUGGEST', status: 'aprovada' },
+        { to_mode: 'APPROVAL', status: 'desfeita' },
+      ]);
+      expect((await auditoria(e, 'autonomia.voltar_sombra')).map((a) => a.after)).toEqual([
+        { mode: 'SUGGEST', connected_account_id: e.conta, tool: 'orcamento_reduzir', action: 'orcamento.reduzir', policy_version: 3 },
+      ]);
+      expect(await vezDaAprovacao(e)).toEqual(NADA);
+      await semearPedidos(alvo, dez('executada'), 1);
+      expect(await vezDaAprovacao(e)).toEqual({ propostas: 1, retiradas: 0, encerradas: 0 });
+
+      // Recusar: segue em Sugerir, e a próxima proposta espera mais dez pedidos decididos (31 + 10).
+      const nao = await api.call('POST', `/v1/autonomy/proposals/${(await reduzir(e)).proposal!.id}/reject`, { cookie: e.cookie, body: { reason: 'Ainda não' } });
+      expect(AutonomyItem.parse(nao.body)).toMatchObject({ mode: 'SUGGEST', proposal: { status: 'recusada', to_mode: 'APPROVAL', next_request_count: 41, next_sample_size: null, reason: 'Ainda não' } });
+      expect(await vezDaAprovacao(e)).toEqual(NADA);
+      await semearPedidos(alvo, dez('executada'), 0);
+      expect(await vezDaAprovacao(e)).toEqual({ propostas: 1, retiradas: 0, encerradas: 0 });
+
+      // Voltar de Sugerir para Sombra com uma proposta de Aprovação esperando: ela sai na hora, e a tela volta a mostrar
+      // a história do primeiro passo.
+      const fim = await voltar(e);
+      expect(AutonomyItem.parse(fim.body)).toMatchObject({ mode: 'SHADOW', mode_source: { policy: 'marca', version: 4 }, proposal: { status: 'desfeita', to_mode: 'SUGGEST', next_sample_size: 61 } });
+      expect(await naTabela(e)).toEqual([
+        { to_mode: 'SUGGEST', status: 'desfeita' },
+        { to_mode: 'APPROVAL', status: 'desfeita' },
+        { to_mode: 'APPROVAL', status: 'recusada' },
+        { to_mode: 'APPROVAL', status: 'retirada' },
+      ]);
+      expect(await vezDaAprovacao(e)).toEqual(NADA);
+      expect(await sugestoes(e)).toEqual([]);
+
+      // Em "O que ele fez", cada passo sai com o tipo dele.
+      const atividade = await api.call('GET', `/v1/team/members/trafego/activity?brand_id=${e.brandId}&limit=50`, { cookie: e.cookie });
+      expect(atividade.status).toBe(200);
+      expect([...new Set((atividade.body.items as Array<{ kind: string }>).map((i) => i.kind))].sort()).toEqual([
+        'aprovacao_aprovada',
+        'aprovacao_proposta',
+        'aprovacao_recusada',
+        'aprovacao_retirada',
+        'promocao_aprovada',
+        'promocao_proposta',
+        'recomendou',
+        'saiu_da_aprovacao',
+        'voltou_para_sombra',
+      ]);
+    } finally {
+      await ligarModoAprovacao(e.tenantId, false);
+      await ligarEscritaNaMeta(api, e.tenantId, false);
+    }
+  });
+
+  it('A4 · X3: a proposta de Aprovação que deixa de valer sai; a aprovada sem efeito se encerra; no Google o modo não existe', async () => {
+    const { e, alvo } = await emSugerir();
+    try {
+      await ligarModoAprovacao(e.tenantId, true);
+      await ligarEscritaNaMeta(api, e.tenantId, true);
+      await semearPedidos(alvo, dez('executada'), 100);
+      expect(await vezDaAprovacao(e)).toEqual({ propostas: 1, retiradas: 0, encerradas: 0 });
+
+      // (1) A escrita na Meta foi desligada depois da proposta: ela aparece retirada na hora, não dá para aprovar, e a rotina grava.
+      await ligarEscritaNaMeta(api, e.tenantId, false);
+      expect(await reduzir(e)).toMatchObject({ proposal: { status: 'retirada', reason: 'O modo Aprovação deixou de estar disponível nesta conta.' }, approval: { blocked_by: 'escrita_desligada' } });
+      const semEscrita = await aprovarProposta(e);
+      expect([semEscrita.status, semEscrita.body.code]).toEqual([409, 'aprovacao-indisponivel']);
+      expect(await vezDaAprovacao(e)).toEqual({ propostas: 0, retiradas: 1, encerradas: 0 });
+      expect((await auditoria(e, 'autonomia.retirar')).map((a) => a.after?.reason)).toEqual(['O modo Aprovação deixou de estar disponível nesta conta.']);
+      // Ligada de novo, o sistema propõe de novo (retirada não pede pedidos a mais).
+      await ligarEscritaNaMeta(api, e.tenantId, true);
+      expect(await vezDaAprovacao(e)).toEqual({ propostas: 1, retiradas: 0, encerradas: 0 });
+
+      // (2) O modo Aprovação foi desligado para a empresa: a pendente aparece retirada, e aprovar é recusado.
+      await ligarModoAprovacao(e.tenantId, false);
+      const semModo = await reduzir(e);
+      expect(['approval' in semModo, semModo.proposal?.status, semModo.proposal?.reason]).toEqual([false, 'retirada', 'O modo Aprovação deixou de estar disponível nesta conta.']);
+      const desligado = await aprovarProposta(e);
+      expect([desligado.status, desligado.body.code]).toEqual([409, 'modo-aprovacao-desligado']);
+      expect(await vezDaAprovacao(e)).toEqual(NADA);
+      await ligarModoAprovacao(e.tenantId, true);
+      expect((await reduzir(e)).proposal?.status).toBe('pendente');
+
+      // (3) Um pedido aprovado mais recente terminou em erro: os portões da Aprovação deixam de passar.
+      const [comErro] = await semearPedidos(alvo, ['falhou'], 30);
+      expect((await reduzir(e)).proposal).toMatchObject({ status: 'retirada', reason: 'Os portões da Aprovação deixaram de passar.' });
+      const semPortoes = await aprovarProposta(e);
+      expect([semPortoes.status, semPortoes.body.code]).toEqual([409, 'prontidao-mudou']);
+      expect(await vezDaAprovacao(e)).toEqual({ propostas: 0, retiradas: 1, encerradas: 0 });
+      // O erro era de uma falha passageira e o pedido acabou executado: os portões voltam a passar.
+      await ownerQuery(`update liame.action_request set status = 'executada', status_reason = null where id = $1`, [comErro]);
+      expect(await vezDaAprovacao(e)).toEqual({ propostas: 1, retiradas: 0, encerradas: 0 });
+
+      // (4) Aprovada, e depois a política da marca é publicada sem a regra (pela tela de políticas): a ação volta para
+      // Sombra por outro caminho, e as duas promoções se encerram, cada uma na rotina dela.
+      expect((await aprovarProposta(e)).status).toBe(200);
+      expect((await reduzir(e)).mode).toBe('APPROVAL');
+      expect((await api.call('POST', '/v1/policies', { cookie: e.cookie, body: { brand_id: e.brandId, document: { rules: [] } } })).status).toBe(201);
+      expect(await vezDaAprovacao(e)).toEqual({ propostas: 0, retiradas: 0, encerradas: 1 });
+      await retrato(e, '2026-09-29', { amostra: 35 });
+      expect(await propor(e, '2026-09-29')).toEqual({ propostas: 0, retiradas: 0, encerradas: 1 });
+      const linhas = await ownerQuery<{ to_mode: string; status: string; reason: string | null; next_request_count: number | null }>(
+        `select to_mode, status, reason, next_request_count from liame.autonomy_proposal where tenant_id = $1 and status = 'desfeita' order by to_mode`,
+        [e.tenantId],
+      );
+      expect(linhas).toEqual([
+        { to_mode: 'APPROVAL', status: 'desfeita', reason: 'A política da marca tirou a ação de Aprovação por outro caminho.', next_request_count: 21 },
+        { to_mode: 'SUGGEST', status: 'desfeita', reason: 'A política da marca voltou a ação para Sombra por outro caminho.', next_request_count: null },
+      ]);
+
+      // (5) No Google, o Liame não muda anúncios: o modo vai até Sugerir.
+      const google = randomUUID();
+      await ownerQuery(
+        `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'google_ads', $4, 'Google Ads - Hamburgueria', 'BRL', $5)`,
+        [google, e.tenantId, e.brandId, randomUUID().slice(0, 10), FUSO],
+      );
+      await ownerQuery(
+        `insert into liame.readiness_snapshot (id, tenant_id, brand_id, connected_account_id, tool, computed_on, rule_version, sample_size,
+                                               agreement_rate, worse_rate, regret_sum_micros, confidence_avg, missing)
+         values ($1, $2, $3, $4, 'campanha_pausar', '2026-09-29', 2, 40, 0.90, 0.05, -1000000, 0.800, '{}')`,
+        [uuidv7(), e.tenantId, e.brandId, google],
+      );
+      const doGoogle = (await ver(e, e.brandId)).items.find((i) => i.provider === 'google_ads')!;
+      expect(doGoogle.approval).toEqual({ sample_size: 0, approved: 0, failed: 0, missing: ['pedidos', 'aprovacao'], blocked_by: 'plataforma_sem_escrita' });
+    } finally {
+      await ligarModoAprovacao(e.tenantId, false);
+      await ligarEscritaNaMeta(api, e.tenantId, false);
+    }
   });
 
   it('quem vê e quem decide: o gestor vê; só quem gerencia políticas aprova, recusa ou volta para Sombra', async () => {

@@ -37,6 +37,14 @@ export const AutonomyThresholds = z.strictObject({
   confidence_min_pct: z.int(),
   /** Depois de uma recusa (ou da volta para Sombra), quantas decisões comparáveis a mais até a próxima proposta. */
   sample_after_rejection: z.int(),
+  /**
+   * De Sugerir para Aprovação (A4, X3): quantos pedidos decididos se olham (os mais recentes que nasceram de uma
+   * recomendação dele), quantos precisam ter sido aprovados (nenhum deles com erro na execução) e, depois de uma recusa
+   * ou de uma volta, quantos pedidos decididos a mais até a próxima proposta.
+   */
+  approval_requests: z.int().optional(),
+  approval_min_approved: z.int().optional(),
+  requests_after_rejection: z.int().optional(),
 });
 export type AutonomyThresholds = z.infer<typeof AutonomyThresholds>;
 
@@ -75,8 +83,31 @@ export const AutonomyProposalSummary = z.strictObject({
   reason: z.string().nullable(),
   /** Recusada, desfeita ou retirada: com quantas decisões comparáveis o sistema propõe de novo. */
   next_sample_size: z.int().nullable(),
+  /** Na proposta de Sugerir para Aprovação, recusada ou desfeita: com quantos pedidos decididos o sistema propõe de novo. */
+  next_request_count: z.int().nullable().optional(),
 });
 export type AutonomyProposalSummary = z.infer<typeof AutonomyProposalSummary>;
+
+/**
+ * O que falta para o modo Aprovação nesta conta e ação (A4, X3): os pedidos decididos mais recentes que nasceram de uma
+ * recomendação dele. Só vem para a empresa com o modo Aprovação ligado.
+ */
+export const AutonomyApprovalReadiness = z.strictObject({
+  /** Quantos pedidos decididos entraram na conta (os mais recentes, até `thresholds.approval_requests`). */
+  sample_size: z.int().min(0),
+  /** Quantos uma pessoa aprovou. */
+  approved: z.int().min(0),
+  /** Quantos dos aprovados terminaram em erro. */
+  failed: z.int().min(0),
+  /** O que falta: `pedidos`, `aprovacao` e `erro`; vazio: passou em todos. */
+  missing: z.array(Slug),
+  /**
+   * Por que o modo Aprovação não está disponível aqui, quando não está: `plataforma_sem_escrita` (o Liame não muda esta
+   * plataforma) ou `escrita_desligada` (a escrita não está ligada para esta conta). Nulo: disponível.
+   */
+  blocked_by: Slug.nullable(),
+});
+export type AutonomyApprovalReadiness = z.infer<typeof AutonomyApprovalReadiness>;
 
 export const AutonomyItem = z.strictObject({
   connected_account_id: z.uuid(),
@@ -95,6 +126,8 @@ export const AutonomyItem = z.strictObject({
   readiness: AutonomyReadiness.nullable(),
   /** A proposta pendente ou, sem ela, a mais recente. */
   proposal: AutonomyProposalSummary.nullable(),
+  /** Os portões do modo Aprovação nesta conta e ação; só para a empresa com esse modo ligado (A4, X3). */
+  approval: AutonomyApprovalReadiness.optional(),
 });
 export type AutonomyItem = z.infer<typeof AutonomyItem>;
 

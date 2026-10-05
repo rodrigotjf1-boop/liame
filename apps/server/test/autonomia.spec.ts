@@ -5,12 +5,18 @@ import { avisoDaSugestao } from '../src/results/sugestoes-da-sombra.js';
 import {
   ACAO_DA_FERRAMENTA,
   comRegraDaConta,
+  type DesfechoDoPedido,
+  desfechoDoPedido,
   LIMIARES_DA_AUTONOMIA,
   modoDaAcao,
+  MODOS_DO_FUNCIONARIO,
   mostraNaAtencao,
   portoesQuePassaram,
+  prontidaoDaAprovacao,
   propostaDaAcao,
+  umPassoAtras,
   vezDaProposta,
+  vezDaPropostaDeAprovacao,
 } from '../src/sombra/autonomia.js';
 
 // A3 · I13: a autonomia das ações da sombra. O modo vem do motor de políticas; a promoção troca uma regra da
@@ -137,9 +143,87 @@ describe('autonomia das ações da sombra (A3, I13)', () => {
   it('na A3, qualquer modo acima de Sombra só mostra na Atenção; os limiares vêm das regras da sombra', () => {
     expect(mostraNaAtencao('SHADOW')).toBe(false);
     for (const m of ['SUGGEST', 'APPROVAL', 'LIMITED_AUTO', 'AUTO', 'ESCALATE'] as const) expect(mostraNaAtencao(m)).toBe(true);
-    expect(LIMIARES_DA_AUTONOMIA).toEqual({ sample_size: 30, agreement_min_pct: 80, worse_max_pct: 10, regret_max_micros: '0', confidence_min_pct: 70, sample_after_rejection: 30 });
+    expect(LIMIARES_DA_AUTONOMIA).toEqual({
+      sample_size: 30,
+      agreement_min_pct: 80,
+      worse_max_pct: 10,
+      regret_max_micros: '0',
+      confidence_min_pct: 70,
+      sample_after_rejection: 30,
+      // De Sugerir para Aprovação (A4, X3): 8 aprovados nos 10 pedidos decididos mais recentes; mais 10 depois de uma recusa.
+      approval_requests: 10,
+      approval_min_approved: 8,
+      requests_after_rejection: 10,
+    });
     expect(portoesQuePassaram([])).toBe(5);
     expect(portoesQuePassaram(['amostra', 'confianca'])).toBe(3);
+  });
+
+  it('A4 · X3: os três modos do funcionário passam pela mesma regra da conta, e voltar é um passo por vez', () => {
+    expect(MODOS_DO_FUNCIONARIO).toEqual(['SHADOW', 'SUGGEST', 'APPROVAL']);
+    // A regra de Aprovação é a mesma regra da conta, com o ator do funcionário: troca a de Sugerir, sem empilhar.
+    const emSugerir = comRegraDaConta(null, { action: 'orcamento.reduzir', account: CONTA, mode: 'SUGGEST' });
+    const emAprovacao = comRegraDaConta(emSugerir, { action: 'orcamento.reduzir', account: CONTA, mode: 'APPROVAL' });
+    expect(emAprovacao.rules).toEqual([{ type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: CONTA, mode: 'APPROVAL' }]);
+    const daMarca = politica('brand', 7, emAprovacao.rules);
+    expect(modoDaAcao([PLATFORM_POLICY, daMarca], alvo)).toEqual({ mode: 'APPROVAL', source: 'brand', version: 7 });
+    // O pedido de uma pessoa segue pela regra da distribuição; outra ação e outra conta seguem em Sombra.
+    expect(chooseMode([PLATFORM_POLICY, daMarca], { ...propostaDaAcao(alvo), actor: 'human' }).mode).toBe('APPROVAL');
+    expect(modoDaAcao([PLATFORM_POLICY, daMarca], { ...alvo, tool: 'campanha_pausar' }).mode).toBe('SHADOW');
+    expect(modoDaAcao([PLATFORM_POLICY, daMarca], { ...alvo, accountId: MARCA }).mode).toBe('SHADOW');
+    // De Aprovação volta para Sugerir; de Sugerir (ou de outro modo que a empresa tenha escrito na política), para Sombra.
+    expect(umPassoAtras('APPROVAL')).toBe('SUGGEST');
+    for (const m of ['SUGGEST', 'LIMITED_AUTO', 'AUTO', 'ESCALATE', 'SHADOW'] as const) expect(umPassoAtras(m)).toBe('SHADOW');
+  });
+
+  it('A4 · X3: os portões da Aprovação olham os 10 pedidos decididos mais recentes (8 aprovados, nenhum com erro)', () => {
+    // O desfecho de cada pedido, pela situação dele; o que espera decisão e o que foi retirado por quem pediu não contam.
+    expect((['aprovada', 'executando', 'executada'] as const).map((status) => desfechoDoPedido({ status, recusado: false }))).toEqual(['aprovado', 'aprovado', 'aprovado']);
+    expect(desfechoDoPedido({ status: 'falhou', recusado: false })).toBe('aprovado_com_erro');
+    expect(desfechoDoPedido({ status: 'expirada', recusado: false })).toBe('expirado');
+    expect(desfechoDoPedido({ status: 'cancelada', recusado: true })).toBe('recusado');
+    expect(desfechoDoPedido({ status: 'cancelada', recusado: false })).toBeNull();
+    for (const status of ['aguardando_aprovacao', 'sombra']) expect(desfechoDoPedido({ status, recusado: false })).toBeNull();
+
+    const n = (quantos: number, d: DesfechoDoPedido) => Array.from({ length: quantos }, () => d);
+    expect(prontidaoDaAprovacao([])).toEqual({ sampleSize: 0, approved: 0, failed: 0, missing: ['pedidos', 'aprovacao'] });
+    // Nove aprovados ainda não são dez pedidos.
+    expect(prontidaoDaAprovacao(n(9, 'aprovado'))).toEqual({ sampleSize: 9, approved: 9, failed: 0, missing: ['pedidos'] });
+    // Oito em dez passa; sete, não. Recusado e expirado contam como não aprovado.
+    expect(prontidaoDaAprovacao([...n(8, 'aprovado'), 'recusado', 'expirado'])).toEqual({ sampleSize: 10, approved: 8, failed: 0, missing: [] });
+    expect(prontidaoDaAprovacao([...n(7, 'aprovado'), ...n(3, 'recusado')]).missing).toEqual(['aprovacao']);
+    // Um aprovado que terminou em erro barra, mesmo com a taxa de aprovação cheia (ele conta como aprovado).
+    expect(prontidaoDaAprovacao([...n(9, 'aprovado'), 'aprovado_com_erro'])).toEqual({ sampleSize: 10, approved: 10, failed: 1, missing: ['erro'] });
+    // Só os dez mais recentes: o erro e as recusas mais antigos saem da conta.
+    expect(prontidaoDaAprovacao([...n(10, 'aprovado'), 'aprovado_com_erro', ...n(5, 'recusado')])).toEqual({ sampleSize: 10, approved: 10, failed: 0, missing: [] });
+    expect(prontidaoDaAprovacao(['aprovado_com_erro', ...n(12, 'aprovado')]).missing).toEqual(['erro']);
+  });
+
+  it('A4 · X3: a vez da proposta de Aprovação: só em Sugerir, com os dois grupos de portões e o modo disponível na conta', () => {
+    const pedidosOk = prontidaoDaAprovacao(Array.from({ length: 10 }, () => 'aprovado' as const));
+    const pedidosFaltam = prontidaoDaAprovacao(Array.from({ length: 4 }, () => 'aprovado' as const));
+    const tudo = { disponivel: true, passamOsCinco: true, pedidos: pedidosOk, decididos: 10 };
+    expect(vezDaPropostaDeAprovacao(tudo, 'SUGGEST', null)).toBe('propor');
+    // Falta um dos lados: os cinco da sombra, os dos pedidos, ou o modo não existe ali (Google, escrita desligada).
+    expect(vezDaPropostaDeAprovacao({ ...tudo, passamOsCinco: false }, 'SUGGEST', null)).toBe('nada');
+    expect(vezDaPropostaDeAprovacao({ ...tudo, pedidos: pedidosFaltam }, 'SUGGEST', null)).toBe('nada');
+    expect(vezDaPropostaDeAprovacao({ ...tudo, disponivel: false }, 'SUGGEST', null)).toBe('nada');
+    // Em Sombra não se pula um passo; em Aprovação não há o que propor.
+    for (const modo of ['SHADOW', 'APPROVAL', 'ESCALATE'] as const) expect(vezDaPropostaDeAprovacao(tudo, modo, null)).toBe('nada');
+    // Pendente: segue enquanto tudo vale; sai quando algo deixa de valer ou o modo muda.
+    const pendente = { status: 'pendente', nextRequestCount: null };
+    expect(vezDaPropostaDeAprovacao(tudo, 'SUGGEST', pendente)).toBe('nada');
+    expect(vezDaPropostaDeAprovacao({ ...tudo, pedidos: pedidosFaltam }, 'SUGGEST', pendente)).toBe('retirar');
+    expect(vezDaPropostaDeAprovacao({ ...tudo, disponivel: false }, 'SUGGEST', pendente)).toBe('retirar');
+    expect(vezDaPropostaDeAprovacao(tudo, 'SHADOW', pendente)).toBe('retirar');
+    // Recusada ou desfeita: só com os pedidos decididos que ela pediu.
+    expect(vezDaPropostaDeAprovacao({ ...tudo, decididos: 19 }, 'SUGGEST', { status: 'recusada', nextRequestCount: 20 })).toBe('nada');
+    expect(vezDaPropostaDeAprovacao({ ...tudo, decididos: 20 }, 'SUGGEST', { status: 'desfeita', nextRequestCount: 20 })).toBe('propor');
+    expect(vezDaPropostaDeAprovacao(tudo, 'SUGGEST', { status: 'retirada', nextRequestCount: null })).toBe('propor');
+    // Aprovada: vale enquanto o modo é Aprovação; se saiu por outro caminho, encerra.
+    expect(vezDaPropostaDeAprovacao({ ...tudo, pedidos: pedidosFaltam }, 'APPROVAL', { status: 'aprovada', nextRequestCount: null })).toBe('nada');
+    expect(vezDaPropostaDeAprovacao(tudo, 'SUGGEST', { status: 'aprovada', nextRequestCount: null })).toBe('encerrar');
+    expect(vezDaPropostaDeAprovacao(tudo, 'SHADOW', { status: 'aprovada', nextRequestCount: null })).toBe('encerrar');
   });
 
   it('o aviso da recomendação em Sugerir usa os números do retrato e diz que nada muda sem a pessoa', () => {

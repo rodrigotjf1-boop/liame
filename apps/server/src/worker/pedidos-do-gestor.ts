@@ -2,6 +2,7 @@ import { type Database, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
+import { CONNECTORS } from '../actions/connectors.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { pessoaPode } from '../auth/pessoa-pode.js';
 import { currentTx } from '../context/request-context.js';
@@ -13,6 +14,7 @@ import { carregarPoliticas } from '../policy/policy.service.js';
 import { modoDaAcao } from '../sombra/autonomia.js';
 import { type MotivoDeNaoPedir, motivoDoProblema, pedidoDaRecomendacao, verbaRecomendada } from '../sombra/pedido.js';
 import type { AcaoSombra } from '../sombra/regras.js';
+import { proporAprovacoes, type ResultadoDasPropostas } from './autonomia-propostas.js';
 
 // O pedido do Gestor de tráfego no modo Aprovação (A4, X3 parte 2; proposta D-A4-26). Fica na pasta do worker porque
 // grava a tentativa em escopo de sistema (regra `liame-escopo-sistema`). Depois da rodada da manhã da sombra, a
@@ -122,6 +124,23 @@ export class PedidosDoGestor {
       }
     }
     return resultado;
+  }
+
+  /**
+   * A vez das propostas de Sugerir para Aprovação da marca (parte 2b; proposta D-A4-25): o sistema propõe, retira ou
+   * encerra, e quem decide é uma pessoa. Só para a empresa com a flag `modo_aprovacao`; a escrita de cada conta é
+   * conferida pela flag do conector dela, como no pedido.
+   */
+  async proporAprovacao(alvo: { tenantId: string; brandId: string }): Promise<ResultadoDasPropostas> {
+    const nada: ResultadoDasPropostas = { propostas: 0, retiradas: 0, encerradas: 0 };
+    if (!this.database) return nada;
+    const { tenantId, brandId } = alvo;
+    if (!(await this.flags.isEnabled('modo_aprovacao', this.flags.context({ tenantId, brandId })))) return nada;
+    const escritaLigada = async (provider: string, conta: string): Promise<boolean> => {
+      const flag = CONNECTORS[provider]?.writeFlag;
+      return flag ? this.flags.isEnabled(flag, this.flags.context({ tenantId, brandId, accountId: conta })) : false;
+    };
+    return withSystem(this.database.db, (tx) => proporAprovacoes(tx, alvo, escritaLigada));
   }
 
   /** Faz o pedido de uma recomendação. Devolve nulo se o pedido entrou, ou o motivo de não ter entrado. */

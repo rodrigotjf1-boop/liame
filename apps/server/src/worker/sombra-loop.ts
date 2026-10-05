@@ -92,9 +92,14 @@ export class SombraLoop {
         // Aprovação (A4, X3): a recomendação nova de uma ação em Aprovação vira um pedido do Gestor de tráfego. Vem
         // antes de fechar a vez: se o worker cair no meio, a rodada volta e ele pede só o que ainda não tentou.
         const pedidos = r.status === 'feito' ? await this.pedidos.pedirAsDeHoje({ ...alvo, hoje: r.dia }) : null;
+        // E a vez das propostas de Sugerir para Aprovação: o sistema propõe, e quem decide é uma pessoa.
+        const propostas = r.status === 'feito' ? await this.pedidos.proporAprovacao(alvo) : null;
         await this.fechar(m.brand_id, r.status, r.status === 'feito' ? r.dia : null, referencia);
         if (pedidos && (pedidos.pedidos || pedidos.semPedido)) {
           this.logger.log(`marca ${m.brand_id}: ${pedidos.pedidos} pedido(s) do Gestor de tráfego, ${pedidos.semPedido} recomendação(ões) sem pedido`);
+        }
+        if (propostas && (propostas.propostas || propostas.retiradas || propostas.encerradas)) {
+          this.logger.log(`marca ${m.brand_id}: modo Aprovação: ${propostas.propostas} proposta(s), ${propostas.retiradas} retirada(s), ${propostas.encerradas} encerrada(s)`);
         }
         if (r.status === 'feito' && (r.novas || r.avaliadas || r.observadas || r.descartadas)) {
           this.logger.log(`marca ${m.brand_id}: ${r.novas} nova(s), ${r.observadas} com ação da pessoa, ${r.avaliadas} avaliada(s), ${r.descartadas} descartada(s)`);

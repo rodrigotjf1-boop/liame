@@ -224,6 +224,7 @@ export {
   WeekPlanContent,
 } from './planos.js';
 export {
+  AutonomyApprovalReadiness,
   AutonomyItem,
   AutonomyProposalSummary,
   AutonomyQuery,

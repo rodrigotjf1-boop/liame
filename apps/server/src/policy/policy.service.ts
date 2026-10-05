@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
-import { comRegraDaConta } from '../sombra/autonomia.js';
+import { comRegraDaConta, type ModoDoFuncionario } from '../sombra/autonomia.js';
 import { evaluatePolicy, type LoadedPolicy, PLATFORM_POLICY } from './engine.js';
 
 type Row = {
@@ -75,7 +75,7 @@ export class PolicyService {
    */
   async publicarRegraDaConta(
     tx: Tx,
-    alvo: { tenantId: string; brandId: string; userId: string; action: string; account: string; mode: 'SHADOW' | 'SUGGEST' },
+    alvo: { tenantId: string; brandId: string; userId: string; action: string; account: string; mode: ModoDoFuncionario },
   ): Promise<{ id: string; version: number }> {
     const row = await this.publicarNoEscopo(tx, {
       tenantId: alvo.tenantId,
