@@ -15,17 +15,19 @@ o que tem: (1) a tela Criativos: o uso de IA do dia, o lote que espera decisão,
            texto com a contagem de cada campo, a conferência do Compliance item por item (passou, aviso ou barrou,
            com o motivo), "feito com IA", de onde veio, o custo e as versões; aprovar, editar o texto, pedir outra e
            recusar; (4) a campanha nova com a peça aprovada: a gaveta que monta (nome, objetivo, quem vê, verba e
-           fim), o pedido em Aprovações com a prévia do anúncio, criada pausada, a Meta recusou, parou no meio; e
-           ativar, que é outro pedido, com risco médio e os limites da Verba do mês; (5) no Resumo, as peças que
-           esperam decisão e o que o Criativo fez.
+           fim) e mostra quem assina o anúncio (a Página do Facebook da marca; sem Página ligada, não há campanha),
+           o pedido em Aprovações com a prévia do anúncio, criada pausada, a Meta recusou, parou no meio; e ativar,
+           que é outro pedido, com risco médio e os limites da Verba do mês; (5) no Resumo, as peças que esperam
+           decisão e o que o Criativo fez.
 estados: seletor "Criativos" na faixa do topo. Lite e Pro pelo seletor do topo. No código do app, 000000 faz o papel
          do código recusado; qualquer outro de 6 números aprova.
 regras: o Criativo só trabalha a pedido e dentro do limite de uso de IA da empresa; a oferta e o preço vêm de Minha
         marca; a imagem parte de uma foto de verdade do produto e sai sem texto, sem pessoa e sem marca de terceiro;
         toda peça passa pelo Compliance antes de aparecer, e a barrada não pode ser aprovada nem vai para a Meta;
-        aprovar a peça guarda na biblioteca, sem o código do app; a campanha nasce pausada, com as melhorias
-        automáticas da Meta desligadas; ativar pede outra aprovação, o teto por campanha e caber no teto do mês; o
-        Liame não apaga nada na Meta. Dados fictícios (Mister Burgers · Loja Centro); as artes são desenhos de exemplo.
+        aprovar a peça guarda na biblioteca, sem o código do app; o anúncio sai em nome da Página do Facebook da
+        marca; a campanha nasce pausada, com as melhorias automáticas da Meta desligadas; ativar pede outra
+        aprovação, o teto por campanha e caber no teto do mês; o Liame não apaga nada na Meta. Dados fictícios
+        (Mister Burgers · Loja Centro); as artes são desenhos de exemplo.
 fora deste protótipo: vídeo; trocar o criativo de um anúncio que está no ar; cadastrar oferta e enviar foto (ficam
         em Minha marca e no pedido da peça); a escrita no Google.
 conferência: os cenários `p10-*` em window.uiuxCenarios (1440, 1024, 768 e 375 px, claro e escuro).
@@ -1367,6 +1369,8 @@ select.input { padding-right: var(--sp-2); }
 .mc-peca span { color: var(--text-muted); }
 .mc-destino { margin: 0; }
 .mc-destino code { overflow-wrap: anywhere; font-weight: 400; }
+/* No celular, o rótulo longo ("Melhorias automáticas da Meta") quebra a linha em vez de espremer o valor. */
+@media (max-width: 480px) { .mc-destino { grid-template-columns: minmax(0, 38%) minmax(0, 1fr); column-gap: var(--sp-3); } }
 #mc-erro, #pp-erro { outline: none; }
 
 /* Aprovações: a campanha nova, com a prévia do anúncio */
@@ -5244,6 +5248,7 @@ const ESTADOS_P10 = {
     'campanha-teto': 'A verba passa do teto por campanha',
     'campanha-sem-limites': 'Limites ainda não definidos',
     'campanha-reconectar': 'Falta a permissão de mudar anúncios',
+    'campanha-sem-pagina': 'A marca não tem Página do Facebook ligada',
     'campanha-pedida': 'Pedido criado',
     'campanha-aprovar': 'Em Aprovações: criar pausada, com a prévia',
     'campanha-criando': 'Aprovado: o Liame cria em instantes',
@@ -5291,6 +5296,9 @@ const OBJETIVOS_P10 = {
   whatsapp: { rot: 'Conversas no WhatsApp', ic: 'i-message', leva: 'A conversa no WhatsApp da Loja Centro', onde: 'o número da loja, pelo RegemCast', rastreio: 'Pela conversa que o anúncio abre' },
 };
 const URL_TAGS_P10 = 'utm_source=meta&utm_medium=paid&utm_campaign={{campaign.name}}&campaign_id={{campaign.id}}&adset_id={{adset.id}}&ad_id={{ad.id}}&lk=7K2M9QX4HD';
+/* Quem assina o anúncio: na Meta, todo anúncio sai em nome de uma Página do Facebook e, no Instagram, da conta ligada
+   a ela. O Liame usa a Página que a marca escolheu ao conectar a Meta; sem Página, não cria campanha. */
+const ASSINA_P10 = { pagina: 'Mister Burgers', instagram: '@misterburgers' };
 
 /* ---------- as artes de exemplo (desenhos; no produto são a foto da empresa e a imagem feita a partir dela) ---------- */
 const ARTES_P10 = {
@@ -5401,7 +5409,7 @@ function baseP10() {
     ui: uiP10(),
     pedir: null, // o diálogo "Pedir uma peça"
     montar: null, // a gaveta "Campanha nova, pausada"
-    falhaDaGaveta: null, // 'reconectar'
+    falhaDaGaveta: null, // 'reconectar' | 'sem-pagina'
     pedidos: {}, // os pedidos de campanha (criar, ativar e a volta), que entram em Aprovações
     desfecho: 'executado', // o que acontece depois de aprovar a criação: 'executado' | 'recusou' | 'metade'
     seq: 0,
@@ -6009,7 +6017,10 @@ function htmlMontar() {
     return so(`<div class="pd-bloco" aria-busy="true"><p class="sr-only" role="status">Lendo a conta de anúncios na Meta…</p><p class="pd-nota">${ic('i-refresh')}<span>Lendo a conta de anúncios na Meta, para a campanha nascer com o que vale lá agora…</span></p><span class="esqueleto esqueleto--medio"></span><span class="esqueleto"></span><span class="esqueleto esqueleto--curto"></span></div>`, fechar);
   }
   if (m.fase === 'reconectar') {
-    return so(`<div class="pd-aviso" role="alert">${ic('i-plug')}<div><b id="mc-falha" tabindex="-1">A conexão com a Meta ainda não deixa o Liame criar anúncios</b><span>Hoje ela só deixa ler. Conecte a Meta de novo em Contas conectadas: a Meta vai pedir a permissão de gerenciar anúncios, e as contas que já estão ligadas continuam as mesmas. A peça continua aprovada, na biblioteca.</span><a class="btn btn--primary btn--sm" href="prototipo-contas-regem.html" data-destino="prototipo-contas-regem.html">Abrir Contas conectadas</a></div></div>`, fechar);
+    return so(`<div class="pd-aviso" role="alert">${ic('i-plug')}<div><b id="mc-falha" tabindex="-1">A conexão com a Meta ainda não deixa o Liame criar anúncios</b><span>Hoje ela só deixa ler. Conecte a Meta de novo em Contas conectadas: a Meta vai pedir a permissão de gerenciar anúncios e a de anunciar pela Página da marca, e as contas que já estão ligadas continuam as mesmas. A peça continua aprovada, na biblioteca.</span><a class="btn btn--primary btn--sm" href="prototipo-contas-regem.html" data-destino="prototipo-contas-regem.html">Abrir Contas conectadas</a></div></div>`, fechar);
+  }
+  if (m.fase === 'sem-pagina') {
+    return so(`<div class="pd-aviso" role="alert">${ic('i-plug')}<div><b id="mc-falha" tabindex="-1">Falta a Página do Facebook da marca</b><span>Na Meta, todo anúncio sai em nome de uma Página do Facebook. A conexão da Mister Burgers com a Meta ainda não tem Página. Conecte a Meta de novo em Contas conectadas: a Meta mostra as Páginas que você administra, e você escolhe a da marca. Quem conecta precisa ser administrador ou editor da Página. A peça continua aprovada, na biblioteca.</span><a class="btn btn--primary btn--sm" href="prototipo-contas-regem.html" data-destino="prototipo-contas-regem.html">Abrir Contas conectadas</a></div></div>`, fechar);
   }
   if (m.fase === 'criado') {
     const q = p10.pedidos[m.criado];
@@ -6023,6 +6034,9 @@ function htmlMontar() {
   const publico = `<div class="campo"><label for="mc-publico">Quem vê</label><select class="input" id="mc-publico" aria-describedby="mc-publico-dica">${Object.entries(PUBLICOS_P10).map(([id, rot]) => `<option value="${id}"${m.publico === id ? ' selected' : ''}>${rot}</option>`).join('')}</select><p class="campo-dica" id="mc-publico-dica">Pessoas de 18 anos ou mais, dentro do raio. O de 5 km é o mesmo da campanha Combo sexta. Dentro da região, a Meta escolhe para quem mostrar.</p></div>`;
   const verba = `<div class="campo"><label for="mc-verba">Verba diária</label><div class="pd-valor"><span aria-hidden="true">R$</span><input id="mc-verba" inputmode="decimal" autocomplete="off" maxlength="10" value="${esc(m.verba)}" aria-describedby="mc-verba-dica${m.erro && m.campo === 'mc-verba' ? ' mc-erro' : ''}"${invalido('mc-verba')}></div><p class="campo-dica" id="mc-verba-dica">${L.tetoCampanha == null ? 'A empresa ainda não definiu o teto por campanha.' : `Teto por campanha: ${moeda(L.tetoCampanha)} por dia.`} Enquanto estiver pausada, ela não gasta.</p></div>`;
   const fim = `<div class="campo"><label for="mc-fim">Termina em <span class="campo-dica">Opcional.</span></label><input class="input" type="date" id="mc-fim" min="2026-09-30" value="${esc(m.fim)}" aria-describedby="mc-fim-dica"${invalido('mc-fim')}><p class="campo-dica" id="mc-fim-dica">Em branco, não tem data de fim. Ela começa quando você ativar.</p></div>`;
+  const assina = `<div class="pd-bloco"><p class="rotulo-marca">Quem assina o anúncio</p><dl class="pd-agora mc-destino">
+      <dt>No Facebook</dt><dd>Página ${esc(ASSINA_P10.pagina)}<small>o nome e a foto dela aparecem no topo do anúncio</small></dd>
+      <dt>No Instagram</dt><dd>${esc(ASSINA_P10.instagram)}<small>a conta ligada à Página</small></dd></dl></div>`;
   const destino = `<div class="pd-bloco"><p class="rotulo-marca">Para onde leva</p><dl class="pd-agora mc-destino">
       <dt>Destino</dt><dd>${obj.leva}<small>${obj.onde}</small></dd>
       <dt>Botão do anúncio</dt><dd>${esc(botaoDoAnuncio(v, m.objetivo))}<small>acompanha o que você quer do anúncio</small></dd>
@@ -6034,7 +6048,7 @@ function htmlMontar() {
     : `<div class="pd-bloco"><p class="rotulo-marca">Limites da empresa</p><ul class="pd-limites">
         <li><span>Teto por campanha</span><b>${moeda(L.tetoCampanha)} por dia</b></li>
         <li><span>Verba de ${MES.nome}</span><b>${conta.sobra >= 0 ? `sobram ${moeda(conta.sobra)} de ${moeda(L.tetoMes)}` : `passa ${moeda(-conta.sobra)} do teto de ${moeda(L.tetoMes)}`}</b></li></ul></div>`;
-  const corpo = `${peca}${nome}${objetivo}${publico}${verba}${fim}${erro}<p class="pd-efeito" id="mc-efeito" role="status">${efeitoDaCampanha(m)}</p>${destino}${limites}
+  const corpo = `${peca}${nome}${objetivo}${publico}${verba}${fim}${erro}<p class="pd-efeito" id="mc-efeito" role="status">${efeitoDaCampanha(m)}</p>${assina}${destino}${limites}
     <p class="pd-nota">${ic('i-shield')}<span>O pedido vai para Aprovações, com a prévia do anúncio. Depois da aprovação com o código do app, o Liame confere com a Meta e cria a campanha, o conjunto e o anúncio, tudo pausado.</span></p>`;
   return so(corpo, '<button class="btn" type="button" data-fechar>Cancelar</button><button class="btn btn--primary" type="submit">Pedir a criação</button>');
 }
@@ -6142,6 +6156,7 @@ function tabelaDaCampanha(q) {
     ['Campanha', 'não existe', `“${esc(c.nome)}”, pausada`],
     ['O que você quer', '—', obj.rot],
     ['Quem vê', '—', `${PUBLICOS_P10[c.publico]} · 18 anos ou mais`],
+    ['Quem assina', '—', `a Página ${esc(ASSINA_P10.pagina)} (no Instagram, ${esc(ASSINA_P10.instagram)})`],
     ['Verba diária', '—', `${moeda(c.verba)} (só gasta depois de ativada)`],
     ['Termina em', '—', c.fim ? dataCurta(c.fim) : 'sem data de fim'],
     ['Anúncio', '—', `a peça “${esc(v.titulo)}” (versão ${v.n}), com o botão “${esc(botaoDoAnuncio(v, c.objetivo))}”`],
@@ -6345,7 +6360,7 @@ const PEDIR_P10 = {
 };
 /* A peça que cada estado abre. */
 const PECA_DO_ESTADO = { 'peca-aviso': 'pc-2', 'peca-barrada': 'pc-3', 'peca-barrada-imagem': 'pc-3', 'peca-contestar': 'pc-3', 'peca-texto': 'pc-b2' };
-const MONTAR_P10 = { 'campanha-montar': {}, 'campanha-teto': { verba: 90 }, 'campanha-sem-limites': {}, 'campanha-reconectar': {}, 'campanha-pedida': {} };
+const MONTAR_P10 = { 'campanha-montar': {}, 'campanha-teto': { verba: 90 }, 'campanha-sem-limites': {}, 'campanha-reconectar': {}, 'campanha-sem-pagina': {}, 'campanha-pedida': {} };
 function definirP10(v, { focar = false } = {}) {
   if (!TODOS_P10[v]) v = 'criativos';
   const tela = TELA_DO_ESTADO_P10(v), pedir = PEDIR_P10[v], montar = MONTAR_P10[v];
@@ -6401,6 +6416,7 @@ function definirP10(v, { focar = false } = {}) {
   if (montar) { aprovar('pc-1'); P.vista = 'peca'; P.sel = 'pc-1'; }
   if (v === 'campanha-sem-limites') p9.limites = { tetoMes: null, tetoCampanha: null, por: null, em: null };
   if (v === 'campanha-reconectar') P.falhaDaGaveta = 'reconectar';
+  if (v === 'campanha-sem-pagina') P.falhaDaGaveta = 'sem-pagina';
   if (tela === 'aprovacoes') {
     aprovar('pc-1');
     criar();
@@ -6669,6 +6685,14 @@ definirP10(TODOS_P10[params.get('p10')] ? params.get('p10') : 'criativos');
   window.uiuxCenarios['p10-pro-campanha'] = { larguras: todas, executar: async () => {
     await abrir('campanha-aprovar'); definirModo('pro', { silencioso: true }); await esperar(200);
     exige($('#ap-detalhes')?.getClientRects().length > 0 && texto('#aprovacoes').includes('Melhorias automáticas da Meta') && !!$('#aprovacoes .previa'), 'no Pro, o pedido de campanha não aparece inteiro');
+  } };
+  window.uiuxCenarios['p10-fluxo-pagina'] = { larguras: [1440, 375], executar: async () => {
+    await abrir('campanha-montar');
+    exige(texto('#montar-form').includes('Quem assina o anúncio') && texto('#montar-form').includes('Página ' + ASSINA_P10.pagina) && texto('#montar-form').includes(ASSINA_P10.instagram), 'a gaveta não diz quem assina o anúncio');
+    await abrir('campanha-aprovar');
+    exige(texto('#aprovacoes').includes('Quem assina') && texto('#aprovacoes').includes('a Página ' + ASSINA_P10.pagina), 'o pedido de campanha não diz quem assina o anúncio');
+    await abrir('campanha-sem-pagina');
+    exige(document.activeElement?.id === 'mc-falha' && texto('#montar-form').includes('Página do Facebook') && !$('#mc-nome') && !!$('#montar-form a[data-destino]'), 'sem Página ligada, a gaveta não explica nem leva a Contas conectadas');
   } };
   window.uiuxCenarios['p10-fluxo-pedir'] = { larguras: pontas, executar: async () => {
     await abrir('criativos-em-dia');
