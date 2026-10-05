@@ -71,7 +71,7 @@ Situação em 27/09/2026. As entregas (G1–G9) estão na tabela acima; aqui, o 
 | A2-8 | A1-1 a A1-3 cobrindo as tabelas novas | ✅ | Catálogo e cruzamento entre empresas gerados do banco passam com as tabelas das migrations 0017–0020 |
 | A2-9 | Telas de Contas conectadas e Atenção de mídia conforme mockup aprovado | ✅ 27/09/2026 | Protótipo aprovado pelo dono (avisos como cartões na home Atenção quando ela existir; a tela é o "ver todos"); telas `/contas` e `/atencao` conferidas no navegador (4 larguras, claro e escuro) com dados semeados. **Falta:** repetir com as contas reais do piloto |
 
-**Produção (29/09/2026):** Liame no ar (`app.` e `api.agencialiame.com`, EasyPanel projeto `liame`, `docs/deploy.md`); migrations 0001–0020 na nuvem. **Falta da A2:** 7 dias de piloto sem erro de cota (A2-4), a conferência do Google (A2-2) e publicar os apps da Meta e do Google.
+**Produção (29/09/2026):** Liame no ar (`app.` e `api.agencialiame.com`, EasyPanel projeto `liame`, `docs/deploy.md`); migrations 0001–0020 na nuvem. **Falta da A2:** 7 dias de piloto sem erro de cota (A2-4), a conferência do Google (A2-2) e publicar os apps da Meta e do Google. *(05/10/2026: o app do Google em status Testing faz a autorização vencer a cada 7 dias; publicado, o prazo deixa de valer, com o aviso de app não verificado até a verificação. Base de conhecimento §3.1.)*
 
 ## Fase A2.5 · Ciclo fechado
 
