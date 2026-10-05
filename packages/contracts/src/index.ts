@@ -296,6 +296,7 @@ export {
   TrackingLinkListResponse,
 } from './links.js';
 export {
+  AD_PIECE_BATCH_MAX,
   AD_PIECE_BUTTONS,
   AD_PIECE_DESTINATIONS,
   AD_PIECE_LIMITS,
@@ -319,6 +320,8 @@ export {
   AdPieceStatus,
   AdPieceVersion,
   ApproveAdPieceRequest,
+  ApproveAdPiecesRequest,
+  ApproveAdPiecesResponse,
   ContestAdPieceRequest,
   CreateAdPieceRequest,
   RedoAdPieceRequest,

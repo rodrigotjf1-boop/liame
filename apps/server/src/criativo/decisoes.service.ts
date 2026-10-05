@@ -1,4 +1,13 @@
-import type { AdPieceResponse, ApproveAdPieceRequest, ContestAdPieceRequest, RedoAdPieceRequest, RejectAdPieceRequest, UpdateAdPieceRequest } from '@liame/contracts';
+import type {
+  AdPieceResponse,
+  ApproveAdPieceRequest,
+  ApproveAdPiecesRequest,
+  ApproveAdPiecesResponse,
+  ContestAdPieceRequest,
+  RedoAdPieceRequest,
+  RejectAdPieceRequest,
+  UpdateAdPieceRequest,
+} from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -15,15 +24,15 @@ import { FlagService } from '../flags/flag.service.js';
 import { ResultsService } from '../results/results.service.js';
 import { hashDaPeca, regrasDaConferencia, revisaoDaConferencia } from './apresentacao.js';
 import { type MarcaDoCriativo, marcaDoCriativo, mensagemDoAchado, mensagemDoProblema } from './base.js';
-import { pecaComHistorico } from './consultas.js';
+import { pecaComHistorico, pecasComAVersaoAtual } from './consultas.js';
 import { FLAG_DO_CRIATIVO, PEDIDOS_POR_DIA } from './pecas.service.js';
 
 // As decisões sobre uma peça do Criativo (A4, X6; `plano-a4.md` D-A4-29 e D-A4-30, propostas; protótipo P10, aguardando
 // aprovação; sem tela ainda): editar o texto (nasce uma versão nova, conferida de novo; o que seria barrado não é
-// salvo), aprovar (a peça vai para a biblioteca; não pede o código do app, porque nada sai do Liame), recusar com o
-// motivo, pedir outra ao Criativo e contestar a conferência (guarda o motivo e não destrava). Tudo é de quem opera
-// campanhas e vale só para a peça que espera decisão. A peça é travada no começo de cada decisão (V37): duas pessoas
-// decidindo juntas, uma só passa.
+// salvo), aprovar (a peça vai para a biblioteca; não pede o código do app, porque nada sai do Liame), uma peça ou
+// várias de uma vez ("as que passaram"), recusar com o motivo, pedir outra ao Criativo e contestar a conferência
+// (guarda o motivo e não destrava). Tudo é de quem opera campanhas e vale só para a peça que espera decisão. A peça é
+// travada no começo de cada decisão (V37): duas pessoas decidindo juntas, uma só passa.
 
 const CAMPO_DA_PECA = { titulo: 'title', texto: 'body' } as const;
 
@@ -46,6 +55,15 @@ type PecaTravada = {
   redoing: boolean;
 };
 
+/** A peça com a versão atual e o pedido de onde nasceu: o que cada decisão lê ao travar a peça. */
+const PECA_COM_A_VERSAO_ATUAL = sql`
+  select p.id, p.brand_id, p.status, p.version, p.review_status, q.offer, q.destination, q.instruction, q.reference_ad_id, q.reference_name,
+         v.title, v.body, v.button, v.content_hash, v.author,
+         exists (select 1 from liame.ad_piece_request y where y.piece_id = p.id and y.status in ('pendente', 'gerando')) as redoing
+    from liame.ad_piece p
+    join liame.ad_piece_request q on q.id = p.request_id
+    join liame.ad_piece_version v on v.piece_id = p.id and v.version = p.version`;
+
 const naoEncontrado = () => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Esta peça não existe nesta empresa.');
 const decidida = () => new AppProblem(409, 'peca-decidida', 'Esta peça já foi decidida', 'Alguém já aprovou ou recusou esta peça. Atualize a tela.');
 const mudou = () => new AppProblem(409, 'peca-mudou', 'A peça mudou depois que você abriu', 'Há uma versão mais nova desta peça. Atualize a tela e confira de novo antes de decidir.');
@@ -57,6 +75,26 @@ const ofertaMudou = () =>
 function errosDaConferencia(c: ConferenciaDaPeca): FieldError[] {
   return c.itens.filter((i) => i.situacao === 'barrou').flatMap((i) => i.achados.map((a) => ({ path: CAMPO_DA_PECA[a.campo], message: mensagemDoAchado(a) })));
 }
+
+// A regra de aprovar é uma só, para uma peça e para várias: primeiro o que impede decidir sobre o que a pessoa viu;
+// depois a conferência de novo, com Minha marca de agora.
+
+type ImpedimentoDeAprovar = 'peca_decidida' | 'peca_refazendo' | 'peca_mudou';
+const PROBLEMA_DO_IMPEDIMENTO: Record<ImpedimentoDeAprovar, () => AppProblem> = { peca_decidida: decidida, peca_refazendo: refazendo, peca_mudou: mudou };
+
+/** O que impede aprovar a peça como a pessoa a viu, antes de olhar a marca; nulo quando nada impede. */
+function impedimentoDeAprovar(p: PecaTravada, hashVisto: string): ImpedimentoDeAprovar | null {
+  if (p.status !== 'decidir') return 'peca_decidida';
+  if (p.redoing) return 'peca_refazendo';
+  return hashVisto !== p.content_hash ? 'peca_mudou' : null;
+}
+
+/** A oferta da peça continua em Minha marca? Com ela fora (ou sem dossiê), o preço da peça pode não valer mais. */
+const ofertaAindaVale = (p: PecaTravada, marca: MarcaDoCriativo | null): marca is MarcaDoCriativo => marca !== null && marca.conteudo.offers.items.includes(p.offer);
+
+/** A conferência da versão atual com as regras e a marca de agora (a gravada com a versão é a do dia em que ela nasceu). */
+const conferirDeNovo = (p: PecaTravada, marca: MarcaDoCriativo): ConferenciaDaPeca =>
+  conferirPeca({ titulo: p.title, texto: p.body }, baseDoPedido({ oferta: p.offer, instrucao: p.instruction }, marca), p.author === 'criativo' ? 'ia' : 'pessoa');
 
 @Injectable()
 export class DecisoesDePecaService {
@@ -104,17 +142,68 @@ export class DecisoesDePecaService {
   async aprovar(auth: AuthContext, id: string, body: ApproveAdPieceRequest, agora = new Date()): Promise<AdPieceResponse> {
     const tenantId = await this.exigirCriativo(auth);
     const p = await this.travar(id);
-    if (p.status !== 'decidir') throw decidida();
-    if (p.redoing) throw refazendo();
-    if (body.content_hash !== p.content_hash) throw mudou();
-    const marca = await this.marcaDaPeca(p, agora);
-    const conferencia = conferirPeca({ titulo: p.title, texto: p.body }, baseDoPedido({ oferta: p.offer, instrucao: p.instruction }, marca), p.author === 'criativo' ? 'ia' : 'pessoa');
+    const impede = impedimentoDeAprovar(p, body.content_hash);
+    if (impede) throw PROBLEMA_DO_IMPEDIMENTO[impede]();
+    const conferencia = conferirDeNovo(p, await this.marcaDaPeca(p, agora));
     if (conferencia.situacao === 'barrou') {
       throw new AppProblem(409, 'peca-barrada', 'Esta peça não passa na conferência', 'A peça bate numa regra de anúncio e não pode ser aprovada. Edite o texto, peça outra ou recuse.', {}, errosDaConferencia(conferencia));
     }
     await this.decidir(tenantId, auth, p, 'aprovada', null, null, agora);
     auditDetail({ resourceId: id, before: { status: 'decidir' }, after: { status: 'aprovada', version: p.version, review_status: conferencia.situacao } });
     return this.detalhe(id);
+  }
+
+  /**
+   * Aprovar várias de uma vez ("as que passaram"): a mesma regra de aprovar uma, peça por peça. Cada uma vale para o
+   * hash que a pessoa viu e é conferida de novo com Minha marca de agora. A que não pode ser aprovada fica como está,
+   * com o motivo, e as outras entram: uma peça não segura as outras. As peças são travadas juntas, em ordem (duas
+   * pessoas aprovando o mesmo lote: cada peça é aprovada uma vez), e a gravação é uma instrução para as decisões e
+   * outra para as peças, qualquer que seja a quantidade.
+   */
+  async aprovarVarias(auth: AuthContext, body: ApproveAdPiecesRequest, agora = new Date()): Promise<ApproveAdPiecesResponse> {
+    const tenantId = await this.exigirCriativo(auth);
+    const tx = currentTx();
+    const travadas = new Map((await this.travarVarias(body.brand_id, body.items.map((i) => i.id))).map((p) => [p.id, p]));
+    // Minha marca de agora, lida uma vez: as peças são todas desta marca.
+    const marca = travadas.size ? await marcaDoCriativo(body.brand_id, await this.resultados.fusoDaMarca(body.brand_id), agora) : null;
+    const avaliar = (item: { id: string; content_hash: string }): { motivo: string } | { p: PecaTravada; conferencia: ConferenciaDaPeca } => {
+      const p = travadas.get(item.id);
+      if (!p) return { motivo: 'nao_encontrada' };
+      const impede = impedimentoDeAprovar(p, item.content_hash);
+      if (impede) return { motivo: impede };
+      if (!ofertaAindaVale(p, marca)) return { motivo: 'oferta_mudou' };
+      const conferencia = conferirDeNovo(p, marca);
+      return conferencia.situacao === 'barrou' ? { motivo: 'peca_barrada' } : { p, conferencia };
+    };
+    const motivos = new Map<string, string>();
+    const aprovadas: Array<{ p: PecaTravada; conferencia: ConferenciaDaPeca }> = [];
+    for (const item of body.items) {
+      const avaliada = avaliar(item);
+      if ('motivo' in avaliada) motivos.set(item.id, avaliada.motivo);
+      else aprovadas.push(avaliada);
+    }
+    if (aprovadas.length) {
+      const decisoes = aprovadas.map(({ p }) => sql`(${uuidv7()}, ${tenantId}, ${p.id}, ${p.version}, ${p.content_hash}, 'aprovada', ${auth.userId})`);
+      await tx.execute(sql`
+        insert into liame.ad_piece_decision (id, tenant_id, piece_id, version, content_hash, decision, decided_by)
+        values ${sql.join(decisoes, sql`, `)}`);
+      await tx.execute(sql`
+        update liame.ad_piece set status = 'aprovada', decided_by = ${auth.userId}, decided_at = ${agora.toISOString()}::timestamptz, updated_at = now()
+         where id in ${aprovadas.map(({ p }) => p.id)}`);
+    }
+    auditDetail({
+      after: {
+        brand_id: body.brand_id,
+        aprovadas: aprovadas.map(({ p, conferencia }) => ({ id: p.id, version: p.version, review_status: conferencia.situacao })),
+        nao_aprovadas: [...motivos].map(([id, motivo]) => ({ id, motivo })),
+      },
+    });
+    // As peças como ficaram: a aprovada e a que não foi (a tela mostra o estado de agora de cada uma).
+    const agoraEstao = travadas.size ? new Map((await pecasComAVersaoAtual(sql`p.id in ${[...travadas.keys()]}`, travadas.size)).map((x) => [x.id, x])) : new Map<string, AdPieceResponse>();
+    return {
+      approved: aprovadas.length,
+      items: body.items.map((i) => ({ id: i.id, approved: !motivos.has(i.id), reason: motivos.get(i.id) ?? null, piece: agoraEstao.get(i.id) ?? null })),
+    };
   }
 
   /** Recusar, com o motivo. O comentário é guardado sem dado pessoal. */
@@ -193,17 +282,18 @@ export class DecisoesDePecaService {
 
   /** A peça, com a versão atual e o pedido de onde nasceu, travada até o fim da transação. */
   private async travar(id: string): Promise<PecaTravada> {
-    const r = await currentTx().execute<PecaTravada>(sql`
-      select p.id, p.brand_id, p.status, p.version, p.review_status, q.offer, q.destination, q.instruction, q.reference_ad_id, q.reference_name,
-             v.title, v.body, v.button, v.content_hash, v.author,
-             exists (select 1 from liame.ad_piece_request y where y.piece_id = p.id and y.status in ('pendente', 'gerando')) as redoing
-        from liame.ad_piece p
-        join liame.ad_piece_request q on q.id = p.request_id
-        join liame.ad_piece_version v on v.piece_id = p.id and v.version = p.version
-       where p.id = ${id}
-         for update of p`);
+    const r = await currentTx().execute<PecaTravada>(sql`${PECA_COM_A_VERSAO_ATUAL} where p.id = ${id} for update of p`);
     if (!r.rows[0]) throw naoEncontrado();
     return r.rows[0];
+  }
+
+  /**
+   * As peças pedidas que são desta marca, travadas juntas até o fim da transação. Em ordem de id: dois pedidos com as
+   * mesmas peças travam na mesma sequência, e um espera o outro em vez de os dois se travarem.
+   */
+  private async travarVarias(brandId: string, ids: string[]): Promise<PecaTravada[]> {
+    const r = await currentTx().execute<PecaTravada>(sql`${PECA_COM_A_VERSAO_ATUAL} where p.id in ${ids} and p.brand_id = ${brandId} order by p.id for update of p`);
+    return r.rows;
   }
 
   /** O dossiê de agora, com a oferta da peça ainda lá: é contra ele que a peça é conferida ao editar e ao aprovar. */

@@ -1,5 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { AdPieceListResponse, AdPieceRequestListResponse, AdPieceResponse } from '@liame/contracts';
+import { AdPieceListResponse, AdPieceRequestListResponse, AdPieceResponse, ApproveAdPiecesResponse } from '@liame/contracts';
 import { type Database, runMigrations } from '@liame/database';
 import { MockLanguageModelV4 } from 'ai/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -17,9 +18,9 @@ import { ligarCriativo, ligarIa, ModelosDeTeste, responde, rotaCompartilhada, us
 import { hasDb, OWNER_URL } from './env.js';
 
 // As decisões sobre uma peça do Criativo (A4, X6): editar (versão nova, conferida de novo; o que seria barrado não é
-// salvo), aprovar (sem o código do app; a barrada e a de oferta que mudou não passam), recusar com o motivo, pedir
-// outra (o Criativo refaz, e a versão nova entra na mesma peça) e contestar a conferência (guarda o motivo e não
-// destrava). Com o modelo simulado.
+// salvo), aprovar (sem o código do app; a barrada e a de oferta que mudou não passam), uma peça ou várias de uma vez
+// ("as que passaram"), recusar com o motivo, pedir outra (o Criativo refaz, e a versão nova entra na mesma peça) e
+// contestar a conferência (guarda o motivo e não destrava). Com o modelo simulado.
 
 const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
 const DOSSIE = {
@@ -33,6 +34,8 @@ const DOSSIE = {
 const BOA = { titulo: 'Sexta é dia de combo', texto: 'Smash, batata e refri por R$ 34,90. Peça pelo cardápio e retire no balcão.', botao: 'pedir_agora' };
 const OUTRA = { titulo: 'Combo sexta por R$ 34,90', texto: 'Smash na chapa, batata e refri por R$ 34,90. É só pedir pelo cardápio.', botao: 'ver_cardapio' };
 const BARRADA = { titulo: 'Combo gourmet por R$ 29,90', texto: 'Smash, batata e refri. Peça pelo cardápio.', botao: 'pedir_agora' };
+/** O título passa do tamanho que a Meta recomenda (27): é só aviso, e dá para aprovar. */
+const COM_AVISO = { titulo: 'Combo de sexta com smash, batata e refri', texto: 'O combo completo por R$ 34,90. Peça agora pelo cardápio.', botao: 'pedir_agora' };
 const ACOES = ['approve', 'reject', 'redo', 'contest'] as const;
 /** O corpo mínimo de cada ação (os contratos são estritos: campo a mais é 400 antes de qualquer regra). */
 const CORPO: Record<(typeof ACOES)[number], Record<string, unknown>> = { approve: {}, reject: { reason: 'outro' }, redo: {}, contest: { comment: 'Não concordo com a conferência.' } };
@@ -92,6 +95,14 @@ describe.skipIf(!hasDb)('Peças do Criativo: editar, aprovar, recusar, pedir out
   const decidir = (d: Dono, p: Peca, acao: 'approve' | 'reject' | 'redo' | 'contest', body: Record<string, unknown> = {}, cookie = d.cookie) =>
     api.call('POST', `/v1/ad-pieces/${p.id}/${acao}`, { cookie, body: { content_hash: p.current.content_hash, ...body } });
   const mensagens = (r: { body: { errors?: Array<{ path: string; message: string }> } }) => (r.body.errors ?? []).map((e) => `${e.path}: ${e.message}`);
+  const item = (p: Peca, hash = p.current.content_hash) => ({ id: p.id, content_hash: hash });
+  const aprovarVarias = (d: Dono, items: Array<{ id: string; content_hash: string }>, cookie = d.cookie) =>
+    api.call('POST', '/v1/ad-pieces/approve', { cookie, body: { brand_id: d.brandId, items } });
+  const variasAprovadas = async (d: Dono, items: Array<{ id: string; content_hash: string }>, cookie = d.cookie) => {
+    const r = await aprovarVarias(d, items, cookie);
+    if (r.status !== 200) throw new Error(`aprovar várias: ${r.status} ${JSON.stringify(r.body)}`);
+    return ApproveAdPiecesResponse.parse(r.body);
+  };
 
   /** Uma empresa com as peças que o Criativo (o modelo simulado) escreveu, esperando decisão. */
   async function comPecas(...pecas: Array<Record<string, unknown>>): Promise<{ d: Dono; pecas: Peca[] }> {
@@ -204,6 +215,117 @@ describe.skipIf(!hasDb)('Peças do Criativo: editar, aprovar, recusar, pedir out
     expect((await editar(d, boa, { title: 'Sexta tem combo' })).body).toMatchObject({ status: 409, code: 'oferta-mudou' });
     expect((await decidir(d, boa, 'redo')).body).toMatchObject({ status: 409, code: 'oferta-mudou' });
     expect((await decidir(d, boa, 'reject', { reason: 'nao_preciso_mais' })).status).toBe(200);
+  });
+
+  it('aprovar várias de uma vez: as que passaram entram (a de aviso junto), e a que não pode fica como está, com o motivo', async () => {
+    const { d, pecas } = await comPecas(BOA, OUTRA, COM_AVISO, BARRADA);
+    const [boa, outra, comAviso, barrada] = pecas as [Peca, Peca, Peca, Peca];
+    expect(comAviso.current.review.status).toBe('aviso');
+
+    // O contrato: de 1 a 20 peças, sem repetir a mesma.
+    expect((await aprovarVarias(d, [])).status).toBe(400);
+    expect((await aprovarVarias(d, [item(boa), item(boa)])).status).toBe(400);
+    expect((await aprovarVarias(d, Array.from({ length: 21 }, () => ({ id: randomUUID(), content_hash: 'a'.repeat(64) })))).status).toBe(400);
+
+    // A boa e a de aviso entram. A que a pessoa viu em outra versão, a barrada e a que não existe ficam de fora, cada
+    // uma com o motivo, e não seguram as outras.
+    const desconhecida = randomUUID();
+    const resposta = await variasAprovadas(d, [item(boa), item(outra, 'a'.repeat(64)), item(comAviso), item(barrada), { id: desconhecida, content_hash: 'b'.repeat(64) }]);
+    expect(resposta.approved).toBe(2);
+    expect(resposta.items.map((i) => [i.id, i.approved, i.reason, i.piece?.status ?? null])).toEqual([
+      [boa.id, true, null, 'aprovada'],
+      [outra.id, false, 'peca_mudou', 'decidir'],
+      [comAviso.id, true, null, 'aprovada'],
+      [barrada.id, false, 'peca_barrada', 'decidir'],
+      [desconhecida, false, 'nao_encontrada', null],
+    ]);
+    expect(resposta.items[0]!.piece).toMatchObject({ decided_by: { id: d.userId }, current: { version: 1, content_hash: boa.current.content_hash } });
+    expect(resposta.items[0]!.piece!.decided_at).not.toBeNull();
+    expect((await lista(d, 'aprovada')).map((x) => x.id).sort()).toEqual([boa.id, comAviso.id].sort());
+    expect((await lista(d, 'decidir')).map((x) => x.id).sort()).toEqual([outra.id, barrada.id].sort());
+
+    // Cada peça aprovada tem a decisão dela, de quem aprovou, para a versão e o hash vistos; o detalhe mostra a decisão.
+    const decisoes = await ownerQuery<{ piece_id: string; version: number; content_hash: string; decision: string; decided_by: string }>(
+      `select piece_id, version, content_hash, decision, decided_by from liame.ad_piece_decision where tenant_id = $1`,
+      [d.tenantId],
+    );
+    expect(decisoes).toHaveLength(2);
+    for (const p of [boa, comAviso]) expect(decisoes).toContainEqual({ piece_id: p.id, version: 1, content_hash: p.current.content_hash, decision: 'aprovada', decided_by: d.userId });
+    expect((await ler(d, comAviso.id)).decisions).toEqual([expect.objectContaining({ decision: 'aprovada', version: 1, decided_by: expect.objectContaining({ id: d.userId }) })]);
+
+    // Um evento de auditoria para o pedido inteiro, com o que entrou e o que ficou de fora.
+    expect(await ownerQuery(`select resource_id, after from liame.audit_event where tenant_id = $1 and action = 'peca.aprovar_varias'`, [d.tenantId])).toEqual([
+      {
+        resource_id: null,
+        after: {
+          brand_id: d.brandId,
+          aprovadas: [
+            { id: boa.id, version: 1, review_status: 'passou' },
+            { id: comAviso.id, version: 1, review_status: 'aviso' },
+          ],
+          nao_aprovadas: [
+            { id: outra.id, motivo: 'peca_mudou' },
+            { id: barrada.id, motivo: 'peca_barrada' },
+            { id: desconhecida, motivo: 'nao_encontrada' },
+          ],
+        },
+      },
+    ]);
+
+    // De novo: a que já foi aprovada volta como decidida, e a outra entra agora, com o hash certo.
+    const deNovo = await variasAprovadas(d, [item(boa), item(outra)]);
+    expect(deNovo.approved).toBe(1);
+    expect(deNovo.items.map((i) => [i.approved, i.reason, i.piece?.status])).toEqual([
+      [false, 'peca_decidida', 'aprovada'],
+      [true, null, 'aprovada'],
+    ]);
+  });
+
+  it('aprovar várias: a peça sendo refeita e a de oferta que mudou não entram; outra marca e outra empresa não acham a peça; só quem opera campanhas', async () => {
+    const { d, pecas } = await comPecas(BOA, OUTRA, COM_AVISO);
+    const [boa, outra, comAviso] = pecas as [Peca, Peca, Peca];
+
+    // Quem não opera campanhas não aprova; a peça de outra marca, ou de outra empresa, não é encontrada, e nada muda.
+    for (const papel of ['somente_leitura', 'aprovador']) expect((await aprovarVarias(d, [item(boa)], (await membro(d, papel)).cookie)).status).toBe(403);
+    expect(await variasAprovadas({ ...d, brandId: randomUUID() }, [item(boa)])).toMatchObject({ approved: 0, items: [{ approved: false, reason: 'nao_encontrada', piece: null }] });
+    const estranho = await dono();
+    expect(await variasAprovadas(estranho, [item(boa)])).toMatchObject({ approved: 0, items: [{ approved: false, reason: 'nao_encontrada', piece: null }] });
+    expect(await lista(d, 'aprovada')).toHaveLength(0);
+
+    // O Criativo está refazendo a boa: ela espera a versão nova. A outra entra, pelo gestor.
+    expect((await decidir(d, boa, 'redo')).status).toBe(202);
+    const gestor = await membro(d, 'gestor');
+    const comRefazendo = await variasAprovadas(d, [item(boa), item(outra)], gestor.cookie);
+    expect(comRefazendo.items.map((i) => [i.approved, i.reason, i.piece?.redoing])).toEqual([
+      [false, 'peca_refazendo', true],
+      [true, null, false],
+    ]);
+
+    // A oferta mudou de preço em Minha marca: a peça da oferta antiga não entra (o preço dela pode não valer mais).
+    await salvarDossie(d, 1, { ...DOSSIE, offers: { items: ['Combo sexta: smash, batata e refri por R$ 36,90'] } });
+    expect(await variasAprovadas(d, [item(comAviso)])).toMatchObject({ approved: 0, items: [{ approved: false, reason: 'oferta_mudou', piece: { status: 'decidir' } }] });
+    expect((await lista(d, 'aprovada')).map((x) => x.id)).toEqual([outra.id]);
+  });
+
+  it('aprovar várias, V37: quatro pedidos juntos aprovam cada peça uma vez; vale com a IA desligada e para com o Criativo desligado', async () => {
+    const { d, pecas } = await comPecas(BOA, OUTRA, COM_AVISO);
+    const [boa, outra, comAviso] = pecas as [Peca, Peca, Peca];
+
+    // Os pedidos trazem as peças em ordens diferentes: as travas saem sempre na mesma ordem, e nenhum pedido trava o outro.
+    const juntas = await Promise.all([aprovarVarias(d, [item(boa), item(outra)]), aprovarVarias(d, [item(outra), item(boa)]), aprovarVarias(d, [item(boa), item(outra)]), aprovarVarias(d, [item(outra), item(boa)])]);
+    expect(juntas.map((r) => r.status)).toEqual([200, 200, 200, 200]);
+    expect(juntas.reduce((n, r) => n + ApproveAdPiecesResponse.parse(r.body).approved, 0)).toBe(2);
+    expect(await ownerQuery(`select count(*)::int as n from liame.ad_piece_decision where tenant_id = $1 and decision = 'aprovada'`, [d.tenantId])).toEqual([{ n: 2 }]);
+
+    // A IA desligada depois de as peças existirem (D-A4-32): aprovar não depende dela.
+    await ownerQuery(`delete from liame.feature_flag_rule where flag_key = 'ia' and scope_type = 'tenant' and scope_id = $1`, [d.tenantId]);
+    flags.invalidate();
+    expect((await variasAprovadas(d, [item(comAviso)])).approved).toBe(1);
+
+    // A flag do Criativo desligada: as decisões param.
+    await ownerQuery(`delete from liame.feature_flag_rule where flag_key = 'criativo' and scope_type = 'tenant' and scope_id = $1`, [d.tenantId]);
+    flags.invalidate();
+    expect((await aprovarVarias(d, [item(comAviso)])).body).toMatchObject({ status: 409, code: 'criativo-desligado' });
   });
 
   it('recusar: com o motivo, e o comentário fica guardado sem dado pessoal', async () => {

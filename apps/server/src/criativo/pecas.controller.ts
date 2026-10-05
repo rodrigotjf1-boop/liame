@@ -8,6 +8,8 @@ import {
   AdPieceRequestResponse,
   AdPieceResponse,
   ApproveAdPieceRequest,
+  ApproveAdPiecesRequest,
+  ApproveAdPiecesResponse,
   ContestAdPieceRequest,
   CreateAdPieceRequest,
   ProblemDetails,
@@ -162,6 +164,23 @@ export class PecasController {
   @ApiConflictResponse({ standardSchema: ProblemDetails })
   aprovar(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string, @Body({ schema: ApproveAdPieceRequest }) body: ApproveAdPieceRequest): Promise<AdPieceResponse> {
     return this.decisoes.aprovar(auth, id, body);
+  }
+
+  @Post('approve')
+  @HttpCode(200)
+  @Permissao('campanhas.operar')
+  @Auditar('peca.aprovar_varias', { recurso: 'ad_piece' })
+  @ApiOperation({
+    summary: 'Aprovar várias peças de uma vez',
+    description:
+      '"Aprovar as que passaram": até 20 peças da marca, cada uma com o hash que a pessoa viu. Vale a mesma regra de aprovar uma, peça por peça: a conferência é refeita com as regras e a oferta de agora. A que não pode ser aprovada fica como está, com o motivo em `reason` (`nao_encontrada`, `peca_decidida`, `peca_refazendo`, `peca_mudou`, `oferta_mudou` ou `peca_barrada`), e as outras entram: a resposta é 200 mesmo quando nenhuma entra, com uma linha por peça, na ordem do pedido, e a peça como ficou. Não pede o código do app: nada sai do Liame.',
+  })
+  @ApiOkResponse({ standardSchema: ApproveAdPiecesResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  aprovarVarias(@Auth() auth: AuthContext, @Body({ schema: ApproveAdPiecesRequest }) body: ApproveAdPiecesRequest): Promise<ApproveAdPiecesResponse> {
+    return this.decisoes.aprovarVarias(auth, body);
   }
 
   @Post(':id/reject')
