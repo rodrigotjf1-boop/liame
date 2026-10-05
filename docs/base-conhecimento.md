@@ -755,6 +755,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 05/10/2026 | §17.6 nova: **armazenamento de arquivos de imagem**, para o ADR-021: S3 (cifra em repouso por padrão; URL assinada de até 7 dias com usuário IAM; teto de idade da assinatura pela política do bucket), Supabase Storage (protocolo S3; a chave do servidor abre todos os buckets; o backup do banco não leva os arquivos; sem versões) e Cloudflare R2 (sem região nem jurisdição na América do Sul). Daí a proposta: bucket privado no S3 de São Paulo, na conta AWS já em uso. |
 | 05/10/2026 | §3.1: **status do app OAuth do Google (Testing × In production)**, nas páginas oficiais: em Testing a autorização e o refresh token vencem em 7 dias; publicado, o prazo deixa de valer, com o aviso de app não verificado e o teto de 100 usuários enquanto o escopo sensível (`auth/adwords`) não é verificado. Daí: publicar o app acaba com a reconexão semanal do piloto; a verificação fica para antes do primeiro cliente de fora. |
 | 05/10/2026 | §6.2 nova: **o texto de um anúncio de comida e bebida**, pelo Código do CONAR (edição 2025, no site novo do CONAR; os endereços antigos do código saíram do ar): apresentação verdadeira (art. 27: comprovação, preço e redução de preço, "grátis"), o Anexo "F" (os dois preços na redução), a comparação (art. 32), crianças (art. 37), alimentos (Anexo "H") e **bebida alcoólica** (Anexos "A", "P" e "T": cláusula de advertência em todo anúncio, também o de bar e restaurante, sem apelo imperativo de consumo), e a página de bebida alcoólica dos Padrões de Publicidade da Meta. Daí as regras do Criativo de texto (X6): preço e "grátis" só da oferta, e nada de bebida alcoólica nesta fase. |
 | 05/10/2026 | Pesquisa para o protótipo P10 (Criativos), em fontes oficiais: §2.1 **criar campanha, conjunto, criativo e anúncio** pela API (o que é obrigatório, `status` na criação, `validate_only`), as **melhorias automáticas do criativo** (cada recurso com `OPT_OUT`), **o que o guia de anúncios recomenda** para imagem e texto (27 e 125 caracteres; 4:5 e 9:16, com as faixas livres dos Stories) e o **rótulo de IA** da Meta; §6 **CONAR e IA** (guia de 2026, item 1.3.1: as regras valem para o conteúdo feito com IA e não há dever novo de aviso), no lugar do "sem norma específica" de 24/09, e a **autoria da peça feita com IA** (Lei 9.610, art. 11, pelo portal da Câmara: o Planalto não respondeu); §7.3 corrigida pelo guia oficial; §16.1 **a peça gerada** (Meta Advantage+ creative, Google Ads Asset Studio, Adobe GenStudio, Pomelli); §17.4 **fornecedores de imagem** (OpenAI e Google, com preço, uso dos dados e marca de origem; Black Forest Labs fora, por treinar com o que recebe; Adobe e Ideogram por conferir). |
@@ -858,6 +859,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - ai-sdk.dev/docs/ai-sdk-core/video-generation
   - cometapi.com/ai-image-api-pricing · buildmvpfast.com/api-costs/ai-image (secundárias)
   - developers.openai.com (imagem: modelos, preço e uso dos dados) · openai.com/policies/services-agreement · ai.google.dev (imagem: modelos, preço e SynthID) · docs.bfl.ai/quick_start/pricing · bfl.ai/legal/flux-api-service-terms (05/10/2026)
+  - docs.aws.amazon.com/AmazonS3/latest/userguide/default-encryption-faq.html · …/using-presigned-url.html · supabase.com/docs/guides/storage/s3/compatibility · …/storage/s3/authentication · …/storage/uploads/file-limits · …/storage/pricing · supabase.com/docs/guides/platform/backups · developers.cloudflare.com/r2/pricing · …/r2/reference/data-location (§17.6, 05/10/2026)
   - modeloinicial.com.br/lei/L-12965-2014/marco-civil-internet/art-15 (secundária; o Planalto não respondeu)
   - support.google.com/google-ads/answer/9978556 (níveis) · …/7456532 (propriedade na conta de administrador) · …/7459601 (vínculo)
   - facebook.com/business/help/708679622611131 (parceiros da Meta)
@@ -1252,7 +1254,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 ## 17. Acesso, ciclo de vida, versões de API e modelos de mídia
 
-*Verificado em 25/09/2026, para os itens novos do plano (ADR-013 a ADR-016); a §17.4 ganhou os fornecedores de imagem em 05/10/2026.*
+*Verificado em 25/09/2026, para os itens novos do plano (ADR-013 a ADR-016); a §17.4 ganhou os fornecedores de imagem em 05/10/2026, e a §17.6 (armazenamento de imagens) é do mesmo dia.*
 
 ### 17.1 Autenticação
 
@@ -1307,4 +1309,21 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Meta** **[O, via busca; detalhes em fontes secundárias]**: "acesso de parceiro" ao portfólio empresarial, com permissões parciais por ativo, sem entregar o login pessoal; só quem tem controle total do portfólio concede.
 - **Perfil da Empresa no Google** **[O, via busca]**: proprietário principal, proprietários e administradores; só proprietários adicionam ou removem usuários; só o proprietário principal transfere a propriedade e não pode se remover antes de transferir.
 - **Regra do Liame (ADR-017):** mesmo modelo de convite e níveis, mas **a conta é sempre do dono do negócio**, inclusive quando uma agência a cria.
+
+### 17.6 Armazenamento de arquivos de imagem
+
+*Páginas oficiais lidas em 05/10/2026, para o ADR-021 (onde ficam as fotos dos produtos e as imagens das peças).*
+
+- **Amazon S3** [O] (docs.aws.amazon.com/AmazonS3/latest/userguide, páginas "Default encryption FAQ" e "Download and upload objects with presigned URLs"):
+  - cifra em repouso: "Amazon S3 now applies server-side encryption with Amazon S3 managed keys (SSE-S3) as the base level of encryption for every bucket"; desde 05/01/2023, "at no additional cost";
+  - URL assinada: usa a credencial de quem a gerou ("The credentials used by the presigned URL are those of the AWS Identity and Access Management (IAM) principal who generated the URL"); com usuário IAM e Signature Version 4, vale até 7 dias; "presigned URLs are bearer tokens that grant access to those who possess them"; a política do bucket pode recusar assinatura velha com a condição `s3:signatureAge` (o exemplo oficial usa 10 minutos);
+  - preço em São Paulo (`sa-east-1`): a página oficial carrega os valores na hora e não foi lida; fontes secundárias dão cerca de US$ 0,0405 por GB por mês no S3 Standard [S]. Conferir na calculadora da AWS antes de um volume grande.
+- **Supabase Storage** [O] (supabase.com/docs/guides/storage e /guides/platform/backups):
+  - fala o protocolo S3 ("You can use almost any S3 client to interact with your Storage objects"), com Signature Version 4 e URL assinada por parâmetros de consulta; sem versões: "Deleted objects are permanently removed and cannot be restored";
+  - as chaves S3 do projeto "provide full access to all S3 operations across all buckets and bypass RLS policies" e são "Intended exclusively for server-side use"; a alternativa é o token de sessão de um usuário, que passa pela RLS;
+  - tamanho máximo do arquivo: 50 MB no plano gratuito e 500 GB no Pro; armazenamento incluído: 1 GB no gratuito e 100 GB no Pro e no Team, depois US$ 0,0213 por GB;
+  - "Database backups do not include objects you store via the Storage API, as the database only includes metadata about these objects".
+- **Cloudflare R2** [O] (developers.cloudflare.com/r2/pricing e /r2/reference/data-location): US$ 0,015 por GB por mês; operações de classe A a US$ 4,50 e de classe B a US$ 0,36 por milhão; saída para a internet grátis; 10 GB por mês sem custo. **Sem América do Sul:** as dicas de local são `wnam`, `enam`, `weur`, `eeur`, `apac` e `oc` ("a best effort and not a guarantee"), e as jurisdições, que garantem onde o objeto fica, são `eu`, `fedramp` e `us`.
+- **O que a Meta aceita de imagem** está na §2.1: JPG ou PNG, até 30 MB, largura mínima de 600 pixels no Feed do Facebook; a imagem entra por `POST /act_{id}/adimages`, em bytes.
+- **Regra do Liame (ADR-021, proposto):** as imagens ficam num bucket privado do S3 em São Paulo, na conta AWS que já guarda as chaves de criptografia; só o servidor fala com o bucket; a pessoa vê por URL assinada de 5 minutos; a imagem enviada é conferida pelo conteúdo e regravada sem metadados antes de ser guardada.
 
