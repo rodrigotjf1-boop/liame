@@ -6478,7 +6478,7 @@
     },
     "/v1/actions": {
       "post": {
-        "description": "Ferramenta + alvo + parâmetros. O servidor lê o estado no provedor, aplica trava, política e orçamento (reserva) e devolve o plano com o hash que a aprovação precisa. Risco e impacto vêm do registro de ferramentas. Numa plataforma de anúncio, o estado é lido nela na hora do pedido: se ela não responde, o pedido não é criado (502 `plataforma-indisponivel`).",
+        "description": "Ferramenta + alvo + parâmetros. O servidor lê o estado no provedor, aplica trava, política e orçamento (reserva) e devolve o plano com o hash que a aprovação precisa. Risco e impacto vêm do registro de ferramentas. Numa plataforma de anúncio, o estado é lido nela na hora do pedido: se ela não responde, o pedido não é criado (502 `plataforma-indisponivel`). Com `recommendation_id`, o pedido nasce de uma recomendação do Gestor de tráfego e fica ligado a ela: ela precisa estar em aberto (409 `recomendacao-encerrada`), ser da mesma conta e da mesma campanha e ir na mesma direção do pedido (422 `recomendacao-nao-confere`).",
         "operationId": "ActionsController_create",
         "parameters": [],
         "requestBody": {
@@ -6519,6 +6519,11 @@
                   "params": {
                     "type": "object",
                     "additionalProperties": {}
+                  },
+                  "recommendation_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   }
                 },
                 "required": [
@@ -6918,6 +6923,115 @@
                         "name",
                         "provider",
                         "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommendation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "rule_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "confidence_pct": {
+                          "type": "string"
+                        },
+                        "percent": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "decided_on": {
+                          "type": "string"
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "daily_budget_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "spend_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "orders": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_known_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_coverage_pct": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "tool",
+                        "rule",
+                        "rule_version",
+                        "confidence_pct",
+                        "percent",
+                        "decided_on",
+                        "window",
+                        "daily_budget_micros",
+                        "spend_micros",
+                        "orders",
+                        "revenue_micros",
+                        "margin_known_micros",
+                        "margin_coverage_pct"
                       ],
                       "additionalProperties": false
                     }
@@ -7641,6 +7755,115 @@
                               "status"
                             ],
                             "additionalProperties": false
+                          },
+                          "recommendation": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "tool": {
+                                "type": "string"
+                              },
+                              "rule": {
+                                "type": "string"
+                              },
+                              "rule_version": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "confidence_pct": {
+                                "type": "string"
+                              },
+                              "percent": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "decided_on": {
+                                "type": "string"
+                              },
+                              "window": {
+                                "type": "object",
+                                "properties": {
+                                  "from": {
+                                    "type": "string"
+                                  },
+                                  "to": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "from",
+                                  "to"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "daily_budget_micros": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "spend_micros": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "orders": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "revenue_micros": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "margin_known_micros": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "margin_coverage_pct": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "tool",
+                              "rule",
+                              "rule_version",
+                              "confidence_pct",
+                              "percent",
+                              "decided_on",
+                              "window",
+                              "daily_budget_micros",
+                              "spend_micros",
+                              "orders",
+                              "revenue_micros",
+                              "margin_known_micros",
+                              "margin_coverage_pct"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -8100,6 +8323,115 @@
                         "name",
                         "provider",
                         "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommendation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "rule_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "confidence_pct": {
+                          "type": "string"
+                        },
+                        "percent": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "decided_on": {
+                          "type": "string"
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "daily_budget_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "spend_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "orders": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_known_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_coverage_pct": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "tool",
+                        "rule",
+                        "rule_version",
+                        "confidence_pct",
+                        "percent",
+                        "decided_on",
+                        "window",
+                        "daily_budget_micros",
+                        "spend_micros",
+                        "orders",
+                        "revenue_micros",
+                        "margin_known_micros",
+                        "margin_coverage_pct"
                       ],
                       "additionalProperties": false
                     }
@@ -8636,6 +8968,115 @@
                         "name",
                         "provider",
                         "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommendation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "rule_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "confidence_pct": {
+                          "type": "string"
+                        },
+                        "percent": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "decided_on": {
+                          "type": "string"
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "daily_budget_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "spend_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "orders": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_known_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_coverage_pct": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "tool",
+                        "rule",
+                        "rule_version",
+                        "confidence_pct",
+                        "percent",
+                        "decided_on",
+                        "window",
+                        "daily_budget_micros",
+                        "spend_micros",
+                        "orders",
+                        "revenue_micros",
+                        "margin_known_micros",
+                        "margin_coverage_pct"
                       ],
                       "additionalProperties": false
                     }
@@ -9179,6 +9620,115 @@
                         "name",
                         "provider",
                         "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommendation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "rule_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "confidence_pct": {
+                          "type": "string"
+                        },
+                        "percent": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "decided_on": {
+                          "type": "string"
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "daily_budget_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "spend_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "orders": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_known_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_coverage_pct": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "tool",
+                        "rule",
+                        "rule_version",
+                        "confidence_pct",
+                        "percent",
+                        "decided_on",
+                        "window",
+                        "daily_budget_micros",
+                        "spend_micros",
+                        "orders",
+                        "revenue_micros",
+                        "margin_known_micros",
+                        "margin_coverage_pct"
                       ],
                       "additionalProperties": false
                     }
@@ -9787,6 +10337,115 @@
                         "name",
                         "provider",
                         "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommendation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "rule_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "confidence_pct": {
+                          "type": "string"
+                        },
+                        "percent": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "decided_on": {
+                          "type": "string"
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "daily_budget_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "spend_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "orders": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_known_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_coverage_pct": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "tool",
+                        "rule",
+                        "rule_version",
+                        "confidence_pct",
+                        "percent",
+                        "decided_on",
+                        "window",
+                        "daily_budget_micros",
+                        "spend_micros",
+                        "orders",
+                        "revenue_micros",
+                        "margin_known_micros",
+                        "margin_coverage_pct"
                       ],
                       "additionalProperties": false
                     }
@@ -10435,6 +11094,115 @@
                         "status"
                       ],
                       "additionalProperties": false
+                    },
+                    "recommendation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "rule_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "confidence_pct": {
+                          "type": "string"
+                        },
+                        "percent": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "decided_on": {
+                          "type": "string"
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "daily_budget_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "spend_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "orders": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_known_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_coverage_pct": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "tool",
+                        "rule",
+                        "rule_version",
+                        "confidence_pct",
+                        "percent",
+                        "decided_on",
+                        "window",
+                        "daily_budget_micros",
+                        "spend_micros",
+                        "orders",
+                        "revenue_micros",
+                        "margin_known_micros",
+                        "margin_coverage_pct"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -10951,6 +11719,115 @@
                         "name",
                         "provider",
                         "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommendation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "rule_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "confidence_pct": {
+                          "type": "string"
+                        },
+                        "percent": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "decided_on": {
+                          "type": "string"
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "daily_budget_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "spend_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "orders": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_known_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_coverage_pct": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "tool",
+                        "rule",
+                        "rule_version",
+                        "confidence_pct",
+                        "percent",
+                        "decided_on",
+                        "window",
+                        "daily_budget_micros",
+                        "spend_micros",
+                        "orders",
+                        "revenue_micros",
+                        "margin_known_micros",
+                        "margin_coverage_pct"
                       ],
                       "additionalProperties": false
                     }
@@ -14439,6 +15316,87 @@
                             ],
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "recommendation": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "request": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "tool": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "provider": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "account_id": {
+                                    "type": "string"
+                                  },
+                                  "resource_id": {
+                                    "type": "string"
+                                  },
+                                  "params": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                  }
+                                },
+                                "required": [
+                                  "tool",
+                                  "provider",
+                                  "account_id",
+                                  "resource_id",
+                                  "params"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "action": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "sombra",
+                                      "aguardando_aprovacao",
+                                      "aprovada",
+                                      "executando",
+                                      "executada",
+                                      "falhou",
+                                      "cancelada",
+                                      "expirada"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "status"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "request",
+                              "action"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -14944,7 +15902,7 @@
     },
     "/v1/results/attention": {
       "get": {
-        "description": "O que precisa de alguém agora entre a mídia e as vendas, mais grave primeiro: Regem desconectado ou com os pedidos atrasados, loja sem a plataforma de pedidos informada, anúncios ativos sem rastreio, campanhas sem cupom exclusivo, campanha medida pelo clique com gasto e sem pedido confirmado em 7 dias, cupom exclusivo sem uso com a campanha gastando, margem desconhecida acima de 20% da receita atribuída e plataforma × caixa muito distantes (informativo); e a recomendação da sombra (pausar a campanha, reduzir ou aumentar a verba) quando a ação, naquela conta, saiu de Sombra (`sugestao_*`; nada é executado). Calculado na hora, com o motivo e o que fazer, no formato dos avisos de mídia.",
+        "description": "O que precisa de alguém agora entre a mídia e as vendas, mais grave primeiro: Regem desconectado ou com os pedidos atrasados, loja sem a plataforma de pedidos informada, anúncios ativos sem rastreio, campanhas sem cupom exclusivo, campanha medida pelo clique com gasto e sem pedido confirmado em 7 dias, cupom exclusivo sem uso com a campanha gastando, margem desconhecida acima de 20% da receita atribuída e plataforma × caixa muito distantes (informativo); e a recomendação da sombra (pausar a campanha, reduzir ou aumentar a verba) quando a ação, naquela conta, saiu de Sombra (`sugestao_*`; nada é executado). Cada sugestão leva a recomendação por trás dela (`recommendation`): o corpo do pedido que a pessoa pode fazer por ela em `POST /v1/actions` (só para quem opera campanhas, e só na plataforma e na conta em que a escrita está ligada) e o pedido mais recente que já nasceu dela. Calculado na hora, com o motivo e o que fazer, no formato dos avisos de mídia.",
         "operationId": "ResultsController_attention",
         "parameters": [
           {
@@ -15018,6 +15976,87 @@
                             ],
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "recommendation": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "request": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "tool": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "provider": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "account_id": {
+                                    "type": "string"
+                                  },
+                                  "resource_id": {
+                                    "type": "string"
+                                  },
+                                  "params": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                  }
+                                },
+                                "required": [
+                                  "tool",
+                                  "provider",
+                                  "account_id",
+                                  "resource_id",
+                                  "params"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "action": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "sombra",
+                                      "aguardando_aprovacao",
+                                      "aprovada",
+                                      "executando",
+                                      "executada",
+                                      "falhou",
+                                      "cancelada",
+                                      "expirada"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "status"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "request",
+                              "action"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -16960,6 +17999,87 @@
                                 ],
                                 "format": "uuid",
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "recommendation": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "request": {
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "properties": {
+                                      "tool": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "provider": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "account_id": {
+                                        "type": "string"
+                                      },
+                                      "resource_id": {
+                                        "type": "string"
+                                      },
+                                      "params": {
+                                        "type": "object",
+                                        "additionalProperties": {}
+                                      }
+                                    },
+                                    "required": [
+                                      "tool",
+                                      "provider",
+                                      "account_id",
+                                      "resource_id",
+                                      "params"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "action": {
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "sombra",
+                                          "aguardando_aprovacao",
+                                          "aprovada",
+                                          "executando",
+                                          "executada",
+                                          "falhou",
+                                          "cancelada",
+                                          "expirada"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "status"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "request",
+                                  "action"
+                                ],
+                                "additionalProperties": false
                               }
                             },
                             "required": [
@@ -45482,6 +46602,87 @@
                                 ],
                                 "format": "uuid",
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "recommendation": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "request": {
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "properties": {
+                                      "tool": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "provider": {
+                                        "type": "string",
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "account_id": {
+                                        "type": "string"
+                                      },
+                                      "resource_id": {
+                                        "type": "string"
+                                      },
+                                      "params": {
+                                        "type": "object",
+                                        "additionalProperties": {}
+                                      }
+                                    },
+                                    "required": [
+                                      "tool",
+                                      "provider",
+                                      "account_id",
+                                      "resource_id",
+                                      "params"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "action": {
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "sombra",
+                                          "aguardando_aprovacao",
+                                          "aprovada",
+                                          "executando",
+                                          "executada",
+                                          "falhou",
+                                          "cancelada",
+                                          "expirada"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "status"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "request",
+                                  "action"
+                                ],
+                                "additionalProperties": false
                               }
                             },
                             "required": [

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ActionStatus } from './actions.js';
 
 // Dados de mídia lidos das plataformas (A2, G7): frescor de cada conta e o último valor de cada métrica.
 // Todo número sai com o frescor da fonte (A2-5). Listas que crescem vão como texto nas respostas (V23).
@@ -82,6 +83,22 @@ export type MediaMetricsResponse = z.infer<typeof MediaMetricsResponse>;
 export const MediaAttentionQuery = z.strictObject({ brand_id: z.uuid().optional() });
 export type MediaAttentionQuery = z.infer<typeof MediaAttentionQuery>;
 
+/**
+ * A recomendação por trás de uma sugestão da Atenção. `request` é o corpo de `POST /v1/actions` para pedir a mudança
+ * (falta só o `recommendation_id`, que é o `id` daqui); vem nulo quando não dá para pedir por aqui: quem lê não
+ * pode operar campanhas, a plataforma não é escrita pelo Liame, a escrita está desligada para a conta, ou a campanha
+ * não tem verba diária própria para mudar.
+ */
+export const AttentionRecommendation = z.strictObject({
+  id: z.uuid(),
+  request: z
+    .strictObject({ tool: Slug, provider: Slug, account_id: z.string(), resource_id: z.string(), params: z.record(z.string(), z.unknown()) })
+    .nullable(),
+  /** O pedido mais recente que nasceu desta recomendação, em qualquer situação; nulo se ninguém pediu (ou se quem lê não vê os pedidos). */
+  action: z.strictObject({ id: z.uuid(), status: ActionStatus }).nullable(),
+});
+export type AttentionRecommendation = z.infer<typeof AttentionRecommendation>;
+
 export const AttentionItem = z.strictObject({
   /**
    * Mídia: `conta_desconectada`, `conta_sem_permissao`, `conta_com_erro`, `dado_atrasado`, `reconectar_em_breve`,
@@ -104,6 +121,11 @@ export const AttentionItem = z.strictObject({
   provider: Slug.nullable(),
   /** A marca do aviso: é com ela que a tela pede a explicação (`POST /v1/ai/explain/attention`). Nula no aviso da empresa inteira (autorização vencendo, versão de API). */
   brand_id: z.uuid().nullable(),
+  /**
+   * Só nas sugestões do Gestor de tráfego, e só na leitura da tela (A4, X3): a recomendação de que o aviso fala, o
+   * pedido que a pessoa pode fazer por ela e o pedido mais recente que já nasceu dela.
+   */
+  recommendation: AttentionRecommendation.optional(),
 });
 export type AttentionItem = z.infer<typeof AttentionItem>;
 

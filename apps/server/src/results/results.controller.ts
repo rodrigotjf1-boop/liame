@@ -11,7 +11,8 @@ import {
 } from '@liame/contracts';
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiCookieAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
-import { Permissao } from '../auth/access.js';
+import { Auth, Permissao } from '../auth/access.js';
+import type { AuthContext } from '../context/request-context.js';
 import { AtencaoCicloService } from './atencao-ciclo.service.js';
 import { ResultsService } from './results.service.js';
 import { RevisaoService } from './revisao.service.js';
@@ -32,13 +33,18 @@ export class ResultsController {
   @ApiOperation({
     summary: 'Atenção do ciclo fechado',
     description:
-      'O que precisa de alguém agora entre a mídia e as vendas, mais grave primeiro: Regem desconectado ou com os pedidos atrasados, loja sem a plataforma de pedidos informada, anúncios ativos sem rastreio, campanhas sem cupom exclusivo, campanha medida pelo clique com gasto e sem pedido confirmado em 7 dias, cupom exclusivo sem uso com a campanha gastando, margem desconhecida acima de 20% da receita atribuída e plataforma × caixa muito distantes (informativo); e a recomendação da sombra (pausar a campanha, reduzir ou aumentar a verba) quando a ação, naquela conta, saiu de Sombra (`sugestao_*`; nada é executado). Calculado na hora, com o motivo e o que fazer, no formato dos avisos de mídia.',
+      'O que precisa de alguém agora entre a mídia e as vendas, mais grave primeiro: Regem desconectado ou com os pedidos atrasados, loja sem a plataforma de pedidos informada, anúncios ativos sem rastreio, campanhas sem cupom exclusivo, campanha medida pelo clique com gasto e sem pedido confirmado em 7 dias, cupom exclusivo sem uso com a campanha gastando, margem desconhecida acima de 20% da receita atribuída e plataforma × caixa muito distantes (informativo); e a recomendação da sombra (pausar a campanha, reduzir ou aumentar a verba) quando a ação, naquela conta, saiu de Sombra (`sugestao_*`; nada é executado). Cada sugestão leva a recomendação por trás dela (`recommendation`): o corpo do pedido que a pessoa pode fazer por ela em `POST /v1/actions` (só para quem opera campanhas, e só na plataforma e na conta em que a escrita está ligada) e o pedido mais recente que já nasceu dela. Calculado na hora, com o motivo e o que fazer, no formato dos avisos de mídia.',
   })
   @ApiOkResponse({ standardSchema: ClosedLoopAttentionResponse })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
-  attention(@Query({ schema: ClosedLoopAttentionQuery }) query: ClosedLoopAttentionQuery): Promise<ClosedLoopAttentionResponse> {
-    return this.ciclo.atencao(query.brand_id);
+  attention(@Auth() auth: AuthContext, @Query({ schema: ClosedLoopAttentionQuery }) query: ClosedLoopAttentionQuery): Promise<ClosedLoopAttentionResponse> {
+    // Quem lê decide o que a recomendação de cada sugestão mostra: como pedir (quem opera campanhas) e o pedido já feito (quem os vê).
+    return this.ciclo.atencao(query.brand_id, undefined, {
+      userId: auth.userId,
+      podePedir: auth.permissions.has('campanhas.operar'),
+      vePedidos: auth.permissions.has('campanhas.ver'),
+    });
   }
 
   @Get('closed-loop')

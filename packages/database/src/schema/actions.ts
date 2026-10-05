@@ -47,6 +47,8 @@ export const actionRequest = liame.table('action_request', {
   nextAttemptAt: ts('next_attempt_at'),
   // A ação que este pedido desfaz (a volta; 0045).
   compensatesActionId: uuid('compensates_action_id'),
+  // A recomendação do Gestor de tráfego de que o pedido nasceu (0047).
+  shadowDecisionId: uuid('shadow_decision_id'),
   actorType: text('actor_type').notNull().default('human'),
   requestedBy: uuid('requested_by').notNull(),
   traceContext: text('trace_context'),

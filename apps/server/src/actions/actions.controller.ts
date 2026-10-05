@@ -52,7 +52,7 @@ export class ActionsController {
   @ApiOperation({
     summary: 'Pedir uma ação',
     description:
-      'Ferramenta + alvo + parâmetros. O servidor lê o estado no provedor, aplica trava, política e orçamento (reserva) e devolve o plano com o hash que a aprovação precisa. Risco e impacto vêm do registro de ferramentas. Numa plataforma de anúncio, o estado é lido nela na hora do pedido: se ela não responde, o pedido não é criado (502 `plataforma-indisponivel`).',
+      'Ferramenta + alvo + parâmetros. O servidor lê o estado no provedor, aplica trava, política e orçamento (reserva) e devolve o plano com o hash que a aprovação precisa. Risco e impacto vêm do registro de ferramentas. Numa plataforma de anúncio, o estado é lido nela na hora do pedido: se ela não responde, o pedido não é criado (502 `plataforma-indisponivel`). Com `recommendation_id`, o pedido nasce de uma recomendação do Gestor de tráfego e fica ligado a ela: ela precisa estar em aberto (409 `recomendacao-encerrada`), ser da mesma conta e da mesma campanha e ir na mesma direção do pedido (422 `recomendacao-nao-confere`).',
   })
   @ApiCreatedResponse({ standardSchema: ActionResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })

@@ -91,4 +91,13 @@ Amarrada ao `plan_hash`; plano alterado invalida a aprovação. Ações com risc
 - **Compensação executável (a volta):** `ToolDefinition.undo(estado de antes)` dá a ferramenta inversa e os parâmetros; `POST /v1/actions/{id}/undo` cria um pedido comum com `compensates_action_id` (migration 0045), aceito só se a versão lida no provedor é a que a execução guardou (`provider_version`). O que o Liame não escreveu (`sem_escrita`) não tem volta; a volta não muda de parâmetro; uma viva por ação (índice único).
 - **Leitura no pedido:** o conector de plataforma lê na rede, esperando no máximo 10 s; a falha vira problema com motivo (502 `plataforma-indisponivel`, 409 `conta-desconectada` ou `sem-permissao-na-plataforma`, 422 `plataforma-recusou`), e nenhum pedido é criado.
 - **Marca do pedido:** quando o alvo é uma conta conectada, a marca é a dela (o pedido com outra marca é recusado, 422 `marca-nao-confere`): política, envelope, trava e flags da marca valem sem depender do que o pedido diz.
-- **Ainda não:** o funcionário de IA como solicitante (X3: o pedido nasce da recomendação em modo Aprovação, com `actor_type = agent`); o gasto real conciliado (X4).
+- **Ainda não:** o funcionário de IA como solicitante (X3, parte 2: o pedido nasce da recomendação em modo Aprovação, com `actor_type = agent`); o gasto real conciliado (X4).
+
+## O pedido que nasce de uma recomendação (A4, X3 parte 1, 04/10/2026)
+
+- **`recommendation_id` no pedido** (`POST /v1/actions`, opcional): a recomendação do Gestor de tráfego (`shadow_decision`) de que o pedido nasce. O pedido guarda a ligação em `action_request.shadow_decision_id` (migration 0047; `on delete set null`).
+- **O que o Action Service confere:** a recomendação existe para a empresa (a RLS corta a de outra: 404), está em aberto (409 `recomendacao-encerrada`), é da mesma plataforma, conta e campanha (antes de ler o provedor) e o plano vai na direção dela: `orcamento.reduzir`, `orcamento.aumentar` ou `campanha.pausar` (422 `recomendacao-nao-confere`). O valor é de quem pede.
+- **O trilho não muda:** trava, flag de escrita, política (o pedido de uma pessoa na Meta espera aprovação com o código do app), limites da empresa, reserva, validação e execução. A ligação não dá nem tira permissão.
+- **Alterar** (`PATCH`) para um plano de outra ação tira a ligação, com registro na auditoria (`recommendation_unlinked`).
+- **Na resposta** (`recommendation`): a regra, a versão, a confiança, o percentual, o dia, a janela e os números do retrato. Pedidos, receita e margem só para quem tem `vendas.ver`.
+- **A conta pura** está em `apps/server/src/sombra/pedido.ts`: a verba recomendada (o percentual sobre a verba de agora, arredondado para a menor unidade da moeda sem passar do percentual), o pedido de cada recomendação e o que confere com ela.

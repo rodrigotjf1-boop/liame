@@ -18,6 +18,11 @@ export const CreateActionRequest = z.strictObject({
   account_id: Ref,
   resource_id: Ref,
   params: z.record(z.string(), z.unknown()),
+  /**
+   * A recomendação do Gestor de tráfego de que o pedido nasce (A4, X3): o "Pedir esta mudança" da Atenção. O servidor
+   * confere que ela está em aberto, é da mesma conta e da mesma campanha e vai na mesma direção do pedido.
+   */
+  recommendation_id: z.uuid().optional(),
 });
 export type CreateActionRequest = z.infer<typeof CreateActionRequest>;
 
@@ -50,6 +55,36 @@ export const ActionApproval = z.strictObject({
   current_plan: z.boolean(),
   created_at: z.string(),
 });
+
+/**
+ * A recomendação de que um pedido nasceu, com os números do retrato dela (os mesmos de Resultados na janela olhada):
+ * é o porquê do pedido na tela de Aprovações. Dinheiro em micros, como texto.
+ */
+export const ActionRecommendation = z.strictObject({
+  id: z.uuid(),
+  /** A ação recomendada: `orcamento_reduzir`, `orcamento_aumentar` ou `campanha_pausar`. */
+  tool: z.string(),
+  /** A regra que recomendou e a versão do conjunto de regras. */
+  rule: z.string(),
+  rule_version: z.int().min(1),
+  /** De 0 a 100, com uma casa. É evidência (gasto observado e margem conhecida), não probabilidade. */
+  confidence_pct: z.string(),
+  /** Só nas de verba: quanto a regra recomendou mudar, em porcento. */
+  percent: z.int().min(0).max(100).nullable(),
+  /** O dia da recomendação e a janela olhada (AAAA-MM-DD, no fuso da loja). */
+  decided_on: z.string(),
+  window: z.strictObject({ from: z.string(), to: z.string() }),
+  /** A verba diária da campanha no dia da recomendação. */
+  daily_budget_micros: z.string().nullable(),
+  spend_micros: z.string().nullable(),
+  /** Os pedidos, a receita e a margem do caixa na janela: nulos para quem não vê as vendas (`vendas.ver`). */
+  orders: z.int().min(0).nullable(),
+  revenue_micros: z.string().nullable(),
+  margin_known_micros: z.string().nullable(),
+  /** Parte da receita com margem conhecida, de 0 a 100, com uma casa. */
+  margin_coverage_pct: z.string().nullable(),
+});
+export type ActionRecommendation = z.infer<typeof ActionRecommendation>;
 
 export const ActionResponse = z.strictObject({
   id: z.uuid(),
@@ -104,6 +139,8 @@ export const ActionResponse = z.strictObject({
   account_name: z.string().nullable(),
   /** A campanha citada nos parâmetros (`campaign_id`), quando há; nula se ela saiu da lista. */
   campaign: z.strictObject({ id: z.uuid(), name: z.string(), provider: z.string(), status: z.string() }).nullable(),
+  /** A recomendação do Gestor de tráfego de que o pedido nasceu (A4, X3); nula no pedido comum. */
+  recommendation: ActionRecommendation.nullable().optional(),
 });
 export type ActionResponse = z.infer<typeof ActionResponse>;
 

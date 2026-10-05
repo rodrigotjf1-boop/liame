@@ -1,11 +1,13 @@
 import { resolve } from 'node:path';
-import { type Database, runMigrations } from '@liame/database';
+import { ActionRecommendation, ClosedLoopAttentionResponse } from '@liame/contracts';
+import { type Database, runMigrations, uuidv7 } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BudgetService } from '../../src/actions/budget.service.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js';
+import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
 import { type EmpresaComMeta, empresaComMeta, type FalhaDaMeta, ligarConectorNaMetaDeMentira, ligarEscritaNaMeta, MetaDeMentira, objetoLido } from '../helpers/meta-de-mentira.js';
@@ -56,6 +58,54 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
   const pedidosDe = async (emp: EmpresaComMeta) => Number((await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.action_request where tenant_id = $1`, [emp.tenantId]))[0]!.n);
   const livroDe = async (id: string) =>
     (await ownerQuery<{ kind: string; amount_micros: string }>(`select kind, amount_micros::text from liame.budget_ledger_entry where action_request_id = $1 order by created_at, id`, [id])).map((l) => [l.kind, Number(l.amount_micros)]);
+
+  const hoje = diaNoFuso(new Date(), 'America/Sao_Paulo');
+  const REGRA_DA_SOMBRA = { orcamento_reduzir: 'prejuizo', orcamento_aumentar: 'lucro_no_limite', campanha_pausar: 'prejuizo_forte' } as const;
+
+  /**
+   * Uma campanha lida da conta (com a verba diária de R$ 30,00 que o Liame guardou dela) e a recomendação em aberto do
+   * Gestor de tráfego para ela, como a rotina da sombra grava: de hoje, com os números dos 7 dias anteriores.
+   */
+  async function campanhaComRecomendacao(emp: EmpresaComMeta, tool: keyof typeof REGRA_DA_SOMBRA, nome = 'Delivery noite') {
+    const c = await objetoLido(meta, emp, 'campanha', { name: nome });
+    const [linha] = await ownerQuery<{ id: string }>(`update liame.campaign set daily_budget_micros = 30000000 where tenant_id = $1 and external_id = $2 returning id`, [emp.tenantId, c.id]);
+    const retrato = {
+      campanha: { nome, situacao: 'ativa', verba_diaria_micros: '30000000' },
+      janela: { de: menosDias(hoje, 7), ate: menosDias(hoje, 1), fuso: 'America/Sao_Paulo' },
+      plataforma: { spend_micros: '150000000' },
+      caixa: { orders: 2, revenue_micros: '120000000', margin_known_micros: '90000000', margin_coverage_pct: '100.0', verdict: 'prejuizo' },
+    };
+    const recomendacao = uuidv7();
+    await ownerQuery(
+      `insert into liame.shadow_decision (id, tenant_id, brand_id, connected_account_id, campaign_id, provider, source, tool, rule_key, rule_version, params,
+                                          confidence, state_snapshot, decided_on, window_from, window_to, evaluate_on, status)
+       values ($1, $2, $3, $4, $5, 'meta_ads', 'regra', $6, $7, 2, $8, 0.9, $9, $10, $11, $12, $13, 'aberta')`,
+      [
+        recomendacao,
+        emp.tenantId,
+        emp.brandId,
+        emp.conta,
+        linha!.id,
+        tool,
+        REGRA_DA_SOMBRA[tool],
+        JSON.stringify(tool === 'campanha_pausar' ? {} : { percent: 10 }),
+        JSON.stringify(retrato),
+        hoje,
+        menosDias(hoje, 7),
+        menosDias(hoje, 1),
+        menosDias(hoje, -7),
+      ],
+    );
+    return { ...c, campanha: linha!.id, recomendacao };
+  }
+  const ligacaoDe = async (pedido: string) =>
+    (await ownerQuery<{ shadow_decision_id: string | null }>(`select shadow_decision_id from liame.action_request where id = $1`, [pedido]))[0]!.shadow_decision_id;
+  /** As sugestões do Gestor de tráfego na Atenção, pelo contrato inteiro (objetos estritos). */
+  const sugestoes = async (emp: EmpresaComMeta) => {
+    const r = await api.call('GET', `/v1/results/attention?brand_id=${emp.brandId}`, { cookie: emp.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    return ClosedLoopAttentionResponse.parse(r.body).items.filter((i) => i.kind.startsWith('sugestao_'));
+  };
 
   /** Pede, aprova com o código do app e executa; devolve a ação como ficou. */
   async function executar(emp: EmpresaComMeta, tool: string, recurso: string, params: Record<string, unknown> = {}) {
@@ -556,6 +606,176 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
       await politica(e, [], e.brandId);
     }
     expect(meta.escritasDe(c.id)).toEqual([]);
+  });
+
+  it('A4 · X3: o pedido que nasce de uma recomendação fica ligado a ela e mostra o porquê; o que não confere com ela não entra', async () => {
+    const r = await campanhaComRecomendacao(e, 'orcamento_reduzir');
+    const outra = await campanhaComRecomendacao(e, 'orcamento_reduzir', 'Almoço executivo');
+    const antes = await pedidosDe(e);
+    const comEla = (recurso: string, tool: string, params: Record<string, unknown>, recomendacao: string = r.recomendacao) => pedir(e, tool, recurso, params, { recommendation_id: recomendacao });
+
+    // De outra campanha: recusado antes de gastar a leitura na Meta.
+    meta.chamadas.length = 0;
+    const trocado = await comEla(outra.recurso, 'orcamento_ajustar', { daily_budget_micros: 27 * REAL });
+    expect([trocado.status, trocado.body.code, trocado.body.detail]).toEqual([422, 'recomendacao-nao-confere', 'O pedido não é da campanha desta recomendação.']);
+    expect(meta.chamadas).toEqual([]);
+    // Na direção contrária: a Meta é lida, o plano é de aumentar, e o pedido não entra (nem chega a pedir os limites).
+    const contrario = await comEla(r.recurso, 'orcamento_ajustar', { daily_budget_micros: 33 * REAL });
+    expect([contrario.status, contrario.body.code, contrario.body.detail]).toEqual([
+      422,
+      'recomendacao-nao-confere',
+      'A recomendação é de reduzir a verba, e este pedido faz outra coisa. Peça sem ligar à recomendação.',
+    ]);
+    expect(meta.resumo(r.id)).toEqual(['ler']);
+    // Pausar a campanha também não é o que ela recomenda.
+    expect((await comEla(r.recurso, 'campanha_pausar', {})).body.code).toBe('recomendacao-nao-confere');
+    // A recomendação de outra empresa não existe (a RLS corta); a que não existe, também não; e o id tem de ser um id.
+    const sem = await empresaSemLimites();
+    const dela = await objetoLido(meta, sem, 'campanha');
+    const alheia = await pedir(sem, 'orcamento_ajustar', dela.recurso, { daily_budget_micros: 27 * REAL }, { recommendation_id: r.recomendacao });
+    expect([alheia.status, alheia.body.code, alheia.body.detail]).toEqual([404, 'nao-encontrado', 'Recomendação não encontrada nesta empresa.']);
+    expect((await comEla(r.recurso, 'orcamento_ajustar', { daily_budget_micros: 27 * REAL }, uuidv7())).status).toBe(404);
+    expect((await comEla(r.recurso, 'orcamento_ajustar', { daily_budget_micros: 27 * REAL }, 'a-recomendacao-de-hoje')).status).toBe(400);
+    expect(await pedidosDe(e)).toBe(antes);
+
+    // Confere: mesma conta, mesma campanha, mesma direção. O pedido segue o trilho de sempre e guarda de onde veio.
+    const p = await comEla(r.recurso, 'orcamento_ajustar', { daily_budget_micros: 27 * REAL });
+    expect(p.status, JSON.stringify(p.body)).toBe(201);
+    expect(p.body).toMatchObject({ action: 'orcamento.reduzir', mode: 'APPROVAL', status: 'aguardando_aprovacao', reserved_micros: 0, requested_by: { id: e.userId } });
+    const porque = {
+      id: r.recomendacao,
+      tool: 'orcamento_reduzir',
+      rule: 'prejuizo',
+      rule_version: 2,
+      confidence_pct: '90.0',
+      percent: 10,
+      decided_on: hoje,
+      window: { from: menosDias(hoje, 7), to: menosDias(hoje, 1) },
+      daily_budget_micros: '30000000',
+      spend_micros: '150000000',
+      orders: 2,
+      revenue_micros: '120000000',
+      margin_known_micros: '90000000',
+      margin_coverage_pct: '100.0',
+    };
+    expect(ActionRecommendation.parse(p.body.recommendation)).toEqual(porque);
+    expect(await ligacaoDe(p.body.id)).toBe(r.recomendacao);
+    const [aud] = await ownerQuery<{ action: string; after: { recommendation_id?: string } }>(
+      `select action, "after" from liame.audit_event where chain_key = $1 and resource_id = $2 order by chain_seq limit 1`,
+      [e.tenantId, p.body.id],
+    );
+    expect([aud!.action, aud!.after.recommendation_id]).toEqual(['acao.pedir', r.recomendacao]);
+    // Na lista de Aprovações, o pedido da recomendação traz o porquê; o pedido comum, nada.
+    const comum = await pedir(e, 'orcamento_ajustar', outra.recurso, { daily_budget_micros: 27 * REAL });
+    expect([comum.status, comum.body.recommendation, await ligacaoDe(comum.body.id)]).toEqual([201, null, null]);
+    const lista = (await api.call('GET', '/v1/actions?status=aguardando_aprovacao', { cookie: e.cookie })).body.items as Array<{ id: string; recommendation: { id: string } | null }>;
+    expect(lista.find((x) => x.id === p.body.id)!.recommendation).toEqual(porque);
+    expect(lista.find((x) => x.id === comum.body.id)!.recommendation).toBeNull();
+    await cancelar(e, comum.body.id);
+
+    // Quem não vê as vendas recebe a recomendação sem os números do caixa (pedidos, receita, margem): o gasto é da mídia.
+    await ownerQuery(`insert into liame.role_permission (tenant_id, role_key, permission) select $1, 'dono', p from unnest(array['empresa.ver', 'marcas.ver', 'campanhas.ver']) as p`, [e.tenantId]);
+    try {
+      expect((await ver(e, p.body.id)).recommendation).toEqual({ ...porque, orders: null, revenue_micros: null, margin_known_micros: null, margin_coverage_pct: null });
+    } finally {
+      await ownerQuery(`delete from liame.role_permission where tenant_id = $1`, [e.tenantId]);
+    }
+
+    // A pessoa ajusta o valor e segue na direção da recomendação: a ligação fica. Muda de direção: a ligação sai.
+    const alterar = (params: Record<string, unknown>) => api.call('PATCH', `/v1/actions/${p.body.id}`, { cookie: e.cookie, body: { params } });
+    const menos = await alterar({ daily_budget_micros: 28 * REAL });
+    expect([menos.status, menos.body.action, menos.body.recommendation?.id]).toEqual([200, 'orcamento.reduzir', r.recomendacao]);
+    const mais = await alterar({ daily_budget_micros: 31 * REAL });
+    expect([mais.status, mais.body.action, mais.body.recommendation, await ligacaoDe(p.body.id)]).toEqual([200, 'orcamento.aumentar', null, null]);
+    const [mudanca] = await ownerQuery<{ after: { recommendation_unlinked?: string } }>(
+      `select "after" from liame.audit_event where chain_key = $1 and resource_id = $2 and action = 'acao.alterar' order by chain_seq desc limit 1`,
+      [e.tenantId, p.body.id],
+    );
+    expect(mudanca!.after.recommendation_unlinked).toBe(r.recomendacao);
+    // E voltar para a redução não religa: a ligação nasce com o pedido.
+    expect((await alterar({ daily_budget_micros: 27 * REAL })).body.recommendation).toBeNull();
+    await cancelar(e, p.body.id);
+
+    // A recomendação que se encerrou (avaliada ou descartada pela rotina) não recebe mais pedido.
+    await ownerQuery(`update liame.shadow_decision set status = 'descartada', discard_reason = 'conta de anúncio desconectada' where id = $1`, [r.recomendacao]);
+    const tarde = await comEla(r.recurso, 'orcamento_ajustar', { daily_budget_micros: 27 * REAL });
+    expect([tarde.status, tarde.body.code]).toEqual([409, 'recomendacao-encerrada']);
+    expect(tarde.body.detail).toBe('Esta recomendação já foi avaliada ou saiu da lista. Se a mudança ainda fizer sentido, peça sem ela.');
+    expect(meta.escritasDe(r.id)).toEqual([]);
+  });
+
+  it('A4 · X3: a Atenção diz como pedir a mudança de cada sugestão e mostra o pedido que já nasceu dela; executado, a ligação fica', async () => {
+    const r = await campanhaComRecomendacao(e, 'orcamento_reduzir', 'Jantar de sexta');
+    const pausar = await campanhaComRecomendacao(e, 'campanha_pausar', 'Madrugada');
+    const daMarca = (rules: unknown[]) => politica(e, rules, e.brandId);
+    const desta = async (campanha: string) => (await sugestoes(e)).find((s) => s.campaign_id === campanha);
+    try {
+      // Em Sombra, a recomendação não aparece na Atenção: não há o que pedir.
+      expect(await desta(r.campanha)).toBeUndefined();
+      // O Gestor de tráfego em Sugerir, nesta conta, para reduzir verba e para pausar campanha (as regras da promoção).
+      expect(
+        (
+          await daMarca([
+            { type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: e.conta, mode: 'SUGGEST' },
+            { type: 'autonomy', action: 'campanha.pausar', actor: 'agent', account: e.conta, mode: 'SUGGEST' },
+          ])
+        ).status,
+      ).toBe(201);
+
+      // A sugestão leva a recomendação e o corpo do pedido: a ferramenta, a campanha na Meta e a verba recomendada.
+      const aviso = await desta(r.campanha);
+      expect(aviso).toMatchObject({ kind: 'sugestao_reduzir_verba', title: 'Sugestão do Gestor de tráfego: reduzir a verba da campanha "Jantar de sexta" em 10%' });
+      expect(aviso!.recommendation).toEqual({
+        id: r.recomendacao,
+        request: { tool: 'orcamento_ajustar', provider: 'meta_ads', account_id: e.conta, resource_id: r.recurso, params: { daily_budget_micros: 27 * REAL } },
+        action: null,
+      });
+      expect((await desta(pausar.campanha))!.recommendation).toEqual({
+        id: pausar.recomendacao,
+        request: { tool: 'campanha_pausar', provider: 'meta_ads', account_id: e.conta, resource_id: pausar.recurso, params: {} },
+        action: null,
+      });
+
+      // Com a escrita na Meta desligada para a empresa, a sugestão segue lá, sem o pedido: quem muda é a pessoa, na Meta.
+      await ligarEscritaNaMeta(api, e.tenantId, false);
+      try {
+        expect((await desta(r.campanha))!.recommendation).toEqual({ id: r.recomendacao, request: null, action: null });
+      } finally {
+        await ligarEscritaNaMeta(api, e.tenantId, true);
+      }
+      // A campanha sem verba diária própria (a verba foi para o conjunto) não tem verba para pedir; pausar, tem.
+      await ownerQuery(`update liame.campaign set daily_budget_micros = null where id = any($1::uuid[])`, [[r.campanha, pausar.campanha]]);
+      expect([(await desta(r.campanha))!.recommendation!.request, (await desta(pausar.campanha))!.recommendation!.request?.tool]).toEqual([null, 'campanha_pausar']);
+      await ownerQuery(`update liame.campaign set daily_budget_micros = 30000000 where id = $1`, [r.campanha]);
+
+      // A tela pede com o que a Atenção deu, mais o id da recomendação: o pedido entra e aparece na sugestão.
+      const { id, request } = (await desta(r.campanha))!.recommendation!;
+      const p = await api.call('POST', '/v1/actions', { cookie: e.cookie, body: { ...request, recommendation_id: id } });
+      expect(p.status, JSON.stringify(p.body)).toBe(201);
+      expect(p.body).toMatchObject({ tool: 'orcamento_ajustar', action: 'orcamento.reduzir', value_micros: 27 * REAL, current_value_micros: 30 * REAL, status: 'aguardando_aprovacao', recommendation: { id: r.recomendacao } });
+      expect((await desta(r.campanha))!.recommendation!.action).toEqual({ id: p.body.id, status: 'aguardando_aprovacao' });
+
+      // Quem vê as vendas, mas não opera campanhas nem vê os pedidos, recebe só a recomendação.
+      await ownerQuery(`insert into liame.role_permission (tenant_id, role_key, permission) select $1, 'dono', p from unnest(array['empresa.ver', 'marcas.ver', 'vendas.ver']) as p`, [e.tenantId]);
+      try {
+        expect((await desta(r.campanha))!.recommendation).toEqual({ id: r.recomendacao, request: null, action: null });
+      } finally {
+        await ownerQuery(`delete from liame.role_permission where tenant_id = $1`, [e.tenantId]);
+      }
+
+      // Aprovado com o código do app e executado: a verba muda na Meta e o pedido segue ligado à recomendação.
+      expect((await aprovar(e, p.body)).body.status).toBe('aprovada');
+      await ciclo(e);
+      expect(await ver(e, p.body.id)).toMatchObject({ status: 'executada', recommendation: { id: r.recomendacao, tool: 'orcamento_reduzir' } });
+      expect(meta.objetos.get(r.id)!.daily_budget).toBe('2700');
+      expect((await desta(r.campanha))!.recommendation!.action).toEqual({ id: p.body.id, status: 'executada' });
+
+      // A recomendação apagada (a campanha saiu da conta) não leva o pedido junto: ele fica, sem a ligação.
+      await ownerQuery(`delete from liame.shadow_decision where id = $1`, [r.recomendacao]);
+      expect([(await ver(e, p.body.id)).status, (await ver(e, p.body.id)).recommendation, await ligacaoDe(p.body.id)]).toEqual(['executada', null, null]);
+    } finally {
+      await daMarca([]);
+    }
   });
 
   it('o token da empresa não aparece no pedido, na resposta nem na auditoria', async () => {
