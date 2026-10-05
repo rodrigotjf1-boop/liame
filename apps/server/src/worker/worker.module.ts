@@ -30,6 +30,7 @@ import { AtencaoCicloService } from '../results/atencao-ciclo.service.js';
 import { ResultsService } from '../results/results.service.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { RevisaoSemanalService } from './revisao-semanal.service.js';
+import { PedidosDoGestor } from './pedidos-do-gestor.js';
 import { SombraLoop } from './sombra-loop.js';
 import { SombraService } from './sombra.service.js';
 import { eventoDoRegem, VendasLoop } from './vendas-loop.js';
@@ -79,6 +80,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ResultsService,
     SombraService,
     SombraLoop,
+    // Modo Aprovação (A4, X3): a recomendação nova vira um pedido do Gestor de tráfego, pelo Action Service.
+    PedidosDoGestor,
     // Revisão da semana (A3, I7): os números da tela Resultados, os avisos e a leitura do Explicar (a LIA, quando ligada).
     MediaService,
     LinksService,

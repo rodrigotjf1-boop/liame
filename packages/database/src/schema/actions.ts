@@ -50,6 +50,8 @@ export const actionRequest = liame.table('action_request', {
   // A recomendação do Gestor de tráfego de que o pedido nasceu (0047).
   shadowDecisionId: uuid('shadow_decision_id'),
   actorType: text('actor_type').notNull().default('human'),
+  // O funcionário de IA que fez o pedido, quando `actor_type` é `agent` (0048).
+  agentKey: text('agent_key'),
   requestedBy: uuid('requested_by').notNull(),
   traceContext: text('trace_context'),
   expiresAt: ts('expires_at').notNull(),

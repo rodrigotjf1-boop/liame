@@ -7034,6 +7034,14 @@
                         "margin_coverage_pct"
                       ],
                       "additionalProperties": false
+                    },
+                    "agent_key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
                     }
                   },
                   "required": [
@@ -7864,6 +7872,14 @@
                               "margin_coverage_pct"
                             ],
                             "additionalProperties": false
+                          },
+                          "agent_key": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 60,
+                            "pattern": "^[a-z0-9_]+$"
                           }
                         },
                         "required": [
@@ -8434,6 +8450,14 @@
                         "margin_coverage_pct"
                       ],
                       "additionalProperties": false
+                    },
+                    "agent_key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
                     }
                   },
                   "required": [
@@ -9079,6 +9103,14 @@
                         "margin_coverage_pct"
                       ],
                       "additionalProperties": false
+                    },
+                    "agent_key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
                     }
                   },
                   "required": [
@@ -9731,6 +9763,14 @@
                         "margin_coverage_pct"
                       ],
                       "additionalProperties": false
+                    },
+                    "agent_key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
                     }
                   },
                   "required": [
@@ -10448,6 +10488,14 @@
                         "margin_coverage_pct"
                       ],
                       "additionalProperties": false
+                    },
+                    "agent_key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
                     }
                   },
                   "required": [
@@ -11203,6 +11251,14 @@
                         "margin_coverage_pct"
                       ],
                       "additionalProperties": false
+                    },
+                    "agent_key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
                     }
                   },
                   "required": [
@@ -11830,6 +11886,14 @@
                         "margin_coverage_pct"
                       ],
                       "additionalProperties": false
+                    },
+                    "agent_key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
                     }
                   },
                   "required": [
@@ -15389,6 +15453,26 @@
                                   "status"
                                 ],
                                 "additionalProperties": false
+                              },
+                              "not_requested": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "detail": {
+                                    "type": "string"
+                                  },
+                                  "at": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "detail",
+                                  "at"
+                                ],
+                                "additionalProperties": false
                               }
                             },
                             "required": [
@@ -16047,6 +16131,26 @@
                                 "required": [
                                   "id",
                                   "status"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "not_requested": {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "detail": {
+                                    "type": "string"
+                                  },
+                                  "at": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "detail",
+                                  "at"
                                 ],
                                 "additionalProperties": false
                               }
@@ -18070,6 +18174,26 @@
                                     "required": [
                                       "id",
                                       "status"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "not_requested": {
+                                    "type": "object",
+                                    "properties": {
+                                      "code": {
+                                        "type": "string"
+                                      },
+                                      "detail": {
+                                        "type": "string"
+                                      },
+                                      "at": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "code",
+                                      "detail",
+                                      "at"
                                     ],
                                     "additionalProperties": false
                                   }
@@ -46673,6 +46797,26 @@
                                     "required": [
                                       "id",
                                       "status"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "not_requested": {
+                                    "type": "object",
+                                    "properties": {
+                                      "code": {
+                                        "type": "string"
+                                      },
+                                      "detail": {
+                                        "type": "string"
+                                      },
+                                      "at": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "code",
+                                      "detail",
+                                      "at"
                                     ],
                                     "additionalProperties": false
                                   }

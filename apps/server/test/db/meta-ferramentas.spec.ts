@@ -10,7 +10,17 @@ import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js'
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
-import { type EmpresaComMeta, empresaComMeta, type FalhaDaMeta, ligarConectorNaMetaDeMentira, ligarEscritaNaMeta, MetaDeMentira, objetoLido } from '../helpers/meta-de-mentira.js';
+import {
+  type AcaoRecomendada,
+  campanhaComRecomendacao as comRecomendacao,
+  type EmpresaComMeta,
+  empresaComMeta,
+  type FalhaDaMeta,
+  ligarConectorNaMetaDeMentira,
+  ligarEscritaNaMeta,
+  MetaDeMentira,
+  objetoLido,
+} from '../helpers/meta-de-mentira.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // A4 · X2: as ferramentas de anúncio na Meta, do pedido à volta, pela API e contra uma Graph API local
@@ -60,44 +70,8 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     (await ownerQuery<{ kind: string; amount_micros: string }>(`select kind, amount_micros::text from liame.budget_ledger_entry where action_request_id = $1 order by created_at, id`, [id])).map((l) => [l.kind, Number(l.amount_micros)]);
 
   const hoje = diaNoFuso(new Date(), 'America/Sao_Paulo');
-  const REGRA_DA_SOMBRA = { orcamento_reduzir: 'prejuizo', orcamento_aumentar: 'lucro_no_limite', campanha_pausar: 'prejuizo_forte' } as const;
-
-  /**
-   * Uma campanha lida da conta (com a verba diária de R$ 30,00 que o Liame guardou dela) e a recomendação em aberto do
-   * Gestor de tráfego para ela, como a rotina da sombra grava: de hoje, com os números dos 7 dias anteriores.
-   */
-  async function campanhaComRecomendacao(emp: EmpresaComMeta, tool: keyof typeof REGRA_DA_SOMBRA, nome = 'Delivery noite') {
-    const c = await objetoLido(meta, emp, 'campanha', { name: nome });
-    const [linha] = await ownerQuery<{ id: string }>(`update liame.campaign set daily_budget_micros = 30000000 where tenant_id = $1 and external_id = $2 returning id`, [emp.tenantId, c.id]);
-    const retrato = {
-      campanha: { nome, situacao: 'ativa', verba_diaria_micros: '30000000' },
-      janela: { de: menosDias(hoje, 7), ate: menosDias(hoje, 1), fuso: 'America/Sao_Paulo' },
-      plataforma: { spend_micros: '150000000' },
-      caixa: { orders: 2, revenue_micros: '120000000', margin_known_micros: '90000000', margin_coverage_pct: '100.0', verdict: 'prejuizo' },
-    };
-    const recomendacao = uuidv7();
-    await ownerQuery(
-      `insert into liame.shadow_decision (id, tenant_id, brand_id, connected_account_id, campaign_id, provider, source, tool, rule_key, rule_version, params,
-                                          confidence, state_snapshot, decided_on, window_from, window_to, evaluate_on, status)
-       values ($1, $2, $3, $4, $5, 'meta_ads', 'regra', $6, $7, 2, $8, 0.9, $9, $10, $11, $12, $13, 'aberta')`,
-      [
-        recomendacao,
-        emp.tenantId,
-        emp.brandId,
-        emp.conta,
-        linha!.id,
-        tool,
-        REGRA_DA_SOMBRA[tool],
-        JSON.stringify(tool === 'campanha_pausar' ? {} : { percent: 10 }),
-        JSON.stringify(retrato),
-        hoje,
-        menosDias(hoje, 7),
-        menosDias(hoje, 1),
-        menosDias(hoje, -7),
-      ],
-    );
-    return { ...c, campanha: linha!.id, recomendacao };
-  }
+  /** Uma campanha lida da conta e a recomendação em aberto do Gestor de tráfego para ela, de hoje. */
+  const campanhaComRecomendacao = (emp: EmpresaComMeta, tool: AcaoRecomendada, nome = 'Delivery noite') => comRecomendacao(meta, emp, tool, { dia: hoje, nome });
   const ligacaoDe = async (pedido: string) =>
     (await ownerQuery<{ shadow_decision_id: string | null }>(`select shadow_decision_id from liame.action_request where id = $1`, [pedido]))[0]!.shadow_decision_id;
   /** As sugestões do Gestor de tráfego na Atenção, pelo contrato inteiro (objetos estritos). */

@@ -96,6 +96,12 @@ export const AttentionRecommendation = z.strictObject({
     .nullable(),
   /** O pedido mais recente que nasceu desta recomendação, em qualquer situação; nulo se ninguém pediu (ou se quem lê não vê os pedidos). */
   action: z.strictObject({ id: z.uuid(), status: ActionStatus }).nullable(),
+  /**
+   * Só no modo Aprovação, quando o Gestor de tráfego tentou fazer o pedido desta recomendação e não conseguiu: o código
+   * do problema (`plataforma-indisponivel`, `teto-nao-definido`, `acao-duplicada`…), o motivo em palavras e a hora da
+   * tentativa. Ele não tenta de novo sozinho; a pessoa ainda pode pedir.
+   */
+  not_requested: z.strictObject({ code: z.string(), detail: z.string(), at: z.string() }).optional(),
 });
 export type AttentionRecommendation = z.infer<typeof AttentionRecommendation>;
 

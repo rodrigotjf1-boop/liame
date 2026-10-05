@@ -1,13 +1,14 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { type Database, withTenant } from '@liame/database';
+import { type Database, uuidv7, withTenant } from '@liame/database';
 import type { ReadResult } from '../../src/actions/connectors.js';
 import { metaAnunciosConnector } from '../../src/actions/meta-anuncios.js';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { versaoRegistrada } from '../../src/connectors/tipos.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
+import { menosDias } from '../../src/results/fora-do-normal.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { enableMfa, ownerQuery, signupAndLogin, type TestApi } from './api.js';
 
@@ -238,6 +239,54 @@ export async function objetoLido(
     ]);
   }
   return { id: o.id, recurso: `${tipo}:${o.id}` };
+}
+
+/** A regra da sombra que recomenda cada ação (`sombra/regras.ts`). */
+export const REGRA_DA_SOMBRA = { orcamento_reduzir: 'prejuizo', orcamento_aumentar: 'lucro_no_limite', campanha_pausar: 'prejuizo_forte' } as const;
+export type AcaoRecomendada = keyof typeof REGRA_DA_SOMBRA;
+
+/**
+ * Uma campanha lida da conta (com a verba diária de R$ 30,00 que o Liame guardou dela) e a recomendação em aberto do
+ * Gestor de tráfego para ela, como a rotina da sombra grava: do dia dado (no fuso da loja), com os números dos 7 dias
+ * anteriores e o passo de 10% nas de verba.
+ */
+export async function campanhaComRecomendacao(
+  meta: MetaDeMentira,
+  emp: Pick<EmpresaComMeta, 'tenantId' | 'brandId' | 'conta'>,
+  tool: AcaoRecomendada,
+  opcoes: { dia: string; nome?: string },
+): Promise<{ id: string; recurso: string; campanha: string; recomendacao: string }> {
+  const nome = opcoes.nome ?? 'Delivery noite';
+  const c = await objetoLido(meta, emp, 'campanha', { name: nome });
+  const [linha] = await ownerQuery<{ id: string }>(`update liame.campaign set daily_budget_micros = 30000000 where tenant_id = $1 and external_id = $2 returning id`, [emp.tenantId, c.id]);
+  const retrato = {
+    campanha: { nome, situacao: 'ativa', verba_diaria_micros: '30000000' },
+    janela: { de: menosDias(opcoes.dia, 7), ate: menosDias(opcoes.dia, 1), fuso: 'America/Sao_Paulo' },
+    plataforma: { spend_micros: '150000000' },
+    caixa: { orders: 2, revenue_micros: '120000000', margin_known_micros: '90000000', margin_coverage_pct: '100.0', verdict: 'prejuizo' },
+  };
+  const recomendacao = uuidv7();
+  await ownerQuery(
+    `insert into liame.shadow_decision (id, tenant_id, brand_id, connected_account_id, campaign_id, provider, source, tool, rule_key, rule_version, params,
+                                        confidence, state_snapshot, decided_on, window_from, window_to, evaluate_on, status)
+     values ($1, $2, $3, $4, $5, 'meta_ads', 'regra', $6, $7, 2, $8, 0.9, $9, $10, $11, $12, $13, 'aberta')`,
+    [
+      recomendacao,
+      emp.tenantId,
+      emp.brandId,
+      emp.conta,
+      linha!.id,
+      tool,
+      REGRA_DA_SOMBRA[tool],
+      JSON.stringify(tool === 'campanha_pausar' ? {} : { percent: 10 }),
+      JSON.stringify(retrato),
+      opcoes.dia,
+      menosDias(opcoes.dia, 7),
+      menosDias(opcoes.dia, 1),
+      menosDias(opcoes.dia, -7),
+    ],
+  );
+  return { ...c, campanha: linha!.id, recomendacao };
 }
 
 /** O estado do objeto como o conector o lê (na Meta de mentira), sob a RLS da empresa. */

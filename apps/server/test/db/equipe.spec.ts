@@ -3,10 +3,12 @@ import { resolve } from 'node:path';
 import { TeamResponse } from '@liame/contracts';
 import { createDatabase, type Database, runMigrations, uuidv7, withTenant } from '@liame/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ActionService } from '../../src/actions/action.service.js';
 import { funcionarioAtivo } from '../../src/ai/registro/ativacao.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { ResultsService } from '../../src/results/results.service.js';
+import { PedidosDoGestor } from '../../src/worker/pedidos-do-gestor.js';
 import { SombraLoop } from '../../src/worker/sombra-loop.js';
 import { SombraService } from '../../src/worker/sombra.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
@@ -263,7 +265,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
   it('o Gestor de tráfego desligado na marca não roda a sombra; ligado de novo, volta', async () => {
     const e = await empresa();
     await ligarSombra(e.tenantId);
-    const loop = new SombraLoop(database, flags, new SombraService(database, api.app.get(ResultsService)));
+    const loop = new SombraLoop(database, flags, new SombraService(database, api.app.get(ResultsService)), new PedidosDoGestor(database, api.app.get(ActionService), flags));
     expect((await api.call('POST', '/v1/team/members/trafego/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).status).toBe(200);
     expect(await loop.executarLote(10, { tenantIds: [e.tenantId] })).toEqual([{ brandId: e.brandId, tenantId: e.tenantId, status: 'desligada_pela_empresa' }]);
     expect((await api.call('POST', '/v1/team/members/trafego/resume', { cookie: e.cookie, body: { brand_id: e.brandId } })).status).toBe(200);

@@ -256,10 +256,14 @@ export class AtencaoCicloService {
       moeda: string | null;
       pedido_id: string | null;
       pedido_status: ActionStatus | null;
+      tentou_em: Date | string | null;
+      nao_pediu: string | null;
+      nao_pediu_motivo: string | null;
     }>(sql`
       select d.id, d.brand_id, d.tool, d.campaign_id, d.connected_account_id, d.provider, d.params, d.state_snapshot,
              c.external_id as campanha_externa, c.daily_budget_micros::text as verba_de_agora, a.currency as moeda,
-             p.id as pedido_id, p.status as pedido_status
+             p.id as pedido_id, p.status as pedido_status,
+             d.request_attempted_at as tentou_em, d.request_error as nao_pediu, d.request_error_detail as nao_pediu_motivo
         from liame.shadow_decision d
         join liame.connected_account a on a.id = d.connected_account_id and a.disconnected_at is null
         join liame.campaign c on c.id = d.campaign_id and c.status = 'ativa'
@@ -327,6 +331,10 @@ export class AtencaoCicloService {
             id: s.id,
             request: pedido ? { ...pedido, provider: s.provider, account_id: s.connected_account_id } : null,
             action: leitor.vePedidos && s.pedido_id && s.pedido_status ? { id: s.pedido_id, status: s.pedido_status } : null,
+            // Modo Aprovação: ele tentou pedir e não conseguiu. Fica o motivo, e a pessoa ainda pode pedir.
+            ...(s.nao_pediu && s.nao_pediu_motivo && s.tentou_em
+              ? { not_requested: { code: s.nao_pediu, detail: s.nao_pediu_motivo, at: new Date(s.tentou_em).toISOString() } }
+              : {}),
           });
         }
 
