@@ -1,0 +1,103 @@
+/* Verba do mês (A4 · P9, aprovado em 05/10/2026): quanto a empresa pode gastar em anúncios, quanto já gastou, os dois
+   limites e o que o Liame mudou. As classes são as do protótipo (mockups/prototipo-anuncios.html); os números com
+   fonte usam as do Explicar (.nf, .fontes-num) e as tabelas, as de Resultados (.tabela, .kpi). */
+
+.verba { display: grid; gap: var(--sp-4); }
+.verba > * { min-width: 0; }
+.verba-heroi { gap: var(--sp-4); }
+/* O selo do mês leva duas informações: na tela estreita ele quebra a linha dentro da própria caixa. */
+.verba-heroi .card-cab .lite-chip { height: auto; min-height: 24px; padding-block: 3px; border-radius: 12px; line-height: 1.35; }
+.verba-num { margin: 0; font-family: var(--font-mono); font-size: var(--text-hero); font-weight: 600; letter-spacing: -.02em; line-height: 1.05; }
+.verba-num .nf { font-size: inherit; }
+.verba-num small { display: block; margin-top: 6px; font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 400; letter-spacing: 0; color: var(--text-muted); }
+
+/* A barra do teto: o gasto até ontem (cheio), a previsão até o fim do mês (hachura) e o que sobra do teto (fundo). */
+.verba-barra { position: relative; height: 14px; border-radius: 7px; background: var(--chart-grade); overflow: hidden; }
+.verba-barra i { position: absolute; top: 0; bottom: 0; left: 0; display: block; }
+.verba-barra .gasto { width: calc(var(--gasto) * 1%); background: var(--chart-foco); border-radius: 7px 0 0 7px; }
+.verba-barra .previsto { left: calc(var(--gasto) * 1% + 2px); width: max(0px, calc((var(--previsto) - var(--gasto)) * 1% - 2px)); background: repeating-linear-gradient(135deg, var(--chart-foco) 0 3px, transparent 3px 6px); opacity: .75; }
+.verba-barra--acima .previsto { background: repeating-linear-gradient(135deg, var(--danger) 0 3px, transparent 3px 6px); opacity: 1; }
+.verba-legenda { display: flex; flex-wrap: wrap; gap: 6px var(--sp-4); font-size: var(--text-xs); color: var(--text-muted); }
+.verba-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.verba-legenda i { width: 12px; height: 10px; border-radius: 3px; background: var(--chart-foco); }
+.verba-legenda .lg-previsto { background: repeating-linear-gradient(135deg, var(--chart-foco) 0 3px, transparent 3px 6px); }
+.verba-legenda .lg-teto { background: var(--chart-grade); }
+
+.verba-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
+.verba-stats .kpi-val { font-size: var(--text-lg); }
+.verba-stats .kpi-val .nf, .verba-stats .kpi-sub .nf { font-size: inherit; }
+
+/* Os limites da empresa: os dois valores (ou o formulário) de um lado, as regras da Liame do outro. */
+.limites-grade { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--sp-5) var(--sp-8); align-items: start; }
+.limites-lado { display: grid; gap: var(--sp-3); }
+.limites-dois { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.limite { display: grid; align-content: start; gap: 2px; min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.limite-rot { font-size: var(--text-sm); color: var(--text-muted); }
+.limite-val { font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; }
+.limite-val--falta { font-family: var(--font-sans); font-size: var(--text-md); color: var(--warning); }
+.limite-sub { margin-top: 2px; font-size: var(--text-xs); color: var(--text-muted); }
+.limites-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); padding: var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); }
+.limites-form > :not(.campo) { grid-column: 1 / -1; }
+.limites-form .pd-valor { width: 100%; max-width: 14rem; }
+.limites-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.regras-liame { display: grid; gap: var(--sp-2); margin: var(--sp-2) 0 0; padding: 0; list-style: none; font-size: var(--text-sm); color: var(--text-muted); }
+.regras-liame li { display: flex; gap: var(--sp-2); }
+.regras-liame .ic { flex: none; width: 15px; height: 15px; margin-top: 3px; color: var(--success); }
+
+/* O campo de valor em reais e o aviso do que falta (as mesmas peças do pedido de mudança, no protótipo P9). */
+.pd-valor { display: flex; align-items: center; min-height: 40px; width: 11rem; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.pd-valor:focus-within { border-color: var(--foco); box-shadow: var(--focus-ring); }
+.pd-valor:has([aria-invalid="true"]) { border-color: var(--danger); }
+.pd-valor span { padding-left: var(--sp-3); color: var(--text-muted); font-family: var(--font-mono); }
+.pd-valor input { flex: 1; min-width: 0; height: 38px; padding: 0 var(--sp-3) 0 var(--sp-2); border: 0; background: none; outline: none; font: inherit; font-family: var(--font-mono); font-weight: 600; color: inherit; }
+.pd-aviso { display: flex; gap: var(--sp-3); margin: 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--warning-soft); font-size: var(--text-sm); }
+.pd-aviso .ic { flex: none; margin-top: 2px; color: var(--warning); }
+
+/* O que o Liame mudou: a situação de cada mudança depois da conferência do dia. */
+.concilia-sit { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: normal; }
+.concilia-sit .ic { width: 15px; height: 15px; flex: none; }
+.concilia-sit--ok { color: var(--success); }
+.concilia-sit--mudou, .concilia-sit--trocada, .concilia-sit--espera, .concilia-sit--outra { color: var(--text-muted); }
+.concilia-sit--acima { color: var(--warning); }
+.verba .tabela td, .verba .tabela tbody th { white-space: normal; }
+.verba .tabela td.n { white-space: nowrap; }
+.verba .tabela .sub { white-space: normal; }
+.verba .fontes-num { margin-top: 0; }
+.verba .nota { display: flex; gap: var(--sp-3); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.verba .nota .ic { flex: none; margin-top: 2px; }
+.verba-avisos { display: grid; gap: var(--sp-3); }
+.verba-avisos .faixa { margin: 0; }
+@container pagina (min-width: 600px) {
+  /* A explicação da situação não toma a tabela: o que mudou fica com o espaço que sobra. */
+  .verba .tabela--compacta td.larga { width: 32%; }
+}
+@container pagina (min-width: 900px) {
+  /* Com espaço, o que mudou e os valores ("R$ 39,97 por dia") ficam numa linha só; a explicação da situação é que quebra. */
+  .verba .tabela--compacta tbody th, .verba .tabela--compacta td.num { white-space: nowrap; }
+}
+
+/* O cartão da verba no Resumo (a página inicial do Lite). */
+.r-verba { grid-column: 1 / -1; }
+.r-verba .verba-linha { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3) var(--sp-5); }
+.r-verba .lite-frase { margin: 0; }
+
+@container pagina (max-width: 899px) {
+  .limites-grade { grid-template-columns: minmax(0, 1fr); }
+  /* Com pouco espaço, o título da coluna quebra a linha: a coluna fica do tamanho do valor dela. */
+  .verba .tabela--compacta thead th { white-space: normal; }
+}
+@container pagina (max-width: 599px) {
+  .verba-stats, .limites-dois, .limites-form { grid-template-columns: minmax(0, 1fr); }
+  .r-verba .verba-linha { grid-template-columns: minmax(0, 1fr); }
+  .r-verba .verba-linha .btn { justify-self: start; }
+  /* No celular, cada linha das tabelas da verba vira um bloco: o título em cima e os números em pares, cada um com o rótulo da coluna. */
+  .verba .tabela--pilha, .verba .tabela--pilha tbody, .verba .tabela--pilha tfoot { display: block; }
+  .verba .tabela--pilha thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .verba .tabela--pilha tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+  .verba .tabela--pilha tbody:last-child tr:last-child { border-bottom: 0; }
+  .verba .tabela--pilha tfoot tr { border-bottom: 0; background: var(--surface-2); }
+  .verba .tabela--pilha tr > th, .verba .tabela--pilha tr > td { display: block; padding: 0; border: 0; background: none; text-align: left; }
+  .verba .tabela--pilha tr > th { grid-column: 1 / -1; order: -1; }
+  .verba .tabela--pilha tr > td.larga { grid-column: 1 / -1; }
+  .verba .tabela--pilha td::before { content: attr(data-rot); display: block; margin-bottom: 1px; font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 400; letter-spacing: 0; color: var(--text-muted); }
+}

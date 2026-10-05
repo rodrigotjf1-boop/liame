@@ -126,6 +126,7 @@ Sinais do briefing: o dono decide e o gestor opera (modos Lite e Pro), chega coi
 | Aprovações | o que muda em uma frase, risco, "dá para desfazer", prazo, **Explicar** e **E se eu recusar?**; **Ver detalhes** abre o resto ali mesmo | por quê em números, minigráfico, ajuste, antes e depois, política, versão e hash |
 | Sua equipe | o passo atual com barra de progresso, "Já pode agir sozinho?" em uma frase, o que faz sem perguntar | passo a passo completo, corrigir o rumo, medidor com sinais, tabela de limites, histórico |
 | Resultados | "para cada R$ 1 voltaram R$ 2,60", 3 números e cada campanha com **Dá lucro / Empata / Dá prejuízo** | fontes e horários, fio completo, tabela com halteres plataforma × caixa |
+| Verba do mês | o gasto do mês contra o teto numa barra e numa frase, os dois limites e o que o Liame mudou, com a situação de cada mudança; **Ver detalhes** abre o resto ali mesmo | a tabela por plataforma (gasto, ritmo e previsão) e, em cada mudança, o que a Meta informa hoje e o gasto por dia depois |
 
 - **Botões da LIA (Explicar, O que é isso?, Por quê?):** abrem a LIA com a pergunta pronta; a resposta traz em linguagem simples os números e motivos que o Lite escondeu, com até 2 ações (abrir a aprovação, ver no Pro). A LIA nunca aprova gasto pelo chat.
 - **Nada some:** tudo o que existe no Pro existe no Lite, um clique adiante.

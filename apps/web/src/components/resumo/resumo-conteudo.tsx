@@ -1,11 +1,14 @@
 'use client';
 
-import type { SummaryResponse, TeamResponse } from '@liame/contracts';
+import type { BudgetMonthResponse, SummaryResponse, TeamResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { type FormEvent, type ReactNode, type Ref, useMemo, useState } from 'react';
 import { useConversa } from '@/components/conversa/contexto';
 import { IconeLia } from '@/components/marca/logo';
+import { TextoRico } from '@/components/resultados/pecas';
 import { Icone } from '@/components/ui/icone';
+import { BarraDoTeto } from '@/components/verba/barra-do-teto';
+import { verbaNoResumo } from '@/components/verba/textos';
 import { ListaDeFontes, NumeroComFonte, TextoComNumeros, useFontes } from './numeros';
 import { canaisDo, equipeDo, Fontes, hojeEscrito, pedidosDo, perguntasDoResumo, perguntasDoVeredito, precisaDe, primeiroNome, saudacao, type Stat, statsDo, vereditoDo } from './textos';
 
@@ -17,6 +20,10 @@ type Props = {
   r: SummaryResponse;
   /** O que a equipe fez no mês; nulo sem a permissão ou se a leitura falhou (o cartão some). */
   equipe: TeamResponse | null;
+  /** A verba do mês da empresa (protótipo P9); nula sem a permissão ou se a leitura falhou (o cartão some). */
+  verba?: BudgetMonthResponse | null;
+  /** A empresa tem mais de uma marca: a verba soma todas, e o cartão diz. */
+  variasMarcas?: boolean;
   nomePessoa: string;
   nomeMarca: string | null;
   agora: Date;
@@ -26,7 +33,7 @@ type Props = {
   tituloRef?: Ref<HTMLHeadingElement>;
 };
 
-export function ResumoConteudo({ r, equipe, nomePessoa, nomeMarca, agora, pode, seletor, tituloRef }: Props) {
+export function ResumoConteudo({ r, equipe, verba = null, variasMarcas = false, nomePessoa, nomeMarca, agora, pode, seletor, tituloRef }: Props) {
   const fuso = r.period.timezone;
   const dados = useMemo(() => {
     const fontes = new Fontes();
@@ -46,6 +53,8 @@ export function ResumoConteudo({ r, equipe, nomePessoa, nomeMarca, agora, pode, 
     autonomia: verCampanhas && pode('politicas.gerenciar'),
   });
   const linhasDaEquipe = equipe ? equipeDo(equipe) : [];
+  // Sem conta de anúncio conectada não há verba para mostrar: o cartão fica para quando houver.
+  const daVerba = verba && verba.platforms.length ? verbaNoResumo(verba, variasMarcas) : null;
   const primeira = r.state === 'primeira_semana';
   const semRegem = r.state === 'sem_regem';
   const aoTocar = fontes.mostrar;
@@ -176,6 +185,33 @@ export function ResumoConteudo({ r, equipe, nomePessoa, nomeMarca, agora, pode, 
               ))}
             </div>
             <p className="explica-nota">A LIA é uma assistente de IA. Ela lê os números do sistema; quem decide é você.</p>
+          </article>
+        )}
+
+        {daVerba && (
+          <article className="card r-verba" aria-labelledby="rv-t">
+            <div className="card-cab">
+              <div>
+                <h2 id="rv-t">{daVerba.titulo}</h2>
+                <p className="card-sub">{daVerba.sub}</p>
+              </div>
+            </div>
+            {daVerba.barra && <BarraDoTeto barra={daVerba.barra} />}
+            <div className="verba-linha">
+              <p className="lite-frase lite-frase--grande">
+                <TextoRico frase={daVerba.frase} />
+              </p>
+              {daVerba.semTeto && pode('orcamento.gerenciar') ? (
+                <Link className="btn btn--primary" href="/verba#limites">
+                  Definir os limites
+                </Link>
+              ) : (
+                <Link className="btn" href="/verba">
+                  <Icone nome="wallet" pequeno />
+                  Ver a verba do mês
+                </Link>
+              )}
+            </div>
           </article>
         )}
 

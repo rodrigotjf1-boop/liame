@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandResponse, SummaryResponse, TeamResponse } from '@liame/contracts';
+import type { BrandResponse, BudgetMonthResponse, SummaryResponse, TeamResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -15,11 +15,12 @@ import { ResumoConteudo } from './resumo-conteudo';
 
 // "Resumo" (mockups/prototipo-resumo.html, P8 aprovado em 03/10/2026): a página inicial do Lite. No Pro, a página
 // inicial é a Atenção (protótipo geral aprovado): escolher Pro aqui leva para lá. A conta é do servidor
-// (`GET /v1/summary`, `vendas.ver`); "o que a equipe fez" vem de `/v1/team` (quem vê campanhas e vendas).
+// (`GET /v1/summary`, `vendas.ver`); "o que a equipe fez" vem de `/v1/team` (quem vê campanhas e vendas) e a verba
+// do mês, de `/v1/budget/month` (quem acompanha as campanhas; protótipo P9).
 
 type Carga =
   | { tipo: 'carregando' }
-  | { tipo: 'ok'; dados: SummaryResponse; equipe: TeamResponse | null; marca: string }
+  | { tipo: 'ok'; dados: SummaryResponse; equipe: TeamResponse | null; verba: BudgetMonthResponse | null; marca: string }
   | { tipo: 'erro'; problema: Problema };
 
 export function ResumoTela() {
@@ -28,6 +29,7 @@ export function ResumoTela() {
   const router = useRouter();
   const podeVer = pode('vendas.ver');
   const podeVerEquipe = podeVer && pode('campanhas.ver');
+  const podeVerVerba = podeVer && pode('campanhas.ver');
   const titulo = useRef<HTMLHeadingElement>(null);
   const [marcas, setMarcas] = useState<BrandResponse[] | null>(null);
   const [erroMarcas, setErroMarcas] = useState<Problema | null>(null);
@@ -67,13 +69,15 @@ export function ResumoTela() {
         chamar(() => api.GET('/v1/summary', { params: { query } })),
         // A equipe é um cartão a mais: se a leitura dela falhar, o cartão some e o Resumo fica.
         podeVerEquipe ? chamar(() => api.GET('/v1/team', { params: { query } })) : Promise.resolve(null),
-      ]).then(([r, e]) => {
+        // A verba do mês também: é da empresa (soma as contas de anúncio de todas as marcas).
+        podeVerVerba ? chamar(() => api.GET('/v1/budget/month')) : Promise.resolve(null),
+      ]).then(([r, e, v]) => {
         // Só a resposta mais nova vale (trocar de marca no meio de uma leitura não mistura números).
         if (id !== seq.current) return;
-        setCarga(r.ok ? { tipo: 'ok', dados: r.data, equipe: e?.ok ? e.data : null, marca } : { tipo: 'erro', problema: r.problema });
+        setCarga(r.ok ? { tipo: 'ok', dados: r.data, equipe: e?.ok ? e.data : null, verba: v?.ok ? v.data : null, marca } : { tipo: 'erro', problema: r.problema });
       }),
     );
-  }, [marca, tentativa, podeVerEquipe, vaiParaAtencao]);
+  }, [marca, tentativa, podeVerEquipe, podeVerVerba, vaiParaAtencao]);
 
   // Depois de "Tentar de novo", o foco vai para o título do Resumo que chegou.
   useEffect(() => {
@@ -159,7 +163,18 @@ export function ResumoTela() {
 
   return (
     <section aria-labelledby="h-resumo">
-      <ResumoConteudo r={carga.dados} equipe={carga.equipe} nomePessoa={me.user.name} nomeMarca={nomeMarca} agora={agora} pode={pode} seletor={seletor} tituloRef={titulo} />
+      <ResumoConteudo
+        r={carga.dados}
+        equipe={carga.equipe}
+        verba={carga.verba}
+        variasMarcas={(marcas?.length ?? 0) > 1}
+        nomePessoa={me.user.name}
+        nomeMarca={nomeMarca}
+        agora={agora}
+        pode={pode}
+        seletor={seletor}
+        tituloRef={titulo}
+      />
     </section>
   );
 }

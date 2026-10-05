@@ -61,11 +61,11 @@ export function TextoComNumeros({ texto, lista, aoTocar }: { texto: Texto; lista
   );
 }
 
-export function ListaDeFontes({ lista, estado }: { lista: LinhaDeFonte[]; estado: ReturnType<typeof useFontes> }) {
+export function ListaDeFontes({ lista, estado, id = 'resumo-fontes' }: { lista: LinhaDeFonte[]; estado: ReturnType<typeof useFontes>; /** O id da lista, quando a tela não é o Resumo. */ id?: string }) {
   if (!lista.length) return null;
   return (
     <>
-      <details className="fontes-num" id="resumo-fontes" open={estado.aberta} onToggle={(ev) => estado.setAberta(ev.currentTarget.open)}>
+      <details className="fontes-num" id={id} open={estado.aberta} onToggle={(ev) => estado.setAberta(ev.currentTarget.open)}>
         <summary>
           <Icone nome="chevron-down" pequeno />
           De onde vêm os números ({lista.length})
