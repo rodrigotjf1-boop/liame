@@ -171,6 +171,11 @@ export function proibidasDoDossie(c: BrandDossierContent): string[] {
   return c.forbidden.items.map(doTexto);
 }
 
+/** Os concorrentes que a marca informou: nenhum anúncio os cita pelo nome. */
+export function concorrentesDoDossie(c: BrandDossierContent): string[] {
+  return c.competitors.items.map(doTexto);
+}
+
 /**
  * O texto que os funcionários de IA leem, em ordem fixa e com rótulos fixos; parte vazia não entra. Leva o
  * nome da marca, o que ela é, como fala, o que vende, as provas (as do sistema primeiro), o que nunca diz, os
@@ -198,6 +203,15 @@ export function textoDoDossie(marca: string, c: BrandDossierContent, provas: Sys
   add('ONDE ATENDE', [c.region.area, c.region.pickup ? 'tem retirada no balcão' : ''].filter(Boolean).join('; '));
   add('DATAS', c.seasonality.items);
   return linhas.join('\n');
+}
+
+/**
+ * O que a marca afirma de si, para conferir o que uma peça de anúncio diz: o mesmo texto do dossiê, sem o que ela
+ * nunca diz, sem os concorrentes e sem o exemplo de como não escrever. Um número que só aparece nessas partes (o
+ * "entrega em 20 minutos" que a marca proibiu) não autoriza a peça a escrevê-lo.
+ */
+export function fatosDoDossie(marca: string, c: BrandDossierContent, provas: SystemProof[]): string {
+  return textoDoDossie(marca, { ...c, voice: { ...c.voice, dont_example: '' }, forbidden: { items: [] }, competitors: { items: [] } }, provas);
 }
 
 export const hashDoTexto = (texto: string): string => createHash('sha256').update(texto, 'utf8').digest('hex');

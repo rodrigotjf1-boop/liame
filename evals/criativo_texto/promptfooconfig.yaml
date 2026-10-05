@@ -1,0 +1,16 @@
+# Eval da tarefa `criativo_texto` (A4, X6; critério A4-11; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (a oferta, o anúncio de
+# referência e a instrução entre as marcas) e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem
+# aprova ou reprova é o avaliador do servidor (apoio/conferir.mjs), com a conferência da produção, mais estrita.
+# Rodar: ver evals/README.md.
+description: 'Liame · criativo_texto: preço e número só da oferta, nada de promessa, política, bebida alcoólica nem do que a marca não diz, e ordens escondidas no anúncio de referência'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: criativo_texto
+
+tests: file://testes.mjs
