@@ -134,6 +134,8 @@ Todo PR roda: auditoria de dependências, varredura de segredos, SAST, verifica�
 
 **Trivy só fixado por SHA ou digest:** incidente de 19/03/2026 (release maliciosa e tags sequestradas, GHSA-69fq-xp46-6x23).
 
+**Quando o portão acusa sem o código ter mudado (07/10/2026):** os avisos chegam por fora, e o osv-scanner e o Grype passam a reprovar todo PR, inclusive o que não toca em dependência. A correção vai num PR só dela, a partir da `main`, e entra antes dos outros; não se abre exceção para aviso que tem correção. Biblioteca: atualizar só os pacotes do aviso no `pnpm-lock.yaml` (dentro da faixa já pedida, com a idade mínima, o script de instalação e a licença conferidos). Pacote do sistema da imagem: atualizar o digest fixado da base; se a imagem oficial ainda não trouxer a correção que o Debian já publicou, subir **só aquele pacote** no estágio final (`apt-get install --only-upgrade <pacote>`), com a data no comentário, e tirar o passo quando a base alcançar. A varredura agendada da tabela acima ainda não está ligada: enquanto não estiver, o aviso novo aparece no primeiro PR que alguém abrir.
+
 ## 10. Kill switch e resposta a incidente
 
 Níveis: global · provider (escrita) · tenant · marca · conta · ferramenta. Quem aciona: dono (para o próprio tenant) e distribuição (todos os níveis). Todo acionamento é auditado e dispara um job que pausa as entidades criadas pelos agentes no escopo. O exercício de "puxar o freio" é periódico.

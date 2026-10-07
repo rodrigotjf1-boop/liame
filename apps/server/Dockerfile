@@ -6,8 +6,8 @@
 #           (o worker responde /health no 127.0.0.1 do contêiner: o HEALTHCHECK abaixo vale para os dois)
 #   migrations (release): docker run -e DATABASE_URL_OWNER=... liame-server node node_modules/@liame/database/dist/cli/migrate.js
 
-# Base fixada por digest (Node 24.21.0, bookworm-slim, 19/09/2026): tag sozinha pode mudar por baixo.
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS build
+# Base fixada por digest (Node 24.21.0, bookworm-slim, refeita em 06/10/2026): tag sozinha pode mudar por baixo.
+FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS build
 ENV CI=true TURBO_TELEMETRY_DISABLED=1 NEXT_TELEMETRY_DISABLED=1
 # pnpm 12 é nativo: o script de instalação DELE troca o marcador pelo binário da plataforma (ERR-017).
 # Os scripts das dependências do projeto continuam desligados (V9, LIC-079).
@@ -20,7 +20,13 @@ RUN pnpm turbo run build --filter=@liame/server...
 RUN pnpm --filter @liame/server deploy --prod /out \
  && rm -rf /out/src /out/test /out/tsconfig.json /out/tsconfig.build.json /out/nest-cli.json
 
-FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
+FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS runtime
+# Correção de segurança do Debian que a imagem oficial do Node ainda não trouxe (07/10/2026): perl-base
+# 5.36.0-7+deb12u4, com avisos críticos. Quem acusa é o Grype do CI. Quando a base fixada já vier com a versão
+# corrigida, este passo não faz nada e pode sair (security-model.md §9).
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --only-upgrade perl-base \
+ && rm -rf /var/lib/apt/lists/*
 # Versão no /health: o EasyPanel passa GIT_SHA como argumento de build; APP_VERSION explícito vence.
 ARG GIT_SHA=dev
 ARG APP_VERSION=${GIT_SHA}
