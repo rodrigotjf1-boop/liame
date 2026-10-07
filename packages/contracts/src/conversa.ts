@@ -200,6 +200,11 @@ export const ConversationMessage = z.strictObject({
   cards: z.array(ConversationCard),
   /** Da LIA: respondeu com o modelo econômico (perto do limite de uso do dia; a tela avisa que as respostas estão mais curtas). */
   economy: z.boolean(),
+  /**
+   * Da LIA: a resposta foi montada pelo sistema, por regra, com os dados que o Liame já leu, sem IA (a tela troca o
+   * selo "Feito com IA" por "Sem IA"). O sistema responde o pedido que conhece; a IA fica para o resto.
+   */
+  by_system: z.boolean(),
   /** Da LIA: a chamada que gerou a resposta; é o que o retorno (`POST /v1/ai/feedback`) referencia. */
   usage_id: z.uuid().nullable(),
   /**

@@ -18,6 +18,7 @@ import { AbrirDemandaInput, ABRIR_DEMANDA } from '../ai/conversa/demanda.defs.js
 import { valorDaDemanda, valorDaProposta } from '../ai/conversa/escritas.js';
 import { indiceDasOrigens, marcarResposta, type OrigemDosNumeros } from '../ai/conversa/fontes.js';
 import { foraDoDia, nomesDaLeitura, rotuloDaLeitura, rotuloDoPasso } from '../ai/conversa/leituras.js';
+import { LEITURA_DO_PEDIDO, type PedidoPorRegra, reconhecerPedido, respostaPorRegra } from '../ai/conversa/por-regra.js';
 import { LIA, PROMPT_CONVERSA_LIA, TAREFA_CONVERSA } from '../ai/conversa/prompt.js';
 import { contextoDoPedido, contextoPermitido, dossieDoPedido, historicoParaOModelo, querFalarComPessoa, textoDaResposta } from '../ai/conversa/contexto.js';
 import { conferirResposta, RespostaDaLia } from '../ai/conversa/resposta.js';
@@ -38,7 +39,7 @@ import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { dossieParaOModelo, proibidasDaMarca } from '../marca/marca.service.js';
 import { conferirTexto, REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
-import { diaNoFuso } from '../results/fora-do-normal.js';
+import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
 import { ATENDIMENTO } from '../suporte.js';
 import { DemandasService, type QuemPede } from './demandas.service.js';
@@ -108,6 +109,7 @@ export function mensagemDaLinha(l: LinhaMensagem): ConversationMessage {
     read: lista(c.read),
     cards: lista<Record<string, unknown>>(c.cards).map(cartaoDaLinha),
     economy: c.economy === true,
+    by_system: c.by_system === true,
     usage_id: l.usage_id,
     notice: l.role === 'sistema' ? (textoOuNulo(c.notice) ?? 'fora_do_ar') : null,
     contact: (c.contact as ConversationMessage['contact']) ?? null,
@@ -359,6 +361,13 @@ export class ConversaService {
       return aviso('politico');
     }
     if (!t.liaAtiva) return aviso('desligada', { contact: ATENDIMENTO });
+    // O que o sistema responde sozinho, com os dados que já leu (decisão do dono, 07/10/2026): a IA fica para o pedido
+    // que ele não reconhece ou não tem como resumir. Nulo aqui é "siga para a IA".
+    const conhecido = reconhecerPedido(t.texto);
+    if (conhecido) {
+      const pelaRegra = await this.porRegra(t, conhecido, io, aviso);
+      if (pelaRegra) return pelaRegra;
+    }
     // A falha da IA (da LIA ou do revisor) como a tela a mostra.
     const avisoDoErro = (err: AiError): Final =>
       aviso(AVISO_DO_ERRO[err.code] ?? 'fora_do_ar', {
@@ -472,6 +481,51 @@ export class ConversaService {
     const { blocks, numbers, meeting } = marcarResposta(resposta.data, indiceDasOrigens(origens), nomes);
     if (meeting) cards.push({ kind: 'reuniao', demand: null, coupon: null, meeting });
     return { role: 'lia', status: 'ok', content: { blocks, numbers, read: lidas(leituras), cards, economy: r.servedBy === 'economico' }, usageId: r.usageId };
+  }
+
+  /**
+   * A resposta montada pelo sistema, sem IA: faz a mesma leitura que a LIA faria (a ferramenta, com a permissão de quem
+   * pergunta), monta o texto por regra e o passa pela mesma conferência (números, Compliance, o que a marca não diz).
+   * Devolve nulo quando não dá para responder assim (sem a permissão da leitura, leitura que falhou, texto que não
+   * passou): o pedido segue para a IA. Com fonte fora do dia, sai o mesmo aviso de dado velho, sem gastar a IA.
+   */
+  private async porRegra(
+    t: TurnoPreparado,
+    pedido: PedidoPorRegra,
+    io: { enviar: (e: ConversationStreamEvent) => void; parar: AbortSignal },
+    aviso: (notice: string, extra?: Record<string, unknown>) => Final,
+  ): Promise<Final | null> {
+    const nome = LEITURA_DO_PEDIDO[pedido];
+    const [ferramenta] = this.leituras.paraPedido({ tenantId: t.quem.tenantId, userId: t.quem.userId, permissions: t.quem.permissions }, [nome]);
+    if (!ferramenta) return null;
+    // "A semana" são os 7 dias completos até ontem, como o contexto que vai à LIA diz.
+    const input = nome === 'resultados_ciclo_fechado' ? { brand_id: t.marca.id, from: menosDias(t.hoje, 7), to: menosDias(t.hoje, 1) } : { brand_id: t.marca.id };
+    const passo = (status: string) => io.enviar(evento('passo', { step: { id: `regra-${pedido}`, label: rotuloDoPasso(nome, input), status } }));
+    passo('lendo');
+    const lido = await ferramenta.executar(input);
+    passo(lido.ok ? 'ok' : 'falhou');
+    if (!lido.ok) return null;
+    if (io.parar.aborted) return { role: 'lia', status: 'parada', content: { blocks: [], numbers: [], read: [], cards: [], economy: false }, usageId: null };
+    const leitura: Leitura = { ferramenta: nome, input, valor: limparJson(lido.valor).valor };
+    const atrasadas = semRepetir(foraDoDia(nome, leitura.valor));
+    if (atrasadas.length) return aviso('dado_velho', { stale_sources: atrasadas });
+    const montada = respostaPorRegra(pedido, leitura.valor);
+    if (!montada) return null;
+    const nomes = [...new Set([t.marca.nome, ...nomesDaLeitura(leitura.valor)])];
+    const fixo = contextoPermitido(t);
+    const recusa = conferirResposta(montada.resposta, { emDia: [leitura.valor, fixo, montada.calculados.map((c) => c.valor)], velhas: [], nomes, daMarca: t.daMarca });
+    if (recusa) {
+      // O texto é do código: se não passou, é um aviso ou um nome que esbarrou numa regra. A IA tenta, com a conferência dela.
+      this.logger.warn(`conversa: resposta por regra (${pedido}) não passou na conferência (${recusa.recusa}${recusa.detalhe.length ? `: ${recusa.detalhe.slice(0, 8).join(' | ')}` : ''})`);
+      return null;
+    }
+    const origens: OrigemDosNumeros[] = [
+      { rotulo: rotuloDaOrigem(leitura), valor: leitura.valor, comCaminho: true, ordem: 1 },
+      ...montada.calculados.map((c) => ({ rotulo: c.rotulo, valor: c.valor, comCaminho: false, ordem: 1 })),
+      { rotulo: 'Liame · calendário (dia de hoje e os próximos)', valor: fixo.datas, comCaminho: false, ordem: 4 },
+    ];
+    const { blocks, numbers } = marcarResposta(montada.resposta, indiceDasOrigens(origens), nomes);
+    return { role: 'lia', status: 'ok', content: { blocks, numbers, read: lidas([leitura]), cards: [], economy: false, by_system: true }, usageId: null };
   }
 
   /**
