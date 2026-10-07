@@ -651,7 +651,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 | Node.js | **24.21.0 (LTS "Krypton")** | 26.x ainda Current; 22.x em manutenção |
 | NestJS | 12.1.0 | Node ≥ 20; `@nestjs/cli` 12.0.6 depende de **`typescript ~6.0.2`** |
 | TypeScript | **6.0.3** | A 7.0.2 existe, mas o Nest CLI ainda não usa |
-| Next.js | 16.3.6 | Node ≥ 20.9 |
+| Next.js | 16.3.8 | Node ≥ 20.9 |
 | React | 19.3.0 | — |
 | Tailwind CSS | 4.3.3 | configuração CSS-first |
 | Drizzle ORM | 0.45.3 (estável) | 1.0 em **RC.5**: não usar em produção ainda |
