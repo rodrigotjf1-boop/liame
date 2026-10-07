@@ -3,20 +3,23 @@
 import Link from 'next/link';
 import { Estado } from '@/components/ui/estado';
 import { useDetalhes } from '@/lib/modo';
-import { BotaoDetalhes } from './pecas';
+import { BarraDividida } from './desenhos';
+import type { OrigemLite } from './graficos';
+import { BotaoDetalhes, TextoRico } from './pecas';
 import type { CartaoOrigem as Dados } from './textos';
 
-// "De onde vieram os pedidos" (protótipo P1): pedido só ganha campanha com evidência; os sem origem (com
-// a porcentagem sobre os canais com clique), os canais sem clique e os cancelados aparecem à parte.
+// "De onde vieram os pedidos": pedido só ganha campanha com evidência. No modo simples (protótipo de Resultados em
+// gráficos, 07/10/2026), uma barra só: com prova de anúncio, canais sem clique e cardápio e WhatsApp sem prova. No
+// Pro (protótipo P1), os sem origem (com a porcentagem sobre os canais com clique), os canais sem clique e os cancelados.
 
-export function CartaoOrigem({ origem, podeVerContas }: { origem: Dados; podeVerContas: boolean }) {
+export function CartaoOrigem({ origem, lite, podeVerContas }: { origem: Dados; /** O desenho do modo simples (nulo sem o Regem ou sem pedido). */ lite: OrigemLite | null; podeVerContas: boolean }) {
   const d = useDetalhes();
   return (
     <article className="card" aria-labelledby="t-origem">
       <div className="card-cab">
         <div>
-          <h2 id="t-origem">De onde vieram os pedidos</h2>
-          <p className="card-sub">Pedido só ganha campanha com evidência; o resto aparece aqui, separado.</p>
+          <h2 id="t-origem">{!d.pro && lite ? lite.titulo : 'De onde vieram os pedidos'}</h2>
+          {d.pro && <p className="card-sub">Pedido só ganha campanha com evidência; o resto aparece aqui, separado.</p>}
         </div>
       </div>
 
@@ -47,18 +50,17 @@ export function CartaoOrigem({ origem, podeVerContas }: { origem: Dados; podeVer
 
       {origem.tipo === 'ok' && (
         <>
-          {!d.pro && (
-            <ul className="origem-lite">
-              {origem.lite.map((i) => (
-                <li key={i.titulo}>
-                  <span className="origem-n num">{i.numero}</span>
+          {!d.pro && lite && (
+            <div className="desenho-b">
+              <BarraDividida barra={lite.barra} />
+              {lite.cancelados && (
+                <p className="nota-b">
                   <span>
-                    <b>{i.titulo}</b>
-                    {i.texto}
+                    <TextoRico frase={lite.cancelados} />
                   </span>
-                </li>
-              ))}
-            </ul>
+                </p>
+              )}
+            </div>
           )}
           {!d.pro && <BotaoDetalhes aberto={d.aberto} controla="origem-pro" aoAlternar={d.alternar} />}
           <div className="origem-grid" id="origem-pro" hidden={!d.mostraPro}>

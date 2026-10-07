@@ -2,21 +2,33 @@
 
 import type { ReactNode } from 'react';
 import { useDetalhes } from '@/lib/modo';
+import { RetornoDoPeriodo } from './desenhos';
+import type { RetornoLite } from './graficos';
 import { BotaoDetalhes, SeloVeredito, TextoRico } from './pecas';
 import type { CartaoRoas as Dados } from './textos';
 
-// Herói da tela (protótipo P1): o ROAS confirmado no caixa, com a frase do dono no Lite; no Pro (ou em
-// "Ver detalhes"), cada plataforma com a janela dela ao lado do confirmado no caixa, com a janela do Liame.
+// Herói da tela. No modo simples (protótipo de Resultados em gráficos, 07/10/2026): quanto voltou para cada R$ 1, com
+// o selo do período, as duas barras na mesma régua e o gráfico dos dias. No Pro (protótipo P1): o ROAS confirmado no
+// caixa. No Pro ou em "Ver detalhes", cada plataforma com a janela dela ao lado do confirmado, com a janela do Liame.
 
-export function CartaoRoas({ roas, explicar }: { roas: Dados; /** O botão "Explicar" (A3 · I4), quando há o que explicar. */ explicar?: ReactNode }) {
+type Props = {
+  roas: Dados;
+  /** O desenho do modo simples. */
+  lite: RetornoLite;
+  /** O botão "Explicar" (A3 · I4), quando há o que explicar. */
+  explicar?: ReactNode;
+};
+
+export function CartaoRoas({ roas, lite, explicar }: Props) {
   const d = useDetalhes();
   return (
     <article className="card res-hero" aria-labelledby="t-roas">
       <div className="card-cab">
         <h2 id="t-roas" className="rotulo-marca">
-          {roas.titulo}
+          {d.pro ? roas.titulo : lite.titulo}
         </h2>
-        {roas.selos.map((s) => (
+        {/* A hora da fonte atrasada, no modo simples, está na faixa do topo. */}
+        {(d.pro ? roas.selos : []).map((s) => (
           <span key={s} className="st st--aguardando">
             <span className="dot" aria-hidden="true" />
             {s}
@@ -24,20 +36,16 @@ export function CartaoRoas({ roas, explicar }: { roas: Dados; /** O botão "Expl
         ))}
         {explicar}
       </div>
-      <p className={`hero-num num${roas.vazio ? ' hero-num--vazio' : ''}`}>{roas.numero}</p>
-      {roas.frase && (
+      {!d.pro && <RetornoDoPeriodo retorno={lite} />}
+      {d.pro && <p className={`hero-num num${roas.vazio ? ' hero-num--vazio' : ''}`}>{roas.numero}</p>}
+      {d.pro && roas.frase && (
         <p className="res-explica">
           <TextoRico frase={roas.frase} />
         </p>
       )}
-      {!d.pro && roas.fraseLite && (
-        <p className="res-explica">
-          <TextoRico frase={roas.fraseLite} />
-        </p>
-      )}
-      {!d.pro && roas.frasePlataformas && <p className="res-explica">{roas.frasePlataformas}</p>}
 
-      {roas.mensagens.length > 0 && (
+      {/* No modo simples, as campanhas de mensagem têm o cartão das conversas. */}
+      {d.pro && roas.mensagens.length > 0 && (
         <div className="msg-comp" role="group" aria-label="Campanhas de mensagem: custo por conversa e por pedido">
           <p className="rotulo-marca">Campanha de mensagem · conversa × pedido</p>
           {roas.mensagens.map((m) => (

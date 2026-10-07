@@ -6,6 +6,7 @@
 @import "../styles/seguranca.css";
 @import "../styles/contas.css";
 @import "../styles/resultados.css";
+@import "../styles/resultados-graficos.css";
 @import "../styles/links.css";
 @import "../styles/aprovacoes.css";
 @import "../styles/explicar.css";
@@ -68,6 +69,9 @@
   --chart-foco: light-dark(#009AAA, #16A0AF);
   --chart-contexto: light-dark(#7E8499, #7C83A3);
   --chart-grade: light-dark(#ECE9E1, #252B48);
+  /* os dois cinzas das barras divididas (07/10/2026): foco, cinza 1 e cinza 2 são vizinhos seguros (ux-modelo-interface §6) */
+  --chart-cinza-1: light-dark(#C3C6D2, #454B6C);
+  --chart-cinza-2: light-dark(#6B7189, #9AA0B4);
 
   /* marca (logo) */
   --logo-ink: light-dark(#0B0D17, #F4F2EC);

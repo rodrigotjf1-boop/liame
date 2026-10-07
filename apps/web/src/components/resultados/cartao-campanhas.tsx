@@ -3,13 +3,16 @@
 import { BotaoPedir, type PedirNaLista } from '@/components/pedir/botao-pedir';
 import { mostraOPedir, notaDoPedir } from '@/components/pedir/textos';
 import { useDetalhes } from '@/lib/modo';
+import { ListaDeCampanhas } from './campanhas-lite';
+import type { CampanhasLite } from './graficos';
 import { Halteres } from './halteres';
 import { BotaoDetalhes, SeloVeredito, TextoRico } from './pecas';
 import type { CartaoCampanhas as Dados, Celula, LinhaCampanha } from './textos';
 
-// "Por campanha" (protótipo P1): no Lite, cada campanha em palavras simples com "Dá lucro / Empata /
-// Dá prejuízo" (ou "Margem incompleta"); no Pro, a tabela com o ROAS da plataforma (na janela dela) ao
-// lado do confirmado no caixa, e os halteres. O clique só da plataforma fica numa linha à parte.
+// "Por campanha". No modo simples (protótipo de Resultados em gráficos, 07/10/2026): cada campanha numa barra para a
+// direita (sobrou) ou para a esquerda (faltou), com "Dá lucro / Empata / Dá prejuízo" (ou "Margem incompleta"). No
+// Pro (protótipo P1): a tabela com o ROAS da plataforma (na janela dela) ao lado do confirmado no caixa, e os
+// halteres. O clique só da plataforma fica numa linha à parte.
 // Com o pedido de mudança (protótipo P9), cada campanha em que o Liame pode mexer ganha o botão "Pedir mudança":
 // ao lado dela no Lite e na coluna "Mudar" do Pro (no celular, embaixo do nome).
 
@@ -39,12 +42,14 @@ function Celulas({ c }: { c: LinhaCampanha['celulas'] }) {
 
 type Props = {
   campanhas: Dados;
+  /** O desenho do modo simples. */
+  lite: CampanhasLite;
   rotuloPeriodo: string;
   /** O pedido de mudança nas campanhas (nulo para quem não acompanha as campanhas, ou antes de a lista chegar). */
   pedir?: PedirNaLista | null;
 };
 
-export function CartaoCampanhas({ campanhas, rotuloPeriodo, pedir = null }: Props) {
+export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null }: Props) {
   const d = useDetalhes();
   // A coluna só existe quando alguma campanha à vista tem o que mostrar nela.
   const comPedir =
@@ -69,10 +74,7 @@ export function CartaoCampanhas({ campanhas, rotuloPeriodo, pedir = null }: Prop
     <article className="card" aria-labelledby="t-camp">
       <div className="card-cab">
         <div>
-          <h2 id="t-camp">Por campanha</h2>
-          {!d.pro && (
-            <p className="card-sub">Quais campanhas dão lucro depois de pagar o anúncio. “Dá lucro” e “dá prejuízo” só aparecem com 80% ou mais das vendas com custo.</p>
-          )}
+          <h2 id="t-camp">{d.pro || campanhas.vazio ? 'Por campanha' : lite.titulo}</h2>
           {d.mostraPro && <p className="card-sub">Cada linha compara o ROAS que a plataforma informa, na janela dela, com o confirmado no caixa, na janela de 7 dias do Liame.</p>}
         </div>
         {d.mostraPro && !campanhas.vazio && (
@@ -94,26 +96,9 @@ export function CartaoCampanhas({ campanhas, rotuloPeriodo, pedir = null }: Prop
       ) : (
         <>
           {!d.pro && (
-            <ul className={comPedir ? 'camp-lite camp-lite--pedir' : 'camp-lite'} aria-label="Campanhas em palavras simples">
-              {campanhas.lite.map((c) => (
-                <li className="camp-lite-item" key={c.id}>
-                  <div className="cl-nome">
-                    <b>{c.nome}</b>
-                    <span>{c.sub}</span>
-                  </div>
-                  <div className="cl-valor">
-                    <span>{c.valor}</span>
-                    {c.detalhe && <span className="cl-sobra">{c.detalhe}</span>}
-                  </div>
-                  {c.veredito && <SeloVeredito veredito={c.veredito} />}
-                  {comPedir && (
-                    <div className="cl-pedir">
-                      <BotaoPedir campanha={c} pedir={comPedir} />
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <div className="desenho-b">
+              <ListaDeCampanhas campanhas={lite} pedir={comPedir} />
+            </div>
           )}
           {!d.pro &&
             campanhas.soPlataforma.map((s) => (

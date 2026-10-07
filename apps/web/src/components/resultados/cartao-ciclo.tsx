@@ -1,48 +1,34 @@
 'use client';
 
-import { Fragment } from 'react';
-import { Icone } from '@/components/ui/icone';
 import { useDetalhes } from '@/lib/modo';
+import { BarraDividida } from './desenhos';
+import type { RealLite } from './graficos';
 import { BotaoDetalhes, TextoRico } from './pecas';
-import type { CartaoCiclo as Dados, Passo } from './textos';
+import type { CartaoCiclo as Dados } from './textos';
 
-// "Do anúncio ao caixa" (protótipo P1): no Lite, 3 passos (investiu → vendeu → sobrou) e uma frase; no
-// Pro, os 8 números do período.
+// No modo simples (protótipo de Resultados em gráficos, 07/10/2026): "Para onde foi cada real vendido", uma barra
+// dividida em custo dos produtos, itens sem custo, anúncios e o que sobrou (ou faltou). No Pro (protótipo P1): "Do
+// anúncio ao caixa", com os 8 números do período, que o modo simples abre em "Ver detalhes".
 
-const TOM: Record<Passo['tom'], string> = { normal: '', foco: ' passo-lite--foco', ruim: ' passo-lite--ruim', neutro: ' passo-lite--neutro' };
-
-export function CartaoCiclo({ ciclo, rotuloPeriodo, datas }: { ciclo: Dados; rotuloPeriodo: string; datas: string }) {
+export function CartaoCiclo({ ciclo, lite, rotuloPeriodo, datas }: { ciclo: Dados; /** O desenho do modo simples. */ lite: RealLite; rotuloPeriodo: string; datas: string }) {
   const d = useDetalhes();
   return (
     <article className="card" aria-labelledby="t-ciclo">
       <div className="card-cab">
         <div>
-          <h2 id="t-ciclo">Do anúncio ao caixa</h2>
-          <p className="card-sub">
-            {rotuloPeriodo} · {datas}
-          </p>
+          <h2 id="t-ciclo">{d.pro ? 'Do anúncio ao caixa' : 'Para onde foi cada real vendido'}</h2>
+          {d.pro && (
+            <p className="card-sub">
+              {rotuloPeriodo} · {datas}
+            </p>
+          )}
         </div>
       </div>
       {!d.pro && (
-        <div className="ciclo-lite">
-          <div className="fluxo-lite" role="group" aria-label="Resumo do período">
-            {ciclo.passos.map((p, i) => (
-              <Fragment key={p.rotulo}>
-                {i > 0 && (
-                  <span className="fluxo-seta" aria-hidden="true">
-                    <Icone nome="arrow-right" />
-                  </span>
-                )}
-                <div className={`passo-lite${TOM[p.tom]}`}>
-                  <span className="etapa-rot">{p.rotulo}</span>
-                  <span className={p.texto ? 'etapa-val etapa-val--txt' : 'etapa-val num'}>{p.valor}</span>
-                  {p.sub && <span className="etapa-sub">{p.sub}</span>}
-                </div>
-              </Fragment>
-            ))}
-          </div>
-          <p className="lite-frase lite-frase--grande">
-            <TextoRico frase={ciclo.frase} />
+        <div className="desenho-b">
+          {lite.tipo === 'barra' ? <BarraDividida barra={lite.barra} /> : <div className="pilha pilha--vazia" aria-hidden="true" />}
+          <p className="lite-frase">
+            <TextoRico frase={lite.frase} />
           </p>
         </div>
       )}
