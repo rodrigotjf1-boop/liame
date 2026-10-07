@@ -11,16 +11,20 @@ import type { PedirNaLista } from '@/components/pedir/botao-pedir';
 import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { AvisosResultados } from './avisos-resultados';
+import { CartaoConversas } from './campanhas-lite';
 import { CartaoCampanhas } from './cartao-campanhas';
 import { CartaoCiclo } from './cartao-ciclo';
-import { CartaoFontes } from './cartao-fontes';
+import { CartaoFontes, FaixaDoTopoDosResultados } from './cartao-fontes';
 import { CartaoOrigem } from './cartao-origem';
 import { type ConsultaDePedidos, CartaoPedidos } from './cartao-pedidos';
 import { CartaoRoas } from './cartao-roas';
 import { ContextoResultados } from './contexto-resultados';
+import { DicaDosDesenhos } from './desenhos';
+import type { GraficosDaTela } from './graficos';
 import type { TelaDeResultados } from './textos';
 
-// O corpo da tela de Resultados com os dados já lidos (o que o protótipo P1 desenha abaixo do cabeçalho).
+// O corpo da tela de Resultados com os dados já lidos (o que os protótipos desenham abaixo do cabeçalho: o P1 no Pro
+// e o de Resultados em gráficos, de 07/10/2026, no modo simples).
 // Separado da busca para ser desenhado igual no teste e no navegador. O "Explicar" (protótipo P4) entra
 // pelo número principal: o botão no cabeçalho dele e o bloco logo abaixo.
 
@@ -34,6 +38,8 @@ export type ExplicarResultados = {
 
 type Props = {
   tela: TelaDeResultados;
+  /** Os desenhos do modo simples. */
+  graficos: GraficosDaTela;
   modelo: ClosedLoopResponse['model'];
   /** Consulta da lista de pedidos; nula sem o Regem. */
   consulta: ConsultaDePedidos | null;
@@ -59,7 +65,7 @@ function verPorCampanha() {
   titulo.focus({ preventScroll: true });
 }
 
-export function ResultadosConteudo({ tela, modelo, consulta, loja, podeVerContas, reserva, explicar = null, pedir = null }: Props) {
+export function ResultadosConteudo({ tela, graficos, modelo, consulta, loja, podeVerContas, reserva, explicar = null, pedir = null }: Props) {
   const pro = useModo().modo === 'pro';
   const explicacao = useExplicacao(explicar?.pedido ?? null);
   const botao = useRef<HTMLButtonElement>(null);
@@ -71,11 +77,14 @@ export function ResultadosConteudo({ tela, modelo, consulta, loja, podeVerContas
 
   return (
     <>
-      <ContextoResultados contexto={tela.contexto} fontes={tela.fontes} pro={pro} />
-      <AvisosResultados avisos={tela.avisos} podeVerContas={podeVerContas} />
+      <ContextoResultados contexto={tela.contexto} pro={pro} />
+      <FaixaDoTopoDosResultados faixa={graficos.faixa} fontes={tela.fontes} podeVerContas={podeVerContas} />
+      {/* No modo simples, os outros avisos são o estado ou uma nota do cartão a que pertencem. */}
+      {pro && <AvisosResultados avisos={tela.avisos} />}
       <div className={pro ? 'res-grid res-grid--pro' : 'res-grid'}>
         <CartaoRoas
           roas={tela.roas}
+          lite={graficos.retorno}
           explicar={
             explicar && (
               <BotaoExplicar ref={botao} lia={explicar.lia} aberto={explicacao.aberta} controla="exp-resultados" aoClicar={() => (explicacao.aberta ? fechar() : disparar(explicacao.pedir()))} />
@@ -106,11 +115,13 @@ export function ResultadosConteudo({ tela, modelo, consulta, loja, podeVerContas
           />
         )}
         {pro && <CartaoFontes fontes={tela.fontes} />}
-        <CartaoCiclo ciclo={tela.ciclo} rotuloPeriodo={tela.base.rotuloPeriodo} datas={tela.contexto.datas} />
-        <CartaoCampanhas campanhas={tela.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} pedir={pedir} />
-        <CartaoOrigem origem={tela.origem} podeVerContas={podeVerContas} />
+        <CartaoCiclo ciclo={tela.ciclo} lite={graficos.real} rotuloPeriodo={tela.base.rotuloPeriodo} datas={tela.contexto.datas} />
+        <CartaoCampanhas campanhas={tela.campanhas} lite={graficos.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} pedir={pedir} />
+        {!pro && <CartaoConversas linhas={graficos.conversas} />}
+        <CartaoOrigem origem={tela.origem} lite={graficos.origem} podeVerContas={podeVerContas} />
         <CartaoPedidos consulta={consulta} fuso={tela.base.fuso} loja={loja} modelo={modelo} reserva={reserva} />
       </div>
+      <DicaDosDesenhos />
     </>
   );
 }

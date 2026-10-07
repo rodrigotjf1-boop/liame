@@ -93,7 +93,6 @@ export function CartaoPedidos({ consulta, fuso, loja, modelo, reserva }: Props) 
   return (
     <article className="card" aria-labelledby="t-ped">
       {cabecalho}
-      {!d.pro && <p className="lite-frase">Veja pedido por pedido de onde veio cada venda, com a evidência e a janela.</p>}
       {!d.pro && <BotaoDetalhes aberto={d.aberto} controla="ped-pro" aoAlternar={d.alternar} />}
       <div className="res-pro" id="ped-pro" hidden={!d.mostraPro}>
         {(carga.tipo === 'carregando' || carga.tipo === 'parado') && (

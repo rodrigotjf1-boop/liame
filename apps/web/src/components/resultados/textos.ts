@@ -136,7 +136,7 @@ function minutoAntes(hora: string): string {
 // ------------------------------------------------------------------ números da API (texto) → tela
 
 /** "2.53" → 253 centésimos (exato). */
-function centesimos(razao: string): bigint {
+export function centesimosDe(razao: string): bigint {
   const negativo = razao.startsWith('-');
   const [inteira = '0', fracao = ''] = (negativo ? razao.slice(1) : razao).split('.');
   const valor = BigInt(inteira) * 100n + BigInt((fracao + '00').slice(0, 2));
@@ -146,7 +146,7 @@ function centesimos(razao: string): bigint {
 /** ROAS como no protótipo, com uma casa: "2.53" → "2,5×" (arredondado, sem ponto flutuante). */
 export function vezes(razao: string | null): string {
   if (razao === null) return '—';
-  const c = centesimos(razao);
+  const c = centesimosDe(razao);
   const negativo = c < 0n;
   const decimos = ((negativo ? -c : c) + 5n) / 10n;
   return `${negativo && decimos > 0n ? '-' : ''}${decimos / 10n},${decimos % 10n}×`;
@@ -154,7 +154,7 @@ export function vezes(razao: string | null): string {
 
 /** "Para cada R$ 1, voltaram R$ 2,53": a razão lida como reais. */
 export function reaisPorReal(razao: string): string {
-  return reaisDeMicros(centesimos(razao) * 10_000n);
+  return reaisDeMicros(centesimosDe(razao) * 10_000n);
 }
 
 /** "83.4" → 834 décimos de ponto percentual. */
@@ -177,7 +177,6 @@ export function parte(n: bigint | number, de: bigint | number): string {
 }
 
 const reais = (micros: string | bigint) => reaisDeMicros(micros);
-const reaisInteiros = (micros: string | bigint) => reaisDeMicros(micros, 0);
 const plural = (n: number | bigint, um: string, varios: string) => `${inteiro(n)} ${BigInt(n) === 1n ? um : varios}`;
 
 /** Cobertura mínima para dizer "dá lucro / dá prejuízo" (D-A2.5-7), em décimos de ponto percentual. */
@@ -242,8 +241,6 @@ export type Fonte = {
   ultima: string | null;
   /** Coluna "quando" do cartão de fontes (Pro). */
   quando: string;
-  /** Chip da linha de contexto (Lite). */
-  chip: string;
   /** Selo da hora quando a fonte está atrasada ou com problema ("Caixa até 09:42"). */
   selo: string | null;
 };
@@ -286,28 +283,22 @@ export function fontesDe(r: Pick<ClosedLoopResponse, 'sources'>, fuso: string, a
     const caixa = s.provider === 'regem' || s.provider === 'regemcast';
     const situacao = situacaoDa(s);
     const conta = (porProvider.get(s.provider) ?? 0) > 1 ? s.name : null;
-    const rotulo = conta ? `${nomes.nome} (${conta})` : nomes.nome;
     const ultima = s.last_success_at;
     const quandoFoi = ultima ? quandoNoFuso(ultima, fuso, agora) : null;
     const curta = ultima ? horaCurta(ultima, fuso, agora) : null;
     let quando: string;
-    let chip: string;
     let selo: string | null = null;
     if (situacao === 'problema') {
       const st = STATUS_DA_CONTA[s.status] ?? 'Com problema';
       quando = quandoFoi ? `${st} · última leitura ${quandoFoi}` : st;
-      chip = `${rotulo}: ${st.toLocaleLowerCase('pt-BR')}`;
       selo = curta ? `${caixa ? 'Caixa' : 'Gasto'} até ${curta}` : null;
     } else if (situacao === 'atraso') {
       quando = `Dados desatualizados · última ${caixa ? 'sincronização' : 'leitura'} ${curta}`;
-      chip = `${rotulo}: ${quando}`;
       selo = `${caixa ? 'Caixa' : 'Gasto'} até ${curta}`;
     } else if (situacao === 'sem_leitura') {
       quando = 'Ainda sem leitura';
-      chip = `${rotulo}: ainda sem leitura`;
     } else {
       quando = quandoFoi!;
-      chip = `${rotulo} ${curta}`;
     }
     const fusoDaFonte = s.timezone ? `fuso ${caixa ? 'da loja' : 'da conta'}: ${nomeDoFuso(s.timezone)}` : null;
     return {
@@ -320,7 +311,6 @@ export function fontesDe(r: Pick<ClosedLoopResponse, 'sources'>, fuso: string, a
       situacao,
       ultima: quandoFoi,
       quando,
-      chip,
       selo,
     };
   });
@@ -335,7 +325,6 @@ export function fontesDe(r: Pick<ClosedLoopResponse, 'sources'>, fuso: string, a
       situacao: 'nao_conectada',
       ultima: null,
       quando: 'Não conectado',
-      chip: 'Regem: não conectado',
       selo: null,
     });
   }
@@ -407,7 +396,8 @@ export function nadaConectado(r: Pick<ClosedLoopResponse, 'sources'>): boolean {
 
 // ------------------------------------------------------------------ linha de contexto
 
-export type LinhaDeContexto = { datas: string; complemento: string; modelo: string };
+/** `curto` é o complemento do modo simples: sem os fusos (quem os diz, quando importam, é a faixa do topo). */
+export type LinhaDeContexto = { datas: string; complemento: string; curto: string; modelo: string };
 
 /** "22/09 a 28/09"; um dia só, "28/09". */
 export function intervaloEscrito(inicio: string, fim: string): string {
@@ -425,7 +415,7 @@ export function contextoDe(r: ClosedLoopResponse, b: Base, local: string | null)
   const partes = [b.hoje ? null : 'dias completos', local, fuso].filter(Boolean);
   const m = r.model;
   const modelo = `Modelo: ${m.key === 'ultimo_toque' ? 'último toque' : m.key.replaceAll('_', ' ')} · v${m.version} · ${m.window_days} dias · ${m.counts_views ? 'com visualização' : 'sem visualização'}`;
-  return { datas, complemento: partes.join(' · '), modelo };
+  return { datas, complemento: partes.join(' · '), curto: partes.slice(0, -1).join(' · '), modelo };
 }
 
 // ------------------------------------------------------------------ avisos (faixas do topo)
@@ -436,61 +426,15 @@ export type Aviso = {
   icone: NomeIcone;
   titulo: string;
   texto: string;
-  /** Ação da faixa: abrir Contas conectadas (só para quem pode vê-las). */
-  acao: { rotulo: string; destino: 'contas' } | null;
 };
 
-/** Faixas do topo, na ordem do protótipo. Só entra o que a API permite afirmar. */
-export function avisosDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): Aviso[] {
+/**
+ * As faixas do Pro, na ordem do protótipo P1: fuso da conta, margem incompleta, plataforma sem valor de venda e "o
+ * gasto de hoje sai amanhã". Só entra o que a API permite afirmar. O que impede ou data os números (conectar, fonte
+ * com problema ou sem leitura nova) é da faixa única do topo, nos dois modos (`faixaDe`, em graficos.ts).
+ */
+export function avisosDe(r: ClosedLoopResponse, b: Base): Aviso[] {
   const avisos: Aviso[] = [];
-  const contas = (rotulo: string) => ({ rotulo, destino: 'contas' as const });
-  if (b.semRegem) {
-    avisos.push({
-      id: 'sem-regem',
-      tipo: 'acao',
-      icone: 'plug',
-      titulo: 'Conecte o Regem para ver o que virou pedido no caixa',
-      texto: 'Sem o Regem, o Liame mostra só o que as plataformas informam. Pedidos, receita, margem e a origem de cada pedido vêm do caixa da loja.',
-      acao: contas('Abrir Contas conectadas'),
-    });
-  }
-  if (b.semMidia) {
-    avisos.push({
-      id: 'sem-midia',
-      tipo: 'acao',
-      icone: 'plug',
-      titulo: 'Conecte a Meta ou o Google para comparar com o que a mídia custou',
-      texto: 'Sem as contas de anúncio, o Liame mostra os pedidos e a receita do caixa, mas não o investimento, o ROAS nem o custo por pedido.',
-      acao: contas('Abrir Contas conectadas'),
-    });
-  }
-  for (const f of fontes) {
-    if (f.situacao === 'problema') {
-      avisos.push({
-        id: `problema-${f.id}`,
-        tipo: 'atencao',
-        icone: 'alert',
-        titulo: `${f.conta ? `${f.nome} (${f.conta})` : f.nome}: ${f.quando}`,
-        texto:
-          f.provider === 'regem'
-            ? 'A leitura do caixa parou. Os números valem até a última leitura; pedidos, cancelamentos e estornos de depois ainda não entraram.'
-            : 'A leitura desta conta parou. O gasto e o que a plataforma informa valem até a última leitura.',
-        acao: contas('Ver a conexão'),
-      });
-    } else if (f.situacao === 'atraso') {
-      const caixa = f.provider === 'regem' || f.provider === 'regemcast';
-      avisos.push({
-        id: `atraso-${f.id}`,
-        tipo: 'atencao',
-        icone: 'clock',
-        titulo: `${caixa ? `Pedidos ${nomesDe(f.provider).de}` : f.conta ? `${f.nome} (${f.conta})` : f.nome}: ${f.quando}`,
-        texto: caixa
-          ? 'Os números do caixa valem até essa hora: pedidos, cancelamentos e estornos de depois ainda não entraram. O Liame tenta de novo sozinho; se continuar parado, confira a conexão.'
-          : 'O gasto e o que a plataforma informa valem até essa leitura. O Liame tenta de novo sozinho; se continuar parado, confira a conexão.',
-        acao: contas('Ver a conexão'),
-      });
-    }
-  }
   const vistos = new Set<string>();
   const minLoja = deslocamentoDoFuso(b.fuso, b.agora);
   for (const s of r.sources) {
@@ -512,7 +456,6 @@ export function avisosDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): Aviso
         `A loja usa o de ${nomeDoFuso(b.fuso)}${offLoja}. Os pedidos seguem o fuso da loja e o gasto segue o da conta, porque é assim que a plataforma fecha o dia` +
         (inicio ? `: cada dia de gasto ${nomes.de} vai das ${inicio} às ${minutoAntes(inicio)} no horário da loja.` : '.') +
         ' Em 7 ou 30 dias a diferença é pequena; em “Hoje”, pesa.',
-      acao: null,
     });
   }
   const t = r.totals.confirmed;
@@ -526,7 +469,6 @@ export function avisosDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): Aviso
       texto: nenhuma
         ? 'Sem o custo dos itens, o Liame mostra a receita, mas não diz se deu lucro ou prejuízo. O custo vem da ficha técnica do Regem, com a leitura de custos liberada na conexão.'
         : 'Com menos de 80%, o Liame mostra a margem conhecida, mas não diz se deu lucro ou prejuízo. Cadastre o custo dos itens que faltam na ficha técnica do Regem.',
-      acao: null,
     });
   }
   if (!b.hoje && !b.semRegem) {
@@ -539,8 +481,7 @@ export function avisosDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): Aviso
         icone: 'message',
         titulo: `${capitalizar(nomes.artigo)} não informa valor de venda para campanhas de mensagem`,
         texto: `Por isso o ROAS ${nomes.de} fica em branco. Compare o custo por conversa com o custo por pedido confirmado no caixa.`,
-        acao: null,
-      });
+        });
     }
   }
   if (b.hoje && !b.semRegem && !b.semMidia) {
@@ -557,7 +498,6 @@ export function avisosDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): Aviso
         `${capitalizar(juntar(quem))} ${quem.length > 1 ? 'são lidos' : 'é lido'} uma vez por dia` +
         (ultima ? ` (última leitura ${quandoNoFuso(ultima, b.fuso, b.agora)})` : '') +
         '. Até lá, “Hoje” mostra os pedidos e a receita do caixa; o ROAS e o custo por pedido de hoje saem amanhã.',
-      acao: null,
     });
   }
   return avisos;
@@ -600,10 +540,8 @@ export type CartaoRoas = {
   titulo: string;
   numero: string;
   vazio: boolean;
-  /** Frase que aparece nos dois modos (estado vazio ou "hoje"); a do Lite fica em `fraseLite`. */
+  /** Frase do estado vazio ou de "hoje" (no modo simples, quem diz é o desenho). */
   frase: Frase | null;
-  fraseLite: Frase | null;
-  frasePlataformas: string | null;
   selos: string[];
   explicacao: Frase;
   plataformas: LinhaPlataforma[];
@@ -629,7 +567,6 @@ export function roasDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): CartaoR
   const titulo = `ROAS confirmado no caixa · ${b.rotuloPeriodo}`;
   let numero = '—';
   let frase: Frase | null = null;
-  let fraseLite: Frase | null = null;
   if (b.semRegem) {
     frase = [n('Falta conectar o Regem'), { t: ' para saber quanto os anúncios venderam de verdade no caixa.' }];
   } else if (r.totals.orders_confirmed === 0) {
@@ -652,21 +589,9 @@ export function roasDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): CartaoR
     frase = [n('Sem gasto com anúncios no período.'), { t: ' O ROAS compara a receita confirmada com o investimento; os pedidos aparecem abaixo, com a origem.' }];
   } else {
     numero = vezes(t.roas);
-    fraseLite = [{ t: 'Para cada ' }, n('R$ 1'), { t: ' em anúncio, voltaram ' }, n(reaisPorReal(t.roas)), { t: ' em vendas confirmadas no caixa.' }];
   }
 
   const midia = r.platforms.filter((p) => ehMidia(p.provider));
-  let frasePlataformas: string | null = null;
-  if (!b.hoje && midia.length) {
-    const partes = midia.map((p) => {
-      const nomes = nomesDe(p.provider);
-      if (p.platform.roas !== null) return `${nomes.artigo} informa ${vezes(p.platform.roas)}`;
-      if (p.platform.value_micros === null) return `${nomes.artigo} não informa valor de venda`;
-      return `${nomes.artigo} não teve gasto no período`;
-    });
-    frasePlataformas = `Na conta das plataformas, ${juntar(partes)}: cada uma conta do jeito dela, com a própria janela.`;
-  }
-
   const plataformas = midia.map((p): LinhaPlataforma => {
     const nomes = nomesDe(p.provider);
     return {
@@ -712,8 +637,6 @@ export function roasDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): CartaoR
     numero,
     vazio: numero === '—',
     frase,
-    fraseLite,
-    frasePlataformas,
     // Duas contas lidas na mesma hora dariam o mesmo selo: um basta.
     selos: [...new Set(fontes.map((f) => f.selo).filter((s): s is string => Boolean(s)))],
     explicacao,
@@ -724,73 +647,15 @@ export function roasDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): CartaoR
 
 // ------------------------------------------------------------------ "Do anúncio ao caixa"
 
-export type Passo = { rotulo: string; valor: string; sub: string; tom: 'normal' | 'foco' | 'ruim' | 'neutro'; texto: boolean };
 export type Kpi = { rotulo: string; valor: string; sub: string; vazio: boolean; atencao: boolean };
-export type CartaoCiclo = { passos: [Passo, Passo, Passo]; frase: Frase; kpis: Kpi[] };
+export type CartaoCiclo = { kpis: Kpi[] };
 
-const passo = (rotulo: string, valor: string, sub = '', tom: Passo['tom'] = 'normal', texto = false): Passo => ({ rotulo, valor, sub, tom, texto });
 /** Número que ainda não existe ("—" ou "Sai amanhã") aparece apagado, como no protótipo. */
 const kpi = (rotulo: string, valor: string, sub = '', atencao = false): Kpi => ({ rotulo, valor, sub, vazio: valor === '—' || valor === 'Sai amanhã', atencao });
 
 export function cicloDe(r: ClosedLoopResponse, b: Base): CartaoCiclo {
   const t = r.totals.confirmed;
   const gasto = r.totals.spend_micros;
-  let p1 = passo('Você investiu em anúncios', reaisInteiros(gasto));
-  if (b.hoje) p1 = passo('Você investiu em anúncios', 'Sai amanhã', 'as plataformas são lidas uma vez por dia', 'neutro', true);
-  else if (b.semMidia) p1 = passo('Você investiu em anúncios', '—', 'conecte a Meta ou o Google', 'neutro');
-  let p2 = passo('Vendas confirmadas no caixa', reaisInteiros(t.revenue_micros), plural(t.orders, 'pedido', 'pedidos'));
-  if (b.semRegem) p2 = passo('Vendas confirmadas no caixa', 'Conecte o Regem', 'o caixa da loja confirma os pedidos', 'neutro', true);
-
-  let p3: Passo;
-  let frase: Frase;
-  const ver = vereditoDe(t, gasto, b.hoje);
-  const sobra = sobraDe(t, gasto);
-  if (b.semRegem) {
-    p3 = passo('Sobrou depois dos anúncios', '—', 'precisa do Regem', 'neutro');
-    frase = [{ t: 'Sem o caixa da loja, o Liame não sabe quanto os anúncios venderam nem quanto sobrou.' }];
-  } else if (b.hoje) {
-    p3 = passo('Sobrou depois dos anúncios', 'Sai amanhã', 'com o gasto do dia', 'neutro', true);
-    frase = t.orders
-      ? [{ t: 'Hoje, até agora, ' }, n(plural(t.orders, 'pedido', 'pedidos')), { t: ` ${t.orders === 1 ? 'veio' : 'vieram'} de anúncios. O resultado do dia fecha amanhã.` }]
-      : [n(r.totals.orders_confirmed ? 'Nenhum pedido com prova de anúncio hoje, até agora.' : 'Nenhum pedido confirmado hoje, até agora.')];
-  } else if (!r.totals.orders_confirmed) {
-    p3 = passo('Sobrou depois dos anúncios', '—', 'sem pedidos no período', 'neutro');
-    frase = [n('Nenhum pedido confirmado no período.')];
-  } else if (!t.orders) {
-    p3 = passo('Sobrou depois dos anúncios', '—', 'sem pedidos com prova de anúncio', 'neutro');
-    frase = [n('Nenhum pedido com prova de anúncio no período.'), { t: ' Sem venda ligada a um anúncio, não há margem para descontar do investimento.' }];
-  } else if (b.semMidia || BigInt(gasto) === 0n) {
-    p3 = passo('Sobrou depois dos anúncios', '—', 'sem gasto com anúncios', 'neutro');
-    frase = [n('Sem gasto com anúncios no período.'), { t: ' Os pedidos confirmados aparecem abaixo, com a origem.' }];
-  } else if (ver?.classe === 'incompleta' || sobra === null || !ver) {
-    const semCusto = t.margin_known_micros === null;
-    p3 = passo(
-      'Sobrou depois dos anúncios',
-      'Ainda não dá para dizer',
-      semCusto ? 'nenhuma venda tem custo no Regem' : `só ${porcentagem(t.margin_coverage_pct)} das vendas têm custo no Regem`,
-      'neutro',
-      true,
-    );
-    frase = semCusto
-      ? [n('Ainda não dá para dizer se sobrou.'), { t: ' Nenhuma venda dos anúncios tem custo conhecido no Regem; com menos de 80% das vendas com custo, o Liame não diz se deu lucro.' }]
-      : [
-          n('Ainda não dá para dizer se sobrou.'),
-          {
-            t: ` A margem conhecida é de ${reais(t.margin_known_micros!)}, mas só ${porcentagem(t.margin_coverage_pct)} das vendas têm custo cadastrado no Regem; com menos de 80%, o Liame não diz se deu lucro.`,
-          },
-        ];
-  } else {
-    const ruim = sobra < 0n;
-    const absoluto = ruim ? -sobra : sobra;
-    p3 = passo(ruim ? 'Faltou para pagar os anúncios' : 'Sobrou depois dos anúncios', reaisInteiros(absoluto), `da margem conhecida (${porcentagem(t.margin_coverage_pct)} da receita)`, ruim ? 'ruim' : 'foco');
-    frase =
-      ver.classe === 'bom'
-        ? [n('O marketing deu lucro.'), { t: ` Pagando os anúncios, sobraram ${reais(sobra)} da margem conhecida.` }]
-        : ver.classe === 'ruim'
-          ? [n('O marketing não se pagou.'), { t: ` Faltaram ${reais(absoluto)} para cobrir os anúncios.` }]
-          : [n('O marketing se pagou, mas sobrou pouco:'), { t: ` ${reais(sobra)} da margem conhecida, depois de pagar os anúncios.` }];
-  }
-
   const precisa = 'precisa do Regem';
   const midia = r.platforms.filter((p) => ehMidia(p.provider));
   const conversas = midia.map((p) => p.platform.conversations).filter((c): c is string => c !== null);
@@ -838,7 +703,7 @@ export function cicloDe(r: ClosedLoopResponse, b: Base): CartaoCiclo {
       b.semRegem ? precisa : `${plural(r.totals.orders_confirmed, 'pedido confirmado', 'pedidos confirmados')} no período`,
     ),
   ];
-  return { passos: [p1, p2, p3], frase, kpis };
+  return { kpis };
 }
 
 // ------------------------------------------------------------------ por campanha
@@ -851,7 +716,10 @@ const SITUACAO_DA_CAMPANHA: Record<string, string> = {
   desconhecida: 'situação desconhecida',
 };
 
-export type ItemCampanhaLite = { id: string; nome: string; provider: string; sub: string; valor: string; detalhe: string; veredito: Veredito | null };
+/** "ativa", "pausada"… (valor novo da API aparece como veio, sem o sublinhado). */
+export function situacaoDaCampanha(status: string): string {
+  return SITUACAO_DA_CAMPANHA[status] ?? status.replaceAll('_', ' ');
+}
 
 export type Celula = { texto: string; sub?: string; subAtencao?: boolean; forte?: boolean };
 
@@ -880,7 +748,6 @@ export type LinhaCampanha = {
 export type LinhaSoPlataforma = { provider: string; titulo: string; pedidos: string; receita: string; nota: string; frase: Frase };
 
 export type CartaoCampanhas = {
-  lite: ItemCampanhaLite[];
   linhas: LinhaCampanha[];
   soPlataforma: LinhaSoPlataforma[];
   total: LinhaCampanha['celulas'];
@@ -900,36 +767,6 @@ function numeroDe(razao: string | null): number | null {
 }
 
 export function campanhasDe(r: ClosedLoopResponse, b: Base): CartaoCampanhas {
-  const lite = r.campaigns.map((c): ItemCampanhaLite => {
-    const nomes = nomesDe(c.provider);
-    const sub = `${nomes.nome} · ${SITUACAO_DA_CAMPANHA[c.status] ?? c.status.replaceAll('_', ' ')}`;
-    const gasto = c.platform.spend_micros;
-    const k = c.confirmed;
-    let valor: string;
-    let detalhe = '';
-    if (b.semRegem) {
-      valor = 'conecte o Regem';
-      detalhe = b.hoje ? 'o gasto de hoje sai amanhã' : `${reais(gasto)} investidos`;
-    } else if (!k.orders) {
-      valor = 'Sem pedido no período';
-      detalhe = b.hoje ? 'o gasto de hoje sai amanhã' : BigInt(gasto) > 0n ? `${reais(gasto)} investidos` : '';
-    } else if (b.hoje) {
-      valor = plural(k.orders, 'pedido', 'pedidos');
-      detalhe = `${reais(k.revenue_micros)} · o gasto sai amanhã`;
-    } else if (k.roas === null) {
-      valor = `${plural(k.orders, 'pedido', 'pedidos')} · ${reais(k.revenue_micros)}`;
-      detalhe = 'sem gasto no período';
-    } else {
-      valor = `R$ 1 vira ${reaisPorReal(k.roas)}`;
-      const ver = vereditoDe(k, gasto, false);
-      const sobra = sobraDe(k, gasto);
-      if (ehDeMensagem(c.platform)) detalhe = `${c.platform.cost_per_conversation_micros ? reais(c.platform.cost_per_conversation_micros) : '—'} por conversa · ${k.cost_per_order_micros ? reais(k.cost_per_order_micros) : '—'} por pedido`;
-      else if (ver && ver.classe !== 'incompleta' && sobra !== null) detalhe = sobra >= 0n ? `sobraram ${reais(sobra)}` : `faltaram ${reais(-sobra)}`;
-      else if (k.margin_coverage_pct !== null) detalhe = `só ${porcentagem(k.margin_coverage_pct)} com custo`;
-    }
-    return { id: c.campaign_id, nome: c.name, provider: c.provider, sub, valor, detalhe, veredito: b.semRegem ? null : vereditoDe(k, gasto, b.hoje) };
-  });
-
   const linhas = r.campaigns.map((c): LinhaCampanha => {
     const nomes = nomesDe(c.provider);
     const p = c.platform;
@@ -1016,7 +853,7 @@ export function campanhasDe(r: ClosedLoopResponse, b: Base): CartaoCampanhas {
 
   let vazio: string | null = null;
   if (!r.campaigns.length) vazio = b.semMidia ? 'Conecte a Meta ou o Google para ver o resultado de cada campanha.' : 'Nenhuma campanha gastou ou vendeu no período.';
-  return { lite, linhas, soPlataforma, total, vazio };
+  return { linhas, soPlataforma, total, vazio };
 }
 
 // ------------------------------------------------------------------ de onde vieram os pedidos
@@ -1033,7 +870,6 @@ export function grupoDeCanal(g: string): string {
   return GRUPOS_DE_CANAL[g] ?? g.replaceAll('_', ' ');
 }
 
-export type ItemOrigemLite = { numero: string; titulo: string; texto: string };
 export type LinhaCanal = { grupo: string; pedidos: string; receita: string };
 
 export type CartaoOrigem =
@@ -1041,7 +877,6 @@ export type CartaoOrigem =
   | { tipo: 'sem-pedido'; titulo: string; texto: string }
   | {
       tipo: 'ok';
-      lite: ItemOrigemLite[];
       semOrigem: { porcentagem: string; frase: string };
       canais: LinhaCanal[];
       totalCanais: LinhaCanal;
@@ -1065,36 +900,10 @@ export function origemDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): Carta
       texto: `${leitura}Quando entrar pedido, ele aparece aqui com a origem.`,
     };
   }
-  const t = tot.confirmed;
-  const soPlat = r.platforms.filter((p) => p.platform_only_orders > 0);
-  const soPlatTexto = soPlat.length
-    ? ` · ${soPlat.map((p) => `${inteiro(p.platform_only_orders)} ${p.platform_only_orders === 1 ? 'deles só diz' : 'deles só dizem'} a plataforma (${nomesDe(p.provider).nome.replace(' Ads', '')})`).join(' · ')}`
-    : '';
   const semClique = tot.no_click_channels.reduce((s, c) => ({ pedidos: s.pedidos + c.orders, receita: s.receita + BigInt(c.revenue_micros) }), { pedidos: 0, receita: 0n });
   const comClique = tot.orders_confirmed - semClique.pedidos;
-  const lite: ItemOrigemLite[] = [
-    { numero: inteiro(t.orders), titulo: t.orders === 1 ? 'pedido veio de anúncios, com prova' : 'pedidos vieram de anúncios, com prova', texto: `${reais(t.revenue_micros)}${soPlatTexto}` },
-    {
-      numero: inteiro(tot.without_origin.orders),
-      titulo: tot.without_origin.orders === 1 ? 'pedido do cardápio e do WhatsApp sem prova de anúncio' : 'pedidos do cardápio e do WhatsApp sem prova de anúncio',
-      texto: tot.without_origin.share_pct === null ? 'nenhum pedido desses canais' : `${porcentagem(tot.without_origin.share_pct)} desses canais`,
-    },
-    {
-      numero: inteiro(semClique.pedidos),
-      titulo: semClique.pedidos === 1 ? 'pedido de marketplace, balcão ou outro canal sem clique' : 'pedidos de marketplaces, balcão e outros canais sem clique',
-      texto: `canais sem clique, fora desta conta · ${reais(semClique.receita)}`,
-    },
-  ];
-  if (tot.cancelled.orders) {
-    lite.push({
-      numero: inteiro(tot.cancelled.orders),
-      titulo: tot.cancelled.orders === 1 ? 'pedido cancelado depois' : 'pedidos cancelados depois',
-      texto: tot.cancelled.orders === 1 ? 'saiu da conta' : 'saíram da conta',
-    });
-  }
   return {
     tipo: 'ok',
-    lite,
     semOrigem: {
       porcentagem: porcentagem(tot.without_origin.share_pct),
       frase: `${inteiro(tot.without_origin.orders)} de ${inteiro(comClique)} pedidos do cardápio online e do WhatsApp não têm evidência de anúncio. Pedido sem evidência fica sem origem: o Liame não chuta.`,
@@ -1153,7 +962,7 @@ export function montarTela(r: ClosedLoopResponse, periodo: Periodo, agora: Date,
     base,
     contexto: contextoDe(r, base, local),
     fontes,
-    avisos: avisosDe(r, base, fontes),
+    avisos: avisosDe(r, base),
     roas: roasDe(r, base, fontes),
     ciclo: cicloDe(r, base),
     campanhas: campanhasDe(r, base),

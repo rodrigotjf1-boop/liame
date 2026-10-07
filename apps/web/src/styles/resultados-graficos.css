@@ -1,0 +1,178 @@
+/* ===== Resultados em gráficos (mockups/prototipo-resultados-graficos.html, aprovado em 07/10/2026) =====
+   Os desenhos do modo simples: cada cartão responde com um desenho e uma frase curta; o Pro não muda.
+   Regras (docs/ux-modelo-interface.md §6): barra e posição, nunca pizza; o valor sempre escrito ao lado (a dica só
+   reforça); estado com palavra, nunca só a cor; 2px de respiro entre as partes de uma barra; ponta arredondada em
+   4px só no lado do dado. Foco e cinza de contexto não são vizinhos numa barra: a ordem é foco, cinza 1, cinza 2. */
+/* o selo neutro ("Sem pedido", "O retorno sai amanhã"): estado sem veredito, em palavra */
+.veredito--neutro { background: var(--bg-subtle); color: var(--text-muted); }
+.cor-foco { background: var(--chart-foco); }
+.cor-c1 { background: var(--chart-cinza-1); }
+.cor-c2 { background: var(--chart-cinza-2); }
+.cor-falta { background: var(--danger); }
+.cor-semcusto { background: repeating-linear-gradient(135deg, var(--border-strong) 0 2px, var(--bg-subtle) 2px 6px); }
+.dica-desenho { position: fixed; z-index: 80; max-width: 260px; padding: 6px 10px; border-radius: 8px; background: var(--text); color: var(--bg); font-size: 12px; line-height: 1.35; pointer-events: none; box-shadow: var(--shadow); }
+.dica-desenho b { display: block; font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
+
+/* uma faixa só no topo: o que impede ou data os números (conectar, fonte sem leitura nova, fuso da conta) */
+.frescor { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-5); }
+.frescor-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: 10px var(--sp-4); border: 1px solid transparent; border-radius: var(--radius); font-size: var(--text-sm); }
+.frescor-linha > .ic { color: var(--text-subtle); }
+.frescor-txt { flex: 1; min-width: min(100%, 220px); color: var(--text-muted); }
+.frescor-txt b { color: var(--text); font-weight: 600; }
+.frescor--ok .frescor-linha { padding: 0; }
+.frescor--ok .frescor-linha > .ic { color: var(--success); }
+.frescor--atencao .frescor-linha { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); background: var(--warning-soft); }
+.frescor--atencao .frescor-linha > .ic { color: var(--warning); }
+.frescor--atencao .frescor-txt { color: var(--text); }
+.frescor--acao .frescor-linha { border-color: color-mix(in srgb, var(--fio) 45%, var(--border)); background: var(--primary-soft); }
+.frescor--acao .frescor-linha > .ic { color: var(--link); }
+.frescor .detalhes-bt { margin-left: 0; }
+.frescor-det { padding: var(--sp-1) var(--sp-4) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+
+/* o número principal: um só na tela */
+.desenho-b { display: grid; gap: var(--sp-3); min-width: 0; }
+.heroi-grade { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: end; gap: var(--sp-5) var(--sp-8); }
+.heroi-grade > * { min-width: 0; }
+.heroi-esq { display: grid; gap: var(--sp-3); }
+.heroi { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-1); }
+.heroi-valor { font-size: var(--text-hero); font-weight: 600; letter-spacing: -.035em; line-height: 1; white-space: nowrap; }
+.heroi-valor--vazio { color: var(--text-subtle); }
+.heroi-sub { margin-top: -6px; color: var(--text-muted); }
+.heroi-sub b { color: var(--text); font-weight: 600; }
+.variacao { display: flex; align-items: flex-start; gap: 6px; font-size: var(--text-sm); color: var(--text-muted); }
+.variacao b { color: var(--text); font-weight: 600; }
+.variacao svg { width: 10px; height: 10px; flex: none; margin-top: 5px; }
+.variacao .sobe { fill: var(--success); }
+.variacao .cai { fill: var(--danger); }
+@container pagina (max-width: 799px) { .heroi-grade { grid-template-columns: minmax(0, 1fr); } }
+
+/* "você pôs" e "voltou" na mesma escala; a marca é o ponto em que o produto e o anúncio ficam pagos */
+.par { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 10px var(--sp-3); }
+.par-linha { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; font-size: var(--text-sm); color: var(--text-muted); }
+.par-valor { font-family: var(--font-mono); font-weight: 600; color: var(--text); text-align: right; white-space: nowrap; }
+.trilho { position: relative; height: 16px; }
+.trilho .barra { display: block; height: 100%; min-width: 3px; border-radius: 0 4px 4px 0; background: var(--chart-foco); }
+.trilho .barra--gasto { background: var(--chart-cinza-1); }
+.trilho .empate { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text); box-shadow: 0 0 0 2px var(--surface); }
+.trilho--vazio { height: auto; min-height: 16px; padding: 3px var(--sp-3); border: 1px dashed var(--border-strong); border-radius: 4px; font-size: var(--text-xs); color: var(--text-muted); }
+.par-legenda { display: flex; align-items: baseline; gap: var(--sp-2); font-size: var(--text-xs); color: var(--text-muted); }
+.par-legenda i { flex: none; width: 2px; height: 11px; border-radius: 1px; background: var(--text); transform: translateY(2px); }
+.par-legenda b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+
+/* a linha dos dias: vendas em linha, anúncios em colunas, na mesma escala (reais) */
+.mini { display: grid; gap: 6px; }
+.mini-topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--sp-4); font-size: var(--text-sm); color: var(--text-muted); }
+.mini-topo b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+.mini-leg { display: inline-flex; flex-wrap: wrap; gap: 2px var(--sp-3); font-size: var(--text-xs); }
+.mini-leg i { display: inline-block; margin-right: 5px; vertical-align: middle; }
+.mini-leg .lg-linha { width: 14px; height: 2px; border-radius: 1px; background: var(--chart-foco); }
+.mini-leg .lg-coluna { width: 6px; height: 10px; border-radius: 2px 2px 0 0; background: var(--chart-cinza-1); }
+.faisca { position: relative; height: 84px; margin-inline: 8px; border-bottom: 1px solid var(--chart-grade); border-radius: 2px; outline: none; }
+.faisca:focus-visible { box-shadow: var(--focus-ring); }
+.faisca svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; overflow: visible; }
+.faisca .area { fill: var(--chart-foco); opacity: .1; }
+.faisca .fio { fill: none; stroke: var(--chart-foco); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.faisca .coluna { position: absolute; bottom: 0; width: 10px; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--chart-cinza-1); transform: translateX(-50%); }
+.faisca .coluna--fina { width: 3px; }
+.faisca .pt { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--chart-foco); box-shadow: 0 0 0 2px var(--surface); transform: translate(-50%, -50%); }
+.faisca .alvo { position: absolute; top: 0; bottom: 0; transform: translateX(-50%); }
+.faisca .alvo:hover::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border-strong); }
+.faisca .alvo--ini { left: 0; transform: none; }
+.faisca .alvo--ini:hover::after { left: 0; }
+.faisca .alvo--fim { left: auto; right: 0; transform: none; }
+.faisca .alvo--fim:hover::after { left: 100%; }
+.dias { position: relative; height: 14px; margin-inline: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--text-subtle); }
+.dias span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.dias span:first-child { transform: none; }
+.dias span:last-child { transform: translateX(-100%); }
+
+/* barra dividida: para onde foi cada real, e de onde vieram os pedidos */
+.pilha-caixa { position: relative; }
+.pilha-caixa--marca { padding-top: 20px; }
+.pilha { display: flex; gap: 2px; height: 24px; }
+.pilha > span { display: block; min-width: 4px; height: 100%; }
+.pilha > span:first-child { border-radius: 4px 0 0 4px; }
+.pilha > span:last-child { border-radius: 0 4px 4px 0; }
+.pilha--vazia { border: 1px dashed var(--border-strong); border-radius: 4px; }
+.pilha-marca { position: absolute; top: 0; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text); }
+.pilha-marca span { position: absolute; top: -2px; right: 6px; white-space: nowrap; font-size: var(--text-xs); line-height: 1.2; color: var(--text-muted); }
+.pilha-marca--dir span { right: auto; left: 6px; }
+.legenda-b { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: var(--sp-2) var(--sp-4); }
+.legenda-b li { display: grid; grid-template-columns: 10px minmax(0, 1fr); column-gap: 8px; align-items: start; font-size: var(--text-sm); line-height: 1.35; color: var(--text-muted); }
+.legenda-b i { width: 10px; height: 10px; margin-top: 7px; border-radius: 3px; }
+.legenda-b b { display: block; font-family: var(--font-mono); font-size: var(--text-md); font-weight: 600; color: var(--text); }
+.legenda-b--linha { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-5); }
+.legenda-b--linha li { font-size: var(--text-xs); }
+.legenda-b--linha i { margin-top: 4px; }
+.nota-b { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); font-size: var(--text-sm); color: var(--text-muted); }
+.nota-b b { color: var(--text); font-weight: 600; }
+.nota-b > span { flex: 1; min-width: min(100%, 240px); }
+.nota-b--atencao { padding: 10px var(--sp-4); border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); border-radius: var(--radius); background: var(--warning-soft); color: var(--text); }
+
+/* cada campanha: sobrou (para a direita) ou faltou (para a esquerda) depois de pagar o anúncio */
+.camp-b { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) auto; column-gap: var(--sp-4); }
+.camp-b--pedir { grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) auto auto; }
+.camp-b > li > .veredito { justify-self: start; }
+.camp-b > li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; row-gap: var(--sp-2); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.camp-b > li:last-child { border-bottom: 0; }
+.camp-b > .camp-b-leg { padding: 0 0 var(--sp-1); border-bottom: 0; }
+.eixo { position: relative; height: 18px; margin-right: 6.2rem; }
+.eixo::before { content: ""; position: absolute; left: var(--zero, 0%); top: -6px; bottom: -6px; width: 1px; background: var(--border-strong); }
+.eixo .b { position: absolute; top: 1px; bottom: 1px; min-width: 3px; }
+.eixo .b--ganho { left: var(--zero, 0%); border-radius: 0 4px 4px 0; background: var(--success); }
+.eixo .b--perda { right: calc(100% - var(--zero, 0%)); border-radius: 4px 0 0 4px; background: var(--danger); }
+.eixo .b--foco { left: 0; border-radius: 0 4px 4px 0; background: var(--chart-foco); }
+.eixo .b--gasto { left: 0; border-radius: 0 4px 4px 0; background: var(--chart-cinza-1); }
+.eixo .b--neutro { left: calc(var(--zero, 0%) - 3px); width: 7px; border-radius: 4px; background: var(--chart-cinza-2); }
+.eixo .b--semcusto { left: var(--zero, 0%); width: 22px; border-radius: 0 4px 4px 0; background: repeating-linear-gradient(135deg, var(--border-strong) 0 2px, var(--bg-subtle) 2px 6px); }
+.eixo .v { position: absolute; top: 50%; transform: translate(8px, -50%); white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.eixo .v--txt { font-family: var(--font-sans); font-weight: 400; color: var(--text-muted); }
+.eixo--sem-zero::before { content: none; }
+.eixo-legenda { position: relative; height: 16px; margin-right: 6.2rem; font-size: 11px; color: var(--text-subtle); }
+.eixo-legenda span { position: absolute; top: 0; white-space: nowrap; }
+.eixo-legenda .el-falta { right: calc(100% - var(--zero, 0%) + 6px); }
+.eixo-legenda .el-sobra { left: calc(var(--zero, 0%) + 6px); }
+.camp-acao { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2); }
+/* O pedido que espera fica antes do botão: os botões das linhas ficam alinhados à direita. */
+.camp-acao .pedido-esperando { order: -1; }
+/* A lista empilha (o nome e o selo; a barra na linha de baixo; o pedido no fim) antes de a barra ficar sem espaço:
+   mais cedo quando há a coluna do "Pedir mudança". */
+@container pagina (max-width: 859px) {
+  .camp-b:not(.camp-b--pedir) { grid-template-columns: minmax(0, 1fr) auto; }
+  .camp-b:not(.camp-b--pedir) > li { row-gap: var(--sp-3); }
+  .camp-b:not(.camp-b--pedir) > li > .cl-nome { grid-column: 1; grid-row: 1; }
+  .camp-b:not(.camp-b--pedir) > li > .veredito { grid-column: 2; grid-row: 1; justify-self: end; align-self: start; }
+  .camp-b:not(.camp-b--pedir) > li > .eixo, .camp-b:not(.camp-b--pedir) > li > .eixo-legenda { grid-column: 1 / -1; grid-row: 2; }
+  .camp-b:not(.camp-b--pedir) > li > .camp-acao { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start; }
+  .camp-b:not(.camp-b--pedir) > li > .camp-acao .pedido-esperando { order: 0; }
+  .camp-b:not(.camp-b--pedir) > li > .camp-acao:empty, .camp-b:not(.camp-b--pedir) > li > .veredito-vago { display: none; }
+  .camp-b:not(.camp-b--pedir) > .camp-b-leg > .eixo-legenda { grid-row: 1; }
+}
+@container pagina (max-width: 1039px) {
+  .camp-b--pedir { grid-template-columns: minmax(0, 1fr) auto; }
+  .camp-b--pedir > li { row-gap: var(--sp-3); }
+  .camp-b--pedir > li > .cl-nome { grid-column: 1; grid-row: 1; }
+  .camp-b--pedir > li > .veredito { grid-column: 2; grid-row: 1; justify-self: end; align-self: start; }
+  .camp-b--pedir > li > .eixo, .camp-b--pedir > li > .eixo-legenda { grid-column: 1 / -1; grid-row: 2; }
+  .camp-b--pedir > li > .camp-acao { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start; }
+  .camp-b--pedir > li > .camp-acao .pedido-esperando { order: 0; }
+  .camp-b--pedir > li > .camp-acao:empty, .camp-b--pedir > li > .veredito-vago { display: none; }
+  .camp-b--pedir > .camp-b-leg > .eixo-legenda { grid-row: 1; }
+}
+
+/* das conversas ao pedido (campanhas de mensagem): os pedidos dentro das conversas */
+.funil { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); column-gap: var(--sp-4); }
+.funil > li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; row-gap: var(--sp-1); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.funil > li:last-child { border-bottom: 0; }
+.funil-trilho { position: relative; height: 16px; border-radius: 0 4px 4px 0; background: var(--chart-cinza-1); }
+.funil-trilho span { position: absolute; inset: 0 auto 0 0; min-width: 4px; border-radius: 0 4px 4px 0; background: var(--chart-foco); box-shadow: 2px 0 0 var(--surface); }
+.funil-txt { grid-column: 2; font-size: var(--text-sm); color: var(--text-muted); }
+.funil-txt b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+@container pagina (max-width: 599px) {
+  .funil { grid-template-columns: minmax(0, 1fr); }
+  .funil-txt { grid-column: 1; }
+}
+@container pagina (max-width: 479px) {
+  .par { column-gap: var(--sp-2); }
+  .eixo, .eixo-legenda { margin-right: 5.4rem; }
+}

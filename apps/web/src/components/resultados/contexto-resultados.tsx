@@ -1,8 +1,8 @@
 import { Icone } from '@/components/ui/icone';
 import type { Fonte, LinhaDeContexto } from './textos';
 
-// Linha de contexto do protótipo: período (dias completos), loja, fusos e, no Lite, quando cada fonte
-// foi lida; no Pro, o modelo de atribuição (as fontes ganham um cartão próprio).
+// Linha de contexto: período (dias completos) e loja; no Pro, também os fusos e o modelo de atribuição. Quando cada
+// fonte foi lida fica na faixa do topo (modo simples, em "Ver detalhes") e no cartão das fontes (Pro).
 
 const PONTO: Record<Fonte['situacao'], string> = {
   ok: 'ponto',
@@ -16,29 +16,21 @@ export function classeDoPonto(f: Fonte): string {
   return PONTO[f.situacao];
 }
 
-export function ContextoResultados({ contexto, fontes, pro }: { contexto: LinhaDeContexto; fontes: Fonte[]; pro: boolean }) {
+export function ContextoResultados({ contexto, pro }: { contexto: LinhaDeContexto; pro: boolean }) {
+  const complemento = pro ? contexto.complemento : contexto.curto;
   return (
     <div className="res-contexto">
       <p className="res-periodo">
         <Icone nome="calendar" pequeno />
         <span>
           <b>{contexto.datas}</b>
-          {contexto.complemento ? ` · ${contexto.complemento}` : ''}
+          {complemento ? ` · ${complemento}` : ''}
         </span>
       </p>
-      {pro ? (
+      {pro && (
         <p>
           <span className="lite-chip">{contexto.modelo}</span>
         </p>
-      ) : (
-        <ul className="frescor-lista" aria-label="Quando cada fonte foi lida">
-          {fontes.map((f) => (
-            <li key={f.id} className={f.situacao === 'atraso' || f.situacao === 'problema' ? 'lite-chip lite-chip--atraso' : 'lite-chip'}>
-              <span className={classeDoPonto(f)} aria-hidden="true" />
-              {f.chip}
-            </li>
-          ))}
-        </ul>
       )}
     </div>
   );

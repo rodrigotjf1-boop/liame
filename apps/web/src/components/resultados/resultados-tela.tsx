@@ -1,6 +1,6 @@
 'use client';
 
-import type { ActionTargetsResponse, BrandResponse, ClosedLoopResponse } from '@liame/contracts';
+import type { ActionTargetsResponse, BrandResponse, ClosedLoopResponse, DailyResultsResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { liaLigada } from '@/components/explicar/pedir';
@@ -11,8 +11,10 @@ import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
 import type { ConsultaDePedidos } from './cartao-pedidos';
+import { montarGraficos } from './graficos';
 import { type ExplicarResultados, ResultadosConteudo } from './resultados-conteudo';
 import { FUSO_PADRAO, fusoValido, intervaloDo, localDe, type Loja, lojasDoRegem, montarTela, nadaConectado, PERIODOS, type Periodo, rotuloDoPeriodo } from './textos';
 
@@ -21,6 +23,8 @@ import { FUSO_PADRAO, fusoValido, intervaloDo, localDe, type Loja, lojasDoRegem,
 // permissão `vendas.ver`). A conta é do servidor; a tela escolhe o período, a marca e a loja, e mostra.
 // Para quem acompanha as campanhas, a lista delas ganha o "Pedir mudança" (protótipo P9): onde dá para pedir vem
 // de `GET /v1/actions/targets`, e o botão abre a gaveta do pedido.
+// No modo simples, os cartões são desenhos (mockups/prototipo-resultados-graficos.html, aprovado em 07/10/2026); a
+// linha dos dias e o período anterior vêm de `GET /v1/results/daily`.
 
 type Carga =
   | { tipo: 'carregando' }
@@ -29,6 +33,7 @@ type Carga =
 
 export function ResultadosTela() {
   const { pode } = useSessao();
+  const pro = useModo().modo === 'pro';
   const podeVer = pode('vendas.ver');
   const podeVerContas = pode('contas.ver');
   const podeVerCampanhas = pode('campanhas.ver');
@@ -50,6 +55,8 @@ export function ResultadosTela() {
   const [versaoDosAlvos, setVersaoDosAlvos] = useState(0);
   /** A campanha com a gaveta "Pedir uma mudança" aberta. */
   const [pedindo, setPedindo] = useState<CampanhaDoPedido | null>(null);
+  /** A linha dos dias e o período anterior, pela consulta a que pertencem. */
+  const [serie, setSerie] = useState<{ chave: string; dados: DailyResultsResponse } | null>(null);
   // Fuso da loja: corta o dia dos pedidos (a API diz qual é; até a primeira resposta, o padrão dela).
   const fuso = useRef(FUSO_PADRAO);
   // Só a resposta mais nova vale (trocar de período no meio de uma leitura não mistura números).
@@ -143,11 +150,30 @@ export function ResultadosTela() {
 
   const nomeDaMarca = marcas?.find((m) => m.id === marca)?.name ?? null;
   const dados = carga.tipo === 'ok' ? carga : null;
+
+  // A linha dos dias e o período anterior, para o mesmo período da tela (em "Hoje" não há o que desenhar). Se a
+  // leitura falhar, a tela segue sem o gráfico dos dias e sem a variação: são um extra do modo simples.
+  const chaveDaSerie = dados && dados.periodo !== 'hoje' ? `${dados.marca}|${dados.loja ?? ''}|${dados.dados.period.from}|${dados.dados.period.to}` : null;
+  useEffect(() => {
+    if (!dados || !chaveDaSerie) return;
+    let vivo = true;
+    const query = { brand_id: dados.marca, from: dados.dados.period.from, to: dados.dados.period.to, ...(dados.loja ? { unit_id: dados.loja } : {}) };
+    disparar(
+      chamar(() => api.GET('/v1/results/daily', { params: { query } })).then((r) => {
+        if (vivo && r.ok) setSerie({ chave: chaveDaSerie, dados: r.data });
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [dados, chaveDaSerie]);
+  const serieDaTela = serie && serie.chave === chaveDaSerie ? serie.dados : null;
   const lojaEscolhida = dados?.loja ? (lojas.find((l) => l.id === dados.loja) ?? null) : null;
   const tela = useMemo(
     () => (dados ? montarTela(dados.dados, dados.periodo, new Date(dados.dados.generated_at), localDe(dados.dados, lojaEscolhida, nomeDaMarca)) : null),
     [dados, lojaEscolhida, nomeDaMarca],
   );
+  const graficos = useMemo(() => (dados && tela ? montarGraficos(dados.dados, tela.base, tela.fontes, tela.avisos, serieDaTela) : null), [dados, tela, serieDaTela]);
   // Só os alvos da marca que está na tela (trocar de marca não mostra o botão da anterior).
   const alvosDaMarca = alvos && dados && alvos.marca === dados.marca ? alvos.dados : null;
   const pedir = useMemo<PedirNaLista | null>(
@@ -201,7 +227,7 @@ export function ResultadosTela() {
     );
   } else if (carga.tipo === 'erro') {
     corpo = <Erro problema={carga.problema} aoTentar={() => setTentativa((t) => t + 1)} ocupado={buscando} />;
-  } else if (!dados || !tela) {
+  } else if (!dados || !tela || !graficos) {
     corpo = <ResultadosCarregando />;
   } else if (nadaConectado(dados.dados)) {
     corpo = (
@@ -228,6 +254,7 @@ export function ResultadosTela() {
       <div className={buscando ? 'res-corpo recarregando' : 'res-corpo'} aria-busy={buscando}>
         <ResultadosConteudo
           tela={tela}
+          graficos={graficos}
           modelo={dados.dados.model}
           consulta={consulta}
           loja={lojaDoPedido}
@@ -247,7 +274,7 @@ export function ResultadosTela() {
           <h1 id="h-res" ref={titulo} tabIndex={-1}>
             Resultados
           </h1>
-          <p>O que a mídia virou de verdade: pedidos, receita e margem confirmados no caixa do Regem, ao lado do que cada plataforma informa.</p>
+          <p>{pro ? 'O que a mídia virou de verdade: pedidos, receita e margem confirmados no caixa do Regem, ao lado do que cada plataforma informa.' : 'O que os anúncios viraram no caixa da loja.'}</p>
         </div>
         <div className="res-controles">
           {/* A revisão da semana abre por aqui; sem o Regem não há o que revisar (protótipo P4). */}
