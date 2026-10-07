@@ -33,6 +33,12 @@ export const SummaryResponse = z.strictObject({
     left_micros: z.strictObject({ now: Micros.nullable(), before: Micros.nullable() }),
     margin_known_micros: Micros.nullable(),
     margin_coverage_pct: Porcento,
+    /**
+     * A receita dos pedidos com margem conhecida: o custo conhecido dos produtos é ela menos a margem, e o resto da
+     * receita é de itens sem custo cadastrado. É o que a barra "para onde foi cada real vendido" precisa. Opcional:
+     * resposta de antes de 07/10/2026 não a traz.
+     */
+    revenue_with_margin_micros: Micros.optional(),
     /** `lucro`, `empata` ou `prejuizo`, pela regra de Resultados; nulo com a margem incompleta ou sem gasto. */
     verdict: Slug.nullable(),
   }),
@@ -47,8 +53,11 @@ export const SummaryResponse = z.strictObject({
     /** Do cardápio e do WhatsApp, sem origem provada. */
     without_origin: z.int().min(0),
   }),
-  /** Por plataforma de anúncio: os pedidos com origem nela e o que sobrou (nulo com a margem incompleta). */
-  platforms: z.array(z.strictObject({ provider: Slug, orders: z.int().min(0), left_micros: Micros.nullable() })),
+  /**
+   * Por plataforma de anúncio: os pedidos com origem nela, o que sobrou (nulo com a margem incompleta ou sem pedido) e
+   * o gasto dela no período (opcional: resposta de antes de 07/10/2026 não o traz).
+   */
+  platforms: z.array(z.strictObject({ provider: Slug, orders: z.int().min(0), left_micros: Micros.nullable(), spend_micros: Micros.optional() })),
   needs_you: z.strictObject({
     critical: z.int().min(0),
     attention: z.int().min(0),

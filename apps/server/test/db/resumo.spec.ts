@@ -147,11 +147,12 @@ describe.skipIf(!hasDb)('Resumo: o dinheiro do marketing, os pedidos e o que pre
         left_micros: { now: '-20000000', before: '-10000000' },
         margin_known_micros: '80000000',
         margin_coverage_pct: '100.0',
+        revenue_with_margin_micros: '120000000',
         verdict: 'prejuizo',
       },
       campaigns: { profit: [], loss: [{ campaign_id: e.campanha, name: 'Delivery noite', provider: 'meta_ads' }] },
       orders: { marketing: 2, average_micros: '60000000', all_channels: 2, without_origin: 0 },
-      platforms: [{ provider: 'meta_ads', orders: 2, left_micros: '-20000000' }],
+      platforms: [{ provider: 'meta_ads', orders: 2, left_micros: '-20000000', spend_micros: '100000000' }],
       needs_you: { approvals: { actions: 0, plans: 0, autonomy: 0 } },
     });
     expect(r.needs_you.items.length).toBeLessThanOrEqual(5);

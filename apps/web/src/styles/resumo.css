@@ -25,8 +25,32 @@
 .stat .esqueleto--medio { width: 62%; }
 .stat .esqueleto--alto { width: 50%; height: 36px; }
 
-.dono-veredito { display: grid; gap: var(--sp-3); margin: var(--sp-5) 0 var(--sp-6); padding: var(--sp-4) var(--sp-5); border-radius: var(--radius-lg); background: var(--ai-soft); }
-.dono-veredito .lite-frase { margin: 0; }
+/* Os três números: a barra é esta semana; a marca, a semana anterior, na mesma régua (que começa no zero). */
+.stat { --fundo: var(--surface); }
+.stat--foco { --fundo: color-mix(in srgb, var(--success-soft) 45%, var(--surface)); }
+.bala { position: relative; height: 12px; margin: 8px 3px 4px; }
+.bala-b { position: absolute; top: 0; bottom: 0; min-width: 3px; border-radius: 0 4px 4px 0; }
+.bala-b--neg { border-radius: 4px 0 0 4px; }
+.bala-zero { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--border-strong); }
+.bala-marca { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text); box-shadow: 0 0 0 2px var(--fundo); }
+.bala-marca::after { content: ""; position: absolute; inset: -3px -8px; }
+.stat-pe { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--sp-3); }
+.bala-leg { display: inline-flex; align-items: baseline; gap: 6px; margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+.bala-leg i { flex: none; width: 2px; height: 11px; border-radius: 1px; background: var(--text); transform: translateY(2px); }
+
+/* Para onde foi cada real vendido: o veredito desenhado, no lugar da frase. */
+.r-dinheiro { margin: var(--sp-4) 0 var(--sp-6); }
+.r-dinheiro .card-cab { align-items: center; }
+.r-dinheiro .lite-frase { margin: 0; }
+.dinheiro-grade { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; gap: var(--sp-4) var(--sp-8); }
+.dinheiro-grade > * { min-width: 0; }
+.dinheiro-lado { display: grid; gap: var(--sp-3); }
+.lados { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.lados li { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); align-items: baseline; gap: var(--sp-1) var(--sp-3); font-size: var(--text-sm); }
+.lados .veredito { justify-self: start; }
+.r-pedidos .legenda-b, .r-dinheiro .legenda-b { margin: 0; padding: 0; list-style: none; }
+.r-pedidos .nota-b { margin: 0; }
+
 .ia-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 
 .resumo-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--sp-4); }
@@ -60,19 +84,14 @@
 .dono-sub b { color: var(--text); font-weight: 600; }
 .r-vazio { display: grid; gap: var(--sp-3); }
 
-.mini-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); margin: 0; }
-.mini-stats div { min-width: 0; padding: var(--sp-3); border-radius: var(--radius); background: var(--surface-2); }
-.mini-stats dt { font-size: var(--text-xs); color: var(--text-muted); }
-.mini-stats dd { margin: 0; font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; }
-.mini-stats dd .nf { font-size: inherit; }
-
 .canais { display: grid; gap: var(--sp-4); margin: 0; padding: 0; list-style: none; }
 .canal-linha { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--text-sm); }
 .canal-nome { font-weight: 600; }
 .canal-num { color: var(--text-muted); white-space: nowrap; }
-.canal-barra { height: 10px; margin: 6px 0 4px; border-radius: 4px; background: var(--chart-grade); overflow: hidden; }
-.canal-barra span { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--chart-foco); }
-.canal-sub { margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+/* Cada canal de anúncio: sobrou (para a direita) ou faltou (para a esquerda), na régua de Resultados. */
+.canais--b { gap: var(--sp-3); }
+.canais--b > li { display: grid; gap: 6px; }
+.canais--b > .canal-leg { gap: 0; }
 
 .feito-lista { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
 .feito-lista li { display: flex; align-items: flex-start; gap: var(--sp-3); font-size: var(--text-sm); color: var(--text-muted); }
@@ -84,6 +103,10 @@
 .av-func--lg .ic { width: 24px; height: 24px; }
 
 .resumo-corpo > .fontes-num { margin-top: var(--sp-6); }
+
+@container pagina (max-width: 899px) {
+  .dinheiro-grade { grid-template-columns: minmax(0, 1fr); }
+}
 
 @container pagina (max-width: 999px) {
   .resumo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

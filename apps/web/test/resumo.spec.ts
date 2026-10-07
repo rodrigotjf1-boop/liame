@@ -4,29 +4,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { ConversaProvider } from '@/components/conversa/contexto';
 import { ResumoConteudo } from '@/components/resumo/resumo-conteudo';
-import {
-  canaisDo,
-  contadorDoResumo,
-  equipeDo,
-  Fontes,
-  hojeEscrito,
-  pedidosDo,
-  pontosFalados,
-  precisaDe,
-  primeiroNome,
-  saudacao,
-  statsDo,
-  textoCorrido,
-  variacaoEntre,
-  vereditoDo,
-} from '@/components/resumo/textos';
+import { balaDe, canaisDo, dinheiroDo, nomeDoCanal, pedidosDo, statsDo } from '@/components/resumo/graficos';
+import { contadorDoResumo, equipeDo, Fontes, hojeEscrito, pontosFalados, precisaDe, primeiroNome, saudacao, textoCorrido, variacaoEntre, vereditoDo } from '@/components/resumo/textos';
 import { destinoInicial } from '@/components/shell/inicio';
 import { itensVisiveis, NAVEGACAO, temModos, tituloDa } from '@/components/shell/navegacao';
 import { AvisosProvider } from '@/components/ui/avisos';
 
 // "Resumo" (A3 · P8, aprovado em 03/10/2026; mockups/prototipo-resumo.html): a página inicial do Lite. As frases e
 // os números saem do que a API manda (`GET /v1/summary` e `/v1/team`); a tela é desenhada pelo mesmo componente
-// do navegador.
+// do navegador. Desde 07/10/2026 os cartões de análise são desenhos (mockups/prototipo-resumo-graficos.html): os
+// três números contra a semana anterior, para onde foi cada real vendido, os pedidos e cada canal de anúncio.
 
 const FUSO = 'America/Sao_Paulo';
 const AGORA = new Date('2026-09-29T17:40:00Z'); // terça, 14:40 em São Paulo
@@ -143,48 +130,179 @@ describe('Resumo: os três números do topo', () => {
     expect(variacaoEntre('5', '0')).toBeNull();
   });
 
-  it('semana normal: vendas, gasto e o que sobrou, cada um com a fonte e a comparação', () => {
+  it('a barra contra a semana anterior: as duas na mesma régua, que começa no zero; quando faltou, a régua vai para a esquerda', () => {
+    // Esta semana maior: a barra ocupa a régua e a marca fica dentro dela.
+    expect(balaDe(3_471_000_000n, 3_068_000_000n)).toEqual({ de: 0, largura: 100, negativa: false, zero: null, marca: 88.38 });
+    // Esta semana menor: a marca fica na ponta.
+    expect(balaDe(2_000_000_000n, 4_000_000_000n)).toEqual({ de: 0, largura: 50, negativa: false, zero: null, marca: 100 });
+    // Sem semana anterior não há marca; tudo em zero não quebra.
+    expect(balaDe(500n, null)).toEqual({ de: 0, largura: 100, negativa: false, zero: null, marca: null });
+    expect(balaDe(0n, 0n)).toEqual({ de: 0, largura: 0, negativa: false, zero: null, marca: 0 });
+    // Faltou agora e tinha sobrado antes: o zero aparece, a barra sai dele para a esquerda e a marca fica à direita.
+    expect(balaDe(-300_000_000n, 100_000_000n)).toEqual({ de: 0, largura: 75, negativa: true, zero: 75, marca: 100 });
+    // Sobrou agora e tinha faltado antes.
+    expect(balaDe(100_000_000n, -100_000_000n)).toEqual({ de: 50, largura: 50, negativa: false, zero: 50, marca: 0 });
+  });
+
+  it('semana normal: cada número com a barra, quanto mudou, o valor da semana anterior e a fonte de cada um', () => {
     const f = new Fontes();
     const [vendas, gasto, sobra] = statsDo(resumo(), f, AGORA);
     expect(vendas!.valor!.texto).toBe(nbsp('R$ 3.471'));
-    expect(textoCorrido(vendas!.sub!.texto)).toBe('13,1% a mais que na semana anterior');
-    expect(vendas!.sub!.tom).toBe('bom');
+    expect(textoCorrido(vendas!.mudou!.texto)).toBe('13,1% a mais');
+    expect(vendas!.mudou).toMatchObject({ tom: 'bom', seta: 'sobe' });
+    expect(textoCorrido(vendas!.anterior!)).toBe(nbsp('semana anterior: R$ 3.068'));
+    expect(vendas!.bala).toMatchObject({ cor: 'foco', de: 0, largura: 100, marca: 88.38, negativa: false });
+    expect(vendas!.bala!.rotulo).toBe(nbsp('Esta semana, R$ 3.471,00 em vendas que vieram do marketing; na semana anterior, R$ 3.068,00.'));
+    expect(vendas!.bala!.dicaAntes).toBe(nbsp('R$ 3.068,00|semana anterior · 15/09 a 21/09'));
     expect(gasto!.valor!.texto).toBe(nbsp('R$ 1.214'));
-    expect(gasto!.sub!.tom).toBe('neutro');
+    // Gastar mais não é bom nem ruim: a seta fica, a cor é neutra, e a barra é a do gasto (cinza 1).
+    expect(gasto!.mudou).toMatchObject({ tom: 'neutro', seta: 'sobe' });
+    expect(gasto!.bala).toMatchObject({ cor: 'c1', marca: 97.17 });
     expect(sobra).toMatchObject({ rotulo: 'Sobrou depois de pagar os anúncios', foco: true });
     expect(sobra!.valor!.texto).toBe(nbsp('R$ 287'));
-    expect(textoCorrido(sobra!.sub!.texto)).toBe('a margem conhecida cobre 91% da receita');
+    // O que sobrou muda em reais (a diferença entre os dois números escritos), não em porcentagem.
+    expect(textoCorrido(sobra!.mudou!.texto)).toBe(nbsp('R$ 167 a mais'));
+    expect(sobra!.mudou).toMatchObject({ tom: 'bom', seta: 'sobe' });
+    expect(textoCorrido(sobra!.anterior!)).toBe(nbsp('semana anterior: R$ 120'));
+    expect(sobra!.bala!.rotulo).toBe(nbsp('Esta semana, sobraram R$ 286,50; na semana anterior, sobraram R$ 120,00.'));
+    // A lista das fontes segue a ordem da tela: o valor, quanto mudou e o valor de antes.
     expect(f.lista).toEqual([
       { valor: nbsp('R$ 3.471'), fonte: 'Regem · confirmado no caixa · 22/09 a 28/09' },
       { valor: '13,1%', fonte: 'Liame · comparação com 15/09 a 21/09 · calculada pelo sistema' },
+      { valor: nbsp('R$ 3.068'), fonte: 'Regem · confirmado no caixa · 15/09 a 21/09' },
       { valor: nbsp('R$ 1.214'), fonte: 'Meta Ads e Google Ads · gasto · 22/09 a 28/09 · lido hoje, 06:12 e 06:20' },
       { valor: '2,9%', fonte: 'Liame · comparação com 15/09 a 21/09 · calculada pelo sistema' },
+      { valor: nbsp('R$ 1.180'), fonte: 'Meta Ads e Google Ads · gasto · 15/09 a 21/09' },
       { valor: nbsp('R$ 287'), fonte: 'Liame · margem conhecida − investimento · calculado pelo sistema' },
-      { valor: '91%', fonte: 'Regem · parte da receita com custo cadastrado · 22/09 a 28/09' },
+      { valor: nbsp('R$ 167'), fonte: 'Liame · comparação com 15/09 a 21/09 · calculada pelo sistema' },
+      { valor: nbsp('R$ 120'), fonte: 'Liame · margem conhecida − investimento · 15/09 a 21/09 · calculado pelo sistema' },
     ]);
   });
 
-  it('vendas caindo ficam em vermelho; prejuízo vira "Faltou para pagar os anúncios", sem o destaque verde', () => {
-    const [vendas, , sobra] = statsDo(resumo({}, { revenue_micros: { now: '2000000000', before: '3000000000' }, left_micros: { now: '-150000000', before: null } }), new Fontes(), AGORA);
-    expect(vendas!.sub).toMatchObject({ tom: 'ruim', seta: 'desce' });
+  it('vendas caindo ficam em vermelho; prejuízo vira "Faltou para pagar os anúncios", com a barra para a esquerda do zero', () => {
+    const [vendas, , sobra] = statsDo(resumo({}, { revenue_micros: { now: '2000000000', before: '3000000000' }, left_micros: { now: '-150000000', before: '50000000' } }), new Fontes(), AGORA);
+    expect(vendas!.mudou).toMatchObject({ tom: 'ruim', seta: 'desce' });
+    expect(textoCorrido(vendas!.mudou!.texto)).toBe('33,3% a menos');
     expect(sobra).toMatchObject({ rotulo: 'Faltou para pagar os anúncios', foco: false });
     expect(sobra!.valor!.texto).toBe(nbsp('R$ 150'));
+    expect(sobra!.bala).toMatchObject({ negativa: true, zero: 75, de: 0, largura: 75, marca: 100 });
+    expect(textoCorrido(sobra!.mudou!.texto)).toBe(nbsp('R$ 200 a menos'));
+    expect(sobra!.mudou).toMatchObject({ tom: 'ruim', seta: 'desce' });
+    expect(sobra!.bala!.rotulo).toBe(nbsp('Esta semana, faltaram R$ 150,00; na semana anterior, sobraram R$ 50,00.'));
+    // Na semana anterior também tinha faltado: a legenda da marca diz.
+    const [, , faltava] = statsDo(resumo({}, { left_micros: { now: '-150000000', before: '-90000000' } }), new Fontes(), AGORA);
+    expect(textoCorrido(faltava!.anterior!)).toBe(nbsp('semana anterior: faltaram R$ 90'));
   });
 
-  it('margem abaixo de 80% (o piloto sem o custo dos produtos): ainda não dá para dizer o que sobrou', () => {
+  it('sem a semana anterior: a barra fica, sem a marca; igual à anterior diz que está igual', () => {
+    const [vendas, gasto, sobra] = statsDo(resumo({}, { revenue_micros: { now: '3471000000', before: null }, spend_micros: { now: '1214300000', before: '1214300000' }, left_micros: { now: '286500000', before: null } }), new Fontes(), AGORA);
+    expect(vendas).toMatchObject({ mudou: null, anterior: null });
+    expect(vendas!.bala).toMatchObject({ marca: null, dicaAntes: null });
+    expect(vendas!.bala!.rotulo).toBe(nbsp('Esta semana, R$ 3.471,00 em vendas que vieram do marketing.'));
+    expect(textoCorrido(gasto!.mudou!.texto)).toBe('igual à semana anterior');
+    expect(gasto!.mudou).toMatchObject({ tom: 'neutro', seta: null });
+    expect(sobra).toMatchObject({ mudou: null, anterior: null });
+  });
+
+  it('margem abaixo de 80% (o piloto sem o custo dos produtos): ainda não dá para dizer o que sobrou, e não há barra', () => {
     const [, , baixa] = statsDo(resumo({}, { left_micros: { now: null, before: null }, margin_coverage_pct: '62.0', verdict: null }), new Fontes(), AGORA);
-    expect(baixa).toMatchObject({ valor: null, vazio: 'Ainda não dá para dizer' });
-    expect(textoCorrido(baixa!.sub!.texto)).toBe('só 62% das vendas têm custo no Regem');
+    expect(baixa).toMatchObject({ valor: null, vazio: 'Ainda não dá para dizer', bala: null, mudou: null, anterior: null });
+    expect(textoCorrido(baixa!.nota!)).toBe('só 62% das vendas têm custo no Regem');
     const [, , semCusto] = statsDo(resumo({}, { left_micros: { now: null, before: null }, margin_known_micros: null, margin_coverage_pct: null, verdict: null }), new Fontes(), AGORA);
-    expect(textoCorrido(semCusto!.sub!.texto)).toBe('nenhuma venda tem o custo dos produtos no Regem');
+    expect(textoCorrido(semCusto!.nota!)).toBe('nenhuma venda tem o custo dos produtos no Regem');
+    // Sem pedido dos anúncios, o motivo é outro: não há venda para descontar do gasto.
+    const semPedido = resumo({ orders: { marketing: 0, average_micros: null, all_channels: 12, without_origin: 4 } }, { revenue_micros: { now: '0', before: '3068000000' }, left_micros: { now: null, before: null }, margin_known_micros: null, margin_coverage_pct: null, verdict: null });
+    const [semVenda, , semSobra] = statsDo(semPedido, new Fontes(), AGORA);
+    expect(textoCorrido(semSobra!.nota!)).toBe('nenhuma venda veio dos anúncios');
+    expect(semVenda!.valor!.texto).toBe(nbsp('R$ 0'));
+    expect(textoCorrido(semVenda!.mudou!.texto)).toBe('100,0% a menos');
   });
 
   it('sem o Regem: só o gasto; na primeira semana, nenhum dos três', () => {
     const semRegem = statsDo(resumo({ state: 'sem_regem' }), new Fontes(), AGORA);
     expect(semRegem.map((s) => s.vazio)).toEqual(['Sem o Regem, não dá para saber', null, 'Sem o Regem, não dá para saber']);
     expect(semRegem[1]!.valor!.texto).toBe(nbsp('R$ 1.214'));
+    expect(semRegem[1]!.bala).not.toBeNull();
+    expect(textoCorrido(semRegem[0]!.nota!)).toBe('O caixa da loja é que confirma cada venda.');
     const primeira = statsDo(resumo({ state: 'primeira_semana' }), new Fontes(), AGORA);
     expect(primeira.map((s) => s.vazio)).toEqual(Array(3).fill('Ainda sem 7 dias completos'));
+    expect(primeira.every((s) => s.bala === null)).toBe(true);
+  });
+});
+
+describe('Resumo: para onde foi cada real vendido', () => {
+  const partes = (r: SummaryResponse) => {
+    const d = dinheiroDo(r, new Fontes());
+    if (d.tipo !== 'barra') throw new Error('esperava a barra');
+    return d;
+  };
+
+  it('semana normal: o selo, a barra com o custo, o que não tem custo, os anúncios e o que sobrou, e as campanhas de cada lado', () => {
+    const f = new Fontes();
+    const d = dinheiroDo(resumo(), f);
+    if (d.tipo !== 'barra') throw new Error('esperava a barra');
+    expect(d.selo).toEqual({ rotulo: 'Empatou', classe: 'atencao' });
+    expect(textoCorrido(d.sub)).toBe('53 pedidos com prova de anúncio · 22/09 a 28/09');
+    // Sem a receita com custo conhecido na resposta (as de antes de 07/10/2026), ela sai da porcentagem: 91,4%.
+    expect(d.partes.map((p) => [p.classe, p.num.texto, p.rotulo])).toEqual([
+      ['c2', nbsp('R$ 1.672'), 'custo dos produtos'],
+      ['semcusto', nbsp('R$ 299'), 'em itens sem custo no Regem'],
+      ['c1', nbsp('R$ 1.214'), 'anúncios'],
+      ['foco', nbsp('R$ 287'), 'sobrou'],
+    ]);
+    expect(d.marca).toBeNull();
+    expect(d.frase).toBeNull();
+    expect(d.rotulo).toBe(nbsp('Dos R$ 3.471,00 vendidos: R$ 1.672 de custo dos produtos, R$ 299 em itens sem custo no Regem, R$ 1.214 de anúncios e R$ 287 que sobraram.'));
+    expect(d.lados).toEqual({ lucro: ['Combo sexta'], prejuizo: ['Smash em dobro', 'Busca hambúrguer perto'] });
+    // Cada valor da legenda leva à fonte dele.
+    expect(f.lista.map((l) => l.fonte)).toEqual([
+      'Regem · confirmado no caixa · 22/09 a 28/09',
+      'Regem · custo dos produtos vendidos · 22/09 a 28/09',
+      'Regem · vendas de itens sem custo cadastrado · 22/09 a 28/09',
+      'Meta Ads e Google Ads · gasto · 22/09 a 28/09',
+      'Liame · margem conhecida − investimento · calculado pelo sistema',
+    ]);
+    // Com a receita com custo conhecido vinda do servidor, a conta é exata: tudo tem custo, e a parte hachurada some.
+    const exato = partes(resumo({}, { revenue_with_margin_micros: '3471000000' }));
+    expect(exato.partes.map((p) => [p.classe, p.num.texto])).toEqual([['c2', nbsp('R$ 1.970')], ['c1', nbsp('R$ 1.214')], ['foco', nbsp('R$ 287')]]);
+    expect(partes(resumo({}, { verdict: 'lucro' })).selo).toEqual({ rotulo: 'Deu lucro', classe: 'bom' });
+  });
+
+  it('prejuízo: a barra dos anúncios vai até onde a margem cobre, o que faltou continua depois da marca do que foi vendido', () => {
+    const d = partes(resumo({}, { left_micros: { now: '-150000000', before: null }, margin_known_micros: '1064300000', revenue_with_margin_micros: '3471000000', verdict: 'prejuizo' }));
+    expect(d.selo).toEqual({ rotulo: 'Deu prejuízo', classe: 'ruim' });
+    expect(d.partes.map((p) => [p.classe, p.num.texto, p.peso])).toEqual([
+      ['c2', nbsp('R$ 2.407'), 240670],
+      ['c1', nbsp('R$ 1.214'), 106430],
+      ['falta', nbsp('R$ 150'), 15000],
+    ]);
+    expect(d.marca).toEqual({ posicao: 0.95857, antes: 2, texto: nbsp('vendido: R$ 3.471') });
+    expect(d.rotulo).toContain(nbsp('R$ 150 que faltaram para pagar os anúncios'));
+  });
+
+  it('margem incompleta: quanto das vendas tem custo, com a marca dos 80%, e sem as campanhas de cada lado', () => {
+    const d = partes(resumo({}, { left_micros: { now: null, before: null }, margin_coverage_pct: '62.0', verdict: null }));
+    expect(d.selo).toEqual({ rotulo: 'Margem incompleta', classe: 'incompleta' });
+    expect(d.partes.map((p) => [p.classe, p.num.texto, p.rotulo])).toEqual([
+      ['foco', '62%', 'das vendas com custo no Regem'],
+      ['semcusto', nbsp('R$ 1.319'), 'em itens sem custo'],
+    ]);
+    expect(d.marca).toEqual({ posicao: 0.8, antes: 0, texto: 'precisa de 80%' });
+    expect(d.frase!.map((x) => x.t).join('')).toBe('Ainda não dá para dizer se sobrou. Falta o custo de alguns itens no Regem.');
+    expect(d.lados).toEqual({ lucro: [], prejuizo: [] });
+  });
+
+  it('sem o que desenhar (primeira semana, sem o Regem, sem gasto, sem pedido de anúncio): fica a frase do veredito', () => {
+    const vago = (r: SummaryResponse) => {
+      const d = dinheiroDo(r, new Fontes());
+      if (d.tipo !== 'vago') throw new Error('esperava a frase');
+      return textoCorrido(d.veredito.frase);
+    };
+    expect(vago(resumo({ state: 'primeira_semana' }))).toMatch(/^Os primeiros 7 dias completos ainda não fecharam\./);
+    expect(vago(resumo({ state: 'sem_regem' }))).toMatch(/^Sem o Regem, o Liame vê o gasto, não as vendas\./);
+    expect(vago(resumo({}, { spend_micros: { now: '0', before: null } }))).toMatch(/^Sem gasto com anúncios/);
+    expect(vago(resumo({ orders: { marketing: 0, average_micros: null, all_channels: 12, without_origin: 4 } }))).toMatch(/^Nenhum pedido com prova de anúncio/);
+    expect(dinheiroDo(resumo({ state: 'sem_regem' }), new Fontes())).toMatchObject({ tipo: 'vago', veredito: { conectarRegem: true } });
   });
 });
 
@@ -270,29 +388,65 @@ describe('Resumo: precisa de você', () => {
 });
 
 describe('Resumo: pedidos, canais e a equipe', () => {
-  it('os pedidos do caixa; sem pedido de anúncio, sem o valor médio', () => {
+  it('os pedidos numa barra só: de anúncios com prova, de aplicativos e balcão, e sem prova; o valor médio à parte', () => {
     const f = new Fontes();
-    expect(pedidosDo(resumo(), f)!.map((m) => [m.rotulo, m.valor.texto])).toEqual([
-      ['Pedidos que vieram do marketing', '53'],
-      ['Valor médio desses pedidos', nbsp('R$ 65,49')],
-      ['Pedidos de todos os canais', '412'],
-      ['Sem origem provada', '61'],
+    const p = pedidosDo(resumo(), f)!;
+    expect(p.total.texto).toBe('412');
+    expect(p.partes.map((x) => [x.classe, x.num.texto, x.peso, x.rotulo])).toEqual([
+      ['foco', '53', 53, 'de anúncios, com prova'],
+      ['c1', '298', 298, 'de aplicativos de entrega e balcão'],
+      ['c2', '61', 61, 'do cardápio e do WhatsApp, sem prova de anúncio'],
     ]);
-    expect(pedidosDo(resumo({ orders: { marketing: 0, average_micros: null, all_channels: 12, without_origin: 4 } }), new Fontes())!.map((m) => m.rotulo)).not.toContain('Valor médio desses pedidos');
+    expect(p.rotulo).toBe('Dos 412 pedidos da semana: 53 de anúncios, com prova, 298 de aplicativos de entrega e balcão e 61 do cardápio e do WhatsApp, sem prova de anúncio.');
+    expect(p.partes[0]!.dica).toBe('53 pedidos|de anúncios, com prova · 13%');
+    expect(p.medio!.texto).toBe(nbsp('R$ 65,49'));
+    expect(f.lista[0]).toEqual({ valor: '412', fonte: 'Regem · pedidos de todos os canais · 22/09 a 28/09' });
+    // Sem pedido de anúncio, a parte dele some e não há valor médio; sem pedido nenhum, não há barra.
+    const semAnuncio = pedidosDo(resumo({ orders: { marketing: 0, average_micros: null, all_channels: 12, without_origin: 4 } }), new Fontes())!;
+    expect(semAnuncio.partes.map((x) => [x.classe, x.num.texto])).toEqual([['c1', '8'], ['c2', '4']]);
+    expect(semAnuncio.medio).toBeNull();
+    expect(pedidosDo(resumo({ orders: { marketing: 0, average_micros: null, all_channels: 0, without_origin: 0 } }), new Fontes())!.partes).toEqual([]);
     expect(pedidosDo(resumo({ state: 'sem_regem' }), new Fontes())).toBeNull();
   });
 
-  it('cada canal com a parte dos pedidos e o que sobrou (ou faltou); sem margem, não diz quanto', () => {
+  it('cada canal de anúncio na mesma régua: o que sobrou vai para a direita do zero, e o que faltou, para a esquerda', () => {
     const c = canaisDo(resumo(), new Fontes())!;
-    expect(c.canais.map((x) => [x.nome, x.pedidos.texto, x.parte, textoCorrido(x.sub)])).toEqual([
-      ['Instagram e Facebook', '41', 77, nbsp('sobraram R$ 402 depois dos anúncios')],
-      ['Google', '12', 23, nbsp('faltaram R$ 116 para pagar os anúncios')],
+    if (c.tipo !== 'lista') throw new Error('esperava a lista');
+    expect(c.legenda).toEqual({ faltou: true, sobrou: true });
+    expect(c.zero).toBeCloseTo(22.32, 1);
+    expect(c.linhas.map((l) => [l.nome, l.pedidos.texto, l.tipo, l.valor?.sinal, l.valor?.num.texto])).toEqual([
+      ['Instagram e Facebook', '41', 'ganho', '+', nbsp('R$ 402')],
+      ['Google', '12', 'perda', '−', nbsp('R$ 116')],
     ]);
-    expect(c.canais[0]!.falado).toBe('41 de 53 pedidos com origem provada');
-    expect(c.semOrigem.texto).toBe('61');
-    const semMargem = canaisDo(resumo({ platforms: [{ provider: 'meta_ads', orders: 0, left_micros: null }] }), new Fontes())!;
-    expect(semMargem.canais[0]).toMatchObject({ parte: 0 });
-    expect(textoCorrido(semMargem.canais[0]!.sub)).toBe('sem margem conhecida bastante para dizer quanto sobrou');
+    // A mesma régua dos dois lados: as duas barras juntas ocupam a régua inteira, cada uma no lado dela.
+    expect(c.linhas[0]!.largura).toBeCloseTo(100 - c.zero, 0);
+    expect(c.linhas[1]!.largura).toBeCloseTo(c.zero, 0);
+    expect(c.linhas[0]!.rotulo).toBe(nbsp('Instagram e Facebook: sobraram R$ 402,10 depois de pagar o anúncio'));
+    expect(c.linhas[1]!.rotulo).toBe(nbsp('Google: faltaram R$ 115,60 depois de pagar o anúncio'));
+    expect(nomeDoCanal('meta_ads')).toBe('Instagram e Facebook');
+    // Só sobrou: o zero fica na borda e não há "faltou" na legenda. Só faltou: o zero vai para a direita.
+    const soSobrou = canaisDo(resumo({ platforms: [{ provider: 'meta_ads', orders: 41, left_micros: '402100000' }] }), new Fontes())!;
+    expect(soSobrou).toMatchObject({ tipo: 'lista', zero: 0, legenda: { faltou: false, sobrou: true } });
+    const soFaltou = canaisDo(resumo({ platforms: [{ provider: 'google_ads', orders: 12, left_micros: '-115600000' }] }), new Fontes())!;
+    expect(soFaltou).toMatchObject({ tipo: 'lista', zero: 60, legenda: { faltou: true, sobrou: false } });
+  });
+
+  it('canal sem pedido diz o que gastou; com a margem incompleta, não diz quanto sobrou; sem canal, diz por quê', () => {
+    const c = canaisDo(resumo({ platforms: [{ provider: 'meta_ads', orders: 0, left_micros: null, spend_micros: '845300000' }, { provider: 'google_ads', orders: 12, left_micros: null }] }), new Fontes())!;
+    if (c.tipo !== 'lista') throw new Error('esperava a lista');
+    expect(c.linhas.map((l) => [l.tipo, l.texto, l.valor])).toEqual([
+      ['neutro', nbsp('gastou R$ 845'), null],
+      ['semcusto', 'margem incompleta', null],
+    ]);
+    expect(c.legenda).toEqual({ faltou: false, sobrou: false });
+    expect(c.linhas[0]!.rotulo).toBe(nbsp('Instagram e Facebook: sem pedido na semana; gastou R$ 845,30'));
+    // Resposta de antes de 07/10/2026 não traz o gasto do canal.
+    const antiga = canaisDo(resumo({ platforms: [{ provider: 'meta_ads', orders: 0, left_micros: null }] }), new Fontes())!;
+    expect(antiga).toMatchObject({ tipo: 'lista', linhas: [{ tipo: 'neutro', texto: 'sem pedido na semana' }] });
+    // Conta conectada sem gasto na semana não é o mesmo que não ter conta de anúncio.
+    expect(canaisDo(resumo({ platforms: [] }), new Fontes())).toEqual({ tipo: 'vazio', frase: 'Nenhum anúncio gastou nos últimos 7 dias.' });
+    expect(canaisDo(resumo({ platforms: [], sources: [fonte('regem')] }), new Fontes())).toEqual({ tipo: 'vazio', frase: 'Nenhuma conta de anúncio conectada a esta marca.' });
+    expect(canaisDo(resumo({ state: 'primeira_semana' }), new Fontes())).toBeNull();
   });
 
   it('a equipe: o que cada um fez no mês, contado pelo código; desligado e parado não entram', () => {
@@ -351,14 +505,36 @@ describe('Resumo: a tela', () => {
     expect(sem).not.toContain('r-precisa--com-lia');
   });
 
-  it('semana normal: saudação, os três números com fonte, o veredito, o que precisa de você e a lista das fontes', () => {
+  it('semana normal: saudação, os três números com a barra e a fonte, o veredito desenhado, os pedidos, os canais e a lista das fontes', () => {
     const html = desenhar(resumo({ needs_you: { critical: 1, attention: 0, items: [aviso({})], approvals: { actions: 1, plans: 0, autonomy: 0 } } }), equipe([membro('lia', { stats: [stat('respostas', 3)] })]));
     expect(html).toContain('Terça, 29 de setembro · Mister Burgers');
     expect(html).toContain('Boa tarde, Rodrigo.');
     expect(html).toContain('Assim foi o seu marketing nos últimos 7 dias.');
     expect(html).toContain('class="nf"');
     expect(html).toContain('De onde vêm os números (');
-    expect(html).toContain('O marketing se pagou, mas sobrou pouco.');
+    // O veredito é desenhado: o selo, a barra dividida e as campanhas de cada lado; a frase de antes não aparece.
+    expect(html).not.toContain('O marketing se pagou, mas sobrou pouco.');
+    expect(html).toContain('Para onde foi cada real vendido');
+    expect(html).toContain('<span class="veredito veredito--atencao">Empatou</span>');
+    expect(html).toContain('<span class="veredito veredito--bom">Dá lucro</span><span>Combo sexta</span>');
+    expect(html).toContain('<span class="veredito veredito--ruim">Dá prejuízo</span><span>Smash em dobro e Busca hambúrguer perto</span>');
+    // Cada um dos três números tem a barra (com o rótulo para quem ouve a tela) e a marca da semana anterior.
+    expect(html.match(/class="bala" role="img"/g)).toHaveLength(3);
+    expect(html.match(/class="bala-marca"/g)).toHaveLength(3);
+    expect(html).toContain('semana anterior: ');
+    // Os pedidos numa barra só e cada canal na régua de sobrou e faltou.
+    expect(html).toContain('De onde vieram os pedidos');
+    expect(html).toContain('confirmados no caixa do Regem, em todos os canais.');
+    expect(html).toContain('Cada pedido que veio dos anúncios valeu, em média,');
+    expect(html).toContain('Cada canal de anúncio');
+    expect(html).toContain('← faltou');
+    expect(html).toContain('sobrou →');
+    expect(html).toContain('class="b b--ganho"');
+    expect(html).toContain('class="b b--perda"');
+    // Os desenhos antigos saíram.
+    expect(html).not.toContain('mini-stats');
+    expect(html).not.toContain('canal-barra');
+    expect(html).not.toContain('dono-veredito');
     expect(html).toContain('href="/aprovacoes"');
     expect(html).toContain('Ver todos os avisos');
     expect(html).toContain('O que a sua equipe fez');
@@ -373,6 +549,13 @@ describe('Resumo: a tela', () => {
     const html = desenhar(resumo({ state: 'sem_regem' }));
     expect(html).toContain('Conectar o Regem');
     expect(html).toContain('Os pedidos vêm do caixa do Regem.');
+    // Sem o que desenhar, o cartão do dinheiro fica com a frase e a barra vazia; só o gasto tem a barra dele.
+    expect(html).toContain('Sem o Regem, o Liame vê o gasto, não as vendas.');
+    expect(html).toContain('pilha pilha--vazia');
+    expect(html.match(/class="bala" role="img"/g)).toHaveLength(1);
+    expect(html).toContain('Sem o Regem, os pedidos não chegam ao Liame.');
+    // Sem a permissão de ver as contas, o botão de conectar não aparece.
+    expect(desenhar(resumo({ state: 'sem_regem' }), null, (p) => p !== 'contas.ver')).not.toContain('Conectar o Regem');
   });
 
   it('sem as permissões: sem o convite, sem "Ver todos os avisos", sem o cartão da equipe', () => {

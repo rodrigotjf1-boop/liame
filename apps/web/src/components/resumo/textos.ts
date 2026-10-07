@@ -1,10 +1,11 @@
 import type { AttentionItem, SourceFreshness, SummaryResponse, TeamResponse } from '@liame/contracts';
 import { acaoDoAviso, destinoDoAviso, destinoPedeVendas, gravidadeDe } from '@/components/atencao/textos';
-import { inteiro, reaisDeMicros } from '@/lib/formato';
-import { diaMes, intervaloEscrito, nomesDe, porcentagem, quandoNoFuso, type Trecho } from '@/components/resultados/textos';
+import { inteiro } from '@/lib/formato';
+import { diaMes, nomesDe, porcentagem, type Trecho } from '@/components/resultados/textos';
 
 // Regras e frases do Resumo (A3 · P8, aprovado em 03/10/2026): a página inicial do Lite. Os números chegam
-// prontos de `GET /v1/summary` (os mesmos de Resultados); a tela só os escreve, com a fonte de cada um.
+// prontos de `GET /v1/summary` (os mesmos de Resultados); a tela só os escreve, com a fonte de cada um. Os cartões
+// de análise (os três números, o dinheiro, os pedidos e os canais) são desenhos e estão em `graficos.ts`.
 
 // ------------------------------------------------------------------ números com fonte
 
@@ -55,9 +56,7 @@ export function primeiroNome(nome: string): string {
   return nome.trim().split(/\s+/)[0] ?? nome;
 }
 
-// ------------------------------------------------------------------ o dinheiro (os três números do topo)
-
-const reais0 = (micros: string | bigint) => reaisDeMicros(micros, 0);
+// ------------------------------------------------------------------ a comparação com a semana anterior
 
 /** "+13,1%" entre duas somas (micros), sem ponto flutuante; nulo sem a semana anterior ou com ela em zero. */
 export function variacaoEntre(agora: string, antes: string | null): { sobe: boolean; texto: string } | null {
@@ -73,133 +72,9 @@ export function variacaoEntre(agora: string, antes: string | null): { sobe: bool
   return { sobe: !negativa, texto: `${decimos / 10n},${decimos % 10n}%` };
 }
 
-export type Stat = {
-  id: 'vendas' | 'gasto' | 'sobra';
-  rotulo: string;
-  /** O valor com a fonte; nulo quando ainda não dá para dizer (o texto vai em `vazio`). */
-  valor: Num | null;
-  vazio: string | null;
-  /** A linha de baixo: a comparação com a semana anterior ou o que falta. */
-  sub: { texto: Texto; tom: 'bom' | 'ruim' | 'neutro'; seta: 'sobe' | 'desce' | null } | null;
-  foco: boolean;
-};
-
-type Contexto = {
-  r: SummaryResponse;
-  fontes: Fontes;
-  /** "22/09 a 28/09" */
-  periodo: string;
-  agora: Date;
-};
-
-function contextoDe(r: SummaryResponse, fontes: Fontes, agora: Date): Contexto {
-  return { r, fontes, periodo: intervaloEscrito(r.period.from, r.period.to), agora };
-}
-
-const MIDIA = new Set(['meta_ads', 'google_ads']);
-
-/** "Meta Ads e Google Ads · gasto · 22/09 a 28/09 · lido hoje, 06:12 e 06:20" (das fontes de mídia da marca). */
-function fonteDoGasto(c: Contexto): string {
-  const midia = c.r.sources.filter((s) => MIDIA.has(s.provider));
-  const nomes = [...new Set(midia.map((s) => nomesDe(s.provider).nome))];
-  const lidas = [...new Set(midia.map((s) => s.last_success_at).filter((x): x is string => x !== null).map((l) => quandoNoFuso(l, c.r.period.timezone, c.agora)))];
-  // "lido hoje, 06:12 e 06:20": o "hoje" uma vez só quando as duas leituras são de hoje.
-  const deHoje = lidas.length > 1 && lidas.every((l) => l.startsWith('hoje, '));
-  const quando = lidas.length ? ` · lido ${deHoje ? `hoje, ${juntar(lidas.map((l) => l.slice(6)))}` : juntar(lidas)}` : '';
-  return `${nomes.length ? juntar(nomes) : 'Plataformas de anúncio'} · gasto · ${c.periodo}${quando}`;
-}
-
 function juntar(itens: string[]): string {
   if (itens.length <= 1) return itens.join('');
   return `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`;
-}
-
-function comparacao(c: Contexto, agora: string, antes: string | null, tomSubida: 'bom' | 'neutro'): Stat['sub'] {
-  const v = variacaoEntre(agora, antes);
-  if (!v) return { texto: [{ t: 'sem semana anterior para comparar' }], tom: 'neutro', seta: null };
-  const fonte = `Liame · comparação com ${intervaloEscrito(c.r.previous.from, c.r.previous.to)} · calculada pelo sistema`;
-  const tom = tomSubida === 'neutro' ? 'neutro' : v.sobe ? 'bom' : 'ruim';
-  return { texto: [{ num: c.fontes.n(v.texto, fonte) }, { t: ` ${v.sobe ? 'a mais' : 'a menos'} que na semana anterior` }], tom, seta: v.sobe ? 'sobe' : 'desce' };
-}
-
-/** Os três números do topo, como no protótipo: vendas que vieram do marketing, gasto e o que sobrou. */
-export function statsDo(r: SummaryResponse, fontes: Fontes, agora: Date): Stat[] {
-  const c = contextoDe(r, fontes, agora);
-  const m = r.money;
-  const primeira = r.state === 'primeira_semana';
-  const semRegem = r.state === 'sem_regem';
-  const ainda = 'Ainda sem 7 dias completos';
-  const caixa = `Regem · confirmado no caixa · ${c.periodo}`;
-
-  const vendas: Stat = primeira
-    ? { id: 'vendas', rotulo: 'Vendas que vieram do marketing', valor: null, vazio: ainda, sub: null, foco: false }
-    : semRegem
-      ? {
-          id: 'vendas',
-          rotulo: 'Vendas que vieram do marketing',
-          valor: null,
-          vazio: 'Sem o Regem, não dá para saber',
-          sub: { texto: [{ t: 'O caixa da loja é que confirma cada venda.' }], tom: 'neutro', seta: null },
-          foco: false,
-        }
-      : {
-          id: 'vendas',
-          rotulo: 'Vendas que vieram do marketing',
-          valor: fontes.n(reais0(m.revenue_micros.now), caixa),
-          vazio: null,
-          sub: comparacao(c, m.revenue_micros.now, m.revenue_micros.before, 'bom'),
-          foco: false,
-        };
-
-  const gasto: Stat = primeira
-    ? { id: 'gasto', rotulo: 'Gasto com anúncios', valor: null, vazio: ainda, sub: null, foco: false }
-    : {
-        id: 'gasto',
-        rotulo: 'Gasto com anúncios',
-        valor: fontes.n(reais0(m.spend_micros.now), fonteDoGasto(c)),
-        vazio: null,
-        sub: comparacao(c, m.spend_micros.now, m.spend_micros.before, 'neutro'),
-        foco: false,
-      };
-
-  let sobra: Stat;
-  if (primeira || semRegem) {
-    sobra = { id: 'sobra', rotulo: 'Sobrou depois de pagar os anúncios', valor: null, vazio: primeira ? ainda : 'Sem o Regem, não dá para saber', sub: null, foco: false };
-  } else if (m.left_micros.now === null) {
-    // A margem conhecida cobre menos de 80% da receita (no piloto, sem o custo dos produtos): o Liame não diz.
-    const cobre = m.margin_coverage_pct;
-    sobra = {
-      id: 'sobra',
-      rotulo: 'Sobrou depois de pagar os anúncios',
-      valor: null,
-      vazio: 'Ainda não dá para dizer',
-      sub: {
-        texto:
-          cobre === null || m.margin_known_micros === null
-            ? [{ t: 'nenhuma venda tem o custo dos produtos no Regem' }]
-            : [{ t: 'só ' }, { num: fontes.n(porcentagem(cobre), `Regem · parte da receita com custo cadastrado · ${c.periodo}`) }, { t: ' das vendas têm custo no Regem' }],
-        tom: 'neutro',
-        seta: null,
-      },
-      foco: false,
-    };
-  } else {
-    const valor = BigInt(m.left_micros.now);
-    const faltou = valor < 0n;
-    sobra = {
-      id: 'sobra',
-      rotulo: faltou ? 'Faltou para pagar os anúncios' : 'Sobrou depois de pagar os anúncios',
-      valor: fontes.n(reais0(faltou ? -valor : valor), 'Liame · margem conhecida − investimento · calculado pelo sistema'),
-      vazio: null,
-      sub: {
-        texto: [{ t: 'a margem conhecida cobre ' }, { num: fontes.n(porcentagem(m.margin_coverage_pct), `Regem · parte da receita com custo cadastrado · ${c.periodo}`) }, { t: ' da receita' }],
-        tom: 'neutro',
-        seta: null,
-      },
-      foco: !faltou,
-    };
-  }
-  return [vendas, gasto, sobra];
 }
 
 // ------------------------------------------------------------------ o veredito
@@ -212,8 +87,9 @@ function campanhas(lista: SummaryResponse['campaigns']['profit']): string {
 }
 
 /**
- * A frase grande debaixo dos números. O veredito é o de Resultados (dito pelo servidor); a tela só o escreve,
- * com as campanhas de cada lado. Sem margem suficiente, diz que ainda não dá para dizer, como em Resultados.
+ * O veredito em frase. Desde 07/10/2026 a tela o desenha (o selo, a barra e as campanhas de cada lado, em
+ * `graficos.ts`); a frase aparece quando ainda não há o que desenhar: primeira semana, sem o Regem, sem gasto e sem
+ * pedido de anúncio. O veredito é o de Resultados (dito pelo servidor).
  */
 export function vereditoDo(r: SummaryResponse): Veredito {
   const n = (t: string): Trecho => ({ t, b: true });
@@ -362,66 +238,6 @@ export function contadorDoResumo(avisos: number | null, aprovacoes: number | nul
 /** ", 3 pontos para você" para quem ouve o menu. */
 export function pontosFalados(n: number): string {
   return n === 1 ? ', 1 ponto para você' : `, ${n} pontos para você`;
-}
-
-// ------------------------------------------------------------------ pedidos e canais
-
-export type MiniStat = { rotulo: string; valor: Num };
-
-export function pedidosDo(r: SummaryResponse, fontes: Fontes): MiniStat[] | null {
-  if (r.state !== 'ok') return null;
-  const periodo = intervaloEscrito(r.period.from, r.period.to);
-  const o = r.orders;
-  const lista: MiniStat[] = [{ rotulo: 'Pedidos que vieram do marketing', valor: fontes.n(inteiro(o.marketing), `Regem · confirmado no caixa · ${periodo}`) }];
-  if (o.average_micros !== null) {
-    lista.push({ rotulo: 'Valor médio desses pedidos', valor: fontes.n(reaisDeMicros(o.average_micros), 'Liame · receita ÷ pedidos com origem provada · calculado pelo sistema') });
-  }
-  lista.push({ rotulo: 'Pedidos de todos os canais', valor: fontes.n(inteiro(o.all_channels), `Regem · pedidos de todos os canais · ${periodo}`) });
-  lista.push({ rotulo: 'Sem origem provada', valor: fontes.n(inteiro(o.without_origin), `Regem · pedidos do cardápio e do WhatsApp sem origem provada · ${periodo}`) });
-  return lista;
-}
-
-export type Canal = {
-  provider: string;
-  nome: string;
-  pedidos: Num;
-  /** Parte da barra (0 a 100), entre os pedidos com origem nos anúncios. */
-  parte: number;
-  falado: string;
-  sub: Texto;
-};
-
-/** "Instagram e Facebook" (o que o dono reconhece), "Google"; outra plataforma com o nome dela. */
-function nomeDoCanal(provider: string): string {
-  if (provider === 'meta_ads') return 'Instagram e Facebook';
-  if (provider === 'google_ads') return 'Google';
-  return nomesDe(provider).nome;
-}
-
-export function canaisDo(r: SummaryResponse, fontes: Fontes): { canais: Canal[]; semOrigem: Num } | null {
-  if (r.state !== 'ok') return null;
-  const periodo = intervaloEscrito(r.period.from, r.period.to);
-  const total = r.platforms.reduce((s, p) => s + p.orders, 0);
-  const canais = r.platforms.map((p): Canal => {
-    const nome = nomeDoCanal(p.provider);
-    const plataforma = nomesDe(p.provider).nome;
-    let sub: Texto;
-    if (p.left_micros === null) sub = [{ t: 'sem margem conhecida bastante para dizer quanto sobrou' }];
-    else {
-      const v = BigInt(p.left_micros);
-      const fonte = `Liame · margem conhecida − investimento em ${plataforma} · calculado pelo sistema`;
-      sub = v >= 0n ? [{ t: 'sobraram ' }, { num: fontes.n(reais0(v), fonte) }, { t: ' depois dos anúncios' }] : [{ t: 'faltaram ' }, { num: fontes.n(reais0(-v), fonte) }, { t: ' para pagar os anúncios' }];
-    }
-    return {
-      provider: p.provider,
-      nome,
-      pedidos: fontes.n(inteiro(p.orders), `Regem · pedidos com origem em ${plataforma} · ${periodo}`),
-      parte: total ? Math.round((p.orders / total) * 100) : 0,
-      falado: `${inteiro(p.orders)} de ${inteiro(total)} pedidos com origem provada`,
-      sub,
-    };
-  });
-  return { canais, semOrigem: fontes.n(inteiro(r.orders.without_origin), `Regem · pedidos do cardápio e do WhatsApp sem origem provada · ${periodo}`) };
 }
 
 // ------------------------------------------------------------------ o que a equipe fez

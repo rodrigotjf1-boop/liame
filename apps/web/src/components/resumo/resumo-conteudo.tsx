@@ -5,16 +5,21 @@ import Link from 'next/link';
 import { type FormEvent, type ReactNode, type Ref, useMemo, useState } from 'react';
 import { useConversa } from '@/components/conversa/contexto';
 import { IconeLia } from '@/components/marca/logo';
+import { DicaDosDesenhos } from '@/components/resultados/desenhos';
 import { TextoRico } from '@/components/resultados/pecas';
 import { Icone } from '@/components/ui/icone';
 import { BarraDoTeto } from '@/components/verba/barra-do-teto';
 import { verbaNoResumo } from '@/components/verba/textos';
-import { ListaDeFontes, NumeroComFonte, TextoComNumeros, useFontes } from './numeros';
-import { canaisDo, equipeDo, Fontes, hojeEscrito, pedidosDo, perguntasDoResumo, perguntasDoVeredito, precisaDe, primeiroNome, saudacao, type Stat, statsDo, vereditoDo } from './textos';
+import { CartaoCanais, CartaoDinheiro, CartaoPedidos, CartaoStat } from './desenhos';
+import { canaisDo, dinheiroDo, pedidosDo, statsDo } from './graficos';
+import { ListaDeFontes, TextoComNumeros, useFontes } from './numeros';
+import { equipeDo, Fontes, hojeEscrito, perguntasDoResumo, perguntasDoVeredito, precisaDe, primeiroNome, saudacao } from './textos';
 
 // O Resumo (A3 · P8, aprovado em 03/10/2026): a página inicial do Lite, a visão do dono. Os números são os de
 // Resultados (`GET /v1/summary`), com a fonte de cada um; o que a equipe fez vem de `/v1/team`. Desenhado a
-// partir dos dados prontos: o teste usa o mesmo componente.
+// partir dos dados prontos: o teste usa o mesmo componente. Desde 07/10/2026 os cartões de análise são desenhos
+// (mockups/prototipo-resumo-graficos.html): os três números contra a semana anterior, para onde foi cada real
+// vendido, de onde vieram os pedidos e cada canal de anúncio.
 
 type Props = {
   r: SummaryResponse;
@@ -39,12 +44,12 @@ export function ResumoConteudo({ r, equipe, verba = null, variasMarcas = false, 
     const fontes = new Fontes();
     // A ordem das linhas em "De onde vêm os números" é a ordem em que os números aparecem na tela.
     const stats = statsDo(r, fontes, agora);
+    const dinheiro = dinheiroDo(r, fontes);
     const pedidos = pedidosDo(r, fontes);
     const canais = canaisDo(r, fontes);
-    return { lista: fontes.lista, stats, pedidos, canais };
+    return { lista: fontes.lista, stats, dinheiro, pedidos, canais };
   }, [r, agora]);
   const fontes = useFontes(dados.lista);
-  const veredito = vereditoDo(r);
   // O que a pessoa decide: as ações e os planos, na tela Aprovações (de quem acompanha as campanhas); a promoção de um funcionário, em Sua equipe.
   const verCampanhas = pode('campanhas.ver');
   const itens = precisaDe(r, pode('vendas.ver'), pode('contas.ver'), {
@@ -92,27 +97,7 @@ export function ResumoConteudo({ r, equipe, verba = null, variasMarcas = false, 
         ))}
       </div>
 
-      <div className="dono-veredito">
-        <p className="lite-frase lite-frase--grande">{nf(veredito.frase)}</p>
-        {veredito.conectarRegem && pode('contas.ver') && (
-          <div className="ia-linha">
-            <Link className="btn btn--primary" href="/contas">
-              <Icone nome="plug" />
-              Conectar o Regem
-            </Link>
-          </div>
-        )}
-        {doVeredito.length > 0 && (
-          <div className="ia-linha" role="group" aria-label="Perguntar à LIA sobre a semana">
-            {doVeredito.map((q) => (
-              <button className="ia-bt" type="button" key={q} onClick={() => conversa.abrir({ pergunta: q })}>
-                <Icone nome="sparkles" />
-                {q}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <CartaoDinheiro dinheiro={dados.dinheiro} perguntas={doVeredito} aoPerguntar={(q) => conversa.abrir({ pergunta: q })} podeVerContas={pode('contas.ver')} lista={dados.lista} aoTocar={aoTocar} />
 
       <div className="resumo-grid">
         <article className={conversa.disponivel ? 'card r-precisa r-precisa--com-lia' : 'card r-precisa'} aria-labelledby="rp-t">
@@ -215,68 +200,8 @@ export function ResumoConteudo({ r, equipe, verba = null, variasMarcas = false, 
           </article>
         )}
 
-        <article className="card r-pedidos" aria-labelledby="rpd-t">
-          <div className="card-cab">
-            <div>
-              <h2 id="rpd-t">Seus pedidos</h2>
-              <p className="card-sub">Confirmados no caixa do Regem.</p>
-            </div>
-          </div>
-          {dados.pedidos ? (
-            <dl className="mini-stats">
-              {dados.pedidos.map((m) => (
-                <div key={m.rotulo}>
-                  <dt>{m.rotulo}</dt>
-                  <dd>
-                    <NumeroComFonte num={m.valor} lista={dados.lista} aoTocar={aoTocar} />
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="card-sub">{semRegem ? 'Os pedidos vêm do caixa do Regem.' : 'Ainda sem 7 dias completos de pedidos.'}</p>
-          )}
-        </article>
-
-        <article className="card r-canais" aria-labelledby="rcn-t">
-          <div className="card-cab">
-            <div>
-              <h2 id="rcn-t">De onde vieram os pedidos</h2>
-              <p className="card-sub">E quanto sobrou em cada canal.</p>
-            </div>
-          </div>
-          {dados.canais && dados.canais.canais.length ? (
-            <>
-              <ul className="canais">
-                {dados.canais.canais.map((c) => (
-                  <li key={c.provider}>
-                    <div className="canal-linha">
-                      <span className="canal-nome">{c.nome}</span>
-                      <span className="canal-num">
-                        <NumeroComFonte num={c.pedidos} lista={dados.lista} aoTocar={aoTocar} /> pedidos
-                      </span>
-                    </div>
-                    <div className="canal-barra" role="img" aria-label={c.falado}>
-                      <span style={{ width: `${c.parte}%` }} />
-                    </div>
-                    <p className="canal-sub">{nf(c.sub)}</p>
-                  </li>
-                ))}
-              </ul>
-              <p className="eixo-nota">
-                Mais <NumeroComFonte num={dados.canais.semOrigem} lista={dados.lista} aoTocar={aoTocar} /> pedidos do cardápio e do WhatsApp vieram sem origem provada.
-              </p>
-            </>
-          ) : (
-            <p className="card-sub">
-              {semRegem
-                ? 'Sem o Regem, os pedidos não chegam ao Liame.'
-                : primeira
-                  ? 'Os pedidos aparecem aqui depois dos primeiros 7 dias completos.'
-                  : 'Nenhuma conta de anúncio conectada a esta marca.'}
-            </p>
-          )}
-        </article>
+        <CartaoPedidos pedidos={dados.pedidos} semRegem={semRegem} lista={dados.lista} aoTocar={aoTocar} />
+        <CartaoCanais canais={dados.canais} semRegem={semRegem} lista={dados.lista} aoTocar={aoTocar} />
 
         {equipe && (
           <article className={convite ? 'card r-equipe' : 'card r-equipe r-cheio'} aria-labelledby="re-t">
@@ -330,30 +255,7 @@ export function ResumoConteudo({ r, equipe, verba = null, variasMarcas = false, 
       </div>
 
       <ListaDeFontes lista={dados.lista} estado={fontes} />
-    </div>
-  );
-}
-
-function CartaoStat({ s, lista, aoTocar }: { s: Stat; lista: Parameters<typeof NumeroComFonte>[0]['lista']; aoTocar: (i: number) => void }) {
-  const classe = `stat${s.foco ? ' stat--foco' : ''}${s.valor ? '' : ' stat--vazio'}`;
-  return (
-    <div className={classe}>
-      <p className="stat-rot">{s.rotulo}</p>
-      {s.valor ? (
-        <p className="stat-val">
-          <NumeroComFonte num={s.valor} lista={lista} aoTocar={aoTocar} />
-        </p>
-      ) : (
-        <p className="stat-val stat-val--txt">{s.vazio}</p>
-      )}
-      {s.sub && (
-        <p className={`stat-delta stat-delta--${s.sub.tom}`}>
-          {s.sub.seta && <Icone nome={s.sub.seta === 'sobe' ? 'trend-up' : 'trend-down'} pequeno />}
-          <span>
-            <TextoComNumeros texto={s.sub.texto} lista={lista} aoTocar={aoTocar} />
-          </span>
-        </p>
-      )}
+      <DicaDosDesenhos />
     </div>
   );
 }

@@ -25,6 +25,8 @@ export function dinheiroDoResumo(atual: ClosedLoopResponse, anterior: ClosedLoop
     left_micros: { now: sobrou(t.confirmed, t.spend_micros), before: a ? sobrou(a.confirmed, a.spend_micros) : null },
     margin_known_micros: t.confirmed.margin_known_micros,
     margin_coverage_pct: t.confirmed.margin_coverage_pct,
+    // A receita com margem conhecida, para a tela separar o custo dos produtos do que não tem custo cadastrado.
+    ...(t.confirmed.revenue_with_margin_micros !== undefined ? { revenue_with_margin_micros: t.confirmed.revenue_with_margin_micros } : {}),
     verdict: t.confirmed.verdict,
   };
 }
@@ -54,9 +56,9 @@ export function pedidosDoResumo(atual: ClosedLoopResponse): SummaryResponse['ord
   };
 }
 
-/** Por plataforma de anúncio: os pedidos com origem nela e o que sobrou. */
+/** Por plataforma de anúncio: os pedidos com origem nela, o que sobrou e o que ela gastou. */
 export function plataformasDoResumo(atual: ClosedLoopResponse): SummaryResponse['platforms'] {
-  return atual.platforms.map((p) => ({ provider: p.provider, orders: p.confirmed.orders, left_micros: sobrou(p.confirmed, p.platform.spend_micros) }));
+  return atual.platforms.map((p) => ({ provider: p.provider, orders: p.confirmed.orders, left_micros: sobrou(p.confirmed, p.platform.spend_micros), spend_micros: p.platform.spend_micros }));
 }
 
 const PESO: Record<string, number> = { critica: 0, atencao: 1 };
