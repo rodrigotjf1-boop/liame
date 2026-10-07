@@ -180,6 +180,7 @@ Sinais do briefing: o dono decide e o gestor opera (modos Lite e Pro), chega coi
 - Link no claro: o `#0E7C86` citado em `decisoes-design.md` §2 dá 4,42 sobre o Papel; o protótipo usa `#0A6C75` (6,15 sobre branco).
 - Foco no claro: o Ciano dá 1,6:1 e não aparece; o anel usa `#008796` (3,82 sobre o Papel).
 - Petróleo da marca `#1BA8B8` reprovou como cor de gráfico (faixa de luminosidade e contraste); entram `#009AAA` e `#16A0AF`.
+- **Foco e contexto não ficam lado a lado numa barra empilhada** (conferido em 07/10/2026): `#009AAA` e `#7E8499` têm claridade parecida e se confundem, mais ainda para quem é daltônico. Nos halteres eles são pontos separados, e funciona. Em barra dividida, a ordem é foco · cinza claro · cinza escuro (`#C3C6D2` e `#6B7189` no claro; `#454B6C` e `#9AA0B4` no escuro), com o valor de cada parte escrito embaixo (`base-conhecimento.md` §16.7).
 
 **Tipografia:** Poppins 700 no título da tela, 500 e 400 no resto, como no kit; **600 em título de cartão e números** (proposta, o kit não lista 600). JetBrains Mono em rótulos (caixa alta, espaçamento largo), horários, hash e colunas numéricas.
 
