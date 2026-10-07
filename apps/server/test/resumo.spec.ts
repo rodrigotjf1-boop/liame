@@ -69,6 +69,10 @@ describe('Resumo (A3, I13c)', () => {
       verdict: 'prejuizo',
     });
     expect(dinheiroDoResumo(atual, null)).toMatchObject({ revenue_micros: { before: null }, spend_micros: { before: null }, left_micros: { now: '-20000000', before: null } });
+    // A receita com margem conhecida acompanha quando os resultados a trazem (é o que separa o custo dos produtos do que não tem custo).
+    const comCusto = { ...atual, totals: { ...atual.totals, confirmed: { ...atual.totals.confirmed, revenue_with_margin_micros: '96000000' } } };
+    expect(dinheiroDoResumo(comCusto, null).revenue_with_margin_micros).toBe('96000000');
+    expect('revenue_with_margin_micros' in dinheiroDoResumo(atual, null)).toBe(false);
   });
 
   it('as campanhas de cada lado do veredito, as de maior gasto primeiro, até três', () => {
@@ -93,7 +97,7 @@ describe('Resumo (A3, I13c)', () => {
     const r = resultado({ spend: 100_000_000, orders: 3, revenue: 100_000_000, margin: 80_000_000, coverage: '100.0', verdict: 'prejuizo', all: 41, semOrigem: 6 });
     expect(pedidosDoResumo(r)).toEqual({ marketing: 3, average_micros: '33333333', all_channels: 41, without_origin: 6 });
     expect(pedidosDoResumo(resultado({ spend: 0, orders: 0, revenue: 0, margin: null, coverage: null, verdict: null })).average_micros).toBeNull();
-    expect(plataformasDoResumo(r)).toEqual([{ provider: 'meta_ads', orders: 3, left_micros: '-20000000' }]);
+    expect(plataformasDoResumo(r)).toEqual([{ provider: 'meta_ads', orders: 3, left_micros: '-20000000', spend_micros: '100000000' }]);
   });
 
   it('"Precisa de você": só crítico e atenção, o mais grave primeiro, mídia antes na mesma gravidade, até cinco', () => {
