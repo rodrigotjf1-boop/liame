@@ -19,7 +19,6 @@ import { z } from 'zod';
 import { activeTraceId, canonicalJson, sha256, writeAudit } from '../audit/audit.js';
 import { MfaService } from '../auth/mfa.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
-import { ErroConector } from '../connectors/cliente-http.js';
 import { afterCommit, type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, issuesToErrors, ValidationProblem } from '../errors/problems.js';
 import { emitEvent } from '../events/outbox.js';
@@ -34,6 +33,7 @@ import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
 import { BudgetService } from './budget.service.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
+import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
 import { PlanoRecusado, type ResourceState, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
 
 /** Pedido que ninguém aprova expira (e devolve a reserva). */
@@ -114,8 +114,6 @@ type ApprovalRow = {
 };
 
 const notFound = () => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Ação não encontrada nesta empresa.');
-/** Como a pessoa chama cada provedor, na frase. */
-const PLATAFORMA: Record<string, string> = { meta_ads: 'A Meta', regem: 'O Regem' };
 /** O que a pessoa precisa saber quando falta um limite da empresa: quem o define, e onde. */
 const ONDE_SE_DEFINE = 'Quem define é o Dono ou o Administrador, em Verba do mês.';
 /** O pedido aumenta verba ou volta a gastar numa plataforma de anúncio: passa pela conta do mês inteiro (D-A4-19). */
@@ -586,21 +584,9 @@ export class ActionService {
     try {
       read = await connector.read(tx, ref);
     } catch (err) {
-      if (!(err instanceof ErroConector)) throw err;
-      const quem = PLATAFORMA[connector.provider] ?? 'A plataforma';
-      if (err.tipo === 'autenticacao') {
-        throw new AppProblem(409, 'conta-desconectada', 'Conecte a conta de novo', `${quem} recusou o acesso desta conta (a autorização foi revogada ou venceu). Conecte de novo em Contas conectadas.`);
-      }
-      if (err.tipo === 'permissao') {
-        throw new AppProblem(409, 'sem-permissao-na-plataforma', 'Falta permissão na plataforma', `${quem} não deu ao Liame a permissão para ler este objeto. Conecte a conta de novo em Contas conectadas.`);
-      }
-      if (err.tipo === 'definitivo') {
-        throw new AppProblem(422, 'plataforma-recusou', 'A plataforma recusou a leitura', `${quem} não deixou ler o objeto: ${err.mensagemUsuario ?? err.message}`);
-      }
-      // Limite de uso, fora do ar ou muitas falhas seguidas: nada foi pedido; é tentar de novo daqui a pouco.
-      throw new AppProblem(502, 'plataforma-indisponivel', 'A plataforma não respondeu', `${quem} não respondeu agora, ou pediu para esperar. Nada foi pedido: tente de novo em alguns minutos.`);
+      throw problemaDaLeitura(connector.provider, err) ?? err;
     }
-    if (!read) throw new AppProblem(404, 'recurso-nao-encontrado', 'Recurso não encontrado', 'A conta ou o recurso não existe no provedor.');
+    if (!read) throw recursoNaoEncontrado();
     return read;
   }
 

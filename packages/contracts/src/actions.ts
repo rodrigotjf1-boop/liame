@@ -331,6 +331,102 @@ export const BudgetMonthResponse = z.strictObject({
 });
 export type BudgetMonthResponse = z.infer<typeof BudgetMonthResponse>;
 
+// ------------------------------------------------------------------ o pedido de mudança (A4, X8)
+
+/** Um pedido em aberto (esperando aprovação, aprovado ou executando), para a tela não deixar pedir o mesmo duas vezes. */
+export const ActionOpenRequest = z.strictObject({
+  id: z.uuid(),
+  tool: z.string(),
+  /** `orcamento.aumentar`, `orcamento.reduzir`, `campanha.pausar`, `conjunto.retomar`… */
+  action: z.string(),
+  resource_id: z.string(),
+  status: ActionStatus,
+  /** A verba diária pedida, nos pedidos de verba. */
+  value_micros: Micros.nullable(),
+  created_at: z.iso.datetime(),
+});
+export type ActionOpenRequest = z.infer<typeof ActionOpenRequest>;
+
+export const ActionTargetsQuery = z.strictObject({ brand_id: z.uuid() });
+export type ActionTargetsQuery = z.infer<typeof ActionTargetsQuery>;
+
+/**
+ * Onde dá para pedir uma mudança numa marca (A4, X8; D-A4-20): as campanhas das contas de anúncio em que a escrita do
+ * Liame está ligada para a empresa, com os pedidos em aberto de cada uma. A campanha de uma plataforma que o Liame só
+ * lê, ou de uma conta com a escrita desligada, não aparece: nela não há botão de pedir.
+ */
+export const ActionTargetsResponse = z.strictObject({
+  campaigns: z.array(
+    z.strictObject({
+      campaign_id: z.uuid(),
+      /**
+       * `ligada`, ou `so_leitura` quando a autorização desta conta não pediu para gerenciar anúncios (ela é de antes de
+       * a escrita ser ligada): é conectar a plataforma de novo em Contas conectadas.
+       */
+      write: z.string(),
+      /** Os pedidos em aberto na campanha, nos conjuntos e nos anúncios dela, do mais novo para o mais antigo. */
+      open: z.array(ActionOpenRequest),
+    }),
+  ),
+});
+export type ActionTargetsResponse = z.infer<typeof ActionTargetsResponse>;
+
+/** Um objeto de anúncio como o pedido o vê: `resource_id` é o do pedido (`campanha:123`, `conjunto:456`, `anuncio:789`). */
+export const AdObject = z.strictObject({
+  resource_id: Ref,
+  /** `campanha`, `conjunto` ou `anuncio`. */
+  kind: z.string(),
+  name: z.string(),
+  /** `ativo`, `pausado`, `arquivado`, `removido` ou `desconhecido`. */
+  status: z.string(),
+  /** A verba diária que mora no objeto; nula quando ela fica em outro nível, quando é de período e em todo anúncio. */
+  daily_micros: Micros.nullable(),
+});
+export type AdObject = z.infer<typeof AdObject>;
+
+export const ActionOptionsQuery = z.strictObject({
+  campaign_id: z.uuid(),
+  /** O objeto escolhido na gaveta: um conjunto ou um anúncio desta campanha (o `resource_id` dele). Sem ele, a campanha. */
+  target: Ref.optional(),
+});
+export type ActionOptionsQuery = z.infer<typeof ActionOptionsQuery>;
+
+/**
+ * As opções do pedido de mudança numa campanha (A4, X8; D-A4-20): o objeto escolhido lido AGORA na plataforma, para o
+ * pedido partir do que está valendo; o que dá para pedir nele; os conjuntos e os anúncios da campanha, pela leitura
+ * diária; e os pedidos em aberto. Os limites da empresa e a conta do mês vêm de `GET /v1/budget/month`.
+ */
+export const ActionOptionsResponse = z.strictObject({
+  campaign: z.strictObject({
+    id: z.uuid(),
+    name: z.string(),
+    provider: z.string(),
+    brand_id: z.uuid(),
+    /** A conta conectada da campanha: o `account_id` do pedido. */
+    account_id: z.uuid(),
+    account_name: z.string(),
+  }),
+  target: AdObject.extend({
+    /** A situação de entrega que a plataforma informa (`CAMPAIGN_PAUSED` quando o pai está em pausa, por exemplo). */
+    effective_status: z.string().nullable(),
+  }),
+  /** Quando o objeto foi lido na plataforma (agora). */
+  read_at: z.iso.datetime(),
+  /**
+   * As ferramentas que cabem no objeto como ele está agora, na ordem da tela: `orcamento_ajustar` (só com verba diária
+   * própria) e pausar, ou retomar. Vazia quando o objeto foi arquivado ou removido na plataforma.
+   */
+  tools: z.array(Slug),
+  /** Os conjuntos e os anúncios da campanha pela leitura diária: a situação e a verba são as da última leitura. */
+  ad_sets: z.array(AdObject),
+  ads: z.array(AdObject.extend({ /** O conjunto do anúncio (o `resource_id` dele). */ ad_set: Ref.nullable() })),
+  /** Quando a lista foi vista pela última vez na plataforma; nulo se a conta ainda não foi lida. */
+  listed_at: z.iso.datetime().nullable(),
+  /** Os pedidos em aberto na campanha, nos conjuntos e nos anúncios dela, do mais novo para o mais antigo. */
+  open: z.array(ActionOpenRequest),
+});
+export type ActionOptionsResponse = z.infer<typeof ActionOptionsResponse>;
+
 // ------------------------------------------------------------------ sandbox
 
 export const SandboxResourceRequest = z.strictObject({ account_id: Ref, resource_id: Ref, state: z.record(z.string(), z.unknown()) });

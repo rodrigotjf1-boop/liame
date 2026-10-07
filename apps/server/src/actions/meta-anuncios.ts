@@ -7,7 +7,7 @@ import { canonicalJson, sha256 } from '../audit/audit.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { emMenorUnidade, orcamentoEmMicros } from '../connectors/meta/verba.js';
-import type { ApplyOptions, ApplyResult, Connector, ReadResult, ResourceRef } from './connectors.js';
+import type { ApplyOptions, ApplyResult, Connector, PreparedRead, ReadResult, ResourceRef } from './connectors.js';
 import type { ResourceState } from './tools.js';
 
 // Escrita na Meta pelo Action Service (A4, X1; base de conhecimento §2.1, conferida em 04/10/2026): mudar a situação
@@ -137,6 +137,8 @@ type Conta = { id: string; external_id: string; currency: string | null; credent
 type ObjetoNaMeta = { id?: string; name?: string; status?: string; effective_status?: string; daily_budget?: string; lifetime_budget?: string; account_id?: string };
 type Lido = { estado: EstadoDoObjeto; versao: number; usoPct: number; esperarMs: number };
 type Alvo = { lido: Lido; conta: Conta; token: string; objeto: Objeto; deps: DependenciasDaEscritaMeta };
+/** A parte do banco de uma leitura: a conta, a autorização dela e o objeto. O token fica só na memória de quem lê. */
+type Preparada = PreparedRead & { conta: Conta; token: string; objeto: Objeto; deps: DependenciasDaEscritaMeta };
 
 const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recusado', mensagem });
 
@@ -256,14 +258,20 @@ export class MetaAnunciosConnector implements Connector {
     return { estado, versao: versaoDoEstado(estado), usoPct, esperarMs };
   }
 
-  /** O objeto do pedido, lido na Meta com o token da empresa. Nulo quando a conta ou o objeto não é desta empresa, ou sumiu. */
-  private async alvo(tx: Tx, ref: ResourceRef, deps: DependenciasDaEscritaMeta, tempoLimiteMs?: number): Promise<Alvo | null> {
+  /** A parte do banco: a conta conectada da empresa que conhece o objeto, com a autorização dela. Nulo quando não é desta empresa. */
+  private async preparar(tx: Tx, ref: ResourceRef, deps: DependenciasDaEscritaMeta): Promise<Preparada | null> {
     const objeto = objetoDoRecurso(ref.resourceId);
     const conta = objeto ? await this.conta(tx, ref, objeto) : null;
     if (!objeto || !conta) return null;
-    const token = await this.token(tx, conta, deps);
-    const lido = await this.lerNaMeta(deps, conta, token, objeto, tempoLimiteMs);
-    return lido ? { lido, conta, token, objeto, deps } : null;
+    return { conector: PROVIDER, conta, token: await this.token(tx, conta, deps), objeto, deps };
+  }
+
+  /** O objeto do pedido, lido na Meta com o token da empresa. Nulo quando a conta ou o objeto não é desta empresa, ou sumiu. */
+  private async alvo(tx: Tx, ref: ResourceRef, deps: DependenciasDaEscritaMeta, tempoLimiteMs?: number): Promise<Alvo | null> {
+    const p = await this.preparar(tx, ref, deps);
+    if (!p) return null;
+    const lido = await this.lerNaMeta(deps, p.conta, p.token, p.objeto, tempoLimiteMs);
+    return lido ? { lido, conta: p.conta, token: p.token, objeto: p.objeto, deps } : null;
   }
 
   /** A leitura da hora do pedido, com o tempo curto de quem tem uma pessoa esperando. A do executor é a de `apply`. */
@@ -272,6 +280,20 @@ export class MetaAnunciosConnector implements Connector {
     if (!this.deps) throw new Error('escrita na Meta: dependências não ligadas');
     const alvo = await this.alvo(tx, ref, this.deps, this.deps.tempoDaLeituraDoPedidoMs ?? TEMPO_DA_LEITURA_DO_PEDIDO_MS);
     return alvo ? { state: alvo.lido.estado, version: alvo.lido.versao } : null;
+  }
+
+  /** A leitura da hora do pedido em duas partes: esta é a do banco (rápida, na transação de quem chama). */
+  async prepareRead(tx: Tx, ref: ResourceRef): Promise<PreparedRead | null> {
+    if (!this.deps) throw new Error('escrita na Meta: dependências não ligadas');
+    return this.preparar(tx, ref, this.deps);
+  }
+
+  /** E esta, a da Meta: sem transação aberta, com o mesmo tempo curto de quem tem uma pessoa esperando. */
+  async readPrepared(prepared: PreparedRead): Promise<ReadResult | null> {
+    if (prepared.conector !== PROVIDER) throw new Error('escrita na Meta: leitura preparada por outro conector');
+    const p = prepared as Preparada;
+    const lido = await this.lerNaMeta(p.deps, p.conta, p.token, p.objeto, p.deps.tempoDaLeituraDoPedidoMs ?? TEMPO_DA_LEITURA_DO_PEDIDO_MS);
+    return lido ? { state: lido.estado, version: lido.versao } : null;
   }
 
   async apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options: ApplyOptions = {}): Promise<ApplyResult> {

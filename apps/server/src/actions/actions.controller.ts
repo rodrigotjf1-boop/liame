@@ -1,7 +1,11 @@
 import {
   ActionListQuery,
   ActionListResponse,
+  ActionOptionsQuery,
+  ActionOptionsResponse,
   ActionResponse,
+  ActionTargetsQuery,
+  ActionTargetsResponse,
   ApproveActionRequest,
   BudgetLimitsRequest,
   BudgetMonthResponse,
@@ -34,8 +38,10 @@ import {
 import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
+import { SemTransacao } from '../context/sem-transacao.js';
 import { ActionService } from './action.service.js';
 import { BudgetService } from './budget.service.js';
+import { OpcoesDoPedidoService } from './opcoes-do-pedido.service.js';
 
 // Ações com trilho (ADR-007): a única porta de escrita fora do Liame.
 @ApiTags('actions')
@@ -45,6 +51,7 @@ export class ActionsController {
   constructor(
     private readonly actions: ActionService,
     private readonly budget: BudgetService,
+    private readonly opcoes: OpcoesDoPedidoService,
   ) {}
 
   @Post('actions')
@@ -71,6 +78,39 @@ export class ActionsController {
   @ApiOkResponse({ standardSchema: ActionListResponse })
   async list(@Auth() auth: AuthContext, @Query({ schema: ActionListQuery }) query: ActionListQuery): Promise<ActionListResponse> {
     return { items: await this.actions.list(auth, query.status) };
+  }
+
+  // As duas leituras do pedido de mudança vêm antes de `actions/:id`: senão, "targets" e "options" seriam lidos como um id.
+  @Get('actions/targets')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Onde dá para pedir uma mudança',
+    description:
+      'As campanhas de uma marca em que dá para pedir uma mudança pelo Liame (as das contas de anúncio com a escrita ligada para a empresa), com os pedidos em aberto de cada uma: esperando aprovação, aprovados ou executando. `write` diz se a conta já pode escrever (`ligada`) ou se a autorização dela só pediu leitura (`so_leitura`: é conectar a plataforma de novo). Campanha de plataforma que o Liame só lê, ou de conta com a escrita desligada, não aparece.',
+  })
+  @ApiOkResponse({ standardSchema: ActionTargetsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  targets(@Auth() auth: AuthContext, @Query({ schema: ActionTargetsQuery }) query: ActionTargetsQuery): Promise<ActionTargetsResponse> {
+    return this.opcoes.alvos(auth, query.brand_id);
+  }
+
+  @Get('actions/options')
+  @Permissao('campanhas.operar')
+  @SemTransacao('lê o objeto na plataforma de anúncio na hora, por até 10 segundos: o banco numa transação curta e a plataforma depois, sem transação aberta')
+  @ApiOperation({
+    summary: 'As opções do pedido de mudança numa campanha',
+    description:
+      'O que a tela precisa antes de a pessoa pedir uma mudança numa campanha: o objeto escolhido (a campanha ou, com `target`, um conjunto ou um anúncio dela) lido AGORA na plataforma, para o pedido partir do que está valendo; as ferramentas que cabem nele (`tools`); os conjuntos e os anúncios da campanha pela leitura diária; e os pedidos em aberto. Não cria pedido e não muda nada: quem decide é `POST /v1/actions`. As recusas que dá para antecipar saem com os mesmos códigos do pedido: 403 `escrita-desligada`, 423 `parada-acionada`, 409 `conta-desconectada`, 502 `plataforma-indisponivel` (a plataforma não respondeu: é tentar de novo), e mais 409 `conexao-so-leitura` (a autorização desta conta não pediu para gerenciar anúncios: é conectar de novo) e 422 `plataforma-so-leitura` (o Liame só lê esta plataforma). Os limites da empresa e a conta do mês vêm de `GET /v1/budget/month`.',
+  })
+  @ApiOkResponse({ standardSchema: ActionOptionsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  @ApiBadGatewayResponse({ standardSchema: ProblemDetails })
+  options(@Auth() auth: AuthContext, @Query({ schema: ActionOptionsQuery }) query: ActionOptionsQuery): Promise<ActionOptionsResponse> {
+    return this.opcoes.daCampanha(auth, query);
   }
 
   @Get('actions/:id')

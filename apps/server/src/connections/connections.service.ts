@@ -176,9 +176,10 @@ export class ConnectionsService {
     const redirectUri = enderecoDeVolta(this.config);
     const verificadorCifrado = verificador ? await this.vault.encryptForTenant(tx, tenantId, `oauth_pkce:${id}`, verificador) : null;
     const r = await tx.execute<{ expires_at: Date | string }>(sql`
-      insert into liame.oauth_connection (id, tenant_id, brand_id, provider, requested_by, state_hash, redirect_uri, pkce_verifier_enc, expires_at)
+      insert into liame.oauth_connection (id, tenant_id, brand_id, provider, requested_by, state_hash, redirect_uri, pkce_verifier_enc, expires_at,
+                                          requested_access)
       values (${id}, ${tenantId}, ${body.brand_id}, ${provedor}, ${auth.userId}, ${hashEstado(estado)}, ${redirectUri}, ${verificadorCifrado},
-              now() + make_interval(mins => ${VALIDADE_MIN}))
+              now() + make_interval(mins => ${VALIDADE_MIN}), ${meta?.acesso ?? null})
       returning expires_at`);
     auditDetail({ resourceId: id, after: { provider: provedor, brand_id: body.brand_id, ...(meta ? { acesso: meta.acesso } : {}) } });
     return {

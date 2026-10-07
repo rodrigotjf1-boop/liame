@@ -19,6 +19,8 @@ export const oauthConnection = liame.table('oauth_connection', {
   origin: text('origin').notNull().default('oauth'),
   inboxSecretId: uuid('inbox_secret_id'),
   scopes: text('scopes').array().notNull().default([]),
+  /** O que a autorização pediu à plataforma: `leitura` ou `escrita` (Meta; migration 0054). Nulo = de antes, ou sem essa diferença. */
+  requestedAccess: text('requested_access'),
   discovered: jsonb('discovered').notNull().default([]),
   errorCode: text('error_code'),
   attempts: integer('attempts').notNull().default(0),

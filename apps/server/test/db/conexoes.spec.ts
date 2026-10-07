@@ -253,9 +253,16 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
       const url = new URL(r.body.authorize_url);
       return { id: r.body.id as string, config: url.searchParams.get('config_id'), estado: url.searchParams.get('state')! };
     };
-    /** O que a auditoria guardou do pedido de conexão: por qual acesso a empresa foi mandada autorizar. */
-    const acessoPedido = async (tenantId: string, id: string) =>
-      (await ownerQuery<{ acesso: string | null }>(`select "after" ->> 'acesso' as acesso from liame.audit_event where tenant_id = $1 and action = 'conexao.iniciar' and resource_id = $2`, [tenantId, id]))[0]?.acesso;
+    /**
+     * Por qual acesso a empresa foi mandada autorizar: o que a auditoria guardou do pedido de conexão e o que ficou na
+     * própria conexão (migration 0054), que é o que a tela do pedido de mudança lê. Os dois dizem o mesmo.
+     */
+    const acessoPedido = async (tenantId: string, id: string) => {
+      const [auditoria] = await ownerQuery<{ acesso: string | null }>(`select "after" ->> 'acesso' as acesso from liame.audit_event where tenant_id = $1 and action = 'conexao.iniciar' and resource_id = $2`, [tenantId, id]);
+      const [linha] = await ownerQuery<{ requested_access: string | null }>(`select requested_access from liame.oauth_connection where id = $1`, [id]);
+      expect(linha?.requested_access).toBe(auditoria?.acesso);
+      return linha?.requested_access;
+    };
     const concluir = async (c: { id: string; estado: string }) => {
       expect((await voltar(e.cookie, { state: c.estado, code: 'codigo-meta-bom' })).status).toBe(303);
       expect(await processador.processarLote(5, { tenantIds: [e.tenantId] })).toBe(1);
