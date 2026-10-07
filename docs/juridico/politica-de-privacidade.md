@@ -32,7 +32,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 | --- | --- |
 | **Cadastro:** nome, e-mail, telefone, cargo; dados da empresa (razão social, CNPJ, endereço) | Você |
 | **Acesso e segurança:** senha (guardada só como resumo criptográfico), segundo fator, sessões, endereço IP, data e hora de acesso, aparelho e navegador | Gerados pelo uso |
-| **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê; e, quando a IA for ligada, as avaliações que você fizer das explicações dela, os pedidos que a LIA registrar para a equipe a seu pedido, as suas decisões sobre os planos do Estrategista e os endereços de página que você pedir para o Pesquisador ler; e, quando a sombra do Gestor de tráfego for ligada, as suas decisões sobre a autonomia dele | Gerados pelo uso |
+| **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê; e, na empresa com a IA ligada, as avaliações que você fizer das explicações dela, os pedidos que a LIA registrar para a equipe a seu pedido, as suas decisões sobre os planos do Estrategista e os endereços de página que você pedir para o Pesquisador ler; e, quando a sombra do Gestor de tráfego for ligada, as suas decisões sobre a autonomia dele | Gerados pelo uso |
 | **Pessoas convidadas:** nome, e-mail e nível de acesso de quem o Dono convidou | O Dono da conta |
 | **Cobrança:** plano, valores, notas fiscais e status de pagamento. Os dados do cartão são tratados pelo processador de pagamento; o Liame não os guarda | Você e o processador de pagamento |
 | **Atendimento:** mensagens trocadas com a LIA e com o suporte, inclusive pelo WhatsApp | Você |
@@ -95,9 +95,9 @@ Respondemos em até 15 dias. Se algum dado precisar ser guardado por obrigação
 
 ## 7. Inteligência artificial
 
-**Nesta fase de lançamento, o Liame ainda não envia dados a modelos de inteligência artificial.** Quando os funcionários de IA forem ligados, valem as regras abaixo, e avisamos antes.
+**Os funcionários de IA são ligados empresa por empresa, e avisamos antes.** Para a empresa que não tem a IA ligada, o Liame não envia dado nenhum a modelos de inteligência artificial. Para a que tem, valem as regras abaixo.
 
-7.1. Os funcionários do Liame vão usar modelos de IA de fornecedores especializados (seção 8). **Antes de enviar qualquer texto a um modelo, o Liame remove ou substitui dados pessoais** (nome, telefone, e-mail, endereço) sempre que o modelo não precisa deles.
+7.1. Os funcionários do Liame usam modelos de IA de fornecedores especializados (seção 8). **Antes de enviar qualquer texto a um modelo, o Liame remove ou substitui dados pessoais** (nome, telefone, e-mail, endereço) sempre que o modelo não precisa deles.
 
 7.2. Só contratamos fornecedores de IA que **não usam os dados enviados para treinar os modelos deles**.
 
@@ -131,12 +131,13 @@ Compartilhamos dados apenas com fornecedores que nos ajudam a prestar o serviço
 | Hostinger | Servidores da aplicação | Brasil |
 | Cloudflare | Rede, proteção contra ataques e entrega do site | Rede global |
 | Amazon Web Services | Chaves de criptografia e envio dos e-mails do serviço | Brasil (São Paulo) |
+| Anthropic | Modelos de inteligência artificial, só para a empresa com a IA ligada (seção 7) | Estados Unidos |
 
 **Previstos** (entram junto com as funções que dependem deles; avisamos antes de ligar cada um):
 
 | Fornecedor | Para quê | Onde os dados ficam |
 | --- | --- | --- |
-| Anthropic, OpenAI e Google | Modelos de inteligência artificial | Estados Unidos |
+| OpenAI e Google | Modelos de inteligência artificial | Estados Unidos |
 | Amazon Web Services | Cópia da auditoria em armazenamento que não permite alteração | Brasil (São Paulo) |
 | Grafana Cloud | Monitoramento técnico | Brasil |
 | Sentry | Registro de erros técnicos, sem conteúdo de clientes | União Europeia |
@@ -156,7 +157,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 
 | | |
 | --- | --- |
-| **Para onde** | **Hoje:** parte da rede (Cloudflare), que pode passar por outros países. **Quando ligados:** **Estados Unidos**, provedores de inteligência artificial (Anthropic, OpenAI, Google); **União Europeia**, registro de erros (Sentry) e qualidade dos funcionários de IA (Langfuse); a União Europeia tem decisão de adequação da ANPD (Resolução CD/ANPD nº 32/2026). |
+| **Para onde** | **Hoje:** parte da rede (Cloudflare), que pode passar por outros países; e, para a empresa com a IA ligada, **Estados Unidos**, o provedor de inteligência artificial (Anthropic). **Quando ligados:** **Estados Unidos**, outros provedores de inteligência artificial (OpenAI, Google); **União Europeia**, registro de erros (Sentry) e qualidade dos funcionários de IA (Langfuse); a União Europeia tem decisão de adequação da ANPD (Resolução CD/ANPD nº 32/2026). |
 | **Como** | O fornecedor recebe e processa os dados em servidores dele para prestar o serviço contratado. Para os modelos de IA, enviamos só o texto necessário, **sem os dados pessoais que o modelo não precisa**. |
 | **Para quê e por quanto tempo** | As finalidades da seção 5 e da seção 7, pelo tempo necessário para cada uma, respeitados os prazos da seção 9 e os dos contratos com os fornecedores. |
 | **Mecanismo** | Para países sem decisão de adequação, as **cláusulas-padrão contratuais aprovadas pela ANPD**, adotadas integralmente e sem alteração, ou outro mecanismo do art. 33 da LGPD. |
