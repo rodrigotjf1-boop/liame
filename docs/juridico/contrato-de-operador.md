@@ -141,12 +141,13 @@ Lista vigente em [agencialiame.com/privacidade#fornecedores](https://agencialiam
 | Hostinger | Servidores da aplicação | Brasil |
 | Cloudflare | Rede e proteção | Rede global |
 | Amazon Web Services | Chaves de criptografia e e-mails do serviço | Brasil (São Paulo) |
+| Anthropic | Modelos de inteligência artificial (com dados minimizados), só para o Cliente com a IA ligada | Estados Unidos |
 
 Previstos, com o aviso da cláusula 6.2 antes de cada um ser ligado:
 
 | Suboperador | Serviço | Local |
 | --- | --- | --- |
-| Anthropic, OpenAI, Google | Modelos de inteligência artificial (com dados minimizados) | Estados Unidos |
+| OpenAI, Google | Modelos de inteligência artificial (com dados minimizados) | Estados Unidos |
 | Amazon Web Services | Cópia da auditoria em armazenamento que não permite alteração | Brasil (São Paulo) |
 | Grafana Cloud | Monitoramento técnico | Brasil |
 | Sentry | Erros técnicos, sem conteúdo de clientes | União Europeia |
