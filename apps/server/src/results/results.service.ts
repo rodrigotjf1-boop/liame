@@ -1,10 +1,11 @@
-import type { CampaignResult, ClosedLoopQuery, ClosedLoopResponse, OrderOriginQuery, OrderOriginResponse, PlatformReport, SourceFreshness } from '@liame/contracts';
+import type { CampaignResult, ClosedLoopQuery, ClosedLoopResponse, DailyResultsResponse, OrderOriginQuery, OrderOriginResponse, PlatformReport, SourceFreshness } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { MODELO_PADRAO } from '../attribution/motor.js';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { frescor } from '../media/frescor.js';
+import { montarSerie, periodoAntes } from './serie-diaria.js';
 
 // Resultados do ciclo fechado (A2.5, F8; ADR-020, D-A2.5-6 a 8). Tudo na transação da requisição, sob
 // a RLS da empresa, em poucas consultas de conjunto. O gasto e o que a plataforma informa vêm das métricas
@@ -82,6 +83,7 @@ function resultadoConfirmado(c: Confirmado, spend: bigint) {
     cost_per_order_micros: c.orders > 0 && spend > 0n ? (spend / BigInt(c.orders)).toString() : null,
     margin_known_micros: c.marginOrders > 0 ? c.margin.toString() : null,
     margin_coverage_pct: porcento(c.revenueWithMargin, c.revenue),
+    revenue_with_margin_micros: c.revenueWithMargin.toString(),
     verdict: veredito(c.marginOrders > 0 ? c.margin : null, spend, cobertura),
   };
 }
@@ -274,6 +276,57 @@ export class ResultsService {
       })),
       campaigns: itensCampanha,
       sources: await this.fontes(q.brand_id, q.unit_id, agora),
+      generated_at: agora.toISOString(),
+    };
+  }
+
+  /**
+   * A linha dos dias: o gasto e as vendas dos anúncios dia a dia, e o período de mesmo tamanho logo antes, somado.
+   * Duas consultas de conjunto sobre os dois períodos de uma vez. O gasto e os pedidos são os mesmos de
+   * `closedLoop`: o gasto pelo dia da conta de anúncio; o pedido confirmado e contado pelo modelo, pelo dia do
+   * faturamento no fuso da loja (cancelado e removido ficam fora).
+   */
+  async daily(q: ClosedLoopQuery, agora = new Date()): Promise<DailyResultsResponse> {
+    const tx = currentTx();
+    const { fuso, modelo } = await this.contexto(q);
+    const antes = periodoAntes(q.from, q.to);
+    const gasto = await tx.execute<{ dia: string; micros: string }>(sql`
+      select ml.metric_date::text as dia, round(sum(ml.metric_value) * 1000000)::bigint::text as micros
+        from liame.metric_latest ml
+        join liame.connected_account c on c.id = ml.connected_account_id
+       where c.brand_id = ${q.brand_id} and c.provider in ('meta_ads', 'google_ads')
+         and ml.metric_date between ${antes.from}::date and ${q.to}::date
+         and ml.metric_name = 'spend' and ml.attribution_window = ''
+         and ((c.provider = 'meta_ads' and ml.level = 'ad') or (c.provider = 'google_ads' and ml.level = 'campaign'))
+       group by 1`);
+    const vendas = await tx.execute<{ dia: string; n: string; receita: string }>(sql`
+      select (coalesce(o.billed_at, o.confirmed_at) at time zone ${fuso})::date::text as dia,
+             count(*)::text as n, sum(o.revenue_micros - o.refunded_micros)::text as receita
+        from liame.order_fact o
+        join liame.attribution_result r on r.order_id = o.id and r.model_id = ${modelo.id} and r.counted
+       where o.brand_id = ${q.brand_id} ${q.unit_id ? sql`and o.unit_id = ${q.unit_id}` : sql``}
+         and o.status not in ('removido', 'cancelado')
+         and coalesce(o.billed_at, o.confirmed_at) >= (${antes.from}::date - 1)::timestamp at time zone ${fuso}
+         and coalesce(o.billed_at, o.confirmed_at) < (${q.to}::date + 2)::timestamp at time zone ${fuso}
+         and (coalesce(o.billed_at, o.confirmed_at) at time zone ${fuso})::date between ${antes.from}::date and ${q.to}::date
+       group by 1`);
+    const { days, anterior } = montarSerie(
+      q,
+      gasto.rows.map((l) => ({ dia: l.dia, micros: BigInt(l.micros) })),
+      vendas.rows.map((l) => ({ dia: l.dia, pedidos: Number(l.n), receita: BigInt(l.receita) })),
+    );
+    return {
+      period: { from: q.from, to: q.to, timezone: fuso },
+      currency: 'BRL',
+      days,
+      previous: {
+        from: anterior.from,
+        to: anterior.to,
+        spend_micros: anterior.spend.toString(),
+        orders: anterior.orders,
+        revenue_micros: anterior.revenue.toString(),
+        roas: razao(anterior.revenue, anterior.spend),
+      },
       generated_at: agora.toISOString(),
     };
   }

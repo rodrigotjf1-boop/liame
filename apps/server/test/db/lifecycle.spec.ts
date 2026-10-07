@@ -9,7 +9,7 @@ import { DATA_CLASSES } from '../../src/lifecycle/data-classes.js';
 import { Mailer, type MemoryMailer } from '../../src/mail/mailer.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { LifecyclePurgeService } from '../../src/worker/lifecycle-purge.service.js';
-import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom, uniqueEmail, TERMOS } from '../helpers/api.js';
+import { codigoErrado, enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom, uniqueEmail, TERMOS } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 describe.skipIf(!hasDb)('ciclo de vida: arquivar, reter, encerrar e expurgar (ADR-014)', () => {
@@ -123,7 +123,7 @@ describe.skipIf(!hasDb)('ciclo de vida: arquivar, reter, encerrar e expurgar (AD
 
     const close = (body: Record<string, unknown>) => api.call('POST', '/v1/organization/close', { cookie: dono.cookie, body });
     expect((await close({ confirm_name: 'Outra', code: await code(dono) })).status).toBe(400);
-    expect((await close({ confirm_name: 'Hamburgueria Encerrando', code: '000000' })).status).toBe(401);
+    expect((await close({ confirm_name: 'Hamburgueria Encerrando', code: codigoErrado(dono.secret) })).status).toBe(401);
     expect((await close({ confirm_name: 'hamburgueria encerrando', code: await code(dono) })).status).toBe(204);
 
     const org = await api.call('GET', '/v1/organization', { cookie: dono.cookie });

@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { runMigrations } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
-import { ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom } from '../helpers/api.js';
+import { codigoErrado, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // ADR-013: segundo fator por app autenticador, obrigatório para Dono, Administrador, Gestor e Aprovador.
@@ -47,7 +47,7 @@ describe.skipIf(!hasDb)('segundo fator (app autenticador)', () => {
     const setup = await api.call('POST', '/v1/me/mfa/totp/setup', { cookie });
     expect(setup.body.otpauth_uri).toMatch(/^otpauth:\/\/totp\/Liame%3A/);
 
-    const errado = await api.call('POST', '/v1/me/mfa/totp/confirm', { cookie, body: { code: '000000' } });
+    const errado = await api.call('POST', '/v1/me/mfa/totp/confirm', { cookie, body: { code: codigoErrado(setup.body.secret) } });
     expect(errado.status).toBe(401);
 
     const ok = await api.call('POST', '/v1/me/mfa/totp/confirm', { cookie, body: { code: code(setup.body.secret) } });

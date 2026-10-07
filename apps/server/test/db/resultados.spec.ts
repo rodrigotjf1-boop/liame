@@ -179,6 +179,8 @@ describe.skipIf(!hasDb)('resultados do ciclo fechado (A2.5 · F8)', () => {
         // o1: 60 − 20 de custo = 40; o2 tem item sem custo → margem desconhecida (não é zero).
         margin_known_micros: M(40),
         margin_coverage_pct: '60.0',
+        // A receita com margem conhecida é a do o1 (60): o custo conhecido dos produtos é 60 − 40 = 20.
+        revenue_with_margin_micros: M(60),
         // Cobertura de 60%: "margem incompleta", sem veredito.
         verdict: null,
       },
@@ -204,13 +206,13 @@ describe.skipIf(!hasDb)('resultados do ciclo fechado (A2.5 · F8)', () => {
         cost_per_conversation_micros: M(15),
       },
       // Margem 40 contra 150 de investimento: −73%, dá prejuízo.
-      confirmed: { orders: 1, revenue_micros: M(60), roas: '0.40', cost_per_order_micros: M(150), margin_known_micros: M(40), margin_coverage_pct: '100.0', verdict: 'prejuizo' },
+      confirmed: { orders: 1, revenue_micros: M(60), roas: '0.40', cost_per_order_micros: M(150), margin_known_micros: M(40), margin_coverage_pct: '100.0', revenue_with_margin_micros: M(60), verdict: 'prejuizo' },
       platform_only_orders: 0,
     });
     const google = r.body.platforms.find((p: { provider: string }) => p.provider === 'google_ads');
     expect(google.platform).toMatchObject({ spend_micros: M(40), value_micros: M(120), roas: '3.00', window: 'padrao', conversions: '3' });
     // O gclid sem campanha prova o Google, mas não a campanha: entra na plataforma, não na campanha.
-    expect(google.confirmed).toMatchObject({ orders: 1, revenue_micros: M(40), roas: '1.00', margin_known_micros: null, margin_coverage_pct: '0.0' });
+    expect(google.confirmed).toMatchObject({ orders: 1, revenue_micros: M(40), roas: '1.00', margin_known_micros: null, margin_coverage_pct: '0.0', revenue_with_margin_micros: '0' });
     expect(google.platform_only_orders).toBe(1);
 
     expect(r.body.campaigns.map((c: { name: string }) => c.name)).toEqual(['Combo sexta', 'Busca hambúrguer']);
@@ -221,12 +223,50 @@ describe.skipIf(!hasDb)('resultados do ciclo fechado (A2.5 · F8)', () => {
     expect(r.body.campaigns[1].confirmed).toMatchObject({ orders: 0, revenue_micros: '0', roas: '0.00', cost_per_order_micros: null, margin_known_micros: null });
   });
 
+  it('dia a dia: o gasto e os pedidos contados de cada dia, com zero onde não houve nada, e o período anterior somado', async () => {
+    const porDia = (params: Record<string, string>) => api.call('GET', `/v1/results/daily?${new URLSearchParams(params)}`, { cookie });
+    const r = await porDia({ brand_id: brandId, from: '2026-09-26', to: '2026-09-27' });
+    expect(r.status).toBe(200);
+    expect(r.body.period).toEqual({ from: '2026-09-26', to: '2026-09-27', timezone: 'America/Sao_Paulo' });
+    expect(r.body.currency).toBe('BRL');
+    expect(r.body.days).toEqual([
+      // 26/09: Meta 100 + Google 40 (o nível de anúncio do Google não soma de novo); o1 e o2 são os contados.
+      { date: '2026-09-26', spend_micros: M(140), orders: 2, revenue_micros: M(100) },
+      // 27/09: o o8 (23h30 em Brasília) é do dia, mas não tem evidência; o cancelado e o removido ficam fora.
+      { date: '2026-09-27', spend_micros: M(50), orders: 0, revenue_micros: '0' },
+    ]);
+    expect(r.body.previous).toEqual({ from: '2026-09-24', to: '2026-09-25', spend_micros: '0', orders: 0, revenue_micros: '0', roas: null });
+
+    // Os dias somam o total da tela, para o mesmo período.
+    const total = (await consultar({ brand_id: brandId, from: '2026-09-26', to: '2026-09-27' })).body.totals;
+    const soma = (campo: 'spend_micros' | 'revenue_micros') => r.body.days.reduce((s: bigint, d: Record<string, string>) => s + BigInt(d[campo]!), 0n).toString();
+    expect(soma('spend_micros')).toBe(total.spend_micros);
+    expect(soma('revenue_micros')).toBe(total.confirmed.revenue_micros);
+    expect(r.body.days.reduce((s: number, d: { orders: number }) => s + d.orders, 0)).toBe(total.confirmed.orders);
+
+    // De 28 a 30/09: o gasto de 28/09, um dia vazio e o o7 (clique com campanha) em 30/09. O anterior é 25 a 27/09.
+    const depois = await porDia({ brand_id: brandId, unit_id: unitId, from: '2026-09-28', to: '2026-09-30' });
+    expect(depois.body.days).toEqual([
+      { date: '2026-09-28', spend_micros: M(70), orders: 0, revenue_micros: '0' },
+      { date: '2026-09-29', spend_micros: '0', orders: 0, revenue_micros: '0' },
+      { date: '2026-09-30', spend_micros: '0', orders: 1, revenue_micros: M(55) },
+    ]);
+    expect(depois.body.previous).toEqual({ from: '2026-09-25', to: '2026-09-27', spend_micros: M(190), orders: 2, revenue_micros: M(100), roas: '0.53' });
+    expect(JSON.stringify(depois.body)).not.toMatch(/IwAR|Cj0|gclid|fbclid|telefone|phone/);
+
+    // As mesmas recusas da tela: período inválido ou longo, marca de outra empresa e loja de outra marca.
+    expect((await porDia({ brand_id: brandId, from: '2026-09-27', to: '2026-09-26' })).status).toBe(422);
+    expect((await porDia({ brand_id: brandId, from: '2026-01-01', to: '2026-09-26' })).status).toBe(422);
+    expect((await porDia({ brand_id: randomUUID(), from: '2026-09-26', to: '2026-09-27' })).status).toBe(404);
+    expect((await porDia({ brand_id: brandId, unit_id: randomUUID(), from: '2026-09-26', to: '2026-09-27' })).status).toBe(404);
+  });
+
   it('com a margem conhecida em 80%+ da receita confirmada, diz se deu lucro, empate ou prejuízo', async () => {
     // O item de o2 ganha custo: a margem passa a ser conhecida em toda a receita confirmada.
     await ownerQuery(`update liame.order_item_fact set cost_micros = $1 where order_id = $2`, [M(10), ids.o2]);
     const r = await consultar({ brand_id: brandId, from: '2026-09-26', to: '2026-09-27' });
     // Margem: o1 40 + o2 30 = 70 em 100% da receita confirmada; gasto 190 → prejuízo.
-    expect(r.body.totals.confirmed).toMatchObject({ margin_known_micros: M(70), margin_coverage_pct: '100.0', verdict: 'prejuizo' });
+    expect(r.body.totals.confirmed).toMatchObject({ margin_known_micros: M(70), margin_coverage_pct: '100.0', revenue_with_margin_micros: M(100), verdict: 'prejuizo' });
   });
 
   it('origem de cada pedido: evidência, horas antes, janela e motivo; sem dado pessoal', async () => {

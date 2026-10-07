@@ -65,6 +65,12 @@ export const ConfirmedResult = z.strictObject({
   /** Parte da receita confirmada com margem conhecida. */
   margin_coverage_pct: Porcento,
   /**
+   * Receita dos pedidos com a margem conhecida (a base de `margin_coverage_pct`). O custo conhecido dos produtos é
+   * esta receita menos `margin_known_micros`; o resto da receita é de pedido com item sem custo (desconhecido ≠
+   * zero). A rota manda sempre; só falta em respostas guardadas antes de 07/10/2026 (casos de eval).
+   */
+  revenue_with_margin_micros: Micros.optional(),
+  /**
    * `lucro`, `empata` ou `prejuizo`: (margem conhecida − investimento) ÷ investimento acima de +10%, entre
    * −10% e +10% ou abaixo de −10% (regra dos protótipos aprovados). Nulo com cobertura de margem abaixo de
    * 80% (a tela mostra "margem incompleta") ou sem investimento.
@@ -130,6 +136,37 @@ export const ClosedLoopResponse = z.strictObject({
   generated_at: z.string(),
 });
 export type ClosedLoopResponse = z.infer<typeof ClosedLoopResponse>;
+
+// A linha dos dias (07/10/2026, resultados em gráficos). Rota à parte de `closed-loop`, que também serve as rotinas
+// internas: quem não desenha o gráfico não paga por ele. A consulta é a mesma (`ClosedLoopQuery`).
+export const DailyResult = z.strictObject({
+  /** Dia (AAAA-MM-DD): o do faturamento do pedido, no fuso da loja; o do gasto, no fuso de cada conta de anúncio. */
+  date: z.string(),
+  spend_micros: Micros,
+  /** Pedidos confirmados com evidência alta ou média (os mesmos de `totals.confirmed` em `closed-loop`). */
+  orders: z.number().int().min(0),
+  revenue_micros: Micros,
+});
+export type DailyResult = z.infer<typeof DailyResult>;
+
+export const DailyResultsResponse = z.strictObject({
+  period: z.strictObject({ from: z.string(), to: z.string(), timezone: z.string() }),
+  currency: z.string(),
+  /** Um item por dia do período, em ordem, com zero onde não houve gasto nem pedido. */
+  days: z.array(DailyResult),
+  /** O período de mesmo tamanho logo antes, somado: para dizer se o retorno subiu ou caiu. */
+  previous: z.strictObject({
+    from: z.string(),
+    to: z.string(),
+    spend_micros: Micros,
+    orders: z.number().int().min(0),
+    revenue_micros: Micros,
+    /** Receita confirmada com evidência ÷ gasto; nulo sem gasto. */
+    roas: Razao,
+  }),
+  generated_at: z.string(),
+});
+export type DailyResultsResponse = z.infer<typeof DailyResultsResponse>;
 
 export const OrderOriginQuery = z.strictObject({
   brand_id: z.uuid(),

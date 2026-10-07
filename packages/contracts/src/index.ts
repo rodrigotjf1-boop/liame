@@ -156,6 +156,8 @@ export {
   ClosedLoopAttentionResponse,
   ClosedLoopResponse,
   ConfirmedResult,
+  DailyResult,
+  DailyResultsResponse,
   OrderOrigin,
   OrderOriginQuery,
   OrderOriginResponse,
