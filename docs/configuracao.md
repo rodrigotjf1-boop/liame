@@ -89,14 +89,14 @@ Sem as peças de um app, a plataforma aparece como "ainda indisponível" (503 `i
 | `GOOGLE_OAUTH_CLIENT_ID` · `GOOGLE_OAUTH_CLIENT_SECRET` | Cliente OAuth do tipo "aplicativo da Web" no projeto Google Cloud da distribuição (Google Ads API habilitada; escopos `adwords` e `analytics.readonly`) | vazio (Google indisponível) |
 | `GOOGLE_AUTH_URL` · `GOOGLE_TOKEN_URL` | Autorização e token do Google (oficiais em produção) | `https://accounts.google.com` · `https://oauth2.googleapis.com` |
 
-Enquanto o app do Google estiver em **modo de teste**, o refresh token vence em 7 dias [S]: a conexão mostra a data (`refresh_expires_at`) e a tela avisa antes.
+Enquanto o app do Google estiver em **modo de teste**, o refresh token vence em 7 dias [S]: a conexão mostra a data (`refresh_expires_at`) e a tela avisa antes. O app foi publicado em 07/10/2026: a autorização dada depois disso não tem esse prazo (`refresh_expires_at` nulo), e a tela diz "sem prazo de validade".
 
 **Situação dos apps (28/09/2026, configurados com o dono; os segredos ficam só no gerenciador de senhas dele e no EasyPanel):**
 
 | Plataforma | O que existe | Valores não secretos |
 | --- | --- | --- |
 | Meta | App **Liame**, tipo Empresa, no portfólio verificado da empresa, em **desenvolvimento**; produtos API de Marketing e Facebook Login for Business; URI de volta `https://api.agencialiame.com/v1/oauth/callback` (modo estrito); configuração "Liame - leitura de anúncios": variação Geral, token de usuário do sistema que **não expira**, ativo Contas de anúncios obrigatório com a tarefa **ANALYZE** (só leitura) e a permissão **`ads_read`** | `META_APP_ID=1399495602273174` · `META_LOGIN_CONFIG_ID=1068233099319648` |
-| Google | Projeto `liame-agencia` (duas contas proprietárias); APIs Google Ads, Analytics Data e Analytics Admin ativas; Google Auth Platform "Liame", **Externo, em teste**, escopos `adwords` e `analytics.readonly`; cliente "Liame API" (aplicativo da Web) com a mesma URI de volta; Google Ads API no nível **Explorer** | `GOOGLE_OAUTH_CLIENT_ID=285693801008-armp76vqm8543v88bhcd19um2k1vitnq.apps.googleusercontent.com` |
+| Google | Projeto `liame-agencia` (duas contas proprietárias); APIs Google Ads, Analytics Data e Analytics Admin ativas; Google Auth Platform "Liame", **Externo, em produção desde 07/10/2026** (ainda sem a verificação do Google: quem autoriza vê o aviso de app não verificado, e vale o teto de 100 usuários; no branding, a página inicial, a Política de Privacidade e os Termos do site, sem logotipo, que exigiria a verificação), escopos `adwords` e `analytics.readonly`; cliente "Liame API" (aplicativo da Web) com a mesma URI de volta; Google Ads API no nível **Explorer** | `GOOGLE_OAUTH_CLIENT_ID=285693801008-armp76vqm8543v88bhcd19um2k1vitnq.apps.googleusercontent.com` |
 
 Falta, nas duas: publicar a política de privacidade, os termos e as instruções de exclusão de dados no site; testadores (contas do restaurante de testes); ir ao vivo (Meta: acesso avançado e análise do app; Google: verificação da marca e do app, nível Básico). Para executar ações (A4), a Meta ganha uma **segunda** configuração, de escrita (`META_LOGIN_CONFIG_ID_ESCRITA`); a de leitura fica como está, porque a análise de `ads_read` usa o login com ela.
 
