@@ -20,6 +20,9 @@ export interface ReadResult {
   version: number;
 }
 
+/** O que a parte do banco de uma leitura deixa pronto para a parte da plataforma. Opaco para quem chama: só o conector sabe abrir. */
+export type PreparedRead = { readonly conector: string };
+
 export type ApplyResult =
   | { ok: true; state: ResourceState; version: number }
   /** O recurso mudou desde o pedido: não sobrescreve (ADR-007, compensação). */
@@ -40,6 +43,13 @@ export interface Connector {
    */
   readonly requiresSpendLimits: boolean;
   read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null>;
+  /**
+   * A mesma leitura em duas partes, para quem não quer segurar a transação enquanto espera a plataforma (a rota
+   * `@SemTransacao` das opções do pedido): `prepareRead` faz a parte do banco (a conta, a autorização, o objeto
+   * conhecido) e `readPrepared` chama a plataforma, sem transação. Só o conector de plataforma tem as duas.
+   */
+  prepareRead?(tx: Tx, ref: ResourceRef): Promise<PreparedRead | null>;
+  readPrepared?(prepared: PreparedRead): Promise<ReadResult | null>;
   /**
    * Aplica o estado desejado se a versão ainda for a esperada (concorrência otimista). O que é passageiro (limite de
    * uso da plataforma, fora do ar) sobe como `ErroConector`: quem executa adia a ação, em vez de insistir.

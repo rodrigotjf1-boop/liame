@@ -121,6 +121,14 @@ Amarrada ao `plan_hash`; plano alterado invalida a aprovação. Ações com risc
 - **Os dois limites, juntos (D-A4-22):** `PUT /v1/budget/limits` (permissão `orcamento.gerenciar`) grava o teto do mês no envelope da empresa (`updated_by`, migration 0052) e publica o teto por campanha como regra `max_value` de `orcamento.*`, sem provedor, numa versão nova da política da empresa (as outras regras ficam; o mesmo valor não publica versão). `GET /v1/budget/month` devolve a conta, os limites, quem definiu e as regras da distribuição que a tela cita.
 - **Nomes:** para a pessoa, "teto por ação" e "envelope do mês" são o **teto por campanha** e o **teto do mês**; os códigos dos problemas não mudam (`teto-nao-definido`, `envelope-nao-definido`, `orcamento-insuficiente`).
 
+## O que a tela lê antes do pedido (A4, X8 parte 1, 07/10/2026)
+
+- **Nada aqui é pedido:** `GET /v1/actions/targets` e `GET /v1/actions/options` só leem. A política, os limites da empresa, a reserva e a leitura que vale para o plano continuam em `POST /v1/actions`.
+- **`targets`** (`campanhas.ver`): as campanhas ativas e em pausa das contas de anúncio da marca com a flag de escrita ligada, com os pedidos em aberto de cada uma (os da campanha, dos conjuntos e dos anúncios dela) e `write`: `ligada` ou `so_leitura`.
+- **`options`** (`campanhas.operar`): o objeto escolhido lido na plataforma na hora, as ferramentas que cabem nele (`ferramentasPara`: nunca oferece o que a ferramenta recusaria ao planejar), os conjuntos e os anúncios pela leitura diária e os pedidos em aberto.
+- **Fora da transação:** a rota é `@SemTransacao`. O conector de plataforma lê em duas partes: `prepareRead` (a conta, a autorização e o objeto conhecido, no banco) e `readPrepared` (a chamada à plataforma, com o tempo curto de quem tem uma pessoa esperando).
+- **As mesmas barreiras do pedido, antes de gastar a leitura:** a trava (423), a flag de escrita (403) e a conexão que só pediu leitura (409 `conexao-so-leitura`, por `oauth_connection.requested_access`, migration 0054).
+
 ## O gasto conferido (A4, X4 parte 2, 05/10/2026)
 
 - **`execução → informado → gasto real`:** a ponta que faltava do livro. `action_spend_check` (migration 0053) guarda, por mudança e por dia, como o Liame deixou o objeto, como a leitura do dia o mostra e quanto ele gastou. Só cresce (`select` e `insert` para a aplicação).
