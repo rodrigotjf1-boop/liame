@@ -113,8 +113,12 @@ function montador() {
   const blocos: RespostaDaLia['blocos'] = [];
   const calculados: RespostaPorRegra['calculados'] = [];
   return {
-    p: (texto: string) => void blocos.push({ tipo: 'paragrafo', texto, risco: null }),
-    item: (texto: string) => void blocos.push({ tipo: 'item', texto, risco: null }),
+    p: (texto: string): void => {
+      blocos.push({ tipo: 'paragrafo', texto, risco: null });
+    },
+    item: (texto: string): void => {
+      blocos.push({ tipo: 'item', texto, risco: null });
+    },
     /** Um número que o código calculou (não está na leitura): entra na resposta com a fonte dele. */
     calculado: (rotulo: string, valor: string) => {
       calculados.push({ rotulo, valor });
