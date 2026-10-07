@@ -1,9 +1,12 @@
 'use client';
 
-import type { BrandResponse, ClosedLoopResponse } from '@liame/contracts';
+import type { ActionTargetsResponse, BrandResponse, ClosedLoopResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { liaLigada } from '@/components/explicar/pedir';
+import { botaoPedirAVista, type PedirNaLista } from '@/components/pedir/botao-pedir';
+import { type CampanhaDoPedido, GavetaPedir } from '@/components/pedir/gaveta-pedir';
+import { pedirPorCampanha } from '@/components/pedir/textos';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
@@ -16,6 +19,8 @@ import { FUSO_PADRAO, fusoValido, intervaloDo, localDe, type Loja, lojasDoRegem,
 // "Resultados" (mockups/prototipo-resultados.html, P1 aprovado em 29/09/2026): o ROAS que cada plataforma
 // informa, com a janela dela, ao lado do confirmado no caixa do Regem (`GET /v1/results/closed-loop`,
 // permissão `vendas.ver`). A conta é do servidor; a tela escolhe o período, a marca e a loja, e mostra.
+// Para quem acompanha as campanhas, a lista delas ganha o "Pedir mudança" (protótipo P9): onde dá para pedir vem
+// de `GET /v1/actions/targets`, e o botão abre a gaveta do pedido.
 
 type Carga =
   | { tipo: 'carregando' }
@@ -26,6 +31,8 @@ export function ResultadosTela() {
   const { pode } = useSessao();
   const podeVer = pode('vendas.ver');
   const podeVerContas = pode('contas.ver');
+  const podeVerCampanhas = pode('campanhas.ver');
+  const podePedir = pode('campanhas.operar');
   const titulo = useRef<HTMLHeadingElement>(null);
   const [marcas, setMarcas] = useState<BrandResponse[] | null>(null);
   const [erroMarcas, setErroMarcas] = useState<Problema | null>(null);
@@ -38,6 +45,11 @@ export function ResultadosTela() {
   const [tentativa, setTentativa] = useState(0);
   const [anuncio, setAnuncio] = useState('');
   const [lia, setLia] = useState<{ marca: string; ligada: boolean } | null>(null);
+  /** Onde dá para pedir uma mudança, pela marca; relido depois de cada pedido criado. */
+  const [alvos, setAlvos] = useState<{ marca: string; dados: ActionTargetsResponse } | null>(null);
+  const [versaoDosAlvos, setVersaoDosAlvos] = useState(0);
+  /** A campanha com a gaveta "Pedir uma mudança" aberta. */
+  const [pedindo, setPedindo] = useState<CampanhaDoPedido | null>(null);
   // Fuso da loja: corta o dia dos pedidos (a API diz qual é; até a primeira resposta, o padrão dela).
   const fuso = useRef(FUSO_PADRAO);
   // Só a resposta mais nova vale (trocar de período no meio de uma leitura não mistura números).
@@ -70,6 +82,21 @@ export function ResultadosTela() {
       vivo = false;
     };
   }, [marca, podeVer]);
+
+  // As campanhas da marca em que dá para pedir uma mudança (e os pedidos em aberto de cada uma). Se a leitura
+  // falhar, a lista de campanhas segue sem o botão: a tela é de resultado, e o pedido é um extra dela.
+  useEffect(() => {
+    if (!marca || !podeVerCampanhas) return;
+    let vivo = true;
+    disparar(
+      chamar(() => api.GET('/v1/actions/targets', { params: { query: { brand_id: marca } } })).then((r) => {
+        if (vivo && r.ok) setAlvos({ marca, dados: r.data });
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [marca, podeVerCampanhas, versaoDosAlvos]);
 
   // Lojas do Regem da marca, para escolher uma (só quem vê as contas; sem isso, todas as lojas).
   useEffect(() => {
@@ -120,6 +147,12 @@ export function ResultadosTela() {
   const tela = useMemo(
     () => (dados ? montarTela(dados.dados, dados.periodo, new Date(dados.dados.generated_at), localDe(dados.dados, lojaEscolhida, nomeDaMarca)) : null),
     [dados, lojaEscolhida, nomeDaMarca],
+  );
+  // Só os alvos da marca que está na tela (trocar de marca não mostra o botão da anterior).
+  const alvosDaMarca = alvos && dados && alvos.marca === dados.marca ? alvos.dados : null;
+  const pedir = useMemo<PedirNaLista | null>(
+    () => (alvosDaMarca ? { porCampanha: pedirPorCampanha(alvosDaMarca), podePedir, aberta: pedindo?.id ?? null, aoPedir: setPedindo } : null),
+    [alvosDaMarca, podePedir, pedindo],
   );
 
   if (!podeVer) {
@@ -193,7 +226,16 @@ export function ResultadosTela() {
   } else {
     corpo = (
       <div className={buscando ? 'res-corpo recarregando' : 'res-corpo'} aria-busy={buscando}>
-        <ResultadosConteudo tela={tela} modelo={dados.dados.model} consulta={consulta} loja={lojaDoPedido} podeVerContas={podeVerContas} reserva={titulo} explicar={explicar} />
+        <ResultadosConteudo
+          tela={tela}
+          modelo={dados.dados.model}
+          consulta={consulta}
+          loja={lojaDoPedido}
+          podeVerContas={podeVerContas}
+          reserva={titulo}
+          explicar={explicar}
+          pedir={pedir}
+        />
       </div>
     );
   }
@@ -261,6 +303,18 @@ export function ResultadosTela() {
         {anuncio}
       </p>
       {corpo}
+      {pedindo && (
+        <GavetaPedir
+          key={pedindo.id}
+          campanha={pedindo}
+          podeDefinirLimites={pode('orcamento.gerenciar')}
+          podeVerContas={podeVerContas}
+          reserva={titulo}
+          voltarPara={() => botaoPedirAVista(pedindo.id)}
+          aoFechar={() => setPedindo(null)}
+          aoCriar={() => setVersaoDosAlvos((v) => v + 1)}
+        />
+      )}
     </section>
   );
 }

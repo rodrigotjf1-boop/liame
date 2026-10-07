@@ -2,6 +2,8 @@ import type { ClosedLoopResponse, ConfirmedResult, OrderOrigin, PlatformReport, 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import type { PedirNaLista } from '@/components/pedir/botao-pedir';
+import { pedirPorCampanha } from '@/components/pedir/textos';
 import { detalheDoPedido, contarPedidos, filtrarPedidos, numeroDoPedido, origemDoPedido, confiancaDe, tempoAntes, textoDoModelo } from '@/components/resultados/pedidos';
 import { type ExplicarResultados, ResultadosConteudo } from '@/components/resultados/resultados-conteudo';
 import {
@@ -636,7 +638,14 @@ describe('pedido a pedido e a origem de cada pedido', () => {
 });
 
 describe('desenho da tela (o mesmo componente do navegador)', () => {
-  const desenhar = (r: ClosedLoopResponse, periodo: 'hoje' | '7' | '30', modo: 'lite' | 'pro', local: string | null = 'Loja Centro', explicar: ExplicarResultados | null = null) =>
+  const desenhar = (
+    r: ClosedLoopResponse,
+    periodo: 'hoje' | '7' | '30',
+    modo: 'lite' | 'pro',
+    local: string | null = 'Loja Centro',
+    explicar: ExplicarResultados | null = null,
+    pedir: PedirNaLista | null = null,
+  ) =>
     renderToStaticMarkup(
       createElement(ModoProvider, {
         inicial: modo,
@@ -648,6 +657,7 @@ describe('desenho da tela (o mesmo componente do navegador)', () => {
           podeVerContas: true,
           reserva: { current: null },
           explicar,
+          pedir,
         }),
       }),
     );
@@ -655,6 +665,65 @@ describe('desenho da tela (o mesmo componente do navegador)', () => {
     expect(html).not.toMatch(/NaN|undefined|\[object Object\]|Infinity/);
     expect(html).not.toMatch(/>null</);
   };
+
+  it('o pedido de mudança na lista de campanhas (P9): o botão só onde o servidor diz, o pedido que espera e a nota', () => {
+    // Onde dá para pedir vem de `GET /v1/actions/targets`: duas das três campanhas da Meta, e nenhuma do Google.
+    const alvos = (podePedir: boolean, comEspera = true): PedirNaLista => ({
+      porCampanha: pedirPorCampanha({
+        campaigns: [
+          { campaign_id: uuid(11), write: 'ligada', open: [] },
+          {
+            campaign_id: uuid(13),
+            write: 'ligada',
+            open: comEspera
+              ? [{ id: uuid(501), tool: 'orcamento_ajustar', action: 'orcamento.reduzir', resource_id: 'campanha:120210000000013', status: 'aguardando_aprovacao', value_micros: 36_000_000, created_at: AGORA }]
+              : [],
+          },
+        ],
+      }),
+      podePedir,
+      aberta: null,
+      aoPedir: () => undefined,
+    });
+    const NOTA = '“Pedir mudança” vale para as campanhas da Meta: mudar a verba, pausar e retomar, sempre com a sua aprovação. As do Google seguem só para leitura.';
+    const botoes = (html: string) => [...html.matchAll(/aria-label="Pedir mudança na campanha ([^"]+)"/g)].map((m) => m[1]);
+
+    // Sem a lista do servidor, a tela é a de antes.
+    const sem = desenhar(base7(), '7', 'pro');
+    expect(sem).not.toContain('Pedir mudança');
+    expect(sem).not.toContain('class="mudar"');
+
+    const lite = desenhar(base7(), '7', 'lite', 'Loja Centro', null, alvos(true));
+    semLixo(lite);
+    expect(lite).toContain('class="camp-lite camp-lite--pedir"');
+    // Na lista do Lite, um botão por campanha com pedido; a tabela do Pro (escondida) traz os dela.
+    expect(lite.split('id="camp-pro"')[0]!.match(/class="cl-pedir"/g)).toHaveLength(4);
+    expect(botoes(lite.split('id="camp-pro"')[0]!)).toEqual(['Combo sexta', 'Smash em dobro']);
+    expect(lite).toContain(`<a class="pedido-esperando" href="/aprovacoes?pedido=${uuid(501)}">1 pedido esperando</a>`);
+    expect(lite).toContain(NOTA);
+    expect(lite).toContain('aria-haspopup="dialog"');
+
+    const pro = desenhar(base7(), '7', 'pro', 'Loja Centro', null, alvos(true));
+    semLixo(pro);
+    expect(pro).toContain('<th scope="col" class="mudar">Mudar</th>');
+    expect(pro).toContain('; na última coluna, o pedido de mudança</caption>');
+    // Cada campanha com pedido tem o botão na coluna e embaixo do nome (no celular a coluna some).
+    expect(botoes(pro)).toEqual(['Combo sexta', 'Combo sexta', 'Smash em dobro', 'Smash em dobro']);
+    expect(pro.match(/class="mudar-linha"/g)).toHaveLength(2);
+    // Quatro campanhas, a linha "sem campanha identificada" e o total: a coluna existe em todas.
+    expect(pro.match(/<td class="mudar">/g)).toHaveLength(6);
+    // O Google segue só para leitura; a campanha da Meta sem pedido (fora da lista do servidor) fica em branco.
+    expect(pro.match(/<span class="eixo-nota">só leitura<\/span>/g)).toHaveLength(1);
+    expect(pro).toContain(NOTA);
+    expect(pro).toContain('>Pedir</button>');
+
+    // Quem só acompanha as campanhas vê o pedido que espera, sem o botão; sem nada a mostrar, a coluna não existe.
+    const soVe = desenhar(base7(), '7', 'pro', 'Loja Centro', null, alvos(false));
+    expect(botoes(soVe)).toEqual([]);
+    expect(soVe).toContain('1 pedido esperando');
+    expect(soVe).toContain('<th scope="col" class="mudar">Mudar</th>');
+    expect(desenhar(base7(), '7', 'pro', 'Loja Centro', null, alvos(false, false))).not.toContain('class="mudar"');
+  });
 
   it('piloto no Lite: faixa do Regem, números da plataforma e os estados vazios do caixa', () => {
     const html = desenhar(piloto(), '7', 'lite', 'Mister Burgers');

@@ -851,13 +851,14 @@ const SITUACAO_DA_CAMPANHA: Record<string, string> = {
   desconhecida: 'situação desconhecida',
 };
 
-export type ItemCampanhaLite = { id: string; nome: string; sub: string; valor: string; detalhe: string; veredito: Veredito | null };
+export type ItemCampanhaLite = { id: string; nome: string; provider: string; sub: string; valor: string; detalhe: string; veredito: Veredito | null };
 
 export type Celula = { texto: string; sub?: string; subAtencao?: boolean; forte?: boolean };
 
 export type LinhaCampanha = {
   id: string;
   nome: string;
+  provider: string;
   nomePlataforma: string;
   classe: string;
   situacao: string;
@@ -926,7 +927,7 @@ export function campanhasDe(r: ClosedLoopResponse, b: Base): CartaoCampanhas {
       else if (ver && ver.classe !== 'incompleta' && sobra !== null) detalhe = sobra >= 0n ? `sobraram ${reais(sobra)}` : `faltaram ${reais(-sobra)}`;
       else if (k.margin_coverage_pct !== null) detalhe = `só ${porcentagem(k.margin_coverage_pct)} com custo`;
     }
-    return { id: c.campaign_id, nome: c.name, sub, valor, detalhe, veredito: b.semRegem ? null : vereditoDe(k, gasto, b.hoje) };
+    return { id: c.campaign_id, nome: c.name, provider: c.provider, sub, valor, detalhe, veredito: b.semRegem ? null : vereditoDe(k, gasto, b.hoje) };
   });
 
   const linhas = r.campaigns.map((c): LinhaCampanha => {
@@ -945,6 +946,7 @@ export function campanhasDe(r: ClosedLoopResponse, b: Base): CartaoCampanhas {
     return {
       id: c.campaign_id,
       nome: c.name,
+      provider: c.provider,
       nomePlataforma: nomes.nome,
       classe: nomes.classe,
       situacao: SITUACAO_DA_CAMPANHA[c.status] ?? c.status.replaceAll('_', ' '),
