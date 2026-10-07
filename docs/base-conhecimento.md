@@ -762,6 +762,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 07/10/2026 | §16.7 nova: **resultados em gráficos**, a pedido do dono: como Shopify, Stripe, Plausible, Triple Whale, Google Analytics e a Apple mostram resultado com pouco texto, o gráfico de bala de Stephen Few e a regra da Nielsen Norman (comprimento e posição se leem mais rápido; pizza e velocímetro, não). Com a conferência das cores: o foco e o cinza de contexto do Liame não podem ser vizinhos numa barra empilhada. Estudo em `mockups/prototipo-graficos.html`. |
+| 07/10/2026 | §15.1: a **imagem base** `node:24-bookworm-slim` foi refeita em 06/10 (mesmo Node 24.21.0) e ainda não trazia o `perl-base` que o Debian já tinha corrigido; como conferir a imagem pelo registry, sem Docker (PR #165). |
 | 05/10/2026 | §17.6: o **preço do S3 em São Paulo** passou a ser o da lista pública da AWS (US$ 0,0405 por GB por mês; 100 GB de saída por mês sem custo), e entrou o **Backblaze B2** (US$ 6,95 por TB por mês, 10 GB grátis, sem região na América do Sul), a pedido do dono, que perguntou do custo e escolheu a AWS no mesmo dia. |
 | 05/10/2026 | §2.1: **o que a campanha nova (X5) pede**, nas referências oficiais da Meta: o criativo só existe em nome de uma **Página do Facebook** (`object_story_spec.page_id`; quem conecta precisa ser administrador ou editor); no Instagram, a conta ligada à Página; as permissões de Página (`pages_show_list`, `pages_read_engagement`, `pages_manage_ads`) além de `ads_management`; os tipos de botão (`ORDER_NOW` e `WHATSAPP_MESSAGE` estão na lista; `SEE_MENU` não está na lista do anúncio de link); e o anúncio que leva ao WhatsApp (`destination_type: WHATSAPP`). Daí a proposta D-A4-35 e o ajuste do protótipo P10 (quem assina o anúncio). |
 | 05/10/2026 | §17.6 nova: **armazenamento de arquivos de imagem**, para o ADR-021: S3 (cifra em repouso por padrão; URL assinada de até 7 dias com usuário IAM; teto de idade da assinatura pela política do bucket), Supabase Storage (protocolo S3; a chave do servidor abre todos os buckets; o backup do banco não leva os arquivos; sem versões) e Cloudflare R2 (sem região nem jurisdição na América do Sul). Daí a proposta: bucket privado no S3 de São Paulo, na conta AWS já em uso. |
@@ -893,6 +895,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - planalto.gov.br/ccivil_03/leis/2002/l10607.htm · planalto.gov.br/ccivil_03/_ato2023-2026/2023/lei/l14759.htm (feriados nacionais)
   - blackfriday.com.br (data da Black Friday de 2026, secundária)
   - facebook.com/business/ads/meta-advantage-plus/creative · support.google.com/google-ads/answer/16456563 (Asset Studio) · …/17140115 (rótulo de IA) · experienceleague.adobe.com/en/docs/genstudio-for-performance-marketing/user-guide/guidelines/brand-validation · blog.google/innovation-and-ai/models-and-research/google-labs/pomelli (P10)
+  - help.shopify.com/en/manual/reports-and-analytics/shopify-reports/overview-dashboard · shopify.dev/docs/api/shopifyql/latest/web-components/metric-card · plausible.io/docs/guided-tour · support.google.com/analytics/answer/9443595 · nngroup.com/articles/dashboards-preattentive (07/10/2026); support.stripe.com/questions/dashboard-home-page-charts-for-business-insights · kb.triplewhale.com/en/articles/5725275 · en.wikipedia.org/wiki/Bullet_graph · macworld.com/article/233093 (secundárias, pela busca)
 
 ---
 
@@ -1146,7 +1149,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 ## 16. Interface: padrões de mercado e plataforma web
 
-*Verificado em 25/09/2026, para escolher o modelo de interface (`docs/ux-modelo-interface.md`); a §16.1 foi ampliada em 02/10/2026 (conversa com o assistente), antes do protótipo P5. Referências de layout mais amplas ficam no catálogo da skill `ui-ux-proprio` (`referencias/03-catalogo-mercado.md`, verificado em 24/09/2026).*
+*Verificado em 25/09/2026, para escolher o modelo de interface (`docs/ux-modelo-interface.md`); a §16.1 foi ampliada em 02/10/2026 (conversa com o assistente), antes do protótipo P5; a §16.7 (resultados em gráficos) é de 07/10/2026. Referências de layout mais amplas ficam no catálogo da skill `ui-ux-proprio` (`referencias/03-catalogo-mercado.md`, verificado em 24/09/2026).*
 
 ### 16.1 Como os produtos de marketing mostram agentes
 
@@ -1259,6 +1262,21 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - **não guarda a página**, só os rótulos conferidos (produtos e preços, ofertas, diferenciais);
   - tira dado pessoal antes do modelo e de gravar;
   - o redirecionamento só é seguido depois de conferir o destino de novo.
+
+### 16.7 Resultados em gráficos, com menos texto
+
+*Pesquisado em 07/10/2026, a pedido do dono ("apresentar resultados em formas de gráficos, para reduzir excesso de textos"), antes do estudo `mockups/prototipo-graficos.html`. A tela de Resultados no modo simples não tinha nenhum gráfico: três faixas de aviso e seis cartões em frases.*
+
+- **Shopify, painel de análises** **[O]** (help.shopify.com, "Overview dashboard", e shopify.dev, componente `metric-card`; abertos em 07/10/2026): cartões de métrica que a pessoa adiciona, tira, reordena e redimensiona; o cartão compacto traz "the headline value, a percent-change indicator, and a small sparkline"; a comparação é com o período anterior (`COMPARE TO previous_period`).
+- **Stripe, página inicial** **[S]** (support.stripe.com, pela busca em 07/10/2026): gráficos com o período anterior à esquerda e o atual à direita; a pessoa escolhe os blocos.
+- **Plausible** **[O]** (plausible.io/docs/guided-tour, aberto em 07/10/2026): uma página só; "click on a particular metric to display it in the top graph"; listas em ordem (fontes, páginas), com a opção de expandir.
+- **Triple Whale, resumo** **[S]** (kb.triplewhale.com; a página recusou a leitura automática em 07/10/2026): o retorno dos anúncios de todas as plataformas num bloco, tendência em cada cartão, clique para a barra com o período anterior, e os principais fixados no topo.
+- **Gráfico de bala** (Stephen Few, 2005) **[S]** (en.wikipedia.org/wiki/Bullet_graph): uma medida contra uma meta, com faixas em tons do mesmo cinza, no lugar do velocímetro. É o desenho da barra do teto da Verba do mês.
+- **Google Analytics, Insights** **[O]** (support.google.com/analytics/answer/9443595, aberto em 07/10/2026): cartões na página inicial com o que mudou, automáticos ("detects unusual changes or emerging trends in your data") ou por condição da pessoa.
+- **Apple, Tendências** **[S]** (macworld.com e a ajuda da Apple, pela busca em 07/10/2026): uma seta para cima ou para baixo (os 90 dias mais recentes contra os 365), e o gráfico só no toque.
+- **Nielsen Norman Group, "Dashboards: Making Charts and Graphs Easier to Understand"** **[O]** (nngroup.com/articles/dashboards-preattentive, Page Laubheimer, 18/06/2017; aberto em 07/10/2026): comprimento e posição em duas dimensões se leem mais rápido ("we are quite adept at estimating how lengths compare"); área e ângulo, não: pizza, rosca, mapa de árvore e velocímetro são ruins para comparar; cor só reforça o que outra forma já diz.
+- **Consequência para o estudo:** três caminhos (o painel de indicadores, tradicional; uma pergunta por cartão respondida com um desenho, moderno e recomendado, **escolhido pelo dono em 07/10/2026**; o resumo que conta a semana com setas, inovador). No recomendado, cada cartão fica com um desenho e uma frase: o número principal com duas barras na mesma escala, a receita dividida numa barra (custo dos produtos, anúncios, o que sobrou), cada campanha como barra para a direita (sobrou) ou para a esquerda (faltou) com o selo em palavra, e a origem dos pedidos numa barra dividida. Quase tudo sai do que `GET /v1/results/closed-loop` já devolve; **a linha por dia pede uma série diária no servidor**, que hoje não existe.
+- **Cores conferidas com o validador da skill dataviz (07/10/2026):** o foco (`#009AAA`) ao lado do cinza de contexto (`#7E8499`) numa barra empilhada **não separa** (ΔE 2,7 com deuteranopia e 9,9 na visão comum, abaixo do piso de 15): os dois têm claridade parecida. Na ordem **foco · cinza claro · cinza escuro** a separação passa com folga (16,5 e 22,5 no claro; 22,3 e 24,7 no escuro), com `#C3C6D2` e `#6B7189` no claro e `#454B6C` e `#9AA0B4` no escuro. O cinza claro fica abaixo de 3:1 contra o cartão: por isso o valor de cada parte vai escrito embaixo da barra.
 
 ---
 
