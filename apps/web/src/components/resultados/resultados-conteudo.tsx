@@ -7,6 +7,7 @@ import { BlocoExplicacao } from '@/components/explicar/bloco-explicacao';
 import { BotaoExplicar } from '@/components/explicar/botao-explicar';
 import type { PedidoDeExplicacao } from '@/components/explicar/pedir';
 import { useExplicacao } from '@/components/explicar/use-explicacao';
+import type { PedirNaLista } from '@/components/pedir/botao-pedir';
 import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { AvisosResultados } from './avisos-resultados';
@@ -42,6 +43,8 @@ type Props = {
   reserva: RefObject<HTMLElement | null>;
   /** Nulo quando não há o que explicar (hoje, sem o Regem, sem pedido com origem) ou antes de saber se a LIA responde. */
   explicar?: ExplicarResultados | null;
+  /** O pedido de mudança nas campanhas (protótipo P9); nulo para quem não acompanha as campanhas. */
+  pedir?: PedirNaLista | null;
 };
 
 /** "Ver por campanha": leva ao cartão das campanhas e, no Lite, abre os detalhes dele (como no protótipo). */
@@ -56,7 +59,7 @@ function verPorCampanha() {
   titulo.focus({ preventScroll: true });
 }
 
-export function ResultadosConteudo({ tela, modelo, consulta, loja, podeVerContas, reserva, explicar = null }: Props) {
+export function ResultadosConteudo({ tela, modelo, consulta, loja, podeVerContas, reserva, explicar = null, pedir = null }: Props) {
   const pro = useModo().modo === 'pro';
   const explicacao = useExplicacao(explicar?.pedido ?? null);
   const botao = useRef<HTMLButtonElement>(null);
@@ -104,7 +107,7 @@ export function ResultadosConteudo({ tela, modelo, consulta, loja, podeVerContas
         )}
         {pro && <CartaoFontes fontes={tela.fontes} />}
         <CartaoCiclo ciclo={tela.ciclo} rotuloPeriodo={tela.base.rotuloPeriodo} datas={tela.contexto.datas} />
-        <CartaoCampanhas campanhas={tela.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} />
+        <CartaoCampanhas campanhas={tela.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} pedir={pedir} />
         <CartaoOrigem origem={tela.origem} podeVerContas={podeVerContas} />
         <CartaoPedidos consulta={consulta} fuso={tela.base.fuso} loja={loja} modelo={modelo} reserva={reserva} />
       </div>

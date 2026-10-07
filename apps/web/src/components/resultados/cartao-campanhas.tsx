@@ -1,5 +1,7 @@
 'use client';
 
+import { BotaoPedir, type PedirNaLista } from '@/components/pedir/botao-pedir';
+import { mostraOPedir, notaDoPedir } from '@/components/pedir/textos';
 import { useDetalhes } from '@/lib/modo';
 import { Halteres } from './halteres';
 import { BotaoDetalhes, SeloVeredito, TextoRico } from './pecas';
@@ -8,6 +10,8 @@ import type { CartaoCampanhas as Dados, Celula, LinhaCampanha } from './textos';
 // "Por campanha" (protótipo P1): no Lite, cada campanha em palavras simples com "Dá lucro / Empata /
 // Dá prejuízo" (ou "Margem incompleta"); no Pro, a tabela com o ROAS da plataforma (na janela dela) ao
 // lado do confirmado no caixa, e os halteres. O clique só da plataforma fica numa linha à parte.
+// Com o pedido de mudança (protótipo P9), cada campanha em que o Liame pode mexer ganha o botão "Pedir mudança":
+// ao lado dela no Lite e na coluna "Mudar" do Pro (no celular, embaixo do nome).
 
 function Numero({ c }: { c: Celula }) {
   return (
@@ -33,8 +37,34 @@ function Celulas({ c }: { c: LinhaCampanha['celulas'] }) {
   );
 }
 
-export function CartaoCampanhas({ campanhas, rotuloPeriodo }: { campanhas: Dados; rotuloPeriodo: string }) {
+type Props = {
+  campanhas: Dados;
+  rotuloPeriodo: string;
+  /** O pedido de mudança nas campanhas (nulo para quem não acompanha as campanhas, ou antes de a lista chegar). */
+  pedir?: PedirNaLista | null;
+};
+
+export function CartaoCampanhas({ campanhas, rotuloPeriodo, pedir = null }: Props) {
   const d = useDetalhes();
+  // A coluna só existe quando alguma campanha à vista tem o que mostrar nela.
+  const comPedir =
+    pedir &&
+    mostraOPedir(
+      campanhas.linhas.map((l) => l.id),
+      pedir.porCampanha,
+      pedir.podePedir,
+    )
+      ? pedir
+      : null;
+  const nota = comPedir
+    ? notaDoPedir(
+        campanhas.linhas.filter((l) => comPedir.porCampanha.has(l.id)).map((l) => l.provider),
+        campanhas.linhas.filter((l) => !comPedir.porCampanha.has(l.id)).map((l) => l.provider),
+      )
+    : null;
+  // Campanha de plataforma em que o Liame não muda nada: a coluna diz por quê.
+  const comBotao = new Set(comPedir ? campanhas.linhas.filter((l) => comPedir.porCampanha.has(l.id)).map((l) => l.provider) : []);
+
   return (
     <article className="card" aria-labelledby="t-camp">
       <div className="card-cab">
@@ -64,7 +94,7 @@ export function CartaoCampanhas({ campanhas, rotuloPeriodo }: { campanhas: Dados
       ) : (
         <>
           {!d.pro && (
-            <ul className="camp-lite" aria-label="Campanhas em palavras simples">
+            <ul className={comPedir ? 'camp-lite camp-lite--pedir' : 'camp-lite'} aria-label="Campanhas em palavras simples">
               {campanhas.lite.map((c) => (
                 <li className="camp-lite-item" key={c.id}>
                   <div className="cl-nome">
@@ -76,6 +106,11 @@ export function CartaoCampanhas({ campanhas, rotuloPeriodo }: { campanhas: Dados
                     {c.detalhe && <span className="cl-sobra">{c.detalhe}</span>}
                   </div>
                   {c.veredito && <SeloVeredito veredito={c.veredito} />}
+                  {comPedir && (
+                    <div className="cl-pedir">
+                      <BotaoPedir campanha={c} pedir={comPedir} />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -86,12 +121,14 @@ export function CartaoCampanhas({ campanhas, rotuloPeriodo }: { campanhas: Dados
                 <TextoRico frase={s.frase} />
               </p>
             ))}
+          {!d.pro && nota && <p className="eixo-nota">{nota}</p>}
           {!d.pro && <BotaoDetalhes aberto={d.aberto} controla="camp-pro" aoAlternar={d.alternar} />}
           <div className="res-pro" id="camp-pro" hidden={!d.mostraPro}>
             <div className="table-wrap">
               <table className="tabela tabela--camp">
                 <caption className="sr-only">
                   Resultado por campanha em {rotuloPeriodo}: investimento, conversas, pedidos, receita, margem conhecida, custo por pedido, ROAS da plataforma e ROAS confirmado no caixa
+                  {comPedir ? '; na última coluna, o pedido de mudança' : ''}
                 </caption>
                 <thead>
                   <tr>
@@ -121,6 +158,11 @@ export function CartaoCampanhas({ campanhas, rotuloPeriodo }: { campanhas: Dados
                       ROAS caixa
                     </th>
                     <th scope="col">Plataforma × caixa</th>
+                    {comPedir && (
+                      <th scope="col" className="mudar">
+                        Mudar
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -132,9 +174,20 @@ export function CartaoCampanhas({ campanhas, rotuloPeriodo }: { campanhas: Dados
                           <span className={`plat plat--${l.classe}`}>{l.nomePlataforma}</span>
                           {l.situacao}
                         </span>
+                        {/* No celular a tabela rola de lado e a coluna "Mudar" some: o botão fica embaixo do nome. */}
+                        {comPedir && comPedir.porCampanha.has(l.id) && (
+                          <span className="mudar-linha">
+                            <BotaoPedir campanha={l} pedir={comPedir} curto />
+                          </span>
+                        )}
                       </th>
                       <Celulas c={l.celulas} />
                       <td>{l.halteres ? <Halteres plataforma={l.halteres.plataforma} caixa={l.halteres.caixa} rotulo={l.rotuloHalteres} /> : <span className="eixo-nota">—</span>}</td>
+                      {comPedir && (
+                        <td className="mudar">
+                          {comPedir.porCampanha.has(l.id) ? <BotaoPedir campanha={l} pedir={comPedir} curto /> : !comBotao.has(l.provider) && <span className="eixo-nota">só leitura</span>}
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {campanhas.soPlataforma.map((s) => (
@@ -154,6 +207,7 @@ export function CartaoCampanhas({ campanhas, rotuloPeriodo }: { campanhas: Dados
                       <td>
                         <span className="eixo-nota">{s.nota}</span>
                       </td>
+                      {comPedir && <td className="mudar" />}
                     </tr>
                   ))}
                 </tbody>
@@ -162,11 +216,13 @@ export function CartaoCampanhas({ campanhas, rotuloPeriodo }: { campanhas: Dados
                     <th scope="row">Total</th>
                     <Celulas c={campanhas.total} />
                     <td />
+                    {comPedir && <td className="mudar" />}
                   </tr>
                 </tfoot>
               </table>
             </div>
             <p className="eixo-nota">Escala de 0 a 7. A linha vertical marca ROAS 1, o ponto em que a mídia se paga.</p>
+            {nota && <p className="eixo-nota">{nota}</p>}
           </div>
         </>
       )}

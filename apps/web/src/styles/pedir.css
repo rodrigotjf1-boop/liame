@@ -1,0 +1,67 @@
+/* O pedido de mudança (A4 · X8; protótipo P9, mockups/prototipo-anuncios.html): o botão "Pedir mudança" de cada
+   campanha em Resultados e a gaveta "Pedir uma mudança". O campo de valor (.pd-valor) e a base do aviso (.pd-aviso)
+   estão em verba.css, que já os usa. */
+
+/* Resultados: "Pedir mudança" em cada campanha em que o Liame pode mexer */
+.camp-lite--pedir .camp-lite-item { grid-template-columns: minmax(0, 1fr) auto auto minmax(9.5rem, auto); }
+.cl-pedir { grid-column: 4; display: grid; justify-items: end; gap: 4px; }
+.pedido-esperando { color: var(--link); font-size: var(--text-xs); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.pedido-esperando:focus-visible { outline: none; border-radius: 4px; box-shadow: var(--focus-ring); }
+/* No Pro, a coluna "Mudar" fica presa à direita enquanto a tabela rola de lado: a ação não some da vista. A sombra
+   diz que ela está por cima do que rola por baixo. */
+.tabela--camp .mudar { position: sticky; right: 0; z-index: 1; background: var(--surface); box-shadow: -1px 0 0 var(--border), -10px 0 10px -10px color-mix(in srgb, var(--text) 22%, transparent); }
+.tabela--camp thead .mudar, .tabela--camp tfoot .mudar { background: var(--surface-2); }
+.tabela--camp .linha-plat .mudar { background: color-mix(in srgb, var(--bg-subtle) 55%, var(--surface)); }
+.tabela--camp td.mudar { text-align: right; white-space: nowrap; }
+/* O atalho do pedido que espera quebra a linha: a coluna fica da largura do botão, e não da frase. */
+.tabela--camp td.mudar .pedido-esperando { display: block; max-width: 5.6rem; margin: 4px 0 0 auto; white-space: normal; line-height: 1.25; text-align: right; }
+/* Com a coluna a mais, as células apertam um pouco e o gráfico encolhe: no computador a tabela volta a caber. */
+.tabela--camp:has(.mudar) th, .tabela--camp:has(.mudar) td { padding-left: 6px; padding-right: 6px; }
+.tabela--camp:has(.mudar) .halteres svg { width: 96px; }
+.mudar-linha { display: none; }
+@container pagina (max-width: 599px) {
+  .camp-lite--pedir .camp-lite-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .cl-pedir { grid-column: 1 / -1; justify-items: start; }
+  .cl-pedir:empty { display: none; }
+  /* No celular a coluna presa tomaria a tela: o botão desce para baixo do nome da campanha. */
+  .tabela--camp .mudar { display: none; }
+  .mudar-linha { display: block; margin-top: 6px; }
+  .mudar-linha .pedido-esperando { display: block; margin-top: 4px; width: fit-content; }
+}
+@container pagina (max-width: 479px) {
+  .camp-lite--pedir .camp-lite-item { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A gaveta "Pedir uma mudança" */
+.pd-bloco { display: grid; gap: var(--sp-2); }
+.pd-bloco > .rotulo-marca { margin-bottom: 2px; }
+.pd-bloco .esqueleto { display: block; height: 14px; }
+.pd-bloco .esqueleto--medio { width: 60%; }
+.pd-bloco .esqueleto--curto { width: 35%; }
+.pd-agora { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px var(--sp-4); margin: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.pd-agora dt { color: var(--text-muted); }
+.pd-agora dd { margin: 0; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.pd-agora dd small { display: block; font-size: var(--text-xs); font-weight: 400; color: var(--text-muted); }
+.pd-escolha { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.pd-opcao { position: relative; display: inline-flex; align-items: center; gap: var(--sp-2); min-height: 38px; padding: 0 var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.pd-opcao input { position: absolute; opacity: 0; pointer-events: none; }
+.pd-opcao:has(input:checked) { border-color: var(--text); background: var(--text); color: var(--bg); }
+.pd-opcao:has(input:focus-visible) { box-shadow: var(--focus-ring); }
+.pd-opcao:has(input:disabled) { opacity: .6; cursor: default; }
+.pd-opcao .ic { width: 15px; height: 15px; }
+.pd-verba { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.pd-efeito { padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--ai-soft); font-size: var(--text-sm); }
+.pd-efeito b { font-weight: 600; }
+.pd-limites { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); color: var(--text-muted); }
+.pd-limites li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px var(--sp-3); }
+.pd-limites b { color: var(--text); font-weight: 600; }
+.pd-aviso > div { display: grid; gap: var(--sp-2); justify-items: start; min-width: 0; }
+.pd-aviso b { outline: none; }
+.pd-aviso--perigo { background: var(--danger-soft); }
+.pd-aviso--perigo .ic { color: var(--danger); }
+.pd-nota { display: flex; gap: var(--sp-3); font-size: var(--text-sm); color: var(--text-muted); }
+.pd-nota .ic { flex: none; margin-top: 2px; }
+.pd-feito { display: grid; justify-items: center; gap: var(--sp-3); padding: var(--sp-8) var(--sp-2); text-align: center; }
+.pd-feito h3 { font-size: var(--text-lg); outline: none; }
+.pd-feito p { max-width: 44ch; color: var(--text-muted); }
+#pd-erro { outline: none; }

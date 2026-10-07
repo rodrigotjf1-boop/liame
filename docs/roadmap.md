@@ -31,6 +31,8 @@
 > 1. **Armazenamento de fotos e mídias** (ADR-021: AWS S3 em São Paulo, aceito em 05/10/2026, com a ordem de não construir agora). Com ele vêm a imagem do Criativo (A4 · X7) e a campanha nova, criada pausada (A4 · X5), que dependem das fotos guardadas.
 > 2. **Quem paga a IA** (05/10/2026): a distribuição, com teto por empresa, ou cada empresa cliente com a própria conta de IA, ligada pelo front. Decide-se com a conta mensal medida nos testes (`ai-architecture.md` §10).
 
+> **Pedido do dono em 07/10/2026, para depois da entrega em curso:** estudar como apresentar os resultados em gráficos, para reduzir o excesso de texto e deixar as análises menos cansativas. É estudo antes de tela: referências de mercado nas três trilhas, a paleta de gráfico já validada e os minigráficos que o modelo de interface previa (`ux-modelo-interface.md`) e um protótipo para o dono aprovar; só depois o port. As telas em vista são as de resultado e análise: Resultados, Revisão da semana, Explicar, Verba do mês e Resumo.
+
 ## 3. Critérios objetivos de saída da A0
 
 A A0 termina quando **todos** os itens abaixo estiverem cumpridos e registrados:
