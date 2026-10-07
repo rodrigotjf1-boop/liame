@@ -17,6 +17,14 @@ export const SUGESTOES: Record<Modo, string[]> = {
   pro: ['Compare Meta e Google em 7 dias', 'Por que tem pedido sem origem?', 'Proponha um cupom exclusivo para uma campanha', 'Vale pausar alguma campanha?'],
 };
 
+/**
+ * A resposta que o sistema montou por regra, com os dados que já leu (sem IA): o que a tela diz embaixo dela e o pedido
+ * que o botão "Pedir a análise da LIA" manda. O pedido leva uma palavra que a regra do servidor não conhece ("analise"):
+ * por isso vai para a LIA, e não volta como outro resumo do sistema.
+ */
+export const NOTA_DO_SISTEMA = 'Resumo montado pelo sistema, por regra, com os números que o Liame já leu. Nenhuma IA escreveu este texto.';
+export const PEDIDO_DE_ANALISE = 'Analise esses números para mim.';
+
 /** A saudação que abre toda conversa nova: escrita pela tela, não pela IA. */
 export function saudacaoDa(nomeDaPessoa: string, nomeDaMarca: string): string[] {
   const primeiro = nomeDaPessoa.trim().split(/\s+/)[0] ?? '';

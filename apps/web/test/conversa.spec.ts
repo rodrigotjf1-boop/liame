@@ -14,7 +14,9 @@ import {
   diaPorExtenso,
   faixaDa,
   gruposDe,
+  NOTA_DO_SISTEMA,
   notaDeDadoPessoal,
+  PEDIDO_DE_ANALISE,
   prazoDoAtendimento,
   registradoNoAviso,
   saudacaoDa,
@@ -47,6 +49,7 @@ const mensagem = (over: Partial<ConversationMessage> = {}): ConversationMessage 
   read: [],
   cards: [],
   economy: false,
+  by_system: false,
   usage_id: uuid(2),
   notice: null,
   contact: null,
@@ -110,7 +113,7 @@ const tudoPode = () => true;
 const CARTOES = { euId: uuid(9), agora: AGORA, pode: tudoPode, ocupado: null, aoCancelarDemanda: nada, aoCancelarProposta: nada };
 const desenhar = (filho: ReactNode) => renderToStaticMarkup(createElement(AvisosProvider, { children: createElement('ol', null, filho) }));
 const daLia = (m: ConversationMessage, modo: 'lite' | 'pro' = 'lite', pode: (p: string) => boolean = tudoPode, ultima = true) =>
-  desenhar(createElement(MensagemDaLia, { item: { de: 'lia', id: m.id, em: m.created_at, fase: m.status === 'parada' ? 'parada' : 'pronta', m }, modo, pode, cartoes: CARTOES, ultima, aoPerguntarDeNovo: nada }));
+  desenhar(createElement(MensagemDaLia, { item: { de: 'lia', id: m.id, em: m.created_at, fase: m.status === 'parada' ? 'parada' : 'pronta', m }, modo, pode, cartoes: CARTOES, ultima, aoPerguntarDeNovo: nada, aoPedirAnalise: nada }));
 
 describe('Conversa: o fluxo de eventos da resposta', () => {
   it('tira os eventos completos e guarda o que ainda não chegou inteiro', () => {
@@ -298,6 +301,45 @@ describe('Conversa: as mensagens na tela', () => {
     expect(daLia(RESPOSTA, 'lite', (p) => p !== 'vendas.ver')).not.toContain('href="/resultados"');
   });
 
+  it('07/10/2026: a resposta montada por regra aparece como resumo do sistema, sem o selo de IA, com o pedido de análise', () => {
+    const doSistema = mensagem({
+      by_system: true,
+      usage_id: null,
+      blocks: [{ kind: 'paragrafo', text: [t('De '), t('30/09/2026', 0), t(' a 06/10/2026, os anúncios custaram '), t('R$ 1.240,00', 1), t('.')], risk: null }],
+      numbers: [
+        { value: '30/09/2026', sources: ['Resultados de 30/09 a 06/10 · periodo · de'] },
+        { value: 'R$ 1.240,00', sources: ['Resultados de 30/09 a 06/10 · totais · investimento'] },
+      ],
+      read: ['Resultados de 30/09 a 06/10'],
+    });
+    const html = daLia(doSistema);
+    // Quem responde é o sistema: o nome, o selo "Sem IA" e a nota de que nenhuma IA escreveu.
+    expect(html).toContain('<b>Resumo do sistema</b>');
+    expect(html).toContain('>Sem IA</span>');
+    expect(html).not.toContain('Feito com IA');
+    expect(html).not.toContain('<b>LIA</b>');
+    expect(html).toContain(NOTA_DO_SISTEMA);
+    // Os números continuam com a fonte, e a lista diz quem leu.
+    expect(html).toContain('De onde vêm os números (2)');
+    expect(html).toContain('O sistema leu: Resultados de 30/09 a 06/10.');
+    expect(html).not.toContain('A LIA leu');
+    // Sem chamada ao modelo não há o que avaliar da IA: fica só o "Copiar".
+    expect(html).toContain('Copiar');
+    expect(html).not.toContain('Fez sentido');
+    expect(html).not.toContain('Discordo');
+    // Na última mensagem, a pessoa pode pedir a análise da LIA; numa mensagem antiga, não.
+    expect(html).toContain('Pedir a análise da LIA');
+    expect(daLia(doSistema, 'lite', tudoPode, false)).not.toContain('Pedir a análise da LIA');
+    // A resposta da LIA não muda.
+    const daIa = daLia(RESPOSTA);
+    expect(daIa).toContain('Feito com IA');
+    expect(daIa).not.toContain('Resumo do sistema');
+    expect(daIa).not.toContain('Pedir a análise da LIA');
+    expect(daIa).not.toContain(NOTA_DO_SISTEMA);
+    // O pedido que o botão manda leva a palavra que a regra do servidor não conhece (lá, o teste é `conversa-por-regra.spec.ts`).
+    expect(PEDIDO_DE_ANALISE).toBe('Analise esses números para mim.');
+  });
+
   it('os cartões da resposta: demanda com cancelar, proposta com Aprovações e a reunião de decisão', () => {
     const cards: ConversationCard[] = [
       { kind: 'demanda', demand: DEMANDA, coupon: null, meeting: null },
@@ -332,7 +374,7 @@ describe('Conversa: as mensagens na tela', () => {
     expect(html).toContain('Quem decide é você.');
     // Quem não pode abrir demanda nem criar cupom não vê os botões de cancelar.
     const soLe = desenhar(
-      createElement(MensagemDaLia, { item: { de: 'lia', id: uuid(1), em: RESPOSTA.created_at, fase: 'pronta', m: mensagem({ cards }) }, modo: 'lite', pode: () => false, cartoes: { ...CARTOES, pode: () => false }, ultima: true, aoPerguntarDeNovo: nada }),
+      createElement(MensagemDaLia, { item: { de: 'lia', id: uuid(1), em: RESPOSTA.created_at, fase: 'pronta', m: mensagem({ cards }) }, modo: 'lite', pode: () => false, cartoes: { ...CARTOES, pode: () => false }, ultima: true, aoPerguntarDeNovo: nada, aoPedirAnalise: nada }),
     );
     expect(soLe).not.toContain('Cancelar a demanda');
     expect(soLe).not.toContain('Cancelar o pedido');
@@ -349,7 +391,7 @@ describe('Conversa: as mensagens na tela', () => {
         { id: 'p2', label: 'Lendo os avisos da Atenção', status: 'lendo' },
       ],
     };
-    const html = desenhar(createElement(MensagemDaLia, { item: respondendo, modo: 'lite', pode: tudoPode, cartoes: CARTOES, ultima: true, aoPerguntarDeNovo: nada }));
+    const html = desenhar(createElement(MensagemDaLia, { item: respondendo, modo: 'lite', pode: tudoPode, cartoes: CARTOES, ultima: true, aoPerguntarDeNovo: nada, aoPedirAnalise: nada }));
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('Lendo os avisos da Atenção…');
     expect(html).toContain('A LIA está respondendo');

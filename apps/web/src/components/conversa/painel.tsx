@@ -17,7 +17,7 @@ import { ContatoDoAtendimento } from './cartoes';
 import { ID_DO_PAINEL, useConversa } from './contexto';
 import { mandarMensagem } from './fluxo';
 import { type Item, MensagemDaLia, MensagemDaPessoa, MensagemDoSistema } from './mensagem';
-import { contaDaMensagem, diaDaMensagem, faixaDa, MENSAGEM_MAXIMA, notaDeDadoPessoal, saudacaoDa, SUGESTOES } from './textos';
+import { contaDaMensagem, diaDaMensagem, faixaDa, MENSAGEM_MAXIMA, notaDeDadoPessoal, PEDIDO_DE_ANALISE, saudacaoDa, SUGESTOES } from './textos';
 
 // O painel da Conversa com a LIA (mockups/prototipo-conversa.html, P5 aprovado em 03/10/2026): ao lado da tela a
 // partir de 1280 px, por cima dela nas menores (com o resto inerte) e em tela cheia no celular. Fica montado
@@ -58,6 +58,7 @@ function paradaLocal(id: string, em: string): Item {
     read: [],
     cards: [],
     economy: false,
+    by_system: false,
     usage_id: null,
     notice: null,
     contact: null,
@@ -316,6 +317,13 @@ export function PainelDaLia({ modal }: { modal: boolean }) {
     const t = ultimaPergunta.current || (pergunta.de === 'eu' ? pergunta.texto : '');
     setItens((atuais) => atuais.slice(0, indice));
     disparar(enviar(t));
+    focarNaConversa();
+  }
+
+  /** Depois de um resumo do sistema: a pergunta seguinte, já escrita, que vai para a LIA. */
+  function pedirAnalise() {
+    if (ocupada || bloqueada) return;
+    disparar(enviar(PEDIDO_DE_ANALISE));
     focarNaConversa();
   }
 
@@ -578,7 +586,7 @@ export function PainelDaLia({ modal }: { modal: boolean }) {
             item.de === 'eu' ? (
               <MensagemDaPessoa key={item.id} item={item} />
             ) : item.de === 'lia' ? (
-              <MensagemDaLia key={item.id} item={item} modo={modo} pode={pode} cartoes={cartoes} ultima={ultima} aoPerguntarDeNovo={tentarDeNovo} />
+              <MensagemDaLia key={item.id} item={item} modo={modo} pode={pode} cartoes={cartoes} ultima={ultima} aoPerguntarDeNovo={tentarDeNovo} aoPedirAnalise={pedirAnalise} />
             ) : (
               <MensagemDoSistema key={item.id} item={item} podeVerContas={pode('contas.ver')} ultima={ultima} contato={dados?.contact ?? null} cartoes={cartoes} aoTentarDeNovo={tentarDeNovo} />
             );

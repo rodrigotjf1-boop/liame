@@ -21,7 +21,8 @@ import { ligarIa, ligarRevisor, ModelosDeTeste, modeloComPreco, parecer, recusa,
 import { hasDb, OWNER_URL } from './env.js';
 
 // Conversa com a LIA (A3, I10): pela rota, com o modelo simulado. A resposta só aparece depois da conferência;
-// o que se decide por regra não chama a IA; a conversa é só de quem a abriu; a demanda é registrada em nome da
+// o que se decide por regra não chama a IA (nem o pedido que o sistema responde sozinho, com os dados que já leu);
+// a conversa é só de quem a abriu; a demanda é registrada em nome da
 // pessoa, com auditoria; "Parar" impede a rodada seguinte; o conteúdo sai em 30 dias e a demanda fica.
 
 describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demanda, limites e isolamento (A3, I10)', () => {
@@ -189,7 +190,7 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
         responde(['paragrafo', 'De 18/09/2026 a 01/10/2026, o investimento na Meta foi de R$ 200,00.'], ['risco', 'o caixa ainda não confirmou pedido de campanha.', 'medio'], ['fazer', 'Confira o link com rastreio no anúncio.']),
       ),
     );
-    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Como foi a semana?' });
+    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Analise a semana para mim.' });
     expect(r.status).toBe(200);
     expect(r.tipo).toContain('text/event-stream');
     expect(r.eventos.map((e) => [e.type, e.step?.status ?? null])).toEqual([
@@ -200,8 +201,8 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
       ['fim', null],
     ]);
     const [inicio, lendo] = r.eventos;
-    expect(inicio!.message).toMatchObject({ role: 'pessoa', text: 'Como foi a semana?', removed_personal_data: 0 });
-    expect(inicio!.conversation).toMatchObject({ brand_id: d.brandId, title: 'Como foi a semana?', lia_answers: 0, max_lia_answers: config.ai.conversationMaxAnswers });
+    expect(inicio!.message).toMatchObject({ role: 'pessoa', text: 'Analise a semana para mim.', removed_personal_data: 0 });
+    expect(inicio!.conversation).toMatchObject({ brand_id: d.brandId, title: 'Analise a semana para mim.', lia_answers: 0, max_lia_answers: config.ai.conversationMaxAnswers });
     expect(lendo!.step).toEqual({ id: 'leitura-1', label: 'Lendo os resultados de 18/09 a 01/10', status: 'lendo' });
 
     const m = mensagemFinal(r.eventos);
@@ -239,7 +240,7 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     const segundo = responder(roteiro(responde(['paragrafo', 'Os R$ 200,00 foram todos na Combo sexta.'])));
     const r2 = await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'E onde foi esse gasto?' });
     expect(mensagemFinal(r2.eventos)).toMatchObject({ role: 'lia', status: 'ok' });
-    expect(enviado(segundo, 0)).toContain('Como foi a semana?');
+    expect(enviado(segundo, 0)).toContain('Analise a semana para mim.');
     expect(enviado(segundo, 0)).toContain('o investimento na Meta foi de R$ 200,00');
 
     // Sua equipe conta respostas, não chamadas ao modelo: foram duas respostas em três chamadas (a primeira leu antes de
@@ -256,10 +257,75 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     expect(TeamActivityResponse.parse(feito.body).items.filter((i) => i.kind === 'respondeu')).toHaveLength(2);
   });
 
+  it('07/10/2026: o pedido que o sistema conhece é respondido por regra, sem IA; o que continua a conversa vai para a LIA', async () => {
+    const d = await dono();
+    const mock = responder(roteiro(responde(['paragrafo', 'Nada foi gasto nesses dias.'])));
+    // "A semana" são os 7 dias completos até ontem, no fuso da loja; o gasto do cenário é de 20/09 e fica fora dela.
+    const hoje = diaNoFuso(new Date(), 'America/Sao_Paulo');
+    const [de, ate] = [menosDias(hoje, 7), menosDias(hoje, 1)];
+    const curto = (dia: string) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
+    const inteiro = (dia: string) => `${curto(dia)}/${dia.slice(0, 4)}`;
+
+    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Como foi a semana?' });
+    expect(r.status).toBe(200);
+    // O fluxo é o mesmo de uma resposta da LIA: o passo da leitura e a mensagem.
+    expect(r.eventos.map((e) => [e.type, e.step?.status ?? null])).toEqual([
+      ['inicio', null],
+      ['passo', 'lendo'],
+      ['passo', 'ok'],
+      ['mensagem', null],
+      ['fim', null],
+    ]);
+    expect(r.eventos[1]!.step).toEqual({ id: 'regra-semana', label: `Lendo os resultados de ${curto(de)} a ${curto(ate)}`, status: 'lendo' });
+    const m = mensagemFinal(r.eventos);
+    expect(m).toMatchObject({ role: 'lia', status: 'ok', by_system: true, usage_id: null, economy: false, cards: [], notice: null, read: [`Resultados de ${curto(de)} a ${curto(ate)}`] });
+    expect(m.blocks.map((b) => [b.kind, b.text.map((s) => s.text).join('')])).toEqual([
+      ['paragrafo', `De ${inteiro(de)} a ${inteiro(ate)}, não houve gasto com anúncios nem pedido com prova de anúncio.`],
+    ]);
+    // Cada número leva a fonte, dita pelo código: aqui, as duas datas do período lido.
+    expect(m.numbers.map((n) => n.value)).toEqual([inteiro(de), inteiro(ate)]);
+    expect(m.numbers[0]!.sources[0]).toMatch(/^Resultados de /);
+    // Nenhuma chamada ao modelo e nenhum uso de IA registrado; a resposta conta na conversa.
+    expect(mock.doGenerateCalls).toHaveLength(0);
+    expect(await usosDaConversa(d.tenantId)).toEqual([]);
+    expect(r.eventos.at(-1)!.conversation).toMatchObject({ lia_answers: 1 });
+    const conversaId = r.eventos[0]!.conversation!.id;
+    const aberta = await api.call('GET', `/v1/conversations/${conversaId}`, { cookie: d.cookie });
+    expect(ConversationResponse.parse(aberta.body).messages[1]).toEqual(m);
+
+    // Os outros pedidos conhecidos: as campanhas (a mesma leitura) e o que pede alguém agora (os avisos).
+    const campanhas = mensagemFinal((await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'Como estão as campanhas?' })).eventos);
+    expect(campanhas).toMatchObject({ role: 'lia', status: 'ok', by_system: true, usage_id: null });
+    expect(campanhas.blocks[0]!.text.map((s) => s.text).join('')).toBe(`De ${inteiro(de)} a ${inteiro(ate)}, nenhuma campanha gastou nem teve pedido confirmado no caixa.`);
+    const avisos = await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'O que precisa de mim?' });
+    expect(avisos.eventos[1]!.step).toEqual({ id: 'regra-avisos', label: 'Lendo os avisos da Atenção', status: 'lendo' });
+    expect(mensagemFinal(avisos.eventos)).toMatchObject({ role: 'lia', status: 'ok', by_system: true, usage_id: null, read: ['Avisos da Atenção'] });
+    expect(mock.doGenerateCalls).toHaveLength(0);
+
+    // O que continua a conversa ("E por quê?") depende do que veio antes: vai para a LIA, com a resposta do sistema no histórico.
+    const r2 = await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'E por quê?' });
+    expect(mensagemFinal(r2.eventos)).toMatchObject({ role: 'lia', status: 'ok', by_system: false });
+    expect(mock.doGenerateCalls).toHaveLength(1);
+    expect(enviado(mock, 0)).toContain('não houve gasto com anúncios nem pedido com prova de anúncio');
+    expect(await usosDaConversa(d.tenantId)).toHaveLength(1);
+
+    // Fonte fora do dia: o sistema também não resume dado velho. Sai o mesmo aviso, sem gastar a IA.
+    const velho = await dono({ lidaHaHoras: 96 });
+    const parado = responder(roteiro(responde(['paragrafo', 'Oi.'])));
+    const v = mensagemFinal((await conversar(velho.cookie, { brand_id: velho.brandId, text: 'Quanto investi?' })).eventos);
+    expect(v).toMatchObject({ role: 'sistema', notice: 'dado_velho', usage_id: null });
+    expect(v.stale_sources).toEqual([expect.objectContaining({ platform: 'Meta', name: 'Conta da Hamburgueria' })]);
+    expect(parado.doGenerateCalls).toHaveLength(0);
+
+    // Com a IA desligada para a empresa, a conversa inteira continua desligada (a regra não responde no lugar dela).
+    const desligada = await dono({ ia: false });
+    expect(mensagemFinal((await conversar(desligada.cookie, { brand_id: desligada.brandId, text: 'Como foi a semana?' })).eventos)).toMatchObject({ role: 'sistema', notice: 'desligada' });
+  });
+
   it('A3-5: número fora do que ela leu derruba a resposta (aviso `recusada`); dado velho vira `dado_velho`, com a fonte', async () => {
     const d = await dono();
     responder(roteiro(pede('resultados_ciclo_fechado', { brand_id: d.brandId, ...PERIODO }), responde(['paragrafo', 'O investimento foi de R$ 250,00.'])));
-    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Quanto investi?' });
+    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Analise quanto investi.' });
     expect(mensagemFinal(r.eventos)).toMatchObject({ role: 'sistema', notice: 'recusada', blocks: [], numbers: [], usage_id: null });
     // A resposta recusada não conta no limite da conversa; o custo dela está registrado.
     expect(r.eventos.at(-1)!.conversation).toMatchObject({ lia_answers: 0 });
@@ -274,7 +340,7 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
 
     const velho = await dono({ lidaHaHoras: 96 });
     responder(roteiro(pede('resultados_ciclo_fechado', { brand_id: velho.brandId, ...PERIODO }), responde(['paragrafo', 'O investimento foi de R$ 200,00.'])));
-    const v = mensagemFinal((await conversar(velho.cookie, { brand_id: velho.brandId, text: 'Quanto investi?' })).eventos);
+    const v = mensagemFinal((await conversar(velho.cookie, { brand_id: velho.brandId, text: 'Analise quanto investi.' })).eventos);
     expect(v).toMatchObject({ role: 'sistema', notice: 'dado_velho' });
     expect(v.stale_sources).toEqual([expect.objectContaining({ platform: 'Meta', name: 'Conta da Hamburgueria' })]);
     expect(v.stale_sources[0]!.freshness).not.toBe('em dia');
@@ -334,7 +400,7 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     // O revisor deixa passar: a resposta chega. Ele recebeu só o texto da LIA, em partes; a chamada dele é do sistema.
     responder(roteiro(leitura(), boa()));
     const revisor = revisar(parecer());
-    const primeira = await conversar(d.cookie, { brand_id: d.brandId, text: 'Como foi a semana?' });
+    const primeira = await conversar(d.cookie, { brand_id: d.brandId, text: 'Analise a semana para mim.' });
     expect(mensagemFinal(primeira.eventos)).toMatchObject({ role: 'lia', status: 'ok' });
     expect(primeira.eventos.at(-1)!.conversation).toMatchObject({ lia_answers: 1 });
     expect(revisor.doGenerateCalls).toHaveLength(1);
@@ -372,7 +438,7 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     // Recusada pela conferência do código, a resposta nem chega ao revisor.
     responder(roteiro(leitura(), responde(['paragrafo', 'O investimento foi de R$ 250,00.'])));
     const naoChamado = revisar(parecer());
-    const pelaRegra = await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'Quanto investi?' });
+    const pelaRegra = await conversar(d.cookie, { brand_id: d.brandId, conversation_id: conversaId, text: 'Analise quanto investi.' });
     expect(mensagemFinal(pelaRegra.eventos)).toMatchObject({ role: 'sistema', notice: 'recusada' });
     expect(naoChamado.doGenerateCalls).toHaveLength(0);
     expect((await recusasDaEmpresa()).map((r) => r.kind)).toEqual(['revisor', 'revisor_sem_resposta', 'numero_fora']);
@@ -448,7 +514,7 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     const desligada = await dono({ ia: false });
     const lista = await api.call('GET', `/v1/conversations?brand_id=${desligada.brandId}`, { cookie: desligada.cookie });
     expect(lista.body).toMatchObject({ items: [], lia: false });
-    expect(mensagemFinal((await conversar(desligada.cookie, { brand_id: desligada.brandId, text: 'Como foi a semana?' })).eventos)).toMatchObject({ notice: 'desligada' });
+    expect(mensagemFinal((await conversar(desligada.cookie, { brand_id: desligada.brandId, text: 'Analise a semana para mim.' })).eventos)).toMatchObject({ notice: 'desligada' });
     expect(mock.doGenerateCalls).toHaveLength(0);
 
     // O telefone e o e-mail saem antes de gravar e antes do modelo (D-A3-4).
@@ -702,7 +768,7 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
         [p.tenantId, p.userId],
       );
     }
-    const limite = mensagemFinal((await conversar(p.cookie, { brand_id: p.brandId, text: 'Como foi a semana?' })).eventos);
+    const limite = mensagemFinal((await conversar(p.cookie, { brand_id: p.brandId, text: 'Analise a semana para mim.' })).eventos);
     expect(limite).toMatchObject({ role: 'sistema', notice: 'limite_pessoa' });
     expect(Date.parse(limite.retry_at!)).toBeGreaterThan(Date.now());
   });
@@ -779,7 +845,7 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
         },
       }),
     );
-    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Como foi a semana?' }, { parar: (e) => e.type === 'passo' && e.step?.status === 'ok' });
+    const r = await conversar(d.cookie, { brand_id: d.brandId, text: 'Analise a semana para mim.' }, { parar: (e) => e.type === 'passo' && e.step?.status === 'ok' });
     expect(r.eventos.map((e) => e.type)).toEqual(['inicio', 'passo', 'passo']);
     setTimeout(soltar, 150);
     const conversaId = r.eventos[0]!.conversation!.id;
