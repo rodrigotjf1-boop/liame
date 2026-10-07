@@ -3,6 +3,7 @@ import {
   ClosedLoopAttentionResponse,
   ClosedLoopQuery,
   ClosedLoopResponse,
+  DailyResultsResponse,
   OrderOriginQuery,
   OrderOriginResponse,
   ProblemDetails,
@@ -60,6 +61,21 @@ export class ResultsController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   closedLoop(@Query({ schema: ClosedLoopQuery }) query: ClosedLoopQuery): Promise<ClosedLoopResponse> {
     return this.results.closedLoop(query);
+  }
+
+  @Get('daily')
+  @Permissao('vendas.ver')
+  @ApiOperation({
+    summary: 'Resultados dia a dia',
+    description:
+      'Para a marca (ou uma loja) no período: o gasto com anúncios e os pedidos confirmados com evidência, um item por dia (zero onde não houve nada), e o período de mesmo tamanho logo antes, somado, com o retorno dele. São os mesmos números de `GET /v1/results/closed-loop`, abertos por dia: o gasto pelo dia da conta de anúncio; o pedido pelo dia do faturamento no fuso da loja. Sem nenhum dado pessoal.',
+  })
+  @ApiOkResponse({ standardSchema: DailyResultsResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  daily(@Query({ schema: ClosedLoopQuery }) query: ClosedLoopQuery): Promise<DailyResultsResponse> {
+    return this.results.daily(query);
   }
 
   @Get('orders')

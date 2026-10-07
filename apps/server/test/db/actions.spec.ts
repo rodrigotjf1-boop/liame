@@ -5,7 +5,7 @@ import { planHashOf } from '../../src/actions/action.service.js';
 import { TOOLS } from '../../src/actions/tools.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { FlagService } from '../../src/flags/flag.service.js';
-import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom, uniqueEmail, TERMOS } from '../helpers/api.js';
+import { codigoErrado, enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi, tokenFrom, uniqueEmail, TERMOS } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 const REAL = 1_000_000;
@@ -181,7 +181,11 @@ describe.skipIf(!hasDb)('pedido de ação: política, orçamento, fingerprint e 
       api.call('POST', `/v1/actions/${pedido.body.id}/approve`, { cookie: p.cookie, body: { plan_hash: planHash, code: c } });
 
     expect((await approve(adm, 'a'.repeat(64), await code(adm))).body.code).toBe('plano-mudou');
-    expect((await approve(adm, pedido.body.plan_hash, '000000')).body.code).toBe('codigo-invalido');
+    // Falhou uma vez no CI (07/10/2026) com a resposta sem `code`, usando "000000" como código errado (ERR-114): o
+    // código errado passa a ser um que o app não mostraria, e o status e o corpo ficam na mensagem.
+    const recusado = await approve(adm, pedido.body.plan_hash, codigoErrado(adm.secret));
+    expect(recusado.status, JSON.stringify(recusado.body)).toBe(401);
+    expect(recusado.body.code).toBe('codigo-invalido');
 
     // Administradora com limite de R$ 5 aprova R$ 20: registra, mas falta o dono (ADR-017).
     const parcial = await approve(adm, pedido.body.plan_hash, await code(adm));

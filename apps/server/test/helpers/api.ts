@@ -99,6 +99,19 @@ export async function enableMfa(api: TestApi, cookie: string): Promise<{ secret:
   return { secret: setup.body.secret, codes: confirm.body.recovery_codes };
 }
 
+/**
+ * Um código de seis dígitos que o app autenticador não mostraria agora: diferente dos códigos dos passos vizinhos.
+ * Um código fixo ("000000") coincide com o de verdade uma vez em algumas centenas de milhares de execuções, e o
+ * teste que esperava a recusa falha sem motivo aparente (ERR-114).
+ */
+export function codigoErrado(secret: string): string {
+  const validos = new Set([-2, -1, 0, 1, 2].map((d) => totpCode(secret, currentStep() + d)));
+  for (let n = 0; ; n += 1) {
+    const c = String(n).padStart(6, '0');
+    if (!validos.has(c)) return c;
+  }
+}
+
 /** Consulta como dono do banco, em escopo de sistema (a RLS é forçada até para o dono). */
 export async function ownerQuery<T extends pg.QueryResultRow>(sqlText: string, params: unknown[] = []): Promise<T[]> {
   const client = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL_OWNER });

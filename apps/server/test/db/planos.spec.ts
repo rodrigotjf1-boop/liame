@@ -19,7 +19,7 @@ import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { ResultsService } from '../../src/results/results.service.js';
 import { EstrategistaLoop, TENTATIVAS } from '../../src/worker/estrategista-loop.js';
 import { EstrategistaService } from '../../src/worker/estrategista.service.js';
-import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
+import { codigoErrado, enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import { ligarIa, ligarRevisor, ModelosDeTeste, parecer, recusa, rotaCompartilhada, uso } from '../helpers/ia.js';
 import { hasDb, OWNER_URL } from './env.js';
 
@@ -258,7 +258,7 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     const p = await ofertaProposta(d);
     const aprovar = async (hash: string, code: string) => api.call('POST', `/v1/plans/${p.plan.id}/approve`, { cookie: d.cookie, body: { plan_hash: hash, code } });
     expect((await aprovar('0'.repeat(64), await codigo(d))).body.code).toBe('plano-mudou');
-    expect((await aprovar(p.plan.content_hash, '000000')).status).toBe(401);
+    expect((await aprovar(p.plan.content_hash, codigoErrado(d.secret))).status).toBe(401);
     const ok = await aprovar(p.plan.content_hash, await codigo(d));
     expect(ok.status).toBe(200);
     const aprovado = PlanResponse.parse(ok.body);
