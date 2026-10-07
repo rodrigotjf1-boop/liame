@@ -11,11 +11,12 @@ import { horaDe } from '@/lib/formato';
 import type { Modo } from '@/lib/modo';
 import { type AcoesDosCartoes, CartaoDaConversa, ContatoDoAtendimento } from './cartoes';
 import { RetornoDaMensagem } from './retorno-da-mensagem';
-import { avisoDoSistema, caminhosDa, gruposDe, registradoNoAviso, textoDaResposta } from './textos';
+import { avisoDoSistema, caminhosDa, gruposDe, NOTA_DO_SISTEMA, registradoNoAviso, textoDaResposta } from './textos';
 
 // As mensagens da conversa (protótipo P5). A da pessoa, como foi guardada (sem dado pessoal); a da LIA, em blocos já
 // conferidos, com a fonte de cada número, o que ela leu e o que ela registrou; e o aviso do sistema, que nunca é
-// escrito por IA. Durante a resposta, aparece o que a LIA está lendo.
+// escrito por IA. Durante a resposta, aparece o que a LIA está lendo. O pedido que o sistema conhece é respondido por
+// regra, sem IA (`by_system`): a resposta aparece como "Resumo do sistema", com o selo "Sem IA", como no Explicar.
 
 /** O aviso que ficou no lugar de uma resposta. `cards`: o que a LIA já tinha registrado antes dele (a demanda, a proposta de cupom). */
 type AvisoDoServidor = Pick<ConversationMessage, 'notice' | 'retry_at' | 'budget_window' | 'stale_sources' | 'contact' | 'cards'>;
@@ -48,7 +49,20 @@ export function MensagemDaPessoa({ item }: { item: Extract<Item, { de: 'eu' }> }
   );
 }
 
-function Cabecalho({ em, saudacao = false, parada = false }: { em: string; saudacao?: boolean; parada?: boolean }) {
+function Cabecalho({ em, saudacao = false, parada = false, doSistema = false }: { em: string; saudacao?: boolean; parada?: boolean; doSistema?: boolean }) {
+  // O resumo montado por regra não é da LIA: leva o nome e o selo do sistema.
+  if (doSistema) {
+    return (
+      <div className="msg-cab">
+        <span className="av-sistema" aria-hidden="true">
+          <Icone nome="file" />
+        </span>
+        <b>Resumo do sistema</b>
+        <span className="st st--espera">Sem IA</span>
+        <time dateTime={em}>{horaDe(em)}</time>
+      </div>
+    );
+  }
   return (
     <div className="msg-cab">
       <IconeLia />
@@ -73,6 +87,7 @@ export function MensagemDaLia({
   cartoes,
   ultima,
   aoPerguntarDeNovo,
+  aoPedirAnalise,
 }: {
   item: Extract<Item, { de: 'lia' }>;
   modo: Modo;
@@ -81,6 +96,8 @@ export function MensagemDaLia({
   /** É a última mensagem da conversa: só nela "Perguntar de novo" faz sentido. */
   ultima: boolean;
   aoPerguntarDeNovo: () => void;
+  /** Depois de um resumo do sistema, a pessoa pode pedir a análise da LIA (a pergunta seguinte, já escrita). */
+  aoPedirAnalise: () => void;
 }) {
   const [fontesAbertas, setFontesAbertas] = useState(false);
   const [destaque, setDestaque] = useState<number | null>(null);
@@ -166,10 +183,12 @@ export function MensagemDaLia({
   }
   const texto = (t: ExplanationSegment[]) => <TextoDaExplicacao trechos={t} numeros={m.numbers} aoTocar={mostrarFonte} />;
   const caminhos = caminhosDa(m.read, pode);
+  const doSistema = m.by_system;
+  const pedirAnalise = doSistema && ultima;
 
   return (
     <li className="msg msg--lia" id={`msg-${item.id}`}>
-      <Cabecalho em={item.em} />
+      <Cabecalho em={item.em} doSistema={doSistema} />
       <div className="msg-corpo">
         {gruposDe(m.blocks).map((g, i) => {
           if (g.tipo === 'paragrafo') return <p key={i}>{texto(g.texto)}</p>;
@@ -204,14 +223,21 @@ export function MensagemDaLia({
         {m.cards.map((c, i) => (
           <CartaoDaConversa key={`${c.kind}-${i}`} cartao={c} numeros={m.numbers} aoTocarNumero={mostrarFonte} acoes={cartoes} />
         ))}
+        {doSistema && <p className="explica-nota">{NOTA_DO_SISTEMA}</p>}
       </div>
-      {caminhos.length > 0 && (
+      {(caminhos.length > 0 || pedirAnalise) && (
         <div className="explica-acoes">
           {caminhos.map((c) => (
             <Link className="btn btn--sm" href={c.href} key={c.href}>
               {c.rotulo}
             </Link>
           ))}
+          {pedirAnalise && (
+            <button className="btn btn--sm" type="button" onClick={aoPedirAnalise}>
+              <Icone nome="sparkles" pequeno />
+              Pedir a análise da LIA
+            </button>
+          )}
         </div>
       )}
       {modo === 'pro' && m.read.length > 0 && (
@@ -246,7 +272,11 @@ export function MensagemDaLia({
               </div>
             ))}
           </dl>
-          {m.read.length > 0 && <p className="explica-nota">A LIA leu: {m.read.join('; ')}.</p>}
+          {m.read.length > 0 && (
+            <p className="explica-nota">
+              {doSistema ? 'O sistema leu' : 'A LIA leu'}: {m.read.join('; ')}.
+            </p>
+          )}
         </details>
       )}
       <p className="sr-only" role="status" aria-live="polite">

@@ -92,7 +92,7 @@ export function RetornoDaMensagem({ id, usageId, texto }: { id: string; usageId:
     </button>
   );
 
-  // Resposta sem a chamada registrada (não deveria acontecer): fica só o "Copiar".
+  // Resposta sem chamada ao modelo (o resumo que o sistema montou por regra): não há o que avaliar da IA; fica só o "Copiar".
   if (!usageId) return <div className="msg-pe">{botaoDeCopiar}</div>;
 
   return (

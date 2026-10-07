@@ -249,7 +249,7 @@ describe('o que se decide por regra e o que volta ao modelo', () => {
   it('o histórico começa pela pessoa e não leva aviso do sistema nem resposta parada', () => {
     const m = (role: string, extra: Partial<ConversationMessage> = {}): ConversationMessage => ({
       id: '00000000-0000-7000-8000-000000000000', role, created_at: '', status: 'ok', text: null, removed_personal_data: null, blocks: [], numbers: [], read: [], cards: [],
-      economy: false, usage_id: null, notice: null, contact: null, retry_at: null, budget_window: null, stale_sources: [], ...extra,
+      economy: false, by_system: false, usage_id: null, notice: null, contact: null, retry_at: null, budget_window: null, stale_sources: [], ...extra,
     });
     const lia = (texto: string, status = 'ok') => m('lia', { status, blocks: [{ kind: 'paragrafo', risk: null, text: [{ text: texto, number: null }] }] });
     expect(

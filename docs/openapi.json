@@ -35079,6 +35079,9 @@
                           "economy": {
                             "type": "boolean"
                           },
+                          "by_system": {
+                            "type": "boolean"
+                          },
                           "usage_id": {
                             "type": [
                               "string",
@@ -35178,6 +35181,7 @@
                           "read",
                           "cards",
                           "economy",
+                          "by_system",
                           "usage_id",
                           "notice",
                           "contact",
@@ -36080,6 +36084,9 @@
                         "economy": {
                           "type": "boolean"
                         },
+                        "by_system": {
+                          "type": "boolean"
+                        },
                         "usage_id": {
                           "type": [
                             "string",
@@ -36179,6 +36186,7 @@
                         "read",
                         "cards",
                         "economy",
+                        "by_system",
                         "usage_id",
                         "notice",
                         "contact",

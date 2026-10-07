@@ -30,7 +30,7 @@ const palavras = (lista: string): Set<string> => new Set(lista.split(/\s+/).filt
 const COMUNS = palavras(`
   lia liame por favor pf pfv me diz diga fala fale conta conte mostra mostre manda mande ver quero queria gostaria saber sabe pode poderia consegue informa passa
   a o as os um uma da do das dos de na no nas nos em e que qual quais como quanto quanta quantos quantas
-  foi foram esta estao ta tao anda andam vai vao ficou ficaram deu deram teve tive tivemos temos tem houve fez fizemos sao eh
+  foi foram esta estao ta tao anda andam vai vao ficou ficaram deu deram dao teve tive tivemos temos tem houve fez fizemos sao eh
   minha meu meus minhas nossa nosso nossos nossas esse essa esses essas este estes estas isso
   semana ultimos ultimas 7 sete dias loja empresa marca negocio entao agora`);
 
