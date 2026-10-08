@@ -95,7 +95,35 @@ type LinhaEnvio = {
   touch_at: Date | string | null;
 };
 
+/**
+ * O tipo da última falha da passagem, guardado ao lado do texto (migration 0056): a tela separa "o Google pediu para
+ * esperar" (a conta volta sozinha) de "falta a permissão" (é autorizar o Google de novo) sem adivinhar pelo texto.
+ */
+export type TipoDaFalha = 'esperar' | 'permissao' | 'parada' | 'outro';
+type Falha = { texto: string; tipo: TipoDaFalha };
+
 const vazio = (status: ResultadoConversoes['status'], erro?: string): ResultadoConversoes => ({ status, novos: 0, desistiu: 0, enviados: 0, aceitos: 0, recusados: 0, corrigidos: 0, ...(erro ? { erro } : {}) });
+
+/**
+ * Os pedidos que o Liame atribui ao Google para uma conta e que ainda não entraram na fila dela: a mesma regra na
+ * rotina (que os põe na fila) e na tela (que conta os que esperam). É o pedido confirmado, com o clique que venceu a
+ * atribuição (o mesmo da tela de Resultados). Com a campanha conhecida, vai para a conta dela; só com a plataforma,
+ * vai para esta conta se ela é a única do Google com destino na marca. `ate` nulo: sem esperar as duas horas.
+ */
+export function pedidosAInformar(d: { tenant_id: string; brand_id: string; connected_account_id: string }, janela: { desde: string; ate: string | null }): SQL {
+  return sql`
+      from liame.order_fact o
+      join liame.attribution_result r on r.order_id = o.id and r.model_id = ${MODELO_PADRAO} and r.counted and r.provider = 'google_ads' and r.touchpoint_id is not null
+      join liame.touchpoint t on t.id = r.touchpoint_id and coalesce(t.gclid, t.gbraid, t.wbraid) is not null
+      left join liame.campaign c on c.id = r.campaign_id
+     where o.tenant_id = ${d.tenant_id} and o.brand_id = ${d.brand_id} and o.status = 'confirmado'
+       and o.confirmed_at >= ${janela.desde}::timestamptz ${janela.ate === null ? sql`` : sql`and o.confirmed_at <= ${janela.ate}::timestamptz`}
+       and (c.connected_account_id = ${d.connected_account_id}
+            or (c.id is null and not exists (
+                  select 1 from liame.conversion_destination x
+                   where x.brand_id = ${d.brand_id} and x.stopped_at is null and x.connected_account_id <> ${d.connected_account_id})))
+       and not exists (select 1 from liame.conversion_upload u where u.order_id = o.id and u.connected_account_id = ${d.connected_account_id})`;
+}
 
 /** O clique que vai no evento: um só, na ordem que o Google recomenda (o gclid primeiro). */
 export function cliqueDoEnvio(l: Pick<LinhaEnvio, 'gclid' | 'gbraid' | 'wbraid'>): CliqueGoogle | null {
@@ -147,20 +175,20 @@ export class ConversoesGoogle {
       return vazio('ignorada');
     }
     if (lida.trava) {
-      await this.marcar(destino, agora, 'parada: a empresa ou a Liame parou as ações desta conta', INTERVALO_CONVERSOES_MIN, false);
+      await this.marcar(destino, agora, { texto: 'parada: a empresa ou a Liame parou as ações desta conta', tipo: 'parada' }, INTERVALO_CONVERSOES_MIN, false);
       return vazio('parada');
     }
     const credencial = lida.segredo ? (JSON.parse(lida.segredo) as CredencialGuardada) : null;
     if (credencial?.tipo !== 'google') {
-      await this.marcar(destino, agora, 'sem_autorizacao: a conta do Google não está autorizada', 24 * 60, false);
+      await this.marcar(destino, agora, { texto: 'sem_autorizacao: a conta do Google não está autorizada', tipo: 'permissao' }, 24 * 60, false);
       return vazio('sem_permissao', 'sem autorização do Google');
     }
     if (!credencial.escopos.includes(ESCOPO_DATA_MANAGER)) {
-      await this.marcar(destino, agora, 'sem_permissao: a autorização do Google não inclui o envio de conversões; conecte o Google de novo', 24 * 60, false);
+      await this.marcar(destino, agora, { texto: 'sem_permissao: a autorização do Google não inclui o envio de conversões; conecte o Google de novo', tipo: 'permissao' }, 24 * 60, false);
       return vazio('sem_permissao', 'a autorização não inclui o envio de conversões');
     }
     if (!soDigitos(destino.external_id)) {
-      await this.marcar(destino, agora, 'conta_invalida: o id da conta do Google Ads não é numérico', 24 * 60, false);
+      await this.marcar(destino, agora, { texto: 'conta_invalida: o id da conta do Google Ads não é numérico', tipo: 'outro' }, 24 * 60, false);
       return vazio('falhou', 'id da conta inválido');
     }
 
@@ -272,10 +300,11 @@ export class ConversoesGoogle {
       if (e) this.logger.warn(`conta ${destino.connected_account_id}: ${e.tipo}: ${e.message}`);
       else this.logger.error(`conta ${destino.connected_account_id}: ${err instanceof Error ? err.message : String(err)}`);
       const falhas = destino.failures + 1;
+      const semAcesso = e !== null && (e.tipo === 'permissao' || e.tipo === 'autenticacao');
       // Sem permissão ou token recusado: um dia; o resto, o que a plataforma pediu ou 30 minutos dobrando até 12 horas.
-      const esperaMs = e && (e.tipo === 'permissao' || e.tipo === 'autenticacao') ? DIA_MS : e?.esperarMs && e.esperarMs > 0 ? e.esperarMs : Math.min(30 * MIN_MS * 2 ** (falhas - 1), 12 * 60 * MIN_MS);
-      await this.marcar(destino, agora, texto, Math.ceil(esperaMs / MIN_MS), true);
-      return { ...resultado, status: e && (e.tipo === 'permissao' || e.tipo === 'autenticacao') ? 'sem_permissao' : 'falhou', erro: texto };
+      const esperaMs = semAcesso ? DIA_MS : e?.esperarMs && e.esperarMs > 0 ? e.esperarMs : Math.min(30 * MIN_MS * 2 ** (falhas - 1), 12 * 60 * MIN_MS);
+      await this.marcar(destino, agora, { texto, tipo: semAcesso ? 'permissao' : e && passageira(e) ? 'esperar' : 'outro' }, Math.ceil(esperaMs / MIN_MS), true);
+      return { ...resultado, status: semAcesso ? 'sem_permissao' : 'falhou', erro: texto };
     }
     await this.marcar(destino, agora, null, filaCheia ? COM_FILA_MIN : INTERVALO_CONVERSOES_MIN, false, true);
     return resultado;
@@ -288,23 +317,11 @@ export class ConversoesGoogle {
   private async prepararFila(d: LinhaDestino, agora: Date): Promise<{ novos: number; desistiu: number }> {
     const ate = new Date(agora.getTime() - ESPERA_ANTES_DE_INFORMAR_MIN * MIN_MS).toISOString();
     return withTenant(this.db, d.tenant_id, async (tx) => {
-      // O pedido que o Liame atribui ao Google (o mesmo da tela de Resultados), pelo clique que venceu. Com a campanha
-      // conhecida, vai para a conta dela; só com a plataforma, vai para esta conta se ela é a única do Google com
-      // destino na marca.
+      // O pedido que o Liame atribui ao Google, confirmado desde o começo do destino e há pelo menos duas horas.
       const candidatos = await tx.execute<{ id: string; liquido: string; currency: string; confirmed_at: Date | string; touchpoint_id: string; tipo: TipoDeClique }>(sql`
         select o.id, (o.revenue_micros - o.refunded_micros)::text as liquido, o.currency, o.confirmed_at, r.touchpoint_id,
                case when t.gclid is not null then 'gclid' when t.gbraid is not null then 'gbraid' else 'wbraid' end as tipo
-          from liame.order_fact o
-          join liame.attribution_result r on r.order_id = o.id and r.model_id = ${MODELO_PADRAO} and r.counted and r.provider = 'google_ads' and r.touchpoint_id is not null
-          join liame.touchpoint t on t.id = r.touchpoint_id and coalesce(t.gclid, t.gbraid, t.wbraid) is not null
-          left join liame.campaign c on c.id = r.campaign_id
-         where o.tenant_id = ${d.tenant_id} and o.brand_id = ${d.brand_id} and o.status = 'confirmado'
-           and o.confirmed_at >= ${new Date(d.starts_at).toISOString()}::timestamptz and o.confirmed_at <= ${ate}::timestamptz
-           and (c.connected_account_id = ${d.connected_account_id}
-                or (c.id is null and not exists (
-                      select 1 from liame.conversion_destination x
-                       where x.brand_id = ${d.brand_id} and x.stopped_at is null and x.connected_account_id <> ${d.connected_account_id})))
-           and not exists (select 1 from liame.conversion_upload u where u.order_id = o.id and u.connected_account_id = ${d.connected_account_id})
+        ${pedidosAInformar(d, { desde: new Date(d.starts_at).toISOString(), ate })}
          order by o.confirmed_at, o.id
          limit ${POR_PASSAGEM}`);
       let novos = 0;
@@ -371,12 +388,13 @@ export class ConversoesGoogle {
   }
 
   /** Quando a conta volta para a fila, e como foi esta passagem. `falha` soma na conta das falhas seguidas; `ok` zera. */
-  private async marcar(d: LinhaDestino, agora: Date, erro: string | null, emMinutos: number, falha: boolean, ok = false): Promise<void> {
+  private async marcar(d: LinhaDestino, agora: Date, erro: Falha | null, emMinutos: number, falha: boolean, ok = false): Promise<void> {
     const proxima = new Date(agora.getTime() + emMinutos * MIN_MS).toISOString();
     await withTenant(this.db, d.tenant_id, (tx) =>
       tx.execute(sql`
         update liame.conversion_destination
-           set next_run_at = ${proxima}::timestamptz, last_run_at = now(), last_error = ${erro ? erro.slice(0, 300) : null},
+           set next_run_at = ${proxima}::timestamptz, last_run_at = now(), last_error = ${erro ? erro.texto.slice(0, 300) : null},
+               last_error_kind = ${erro ? erro.tipo : null},
                last_ok_at = case when ${ok}::boolean then now() else last_ok_at end,
                failures = case when ${falha}::boolean then failures + 1 when ${ok}::boolean then 0 else failures end,
                updated_at = now()

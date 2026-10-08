@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { ESCOPOS_GOOGLE, escoposDoGoogle, urlDeAutorizacao } from '../src/connections/oauth.js';
 import { ErroConector } from '../src/connectors/cliente-http.js';
-import { corpoDaIngestao, motivoDoErro, motivoSemIdentificador, resultadoDoDestino, valorDaMoeda } from '../src/connectors/google-ads/data-manager.js';
+import { corpoDaIngestao, ESCOPO_DATA_MANAGER, motivoDoErro, motivoSemIdentificador, resultadoDoDestino, valorDaMoeda } from '../src/connectors/google-ads/data-manager.js';
 import { cliqueDoEnvio } from '../src/conversoes/conversoes-google.js';
+import { situacaoDaConta } from '../src/conversoes/conversoes.service.js';
 
 // A5 · Y1: o que o Liame manda ao Google quando informa uma venda confirmada (Data Manager API), sem banco. O corpo é
 // conferido campo a campo: é a prova do critério A5-3 (nenhum telefone, e-mail, margem ou custo no que é enviado).
@@ -83,5 +85,40 @@ describe('conversões para o Google: o que sai do Liame (A5, Y1)', () => {
     expect(resultadoDoDestino({ requestStatus: 'FAILED' })).toEqual({ situacao: 'recusado', motivo: 'o Google recusou o registro' });
     // Com um evento por envio, "parte passou" não deveria existir: vale como recusa.
     expect(resultadoDoDestino({ requestStatus: 'PARTIAL_SUCCESS', errorInfo: { errorCounts: [{ reason: 'CLICK_NOT_FOUND' }] } })).toEqual({ situacao: 'recusado', motivo: 'CLICK_NOT_FOUND' });
+  });
+});
+
+describe('conversões para o Google: a permissão pedida e a situação da conta na tela (A5, Y1)', () => {
+  const LEITURA = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/analytics.readonly'];
+
+  it('a autorização do Google só pede a permissão de informar vendas para a empresa com a função ligada', () => {
+    expect(escoposDoGoogle(false)).toEqual(LEITURA);
+    expect(escoposDoGoogle(true)).toEqual([...LEITURA, ESCOPO_DATA_MANAGER]);
+    // A lista devolvida é uma cópia: quem a recebe não muda a de leitura.
+    escoposDoGoogle(false).push('x');
+    expect(ESCOPOS_GOOGLE).toEqual(LEITURA);
+
+    const config = { oauth: { meta: null, regem: null, google: { clientId: 'cliente-de-teste.apps.googleusercontent.com', clientSecret: 'segredo-do-cliente-de-teste', authUrl: 'https://accounts.example', tokenUrl: 'https://oauth2.example' } } };
+    const p = { estado: 'estado-de-teste', redirectUri: 'https://api.example/v1/oauth/callback', verificador: 'verificador-de-teste', versaoMeta: 'v26.0' };
+    const pedido = (url: string) => new URL(url).searchParams.get('scope');
+    // Sem dizer nada, é a de sempre.
+    expect(pedido(urlDeAutorizacao('google', config, p))).toBe(LEITURA.join(' '));
+    expect(pedido(urlDeAutorizacao('google', config, { ...p, escoposGoogle: escoposDoGoogle(true) }))).toBe([...LEITURA, ESCOPO_DATA_MANAGER].join(' '));
+  });
+
+  it('a situação da conta: a parada pesa mais, depois a autorização, o destino, a parada da pessoa e a última passagem', () => {
+    const normal = { parada: false, autorizada: true, temDestino: true, parado: false, falha: null };
+    expect(situacaoDaConta(normal)).toBe('informando');
+    expect(situacaoDaConta({ ...normal, falha: 'esperar' })).toBe('esperando_a_plataforma');
+    expect(situacaoDaConta({ ...normal, falha: 'outro' })).toBe('esperando_a_plataforma');
+    // O Google recusou a autorização na passagem: é autorizar de novo, mesmo com a permissão no papel.
+    expect(situacaoDaConta({ ...normal, falha: 'permissao' })).toBe('sem_permissao');
+    // A parada registrada por uma passagem antiga não vale: a parada é conferida na hora.
+    expect(situacaoDaConta({ ...normal, falha: 'parada' })).toBe('informando');
+    expect(situacaoDaConta({ ...normal, parado: true, falha: 'esperar' })).toBe('parado');
+    expect(situacaoDaConta({ ...normal, temDestino: false })).toBe('sem_destino');
+    expect(situacaoDaConta({ ...normal, autorizada: false, temDestino: false })).toBe('sem_permissao');
+    expect(situacaoDaConta({ ...normal, autorizada: false, parado: true })).toBe('sem_permissao');
+    expect(situacaoDaConta({ parada: true, autorizada: false, temDestino: false, parado: true, falha: 'permissao' })).toBe('equipe_parada');
   });
 });

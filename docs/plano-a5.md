@@ -47,7 +47,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **C3d** | Regem | Só se a D-A5-9 for "sim": no cardápio online, o aviso de medição com a escolha da pessoa e a guarda do que a Meta exige para um evento de site | Y7 |
 | **C2c** | RegemCast | O token do piloto com as permissões de rascunho e disparo (classe DMS); conferir se a campanha devolve o cupom usado ou só os números | Y5 |
 
-> **Andamento.** **Y1, servidor (08/10/2026):** a migration 0055, o conector da Data Manager API, a rotina de envio e a flag `conversoes_google`, desligada; sem tela e sem rota. **P14 (08/10/2026; aguarda a aprovação do dono):** o protótipo da tela, `mockups/prototipo-contas-conversoes.html`: um cartão em Contas conectadas, depois da autorização do Google. Faltam da Y1 as rotas, a permissão nova na autorização do Google e a tela.
+> **Andamento.** **Y1, servidor (08/10/2026):** a migration 0055, o conector da Data Manager API, a rotina de envio e a flag `conversoes_google`, desligada; sem tela e sem rota. **P14 (08/10/2026; aguarda a aprovação do dono):** o protótipo da tela, `mockups/prototipo-contas-conversoes.html`: um cartão em Contas conectadas, depois da autorização do Google. **Y1, rotas (08/10/2026):** a migration 0056, as quatro rotas que a tela vai ler (a situação de cada conta, as conversões da conta lidas no Google, escolher e parar) e a permissão `auth/datamanager` na autorização do Google, só para a empresa com a função ligada. Falta da Y1 a tela, que espera o aceite do P14.
 
 ## 4. Decisões (aprovadas pelo dono em 08/10/2026, como recomendadas)
 
@@ -129,7 +129,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | Para | Preciso de |
 | --- | --- |
 | Começar | ✅ Aceite deste plano e das decisões da seção 4 (08/10/2026) |
-| Y1 | Autorizar o Google de novo, com a permissão a mais (eu aviso quando); criar a ação de conversão na conta do Google Ads (eu guio, um print por vez, com o caminho conferido na página oficial); ligar `conversoes_google` |
+| Y1 | Ativar a Data Manager API no projeto do Google Cloud da distribuição (eu guio, um print por vez; conferir na mesma hora se a permissão nova precisa ser declarada na tela de acesso a dados do app); ligar `conversoes_google`; autorizar o Google de novo, com a permissão a mais (só depois da flag: é ela que faz a autorização pedir a permissão); criar a ação de conversão na conta do Google Ads (eu guio, com o caminho conferido na página oficial) e escolhê-la na tela |
 | Y2 e Y3 | O piloto da A4 andando (os tetos de verba e a escrita na Meta ligada); depois, ligar `google_write` |
 | Y2 | Pedir o nível Básico do Google, que exige a verificação da marca do projeto (eu guio) |
 | Y5 | No RegemCast: o número do piloto na API oficial (a pergunta aberta do A0-7), o token com as permissões de rascunho e disparo, o teto de gasto das mensagens e um modelo aprovado pela Meta |

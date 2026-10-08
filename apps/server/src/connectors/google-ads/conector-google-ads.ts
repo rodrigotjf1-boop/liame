@@ -98,6 +98,12 @@ const GRUPO_URL = 'ad_group.final_url_suffix, ad_group.tracking_url_template';
 const ANUNCIO = 'ad_group_ad.ad.id, ad_group_ad.ad.name, ad_group_ad.ad.type, ad_group_ad.status, ad_group.id';
 const ANUNCIO_URL = 'ad_group_ad.ad.final_urls, ad_group_ad.ad.final_url_suffix, ad_group_ad.ad.tracking_url_template';
 
+/** Uma ação de conversão da conta, como a tela a mostra: o id, o nome, a categoria do Google e se ela entra nos lances. */
+export type AcaoDeConversao = { id: string; name: string; category: string | null; primary: boolean };
+
+/** Teto de ações devolvidas: uma conta tem poucas; a lista é para uma pessoa escolher. */
+const MAX_ACOES_DE_CONVERSAO = 200;
+
 /** Sufixo e modelo de um nível, como o Google devolve (vazio ou ausente = o nível não define). */
 export type UrlDoNivel = { finalUrlSuffix?: string; trackingUrlTemplate?: string };
 
@@ -315,6 +321,30 @@ export class ConectorGoogleAds implements ConectorLeitura {
       for (const l of porCampanha) if (l.campaign?.id !== undefined) pontos.push(...pontosDaLinha('campaign', String(l.campaign.id), l));
     }
     return pontos;
+  }
+
+  /**
+   * As ações de conversão ATIVAS da conta que recebem venda importada por clique (`UPLOAD_CLICKS`), por nome: é entre
+   * elas que uma pessoa escolhe onde o Liame informa as vendas (A5, Y1; base de conhecimento §3.2). Mesmo escopo de
+   * leitura das campanhas. O filtro vai na consulta e é conferido de novo aqui: o que não for desse tipo, ou não
+   * estiver ativo, não entra, mesmo que a plataforma devolva.
+   */
+  async lerAcoesDeConversao(conta: ContextoConta): Promise<AcaoDeConversao[]> {
+    type Linha = { conversionAction?: { id?: string | number; name?: string; status?: string; type?: string; category?: string; primaryForGoal?: boolean } };
+    const linhas = await this.consultar<Linha>(
+      conta.credencial,
+      conta.externalId,
+      conta.loginCustomerId,
+      "SELECT conversion_action.id, conversion_action.name, conversion_action.status, conversion_action.type, conversion_action.category, conversion_action.primary_for_goal FROM conversion_action WHERE conversion_action.type = 'UPLOAD_CLICKS' AND conversion_action.status = 'ENABLED' ORDER BY conversion_action.name",
+    );
+    const acoes: AcaoDeConversao[] = [];
+    for (const { conversionAction: a } of linhas) {
+      const id = idNumerico(a?.id);
+      if (!a || !soDigitos(id) || a.type !== 'UPLOAD_CLICKS' || a.status !== 'ENABLED') continue;
+      const nome = typeof a.name === 'string' ? a.name.trim().slice(0, 200) : '';
+      acoes.push({ id, name: nome || `Conversão ${id}`, category: typeof a.category === 'string' && a.category ? a.category.slice(0, 60) : null, primary: a.primaryForGoal === true });
+    }
+    return acoes.sort((x, y) => x.name.localeCompare(y.name, 'pt-BR') || x.id.localeCompare(y.id)).slice(0, MAX_ACOES_DE_CONVERSAO);
   }
 }
 

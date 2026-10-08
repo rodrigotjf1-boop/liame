@@ -46,13 +46,22 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     }
   });
 
-  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10) e a que lê o objeto na plataforma de anúncio (A4, X8)', () => {
+  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10), a que lê o objeto na plataforma de anúncio (A4, X8) e as duas que leem as conversões da conta no Google (A5, Y1)', () => {
     const semTransacao = listRoutes(api.app)
       .filter((r) => r.semTransacao)
       .map((r) => `${r.method} ${r.path}`)
       .sort();
     // `GET /v1/actions/options` só lê: o banco numa transação curta e a plataforma depois, sem transação aberta.
-    expect(semTransacao).toEqual(['GET /v1/actions/options', 'POST /v1/ai/explain/attention', 'POST /v1/ai/explain/results', 'POST /v1/conversations/messages']);
+    // As duas das conversões leem a lista de conversões no Google: `actions` só lê; `destination` confere o id
+    // escolhido no Google e só então grava, noutra transação curta, com o evento de auditoria junto (manual).
+    expect(semTransacao).toEqual([
+      'GET /v1/actions/options',
+      'GET /v1/conversions/google/actions',
+      'POST /v1/ai/explain/attention',
+      'POST /v1/ai/explain/results',
+      'POST /v1/conversations/messages',
+      'PUT /v1/conversions/google/destination',
+    ]);
   });
 
   it('cookie inválido também é 401', async () => {
