@@ -69,6 +69,7 @@ ser os oficiais, senão a API não sobe; fora dela, os testes apontam para uma p
 | `META_GRAPH_URL` | Graph API / Marketing API da Meta | `https://graph.facebook.com` |
 | `GOOGLE_ADS_URL` | Google Ads API (REST) | `https://googleads.googleapis.com` |
 | `GA4_DATA_URL` · `GA4_ADMIN_URL` | GA4 Data API e Admin API | `https://analyticsdata.googleapis.com` · `https://analyticsadmin.googleapis.com` |
+| `GOOGLE_DATA_MANAGER_URL` | Data Manager API do Google: as vendas confirmadas (A5 · Y1) | `https://datamanager.googleapis.com` |
 | `META_APP_SECRET` | Segredo do app da Meta (**da distribuição**, só no EasyPanel): assina cada chamada com `appsecret_proof` | vazio (sem assinatura) |
 
 A versão de cada API não é variável: vem do Capability Registry (`connector_capability`, migration 0018).

@@ -24,7 +24,7 @@ Ver `arquitetura.md` §6. A escrita só acontece por `execute()` chamado pelo Ac
 | **Instagram / Facebook Pages / Threads** | insights, comentários | publicar (IG 100 por 24 h; Threads 250), responder | Acesso avançado; mídia em URL pública; IG só JPEG | A6 |
 | **Meta CAPI** | — | eventos pelo servidor (dedup por `event_id`) | dataset do cliente | A5 |
 | **Google Ads API** | GAQL | Search/AI Max, PMax, Demand Gen | **Sem developer token desde 09/09/2026**: acesso por projeto Cloud (Explorer 2.880 op/dia; Basic com verificação de marca; Standard com auditoria). OAuth `adwords` com verificação do app. `validate_only`: **INVESTIGAR** no spike | A2 (leitura) · A5 (escrita) |
-| **Google Data Manager API** | — | conversões offline, Customer Match, enhanced conversions (saíram da Ads API em 2026) | — | A5 |
+| **Google Data Manager API** | o resultado de cada envio (`requestStatus:retrieve`) | conversões offline, Customer Match, enhanced conversions (saíram da Ads API em 2026). **No servidor desde 08/10/2026 (A5 · Y1, desligado):** a venda confirmada por clique, um evento por pedido de envio, com `validateOnly` antes | escopo `auth/datamanager`; a ação de conversão `UPLOAD_CLICKS` escolhida por uma pessoa | A5 |
 | **GA4 Data/Admin** | relatórios | eventos-chave (Admin) | OAuth `analytics.readonly`; cota por propriedade | A2 |
 | **Regem** | pedidos, itens, custo, clientes com consentimento, cupons, cardápio | cupom de campanha | **Pré-requisito C1** (token por loja; código fora do git) | A2.5 |
 | **RegemCast** | status de mensagens (`wamid`), referral CTWA, opt-out | disparos com aprovação | **Pré-requisito C2** (API de serviço, idempotência, webhook de saída) | A2.5 (leitura) · A5 (escrita) |

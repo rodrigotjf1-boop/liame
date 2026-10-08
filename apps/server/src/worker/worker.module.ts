@@ -36,6 +36,7 @@ import { SombraLoop } from './sombra-loop.js';
 import { SombraService } from './sombra.service.js';
 import { eventoDoRegem, VendasLoop } from './vendas-loop.js';
 import { ConversasLoop } from './conversas-loop.js';
+import { ConversoesLoop } from './conversoes-loop.js';
 import { EstrategistaAgenda } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { EstrategistaService } from './estrategista.service.js';
@@ -81,6 +82,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     SincronizacaoLoop,
     VendasLoop,
     ConversasLoop,
+    // Conversões para o Google (A5, Y1): a venda confirmada que veio de um anúncio do Google volta para ele; nasce desligada.
+    ConversoesLoop,
     // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.
     ResultsService,
     SombraService,

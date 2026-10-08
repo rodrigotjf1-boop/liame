@@ -3,6 +3,7 @@ import { ActionExecutor } from './action-executor.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
 import { ConversasLoop } from './conversas-loop.js';
+import { ConversoesLoop } from './conversoes-loop.js';
 import { CriativoLoop } from './criativo-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
@@ -43,6 +44,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly pesquisa: PesquisaLoop,
     private readonly criativo: CriativoLoop,
     private readonly conferencia: ConferenciaDoGasto,
+    private readonly conversoes: ConversoesLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -66,6 +68,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('criativo', 3, 5_000, async (n) => (await this.criativo.executarLote(n)).length),
       // O gasto de cada mudança, conferido depois da leitura da manhã: olha de 5 em 5 minutos o que falta conferir hoje.
       this.loop('conferencia-do-gasto', 100, 300_000, async (n) => (await this.conferencia.executarLote(n)).reduce((s, c) => s + c.conferidas, 0)),
+      // As vendas confirmadas para o Google: cada conta com destino passa uma vez por hora; a fila das contas é olhada de 5 em 5 minutos.
+      this.loop('conversoes-google', 2, 300_000, async (n) => (await this.conversoes.executarLote(n)).length),
     );
   }
 

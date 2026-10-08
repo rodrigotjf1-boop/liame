@@ -88,7 +88,7 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
     await api?.close();
   });
 
-  const plataformas = () => ({ metaGraphUrl: 'https://graph.facebook.com', googleAdsUrl: base, ga4DataUrl: 'https://analyticsdata.googleapis.com', ga4AdminUrl: 'https://analyticsadmin.googleapis.com', metaAppSecret: null });
+  const plataformas = () => ({ metaGraphUrl: 'https://graph.facebook.com', googleAdsUrl: base, ga4DataUrl: 'https://analyticsdata.googleapis.com', ga4AdminUrl: 'https://analyticsadmin.googleapis.com', dataManagerUrl: 'https://datamanager.googleapis.com', metaAppSecret: null });
   const cliente = () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(plataformas()), tentativas: 1, esperaMaximaMs: 2_000, balde: { capacidade: 500, porSegundo: 50 } });
   const conector = () => new ConectorGoogleAds(cliente(), base, 'v25');
   const conta = (externalId = CLIENTE, loginCustomerId: string | null = GERENTE) => ({ credencial: { accessToken: TOKEN }, externalId, timezone: 'America/Sao_Paulo', currency: 'BRL', loginCustomerId });

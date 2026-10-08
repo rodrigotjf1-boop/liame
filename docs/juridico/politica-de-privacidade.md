@@ -146,6 +146,7 @@ Compartilhamos dados apenas com fornecedores que nos ajudam a prestar o serviço
 Também compartilhamos dados:
 
 - com as **plataformas que a empresa cliente conecta** (Meta, Google, WhatsApp e outras), quando ela manda executar uma ação, por exemplo, publicar um anúncio ou enviar uma mensagem;
+- com o **Google**, quando a empresa cliente liga o **envio das vendas confirmadas**: para cada pedido confirmado no caixa que veio de um clique num anúncio do Google, o Liame informa à conta do Google Ads da empresa cliente o identificador do clique, o instante e o valor do pedido e um identificador interno do pedido, para a plataforma saber que o anúncio gerou uma venda. **Não enviamos nome, telefone, e-mail nem endereço de quem comprou**, nem o custo ou a margem do pedido. O pedido cancelado depois de informado tem o valor corrigido para zero. A função nasce desligada: só funciona para a empresa cliente em que ela for ligada e que escolher, na conta dela do Google Ads, onde essas vendas são contadas;
 - com os **produtos da DMS** que a empresa cliente usa e conecta ao Liame (Regem e RegemCast);
 - com **autoridades**, quando a lei ou uma ordem judicial exigir. Todo pedido de autoridade passa antes pelo nosso encarregado, que confere se ele é legítimo e tem base na lei. Se o pedido for ilegal, nós o contestamos. Quando o pedido é devido, entregamos só o mínimo necessário para atendê-lo. O encarregado mantém o registro de cada pedido: quem pediu, a nossa resposta e o fundamento da decisão.
 
@@ -184,6 +185,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | Dados de contatos dos clientes (como operador) | enquanto a empresa cliente tiver finalidade e base legal; pedido de exclusão ou saída da lista, em até 15 dias |
 | Pedidos e itens vindos do Regem, quando conectado (valores, itens, canal e cupom, sem dados pessoais) | enquanto durar o contrato |
 | Identificadores de clique e de anúncio que levaram a um pedido (como `gclid` e `fbclid`, captados no cardápio da própria loja, e o identificador do anúncio que abriu uma conversa), quando o Regem ou o RegemCast forem conectados | 90 dias |
+| Registro das vendas informadas ao Google, quando esse envio for ligado (o pedido, o valor, a situação e a resposta do Google; o identificador do clique não é copiado para esse registro) | enquanto durar o contrato |
 | Identificador pseudonimizado do cliente, quando o Regem ou o RegemCast forem conectados (um código calculado a partir do telefone com a chave da empresa cliente; **o telefone não é guardado**) | enquanto a empresa cliente tiver finalidade; apagado quando a loja anonimiza o cliente no Regem |
 | Auditoria de ações | 5 anos, com proteção contra alteração |
 | Registro de incidentes de segurança | no mínimo 5 anos (Resolução CD/ANPD nº 15/2024, art. 10) |

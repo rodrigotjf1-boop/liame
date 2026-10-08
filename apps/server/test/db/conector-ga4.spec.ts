@@ -95,7 +95,7 @@ describe.skipIf(!hasDb)('conector do GA4 (leitura, v1beta)', () => {
     await api?.close();
   });
 
-  const plataformas = () => ({ metaGraphUrl: 'https://graph.facebook.com', googleAdsUrl: 'https://googleads.googleapis.com', ga4DataUrl: baseDados, ga4AdminUrl: baseAdmin, metaAppSecret: null });
+  const plataformas = () => ({ metaGraphUrl: 'https://graph.facebook.com', googleAdsUrl: 'https://googleads.googleapis.com', ga4DataUrl: baseDados, ga4AdminUrl: baseAdmin, dataManagerUrl: 'https://datamanager.googleapis.com', metaAppSecret: null });
   const cliente = () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(plataformas()), tentativas: 1, esperaMaximaMs: 2_000, balde: { capacidade: 500, porSegundo: 50 } });
   const conector = (opcoes: OpcoesGa4 = {}) => new ConectorGa4(cliente(), { data: baseDados, admin: baseAdmin }, 'v1beta', 'v1beta', opcoes);
   const conta = (externalId = PROPRIEDADE) => ({ credencial: { accessToken: TOKEN }, externalId, timezone: 'America/Sao_Paulo', currency: 'BRL' });
