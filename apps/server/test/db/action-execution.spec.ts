@@ -123,6 +123,9 @@ describe.skipIf(!hasDb)('execução de ações no worker e workflow durável (A1
     await cycle(dono);
     const final = await getAction(dono, acao.id);
     expect(final.body).toMatchObject({ status: 'falhou', status_reason: 'o recurso mudou desde o pedido; nada foi sobrescrito', workflow: { status: 'falhou' } });
+    // O pedido do sandbox não é de um objeto de anúncio: sem alvo, sem antes e depois; a última execução vem do mesmo jeito.
+    expect([final.body.target, final.body.from, final.body.to]).toEqual([null, null, null]);
+    expect(final.body.execution).toMatchObject({ status: 'estado_mudou', no_write: false });
     const [res] = await ownerQuery<{ state: { daily_budget_micros: number } }>(`select state from liame.sandbox_resource where tenant_id = $1`, [dono.tenantId]);
     expect(res!.state.daily_budget_micros).toBe(90 * REAL);
     const [ledger] = await ownerQuery<{ open: string }>(

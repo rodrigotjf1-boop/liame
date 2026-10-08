@@ -31,7 +31,7 @@ import { currentTraceparent, inSpan } from '../observability/trace.js';
 import { alvoDaRecomendacao, direcaoDaRecomendacao, type FalhaDaLigacao } from '../sombra/pedido.js';
 import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
-import { BudgetService } from './budget.service.js';
+import { BudgetService, estadoNaResposta } from './budget.service.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
 import { PlanoRecusado, type ResourceState, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
@@ -90,7 +90,17 @@ type Apresentacao = {
   voltas: Map<string, NonNullable<ActionResponse['undone_by']>>;
   /** A recomendação de que cada pedido nasceu, pelo id dela. */
   recomendacoes: Map<string, NonNullable<ActionResponse['recommendation']>>;
+  /** A campanha (na lista do Liame) de cada objeto de anúncio, pela chave `conta/recurso`. */
+  campanhasDosObjetos: Map<string, { id: string; name: string }>;
+  /** A tentativa de execução mais recente de cada pedido. */
+  execucoes: Map<string, NonNullable<ActionResponse['execution']>>;
 };
+
+/** `campanha`, `conjunto` ou `anuncio` quando o recurso é um objeto de anúncio (`tipo:id na plataforma`); senão, nulo. */
+function tipoDoObjeto(resourceId: string): 'campanha' | 'conjunto' | 'anuncio' | null {
+  const tipo = resourceId.split(':')[0];
+  return resourceId.includes(':') && (tipo === 'campanha' || tipo === 'conjunto' || tipo === 'anuncio') ? tipo : null;
+}
 
 /** O retrato que a sombra grava com a recomendação (`shadow_decision.state_snapshot`): só o que a resposta mostra. */
 type RetratoDaRecomendacao = {
@@ -716,7 +726,7 @@ export class ActionService {
    * do caixa no retrato da recomendação (pedidos, receita, margem) só saem para quem vê as vendas.
    */
   private async apresentacaoDe(tx: Tx, rows: ActionRow[], comVendas: boolean): Promise<Apresentacao> {
-    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map(), recomendacoes: new Map() };
+    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map(), recomendacoes: new Map(), campanhasDosObjetos: new Map(), execucoes: new Map() };
     if (!rows.length) return ap;
     const recomendacoes = [...new Set(rows.map((r) => r.shadow_decision_id).filter((id): id is string => id !== null))];
     if (recomendacoes.length) {
@@ -776,6 +786,60 @@ export class ActionService {
       const c = await tx.execute<{ id: string; name: string; provider: string; status: string }>(sql`
         select id, name, provider, status from liame.campaign where id in ${campanhas}`);
       for (const l of c.rows) ap.campanhas.set(l.id, l);
+    }
+    // Os objetos de anúncio (pelo id deles na plataforma): a campanha de cada um na lista do Liame (X8).
+    const objetos = rows.flatMap((r) => {
+      const tipo = tipoDoObjeto(r.resource_id);
+      return tipo && ehUuid(r.account_id) ? [{ conta: r.account_id, tipo, externo: r.resource_id.slice(tipo.length + 1) }] : [];
+    });
+    if (objetos.length) {
+      const contasDosObjetos = [...new Set(objetos.map((o) => o.conta))];
+      const externos = (tipo: string) => [...new Set(objetos.filter((o) => o.tipo === tipo).map((o) => o.externo))];
+      type Linha = { conta: string; externo: string; id: string; name: string };
+      const guardar = (tipo: string, linhas: Linha[]) => {
+        for (const l of linhas) ap.campanhasDosObjetos.set(`${l.conta}/${tipo}:${l.externo}`, { id: l.id, name: l.name });
+      };
+      const [dasCampanhas, dosConjuntos, dosAnuncios] = [externos('campanha'), externos('conjunto'), externos('anuncio')];
+      if (dasCampanhas.length) {
+        const c = await tx.execute<Linha>(sql`
+          select c.connected_account_id::text as conta, c.external_id as externo, c.id, c.name from liame.campaign c
+           where c.connected_account_id in ${contasDosObjetos} and c.external_id in ${dasCampanhas}`);
+        guardar('campanha', c.rows);
+      }
+      if (dosConjuntos.length) {
+        const g = await tx.execute<Linha>(sql`
+          select g.connected_account_id::text as conta, g.external_id as externo, c.id, c.name
+            from liame.ad_group g join liame.campaign c on c.id = g.campaign_id
+           where g.connected_account_id in ${contasDosObjetos} and g.external_id in ${dosConjuntos}`);
+        guardar('conjunto', g.rows);
+      }
+      if (dosAnuncios.length) {
+        const a = await tx.execute<Linha>(sql`
+          select ad.connected_account_id::text as conta, ad.external_id as externo, c.id, c.name
+            from liame.ad ad join liame.ad_group g on g.id = ad.ad_group_id join liame.campaign c on c.id = g.campaign_id
+           where ad.connected_account_id in ${contasDosObjetos} and ad.external_id in ${dosAnuncios}`);
+        guardar('anuncio', a.rows);
+      }
+    }
+    // A tentativa de execução mais recente de cada pedido (a adiada também: é ela que diz que a plataforma mandou esperar).
+    const execucoes = await tx.execute<{
+      action_request_id: string;
+      status: string;
+      finished_at: Date | string;
+      result_state: Record<string, unknown> | null;
+      observed_state: Record<string, unknown> | null;
+    }>(sql`
+      select distinct on (action_request_id) action_request_id, status, finished_at, result_state, observed_state
+        from liame.action_execution
+       where tenant_id = ${rows[0]!.tenant_id} and action_request_id in ${rows.map((r) => r.id)}
+       order by action_request_id, finished_at desc, id desc`);
+    for (const x of execucoes.rows) {
+      ap.execucoes.set(x.action_request_id, {
+        status: x.status,
+        finished_at: new Date(x.finished_at).toISOString(),
+        no_write: x.result_state?.sem_escrita === true,
+        observed: x.status === 'estado_mudou' && x.observed_state ? estadoNaResposta(x.observed_state) : null,
+      });
     }
     return ap;
   }
@@ -867,6 +931,15 @@ function flowAfterRequest(
 
 function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionResponse['workflow'], ap: Apresentacao): ActionResponse {
   const campanha = row.params.campaign_id;
+  // O objeto de anúncio do pedido: o tipo e o nome são os da leitura na plataforma, guardados com o pedido.
+  const tipo = tipoDoObjeto(row.resource_id);
+  const alvo = tipo
+    ? {
+        kind: typeof row.before_state?.tipo === 'string' ? row.before_state.tipo : tipo,
+        name: typeof row.before_state?.nome === 'string' && row.before_state.nome ? row.before_state.nome : row.resource_id,
+        campaign: ap.campanhasDosObjetos.get(`${row.account_id}/${row.resource_id}`) ?? null,
+      }
+    : null;
   return {
     id: row.id,
     tool: row.tool,
@@ -909,6 +982,10 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     campaign: typeof campanha === 'string' ? (ap.campanhas.get(campanha) ?? null) : null,
     recommendation: row.shadow_decision_id ? (ap.recomendacoes.get(row.shadow_decision_id) ?? null) : null,
     agent_key: row.agent_key ?? null,
+    target: alvo,
+    from: alvo ? estadoNaResposta(row.before_state) : null,
+    to: alvo ? estadoNaResposta(row.desired_state) : null,
+    execution: ap.execucoes.get(row.id) ?? null,
   };
 }
 

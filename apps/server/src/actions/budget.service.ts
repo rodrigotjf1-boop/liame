@@ -70,7 +70,7 @@ type LinhaDaMudanca = {
 };
 
 /** A situação e a verba de um estado guardado no pedido, como a resposta mostra (verba zero ou ausente: não mora no objeto). */
-const estadoNaResposta = (estado: Record<string, unknown> | null): { status: string; daily_micros: number | null } => ({
+export const estadoNaResposta = (estado: Record<string, unknown> | null): { status: string; daily_micros: number | null } => ({
   status: typeof estado?.status === 'string' ? estado.status : 'desconhecido',
   daily_micros: typeof estado?.daily_budget_micros === 'number' && estado.daily_budget_micros > 0 ? estado.daily_budget_micros : null,
 });

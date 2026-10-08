@@ -86,6 +86,36 @@ export const ActionRecommendation = z.strictObject({
 });
 export type ActionRecommendation = z.infer<typeof ActionRecommendation>;
 
+/** A situação e a verba diária de um objeto de anúncio (a verba é nula quando não mora nele). */
+const BudgetChangeState = z.strictObject({ status: z.string(), daily_micros: Micros.nullable() });
+
+/**
+ * O objeto de anúncio que um pedido muda, como foi lido na plataforma na hora do pedido: `campanha`, `conjunto` ou
+ * `anuncio`, o nome dele e a campanha de que faz parte na lista do Liame (a própria, quando o objeto é a campanha; nula
+ * se ela saiu da lista). É com a campanha que a tela abre um pedido novo ("Pedir de novo").
+ */
+export const ActionTarget = z.strictObject({
+  kind: z.string(),
+  name: z.string(),
+  campaign: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
+});
+export type ActionTarget = z.infer<typeof ActionTarget>;
+
+/**
+ * A tentativa de execução mais recente de um pedido. `status`: `executada`; `falhou` (a plataforma recusou na
+ * conferência, e o motivo está em `status_reason`); `estado_mudou` (alguém mexeu no objeto depois do pedido: nada foi
+ * sobrescrito, e `observed` diz como ele estava); `bloqueada` (trava, aprovação que deixou de valer ou escrita
+ * desligada); ou `adiada` (a plataforma mandou esperar: `next_attempt_at` no pedido diz quando o Liame tenta de novo).
+ */
+export const ActionExecution = z.strictObject({
+  status: z.string(),
+  finished_at: z.string(),
+  /** O objeto já estava como o pedido queria: nada foi escrito (e não há o que desfazer). */
+  no_write: z.boolean(),
+  observed: BudgetChangeState.nullable(),
+});
+export type ActionExecution = z.infer<typeof ActionExecution>;
+
 export const ActionResponse = z.strictObject({
   id: z.uuid(),
   tool: z.string(),
@@ -146,6 +176,13 @@ export const ActionResponse = z.strictObject({
    * uma pessoa. No pedido do funcionário, `requested_by` é a pessoa que o deixou pedir (quem publicou a regra do modo).
    */
   agent_key: Slug.nullable().optional(),
+  /** O objeto de anúncio do pedido (A4, X8); nulo no pedido que não é de anúncio (o cupom, o sandbox). */
+  target: ActionTarget.nullable().optional(),
+  /** A situação e a verba do objeto na hora do pedido, e como o pedido quer deixar; nulos sem `target`. */
+  from: BudgetChangeState.nullable().optional(),
+  to: BudgetChangeState.nullable().optional(),
+  /** A tentativa de execução mais recente; nula enquanto o executor não pegou o pedido. */
+  execution: ActionExecution.nullable().optional(),
 });
 export type ActionResponse = z.infer<typeof ActionResponse>;
 
@@ -243,9 +280,6 @@ export const BudgetChangeCheck = z.strictObject({
   spend_after_micros: Micros,
 });
 export type BudgetChangeCheck = z.infer<typeof BudgetChangeCheck>;
-
-/** A situação e a verba diária de um objeto de anúncio (a verba é nula quando não mora nele). */
-const BudgetChangeState = z.strictObject({ status: z.string(), daily_micros: Micros.nullable() });
 
 /** Uma mudança que o Liame executou numa plataforma de anúncio, com a conferência dela. */
 export const BudgetMonthChange = z.strictObject({
