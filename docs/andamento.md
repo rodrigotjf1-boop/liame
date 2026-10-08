@@ -291,7 +291,9 @@ Plano **aprovado pelo dono em 03/10/2026**, com as decisões como recomendadas: 
 
 ## Fase A5 · Google e mensageria
 
-**Plano proposto em 08/10/2026; aguarda a aprovação do dono:** [`plano-a5.md`](plano-a5.md). Sem código. A proposta: as vendas confirmadas no caixa voltam para o Google como conversão (Y1), o trilho da A4 passa a valer no Google Ads (Y2 e Y3), e o funcionário de CRM e mensageria propõe mensagens de WhatsApp pelo RegemCast, sempre com aprovação (Y4 a Y6); as conversões para a Meta ficam por último (Y7). A ordem começa pelo que não depende do piloto da A4. São 20 decisões com recomendação (seção 4), quatro protótipos (P13 a P16) e 16 critérios de saída. Para o plano, a base de conhecimento ganhou o que foi conferido nas páginas oficiais (§2.3, §3.1 e §3.2).
+**Plano aprovado pelo dono em 08/10/2026** ("plano a5 aprovado"), com as 20 decisões como recomendadas: [`plano-a5.md`](plano-a5.md). O plano: as vendas confirmadas no caixa voltam para o Google como conversão (Y1), o trilho da A4 passa a valer no Google Ads (Y2 e Y3), e o funcionário de CRM e mensageria propõe mensagens de WhatsApp pelo RegemCast, sempre com aprovação (Y4 a Y6); as conversões para a Meta ficam por último (Y7). A ordem começa pelo que não depende do piloto da A4. São 20 decisões com recomendação (seção 4), quatro protótipos (P13 a P16) e 16 critérios de saída. Para o plano, a base de conhecimento ganhou o que foi conferido nas páginas oficiais (§2.3, §3.1 e §3.2).
+
+**Y1 · reconferência antes do código (08/10/2026).** Sem código. Nas páginas oficiais da Data Manager API (base de conhecimento §3.2): a ação de conversão que recebe venda por clique, o destino, os campos do evento, a leitura do resultado e os limites. **O achado:** a Data Manager não retira uma conversão; o mesmo id de transação só sobrescreve o valor. A D-A5-7 foi ajustada: o pedido só é informado duas horas depois de confirmado (o que for cancelado antes nunca sai), e o cancelado depois tem o valor zerado. Vai ao Google o pedido que o Liame atribui ao Google, o mesmo que aparece em Resultados.
 
 ## A0-3 · Spike de compatibilidade (25/09/2026)
 

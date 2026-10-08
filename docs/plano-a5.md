@@ -1,6 +1,6 @@
 # Liame — Plano da fase A5 · Google e mensageria
 
-> **Proposta de 08/10/2026. Aguarda a aprovação do dono.** Nada deste plano vira código antes do aceite dele e das decisões da seção 4. A A5 é "o segundo canal e a mensageria" (roadmap §2): o trilho que a A4 construiu para a Meta passa a valer no **Google Ads**; as vendas confirmadas no caixa passam a **voltar para as plataformas** como conversão, para elas aprenderem com venda de verdade; e a equipe ganha o funcionário de **CRM e mensageria**, que propõe mensagens de WhatsApp pelo RegemCast para uma pessoa aprovar. **Nada é enviado, gasto ou mudado sem a aprovação de uma pessoa com o código do app**, como na A4.
+> **Aprovado pelo dono em 08/10/2026** ("plano a5 aprovado"), com as decisões D-A5-1 a D-A5-20 como recomendadas (seção 4). A D-A5-7 foi ajustada no mesmo dia, pelo que a página oficial do Google permite (a nota abaixo da tabela das decisões). A A5 é "o segundo canal e a mensageria" (roadmap §2): o trilho que a A4 construiu para a Meta passa a valer no **Google Ads**; as vendas confirmadas no caixa passam a **voltar para as plataformas** como conversão, para elas aprenderem com venda de verdade; e a equipe ganha o funcionário de **CRM e mensageria**, que propõe mensagens de WhatsApp pelo RegemCast para uma pessoa aprovar. **Nada é enviado, gasto ou mudado sem a aprovação de uma pessoa com o código do app**, como na A4.
 >
 > A A5 depende da A4 (roadmap §2). O código da A4 está no ar, mas o piloto dela (critério A4-14: 10 ações aprovadas e executadas na Meta) ainda não começou: espera os tetos de verba e a escrita ligada. Por isso a ordem proposta começa pelo que **não depende** desse piloto (seção 3).
 
@@ -30,7 +30,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 
 | # | Entrega | O que fica pronto | Critérios | Depende de |
 | --- | --- | --- | --- | --- |
-| **Y1** | **Conversões para o Google** | Para cada pedido confirmado com `gclid` ou `gbraid` guardado: um evento pela Data Manager API, com o instante, o valor, a moeda e o id do pedido, para a ação de conversão que o dono escolher na conta. Primeiro com `validateOnly`; o resultado e os avisos do Google ficam guardados; pedido cancelado vira retirada; nada é enviado duas vezes (o id do pedido é a chave). Flag `conversoes_google`, desligada | A5-1 a A5-4 | Escopo `datamanager` na autorização do Google; D-A5-5 a D-A5-8 |
+| **Y1** | **Conversões para o Google** | Para cada pedido confirmado com `gclid` ou `gbraid` guardado: um evento pela Data Manager API, com o instante, o valor, a moeda e o id do pedido, para a ação de conversão que o dono escolher na conta. Primeiro com `validateOnly`; o resultado e os avisos do Google ficam guardados; pedido cancelado depois de informado tem o valor zerado (a Data Manager não tem retirada; nota da D-A5-7); nada é enviado duas vezes (o id do pedido é a chave). Flag `conversoes_google`, desligada | A5-1 a A5-4 | Escopo `datamanager` na autorização do Google; D-A5-5 a D-A5-8 |
 | **Y2** | **Conector de escrita do Google Ads** | O provedor `google_ads` na interface de escrita que a Meta já usa: lê a situação e o orçamento da campanha (com quantas campanhas dividem o mesmo orçamento), aplica primeiro com `validate_only` e só então de verdade; recusa do Google vira "recusado" com o motivo; o limite diário de operações do nível de acesso adia em vez de insistir. Flag `google_write`, desligada | A5-5 a A5-7 | — |
 | **Y3** | **Ferramentas de anúncio no Google** | Verba, pausar e retomar campanha aceitam `google_ads`, com as mesmas regras da Meta (passo de até 10%, teto por campanha, teto do mês, compensação que não sobrescreve mudança humana). O modo Aprovação passa a valer no Google. A conferência diária do gasto cobre as mudanças no Google | A5-5 a A5-8 | Y2; o piloto da A4 para ligar (D-A5-2) |
 | **Y4** | **Mensageria: leitura** | O Liame lê do RegemCast os públicos (só a contagem), os modelos e a situação deles na Meta, os tetos de gasto e as campanhas com o custo. Nenhum telefone chega ao Liame | A5-9 | Token do RegemCast com as permissões de leitura |
@@ -47,7 +47,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **C3d** | Regem | Só se a D-A5-9 for "sim": no cardápio online, o aviso de medição com a escolha da pessoa e a guarda do que a Meta exige para um evento de site | Y7 |
 | **C2c** | RegemCast | O token do piloto com as permissões de rascunho e disparo (classe DMS); conferir se a campanha devolve o cupom usado ou só os números | Y5 |
 
-## 4. Decisões (recomendações; cada uma espera o seu "sim")
+## 4. Decisões (aprovadas pelo dono em 08/10/2026, como recomendadas)
 
 | # | Decisão | Recomendação | Por quê |
 | --- | --- | --- | --- |
@@ -57,7 +57,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | D-A5-4 | **Orçamento compartilhado** | No Google, um orçamento pode servir a várias campanhas. Na A5 o Liame **não mexe** em orçamento compartilhado: mostra o motivo e quais campanhas dividem a verba | Mudar a verba de uma campanha mudaria a de outras sem ninguém pedir |
 | D-A5-5 | **O que vai na conversão para o Google** | Só o id do clique, o instante, o valor e o id do pedido. **Nenhum telefone ou e-mail**, nem em hash | O Liame não guarda esses dados; o id do clique basta para o Google ligar a venda ao anúncio |
 | D-A5-6 | **Que valor é enviado** | A receita confirmada no caixa. A margem e o custo **nunca** saem do Liame | A plataforma otimiza por valor de venda; a margem é segredo comercial da loja |
-| D-A5-7 | **Quais pedidos são enviados** | Só os que têm clique de anúncio guardado (até 90 dias) e foram confirmados no caixa. Cancelado depois de enviado é retirado | É o que a D-A2.5-10 previu ao guardar o clique por 90 dias |
+| D-A5-7 | **Quais pedidos são enviados** | Só os que têm clique de anúncio guardado (até 90 dias) e foram confirmados no caixa. Cancelado depois de enviado tem o **valor zerado**; para isso ser raro, o pedido só sai depois de uma espera (nota abaixo) | É o que a D-A2.5-10 previu ao guardar o clique por 90 dias |
 | D-A5-8 | **A ação de conversão no Google** | Uma ação própria, "Pedido confirmado no caixa", criada por você na conta do Google Ads (eu guio, um print por vez). O Liame só envia para ela | Não misturar com as conversões que a conta já mede; criar ação de conversão é configuração da conta, não do Liame |
 | D-A5-9 | **Conversões para a Meta** | Fazer **depois** do Google, e só se você aceitar a mudança no cardápio do Regem (C3d). Para um evento de site, a Meta pede o endereço da página e dados do navegador de quem comprou; o que é obrigatório e o que é só recomendado eu reconfiro antes (seção 8) | Sem esses dados o evento casa mal com o anúncio; guardá-los muda o cardápio e a Política de Privacidade |
 | D-A5-10 | **WhatsApp só pelo RegemCast** | O Liame nunca guarda telefone nem lista. O público é sempre um que já existe no RegemCast; o Liame vê só quantas pessoas | É a regra da casa (base §2.4) e o que mantém o dado pessoal num lugar só |
@@ -71,6 +71,8 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | D-A5-18 | **Públicos de anúncio** (lista de clientes para a Meta e o Google) | Ficam fora da A5; decidir depois de o consentimento com prova (C3c) existir e ser medido | Exige enviar telefone em hash, que o Liame não guarda, e consentimento por finalidade |
 | D-A5-19 | **A LIA no WhatsApp** | Fica para a A6 | A A5 já abre dois caminhos novos de escrita |
 | D-A5-20 | **Nível de acesso no Google** | Começar no Explorer (2.880 operações por dia) e pedir o Básico, que exige a verificação da marca do projeto. O Padrão fica para antes do primeiro cliente de fora | A página oficial não põe campanhas e orçamentos entre os serviços bloqueados no Explorer; o piloto cabe no limite |
+
+> **Ajuste da D-A5-7 (08/10/2026, depois da reconferência da Y1).** A página oficial dos ajustes de conversão da Data Manager API descreve duas coisas: corrigir o valor e completar os dados do usuário. **Não há como retirar uma conversão por ela** (base §3.2). Por isso: (1) o pedido só é informado **duas horas depois** de confirmado no caixa, e o que for cancelado nesse intervalo nunca sai do Liame; (2) o pedido cancelado depois de informado tem o **valor corrigido para zero**: a conversão continua contada, sem valor; (3) vai ao Google o pedido que o Liame atribui ao Google, pelo clique que venceu a atribuição: o mesmo que aparece em Resultados. Fica por conferir no piloto se o Google aceita o valor zero. A espera de duas horas é escolha de implementação, e o dono pode mudar.
 
 ## 5. Protótipos para aprovação (antes do código de tela)
 
@@ -114,7 +116,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 ## 8. Base de conhecimento: reconferir antes do código (`CLAUDE.md` §1)
 
 - **Conferido em 08/10/2026, nas páginas oficiais (base §3.1 e §3.2):** os serviços bloqueados no nível Explorer (criação de conta, usuários, planejamento e cobrança; campanhas e orçamentos não estão na lista); `validate_only` existe nos pedidos de escrita do Google Ads; `POST https://datamanager.googleapis.com/v1/events:ingest`, com até 2.000 eventos, `validateOnly`, o consentimento (`adUserData` e `adPersonalization`) e a resposta com `requestId`; o ajuste de conversão pelo mesmo `transactionId`.
-- **Reconferir antes da Y1:** o que a Data Manager exige de uma ação de conversão para receber venda por clique; o prazo máximo entre o clique e o envio; como ler o resultado de um pedido já aceito; a retirada de um pedido cancelado, campo a campo.
+- **Reconferido para a Y1 em 08/10/2026 (base §3.2):** a ação de conversão é a de importação por clique (`UPLOAD_CLICKS`); o destino é a conta com o id da ação; o evento leva exatamente um id de clique; o mesmo `transactionId` sobrescreve o valor, e **não existe retirada**; o resultado se lê por `requestStatus:retrieve`; os limites por projeto. **Por conferir no piloto:** se o valor zero é aceito, e o passo a passo da ação de conversão na tela do Google Ads, antes de guiar o dono.
 - **Reconferir antes da Y2:** os campos de `CampaignBudget` e de `Campaign` na versão em uso, o orçamento compartilhado e o de período, a resposta do `validate_only` e os erros de cota.
 - **Reconferir antes da Y7:** o que a Conversions API exige num evento de site (a página dos parâmetros do cliente) e o que muda no evento de mensageria.
 - **Reconferir antes da Y5:** a política do WhatsApp em vigor para mensagem de marketing e os preços por mensagem.
@@ -124,7 +126,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 
 | Para | Preciso de |
 | --- | --- |
-| Começar | O aceite deste plano e das decisões da seção 4 |
+| Começar | ✅ Aceite deste plano e das decisões da seção 4 (08/10/2026) |
 | Y1 | Autorizar o Google de novo, com a permissão a mais (eu aviso quando); criar a ação de conversão na conta do Google Ads (eu guio, um print por vez, com o caminho conferido na página oficial); ligar `conversoes_google` |
 | Y2 e Y3 | O piloto da A4 andando (os tetos de verba e a escrita na Meta ligada); depois, ligar `google_write` |
 | Y2 | Pedir o nível Básico do Google, que exige a verificação da marca do projeto (eu guio) |
