@@ -110,4 +110,39 @@
   .eqp-bloco { padding: var(--sp-4); }
   .eqp-topo { justify-content: flex-start; }
 }
+/* ===== A4 · P11 · Sua equipe com o modo Aprovação ===== */
+.modo-chip--aprovacao { background: var(--warning-soft); color: var(--warning); }
+.portoes--7 { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.eqp-passo-ic--falha { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+/* O modo em cada conta e ação: uma linha por par, que também escolhe o que o bloco da prontidão mostra. */
+.modos-lista { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.modos-lista li + li { border-top: 1px solid var(--border); }
+.modos-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px var(--sp-3); width: 100%; padding: var(--sp-3) var(--sp-4); border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.modos-item:hover { background: var(--surface-hover); }
+.modos-item:focus-visible { outline: 2px solid var(--foco); outline-offset: -2px; }
+.modos-item[aria-current="true"] { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--foco); }
+.modos-item b { min-width: 0; font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.modos-oque { grid-column: 1 / -1; font-size: var(--text-xs); color: var(--text-muted); }
+.modos-legenda { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--text-muted); }
+.modos-legenda li { display: grid; grid-template-columns: 6.25rem minmax(0, 1fr); align-items: baseline; gap: var(--sp-2); }
+.modos-legenda .modo-chip { justify-self: start; }
+/* O selo com o nome da linha (conta e ação) quebra a linha quando o nome é comprido. */
+.eqp-bloco-cab .modo-chip { max-width: 100%; padding-block: 4px; white-space: normal; overflow-wrap: anywhere; }
+/* A tabela da sombra deixa de rolar de lado: o texto quebra a linha, e no celular cada recomendação vira um bloco. */
+.eqp-bloco .tabela--sombra td { white-space: normal; }
+.eqp-bloco .tabela--sombra td.num { white-space: nowrap; }
+.eqp-bloco .tabela--sombra td:last-child { min-width: 150px; }
+.promocao .nota { display: flex; gap: var(--sp-3); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.promocao .nota .ic { flex: none; margin-top: 2px; }
+@container pagina (max-width: 599px) {
+  /* No celular, cada linha da tabela de prontidão vira um bloco: o título em cima, o resto com o rótulo da coluna. */
+  .eqp-bloco .tabela--pilha, .eqp-bloco .tabela--pilha tbody { display: block; }
+  .eqp-bloco .tabela--pilha thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .eqp-bloco .tabela--pilha tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+  .eqp-bloco .tabela--pilha tbody tr:last-child { border-bottom: 0; }
+  .eqp-bloco .tabela--pilha tr > th, .eqp-bloco .tabela--pilha tr > td { display: block; min-width: 0; padding: 0; border: 0; background: none; text-align: left; white-space: normal; }
+  .eqp-bloco .tabela--pilha tr > th, .eqp-bloco .tabela--pilha tr > td.larga { grid-column: 1 / -1; }
+  .eqp-bloco .tabela--pilha tr > th { order: -1; }
+  .eqp-bloco .tabela--pilha td::before { content: attr(data-rot); display: block; margin-bottom: 1px; font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 400; letter-spacing: 0; color: var(--text-muted); }
+}
 @media (prefers-reduced-motion: reduce) { .st--trabalhando .dot { animation: none; } }

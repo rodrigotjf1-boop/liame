@@ -4,7 +4,7 @@ import type { TeamMember } from '@liame/contracts';
 import type { ReactNode } from 'react';
 import { IconeLia } from '@/components/marca/logo';
 import { Icone, type NomeIcone } from '@/components/ui/icone';
-import { type Numero, situacaoDo } from './textos';
+import { type Numero, type Selo, situacaoDo } from './textos';
 
 // Peças pequenas da tela Sua equipe (protótipo P7): o avatar, o selo da situação e o bloco de números. A confirmação
 // na linha é a do app (`components/ui/confirma-na-linha`).
@@ -21,8 +21,8 @@ export function Avatar({ icone, grande = false, apagado = false }: { icone: Nome
   );
 }
 
-export function SeloDaSituacao({ m }: { m: TeamMember }) {
-  const s = situacaoDo(m);
+export function SeloDaSituacao({ m, selo }: { m: TeamMember; selo?: Selo | undefined }) {
+  const s = selo ?? situacaoDo(m);
   return (
     <span className={s.classe}>
       {s.ponto && <span className="dot" aria-hidden="true" />}

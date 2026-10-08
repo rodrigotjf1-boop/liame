@@ -42,7 +42,22 @@ export function BlocoRodada({ sombra, agora }: { sombra: TeamShadowResponse; ago
   );
 }
 
-export function BlocoSombra({ m, mes, sombra, modo, agora }: { m: TeamMember; mes: string; sombra: TeamShadowResponse | null; modo: Modo; agora: Date }) {
+export function BlocoSombra({
+  m,
+  mes,
+  sombra,
+  modo,
+  agora,
+  comAprovacao = false,
+}: {
+  m: TeamMember;
+  mes: string;
+  sombra: TeamShadowResponse | null;
+  modo: Modo;
+  agora: Date;
+  /** Com o modo Aprovação (P11), há ação que já muda a plataforma: o selo diz que a sombra segue medindo. */
+  comAprovacao?: boolean;
+}) {
   const frase = fraseDaSombra(m, mes);
   let pro;
   if (!sombra) pro = <p className="card-sub">Não foi possível carregar a lista das recomendações. Os números do mês seguem acima.</p>;
@@ -51,7 +66,7 @@ export function BlocoSombra({ m, mes, sombra, modo, agora }: { m: TeamMember; me
     pro = (
       <>
         <div className="table-wrap">
-          <table className="tabela tabela--compacta">
+          <table className="tabela tabela--compacta tabela--pilha tabela--sombra">
             <caption className="sr-only">Recomendações em sombra, o que você fez e o resultado</caption>
             <thead>
               <tr>
@@ -67,11 +82,15 @@ export function BlocoSombra({ m, mes, sombra, modo, agora }: { m: TeamMember; me
                 const l = linhaDaSombra(d, agora);
                 return (
                   <tr key={d.id}>
-                    <td className="num">{l.dia}</td>
+                    <td className="num" data-rot="Dia">
+                      {l.dia}
+                    </td>
                     <th scope="row">{l.campanha}</th>
-                    <td>{l.eleFaria}</td>
-                    <td>{l.voceFez}</td>
-                    <td>{l.resultado}</td>
+                    <td data-rot="Ele faria">{l.eleFaria}</td>
+                    <td data-rot="Você fez">{l.voceFez}</td>
+                    <td className="larga" data-rot="Resultado">
+                      {l.resultado}
+                    </td>
                   </tr>
                 );
               })}
@@ -86,7 +105,7 @@ export function BlocoSombra({ m, mes, sombra, modo, agora }: { m: TeamMember; me
     <div className="eqp-bloco">
       <div className="eqp-bloco-cab">
         <h3>O que ele teria feito, e o que você fez</h3>
-        <span className="modo-chip modo-chip--sombra">Nada muda na plataforma</span>
+        <span className="modo-chip modo-chip--sombra">{comAprovacao ? 'A sombra continua medindo' : 'Nada muda na plataforma'}</span>
       </div>
       {modo === 'lite' ? <p className="lite-frase">{frase.partes.map((p, i) => (p.forte ? <b key={i}>{p.texto}</b> : <span key={i}>{p.texto}</span>))}</p> : pro}
       <p className="explica-nota">

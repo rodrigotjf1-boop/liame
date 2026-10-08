@@ -3,6 +3,7 @@
 import type { TeamActivityResponse } from '@liame/contracts';
 import { Icone } from '@/components/ui/icone';
 import type { Modo } from '@/lib/modo';
+import { historicoDaAprovacao } from './aprovacao-textos';
 import { historicoDo } from './textos';
 
 // "O que fez" (protótipo P7): os acontecimentos do funcionário, do mais novo para o mais antigo. No Lite, o mais
@@ -53,7 +54,8 @@ export function BlocoHistorico({
       <>
         <ul className="eqp-hist">
           {visiveis.map((i, n) => {
-            const linha = historicoDo(i, agora);
+            // Os tipos do modo Aprovação (o pedido dele, a proposta, a volta) têm os textos deles.
+            const linha = { ...historicoDo(i, agora), ...historicoDaAprovacao(i) };
             return (
               <li key={`${i.at}-${i.kind}-${n}`}>
                 <time dateTime={i.at}>{linha.quando}</time>

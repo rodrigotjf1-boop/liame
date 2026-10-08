@@ -6,6 +6,8 @@ import { useConversa } from '@/components/conversa/contexto';
 import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import type { Modo } from '@/lib/modo';
+import { chaveDaLinha, gestorNaLista, LIMITES_DO_GESTOR, RESUMO_DO_GESTOR, rodadaDoGestor, temModoAprovacao } from './aprovacao-textos';
+import { BlocoDaLinha, BlocoModos, BlocoRodadaDoGestor } from './bloco-aprovacao';
 import { BlocoHistorico, type Historico } from './bloco-historico';
 import { type AcoesDaProntidao, BlocoProntidao } from './bloco-prontidao';
 import { BlocoRodada, BlocoSombra } from './bloco-sombra';
@@ -167,6 +169,10 @@ export function DetalheDoMembro({
   const cotacao = notaDaCotacao(t.usd_brl);
   const acerto = acertoDo(m, mes);
   const pronome = chave === 'lia' ? 'ela' : 'ele';
+  // Com o modo Aprovação (P11), a ficha do Gestor de tráfego mostra o modo de cada conta e ação; a linha escolhida
+  // é a que a pessoa tocou ou, sem escolha, a primeira (a proposta pendente vem na frente).
+  const comAprovacao = chave === 'trafego' && temModoAprovacao(autonomia);
+  const linha = comAprovacao && autonomia ? (autonomia.items.find((a) => chaveDaLinha(a) === prontidao.linha) ?? autonomia.items[0] ?? null) : null;
   return (
     <>
       <Voltar aoVoltar={aoVoltar} />
@@ -178,12 +184,12 @@ export function DetalheDoMembro({
           </h2>
           <p>{f.cargo}</p>
           <div className="eqp-tags">
-            <SeloDaSituacao m={m} />
+            <SeloDaSituacao m={m} selo={comAprovacao && autonomia ? gestorNaLista(m, rodadaDoGestor(sombra, autonomia.items, t, agora))?.selo : undefined} />
             <span className={selo.classe}>Modo: {selo.rotulo}</span>
           </div>
         </div>
       </div>
-      <p className="eqp-resumo">{f.resumo}</p>
+      <p className="eqp-resumo">{comAprovacao ? RESUMO_DO_GESTOR : f.resumo}</p>
       <AcoesDoFuncionario key={chave} m={m} chave={chave} t={t} acoes={acoes} />
       {m.status === 'desligado' && (
         <Faixa
@@ -203,7 +209,14 @@ export function DetalheDoMembro({
           }
         />
       )}
-      {chave === 'trafego' ? (
+      {autonomia && linha ? (
+        <>
+          <BlocoRodadaDoGestor sombra={sombra} autonomia={autonomia} equipe={t} modo={modo} agora={agora} />
+          <BlocoModos autonomia={autonomia} modo={modo} alvo={linha} aoEscolher={prontidao.aoEscolherLinha} />
+          <BlocoDaLinha autonomia={autonomia} alvo={linha} modo={modo} agora={agora} acoes={prontidao} />
+          <BlocoSombra m={m} mes={mes} sombra={sombra} modo={modo} agora={agora} comAprovacao />
+        </>
+      ) : chave === 'trafego' ? (
         <>
           {modo === 'pro' && sombra && <BlocoRodada sombra={sombra} agora={agora} />}
           <BlocoSombra m={m} mes={mes} sombra={sombra} modo={modo} agora={agora} />
@@ -223,9 +236,13 @@ export function DetalheDoMembro({
         </div>
         <ul className="eqp-lite">
           <li>
-            <b>Faz:</b> {f.faz.map(minuscula).join('; ')}.
+            <b>Faz:</b> {comAprovacao ? LIMITES_DO_GESTOR.faz : `${f.faz.map(minuscula).join('; ')}.`}
           </li>
-          {chave === 'trafego' ? (
+          {comAprovacao ? (
+            <li>
+              <b>Nunca:</b> {LIMITES_DO_GESTOR.nunca}
+            </li>
+          ) : chave === 'trafego' ? (
             <li>
               <b>Nunca, nesta fase:</b> pausar, mudar verba ou criar campanha. Mexer em anúncio entra na fase A4, com aprovação.
             </li>

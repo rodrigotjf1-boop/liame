@@ -238,6 +238,8 @@ export function modoDo(m: TeamMember, autonomia: AutonomyItem[] | null): { rotul
   if (desligado(m)) return { rotulo: 'Desligado', classe: 'modo-chip modo-chip--off' };
   const ficha = ehMembro(m.key) ? FICHAS[m.key] : null;
   if (m.key === 'trafego') {
+    // Com o modo Aprovação (P11), o modo é de cada conta e de cada ação: a lista está na ficha dele.
+    if ((autonomia ?? []).some((a) => a.approval !== undefined)) return { rotulo: 'por conta e ação', classe: 'modo-chip' };
     const sugere = (autonomia ?? []).some((a) => a.mode === 'SUGGEST');
     return sugere ? { rotulo: 'Sombra e Sugerir', classe: 'modo-chip modo-chip--sugerir' } : { rotulo: 'Sombra', classe: 'modo-chip modo-chip--sombra' };
   }
@@ -252,11 +254,13 @@ export interface Grupos {
 }
 
 /** Os grupos da lista, na ordem do protótipo. O que a tela não conhece (funcionário novo no servidor) fica de fora. */
-export function gruposDa(t: TeamResponse): Grupos {
+export function gruposDa(t: TeamResponse, comAprovacao = false): Grupos {
   const conhecidos = ORDEM.map((k) => t.members.find((m) => m.key === k)).filter((m): m is TeamMember => m !== undefined);
+  // Com o modo Aprovação (P11), o Gestor de tráfego já faz mais do que registrar: fica com os que trabalham para a pessoa.
+  const emSombra = (m: TeamMember) => m.key === 'trafego' && !comAprovacao;
   return {
-    ativos: conhecidos.filter((m) => m.key !== 'trafego' && m.status !== 'desligado'),
-    sombra: conhecidos.filter((m) => m.key === 'trafego' && m.status !== 'desligado'),
+    ativos: conhecidos.filter((m) => !emSombra(m) && m.status !== 'desligado'),
+    sombra: conhecidos.filter((m) => emSombra(m) && m.status !== 'desligado'),
     desligados: conhecidos.filter((m) => m.status === 'desligado'),
   };
 }
