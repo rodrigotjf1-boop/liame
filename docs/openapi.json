@@ -7042,6 +7042,143 @@
                       ],
                       "maxLength": 60,
                       "pattern": "^[a-z0-9_]+$"
+                    },
+                    "target": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "name",
+                        "campaign"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "to": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "execution": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "finished_at": {
+                          "type": "string"
+                        },
+                        "no_write": {
+                          "type": "boolean"
+                        },
+                        "observed": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "daily_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "finished_at",
+                        "no_write",
+                        "observed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -7880,6 +8017,143 @@
                             ],
                             "maxLength": 60,
                             "pattern": "^[a-z0-9_]+$"
+                          },
+                          "target": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "kind": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "campaign": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "name",
+                              "campaign"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "from": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "status": {
+                                "type": "string"
+                              },
+                              "daily_micros": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "status",
+                              "daily_micros"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "to": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "status": {
+                                "type": "string"
+                              },
+                              "daily_micros": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "status",
+                              "daily_micros"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "execution": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "status": {
+                                "type": "string"
+                              },
+                              "finished_at": {
+                                "type": "string"
+                              },
+                              "no_write": {
+                                "type": "boolean"
+                              },
+                              "observed": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "daily_micros": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "daily_micros"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "status",
+                              "finished_at",
+                              "no_write",
+                              "observed"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -9337,6 +9611,143 @@
                       ],
                       "maxLength": 60,
                       "pattern": "^[a-z0-9_]+$"
+                    },
+                    "target": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "name",
+                        "campaign"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "to": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "execution": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "finished_at": {
+                          "type": "string"
+                        },
+                        "no_write": {
+                          "type": "boolean"
+                        },
+                        "observed": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "daily_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "finished_at",
+                        "no_write",
+                        "observed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -9990,6 +10401,143 @@
                       ],
                       "maxLength": 60,
                       "pattern": "^[a-z0-9_]+$"
+                    },
+                    "target": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "name",
+                        "campaign"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "to": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "execution": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "finished_at": {
+                          "type": "string"
+                        },
+                        "no_write": {
+                          "type": "boolean"
+                        },
+                        "observed": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "daily_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "finished_at",
+                        "no_write",
+                        "observed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -10650,6 +11198,143 @@
                       ],
                       "maxLength": 60,
                       "pattern": "^[a-z0-9_]+$"
+                    },
+                    "target": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "name",
+                        "campaign"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "to": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "execution": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "finished_at": {
+                          "type": "string"
+                        },
+                        "no_write": {
+                          "type": "boolean"
+                        },
+                        "observed": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "daily_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "finished_at",
+                        "no_write",
+                        "observed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -11375,6 +12060,143 @@
                       ],
                       "maxLength": 60,
                       "pattern": "^[a-z0-9_]+$"
+                    },
+                    "target": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "name",
+                        "campaign"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "to": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "execution": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "finished_at": {
+                          "type": "string"
+                        },
+                        "no_write": {
+                          "type": "boolean"
+                        },
+                        "observed": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "daily_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "finished_at",
+                        "no_write",
+                        "observed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -12138,6 +12960,143 @@
                       ],
                       "maxLength": 60,
                       "pattern": "^[a-z0-9_]+$"
+                    },
+                    "target": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "name",
+                        "campaign"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "to": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "execution": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "finished_at": {
+                          "type": "string"
+                        },
+                        "no_write": {
+                          "type": "boolean"
+                        },
+                        "observed": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "daily_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "finished_at",
+                        "no_write",
+                        "observed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -12773,6 +13732,143 @@
                       ],
                       "maxLength": 60,
                       "pattern": "^[a-z0-9_]+$"
+                    },
+                    "target": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "name",
+                        "campaign"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "to": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "execution": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "finished_at": {
+                          "type": "string"
+                        },
+                        "no_write": {
+                          "type": "boolean"
+                        },
+                        "observed": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "daily_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "finished_at",
+                        "no_write",
+                        "observed"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [

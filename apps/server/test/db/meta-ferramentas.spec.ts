@@ -144,6 +144,15 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
       undoes: null,
       undone_by: null,
     });
+    // O que a tela de Aprovações mostra do pedido de anúncio (X8): o objeto com a campanha dele na lista do Liame, a
+    // situação e a verba de antes e de depois e, enquanto o executor não pega o pedido, nenhuma execução.
+    const [naLista] = await ownerQuery<{ id: string }>(`select id from liame.campaign where connected_account_id = $1 and external_id = $2`, [e.conta, c.id]);
+    expect(p.body).toMatchObject({
+      target: { kind: 'campanha', name: 'Delivery noite', campaign: { id: naLista!.id, name: 'Delivery noite' } },
+      from: { status: 'ativo', daily_micros: 30 * REAL },
+      to: { status: 'ativo', daily_micros: 27 * REAL },
+      execution: null,
+    });
     // O pedido leu o estado na Meta, e mais nada. Sem a aprovação, o executor nem olha para ele.
     expect(meta.resumo(c.id)).toEqual(['ler']);
     await ciclo(e);
@@ -152,7 +161,14 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
 
     expect((await aprovar(e, p.body)).body).toMatchObject({ status: 'aprovada', approvals: [{ approver_role: 'dono', sufficient: true, current_plan: true }] });
     await ciclo(e);
-    expect(await ver(e, p.body.id)).toMatchObject({ status: 'executada', status_reason: null, workflow: { status: 'concluido' } });
+    expect(await ver(e, p.body.id)).toMatchObject({
+      status: 'executada',
+      status_reason: null,
+      workflow: { status: 'concluido' },
+      // A última execução: escreveu de verdade, e o objeto estava como o pedido esperava.
+      execution: { status: 'executada', finished_at: expect.any(String), no_write: false, observed: null },
+      target: { kind: 'campanha', name: 'Delivery noite' },
+    });
     // Na execução: lê e valida; lê, escreve e confere.
     expect(meta.resumo(c.id)).toEqual(['ler', 'ler', 'validar', 'ler', 'escrever', 'ler']);
     expect(meta.escritasDe(c.id).map((x) => x.params)).toEqual([{ daily_budget: '2700', execution_options: '["validate_only"]' }, { daily_budget: '2700' }]);
@@ -402,7 +418,14 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     await ciclo(e);
     expect(meta.escritasDe(c.id)).toEqual([]);
     expect(meta.objetos.get(c.id)!.daily_budget).toBe('2600');
-    expect(await ver(e, volta.body.id)).toMatchObject({ status: 'falhou', status_reason: 'o recurso mudou desde o pedido; nada foi sobrescrito' });
+    expect(await ver(e, volta.body.id)).toMatchObject({
+      status: 'falhou',
+      status_reason: 'o recurso mudou desde o pedido; nada foi sobrescrito',
+      // A tela diz o que o Liame encontrou na Meta: a verba que alguém deixou, e não a que a volta esperava.
+      execution: { status: 'estado_mudou', no_write: false, observed: { status: 'ativo', daily_micros: 26 * REAL } },
+      from: { daily_micros: 27 * REAL },
+      to: { daily_micros: 30 * REAL },
+    });
     // A reserva da volta voltou ao envelope, a ação original mostra a volta que falhou, e pedir de novo não adianta.
     expect(await livroDe(volta.body.id)).toEqual([
       ['reserva', 3 * REAL],
@@ -417,7 +440,14 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
     await aprovar(e, p.body);
     meta.objetos.get(a.id)!.status = 'PAUSED';
     await ciclo(e);
-    expect((await ver(e, p.body.id)).status).toBe('executada');
+    // Executada sem escrever: a resposta diz, para a tela não oferecer "Desfazer". O anúncio do teste não tem conjunto na lista: sem campanha.
+    expect(await ver(e, p.body.id)).toMatchObject({
+      status: 'executada',
+      execution: { status: 'executada', no_write: true, observed: null },
+      target: { kind: 'anuncio', campaign: null },
+      from: { status: 'ativo' },
+      to: { status: 'pausado' },
+    });
     expect(meta.escritasDe(a.id)).toEqual([]);
     const r3 = await desfazer(e, p.body.id);
     expect([r3.status, r3.body.code]).toEqual([409, 'acao-sem-volta']);

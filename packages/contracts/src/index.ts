@@ -80,6 +80,7 @@ export {
   RiskLevel,
 } from './policy.js';
 export {
+  ActionExecution,
   ActionListQuery,
   ActionListResponse,
   ActionOpenRequest,
@@ -88,6 +89,7 @@ export {
   ActionRecommendation,
   ActionResponse,
   ActionStatus,
+  ActionTarget,
   ActionTargetsQuery,
   ActionTargetsResponse,
   AdObject,
