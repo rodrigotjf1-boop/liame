@@ -90,6 +90,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   attribution_model: { class: 'PUBLIC', retention: 'do produto (a versão nunca muda)' },
   attribution_run: { class: 'INTERNAL', retention: '90 dias', purge: { job: 'execucao_atribuicao', days: 90 } },
   attribution_result: { class: 'CONFIDENTIAL', retention: 'com o pedido' },
+  // Conversões para o Google (A5, Y1): o destino guarda quem escolheu a ação de conversão; o envio guarda o pedido, o
+  // valor e a resposta do Google, sem o id do clique (que fica no ponto de contato, com o prazo de guarda dele).
+  conversion_destination: { class: 'PERSONAL', retention: 'com a conta conectada (quem escolheu a ação de conversão fica ligado à linha)' },
+  conversion_upload: { class: 'CONFIDENTIAL', retention: 'com a empresa, a conta conectada ou o pedido' },
   // IA (A3, I1): preços e rotas são do produto; o uso é o registro técnico de cada chamada (quem pediu,
   // sem conteúdo); o conteúdo enviado e recebido, já sem dado pessoal, fica 30 dias (Política 7.3).
   ai_model_price: { class: 'PUBLIC', retention: 'do produto' },

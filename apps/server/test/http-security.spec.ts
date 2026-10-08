@@ -106,10 +106,12 @@ describe('fail-fast da configuração em produção', () => {
       googleAdsUrl: 'https://googleads.googleapis.com',
       ga4DataUrl: 'https://analyticsdata.googleapis.com',
       ga4AdminUrl: 'https://analyticsadmin.googleapis.com',
+      dataManagerUrl: 'https://datamanager.googleapis.com',
       metaAppSecret: null,
     });
     expect(() => loadConfig({ ...prod, META_GRAPH_URL: 'https://graph.facebook.com.outro.site' })).toThrow('endereço oficial');
     expect(() => loadConfig({ ...prod, GA4_DATA_URL: 'http://127.0.0.1:4000' })).toThrow('endereço oficial');
+    expect(() => loadConfig({ ...prod, GOOGLE_DATA_MANAGER_URL: 'https://datamanager.googleapis.com.outro.site' })).toThrow('endereço oficial');
     expect(loadConfig({ NODE_ENV: 'test', META_GRAPH_URL: 'http://127.0.0.1:4000/' } as NodeJS.ProcessEnv).plataformas.metaGraphUrl).toBe('http://127.0.0.1:4000');
   });
 

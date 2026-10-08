@@ -41,6 +41,8 @@ const Env = z.object({
   GOOGLE_ADS_URL: z.url().default('https://googleads.googleapis.com'),
   GA4_DATA_URL: z.url().default('https://analyticsdata.googleapis.com'),
   GA4_ADMIN_URL: z.url().default('https://analyticsadmin.googleapis.com'),
+  /** Data Manager API do Google: para onde vão as vendas confirmadas (A5, Y1). */
+  GOOGLE_DATA_MANAGER_URL: z.url().default('https://datamanager.googleapis.com'),
   /** Segredo do app da Meta (da distribuição): assina as chamadas com appsecret_proof. */
   META_APP_SECRET: z.string().min(16).optional(),
   /** Origem pública da API: monta o endereço de volta do OAuth (registrado no app de cada plataforma). */
@@ -101,7 +103,7 @@ export type AppConfig = {
   /** Termos vigentes (A0-6): versão e endereços públicos. */
   terms: { version: string; termsUrl: string; privacyUrl: string };
   /** Plataformas (A2): endereço de cada API e o que assina as chamadas. */
-  plataformas: { metaGraphUrl: string; googleAdsUrl: string; ga4DataUrl: string; ga4AdminUrl: string; metaAppSecret: string | null };
+  plataformas: { metaGraphUrl: string; googleAdsUrl: string; ga4DataUrl: string; ga4AdminUrl: string; dataManagerUrl: string; metaAppSecret: string | null };
   /** Produtos DMS (A2.5): rotas de integração do Regem e do RegemCast (nulo = ainda sem endereço). */
   produtos: { regemApiUrl: string; regemcastApiUrl: string | null };
   /** Origem pública da API (volta do OAuth). */
@@ -154,6 +156,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     GOOGLE_ADS_URL: 'https://googleads.googleapis.com',
     GA4_DATA_URL: 'https://analyticsdata.googleapis.com',
     GA4_ADMIN_URL: 'https://analyticsadmin.googleapis.com',
+    GOOGLE_DATA_MANAGER_URL: 'https://datamanager.googleapis.com',
     META_DIALOG_URL: 'https://www.facebook.com',
     GOOGLE_AUTH_URL: 'https://accounts.google.com',
     GOOGLE_TOKEN_URL: 'https://oauth2.googleapis.com',
@@ -239,6 +242,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       googleAdsUrl: env.GOOGLE_ADS_URL.replace(/\/$/, ''),
       ga4DataUrl: env.GA4_DATA_URL.replace(/\/$/, ''),
       ga4AdminUrl: env.GA4_ADMIN_URL.replace(/\/$/, ''),
+      dataManagerUrl: env.GOOGLE_DATA_MANAGER_URL.replace(/\/$/, ''),
       metaAppSecret: env.META_APP_SECRET ?? null,
     },
     produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl: env.REGEMCAST_API_URL?.replace(/\/$/, '') ?? null },

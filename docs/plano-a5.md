@@ -47,6 +47,8 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **C3d** | Regem | Só se a D-A5-9 for "sim": no cardápio online, o aviso de medição com a escolha da pessoa e a guarda do que a Meta exige para um evento de site | Y7 |
 | **C2c** | RegemCast | O token do piloto com as permissões de rascunho e disparo (classe DMS); conferir se a campanha devolve o cupom usado ou só os números | Y5 |
 
+> **Andamento.** **Y1, servidor (08/10/2026):** a migration 0055, o conector da Data Manager API, a rotina de envio e a flag `conversoes_google`, desligada; sem tela e sem rota. Faltam da Y1 as rotas, a permissão nova na autorização do Google, o protótipo P14 e a tela.
+
 ## 4. Decisões (aprovadas pelo dono em 08/10/2026, como recomendadas)
 
 | # | Decisão | Recomendação | Por quê |
