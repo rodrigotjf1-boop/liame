@@ -247,6 +247,7 @@ export class BudgetService {
         stale: p.atrasada,
         last_success_at: p.lidoEm ? p.lidoEm.toISOString() : null,
       })),
+      days: conta.dias.map((d) => ({ day: d.dia, spend_micros: Number(d.gasto), missing: d.faltam })),
       rules: regras,
       changes: mudancas,
       overspend: avisosDeGasto(mudancas, mes.ontem),

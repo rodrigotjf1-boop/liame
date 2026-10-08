@@ -1,6 +1,6 @@
 import type { PolicyDocument } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { aoCentavo, cabeNoMes, type ContaDeAnuncio, contaDoMes, diasEntre, fraseDeNaoCaber, linhaDaConta, mesDe, nomeDoMes } from '../src/actions/verba-do-mes.js';
+import { aoCentavo, cabeNoMes, type ContaDeAnuncio, contaDoMes, diasEntre, fraseDeNaoCaber, gastoDeCadaDia, linhaDaConta, mesDe, nomeDoMes } from '../src/actions/verba-do-mes.js';
 import { type LoadedPolicy, PLATFORM_POLICY } from '../src/policy/engine.js';
 import { comTetoDaVerba, regrasDaVerba, temOTetoDaVerba, tetoDaVerba } from '../src/policy/teto-da-verba.js';
 import { reais } from '../src/results/atencao-ciclo.js';
@@ -8,7 +8,8 @@ import { menosDias } from '../src/results/fora-do-normal.js';
 
 // A4 · X4 (D-A4-19): a conta da verba do mês, em funções puras. O teto do mês conta tudo o que as contas de anúncio
 // gastam; o pedido que faz o gasto subir só passa se couber na previsão de fechamento. Aqui: o calendário do mês, a
-// conta de cada conta de anúncio (lida hoje, atrasada, nunca lida), a soma por plataforma, o que pesa hoje, a
+// conta de cada conta de anúncio (lida hoje, atrasada, nunca lida), a soma por plataforma, o gasto de cada dia (o
+// desenho "o mês, dia a dia"), o que pesa hoje, a
 // conferência do pedido, a frase da recusa e o teto por campanha na política.
 
 const REAL = 1_000_000n;
@@ -130,6 +131,67 @@ describe('a conta do mês', () => {
     // Com uma conta nunca lida, a plataforma não tem "lido até".
     const nunca = contaDoMes({ hoje: '2026-09-29', contas: [meta, conta({ id: 'm3', lidoAte: null, lidoEm: null })], pesamPorDia: 0n, teto: null });
     expect(nunca.plataformas[0]).toMatchObject({ lidoAte: null, lidoEm: null, atrasada: true });
+  });
+});
+
+describe('o gasto de cada dia do mês', () => {
+  const mes = mesDe('2026-09-29');
+
+  it('do primeiro dia ao último lido, e a soma dos dias é o gasto do mês', () => {
+    // Hoje (29/09) só tem dado amanhã, e agosto não é deste mês.
+    const meta = conta({ id: 'm', gastoPorDia: gastos('2026-08-25', '2026-09-28', 120n * REAL, [['2026-09-29', 999n * REAL]]) });
+    const google = conta({ id: 'g', provider: 'google_ads', gastoPorDia: gastos('2026-09-03', '2026-09-28', 56n * REAL) });
+    const dias = gastoDeCadaDia([google, meta], mes);
+    expect(dias).toHaveLength(28);
+    expect([dias[0], dias[2], dias.at(-1)]).toEqual([
+      { dia: '2026-09-01', gasto: 120n * REAL, faltam: [] },
+      { dia: '2026-09-03', gasto: 176n * REAL, faltam: [] },
+      { dia: '2026-09-28', gasto: 176n * REAL, faltam: [] },
+    ]);
+    const c = contaDoMes({ hoje: '2026-09-29', contas: [google, meta], pesamPorDia: 0n, teto: null });
+    expect(c.dias).toEqual(dias);
+    expect(c.dias.reduce((s, d) => s + d.gasto, 0n)).toBe(c.gasto);
+  });
+
+  it('a fração de centavo vai ao centavo no acumulado: nenhum dia fica negativo e a soma fecha com o total da tela', () => {
+    // R$ 20,555555 por dia (o Google manda fração de centavo): 28 dias somam R$ 575,55554, que a tela mostra como R$ 575,56.
+    const google = conta({ provider: 'google_ads', gastoPorDia: gastos('2026-09-01', '2026-09-28', 20_555_555n) });
+    const dias = gastoDeCadaDia([google], mes);
+    expect(dias.every((d) => d.gasto >= 0n && d.gasto % 10_000n === 0n)).toBe(true);
+    expect(dias.reduce((s, d) => s + d.gasto, 0n)).toBe(linhaDaConta(google, mes).gasto);
+    expect(linhaDaConta(google, mes).gasto).toBe(575_560_000n);
+    // Cada dia mostra R$ 20,55 ou R$ 20,56, conforme o centavo que o acumulado ganhou.
+    expect(new Set(dias.map((d) => d.gasto))).toEqual(new Set([20_550_000n, 20_560_000n]));
+  });
+
+  it('conta atrasada: entra até o último dia lido dela, e o dia que falta diz a plataforma', () => {
+    const meta = conta({ id: 'm', lidoAte: '2026-09-27', gastoPorDia: gastos('2026-09-01', '2026-09-28', 100n * REAL) });
+    const google = conta({ id: 'g', provider: 'google_ads', gastoPorDia: gastos('2026-09-01', '2026-09-28', 50n * REAL) });
+    const dias = gastoDeCadaDia([google, meta], mes);
+    expect(dias.slice(-2)).toEqual([
+      { dia: '2026-09-27', gasto: 150n * REAL, faltam: [] },
+      { dia: '2026-09-28', gasto: 50n * REAL, faltam: ['meta_ads'] },
+    ]);
+    expect(dias.reduce((s, d) => s + d.gasto, 0n)).toBe(contaDoMes({ hoje: '2026-09-29', contas: [google, meta], pesamPorDia: 0n, teto: null }).gasto);
+    // Com as duas atrasadas, a lista para no último dia que alguma cobre.
+    expect(gastoDeCadaDia([meta, { ...google, lidoAte: '2026-09-26' }], mes).at(-1)).toEqual({ dia: '2026-09-27', gasto: 100n * REAL, faltam: ['google_ads'] });
+  });
+
+  it('nunca lida ou parada desde antes do mês: falta em todos os dias; sozinha, não há dia para mostrar', () => {
+    const meta = conta({ id: 'm', gastoPorDia: gastos('2026-09-01', '2026-09-28', 100n * REAL) });
+    const nunca = conta({ id: 'g', provider: 'google_ads', lidoAte: null, lidoEm: null, gastoPorDia: gastos('2026-09-01', '2026-09-28', 50n * REAL) });
+    const parada = conta({ id: 'g2', provider: 'google_ads', lidoAte: '2026-08-25', gastoPorDia: gastos('2026-08-01', '2026-08-25', 50n * REAL) });
+    const dias = gastoDeCadaDia([nunca, meta, parada], mes);
+    expect(dias).toHaveLength(28);
+    expect(dias.every((d) => d.gasto === 100n * REAL && d.faltam.join() === 'google_ads')).toBe(true);
+    expect([gastoDeCadaDia([nunca], mes), gastoDeCadaDia([parada], mes), gastoDeCadaDia([], mes)]).toEqual([[], [], []]);
+  });
+
+  it('no primeiro dia do mês ainda não há dia inteiro para mostrar; no dia 2, o dia 1', () => {
+    const c = conta({ lidoAte: '2026-09-30', gastoPorDia: gastos('2026-09-01', '2026-09-30', 100n * REAL) });
+    expect(gastoDeCadaDia([c], mesDe('2026-10-01'))).toEqual([]);
+    const noDia2 = conta({ lidoAte: '2026-10-01', gastoPorDia: gastos('2026-09-25', '2026-10-01', 100n * REAL) });
+    expect(gastoDeCadaDia([noDia2], mesDe('2026-10-02'))).toEqual([{ dia: '2026-10-01', gasto: 100n * REAL, faltam: [] }]);
   });
 });
 

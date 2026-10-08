@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Verba do mês em gráficos · Liame</title>
 <!--
-@prototipo Liame · Verba do mês em gráficos (caminho B, "uma pergunta, um desenho") (PARA APROVAÇÃO DO DONO)
+@prototipo Liame · Verba do mês em gráficos (caminho B, "uma pergunta, um desenho") (APROVADO PELO DONO EM 07/10/2026)
 base: mockups/prototipo-anuncios.html (P9, aprovado em 05/10/2026), com o shell, os dados, os limites da empresa, "O que
       o Liame mudou" e as outras telas como estão lá, e a gramática dos desenhos aprovados em Resultados, no Resumo e na
       Revisão da semana (07/10/2026).
@@ -25,6 +25,7 @@ regras: barra e posição, nunca pizza; o valor sempre escrito ao lado (a dica d
         nunca só a cor; nenhuma cor nova (o gasto do mês segue na cor da barra do teto aprovada no P9, e o que passa do
         teto leva o vermelho de estado); uma régua só, em reais, começando no zero; nenhum dado pessoal; dados
         fictícios (Mister Burgers · Loja Centro).
+no app: desde 07/10/2026 (apps/web/src/components/verba); as diferenças para este arquivo estão em decisoes-design.md.
 fontes: base-conhecimento.md §16.7, ux-modelo-interface.md §6, plano-a4.md (§5 P9), apps/web/src/components/verba,
         apps/server/src/actions/budget.service.ts.
 -->
@@ -1369,7 +1370,7 @@ select.input { padding-right: var(--sp-2); }
 <p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
 
 <div class="revisao" role="region" aria-label="Controles do protótipo">
-  <p class="revisao-marca"><b>Protótipo para aprovação · Verba do mês em gráficos</b><span>Caminho B, “uma pergunta, um desenho” · só o cartão do mês · dados de exemplo</span></p>
+  <p class="revisao-marca"><b>Protótipo aprovado em 07/10/2026 · Verba do mês em gráficos</b><span>Caminho B, “uma pergunta, um desenho” · só o cartão do mês · dados de exemplo</span></p>
   <label>Estado <select id="rev-p9"></select></label>
   <!-- Os seletores do P4 e do P8 seguem no arquivo (os cenários `p4-*` e `p8-*` usam), fora da faixa. -->
   <span hidden><label>Resumo e plano <select id="rev-p8"></select></label><label>Tela <select id="rev-tela"><option value="resultados">Resultados</option><option value="atencao">Atenção</option><option value="revisao">Revisão semanal</option></select></label><label>Explicação <select id="rev-explicacao"></select></label><label id="rev-cenario-rot">Cenário <select id="rev-cenario"></select></label></span>

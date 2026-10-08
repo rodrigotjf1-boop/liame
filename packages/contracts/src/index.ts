@@ -96,6 +96,7 @@ export {
   BudgetEnvelope,
   BudgetLimitsRequest,
   BudgetMonthChange,
+  BudgetMonthDay,
   BudgetMonthPlatform,
   BudgetMonthResponse,
   BudgetPolicyRequest,

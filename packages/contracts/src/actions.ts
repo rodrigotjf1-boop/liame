@@ -209,6 +209,15 @@ export const BudgetMonthPlatform = z.strictObject({
 });
 export type BudgetMonthPlatform = z.infer<typeof BudgetMonthPlatform>;
 
+/** O gasto de um dia do mês, somando as contas de anúncio que a leitura cobre naquele dia. */
+export const BudgetMonthDay = z.strictObject({
+  day: Dia,
+  spend_micros: Micros,
+  /** As plataformas com alguma conta que a leitura não cobre neste dia: o gasto delas entra na previsão, pelo ritmo. */
+  missing: z.array(z.string()),
+});
+export type BudgetMonthDay = z.infer<typeof BudgetMonthDay>;
+
 /**
  * A conferência mais recente de uma mudança (D-A4-24): o que a leitura do dia mostrou do objeto e quanto ele gastou. O
  * gasto é conferido pela semana (os dias comparados, o gasto neles e o que a verba de cada dia permite), não pelo dia.
@@ -304,6 +313,12 @@ export const BudgetMonthResponse = z.strictObject({
   /** O que sobra do teto do mês: teto − previsão − aumentos de hoje. Negativo quando o mês passa do teto; nulo sem teto. */
   remaining_micros: z.int().nullable(),
   platforms: z.array(BudgetMonthPlatform),
+  /**
+   * O gasto de cada dia, do primeiro dia do mês ao último que alguma conta cobre (o desenho "o mês, dia a dia"); a soma
+   * é `spend_micros`. Vazio quando ainda não há dia inteiro lido neste mês. Opcional: a resposta de antes de
+   * 07/10/2026 não traz, e a tela fica com a barra do teto.
+   */
+  days: z.array(BudgetMonthDay).optional(),
   /** As regras da distribuição que a tela cita (valem para todas as empresas); nulas se a regra deixar de existir. */
   rules: z.strictObject({
     /** Quanto um pedido pode mexer na verba diária, em %. */
