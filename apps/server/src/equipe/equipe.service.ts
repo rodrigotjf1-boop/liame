@@ -263,12 +263,28 @@ export class EquipeService {
         agreement: string | null;
         regret_label: string | null;
         regret_micros: string | null;
+        connected_account_id: string;
+        pedido_id: string | null;
+        pedido_status: NonNullable<TeamShadowDecision['request']>['status'] | null;
+        pedido_em: Date | string | null;
+        pedido_do_funcionario: string | null;
+        tentou_em: Date | string | null;
+        nao_pediu: string | null;
+        nao_pediu_motivo: string | null;
       }>(sql`
         select d.id, d.decided_on::text as decided_on, d.campaign_id, c.name as campaign_name, d.provider, d.tool,
                (d.params->>'percent')::numeric::integer as percent, to_char(d.confidence * 100, 'FM990.0') as confidence_pct, d.status,
                d.evaluate_on::text as evaluate_on, d.human_action, d.human_action_on::text as human_action_on, d.agreement, d.regret_label,
-               d.action_regret_micros::text as regret_micros
+               d.action_regret_micros::text as regret_micros, d.connected_account_id,
+               p.id as pedido_id, p.status as pedido_status, p.created_at as pedido_em, p.agent_key as pedido_do_funcionario,
+               d.request_attempted_at as tentou_em, d.request_error as nao_pediu, d.request_error_detail as nao_pediu_motivo
           from liame.shadow_decision d join liame.campaign c on c.id = d.campaign_id
+          -- O pedido mais recente que nasceu da recomendação (o da pessoa, pelo "Pedir esta mudança", ou o dele, no modo Aprovação).
+          left join lateral (
+            select r.id, r.status, r.created_at, r.agent_key from liame.action_request r
+             where r.shadow_decision_id = d.id and r.tenant_id = d.tenant_id
+             order by r.created_at desc, r.id desc limit 1
+          ) p on true
          where d.tenant_id = ${tenantId} and d.brand_id = ${query.brand_id}
          order by d.decided_on desc, d.id desc
          limit ${query.limit + 1}`)
@@ -292,6 +308,10 @@ export class EquipeService {
       agreement: d.agreement,
       regret_label: d.regret_label,
       regret_micros: d.regret_micros,
+      connected_account_id: d.connected_account_id,
+      // A rota já exige `campanhas.ver`, que é quem vê os pedidos de ação. O motivo de não ter pedido é o mesmo que a Atenção mostra.
+      request: d.pedido_id && d.pedido_status && d.pedido_em ? { id: d.pedido_id, status: d.pedido_status, created_at: iso(d.pedido_em), agent_key: d.pedido_do_funcionario } : null,
+      ...(d.nao_pediu && d.nao_pediu_motivo && d.tentou_em ? { not_requested: { code: d.nao_pediu, detail: d.nao_pediu_motivo, at: iso(d.tentou_em) } } : {}),
     }));
     return {
       brand_id: query.brand_id,

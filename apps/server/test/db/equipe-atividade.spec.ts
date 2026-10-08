@@ -319,6 +319,8 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
         agreement: null,
         regret_label: null,
         regret_micros: null,
+        connected_account_id: e.conta,
+        request: null,
       },
       {
         id: avaliada,
@@ -334,6 +336,8 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
         agreement: 'mesma_direcao',
         regret_label: 'teria_melhorado',
         regret_micros: '-18400000',
+        connected_account_id: e.conta,
+        request: null,
       },
     ]);
     const curta = TeamShadowResponse.parse((await api.call('GET', `/v1/team/shadow?brand_id=${e.brandId}&limit=1`, { cookie: e.cookie })).body);

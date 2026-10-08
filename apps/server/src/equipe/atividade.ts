@@ -176,6 +176,17 @@ function ramosDoMembro(membro: Membro, q: QuemOlha): SQL[] {
           sql`${daSombra} and d.created_at >= ${q.desde}::timestamptz`,
         ),
         ramo({ at: sql`d.evaluated_at`, kind: 'comparou', subject: sql`c.name`, detail: sql`d.regret_label` }, sql`${daSombra} and d.status = 'avaliada' and d.evaluated_at >= ${q.desde}::timestamptz`),
+        // O modo Aprovação (A4, X3): o pedido que ele mesmo fez, e a tentativa que não virou pedido (o motivo vai em código;
+        // o texto dele está na recomendação, que a Atenção e a lista da sombra mostram).
+        ramo(
+          { at: sql`r.created_at`, kind: 'pediu', subject: sql`c.name`, detail: sql`d.tool`, n: sql`(d.params->>'percent')::numeric` },
+          sql`from liame.action_request r join liame.shadow_decision d on d.id = r.shadow_decision_id join liame.campaign c on c.id = d.campaign_id
+              where r.tenant_id = ${q.tenantId} and r.brand_id = ${q.brandId} and r.agent_key = ${membro} and r.created_at >= ${q.desde}::timestamptz`,
+        ),
+        ramo(
+          { at: sql`d.request_attempted_at`, kind: 'nao_pediu', subject: sql`c.name`, detail: sql`left(replace(d.request_error, '-', '_'), 60)` },
+          sql`${daSombra} and d.request_error is not null and d.request_attempted_at >= ${q.desde}::timestamptz`,
+        ),
         // O passo para a Aprovação (A4, X3) sai com os tipos dele: o texto de cada um diz outra coisa.
         ramo(
           { at: sql`a.created_at`, kind: sql`case a.to_mode when 'APPROVAL' then 'aprovacao_proposta' else 'promocao_proposta' end`, subject: sql`ca.name`, detail: sql`a.tool`, n: sql`a.sample_size` },
