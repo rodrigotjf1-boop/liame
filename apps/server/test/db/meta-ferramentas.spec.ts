@@ -710,11 +710,13 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
       expect(aviso).toMatchObject({ kind: 'sugestao_reduzir_verba', title: 'Sugestão do Gestor de tráfego: reduzir a verba da campanha "Jantar de sexta" em 10%' });
       expect(aviso!.recommendation).toEqual({
         id: r.recomendacao,
+        campaign_name: 'Jantar de sexta',
         request: { tool: 'orcamento_ajustar', provider: 'meta_ads', account_id: e.conta, resource_id: r.recurso, params: { daily_budget_micros: 27 * REAL } },
         action: null,
       });
       expect((await desta(pausar.campanha))!.recommendation).toEqual({
         id: pausar.recomendacao,
+        campaign_name: 'Madrugada',
         request: { tool: 'campanha_pausar', provider: 'meta_ads', account_id: e.conta, resource_id: pausar.recurso, params: {} },
         action: null,
       });
@@ -722,7 +724,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
       // Com a escrita na Meta desligada para a empresa, a sugestão segue lá, sem o pedido: quem muda é a pessoa, na Meta.
       await ligarEscritaNaMeta(api, e.tenantId, false);
       try {
-        expect((await desta(r.campanha))!.recommendation).toEqual({ id: r.recomendacao, request: null, action: null });
+        expect((await desta(r.campanha))!.recommendation).toEqual({ id: r.recomendacao, campaign_name: 'Jantar de sexta', request: null, action: null });
       } finally {
         await ligarEscritaNaMeta(api, e.tenantId, true);
       }
@@ -736,12 +738,14 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
       const p = await api.call('POST', '/v1/actions', { cookie: e.cookie, body: { ...request, recommendation_id: id } });
       expect(p.status, JSON.stringify(p.body)).toBe(201);
       expect(p.body).toMatchObject({ tool: 'orcamento_ajustar', action: 'orcamento.reduzir', value_micros: 27 * REAL, current_value_micros: 30 * REAL, status: 'aguardando_aprovacao', recommendation: { id: r.recomendacao } });
-      expect((await desta(r.campanha))!.recommendation!.action).toEqual({ id: p.body.id, status: 'aguardando_aprovacao' });
+      // O pedido que nasceu dela: a situação, quando foi feito e quem pediu (uma pessoa: sem funcionário de IA).
+      const doPedido = { id: p.body.id, created_at: new Date(p.body.created_at).toISOString(), agent_key: null, requested_by: e.userId };
+      expect((await desta(r.campanha))!.recommendation!.action).toEqual({ ...doPedido, status: 'aguardando_aprovacao' });
 
       // Quem vê as vendas, mas não opera campanhas nem vê os pedidos, recebe só a recomendação.
       await ownerQuery(`insert into liame.role_permission (tenant_id, role_key, permission) select $1, 'dono', p from unnest(array['empresa.ver', 'marcas.ver', 'vendas.ver']) as p`, [e.tenantId]);
       try {
-        expect((await desta(r.campanha))!.recommendation).toEqual({ id: r.recomendacao, request: null, action: null });
+        expect((await desta(r.campanha))!.recommendation).toEqual({ id: r.recomendacao, campaign_name: 'Jantar de sexta', request: null, action: null });
       } finally {
         await ownerQuery(`delete from liame.role_permission where tenant_id = $1`, [e.tenantId]);
       }
@@ -751,11 +755,83 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
       await ciclo(e);
       expect(await ver(e, p.body.id)).toMatchObject({ status: 'executada', recommendation: { id: r.recomendacao, tool: 'orcamento_reduzir' } });
       expect(meta.objetos.get(r.id)!.daily_budget).toBe('2700');
-      expect((await desta(r.campanha))!.recommendation!.action).toEqual({ id: p.body.id, status: 'executada' });
+      expect((await desta(r.campanha))!.recommendation!.action).toEqual({ ...doPedido, status: 'executada' });
 
       // A recomendação apagada (a campanha saiu da conta) não leva o pedido junto: ele fica, sem a ligação.
       await ownerQuery(`delete from liame.shadow_decision where id = $1`, [r.recomendacao]);
       expect([(await ver(e, p.body.id)).status, (await ver(e, p.body.id)).recommendation, await ligacaoDe(p.body.id)]).toEqual(['executada', null, null]);
+    } finally {
+      await daMarca([]);
+    }
+  });
+
+  it('A4 · X8: "Agora não" dispensa a recomendação: fica o registro de quem dispensou, ela sai da Atenção e nada muda na Meta', async () => {
+    const r = await campanhaComRecomendacao(e, 'orcamento_reduzir', 'Almoço de terça');
+    const pedida = await campanhaComRecomendacao(e, 'campanha_pausar', 'Sobremesas');
+    const sem = await empresaSemLimites();
+    const daMarca = (rules: unknown[]) => politica(e, rules, e.brandId);
+    const desta = async (campanha: string) => (await sugestoes(e)).find((s) => s.campaign_id === campanha);
+    const dispensar = (emp: EmpresaComMeta, id: string) => api.call('POST', `/v1/results/recommendations/${id}/dismiss`, { cookie: emp.cookie });
+    const registros = (id: string) =>
+      ownerQuery<{ user_id: string; recommended_action: string; executed_action: string | null; reason_code: string }>(
+        `select user_id, recommended_action, executed_action, reason_code from liame.human_override where shadow_decision_id = $1 order by created_at`,
+        [id],
+      );
+    try {
+      expect(
+        (
+          await daMarca([
+            { type: 'autonomy', action: 'orcamento.reduzir', actor: 'agent', account: e.conta, mode: 'SUGGEST' },
+            { type: 'autonomy', action: 'campanha.pausar', actor: 'agent', account: e.conta, mode: 'SUGGEST' },
+          ])
+        ).status,
+      ).toBe(201);
+      expect((await desta(r.campanha))!.recommendation!.id).toBe(r.recomendacao);
+
+      // De outra empresa, a recomendação não existe; o que não é id nem chega ao banco.
+      expect((await dispensar(sem, r.recomendacao)).status).toBe(404);
+      expect((await dispensar(e, 'nao-e-um-id')).status).toBe(400);
+      // Quem não opera campanhas não dispensa (é a mesma permissão de pedir a mudança).
+      await ownerQuery(`insert into liame.role_permission (tenant_id, role_key, permission) select $1, 'dono', p from unnest(array['empresa.ver', 'marcas.ver', 'vendas.ver', 'campanhas.ver']) as p`, [e.tenantId]);
+      try {
+        expect((await dispensar(e, r.recomendacao)).status).toBe(403);
+      } finally {
+        await ownerQuery(`delete from liame.role_permission where tenant_id = $1`, [e.tenantId]);
+      }
+      expect(await registros(r.recomendacao)).toEqual([]);
+
+      // Com um pedido dela esperando a aprovação, não há o que dispensar: quem decide é a aprovação.
+      const { id, request } = (await desta(pedida.campanha))!.recommendation!;
+      const p = await api.call('POST', '/v1/actions', { cookie: e.cookie, body: { ...request, recommendation_id: id } });
+      expect(p.status, JSON.stringify(p.body)).toBe(201);
+      const comPedido = await dispensar(e, pedida.recomendacao);
+      expect([comPedido.status, comPedido.body.code]).toEqual([409, 'recomendacao-ja-pedida']);
+      // Cancelado o pedido, dá para dispensar.
+      expect((await cancelar(e, p.body.id)).status).toBe(200);
+      expect((await dispensar(e, pedida.recomendacao)).status).toBe(204);
+
+      // Dispensada: o registro de quem dispensou, a sugestão fora da Atenção e a recomendação ainda aberta para a sombra comparar.
+      const escritasAntes = meta.escritasDe(r.id).length;
+      expect((await dispensar(e, r.recomendacao)).status).toBe(204);
+      expect(await registros(r.recomendacao)).toEqual([{ user_id: e.userId, recommended_action: 'orcamento_reduzir', executed_action: null, reason_code: 'agora_nao' }]);
+      expect([await desta(r.campanha), await desta(pedida.campanha)]).toEqual([undefined, undefined]);
+      expect((await ownerQuery<{ status: string }>(`select status from liame.shadow_decision where id = $1`, [r.recomendacao]))[0]!.status).toBe('aberta');
+      expect(meta.escritasDe(r.id).length).toBe(escritasAntes);
+      // De novo, não grava outra vez.
+      expect((await dispensar(e, r.recomendacao)).status).toBe(204);
+      expect(await registros(r.recomendacao)).toHaveLength(1);
+      // Na auditoria da empresa, quem dispensou e o quê.
+      const [aud] = await ownerQuery<{ action: string; resource_type: string; after: { dismissed?: boolean; tool?: string } }>(
+        `select action, resource_type, after from liame.audit_event where chain_key = $1 and resource_id = $2 order by chain_seq`,
+        [e.tenantId, r.recomendacao],
+      );
+      expect([aud!.action, aud!.resource_type, aud!.after.dismissed, aud!.after.tool]).toEqual(['recomendacao.dispensar', 'shadow_decision', true, 'orcamento_reduzir']);
+
+      // A recomendação que a sombra já encerrou não se dispensa mais.
+      const encerrada = await campanhaComRecomendacao(e, 'orcamento_reduzir', 'Encerrada');
+      await ownerQuery(`update liame.shadow_decision set status = 'descartada', discard_reason = 'conta de anúncio desconectada' where id = $1`, [encerrada.recomendacao]);
+      const tarde = await dispensar(e, encerrada.recomendacao);
+      expect([tarde.status, tarde.body.code]).toEqual([409, 'recomendacao-encerrada']);
     } finally {
       await daMarca([]);
     }

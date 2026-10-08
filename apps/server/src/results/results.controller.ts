@@ -7,11 +7,23 @@ import {
   OrderOriginQuery,
   OrderOriginResponse,
   ProblemDetails,
+  ResourceId,
   WeeklyReviewQuery,
   WeeklyReviewResponse,
 } from '@liame/contracts';
-import { Controller, Get, Query } from '@nestjs/common';
-import { ApiCookieAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
+import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import {
+  ApiConflictResponse,
+  ApiCookieAuth,
+  ApiForbiddenResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnprocessableEntityResponse,
+} from '@nestjs/swagger';
+import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { AtencaoCicloService } from './atencao-ciclo.service.js';
@@ -46,6 +58,23 @@ export class ResultsController {
       podePedir: auth.permissions.has('campanhas.operar'),
       vePedidos: auth.permissions.has('campanhas.ver'),
     });
+  }
+
+  @Post('recommendations/:id/dismiss')
+  @Permissao('campanhas.operar')
+  @Auditar('recomendacao.dispensar', { recurso: 'shadow_decision' })
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Dispensar uma recomendação do Gestor de tráfego',
+    description:
+      'O "Agora não" da Atenção: a pessoa viu a recomendação (`recommendation.id` de uma sugestão de `GET /v1/results/attention`) e não quis a mudança. O Liame registra quem dispensou, a sugestão sai da Atenção e do Resumo e, no modo Aprovação, o Gestor de tráfego não faz o pedido dela. Nada muda na plataforma de anúncio. Dispensar de novo não grava outra vez. Com um pedido desta recomendação em andamento, responde 409: quem decide é a aprovação.',
+  })
+  @ApiNoContentResponse({ description: 'Recomendação dispensada.' })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  async dismissRecommendation(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<void> {
+    await this.ciclo.dispensar(auth, id);
   }
 
   @Get('closed-loop')

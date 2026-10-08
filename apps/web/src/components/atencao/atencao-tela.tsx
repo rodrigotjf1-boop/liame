@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DialogoConectar } from '@/components/contas/dialogo-conectar';
 import { liaLigada } from '@/components/explicar/pedir';
 import { avisoTemExplicacao } from '@/components/explicar/textos';
+import { GavetaPedir } from '@/components/pedir/gaveta-pedir';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Faixa } from '@/components/ui/faixa';
@@ -20,12 +21,24 @@ import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
 import { type Avisos, buscarAvisos } from './buscar-avisos';
 import { ItemAviso } from './item-aviso';
-import { contadorDoMenu, contagemPorGravidade, type Gravidade, GRAVIDADES, gravidadeDe, rotuloDoFiltro } from './textos';
+import {
+  AVISO_DE_DISPENSADA,
+  contadorDoMenu,
+  contagemPorGravidade,
+  erroAoDispensar,
+  type Gravidade,
+  GRAVIDADES,
+  gravidadeDe,
+  type RecomendacaoDoAviso,
+  recomendacaoDoAviso,
+  rotuloDoFiltro,
+} from './textos';
 
 // "Atenção de mídia" (mockups/prototipo-contas.html): o que precisa de alguém agora nas contas de anúncio
 // e, para quem vê as vendas, entre a mídia e o caixa (Atenção do ciclo fechado, F9), do mais grave para o
 // menos, com o motivo e o que fazer. É a tela "ver todos"; na home, os avisos entram como cartões numa
-// fase futura (ux-modelo-interface §11).
+// fase futura (ux-modelo-interface §11). A sugestão do Gestor de tráfego é o cartão da recomendação (protótipo P9):
+// "Pedir esta mudança" abre a gaveta do pedido (a mesma de Resultados) e "Agora não" dispensa a recomendação.
 
 type Carga =
   | { tipo: 'carregando' }
@@ -34,7 +47,7 @@ type Carga =
 type Filtro = Gravidade | 'todas';
 
 export function AtencaoTela() {
-  const { pode } = useSessao();
+  const { pode, me } = useSessao();
   const avisar = useAvisar();
   const contador = useContadorAtencao();
   const titulo = useRef<HTMLHeadingElement>(null);
@@ -43,6 +56,9 @@ export function AtencaoTela() {
   const [conectar, setConectar] = useState<BrandResponse[] | null>(null);
   /** Nulo até a tela saber (o botão "Explicar" só aparece depois, já no formato certo). */
   const [lia, setLia] = useState<boolean | null>(null);
+  /** A recomendação cuja gaveta do pedido está aberta, e a que está sendo dispensada ("Agora não"). */
+  const [pedindo, setPedindo] = useState<RecomendacaoDoAviso | null>(null);
+  const [dispensando, setDispensando] = useState<string | null>(null);
   const agora = useAgora(60_000, estado);
   const podeVer = pode('campanhas.ver');
   const podeVerContas = pode('contas.ver');
@@ -102,6 +118,23 @@ export function AtencaoTela() {
     titulo.current?.focus();
     if (ok) avisar('Avisos atualizados.');
   }
+
+  // "Agora não": o cartão sai da lista (com o botão que tinha o foco), e o foco vai para o título da tela.
+  async function dispensar(r: RecomendacaoDoAviso) {
+    setDispensando(r.id);
+    const resposta = await chamar(() => api.POST('/v1/results/recommendations/{id}/dismiss', { params: { path: { id: r.id } } }));
+    const erro = resposta.ok ? null : erroAoDispensar(resposta.problema);
+    if (!erro || erro.recarregar) {
+      await carregar();
+      titulo.current?.focus();
+    }
+    setDispensando(null);
+    if (erro) avisar(erro.texto, { tipo: 'perigo' });
+    else avisar(AVISO_DE_DISPENSADA);
+  }
+
+  /** O botão "Pedir esta mudança" do cartão que abriu a gaveta (o cartão pode ter sido redesenhado enquanto ela estava aberta). */
+  const botaoDaRecomendacao = (id: string): HTMLElement | null => document.querySelector<HTMLElement>(`[data-recomendacao="${id}"] a, [data-recomendacao="${id}"] button`);
 
   async function abrirConectar() {
     const r = await chamar(() => api.GET('/v1/brands'));
@@ -198,23 +231,45 @@ export function AtencaoTela() {
           </div>
           {visiveis.length ? (
             <ul className="avisos-midia anima" style={{ ['--i' as string]: 2 }} aria-label="Avisos">
-              {visiveis.map((item, i) => (
-                <ItemAviso
-                  key={`${item.kind}-${item.connected_account_id ?? ''}-${item.campaign_id ?? ''}-${item.provider ?? ''}-${i}`}
-                  item={item}
-                  podeVerContas={podeVerContas}
-                  podeConectar={podeConectar}
-                  podeVerVendas={podeVerVendas}
-                  aoReconectar={() => disparar(abrirConectar())}
-                  explicar={podeVerVendas && lia !== null && avisoTemExplicacao(item) ? { lia } : null}
-                  aoAtualizar={() => disparar(atualizarAvisos())}
-                />
-              ))}
+              {visiveis.map((item, i) => {
+                const rec = recomendacaoDoAviso(item, me.user.id, agora);
+                return (
+                  <ItemAviso
+                    key={`${item.kind}-${item.connected_account_id ?? ''}-${item.campaign_id ?? ''}-${item.provider ?? ''}-${i}`}
+                    item={item}
+                    recomendacao={rec}
+                    pedindo={rec !== null && pedindo?.id === rec.id}
+                    dispensando={rec !== null && dispensando === rec.id}
+                    aoPedir={setPedindo}
+                    aoDispensar={(r) => disparar(dispensar(r))}
+                    podeVerContas={podeVerContas}
+                    podeConectar={podeConectar}
+                    podeVerVendas={podeVerVendas}
+                    aoReconectar={() => disparar(abrirConectar())}
+                    explicar={podeVerVendas && lia !== null && avisoTemExplicacao(item) ? { lia } : null}
+                    aoAtualizar={() => disparar(atualizarAvisos())}
+                  />
+                );
+              })}
             </ul>
           ) : (
             <p className="seg-txt">Nenhum aviso com essa gravidade agora.</p>
           )}
         </>
+      )}
+
+      {pedindo?.pedir && (
+        <GavetaPedir
+          key={pedindo.id}
+          campanha={pedindo.pedir.campanha}
+          inicial={{ acao: pedindo.pedir.acao, ...(pedindo.pedir.valorMicros === null ? {} : { valorMicros: pedindo.pedir.valorMicros }), recomendacao: pedindo.id }}
+          podeDefinirLimites={pode('orcamento.gerenciar')}
+          podeVerContas={podeVerContas}
+          reserva={titulo}
+          voltarPara={() => botaoDaRecomendacao(pedindo.id)}
+          aoFechar={() => setPedindo(null)}
+          aoCriar={() => disparar(carregar())}
+        />
       )}
 
       {conectar && (

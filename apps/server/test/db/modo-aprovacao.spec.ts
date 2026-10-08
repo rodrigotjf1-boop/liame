@@ -175,7 +175,7 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
     expect(await rodada()).toEqual({ pedidos: 0, semPedido: 0 });
     expect(await pedidosDa(r.recomendacao)).toHaveLength(1);
     // Na Atenção, a sugestão mostra o pedido que ele fez (e nenhum motivo de não ter pedido).
-    expect(await naAtencao(r.campanha)).toMatchObject({ id: r.recomendacao, action: { id: p!.id, status: 'aguardando_aprovacao' } });
+    expect(await naAtencao(r.campanha)).toMatchObject({ id: r.recomendacao, action: { id: p!.id, status: 'aguardando_aprovacao', agent_key: 'trafego', requested_by: e.userId } });
     expect('not_requested' in (await naAtencao(r.campanha))!).toBe(false);
 
     // Sem a aprovação de uma pessoa, nada muda na Meta. Com ela (e o código do app), o Liame valida, escreve e confere.
@@ -290,8 +290,11 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
       body: { tool: 'campanha_pausar', provider: 'meta_ads', account_id: e.conta, resource_id: jaPedida.recurso, params: {}, recommendation_id: jaPedida.recomendacao },
     });
     expect(dela.status, JSON.stringify(dela.body)).toBe(201);
+    // E a que uma pessoa dispensou ("Agora não", com a ação ainda em Sugerir para ela): ele não pede depois.
+    const dispensada = await campanha('orcamento_reduzir', { nome: 'Dispensada' });
+    expect((await api.call('POST', `/v1/results/recommendations/${dispensada.recomendacao}/dismiss`, { cookie: e.cookie })).status).toBe(204);
     expect(await rodada()).toEqual({ pedidos: 0, semPedido: 0 });
-    for (const c of [deOntem, jaMexeu, jaPedida]) expect((await tentativa(c.recomendacao)).tentou).toBe(false);
+    for (const c of [deOntem, jaMexeu, jaPedida, dispensada]) expect((await tentativa(c.recomendacao)).tentou).toBe(false);
     expect((await pedidosDa(jaPedida.recomendacao)).map((p) => [p.actor_type, p.agent_key])).toEqual([['human', null]]);
     await api.call('POST', `/v1/actions/${dela.body.id}/cancel`, { cookie: e.cookie });
 

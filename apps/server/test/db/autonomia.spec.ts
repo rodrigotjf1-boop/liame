@@ -196,7 +196,7 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
     });
     // A sugestão leva a recomendação por trás dela (A4, X3). Sem a escrita na Meta ligada para a empresa, não há pedido
     // a fazer pelo Liame: quem muda é a pessoa, na plataforma.
-    expect(aviso!.recommendation).toEqual({ id: expect.any(String), request: null, action: null });
+    expect(aviso!.recommendation).toEqual({ id: expect.any(String), campaign_name: 'Delivery noite', request: null, action: null });
     expect((await ownerQuery<{ daily_budget_micros: string }>(`select daily_budget_micros::text from liame.campaign where id = $1`, [e.campanha]))[0]!.daily_budget_micros).toBe('30000000');
     expect((await api.call('POST', `/v1/autonomy/proposals/${proposta.id}/approve`, { cookie: e.cookie })).body.code).toBe('proposta-decidida');
 
@@ -308,17 +308,18 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
     const [decisao] = await ownerQuery<{ id: string }>(`select id from liame.shadow_decision where tenant_id = $1`, [e.tenantId]);
 
     // A escrita na Meta nasce desligada: a sugestão vem com a recomendação, sem o pedido.
-    expect(await recomendacaoDe(e)).toEqual({ id: decisao!.id, request: null, action: null });
+    expect(await recomendacaoDe(e)).toEqual({ id: decisao!.id, campaign_name: 'Delivery noite', request: null, action: null });
     await ligarEscritaNaMeta(api, e.tenantId, true);
     try {
       // Ligada para a empresa: o corpo do pedido, com a verba de agora menos os 20% desta recomendação.
       expect(await recomendacaoDe(e)).toEqual({
         id: decisao!.id,
+        campaign_name: 'Delivery noite',
         request: { tool: 'orcamento_ajustar', provider: 'meta_ads', account_id: e.conta, resource_id: `campanha:${naMeta}`, params: { daily_budget_micros: 24_000_000 } },
         action: null,
       });
       // Quem só lê não pede ação: recebe a recomendação, e mais nada.
-      expect(await recomendacaoDe(leitor)).toEqual({ id: decisao!.id, request: null, action: null });
+      expect(await recomendacaoDe(leitor)).toEqual({ id: decisao!.id, campaign_name: 'Delivery noite', request: null, action: null });
     } finally {
       await ligarEscritaNaMeta(api, e.tenantId, false);
     }

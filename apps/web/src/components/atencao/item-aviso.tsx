@@ -8,12 +8,15 @@ import { BlocoExplicacao } from '@/components/explicar/bloco-explicacao';
 import { BotaoExplicar } from '@/components/explicar/botao-explicar';
 import type { PedidoDeExplicacao } from '@/components/explicar/pedir';
 import { useExplicacao } from '@/components/explicar/use-explicacao';
+import { Icone } from '@/components/ui/icone';
 import { disparar } from '@/lib/disparar';
-import { acaoDoAviso, destinoDoAviso, destinoPedeVendas, gravidadeDe, oQueFazer, rotuloDaGravidade } from './textos';
+import { acaoDoAviso, destinoDoAviso, destinoPedeVendas, gravidadeDe, oQueFazer, type RecomendacaoDoAviso, rotuloDaGravidade } from './textos';
 
 // Um aviso (protótipo aprovado): gravidade, plataforma, o que aconteceu, o motivo e o que fazer. Os do ciclo
 // fechado (F9) levam à tela onde se resolve, para quem vê as vendas. Os de campanha, de medição e os fora do
-// normal têm "Explicar" (protótipo P4): a explicação abre dentro do próprio aviso.
+// normal têm "Explicar" (protótipo P4): a explicação abre dentro do próprio aviso. A sugestão do Gestor de tráfego
+// vira o cartão da recomendação (protótipo P9): "Pedir esta mudança" abre a gaveta do pedido já com a mudança, e
+// "Agora não" tira o cartão e registra que a pessoa não quis.
 
 type Props = {
   item: AttentionItem;
@@ -25,10 +28,20 @@ type Props = {
   explicar?: { lia: boolean } | null;
   /** Recarrega a lista: é o que a explicação oferece quando o aviso dela saiu da lista com a tela aberta. */
   aoAtualizar?: () => void;
+  /** A recomendação por trás da sugestão, já em palavras; nula nos outros avisos. */
+  recomendacao?: RecomendacaoDoAviso | null;
+  /** A gaveta do pedido está aberta por este cartão (o botão diz que controla um diálogo aberto). */
+  pedindo?: boolean;
+  /** "Agora não" em andamento: os dois botões esperam. */
+  dispensando?: boolean;
+  aoPedir?: (r: RecomendacaoDoAviso) => void;
+  aoDispensar?: (r: RecomendacaoDoAviso) => void;
 };
 
-export function ItemAviso({ item, podeVerContas, podeConectar, podeVerVendas, aoReconectar, explicar = null, aoAtualizar }: Props) {
-  const g = gravidadeDe(item.severity);
+export function ItemAviso({ item, podeVerContas, podeConectar, podeVerVendas, aoReconectar, explicar = null, aoAtualizar, recomendacao = null, pedindo = false, dispensando = false, aoPedir, aoDispensar }: Props) {
+  const rec = recomendacao;
+  // A recomendação leva o azul de informação, como no protótipo; a gravidade do servidor segue valendo no filtro e no menu.
+  const g = rec ? 'info' : gravidadeDe(item.severity);
   const plat = item.provider ? plataforma(item.provider) : null;
   const acao = acaoDoAviso(item.kind);
   const destino = acao && (podeVerVendas || !destinoPedeVendas(acao)) ? destinoDoAviso(acao) : null;
@@ -62,18 +75,52 @@ export function ItemAviso({ item, podeVerContas, podeConectar, podeVerVendas, ao
   const acaoDaExplicacao = destino ?? { href: '/resultados', rotulo: 'Ver em Resultados' };
 
   return (
-    <li className="card aviso-midia" data-sev={g}>
+    <li className={rec ? 'card aviso-midia aviso--rec' : 'card aviso-midia'} data-sev={g} data-recomendacao={rec?.id}>
       <div className="aviso-topo">
-        <span className={`sev sev--${g}`}>{rotuloDaGravidade(g)}</span>
+        <span className={`sev sev--${g}`}>{rec ? 'Recomendação' : rotuloDaGravidade(g)}</span>
         {plat && <span className={`plat plat--${plat.classe}`}>{plat.nome}</span>}
+        {rec && (
+          <span className="lite-chip">
+            <Icone nome="megaphone" />
+            Gestor de tráfego · {rec.modo}
+          </span>
+        )}
       </div>
-      <h2 className="aviso-titulo">{item.title}</h2>
+      <h2 className="aviso-titulo">{rec ? rec.titulo : item.title}</h2>
       <p className="aviso-det">{item.detail}</p>
-      <p className="aviso-fazer">
-        <b>O que fazer:</b> {oQueFazer(item.action)}
-      </p>
-      {(pedido || abreContas || destino || reconecta) && (
+      {rec && (rec.estado.tipo === 'pedida' || rec.estado.tipo === 'feita') ? (
+        <p className="aviso-estado">
+          <Icone nome={rec.estado.tipo === 'feita' ? 'check' : 'clock'} pequeno />
+          <span>{rec.estado.frase}</span>
+        </p>
+      ) : (
+        <p className="aviso-fazer">
+          <b>O que fazer:</b> {rec?.estado.tipo === 'aberta' ? rec.estado.fazer : oQueFazer(item.action)}
+        </p>
+      )}
+      {rec?.estado.tipo === 'aberta' && rec.estado.nota && (
+        <p className="aviso-estado aviso-estado--nota">
+          <Icone nome="info" pequeno />
+          <span>{rec.estado.nota}</span>
+        </p>
+      )}
+      {(pedido || abreContas || destino || reconecta || (rec && rec.estado.tipo !== 'manual')) && (
         <div className="aviso-acoes">
+          {rec?.estado.tipo === 'aberta' && (
+            <>
+              <button className="btn btn--primary btn--sm" type="button" data-pedir-recomendacao aria-haspopup="dialog" aria-expanded={pedindo} disabled={dispensando} onClick={() => aoPedir?.(rec)}>
+                Pedir esta mudança
+              </button>
+              <button className="btn btn--sm" type="button" disabled={dispensando} onClick={() => aoDispensar?.(rec)}>
+                Agora não
+              </button>
+            </>
+          )}
+          {rec && (rec.estado.tipo === 'pedida' || rec.estado.tipo === 'feita') && (
+            <Link className="btn btn--sm" href={`/aprovacoes?pedido=${rec.estado.pedido}`}>
+              Ver o pedido
+            </Link>
+          )}
           {pedido && explicar && (
             <BotaoExplicar
               ref={botao}

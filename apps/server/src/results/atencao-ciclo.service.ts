@@ -1,10 +1,11 @@
 import type { ActionStatus, AttentionRecommendation, ClosedLoopAttentionResponse } from '@liame/contracts';
+import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { nomeDaPlataforma, textoDoGastoAcima, verbaDaLeitura } from '../actions/conferencia-do-gasto.js';
 import { CONNECTORS } from '../actions/connectors.js';
 import { MODELO_PADRAO } from '../attribution/motor.js';
-import { currentTx } from '../context/request-context.js';
+import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { LinksService } from '../links/links.service.js';
@@ -77,6 +78,39 @@ export class AtencaoCicloService {
     private readonly links: LinksService,
     private readonly flags: FlagService,
   ) {}
+
+  /**
+   * "Agora não" (A4, X8): a pessoa viu a recomendação do Gestor de tráfego e não quis a mudança. Fica o registro de
+   * quem dispensou (`human_override`, a tabela que a sombra já previa para isso), e a recomendação sai da Atenção e do
+   * Resumo; no modo Aprovação, ele não faz o pedido dela. A recomendação continua aberta para a sombra comparar depois
+   * o que teria acontecido. Dispensar de novo não grava outra vez. Com um pedido dela em andamento, não há o que
+   * dispensar: quem decide é a aprovação.
+   */
+  async dispensar(auth: AuthContext, id: string): Promise<void> {
+    const tx = currentTx();
+    if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
+    // A linha da recomendação fica travada: dois cliques juntos não gravam duas vezes, e o pedido que nasce ao mesmo tempo espera.
+    const r = await tx.execute<{ status: string; tool: string; ja: boolean; pedido: string | null }>(sql`
+      select d.status, d.tool,
+             exists (select 1 from liame.human_override o where o.shadow_decision_id = d.id) as ja,
+             (select r.id from liame.action_request r
+               where r.shadow_decision_id = d.id and r.tenant_id = d.tenant_id and r.status in ('aguardando_aprovacao', 'aprovada', 'executando')
+               order by r.created_at desc limit 1) as pedido
+        from liame.shadow_decision d
+       where d.id = ${id} and d.tenant_id = ${auth.tenantId}
+         for update of d`);
+    const rec = r.rows[0];
+    if (!rec) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Recomendação não encontrada nesta empresa.');
+    if (rec.ja) return;
+    if (rec.status !== 'aberta') throw new AppProblem(409, 'recomendacao-encerrada', 'Esta recomendação já foi encerrada', 'A recomendação não está mais em aberto: atualize a tela.');
+    if (rec.pedido) {
+      throw new AppProblem(409, 'recomendacao-ja-pedida', 'Esta mudança já foi pedida', 'Já há um pedido desta recomendação em andamento. Para não seguir com ele, recuse ou cancele o pedido em Aprovações.');
+    }
+    await tx.execute(sql`
+      insert into liame.human_override (id, tenant_id, shadow_decision_id, user_id, recommended_action, executed_action, reason_code)
+      values (${uuidv7()}, ${auth.tenantId}, ${id}, ${auth.userId}, ${rec.tool}, null, 'agora_nao')`);
+    auditDetail({ resourceId: id, after: { dismissed: true, tool: rec.tool, reason_code: 'agora_nao' } });
+  }
 
   async atencao(brandId: string | undefined, agora = new Date(), leitor: LeitorDaAtencao | null = null): Promise<ClosedLoopAttentionResponse> {
     const tx = currentTx();
@@ -260,26 +294,32 @@ export class AtencaoCicloService {
       campanha_externa: string;
       verba_de_agora: string | null;
       moeda: string | null;
+      campanha_nome: string;
       pedido_id: string | null;
       pedido_status: ActionStatus | null;
+      pedido_em: Date | string | null;
+      pedido_do_funcionario: string | null;
+      pedido_de: string | null;
       tentou_em: Date | string | null;
       nao_pediu: string | null;
       nao_pediu_motivo: string | null;
     }>(sql`
       select d.id, d.brand_id, d.tool, d.campaign_id, d.connected_account_id, d.provider, d.params, d.state_snapshot,
-             c.external_id as campanha_externa, c.daily_budget_micros::text as verba_de_agora, a.currency as moeda,
-             p.id as pedido_id, p.status as pedido_status,
+             c.external_id as campanha_externa, c.name as campanha_nome, c.daily_budget_micros::text as verba_de_agora, a.currency as moeda,
+             p.id as pedido_id, p.status as pedido_status, p.created_at as pedido_em, p.agent_key as pedido_do_funcionario, p.requested_by as pedido_de,
              d.request_attempted_at as tentou_em, d.request_error as nao_pediu, d.request_error_detail as nao_pediu_motivo
         from liame.shadow_decision d
         join liame.connected_account a on a.id = d.connected_account_id and a.disconnected_at is null
         join liame.campaign c on c.id = d.campaign_id and c.status = 'ativa'
         left join lateral (
-          select r.id, r.status from liame.action_request r
+          select r.id, r.status, r.created_at, r.agent_key, r.requested_by from liame.action_request r
            where r.shadow_decision_id = d.id and r.tenant_id = d.tenant_id
            order by r.created_at desc, r.id desc limit 1
         ) p on true
        where d.brand_id in ${marcas} and d.status = 'aberta' and d.human_action is null
          and d.decided_on >= (${instante}::timestamptz at time zone coalesce(a.timezone, ${FUSO_PADRAO}))::date - ${LIMIARES.dias - 1}::int
+         -- "Agora não": a recomendação que alguém dispensou sai da lista (X8).
+         and not exists (select 1 from liame.human_override o where o.shadow_decision_id = d.id)
        order by d.decided_on desc, d.id`);
     // 7. O gasto conferido (A4, X4; D-A4-24): as mudanças que o Liame executou, que continuam valendo, e cuja
     //    conferência mais recente (de hoje ou de ontem) diz que o objeto gastou mais do que a verba permite.
@@ -376,8 +416,12 @@ export class AtencaoCicloService {
               : null;
           recomendacaoDoAviso.set(aviso, {
             id: s.id,
+            campaign_name: s.campanha_nome,
             request: pedido ? { ...pedido, provider: s.provider, account_id: s.connected_account_id } : null,
-            action: leitor.vePedidos && s.pedido_id && s.pedido_status ? { id: s.pedido_id, status: s.pedido_status } : null,
+            action:
+              leitor.vePedidos && s.pedido_id && s.pedido_status && s.pedido_em && s.pedido_de
+                ? { id: s.pedido_id, status: s.pedido_status, created_at: new Date(s.pedido_em).toISOString(), agent_key: s.pedido_do_funcionario, requested_by: s.pedido_de }
+                : null,
             // Modo Aprovação: ele tentou pedir e não conseguiu. Fica o motivo, e a pessoa ainda pode pedir.
             ...(s.nao_pediu && s.nao_pediu_motivo && s.tentou_em
               ? { not_requested: { code: s.nao_pediu, detail: s.nao_pediu_motivo, at: new Date(s.tentou_em).toISOString() } }
