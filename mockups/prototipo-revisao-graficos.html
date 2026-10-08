@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Revisão da semana em gráficos · Liame</title>
 <!--
-@prototipo Liame · Revisão da semana em gráficos (caminho B, "uma pergunta, um desenho") (PARA APROVAÇÃO DO DONO)
+@prototipo Liame · Revisão da semana em gráficos (caminho B, "uma pergunta, um desenho") (APROVADO PELO DONO EM 07/10/2026)
 base: mockups/prototipo-explicar.html (P4, aprovado em 02/10/2026), com o shell, os dados, a leitura da semana e as outras
       telas como estão lá, e os desenhos aprovados em Resultados e no Resumo (07/10/2026).
 pedido: do dono, em 07/10/2026: apresentar as análises em gráficos, com menos texto. Ele escolheu o caminho B do estudo
@@ -913,6 +913,16 @@ select.input { padding-right: var(--sp-2); }
   .camp-rev > li > .veredito { grid-column: 3; grid-row: 1; align-self: start; }
   .camp-rev > li > .par { grid-column: 1 / -1; grid-row: 2; }
 }
+/* No celular, o valor fica na linha do rótulo e a barra ocupa a largura inteira embaixo: com valores grandes não sobrava espaço para ela. */
+@container pagina (max-width: 599px) {
+  .camp-rev { grid-template-columns: minmax(0, 1fr) auto; }
+  .camp-rev > li > .cl-nome { grid-column: 1; }
+  .camp-rev > li > .veredito { grid-column: 2; }
+  .camp-rev .par-linha { row-gap: 3px; }
+  .camp-rev .par-linha > span:first-child { grid-column: 1; }
+  .camp-rev .par-valor { grid-column: 2; }
+  .camp-rev .trilho { grid-column: 1 / -1; }
+}
 
 /* o que melhorou e o que piorou: o nome, de quanto para quanto e a barra com a marca de antes */
 .rev-lista--g { gap: var(--sp-3); }
@@ -986,7 +996,7 @@ select.input { padding-right: var(--sp-2); }
 <p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
 
 <div class="revisao" role="region" aria-label="Controles do protótipo">
-  <p class="revisao-marca"><b>Protótipo para aprovação · Revisão da semana em gráficos</b><span>Caminho B, “uma pergunta, um desenho” · só os números, as campanhas e o que mudou · dados de exemplo</span></p>
+  <p class="revisao-marca"><b>Protótipo aprovado em 07/10/2026 · Revisão da semana em gráficos</b><span>Caminho B, “uma pergunta, um desenho” · só os números, as campanhas e o que mudou · dados de exemplo</span></p>
   <label>Tela <select id="rev-tela"><option value="resultados">Resultados</option><option value="atencao">Atenção</option><option value="revisao">Revisão semanal</option></select></label>
   <label>Explicação <select id="rev-explicacao"></select></label>
   <label id="rev-semana-rot">Semana <select id="rev-semana"></select></label>

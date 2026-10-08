@@ -23,8 +23,66 @@
 /* Lista vazia ("nada melhorou", "nada piorou", "nada pede decisão"). */
 .rev-nada { font-size: var(--text-sm); color: var(--text-muted); }
 
+/* Os desenhos da revisão (mockups/prototipo-revisao-graficos.html, 07/10/2026). A barra do número é a do Resumo: esta
+   semana, com a marca da semana anterior na mesma régua. */
+.rev-sem .kpi { --fundo: var(--surface-2); }
+.rev-sem .bala-leg b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+.rev-chave { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-4); margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+.rev-chave span { display: inline-flex; align-items: center; gap: 6px; }
+.rev-chave .ch-barra { width: 18px; height: 8px; border-radius: 0 3px 3px 0; background: var(--chart-foco); }
+.rev-chave .ch-marca { width: 2px; height: 12px; border-radius: 1px; background: var(--text); }
+
+/* Cada campanha: o que foi investido e o que voltou no caixa. As colunas do rótulo, do valor e da barra são as mesmas
+   para todas as campanhas: as barras começam no mesmo lugar, porque a régua é uma só. */
+.camp-rev { display: grid; grid-template-columns: minmax(0, 14rem) auto auto minmax(0, 1fr) auto; column-gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.camp-rev > li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; row-gap: var(--sp-2); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.camp-rev > li:last-child { border-bottom: 0; }
+.camp-rev > li > .veredito { justify-self: end; }
+.camp-rev .par { grid-template-columns: subgrid; grid-column: 2 / 5; gap: 6px var(--sp-3); min-width: 0; }
+.camp-rev .par-linha { font-size: var(--text-xs); }
+.camp-rev .par-valor { font-size: var(--text-sm); }
+.camp-rev .trilho { height: 14px; }
+.rev-legenda { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-5); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--text-muted); }
+.rev-legenda li { display: inline-flex; align-items: center; gap: 6px; }
+.rev-legenda i { width: 10px; height: 10px; border-radius: 3px; }
+.rev-total { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-4); margin: 0; padding-top: var(--sp-3); border-top: 1px solid var(--border-strong); font-size: var(--text-sm); color: var(--text-muted); }
+.rev-total b { color: var(--text); font-weight: 600; }
+.rev-total .num { font-weight: 600; color: var(--text); }
+.rev-tabela summary { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm); }
+.rev-tabela summary:hover { color: var(--text); }
+.rev-tabela summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.rev-tabela[open] summary .ic { transform: rotate(180deg); }
+.rev-tabela .table-wrap { margin-top: var(--sp-2); }
+
+/* O que melhorou e o que piorou: o nome, de quanto para quanto e a barra com a marca de antes. */
+.rev-lista--g { gap: var(--sp-3); }
+.rev-lista--g li { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: var(--sp-2); row-gap: 0; line-height: 1.4; --fundo: var(--surface); }
+.rev-lista--g .ic { margin-top: 2px; }
+.mud-topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--sp-3); font-size: var(--text-sm); }
+.mud-topo .mud-nome { min-width: 0; }
+.mud-de-para { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+.mud-de-para small { font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 500; color: var(--text-muted); }
+.rev-lista--g .bala { grid-column: 2; height: 10px; margin: 6px 3px 2px; }
+
 @container pagina (max-width: 899px) {
   .rev-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container pagina (max-width: 759px) {
+  .camp-rev { grid-template-columns: auto auto minmax(0, 1fr); }
+  .camp-rev > li > .cl-nome { grid-column: 1 / 3; grid-row: 1; }
+  .camp-rev > li > .veredito { grid-column: 3; grid-row: 1; align-self: start; }
+  .camp-rev > li > .veredito-vago { display: none; }
+  .camp-rev > li > .par { grid-column: 1 / -1; grid-row: 2; }
+}
+/* No celular, o valor fica na linha do rótulo e a barra ocupa a largura inteira embaixo: com valores grandes não sobrava espaço para ela. */
+@container pagina (max-width: 599px) {
+  .camp-rev { grid-template-columns: minmax(0, 1fr) auto; }
+  .camp-rev > li > .cl-nome { grid-column: 1; }
+  .camp-rev > li > .veredito { grid-column: 2; }
+  .camp-rev .par-linha { row-gap: 3px; }
+  .camp-rev .par-linha > span:first-child { grid-column: 1; }
+  .camp-rev .par-valor { grid-column: 2; }
+  .camp-rev .trilho { grid-column: 1 / -1; }
 }
 @container pagina (max-width: 699px) {
   .rev-duas { grid-template-columns: minmax(0, 1fr); }
