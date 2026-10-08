@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { AutonomyResponse, ClosedLoopAttentionResponse } from '@liame/contracts';
+import { AutonomyResponse, ClosedLoopAttentionResponse, TeamActivityResponse, TeamShadowResponse } from '@liame/contracts';
 import { type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
@@ -89,6 +89,17 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     return ClosedLoopAttentionResponse.parse(r.body).items.find((i) => i.kind.startsWith('sugestao_') && i.campaign_id === campanhaId)?.recommendation;
   };
+  /** A recomendação como a tela Sua equipe a lê (a lista da sombra), e o histórico do Gestor de tráfego. */
+  const naSombra = async (recomendacao: string, cookie = e.cookie) => {
+    const r = await api.call('GET', `/v1/team/shadow?brand_id=${e.brandId}&limit=100`, { cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    return TeamShadowResponse.parse(r.body).items.find((d) => d.id === recomendacao);
+  };
+  const noHistorico = async (tipo: string, campanhaNome: string) => {
+    const r = await api.call('GET', `/v1/team/members/trafego/activity?brand_id=${e.brandId}&limit=50`, { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    return TeamActivityResponse.parse(r.body).items.filter((i) => i.kind === tipo && i.subject === campanhaNome);
+  };
   const trilha = async (pedido: string) =>
     (
       await ownerQuery<{ action: string; actor_type: string; actor_label: string | null; origin: string }>(
@@ -129,7 +140,7 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
   });
 
   it('com a flag desligada ou a ação em Sugerir, ele não pede; em Aprovação, a recomendação de hoje vira um pedido dele, que espera uma pessoa', async () => {
-    const r = await campanha('orcamento_reduzir');
+    const r = await campanha('orcamento_reduzir', { nome: 'Jantar da semana' });
     const semTentativa = { tentou: false, request_error: null, request_error_detail: null };
 
     // A regra de Aprovação existe, mas a flag `modo_aprovacao` está desligada (como nasce): nada acontece.
@@ -141,6 +152,8 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
     await modos(e, { 'orcamento.reduzir': 'SUGGEST' });
     expect(await rodada()).toEqual({ pedidos: 0, semPedido: 0 });
     expect([await tentativa(r.recomendacao), await pedidosDa(r.recomendacao)]).toEqual([semTentativa, []]);
+    expect(await naSombra(r.recomendacao)).toMatchObject({ connected_account_id: e.conta, request: null });
+    expect(await noHistorico('pediu', 'Jantar da semana')).toEqual([]);
 
     // Em Aprovação: o pedido nasce pelo trilho de sempre, lido na Meta, e fica esperando.
     await modos(e, { 'orcamento.reduzir': 'APPROVAL' });
@@ -177,6 +190,12 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
     // Na Atenção, a sugestão mostra o pedido que ele fez (e nenhum motivo de não ter pedido).
     expect(await naAtencao(r.campanha)).toMatchObject({ id: r.recomendacao, action: { id: p!.id, status: 'aguardando_aprovacao', agent_key: 'trafego', requested_by: e.userId } });
     expect('not_requested' in (await naAtencao(r.campanha))!).toBe(false);
+    // Em Sua equipe: a recomendação diz o pedido que nasceu dela, e o histórico dele ganha "pediu".
+    const pedida = await naSombra(r.recomendacao);
+    expect(pedida).toMatchObject({ connected_account_id: e.conta, request: { id: p!.id, status: 'aguardando_aprovacao', agent_key: 'trafego' } });
+    expect('not_requested' in pedida!).toBe(false);
+    expect(await noHistorico('pediu', 'Jantar da semana')).toMatchObject([{ kind: 'pediu', subject: 'Jantar da semana', detail: 'orcamento_reduzir', count: 10, by: null }]);
+    expect(await noHistorico('nao_pediu', 'Jantar da semana')).toEqual([]);
 
     // Sem a aprovação de uma pessoa, nada muda na Meta. Com ela (e o código do app), o Liame valida, escreve e confere.
     await ciclo();
@@ -216,6 +235,10 @@ describe.skipIf(!hasDb)('modo Aprovação: o pedido feito pelo Gestor de tráfeg
     const aviso = await naAtencao(fora.campanha);
     expect(aviso).toMatchObject({ id: fora.recomendacao, action: null, request: { tool: 'orcamento_ajustar', resource_id: fora.recurso }, not_requested: { code: 'plataforma-indisponivel', detail: indisponivel } });
     expect(Number.isNaN(Date.parse(aviso!.not_requested!.at))).toBe(false);
+    // Em Sua equipe: a recomendação leva o mesmo motivo, e o histórico dele ganha "nao_pediu", com o código.
+    expect(await naSombra(fora.recomendacao)).toMatchObject({ request: null, not_requested: { code: 'plataforma-indisponivel', detail: indisponivel, at: aviso!.not_requested!.at } });
+    expect(await noHistorico('nao_pediu', 'Almoço executivo')).toMatchObject([{ kind: 'nao_pediu', subject: 'Almoço executivo', detail: 'plataforma_indisponivel', by: null }]);
+    expect(await noHistorico('pediu', 'Almoço executivo')).toEqual([]);
 
     // (2) Já existe um pedido igual, feito por uma pessoa.
     const igual = await campanha('campanha_pausar', { nome: 'Madrugada' });

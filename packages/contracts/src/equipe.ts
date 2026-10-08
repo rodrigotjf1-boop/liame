@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ActionStatus } from './actions.js';
 
 // Sua equipe (A3, I13b; protótipo P7, aprovado em 03/10/2026): quem trabalha para a marca, em que situação, quanto a IA
 // dele custou no mês e o que ele fez, contado pelo código (inclusive o que a conferência recusou, sem o texto). A
@@ -100,7 +101,8 @@ export const TeamActivityItem = z.strictObject({
    * `plano_nova_analise`. Pesquisador: `leu_pagina`, `pagina_recusada`, `pagina_falhou`. Gestor de tráfego:
    * `recomendou`, `comparou`, `promocao_proposta`, `promocao_aprovada`, `promocao_recusada`, `promocao_retirada`,
    * `voltou_para_sombra` e, no passo para a Aprovação (A4, X3), `aprovacao_proposta`, `aprovacao_aprovada`,
-   * `aprovacao_recusada`, `aprovacao_retirada` e `saiu_da_aprovacao`. De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
+   * `aprovacao_recusada`, `aprovacao_retirada` e `saiu_da_aprovacao`; no modo Aprovação, `pediu` (ele mesmo fez o pedido
+   * da mudança, que espera uma pessoa) e `nao_pediu` (tentou e não conseguiu: o motivo vai no `detail`). De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
    * aparecer), `desligado` e `ligado` (pela empresa, nesta marca).
    */
   kind: Slug,
@@ -112,7 +114,8 @@ export const TeamActivityItem = z.strictObject({
   /**
    * Um código que completa o `kind` (lista que cresce): o tipo da demanda ou do plano; quem escreveu a leitura da
    * revisão (`lia` ou `sistema`); o funcionário que escreveu o texto barrado; o porquê da retirada, da recusa ou da
-   * falha; a ação recomendada ou promovida (`orcamento_reduzir`…); o resultado da comparação (`teria_melhorado`…).
+   * falha; a ação recomendada, pedida ou promovida (`orcamento_reduzir`…); o resultado da comparação (`teria_melhorado`…);
+   * em `nao_pediu`, o código do problema com `_` no lugar de `-` (`plataforma_indisponivel`, `acao_duplicada`…).
    */
   detail: Slug.nullable(),
   /** A semana da revisão. */
@@ -187,6 +190,18 @@ export const TeamShadowDecision = z.strictObject({
    * rendido mais; nulo sem dado para comparar.
    */
   regret_micros: Inteiro.nullable(),
+  /** A conta de anúncio da campanha. Com a ferramenta, diz em que modo a ação está agora (`GET /v1/autonomy`). */
+  connected_account_id: z.uuid().optional(),
+  /**
+   * O pedido mais recente que nasceu desta recomendação (A4, X3), em qualquer situação. `agent_key`: o funcionário de IA
+   * que pediu, no modo Aprovação (nulo no pedido de uma pessoa). Nulo se ninguém pediu.
+   */
+  request: z.strictObject({ id: z.uuid(), status: ActionStatus, created_at: z.iso.datetime(), agent_key: Slug.nullable() }).nullable().optional(),
+  /**
+   * Só no modo Aprovação, quando ele tentou fazer o pedido desta recomendação e não conseguiu: o código do problema, o
+   * motivo em palavras e a hora da tentativa (os mesmos da Atenção). Ele não tenta de novo sozinho.
+   */
+  not_requested: z.strictObject({ code: z.string(), detail: z.string(), at: z.iso.datetime() }).optional(),
 });
 export type TeamShadowDecision = z.infer<typeof TeamShadowDecision>;
 
