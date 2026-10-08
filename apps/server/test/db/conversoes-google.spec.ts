@@ -191,7 +191,7 @@ describe.skipIf(!hasDb)('conversões para o Google: a venda confirmada volta par
   const linha = async (e: Empresa, v: Venda): Promise<Linha | undefined> =>
     (await ownerQuery<Linha>(`select status, value_micros::text, request_id, attempts, last_error, correction_status, correction_value_micros::text, corrections, click_kind from liame.conversion_upload where order_id = $1 and connected_account_id = $2`, [v.id, e.google]))[0];
   const destinoDe = async (e: Empresa) =>
-    (await ownerQuery<{ last_error: string | null; failures: number; last_ok_at: Date | null; next_run_at: Date }>(`select last_error, failures, last_ok_at, next_run_at from liame.conversion_destination where connected_account_id = $1`, [e.google]))[0]!;
+    (await ownerQuery<{ last_error: string | null; last_error_kind: string | null; failures: number; last_ok_at: Date | null; next_run_at: Date }>(`select last_error, last_error_kind, failures, last_ok_at, next_run_at from liame.conversion_destination where connected_account_id = $1`, [e.google]))[0]!;
   /** Os envios (validação e de verdade) que a plataforma recebeu para a conta da empresa. */
   const envios = (e: Empresa) => pedidos.filter((p) => p.caminho === '/dm/v1/events:ingest' && (p.corpo as unknown as Envio).destinations[0]!.operatingAccount.accountId === e.cliente).map((p) => p.corpo as unknown as Envio);
   const doPedido = (e: Empresa, v: Venda) => envios(e).filter((x) => x.events[0]!.transactionId === v.id);
@@ -272,7 +272,7 @@ describe.skipIf(!hasDb)('conversões para o Google: a venda confirmada volta par
     expect(pedidos.filter((p) => p.caminho === '/dm/v1/requestStatus:retrieve').map((p) => p.requestId)).toEqual([(await linha(e, antigo))!.request_id]);
     expect(await linha(e, antigo)).toMatchObject({ status: 'aceito' });
     const d = await destinoDe(e);
-    expect(d).toMatchObject({ last_error: null, failures: 0 });
+    expect(d).toMatchObject({ last_error: null, last_error_kind: null, failures: 0 });
     expect(d.last_ok_at).not.toBeNull();
     expect(Math.round((new Date(d.next_run_at).getTime() - agora.getTime()) / MIN)).toBe(INTERVALO_CONVERSOES_MIN);
 
@@ -380,14 +380,15 @@ describe.skipIf(!hasDb)('conversões para o Google: a venda confirmada volta par
     expect(r.erro).toBe('429: Quota exceeded for quota metric');
     expect(await linha(e, v)).toMatchObject({ status: 'pendente', attempts: 1 });
     const d = await destinoDe(e);
-    expect(d).toMatchObject({ failures: 1, last_error: '429: Quota exceeded for quota metric' });
+    // O tipo da falha vai ao lado do texto: é por ele que a tela diz "o Google pediu para esperar".
+    expect(d).toMatchObject({ failures: 1, last_error: '429: Quota exceeded for quota metric', last_error_kind: 'esperar' });
     // A conta volta logo (o que a plataforma pediu), e não na hora cheia.
     expect(new Date(d.next_run_at).getTime() - agora.getTime()).toBeLessThanOrEqual(2 * MIN);
 
     pedidos.length = 0;
     expect(await passar(e, agora)).toMatchObject({ status: 'ok', novos: 0, enviados: 1 });
     expect(doPedido(e, v).filter((x) => !x.validateOnly)).toHaveLength(1);
-    expect(await destinoDe(e)).toMatchObject({ failures: 0, last_error: null });
+    expect(await destinoDe(e)).toMatchObject({ failures: 0, last_error: null, last_error_kind: null });
   });
 
   it('sem a flag, sem a permissão, com a parada ou com o destino parado, nada sai', async () => {
@@ -400,11 +401,13 @@ describe.skipIf(!hasDb)('conversões para o Google: a venda confirmada volta par
     await vender(semEscopo, 200, { ref: agora });
     expect(await passar(semEscopo, agora)).toMatchObject({ status: 'sem_permissao' });
     expect((await destinoDe(semEscopo)).last_error).toMatch(/^sem_permissao: a autorização do Google não inclui o envio de conversões/);
+    expect((await destinoDe(semEscopo)).last_error_kind).toBe('permissao');
 
     const parada = await empresa();
     await vender(parada, 200, { ref: agora });
     await ownerQuery(`insert into liame.kill_switch (id, level, tenant_id, reason) values (gen_random_uuid(), 'tenant', $1, 'teste: equipe parada')`, [parada.tenantId]);
     expect(await passar(parada, agora)).toMatchObject({ status: 'parada', novos: 0 });
+    expect((await destinoDe(parada)).last_error_kind).toBe('parada');
 
     const parado = await empresa();
     await vender(parado, 200, { ref: agora });

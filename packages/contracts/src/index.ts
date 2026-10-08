@@ -271,6 +271,18 @@ export {
 } from './equipe.js';
 export { SummaryQuery, SummaryResponse } from './resumo.js';
 export {
+  GoogleConversionAccount,
+  GoogleConversionAction,
+  GoogleConversionActionsQuery,
+  GoogleConversionActionsResponse,
+  GoogleConversionCounts,
+  GoogleConversionDestination,
+  GoogleConversionsQuery,
+  GoogleConversionsResponse,
+  SetGoogleConversionDestinationRequest,
+  StopGoogleConversionDestinationRequest,
+} from './conversoes.js';
+export {
   CouponCampaign,
   CouponCode,
   CouponItem,

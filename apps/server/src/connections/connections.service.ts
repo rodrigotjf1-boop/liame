@@ -22,12 +22,14 @@ import { ClienteConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
 import { revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
+import { FLAG_CONVERSOES_GOOGLE } from '../conversoes/conversoes-google.js';
 import { DATABASE } from '../database/database.module.js';
 import {
   configuracaoDaMeta,
   type CredencialGuardada,
   type CredencialRegem,
   enderecoDeVolta,
+  escoposDoGoogle,
   hashEstado,
   novoEstado,
   novoVerificador,
@@ -168,6 +170,10 @@ export class ConnectionsService {
             (await this.flags.isEnabled('meta_write', this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id }))),
         )
       : null;
+    // Google: a empresa com as conversões ligadas (a mesma flag que a rotina de envio confere) autoriza também a
+    // permissão de informar vendas; as outras seguem só com a leitura.
+    const conversoes =
+      provedor === 'google' && (await this.flags.isEnabled(FLAG_CONVERSOES_GOOGLE, this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id })));
 
     const id = uuidv7();
     const estado = novoEstado();
@@ -181,10 +187,17 @@ export class ConnectionsService {
       values (${id}, ${tenantId}, ${body.brand_id}, ${provedor}, ${auth.userId}, ${hashEstado(estado)}, ${redirectUri}, ${verificadorCifrado},
               now() + make_interval(mins => ${VALIDADE_MIN}), ${meta?.acesso ?? null})
       returning expires_at`);
-    auditDetail({ resourceId: id, after: { provider: provedor, brand_id: body.brand_id, ...(meta ? { acesso: meta.acesso } : {}) } });
+    auditDetail({ resourceId: id, after: { provider: provedor, brand_id: body.brand_id, ...(meta ? { acesso: meta.acesso } : {}), ...(conversoes ? { informar_vendas: true } : {}) } });
     return {
       id,
-      authorize_url: urlDeAutorizacao(provedor, this.config, { estado, redirectUri, verificador: verificador ?? undefined, versaoMeta, configMeta: meta?.configId }),
+      authorize_url: urlDeAutorizacao(provedor, this.config, {
+        estado,
+        redirectUri,
+        verificador: verificador ?? undefined,
+        versaoMeta,
+        configMeta: meta?.configId,
+        ...(provedor === 'google' ? { escoposGoogle: escoposDoGoogle(conversoes) } : {}),
+      }),
       expires_at: iso(r.rows[0]!.expires_at),
     };
   }

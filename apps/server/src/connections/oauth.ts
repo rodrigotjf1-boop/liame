@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { AppConfig } from '../config.js';
 import { enderecoLiberado, ErroConector } from '../connectors/cliente-http.js';
+import { ESCOPO_DATA_MANAGER } from '../connectors/google-ads/data-manager.js';
 
 // OAuth das plataformas (A2, G3; base §2.1 e §3.1). Estado aleatório guardado só como hash; PKCE (S256)
 // no Google; na Meta, o Facebook Login for Business com `config_id` devolve o token de usuário do
@@ -34,11 +35,23 @@ export function configuracaoDaMeta(meta: NonNullable<AppConfig['oauth']['meta']>
   return escritaLigada && meta.writeConfigId ? { configId: meta.writeConfigId, acesso: 'escrita' } : { configId: meta.configId, acesso: 'leitura' };
 }
 
-/** Para onde mandar a pessoa autorizar. `configMeta`: a configuração escolhida por `configuracaoDaMeta` (sem ela, a de leitura). */
+/**
+ * Os escopos que a autorização do Google pede: a leitura de sempre e, só para a empresa com as conversões ligadas
+ * (flag `conversoes_google`), a permissão de informar vendas pela Data Manager API (A5, Y1). Quem já estava conectado
+ * só passa a informar depois de autorizar de novo: a autorização nova assume as contas (`ligarContas`).
+ */
+export function escoposDoGoogle(conversoesLigadas: boolean): string[] {
+  return conversoesLigadas ? [...ESCOPOS_GOOGLE, ESCOPO_DATA_MANAGER] : [...ESCOPOS_GOOGLE];
+}
+
+/**
+ * Para onde mandar a pessoa autorizar. `configMeta`: a configuração escolhida por `configuracaoDaMeta` (sem ela, a de
+ * leitura). `escoposGoogle`: os de `escoposDoGoogle` (sem eles, só a leitura).
+ */
 export function urlDeAutorizacao(
   provedor: ProvedorOAuth,
   config: Pick<AppConfig, 'oauth'>,
-  p: { estado: string; redirectUri: string; verificador?: string; versaoMeta: string; configMeta?: string },
+  p: { estado: string; redirectUri: string; verificador?: string; versaoMeta: string; configMeta?: string; escoposGoogle?: string[] },
 ): string {
   if (provedor === 'meta') {
     const meta = config.oauth.meta!;
@@ -70,7 +83,7 @@ export function urlDeAutorizacao(
     client_id: google.clientId,
     redirect_uri: p.redirectUri,
     response_type: 'code',
-    scope: ESCOPOS_GOOGLE.join(' '),
+    scope: (p.escoposGoogle ?? ESCOPOS_GOOGLE).join(' '),
     access_type: 'offline',
     prompt: 'consent',
     include_granted_scopes: 'true',
