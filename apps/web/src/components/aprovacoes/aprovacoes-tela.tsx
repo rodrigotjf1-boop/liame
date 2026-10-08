@@ -1,9 +1,10 @@
 'use client';
 
-import type { ActionResponse, BrandResponse, PlanContent, PlanResponse, PlanSummary } from '@liame/contracts';
+import type { ActionResponse, BrandResponse, BudgetMonthResponse, PlanContent, PlanResponse, PlanSummary } from '@liame/contracts';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { GavetaPedir } from '@/components/pedir/gaveta-pedir';
 import { destinoInicial } from '@/components/shell/inicio';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
@@ -15,8 +16,10 @@ import { disparar } from '@/lib/disparar';
 import { iniciais } from '@/lib/formato';
 import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
+import { type AcaoDeAnuncio, anuncioApresentado, ehPedidoDeAnuncio, erroAoDesfazer, etiquetaDoAnuncio, mesDoPedido, quemPediu, textosDoAnuncio } from './anuncio-textos';
 import type { Decisao } from './barra-da-decisao';
 import { marcasAtivas, planosDasMarcas } from './buscar-planos';
+import { DetalheAnuncio, type Volta } from './detalhe-anuncio';
 import { DetalhePedido } from './detalhe-pedido';
 import { DetalhePlano } from './detalhe-plano';
 import { chaveDaAcao, chaveDoPlano, type ItemDaLista, montarLista, pendentesDe } from './lista';
@@ -27,7 +30,9 @@ import { apresentar, avisoDepoisDeAprovar, erroDaDecisao, etiquetaDoDecidido, ty
 // esquerda, o que espera alguém, o que a política fez sozinha e o que foi decidido hoje; à direita, o pedido aberto.
 // Dois tipos de pedido na mesma fila: a ação que alguém pediu (`/v1/actions`; decidir exige `acoes.aprovar`) e o
 // plano do Estrategista (`/v1/plans`, por marca; decidir exige `planos.decidir`). Aprovar pede o código do app
-// autenticador e vale só para o que está na tela (o hash); recusar pede um motivo.
+// autenticador e vale só para o que está na tela (o hash); recusar pede um motivo. O pedido de anúncio (mudar a verba,
+// pausar e retomar na plataforma; mockups/prototipo-anuncios.html, P9) tem os textos e o detalhe dele: o porquê, o
+// caminho da execução, desfazer (um pedido novo) e pedir de novo, pela mesma gaveta de Resultados.
 
 type Carga =
   | { tipo: 'carregando' }
@@ -57,6 +62,12 @@ export function AprovacoesTela() {
   const podeConferirTexto = pode('dossie.ver');
   const temApp = me.mfa !== 'not_configured';
   const tituloDoDetalhe = useRef<HTMLHeadingElement>(null);
+  // O foco no título depois de decidir: pedido pelo estado, para ser atendido com o pedido novo já na tela (por
+  // requestAnimationFrame, o quadro podia chegar antes da troca: o título antigo recebia o foco e sumia).
+  const [focoNoTitulo, setFocoNoTitulo] = useState(0);
+  useEffect(() => {
+    if (focoNoTitulo) tituloDoDetalhe.current?.focus({ preventScroll: true });
+  }, [focoNoTitulo]);
   const campoCodigo = useRef<HTMLInputElement>(null);
   const lista = useRef<HTMLDivElement>(null);
   const [carga, setCarga] = useState<Carga>({ tipo: 'carregando' });
@@ -69,6 +80,10 @@ export function AprovacoesTela() {
   /** O plano aberto, lido por inteiro (a lista só traz o resumo de cada um). */
   const [planoAberto, setPlanoAberto] = useState<PlanoAberto | null>(null);
   const [relerPlano, setRelerPlano] = useState(0);
+  /** A verba do mês: diz quanto um pedido de anúncio pesa até o fim do mês e os limites que ele passou. */
+  const [verba, setVerba] = useState<BudgetMonthResponse | null>(null);
+  /** O pedido de anúncio cuja gaveta "Pedir uma mudança" está aberta (pedir de novo). */
+  const [pedindo, setPedindo] = useState<AcaoDeAnuncio | null>(null);
   const agora = useAgora(60_000, carga);
   const seq = useRef(0);
 
@@ -111,6 +126,23 @@ export function AprovacoesTela() {
   }, [podeVer, carregar, tentativa]);
 
   const acoes = carga.tipo === 'ok' ? carga.acoes : [];
+  // Com um pedido de anúncio na fila, a tela lê a verba do mês uma vez (sem ela, os textos saem sem a conta do mês).
+  const temAnuncio = acoes.some(ehPedidoDeAnuncio) || Boolean(avulso && ehPedidoDeAnuncio(avulso));
+  useEffect(() => {
+    if (!temAnuncio) return;
+    let vivo = true;
+    disparar(
+      chamar(() => api.GET('/v1/budget/month')).then((r) => {
+        if (vivo && r.ok) setVerba(r.data);
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [temAnuncio, tentativa]);
+  const mes = mesDoPedido(verba);
+  /** O pedido em palavras, para a lista e os avisos: o de anúncio tem os textos dele. */
+  const emPalavras = (a: ActionResponse) => (ehPedidoDeAnuncio(a) ? anuncioApresentado(a, mes) : apresentar(a));
   const planos = carga.tipo === 'ok' ? carga.planos : [];
   const marcas = carga.tipo === 'ok' ? carga.marcas : [];
   const grupos = montarLista(acoes, planos, agora);
@@ -180,7 +212,7 @@ export function AprovacoesTela() {
     );
   }
 
-  const focarOTitulo = () => requestAnimationFrame(() => tituloDoDetalhe.current?.focus({ preventScroll: true }));
+  const focarOTitulo = () => setFocoNoTitulo((n) => n + 1);
 
   /** Depois de decidir: a lista volta a ler, a fila anda para o próximo pedido e o foco vai para o título dele. */
   async function depoisDeDecidir(chaveDecidida: string, opcoes: { fica?: boolean } = {}) {
@@ -199,7 +231,7 @@ export function AprovacoesTela() {
   async function aprovar(acao: ActionResponse, codigo: string): Promise<Decisao> {
     const r = await chamar(() => api.POST('/v1/actions/{id}/approve', { params: { path: { id: acao.id } }, body: { plan_hash: acao.plan_hash, code: codigo } }));
     if (!r.ok) return recusaDoServidor(r.problema);
-    avisar(avisoDepoisDeAprovar(apresentar(acao), r.data));
+    avisar(avisoDepoisDeAprovar(emPalavras(acao), r.data));
     await depoisDeDecidir(chaveDaAcao(acao.id));
     return { ok: true };
   }
@@ -209,6 +241,18 @@ export function AprovacoesTela() {
     if (!r.ok) return recusaDoServidor(r.problema);
     avisar('Recusado. Quem pediu vê o motivo, e nada foi executado.');
     await depoisDeDecidir(chaveDaAcao(acao.id));
+    return { ok: true };
+  }
+
+  // Desfazer um pedido de anúncio executado: nasce um pedido novo (a volta), que também espera a aprovação. A tela abre nele.
+  async function desfazer(acao: AcaoDeAnuncio): Promise<Volta> {
+    const r = await chamar(() => api.POST('/v1/actions/{id}/undo', { params: { path: { id: acao.id } } }));
+    if (!r.ok) return { ok: false, ...erroAoDesfazer(r.problema, acao) };
+    avisar('Pedido de volta criado. Ele espera a aprovação com o código do app.');
+    // A volta só entra na lista com a leitura: a tela a escolhe depois de ler, sem abrir outro pedido da fila no meio.
+    await carregar();
+    setSel(chaveDaAcao(r.data.id));
+    focarOTitulo();
     return { ok: true };
   }
 
@@ -298,13 +342,16 @@ export function AprovacoesTela() {
       );
     }
     const a = i.acao;
-    const p = apresentar(a);
-    const risco = riscoDe(a);
+    const p = emPalavras(a);
+    // No pedido de anúncio, o risco segue a direção do dinheiro, e quem pediu pode ser um funcionário de IA.
+    const anuncio = ehPedidoDeAnuncio(a) ? a : null;
+    const risco = anuncio ? textosDoAnuncio(anuncio, mes).risco : riscoDe(a);
+    const quem = quemPediu(a);
     return (
       <li key={i.chave}>
         <button className="ap-item" type="button" aria-current={atual} onClick={() => abrir(i.chave, true)}>
-          <span className="ap-av" aria-hidden="true">
-            {iniciais(a.requested_by.name)}
+          <span className={quem.funcionario ? 'ap-av ap-av--func' : 'ap-av'} aria-hidden="true">
+            {quem.funcionario ? <Icone nome="megaphone" /> : iniciais(a.requested_by.name)}
           </span>
           <span>
             <span className="ap-titulo">{p.titulo}</span>
@@ -317,8 +364,8 @@ export function AprovacoesTela() {
                 </>
               ) : (
                 <>
-                  <span>{a.requested_by.name}</span>
-                  <span>{etiquetaDoDecidido(a)}</span>
+                  <span>{quem.nome}</span>
+                  <span>{anuncio ? etiquetaDoAnuncio(anuncio) : etiquetaDoDecidido(a)}</span>
                 </>
               )}
             </span>
@@ -344,7 +391,30 @@ export function AprovacoesTela() {
   const decide = podeDecidir || podeDecidirPlanos;
 
   let detalhe;
-  if (aberta?.tipo === 'acao') {
+  if (aberta?.tipo === 'acao' && ehPedidoDeAnuncio(aberta.acao)) {
+    const anuncio = aberta.acao;
+    detalhe = (
+      <DetalheAnuncio
+        acao={anuncio}
+        grupo={grupoDe(anuncio, agora)}
+        agora={agora}
+        pro={pro}
+        podeDecidir={podeDecidir}
+        podeOperar={pode('campanhas.operar')}
+        temApp={temApp}
+        mes={mes}
+        pedindo={pedindo?.id === anuncio.id}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+        aoDesfazer={desfazer}
+        aoPedirDeNovo={setPedindo}
+        aoAbrir={(id) => abrir(chaveDaAcao(id), true)}
+      />
+    );
+  } else if (aberta?.tipo === 'acao') {
     detalhe = (
       <DetalhePedido
         acao={aberta.acao}
@@ -518,6 +588,20 @@ export function AprovacoesTela() {
             {detalhe}
           </article>
         </div>
+      )}
+
+      {pedindo?.target.campaign && (
+        <GavetaPedir
+          key={pedindo.id}
+          campanha={{ id: pedindo.target.campaign.id, nome: pedindo.target.campaign.name, provider: pedindo.provider }}
+          inicial={pedindo.target.kind === 'campanha' ? {} : { alvo: pedindo.resource_id }}
+          podeDefinirLimites={pode('orcamento.gerenciar')}
+          podeVerContas={pode('contas.ver')}
+          reserva={tituloDoDetalhe}
+          voltarPara={() => document.querySelector<HTMLElement>('[data-pedir-de-novo]')}
+          aoFechar={() => setPedindo(null)}
+          aoCriar={() => disparar(carregar())}
+        />
       )}
     </section>
   );
