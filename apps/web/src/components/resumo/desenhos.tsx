@@ -16,8 +16,8 @@ import type { LinhaDeFonte, Texto } from './textos';
 /** A lista "De onde vêm os números" e como abrir a linha de um número. */
 type ComFonte = { lista: LinhaDeFonte[]; aoTocar: MostrarFonte };
 
-/** A barra do número: esta semana; a marca escura, a semana anterior, na mesma régua. */
-function Bala({ bala }: { bala: BalaDoNumero }) {
+/** A barra do número: esta semana; a marca escura, a semana anterior, na mesma régua. A Revisão da semana usa a mesma. */
+export function Bala({ bala }: { bala: BalaDoNumero }) {
   return (
     <div className="bala" role="img" aria-label={bala.rotulo}>
       <span className={bala.negativa ? 'bala-b bala-b--neg cor-falta' : `bala-b cor-${bala.cor}`} style={{ left: `${bala.de}%`, width: `${bala.largura}%` }} data-dica={bala.dicaAgora} />

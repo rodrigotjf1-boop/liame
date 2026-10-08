@@ -42,8 +42,8 @@ export function balaDe(agora: bigint, antes: bigint | null): GeometriaDaBala {
 }
 
 export type BalaDoNumero = GeometriaDaBala & {
-  /** A cor da coisa: o que voltou e o que sobrou no foco; o gasto no cinza 1. Barra negativa leva o vermelho de estado. */
-  cor: 'foco' | 'c1';
+  /** A cor da coisa: o que voltou e o que sobrou no foco; o gasto no cinza 1; o que ficou sem prova, no cinza 2. Barra negativa leva o vermelho de estado. */
+  cor: 'foco' | 'c1' | 'c2';
   /** O que quem ouve a tela escuta no lugar do desenho. */
   rotulo: string;
   dicaAgora: string;

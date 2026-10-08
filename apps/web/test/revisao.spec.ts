@@ -4,6 +4,7 @@ import type { WeeklyReview, WeeklyReviewChange } from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { campanhasDaRevisao, mudancaDesenhada, numerosDaRevisao } from '@/components/revisao/graficos';
 import { RevisaoConteudo } from '@/components/revisao/revisao-conteudo';
 import {
   avisoDaLeitura,
@@ -11,7 +12,6 @@ import {
   diaEscrito,
   envioDaRevisao,
   introDaRevisao,
-  kpisDaRevisao,
   momentoEscrito,
   mudancaDe,
   razao,
@@ -23,7 +23,8 @@ import {
 import { temModos, tituloDa } from '@/components/shell/navegacao';
 import { AvisosProvider } from '@/components/ui/avisos';
 
-// "Revisão da semana" (A3 · I7; mockups/prototipo-explicar.html, P4): as regras de escrita da tela e a tela
+// "Revisão da semana" (A3 · I7; mockups/prototipo-explicar.html, P4; em gráficos desde 07/10/2026,
+// mockups/prototipo-revisao-graficos.html): as regras de escrita da tela, os desenhos e a tela
 // desenhada pelo mesmo componente do navegador. A revisão do teste é o arquivo que o servidor usa para
 // provar o que ele guarda no banco: a tela desenha exatamente o que está guardado.
 
@@ -56,20 +57,80 @@ describe('revisão da semana: como a tela escreve o que a API manda', () => {
     expect(valorDe(mudanca({ before: null }), 'before')).toBe('—');
   });
 
-  it('os quatro números do topo, com a linha de baixo do protótipo; sem semana anterior, diz que não há comparação', () => {
-    expect(kpisDaRevisao(revisao())).toEqual([
-      { id: 'investimento', rotulo: 'Investido em anúncios', valor: nbsp('R$ 1.214,30'), sub: '+2,9% sobre a semana anterior' },
-      { id: 'pedidos_de_anuncios', rotulo: 'Pedidos de anúncios', valor: '53', sub: '+12,8% · eram 47' },
-      { id: 'receita_confirmada', rotulo: 'Receita confirmada no caixa', valor: nbsp('R$ 3.471,00'), sub: nbsp('+13,1% · era R$ 3.068,00') },
-      { id: 'roas_confirmado', rotulo: 'ROAS confirmado no caixa', valor: '2,86', sub: 'era 2,60 na semana anterior' },
+  it('os quatro números do topo: o valor, a barra desta semana com a marca da anterior, quanto mudou e o valor de antes', () => {
+    const [investido, pedidos, receita, roas] = numerosDaRevisao(revisao());
+    expect([investido, pedidos, receita, roas].map((k) => [k!.id, k!.rotulo, k!.valor, k!.anterior])).toEqual([
+      ['investimento', 'Investido em anúncios', nbsp('R$ 1.214,30'), nbsp('R$ 1.180,00')],
+      ['pedidos_de_anuncios', 'Pedidos de anúncios', '53', '47'],
+      ['receita_confirmada', 'Receita confirmada no caixa', nbsp('R$ 3.471,00'), nbsp('R$ 3.068,00')],
+      ['roas_confirmado', 'ROAS confirmado no caixa', '2,86', '2,60'],
     ]);
-    const semAntes = kpisDaRevisao({ totals: guardada.totals.map((m) => ({ ...m, before: null, change_pct: null })) });
-    expect(semAntes.map((k) => k.sub)).toEqual(Array(4).fill('sem semana anterior para comparar'));
-    // De zero para doze não tem porcentagem; um pedido só é "era".
-    expect(kpisDaRevisao({ totals: [mudanca({ before: '0', now: '12', change_pct: null })] })[0]!.sub).toBe('eram 0');
-    expect(kpisDaRevisao({ totals: [mudanca({ before: '1', now: '2', change_pct: '+100.0' })] })[0]!.sub).toBe('+100,0% · era 1');
+    // Gastar mais não é bom nem ruim; vender mais é bom; no ROAS a revisão mostra só os dois valores, e a tela diz se subiu.
+    expect(investido!.mudou).toEqual({ texto: '2,9% a mais', tom: 'neutro', seta: 'sobe' });
+    expect(pedidos!.mudou).toEqual({ texto: '12,8% a mais', tom: 'bom', seta: 'sobe' });
+    expect(receita!.mudou).toEqual({ texto: '13,1% a mais', tom: 'bom', seta: 'sobe' });
+    expect(roas!.mudou).toEqual({ texto: 'subiu', tom: 'bom', seta: 'sobe' });
+    // A barra: esta semana é a régua inteira (era maior), e a marca fica onde estava a semana anterior. A cor é a da coisa.
+    expect(investido!.bala).toMatchObject({ cor: 'c1', de: 0, largura: 100, marca: 97.17, negativa: false, zero: null });
+    expect(pedidos!.bala).toMatchObject({ cor: 'foco', largura: 100, marca: 88.67 });
+    expect(receita!.bala).toMatchObject({ cor: 'foco', largura: 100, marca: 88.38 });
+    expect(roas!.bala).toMatchObject({ cor: 'foco', largura: 100, marca: 90.9 });
+    expect(pedidos!.bala!.rotulo).toBe('Pedidos de anúncios: 53 nesta semana; 47 na semana anterior.');
+    expect(pedidos!.bala!.dicaAgora).toBe('53|esta semana · 21/09 a 27/09');
+    expect(pedidos!.bala!.dicaAntes).toBe('47|semana anterior · 14/09 a 20/09');
+  });
+
+  it('os números do topo sem comparação, caindo, iguais, sem valor e de um tipo que a tela ainda não conhece', () => {
+    const com = (m: Partial<WeeklyReviewChange>) => numerosDaRevisao({ ...revisao(), totals: [mudanca(m)] })[0]!;
+    // Sem semana anterior: a barra fica, sem a marca, e não há o que dizer da mudança.
+    const semAntes = numerosDaRevisao({ ...revisao(), totals: guardada.totals.map((m) => ({ ...m, before: null, change_pct: null })) });
+    expect(semAntes.map((k) => [k.anterior, k.mudou, k.bala!.marca, k.bala!.dicaAntes])).toEqual(Array(4).fill([null, null, null, null]));
+    expect(semAntes[1]!.bala!.rotulo).toBe('Pedidos de anúncios: 53 nesta semana.');
+    // Caiu: a barra fica menor que a régua, e a marca vai para a ponta.
+    const caiu = com({ before: '53', now: '47', change_pct: '-11.3' });
+    expect(caiu.mudou).toEqual({ texto: '11,3% a menos', tom: 'ruim', seta: 'desce' });
+    expect(caiu.bala).toMatchObject({ largura: 88.67, marca: 100 });
+    expect(com({ kind: 'investimento', unit: 'dinheiro', before: '1180000000', now: '900000000', change_pct: '-23.7' }).mudou).toEqual({ texto: '23,7% a menos', tom: 'neutro', seta: 'desce' });
+    // De zero para doze não tem porcentagem: diz que subiu. Igual, diz que está igual.
+    expect(com({ before: '0', now: '12', change_pct: null })).toMatchObject({ anterior: '0', mudou: { texto: 'subiu', tom: 'bom', seta: 'sobe' } });
+    expect(com({ before: '5', now: '5', change_pct: '0.0' }).mudou).toEqual({ texto: 'igual à semana anterior', tom: 'neutro', seta: null });
+    // O ROAS sem investimento não existe: fica o travessão, sem barra.
+    expect(com({ kind: 'roas_confirmado', unit: 'razao', before: '2.60', now: null, change_pct: null })).toMatchObject({ valor: '—', bala: null, mudou: null, anterior: '2,60' });
     // Tipo que a tela ainda não conhece aparece com o nome que veio, sem quebrar.
-    expect(kpisDaRevisao({ totals: [mudanca({ kind: 'numero_novo' })] })[0]!.rotulo).toBe('numero novo');
+    expect(com({ kind: 'numero_novo' }).rotulo).toBe('numero novo');
+  });
+
+  it('cada campanha com o que foi investido e o que voltou no caixa, na mesma régua para todas', () => {
+    const c = campanhasDaRevisao(revisao());
+    expect(c.linhas.map((l) => [l.nome, l.sub, l.investido.valor, l.investido.largura, l.caixa.valor, l.caixa.largura, l.selo])).toEqual([
+      ['Combo sexta', 'Meta Ads · 26 pedidos', nbsp('R$ 404,10'), 23.54, nbsp('R$ 1.716,00'), 100, { rotulo: 'Dá lucro', classe: 'bom' }],
+      ['Busca perto', 'Google Ads · 12 pedidos', nbsp('R$ 386,20'), 22.5, nbsp('R$ 804,00'), 46.85, { rotulo: 'Empata', classe: 'atencao' }],
+      ['Smash em dobro', 'Meta Ads · 9 pedidos', nbsp('R$ 274,00'), 15.96, nbsp('R$ 612,00'), 35.66, { rotulo: 'Empata', classe: 'atencao' }],
+      ['Delivery noite', 'Meta Ads · 2 pedidos', nbsp('R$ 150,00'), 8.74, nbsp('R$ 114,00'), 6.64, { rotulo: 'Dá prejuízo', classe: 'ruim' }],
+    ]);
+    expect(c.linhas[0]!.rotulo).toBe(nbsp('Combo sexta: R$ 404,10 investidos e R$ 1.716,00 no caixa, em 26 pedidos.'));
+    expect(c.linhas[0]!.caixa.dica).toBe(nbsp('R$ 1.716,00|confirmado no caixa · ROAS 4,25'));
+    // O que só a plataforma prova não tem campanha: vira uma nota, e conta no total.
+    expect(c.notas).toEqual([nbsp('Mais 4 pedidos (R$ 1.029,00) vieram da Meta sem dizer a campanha: contam no total.')]);
+    expect(campanhasDaRevisao({ campaigns: [], platform_only: [{ provider: 'google_ads', orders: 1, revenue_micros: null }] }).notas).toEqual(['Mais 1 pedido veio do Google Ads sem dizer a campanha: conta no total.']);
+    // Sem pedido: a barra do caixa não aparece e o selo diz "Sem pedido"; com pedido e sem veredito, "Margem incompleta".
+    const semPedido = campanhasDaRevisao({ campaigns: [{ ...guardada.campaigns[0]!, orders: 0, revenue_micros: '0', roas: '0.00', verdict: null }], platform_only: [] }).linhas[0]!;
+    expect(semPedido).toMatchObject({ sub: 'Meta Ads · sem pedido na semana', selo: { rotulo: 'Sem pedido', classe: 'neutro' }, caixa: { largura: 0 }, investido: { largura: 100 } });
+    expect(semPedido.rotulo).toBe(nbsp('Combo sexta: R$ 404,10 investidos e nenhum pedido confirmado no caixa.'));
+    expect(campanhasDaRevisao({ campaigns: [{ ...guardada.campaigns[0]!, verdict: null }], platform_only: [] }).linhas[0]!.selo).toEqual({ rotulo: 'Margem incompleta', classe: 'incompleta' });
+    expect(campanhasDaRevisao({ campaigns: [], platform_only: [] })).toEqual({ linhas: [], notas: [] });
+  });
+
+  it('o que mudou, desenhado: o nome sem os dois pontos, de quanto para quanto e a barra com a marca de antes', () => {
+    const r = revisao();
+    expect(mudancaDesenhada(mudanca({}), r)).toMatchObject({ chave: 'pedidos_de_anuncios-', nome: 'Pedidos de anúncios', de: '47', para: '53', variacao: '+12,8%', bala: { cor: 'foco', largura: 100, marca: 88.67 } });
+    const campanha = { id: 'a0000000-0000-4000-8000-000000000101', name: 'Combo sexta', provider: 'meta_ads' };
+    const roas = mudancaDesenhada(mudanca({ kind: 'roas_da_campanha', campaign: campanha, unit: 'razao', before: '4.02', now: '4.25', change_pct: '+5.7' }), r);
+    expect(roas).toMatchObject({ nome: 'Combo sexta: ROAS no caixa', de: '4,02', para: '4,25', variacao: null, bala: { marca: 94.58 } });
+    expect(roas.bala!.rotulo).toBe('Combo sexta: ROAS no caixa: 4,25 nesta semana; 4,02 na semana anterior.');
+    // O que ficou sem prova tem a cor dele (o cinza 2), e o ROAS que caiu fica menor que a marca.
+    expect(mudancaDesenhada(mudanca({ kind: 'pedidos_sem_origem', before: '41', now: '44', change_pct: '+7.3' }), r)).toMatchObject({ nome: 'Pedidos sem origem', bala: { cor: 'c2' } });
+    expect(mudancaDesenhada(mudanca({ kind: 'roas_da_campanha', campaign: campanha, unit: 'razao', before: '1.12', now: '0.76', change_pct: '-32.1' }), r).bala).toMatchObject({ largura: 67.85, marca: 100 });
   });
 
   it('melhorou e piorou: de quanto para quanto; no ROAS da campanha, só os dois valores', () => {
@@ -153,14 +214,20 @@ describe('revisão da semana: como a tela escreve o que a API manda', () => {
 });
 
 describe('revisão da semana desenhada (o mesmo componente do navegador)', () => {
-  it('com a leitura da LIA: os números, o bloco fixo com a hora da geração, a tabela, as listas e as decisões', () => {
+  it('com a leitura da LIA: os números com a barra, o bloco fixo com a hora da geração, as campanhas desenhadas, a tabela, as mudanças e as decisões', () => {
     const html = desenhar(revisao());
     expect(html).not.toMatch(/NaN|undefined|\[object Object\]|>null</);
     expect(html).toContain('<a class="btn btn--sm btn--ghost" href="/resultados">Voltar aos Resultados</a>');
     expect(html).toContain('Enviada por e-mail na segunda-feira, 28/09, às 07:00, para 3 pessoas.');
     // Os quatro números.
     expect(html).toContain('<div class="rev-nums" role="group" aria-label="Números da semana">');
-    expect(html).toContain('<p class="kpi-rot">Pedidos de anúncios</p><p class="kpi-val num">53</p><p class="kpi-sub">+12,8% · eram 47</p>');
+    expect(html).toContain('<p class="kpi-rot">Pedidos de anúncios</p><p class="kpi-val num">53</p><div class="bala" role="img" aria-label="Pedidos de anúncios: 53 nesta semana; 47 na semana anterior.">');
+    expect(html).toContain('<span>12,8% a mais</span>');
+    expect(html).toContain('<span>semana anterior: <b class="num">47</b></span>');
+    // Cada número tem a barra e a marca; a legenda diz o que é cada uma.
+    expect(html.match(/class="kpi"/g)).toHaveLength(4);
+    expect(html.match(/<div class="kpi">.*?<div class="bala" role="img"/g)).toHaveLength(4);
+    expect(html).toContain('<p class="rev-chave" aria-hidden="true">');
     expect(html.match(/class="kpi"/g)).toHaveLength(4);
     // A leitura: o mesmo bloco do Explicar, fixo (sem fechar), com o título e a hora da revisão.
     expect(html).toContain('<article class="card explica" id="exp-revisao" aria-labelledby="exp-t-revisao">');
@@ -170,7 +237,15 @@ describe('revisão da semana desenhada (o mesmo componente do navegador)', () =>
     expect(html).toContain('<a class="btn btn--sm" href="/resultados">Ver os Resultados</a>');
     expect(html).toContain('role="group" aria-label="Esta explicação fez sentido?"');
     expect(html).toContain('De onde vêm os números (1)');
-    // A tabela das campanhas, com o que só a plataforma prova e o total.
+    // As campanhas desenhadas: o investido e o que voltou no caixa, na mesma régua, com o selo.
+    expect(html).toContain('<ul class="camp-rev" aria-label="Campanhas da semana de 21/09 a 27/09">');
+    expect(html).toContain(nbsp('<div class="par" role="img" aria-label="Combo sexta: R$ 404,10 investidos e R$ 1.716,00 no caixa, em 26 pedidos.">'));
+    expect(html.match(/<span class="barra barra--gasto"/g)).toHaveLength(4);
+    expect(html).toContain(nbsp('Mais 4 pedidos (R$ 1.029,00) vieram da Meta sem dizer a campanha: contam no total.'));
+    expect(html).toContain('<b>Total:</b>');
+    // A tabela inteira continua na tela, atrás de "Ver a tabela", com o que só a plataforma prova e o total.
+    expect(html).toContain('<details class="rev-tabela"><summary>');
+    expect(html).toContain('Ver a tabela</summary>');
     expect(html).toContain('<caption class="sr-only">Campanhas da semana de 21/09 a 27/09: investimento, pedidos, receita, ROAS confirmado no caixa e resultado</caption>');
     expect(html).toContain(
       nbsp('<th scope="row">Combo sexta<span class="camp-canal"><span class="plat plat--meta">Meta Ads</span></span></th><td class="n num">R$ 404,10</td><td class="n num">26</td><td class="n num">R$ 1.716,00</td><td class="n num forte">4,25</td><td><span class="veredito veredito--bom">Dá lucro</span></td>'),
@@ -179,10 +254,16 @@ describe('revisão da semana desenhada (o mesmo componente do navegador)', () =>
     expect(html).toContain(nbsp('<tr class="linha-plat"><th scope="row">Meta · sem campanha identificada</th><td class="n">—</td><td class="n num">4</td><td class="n num">R$ 1.029,00</td><td class="n">—</td><td><span class="eixo-nota">conta no total</span></td></tr>'));
     expect(html).toContain(nbsp('<tfoot><tr><th scope="row">Total</th><td class="n num">R$ 1.214,30</td><td class="n num">53</td><td class="n num">R$ 3.471,00</td><td class="n num forte">2,86</td><td><span class="veredito veredito--atencao">Empata</span></td></tr></tfoot>'));
     // Melhorou e piorou.
-    expect(html).toMatch(/<ul class="rev-lista rev-lista--bom"><li><svg[^>]*>.*?<\/svg><span>Pedidos de anúncios: de <b class="num">47<\/b> para <b class="num">53<\/b> \(\+12,8%\)\.<\/span><\/li>/);
-    expect(html).toContain('<span>Combo sexta: ROAS no caixa de <b class="num">4,02</b> para <b class="num">4,25</b>.</span>');
-    expect(html).toContain('<span>Delivery noite: ROAS no caixa de <b class="num">1,12</b> para <b class="num">0,76</b>.</span>');
-    expect(html).toContain('<span>Pedidos sem origem: de <b class="num">41</b> para <b class="num">44</b> (+7,3%).</span>');
+    const dePara = (nome: string, de: string, para: string, variacao = '') =>
+      `<span class="mud-nome">${nome}</span><span class="mud-de-para"><span class="sr-only">de </span>${de}<span aria-hidden="true"> → </span><span class="sr-only"> para </span>${para}${variacao ? `<small> ${variacao}</small>` : ''}</span>`;
+    expect(html).toContain('<ul class="rev-lista rev-lista--g rev-lista--bom">');
+    expect(html).toContain(dePara('Pedidos de anúncios', '47', '53', '+12,8%'));
+    expect(html).toContain(dePara('Combo sexta: ROAS no caixa', '4,02', '4,25'));
+    expect(html).toContain('<ul class="rev-lista rev-lista--g rev-lista--ruim">');
+    expect(html).toContain(dePara('Delivery noite: ROAS no caixa', '1,12', '0,76'));
+    expect(html).toContain(dePara('Pedidos sem origem', '41', '44', '+7,3%'));
+    // Cada mudança tem a barra dela: quatro números, quatro que melhoraram e duas que pioraram.
+    expect(html.match(/class="bala" role="img"/g)).toHaveLength(10);
     // Precisa de decisão: o que aconteceu e para onde ir (só navegação).
     expect(html).toContain('O Liame aponta; quem decide é você. Nada muda nas campanhas por aqui.');
     expect(html).toContain('<b>Delivery noite deu prejuízo nas duas últimas semanas</b>');
@@ -220,6 +301,11 @@ describe('revisão da semana desenhada (o mesmo componente do navegador)', () =>
     // Campanha sem pedido não tem selo; com gasto e sem margem, "Margem incompleta".
     const semPedido = desenhar(revisao({ campaigns: [{ ...guardada.campaigns[0]!, orders: 0, revenue_micros: '0', roas: '0.00', verdict: null }] }));
     expect(semPedido).toContain('<td><span class="eixo-nota">sem pedido na semana</span></td>');
+    expect(semPedido).toContain('<span class="veredito veredito--neutro">Sem pedido</span>');
+    // Sem semana anterior, cada número diz que não há com o que comparar, e a legenda da marca não aparece.
+    const semAntes = desenhar(revisao({ totals: guardada.totals.map((m) => ({ ...m, before: null, change_pct: null })) }));
+    expect(semAntes.match(/<p class="kpi-sub">sem semana anterior para comparar<\/p>/g)).toHaveLength(4);
+    expect(semAntes).not.toContain('rev-chave');
     expect(desenhar(revisao({ campaigns: [{ ...guardada.campaigns[0]!, verdict: null }] }))).toContain('<span class="veredito veredito--incompleta">Margem incompleta</span>');
   });
 

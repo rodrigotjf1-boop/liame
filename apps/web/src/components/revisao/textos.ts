@@ -7,6 +7,7 @@ import { inteiro, reaisDeMicros } from '@/lib/formato';
 // Regras e frases da "Revisão da semana" (mockups/prototipo-explicar.html, P4 aprovado em 02/10/2026). A
 // revisão vem pronta da API, como foi gerada na segunda-feira: aqui nada é calculado, só escrito. Valor que
 // a tela ainda não conhece (tipo de mudança, veredito, situação do envio) tem um caminho (V23).
+// Os números do topo, as campanhas e as mudanças desenhadas estão em `graficos.ts`.
 
 /** "2.86" → "2,86" (o ROAS da revisão tem duas casas, como no protótipo); nulo vira travessão. */
 export function razao(r: string | null): string {
@@ -25,31 +26,6 @@ export function valorDe(m: WeeklyReviewChange, qual: 'before' | 'now'): string {
   if (m.unit === 'dinheiro') return reaisDeMicros(v);
   if (m.unit === 'razao') return razao(v);
   return inteiro(v);
-}
-
-export type Kpi = { id: string; rotulo: string; valor: string; sub: string };
-
-const ROTULO_DO_TOPO: Record<string, string> = {
-  investimento: 'Investido em anúncios',
-  pedidos_de_anuncios: 'Pedidos de anúncios',
-  receita_confirmada: 'Receita confirmada no caixa',
-  roas_confirmado: 'ROAS confirmado no caixa',
-};
-
-/** A linha de baixo de cada número do topo, como no protótipo; sem semana anterior, diz que não há comparação. */
-function subDoTopo(m: WeeklyReviewChange): string {
-  if (m.before === null) return 'sem semana anterior para comparar';
-  const antes = valorDe(m, 'before');
-  const v = variacao(m.change_pct);
-  if (m.kind === 'investimento') return v ? `${v} sobre a semana anterior` : `era ${antes} na semana anterior`;
-  if (m.unit === 'razao') return `era ${antes} na semana anterior`;
-  const era = m.unit === 'contagem' && m.before !== '1' ? 'eram' : 'era';
-  return v ? `${v} · ${era} ${antes}` : `${era} ${antes}`;
-}
-
-/** Os números do topo, na ordem em que a API manda (investimento, pedidos, receita e ROAS). */
-export function kpisDaRevisao(r: Pick<WeeklyReview, 'totals'>): Kpi[] {
-  return r.totals.map((m) => ({ id: m.kind, rotulo: ROTULO_DO_TOPO[m.kind] ?? m.kind.replaceAll('_', ' '), valor: valorDe(m, 'now'), sub: subDoTopo(m) }));
 }
 
 export type Mudanca = { chave: string; nome: string; de: string; para: string; variacao: string | null };
