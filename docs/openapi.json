@@ -17699,6 +17699,9 @@
                                 "format": "uuid",
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                               },
+                              "campaign_name": {
+                                "type": "string"
+                              },
                               "request": {
                                 "type": [
                                   "object",
@@ -17756,11 +17759,29 @@
                                       "cancelada",
                                       "expirada"
                                     ]
+                                  },
+                                  "created_at": {
+                                    "type": "string"
+                                  },
+                                  "agent_key": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "requested_by": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                                   }
                                 },
                                 "required": [
                                   "id",
-                                  "status"
+                                  "status",
+                                  "created_at",
+                                  "agent_key",
+                                  "requested_by"
                                 ],
                                 "additionalProperties": false
                               },
@@ -17787,6 +17808,7 @@
                             },
                             "required": [
                               "id",
+                              "campaign_name",
                               "request",
                               "action"
                             ],
@@ -18379,6 +18401,9 @@
                                 "format": "uuid",
                                 "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                               },
+                              "campaign_name": {
+                                "type": "string"
+                              },
                               "request": {
                                 "type": [
                                   "object",
@@ -18436,11 +18461,29 @@
                                       "cancelada",
                                       "expirada"
                                     ]
+                                  },
+                                  "created_at": {
+                                    "type": "string"
+                                  },
+                                  "agent_key": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "requested_by": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                                   }
                                 },
                                 "required": [
                                   "id",
-                                  "status"
+                                  "status",
+                                  "created_at",
+                                  "agent_key",
+                                  "requested_by"
                                 ],
                                 "additionalProperties": false
                               },
@@ -18467,6 +18510,7 @@
                             },
                             "required": [
                               "id",
+                              "campaign_name",
                               "request",
                               "action"
                             ],
@@ -18635,6 +18679,230 @@
           }
         ],
         "summary": "Atenção do ciclo fechado",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/v1/results/recommendations/{id}/dismiss": {
+      "post": {
+        "description": "O \"Agora não\" da Atenção: a pessoa viu a recomendação (`recommendation.id` de uma sugestão de `GET /v1/results/attention`) e não quis a mudança. O Liame registra quem dispensou, a sugestão sai da Atenção e do Resumo e, no modo Aprovação, o Gestor de tráfego não faz o pedido dela. Nada muda na plataforma de anúncio. Dispensar de novo não grava outra vez. Com um pedido desta recomendação em andamento, responde 409: quem decide é a aprovação.",
+        "operationId": "ResultsController_dismissRecommendation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Recomendação dispensada."
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Dispensar uma recomendação do Gestor de tráfego",
         "tags": [
           "results"
         ]
@@ -20802,6 +21070,9 @@
                                     "format": "uuid",
                                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                                   },
+                                  "campaign_name": {
+                                    "type": "string"
+                                  },
                                   "request": {
                                     "type": [
                                       "object",
@@ -20859,11 +21130,29 @@
                                           "cancelada",
                                           "expirada"
                                         ]
+                                      },
+                                      "created_at": {
+                                        "type": "string"
+                                      },
+                                      "agent_key": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "requested_by": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                                       }
                                     },
                                     "required": [
                                       "id",
-                                      "status"
+                                      "status",
+                                      "created_at",
+                                      "agent_key",
+                                      "requested_by"
                                     ],
                                     "additionalProperties": false
                                   },
@@ -20890,6 +21179,7 @@
                                 },
                                 "required": [
                                   "id",
+                                  "campaign_name",
                                   "request",
                                   "action"
                                 ],
@@ -49664,6 +49954,9 @@
                                     "format": "uuid",
                                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                                   },
+                                  "campaign_name": {
+                                    "type": "string"
+                                  },
                                   "request": {
                                     "type": [
                                       "object",
@@ -49721,11 +50014,29 @@
                                           "cancelada",
                                           "expirada"
                                         ]
+                                      },
+                                      "created_at": {
+                                        "type": "string"
+                                      },
+                                      "agent_key": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "requested_by": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                                       }
                                     },
                                     "required": [
                                       "id",
-                                      "status"
+                                      "status",
+                                      "created_at",
+                                      "agent_key",
+                                      "requested_by"
                                     ],
                                     "additionalProperties": false
                                   },
@@ -49752,6 +50063,7 @@
                                 },
                                 "required": [
                                   "id",
+                                  "campaign_name",
                                   "request",
                                   "action"
                                 ],

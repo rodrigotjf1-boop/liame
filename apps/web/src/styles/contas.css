@@ -48,6 +48,13 @@
 .aviso-titulo { font-size: var(--text-md); overflow-wrap: anywhere; }
 .aviso-det { color: var(--text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .aviso-fazer { font-size: var(--text-sm); }
+/* A recomendação do Gestor de tráfego (protótipo P9): o selo de quem recomenda e a situação do pedido que nasceu dela. */
+.aviso--rec .lite-chip { gap: 6px; }
+.aviso--rec .lite-chip .ic { flex: none; width: 13px; height: 13px; }
+.aviso-estado { display: flex; gap: var(--sp-2); align-items: flex-start; margin: 0; font-size: var(--text-sm); font-weight: 500; }
+.aviso-estado .ic { flex: none; margin-top: 2px; color: var(--link); }
+.aviso-estado--nota { font-weight: 400; color: var(--text-muted); }
+.aviso-estado--nota .ic { color: var(--text-subtle); }
 .sev { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; }
 .sev--critica { background: var(--danger-soft); color: var(--danger); }
 .sev--atencao { background: var(--warning-soft); color: var(--warning); }

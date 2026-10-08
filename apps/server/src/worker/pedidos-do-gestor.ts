@@ -73,6 +73,8 @@ export class PedidosDoGestor {
            where d.tenant_id = ${tenantId} and d.brand_id = ${brandId} and d.status = 'aberta' and d.decided_on = ${alvo.hoje}::date
              and d.human_action is null and d.request_attempted_at is null
              and not exists (select 1 from liame.action_request r where r.shadow_decision_id = d.id)
+             -- A recomendação que alguém dispensou ("Agora não") não vira pedido.
+             and not exists (select 1 from liame.human_override o where o.shadow_decision_id = d.id)
            order by d.id`)
       ).rows;
       if (!candidatas.length) return [];

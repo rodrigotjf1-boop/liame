@@ -91,11 +91,17 @@ export type MediaAttentionQuery = z.infer<typeof MediaAttentionQuery>;
  */
 export const AttentionRecommendation = z.strictObject({
   id: z.uuid(),
+  /** O nome da campanha na leitura mais recente: é o título da gaveta do pedido. */
+  campaign_name: z.string(),
   request: z
     .strictObject({ tool: Slug, provider: Slug, account_id: z.string(), resource_id: z.string(), params: z.record(z.string(), z.unknown()) })
     .nullable(),
-  /** O pedido mais recente que nasceu desta recomendação, em qualquer situação; nulo se ninguém pediu (ou se quem lê não vê os pedidos). */
-  action: z.strictObject({ id: z.uuid(), status: ActionStatus }).nullable(),
+  /**
+   * O pedido mais recente que nasceu desta recomendação, em qualquer situação; nulo se ninguém pediu (ou se quem lê não
+   * vê os pedidos). `agent_key`: o funcionário de IA que pediu, no modo Aprovação (nulo no pedido de uma pessoa);
+   * `requested_by`: quem pediu (no pedido do funcionário, a pessoa que o deixou pedir).
+   */
+  action: z.strictObject({ id: z.uuid(), status: ActionStatus, created_at: z.string(), agent_key: Slug.nullable(), requested_by: z.uuid() }).nullable(),
   /**
    * Só no modo Aprovação, quando o Gestor de tráfego tentou fazer o pedido desta recomendação e não conseguiu: o código
    * do problema (`plataforma-indisponivel`, `teto-nao-definido`, `acao-duplicada`…), o motivo em palavras e a hora da
