@@ -30,7 +30,9 @@ import type { Modo } from '@/lib/modo';
 // passo e a rodada da manhã saem do que `/v1/autonomy` e `/v1/team/shadow` mandam. A empresa sem o modo Aprovação
 // segue com a tela do P7 (`equipe.spec.ts`).
 
-const AGORA = new Date('2026-10-08T17:40:00Z');
+// Os instantes são montados pelo relógio local: a tela escreve a hora no fuso de quem lê, e o teste roda em qualquer fuso (ERR-116).
+const AGORA = new Date(2026, 9, 8, 14, 40);
+const local = (h: number, m = 0, d = 8) => new Date(2026, 9, d, h, m).toISOString();
 const uuid = (n: number) => `a0000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const texto = (f: Array<{ t: string }>) => f.map((x) => x.t).join('');
 const semTags = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
@@ -61,7 +63,7 @@ const proposta = (over: Partial<NonNullable<AutonomyItem['proposal']>> = {}): No
   from_mode: 'SUGGEST',
   to_mode: 'APPROVAL',
   sample_size: 34,
-  proposed_at: '2026-10-08T09:32:00.000Z',
+  proposed_at: local(6, 32),
   decided_by: null,
   decided_at: null,
   policy_version: null,
@@ -75,7 +77,7 @@ const proposta = (over: Partial<NonNullable<AutonomyItem['proposal']>> = {}): No
 const PRONTA = { sample_size: 10, approved: 9, failed: 0, missing: [], blocked_by: null };
 const emSugerir = item();
 const comProposta = item({ approval: PRONTA, proposal: proposta() });
-const emAprovacao = item({ mode: 'APPROVAL', mode_source: { policy: 'marca', version: 4 }, approval: PRONTA, proposal: proposta({ status: 'aprovada', decided_by: RODRIGO, decided_at: '2026-10-08T17:52:00.000Z', policy_version: 4 }) });
+const emAprovacao = item({ mode: 'APPROVAL', mode_source: { policy: 'marca', version: 4 }, approval: PRONTA, proposal: proposta({ status: 'aprovada', decided_by: RODRIGO, decided_at: local(14, 52), policy_version: 4 }) });
 const aumentar = item({ tool: 'orcamento_aumentar', action: 'orcamento.aumentar', approval: { sample_size: 4, approved: 3, failed: 0, missing: ['pedidos', 'aprovacao'], blocked_by: null } });
 const pausar = item({ tool: 'campanha_pausar', action: 'campanha.pausar', mode: 'SHADOW', mode_source: { policy: 'padrao', version: null }, readiness: FALTANDO, approval: { sample_size: 0, approved: 0, failed: 0, missing: ['pedidos', 'aprovacao'], blocked_by: null } });
 const google = item({
@@ -106,14 +108,14 @@ const decisao = (over: Partial<TeamShadowDecision> = {}): TeamShadowDecision => 
   request: null,
   ...over,
 });
-const pedida = decisao({ request: { id: uuid(90), status: 'aguardando_aprovacao', created_at: '2026-10-08T09:31:00.000Z', agent_key: 'trafego' } });
+const pedida = decisao({ request: { id: uuid(90), status: 'aguardando_aprovacao', created_at: local(6, 31), agent_key: 'trafego' } });
 const sugerida = decisao({ id: uuid(51), campaign: { id: uuid(61), name: 'Combo sexta', provider: 'meta_ads' }, tool: 'orcamento_aumentar' });
 const INDISPONIVEL = 'A Meta não respondeu agora, ou pediu para esperar. Nada foi pedido: tente de novo em alguns minutos.';
-const naoPedida = decisao({ not_requested: { code: 'plataforma-indisponivel', detail: INDISPONIVEL, at: '2026-10-08T09:31:00.000Z' } });
+const naoPedida = decisao({ not_requested: { code: 'plataforma-indisponivel', detail: INDISPONIVEL, at: local(6, 31) } });
 const sombra = (items: TeamShadowDecision[], over: Partial<TeamShadowResponse> = {}): TeamShadowResponse => ({
   brand_id: uuid(1),
   rule_version: 2,
-  last_run: { on: '2026-10-08', status: 'feito', at: '2026-10-08T09:31:00.000Z' },
+  last_run: { on: '2026-10-08', status: 'feito', at: local(6, 31) },
   items,
   has_more: false,
   generated_at: AGORA.toISOString(),
@@ -258,18 +260,18 @@ describe('a caixa da linha: a proposta, o modo de agora e a volta de um passo', 
   });
 
   it('o que aconteceu com a última proposta: recusada, retirada e a volta de um passo', () => {
-    const recusada = c(item({ approval: PRONTA, proposal: proposta({ status: 'recusada', decided_by: RODRIGO, decided_at: '2026-10-08T17:00:00.000Z' }) }))!;
+    const recusada = c(item({ approval: PRONTA, proposal: proposta({ status: 'recusada', decided_by: RODRIGO, decided_at: local(14) }) }))!;
     expect(recusada).toMatchObject({ titulo: 'Promoção recusada por Rodrigo', sub: 'Ele segue em Sugerir nesta ação. O sistema só propõe de novo depois de mais 10 pedidos decididos.', voltar: 'Sombra', aviso: true });
-    const retirada = c(item({ approval: { sample_size: 10, approved: 7, failed: 0, missing: ['aprovacao'], blocked_by: null }, proposal: proposta({ status: 'retirada', decided_at: '2026-10-08T09:32:00.000Z' }) }))!;
+    const retirada = c(item({ approval: { sample_size: 10, approved: 7, failed: 0, missing: ['aprovacao'], blocked_by: null }, proposal: proposta({ status: 'retirada', decided_at: local(6, 32) }) }))!;
     expect(retirada.titulo).toBe('Proposta retirada pelo sistema');
     expect(retirada.sub).toBe('A proposta de Aprovação saiu antes de alguém decidir: um portão deixou de passar (pedidos aprovados). Ele segue em Sugerir. O sistema propõe de novo quando os portões voltarem a passar.');
-    const voltou = c(item({ approval: PRONTA, proposal: proposta({ status: 'desfeita', decided_by: RODRIGO, decided_at: '2026-10-01T12:00:00.000Z', policy_version: 4, undone_by: RODRIGO, undone_at: '2026-10-08T18:10:00.000Z' }) }))!;
+    const voltou = c(item({ approval: PRONTA, proposal: proposta({ status: 'desfeita', decided_by: RODRIGO, decided_at: local(9, 0, 1), policy_version: 4, undone_by: RODRIGO, undone_at: local(15, 10) }) }))!;
     expect(voltou).toMatchObject({ titulo: 'Meta Ads · Reduzir a verba voltou para Sugerir', sub: 'Por Rodrigo, hoje, 15:10.', voltar: 'Sombra', aviso: true });
     expect(texto(voltou.texto!)).toBe(
       'Ele volta a só mostrar a recomendação na Atenção. Os pedidos que ele já tinha feito continuam em Aprovações, esperando a sua decisão. O sistema só propõe de novo depois de mais 10 pedidos decididos.',
     );
     // De Sugerir para Sombra: o que conta para a próxima proposta são as decisões comparáveis.
-    const paraSombra = c(item({ mode: 'SHADOW', proposal: proposta({ status: 'desfeita', from_mode: 'SHADOW', to_mode: 'SUGGEST', undone_by: RODRIGO, undone_at: '2026-10-08T18:10:00.000Z' }) }))!;
+    const paraSombra = c(item({ mode: 'SHADOW', proposal: proposta({ status: 'desfeita', from_mode: 'SHADOW', to_mode: 'SUGGEST', undone_by: RODRIGO, undone_at: local(15, 10) }) }))!;
     expect(paraSombra.titulo).toBe('Meta Ads · Reduzir a verba voltou para Sombra');
     expect(texto(paraSombra.texto!)).toContain('Nada mais aparece na Atenção por ele nesta ação. O sistema só propõe de novo depois de mais 30 decisões comparáveis.');
     expect(paraSombra.voltar).toBeNull();
@@ -308,10 +310,10 @@ describe('a rodada da manhã', () => {
     expect([rodada.aprovacoes, rodada.naAtencao]).toEqual([{ pedido: uuid(90) }, true]);
     expect([rodada.resumo, rodada.hoje]).toEqual(['Pediu 1 mudança hoje', true]);
     // O pedido que já foi decidido no mesmo dia.
-    const decidido = r([decisao({ request: { id: uuid(90), status: 'executada', created_at: '2026-10-08T09:31:00.000Z', agent_key: 'trafego' } })]);
+    const decidido = r([decisao({ request: { id: uuid(90), status: 'executada', created_at: local(6, 31), agent_key: 'trafego' } })]);
     expect(texto(decidido.frase)).toBe('Ele pediu 1 mudança. O pedido de reduzir a verba em 10% da campanha “Smash em dobro” já foi decidido: está em Aprovações.');
     // Vários pedidos: a tela de Aprovações, sem um pedido só.
-    const varios = r([pedida, decisao({ id: uuid(52), campaign: { id: uuid(62), name: 'Almoço', provider: 'meta_ads' }, request: { id: uuid(91), status: 'aguardando_aprovacao', created_at: '2026-10-08T09:31:00.000Z', agent_key: 'trafego' } })]);
+    const varios = r([pedida, decisao({ id: uuid(52), campaign: { id: uuid(62), name: 'Almoço', provider: 'meta_ads' }, request: { id: uuid(91), status: 'aguardando_aprovacao', created_at: local(6, 31), agent_key: 'trafego' } })]);
     expect(texto(varios.frase)).toBe('Ele pediu 2 mudanças. Cada pedido espera a aprovação de uma pessoa com o código do app.');
     expect(varios.aprovacoes).toEqual({ pedido: null });
   });
@@ -324,7 +326,7 @@ describe('a rodada da manhã', () => {
     expect([rodada.aprovacoes, rodada.naAtencao]).toEqual([null, true]);
     expect(rodada.resumo).toBe('Não conseguiu fazer o pedido hoje');
     // O pedido que a pessoa fez depois, pela Atenção, não é pedido dele.
-    const pelaPessoa = r([decisao({ ...naoPedida, request: { id: uuid(92), status: 'aguardando_aprovacao', created_at: '2026-10-08T12:00:00.000Z', agent_key: null } })]);
+    const pelaPessoa = r([decisao({ ...naoPedida, request: { id: uuid(92), status: 'aguardando_aprovacao', created_at: local(9), agent_key: null } })]);
     expect(pelaPessoa.aprovacoes).toBeNull();
     expect(texto(pelaPessoa.frase)).toContain('Ele não conseguiu fazer o pedido desta rodada.');
   });
@@ -344,14 +346,14 @@ describe('a rodada da manhã', () => {
     const nada = r([]);
     expect(texto(nada.frase)).toBe('Nenhuma campanha pediu mudança nesta rodada. Ele leu os resultados e comparou cada campanha com as regras.');
     expect(nada.passos.map((p) => p.texto)).toContain('Não registrou recomendação nova: nenhuma campanha pediu');
-    const ontem = r([decisao({ decided_on: '2026-10-07' })], { last_run: { on: '2026-10-07', status: 'dado_velho', at: '2026-10-08T09:31:00.000Z' } });
+    const ontem = r([decisao({ decided_on: '2026-10-07' })], { last_run: { on: '2026-10-07', status: 'dado_velho', at: local(6, 31) } });
     expect([ontem.titulo, ontem.nota]).toEqual(['Última rodada', '07/10 · regras da sombra, versão 2']);
     expect(ontem.aviso).toBe('A última tentativa (hoje, 06:31) não rodou: os dados das contas não estavam em dia.');
     expect([nada.resumo, ontem.resumo, ontem.hoje]).toEqual(['Nenhuma campanha pediu mudança hoje', 'Deixou 1 recomendação na Atenção em 07/10', false]);
   });
 
   it('com a equipe parada, ninguém pede nada; sem a lista da sombra ou antes da primeira rodada, o bloco não aparece', () => {
-    const parada = rodadaDoGestor(sombra([pedida]), itens, { stop: { id: uuid(95), level: 'tenant', by_company: true, since: '2026-10-08T12:00:00.000Z', reason: 'Equipe parada pela tela Sua equipe.', by: RODRIGO } }, AGORA)!;
+    const parada = rodadaDoGestor(sombra([pedida]), itens, { stop: { id: uuid(95), level: 'tenant', by_company: true, since: local(9), reason: 'Equipe parada pela tela Sua equipe.', by: RODRIGO } }, AGORA)!;
     expect([parada.titulo, parada.nota, parada.passos, parada.aprovacoes]).toEqual(['Rodada de hoje', 'não rodou', [], null]);
     expect(texto(parada.frase)).toBe('Com a equipe parada, ele não recomenda nem pede nada. Os pedidos que já estavam em Aprovações continuam lá, mas nenhum é executado enquanto a equipe estiver parada.');
     expect(rodadaDoGestor(null, itens, SEM_PARADA, AGORA)).toBeNull();
