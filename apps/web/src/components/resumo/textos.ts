@@ -173,17 +173,25 @@ function destinoDe(item: AttentionItem, podeVerVendas: boolean, podeVerContas: b
   return { rotulo: 'Ver', href: '/atencao' };
 }
 
-/** O que a pessoa pode decidir: as ações e os planos (em Aprovações) e a promoção de um funcionário (em Sua equipe). */
+/**
+ * O que a pessoa pode decidir: as ações e os planos (em Aprovações), as peças do Criativo (em Criativos) e a promoção
+ * de um funcionário (em Sua equipe).
+ */
 export interface QuemDecide {
   acoes: boolean;
   planos: boolean;
+  pecas: boolean;
   autonomia: boolean;
 }
 
+/** A oferta dentro de uma frase: sem o ponto final que ela possa trazer. */
+const ofertaNaFrase = (oferta: string): string => oferta.trim().replace(/[.!?…]+$/u, '');
+
 /**
  * Os avisos que pedem alguém (críticos primeiro), com os pedidos de decisão depois dos críticos, como no protótipo:
- * o que espera em Aprovações (as ações e os planos do Estrategista que a pessoa pode decidir) e, à parte, a proposta
- * de um funcionário passar a sugerir (decidida em Sua equipe).
+ * o que espera em Aprovações (as ações e os planos do Estrategista que a pessoa pode decidir), as peças do Criativo
+ * que passaram na conferência (decididas em Criativos; A4 · P10) e, à parte, a proposta de um funcionário passar a
+ * sugerir (decidida em Sua equipe).
  */
 export function precisaDe(r: SummaryResponse, podeVerVendas: boolean, podeVerContas: boolean, decide: QuemDecide): ItemPrecisa[] {
   const avisos = r.needs_you.items.map((a, i): ItemPrecisa => {
@@ -215,6 +223,21 @@ export function precisaDe(r: SummaryResponse, podeVerVendas: boolean, podeVerCon
       botao: { rotulo: 'Decidir', href: '/aprovacoes', primario: true },
     });
   }
+  // As peças que dá para aprovar agora (o servidor só as conta para quem acompanha as campanhas). A barrada não pede
+  // a decisão de ninguém aqui: ela é citada, e está na tela de Criativos.
+  const pecas = decide.pecas ? r.needs_you.approvals.pieces : undefined;
+  if (pecas && pecas.ready > 0) {
+    const para = pecas.offer ? `Para ${ofertaNaFrase(pecas.offer)}. ` : pecas.offers > 1 ? `Para ${inteiro(pecas.offers)} ofertas. ` : '';
+    const barrou = pecas.barred ? ` e barrou ${pecas.barred === 1 ? 'outra' : `outras ${inteiro(pecas.barred)}`}` : '';
+    decisoes.push({
+      chave: 'pecas',
+      gravidade: 'decisao',
+      falado: 'Decisão',
+      titulo: pecas.ready === 1 ? '1 peça do Criativo espera a sua decisão' : `${inteiro(pecas.ready)} peças do Criativo esperam a sua decisão`,
+      sub: [{ t: `${para}O Compliance já conferiu${barrou}. ` }, { t: 'Nada vai para a Meta sem o seu pedido.', b: true }],
+      botao: { rotulo: 'Ver', href: '/criativos', primario: false },
+    });
+  }
   if (autonomia > 0) {
     decisoes.push({
       chave: 'autonomia',
@@ -230,9 +253,12 @@ export function precisaDe(r: SummaryResponse, podeVerVendas: boolean, podeVerCon
   return [...criticos, ...decisoes, ...avisos.filter((a) => a.gravidade !== 'urgente')];
 }
 
-/** O número ao lado de "Resumo" no menu: os avisos que pedem alguém e, havendo pedido esperando, mais um. */
-export function contadorDoResumo(avisos: number | null, aprovacoes: number | null): number {
-  return (avisos ?? 0) + (aprovacoes ? 1 : 0);
+/**
+ * O número ao lado de "Resumo" no menu: os avisos que pedem alguém e, havendo pedido esperando, mais um; havendo
+ * peça do Criativo para decidir, mais um (cada um é um item do "Precisa de você").
+ */
+export function contadorDoResumo(avisos: number | null, aprovacoes: number | null, pecas: number | null = null): number {
+  return (avisos ?? 0) + (aprovacoes ? 1 : 0) + (pecas ? 1 : 0);
 }
 
 /** ", 3 pontos para você" para quem ouve o menu. */

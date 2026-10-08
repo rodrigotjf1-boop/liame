@@ -247,6 +247,14 @@ export type AdPieceListQuery = z.infer<typeof AdPieceListQuery>;
 export const AdPieceListResponse = z.strictObject({ items: z.array(AdPieceResponse) });
 export type AdPieceListResponse = z.infer<typeof AdPieceListResponse>;
 
+/**
+ * As peças que esperam a pessoa, na empresa inteira (o número ao lado de "Criativos" no menu): as que passaram na
+ * conferência e podem ser aprovadas agora (`ready`, as de aviso junto) e as que a conferência barrou (`barred`). Não
+ * entram a peça que o Criativo está refazendo nem as de marca arquivada.
+ */
+export const AdPieceWaitingResponse = z.strictObject({ ready: z.int().min(0), barred: z.int().min(0) });
+export type AdPieceWaitingResponse = z.infer<typeof AdPieceWaitingResponse>;
+
 /** O que impede uma oferta de ir ao Criativo (`politico_eleitoral`, `categoria_proibida`, `bebida_alcoolica`, `dado_pessoal`…), com o trecho. */
 export const AdPieceOfferProblem = z.strictObject({ reason: Slug, excerpt: z.string() });
 export type AdPieceOfferProblem = z.infer<typeof AdPieceOfferProblem>;

@@ -330,8 +330,8 @@ describe('Resumo: o veredito', () => {
 describe('Resumo: precisa de você', () => {
   const itens = [aviso({}), aviso({ kind: 'cupom_sem_uso', severity: 'atencao', title: 'O cupom SMASH10 não foi usado', campaign_id: uuid(12) }), aviso({ kind: 'anuncio_sem_rastreio', severity: 'atencao', title: '3 anúncios estão sem o rastreio do Liame', campaign_id: null })];
 
-  const TUDO = { acoes: true, planos: true, autonomia: true };
-  const NADA = { acoes: false, planos: false, autonomia: false };
+  const TUDO = { acoes: true, planos: true, pecas: true, autonomia: true };
+  const NADA = { acoes: false, planos: false, pecas: false, autonomia: false };
 
   it('os críticos primeiro, depois o pedido de decisão, depois os de atenção; cada um leva à tela onde se resolve', () => {
     const lista = precisaDe(resumo({ needs_you: { critical: 1, attention: 2, items: itens, approvals: { actions: 2, plans: 0, autonomy: 0 } } }), true, true, TUDO);
@@ -378,8 +378,40 @@ describe('Resumo: precisa de você', () => {
     expect(precisaDe(r, true, true, { ...TUDO, autonomia: false }).map((i) => i.chave)).not.toContain('autonomia');
   });
 
-  it('o número do menu: os avisos e, havendo pedido esperando, mais um', () => {
+  it('as peças do Criativo que passaram na conferência: um item à parte, depois dos pedidos, que leva a Criativos', () => {
+    type Pecas = NonNullable<SummaryResponse['needs_you']['approvals']['pieces']>;
+    const com = (pieces: Pecas, approvals = { actions: 1, plans: 0, autonomy: 1 }) =>
+      resumo({ needs_you: { critical: 1, attention: 1, items: [itens[0]!, itens[1]!], approvals: { ...approvals, pieces } } });
+    const daLista = (r: SummaryResponse, decide = TUDO) => precisaDe(r, true, true, decide).find((i) => i.chave === 'pecas');
+
+    const lista = precisaDe(com({ ready: 2, barred: 1, offers: 1, offer: 'Combo sexta: smash, batata e refri por R$ 34,90' }), true, true, TUDO);
+    expect(lista.map((i) => i.chave)).toEqual([expect.any(String), 'decisao', 'pecas', 'autonomia', expect.any(String)]);
+    expect(lista.map((i) => i.gravidade)).toEqual(['urgente', 'decisao', 'decisao', 'decisao', 'atencao']);
+    const pecas = lista[2]!;
+    expect(pecas).toMatchObject({ falado: 'Decisão', titulo: '2 peças do Criativo esperam a sua decisão', botao: { rotulo: 'Ver', href: '/criativos', primario: false } });
+    expect(textoCorrido(pecas.sub)).toBe('Para Combo sexta: smash, batata e refri por R$ 34,90. O Compliance já conferiu e barrou outra. Nada vai para a Meta sem o seu pedido.');
+    expect(pecas.sub.at(-1)).toEqual({ t: 'Nada vai para a Meta sem o seu pedido.', b: true });
+
+    // Uma peça só, sem barrada; a oferta escrita com ponto final não dobra o ponto.
+    const uma = daLista(com({ ready: 1, barred: 0, offers: 1, offer: 'Smash duplo por R$ 39,90.' }, { actions: 0, plans: 0, autonomy: 0 }))!;
+    expect(uma.titulo).toBe('1 peça do Criativo espera a sua decisão');
+    expect(textoCorrido(uma.sub)).toBe('Para Smash duplo por R$ 39,90. O Compliance já conferiu. Nada vai para a Meta sem o seu pedido.');
+    // De mais de uma oferta, a frase diz de quantas; com várias barradas, quantas.
+    expect(textoCorrido(daLista(com({ ready: 3, barred: 2, offers: 2, offer: null }))!.sub)).toBe('Para 2 ofertas. O Compliance já conferiu e barrou outras 2. Nada vai para a Meta sem o seu pedido.');
+
+    // Só barradas: não há o que aprovar, e o item não aparece. Quem não opera campanhas não decide peça.
+    expect(daLista(com({ ready: 0, barred: 2, offers: 0, offer: null }))).toBeUndefined();
+    expect(daLista(com({ ready: 2, barred: 0, offers: 1, offer: 'Combo' }), { ...TUDO, pecas: false })).toBeUndefined();
+    // A resposta de antes de 08/10/2026 (ou de quem não acompanha as campanhas) não traz as peças.
+    expect(daLista(resumo({ needs_you: { critical: 0, attention: 0, items: [], approvals: { actions: 1, plans: 0, autonomy: 0 } } }))).toBeUndefined();
+  });
+
+  it('o número do menu: os avisos e, havendo pedido esperando, mais um; havendo peça para decidir, mais um', () => {
     expect(contadorDoResumo(3, 2)).toBe(4);
+    expect(contadorDoResumo(3, 2, 4)).toBe(5);
+    expect(contadorDoResumo(0, 0, 1)).toBe(1);
+    expect(contadorDoResumo(3, 2, 0)).toBe(4);
+    expect(contadorDoResumo(null, null, null)).toBe(0);
     expect(contadorDoResumo(3, 0)).toBe(3);
     expect(contadorDoResumo(null, null)).toBe(0);
     expect(pontosFalados(1)).toBe(', 1 ponto para você');

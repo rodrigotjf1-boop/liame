@@ -208,6 +208,11 @@ export function paraDecidir(pecas: Peca[], pode: boolean): ParaDecidir | null {
   };
 }
 
+/** "Criativos, 2 peças para decidir" (rótulo falado do item do menu). */
+export function pecasFaladas(n: number): string {
+  return n === 1 ? ', 1 peça para decidir' : `, ${n} peças para decidir`;
+}
+
 /** O aviso quando as peças de um pedido ficam prontas, ou quando o pedido não deu certo. */
 export function avisoDoPedidoPronto(pecas: Peca[]): string {
   const barradas = pecas.filter(ehBarrada).length;

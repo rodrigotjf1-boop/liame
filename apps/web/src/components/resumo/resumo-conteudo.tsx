@@ -50,11 +50,13 @@ export function ResumoConteudo({ r, equipe, verba = null, variasMarcas = false, 
     return { lista: fontes.lista, stats, dinheiro, pedidos, canais };
   }, [r, agora]);
   const fontes = useFontes(dados.lista);
-  // O que a pessoa decide: as ações e os planos, na tela Aprovações (de quem acompanha as campanhas); a promoção de um funcionário, em Sua equipe.
+  // O que a pessoa decide: as ações e os planos, na tela Aprovações (de quem acompanha as campanhas); as peças do Criativo, na tela Criativos
+  // (de quem opera campanhas); a promoção de um funcionário, em Sua equipe.
   const verCampanhas = pode('campanhas.ver');
   const itens = precisaDe(r, pode('vendas.ver'), pode('contas.ver'), {
     acoes: verCampanhas && pode('acoes.aprovar'),
     planos: verCampanhas && pode('planos.decidir'),
+    pecas: verCampanhas && pode('campanhas.operar'),
     autonomia: verCampanhas && pode('politicas.gerenciar'),
   });
   const linhasDaEquipe = equipe ? equipeDo(equipe) : [];
