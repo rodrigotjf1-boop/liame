@@ -3,7 +3,8 @@
 import type { BudgetLimitsRequest } from '@liame/contracts';
 import Link from 'next/link';
 import type { Ref } from 'react';
-import { BotaoDetalhes, TextoRico } from '@/components/resultados/pecas';
+import { DicaDosDesenhos } from '@/components/resultados/desenhos';
+import { BotaoDetalhes } from '@/components/resultados/pecas';
 import { ListaDeFontes, NumeroComFonte, TextoComNumeros, useFontes } from '@/components/resumo/numeros';
 import { Estado } from '@/components/ui/estado';
 import { Faixa } from '@/components/ui/faixa';
@@ -11,12 +12,15 @@ import { Icone } from '@/components/ui/icone';
 import type { Problema } from '@/lib/api';
 import { useDetalhes } from '@/lib/modo';
 import { BarraDoTeto } from './barra-do-teto';
+import { GraficoDoMes, OndeOGastoFoi, SeloDaVerba, TabelaDosDias } from './desenhos';
 import { FormLimites } from './form-limites';
 import type { AvisoDaVerba, TelaDaVerba } from './textos';
 
 // O corpo da tela Verba do mês (A4 · P9, aprovado em 05/10/2026) com os dados já lidos: as faixas do topo, o gasto do
 // mês contra o teto, os limites da empresa e o que o Liame mudou, conferido todo dia. Separado da busca para ser
 // desenhado igual no teste e no navegador. No Lite, o que é do Pro fica a um "Ver detalhes" (nada some).
+// O cartão do mês leva os desenhos do protótipo `mockups/prototipo-verba-graficos.html` (aprovado em 07/10/2026): o
+// selo, "O mês, dia a dia" e "Onde o gasto foi"; a barra do teto só entra quando a resposta não traz o gasto de cada dia.
 
 type Props = {
   tela: TelaDaVerba;
@@ -57,7 +61,7 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
   const fontes = useFontes(tela.fontes);
   const doMes = useDetalhes();
   const dasMudancas = useDetalhes();
-  const { heroi: h, plataformas: p, limites: l, mudancas: m } = tela;
+  const { heroi: h, desenhos: d, plataformas: p, limites: l, mudancas: m } = tela;
   const numero = (texto: Parameters<typeof TextoComNumeros>[0]['texto']) => <TextoComNumeros texto={texto} lista={tela.fontes} aoTocar={fontes.mostrar} />;
   const tres = (gasto: string, ritmo: string, previsto: string) => (
     <>
@@ -113,10 +117,8 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
             <NumeroComFonte num={h.numero} lista={tela.fontes} aoTocar={fontes.mostrar} />
             <small>{h.sub}</small>
           </p>
-          {h.barra && <BarraDoTeto barra={h.barra} />}
-          <p className="lite-frase lite-frase--grande">
-            <TextoRico frase={h.frase} />
-          </p>
+          <SeloDaVerba veredito={d.veredito} />
+          {d.mes ? <GraficoDoMes mes={d.mes} /> : h.barra && <BarraDoTeto barra={h.barra} />}
           <div className="verba-stats" role="group" aria-label="A conta do mês">
             {h.stats.map((s) => (
               <div className="kpi" key={s.rotulo}>
@@ -126,6 +128,7 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
               </div>
             ))}
           </div>
+          {d.onde.length > 0 && <OndeOGastoFoi plataformas={d.onde} />}
           {!doMes.pro && <BotaoDetalhes aberto={doMes.aberto} controla="verba-pro" aoAlternar={doMes.alternar} />}
           {/* O bloco existe sempre (é o alvo do "Ver detalhes"); fechado, fica oculto, como nos cartões de Resultados. */}
           <div className="res-pro" id="verba-pro" hidden={!doMes.mostraPro}>
@@ -168,6 +171,7 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
                   </table>
                 </div>
                 <p className="eixo-nota">{p.nota}</p>
+                {d.dias && <TabelaDosDias dias={d.dias} />}
               </>
             )}
           </div>
@@ -307,6 +311,7 @@ export function VerbaConteudo({ tela, limites, podeDefinir, podeVerContas, podeV
       </article>
 
       <ListaDeFontes lista={tela.fontes} estado={fontes} id="verba-fontes" />
+      <DicaDosDesenhos />
     </div>
   );
 }

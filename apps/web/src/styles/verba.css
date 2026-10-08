@@ -27,6 +27,83 @@
 .verba-stats .kpi-val { font-size: var(--text-lg); }
 .verba-stats .kpi-val .nf, .verba-stats .kpi-sub .nf { font-size: inherit; }
 
+/* Os desenhos do cartão do mês (mockups/prototipo-verba-graficos.html, aprovado em 07/10/2026; caminho B). Sem cor
+   nova: o gasto do mês segue no foco, como na barra do teto; a previsão é a mesma hachura; o que passa do teto leva o
+   vermelho de estado, sempre com a palavra na legenda e no selo. A dica do mouse (.dica-desenho) é a de Resultados. */
+
+/* O selo do mês, com a linha do que ele quer dizer para quem pede mudança. */
+.verba-veredito { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.verba-veredito .st { flex: none; }
+
+/* O mês, dia a dia: o gasto somado (cheio), a previsão (hachura e tracejado) e o teto (o traço escuro). */
+.mes-graf { display: grid; gap: var(--sp-2); min-width: 0; }
+.mes-graf h3, .vb-onde h3 { margin: 0; font-size: var(--text-sm); font-weight: 600; }
+.mes-leg { display: flex; flex-wrap: wrap; gap: 6px var(--sp-4); font-size: var(--text-xs); color: var(--text-muted); }
+.mes-leg span { display: inline-flex; align-items: center; gap: 6px; }
+.mes-leg b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+.mes-leg i { flex: none; width: 14px; height: 10px; }
+.mes-leg .lg-lido { border-top: 2px solid var(--chart-foco); background: color-mix(in srgb, var(--chart-foco) 16%, transparent); }
+.mes-leg .lg-prev { border-top: 2px dashed var(--chart-foco); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--chart-foco) 42%, transparent) 0 2px, transparent 2px 6px); }
+.mes-leg .lg-teto { height: 2px; border-radius: 1px; background: var(--text); }
+.mes-leg .lg-acima { border-top: 2px solid var(--danger); background: color-mix(in srgb, var(--danger) 16%, transparent); }
+/* A calha da régua tem a largura do rótulo mais comprido (o desenho calcula e passa em --calha). */
+.mes-caixa { padding: 6px 6px 0 var(--calha, 3.6rem); }
+.mes-plot { position: relative; height: 200px; border-bottom: 1px solid var(--border-strong); outline: none; }
+.mes-plot:focus-visible { box-shadow: var(--focus-ring); border-radius: 2px; }
+.mes-grade span { position: absolute; left: 0; right: 0; height: 0; border-top: 1px solid var(--chart-grade); }
+.mes-eixo span { position: absolute; right: calc(100% + 8px); transform: translateY(-50%); font-family: var(--font-mono); font-size: 10px; line-height: 1; white-space: nowrap; color: var(--text-subtle); }
+.mes-eixo .do-teto { font-weight: 600; color: var(--text); }
+/* As áreas: cada uma é recortada no formato dela; dentro, a parte de baixo do teto e a de cima têm cores diferentes. */
+.mes-area { position: absolute; inset: 0; }
+.mes-area i { position: absolute; left: 0; right: 0; display: block; }
+.mes-area .abaixo { top: var(--teto, 0%); bottom: 0; }
+.mes-area .acima { top: 0; height: var(--teto, 0%); }
+.mes-area--lido .abaixo { background: color-mix(in srgb, var(--chart-foco) 16%, transparent); }
+.mes-area--lido .acima { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+.mes-area--prev .abaixo { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--chart-foco) 42%, transparent) 0 2px, transparent 2px 6px); }
+.mes-area--prev .acima { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--danger) 60%, transparent) 0 2px, transparent 2px 6px); }
+.mes-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.mes-plot path { fill: none; stroke: var(--chart-foco); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.mes-plot path.prev { stroke-dasharray: 5 4; stroke-linecap: butt; }
+.mes-plot path.acima { stroke: var(--danger); }
+.mes-teto { position: absolute; left: 0; right: 0; top: var(--teto); z-index: 3; height: 0; border-top: 2px solid var(--text); }
+.mes-teto::after { content: ""; position: absolute; inset: -8px 0 -6px; }
+.mes-pt { position: absolute; z-index: 4; width: 10px; height: 10px; border-radius: 50%; background: var(--chart-foco); box-shadow: 0 0 0 2px var(--surface); transform: translate(-50%, -50%); }
+.mes-pt::after { content: ""; position: absolute; inset: -7px; }
+.mes-pt--prev { border: 2px solid var(--chart-foco); background: var(--surface); }
+.mes-pt--acima { background: var(--danger); }
+.mes-pt--prev.mes-pt--acima { border-color: var(--danger); background: var(--surface); }
+.mes-plot .alvo { position: absolute; top: 0; bottom: 0; z-index: 2; }
+.mes-plot .alvo:hover::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 1px; background: var(--border-strong); }
+.mes-dias { position: relative; height: 14px; margin-top: 5px; font-family: var(--font-mono); font-size: 10px; line-height: 1; color: var(--text-subtle); }
+.mes-dias span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.mes-dias span:first-child { transform: none; }
+.mes-dias span:last-child { transform: translateX(-100%); }
+
+/* Onde o gasto foi: uma barra por plataforma, na mesma régua (cheio: o gasto lido; hachura: a previsão). */
+.vb-onde { display: grid; gap: var(--sp-2); min-width: 0; }
+.vb-plats { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--sp-3) var(--sp-4); align-items: center; margin: 0; padding: 0; list-style: none; }
+.vb-plats > li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; }
+.vb-plats .plat { justify-self: start; }
+.vb-trilho { position: relative; height: 12px; min-width: 0; }
+.vb-trilho span { position: absolute; top: 0; bottom: 0; display: block; }
+.vb-trilho .gasto { left: 0; min-width: 3px; border-radius: 0 2px 2px 0; background: var(--chart-foco); }
+.vb-trilho .previsto { border-radius: 0 4px 4px 0; background: repeating-linear-gradient(135deg, var(--chart-foco) 0 3px, transparent 3px 6px); opacity: .75; }
+.vb-valor { display: flex; align-items: baseline; justify-content: flex-end; gap: var(--sp-2); margin: 0; font-size: var(--text-sm); white-space: nowrap; }
+.vb-valor b { font-family: var(--font-mono); font-weight: 600; }
+.vb-valor span { font-size: var(--text-xs); color: var(--text-muted); }
+
+/* O gasto de cada dia, em tabela (para quem quer o número de um dia e para o leitor de tela). */
+.vb-dias-tabela { margin-top: var(--sp-3); }
+.vb-dias-tabela summary { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; cursor: pointer; color: var(--link); font-size: var(--text-sm); font-weight: 600; list-style: none; }
+.vb-dias-tabela summary::-webkit-details-marker { display: none; }
+.vb-dias-tabela summary .ic { width: 15px; height: 15px; transition: transform var(--dur) var(--ease); }
+.vb-dias-tabela[open] summary .ic { transform: rotate(180deg); }
+.vb-dias-tabela summary:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
+.vb-dias-tabela .table-wrap { max-height: 320px; margin-top: var(--sp-2); overflow: auto; }
+/* O dia da semana e o que falta ler ficam cada um na sua linha, sem quebrar no hífen. */
+.verba .vb-dias-tabela .tabela .sub { white-space: nowrap; }
+
 /* Os limites da empresa: os dois valores (ou o formulário) de um lado, as regras da Liame do outro. */
 .limites-grade { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--sp-5) var(--sp-8); align-items: start; }
 .limites-lado { display: grid; gap: var(--sp-3); }
@@ -88,6 +165,11 @@
 }
 @container pagina (max-width: 599px) {
   .verba-stats, .limites-dois, .limites-form { grid-template-columns: minmax(0, 1fr); }
+  .mes-plot { height: 170px; }
+  /* No celular, o valor fica na linha da plataforma e a barra ocupa a largura inteira embaixo. */
+  .vb-plats { grid-template-columns: minmax(0, 1fr) auto; }
+  .vb-plats > li { row-gap: 6px; }
+  .vb-trilho { grid-column: 1 / -1; grid-row: 2; }
   .r-verba .verba-linha { grid-template-columns: minmax(0, 1fr); }
   .r-verba .verba-linha .btn { justify-self: start; }
   /* No celular, cada linha das tabelas da verba vira um bloco: o título em cima e os números em pares, cada um com o rótulo da coluna. */

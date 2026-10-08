@@ -1,4 +1,4 @@
-import type { BudgetMonthChange, BudgetMonthPlatform, BudgetMonthResponse } from '@liame/contracts';
+import type { BudgetMonthChange, BudgetMonthDay, BudgetMonthPlatform, BudgetMonthResponse } from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import { textoDe } from '@/components/resultados/textos';
 import { Fontes, textoCorrido } from '@/components/resumo/textos';
 import { itensVisiveis, NAVEGACAO, temModos, tituloDa } from '@/components/shell/navegacao';
 import { Icone } from '@/components/ui/icone';
+import { desenhosDaVerba, diasLidos, mesDesenhado, ondeOGastoFoi, passoDaGrade, reaisCurtos, vereditoDaVerba } from '@/components/verba/graficos';
 import {
   avisosDaVerba,
   barraDaVerba,
@@ -34,7 +35,8 @@ import { ModoProvider } from '@/lib/modo';
 // "Verba do mês" (A4 · P9, aprovado em 05/10/2026; mockups/prototipo-anuncios.html): quanto a empresa pode gastar em
 // anúncios, quanto já gastou, os dois limites e o que o Liame mudou. As frases e os números saem do que a API manda
 // (`GET /v1/budget/month`); a tela é desenhada pelo mesmo componente do navegador. O cenário é o do protótipo:
-// setembro, terça 29/09, com a Meta e o Google lidos de manhã.
+// setembro, terça 29/09, com a Meta e o Google lidos de manhã. Os desenhos do cartão do mês são os do protótipo
+// `mockups/prototipo-verba-graficos.html` (aprovado em 07/10/2026).
 
 const FUSO = 'America/Sao_Paulo';
 const AGORA = new Date('2026-09-29T17:40:00Z'); // terça, 14:40 em São Paulo
@@ -384,6 +386,177 @@ describe('Verba do mês: o selo e as faixas do topo', () => {
   });
 });
 
+describe('Verba do mês: os desenhos', () => {
+  /** Setembro lido até 28/09: 27 dias de R$ 177,00 e o dia 28 com R$ 181,00 (R$ 4.960,00 no mês). */
+  const dias = (ultimo = 181, falta: string[] = []): BudgetMonthDay[] =>
+    Array.from({ length: 28 }, (_, i) => ({ day: `2026-09-${String(i + 1).padStart(2, '0')}`, spend_micros: r(i === 27 ? ultimo : 177), missing: i === 27 ? falta : [] }));
+  const comDias = (over: Partial<BudgetMonthResponse> = {}) => verba({ days: dias(), ...over });
+  const mes = (v: BudgetMonthResponse) => mesDaVerba(v);
+  const desenho = (v: BudgetMonthResponse) => mesDesenhado(v, mes(v))!;
+  /** A régua do cenário: o teto de R$ 5.500,00 é o maior valor, e o alto do desenho fica 10% acima dele (R$ 6.050,00). */
+  const y = (reais: number, topo = 6050) => Math.round((100 - (reais / topo) * 100) * 100) / 100;
+
+  it('o selo: cabe, perto, passa, já passou e sem teto, cada um com o que muda nos pedidos', () => {
+    const selo = (v: BudgetMonthResponse) => vereditoDaVerba(v, mes(v));
+    expect(selo(verba())).toEqual({ classe: 'concluido', rotulo: 'Cabe no teto', linha: 'No ritmo dos últimos 7 dias, setembro fecha abaixo do teto.' });
+    expect(selo(comTeto(5350))).toEqual({ classe: 'aguardando', rotulo: 'Perto do teto', linha: 'Aumento ou retomada que não couber fica negado.' });
+    expect(selo(comTeto(5200))).toEqual({ classe: 'perigo', rotulo: 'Passa do teto', linha: 'Aumentar e retomar ficam negados; o Liame não pausa nada sozinho.' });
+    expect(selo(comTeto(4800))).toMatchObject({ classe: 'perigo', rotulo: 'Já passou do teto' });
+    expect(selo(semTeto())).toEqual({ classe: 'espera', rotulo: 'Sem teto', linha: 'Sem o teto do mês e o teto por campanha, o Liame só reduz verba e pausa.' });
+  });
+
+  it('a régua: rótulos curtos e, no máximo, quatro linhas acima do zero', () => {
+    expect([reaisCurtos(0), reaisCurtos(r(500)), reaisCurtos(r(437.5)), reaisCurtos(r(2000)), reaisCurtos(r(5500)), reaisCurtos(r(5350)), reaisCurtos(r(12000)), reaisCurtos(r(1250000))]).toEqual([
+      'R$ 0',
+      'R$ 500',
+      'R$ 437,50',
+      'R$ 2 mil',
+      'R$ 5,5 mil',
+      'R$ 5,35 mil',
+      'R$ 12 mil',
+      'R$ 1,25 mi',
+    ]);
+    // O passo é um número redondo: 1, 2, 2,5 ou 5 vezes uma potência de dez, e nunca menos que R$ 1,00.
+    expect([passoDaGrade(r(6050)), passoDaGrade(r(100)), passoDaGrade(r(30)), passoDaGrade(r(40000)), passoDaGrade(r(275000)), passoDaGrade(r(3)), passoDaGrade(0)]).toEqual([
+      r(2000),
+      r(25),
+      r(10),
+      r(10000),
+      r(100000),
+      r(1),
+      r(1),
+    ]);
+  });
+
+  it('sem o gasto de cada dia na resposta, não há desenho do mês nem tabela dos dias (a tela fica com a barra do teto)', () => {
+    const d = desenhosDaVerba(verba(), mes(verba()));
+    expect([d.mes, d.dias]).toEqual([null, null]);
+    expect(d.veredito.rotulo).toBe('Cabe no teto');
+    expect(d.onde).toHaveLength(2);
+  });
+
+  it('o mês, dia a dia: a linha do gasto somado, o ponto de ontem, a previsão até o dia 30 e o teto, na mesma régua', () => {
+    const d = desenho(comDias());
+    expect(d.rotulo).toBe(nbsp('Gasto de setembro, dia a dia, em reais. Até 28/09, R$ 4.960,00. Previsto até o dia 30: R$ 5.306,94. Teto do mês: R$ 5.500,00. O dia de maior gasto foi 28/09, com R$ 181,00.'));
+    expect(d.legenda).toEqual({ lido: 'Gasto até ontem', previsto: 'Previsto até o dia 30', teto: nbsp('R$ 5.500,00'), acima: false });
+    // O teto fica a 9,09% do alto; a linha de R$ 6 mil não entra (ficaria colada no alto do desenho).
+    expect(d.teto).toEqual({ y: 9.09, dica: nbsp('R$ 5.500,00|teto do mês') });
+    expect(d.grade).toEqual([y(2000), y(4000)]);
+    expect(d.eixo).toEqual([
+      { y: 100, texto: 'R$ 0', doTeto: false },
+      { y: y(2000), texto: 'R$ 2 mil', doTeto: false },
+      { y: y(4000), texto: 'R$ 4 mil', doTeto: false },
+      { y: 9.09, texto: 'R$ 5,5 mil', doTeto: true },
+    ]);
+    // A calha tem a largura do rótulo mais comprido: 10 letras de 6 px, mais 12 px de respiro.
+    expect(d.calha).toBe(72);
+    expect(d.fio.startsWith(`M0 100L3.33 ${y(177)}L6.67 ${y(354)}L`)).toBe(true);
+    expect(d.fio.endsWith(`L93.33 ${y(4960)}`)).toBe(true);
+    expect(d.pontoLido).toEqual({ x: 93.33, y: 18.02, acima: false, dica: nbsp('R$ 4.960,00|gastos até 28/09') });
+    expect(d.pontoPrevisto).toEqual({ y: 12.28, acima: false, dica: nbsp('R$ 5.306,94|previsto até 30/09') });
+    expect(d.previsao).toBe('M93.33 18.02L100 12.28');
+    expect(d.areaLida!.startsWith('polygon(0% 100%,3.33% ')).toBe(true);
+    expect(d.areaLida!.endsWith(',93.33% 18.02%,93.33% 100%)')).toBe(true);
+    expect(d.areaPrevista).toBe('polygon(93.33% 18.02%,100% 12.28%,100% 100%,93.33% 100%)');
+    expect(d.marcas).toEqual([
+      { x: 0, texto: '01/09' },
+      { x: 31.67, texto: '10' },
+      { x: 65, texto: '20' },
+      { x: 100, texto: '30/09' },
+    ]);
+  });
+
+  it('um alvo por dia do mês: o lido diz o gasto e o acumulado; o que falta, até onde o mês vai no ritmo', () => {
+    const d = desenho(comDias());
+    expect(d.alvos).toHaveLength(30);
+    expect(d.alvos[0]).toEqual({ x: 0, largura: 3.33, dica: nbsp('R$ 177,00 em 01/09|terça-feira · R$ 177,00 no mês até aqui') });
+    expect(d.alvos[27]!.dica).toBe(nbsp('R$ 181,00 em 28/09|segunda-feira · R$ 4.960,00 no mês até aqui'));
+    // Com tudo lido até ontem, cada dia previsto é o gasto mais o ritmo vezes os dias: o valor é exato.
+    expect(d.alvos[28]!.dica).toBe(nbsp('R$ 5.133,47 até 29/09|previsto, se o ritmo de R$ 173,47 por dia continuar'));
+    expect(d.alvos[29]!.dica).toBe(nbsp('R$ 5.306,94 até 30/09|previsto, se o ritmo de R$ 173,47 por dia continuar'));
+    // O que foi pedido hoje entra no ritmo da previsão e no ponto do fim do mês.
+    const comPedido = desenho(comDias({ pending_daily_micros: r(20), pending_micros: r(40) }));
+    expect(comPedido.alvos[28]!.dica).toBe(nbsp('R$ 5.153,47 até 29/09|previsto, se o ritmo de R$ 193,47 por dia continuar'));
+    expect(comPedido.pontoPrevisto.dica).toBe(nbsp('R$ 5.346,94|previsto até 30/09'));
+  });
+
+  it('o que passa do teto: a previsão, ou o gasto que já passou, levam o vermelho de estado e a palavra na legenda', () => {
+    const passa = desenho({ ...comTeto(5200), days: dias() });
+    expect([passa.legenda.acima, passa.pontoLido!.acima, passa.pontoPrevisto.acima]).toEqual([true, false, true]);
+    const passou = desenho({ ...comTeto(4800), days: dias() });
+    expect([passou.legenda.acima, passou.pontoLido!.acima, passou.pontoPrevisto.acima]).toEqual([true, true, true]);
+    // A régua passa a ser a da previsão (o maior valor), e o rótulo da grade que ficaria em cima do teto dá lugar ao dele.
+    const junto = desenho({ ...comTeto(4200), days: dias() });
+    expect(junto.eixo.map((e) => e.texto)).toEqual(['R$ 0', 'R$ 2 mil', 'R$ 4,2 mil']);
+    expect(junto.grade).toHaveLength(2);
+  });
+
+  it('sem teto: o desenho fica sem o traço escuro e sem o rótulo dele', () => {
+    const d = desenho({ ...semTeto(), days: dias() });
+    expect([d.teto, d.legenda.teto, d.legenda.acima]).toEqual([null, null, false]);
+    expect(d.eixo.every((e) => !e.doTeto)).toBe(true);
+    expect(d.rotulo).toContain('O mês ainda não tem teto.');
+  });
+
+  it('a Meta sem a leitura de hoje: o último dia entra só com o que foi lido, e a previsão dos dias deixa de ser exata', () => {
+    const v = { ...metaAtrasada(), days: dias(60.24, ['meta_ads']) };
+    const d = desenho(v);
+    expect(d.alvos[27]!.dica).toBe(nbsp('R$ 60,24 em 28/09|segunda-feira · falta ler a Meta · R$ 4.839,24 no mês até aqui'));
+    expect(d.alvos[28]!.dica).toBe(nbsp('cerca de R$ 5.073,09 até 29/09|previsto pelo ritmo dos últimos 7 dias'));
+    expect(d.alvos[29]!.dica).toBe(nbsp('R$ 5.306,94 até 30/09|previsto pelo ritmo dos últimos 7 dias'));
+    expect(d.pontoLido!.dica).toBe(nbsp('R$ 4.839,24|gastos até 28/09'));
+    expect(diasLidos(v, mes(v))!.linhas.at(-1)).toEqual({ dia: '28/09', semana: 'segunda-feira', falta: 'falta ler a Meta', gasto: nbsp('R$ 60,24'), soma: nbsp('R$ 4.839,24') });
+    // Com todas as contas paradas há dias, a linha cheia acaba antes de ontem: a legenda e o ponto dizem até que dia.
+    const paradas = desenho({ ...metaAtrasada(), spend_micros: r(4602), days: dias().slice(0, 26) });
+    expect([paradas.legenda.lido, paradas.pontoLido!.dica, paradas.pontoLido!.x]).toEqual(['Gasto até 26/09', nbsp('R$ 4.602,00|gastos até 26/09'), 86.67]);
+  });
+
+  it('no dia 1 ainda não há dia lido: o desenho é só a previsão, do zero ao fim do mês', () => {
+    const v = verba({ period: '2026-10', today: '2026-10-01', month_start: '2026-10-01', month_end: '2026-10-31', through: '2026-09-30', days_left: 31, forecast_days: 31, spend_micros: 0, forecast_micros: r(5377.57), remaining_micros: r(122.43), days: [] });
+    const d = desenho(v);
+    expect([d.fio, d.areaLida, d.pontoLido, d.legenda.lido]).toEqual(['', null, null, null]);
+    expect(d.previsao).toBe(`M0 100L100 ${y(5377.57)}`);
+    expect(d.alvos).toHaveLength(31);
+    expect(d.alvos[0]!.dica).toBe(nbsp('R$ 173,47 até 01/10|previsto, se o ritmo de R$ 173,47 por dia continuar'));
+    expect(d.rotulo).toBe(nbsp('Gasto de outubro, dia a dia, em reais. Ainda não há dia inteiro lido neste mês. Previsto até o dia 31: R$ 5.377,57. Teto do mês: R$ 5.500,00.'));
+    expect(d.marcas.map((m) => m.texto)).toEqual(['01/10', '10', '20', '31/10']);
+    expect(diasLidos(v, mes(v))).toBeNull();
+  });
+
+  it('a tabela dos dias: o gasto de cada dia e o que o mês somava até ali', () => {
+    const t = diasLidos(comDias(), mes(comDias()))!;
+    expect(t.legenda).toBe('Gasto em anúncios em cada dia de setembro e o que o mês somava até ali');
+    expect(t.linhas).toHaveLength(28);
+    expect(t.linhas[0]).toEqual({ dia: '01/09', semana: 'terça-feira', falta: null, gasto: nbsp('R$ 177,00'), soma: nbsp('R$ 177,00') });
+    expect(t.linhas[1]!.soma).toBe(nbsp('R$ 354,00'));
+    expect(t.linhas.at(-1)!.soma).toBe(nbsp('R$ 4.960,00'));
+  });
+
+  it('onde o gasto foi: uma barra por plataforma, na régua da maior previsão, com o valor e a parte do gasto', () => {
+    const [meta, google] = ondeOGastoFoi(verba(), mes(verba()));
+    expect(meta).toEqual({
+      provider: 'meta_ads',
+      nome: 'Meta Ads',
+      classe: 'meta',
+      gasto: 93.33,
+      aMais: 6.67,
+      valor: nbsp('R$ 3.381,20'),
+      parte: '68% do gasto',
+      rotulo: nbsp('Meta Ads: R$ 3.381,20 até 28/09, 68% do gasto do mês. Previsão de fechamento: R$ 3.622,72.'),
+      dicaGasto: nbsp('R$ 3.381,20|Meta Ads · gasto até 28/09'),
+      dicaPrevisto: nbsp('R$ 3.622,72|Meta Ads · previsto até o dia 30'),
+    });
+    expect(google).toMatchObject({ nome: 'Google Ads', classe: 'google', gasto: 43.58, aMais: 2.91, parte: '32% do gasto' });
+    // Sem gasto no mês não há parte a dizer; a conta nunca lida diz isso no lugar da data.
+    const zerado = verba({ spend_micros: 0, platforms: [plataformaDoMes('meta_ads', { spend_micros: 0, forecast_micros: 0, read_through: null, stale: true, last_success_at: null })] });
+    expect(ondeOGastoFoi(zerado, mes(zerado))[0]).toMatchObject({ gasto: 0, aMais: 0, parte: null, dicaGasto: nbsp('R$ 0,00|Meta Ads · gasto ainda sem leitura') });
+    expect(ondeOGastoFoi(verba({ platforms: [] }), mes(verba()))).toEqual([]);
+    // Num mês sem gasto, o leitor de tela não ouve "o dia de maior gasto".
+    const parado = verba({ spend_micros: 0, forecast_micros: 0, daily_micros: 0, days: [{ day: '2026-09-01', spend_micros: 0, missing: [] }] });
+    expect(mesDesenhado(parado, mes(parado))!.rotulo).toBe(nbsp('Gasto de setembro, dia a dia, em reais. Até 01/09, R$ 0,00. Previsto até o dia 30: R$ 0,00. Teto do mês: R$ 5.500,00.'));
+  });
+});
+
 describe('Verba do mês: os limites da empresa', () => {
   it('os dois limites, quem definiu, as regras da Liame e as dicas do formulário', () => {
     expect(limitesDaVerba(verba(), AGORA)).toEqual({
@@ -679,15 +852,20 @@ describe('Verba do mês: a tela', () => {
       }),
     );
   const comMudancas = () => verba({ changes: [pausa(), mudanca()] });
+  /** Setembro lido até 28/09, somando os R$ 4.960,00 do cenário. */
+  const dias28 = (): BudgetMonthDay[] => Array.from({ length: 28 }, (_, i) => ({ day: `2026-09-${String(i + 1).padStart(2, '0')}`, spend_micros: r(i === 27 ? 181 : 177), missing: [] }));
 
-  it('no Lite: o gasto com a fonte, a barra, a frase, os três números, os limites e as mudanças em três colunas', () => {
+  it('no Lite, com a resposta de antes (sem o gasto de cada dia): o gasto com a fonte, o selo, a barra do teto, os três números, os limites e as mudanças em três colunas', () => {
     const html = desenhar(comMudancas());
     expect(html).toContain('setembro · gasto em anúncios');
     expect(html).toContain('class="nf"');
     expect(html).toContain(nbsp('R$ 4.960,00'));
     expect(html).toContain('role="img" aria-label="Gasto até ontem: 90% do teto. Previsão de fechamento: 96% do teto."');
     expect(html).toContain('--gasto:90;--previsto:96');
-    expect(html).toContain('<b>Setembro deve fechar dentro do teto.</b>');
+    expect(html).toContain('<span class="st st--concluido"><span class="dot"></span>Cabe no teto</span>');
+    expect(html).toContain('No ritmo dos últimos 7 dias, setembro fecha abaixo do teto.');
+    expect(html).not.toContain('mes-plot');
+    expect(html).toContain('<h3>Onde o gasto foi</h3>');
     expect(html).toContain('Previsão de fechamento');
     expect(html).toContain('Limites da empresa');
     expect(html).toContain('Você define; o Liame nega o pedido que passar.');
@@ -704,6 +882,46 @@ describe('Verba do mês: a tela', () => {
     expect(html).not.toContain('Ritmo por dia');
     expect(html).not.toContain('A Meta informa hoje</th>');
     expect(html).not.toContain('Gasto depois');
+  });
+
+  it('com o gasto de cada dia: o selo, "O mês, dia a dia" no lugar da barra e "Onde o gasto foi"', () => {
+    const html = desenhar(verba({ days: dias28() }));
+    expect(html).toContain('<span class="st st--concluido"><span class="dot"></span>Cabe no teto</span>');
+    expect(html).toContain('<h3>O mês, dia a dia</h3>');
+    expect(html).toContain(`class="mes-plot" role="img" tabindex="0" aria-label="${nbsp('Gasto de setembro, dia a dia, em reais. Até 28/09, R$ 4.960,00.')}`);
+    expect(html).toContain(`Teto do mês <b>${nbsp('R$ 5.500,00')}</b>`);
+    expect(html.match(/class="alvo"/g)).toHaveLength(30);
+    expect(html).toContain('class="mes-teto"');
+    expect(html).toContain('<clipPath');
+    expect(html).not.toContain('verba-barra');
+    expect(html).not.toContain('Acima do teto');
+    expect(html).toContain('<h3>Onde o gasto foi</h3>');
+    expect(html).toContain('68% do gasto');
+    expect(html).toContain('class="dica-desenho"');
+    // A tabela dos dias fica com o que é do Pro: no Lite, a um "Ver detalhes".
+    expect(html).not.toContain('Ver o gasto de cada dia');
+    const pro = desenhar(verba({ days: dias28() }), { modo: 'pro' });
+    expect(pro).toContain('Ver o gasto de cada dia');
+    expect(pro).toContain('<span class="num">01/09</span><span class="sub">terça-feira</span>');
+  });
+
+  it('o gasto que já passou do teto: o selo, o vermelho no desenho e o quadro com as duas contas', () => {
+    const html = desenhar({ ...comTeto(4800), days: dias28() });
+    expect(html).toContain('<span class="st st--perigo"><span class="dot"></span>Já passou do teto</span>');
+    expect(html).toContain('Acima do teto');
+    expect(html).toContain('class="mes-pt mes-pt--acima"');
+    expect(html).toContain('class="mes-pt mes-pt--prev mes-pt--acima"');
+    expect(html).toContain(nbsp('no fim do mês; até ontem, R$ 160,00 acima do teto de R$ 4.800,00'));
+    expect(html).toContain('Setembro já passou do teto');
+  });
+
+  it('sem teto e com o gasto de cada dia: o desenho aparece sem o traço do teto', () => {
+    const html = desenhar({ ...semTeto(), days: dias28() });
+    expect(html).toContain('<span class="st st--espera"><span class="dot"></span>Sem teto</span>');
+    expect(html).toContain('class="mes-plot"');
+    expect(html).not.toContain('class="mes-teto"');
+    expect(html).not.toContain('<clipPath');
+    expect(html).not.toContain('Teto do mês <b>');
   });
 
   it('no Pro: a tabela por plataforma com o total e as colunas da conferência, sem "Ver detalhes"', () => {

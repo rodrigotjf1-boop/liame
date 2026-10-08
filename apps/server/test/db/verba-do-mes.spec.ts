@@ -184,6 +184,15 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
     expect([v.spend_micros, v.daily_micros, v.forecast_micros]).toEqual([metaNoMes + googleNoMes(diasNoMes()), META_POR_DIA + GOOGLE_RITMO, previstoNormal()]);
     expect(v.forecast_micros).toBe(v.spend_micros + v.daily_micros * dias);
     for (const micros of [v.spend_micros, v.daily_micros, v.forecast_micros]) expect(micros % 10_000).toBe(0);
+    // O gasto de cada dia (o desenho "o mês, dia a dia"): do primeiro dia do mês até ontem, sem plataforma faltando; a
+    // soma é o gasto do mês, ao centavo. No dia 1 ainda não há dia inteiro para mostrar.
+    const lidos = v.days ?? [];
+    expect(lidos.map((d) => d.day)).toEqual(Array.from({ length: diasEntre(mes.inicio, hoje) }, (_, i) => menosDias(mes.inicio, -i)));
+    expect(lidos.reduce((s, d) => s + d.spend_micros, 0)).toBe(v.spend_micros);
+    expect(lidos.every((d) => d.spend_micros % 10_000 === 0 && d.missing.length === 0)).toBe(true);
+    // Ontem: os R$ 70,00 da Meta e os R$ 20,55 ou R$ 20,56 do Google, conforme o centavo que o acumulado ganhou.
+    const ontem = lidos.at(-1);
+    if (ontem) expect([META_POR_DIA + 20_550_000, META_POR_DIA + 20_560_000]).toContain(ontem.spend_micros);
   });
 
   it('D-A4-22: os dois limites juntos, só por quem gerencia o orçamento; o teto por campanha vira regra da política da empresa', async () => {
@@ -328,6 +337,10 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
     // O Google foi lido hoje: os dias previstos deixam de ser um número só.
     expect([v.platforms[1]!.stale, v.platforms[1]!.forecast_days, v.forecast_days]).toEqual([false, dias, previstos === dias ? dias : null]);
     expect(v.forecast_micros).toBe(v.platforms[0]!.forecast_micros + v.platforms[1]!.forecast_micros);
+    // No desenho do mês, o dia que a Meta não cobre entra só com o Google e diz o que falta; a soma segue o gasto lido.
+    const ultimoDia = v.days?.at(-1);
+    if (hoje > mes.inicio) expect([ultimoDia?.day, ultimoDia?.missing]).toEqual([mes.ontem, ['meta_ads']]);
+    expect((v.days ?? []).reduce((s, d) => s + d.spend_micros, 0)).toBe(v.spend_micros);
 
     // Nunca lida: sem gasto e sem ritmo; a tela mostra que falta a leitura.
     await ownerQuery(`delete from liame.sync_state where connected_account_id = $1 and dataset = 'metricas'`, [e.conta]);

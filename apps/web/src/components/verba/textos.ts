@@ -5,11 +5,14 @@ import { Fontes, type LinhaDeFonte, type Num, type Texto } from '@/components/re
 import type { NomeIcone } from '@/components/ui/icone';
 import type { Problema } from '@/lib/api';
 import { reaisDeMicros } from '@/lib/formato';
+import { type DesenhosDaVerba, desenhosDaVerba } from './graficos';
+import { naFrase } from './nomes';
 
 // Regras e frases da tela Verba do mês (A4 · P9, aprovado em 05/10/2026; mockups/prototipo-anuncios.html). A conta é
 // do servidor (`GET /v1/budget/month`): o gasto lido da Meta e do Google, o ritmo, a previsão, o que pesa hoje, os
 // dois limites e o que o Liame mudou, conferido todo dia. Aqui os números viram as frases do protótipo; nada é
-// calculado de novo, fora as porcentagens da barra, o dia em que a previsão passa do teto e a média por dia.
+// calculado de novo, fora as porcentagens da barra, o dia em que a previsão passa do teto e a média por dia. Os
+// desenhos do cartão do mês (o mês dia a dia, o selo e o gasto por plataforma) ficam em `graficos.ts`.
 // Funções puras: o "agora" entra como parâmetro (LIC-006). Listas que crescem chegam como texto (V23): valor novo
 // tem saída.
 
@@ -23,19 +26,6 @@ const plural = (n: number, um: string, varios: string): string => `${n} ${n === 
 const juntar = (itens: string[]): string => (itens.length <= 1 ? itens.join('') : `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`);
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-
-/** Como a frase chama cada plataforma de anúncio ("a Meta não foi lida", "o gasto do Google", "mudado na Meta"). */
-type NaFrase = { nome: string; a: string; da: string; na: string; lida: string };
-const NA_FRASE: Record<string, NaFrase> = {
-  meta_ads: { nome: 'Meta', a: 'a Meta', da: 'da Meta', na: 'na Meta', lida: 'lida' },
-  google_ads: { nome: 'Google', a: 'o Google', da: 'do Google', na: 'no Google', lida: 'lido' },
-};
-function naFrase(provider: string): NaFrase {
-  const conhecida = NA_FRASE[provider];
-  if (conhecida) return conhecida;
-  const nome = plataforma(provider).nome;
-  return { nome, a: nome, da: `de ${nome}`, na: `em ${nome}`, lida: 'lida' };
-}
 
 // ------------------------------------------------------------------ o mês
 
@@ -181,7 +171,7 @@ export function barraDaVerba(v: Verba): BarraDaVerba | null {
   };
 }
 
-/** A frase do dono: o mês cabe, está perto, passa do teto ou ainda não tem teto. */
+/** A frase do dono: o mês cabe, está perto, passa do teto ou ainda não tem teto (hoje, no cartão do Resumo; na tela, a frase virou o selo). */
 export function fraseDaVerba(v: Verba): Frase {
   const mes = mesDaVerba(v);
   const teto = v.limits.month_micros;
@@ -205,8 +195,8 @@ export type HeroiDaVerba = {
   chip: string;
   numero: Num;
   sub: string;
+  /** A barra do teto: só aparece quando a resposta não traz o gasto de cada dia (o desenho do mês toma o lugar dela). */
   barra: BarraDaVerba | null;
-  frase: Frase;
   stats: StatDaVerba[];
 };
 
@@ -243,7 +233,6 @@ export function heroiDaVerba(v: Verba, fontes: Fontes, agora: Date): HeroiDaVerb
     numero,
     sub,
     barra: barraDaVerba(v),
-    frase: fraseDaVerba(v),
     stats: [
       {
         rotulo: 'Previsão de fechamento',
@@ -260,7 +249,12 @@ export function heroiDaVerba(v: Verba, fontes: Fontes, agora: Date): HeroiDaVerb
       },
       teto === null || sobra === null
         ? { rotulo: 'Teto do mês', valor: [{ t: 'não definido' }], sub: [{ t: 'sem ele, o Liame só reduz e pausa' }], falta: true }
-        : { rotulo: sobra < 0 ? 'Passa do teto' : 'Sobra', valor: [{ t: reais(Math.abs(sobra)) }], sub: [{ t: `teto de ${reais(teto)} por mês` }] },
+        : {
+            rotulo: sobra < 0 ? 'Passa do teto' : 'Sobra',
+            valor: [{ t: reais(Math.abs(sobra)) }],
+            // Com o gasto já acima do teto, o quadro diz as duas coisas: quanto passa no fim do mês e quanto já passou.
+            sub: [{ t: v.spend_micros > teto ? `no fim do mês; até ontem, ${reais(v.spend_micros - teto)} acima do teto de ${reais(teto)}` : `teto de ${reais(teto)} por mês` }],
+          },
     ],
   };
 }
@@ -562,6 +556,8 @@ export type TelaDaVerba = {
   lido: string | null;
   avisos: AvisoDaVerba[];
   heroi: HeroiDaVerba;
+  /** Os desenhos do cartão do mês: o selo, o mês dia a dia, a tabela dos dias e o gasto por plataforma. */
+  desenhos: DesenhosDaVerba;
   plataformas: PlataformasDaVerba;
   limites: LimitesDaVerba;
   mudancas: MudancasDaVerba;
@@ -574,11 +570,13 @@ export function telaDaVerba(v: Verba, agora: Date): TelaDaVerba {
   const fontes = new Fontes();
   const heroi = heroiDaVerba(v, fontes, agora);
   const semContas = v.platforms.length === 0;
+  const mes = mesDaVerba(v);
   return {
-    mes: mesDaVerba(v),
+    mes,
     lido: lidoDaVerba(v, agora),
     avisos: avisosDaVerba(v, agora),
     heroi,
+    desenhos: desenhosDaVerba(v, mes),
     plataformas: plataformasDaVerba(v),
     limites: limitesDaVerba(v, agora),
     mudancas: mudancasDaVerba(v),

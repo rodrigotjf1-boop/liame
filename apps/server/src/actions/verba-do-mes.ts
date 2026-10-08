@@ -140,9 +140,54 @@ function linhaDaPlataforma(provider: string, contas: LinhaDaConta[]): LinhaDaPla
   };
 }
 
+export interface DiaDeGasto {
+  dia: string;
+  /** O gasto do dia nas contas que a leitura cobre naquele dia, ao centavo. */
+  gasto: bigint;
+  /** As plataformas com alguma conta que a leitura não cobre neste dia: o gasto delas entra na previsão, pelo ritmo. */
+  faltam: string[];
+}
+
+/** Na ordem das plataformas conhecidas; uma que não está na lista vai depois, pelo nome. */
+const naOrdem = (a: string, b: string): number => {
+  const [ia, ib] = [PLATAFORMAS_DE_ANUNCIO.indexOf(a), PLATAFORMAS_DE_ANUNCIO.indexOf(b)];
+  return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+};
+
+/**
+ * O gasto de cada dia do mês, do primeiro dia ao último que alguma conta cobre (o desenho "o mês, dia a dia"). Cada
+ * conta entra até o último dia lido dela, como na conta do mês. O que vai ao centavo é o acumulado de cada conta, e
+ * não cada dia: o gasto do dia é a diferença entre dois acumulados, e a soma dos dias é o gasto do mês que a tela
+ * mostra. Sem dia inteiro lido neste mês (dia 1, ou nenhuma conta lida), a lista vem vazia.
+ */
+export function gastoDeCadaDia(contas: readonly ContaDeAnuncio[], mes: MesCorrente): DiaDeGasto[] {
+  const linhas = contas.map((c) => ({ c, ate: c.lidoAte === null ? null : c.lidoAte < mes.ontem ? c.lidoAte : mes.ontem, somado: 0n }));
+  const ultimo = linhas
+    .flatMap((l) => (l.ate !== null && l.ate >= mes.inicio ? [l.ate] : []))
+    .sort()
+    .at(-1);
+  if (!ultimo) return [];
+  const dias: DiaDeGasto[] = [];
+  let antes = 0n;
+  for (let dia = mes.inicio; dia <= ultimo; dia = menosDias(dia, -1)) {
+    const faltam = new Set<string>();
+    let acumulado = 0n;
+    for (const l of linhas) {
+      if (l.ate !== null && dia <= l.ate) l.somado += l.c.gastoPorDia.get(dia) ?? 0n;
+      else faltam.add(l.c.provider);
+      acumulado += aoCentavo(l.somado);
+    }
+    dias.push({ dia, gasto: acumulado - antes, faltam: [...faltam].sort(naOrdem) });
+    antes = acumulado;
+  }
+  return dias;
+}
+
 export interface ContaDoMes extends LinhaDeGasto {
   mes: MesCorrente;
   plataformas: LinhaDaPlataforma[];
+  /** O gasto de cada dia do mês, até o último dia que alguma conta cobre; a soma é `gasto`. */
+  dias: DiaDeGasto[];
   /** Os dias previstos pelo ritmo, quando são os mesmos em todas as contas. */
   diasPrevistos: number | null;
   /** Aumentos e retomadas pedidos ou feitos hoje: quanto somam por dia, e até o fim do mês. */
@@ -160,17 +205,14 @@ export interface ContaDoMes extends LinhaDeGasto {
 export function contaDoMes(e: { hoje: string; contas: readonly ContaDeAnuncio[]; pesamPorDia: bigint; teto: bigint | null }): ContaDoMes {
   const mes = mesDe(e.hoje);
   const linhas = e.contas.map((c) => linhaDaConta(c, mes));
-  // Na ordem das plataformas conhecidas; uma que não está na lista vai depois, pelo nome.
-  const provedores = [...new Set(linhas.map((l) => l.provider))].sort((a, b) => {
-    const [ia, ib] = [PLATAFORMAS_DE_ANUNCIO.indexOf(a), PLATAFORMAS_DE_ANUNCIO.indexOf(b)];
-    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
-  });
+  const provedores = [...new Set(linhas.map((l) => l.provider))].sort(naOrdem);
   const plataformas = provedores.map((p) => linhaDaPlataforma(p, linhas.filter((l) => l.provider === p)));
   const previsto = plataformas.reduce((s, p) => s + p.previsto, 0n);
   const pesam = e.pesamPorDia * BigInt(mes.diasQueFaltam);
   return {
     mes,
     plataformas,
+    dias: gastoDeCadaDia(e.contas, mes),
     gasto: plataformas.reduce((s, p) => s + p.gasto, 0n),
     ritmo: plataformas.reduce((s, p) => s + p.ritmo, 0n),
     previsto,
