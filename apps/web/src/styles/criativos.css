@@ -1,0 +1,146 @@
+/* ===== A4 · P10 · Criativos: as peças do Criativo e a conferência de cada uma (entrega do texto) ===== */
+
+/* A tela: o uso de IA, o pedido em andamento, o que espera decisão, a biblioteca e o que já vende */
+.cri { display: grid; gap: var(--sp-4); }
+.cri > * { min-width: 0; }
+.cri .faixa { margin-bottom: 0; }
+.cri-uso { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 200px); align-items: center; gap: var(--sp-2) var(--sp-5); padding: var(--sp-3) var(--sp-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); font-size: var(--text-sm); color: var(--text-muted); }
+.cri-uso p { margin: 0; }
+.cri-uso b { color: var(--text); font-weight: 600; }
+.cri-uso-barra { height: 8px; border-radius: 4px; background: var(--chart-grade); overflow: hidden; }
+.cri-uso-barra i { display: block; height: 100%; width: calc(var(--p) * 1%); border-radius: 4px; background: var(--chart-foco); }
+.cri-uso-barra--cheia i { background: var(--warning); }
+.lote-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.lote-confirma { display: grid; gap: var(--sp-2); justify-items: start; padding: var(--sp-3) var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-sm); }
+.lote-confirma p { margin: 0; }
+.lote-confirma b { outline: none; }
+.cri .passos { display: grid; margin: 0; padding: 0; list-style: none; }
+.cri .passos li { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--sp-3); padding-bottom: var(--sp-3); font-size: var(--text-sm); }
+.cri .passos li::before { content: ""; position: absolute; left: 9px; top: 20px; bottom: 0; width: 2px; background: var(--border); }
+.cri .passos li:last-child { padding-bottom: 0; }
+.cri .passos li:last-child::before { display: none; }
+.cri .passos .passo { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--success-soft); color: var(--success); }
+.cri .passos .passo .ic { width: 12px; height: 12px; }
+.cri .passos .passo--agora { background: var(--ai-soft); color: var(--ai); }
+.cri .passos .passo--agora .ic { animation: gira 1.4s linear infinite; }
+.cri .passos .passo--depois { background: var(--bg-subtle); color: var(--text-subtle); }
+.cri .passos b { font-weight: 600; }
+.cri .passos small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
+@media (prefers-reduced-motion: reduce) { .cri .passos .passo--agora .ic { animation: none; } }
+
+/* As peças em grade: o título, o começo do texto e a situação */
+.pecas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: var(--sp-4); margin: 0; padding: 0; list-style: none; }
+.peca-card { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); color: inherit; font: inherit; text-align: left; cursor: pointer; overflow: hidden; transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease); }
+.peca-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+.peca-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.peca-card[data-barrada] { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.pc-arte--texto { display: grid; place-items: center; align-content: center; gap: var(--sp-2); padding: var(--sp-4); color: var(--text-muted); font-size: var(--text-xs); text-align: center; }
+.pc-arte--texto .ic { width: 28px; height: 28px; }
+.st--neutro { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); }
+.pc-corpo { display: grid; align-content: start; gap: 4px; flex: 1; padding: var(--sp-3) var(--sp-4) var(--sp-4); }
+.pc-tit { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.pc-txt { font-size: var(--text-xs); line-height: 1.45; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.pc-pe { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pc-uso { margin-top: 2px; font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+
+/* O que já vende: os anúncios da marca com pedido confirmado */
+.noar { display: grid; margin: 0; padding: 0; list-style: none; }
+.noar li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3) var(--sp-4); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.noar li:last-child { border-bottom: 0; padding-bottom: 0; }
+.noar-txt { display: grid; gap: 1px; min-width: 0; line-height: 1.35; }
+.noar-txt b { font-weight: 600; overflow-wrap: anywhere; }
+.noar-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+
+/* A peça aberta: a prévia à esquerda; o texto, a conferência e a decisão à direita */
+.peca-topo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.peca-vizinhas { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.peca-pag { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.peca-pag > * { min-width: 0; }
+.peca-previa { position: sticky; top: var(--sp-4); display: grid; gap: var(--sp-4); }
+.peca-previa .nota { display: flex; gap: var(--sp-3); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.peca-previa .nota .ic { flex: none; margin-top: 2px; }
+.peca-det .det-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.peca-det .ap-so-leitura { margin-top: var(--sp-6); }
+.peca-det .acoes-plano .btn--primary { min-width: 150px; }
+.peca-det .secao > .link-bt { justify-self: start; font-size: var(--text-sm); }
+.peca-det #pc-resultado, .peca-det #pc-contestada { outline: none; }
+
+/* A prévia do anúncio: um desenho do Feed, não a tela da Meta */
+.previa { width: 100%; max-width: 340px; margin: 0 auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); overflow: hidden; font-size: var(--text-sm); }
+.pv-cab { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-3); }
+.pv-av { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--bg-subtle); border: 1px solid var(--border); font-size: 11px; font-weight: 600; }
+.pv-quem { flex: 1; min-width: 0; display: grid; line-height: 1.2; }
+.pv-quem b { font-weight: 600; overflow-wrap: anywhere; }
+.pv-quem small { font-size: 11px; color: var(--text-muted); }
+.pv-mais { color: var(--text-subtle); letter-spacing: .1em; }
+.pv-texto { margin: 0; padding: 0 var(--sp-3) var(--sp-3); line-height: 1.45; overflow-wrap: anywhere; }
+.pv-arte { position: relative; aspect-ratio: 16 / 9; background: var(--bg-subtle); overflow: hidden; }
+.pv-pe { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3); background: var(--bg-subtle); }
+.pv-pe-txt { display: grid; min-width: 0; line-height: 1.25; }
+.pv-pe-txt small { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+.pv-pe-txt b { font-weight: 600; overflow-wrap: anywhere; }
+.pv-bt { flex: none; padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+
+/* O texto da peça, com a contagem de cada campo, e a edição */
+.pt { display: grid; gap: var(--sp-2); }
+.pt-linha { display: grid; gap: 2px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.pt-linha p { margin: 0; }
+.pt-rot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px var(--sp-3); font-size: var(--text-xs); color: var(--text-muted); }
+.pt-val { font-size: var(--text-md); line-height: 1.45; overflow-wrap: anywhere; }
+.pt-conta--acima { color: var(--warning); font-weight: 600; }
+.peca-form { display: grid; gap: var(--sp-4); padding: var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); }
+.peca-form .nota { display: flex; gap: var(--sp-3); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.peca-form .nota .ic { flex: none; margin-top: 2px; }
+.peca-form .campo-rot { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--sp-3); }
+.peca-form .campo-rot label { font-size: var(--text-sm); font-weight: 600; }
+.peca-form .campo-rot small { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.peca-form .campo-rot small.pt-conta--acima { color: var(--warning); font-weight: 600; }
+.peca-form-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.rapidas { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* A conferência: uma linha por item, com o motivo */
+.conf-grupo { display: grid; gap: var(--sp-2); }
+.conf-grupo > p { margin: 0; font-size: var(--text-sm); font-weight: 600; }
+.conf { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.conf li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--sp-3); padding: 10px var(--sp-4); border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.conf li:last-child { border-bottom: 0; }
+.conf-ic { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--success-soft); color: var(--success); }
+.conf-ic .ic { width: 12px; height: 12px; }
+.conf li[data-st="aviso"] .conf-ic { background: var(--warning-soft); color: var(--warning); }
+.conf li[data-st="falha"] .conf-ic { background: var(--danger-soft); color: var(--danger); }
+.conf li[data-st="falha"] { background: color-mix(in srgb, var(--danger-soft) 55%, transparent); }
+.conf b { font-weight: 600; }
+.conf small { display: block; margin-top: 1px; font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.conf li[data-st="falha"] small, .conf li[data-st="aviso"] small { color: var(--text); }
+.peca-det mark { padding: 0 1px; border-radius: 3px; background: var(--danger-soft); color: var(--danger); font-weight: 600; }
+
+/* De onde veio, o custo e as versões */
+.origem-peca { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.origem-peca li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--sp-3); font-size: var(--text-sm); color: var(--text-muted); }
+.origem-peca li .ic { margin-top: 2px; }
+.origem-peca b { color: var(--text); font-weight: 600; }
+.custos { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); color: var(--text-muted); }
+.custos li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px var(--sp-3); }
+.custos b { color: var(--text); font-weight: 600; }
+.versoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* Pedir uma peça (diálogo) */
+.pp-partida { display: grid; gap: var(--sp-2); margin: 0; padding: var(--sp-3) var(--sp-4); list-style: none; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.pp-partida li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: var(--sp-3); color: var(--text-muted); }
+.pp-partida li .ic { width: 16px; height: 16px; margin-top: 2px; color: var(--success); }
+.pp-partida li[data-falta] .ic { color: var(--warning); }
+.pp-partida b { color: var(--text); font-weight: 600; }
+.pd-opcao:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+#pp-erro { outline: none; }
+
+@container pagina (max-width: 899px) {
+  .peca-pag { grid-template-columns: minmax(0, 1fr); }
+  .peca-previa { position: static; }
+}
+@container pagina (max-width: 599px) {
+  .cri-uso { grid-template-columns: minmax(0, 1fr); padding: var(--sp-3) var(--sp-4); }
+  .pecas { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+  .pc-corpo { padding: var(--sp-3); }
+  .noar li { grid-template-columns: minmax(0, 1fr); }
+  .noar li .btn { justify-self: start; }
+}
