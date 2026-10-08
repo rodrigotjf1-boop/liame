@@ -9,6 +9,7 @@ import type { Historico } from './bloco-historico';
 import type { AcoesDaProntidao } from './bloco-prontidao';
 import { type AcoesDoMembro, DetalheDaProximaFase, DetalheDoMembro } from './detalhe';
 import { Avatar, ConfirmaNaLinha, SeloDaSituacao } from './pecas';
+import { gestorNaLista, rodadaDoGestor, SUBTITULO_DA_EQUIPE, temModoAprovacao } from './aprovacao-textos';
 import { atividadeDo, avisosDa, ehMembro, FICHAS, gruposDa, mesDe, PROXIMAS_FASES, seloDaIa } from './textos';
 
 // "Sua equipe" (mockups/prototipo-equipe.html, P7 aprovado em 03/10/2026): a lista dos funcionários e o detalhe do
@@ -61,22 +62,26 @@ function Grupo({ rotulo, quantos, children }: { rotulo: string; quantos: number;
 
 export function EquipeConteudo({ t, autonomia, sombra, historicos, escolhido, mostraDetalhe, modo, agora, nomeDaMarca, seletor, tituloRef, topo, membro, prontidao, aoEscolher, aoVoltar }: Props) {
   const mes = mesDe(t.month.from);
-  const grupos = gruposDa(t);
+  // Com o modo Aprovação (P11), o Gestor de tráfego aparece na lista com o que fez na rodada.
+  const comAprovacao = temModoAprovacao(autonomia);
+  const rodada = comAprovacao && autonomia ? rodadaDoGestor(sombra, autonomia.items, t, agora) : null;
+  const grupos = gruposDa(t, comAprovacao);
   const avisos = avisosDa(t, agora);
   const doEscolhido = t.members.find((m) => m.key === escolhido);
 
   const item = (m: TeamMember) => {
     if (!ehMembro(m.key)) return null;
     const f = FICHAS[m.key];
+    const gestor = comAprovacao ? gestorNaLista(m, rodada) : null;
     return (
       <li key={m.key}>
         <button className="eqp-item" type="button" id={`eqp-item-${m.key}`} aria-current={m.key === escolhido ? 'true' : undefined} onClick={() => aoEscolher(m.key)}>
           <Avatar icone={f.icone} apagado={m.status === 'desligado' || m.status === 'desligado_pela_liame'} />
           <span className="eqp-txt">
             <b>{f.nome}</b>
-            <span>{atividadeDo(m, mes, agora)}</span>
+            <span>{gestor?.atividade ?? atividadeDo(m, mes, agora)}</span>
           </span>
-          <SeloDaSituacao m={m} />
+          <SeloDaSituacao m={m} selo={gestor?.selo} />
         </button>
       </li>
     );
@@ -118,8 +123,9 @@ export function EquipeConteudo({ t, autonomia, sombra, historicos, escolhido, mo
             Sua equipe
           </h1>
           <p>
-            Cada funcionário é um assistente de IA, com cargo, limites e histórico. Nesta fase, ninguém mexe em campanha: quem cuida de anúncio trabalha em sombra, aprendendo com o que você
-            faz.
+            {comAprovacao
+              ? SUBTITULO_DA_EQUIPE
+              : 'Cada funcionário é um assistente de IA, com cargo, limites e histórico. Nesta fase, ninguém mexe em campanha: quem cuida de anúncio trabalha em sombra, aprendendo com o que você faz.'}
           </p>
         </div>
         <div className="cab-acoes eqp-topo">

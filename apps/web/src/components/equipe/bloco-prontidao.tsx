@@ -19,7 +19,13 @@ export interface AcoesDaProntidao {
   aoAprovar: (a: AutonomyItem) => void;
   aoPedirRecusa: (id: string | null) => void;
   aoRecusar: (a: AutonomyItem) => void;
+  /** Volta um passo: de Sugerir para Sombra e, com o modo Aprovação, de Aprovação para Sugerir. */
   aoVoltarParaSombra: (a: AutonomyItem) => void;
+  /** Com o modo Aprovação (P11): a linha (conta e ação) escolhida, e a linha cuja volta de um passo espera a confirmação. */
+  linha: string | null;
+  voltando: string | null;
+  aoEscolherLinha: (chave: string) => void;
+  aoPedirVolta: (chave: string | null) => void;
 }
 
 const chaveDe = (a: AutonomyItem) => `${a.connected_account_id}:${a.tool}`;

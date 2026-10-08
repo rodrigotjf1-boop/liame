@@ -10,9 +10,10 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
+import { avisoDaDecisao, chaveDaLinha, nomeDaLinha, temModoAprovacao } from './aprovacao-textos';
 import type { Historico } from './bloco-historico';
 import { EquipeConteudo } from './equipe-conteudo';
-import { acaoDa, type ChaveDoMembro, ehMembro, FICHAS, plataformaDe, PROXIMAS_FASES } from './textos';
+import { acaoDa, type ChaveDoMembro, ehMembro, FICHAS, modoEscrito, plataformaDe, PROXIMAS_FASES } from './textos';
 
 // "Sua equipe" (mockups/prototipo-equipe.html, P7 aprovado em 03/10/2026). Quem vê é quem acompanha campanhas e
 // vendas; desligar e ligar um funcionário pede `agentes.gerenciar`; parar e retomar a equipe é a parada da empresa
@@ -46,6 +47,9 @@ export function EquipeTela() {
   const [parando, setParando] = useState(false);
   const [desligando, setDesligando] = useState<string | null>(null);
   const [recusando, setRecusando] = useState<string | null>(null);
+  // Com o modo Aprovação (P11): a linha (conta e ação) escolhida na ficha do Gestor de tráfego, e a volta de um passo que espera a confirmação.
+  const [linha, setLinha] = useState<string | null>(null);
+  const [voltando, setVoltando] = useState<string | null>(null);
   const [anuncio, setAnuncio] = useState('');
   /** O elemento que recebe o foco depois da próxima pintura (pelo id). */
   const focar = useRef<string | null>(null);
@@ -73,6 +77,8 @@ export function EquipeTela() {
     setParando(false);
     setDesligando(null);
     setRecusando(null);
+    setVoltando(null);
+    setLinha(null);
     const query = { brand_id: marca };
     disparar(
       Promise.all([
@@ -171,6 +177,7 @@ export function EquipeTela() {
   const brandId = carga.marca;
   const query = { brand_id: brandId };
   const nomeDaMarca = marcas?.find((m) => m.id === brandId)?.name ?? 'sua marca';
+  const comAprovacao = temModoAprovacao(autonomia);
 
   /** A equipe de agora (a situação muda com a parada e com desligar ou ligar). */
   async function recarregarEquipe(): Promise<boolean> {
@@ -253,8 +260,13 @@ export function EquipeTela() {
     const r = await chamar(() => api.POST('/v1/autonomy/proposals/{id}/approve', { params: { path: { id } } }));
     if (r.ok) {
       focar.current = `eqp-bt-voltar-${a.connected_account_id}:${a.tool}`;
+      setLinha(chaveDaLinha(a));
       await recarregarAutonomia();
-      avisar(`Promoção aprovada. As recomendações de ${acaoDa(a.tool, null)} na conta ${a.account_name} (${plataformaDe(a.provider)}) passam a aparecer na Atenção.`);
+      avisar(
+        comAprovacao
+          ? avisoDaDecisao(a, 'aprovar')
+          : `Promoção aprovada. As recomendações de ${acaoDa(a.tool, null)} na conta ${a.account_name} (${plataformaDe(a.provider)}) passam a aparecer na Atenção.`,
+      );
       setAnuncio('Promoção aprovada.');
     } else falhou(r.problema);
     setOcupado(null);
@@ -267,9 +279,11 @@ export function EquipeTela() {
     const r = await chamar(() => api.POST('/v1/autonomy/proposals/{id}/reject', { params: { path: { id } }, body: {} }));
     if (r.ok) {
       setRecusando(null);
-      focar.current = 'eqp-det-t';
+      // Com o modo Aprovação, o foco vai para a caixa que diz o que ficou (a recusa); na tela de antes, para o título.
+      focar.current = comAprovacao ? 'eqp-caixa-t' : 'eqp-det-t';
+      setLinha(chaveDaLinha(a));
       await recarregarAutonomia();
-      avisar('Promoção recusada. Ele segue em sombra.');
+      avisar(comAprovacao ? avisoDaDecisao(a, 'recusar') : 'Promoção recusada. Ele segue em sombra.');
       setAnuncio('Promoção recusada.');
     } else falhou(r.problema);
     setOcupado(null);
@@ -280,10 +294,12 @@ export function EquipeTela() {
     setOcupado(`voltar:${a.connected_account_id}:${a.tool}`);
     const r = await chamar(() => api.POST('/v1/autonomy/undo', { body: { connected_account_id: a.connected_account_id, tool } }));
     if (r.ok) {
-      focar.current = 'eqp-det-t';
+      setVoltando(null);
+      focar.current = comAprovacao ? 'eqp-caixa-t' : 'eqp-det-t';
+      setLinha(chaveDaLinha(a));
       await recarregarAutonomia();
-      avisar('De volta para sombra. Nada mais aparece na Atenção por ele nessa ação.');
-      setAnuncio('De volta para sombra.');
+      avisar(comAprovacao ? avisoDaDecisao(a, 'voltar') : 'De volta para sombra. Nada mais aparece na Atenção por ele nessa ação.');
+      setAnuncio(comAprovacao ? `De volta para ${a.mode === 'APPROVAL' ? 'Sugerir' : 'Sombra'}.` : 'De volta para sombra.');
     } else falhou(r.problema);
     setOcupado(null);
   }
@@ -348,12 +364,26 @@ export function EquipeTela() {
           },
           aoRecusar: (a) => disparar(recusar(a)),
           aoVoltarParaSombra: (a) => disparar(voltarParaSombra(a)),
+          linha,
+          voltando,
+          aoEscolherLinha: (chave) => {
+            setLinha(chave);
+            setRecusando(null);
+            setVoltando(null);
+            const a = autonomia?.items.find((x) => chaveDaLinha(x) === chave);
+            if (a && autonomia) setAnuncio(`${nomeDaLinha(a, autonomia.items)}: ${modoEscrito(a.mode)}`);
+          },
+          aoPedirVolta: (chave) => {
+            if (!chave && voltando) focar.current = `eqp-bt-voltar-${voltando}`;
+            setVoltando(chave);
+          },
         }}
         aoEscolher={(chave) => {
           setEscolhido(chave);
           setMostraDetalhe(true);
           setDesligando(null);
           setRecusando(null);
+          setVoltando(null);
           focar.current = 'eqp-det-t';
           setAnuncio(ehMembro(chave) ? FICHAS[chave].nome : (PROXIMAS_FASES.find((f) => f.chave === chave)?.nome ?? ''));
         }}

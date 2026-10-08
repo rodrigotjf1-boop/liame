@@ -159,7 +159,7 @@ function desenhar(over: {
       nomeDaMarca: 'Mister Burgers',
       topo: { ocupado: null, parando: over.parando ?? false, aoPedirParada: nada, aoParar: nada, aoRetomar: nada },
       membro: { ocupado: null, desligando: over.desligando ?? null, aoPedirDesligar: nada, aoDesligar: nada, aoLigar: nada, aoIrParaPro: nada, aoRecarregarHistorico: nada },
-      prontidao: { ocupado: null, recusando: over.recusando ?? null, aoAprovar: nada, aoPedirRecusa: nada, aoRecusar: nada, aoVoltarParaSombra: nada },
+      prontidao: { ocupado: null, recusando: over.recusando ?? null, aoAprovar: nada, aoPedirRecusa: nada, aoRecusar: nada, aoVoltarParaSombra: nada, linha: null, voltando: null, aoEscolherLinha: nada, aoPedirVolta: nada },
       aoEscolher: nada,
       aoVoltar: nada,
     })),
