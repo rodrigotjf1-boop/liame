@@ -63,8 +63,18 @@ export const SummaryResponse = z.strictObject({
     attention: z.int().min(0),
     /** Os avisos críticos e de atenção, mais grave primeiro (até 5); os de mídia só para quem acompanha as campanhas. */
     items: z.array(AttentionItem),
-    /** O que espera decisão: ações (Aprovações), planos do Estrategista e propostas de autonomia. */
-    approvals: z.strictObject({ actions: z.int().min(0), plans: z.int().min(0), autonomy: z.int().min(0) }),
+    /**
+     * O que espera decisão: ações (Aprovações), planos do Estrategista, propostas de autonomia e as peças do Criativo
+     * (`pieces`, só para quem acompanha as campanhas; resposta de antes de 08/10/2026 não o traz). Das peças: as que
+     * passaram na conferência e podem ser aprovadas (`ready`), as barradas (`barred`), de quantas ofertas são as que
+     * passaram (`offers`) e o nome da oferta quando é uma só (`offer`).
+     */
+    approvals: z.strictObject({
+      actions: z.int().min(0),
+      plans: z.int().min(0),
+      autonomy: z.int().min(0),
+      pieces: z.strictObject({ ready: z.int().min(0), barred: z.int().min(0), offers: z.int().min(0), offer: z.string().nullable() }).optional(),
+    }),
   }),
   sources: z.array(SourceFreshness),
   generated_at: z.iso.datetime(),

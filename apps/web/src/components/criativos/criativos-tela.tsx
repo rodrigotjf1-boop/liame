@@ -8,13 +8,14 @@ import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
+import { useContadorCriativos } from '@/lib/contador-criativos';
 import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
 import { CriativosLista } from './lista';
 import { PecaAberta } from './peca';
 import { DialogoPedirPeca } from './pedir-peca';
-import { avisoDaVersaoNova, avisoDoPedidoPronto, erroDaPeca, motivoDeNaoPedir, SUBTITULO } from './textos';
+import { avisoDaVersaoNova, avisoDoPedidoPronto, erroDaPeca, motivoDeNaoPedir, podeAprovar, SUBTITULO } from './textos';
 
 // "Criativos" (mockups/prototipo-criativos.html, P10 aprovado em 05/10/2026), na entrega do TEXTO: as peças que o
 // Criativo escreve a pedido de quem opera campanhas, a conferência de cada uma e a decisão (aprovar, editar, pedir
@@ -160,6 +161,17 @@ export function CriativosTela() {
     // Só o que anda dispara a espera: as outras mudanças da tela não recomeçam a contagem.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoAndando, refazendo, marcaCarregada, carga]);
+
+  // O número ao lado de "Criativos" no menu é da empresa inteira: quando muda o que dá para aprovar nesta marca (uma
+  // decisão, uma peça que ficou pronta), o menu lê de novo. A primeira leitura não conta: o menu acabou de ler.
+  const { recarregar: recarregarOMenu } = useContadorCriativos();
+  const paraAprovar = carga.tipo === 'ok' ? carga.pecas.filter(podeAprovar).length : null;
+  const paraAprovarAntes = useRef<number | null>(null);
+  useEffect(() => {
+    if (paraAprovar === null) return;
+    if (paraAprovarAntes.current !== null && paraAprovarAntes.current !== paraAprovar) recarregarOMenu();
+    paraAprovarAntes.current = paraAprovar;
+  }, [paraAprovar, recarregarOMenu]);
 
   // O foco depois de uma ação vai para o que mudou.
   useEffect(() => {

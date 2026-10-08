@@ -51,6 +51,28 @@ export async function pecasComAVersaoAtual(condicao: SQL, limite: number): Promi
   return pecas.rows.filter((p) => atual.has(p.id)).map((p) => respostaDaPeca(p, atual.get(p.id)!));
 }
 
+/**
+ * As peças que esperam a pessoa (o número do menu e a linha do Resumo): as que passaram na conferência e podem ser
+ * aprovadas agora (as de aviso junto) e as barradas; das que passaram, de quantas ofertas são e o nome quando é uma
+ * só. Não entram a peça que o Criativo está refazendo nem as de marca arquivada. Sem a marca, a empresa inteira.
+ */
+export async function pecasQueEsperam(brandId?: string): Promise<{ prontas: number; barradas: number; ofertas: number; oferta: string | null }> {
+  const r = (
+    await currentTx().execute<{ prontas: number; barradas: number; ofertas: number; oferta: string | null }>(sql`
+      select (count(*) filter (where p.review_status <> 'barrou'))::int as prontas,
+             (count(*) filter (where p.review_status = 'barrou'))::int as barradas,
+             (count(distinct q.offer) filter (where p.review_status <> 'barrou'))::int as ofertas,
+             min(q.offer) filter (where p.review_status <> 'barrou') as oferta
+        from liame.ad_piece p
+        join liame.ad_piece_request q on q.id = p.request_id
+        join liame.brand b on b.id = p.brand_id and b.archived_at is null
+       where p.status = 'decidir' ${brandId ? sql`and p.brand_id = ${brandId}` : sql``}
+         and not exists (select 1 from liame.ad_piece_request y where y.piece_id = p.id and y.status in ('pendente', 'gerando'))`)
+  ).rows[0]!;
+  const ofertas = Number(r.ofertas);
+  return { prontas: Number(r.prontas), barradas: Number(r.barradas), ofertas, oferta: ofertas === 1 ? r.oferta : null };
+}
+
 /** Uma peça com todas as versões e as decisões, das mais novas para as mais antigas; nula quando não existe nesta empresa. */
 export async function pecaComHistorico(id: string): Promise<AdPieceResponse | null> {
   const tx = currentTx();

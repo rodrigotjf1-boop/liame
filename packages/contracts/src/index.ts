@@ -336,6 +336,7 @@ export {
   AdPieceReviewItem,
   AdPieceStatus,
   AdPieceVersion,
+  AdPieceWaitingResponse,
   ApproveAdPieceRequest,
   ApproveAdPiecesRequest,
   ApproveAdPiecesResponse,

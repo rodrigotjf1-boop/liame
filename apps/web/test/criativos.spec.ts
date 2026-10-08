@@ -25,6 +25,7 @@ import {
   ofertaNoPedido,
   origemDaPeca,
   paraDecidir,
+  pecasFaladas,
   pedidoEmAndamento,
   pedidoQueNaoDeuCerto,
   podeAprovar,
@@ -556,10 +557,15 @@ describe('menu: "Criativos" depois da Verba do mês, para quem acompanha as camp
   it('o item, a permissão e o título', () => {
     const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
     const i = agencia.itens.findIndex((x) => x.href === '/criativos');
-    expect(agencia.itens[i]).toEqual({ href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', modos: true });
+    expect(agencia.itens[i]).toEqual({ href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true });
     expect(agencia.itens[i - 1]!.href).toBe('/verba');
     expect(itensVisiveis(agencia, (p) => p !== 'campanhas.ver').map((x) => x.href)).not.toContain('/criativos');
     expect(tituloDa('/criativos')).toBe('Criativos');
     expect(temModos('/criativos', () => true)).toBe(true);
+  });
+
+  it('o número ao lado do item, para quem ouve o menu', () => {
+    expect(pecasFaladas(1)).toBe(', 1 peça para decidir');
+    expect(pecasFaladas(3)).toBe(', 3 peças para decidir');
   });
 });

@@ -6,6 +6,7 @@ import {
   type AdPieceRequestListResponse,
   type AdPieceRequestResponse,
   type AdPieceResponse,
+  type AdPieceWaitingResponse,
   type CreateAdPieceRequest,
 } from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
@@ -26,7 +27,7 @@ import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
 import { ResultsService } from '../results/results.service.js';
 import { type LinhaDoPedido, respostaDoPedido } from './apresentacao.js';
 import { marcaDoCriativo, mensagemDoProblema } from './base.js';
-import { COLUNAS_DO_PEDIDO, pecaComHistorico, pecasComAVersaoAtual } from './consultas.js';
+import { COLUNAS_DO_PEDIDO, pecaComHistorico, pecasComAVersaoAtual, pecasQueEsperam } from './consultas.js';
 import { CustoDasPecasService, respostaDoCusto } from './custo.service.js';
 
 // As peças do Criativo na API (A4, X6; protótipo P10, aguardando aprovação; sem tela ainda). A rota só confere e
@@ -161,6 +162,13 @@ export class PecasService {
     this.empresa(auth);
     await this.exigirMarca(query.brand_id);
     return { items: await pecasComAVersaoAtual(sql`p.brand_id = ${query.brand_id} ${query.status ? sql`and p.status = ${query.status}` : sql``}`, 100) };
+  }
+
+  /** As peças que esperam a pessoa, na empresa inteira: o número ao lado de "Criativos" no menu. */
+  async esperando(auth: AuthContext): Promise<AdPieceWaitingResponse> {
+    this.empresa(auth);
+    const r = await pecasQueEsperam();
+    return { ready: r.prontas, barred: r.barradas };
   }
 
   /** Uma peça, com todas as versões e as decisões (das mais novas para as mais antigas) e a conferência de cada versão. */

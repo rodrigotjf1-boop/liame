@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { AdPieceListResponse, AdPieceRequestListResponse, AdPieceResponse, ApproveAdPiecesResponse } from '@liame/contracts';
+import { AdPieceListResponse, AdPieceRequestListResponse, AdPieceResponse, AdPieceWaitingResponse, ApproveAdPiecesResponse, SummaryResponse } from '@liame/contracts';
 import { type Database, runMigrations } from '@liame/database';
 import { MockLanguageModelV4 } from 'ai/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -20,7 +20,8 @@ import { hasDb, OWNER_URL } from './env.js';
 // As decisões sobre uma peça do Criativo (A4, X6): editar (versão nova, conferida de novo; o que seria barrado não é
 // salvo), aprovar (sem o código do app; a barrada e a de oferta que mudou não passam), uma peça ou várias de uma vez
 // ("as que passaram"), recusar com o motivo, pedir outra (o Criativo refaz, e a versão nova entra na mesma peça) e
-// contestar a conferência (guarda o motivo e não destrava). Com o modelo simulado.
+// contestar a conferência (guarda o motivo e não destrava). Com o modelo simulado. E o que espera a pessoa (X8): o
+// número do menu (`/v1/ad-pieces/waiting`) e a conta das peças dentro do Resumo.
 
 const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
 const DOSSIE = {
@@ -434,6 +435,73 @@ describe.skipIf(!hasDb)('Peças do Criativo: editar, aprovar, recusar, pedir out
     const { pecas: delas } = await comPecas(BOA);
     for (const acao of ACOES) expect((await decidir(estranho, delas[0]!, acao, CORPO[acao])).status).toBe(404);
     expect((await editar(estranho, delas[0]!, { title: 'Outro título' })).status).toBe(404);
+  });
+
+  it('o que espera a pessoa: o menu e o Resumo contam as que passaram e as barradas; a refeita, a decidida e a de outra empresa ficam fora', async () => {
+    const { d, pecas } = await comPecas(BOA, COM_AVISO, BARRADA);
+    const [boa, aviso] = pecas as [Peca, Peca, Peca];
+    const esperando = async (cookie = d.cookie) => {
+      const r = await api.call('GET', '/v1/ad-pieces/waiting', { cookie });
+      expect(r.status).toBe(200);
+      return AdPieceWaitingResponse.parse(r.body);
+    };
+    const noResumo = async (cookie = d.cookie, marca = d.brandId) => {
+      const r = await api.call('GET', `/v1/summary?brand_id=${marca}`, { cookie });
+      expect(r.status).toBe(200);
+      return SummaryResponse.parse(r.body).needs_you.approvals;
+    };
+    /** Um pedido de uma peça para a oferta, já escrita pelo Criativo (o modelo simulado). */
+    const pedirUma = async (oferta: string, peca: Record<string, unknown>) => {
+      const r = await api.call('POST', '/v1/ad-pieces/requests', { cookie: d.cookie, body: { brand_id: d.brandId, offer: oferta, destination: 'cardapio', variations: 1 } });
+      if (r.status !== 202) throw new Error(`pedido não aceito: ${r.status} ${JSON.stringify(r.body)}`);
+      responder(peca);
+      expect((await rodarFila(d))[0]).toMatchObject({ status: 'concluido' });
+    };
+
+    // A de aviso conta com a que passou: as duas podem ser aprovadas agora.
+    expect(await esperando()).toEqual({ ready: 2, barred: 1 });
+    expect((await noResumo()).pieces).toEqual({ ready: 2, barred: 1, offers: 1, offer: OFERTA });
+
+    // A peça que o Criativo está refazendo não espera a pessoa; com a versão nova, volta a esperar.
+    expect((await decidir(d, boa, 'redo', { instruction: 'deixe o texto mais curto' })).status).toBe(202);
+    expect(await esperando()).toEqual({ ready: 1, barred: 1 });
+    expect((await noResumo()).pieces).toEqual({ ready: 1, barred: 1, offers: 1, offer: OFERTA });
+    responder(OUTRA);
+    expect((await rodarFila(d))[0]).toMatchObject({ status: 'concluido' });
+    expect(await esperando()).toEqual({ ready: 2, barred: 1 });
+
+    // Quem não acompanha as campanhas não recebe a conta: nem pela rota, nem dentro do Resumo.
+    await ownerQuery(`insert into liame.role_permission (tenant_id, role_key, permission) select $1, 'dono', p from unnest(array['empresa.ver', 'marcas.ver', 'vendas.ver']) as p`, [d.tenantId]);
+    try {
+      expect((await api.call('GET', '/v1/ad-pieces/waiting', { cookie: d.cookie })).status).toBe(403);
+      expect(await noResumo()).toEqual({ actions: 0, plans: 0, autonomy: 0 });
+    } finally {
+      await ownerQuery(`delete from liame.role_permission where tenant_id = $1`, [d.tenantId]);
+    }
+
+    // Outra empresa não conta estas peças.
+    const vizinha = await dono();
+    expect(await esperando(vizinha.cookie)).toEqual({ ready: 0, barred: 0 });
+    expect((await noResumo(vizinha.cookie, vizinha.brandId)).pieces).toEqual({ ready: 0, barred: 0, offers: 0, offer: null });
+
+    // Decidida, a peça sai da conta (aprovada ou recusada). Só com a barrada, nenhuma oferta é citada.
+    expect((await decidir(d, aviso, 'approve')).status).toBe(200);
+    expect((await decidir(d, await ler(d, boa.id), 'reject', { reason: 'nao_preciso_mais' })).status).toBe(200);
+    expect(await esperando()).toEqual({ ready: 0, barred: 1 });
+    expect((await noResumo()).pieces).toEqual({ ready: 0, barred: 1, offers: 0, offer: null });
+
+    // Peças de duas ofertas: o Resumo diz de quantas são e não cita uma só.
+    const duplo = 'Smash duplo com fritas por R$ 39,90';
+    await salvarDossie(d, 1, { ...DOSSIE, offers: { items: [OFERTA, duplo] } });
+    await pedirUma(OFERTA, { titulo: 'O combo de sexta chegou', texto: 'Smash, batata e refri por R$ 34,90. Retire no balcão.', botao: 'pedir_agora' });
+    expect((await noResumo()).pieces).toEqual({ ready: 1, barred: 1, offers: 1, offer: OFERTA });
+    await pedirUma(duplo, { titulo: 'Smash duplo com fritas', texto: 'Smash duplo com fritas por R$ 39,90. Peça pelo cardápio.', botao: 'pedir_agora' });
+    expect((await noResumo()).pieces).toEqual({ ready: 2, barred: 1, offers: 2, offer: null });
+    expect(await esperando()).toEqual({ ready: 2, barred: 1 });
+
+    // A marca arquivada não aparece na tela de Criativos: as peças dela não contam no menu.
+    await ownerQuery(`update liame.brand set archived_at = now() where id = $1`, [d.brandId]);
+    expect(await esperando()).toEqual({ ready: 0, barred: 0 });
   });
 
   it('com o Criativo desligado para a empresa nada se decide; com a IA desligada, dá para decidir e não para pedir outra', async () => {

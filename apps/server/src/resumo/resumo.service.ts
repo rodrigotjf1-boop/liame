@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { DIAS_DO_AVISO } from '../ai/explicar/aviso.js';
 import { periodoAnterior } from '../ai/explicar/contexto.js';
 import { type AuthContext, currentTx } from '../context/request-context.js';
+import { pecasQueEsperam } from '../criativo/consultas.js';
 import { AppProblem } from '../errors/problems.js';
 import { MediaService } from '../media/media.service.js';
 import { AtencaoCicloService } from '../results/atencao-ciclo.service.js';
@@ -60,6 +61,9 @@ export class ResumoService {
                (select count(*) from liame.autonomy_proposal where brand_id = ${brandId} and status = 'pendente')::int as autonomia`)
     ).rows[0]!;
 
+    // As peças do Criativo que esperam decisão: só para quem acompanha as campanhas (é de quem vê a tela de Criativos).
+    const pecas = auth.permissions.has('campanhas.ver') ? await pecasQueEsperam(brandId) : null;
+
     return {
       brand_id: brandId,
       state,
@@ -71,7 +75,12 @@ export class ResumoService {
       platforms: plataformasDoResumo(atual),
       needs_you: {
         ...avisosQuePrecisam(midia, doCiclo),
-        approvals: { actions: Number(pendentes.acoes), plans: Number(pendentes.planos), autonomy: Number(pendentes.autonomia) },
+        approvals: {
+          actions: Number(pendentes.acoes),
+          plans: Number(pendentes.planos),
+          autonomy: Number(pendentes.autonomia),
+          ...(pecas ? { pieces: { ready: pecas.prontas, barred: pecas.barradas, offers: pecas.ofertas, offer: pecas.oferta } } : {}),
+        },
       },
       sources: atual.sources,
       generated_at: agora.toISOString(),

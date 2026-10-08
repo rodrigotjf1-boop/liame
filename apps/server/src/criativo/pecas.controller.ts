@@ -7,6 +7,7 @@ import {
   AdPieceRequestListResponse,
   AdPieceRequestResponse,
   AdPieceResponse,
+  AdPieceWaitingResponse,
   ApproveAdPieceRequest,
   ApproveAdPiecesRequest,
   ApproveAdPiecesResponse,
@@ -98,6 +99,19 @@ export class PecasController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   pedidos(@Auth() auth: AuthContext, @Query({ schema: AdPieceRequestListQuery }) query: AdPieceRequestListQuery): Promise<AdPieceRequestListResponse> {
     return this.pecas.pedidos(auth, query.brand_id);
+  }
+
+  @Get('waiting')
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'As peças que esperam a pessoa',
+    description:
+      'Quantas peças da empresa esperam decisão agora: as que passaram na conferência e podem ser aprovadas (`ready`, as de aviso junto) e as barradas (`barred`). Não entram a peça que o Criativo está refazendo nem as de marca arquivada. É o número ao lado de "Criativos" no menu.',
+  })
+  @ApiOkResponse({ standardSchema: AdPieceWaitingResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  esperando(@Auth() auth: AuthContext): Promise<AdPieceWaitingResponse> {
+    return this.pecas.esperando(auth);
   }
 
   @Get()

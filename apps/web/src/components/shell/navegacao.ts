@@ -19,7 +19,7 @@ export type ItemNav = {
    * Mostra ao lado um número: os avisos (crítico + atenção), os pedidos esperando aprovação ou, no Resumo, os
    * pontos que pedem a pessoa (os avisos e, havendo pedido esperando, mais um).
    */
-  contador?: 'atencao' | 'aprovacoes' | 'resumo';
+  contador?: 'atencao' | 'aprovacoes' | 'resumo' | 'criativos';
   /** A tela tem as duas visões (Lite e Pro): o seletor de modo aparece no topo. */
   modos?: boolean;
   /**
@@ -48,7 +48,7 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check-circle', permissao: 'campanhas.ver', contador: 'aprovacoes', modos: true },
       { href: '/resultados', rotulo: 'Resultados', icone: 'chart', permissao: 'vendas.ver', modos: true },
       { href: '/verba', rotulo: 'Verba do mês', icone: 'wallet', permissao: 'campanhas.ver', modos: true },
-      { href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', modos: true },
+      { href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true },
       { href: '/equipe', rotulo: 'Sua equipe', icone: 'users', permissao: 'campanhas.ver', modos: true },
       { href: '/marca', rotulo: 'Minha marca', icone: 'palette', permissao: 'dossie.ver' },
       { href: '/contas', rotulo: 'Contas conectadas', icone: 'plug', permissao: 'contas.ver' },

@@ -184,7 +184,8 @@ describe.skipIf(!hasDb)('Resumo: o dinheiro do marketing, os pedidos e o que pre
        values ($1, $2, $3, $4, 'orcamento_reduzir', 'orcamento.reduzir', 'SHADOW', 'SUGGEST', $5, 1, 31, '{}', 'pendente')`,
       [randomUUID(), nova.tenantId, nova.brandId, nova.meta, snapshot],
     );
-    expect((await resumo(nova, nova.brandId)).needs_you.approvals).toEqual({ actions: 0, plans: 0, autonomy: 1 });
+    // As peças do Criativo vêm junto para quem acompanha as campanhas: aqui, nenhuma (a conta com peças está em `pecas-decisoes.spec.ts`).
+    expect((await resumo(nova, nova.brandId)).needs_you.approvals).toEqual({ actions: 0, plans: 0, autonomy: 1, pieces: { ready: 0, barred: 0, offers: 0, offer: null } });
 
     // Outra empresa não vê esta marca.
     expect((await api.call('GET', `/v1/summary?brand_id=${nova.brandId}`, { cookie: semRegem.cookie })).status).toBe(404);
