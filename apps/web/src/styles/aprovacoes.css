@@ -87,6 +87,44 @@
 .inbox-det .porque { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: var(--sp-3); }
 .inbox-det .porque-item { padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
 .inbox-det .porque-item span { display: block; font-size: var(--text-sm); font-weight: 500; overflow-wrap: anywhere; }
+/* O porquê do pedido de anúncio (P9): o número em destaque, o que ele é e o complemento. */
+.inbox-det .porque-item b { display: block; font-size: var(--text-lg); font-weight: 600; }
+.inbox-det .porque-item b .nf { font-size: inherit; }
+.inbox-det .porque-item small { display: block; margin-top: 2px; font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ===== O pedido de anúncio dentro de Aprovações (mockups/prototipo-anuncios.html, P9 aprovado em 05/10/2026) ===== */
+/* O resultado do pedido decidido: executado, esperando a plataforma, recusado por ela ou não executado. */
+.inbox-det .resultado { display: flex; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); font-size: var(--text-sm); background: var(--ai-soft); overflow-wrap: anywhere; }
+.inbox-det .resultado .ic { flex: none; margin-top: 2px; color: var(--ai); }
+.inbox-det .resultado--ok { background: var(--success-soft); }
+.inbox-det .resultado--ok .ic { color: var(--success); }
+.inbox-det .resultado--espera { background: var(--warning-soft); }
+.inbox-det .resultado--espera .ic { color: var(--warning); }
+.inbox-det .resultado--falha { background: var(--danger-soft); }
+.inbox-det .resultado--falha .ic { color: var(--danger); }
+.inbox-det .resultado b { font-weight: 600; outline: none; }
+.inbox-det .secao > .resultado + *, .inbox-det .secao > .nota + .desfazer, .inbox-det .secao > .resultado + .resultado { margin-top: var(--sp-3); }
+/* O caminho do pedido: quem pediu, quem aprovou e o que aconteceu na plataforma. */
+.inbox-det .trilha-pedido { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.inbox-det .trilha-pedido li { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--sp-3); padding-bottom: var(--sp-3); font-size: var(--text-sm); }
+.inbox-det .trilha-pedido li::before { content: ""; position: absolute; left: 9px; top: 20px; bottom: 0; width: 2px; background: var(--border); }
+.inbox-det .trilha-pedido li:last-child { padding-bottom: 0; }
+.inbox-det .trilha-pedido li:last-child::before { display: none; }
+.inbox-det .trilha-pedido .passo { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--success-soft); color: var(--success); }
+.inbox-det .trilha-pedido .passo .ic { width: 12px; height: 12px; }
+.inbox-det .trilha-pedido .passo--espera { background: var(--warning-soft); color: var(--warning); }
+.inbox-det .trilha-pedido .passo--falha { background: var(--danger-soft); color: var(--danger); }
+.inbox-det .trilha-pedido .passo--depois { background: var(--bg-subtle); color: var(--text-subtle); }
+.inbox-det .trilha-pedido b { font-weight: 600; }
+.inbox-det .trilha-pedido small { display: block; color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+/* Desfazer: o botão com a nota, a confirmação (um pedido novo) e o que já foi pedido. */
+.inbox-det .desfazer { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); justify-items: start; }
+/* O botão de pedir de novo pode ser comprido ("…a partir do valor de agora"): no celular ele quebra a linha dentro da caixa. */
+.inbox-det .desfazer .btn { max-width: 100%; height: auto; padding-block: 6px; white-space: normal; text-align: left; }
+.inbox-det .desfazer-confirma { display: grid; gap: var(--sp-3); padding: var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-sm); }
+.inbox-det .desfazer-confirma p { margin: 0; }
+.inbox-det .desfazer-confirma b { outline: none; }
+.inbox-det .desfazer-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .inbox-det .plano-mudar-bts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .inbox-det .plano-editar { display: grid; gap: var(--sp-4); padding: var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); }
 .inbox-det .plano-editar .datas { max-width: 420px; }
