@@ -1,3 +1,4 @@
+import { GOOGLE_SALES_SCOPE } from '@liame/contracts';
 import { type ClienteConector, ErroConector } from '../cliente-http.js';
 
 // Data Manager API do Google (A5, Y1; base de conhecimento §3.2): informar ao Google a venda confirmada no caixa que
@@ -8,8 +9,8 @@ import { type ClienteConector, ErroConector } from '../cliente-http.js';
 // Nenhum telefone, e-mail ou endereço (`userData` não é montado aqui), e nenhum campo de consentimento: o Liame não
 // guarda essa prova, e mandar "concedido" seria afirmar o que não sabe.
 
-/** A permissão que a autorização do Google precisa ter para o envio. */
-export const ESCOPO_DATA_MANAGER = 'https://www.googleapis.com/auth/datamanager';
+/** A permissão que a autorização do Google precisa ter para o envio (a mesma que o contrato mostra à tela). */
+export const ESCOPO_DATA_MANAGER = GOOGLE_SALES_SCOPE;
 /** A capacidade no Capability Registry (a versão da API é dado). */
 export const CAPACIDADE_CONVERSOES = 'conversion_ingest';
 

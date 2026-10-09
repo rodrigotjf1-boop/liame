@@ -271,6 +271,7 @@ export {
 } from './equipe.js';
 export { SummaryQuery, SummaryResponse } from './resumo.js';
 export {
+  GOOGLE_SALES_SCOPE,
   GoogleConversionAccount,
   GoogleConversionAction,
   GoogleConversionActionsQuery,
