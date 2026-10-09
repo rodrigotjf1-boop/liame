@@ -295,6 +295,7 @@ export {
   MessagingCampaignQuery,
   MessagingCampaigns,
   MessagingCost,
+  MessagingCoupon,
   MessagingQuery,
   MessagingReady,
   MessagingResponse,

@@ -1,12 +1,12 @@
-import type { MessagingAccount, MessagingBudgetPeriod, MessagingCampaign, MessagingCampaignDetailResponse, MessagingResponse } from '@liame/contracts';
+import type { ActionResponse, MessagingAccount, MessagingBudgetPeriod, MessagingCampaign, MessagingCampaignDetailResponse, MessagingResponse } from '@liame/contracts';
 import type { NomeIcone } from '@/components/ui/icone';
 import { inteiro, quandoComHora, reaisDeMicros } from '@/lib/formato';
 
 // Textos e contas da tela "Mensagens" (mockups/prototipo-mensagens.html, P15 aprovado em 09/10/2026; Y4 da A5).
 // Tudo vem de `GET /v1/messaging` e `GET /v1/messaging/campaigns/:id`, que leem o RegemCast na hora: a tela só
 // escreve o que o servidor devolve. Só números e textos da loja ou do RegemCast; nenhum nome e nenhum telefone.
-// O que o protótipo mostra por causa do cupom da mensagem (os pedidos, o caixa e o que voltou) entra com o pedido
-// de mensagem (Y5): hoje nenhuma mensagem leva cupom criado pelo Liame.
+// A mensagem que o Liame montou com cupom traz os pedidos e o valor confirmados no caixa com ele (para quem vê as
+// vendas); o custo de cada mensagem só vem no detalhe, e é lá que a tela diz quanto voltou.
 
 const MICROS_POR_CENTAVO = 10_000n;
 
@@ -109,6 +109,15 @@ export interface MensagemDaLista {
   leramPct: number;
   responderam: number;
   falharam: number;
+  /** O cupom da mensagem: o código e, para quem vê as vendas, os pedidos e o valor confirmados no caixa com ele. */
+  cupom: CupomDaMensagem | null;
+}
+
+export interface CupomDaMensagem {
+  codigo: string;
+  pedidos: number | null;
+  /** A receita confirmada, em centavos. */
+  caixaCentavos: number | null;
 }
 
 export interface Trecho {
@@ -120,7 +129,7 @@ export type Enviadas =
   | { tipo: 'sem_permissao' }
   | { tipo: 'indisponivel' }
   | { tipo: 'vazia'; fora: string | null }
-  | { tipo: 'lista'; frase: Trecho[]; itens: MensagemDaLista[]; fora: string | null; mais: string | null };
+  | { tipo: 'lista'; frase: Trecho[]; itens: MensagemDaLista[]; fora: string | null; mais: string | null; comCupom: boolean };
 
 export type ContaDaTela =
   /** O RegemCast recusou a conexão desta conta: é conectar de novo. */
@@ -284,7 +293,13 @@ function mensagemDaLista(c: MessagingCampaign, agora: Date): MensagemDaLista {
     leramPct: porCento(c.read, c.delivered),
     responderam: c.replied,
     falharam: c.failed,
+    cupom: cupomDa(c),
   };
+}
+
+/** O cupom da campanha, como a tela o usa; nulo quando a mensagem não leva cupom do Liame. */
+export function cupomDa(c: Pick<MessagingCampaign, 'coupon'>): CupomDaMensagem | null {
+  return c.coupon ? { codigo: c.coupon.code, pedidos: c.coupon.orders, caixaCentavos: c.coupon.revenue_cents } : null;
 }
 
 /** A frase do modo simples: o que as mensagens da lista somam. */
@@ -300,7 +315,18 @@ export function fraseDasEnviadas(itens: MensagemDaLista[]): Trecho[] {
     { t: uma ? ' e teve ' : ' e tiveram ' },
     { t: plural(soma.responderam, 'resposta', 'respostas'), forte: true },
     { t: '.' },
+    ...fraseDoCupom(itens),
   ];
+}
+
+/** O que os cupons das mensagens trouxeram no caixa, somado; vazio sem cupom ou para quem não vê as vendas. */
+function fraseDoCupom(itens: MensagemDaLista[]): Trecho[] {
+  const comConta = itens.filter((m) => m.cupom !== null && m.cupom.pedidos !== null && m.cupom.caixaCentavos !== null);
+  if (!comConta.length) return [];
+  const pedidos = comConta.reduce((s, m) => s + (m.cupom?.pedidos ?? 0), 0);
+  const caixa = comConta.reduce((s, m) => s + (m.cupom?.caixaCentavos ?? 0), 0);
+  if (pedidos === 0) return [{ t: ' Nenhum pedido usou o cupom de uma mensagem até agora.' }];
+  return [{ t: comConta.length === 1 ? ' O cupom dela trouxe ' : ' Os cupons delas trouxeram ' }, { t: plural(pedidos, 'pedido', 'pedidos'), forte: true }, { t: ', com ' }, { t: centavos(caixa), forte: true }, { t: ' confirmados no caixa.' }];
 }
 
 function enviadasDe(a: MessagingAccount, agora: Date): Enviadas {
@@ -313,7 +339,35 @@ function enviadasDe(a: MessagingAccount, agora: Date): Enviadas {
   if (!saiu.length) return { tipo: 'vazia', fora };
   const itens = saiu.map((m) => mensagemDaLista(m, agora));
   const mais = c.total !== null && c.total > c.items.length ? `A leitura traz só as campanhas mais novas: ${inteiro(c.items.length)} de ${inteiro(c.total)} que estão no RegemCast.` : null;
-  return { tipo: 'lista', frase: fraseDasEnviadas(itens), itens, fora, mais };
+  return { tipo: 'lista', frase: fraseDasEnviadas(itens), itens, fora, mais, comCupom: itens.some((m) => m.cupom !== null) };
+}
+
+// ---------------------------------------------------------------- o pedido que espera aprovação
+
+export interface FaixaDoPedido {
+  titulo: string;
+  texto: string;
+  /** O primeiro pedido da fila (o que expira antes): é para ele que o botão leva. */
+  pedido: string;
+}
+
+/** Os pedidos de envio de mensagem desta conta que esperam a aprovação, em uma faixa; nulo quando não há. */
+export function faixaDosPedidos(acoes: ActionResponse[], contaId: string): FaixaDoPedido | null {
+  const esperando = acoes
+    .filter((a) => a.status === 'aguardando_aprovacao' && a.tool === 'mensagem_disparar' && a.account_id === contaId && a.message)
+    .sort((x, y) => x.expires_at.localeCompare(y.expires_at));
+  const primeiro = esperando[0];
+  if (!primeiro?.message) return null;
+  const m = primeiro.message;
+  const pessoas = m.plan?.people ?? m.audience.can_receive;
+  const custo = m.plan?.cost_cents ?? null;
+  const impedida = primeiro.blocked_reason ? ' Ainda não pode ser aprovada: algo impede o envio.' : '';
+  const mais = esperando.length > 1 ? ` E mais ${esperando.length === 2 ? 'uma' : inteiro(esperando.length - 1)}.` : '';
+  return {
+    titulo: esperando.length === 1 ? '1 mensagem espera a sua aprovação' : `${inteiro(esperando.length)} mensagens esperam a sua aprovação`,
+    texto: `“${m.name}”, para ${plural(pessoas, 'pessoa', 'pessoas')}${custo === null ? '' : `, até ${centavos(custo)}`}.${impedida}${mais}`,
+    pedido: primeiro.id,
+  };
 }
 
 // ---------------------------------------------------------------- uma mensagem de perto
@@ -347,6 +401,8 @@ export interface DetalheDaMensagem {
   falhas: { titulo: string; itens: { chave: string; quantas: string; titulo: string; explicacao: string; acao: string | null }[]; semMotivo: boolean } | null;
   custo: { linhas: { rotulo: string; valor: string; detalhe: string | null }[]; avisos: string[] } | null;
   descanso: string | null;
+  /** O que o cupom da mensagem trouxe no caixa, e quanto voltou para cada real gasto; nulo sem cupom. */
+  trouxe: { texto: string; voltou: string | null } | null;
 }
 
 /** Os números de uma campanha, na ordem em que a mensagem anda: saiu, chegou, foi lida, teve resposta, falhou. */
@@ -400,5 +456,16 @@ export function detalheDaMensagem(d: MessagingCampaignDetailResponse, agora: Dat
     custo = { linhas, avisos: d.cost.notices.map(ponto) };
   }
   const descanso = d.rest_days === null ? null : d.rest_days === 0 ? 'Esta conta não tem descanso entre mensagens de marketing no RegemCast.' : `No RegemCast, quem recebe uma mensagem de marketing só recebe outra depois de ${plural(d.rest_days, 'dia', 'dias')}.`;
-  return { dados: dadosDa(c, agora), pausa, espera, falhas, custo, descanso };
+  return { dados: dadosDa(c, agora), pausa, espera, falhas, custo, descanso, trouxe: oQueTrouxe(cupomDa(c), d.cost?.spent_cents ?? null) };
+}
+
+/** "12 pedidos com o cupom COMBO10, com R$ 1.078,80 confirmados no caixa" e, com o gasto, quanto voltou para cada real. */
+export function oQueTrouxe(cupom: CupomDaMensagem | null, gastoCentavos: number | null): DetalheDaMensagem['trouxe'] {
+  if (!cupom) return null;
+  if (cupom.pedidos === null || cupom.caixaCentavos === null) return { texto: `Esta mensagem leva o cupom ${cupom.codigo}. Os pedidos com ele aparecem para quem vê as vendas.`, voltou: null };
+  if (cupom.pedidos === 0) return { texto: `Nenhum pedido usou o cupom ${cupom.codigo} até agora.`, voltou: null };
+  const texto = `${plural(cupom.pedidos, 'pedido', 'pedidos')} com o cupom ${cupom.codigo}, com ${centavos(cupom.caixaCentavos)} confirmados no caixa.`;
+  // Quanto voltou para cada real: em centavos inteiros, arredondado para baixo (não promete mais do que voltou).
+  const voltou = gastoCentavos !== null && gastoCentavos > 0 ? `Voltou ${centavos(Math.floor((cupom.caixaCentavos * 100) / gastoCentavos))} para cada R$ 1 gasto no envio.` : null;
+  return { texto, voltou };
 }

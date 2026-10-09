@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandResponse, MessagingResponse } from '@liame/contracts';
+import type { ActionResponse, BrandResponse, MessagingResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Estado } from '@/components/ui/estado';
@@ -12,7 +12,7 @@ import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
 import { GavetaMensagem } from './gaveta-mensagem';
 import { MensagensConteudo } from './mensagens-conteudo';
-import { contaDaTela, telaDasMensagens } from './textos';
+import { contaDaTela, faixaDosPedidos, telaDasMensagens } from './textos';
 
 // "Mensagens" (mockups/prototipo-mensagens.html, P15 aprovado em 09/10/2026; Y4 da A5): o que a empresa enviou de
 // WhatsApp pelo RegemCast, com os números de cada mensagem, se a conta pode enviar e o teto de gasto. Tudo é lido do
@@ -34,6 +34,8 @@ export function MensagensTela() {
   const [tentativa, setTentativa] = useState(0);
   const [contaEscolhida, setContaEscolhida] = useState<string | null>(null);
   const [aberta, setAberta] = useState<string | null>(null);
+  /** Os pedidos que esperam aprovação (para a faixa do pedido de mensagem). Se a leitura falhar, a tela segue sem a faixa. */
+  const [esperando, setEsperando] = useState<ActionResponse[]>([]);
   /** Depois de "Tentar de novo", o foco volta ao título quando a leitura chega. */
   const focarTitulo = useRef(false);
   // Só a resposta mais nova vale (trocar de marca no meio de uma leitura não mistura as contas).
@@ -66,6 +68,21 @@ export function MensagensTela() {
     );
   }, [marca, tentativa]);
 
+  // Com a função ligada e conta conectada, a tela lê os pedidos de mensagem que esperam a aprovação.
+  const temConta = carga.tipo === 'ok' && carga.dados.enabled && carga.dados.accounts.length > 0;
+  useEffect(() => {
+    if (!temConta) return setEsperando([]);
+    let vivo = true;
+    disparar(
+      chamar(() => api.GET('/v1/actions', { params: { query: { status: 'aguardando_aprovacao' } } })).then((r) => {
+        if (vivo) setEsperando(r.ok ? r.data.items : []);
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [temConta, tentativa, marca]);
+
   useEffect(() => {
     if (!focarTitulo.current || carga.tipo === 'carregando') return;
     focarTitulo.current = false;
@@ -78,6 +95,7 @@ export function MensagensTela() {
     return carga.dados.accounts.find((a) => a.connected_account_id === contaEscolhida) ?? carga.dados.accounts[0] ?? null;
   }, [carga, contaEscolhida]);
   const daConta = useMemo(() => (conta ? contaDaTela(conta, agora) : null), [conta, agora]);
+  const pedido = useMemo(() => (conta ? faixaDosPedidos(esperando, conta.connected_account_id) : null), [esperando, conta]);
   const campanhaAberta = aberta && conta ? (conta.campaigns.items.find((c) => c.id === aberta) ?? null) : null;
 
   if (!podeVer) {
@@ -155,7 +173,7 @@ export function MensagensTela() {
       </div>
     );
   } else {
-    corpo = <MensagensConteudo conta={daConta} modo={modo} podeVerContas={podeVerContas} aoVer={setAberta} aoTentarDeNovo={tentarDeNovo} />;
+    corpo = <MensagensConteudo conta={daConta} modo={modo} podeVerContas={podeVerContas} pedido={pedido} aoVer={setAberta} aoTentarDeNovo={tentarDeNovo} />;
   }
 
   const contas = tela?.tipo === 'contas' ? tela.contas : [];

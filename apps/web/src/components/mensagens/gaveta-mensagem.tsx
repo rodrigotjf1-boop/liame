@@ -165,6 +165,17 @@ export function GavetaMensagem({ contaId, campanha, agora, reserva, aoFechar }: 
             </section>
           )}
 
+          {detalhe?.trouxe && (
+            <section className="det-bloco" aria-labelledby="mens-trouxe-t">
+              <h3 id="mens-trouxe-t" className="rotulo-marca">
+                O que trouxe
+              </h3>
+              <p id="mens-trouxe">{detalhe.trouxe.texto}</p>
+              {detalhe.trouxe.voltou && <p className="mens-voltou">{detalhe.trouxe.voltou}</p>}
+              <p className="eixo-nota">A conta é pelo cupom da mensagem: entram os pedidos confirmados no caixa, pelo Regem, que usaram o cupom.</p>
+            </section>
+          )}
+
           {carga.tipo === 'ok' && (
             <section className="det-bloco" aria-labelledby="mens-custo-t">
               <h3 id="mens-custo-t" className="rotulo-marca">

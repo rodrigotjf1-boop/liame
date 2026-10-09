@@ -63,6 +63,19 @@ export const MessagingReady = z.strictObject({
 });
 export type MessagingReady = z.infer<typeof MessagingReady>;
 
+/**
+ * O cupom de uma mensagem que o Liame montou (A5, Y5; D-A5-16): é por ele que o resultado é medido no caixa. Os pedidos
+ * e a receita são os confirmados na loja do cupom, com o cupom, desde que ele nasceu; vêm nulos para quem não vê as
+ * vendas. O RegemCast não diz quem recebeu nem quem comprou: a conta é só pelo cupom.
+ */
+export const MessagingCoupon = z.strictObject({
+  code: z.string(),
+  orders: Contagem.nullable(),
+  /** A receita confirmada (já sem o que foi devolvido), em centavos. */
+  revenue_cents: Centavos.nullable(),
+});
+export type MessagingCoupon = z.infer<typeof MessagingCoupon>;
+
 /** Uma campanha de mensagens: os números, sem a lista de quem recebeu. */
 export const MessagingCampaign = z.strictObject({
   id: z.string(),
@@ -84,6 +97,8 @@ export const MessagingCampaign = z.strictObject({
   created_at: z.iso.datetime().nullable(),
   started_at: z.iso.datetime().nullable(),
   finished_at: z.iso.datetime().nullable(),
+  /** O cupom da mensagem, quando o Liame a montou com um e ele já nasceu no Regem; nulo nas outras campanhas. */
+  coupon: MessagingCoupon.nullable().optional(),
 });
 export type MessagingCampaign = z.infer<typeof MessagingCampaign>;
 
