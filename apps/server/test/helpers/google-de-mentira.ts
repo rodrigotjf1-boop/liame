@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { type Database, withTenant } from '@liame/database';
 import { VaultService } from '../../src/vault/vault.service.js';
-import { ownerQuery, resetIpRateLimits, signupAndLogin, type TestApi } from './api.js';
+import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, type TestApi } from './api.js';
 
 // Um "Google" local para os testes da escrita no Google Ads (A5, Y2): o OAuth (a troca do refresh token) e a Google
 // Ads API v25 por REST, no que o conector usa e como a referência conferida em 08/10/2026 descreve (base §3.1):
@@ -226,12 +226,13 @@ export class GoogleDeMentira {
   }
 }
 
-export type EmpresaComGoogle = { cookie: string; tenantId: string; userId: string; brandId: string; conta: string; cliente: string; gerente: string };
+export type EmpresaComGoogle = { cookie: string; tenantId: string; userId: string; brandId: string; conta: string; cliente: string; gerente: string; /** O segredo do app autenticador do dono, para aprovar com o código. */ secret: string };
 
-/** Uma empresa nova com uma conta do Google Ads conectada (em reais), com a autorização no cofre. */
+/** Uma empresa nova com uma conta do Google Ads conectada (em reais), com a autorização no cofre e o dono com o app autenticador. */
 export async function empresaComGoogle(api: TestApi, database: Database, opcoes: { refresh?: string; nome?: string } = {}): Promise<EmpresaComGoogle> {
   await resetIpRateLimits();
   const s = await signupAndLogin(api, undefined, opcoes.nome ?? 'Hamburgueria do Google');
+  const { secret } = await enableMfa(api, s.cookie);
   const tenantId = s.me.active_organization_id as string;
   const brandId = (await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [tenantId]))[0]!.id;
   const conta = randomUUID();
@@ -254,7 +255,7 @@ export async function empresaComGoogle(api: TestApi, database: Database, opcoes:
      values ($1, $2, $3, 'google_ads', $4, 'Hamburgueria Ads', 'BRL', $5, $6, $7::jsonb)`,
     [conta, tenantId, brandId, cliente, FUSO, segredo, JSON.stringify({ login_customer_id: gerente })],
   );
-  return { cookie: s.cookie, tenantId, userId: s.me.user.id as string, brandId, conta, cliente, gerente };
+  return { cookie: s.cookie, tenantId, userId: s.me.user.id as string, brandId, conta, cliente, gerente, secret };
 }
 
 /** Põe a campanha na lista que o Liame leu da conta (sem isso, o conector não a reconhece). */

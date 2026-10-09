@@ -39,16 +39,47 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
         .map((t) => [t.name, [t.risk, t.providers.join('+'), t.compensation]]),
     );
     expect(resumo).toEqual({
-      orcamento_ajustar: ['R3', 'sandbox+meta_ads', 'restaurar_orcamento_anterior_se_inalterado'],
+      orcamento_ajustar: ['R3', 'sandbox+meta_ads+google_ads', 'restaurar_orcamento_anterior_se_inalterado'],
       anuncio_pausar: ['R1', 'sandbox+meta_ads', 'reativar_se_inalterado'],
       conjunto_pausar: ['R1', 'meta_ads', 'reativar_se_inalterado'],
-      campanha_pausar: ['R1', 'meta_ads', 'reativar_se_inalterado'],
+      campanha_pausar: ['R1', 'meta_ads+google_ads', 'reativar_se_inalterado'],
       // Retomar volta a gastar: risco maior que o de pausar.
       anuncio_retomar: ['R2', 'meta_ads', 'pausar_se_inalterado'],
       conjunto_retomar: ['R2', 'meta_ads', 'pausar_se_inalterado'],
-      campanha_retomar: ['R2', 'meta_ads', 'pausar_se_inalterado'],
+      campanha_retomar: ['R2', 'meta_ads+google_ads', 'pausar_se_inalterado'],
     });
     for (const t of Object.values(TOOLS)) expect(t.params.safeParse({ qualquer: 1 }).success, t.name).toBe(false);
+  });
+
+  it('no Google (A5 · Y3): só a campanha, com a verba do orçamento que é só dela; a verba dividida nunca vira pedido', () => {
+    // As ferramentas que aceitam o Google: a verba e pausar e retomar a campanha. Grupo de anúncios e anúncio, não.
+    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_ads')).map((t) => t.name).sort()).toEqual(['campanha_pausar', 'campanha_retomar', 'orcamento_ajustar']);
+    // O estado de uma campanha do Google, como o conector entrega: os mesmos campos da Meta, mais o orçamento.
+    const doGoogle = (over: Record<string, unknown> = {}) => ({
+      ...objeto('campanha', { status_efetivo: 'ELIGIBLE' }),
+      orcamento: { id: '55', compartilhado: false, campanhas: 1, diario_micros: 30 * REAL },
+      ...over,
+    });
+    const propria = doGoogle();
+    expect(plano('orcamento_ajustar', propria, { daily_budget_micros: 27 * REAL })).toMatchObject({ action: 'orcamento.reduzir', budgetImpact: 'decrease', reserveMicros: 0, desiredState: { daily_budget_micros: 27 * REAL, orcamento: propria.orcamento } });
+    expect(plano('orcamento_ajustar', propria, { daily_budget_micros: 33 * REAL })).toMatchObject({ action: 'orcamento.aumentar', reserveMicros: 3 * REAL });
+    expect(plano('campanha_pausar', propria)).toMatchObject({ action: 'campanha.pausar', desiredState: { status: 'pausado' } });
+
+    // Dividida de fato (duas campanhas) ou criada para ser dividida: a verba não muda, e a recusa diz com quem ela é dividida.
+    const dividida = doGoogle({ daily_budget_micros: null, orcamento: { id: '55', compartilhado: true, campanhas: 2, diario_micros: 80 * REAL } });
+    expect(recusa('orcamento_ajustar', dividida, { daily_budget_micros: 88 * REAL })).toBe(
+      'A verba desta campanha vem de um orçamento compartilhado com outra campanha no Google: mudar aqui mudaria a verba dela também. O Liame não muda orçamento compartilhado.',
+    );
+    const criadaParaDividir = doGoogle({ daily_budget_micros: null, orcamento: { id: '55', compartilhado: true, campanhas: 1, diario_micros: 30 * REAL } });
+    expect(recusa('orcamento_ajustar', criadaParaDividir, { daily_budget_micros: 27 * REAL })).toContain('compartilhado entre campanhas no Google');
+    // Pausar e retomar a campanha de verba dividida pode: só ela muda. Retomar não reserva (a verba não é dela).
+    expect(plano('campanha_pausar', dividida)).toMatchObject({ action: 'campanha.pausar' });
+    expect(plano('campanha_retomar', { ...dividida, status: 'pausado' })).toMatchObject({ action: 'campanha.retomar', budgetImpact: 'new_spend', valueMicros: null, reserveMicros: 0 });
+    // De período: sem verba diária própria, como na Meta.
+    const periodo = doGoogle({ daily_budget_micros: null, lifetime_budget_micros: 900 * REAL, orcamento: { id: '55', compartilhado: false, campanhas: 1, diario_micros: null } });
+    expect(recusa('orcamento_ajustar', periodo, { daily_budget_micros: 30 * REAL })).toBe('A campanha não tem verba diária própria: a verba fica em outro nível, ou é de período.');
+    // Removida no Google: não muda mais.
+    expect(recusa('campanha_pausar', doGoogle({ status: 'removido' }))).toContain('não dá para mudar');
   });
 
   it('pausar: o objeto ativo passa a pausado, sem reserva; cada ferramenta só vale para o seu tipo', () => {

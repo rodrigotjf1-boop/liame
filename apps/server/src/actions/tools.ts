@@ -1,6 +1,7 @@
 import type { BudgetImpact, RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
+import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
 // Registro de ferramentas (arquitetura §6, ADR-007): cada ferramenta declara risco, impacto financeiro,
 // estratégia de compensação e o formato dos parâmetros. Ferramenta nova só entra com isso e com testes.
@@ -143,7 +144,7 @@ const pausa = (alvo: TipoDeAnuncio, providers: readonly string[], version = 1): 
   undo: () => ({ tool: `${alvo}_retomar`, params: {} }),
 });
 
-const retomada = (alvo: TipoDeAnuncio): ToolDefinition => ({
+const retomada = (alvo: TipoDeAnuncio, providers: readonly string[]): ToolDefinition => ({
   name: `${alvo}_retomar`,
   version: 1,
   owner: 'midia',
@@ -155,7 +156,7 @@ const retomada = (alvo: TipoDeAnuncio): ToolDefinition => ({
         : 'Retoma uma campanha em pausa: os conjuntos e anúncios ativos dela voltam a rodar e a gastar.',
   // Volta a gastar: exige a aprovação de uma pessoa, como ativar o que nasceu pausado (D-A4-3).
   risk: 'R2',
-  providers: ['meta_ads'],
+  providers,
   compensation: 'pausar_se_inalterado',
   params: NoParams,
   plan: (before) => planoDeRetomada(before, alvo),
@@ -169,7 +170,8 @@ export const TOOLS: Record<string, ToolDefinition> = {
     owner: 'midia',
     description: 'Muda o orçamento diário de uma campanha ou conjunto.',
     risk: 'R3',
-    providers: ['sandbox', 'meta_ads'],
+    // No Google (A5, Y3) a verba é a do orçamento que é só da campanha; grupo de anúncios e anúncio ficam fora.
+    providers: ['sandbox', 'meta_ads', 'google_ads'],
     compensation: 'restaurar_orcamento_anterior_se_inalterado',
     params: BudgetParams,
     plan(before, params) {
@@ -178,6 +180,9 @@ export const TOOLS: Record<string, ToolDefinition> = {
       const tipo = exigirTipo(before, ['campanha', 'conjunto']);
       if (tipo) {
         exigirVivo(before, tipo);
+        // No Google, a verba dividida entre campanhas nunca é alterada (D-A5-4): o pedido nem nasce.
+        const dividido = orcamentoCompartilhado(before);
+        if (dividido) throw new PlanoRecusado(motivoDoCompartilhado(dividido));
         const verba = verbaDiaria(before);
         if (verba === null) throw new PlanoRecusado(`${maiuscula(NOME[tipo].o)} não tem verba diária própria: a verba fica em outro nível, ou é de período.`);
         if (value === verba) throw new PlanoRecusado('A verba pedida é igual à de agora.');
@@ -234,11 +239,12 @@ export const TOOLS: Record<string, ToolDefinition> = {
     },
   },
   // Pausar e retomar (A4, X2): uma ferramenta por tipo de objeto, para o pedido dizer o que vai parar. Pausar a campanha
-  // para os conjuntos e os anúncios dela; pausar o conjunto para os anúncios dele (base §2.1).
+  // para os conjuntos e os anúncios dela; pausar o conjunto para os anúncios dele (base §2.1). No Google (A5, Y3), só a
+  // campanha: o Liame não mexe em grupo de anúncios nem em anúncio do Google nesta fase (D-A5-3).
   anuncio_pausar: pausa('anuncio', ['sandbox', 'meta_ads']),
   conjunto_pausar: pausa('conjunto', ['meta_ads']),
-  campanha_pausar: pausa('campanha', ['meta_ads']),
-  anuncio_retomar: retomada('anuncio'),
-  conjunto_retomar: retomada('conjunto'),
-  campanha_retomar: retomada('campanha'),
+  campanha_pausar: pausa('campanha', ['meta_ads', 'google_ads']),
+  anuncio_retomar: retomada('anuncio', ['meta_ads']),
+  conjunto_retomar: retomada('conjunto', ['meta_ads']),
+  campanha_retomar: retomada('campanha', ['meta_ads', 'google_ads']),
 };

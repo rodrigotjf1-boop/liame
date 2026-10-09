@@ -8,6 +8,7 @@ import { type ClienteConector, ErroConector } from '../connectors/cliente-http.j
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { soDigitos } from '../connectors/validacao.js';
 import type { ApplyOptions, ApplyResult, Connector, PreparedRead, ReadResult, ResourceRef } from './connectors.js';
+import { motivoDoCompartilhado, type OrcamentoDaCampanha } from './orcamento-compartilhado.js';
 import type { ResourceState } from './tools.js';
 
 // Escrita no Google Ads pelo Action Service (A5, Y2; base de conhecimento §3.1, reconferida em 08/10/2026): mudar a
@@ -47,17 +48,9 @@ export type SituacaoDaCampanha = 'ativo' | 'pausado' | 'removido' | 'desconhecid
 const SITUACAO: Record<string, SituacaoDaCampanha> = { ENABLED: 'ativo', PAUSED: 'pausado', REMOVED: 'removido' };
 const NO_GOOGLE: Partial<Record<SituacaoDaCampanha, string>> = { ativo: 'ENABLED', pausado: 'PAUSED' };
 
-/** O orçamento que a campanha usa no Google. */
-export type OrcamentoDaCampanha = {
-  /** O id do orçamento no Google. */
-  id: string;
-  /** Criado para ser dividido, ou usado por mais de uma campanha: o Liame não muda. */
-  compartilhado: boolean;
-  /** Quantas campanhas usam este orçamento agora. */
-  campanhas: number;
-  /** A média diária do orçamento, em micros da moeda da conta (também quando é compartilhado); nula no de período. */
-  diario_micros: number | null;
-};
+// O orçamento da campanha e o motivo de não mexer no compartilhado moram em `orcamento-compartilhado.ts` (o registro de
+// ferramentas usa os mesmos); saem por aqui também, para quem já importava.
+export { motivoDoCompartilhado, type OrcamentoDaCampanha };
 
 /** O estado de uma campanha do Google, como o Action Service o guarda no pedido (os mesmos campos da Meta, mais o orçamento). */
 export type EstadoDaCampanhaGoogle = {
@@ -104,15 +97,6 @@ export type MudancaNoGoogle =
   | { tipo: 'situacao'; status: string }
   | { tipo: 'verba'; orcamentoId: string; micros: number }
   | { tipo: 'invalida'; motivo: string };
-
-const plural = (n: number, um: string, varios: string) => (n === 1 ? um : varios);
-
-/** Por que o Liame não muda a verba de um orçamento compartilhado, com quantas campanhas o dividem. */
-export function motivoDoCompartilhado(o: OrcamentoDaCampanha): string {
-  const outras = Math.max(0, o.campanhas - 1);
-  const quem = outras > 0 ? `com ${outras === 1 ? 'outra campanha' : `outras ${outras} campanhas`}` : 'entre campanhas';
-  return `A verba desta campanha vem de um orçamento compartilhado ${quem} no Google: mudar aqui mudaria a verba ${plural(outras, 'dela', 'delas')} também. O Liame não muda orçamento compartilhado.`;
-}
 
 /**
  * O que precisa mudar no Google para a campanha ficar como o pedido quer. Só a situação (ativa ou pausada) e a verba

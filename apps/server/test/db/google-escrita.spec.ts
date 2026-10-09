@@ -66,9 +66,17 @@ describe.skipIf(!hasDb)('escrita no Google Ads: o conector (A5 · Y2)', () => {
     }
   });
 
-  it('nesta entrega nada chega ao conector: ele não está no registro, e nenhuma ferramenta aceita o Google', () => {
+  it('nada chega ao conector ainda: ele não está no registro (as ferramentas já aceitam o Google, mas sem o registro o pedido é recusado)', async () => {
     expect(CONNECTORS.google_ads).toBeUndefined();
-    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_ads'))).toEqual([]);
+    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_ads')).map((t) => t.name).sort()).toEqual(['campanha_pausar', 'campanha_retomar', 'orcamento_ajustar']);
+    // Pela API, o pedido numa conta do Google não entra: não há o que executar.
+    const c = google.novaCampanha(e.cliente);
+    await campanhaLida(e, c);
+    google.chamadas.length = 0;
+    const pedido = await api.call('POST', '/v1/actions', { cookie: e.cookie, body: { tool: 'campanha_pausar', provider: 'google_ads', account_id: e.conta, resource_id: `campanha:${c.id}`, params: {} } });
+    expect([pedido.status, pedido.body.code], JSON.stringify(pedido.body)).toEqual([400, 'provedor-nao-suportado']);
+    expect(google.chamadas).toHaveLength(0);
+    expect(await ownerQuery(`select 1 from liame.action_request where tenant_id = $1`, [e.tenantId])).toHaveLength(0);
     // Quando entrar (Y3), entra com a flag de escrita e com os limites de gasto, como a Meta.
     expect(googleAnunciosConnector).toMatchObject({ provider: 'google_ads', writeFlag: 'google_write', requiresSpendLimits: true });
   });
