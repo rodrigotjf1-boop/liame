@@ -7,7 +7,12 @@ import type { ResourceState } from './tools.js';
 // Connectors (arquitetura §6): um por provedor, com a mesma interface. Na A1 só existia o sandbox
 // (no próprio banco). O primeiro de verdade é o do Regem (A2.5, F6 parte 2): criar cupom de campanha.
 // O da Meta chegou na A4 (X1): situação e verba diária de campanha, conjunto e anúncio; as ferramentas de
-// anúncio o usam desde a X2. O do Google chega na A5. Todos passam pelo mesmo Action Service.
+// anúncio o usam desde a X2. Todos passam pelo mesmo Action Service.
+//
+// O do Google Ads (`google-anuncios.ts`, A5 · Y2) já existe, com a mesma interface, e é ligado na subida; ele só entra
+// neste registro na Y3, junto com as ferramentas que o aceitam. Entrar antes mudaria, para quem tem conta do Google
+// conectada, a maior verba diária da Verba do mês e o que a Autonomia diz da conta ("escrita desligada" no lugar de
+// "plataforma sem escrita"), sem haver ainda o que pedir.
 
 export interface ResourceRef {
   tenantId: string;

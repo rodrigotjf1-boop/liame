@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ActionService } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
+import { EscritaGoogle } from '../actions/escrita-google.provider.js';
 import { EscritaMeta } from '../actions/escrita-meta.provider.js';
 import { EscritaRegem } from '../actions/escrita-regem.provider.js';
 import { FerramentasDeLeitura } from '../ai/registro/leituras.js';
@@ -73,6 +74,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     EscritaRegem,
     // O da Meta (situação e verba de anúncio, A4): o cofre, o cliente HTTP e a versão da API do registro.
     EscritaMeta,
+    // O do Google Ads (situação e verba de campanha, A5): o mesmo, mais a troca do token e a cota diária por empresa.
+    EscritaGoogle,
     LifecyclePurgeService,
     // Grava na subida as versões de ferramenta, prompt e funcionário de IA que este código traz (A3, I2).
     RegistroIaService,

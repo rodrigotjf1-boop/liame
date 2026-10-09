@@ -209,6 +209,28 @@ const UMA_HORA_MS = 3_600_000;
 const textoCurto = (v: unknown, max: number): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 
 /**
+ * Google Ads API: o erro que diz o que houve vem em `error.details[]`, num `GoogleAdsFailure` (base de conhecimento
+ * §3.1): a lista de erros, cada um com o código (`{"campaignBudgetError": "MONEY_AMOUNT_TOO_LARGE"}`), o texto e, na
+ * cota, a espera pedida (`details.quotaErrorDetails.retryDelay`, "30s"). Sai o primeiro: o código como
+ * `campaignBudgetError.MONEY_AMOUNT_TOO_LARGE`. Corpo de outro formato devolve tudo nulo.
+ */
+export function falhaDoGoogleAds(erro: Record<string, unknown>): { codigo: string | null; mensagem: string | null; esperarMs: number | null } {
+  const vazio = { codigo: null, mensagem: null, esperarMs: null };
+  if (!Array.isArray(erro.details)) return vazio;
+  for (const detalhe of erro.details as unknown[]) {
+    const erros = (detalhe as { errors?: unknown } | null)?.errors;
+    const primeiro = Array.isArray(erros) ? (erros[0] as { errorCode?: unknown; message?: unknown; details?: { quotaErrorDetails?: { retryDelay?: unknown } } } | undefined) : undefined;
+    if (!primeiro || typeof primeiro !== 'object') continue;
+    const par = primeiro.errorCode && typeof primeiro.errorCode === 'object' ? Object.entries(primeiro.errorCode as Record<string, unknown>)[0] : undefined;
+    const codigo = par && typeof par[1] === 'string' && /^[A-Za-z]{1,60}$/.test(par[0]) && /^[A-Z0-9_]{1,80}$/.test(par[1]) ? `${par[0]}.${par[1]}` : null;
+    const espera = primeiro.details?.quotaErrorDetails?.retryDelay;
+    const segundos = typeof espera === 'string' && /^\d{1,7}(\.\d{1,9})?s$/.test(espera) ? Number(espera.slice(0, -1)) : null;
+    return { codigo, mensagem: textoCurto(primeiro.message, 500), esperarMs: segundos !== null && segundos > 0 ? Math.ceil(segundos * 1000) : null };
+  }
+  return vazio;
+}
+
+/**
  * Classifica o erro pelo status e pelo corpo de cada plataforma. Meta: `error.code` 4, 17, 32, 613 e
  * 80000–80014 são limite; 190 é token inválido; 10 e 200–299 são permissão (base §2.1). Google:
  * RESOURCE_EXHAUSTED (429) é limite; UNAUTHENTICATED (401); PERMISSION_DENIED (403).
@@ -222,11 +244,13 @@ export function classificar(provider: string, status: number, corpo: unknown, h:
   const tipoProblema = typeof problema?.type === 'string' ? (problema.type.split('/').pop() ?? null) : null;
   const mensagem =
     typeof erro.message === 'string' ? erro.message.slice(0, 300) : typeof problema?.detail === 'string' ? problema.detail.slice(0, 300) : `HTTP ${status}`;
-  const esperaPedida = lerRetryAfter(h) ?? (uso?.esperarMs ? uso.esperarMs : null);
+  // Google Ads: o erro específico (o código, o texto e a espera da cota) vem dentro de `details`.
+  const google = provider === 'google_ads' ? falhaDoGoogleAds(erro) : { codigo: null, mensagem: null, esperarMs: null };
+  const esperaPedida = lerRetryAfter(h) ?? (uso?.esperarMs ? uso.esperarMs : null) ?? google.esperarMs;
   const cod = codigo === null ? NaN : Number(codigo);
   // Meta: o subcódigo diz qual limite ou qual regra; `error_user_msg` é o texto que ela escreve para a pessoa.
-  const subcodigo = typeof erro.error_subcode === 'number' || typeof erro.error_subcode === 'string' ? String(erro.error_subcode) : null;
-  const detalhe = { subcodigo, mensagemUsuario: textoCurto(erro.error_user_msg, 500) ?? textoCurto(erro.error_user_title, 200) };
+  const subcodigo = typeof erro.error_subcode === 'number' || typeof erro.error_subcode === 'string' ? String(erro.error_subcode) : google.codigo;
+  const detalhe = { subcodigo, mensagemUsuario: textoCurto(erro.error_user_msg, 500) ?? textoCurto(erro.error_user_title, 200) ?? google.mensagem };
   const codigoDoErro = codigo ?? statusGoogle ?? tipoProblema;
 
   const ehLimiteMeta = [4, 17, 32, 613].includes(cod) || (cod >= 80000 && cod <= 80014);
