@@ -90,6 +90,10 @@
       "version": 2,
       "hash": "d01e1028885b66c998d0b2661de55e7c38442c914e9e659e532c1ab166c0ffad"
     },
+    "crm.mensagem": {
+      "version": 1,
+      "hash": "7ab59cdab35b50a45c05bf7dc175f32afc782b9f71e83b3a40a1a2f370213824"
+    },
     "estrategista.plano": {
       "version": 2,
       "hash": "3578e29e668262c26ff3041afb6109ff68057ec7619b2e47474fb6e161a21a50"
@@ -111,6 +115,10 @@
     "criativo": {
       "version": 1,
       "hash": "77c504cfac2fc3c5a7b56259b15aba2b9c31a8480343728049c06e15f329cd28"
+    },
+    "crm": {
+      "version": 1,
+      "hash": "314611a27967759bfbb946cdeaaf66250a1b6c27f89beb841d79d5cdfdb87a1f"
     },
     "estrategista": {
       "version": 1,

@@ -1,0 +1,16 @@
+# Eval da tarefa `crm_mensagem` (A5, Y6; critério A5-13; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (a oferta, o público e o cupom
+# entre as marcas) e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o
+# avaliador do servidor (apoio/conferir.mjs), com a conferência da produção, mais estrita.
+# Rodar: ver evals/README.md.
+description: 'Liame · crm_mensagem: preço e benefício só da oferta e do cupom, as duas variáveis no lugar, nada de promessa, política nem bebida alcoólica, ordens escondidas no público e no cupom, e nenhuma frase que finja saber de quem recebe'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: crm_mensagem
+
+tests: file://testes.mjs

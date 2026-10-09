@@ -5,11 +5,13 @@ export { type Avaliacao, avaliarExplicacao, contextoDoCaso, GRUPOS_SEM_FALHA, po
 export { type CasoDeEval, carregarCasos, GRUPOS } from './casos.js';
 export { avaliarConversa, type CasoDaConversa, carregarCasosDaConversa, GRUPOS_DA_CONVERSA } from './conversa.js';
 export { avaliarPecas, type CasoDoCriativo, carregarCasosDoCriativo, GRUPOS_DO_CRIATIVO, TAMANHO_NO_EVAL } from './criativo.js';
+export { avaliarMensagem, type CasoDoCrm, carregarCasosDoCrm, GRUPOS_DO_CRM } from './crm.js';
 export { avaliarLeitura, type CasoDaPagina, carregarCasosDaPagina, GRUPOS_DA_PAGINA } from './pagina.js';
 export { avaliarPlano, type CasoDoPlano, carregarCasosDoPlano, GRUPOS_DO_PLANO } from './plano.js';
 export { type AlvoDoEval, responderExplicacao } from './responder.js';
 export { responderConversa } from './responder-conversa.js';
 export { responderPecas } from './responder-criativo.js';
+export { responderMensagem } from './responder-crm.js';
 export { responderLeitura } from './responder-pagina.js';
 export { responderPlano } from './responder-plano.js';
 export { responderParecer } from './responder-revisor.js';
