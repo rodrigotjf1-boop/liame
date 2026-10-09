@@ -445,7 +445,7 @@ function EsperaDoPedido({ ids, aoConferir, aoRecusar }: { ids: string; aoConferi
       )}
       <p className="nota">
         <Icone nome="info" />
-        <span>Enquanto isso não se resolve, o pedido espera aqui. Você pode recusar agora.</span>
+        <span>Enquanto isso não se resolve, o pedido espera aqui, e o Liame confere de novo sozinho. Você também pode conferir agora, ou recusar.</span>
       </p>
       <button className="btn" type="button" data-mens-conferir onClick={() => disparar(conferir())} disabled={ocupado !== null} aria-busy={ocupado === 'conferir'}>
         <Icone nome="refresh" pequeno />

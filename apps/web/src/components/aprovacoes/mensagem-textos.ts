@@ -167,7 +167,7 @@ export function impedimentoDoPedido(a: Pick<Acao, 'blocked_reason' | 'status'>):
   const doTeto = motivo.startsWith('Não cabe no teto de gasto de mensagens');
   return doTeto
     ? { tom: 'falha', icone: 'wallet', forte: 'Ainda não dá para aprovar: não cabe no teto de gasto de mensagens.', texto: motivo.slice(motivo.indexOf(':') + 1).trim().replace(/^./, (c) => c.toUpperCase()) }
-    : { tom: 'espera', icone: 'clock', forte: 'Ainda não dá para aprovar.', texto: `${motivo} Quando isso se resolver, confira de novo: o pedido passa a poder ser aprovado.` };
+    : { tom: 'espera', icone: 'clock', forte: 'Ainda não dá para aprovar.', texto: `${motivo} O Liame confere de novo sozinho, de 15 em 15 minutos, e avisa por e-mail quando der para aprovar.` };
 }
 
 /** Quem propôs, para a frase do modo simples. */

@@ -1,6 +1,6 @@
 import { ActionProposal } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { type EstadoDaMensagem, faseDaMensagem, motivoDeNaoCaberNoTeto } from '../src/actions/mensagem-plano.js';
+import { avisoDeMensagemLiberada, type EstadoDaMensagem, faseDaMensagem, motivoDeNaoCaberNoTeto } from '../src/actions/mensagem-plano.js';
 import { estadoDoPlano, mensagemDoRecurso, mudancaPedida, recusaDoRegemcast, regemcastMensagemConnector, versaoDaMensagem } from '../src/actions/regemcast-mensagem.js';
 import { CONNECTORS } from '../src/actions/connectors.js';
 import { PlanoRecusado, TOOLS } from '../src/actions/tools.js';
@@ -250,5 +250,19 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
     const daMarca = { source: 'brand' as const, version: 1, document: { rules: [{ type: 'autonomy' as const, action: 'mensagem.disparar', provider: 'regemcast', mode: 'AUTO' as const }] } };
     expect(chooseMode([PLATFORM_POLICY, daMarca], proposta('mensagem.disparar', 'human')).mode).toBe('AUTO');
     expect(TOOLS.mensagem_disparar!.alwaysApproval).toBe(true);
+  });
+
+  it('o aviso de que a mensagem já pode ser aprovada: o nome da campanha, o que impedia, o endereço do pedido, e que nada sai sem a aprovação', () => {
+    const aviso = avisoDeMensagemLiberada({ nome: 'Sexta em dobro', antes: 'O modelo desta campanha ainda não foi aprovado pela Meta.', link: 'https://app.exemplo/aprovacoes?pedido=abc' });
+    expect(aviso.subject).toBe('Liame: uma mensagem já pode ser aprovada');
+    expect(aviso.text).toBe(
+      'A mensagem “Sexta em dobro” já pode ser aprovada.\n\n' +
+        'O que impedia o envio: O modelo desta campanha ainda não foi aprovado pela Meta.\n' +
+        'O Liame conferiu de novo no RegemCast, e isso foi resolvido.\n\n' +
+        'Ela continua esperando a decisão de uma pessoa, com o código do app. Nada é enviado sem essa aprovação.\n\n' +
+        'https://app.exemplo/aprovacoes?pedido=abc',
+    );
+    // O assunto não leva o nome da campanha: ele aparece na lista de e-mails de quem recebe.
+    expect(aviso.subject).not.toContain('Sexta');
   });
 });

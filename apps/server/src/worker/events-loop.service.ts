@@ -7,6 +7,7 @@ import { ConversoesLoop } from './conversoes-loop.js';
 import { CriativoLoop } from './criativo-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
+import { PedidosQueEsperam } from './pedidos-que-esperam.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
@@ -17,7 +18,7 @@ import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador e conferir o gasto de cada mudança feita numa conta de anúncio. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador, conferir o gasto de cada mudança feita numa conta de anúncio e conferir de novo os pedidos que esperam aprovação com um impedimento. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -45,6 +46,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly criativo: CriativoLoop,
     private readonly conferencia: ConferenciaDoGasto,
     private readonly conversoes: ConversoesLoop,
+    private readonly esperam: PedidosQueEsperam,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -70,6 +72,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('conferencia-do-gasto', 100, 300_000, async (n) => (await this.conferencia.executarLote(n)).reduce((s, c) => s + c.conferidas, 0)),
       // As vendas confirmadas para o Google: cada conta com destino passa uma vez por hora; a fila das contas é olhada de 5 em 5 minutos.
       this.loop('conversoes-google', 2, 300_000, async (n) => (await this.conversoes.executarLote(n)).length),
+      // Os pedidos que esperam com um impedimento: cada um é conferido de 15 em 15 minutos; a fila é olhada a cada minuto.
+      this.loop('pedidos-que-esperam', 20, 60_000, async (n) => (await this.esperam.executarLote(n)).length),
     );
   }
 

@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import type { Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { ActionExecutor } from '../../src/worker/action-executor.js';
+import type { PedidosQueEsperam } from '../../src/worker/pedidos-que-esperam.js';
 import type { TestApi } from '../helpers/api.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
@@ -27,6 +28,7 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
   let api: TestApi;
   let database: Database;
   let executor: ActionExecutor;
+  let rotina: PedidosQueEsperam;
   let regemcast: Server;
   let base = '';
   let e: Empresa;
@@ -221,7 +223,7 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
     ({ ownerQuery, resetIpRateLimits } = ajuda);
     api = await ajuda.startApi();
     database = createDatabase({ connectionString: APP_URL, max: 4, applicationName: 'liame-test' });
-    const [{ ActionExecutor: Executor }, { BudgetService }, { KillSwitchService }, { FlagService }, { DATABASE }, totp, distribuicao, { VaultService }, { loadConfig }] = await Promise.all([
+    const [{ ActionExecutor: Executor }, { BudgetService }, { KillSwitchService }, { FlagService }, { DATABASE }, totp, distribuicao, { VaultService }, { loadConfig }, { PedidosQueEsperam: Rotina }, { ActionService }] = await Promise.all([
       import('../../src/worker/action-executor.js'),
       import('../../src/actions/budget.service.js'),
       import('../../src/kill-switch/kill-switch.service.js'),
@@ -231,11 +233,15 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
       import('../../src/connections/distribuicao.js'),
       import('../../src/vault/vault.service.js'),
       import('../../src/config.js'),
+      import('../../src/worker/pedidos-que-esperam.js'),
+      import('../../src/actions/action.service.js'),
     ]);
     const flags = api.app.get(FlagService);
     invalidarFlags = () => flags.invalidate();
     codigoDoApp = (segredo) => totp.totpCode(segredo, totp.currentStep());
     executor = new Executor(api.app.get(DATABASE), api.app.get(BudgetService), api.app.get(KillSwitchService), flags);
+    // A rotina do worker, com o mesmo Action Service das rotas (e o mesmo carteiro de teste).
+    rotina = new Rotina(api.app.get(DATABASE), api.app.get(ActionService));
     registrar = distribuicao.registrarConexaoDaDistribuicao;
     deps = { db: database.db, vault: api.app.get(VaultService), config: loadConfig() };
     e = await empresa();
@@ -511,5 +517,147 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
     // O recurso que não é uma mensagem do RegemCast.
     const r5 = await api.call('POST', '/v1/actions', { cookie: e.cookie, body: { tool: 'mensagem_disparar', provider: 'regemcast', account_id: e.conta, resource_id: 'mensagem:nao-e-um-id', params: {} } });
     expect(r5.status, JSON.stringify(r5.body)).toBe(404);
+  });
+
+  // ---------------------------------------------------------------- a conferência que o Liame faz sozinho
+  const AVISO = 'Liame: uma mensagem já pode ser aprovada';
+  const EM_ANALISE = 'O modelo desta campanha ainda não foi aprovado pela Meta.';
+  /** A rotina, só para a empresa do teste, com o relógio adiantado em `minutos` (cada pedido é olhado de 15 em 15). */
+  const conferirSozinho = (emp: Empresa, minutos = 0) => rotina.executarLote(20, { tenantIds: [emp.tenantId] }, minutos ? new Date(Date.now() + minutos * 60_000) : undefined);
+  const avisosDesde = (inicio: number) => api.mailer.sent.slice(inicio).filter((m) => m.subject === AVISO);
+  /** Outra pessoa na empresa, com o papel dado; devolve o e-mail dela. */
+  async function pessoaNaEmpresa(emp: Empresa, papel: string): Promise<string> {
+    await resetIpRateLimits();
+    const s = await ajuda.signupAndLogin(api);
+    await ownerQuery(`insert into liame.membership (id, tenant_id, user_id, role_key) values (gen_random_uuid(), $1, $2, $3)`, [emp.tenantId, s.me.user.id, papel]);
+    return s.email;
+  }
+
+  it('o Liame confere sozinho o pedido que espera com impedimento: enquanto dura, nada muda; o motivo novo fica no pedido; quando sai, quem pode aprovar é avisado, uma vez', async () => {
+    const emp = await empresa();
+    const dono = (await ownerQuery<{ email: string }>(`select email from liame.app_user where id = $1`, [emp.userId]))[0]!.email;
+    const aprovador = await pessoaNaEmpresa(emp, 'aprovador');
+    const soLe = await pessoaNaEmpresa(emp, 'somente_leitura');
+    const c = rascunho(emp, { impedimentos: [EM_ANALISE] });
+    const p = await pedir(emp, 'mensagem_disparar', c);
+    expect([p.status, p.body.blocked_reason], JSON.stringify(p.body)).toEqual([201, EM_ANALISE]);
+    const cartas = api.mailer.sent.length;
+    chamadas.length = 0;
+
+    // O pedido acabou de nascer: a primeira conferência espera um intervalo.
+    expect(await conferirSozinho(emp)).toEqual([]);
+    expect(doToken(emp)).toEqual([]);
+
+    // Passado o intervalo, com a Meta ainda analisando: uma leitura do plano, o mesmo pedido, ninguém avisado.
+    expect(await conferirSozinho(emp, 16)).toEqual([{ tenantId: emp.tenantId, id: p.body.id, resultado: 'continua', mudou: false }]);
+    expect(doToken(emp)).toEqual(['campanha_disparo_planejar']);
+    expect(await ver(emp, p.body.id)).toMatchObject({ status: 'aguardando_aprovacao', plan_hash: p.body.plan_hash, blocked_reason: EM_ANALISE });
+    // Antes de outro intervalo, a rotina não olha de novo.
+    expect(await conferirSozinho(emp, 20)).toEqual([]);
+    expect(doToken(emp)).toEqual(['campanha_disparo_planejar']);
+
+    // A Meta recusou o modelo: o motivo novo fica no pedido (a tela mostra), sem e-mail.
+    c.impedimentos = ['A Meta recusou o modelo desta campanha.'];
+    expect(await conferirSozinho(emp, 32)).toEqual([{ tenantId: emp.tenantId, id: p.body.id, resultado: 'continua', mudou: true }]);
+    const recusado = await ver(emp, p.body.id);
+    expect(recusado.blocked_reason).toBe('A Meta recusou o modelo desta campanha.');
+    expect(recusado.plan_hash).not.toBe(p.body.plan_hash);
+    expect(avisosDesde(cartas)).toEqual([]);
+
+    // O impedimento saiu: o plano de agora fica no pedido, e quem pode aprovar recebe o e-mail (o dono e o aprovador;
+    // quem só lê, não).
+    c.impedimentos = [];
+    expect(await conferirSozinho(emp, 48)).toEqual([{ tenantId: emp.tenantId, id: p.body.id, resultado: 'liberou', avisados: 2 }]);
+    const liberado = await ver(emp, p.body.id);
+    expect([liberado.status, liberado.blocked_reason], JSON.stringify(liberado)).toEqual(['aguardando_aprovacao', null]);
+    const avisos = avisosDesde(cartas);
+    expect(avisos.map((m) => m.to).sort()).toEqual([dono, aprovador].sort());
+    expect(avisos.map((m) => m.to)).not.toContain(soLe);
+    const carta = avisos[0]!.text;
+    expect(carta).toContain('A mensagem “Sexta em dobro” já pode ser aprovada.');
+    expect(carta).toContain('O que impedia o envio: A Meta recusou o modelo desta campanha.');
+    expect(carta).toContain('Nada é enviado sem essa aprovação.');
+    expect(carta).toContain(`/aprovacoes?pedido=${p.body.id}`);
+    // Nada de quem recebe a mensagem, nem o token da conta.
+    expect(carta).not.toMatch(/\+55\d{10,11}/);
+    expect(carta).not.toContain(emp.token);
+    // A conferência não aprova nada: a campanha continua em rascunho.
+    await ciclo(emp);
+    expect(c.situacao).toBe('rascunho');
+
+    // Sem impedimento, o pedido não é mais conferido na plataforma, e ninguém é avisado de novo.
+    chamadas.length = 0;
+    expect(await conferirSozinho(emp, 64)).toEqual([]);
+    expect(doToken(emp)).toEqual([]);
+    expect(avisosDesde(cartas)).toHaveLength(2);
+
+    // A trilha: as duas vezes em que o plano guardado mudou, em nome do sistema; conferir e achar tudo igual não deixa linha.
+    const trilha = await ownerQuery<{ actor_type: string; actor_id: string | null; origin: string }>(
+      `select actor_type, actor_id, origin from liame.audit_event where chain_key = $1 and resource_id = $2 and action = 'acao.conferir' order by chain_seq`,
+      [emp.tenantId, p.body.id],
+    );
+    expect(trilha).toEqual([
+      { actor_type: 'system', actor_id: null, origin: 'worker' },
+      { actor_type: 'system', actor_id: null, origin: 'worker' },
+    ]);
+
+    // A pessoa aprova o plano que a rotina guardou, e o envio sai.
+    expect((await aprovar(emp, liberado)).body).toMatchObject({ status: 'aprovada' });
+    await ciclo(emp);
+    expect(c.situacao).toBe('enviando');
+  });
+
+  it('a conferência sozinha: com a escrita desligada nem lê; com o RegemCast fora do ar fica para a próxima volta; o pedido sem impedimento não gasta leitura; e o que saiu da fila não é olhado', async () => {
+    const emp = await empresa();
+    const impedida = rascunho(emp, { impedimentos: [EM_ANALISE] });
+    const p = await pedir(emp, 'mensagem_disparar', impedida);
+    const semImpedimento = rascunho(emp, { nome: 'Domingo em família' });
+    const livre = await pedir(emp, 'mensagem_disparar', semImpedimento);
+    expect([p.body.blocked_reason, livre.body.blocked_reason], JSON.stringify(livre.body)).toEqual([EM_ANALISE, null]);
+    const cartas = api.mailer.sent.length;
+    chamadas.length = 0;
+
+    // O RegemCast fora do ar: o pedido fica como estava, com o motivo de não ter conferido, e volta na próxima volta.
+    caidas.set('campanha_disparo_planejar', 50);
+    const caiu = await conferirSozinho(emp, 16);
+    caidas.clear();
+    expect(caiu).toHaveLength(1);
+    expect(caiu[0]).toMatchObject({ id: p.body.id, resultado: 'sem-leitura' });
+    expect((caiu[0] as { motivo: string }).motivo).toContain('plataforma-indisponivel');
+    expect(await ver(emp, p.body.id)).toMatchObject({ status: 'aguardando_aprovacao', plan_hash: p.body.plan_hash, blocked_reason: EM_ANALISE });
+    // O pedido sem impedimento não foi lido na plataforma: só ganhou a marca de olhado, como o outro.
+    expect(chamadas.filter((x) => x.argumentos.id === semImpedimento.id)).toEqual([]);
+    const marcas = await ownerQuery<{ olhado: boolean }>(`select plan_checked_at is not null as olhado from liame.action_request where id = any($1::uuid[])`, [[p.body.id, livre.body.id]]);
+    expect(marcas).toEqual([{ olhado: true }, { olhado: true }]);
+
+    // A escrita de mensagens desligada para a empresa depois do pedido: a rotina nem chama o RegemCast.
+    await ligarFlag(emp, 'whatsapp_campaign', false);
+    chamadas.length = 0;
+    impedida.impedimentos = [];
+    expect(await conferirSozinho(emp, 32)).toEqual([{ tenantId: emp.tenantId, id: p.body.id, resultado: 'desligada' }]);
+    expect(doToken(emp)).toEqual([]);
+    expect(avisosDesde(cartas)).toEqual([]);
+    await ligarFlag(emp, 'whatsapp_campaign', true);
+
+    // A campanha saiu do rascunho por fora (alguém a disparou no RegemCast): não há mais plano para este pedido.
+    impedida.impedimentos = [EM_ANALISE];
+    impedida.situacao = 'enviando';
+    const semPlano = await conferirSozinho(emp, 48);
+    expect(semPlano[0]).toMatchObject({ id: p.body.id, resultado: 'sem-leitura' });
+    expect((semPlano[0] as { motivo: string }).motivo).toContain('plano-recusado');
+    impedida.situacao = 'rascunho';
+
+    // Recusado, o pedido sai da fila: a rotina não o olha mais.
+    const fora = await api.call('POST', `/v1/actions/${p.body.id}/reject`, { cookie: emp.cookie, body: { plan_hash: p.body.plan_hash, reason: 'Não quero enviar' } });
+    expect([fora.status, fora.body.status], JSON.stringify(fora.body)).toEqual([200, 'cancelada']);
+    chamadas.length = 0;
+    impedida.impedimentos = [];
+    expect(await conferirSozinho(emp, 64)).toEqual([]);
+    expect(doToken(emp)).toEqual([]);
+    expect(avisosDesde(cartas)).toEqual([]);
+
+    // E a rotina de uma empresa não olha o pedido de outra.
+    const vizinha = await empresa();
+    expect(await conferirSozinho(vizinha, 80)).toEqual([]);
   });
 });
