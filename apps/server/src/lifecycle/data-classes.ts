@@ -156,4 +156,8 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   ad_piece: { class: 'PERSONAL', retention: 'com a marca (quem decidiu fica ligado à peça)' },
   ad_piece_version: { class: 'PERSONAL', retention: 'com a peça (as versões não se apagam enquanto ela existir)' },
   ad_piece_decision: { class: 'PERSONAL', retention: 'com a peça (quem decidiu e o motivo)' },
+  // O pedido de mensagem (A5, Y5): o retrato do que o Liame montou no RegemCast antes de pedir a aprovação (o texto do
+  // modelo, escrito pela loja; o nome e a regra do público; contagens; a janela; a regra do cupom) e quem propôs.
+  // Nenhum telefone, nome de contato ou conteúdo de conversa: os contatos ficam no RegemCast.
+  message_request: { class: 'PERSONAL', retention: 'com a marca ou a conta conectada (a pessoa em nome de quem o funcionário propôs fica ligada ao pedido)' },
 };
