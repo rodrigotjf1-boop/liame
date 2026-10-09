@@ -12,8 +12,8 @@ const Slug = z.string().regex(/^[a-z0-9_]+$/).max(60);
 const Inteiro = z.string().regex(/^-?\d+$/);
 const Pessoa = z.strictObject({ id: z.uuid(), name: z.string() }).nullable();
 
-/** Os membros da equipe na A3. */
-export const TEAM_MEMBERS = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'trafego'] as const;
+/** Os membros da equipe: os da A3 e, desde a A4, o Criativo (protótipo P12, aprovado em 09/10/2026). */
+export const TEAM_MEMBERS = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'trafego', 'criativo'] as const;
 export const TeamMemberKey = z.enum(TEAM_MEMBERS);
 export type TeamMemberKey = z.infer<typeof TeamMemberKey>;
 
@@ -27,7 +27,11 @@ export const TeamStat = z.strictObject({
    * sem as retiradas. Compliance: `textos_conferidos` (todo texto de IA que chegou à conferência, entregue ou
    * retirado) e `textos_barrados` (os que uma regra de texto, ou o revisor de IA, barrou). Gestor de
    * tráfego: `recomendacoes`, `comparaveis`, `mesma_direcao` e `arrependimento` (em micros de real; negativo: as
-   * recomendações teriam feito melhor que o que foi feito).
+   * recomendações teriam feito melhor que o que foi feito). Criativo: do mês, `pedidos` (os pedidos de peças novas
+   * atendidos), `pecas_escritas`, `pecas_aprovadas`, `pecas_recusadas` (das escritas no mês, as que uma pessoa aprovou
+   * ou recusou), `versoes_refeitas` e `retiradas_na_conferencia`; de hoje, `pecas_hoje`; e de agora, na marca inteira,
+   * `pecas_esperando` (passaram na conferência e esperam a decisão) e `pecas_barradas` (a conferência barrou, e a
+   * pessoa ainda pode editar, pedir outra ou recusar).
    */
   key: Slug,
   value: Inteiro,
@@ -49,8 +53,20 @@ export const TeamMember = z.strictObject({
    * (a parada da empresa, ou da Liame, trava a IA).
    */
   status: Slug,
-  /** Tem trabalho em andamento agora (um plano em preparo, uma página sendo lida). */
+  /** Tem trabalho em andamento agora (um plano em preparo, uma página sendo lida, um pedido de peças na fila ou sendo escrito). */
   working_now: z.boolean(),
+  /**
+   * O que ele está fazendo agora, quando a tela consegue dizer (hoje, só o Criativo): a oferta do pedido de peças
+   * (`subject`; nula para quem não vê as campanhas, e no pedido de outra versão de uma peça), quantas peças foram
+   * pedidas (`count`; nula na outra versão), quem pediu e quando.
+   */
+  in_progress: z.strictObject({ subject: z.string().nullable(), count: z.int().nullable(), by: Pessoa, since: z.iso.datetime() }).nullable().optional(),
+  /**
+   * Por que ele não pode trabalhar agora, estando ligado (hoje, só o Criativo, que só trabalha a pedido): `sem_oferta`
+   * (Minha marca ainda não tem oferta), `limite_de_ia_do_dia` ou `limite_de_ia_do_mes` (um pedido novo não cabe no que
+   * resta do limite de uso de IA da empresa). Nulo quando ele pode trabalhar, e quando está desligado ou parado.
+   */
+  blocked_by: Slug.nullable().optional(),
   /** A empresa pode desligar (o Compliance não). */
   can_pause: z.boolean(),
   /** Quem desligou, quando e por quê, enquanto estiver desligado pela empresa. */
@@ -101,14 +117,19 @@ export const TeamActivityItem = z.strictObject({
    * `plano_nova_analise`. Pesquisador: `leu_pagina`, `pagina_recusada`, `pagina_falhou`. Gestor de tráfego:
    * `recomendou`, `comparou`, `promocao_proposta`, `promocao_aprovada`, `promocao_recusada`, `promocao_retirada`,
    * `voltou_para_sombra` e, no passo para a Aprovação (A4, X3), `aprovacao_proposta`, `aprovacao_aprovada`,
-   * `aprovacao_recusada`, `aprovacao_retirada` e `saiu_da_aprovacao`; no modo Aprovação, `pediu` (ele mesmo fez o pedido
+   * `aprovacao_recusada`, `aprovacao_retirada` e `saiu_da_aprovacao`. Criativo: `escreveu_pecas` (um pedido de peças
+   * atendido: `count` peças, `barred` delas barradas na conferência), `refez_peca` (outra versão de uma peça: `count` é
+   * a versão e `detail` o resultado da conferência, `passou`, `aviso` ou `barrou`), `pedido_recusado` e `pedido_falhou`
+   * (o porquê em `detail`), e o que as pessoas decidiram das peças dele, `peca_aprovada`, `peca_recusada` e
+   * `peca_contestada`. Gestor de tráfego, no modo Aprovação: `pediu` (ele mesmo fez o pedido
    * da mudança, que espera uma pessoa) e `nao_pediu` (tentou e não conseguiu: o motivo vai no `detail`). De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
    * aparecer), `desligado` e `ligado` (pela empresa, nesta marca).
    */
   kind: Slug,
   /**
    * O nome do que foi tratado, quando a pessoa pode vê-lo na tela de origem: o título da conversa (só a própria), da
-   * demanda ou do plano, o site lido, a campanha, a conta de anúncio. Nulo quando não há ou quando falta a permissão.
+   * demanda ou do plano, o site lido, a campanha, a conta de anúncio, a oferta do pedido de peças ou o título da peça.
+   * Nulo quando não há ou quando falta a permissão.
    */
   subject: z.string().nullable(),
   /**
@@ -125,6 +146,8 @@ export const TeamActivityItem = z.strictObject({
    * barrados de uma vez, a versão do plano, o percentual da verba recomendado.
    */
   count: z.int().nullable(),
+  /** Das peças escritas num pedido (`escreveu_pecas`), quantas a conferência barrou. Nulo nos outros acontecimentos. */
+  barred: z.int().nullable().optional(),
   /**
    * As regras de texto que barraram (`barrou_texto` e `retirada_na_conferencia`), pelo nome. Quando quem barrou foi o
    * revisor de IA do Compliance, as categorias que ele apontou: `tom`, `clareza`, `alegacao`.

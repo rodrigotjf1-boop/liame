@@ -80,9 +80,10 @@ export const LEITURAS: FerramentaDef[] = [
   },
   {
     name: 'equipe_trabalho',
-    version: 1,
+    // v2 (09/10/2026): o Criativo entrou na equipe (A4, P12): `funcionario` aceita `criativo`, e os números trazem as peças.
+    version: 2,
     description:
-      'O trabalho da equipe do Liame para uma marca, como a tela Sua equipe mostra: a situação de cada funcionário (ativo, em sombra, desligado, parado), o que cada um fez no mês contado pelo sistema (respostas, explicações, revisões da semana, planos, páginas lidas, textos barrados, recomendações em sombra), o custo de IA de cada um e o gasto e o limite de IA da empresa no mês. Com `funcionario` (`lia`, `analista` para o Analista de dados, `relatorios`, `compliance`, `estrategista`, `pesquisador` ou `trafego` para o Gestor de tráfego), traz só esse funcionário e os últimos acontecimentos dele (o que fez e quando). Use quando a pessoa perguntar sobre o trabalho, a situação ou o custo de um funcionário ou da equipe.',
+      'O trabalho da equipe do Liame para uma marca, como a tela Sua equipe mostra: a situação de cada funcionário (ativo, em sombra, desligado, parado), o que cada um fez no mês contado pelo sistema (respostas, explicações, revisões da semana, planos, páginas lidas, textos barrados, peças de anúncio, recomendações em sombra), o custo de IA de cada um e o gasto e o limite de IA da empresa no mês. Com `funcionario` (`lia`, `analista` para o Analista de dados, `relatorios`, `compliance`, `estrategista`, `pesquisador`, `criativo` ou `trafego` para o Gestor de tráfego), traz só esse funcionário e os últimos acontecimentos dele (o que fez e quando). Use quando a pessoa perguntar sobre o trabalho, a situação ou o custo de um funcionário ou da equipe.',
     risk: 'R0',
     // A rota de Sua equipe pede também `vendas.ver` e uma pessoa na sessão: `EXIGE`, em `leituras.ts`.
     permission: 'campanhas.ver',

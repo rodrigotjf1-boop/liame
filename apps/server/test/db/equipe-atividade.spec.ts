@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { atividadeDoMembro } from '../../src/equipe/atividade.js';
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
+import { decisaoDaPeca, pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // A3 · Sua equipe (protótipo P7): "O que fez" de cada membro e a sombra do Gestor de tráfego, pela API. Tudo é lido do
@@ -244,7 +245,7 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     // hoje que veem Sua equipe também veem os planos e o dossiê).
     const olhar = (membroDaEquipe: 'estrategista' | 'pesquisador', quem: string) =>
       withContext(database.db, { tenantId: e.tenantId, userId: quem }, (tx) =>
-        atividadeDoMembro(tx, membroDaEquipe, { tenantId: e.tenantId, brandId: e.brandId, userId: quem, desde: ha(60 * 24), podePlanos: false, podeDossie: false }, 20),
+        atividadeDoMembro(tx, membroDaEquipe, { tenantId: e.tenantId, brandId: e.brandId, userId: quem, desde: ha(60 * 24), podePlanos: false, podeDossie: false, podePecas: false }, 20),
       );
     const outraPessoa = await membro(e, 'somente_leitura');
     const semPlanos = await olhar('estrategista', outraPessoa.userId);
@@ -345,6 +346,52 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     expect(curta.has_more).toBe(true);
   });
 
+  it('Criativo (A4 · P12): o pedido atendido com as barradas, a outra versão, o pedido que ele não atendeu e o que as pessoas decidiram', async () => {
+    const e = await empresa();
+    const dono = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId };
+    const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
+    // Há 50 minutos: três peças, uma barrada de saída.
+    const lote = await pedidoDePecas(dono, { oferta: OFERTA, pecas: 3, criadoEm: ha(51), terminouEm: ha(50) });
+    const boa = await pecaEscrita(dono, lote, { titulo: 'Sexta é dia de combo', criadaEm: ha(50) });
+    await pecaEscrita(dono, lote, { titulo: 'Combo sexta no capricho', criadaEm: ha(50) });
+    await pecaEscrita(dono, lote, { titulo: 'Entrega em 20 minutos', conferencia: 'barrou', criadaEm: ha(50) });
+    // Há 40: a pessoa pediu outra versão da primeira; ela saiu com aviso.
+    const outra = await pedidoDePecas(dono, { peca: boa, criadoEm: ha(41), terminouEm: ha(40) });
+    await versaoDaPeca(dono, boa, { versao: 2, titulo: 'Sexta é dia de combo, mais curto', conferencia: 'aviso', pedido: outra, em: ha(40) });
+    // Há 30: aprovou a versão 2. Há 20: um pedido que ele recusou (bebida alcoólica). Há 10: um que falhou.
+    await decisaoDaPeca(dono, boa, { versao: 2, titulo: 'Sexta é dia de combo, mais curto', decisao: 'aprovada', em: ha(30) });
+    await pedidoDePecas(dono, { oferta: 'Smash e chope por R$ 39,90', status: 'recusado', motivo: 'bebida_alcoolica', criadoEm: ha(21), terminouEm: ha(20) });
+    await pedidoDePecas(dono, { oferta: OFERTA, status: 'falhou', motivo: 'ia_fora_do_ar', criadoEm: ha(11), terminouEm: ha(10) });
+    // O pedido na fila não é acontecimento ainda.
+    await pedidoDePecas(dono, { oferta: OFERTA, status: 'pendente', criadoEm: ha(1) });
+
+    const t = await atividade(e, e.brandId, 'criativo');
+    expect(tipos(t)).toEqual(['pedido_falhou', 'pedido_recusado', 'peca_aprovada', 'refez_peca', 'escreveu_pecas']);
+    expect(t.items[0]).toMatchObject({ subject: OFERTA, detail: 'ia_fora_do_ar', by: { id: e.userId }, mine: true, barred: null });
+    expect(t.items[1]).toMatchObject({ subject: 'Smash e chope por R$ 39,90', detail: 'bebida_alcoolica' });
+    expect(t.items[2]).toMatchObject({ subject: 'Sexta é dia de combo, mais curto', count: 2, by: { id: e.userId }, barred: null });
+    expect(t.items[3]).toMatchObject({ subject: 'Sexta é dia de combo, mais curto', detail: 'aviso', count: 2, barred: null });
+    expect(t.items[4]).toMatchObject({ subject: OFERTA, count: 3, barred: 1, by: { id: e.userId } });
+    expect(t.has_more).toBe(false);
+
+    // Sem a permissão da tela de Criativos, o acontecimento aparece sem a oferta e sem o título (direto na função: os
+    // níveis de hoje que veem Sua equipe também veem as campanhas).
+    const semPecas = await withContext(database.db, { tenantId: e.tenantId, userId: e.userId }, (tx) =>
+      atividadeDoMembro(tx, 'criativo', { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId, desde: ha(60 * 24), podePlanos: true, podeDossie: true, podePecas: false }, 20),
+    );
+    expect(semPecas.items.map((i) => [i.kind, i.subject])).toEqual([
+      ['pedido_falhou', null],
+      ['pedido_recusado', null],
+      ['peca_aprovada', null],
+      ['refez_peca', null],
+      ['escreveu_pecas', null],
+    ]);
+    expect(semPecas.items[4]).toMatchObject({ count: 3, barred: 1 });
+    // Outra marca da mesma empresa não vê as peças desta.
+    const outraEmpresa = await empresa();
+    expect((await atividade(outraEmpresa, outraEmpresa.brandId, 'criativo')).items).toEqual([]);
+  });
+
   it('desligar e ligar entram no histórico; outra empresa não vê; quem não vê Sua equipe não vê o histórico', async () => {
     const e = await empresa();
     expect((await api.call('POST', '/v1/team/members/pesquisador/pause', { cookie: e.cookie, body: { brand_id: e.brandId, reason: 'Sem leitura por enquanto' } })).status).toBe(200);
@@ -360,7 +407,7 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     expect((await api.call('GET', `/v1/team/members/pesquisador/activity?brand_id=${e.brandId}`, { cookie: outra.cookie })).status).toBe(404);
     expect((await api.call('GET', `/v1/team/shadow?brand_id=${e.brandId}`, { cookie: outra.cookie })).status).toBe(404);
     // Funcionário que não é da equipe desta fase, e limite fora da faixa.
-    expect((await api.call('GET', `/v1/team/members/criativo/activity?brand_id=${e.brandId}`, { cookie: e.cookie })).status).toBe(400);
+    expect((await api.call('GET', `/v1/team/members/crm/activity?brand_id=${e.brandId}`, { cookie: e.cookie })).status).toBe(400);
     expect((await api.call('GET', `/v1/team/members/lia/activity?brand_id=${e.brandId}&limit=500`, { cookie: e.cookie })).status).toBe(400);
     // Só relatórios: não vê campanhas nem vendas.
     const soRelatorios = await membro(e, 'so_relatorios');

@@ -17,13 +17,15 @@ import { motivoSemDadoPessoal } from '../ai/sanitizar.js';
 import { situacaoDoTeto } from '../ai/teto.js';
 import { ultimaCotacao } from '../cambio/cotacao.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { marcaDoCriativo } from '../criativo/base.js';
+import { CustoDasPecasService } from '../criativo/custo.service.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { REGRAS_VERSAO } from '../sombra/regras.js';
 import { atividadeDoMembro, DIAS_DA_ATIVIDADE } from './atividade.js';
-import { EQUIPE, ehMembro, type Membro, MEMBROS } from './membros.js';
+import { CRIATIVO_DA_EQUIPE, EQUIPE, ehMembro, type Membro, MEMBROS } from './membros.js';
 import { type ContagensDoMes, numerosDoMembro, situacaoDoMembro } from './numeros.js';
 
 // Sua equipe (A3, I13b; protótipo P7, aprovado em 03/10/2026). Na requisição, sob a RLS da empresa: quem
@@ -45,6 +47,7 @@ export class EquipeService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly flags: FlagService,
     private readonly switches: KillSwitchService,
+    private readonly custoDasPecas: CustoDasPecasService,
   ) {}
 
   async ver(auth: QuemVeAEquipe, brandId: string, agora = new Date()): Promise<TeamResponse> {
@@ -132,6 +135,28 @@ export class EquipeService {
           (select coalesce(sum(action_regret_micros), 0) from liame.shadow_decision
             where brand_id = ${brandId} and decided_on >= ${org.de}::date and status = 'avaliada' and regret_label <> 'sem_dado')::text as arrependimento`)
     ).rows[0]!;
+    // O trabalho do Criativo (A4, X6): os pedidos e as peças do mês, as de hoje, o que espera a pessoa agora e o pedido
+    // que está na fila ou sendo escrito (um lote por marca de cada vez; a outra versão de uma peça também conta).
+    const pecas = (
+      await tx.execute<Record<string, number>>(sql`
+        select
+          (select count(*) from liame.ad_piece_request where brand_id = ${brandId} and piece_id is null and status = 'concluido' and finished_at >= ${inicio}::timestamptz)::int as pedidos,
+          (select count(*) from liame.ad_piece_request where brand_id = ${brandId} and piece_id is not null and status = 'concluido' and finished_at >= ${inicio}::timestamptz)::int as refeitas,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz)::int as escritas,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and status = 'aprovada')::int as aprovadas,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and status = 'recusada')::int as recusadas,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${iso(org.inicio_do_dia)}::timestamptz)::int as hoje,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and status = 'decidir' and review_status <> 'barrou')::int as esperando,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and status = 'decidir' and review_status = 'barrou')::int as barradas`)
+    ).rows[0]!;
+    const escrevendo = (
+      await tx.execute<{ offer: string; variations: number; piece_id: string | null; requested_by: string | null; name: string | null; created_at: Date | string }>(sql`
+        select r.offer, r.variations, r.piece_id, r.requested_by, u.name, r.created_at
+          from liame.ad_piece_request r left join liame.app_user u on u.id = r.requested_by
+         where r.brand_id = ${brandId} and r.status in ('pendente', 'gerando')
+         order by (r.piece_id is null) desc, r.created_at
+         limit 1`)
+    ).rows[0];
     const contagens: ContagensDoMes = {
       respostasPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.respostas)])),
       entreguesPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.entregues)])),
@@ -151,6 +176,16 @@ export class EquipeService {
       mesmaDirecao: Number(n.mesma_direcao),
       arrependimentoMicros: BigInt(n.arrependimento as string),
       recusasPorMembro: new Map(recusas.map((r) => [r.member, { doCompliance: Number(r.do_compliance), outras: Number(r.outras) }])),
+      pecas: {
+        pedidos: Number(pecas.pedidos),
+        escritas: Number(pecas.escritas),
+        aprovadas: Number(pecas.aprovadas),
+        recusadas: Number(pecas.recusadas),
+        refeitas: Number(pecas.refeitas),
+        hoje: Number(pecas.hoje),
+        esperando: Number(pecas.esperando),
+        barradas: Number(pecas.barradas),
+      },
     };
 
     // As chaves: a da empresa (pausas), a da distribuição (plano e flags) e a parada.
@@ -163,7 +198,7 @@ export class EquipeService {
       ).rows.map((p) => [p.agent_key, p]),
     );
     const contexto = this.flags.context({ tenantId, userId: auth.userId, brandId });
-    const [ia, sombra] = [await this.flags.isEnabled('ia', contexto), await this.flags.isEnabled('sombra', contexto)];
+    const [ia, sombra, criativo] = [await this.flags.isEnabled('ia', contexto), await this.flags.isEnabled('sombra', contexto), await this.flags.isEnabled('criativo', contexto)];
     const trava = await this.switches.check(tx, { tenantId, provider: 'ai', brandId });
     const parada = trava
       ? (
@@ -182,11 +217,27 @@ export class EquipeService {
         : true;
       const pausa = pausas.get(key);
       const doMembro = def.fluxos.map((f) => usos.get(f)).filter((u) => u !== undefined);
+      const status = situacaoDoMembro(def, { pausado: pausa !== undefined, peloPlano, ia, sombra, criativo, parada: parada !== undefined });
+      const doCriativo = key === CRIATIVO_DA_EQUIPE;
       membros.push({
         key,
         kind: def.kind,
-        status: situacaoDoMembro(def, { pausado: pausa !== undefined, peloPlano, ia, sombra, parada: parada !== undefined }),
-        working_now: (key === 'estrategista' && Number(n.preparando_agora) > 0) || (key === 'pesquisador' && Number(n.lendo_agora) > 0),
+        status,
+        working_now: (key === 'estrategista' && Number(n.preparando_agora) > 0) || (key === 'pesquisador' && Number(n.lendo_agora) > 0) || (doCriativo && escrevendo !== undefined),
+        // O que o Criativo está escrevendo: a oferta só para quem vê as campanhas (é quem vê a tela de Criativos).
+        ...(doCriativo
+          ? {
+              in_progress: escrevendo
+                ? {
+                    subject: escrevendo.piece_id === null && auth.permissions.has('campanhas.ver') ? escrevendo.offer : null,
+                    count: escrevendo.piece_id === null ? Number(escrevendo.variations) : null,
+                    by: quem(escrevendo.requested_by, escrevendo.name),
+                    since: iso(escrevendo.created_at),
+                  }
+                : null,
+              blocked_by: status === 'ativo' ? await this.oQueSeguraOCriativo(tenantId, brandId, org.fuso, agora) : null,
+            }
+          : {}),
         can_pause: def.desligavel,
         paused: pausa ? { by: quem(pausa.paused_by, pausa.name), at: iso(pausa.paused_at), reason: pausa.reason } : null,
         cost: { usd_micros: doMembro.reduce((s, u) => s + BigInt(u.custo), 0n).toString(), calls: doMembro.reduce((s, u) => s + Number(u.chamadas), 0) },
@@ -219,6 +270,18 @@ export class EquipeService {
     };
   }
 
+  /**
+   * Por que o Criativo, ligado, não pode escrever agora: Minha marca sem oferta (ele não inventa oferta nem preço), ou
+   * um pedido novo não cabe no que resta do limite de uso de IA (as mesmas conferências do pedido, em `PecasService`).
+   */
+  private async oQueSeguraOCriativo(tenantId: string, brandId: string, fuso: string, agora: Date): Promise<string | null> {
+    const marca = await marcaDoCriativo(brandId, fuso, agora);
+    if (!marca || !marca.conteudo.offers.items.length) return 'sem_oferta';
+    const custo = await this.custoDasPecas.ler(tenantId, brandId, agora);
+    if (!custo.cabe) return custo.uso.aperta === 'mes' ? 'limite_de_ia_do_mes' : 'limite_de_ia_do_dia';
+    return null;
+  }
+
   /** "O que fez": os acontecimentos do membro nesta marca nos últimos 90 dias, do mais novo para o mais antigo. */
   async atividade(auth: QuemVeAEquipe, key: string, query: TeamActivityQuery, agora = new Date()): Promise<TeamActivityResponse> {
     const tenantId = this.empresa(auth);
@@ -235,6 +298,7 @@ export class EquipeService {
         desde,
         podePlanos: auth.permissions.has('planos.ver'),
         podeDossie: auth.permissions.has('dossie.ver'),
+        podePecas: auth.permissions.has('campanhas.ver'),
       },
       query.limit,
     );

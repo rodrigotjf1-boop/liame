@@ -1,6 +1,7 @@
 'use client';
 
 import type { AutonomyResponse, TeamMember, TeamResponse, TeamShadowResponse } from '@liame/contracts';
+import Link from 'next/link';
 import { useState } from 'react';
 import { useConversa } from '@/components/conversa/contexto';
 import { Faixa } from '@/components/ui/faixa';
@@ -12,10 +13,11 @@ import { BlocoHistorico, type Historico } from './bloco-historico';
 import { type AcoesDaProntidao, BlocoProntidao } from './bloco-prontidao';
 import { BlocoRodada, BlocoSombra } from './bloco-sombra';
 import { Avatar, BlocoNumeros, ConfirmaNaLinha, SeloDaSituacao } from './pecas';
-import { acertoDo, type ChaveDoMembro, custoDo, FICHAS, mesDe, modoDo, notaDaCotacao, perguntaSobre, podeConversarSobre, PROXIMAS_FASES, quandoNaFrase } from './textos';
+import { acertoDo, agoraDoCriativo, type ChaveDoMembro, criativoNaoLigado, custoDo, FICHAS, mesDe, modoDo, notaDaCotacao, perguntaSobre, podeConversarSobre, PROXIMAS_FASES, quandoNaFrase } from './textos';
 
 // O detalhe de um funcionário (protótipo P7): quem é, a situação, o que pode e não pode, o acerto e o custo do mês e
-// o que fez. O Gestor de tráfego mostra a sombra e a prontidão no lugar do acerto.
+// o que fez. O Gestor de tráfego mostra a sombra e a prontidão no lugar do acerto. O Criativo (protótipo P12) só
+// trabalha a pedido: a ficha dele diz o que está escrevendo, o que espera a pessoa e por que não escreve, e leva a Criativos.
 
 export interface AcoesDoMembro {
   /** `desligar:<chave>` ou `ligar:<chave>` enquanto a chamada está em andamento. */
@@ -74,7 +76,13 @@ function AcoesDoFuncionario({ m, chave, t, acoes }: { m: TeamMember; chave: Chav
   const [motivo, setMotivo] = useState('');
   const conversa = useConversa();
   // "Conversar sobre ele" (P7): abre a conversa com a LIA já com a pergunta sobre o trabalho deste funcionário.
-  const conversar = podeConversarSobre(chave, t, conversa.disponivel) ? (
+  // No Criativo (P12), o atalho é para a tela onde o trabalho dele está.
+  const conversar = chave === 'criativo' ? (
+    <Link className="btn" href="/criativos" id="eqp-bt-criativos">
+      <Icone nome="image" pequeno />
+      Abrir Criativos
+    </Link>
+  ) : podeConversarSobre(chave, t, conversa.disponivel) ? (
     <button className="btn" type="button" id="eqp-bt-conversar" onClick={() => conversa.abrir({ pergunta: perguntaSobre(chave) })}>
       <Icone nome="message" pequeno />
       Conversar sobre ele
@@ -104,7 +112,8 @@ function AcoesDoFuncionario({ m, chave, t, acoes }: { m: TeamMember; chave: Chav
     );
   }
   // Desligado pela Liame (fora do plano, ou a sombra ainda não ligada): desligar aqui não mudaria nada.
-  if (m.status === 'desligado_pela_liame') return soConversar;
+  // O Criativo que a Liame ainda não ligou não tem peça para abrir.
+  if (m.status === 'desligado_pela_liame') return chave === 'criativo' ? null : soConversar;
   if (acoes.desligando === chave) {
     const curto = motivo.trim().length > 0 && motivo.trim().length < 3;
     return (
@@ -169,6 +178,9 @@ export function DetalheDoMembro({
   const cotacao = notaDaCotacao(t.usd_brl);
   const acerto = acertoDo(m, mes);
   const pronome = chave === 'lia' ? 'ela' : 'ele';
+  const doCriativo = chave === 'criativo' ? agoraDoCriativo(m, t, agora) : null;
+  // Não ligado pela Liame (P12): não há peça nem custo para mostrar.
+  const naoLigado = criativoNaoLigado(m, t);
   // Com o modo Aprovação (P11), a ficha do Gestor de tráfego mostra o modo de cada conta e ação; a linha escolhida
   // é a que a pessoa tocou ou, sem escolha, a primeira (a proposta pendente vem na frente).
   const comAprovacao = chave === 'trafego' && temModoAprovacao(autonomia);
@@ -195,19 +207,48 @@ export function DetalheDoMembro({
         <Faixa
           icone={<Icone nome="power" />}
           titulo={m.paused ? `Desligado ${m.paused.by ? `por ${m.paused.by.name} ` : ''}${quandoNaFrase(m.paused.at, agora)}` : 'Desligado nesta marca'}
-          texto={`${m.paused?.reason ? `Motivo: "${m.paused.reason}". ` : ''}Enquanto estiver desligado, ${pronome} não trabalha e não custa nada.`}
+          texto={
+            chave === 'criativo'
+              ? `${m.paused?.reason ? `Motivo: "${m.paused.reason}". ` : ''}Enquanto estiver desligado, ninguém pede peça nova nem outra versão, e ele não custa nada. As peças que já existem seguem em Criativos: dá para editar, aprovar ou recusar.`
+              : `${m.paused?.reason ? `Motivo: "${m.paused.reason}". ` : ''}Enquanto estiver desligado, ${pronome} não trabalha e não custa nada.`
+          }
         />
       )}
       {m.status === 'desligado_pela_liame' && t.ai.enabled && (
         <Faixa
           icone={<Icone nome="info" />}
-          titulo={chave === 'trafego' ? 'A sombra ainda não está ligada para esta empresa' : 'Desligado pela Liame nesta empresa'}
+          titulo={chave === 'trafego' ? 'A sombra ainda não está ligada para esta empresa' : chave === 'criativo' ? 'O Criativo ainda não está ligado para esta empresa' : 'Desligado pela Liame nesta empresa'}
           texto={
             chave === 'trafego'
               ? 'Enquanto isso, ele não registra recomendações. Quem liga é a Liame, a pedido do dono.'
-              : `${pronome === 'ela' ? 'Ela' : 'Ele'} não trabalha para esta empresa agora. Quem liga é a Liame, a pedido do dono.`
+              : chave === 'criativo'
+                ? 'Quem liga é a Liame, a pedido do dono. Enquanto isso, ninguém pede peça e ele não custa nada.'
+                : `${pronome === 'ela' ? 'Ela' : 'Ele'} não trabalha para esta empresa agora. Quem liga é a Liame, a pedido do dono.`
           }
         />
+      )}
+      {doCriativo?.faixa && (
+        <Faixa
+          tipo={doCriativo.faixa.tipo}
+          icone={<Icone nome={doCriativo.faixa.icone} />}
+          titulo={doCriativo.faixa.titulo}
+          texto={doCriativo.faixa.texto}
+          acao={
+            doCriativo.faixa.marca ? (
+              <Link className="btn btn--sm" href="/marca">
+                Abrir Minha marca
+              </Link>
+            ) : undefined
+          }
+        />
+      )}
+      {doCriativo?.bloco && (
+        <div className="eqp-bloco" id="eqp-criativo-agora">
+          <div className="eqp-bloco-cab">
+            <h3>{doCriativo.bloco.titulo}</h3>
+          </div>
+          <p className="lite-frase">{doCriativo.bloco.frase.map((p, i) => (p.forte ? <b key={i}>{p.texto}</b> : <span key={i}>{p.texto}</span>))}</p>
+        </div>
       )}
       {autonomia && linha ? (
         <>
@@ -223,13 +264,15 @@ export function DetalheDoMembro({
           <BlocoProntidao autonomia={autonomia} modo={modo} agora={agora} acoes={prontidao} />
         </>
       ) : (
-        acerto.length > 0 && <BlocoNumeros titulo="Acerto" numeros={acerto} />
+        acerto.length > 0 && !naoLigado && <BlocoNumeros titulo={chave === 'criativo' ? `Peças em ${mes}` : 'Acerto'} numeros={acerto} />
       )}
-      <BlocoNumeros titulo={`Custo em ${mes}`} numeros={[custo]}>
-        <p className="explica-nota">
-          O custo de cada resposta é medido pelo Liame e entra no teto da empresa.{cotacao ? ` ${cotacao}` : ''}
-        </p>
-      </BlocoNumeros>
+      {!naoLigado && (
+        <BlocoNumeros titulo={`Custo em ${mes}`} numeros={[custo]}>
+          <p className="explica-nota">
+            O custo de cada {chave === 'criativo' ? 'pedido' : 'resposta'} é medido pelo Liame e entra no teto da empresa.{cotacao ? ` ${cotacao}` : ''}
+          </p>
+        </BlocoNumeros>
+      )}
       <div className="eqp-bloco">
         <div className="eqp-bloco-cab">
           <h3>O que pode e o que não pode</h3>

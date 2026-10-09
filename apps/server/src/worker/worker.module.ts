@@ -42,6 +42,7 @@ import { ConversoesLoop } from './conversoes-loop.js';
 import { EstrategistaAgenda } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { EstrategistaService } from './estrategista.service.js';
+import { CustoDasPecasService } from '../criativo/custo.service.js';
 import { CriativoLoop } from './criativo-loop.js';
 import { CriativoService } from './criativo.service.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
@@ -115,6 +116,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ActionService,
     CouponsService,
     // As leituras da IA incluem a de Sua equipe (só da conversa): o serviço dela entra aqui pela injeção, sem rota.
+    // Ela lê o custo das peças para dizer por que o Criativo não pode escrever (A4, P12).
+    CustoDasPecasService,
     EquipeService,
     FerramentasDeLeitura,
     EstrategistaService,

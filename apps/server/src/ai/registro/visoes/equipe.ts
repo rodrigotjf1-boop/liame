@@ -19,6 +19,7 @@ export const NOME_DO_MEMBRO: Record<string, string> = {
   estrategista: 'Estrategista',
   pesquisador: 'Pesquisador',
   trafego: 'Gestor de tráfego',
+  criativo: 'Criativo',
 };
 
 /** O funcionário na frase ("o trabalho do Analista de dados", "de Relatórios"), como a tela escreve. */
@@ -30,6 +31,7 @@ export const DO_MEMBRO: Record<string, string> = {
   estrategista: 'do Estrategista',
   pesquisador: 'do Pesquisador',
   trafego: 'do Gestor de tráfego',
+  criativo: 'do Criativo',
 };
 
 const SITUACAO: Record<string, string> = {
@@ -62,7 +64,34 @@ const NUMERO: Record<string, string> = {
   recomendacoes: 'recomendacoes_em_sombra',
   comparaveis: 'recomendacoes_que_ja_da_para_comparar',
   mesma_direcao: 'em_que_a_empresa_fez_o_mesmo_ou_foi_na_mesma_direcao',
+  // O Criativo (A4, P12): do mês, de hoje e o que espera a pessoa agora (o nome de cada número diz de quando ele é).
+  pedidos: 'pedidos_de_pecas_atendidos_no_mes',
+  pecas_escritas: 'pecas_escritas_no_mes',
+  pecas_aprovadas: 'pecas_do_mes_aprovadas_por_uma_pessoa',
+  pecas_recusadas: 'pecas_do_mes_recusadas_por_uma_pessoa',
+  versoes_refeitas: 'outras_versoes_escritas_a_pedido_no_mes',
+  pecas_hoje: 'pecas_escritas_hoje',
+  pecas_esperando: 'pecas_esperando_a_decisao_de_uma_pessoa_agora',
+  pecas_barradas: 'pecas_barradas_na_conferencia_agora',
 };
+/** Por que o Criativo, ligado, não pode escrever agora (`blocked_by`), como a ficha dele diz. */
+const NAO_PODE_ESCREVER: Record<string, string> = {
+  sem_oferta: 'Minha marca ainda não tem oferta: ele parte de uma oferta de lá, e não inventa oferta nem preço',
+  limite_de_ia_do_dia: 'o limite de uso de IA de hoje foi atingido: pedir peça nova ou outra versão volta amanhã',
+  limite_de_ia_do_mes: 'o limite de uso de IA do mês foi atingido: pedir peça nova ou outra versão volta quando o mês virar',
+};
+/** Por que ele não atendeu um pedido de peça (`ad_piece_request.reason`). */
+const PEDIDO_DE_PECA: Record<string, string> = {
+  politica: 'o pedido fere uma regra de anúncio',
+  bebida_alcoolica: 'ele não escreve anúncio de bebida alcoólica',
+  categoria_proibida: 'a oferta é de uma categoria que ele não anuncia',
+  sem_peca: 'nenhuma peça passou na conferência',
+  formato: 'a resposta veio fora do formato',
+  ia_fora_do_ar: 'a IA não respondeu',
+  ia_desligada: 'a IA estava desligada',
+  teto: 'o limite de uso de IA tinha acabado',
+};
+const CONFERENCIA_DA_PECA: Record<string, string> = { passou: 'passou na conferência', aviso: 'passou na conferência, com um aviso', barrou: 'foi barrada na conferência' };
 /** Os textos que a conferência não deixou aparecer: na LIA e no Analista, a tela os chama de respostas. */
 const RETIRADAS: Record<string, string> = { lia: 'respostas_retiradas_na_conferencia', analista: 'respostas_retiradas_na_conferencia' };
 const TEXTOS_RETIRADOS = 'textos_retirados_na_conferencia';
@@ -157,11 +186,19 @@ function doMembro(m: TeamMember, naTela: (usdMicros: string) => string, fuso: st
   else if (soma !== null) numeros.comparacao_com_o_que_foi_feito = somaDaSombra(soma);
   // O Compliance trabalha por regras; o custo de IA dele, quando há, é o do revisor de IA.
   const doRevisor = m.key === 'compliance' && m.cost.calls > 0;
+  // O Criativo (A4, P12) só trabalha a pedido, e além da IA precisa estar ligado para a empresa.
+  const criativo = m.key === 'criativo';
+  const escrevendo = criativo && m.working_now ? (m.in_progress ?? null) : null;
   return soOQueExiste({
     funcionario: NOME_DO_MEMBRO[m.key] ?? m.key,
-    situacao: SITUACAO[m.status] ?? m.status.replaceAll('_', ' '),
-    trabalha: m.kind === 'ia' ? 'com um modelo de IA' : doRevisor ? 'por regras do sistema; o custo de IA é do revisor de IA, que lê o texto depois das regras' : 'por regras do sistema',
+    situacao: criativo && m.status === 'desligado_pela_liame' ? 'desligado pela Liame (a IA ou o Criativo não está ligado para a empresa)' : (SITUACAO[m.status] ?? m.status.replaceAll('_', ' ')),
+    trabalha: criativo ? 'com um modelo de IA, só quando alguém pede uma peça na tela Criativos' : m.kind === 'ia' ? 'com um modelo de IA' : doRevisor ? 'por regras do sistema; o custo de IA é do revisor de IA, que lê o texto depois das regras' : 'por regras do sistema',
     trabalhando_agora: m.working_now ? 'sim' : null,
+    // O que ele escreve agora: sem o nome de quem pediu.
+    escrevendo_agora: escrevendo
+      ? soOQueExiste({ o_que: escrevendo.count ? 'peças novas' : 'outra versão de uma peça', pecas_pedidas: escrevendo.count ? inteiro(escrevendo.count) : null, oferta: escrevendo.subject, pedido_feito: quando(escrevendo.since, fuso) })
+      : null,
+    nao_pode_escrever_agora: criativo && m.blocked_by ? (NAO_PODE_ESCREVER[m.blocked_by] ?? m.blocked_by.replaceAll('_', ' ')) : null,
     desligado_desde: m.paused ? quando(m.paused.at, fuso) : null,
     motivo_de_estar_desligado: m.paused?.reason ?? null,
     custo_de_ia_no_mes: naTela(m.cost.usd_micros),
@@ -246,6 +283,26 @@ function doAcontecimento(i: TeamActivityItem, fuso: string) {
       return o({ o_que: 'teve a proposta retirada: os portões deixaram de passar antes de alguém decidir', conta: i.subject, acao });
     case 'voltou_para_sombra':
       return o({ o_que: 'voltou para a sombra nessa ação: nada mais aparece na Atenção por ele', conta: i.subject, acao, quem_decidiu: pessoa });
+    case 'escreveu_pecas':
+      return o({
+        o_que: n === 1 ? 'escreveu uma peça de anúncio, a pedido' : 'escreveu peças de anúncio, a pedido',
+        oferta: i.subject,
+        pecas_escritas: inteiro(n),
+        barradas_na_conferencia: i.barred ? inteiro(i.barred) : null,
+        quem_pediu: pessoa,
+      });
+    case 'refez_peca':
+      return o({ o_que: 'escreveu outra versão de uma peça, a pedido', peca: i.subject, versao_da_peca: n > 0 ? inteiro(n) : null, conferencia: CONFERENCIA_DA_PECA[detalhe] ?? null, quem_pediu: pessoa });
+    case 'pedido_recusado':
+      return o({ o_que: 'não atendeu um pedido de peça', oferta: i.subject, motivo: PEDIDO_DE_PECA[detalhe] ?? 'o pedido foi recusado', quem_pediu: pessoa });
+    case 'pedido_falhou':
+      return o({ o_que: 'não conseguiu atender um pedido de peça', oferta: i.subject, motivo: PEDIDO_DE_PECA[detalhe] ?? 'o pedido falhou', quem_pediu: pessoa });
+    case 'peca_aprovada':
+      return o({ o_que: 'teve uma peça aprovada: ela está na biblioteca', peca: i.subject, quem_decidiu: pessoa });
+    case 'peca_recusada':
+      return o({ o_que: 'teve uma peça recusada, com o motivo guardado', peca: i.subject, quem_decidiu: pessoa });
+    case 'peca_contestada':
+      return o({ o_que: 'teve a conferência de uma peça contestada: a peça segue barrada, e o motivo ficou guardado', peca: i.subject, quem_decidiu: pessoa });
     case 'desligado':
       return o({ o_que: 'foi desligado pela empresa nesta marca', quem_decidiu: pessoa });
     case 'ligado':

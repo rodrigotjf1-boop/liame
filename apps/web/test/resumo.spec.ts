@@ -509,6 +509,14 @@ describe('Resumo: pedidos, canais e a equipe', () => {
       'Gestor de tráfego, em sombra, anotou 12 recomendações, sem mexer em nada.',
     ]);
     expect(equipeDo(equipe([membro('lia', { status: 'desligado_pela_liame' }), membro('trafego', { status: 'desligado_pela_liame' })], false))).toEqual([]);
+    // O Criativo (A4 · P12): as peças do mês e as que esperam; sem pedido, o que ele faz; desligado ou não ligado, não entra.
+    const doCriativo = (over: Parameters<typeof membro>[1]) => equipeDo(equipe([membro('criativo', over)])).map((l) => `${l.nome}${l.sep}${l.texto}`);
+    expect(doCriativo({ stats: [stat('pecas_escritas', 5), stat('pecas_esperando', 2)] })).toEqual(['Criativo escreveu 5 peças de anúncio: 2 esperam você.']);
+    expect(doCriativo({ stats: [stat('pecas_escritas', 1), stat('pecas_esperando', 0)] })).toEqual(['Criativo escreveu 1 peça de anúncio.']);
+    expect(doCriativo({ stats: [stat('pecas_escritas', 0), stat('pecas_esperando', 1)] })).toEqual(['Criativo tem 1 peça de anúncio esperando você.']);
+    expect(doCriativo({ stats: [] })).toEqual(['Criativo escreve peças de anúncio quando você pede, em Criativos.']);
+    expect(doCriativo({ status: 'desligado_pela_liame' })).toEqual([]);
+    expect(equipeDo(equipe([membro('criativo', { stats: [] })]))[0]).toMatchObject({ chave: 'criativo', icone: 'image' });
   });
 
   it('as fontes: o mesmo valor com a mesma fonte é uma linha só', () => {

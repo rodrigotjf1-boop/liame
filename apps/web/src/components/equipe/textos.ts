@@ -4,7 +4,8 @@ import { inteiro, paraSeletor, quandoComHora, reaisDeMicros } from '@/lib/format
 
 // Textos e contas da tela "Sua equipe" (mockups/prototipo-equipe.html, P7 aprovado em 03/10/2026). Funções puras:
 // o que a API manda (`/v1/team`, `/v1/team/members/:key/activity`, `/v1/team/shadow`, `/v1/autonomy`) vira a frase
-// que a pessoa lê. Quem conta é o servidor; aqui só se escreve.
+// que a pessoa lê. Quem conta é o servidor; aqui só se escreve. O Criativo entrou com o protótipo P12, aprovado em
+// 09/10/2026 (mockups/prototipo-equipe-criativo.html): ele só trabalha a pedido, e a ficha diz por que não escreve.
 
 const ESPACO = String.fromCharCode(160);
 
@@ -76,7 +77,7 @@ const numero = (m: TeamMember, chave: string): bigint => BigInt(m.stats.find((s)
 
 // ------------------------------------------------------------------ quem é quem
 
-export type ChaveDoMembro = 'lia' | 'analista' | 'relatorios' | 'compliance' | 'estrategista' | 'pesquisador' | 'trafego';
+export type ChaveDoMembro = 'lia' | 'analista' | 'relatorios' | 'compliance' | 'estrategista' | 'pesquisador' | 'criativo' | 'trafego';
 
 export interface Ficha {
   nome: string;
@@ -151,6 +152,16 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
     faz: ['Lê as páginas informadas'],
     nunca: ['Buscar na internet por conta própria', 'Escrever em qualquer lugar'],
   },
+  criativo: {
+    nome: 'Criativo',
+    cargo: 'Textos de anúncio',
+    icone: 'image',
+    modo: 'A pedido',
+    resumo:
+      'Escreve o texto dos anúncios (título, texto principal e botão) quando alguém pede, a partir de uma oferta de Minha marca e do que já vendeu. O Compliance confere cada peça antes de ela aparecer, e quem aprova é você. Aprovada, a peça fica na biblioteca: nada vai para a Meta por ele. Imagem e vídeo chegam depois.',
+    faz: ['Escreve título, texto principal e botão para uma oferta de Minha marca', 'Refaz a peça quando você pede outra versão'],
+    nunca: ['Inventar oferta ou preço', 'Aprovar a própria peça', 'Publicar ou mandar algo para a Meta', 'Trabalhar sem alguém pedir'],
+  },
   trafego: {
     nome: 'Gestor de tráfego',
     cargo: 'Campanhas da Meta e do Google',
@@ -163,7 +174,7 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
   },
 };
 
-export const ORDEM: ChaveDoMembro[] = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'trafego'];
+export const ORDEM: ChaveDoMembro[] = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'criativo', 'trafego'];
 
 /** "do Analista de dados", "de Relatórios": o funcionário na frase. */
 const DO_MEMBRO: Record<ChaveDoMembro, string> = {
@@ -173,6 +184,7 @@ const DO_MEMBRO: Record<ChaveDoMembro, string> = {
   compliance: 'do Compliance',
   estrategista: 'do Estrategista',
   pesquisador: 'do Pesquisador',
+  criativo: 'do Criativo',
   trafego: 'do Gestor de tráfego',
 };
 
@@ -186,17 +198,17 @@ export function perguntaSobre(chave: ChaveDoMembro): string {
 
 /**
  * O botão "Conversar sobre ele" aparece para quem conversa com a LIA, quando ela está trabalhando nesta marca. Sobre
- * a própria LIA não há o que perguntar por aqui: a conversa com ela é o botão do topo.
+ * a própria LIA não há o que perguntar por aqui: a conversa com ela é o botão do topo. No Criativo, o botão é o
+ * atalho "Abrir Criativos" (P12): o trabalho dele está lá.
  */
 export function podeConversarSobre(chave: ChaveDoMembro, t: TeamResponse, conversaDisponivel: boolean): boolean {
-  return chave !== 'lia' && conversaDisponivel && t.ai.enabled && t.members.some((m) => m.key === 'lia' && m.status === 'ativo');
+  return chave !== 'lia' && chave !== 'criativo' && conversaDisponivel && t.ai.enabled && t.members.some((m) => m.key === 'lia' && m.status === 'ativo');
 }
 
 export const ehMembro = (chave: string): chave is ChaveDoMembro => (ORDEM as string[]).includes(chave);
 
 /** Os funcionários das fases seguintes do roadmap: aparecem na lista, sem trabalhar ainda. */
 export const PROXIMAS_FASES: Array<{ chave: string; nome: string; cargo: string; icone: NomeIcone; fase: string; resumo: string }> = [
-  { chave: 'criativo', nome: 'Criativo', cargo: 'Textos, artes e vídeos', icone: 'image', fase: 'A4', resumo: 'Cria peças a partir do que já vendeu bem, com o Compliance conferindo antes de você.' },
   { chave: 'crm', nome: 'CRM e mensageria', cargo: 'WhatsApp, e-mail e SMS', icone: 'send', fase: 'A5', resumo: 'Cuida das réguas de relacionamento pelo RegemCast, só com quem deu permissão.' },
   { chave: 'social', nome: 'Social media', cargo: 'Redes e comunidade', icone: 'share', fase: 'A6', resumo: 'Calendário e publicação orgânica, com aprovação.' },
   { chave: 'cro', nome: 'CRO e páginas', cargo: 'Páginas e funil', icone: 'target', fase: 'A8', resumo: 'Páginas e formulários que levam ao pedido.' },
@@ -233,6 +245,12 @@ export function situacaoDo(m: TeamMember): Selo {
 
 const desligado = (m: TeamMember) => m.status === 'desligado' || m.status === 'desligado_pela_liame';
 
+/**
+ * O Criativo que a Liame ainda não ligou para a empresa (P12): a IA está ligada e a chave dele, não. Fica com os
+ * desligados, sem botão de ligar. Com a IA inteira desligada, ele segue como os outros funcionários de IA.
+ */
+export const criativoNaoLigado = (m: TeamMember, t: Pick<TeamResponse, 'ai'>): boolean => m.key === 'criativo' && m.status === 'desligado_pela_liame' && t.ai.enabled;
+
 /** O selo "Modo": como ele trabalha. O Gestor de tráfego mostra "Sombra e Sugerir" quando alguma ação já foi promovida. */
 export function modoDo(m: TeamMember, autonomia: AutonomyItem[] | null): { rotulo: string; classe: string } {
   if (desligado(m)) return { rotulo: 'Desligado', classe: 'modo-chip modo-chip--off' };
@@ -259,16 +277,16 @@ export function gruposDa(t: TeamResponse, comAprovacao = false): Grupos {
   // Com o modo Aprovação (P11), o Gestor de tráfego já faz mais do que registrar: fica com os que trabalham para a pessoa.
   const emSombra = (m: TeamMember) => m.key === 'trafego' && !comAprovacao;
   return {
-    ativos: conhecidos.filter((m) => !emSombra(m) && m.status !== 'desligado'),
+    ativos: conhecidos.filter((m) => !emSombra(m) && m.status !== 'desligado' && !criativoNaoLigado(m, t)),
     sombra: conhecidos.filter((m) => emSombra(m) && m.status !== 'desligado'),
-    desligados: conhecidos.filter((m) => m.status === 'desligado'),
+    desligados: conhecidos.filter((m) => m.status === 'desligado' || criativoNaoLigado(m, t)),
   };
 }
 
 /** A linha de baixo de cada funcionário na lista: o que ele fez no mês, ou o que faz. */
 export function atividadeDo(m: TeamMember, mes: string, agora: Date): string {
   if (m.status === 'desligado') return m.paused ? `Desligado ${m.paused.by ? `por ${m.paused.by.name} ` : ''}${quandoNaFrase(m.paused.at, agora)}` : 'Desligado nesta marca';
-  if (m.status === 'desligado_pela_liame') return ehMembro(m.key) ? FICHAS[m.key].cargo : m.key;
+  if (m.status === 'desligado_pela_liame') return m.key === 'criativo' ? 'Ainda não ligado para esta empresa' : ehMembro(m.key) ? FICHAS[m.key].cargo : m.key;
   if (m.status === 'parado') return 'Parado com a equipe';
   switch (m.key) {
     case 'lia':
@@ -288,6 +306,17 @@ export function atividadeDo(m: TeamMember, mes: string, agora: Date): string {
     case 'pesquisador':
       if (m.working_now) return 'Lendo uma página';
       return numero(m, 'paginas_lidas') > 0n ? `Leu ${vezes(numero(m, 'paginas_lidas'), 'página', 'páginas')} em ${mes}` : 'Lê as páginas que você informar';
+    case 'criativo': {
+      const esperam = numero(m, 'pecas_esperando');
+      const eEsperam = esperam > 0n ? `; ${vezes(esperam, 'espera', 'esperam')} você` : '';
+      if (m.working_now) return m.in_progress?.count ? `Escrevendo ${vezes(m.in_progress.count, 'peça', 'peças')}` : 'Escrevendo outra versão de uma peça';
+      if (m.blocked_by === 'sem_oferta') return 'Espera a primeira oferta em Minha marca';
+      if (m.blocked_by === 'limite_de_ia_do_dia') return `O limite de IA de hoje acabou${eEsperam}`;
+      if (m.blocked_by === 'limite_de_ia_do_mes') return `O limite de IA do mês acabou${eEsperam}`;
+      if (numero(m, 'pecas_hoje') > 0n) return `Escreveu ${vezes(numero(m, 'pecas_hoje'), 'peça', 'peças')} hoje${eEsperam}`;
+      if (esperam > 0n) return `${vezes(esperam, 'peça espera', 'peças esperam')} você`;
+      return numero(m, 'pecas_escritas') > 0n ? `Escreveu ${vezes(numero(m, 'pecas_escritas'), 'peça', 'peças')} em ${mes}` : `Sem pedido de peça em ${mes}`;
+    }
     case 'trafego':
       return numero(m, 'recomendacoes') > 0n ? `Recomendou ${vezes(numero(m, 'recomendacoes'), 'ação', 'ações')} em ${mes}, sem mexer em nada` : 'Registra o que faria, sem mexer em nada';
     default:
@@ -348,6 +377,17 @@ export function acertoDo(m: TeamMember, mes: string): Numero[] {
         { valor: n('sugestoes'), rotulo: numero(m, 'sugestoes') === 1n ? 'sugestão para Minha marca' : 'sugestões para Minha marca' },
         { valor: n('recusadas'), rotulo: 'páginas que ele não pôde ler' },
       ];
+    case 'criativo': {
+      // As peças do mês e, delas, o que a pessoa decidiu; o que espera a decisão e o que a conferência barrou são de agora.
+      const [escritas, pedidos, barradas, recusadas] = [numero(m, 'pecas_escritas'), numero(m, 'pedidos'), numero(m, 'pecas_barradas'), numero(m, 'pecas_recusadas')];
+      return [
+        { valor: n('pecas_escritas'), rotulo: `${escritas === 1n ? 'peça escrita' : 'peças escritas'}${pedidos > 0n ? `, em ${vezes(pedidos, 'pedido', 'pedidos')}` : ''}` },
+        { valor: n('pecas_aprovadas'), rotulo: numero(m, 'pecas_aprovadas') === 1n ? 'aprovada por você' : 'aprovadas por você' },
+        { valor: n('pecas_esperando'), rotulo: 'esperando a sua decisão' },
+        ...(barradas > 0n ? [{ valor: n('pecas_barradas'), rotulo: barradas === 1n ? 'barrada na conferência' : 'barradas na conferência' }] : []),
+        ...(recusadas > 0n ? [{ valor: n('pecas_recusadas'), rotulo: recusadas === 1n ? 'recusada por você' : 'recusadas por você' }] : []),
+      ];
+    }
     default:
       return [];
   }
@@ -366,6 +406,11 @@ function feitosDo(m: TeamMember): string {
       return vezes(numero(m, 'planos_aprovados') + numero(m, 'planos_recusados') + numero(m, 'planos_esperando'), 'plano', 'planos');
     case 'pesquisador':
       return vezes(numero(m, 'paginas_lidas'), 'página lida', 'páginas lidas');
+    case 'criativo': {
+      const [pedidos, refeitas] = [numero(m, 'pedidos'), numero(m, 'versoes_refeitas')];
+      if (pedidos === 0n && refeitas === 0n) return 'ele só custa quando alguém pede';
+      return [pedidos > 0n ? vezes(pedidos, 'pedido', 'pedidos') : null, refeitas > 0n ? vezes(refeitas, 'versão refeita', 'versões refeitas') : null].filter((x) => x !== null).join(' e ');
+    }
     default:
       return 'custo de IA';
   }
@@ -386,6 +431,71 @@ export function custoDo(m: TeamMember, t: TeamResponse): Numero {
 /** O selo do topo: "IA em outubro: R$ 22,67 de R$ 104,48". */
 export function seloDaIa(t: TeamResponse): string {
   return `IA em ${mesDe(t.month.from)}: ${custoNaTela(t.ai.spent_usd_micros, t.usd_brl)} de ${custoNaTela(t.ai.ceiling_usd_micros, t.usd_brl)}`;
+}
+
+// ------------------------------------------------------------------ o Criativo: o que acontece agora
+
+export interface AgoraDoCriativo {
+  /** A faixa de cima: por que ele não pode escrever agora. */
+  faixa: { tipo: 'acao' | 'atencao'; icone: NomeIcone; titulo: string; texto: string; marca: boolean } | null;
+  /** O bloco: o que ele está escrevendo, o que espera a pessoa, ou que ele só trabalha a pedido. */
+  bloco: { titulo: string; frase: Array<{ texto: string; forte?: boolean }> } | null;
+}
+
+/**
+ * O que a ficha do Criativo diz de agora (P12). Ele só trabalha quando alguém pede: a ficha diz o que está escrevendo,
+ * o que espera a decisão da pessoa e, quando ele não pode escrever, por quê. Não ligado pela Liame, não há o que dizer.
+ */
+export function agoraDoCriativo(m: TeamMember, t: TeamResponse, agora: Date): AgoraDoCriativo {
+  if (m.status === 'desligado_pela_liame') return { faixa: null, bloco: null };
+  const mes = mesDe(t.month.from);
+  if (m.blocked_by === 'sem_oferta') {
+    return {
+      faixa: { tipo: 'acao', icone: 'info', titulo: 'Minha marca ainda não tem oferta', texto: 'O Criativo parte de uma oferta de lá: o nome, o que é e o preço que uma pessoa conferiu. Ele não inventa oferta nem preço.', marca: true },
+      bloco: null,
+    };
+  }
+  const doMes = m.blocked_by === 'limite_de_ia_do_mes';
+  const faixa: AgoraDoCriativo['faixa'] =
+    m.blocked_by === 'limite_de_ia_do_dia' || doMes
+      ? {
+          tipo: 'atencao',
+          icone: 'alert',
+          titulo: doMes ? `O limite de uso de IA de ${mes} foi atingido` : 'O limite de uso de IA de hoje foi atingido',
+          texto: `Pedir peça nova ou outra versão volta ${doMes ? 'quando o mês virar' : 'amanhã'}. As peças que já existem seguem em Criativos, para decidir.`,
+          marca: false,
+        }
+      : null;
+  const [esperam, barradas, escritas] = [numero(m, 'pecas_esperando'), numero(m, 'pecas_barradas'), numero(m, 'pecas_escritas')];
+  if (m.working_now && m.in_progress) {
+    const p = m.in_progress;
+    const quem = p.by ? ` por ${p.by.name}` : '';
+    const quando = quandoNaFrase(p.since, agora);
+    const frase = p.count
+      ? [
+          { texto: 'Está escrevendo ' },
+          { texto: vezes(p.count, 'peça', 'peças'), forte: true },
+          { texto: `${p.subject ? ` para a oferta “${p.subject}”` : ''}, ${p.count === 1 ? 'pedida' : 'pedidas'}${quem} ${quando}. ${p.count === 1 ? 'Ela aparece em Criativos já conferida' : 'Elas aparecem em Criativos já conferidas'}.` },
+        ]
+      : [{ texto: 'Está escrevendo ' }, { texto: 'outra versão de uma peça', forte: true }, { texto: `, pedida${quem} ${quando}. Ela aparece em Criativos já conferida.` }];
+    return { faixa, bloco: { titulo: 'Agora', frase } };
+  }
+  if (esperam > 0n || barradas > 0n) {
+    const oQueFazer = 'dá para editar o texto, pedir outra ou recusar.';
+    const frase =
+      esperam > 0n
+        ? [
+            { texto: `${vezes(esperam, 'peça passou', 'peças passaram')} na conferência`, forte: true },
+            { texto: ` e ${esperam === 1n ? 'espera' : 'esperam'} a sua decisão.${barradas > 0n ? ` ${vezes(barradas, 'foi barrada', 'foram barradas')}: ${oQueFazer}` : ''}` },
+          ]
+        : [{ texto: `${vezes(barradas, 'peça foi barrada', 'peças foram barradas')} na conferência`, forte: true }, { texto: `: ${oQueFazer}` }];
+    return { faixa, bloco: { titulo: 'Esperando você', frase } };
+  }
+  if (escritas > 0n) return { faixa, bloco: { titulo: 'Nada esperando você', frase: [{ texto: `As peças de ${mes} já foram decididas. Para pedir outra, abra Criativos.` }] } };
+  return {
+    faixa,
+    bloco: { titulo: 'Ele só trabalha quando alguém pede', frase: [{ texto: `Nenhum pedido de peça em ${mes}. Quem opera campanhas pede uma peça em Criativos, para uma oferta de Minha marca.` }] },
+  };
 }
 
 // ------------------------------------------------------------------ avisos do topo
@@ -498,6 +608,22 @@ const RETIRADA: Record<string, string> = {
   numero_fora: 'Citava um número que o sistema não calculou.',
   dado_velho: 'Os dados não estavam em dia.',
   formato: 'A resposta veio fora do formato.',
+};
+/** Por que o Criativo não atendeu um pedido (`ad_piece_request.reason`), como a pessoa lê. */
+const PEDIDO_DE_PECA: Record<string, string> = {
+  politica: 'O pedido fere uma regra de anúncio.',
+  bebida_alcoolica: 'Ele não escreve anúncio de bebida alcoólica.',
+  categoria_proibida: 'A oferta é de uma categoria que ele não anuncia.',
+  sem_peca: 'Nenhuma peça passou na conferência.',
+  formato: 'A resposta veio fora do formato.',
+  ia_fora_do_ar: 'A IA não respondeu.',
+  ia_desligada: 'A IA estava desligada.',
+  teto: 'O limite de uso de IA tinha acabado.',
+};
+const CONFERENCIA_DA_PECA: Record<string, string> = {
+  passou: 'passou na conferência',
+  aviso: 'passou na conferência, com um aviso',
+  barrou: 'foi barrada na conferência',
 };
 const COMPARACAO: Record<string, string> = {
   teria_melhorado: 'A recomendação teria rendido mais do que o que foi feito.',
@@ -632,6 +758,31 @@ export function historicoDo(i: TeamActivityItem, agora: Date): LinhaDoHistorico 
       return { quando, titulo: `Proposta retirada: ${acaoDa(i.detail, null)}`, texto: 'Os portões deixaram de passar antes de alguém decidir.' };
     case 'voltou_para_sombra':
       return { quando, titulo: `De volta para sombra: ${acaoDa(i.detail, null)}`, texto: `${quemFez(i, 'voltou a ação para sombra', 'A ação voltou para sombra')}. Nada mais aparece na Atenção por ele.` };
+    case 'escreveu_pecas': {
+      const barradas = i.barred ?? 0;
+      const conferencia = barradas === 0 ? (n === 1 ? 'Ela passou na conferência.' : 'Todas passaram na conferência.') : `A conferência barrou ${barradas === n && n > 1 ? 'todas' : inteiro(barradas)}.`;
+      return {
+        quando,
+        titulo: `Escreveu ${vezes(n, 'peça', 'peças')}${i.subject ? ` para a oferta “${i.subject}”` : ''}`,
+        texto: `${i.mine ? 'A seu pedido. ' : i.by ? `A pedido de ${i.by.name}. ` : ''}${conferencia} Quem decide cada uma é uma pessoa, em Criativos.`,
+      };
+    }
+    case 'refez_peca':
+      return {
+        quando,
+        titulo: i.subject ? `Refez a peça “${i.subject}”` : 'Refez uma peça',
+        texto: `${i.mine ? 'A seu pedido. ' : i.by ? `A pedido de ${i.by.name}. ` : ''}A versão ${n > 0 ? n : 'nova'} ${CONFERENCIA_DA_PECA[i.detail ?? ''] ?? 'foi conferida'}.`,
+      };
+    case 'pedido_recusado':
+      return { quando, titulo: i.subject ? `Não escreveu para a oferta “${i.subject}”` : 'Não atendeu um pedido de peça', texto: PEDIDO_DE_PECA[i.detail ?? ''] ?? 'O pedido foi recusado.' };
+    case 'pedido_falhou':
+      return { quando, titulo: i.subject ? `Não conseguiu escrever para a oferta “${i.subject}”` : 'Não conseguiu atender um pedido de peça', texto: `${PEDIDO_DE_PECA[i.detail ?? ''] ?? 'O pedido falhou.'} Dá para pedir de novo em Criativos.` };
+    case 'peca_aprovada':
+      return { quando, titulo: i.subject ? `Peça “${i.subject}” aprovada` : 'Peça aprovada', texto: `${quemFez(i, 'aprovou', 'Aprovada')}. Ela está na biblioteca.` };
+    case 'peca_recusada':
+      return { quando, titulo: i.subject ? `Peça “${i.subject}” recusada` : 'Peça recusada', texto: `${quemFez(i, 'recusou', 'Recusada')}. O motivo ficou guardado.` };
+    case 'peca_contestada':
+      return { quando, titulo: i.subject ? `Conferência da peça “${i.subject}” contestada` : 'Conferência de uma peça contestada', texto: `${quemFez(i, 'achou que a conferência errou', 'A conferência foi contestada')}. A peça segue barrada, e o motivo ficou guardado.` };
     case 'desligado':
       return { quando, titulo: 'Desligado nesta marca', texto: `${quemFez(i, 'desligou', 'Desligado pela empresa')}. O histórico ficou guardado.` };
     case 'ligado':
