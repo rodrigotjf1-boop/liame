@@ -608,8 +608,8 @@ describe('menu e permissão', () => {
   it('Resultados aparece só para quem tem vendas.ver (a mesma permissão que a API exige)', () => {
     expect(agencia.itens.find((i) => i.href === '/resultados')).toMatchObject({ permissao: 'vendas.ver', modos: true });
     // Sem o modo, todas as telas que a pessoa pode ver (o menu passa o modo: Resumo no Lite, Atenção no Pro).
-    expect(itensVisiveis(agencia, () => true).map((i) => i.href)).toEqual(['/resumo', '/atencao', '/aprovacoes', '/resultados', '/verba', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
-    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/verba', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, () => true).map((i) => i.href)).toEqual(['/resumo', '/atencao', '/aprovacoes', '/resultados', '/verba', '/mensagens', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/verba', '/mensagens', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
     expect(itensVisiveis(agencia, (p) => p === 'vendas.ver').map((i) => i.href)).toEqual(['/resumo', '/resultados']);
   });
 
