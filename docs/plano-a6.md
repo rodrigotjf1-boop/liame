@@ -1,6 +1,6 @@
 # Liame — Plano da fase A6 · Mais canais
 
-> **Proposta de 09/10/2026, aguardando o aceite do dono.** Nenhuma linha de código da A6 começa antes do aceite deste plano e das decisões da seção 4. A A6 é a "expansão" do roadmap (§2): a marca passa a ser cuidada **onde o cliente a procura sem anúncio** (o perfil no Google, as avaliações, a busca) e **onde ela fala sem pagar** (Instagram, Facebook e Threads), e a equipe ganha o funcionário de **Social media**. Vale a mesma regra das fases anteriores: **nada é publicado ou respondido em nome da empresa sem a aprovação de uma pessoa com o código do app.**
+> **Aprovado pelo dono em 09/10/2026** ("plano a6 aprovado"), com as decisões D-A6-1 a D-A6-18 como recomendadas (seção 4). A A6 é a "expansão" do roadmap (§2): a marca passa a ser cuidada **onde o cliente a procura sem anúncio** (o perfil no Google, as avaliações, a busca) e **onde ela fala sem pagar** (Instagram, Facebook e Threads), e a equipe ganha o funcionário de **Social media**. Vale a mesma regra das fases anteriores: **nada é publicado ou respondido em nome da empresa sem a aprovação de uma pessoa com o código do app.**
 >
 > A A6 depende da A5 (roadmap §2), e a A5 ainda espera os aceites dos protótipos e os pilotos. Por isso a ordem proposta começa pelo que **não depende** deles nem de foto guardada: o Google local (seção 3, Z1 a Z3).
 
@@ -42,7 +42,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **Z8** | **Pacote pronto** | Para TikTok, YouTube e redes sem acesso: o Liame monta o texto, a mídia e o horário, e a pessoa publica. Sem escrita em plataforma | A6-14 | Z4 |
 | **Z9** | **Telas** | Pelos protótipos da seção 5 | A6-15 | Aprovação dos protótipos |
 
-## 4. Decisões (para o aceite do dono; cada uma com a recomendação)
+## 4. Decisões (aprovadas pelo dono em 09/10/2026, como recomendadas)
 
 | # | Decisão | Recomendação | Por quê |
 | --- | --- | --- | --- |
@@ -127,7 +127,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 
 | Para | Preciso de |
 | --- | --- |
-| Começar | O aceite deste plano e das decisões da seção 4 |
+| Começar | ✅ Aceite deste plano e das decisões da seção 4 (09/10/2026) |
 | Z1 | Saber se a Mister Burgers tem o Perfil da Empresa no Google verificado há mais de 60 dias, com site. Com isso, o pedido de acesso à API (eu guio, um print por vez); o Google não diz o prazo |
 | Z3 | Saber se o site ou o cardápio está no Search Console; se não, verificar (eu guio) |
 | Z4 | O aceite da D-A6-2 e as primeiras fotos dos produtos |

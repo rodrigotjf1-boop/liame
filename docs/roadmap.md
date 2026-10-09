@@ -28,7 +28,7 @@
 
 > **Pendências finais do roadmap** (decisões do dono; entram depois da última fase em curso, antes de dar o roadmap por concluído):
 >
-> 1. **Armazenamento de fotos e mídias** (ADR-021: AWS S3 em São Paulo, aceito em 05/10/2026, com a ordem de não construir agora). Com ele vêm a imagem do Criativo (A4 · X7) e a campanha nova, criada pausada (A4 · X5), que dependem das fotos guardadas.
+> 1. **Armazenamento de fotos e mídias** (ADR-021: AWS S3 em São Paulo, aceito em 05/10/2026, com a ordem de não construir agora). **Em 09/10/2026 o dono antecipou a parte das fotos enviadas pela empresa para a A6** (decisão D-A6-2, entrega Z4 do `plano-a6.md`): sem foto guardada não há post no Instagram. O que segue como pendência final é o que vem abaixo. Com ele vêm a imagem do Criativo (A4 · X7) e a campanha nova, criada pausada (A4 · X5), que dependem das fotos guardadas.
 > 2. **Quem paga a IA** (05/10/2026): a distribuição, com teto por empresa, ou cada empresa cliente com a própria conta de IA, ligada pelo front. Decide-se com a conta mensal medida nos testes (`ai-architecture.md` §10).
 > 3. **Anúncio de bebida alcoólica no Criativo** (D-A4-34, aprovada em 07/10/2026): até lá o Criativo não escreve anúncio que cita bebida alcoólica. Quando entrar, entra com a cláusula de advertência posta pelo código, regra própria de texto e a conferência da legislação específica, que a base de conhecimento ainda marca como não conferida (§6.2).
 
