@@ -12,7 +12,7 @@ import { regemcastMensagemConnector } from './regemcast-mensagem.js';
 /**
  * Liga o connector do pedido de mensagem (A5, Y5) ao cofre, ao cliente HTTP e ao endereço do RegemCast quando o app
  * sobe: na API (que lê o plano do disparo para montar o pedido) e no worker (que valida e dispara). O connector é um
- * registro simples; é aqui que ele recebe o que precisa. Ele ainda não está em `CONNECTORS`: nenhum pedido chega a ele.
+ * registro simples; é aqui que ele recebe o que precisa.
  * O cupom da mensagem nasce pelo conector de cupom do Regem, e só com a escrita no Regem ligada para a empresa
  * (`regem_write`): sem ela, a mensagem que leva cupom não sai.
  */

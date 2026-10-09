@@ -60,6 +60,12 @@ export interface ToolDefinition {
    * impedido, espera.
    */
   revalidateOnApproval?: boolean;
+  /**
+   * Quando quem pede é uma pessoa e a política deixa a ação em modo automático, ela executa sem o código do app e
+   * sem depender do `autopilot` (A5, Y5: pausar um envio de mensagem). A pessoa confirma na tela, e o pedido fica com o
+   * nome dela. Só para ação que não gasta, não envia e não desfaz nada. O funcionário de IA não ganha isto.
+   */
+  directByPerson?: boolean;
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -271,7 +277,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
   campanha_retomar: retomada('campanha', ['meta_ads', 'google_ads']),
   // Mensagem de WhatsApp pelo RegemCast (A5, Y5). O estado do recurso é o plano do disparo que o RegemCast devolve para
   // a campanha em rascunho que o Liame montou (`mensagem-plano.ts`): é esse plano, com as pessoas e o custo, que a
-  // pessoa aprova. O conector ainda não está no registro: nenhum pedido chega a estas ferramentas.
+  // pessoa aprova. Sem a flag de escrita `whatsapp_campaign`, nenhum pedido chega a estas ferramentas.
   mensagem_disparar: {
     name: 'mensagem_disparar',
     version: 1,
@@ -322,6 +328,8 @@ export const TOOLS: Record<string, ToolDefinition> = {
     risk: 'R1',
     providers: ['regemcast'],
     compensation: 'sem_volta_pelo_liame',
+    // Pausar só segura o que ainda não saiu: uma pessoa pausa direto, com confirmação na tela (decisão do dono, 09/10/2026).
+    directByPerson: true,
     params: NoParams,
     plan(before) {
       const lido = EstadoDaMensagem.safeParse(before);

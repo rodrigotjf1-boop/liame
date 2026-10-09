@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import type { ActionRow } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
 import { type ApplyResult, CONNECTORS } from '../actions/connectors.js';
+import { TOOLS } from '../actions/tools.js';
 import { writeAudit } from '../audit/audit.js';
 import { ErroConector } from '../connectors/cliente-http.js';
 import { DATABASE } from '../database/database.module.js';
@@ -257,9 +258,13 @@ export class ActionExecutor {
     return r.rows[0]?.id ?? null;
   }
 
-  /** Aprovada pela política (autonomia) e o autopilot continua ligado agora. */
+  /**
+   * Aprovada pela política (autonomia) e o autopilot continua ligado agora; ou a ação que uma pessoa pediu e que a
+   * ferramenta deixa direta (`directByPerson`: pausar um envio de mensagem), que não depende do autopilot.
+   */
   private async autoApproved(row: ActionRow): Promise<boolean> {
     if (row.mode !== 'LIMITED_AUTO' && row.mode !== 'AUTO') return false;
+    if (row.actor_type === 'human' && TOOLS[row.tool]?.directByPerson) return true;
     return this.flags.isEnabled('autopilot', this.flags.context({ tenantId: row.tenant_id, brandId: row.brand_id }));
   }
 

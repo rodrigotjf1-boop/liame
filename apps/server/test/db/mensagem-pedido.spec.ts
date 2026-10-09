@@ -4,18 +4,15 @@ import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 import type { Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { CONNECTORS } from '../../src/actions/connectors.js';
-import { regemcastMensagemConnector } from '../../src/actions/regemcast-mensagem.js';
 import type { ActionExecutor } from '../../src/worker/action-executor.js';
 import type { TestApi } from '../helpers/api.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
-// A5 · Y5 (parte 2): o pedido de mensagem de WhatsApp pelo trilho de ação, do pedido à pausa, pela API e contra um
-// RegemCast falso que fala o MCP sem estado e guarda as campanhas, o plano do disparo, a confirmação e a chave de
-// idempotência como o de verdade. Em produção o conector do RegemCast ainda NÃO está no registro (entra com as telas,
-// depois do aceite do protótipo P15): aqui ele é registrado só neste arquivo, ANTES de o app carregar. Por isso o app e
-// os ajudantes entram por `import()` dentro do `beforeAll`.
-CONNECTORS.regemcast = regemcastMensagemConnector;
+// A5 · Y5: o pedido de mensagem de WhatsApp pelo trilho de ação, do pedido à pausa, pela API e contra um RegemCast
+// falso que fala o MCP sem estado e guarda as campanhas, o plano do disparo, a confirmação e a chave de idempotência
+// como o de verdade. O conector do RegemCast está no registro desde a parte 6; o que segura o pedido em produção é a
+// flag de escrita `whatsapp_campaign`, que nasce desligada. O app e os ajudantes entram por `import()` dentro do
+// `beforeAll`, depois de o endereço do RegemCast falso estar no ambiente.
 
 const TODAS = ['conversas.anuncio.ler', 'conta.ler', 'campanhas.ler', 'publicos.ler', 'modelos.ler', 'orcamento.ler', 'modelos.rascunhar', 'campanhas.rascunhar', 'campanhas.disparar'];
 const PLANO_MUDOU = 'O plano mudou desde a confirmação. Peça um plano novo com campanha_disparo_planejar.';
@@ -26,7 +23,7 @@ type Chamada = { token: string; ferramenta: string; argumentos: Record<string, u
 type Empresa = { cookie: string; tenantId: string; userId: string; brandId: string; secret: string; token: string; contaId: string; conta: string };
 type Resposta = Awaited<ReturnType<TestApi['call']>>;
 
-describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à pausa (A5 · Y5, conector registrado só no teste)', () => {
+describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à pausa (A5 · Y5)', () => {
   let api: TestApi;
   let database: Database;
   let executor: ActionExecutor;
@@ -249,7 +246,6 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
     await resetIpRateLimits();
   });
   afterAll(async () => {
-    delete CONNECTORS.regemcast;
     if (anterior.REGEMCAST_API_URL === undefined) delete process.env.REGEMCAST_API_URL;
     else process.env.REGEMCAST_API_URL = anterior.REGEMCAST_API_URL;
     await api?.close();
@@ -276,8 +272,8 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
       status: 'aguardando_aprovacao',
       policy: { allowed: true, mode: 'APPROVAL', violations: [] },
     });
-    // A regra é da distribuição (versão 5): mensagem só sai com a aprovação de uma pessoa.
-    expect(p.body.policy.versions[0]).toBe('plataforma@5');
+    // A regra é da distribuição: mensagem só sai com a aprovação de uma pessoa.
+    expect(p.body.policy.versions[0]).toBe('plataforma@6');
     // O pedido leu o plano no RegemCast, e mais nada. Sem a aprovação, o executor nem olha para ele.
     expect(doToken(e)).toEqual(['campanha_disparo_planejar']);
     await ciclo(e);
@@ -436,7 +432,7 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
     expect(chamadas.filter((x) => x.ferramenta === 'campanha_disparar')).toHaveLength(0);
   });
 
-  it('a volta do envio é pausar o que ainda não saiu: é um pedido novo, que também espera a aprovação; e a pausa não tem volta pelo Liame', async () => {
+  it('a volta do envio é pausar o que ainda não saiu: a pessoa pausa direto, sem o código do app, e o pedido fica com o nome dela; a pausa não tem volta pelo Liame', async () => {
     const c = rascunho(e);
     const enviada = await executar(e, 'mensagem_disparar', c);
     expect(enviada).toMatchObject({ status: 'executada' });
@@ -444,15 +440,24 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
     Object.assign(c, { naFila: 232, enviadas: 180 });
 
     const volta = await desfazer(e, enviada.id);
-    expect([volta.status, volta.body.tool, volta.body.action, volta.body.status, volta.body.undoes], JSON.stringify(volta.body)).toEqual([201, 'mensagem_pausar', 'mensagem.pausar', 'aguardando_aprovacao', enviada.id]);
+    // Pausar é direto para uma pessoa (política da distribuição, versão 6): o pedido já nasce aprovado pela política,
+    // com o nome de quem pausou, sem aprovação e sem o código do app. Quem executa é o worker.
+    expect([volta.status, volta.body.tool, volta.body.action, volta.body.status, volta.body.mode, volta.body.undoes], JSON.stringify(volta.body)).toEqual([201, 'mensagem_pausar', 'mensagem.pausar', 'aprovada', 'AUTO', enviada.id]);
+    expect(volta.body).toMatchObject({ status_reason: 'pedida por uma pessoa: esta ação não espera aprovação', requested_by: { id: e.userId }, approvals: [], policy: { versions: ['plataforma@6'] } });
     expect(c.situacao).toBe('enviando');
-    expect((await aprovar(e, volta.body)).body.status).toBe('aprovada');
     await ciclo(e);
     expect(await ver(e, volta.body.id)).toMatchObject({ status: 'executada' });
     expect(c.situacao).toBe('pausada');
     const pausas = chamadas.filter((x) => x.ferramenta === 'campanha_pausar');
     expect(pausas).toHaveLength(1);
     expect(String(pausas[0]!.argumentos.chaveIdempotencia)).toMatch(/^liame:pausa:[0-9a-f]{48}$/);
+    // A trilha diz quem pausou e que foi o worker que executou.
+    const trilha = await ownerQuery<{ action: string; actor_type: string; actor_id: string | null }>(
+      `select action, actor_type, actor_id from liame.audit_event where chain_key = $1 and resource_id = $2 order by chain_seq`,
+      [e.tenantId, volta.body.id],
+    );
+    expect(trilha.map((t) => t.action)).toEqual(['acao.desfazer', 'acao.executar']);
+    expect(trilha[0]).toMatchObject({ actor_type: 'human', actor_id: e.userId });
     // Retomar é de uma pessoa, no RegemCast: a pausa não tem volta pelo Liame.
     const semVolta = await desfazer(e, volta.body.id);
     expect(semVolta.status, JSON.stringify(semVolta.body)).not.toBe(201);

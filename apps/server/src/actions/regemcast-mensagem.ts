@@ -12,8 +12,8 @@ import type { ResourceState } from './tools.js';
 
 // O pedido de mensagem de WhatsApp pelo Action Service (A5, Y5; `plano-a5.md` D-A5-10 a D-A5-13): disparar uma campanha
 // que o Liame montou em rascunho no RegemCast, e pausar o que ainda não saiu. Só depois da aprovação de uma pessoa, com
-// a flag `whatsapp_campaign` ligada. Nesta entrega o conector NÃO está no registro (`CONNECTORS`): nenhum pedido chega a
-// ele. Fica pronto e desligado, como o do Google ficou na Y2.
+// a flag `whatsapp_campaign` ligada. O conector está no registro (`CONNECTORS`) desde a parte 6 da Y5; sem a flag, que
+// nasce desligada para todos, nenhum pedido passa do trilho.
 //
 // O recurso é a campanha no RegemCast: `resource_id` = `mensagem:<id>`; `account_id` é a conta conectada do RegemCast.
 //

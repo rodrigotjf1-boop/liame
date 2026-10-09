@@ -471,7 +471,7 @@ export class ActionService {
     const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params };
     // Quem altera é uma pessoa: o plano novo é avaliado como pedido dela, também no pedido que o funcionário de IA fez.
     const decision = await this.decide(tx, tenantId, row.brand_id, tool, connector, request, plan);
-    const { mode, status, reason } = await this.statusFor(decision.mode, { tenantId, userId: auth.userId }, row.brand_id, tool);
+    const { mode, status, reason } = await this.statusFor(decision.mode, { tenantId, userId: auth.userId, ator: 'human' }, row.brand_id, tool);
     const planHash = planHashOf(request, plan, read.version);
     // O pedido que nasceu de uma recomendação e passa a fazer outra coisa (de reduzir para aumentar) deixa de ser dela:
     // a ligação sai, para a prontidão do funcionário não contar o que a pessoa decidiu por conta própria.
@@ -844,17 +844,19 @@ export class ActionService {
 
   /**
    * Autonomia sem o autopilot ligado volta para aprovação (ADR-012: flag de escrita nasce desligada). A ferramenta que
-   * sempre espera uma pessoa (`alwaysApproval`) volta para aprovação mesmo com ele ligado.
+   * sempre espera uma pessoa (`alwaysApproval`) volta para aprovação mesmo com ele ligado. A ação que uma pessoa faz
+   * direto (`directByPerson`: pausar um envio de mensagem) já sai aprovada quando é ela que pede, sem o autopilot.
    */
   private async statusFor(
     mode: AutonomyMode,
-    quem: Pick<Solicitante, 'tenantId' | 'userId'>,
+    quem: Pick<Solicitante, 'tenantId' | 'userId' | 'ator'>,
     brandId: string | null,
-    tool?: Pick<ToolDefinition, 'alwaysApproval'>,
+    tool?: Pick<ToolDefinition, 'alwaysApproval' | 'directByPerson'>,
   ): Promise<{ mode: AutonomyMode; status: ActionStatus; reason: string | null }> {
     if (mode === 'SHADOW') return { mode, status: 'sombra', reason: 'modo sombra: registra, não executa' };
     if (mode === 'LIMITED_AUTO' || mode === 'AUTO') {
       if (tool?.alwaysApproval) return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: `autonomia ${mode} pedida, mas esta ação sempre espera a aprovação de uma pessoa` };
+      if (tool?.directByPerson && quem.ator === 'human') return { mode, status: 'aprovada', reason: 'pedida por uma pessoa: esta ação não espera aprovação' };
       const autopilot = await this.flags.isEnabled('autopilot', this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
       if (autopilot) return { mode, status: 'aprovada', reason: 'aprovada pela política (autonomia)' };
       return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: `autonomia ${mode} pedida, mas o autopilot está desligado` };
