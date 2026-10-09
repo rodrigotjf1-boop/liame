@@ -283,6 +283,21 @@ export {
   StopGoogleConversionDestinationRequest,
 } from './conversoes.js';
 export {
+  MessagingAccount,
+  MessagingBudget,
+  MessagingBudgetPeriod,
+  MessagingCampaign,
+  MessagingCampaignDetailResponse,
+  MessagingCampaignId,
+  MessagingCampaignQuery,
+  MessagingCampaigns,
+  MessagingCost,
+  MessagingQuery,
+  MessagingReady,
+  MessagingResponse,
+  MessagingWhatsapp,
+} from './mensageria.js';
+export {
   CouponCampaign,
   CouponCode,
   CouponItem,

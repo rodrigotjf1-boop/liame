@@ -78,8 +78,9 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
   - a origem do clique que levou ao pedido (como `gclid` e `fbclid`, captados no cardápio da própria loja);
   - o telefone do comprador, que o Liame transforma na chegada num código pseudonimizado e **não guarda**.
 - Do **RegemCast**, o Liame recebe só a origem das conversas abertas por anúncio (qual anúncio e quando), **sem o conteúdo das mensagens**, e o telefone, tratado da mesma forma.
+- Do **RegemCast**, com a função de mensagens ligada para a empresa e conforme as permissões da conexão, o Liame também lê, na hora em que uma pessoa abre a tela **Mensagens**: se a conta do WhatsApp pode enviar, os tetos de gasto de mensagens e quanto já saiu, quantos modelos de mensagem e quantos públicos existem (só a contagem) e as campanhas de mensagens com os números de cada uma (quantas foram enviadas, entregues, lidas, respondidas e quantas falharam) e o custo. **Nenhum telefone, nome de contato ou conteúdo de conversa chega ao Liame por essa leitura, e ela não é guardada:** é mostrada na tela e descartada.
 - Pedidos de marketplaces (iFood, 99Food e outros) chegam **sem nenhuma identificação do comprador**.
-- **Para que serve:** medir quais campanhas trouxeram vendas.
+- **Para que serve:** medir quais campanhas trouxeram vendas e, na tela Mensagens, mostrar o que foi enviado e o que custou.
 - **O que o Liame envia ao Regem:** só quando a criação de cupom de campanha está ligada para a empresa e o Dono da loja liberou essa permissão. Vai a regra do cupom (código, nome, desconto, pedido mínimo, validade e limites de uso), depois da aprovação de uma pessoa da empresa. **Nenhum dado pessoal é enviado.**
 - **Revogação:** a qualquer momento, em **Contas conectadas**. A credencial da loja é apagada do Liame na hora e revogada também no Regem.
 - **Cliente anonimizado:** quando a loja anonimiza um cliente no Regem, o Liame apaga o código pseudonimizado dele.

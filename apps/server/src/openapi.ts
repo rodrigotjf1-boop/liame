@@ -38,6 +38,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('resumo', 'Resumo: a página inicial do Lite, numa chamada, com o dinheiro do marketing nos últimos 7 dias, o veredito, os pedidos e o que precisa de você (A3)')
     .addTag('pecas', 'Peças do Criativo: o pedido de peças de anúncio para uma oferta de Minha marca e as peças, cada uma com a conferência do código, item por item; nada vai para a Meta por aqui (A4)')
     .addTag('conversoes', 'Conversões para o Google: a venda confirmada no caixa, vinda de um clique em anúncio, informada ao Google; a situação de cada conta, as conversões da conta e escolher ou parar o destino (A5)')
+    .addTag('mensageria', 'Mensageria: o que a tela Mensagens lê do RegemCast na hora, sem guardar: se a conta do WhatsApp pode enviar, o teto de gasto, os modelos e os públicos (só contagens) e as campanhas de mensagens com os números e o custo; só leitura (A5)')
     .addCookieAuth('liame_sessao', { type: 'apiKey', in: 'cookie', name: 'liame_sessao', description: 'Sessão aberta pelo POST /v1/auth/login (httpOnly)' }, 'liame_sessao')
     .build();
   return comFluxos(SwaggerModule.createDocument(app, config));
