@@ -20,6 +20,8 @@ import { type AcaoDeAnuncio, anuncioApresentado, ehPedidoDeAnuncio, erroAoDesfaz
 import type { Decisao } from './barra-da-decisao';
 import { marcasAtivas, planosDasMarcas } from './buscar-planos';
 import { DetalheAnuncio, type Volta } from './detalhe-anuncio';
+import { DetalheMensagem, type Feito } from './detalhe-mensagem';
+import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemApresentada } from './mensagem-textos';
 import { DetalhePedido } from './detalhe-pedido';
 import { DetalhePlano } from './detalhe-plano';
 import { chaveDaAcao, chaveDoPlano, type ItemDaLista, montarLista, pendentesDe } from './lista';
@@ -141,8 +143,8 @@ export function AprovacoesTela() {
     };
   }, [temAnuncio, tentativa]);
   const mes = mesDoPedido(verba);
-  /** O pedido em palavras, para a lista e os avisos: o de anúncio tem os textos dele. */
-  const emPalavras = (a: ActionResponse) => (ehPedidoDeAnuncio(a) ? anuncioApresentado(a, mes) : apresentar(a));
+  /** O pedido em palavras, para a lista e os avisos: o de anúncio e o de mensagem têm os textos deles. */
+  const emPalavras = (a: ActionResponse) => (ehPedidoDeAnuncio(a) ? anuncioApresentado(a, mes) : ehPedidoDeMensagem(a) ? mensagemApresentada(a) : apresentar(a));
   const planos = carga.tipo === 'ok' ? carga.planos : [];
   const marcas = carga.tipo === 'ok' ? carga.marcas : [];
   const grupos = montarLista(acoes, planos, agora);
@@ -256,6 +258,25 @@ export function AprovacoesTela() {
     return { ok: true };
   }
 
+  // ---- o pedido de mensagem (P15): conferir de novo o plano que mudou sozinho, e pausar o envio, que é direto.
+  async function conferirMensagem(acao: AcaoDeMensagem): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/actions/{id}/recheck', { params: { path: { id: acao.id } } }));
+    if (!r.ok) return { ok: false, texto: mensagemDe(r.problema) };
+    if (r.data.plan_hash !== acao.plan_hash) avisar(r.data.blocked_reason ? 'O plano mudou no RegemCast, e ainda há um impedimento.' : 'Conferido: o plano de agora já pode ser aprovado.');
+    await carregar();
+    if (r.data.plan_hash !== acao.plan_hash) focarOTitulo();
+    return { ok: true };
+  }
+
+  async function pausarMensagem(acao: AcaoDeMensagem): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/actions/{id}/undo', { params: { path: { id: acao.id } } }));
+    if (!r.ok) return { ok: false, texto: mensagemDe(r.problema) };
+    avisar(r.data.status === 'aguardando_aprovacao' ? 'Pausa pedida. Nesta empresa ela espera a aprovação de uma pessoa.' : 'Pausa pedida. O que já saiu não volta.');
+    await carregar();
+    focarOTitulo();
+    return { ok: true };
+  }
+
   // ---- os planos do Estrategista: a resposta de cada decisão já é o plano como ficou.
   function recusaDoPlano(problema: Problema): Decisao {
     const erro = erroDoPlano(problema);
@@ -345,6 +366,7 @@ export function AprovacoesTela() {
     const p = emPalavras(a);
     // No pedido de anúncio, o risco segue a direção do dinheiro, e quem pediu pode ser um funcionário de IA.
     const anuncio = ehPedidoDeAnuncio(a) ? a : null;
+    const mensagem = ehPedidoDeMensagem(a) ? a : null;
     const risco = anuncio ? textosDoAnuncio(anuncio, mes).risco : riscoDe(a);
     const quem = quemPediu(a);
     return (
@@ -365,7 +387,7 @@ export function AprovacoesTela() {
               ) : (
                 <>
                   <span>{quem.nome}</span>
-                  <span>{anuncio ? etiquetaDoAnuncio(anuncio) : etiquetaDoDecidido(a)}</span>
+                  <span>{anuncio ? etiquetaDoAnuncio(anuncio) : mensagem ? etiquetaDaMensagem(mensagem) : etiquetaDoDecidido(a)}</span>
                 </>
               )}
             </span>
@@ -412,6 +434,29 @@ export function AprovacoesTela() {
         aoDesfazer={desfazer}
         aoPedirDeNovo={setPedindo}
         aoAbrir={(id) => abrir(chaveDaAcao(id), true)}
+      />
+    );
+  } else if (aberta?.tipo === 'acao' && ehPedidoDeMensagem(aberta.acao)) {
+    const mensagem = aberta.acao;
+    // Quem pausou este envio: o pedido de pausa que a lista traz (a volta dele).
+    const daPausa = mensagem.undone_by ? acoes.find((x) => x.id === mensagem.undone_by?.id) : undefined;
+    detalhe = (
+      <DetalheMensagem
+        acao={mensagem}
+        grupo={grupoDe(mensagem, agora)}
+        agora={agora}
+        pro={pro}
+        podeDecidir={podeDecidir}
+        podeOperar={pode('campanhas.operar')}
+        temApp={temApp}
+        pausa={daPausa && daPausa.status === 'executada' ? { quem: daPausa.requested_by.name, quando: daPausa.updated_at } : null}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+        aoConferir={conferirMensagem}
+        aoPausar={pausarMensagem}
       />
     );
   } else if (aberta?.tipo === 'acao') {
