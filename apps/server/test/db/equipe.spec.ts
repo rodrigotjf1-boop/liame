@@ -13,6 +13,7 @@ import { SombraLoop } from '../../src/worker/sombra-loop.js';
 import { SombraService } from '../../src/worker/sombra.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import { ligarCriativo, ligarIa } from '../helpers/ia.js';
+import { contaDoRegemcast, semearMensagemDoCrm } from '../helpers/mensagens-semeadas.js';
 import { pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
@@ -114,6 +115,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
       pesquisador: 'desligado_pela_liame',
       trafego: 'desligado_pela_liame',
       criativo: 'desligado_pela_liame',
+      crm: 'desligado_pela_liame',
     });
     expect(t).toMatchObject({ ai: { enabled: false, spent_usd_micros: '0', band: 'livre' }, stop: null, can_manage: true, can_stop: true });
     expect(t.month.from <= hoje && hoje <= t.month.to).toBe(true);
@@ -125,7 +127,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     await ligarSombra(e.tenantId);
     t = await ver(e, e.brandId);
     // O Criativo precisa da flag dele além da IA: sem ela, segue desligado pela distribuição.
-    expect(situacoes(t)).toEqual({ lia: 'ativo', analista: 'ativo', relatorios: 'ativo', compliance: 'ativo', estrategista: 'ativo', pesquisador: 'ativo', trafego: 'sombra', criativo: 'desligado_pela_liame' });
+    expect(situacoes(t)).toEqual({ lia: 'ativo', analista: 'ativo', relatorios: 'ativo', compliance: 'ativo', estrategista: 'ativo', pesquisador: 'ativo', trafego: 'sombra', criativo: 'desligado_pela_liame', crm: 'desligado_pela_liame' });
     await ligarCriativo(flags, e.tenantId);
     t = await ver(e, e.brandId);
     expect(situacoes(t).criativo).toBe('ativo');
@@ -135,7 +137,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     expect(parada.status).toBe(201);
     t = await ver(e, e.brandId);
     expect(t.stop).toMatchObject({ id: parada.body.id, level: 'tenant', by_company: true, reason: 'Revisando os textos da semana', by: { id: e.userId } });
-    expect(situacoes(t)).toEqual({ lia: 'parado', analista: 'parado', relatorios: 'ativo', compliance: 'ativo', estrategista: 'parado', pesquisador: 'parado', trafego: 'sombra', criativo: 'parado' });
+    expect(situacoes(t)).toEqual({ lia: 'parado', analista: 'parado', relatorios: 'ativo', compliance: 'ativo', estrategista: 'parado', pesquisador: 'parado', trafego: 'sombra', criativo: 'parado', crm: 'desligado_pela_liame' });
     expect((await api.call('DELETE', `/v1/kill-switches/${parada.body.id}`, { cookie: e.cookie })).status).toBe(204);
     expect((await ver(e, e.brandId)).stop).toBeNull();
   });
@@ -219,6 +221,109 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     const parada = await api.call('POST', '/v1/kill-switches', { cookie: e.cookie, body: { level: 'tenant', reason: 'Revisando tudo' } });
     expect(await criativo()).toMatchObject({ status: 'parado', blocked_by: null });
     expect((await api.call('DELETE', `/v1/kill-switches/${parada.body.id}`, { cookie: e.cookie })).status).toBe(204);
+  });
+
+  it('o CRM e mensageria (A5 · P16): ainda não ligado sem as flags dele; ligado, diz o que falta para propor; as mensagens do mês e o que os cupons trouxeram; e desligar', async () => {
+    const e = await empresa();
+    await ligarIa(flags, e.tenantId);
+    const crm = async (quem: { cookie: string } = e) => doMembro(await ver(quem, e.brandId), 'crm');
+    const ligar = async (flag: string) => {
+      await ownerQuery(`insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), $1, 'tenant', $2, 'true'::jsonb, 'testes')`, [flag, e.tenantId]);
+      flags.invalidate();
+    };
+    const zerado = { mensagens_propostas: '0', mensagens_enviadas: '0', mensagens_recusadas: '0', mensagens_esperando: '0', pedidos_com_cupom: '0', caixa_com_cupom: '0', retiradas_na_conferencia: '0' };
+
+    // Com a IA ligada e sem as flags dele: ainda não está ligado para a empresa, e não há o que dizer do que falta.
+    let t = await ver(e, e.brandId);
+    expect(doMembro(t, 'crm')).toMatchObject({ kind: 'ia', status: 'desligado_pela_liame', working_now: false, can_pause: true, paused: null, in_progress: null, blocked_by: null, cost: { usd_micros: '0', calls: 0 } });
+    expect(numeros(t, 'crm')).toEqual(zerado);
+    // Só a flag dele não basta: sem as duas do envio de mensagens ele não tem como propor.
+    await ligar('crm');
+    expect((await crm()).status).toBe('desligado_pela_liame');
+    await ligar('mensageria');
+    expect((await crm()).status).toBe('desligado_pela_liame');
+    await ligar('whatsapp_campaign');
+
+    // Ligado, sem o RegemCast conectado nesta marca: não há para quem propor.
+    expect(await crm()).toMatchObject({ status: 'ativo', blocked_by: 'sem_regemcast', in_progress: null });
+    const conta = await contaDoRegemcast(e);
+    // Com o RegemCast, falta a oferta de Minha marca (ele não inventa oferta nem preço).
+    expect(await crm()).toMatchObject({ status: 'ativo', blocked_by: 'sem_oferta' });
+    const dossie = {
+      identity: { summary: 'Hamburgueria de bairro com smash feito na chapa', audience: 'Quem mora ou trabalha no Centro', differentiator: 'Pão feito na casa todo dia', since: '2019' },
+      voice: { traits: ['Direta'], rules: ['Frases curtas.'], do_example: 'Bateu a fome? O smash sai da chapa rapidinho.', dont_example: '' },
+      products: { items: ['Smash Clássico R$ 29,90'] },
+      offers: { items: ['Combo sexta: smash, batata e refri por R$ 34,90'] },
+      forbidden: { items: [] },
+      competitors: { items: [] },
+      region: { area: 'Centro e Lapa', pickup: true },
+    };
+    const salvo = await api.call('PUT', '/v1/brand-dossier', { cookie: e.cookie, body: { brand_id: e.brandId, base_version: 0, content: dossie } });
+    expect(salvo.status, JSON.stringify(salvo.body)).toBe(200);
+    expect(await crm()).toMatchObject({ status: 'ativo', blocked_by: null, in_progress: null, working_now: false });
+
+    // Três mensagens propostas por ele no mês: uma enviada (com o cupom já criado no Regem), uma esperando a decisão e
+    // uma recusada. E duas chamadas ao modelo para escrever.
+    const loja = randomUUID();
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'regem', $4, 'Loja Centro', 'BRL', $5)`, [
+      loja,
+      e.tenantId,
+      e.brandId,
+      `loja-${randomUUID().slice(0, 8)}`,
+      FUSO,
+    ]);
+    const ha = (minutos: number) => new Date(Date.now() - minutos * 60_000).toISOString();
+    const alvo = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId, conta };
+    await semearMensagemDoCrm(alvo, { situacao: 'executada', nome: 'Sobremesa por nossa conta', pessoas: 176, cupom: { loja, codigo: 'DOCE10', nascido: ha(120) }, aprovadaPor: e.userId, haMinutos: 3 });
+    await semearMensagemDoCrm(alvo, { situacao: 'aguardando', nome: 'Sexta em dobro', cupom: { loja, codigo: 'SEXTA10', nascido: null }, haMinutos: 2 });
+    await semearMensagemDoCrm(alvo, { situacao: 'recusada', nome: 'Combo kids', haMinutos: 1 });
+    // Contam como propostas do mês, e em mais nada: a que quem opera tirou da fila (não é recusa de quem aprova) e a
+    // que passou do prazo antes de a rotina de expirar chegar nela (já não espera ninguém).
+    await semearMensagemDoCrm(alvo, { situacao: 'cancelada', nome: 'Tirada da fila', haMinutos: 4 });
+    await semearMensagemDoCrm(alvo, { situacao: 'aguardando', nome: 'Passou do prazo', haMinutos: 6, venceuHaMinutos: 5 });
+    // Não contam em nada: a mensagem de outro mês (quarenta dias atrás é sempre antes deste mês), mesmo com o cupom
+    // rendendo agora, e o pedido de mensagem que não é dele.
+    await semearMensagemDoCrm(alvo, { situacao: 'executada', nome: 'Do mês passado', cupom: { loja, codigo: 'ANTIGO10', nascido: ha(60 * 24 * 40) }, aprovadaPor: e.userId, haMinutos: 60 * 24 * 40 });
+    await semearMensagemDoCrm(alvo, { situacao: 'aguardando', nome: 'De outro funcionário', funcionario: 'trafego', haMinutos: 2 });
+    await chamada(e, 'crm.mensagem', 40_000);
+    await chamada(e, 'crm.mensagem', 50_000);
+    const venda = (codigo: string | null, quando: string, status: 'confirmado' | 'cancelado', receita: number, devolvido = 0) =>
+      ownerQuery(
+        `insert into liame.order_fact (id, tenant_id, brand_id, connected_account_id, provider, external_id, channel, channel_group, status, currency, timezone, revenue_micros, refunded_micros, coupon_code,
+                                       confirmed_at, cancelled_at, source_version, source_updated_at)
+         values (gen_random_uuid(), $1, $2, $3, 'regem', $4, 'cardapio', 'cardapio', $5::text, 'BRL', $6, $7, $8, $9, $10::timestamptz, case when $5::text = 'cancelado' then $10::timestamptz + interval '10 minutes' end, 1, now())`,
+        [e.tenantId, e.brandId, loja, `p-${randomUUID().slice(0, 12)}`, status, FUSO, receita, devolvido, codigo, quando],
+      );
+    await venda('DOCE10', ha(60), 'confirmado', 30_000_000);
+    await venda('DOCE10', ha(50), 'confirmado', 24_000_000, 4_000_000);
+    // Não contam: o cancelado, o de antes de o cupom nascer, o de outro cupom e o do cupom que ainda não nasceu.
+    await venda('DOCE10', ha(40), 'cancelado', 50_000_000);
+    await venda('DOCE10', ha(180), 'confirmado', 70_000_000);
+    await venda('OUTRO15', ha(60), 'confirmado', 60_000_000);
+    await venda('SEXTA10', ha(60), 'confirmado', 45_000_000);
+    // Nem o pedido de agora com o cupom da mensagem do mês passado: o bloco é das mensagens deste mês.
+    await venda('ANTIGO10', ha(30), 'confirmado', 80_000_000);
+
+    t = await ver(e, e.brandId);
+    // Cinco propostas no mês (a enviada, a que espera, a recusada, a tirada da fila e a que passou do prazo); dois
+    // pedidos com o cupom, R$ 30,00 + (R$ 24,00 − R$ 4,00 devolvidos) = R$ 50,00.
+    expect(numeros(t, 'crm')).toEqual({ mensagens_propostas: '5', mensagens_enviadas: '1', mensagens_recusadas: '1', mensagens_esperando: '1', pedidos_com_cupom: '2', caixa_com_cupom: '50000000', retiradas_na_conferencia: '0' });
+    expect(doMembro(t, 'crm')).toMatchObject({ status: 'ativo', blocked_by: null, cost: { usd_micros: '90000', calls: 2 } });
+    // Os outros funcionários seguem sem os números dele, e ele sem os deles.
+    expect(numeros(t, 'criativo')).not.toHaveProperty('mensagens_propostas');
+    expect(numeros(t, 'crm')).not.toHaveProperty('pecas_escritas');
+
+    // A empresa desliga: ele para de propor; o pedido que já espera em Aprovações segue contado.
+    const desligado = await api.call('POST', '/v1/team/members/crm/pause', { cookie: e.cookie, body: { brand_id: e.brandId, reason: 'Vamos rever as mensagens' } });
+    expect(desligado.status, JSON.stringify(desligado.body)).toBe(200);
+    expect(doMembro(TeamResponse.parse(desligado.body), 'crm')).toMatchObject({ status: 'desligado', blocked_by: null, paused: { by: { id: e.userId }, reason: 'Vamos rever as mensagens' } });
+    expect(numeros(TeamResponse.parse(desligado.body), 'crm').mensagens_esperando).toBe('1');
+    const ligado = await api.call('POST', '/v1/team/members/crm/resume', { cookie: e.cookie, body: { brand_id: e.brandId } });
+    expect(doMembro(TeamResponse.parse(ligado.body), 'crm')).toMatchObject({ status: 'ativo', paused: null });
+
+    // Outra empresa não vê nada disto.
+    const vizinha = await empresa();
+    expect(numeros(await ver(vizinha, vizinha.brandId), 'crm')).toEqual(zerado);
   });
 
   it('o custo de IA de cada um e o que fez no mês saem do banco, por marca', async () => {
@@ -335,8 +440,8 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     expect(await ativo()).toBe(false);
     expect((await api.call('POST', '/v1/team/members/lia/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).body.code).toBe('ja-desligado');
     expect((await api.call('POST', '/v1/team/members/compliance/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).body.code).toBe('nao-desliga');
-    // Quem não é da equipe desta fase não tem o que desligar.
-    expect((await api.call('POST', '/v1/team/members/crm/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).status).toBe(400);
+    // Quem não é da equipe desta fase não tem o que desligar (o CRM e mensageria entrou na A5; o de redes sociais, ainda não).
+    expect((await api.call('POST', '/v1/team/members/social/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).status).toBe(400);
 
     const volta = await api.call('POST', '/v1/team/members/lia/resume', { cookie: e.cookie, body: { brand_id: e.brandId } });
     expect(volta.status).toBe(200);

@@ -20,6 +20,7 @@ export const NOME_DO_MEMBRO: Record<string, string> = {
   pesquisador: 'Pesquisador',
   trafego: 'Gestor de tráfego',
   criativo: 'Criativo',
+  crm: 'CRM e mensageria',
 };
 
 /** O funcionário na frase ("o trabalho do Analista de dados", "de Relatórios"), como a tela escreve. */
@@ -32,6 +33,7 @@ export const DO_MEMBRO: Record<string, string> = {
   pesquisador: 'do Pesquisador',
   trafego: 'do Gestor de tráfego',
   criativo: 'do Criativo',
+  crm: 'do CRM e mensageria',
 };
 
 const SITUACAO: Record<string, string> = {
@@ -73,6 +75,17 @@ const NUMERO: Record<string, string> = {
   pecas_hoje: 'pecas_escritas_hoje',
   pecas_esperando: 'pecas_esperando_a_decisao_de_uma_pessoa_agora',
   pecas_barradas: 'pecas_barradas_na_conferencia_agora',
+  // O CRM e mensageria (A5, P16): as mensagens que ele propôs no mês, as que esperam agora e o que os cupons delas trouxeram.
+  mensagens_propostas: 'mensagens_propostas_no_mes',
+  mensagens_enviadas: 'mensagens_do_mes_aprovadas_por_uma_pessoa_e_enviadas',
+  mensagens_recusadas: 'mensagens_do_mes_recusadas_por_uma_pessoa',
+  mensagens_esperando: 'mensagens_esperando_a_decisao_de_uma_pessoa_agora',
+  pedidos_com_cupom: 'pedidos_confirmados_no_caixa_com_o_cupom_das_mensagens_do_mes',
+};
+/** Por que o CRM e mensageria, ligado, não tem como propor agora (`blocked_by`), como a ficha dele diz. */
+const NAO_PODE_PROPOR: Record<string, string> = {
+  sem_regemcast: 'o RegemCast não está conectado nesta marca: é ele que envia as mensagens e guarda os contatos',
+  sem_oferta: 'Minha marca ainda não tem oferta: para uma promoção ele parte de uma oferta de lá, e não inventa oferta nem preço',
 };
 /** Por que o Criativo, ligado, não pode escrever agora (`blocked_by`), como a ficha dele diz. */
 const NAO_PODE_ESCREVER: Record<string, string> = {
@@ -176,7 +189,9 @@ function doMembro(m: TeamMember, naTela: (usdMicros: string) => string, fuso: st
   const numeros: Record<string, string> = {};
   let soma: string | null = null;
   for (const s of m.stats) {
-    if (s.unit === 'brl_micros') soma = s.value;
+    // O valor que os cupons das mensagens trouxeram é dinheiro do caixa, e não a soma da sombra.
+    if (s.key === 'caixa_com_cupom') numeros.valor_confirmado_no_caixa_com_o_cupom_das_mensagens_do_mes = dinheiro(s.value)!;
+    else if (s.unit === 'brl_micros') soma = s.value;
     else if (s.key === 'retiradas_na_conferencia') numeros[RETIRADAS[m.key] ?? TEXTOS_RETIRADOS] = inteiro(s.value)!;
     else numeros[NUMERO[s.key] ?? s.key] = inteiro(s.value)!;
   }
@@ -189,16 +204,24 @@ function doMembro(m: TeamMember, naTela: (usdMicros: string) => string, fuso: st
   // O Criativo (A4, P12) só trabalha a pedido, e além da IA precisa estar ligado para a empresa.
   const criativo = m.key === 'criativo';
   const escrevendo = criativo && m.working_now ? (m.in_progress ?? null) : null;
+  // O CRM e mensageria (A5, P16) propõe mensagens, sempre como pedido em Aprovações, e precisa estar ligado para a empresa.
+  const crm = m.key === 'crm';
   return soOQueExiste({
     funcionario: NOME_DO_MEMBRO[m.key] ?? m.key,
-    situacao: criativo && m.status === 'desligado_pela_liame' ? 'desligado pela Liame (a IA ou o Criativo não está ligado para a empresa)' : (SITUACAO[m.status] ?? m.status.replaceAll('_', ' ')),
-    trabalha: criativo ? 'com um modelo de IA, só quando alguém pede uma peça na tela Criativos' : m.kind === 'ia' ? 'com um modelo de IA' : doRevisor ? 'por regras do sistema; o custo de IA é do revisor de IA, que lê o texto depois das regras' : 'por regras do sistema',
+    situacao:
+      criativo && m.status === 'desligado_pela_liame'
+        ? 'desligado pela Liame (a IA ou o Criativo não está ligado para a empresa)'
+        : crm && m.status === 'desligado_pela_liame'
+          ? 'ainda não ligado para a empresa (quem liga é a Liame, a pedido do dono); enquanto isso, ninguém propõe mensagem e ele não custa nada'
+          : (SITUACAO[m.status] ?? m.status.replaceAll('_', ' ')),
+    trabalha: criativo ? 'com um modelo de IA, só quando alguém pede uma peça na tela Criativos' : crm ? 'com um modelo de IA, no modo Aprovação: toda mensagem é um pedido em Aprovações, que uma pessoa aprova com o código do app; nenhuma mensagem sai sozinha' : m.kind === 'ia' ? 'com um modelo de IA' : doRevisor ? 'por regras do sistema; o custo de IA é do revisor de IA, que lê o texto depois das regras' : 'por regras do sistema',
     trabalhando_agora: m.working_now ? 'sim' : null,
     // O que ele escreve agora: sem o nome de quem pediu.
     escrevendo_agora: escrevendo
       ? soOQueExiste({ o_que: escrevendo.count ? 'peças novas' : 'outra versão de uma peça', pecas_pedidas: escrevendo.count ? inteiro(escrevendo.count) : null, oferta: escrevendo.subject, pedido_feito: quando(escrevendo.since, fuso) })
       : null,
     nao_pode_escrever_agora: criativo && m.blocked_by ? (NAO_PODE_ESCREVER[m.blocked_by] ?? m.blocked_by.replaceAll('_', ' ')) : null,
+    nao_pode_propor_agora: crm && m.blocked_by ? (NAO_PODE_PROPOR[m.blocked_by] ?? m.blocked_by.replaceAll('_', ' ')) : null,
     desligado_desde: m.paused ? quando(m.paused.at, fuso) : null,
     motivo_de_estar_desligado: m.paused?.reason ?? null,
     custo_de_ia_no_mes: naTela(m.cost.usd_micros),
@@ -303,6 +326,18 @@ function doAcontecimento(i: TeamActivityItem, fuso: string) {
       return o({ o_que: 'teve uma peça recusada, com o motivo guardado', peca: i.subject, quem_decidiu: pessoa });
     case 'peca_contestada':
       return o({ o_que: 'teve a conferência de uma peça contestada: a peça segue barrada, e o motivo ficou guardado', peca: i.subject, quem_decidiu: pessoa });
+    case 'propos_mensagem':
+      return o({ o_que: 'propôs uma mensagem de WhatsApp, como pedido em Aprovações', mensagem: i.subject, pessoas_que_podem_receber: i.count === null ? null : inteiro(n) });
+    case 'mensagem_enviada':
+      return o({ o_que: 'teve uma mensagem aprovada: o envio foi para o RegemCast', mensagem: i.subject, quem_decidiu: pessoa });
+    case 'mensagem_recusada':
+      return o({ o_que: 'teve uma mensagem recusada: nada foi enviado', mensagem: i.subject });
+    case 'mensagem_cancelada':
+      return o({ o_que: 'teve um pedido de mensagem cancelado por quem opera: nada foi enviado', mensagem: i.subject });
+    case 'mensagem_expirou':
+      return o({ o_que: 'teve um pedido de mensagem que expirou sem decisão: nada foi enviado', mensagem: i.subject });
+    case 'mensagem_falhou':
+      return o({ o_que: 'teve uma mensagem aprovada que não foi enviada: o envio falhou', mensagem: i.subject });
     case 'desligado':
       return o({ o_que: 'foi desligado pela empresa nesta marca', quem_decidiu: pessoa });
     case 'ligado':

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { atividadeDoMembro } from '../../src/equipe/atividade.js';
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
+import { contaDoRegemcast, semearMensagemDoCrm } from '../helpers/mensagens-semeadas.js';
 import { decisaoDaPeca, pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
@@ -392,6 +393,62 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     expect((await atividade(outraEmpresa, outraEmpresa.brandId, 'criativo')).items).toEqual([]);
   });
 
+  it('CRM e mensageria (A5 · P16): a mensagem que ele propôs e o que aconteceu com o pedido; sem a permissão das campanhas, sem o nome', async () => {
+    const e = await empresa();
+    const conta = await contaDoRegemcast(e);
+    const alvo = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId, conta };
+    // Há 50: propôs "Sobremesa por nossa conta"; há 40, uma pessoa aprovou e o envio foi para o RegemCast.
+    await semearMensagemDoCrm(alvo, { situacao: 'executada', nome: 'Sobremesa por nossa conta', pessoas: 176, haMinutos: 50, decididaHaMinutos: 40, aprovadaPor: e.userId });
+    // Há 30: propôs "Combo kids"; há 20, uma pessoa recusou.
+    await semearMensagemDoCrm(alvo, { situacao: 'recusada', nome: 'Combo kids', pessoas: 96, haMinutos: 30, decididaHaMinutos: 20 });
+    // Há 10: propôs "Sexta em dobro", que ainda espera a decisão: não há desfecho para contar.
+    await semearMensagemDoCrm(alvo, { situacao: 'aguardando', nome: 'Sexta em dobro', haMinutos: 10 });
+    // Há 8: propôs "Volte a pedir"; há 6, aprovada, e o envio falhou. Há 5: propôs "Promoção antiga"; há 4, expirou.
+    await semearMensagemDoCrm(alvo, { situacao: 'falhou', nome: 'Volte a pedir', haMinutos: 8, decididaHaMinutos: 6, aprovadaPor: e.userId });
+    await semearMensagemDoCrm(alvo, { situacao: 'expirada', nome: 'Promoção antiga', haMinutos: 5, decididaHaMinutos: 4 });
+    // Há 3: propôs "Tirada da fila"; há 2, quem opera cancelou o pedido (não é a recusa de quem aprova).
+    await semearMensagemDoCrm(alvo, { situacao: 'cancelada', nome: 'Tirada da fila', haMinutos: 3, decididaHaMinutos: 2 });
+    // O pedido de mensagem de outro funcionário não entra no histórico dele.
+    await semearMensagemDoCrm(alvo, { situacao: 'aguardando', nome: 'De outro funcionário', funcionario: 'trafego', haMinutos: 1 });
+
+    const t = await atividade(e, e.brandId, 'crm');
+    expect(tipos(t)).toEqual([
+      'mensagem_cancelada',
+      'propos_mensagem',
+      'mensagem_expirou',
+      'propos_mensagem',
+      'mensagem_falhou',
+      'propos_mensagem',
+      'propos_mensagem',
+      'mensagem_recusada',
+      'propos_mensagem',
+      'mensagem_enviada',
+      'propos_mensagem',
+    ]);
+    expect(t.items[0]).toMatchObject({ subject: 'Tirada da fila', by: null, mine: false });
+    expect(t.items[2]).toMatchObject({ subject: 'Promoção antiga', by: null, mine: false });
+    expect(t.items[4]).toMatchObject({ subject: 'Volte a pedir', by: null });
+    expect(t.items[6]).toMatchObject({ subject: 'Sexta em dobro', count: 412, by: null });
+    expect(t.items[7]).toMatchObject({ subject: 'Combo kids', count: 96, by: null });
+    // Quem aprovou aparece no envio; a proposta é dele, sem pessoa.
+    expect(t.items[9]).toMatchObject({ subject: 'Sobremesa por nossa conta', count: 176, by: { id: e.userId }, mine: true });
+    expect(t.items[10]).toMatchObject({ kind: 'propos_mensagem', subject: 'Sobremesa por nossa conta', count: 176, by: null });
+    expect(t.items.map((i) => i.subject)).not.toContain('De outro funcionário');
+    expect(t.has_more).toBe(false);
+    // Nenhum telefone e nenhum nome de cliente: o histórico só tem o nome da mensagem e contagens.
+    expect(JSON.stringify(t)).not.toMatch(/\+55\d{10,11}/);
+
+    // Sem a permissão das campanhas, o acontecimento aparece sem o nome da mensagem.
+    const semNome = await withContext(database.db, { tenantId: e.tenantId, userId: e.userId }, (tx) =>
+      atividadeDoMembro(tx, 'crm', { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId, desde: ha(60 * 24), podePlanos: true, podeDossie: true, podePecas: false }, 20),
+    );
+    expect(semNome.items.map((i) => i.subject)).toEqual(new Array(11).fill(null));
+    expect(semNome.items[10]).toMatchObject({ kind: 'propos_mensagem', count: 176 });
+    // Outra empresa não vê as mensagens desta.
+    const outraEmpresa = await empresa();
+    expect((await atividade(outraEmpresa, outraEmpresa.brandId, 'crm')).items).toEqual([]);
+  });
+
   it('desligar e ligar entram no histórico; outra empresa não vê; quem não vê Sua equipe não vê o histórico', async () => {
     const e = await empresa();
     expect((await api.call('POST', '/v1/team/members/pesquisador/pause', { cookie: e.cookie, body: { brand_id: e.brandId, reason: 'Sem leitura por enquanto' } })).status).toBe(200);
@@ -407,7 +464,7 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     expect((await api.call('GET', `/v1/team/members/pesquisador/activity?brand_id=${e.brandId}`, { cookie: outra.cookie })).status).toBe(404);
     expect((await api.call('GET', `/v1/team/shadow?brand_id=${e.brandId}`, { cookie: outra.cookie })).status).toBe(404);
     // Funcionário que não é da equipe desta fase, e limite fora da faixa.
-    expect((await api.call('GET', `/v1/team/members/crm/activity?brand_id=${e.brandId}`, { cookie: e.cookie })).status).toBe(400);
+    expect((await api.call('GET', `/v1/team/members/social/activity?brand_id=${e.brandId}`, { cookie: e.cookie })).status).toBe(400);
     expect((await api.call('GET', `/v1/team/members/lia/activity?brand_id=${e.brandId}&limit=500`, { cookie: e.cookie })).status).toBe(400);
     // Só relatórios: não vê campanhas nem vendas.
     const soRelatorios = await membro(e, 'so_relatorios');

@@ -430,6 +430,67 @@ describe('a leitura `equipe_trabalho`: o que a LIA recebe de Sua equipe (A3, P7)
     expect(rotuloDoPasso('equipe_trabalho', { brand_id: 'x', funcionario: 'criativo' })).toBe('Lendo o trabalho do Criativo em Sua equipe');
   });
 
+  it('o CRM e mensageria (A5 · P16): o modo dele, as mensagens com o nome de quando são, o valor do caixa (que não é a soma da sombra), por que não pode propor e os acontecimentos dele', () => {
+    const mensagens = [stat('mensagens_propostas', 2), stat('mensagens_enviadas', 1), stat('mensagens_recusadas', 0), stat('mensagens_esperando', 1), stat('pedidos_com_cupom', 12), stat('caixa_com_cupom', '540000000', 'brl_micros'), stat('retiradas_na_conferencia', 0)];
+    const comCrm = (extra: Partial<TeamMember> = {}): TeamResponse => ({ ...EQUIPE, members: [...EQUIPE.members, membro('crm', { cost: { usd_micros: '30000', calls: 2 }, stats: mensagens, in_progress: null, blocked_by: null, ...extra })] });
+    const doCrm = (t: TeamResponse) => (visaoDaEquipe(t, null, 'America/Sao_Paulo') as Record<string, any>).equipe.find((m: { funcionario: string }) => m.funcionario === 'CRM e mensageria');
+    expect(doCrm(comCrm())).toEqual({
+      funcionario: 'CRM e mensageria',
+      situacao: 'ativo',
+      trabalha: 'com um modelo de IA, no modo Aprovação: toda mensagem é um pedido em Aprovações, que uma pessoa aprova com o código do app; nenhuma mensagem sai sozinha',
+      custo_de_ia_no_mes: 'R$ 0,16',
+      chamadas_ao_modelo_no_mes: '2',
+      no_mes: {
+        mensagens_propostas_no_mes: '2',
+        mensagens_do_mes_aprovadas_por_uma_pessoa_e_enviadas: '1',
+        mensagens_do_mes_recusadas_por_uma_pessoa: '0',
+        mensagens_esperando_a_decisao_de_uma_pessoa_agora: '1',
+        pedidos_confirmados_no_caixa_com_o_cupom_das_mensagens_do_mes: '12',
+        // Dinheiro do caixa, com o nome dele: não vira a frase da soma da sombra.
+        valor_confirmado_no_caixa_com_o_cupom_das_mensagens_do_mes: 'R$ 540,00',
+        textos_retirados_na_conferencia: '0',
+      },
+    });
+    // Ligado e sem ter como propor: o porquê, como a ficha diz.
+    expect(doCrm(comCrm({ blocked_by: 'sem_regemcast' })).nao_pode_propor_agora).toBe('o RegemCast não está conectado nesta marca: é ele que envia as mensagens e guarda os contatos');
+    expect(doCrm(comCrm({ blocked_by: 'sem_oferta' })).nao_pode_propor_agora).toContain('não inventa oferta nem preço');
+    expect(doCrm(comCrm({ blocked_by: 'motivo_novo' })).nao_pode_propor_agora).toBe('motivo novo');
+    expect(doCrm(comCrm())).not.toHaveProperty('nao_pode_propor_agora');
+    expect(doCrm(comCrm())).not.toHaveProperty('nao_pode_escrever_agora');
+    // Ainda não ligado para a empresa: a situação diz isso, e não "a IA ou a sombra".
+    expect(doCrm(comCrm({ status: 'desligado_pela_liame' })).situacao).toBe('ainda não ligado para a empresa (quem liga é a Liame, a pedido do dono); enquanto isso, ninguém propõe mensagem e ele não custa nada');
+    // O Gestor de tráfego segue com a soma da sombra dele, e os outros não ganham os campos do CRM.
+    const todos = (visaoDaEquipe(comCrm(), null, 'America/Sao_Paulo') as Record<string, any>).equipe;
+    expect(todos.find((m: { funcionario: string }) => m.funcionario === 'Gestor de tráfego').no_mes.comparacao_com_o_que_foi_feito).toContain('R$ 41,20');
+    expect(todos[0]).not.toHaveProperty('nao_pode_propor_agora');
+
+    // Os acontecimentos: cada um com o campo do que ele é, e sem o nome de quem decidiu.
+    const v = ver('crm', [
+      item({ kind: 'propos_mensagem', subject: 'Sexta em dobro', count: 412 }),
+      item({ kind: 'mensagem_enviada', subject: 'Sobremesa por nossa conta', count: 176, by: RODRIGO, mine: true }),
+      item({ kind: 'mensagem_enviada', subject: 'Combo de domingo', count: 90, by: JULIANA }),
+      item({ kind: 'mensagem_recusada', subject: 'Combo kids', count: 96 }),
+      item({ kind: 'mensagem_cancelada', subject: 'Promoção de teste' }),
+      item({ kind: 'mensagem_expirou', subject: null }),
+      item({ kind: 'mensagem_falhou', subject: 'Volte a pedir' }),
+    ], comCrm());
+    expect(semHora(v)).toEqual([
+      { o_que: 'propôs uma mensagem de WhatsApp, como pedido em Aprovações', mensagem: 'Sexta em dobro', pessoas_que_podem_receber: '412' },
+      { o_que: 'teve uma mensagem aprovada: o envio foi para o RegemCast', mensagem: 'Sobremesa por nossa conta', quem_decidiu: 'você' },
+      { o_que: 'teve uma mensagem aprovada: o envio foi para o RegemCast', mensagem: 'Combo de domingo', quem_decidiu: 'outra pessoa da empresa' },
+      { o_que: 'teve uma mensagem recusada: nada foi enviado', mensagem: 'Combo kids' },
+      { o_que: 'teve um pedido de mensagem cancelado por quem opera: nada foi enviado', mensagem: 'Promoção de teste' },
+      { o_que: 'teve um pedido de mensagem que expirou sem decisão: nada foi enviado' },
+      { o_que: 'teve uma mensagem aprovada que não foi enviada: o envio falhou', mensagem: 'Volte a pedir' },
+    ]);
+    expect(v.equipe.map((m: { funcionario: string }) => m.funcionario)).toEqual(['CRM e mensageria']);
+    const texto = JSON.stringify(v);
+    expect(texto).not.toContain('Juliana');
+    expect(texto).not.toContain('Rodrigo');
+    expect(NOME_DO_MEMBRO.crm).toBe('CRM e mensageria');
+    expect(rotuloDoPasso('equipe_trabalho', { brand_id: 'x', funcionario: 'crm' })).toBe('Lendo o trabalho do CRM e mensageria em Sua equipe');
+  });
+
   it('a leitura no registro: é da conversa (o Estrategista segue com as seis leituras dos números), e a tela diz o que a LIA leu', () => {
     expect(LEITURAS.map((l) => l.name)).toEqual([...LEITURAS_DE_DADOS, 'equipe_trabalho']);
     expect(ESTRATEGISTA.ferramentas).toEqual([...LEITURAS_DE_DADOS]);

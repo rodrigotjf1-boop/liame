@@ -1,5 +1,6 @@
 import { LIA } from '../ai/conversa/prompt.js';
 import { CRIATIVO, WORKFLOW_DO_CRIATIVO } from '../ai/criativo/prompt.js';
+import { CRM, WORKFLOW_DO_CRM } from '../ai/crm/prompt.js';
 import { ESTRATEGISTA } from '../ai/estrategista/prompt.js';
 import { ANALISTA } from '../ai/explicar/prompt.js';
 import { PESQUISADOR } from '../ai/pesquisador/prompt.js';
@@ -10,7 +11,9 @@ import type { FuncionarioDef } from '../ai/registro/definicoes.js';
 // definição no registro (`ai/registro/definicoes.ts`) e a ativação da distribuição; Relatórios, Compliance e o Gestor
 // de tráfego trabalham por regra (sem modelo próprio) e entram aqui pela chave. A descrição de cada um (o que faz e o
 // que nunca faz) é da tela. Os da fase seguinte não estão aqui: a tela mostra com a fase deles. O Criativo (A4) entrou
-// com o protótipo P12, aprovado em 09/10/2026: ele só trabalha a pedido, e só para a empresa com a flag `criativo`.
+// com o protótipo P12, aprovado em 09/10/2026: ele só trabalha a pedido, e só para a empresa com a flag `criativo`. O
+// CRM e mensageria (A5) entrou com o protótipo P16, aprovado em 09/10/2026: propõe mensagens de WhatsApp, sempre como
+// pedido em Aprovações, e só para a empresa com a flag `crm` e as flags do envio de mensagens.
 
 /** Relatórios: a revisão da semana (a leitura dela usa o mesmo prompt do Analista). */
 export const RELATORIOS = 'relatorios';
@@ -25,7 +28,10 @@ export const GESTOR_DE_TRAFEGO = 'trafego';
 /** Criativo: escreve as peças de anúncio que alguém pede em Criativos (A4, X6). */
 export const CRIATIVO_DA_EQUIPE = 'criativo';
 
-export const MEMBROS = ['lia', 'analista', RELATORIOS, COMPLIANCE, 'estrategista', 'pesquisador', GESTOR_DE_TRAFEGO, CRIATIVO_DA_EQUIPE] as const;
+/** CRM e mensageria: propõe mensagens de WhatsApp para os clientes da loja, pelo RegemCast (A5, Y6). */
+export const CRM_DA_EQUIPE = 'crm';
+
+export const MEMBROS = ['lia', 'analista', RELATORIOS, COMPLIANCE, 'estrategista', 'pesquisador', GESTOR_DE_TRAFEGO, CRIATIVO_DA_EQUIPE, CRM_DA_EQUIPE] as const;
 export type Membro = (typeof MEMBROS)[number];
 
 export interface DefinicaoDoMembro {
@@ -53,6 +59,8 @@ export const EQUIPE: Record<Membro, DefinicaoDoMembro> = {
   trafego: { key: GESTOR_DE_TRAFEGO, kind: 'regra', funcionario: null, fluxos: [], desligavel: true },
   // A chave da pausa (`agent_pause`) é a do funcionário no registro: é ela que o serviço das peças confere ao pedir.
   criativo: { key: CRIATIVO_DA_EQUIPE, kind: 'ia', funcionario: CRIATIVO, fluxos: [WORKFLOW_DO_CRIATIVO], desligavel: true },
+  // A chave é a do funcionário no registro e a do pedido que ele faz (`action_request.agent_key`, `message_request.agent_key`).
+  crm: { key: CRM_DA_EQUIPE, kind: 'ia', funcionario: CRM, fluxos: [WORKFLOW_DO_CRM], desligavel: true },
 };
 
 export const ehMembro = (key: string): key is Membro => (MEMBROS as readonly string[]).includes(key);

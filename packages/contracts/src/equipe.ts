@@ -12,8 +12,11 @@ const Slug = z.string().regex(/^[a-z0-9_]+$/).max(60);
 const Inteiro = z.string().regex(/^-?\d+$/);
 const Pessoa = z.strictObject({ id: z.uuid(), name: z.string() }).nullable();
 
-/** Os membros da equipe: os da A3 e, desde a A4, o Criativo (protótipo P12, aprovado em 09/10/2026). */
-export const TEAM_MEMBERS = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'trafego', 'criativo'] as const;
+/**
+ * Os membros da equipe: os da A3; desde a A4, o Criativo (protótipo P12, aprovado em 09/10/2026); e, desde a A5, o CRM e
+ * mensageria (protótipo P16, aprovado em 09/10/2026).
+ */
+export const TEAM_MEMBERS = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'trafego', 'criativo', 'crm'] as const;
 export const TeamMemberKey = z.enum(TEAM_MEMBERS);
 export type TeamMemberKey = z.infer<typeof TeamMemberKey>;
 
@@ -31,7 +34,12 @@ export const TeamStat = z.strictObject({
    * atendidos), `pecas_escritas`, `pecas_aprovadas`, `pecas_recusadas` (das escritas no mês, as que uma pessoa aprovou
    * ou recusou), `versoes_refeitas` e `retiradas_na_conferencia`; de hoje, `pecas_hoje`; e de agora, na marca inteira,
    * `pecas_esperando` (passaram na conferência e esperam a decisão) e `pecas_barradas` (a conferência barrou, e a
-   * pessoa ainda pode editar, pedir outra ou recusar).
+   * pessoa ainda pode editar, pedir outra ou recusar). CRM e mensageria: do mês, `mensagens_propostas` (os pedidos de
+   * envio que ele montou), `mensagens_enviadas` (as que uma pessoa aprovou e foram para o RegemCast),
+   * `mensagens_recusadas` e `retiradas_na_conferencia` (os textos dele que a conferência barrou); de agora,
+   * `mensagens_esperando` (os pedidos que esperam a decisão em Aprovações); e o que as mensagens do mês trouxeram pelo
+   * cupom de cada uma, `pedidos_com_cupom` (contagem) e `caixa_com_cupom` (receita confirmada no caixa, em micros de
+   * real).
    */
   key: Slug,
   value: Inteiro,
@@ -62,9 +70,10 @@ export const TeamMember = z.strictObject({
    */
   in_progress: z.strictObject({ subject: z.string().nullable(), count: z.int().nullable(), by: Pessoa, since: z.iso.datetime() }).nullable().optional(),
   /**
-   * Por que ele não pode trabalhar agora, estando ligado (hoje, só o Criativo, que só trabalha a pedido): `sem_oferta`
-   * (Minha marca ainda não tem oferta), `limite_de_ia_do_dia` ou `limite_de_ia_do_mes` (um pedido novo não cabe no que
-   * resta do limite de uso de IA da empresa). Nulo quando ele pode trabalhar, e quando está desligado ou parado.
+   * Por que ele não pode trabalhar agora, estando ligado. Criativo (só trabalha a pedido): `sem_oferta` (Minha marca
+   * ainda não tem oferta), `limite_de_ia_do_dia` ou `limite_de_ia_do_mes` (um pedido novo não cabe no que resta do
+   * limite de uso de IA da empresa). CRM e mensageria: `sem_regemcast` (nenhuma conta do RegemCast conectada nesta
+   * marca: não há para quem propor) ou `sem_oferta`. Nulo quando ele pode trabalhar, e quando está desligado ou parado.
    */
   blocked_by: Slug.nullable().optional(),
   /** A empresa pode desligar (o Compliance não). */
@@ -121,7 +130,10 @@ export const TeamActivityItem = z.strictObject({
    * atendido: `count` peças, `barred` delas barradas na conferência), `refez_peca` (outra versão de uma peça: `count` é
    * a versão e `detail` o resultado da conferência, `passou`, `aviso` ou `barrou`), `pedido_recusado` e `pedido_falhou`
    * (o porquê em `detail`), e o que as pessoas decidiram das peças dele, `peca_aprovada`, `peca_recusada` e
-   * `peca_contestada`. Gestor de tráfego, no modo Aprovação: `pediu` (ele mesmo fez o pedido
+   * `peca_contestada`. CRM e mensageria: `propos_mensagem` (montou um pedido de envio: `subject` é o nome da mensagem e
+   * `count` quantas pessoas podem receber) e o que aconteceu com o pedido, `mensagem_enviada` (uma pessoa aprovou e o
+   * envio foi para o RegemCast), `mensagem_recusada`, `mensagem_cancelada` (quem opera tirou o pedido da fila),
+   * `mensagem_expirou` e `mensagem_falhou`. Gestor de tráfego, no modo Aprovação: `pediu` (ele mesmo fez o pedido
    * da mudança, que espera uma pessoa) e `nao_pediu` (tentou e não conseguiu: o motivo vai no `detail`). De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
    * aparecer), `desligado` e `ligado` (pela empresa, nesta marca).
    */

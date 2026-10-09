@@ -25,7 +25,8 @@ import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { REGRAS_VERSAO } from '../sombra/regras.js';
 import { atividadeDoMembro, DIAS_DA_ATIVIDADE } from './atividade.js';
-import { CRIATIVO_DA_EQUIPE, EQUIPE, ehMembro, type Membro, MEMBROS } from './membros.js';
+import { PREFIXO_RECUSA } from '../actions/action.service.js';
+import { CRIATIVO_DA_EQUIPE, CRM_DA_EQUIPE, EQUIPE, ehMembro, type Membro, MEMBROS } from './membros.js';
 import { type ContagensDoMes, numerosDoMembro, situacaoDoMembro } from './numeros.js';
 
 // Sua equipe (A3, I13b; protótipo P7, aprovado em 03/10/2026). Na requisição, sob a RLS da empresa: quem
@@ -157,6 +158,26 @@ export class EquipeService {
          order by (r.piece_id is null) desc, r.created_at
          limit 1`)
     ).rows[0];
+    // O trabalho do CRM e mensageria (A5, Y6): os pedidos de envio que ele montou no mês, o que as pessoas decidiram
+    // deles, os que esperam agora e o que os cupons das mensagens do mês trouxeram no caixa (a mesma conta da tela
+    // Mensagens: pedidos confirmados da loja do cupom, com o código dele, desde a hora em que o cupom nasceu).
+    const doCrm = sql`from liame.message_request m join liame.action_request r on r.id = m.action_request_id where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE}`;
+    const mensagens = (
+      await tx.execute<Record<string, number | string>>(sql`
+        select
+          (select count(*) ${doCrm} and m.created_at >= ${inicio}::timestamptz)::int as propostas,
+          (select count(*) ${doCrm} and m.created_at >= ${inicio}::timestamptz and r.status = 'executada')::int as enviadas,
+          (select count(*) ${doCrm} and m.created_at >= ${inicio}::timestamptz and r.status = 'cancelada' and r.status_reason like ${`${PREFIXO_RECUSA}%`})::int as recusadas,
+          (select count(*) ${doCrm} and r.status = 'aguardando_aprovacao' and r.expires_at > ${instante}::timestamptz)::int as esperando,
+          (select count(o.id) from liame.message_request m
+             join liame.order_fact o on o.tenant_id = m.tenant_id and o.connected_account_id = m.coupon_account_id and o.coupon_code = m.coupon_code
+                                    and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at
+            where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE} and m.created_at >= ${inicio}::timestamptz and m.coupon_created_at is not null)::int as pedidos_com_cupom,
+          (select coalesce(sum(o.revenue_micros - o.refunded_micros), 0) from liame.message_request m
+             join liame.order_fact o on o.tenant_id = m.tenant_id and o.connected_account_id = m.coupon_account_id and o.coupon_code = m.coupon_code
+                                    and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at
+            where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE} and m.created_at >= ${inicio}::timestamptz and m.coupon_created_at is not null)::text as caixa_com_cupom`)
+    ).rows[0]!;
     const contagens: ContagensDoMes = {
       respostasPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.respostas)])),
       entreguesPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.entregues)])),
@@ -186,6 +207,14 @@ export class EquipeService {
         esperando: Number(pecas.esperando),
         barradas: Number(pecas.barradas),
       },
+      mensagens: {
+        propostas: Number(mensagens.propostas),
+        enviadas: Number(mensagens.enviadas),
+        recusadas: Number(mensagens.recusadas),
+        esperando: Number(mensagens.esperando),
+        pedidosComCupom: Number(mensagens.pedidos_com_cupom),
+        caixaComCupomMicros: BigInt(mensagens.caixa_com_cupom as string),
+      },
     };
 
     // As chaves: a da empresa (pausas), a da distribuição (plano e flags) e a parada.
@@ -199,6 +228,8 @@ export class EquipeService {
     );
     const contexto = this.flags.context({ tenantId, userId: auth.userId, brandId });
     const [ia, sombra, criativo] = [await this.flags.isEnabled('ia', contexto), await this.flags.isEnabled('sombra', contexto), await this.flags.isEnabled('criativo', contexto)];
+    // O CRM e mensageria só propõe com a flag dele e as duas do envio de mensagens: sem uma delas, ainda não está ligado.
+    const crm = (await this.flags.isEnabled('crm', contexto)) && (await this.flags.isEnabled('mensageria', contexto)) && (await this.flags.isEnabled('whatsapp_campaign', contexto));
     const trava = await this.switches.check(tx, { tenantId, provider: 'ai', brandId });
     const parada = trava
       ? (
@@ -217,7 +248,7 @@ export class EquipeService {
         : true;
       const pausa = pausas.get(key);
       const doMembro = def.fluxos.map((f) => usos.get(f)).filter((u) => u !== undefined);
-      const status = situacaoDoMembro(def, { pausado: pausa !== undefined, peloPlano, ia, sombra, criativo, parada: parada !== undefined });
+      const status = situacaoDoMembro(def, { pausado: pausa !== undefined, peloPlano, ia, sombra, criativo, crm, parada: parada !== undefined });
       const doCriativo = key === CRIATIVO_DA_EQUIPE;
       membros.push({
         key,
@@ -238,6 +269,8 @@ export class EquipeService {
               blocked_by: status === 'ativo' ? await this.oQueSeguraOCriativo(tenantId, brandId, org.fuso, agora) : null,
             }
           : {}),
+        // O CRM e mensageria ligado que não tem como propor: a tela diz o que falta.
+        ...(key === CRM_DA_EQUIPE ? { in_progress: null, blocked_by: status === 'ativo' ? await this.oQueSeguraOCrm(brandId, org.fuso, agora) : null } : {}),
         can_pause: def.desligavel,
         paused: pausa ? { by: quem(pausa.paused_by, pausa.name), at: iso(pausa.paused_at), reason: pausa.reason } : null,
         cost: { usd_micros: doMembro.reduce((s, u) => s + BigInt(u.custo), 0n).toString(), calls: doMembro.reduce((s, u) => s + Number(u.chamadas), 0) },
@@ -279,6 +312,18 @@ export class EquipeService {
     if (!marca || !marca.conteudo.offers.items.length) return 'sem_oferta';
     const custo = await this.custoDasPecas.ler(tenantId, brandId, agora);
     if (!custo.cabe) return custo.uso.aperta === 'mes' ? 'limite_de_ia_do_mes' : 'limite_de_ia_do_dia';
+    return null;
+  }
+
+  /**
+   * Por que o CRM e mensageria, ligado, não tem como propor agora: nenhuma conta do RegemCast conectada nesta marca (é
+   * ele que envia e guarda os contatos), ou Minha marca sem oferta (a promoção parte de uma oferta de lá).
+   */
+  private async oQueSeguraOCrm(brandId: string, fuso: string, agora: Date): Promise<string | null> {
+    const conta = await currentTx().execute(sql`select 1 from liame.connected_account where brand_id = ${brandId} and provider = 'regemcast' and disconnected_at is null limit 1`);
+    if (!conta.rows[0]) return 'sem_regemcast';
+    const marca = await marcaDoCriativo(brandId, fuso, agora);
+    if (!marca || !marca.conteudo.offers.items.length) return 'sem_oferta';
     return null;
   }
 

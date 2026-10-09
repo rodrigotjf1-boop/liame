@@ -77,7 +77,7 @@ const numero = (m: TeamMember, chave: string): bigint => BigInt(m.stats.find((s)
 
 // ------------------------------------------------------------------ quem é quem
 
-export type ChaveDoMembro = 'lia' | 'analista' | 'relatorios' | 'compliance' | 'estrategista' | 'pesquisador' | 'criativo' | 'trafego';
+export type ChaveDoMembro = 'lia' | 'analista' | 'relatorios' | 'compliance' | 'estrategista' | 'pesquisador' | 'criativo' | 'crm' | 'trafego';
 
 export interface Ficha {
   nome: string;
@@ -162,6 +162,23 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
     faz: ['Escreve título, texto principal e botão para uma oferta de Minha marca', 'Refaz a peça quando você pede outra versão'],
     nunca: ['Inventar oferta ou preço', 'Aprovar a própria peça', 'Publicar ou mandar algo para a Meta', 'Trabalhar sem alguém pedir'],
   },
+  crm: {
+    nome: 'CRM e mensageria',
+    cargo: 'Mensagens de WhatsApp',
+    icone: 'send',
+    modo: 'Aprovação',
+    resumo:
+      'Propõe mensagens de WhatsApp para os clientes da loja: escolhe um público que já existe no RegemCast, escreve o texto a partir de uma oferta de Minha marca e monta o pedido com quantas pessoas recebem e quanto pode custar. O Compliance confere o texto antes de você ver, quem aprova é você, com o código do app, e quem envia é o RegemCast. Ele só vê números: nunca o nome ou o telefone de alguém.',
+    faz: ['Propõe mensagem para um público que já existe no RegemCast', 'Escreve o rascunho do texto, a partir de uma oferta de Minha marca', 'Monta o pedido com quantas pessoas recebem e quanto pode custar'],
+    nunca: [
+      'Enviar sem a sua aprovação com o código do app',
+      'Ver nome ou telefone de cliente',
+      'Escrever para quem pediu para sair ou recebeu marketing há pouco',
+      'Enviar fora do horário das 9h às 20h',
+      'Passar do teto de gasto de mensagens do RegemCast',
+      'Enviar o modelo para a análise da Meta no lugar de uma pessoa',
+    ],
+  },
   trafego: {
     nome: 'Gestor de tráfego',
     cargo: 'Campanhas da Meta e do Google',
@@ -174,7 +191,7 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
   },
 };
 
-export const ORDEM: ChaveDoMembro[] = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'criativo', 'trafego'];
+export const ORDEM: ChaveDoMembro[] = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'criativo', 'crm', 'trafego'];
 
 /** "do Analista de dados", "de Relatórios": o funcionário na frase. */
 const DO_MEMBRO: Record<ChaveDoMembro, string> = {
@@ -185,6 +202,7 @@ const DO_MEMBRO: Record<ChaveDoMembro, string> = {
   estrategista: 'do Estrategista',
   pesquisador: 'do Pesquisador',
   criativo: 'do Criativo',
+  crm: 'do CRM e mensageria',
   trafego: 'do Gestor de tráfego',
 };
 
@@ -199,17 +217,16 @@ export function perguntaSobre(chave: ChaveDoMembro): string {
 /**
  * O botão "Conversar sobre ele" aparece para quem conversa com a LIA, quando ela está trabalhando nesta marca. Sobre
  * a própria LIA não há o que perguntar por aqui: a conversa com ela é o botão do topo. No Criativo, o botão é o
- * atalho "Abrir Criativos" (P12): o trabalho dele está lá.
+ * atalho "Abrir Criativos" (P12), e no CRM e mensageria, "Abrir Mensagens" (P16): o trabalho de cada um está lá.
  */
 export function podeConversarSobre(chave: ChaveDoMembro, t: TeamResponse, conversaDisponivel: boolean): boolean {
-  return chave !== 'lia' && chave !== 'criativo' && conversaDisponivel && t.ai.enabled && t.members.some((m) => m.key === 'lia' && m.status === 'ativo');
+  return chave !== 'lia' && chave !== 'criativo' && chave !== 'crm' && conversaDisponivel && t.ai.enabled && t.members.some((m) => m.key === 'lia' && m.status === 'ativo');
 }
 
 export const ehMembro = (chave: string): chave is ChaveDoMembro => (ORDEM as string[]).includes(chave);
 
 /** Os funcionários das fases seguintes do roadmap: aparecem na lista, sem trabalhar ainda. */
 export const PROXIMAS_FASES: Array<{ chave: string; nome: string; cargo: string; icone: NomeIcone; fase: string; resumo: string }> = [
-  { chave: 'crm', nome: 'CRM e mensageria', cargo: 'WhatsApp, e-mail e SMS', icone: 'send', fase: 'A5', resumo: 'Cuida das réguas de relacionamento pelo RegemCast, só com quem deu permissão.' },
   { chave: 'social', nome: 'Social media', cargo: 'Redes e comunidade', icone: 'share', fase: 'A6', resumo: 'Calendário e publicação orgânica, com aprovação.' },
   { chave: 'cro', nome: 'CRO e páginas', cargo: 'Páginas e funil', icone: 'target', fase: 'A8', resumo: 'Páginas e formulários que levam ao pedido.' },
 ];
@@ -251,6 +268,12 @@ const desligado = (m: TeamMember) => m.status === 'desligado' || m.status === 'd
  */
 export const criativoNaoLigado = (m: TeamMember, t: Pick<TeamResponse, 'ai'>): boolean => m.key === 'criativo' && m.status === 'desligado_pela_liame' && t.ai.enabled;
 
+/** O CRM e mensageria que a Liame ainda não ligou para a empresa (P16): o mesmo caso, com a chave dele e as do envio de mensagens. */
+export const crmNaoLigado = (m: TeamMember, t: Pick<TeamResponse, 'ai'>): boolean => m.key === 'crm' && m.status === 'desligado_pela_liame' && t.ai.enabled;
+
+/** O funcionário que tem chave própria e ainda não foi ligado pela Liame: fica com os desligados, sem botão de ligar. */
+export const aindaNaoLigado = (m: TeamMember, t: Pick<TeamResponse, 'ai'>): boolean => criativoNaoLigado(m, t) || crmNaoLigado(m, t);
+
 /** O selo "Modo": como ele trabalha. O Gestor de tráfego mostra "Sombra e Sugerir" quando alguma ação já foi promovida. */
 export function modoDo(m: TeamMember, autonomia: AutonomyItem[] | null): { rotulo: string; classe: string } {
   if (desligado(m)) return { rotulo: 'Desligado', classe: 'modo-chip modo-chip--off' };
@@ -277,16 +300,16 @@ export function gruposDa(t: TeamResponse, comAprovacao = false): Grupos {
   // Com o modo Aprovação (P11), o Gestor de tráfego já faz mais do que registrar: fica com os que trabalham para a pessoa.
   const emSombra = (m: TeamMember) => m.key === 'trafego' && !comAprovacao;
   return {
-    ativos: conhecidos.filter((m) => !emSombra(m) && m.status !== 'desligado' && !criativoNaoLigado(m, t)),
+    ativos: conhecidos.filter((m) => !emSombra(m) && m.status !== 'desligado' && !aindaNaoLigado(m, t)),
     sombra: conhecidos.filter((m) => emSombra(m) && m.status !== 'desligado'),
-    desligados: conhecidos.filter((m) => m.status === 'desligado' || criativoNaoLigado(m, t)),
+    desligados: conhecidos.filter((m) => m.status === 'desligado' || aindaNaoLigado(m, t)),
   };
 }
 
 /** A linha de baixo de cada funcionário na lista: o que ele fez no mês, ou o que faz. */
 export function atividadeDo(m: TeamMember, mes: string, agora: Date): string {
   if (m.status === 'desligado') return m.paused ? `Desligado ${m.paused.by ? `por ${m.paused.by.name} ` : ''}${quandoNaFrase(m.paused.at, agora)}` : 'Desligado nesta marca';
-  if (m.status === 'desligado_pela_liame') return m.key === 'criativo' ? 'Ainda não ligado para esta empresa' : ehMembro(m.key) ? FICHAS[m.key].cargo : m.key;
+  if (m.status === 'desligado_pela_liame') return m.key === 'criativo' || m.key === 'crm' ? 'Ainda não ligado para esta empresa' : ehMembro(m.key) ? FICHAS[m.key].cargo : m.key;
   if (m.status === 'parado') return 'Parado com a equipe';
   switch (m.key) {
     case 'lia':
@@ -316,6 +339,13 @@ export function atividadeDo(m: TeamMember, mes: string, agora: Date): string {
       if (numero(m, 'pecas_hoje') > 0n) return `Escreveu ${vezes(numero(m, 'pecas_hoje'), 'peça', 'peças')} hoje${eEsperam}`;
       if (esperam > 0n) return `${vezes(esperam, 'peça espera', 'peças esperam')} você`;
       return numero(m, 'pecas_escritas') > 0n ? `Escreveu ${vezes(numero(m, 'pecas_escritas'), 'peça', 'peças')} em ${mes}` : `Sem pedido de peça em ${mes}`;
+    }
+    case 'crm': {
+      const esperam = numero(m, 'mensagens_esperando');
+      if (m.blocked_by === 'sem_regemcast') return 'Espera a conexão com o RegemCast';
+      if (m.blocked_by === 'sem_oferta') return 'Espera a primeira oferta em Minha marca';
+      if (esperam > 0n) return `${vezes(esperam, 'mensagem espera', 'mensagens esperam')} a sua decisão`;
+      return numero(m, 'mensagens_propostas') > 0n ? `Propôs ${vezes(numero(m, 'mensagens_propostas'), 'mensagem', 'mensagens')} em ${mes}` : `Sem proposta de mensagem em ${mes}`;
     }
     case 'trafego':
       return numero(m, 'recomendacoes') > 0n ? `Recomendou ${vezes(numero(m, 'recomendacoes'), 'ação', 'ações')} em ${mes}, sem mexer em nada` : 'Registra o que faria, sem mexer em nada';
@@ -388,6 +418,17 @@ export function acertoDo(m: TeamMember, mes: string): Numero[] {
         ...(recusadas > 0n ? [{ valor: n('pecas_recusadas'), rotulo: recusadas === 1n ? 'recusada por você' : 'recusadas por você' }] : []),
       ];
     }
+    case 'crm': {
+      // As mensagens que ele propôs no mês e o que as pessoas decidiram delas; o que espera a decisão é de agora.
+      const [propostas, enviadas, recusadas, barradas] = [numero(m, 'mensagens_propostas'), numero(m, 'mensagens_enviadas'), numero(m, 'mensagens_recusadas'), numero(m, 'retiradas_na_conferencia')];
+      return [
+        { valor: n('mensagens_propostas'), rotulo: propostas === 1n ? 'mensagem proposta' : 'mensagens propostas' },
+        { valor: n('mensagens_enviadas'), rotulo: enviadas === 1n ? 'aprovada e enviada' : 'aprovadas e enviadas' },
+        { valor: n('mensagens_esperando'), rotulo: 'esperando a sua decisão' },
+        { valor: n('retiradas_na_conferencia'), rotulo: barradas === 1n ? 'barrada na conferência' : 'barradas na conferência' },
+        ...(recusadas > 0n ? [{ valor: n('mensagens_recusadas'), rotulo: recusadas === 1n ? 'recusada por você' : 'recusadas por você' }] : []),
+      ];
+    }
     default:
       return [];
   }
@@ -410,6 +451,10 @@ function feitosDo(m: TeamMember): string {
       const [pedidos, refeitas] = [numero(m, 'pedidos'), numero(m, 'versoes_refeitas')];
       if (pedidos === 0n && refeitas === 0n) return 'ele só custa quando alguém pede';
       return [pedidos > 0n ? vezes(pedidos, 'pedido', 'pedidos') : null, refeitas > 0n ? vezes(refeitas, 'versão refeita', 'versões refeitas') : null].filter((x) => x !== null).join(' e ');
+    }
+    case 'crm': {
+      const propostas = numero(m, 'mensagens_propostas');
+      return propostas === 0n ? 'ele só custa quando escreve' : `custo de IA para escrever ${vezes(propostas, 'mensagem', 'mensagens')}`;
     }
     default:
       return 'custo de IA';
@@ -496,6 +541,77 @@ export function agoraDoCriativo(m: TeamMember, t: TeamResponse, agora: Date): Ag
     faixa,
     bloco: { titulo: 'Ele só trabalha quando alguém pede', frase: [{ texto: `Nenhum pedido de peça em ${mes}. Quem opera campanhas pede uma peça em Criativos, para uma oferta de Minha marca.` }] },
   };
+}
+
+// ------------------------------------------------------------------ o CRM e mensageria: o que acontece agora
+
+export interface AgoraDoCrm {
+  /** A faixa de cima: por que ele não tem como propor agora, com o caminho que resolve. */
+  faixa: { tipo: 'acao'; icone: NomeIcone; titulo: string; texto: string; destino: { href: string; rotulo: string } } | null;
+  /** O bloco: o que espera a pessoa, ou que nada espera. `aprovacoes`: leva o atalho para Aprovações. */
+  bloco: { titulo: string; frase: Array<{ texto: string; forte?: boolean }>; aprovacoes: boolean } | null;
+}
+
+/**
+ * O que a ficha do CRM e mensageria diz de agora (P16). Toda mensagem dele é um pedido em Aprovações: a ficha diz
+ * quantos esperam a decisão e, quando ele não tem como propor, por quê. Não ligado pela Liame, não há o que dizer.
+ */
+export function agoraDoCrm(m: TeamMember, t: TeamResponse): AgoraDoCrm {
+  if (m.status === 'desligado_pela_liame') return { faixa: null, bloco: null };
+  const mes = mesDe(t.month.from);
+  if (m.blocked_by === 'sem_regemcast') {
+    return {
+      faixa: {
+        tipo: 'acao',
+        icone: 'plug',
+        titulo: 'O RegemCast não está conectado',
+        texto: 'É o RegemCast que envia as mensagens e guarda os contatos. Sem ele, o CRM e mensageria não tem para quem propor.',
+        destino: { href: '/contas', rotulo: 'Abrir Contas conectadas' },
+      },
+      bloco: null,
+    };
+  }
+  if (m.blocked_by === 'sem_oferta') {
+    return {
+      faixa: {
+        tipo: 'acao',
+        icone: 'info',
+        titulo: 'Minha marca ainda não tem oferta',
+        texto: 'Para uma promoção, ele parte de uma oferta de lá: o nome, o que é e o preço que uma pessoa conferiu. Ele não inventa oferta nem preço.',
+        destino: { href: '/marca', rotulo: 'Abrir Minha marca' },
+      },
+      bloco: null,
+    };
+  }
+  const esperam = numero(m, 'mensagens_esperando');
+  if (esperam > 0n) {
+    return {
+      faixa: null,
+      bloco: {
+        titulo: 'Esperando você',
+        frase: [{ texto: `${vezes(esperam, 'mensagem espera', 'mensagens esperam')} a sua decisão`, forte: true }, { texto: ' em Aprovações. Lá você vê o texto, quem recebe, quando sai e quanto pode custar.' }],
+        aprovacoes: true,
+      },
+    };
+  }
+  if (numero(m, 'mensagens_propostas') > 0n) {
+    return { faixa: null, bloco: { titulo: 'Nada esperando você', frase: [{ texto: `As mensagens de ${mes} já foram decididas. O que foi enviado e o que trouxe está em Mensagens.` }], aprovacoes: false } };
+  }
+  return { faixa: null, bloco: { titulo: 'Nenhuma proposta ainda', frase: [{ texto: `Nenhuma proposta de mensagem em ${mes}. Quando ele propuser uma, ela chega em Aprovações.` }], aprovacoes: false } };
+}
+
+/**
+ * "O que as mensagens trouxeram" (P16): os pedidos confirmados no caixa com o cupom das mensagens do mês e o valor
+ * deles. Nulo enquanto nenhuma mensagem do mês foi enviada. O custo de cada envio é cobrado pela Meta e fica no
+ * RegemCast: a tela Mensagens o mostra, mensagem por mensagem.
+ */
+export function trouxeDoCrm(m: TeamMember): Numero[] | null {
+  if (numero(m, 'mensagens_enviadas') === 0n) return null;
+  const pedidos = numero(m, 'pedidos_com_cupom');
+  return [
+    { valor: inteiro(pedidos), rotulo: pedidos === 1n ? 'pedido com o cupom das mensagens' : 'pedidos com o cupom das mensagens' },
+    { valor: reaisDeMicros(numero(m, 'caixa_com_cupom')), rotulo: 'confirmados no caixa' },
+  ];
 }
 
 // ------------------------------------------------------------------ avisos do topo
@@ -783,6 +899,26 @@ export function historicoDo(i: TeamActivityItem, agora: Date): LinhaDoHistorico 
       return { quando, titulo: i.subject ? `Peça “${i.subject}” recusada` : 'Peça recusada', texto: `${quemFez(i, 'recusou', 'Recusada')}. O motivo ficou guardado.` };
     case 'peca_contestada':
       return { quando, titulo: i.subject ? `Conferência da peça “${i.subject}” contestada` : 'Conferência de uma peça contestada', texto: `${quemFez(i, 'achou que a conferência errou', 'A conferência foi contestada')}. A peça segue barrada, e o motivo ficou guardado.` };
+    case 'propos_mensagem':
+      return {
+        quando,
+        titulo: i.subject ? `Propôs “${i.subject}”${n > 0 ? ` para ${vezes(n, 'pessoa', 'pessoas')}` : ''}` : 'Propôs uma mensagem',
+        texto: 'O pedido foi para Aprovações: nenhuma mensagem sai sem a aprovação de uma pessoa, com o código do app.',
+      };
+    case 'mensagem_enviada':
+      return {
+        quando,
+        titulo: i.subject ? `“${i.subject}” aprovada: o envio foi para o RegemCast` : 'Mensagem aprovada: o envio foi para o RegemCast',
+        texto: `${quemFez(i, 'aprovou', 'Aprovada')}. O que foi entregue e o que trouxe está em Mensagens.`,
+      };
+    case 'mensagem_recusada':
+      return { quando, titulo: i.subject ? `“${i.subject}” recusada` : 'Mensagem recusada', texto: 'Uma pessoa recusou o pedido. Nada foi enviado.' };
+    case 'mensagem_cancelada':
+      return { quando, titulo: i.subject ? `“${i.subject}” cancelada` : 'Pedido de mensagem cancelado', texto: 'O pedido saiu da fila antes da decisão. Nada foi enviado.' };
+    case 'mensagem_expirou':
+      return { quando, titulo: i.subject ? `“${i.subject}” expirou sem decisão` : 'Pedido de mensagem expirou', texto: 'Ninguém decidiu no prazo. Nada foi enviado.' };
+    case 'mensagem_falhou':
+      return { quando, titulo: i.subject ? `“${i.subject}” aprovada, mas não enviada` : 'Mensagem aprovada, mas não enviada', texto: 'O envio falhou. O motivo está no pedido, em Aprovações.' };
     case 'desligado':
       return { quando, titulo: 'Desligado nesta marca', texto: `${quemFez(i, 'desligou', 'Desligado pela empresa')}. O histórico ficou guardado.` };
     case 'ligado':
