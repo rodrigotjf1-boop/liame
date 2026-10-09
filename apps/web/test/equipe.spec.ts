@@ -9,9 +9,12 @@ import {
   acaoDa,
   acertoDo,
   agoraDoCriativo,
+  agoraDoCrm,
+  aindaNaoLigado,
   alvoDe,
   atividadeDo,
   avisosDa,
+  crmNaoLigado,
   custoDo,
   custoNaTela,
   dataDe,
@@ -32,6 +35,7 @@ import {
   rodadaDa,
   seloDaIa,
   situacaoDo,
+  trouxeDoCrm,
   usdDeMicros,
 } from '@/components/equipe/textos';
 import { itensVisiveis, NAVEGACAO, temModos, tituloDa } from '@/components/shell/navegacao';
@@ -420,9 +424,10 @@ describe('Sua equipe: a tela', () => {
     });
     expect(html).toContain('Trabalhando para você');
     expect(html).toContain('Chegam nas próximas fases');
-    // O Criativo saiu das próximas fases (P12): a primeira que falta é a do CRM e mensageria.
-    expect(html).toContain('Na fase A5');
+    // O Criativo (P12) e o CRM e mensageria (P16) saíram das próximas fases: a primeira que falta é a A6.
+    expect(html).toContain('Na fase A6');
     expect(html).not.toContain('Na fase A4');
+    expect(html).not.toContain('Na fase A5');
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('Modo: Explica');
     expect(html).toContain('Custo em outubro');
@@ -482,8 +487,8 @@ describe('Sua equipe: a tela', () => {
   });
 
   it('funcionário de uma fase seguinte: entra depois, não trabalha ainda', () => {
-    const html = desenhar({ escolhido: 'crm' });
-    expect(html).toContain('Ele entra na fase <b>A5</b> do roadmap. Até lá, não trabalha para a Mister Burgers.');
+    const html = desenhar({ escolhido: 'social' });
+    expect(html).toContain('Ele entra na fase <b>A6</b> do roadmap. Até lá, não trabalha para a Mister Burgers.');
     expect(html).not.toContain('O que fez');
   });
 
@@ -584,6 +589,179 @@ describe('Sua equipe: "Conversar sobre ele" (P7)', () => {
     expect(desenhar({ escolhido: 'analista' })).not.toContain('Conversar sobre ele');
     // Confirmando o desligamento, a linha é só da confirmação.
     expect(desenhar({ escolhido: 'analista', comConversa: true, desligando: 'analista' })).not.toContain('Conversar sobre ele');
+  });
+});
+
+describe('o CRM e mensageria em Sua equipe (A5 · P16, aprovado em 09/10/2026)', () => {
+  const RODRIGO = { id: uuid(9), name: 'Rodrigo' };
+  /** As mensagens do protótipo: 2 propostas, 1 aprovada e enviada, 1 esperando; 12 pedidos com o cupom, R$ 540,00 no caixa. */
+  const MENSAGENS = [stat('mensagens_propostas', 2), stat('mensagens_enviadas', 1), stat('mensagens_recusadas', 0), stat('mensagens_esperando', 1), stat('pedidos_com_cupom', 12), stat('caixa_com_cupom', '540000000', 'brl_micros'), stat('retiradas_na_conferencia', 0)];
+  const SEM_MENSAGENS = MENSAGENS.map((s) => stat(s.key, 0, s.unit));
+  const com = (chave: string, valor: number | string) => MENSAGENS.map((s) => (s.key === chave ? stat(chave, valor, s.unit) : s));
+  const crm = (over: Partial<TeamMember> = {}): TeamMember => membro('crm', { stats: MENSAGENS, in_progress: null, blocked_by: null, cost: { usd_micros: '17000', calls: 2 }, ...over });
+  const comCrm = (over: Partial<TeamMember> = {}, daEquipe: Partial<TeamResponse> = {}): TeamResponse => {
+    const t = equipe(daEquipe);
+    return { ...t, members: [...t.members, crm(over)] };
+  };
+  const nomes = (ms: TeamMember[]) => ms.map((m) => m.key);
+  const frase = (m: TeamMember, t = comCrm()) => {
+    const a = agoraDoCrm(m, t);
+    return { faixa: a.faixa, titulo: a.bloco?.titulo ?? null, texto: a.bloco ? a.bloco.frase.map((x) => x.texto).join('') : null, aprovacoes: a.bloco?.aprovacoes ?? null };
+  };
+
+  it('sai de "Chegam nas próximas fases" e entra com quem trabalha; desligado, ou ainda não ligado pela Liame, fica com os desligados', () => {
+    expect(nomes(gruposDa(comCrm()).ativos)).toEqual(['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'crm']);
+    expect(nomes(gruposDa(comCrm({ status: 'desligado' })).desligados)).toEqual(['crm']);
+    // A IA está ligada e as chaves dele, não: fica com os desligados, com o selo da Liame.
+    const naoLigado = comCrm({ status: 'desligado_pela_liame' });
+    expect(nomes(gruposDa(naoLigado).desligados)).toEqual(['crm']);
+    expect(nomes(gruposDa(naoLigado).ativos)).not.toContain('crm');
+    expect([crmNaoLigado(crm({ status: 'desligado_pela_liame' }), naoLigado), aindaNaoLigado(crm({ status: 'desligado_pela_liame' }), naoLigado), aindaNaoLigado(crm(), comCrm())]).toEqual([true, true, false]);
+    // Com a IA inteira desligada, ele segue como os outros funcionários de IA (na lista de sempre).
+    const semIa = comCrm({ status: 'desligado_pela_liame' }, { ai: { enabled: false, spent_usd_micros: '0', ceiling_usd_micros: '20000000', band: 'livre' } });
+    expect(nomes(gruposDa(semIa).ativos)).toContain('crm');
+    // A resposta de um servidor que ainda não manda o CRM: ele só não aparece.
+    expect(nomes(gruposDa(equipe()).ativos)).not.toContain('crm');
+  });
+
+  it('o selo, o modo "Aprovação" e a linha da lista em cada situação', () => {
+    expect(situacaoDo(crm()).rotulo).toBe('Em espera');
+    expect(modoDo(crm(), null).rotulo).toBe('Aprovação');
+    expect(modoDo(crm({ status: 'desligado' }), null).rotulo).toBe('Desligado');
+    const linha = (over: Partial<TeamMember>) => atividadeDo(crm(over), 'outubro', AGORA);
+    expect(linha({})).toBe('1 mensagem espera a sua decisão');
+    expect(linha({ stats: com('mensagens_esperando', 2) })).toBe('2 mensagens esperam a sua decisão');
+    expect(linha({ stats: com('mensagens_esperando', 0) })).toBe('Propôs 2 mensagens em outubro');
+    expect(linha({ stats: SEM_MENSAGENS })).toBe('Sem proposta de mensagem em outubro');
+    expect(linha({ blocked_by: 'sem_regemcast', stats: SEM_MENSAGENS })).toBe('Espera a conexão com o RegemCast');
+    expect(linha({ blocked_by: 'sem_oferta', stats: SEM_MENSAGENS })).toBe('Espera a primeira oferta em Minha marca');
+    expect(linha({ status: 'desligado_pela_liame' })).toBe('Ainda não ligado para esta empresa');
+    expect(linha({ status: 'parado' })).toBe('Parado com a equipe');
+  });
+
+  it('"Mensagens em outubro", o que elas trouxeram e o custo de IA', () => {
+    expect(acertoDo(crm(), 'outubro')).toEqual([
+      { valor: '2', rotulo: 'mensagens propostas' },
+      { valor: '1', rotulo: 'aprovada e enviada' },
+      { valor: '1', rotulo: 'esperando a sua decisão' },
+      { valor: '0', rotulo: 'barradas na conferência' },
+    ]);
+    // A recusada só aparece quando há; a barrada no singular.
+    expect(acertoDo(crm({ stats: com('mensagens_recusadas', 1) }), 'outubro').at(-1)).toEqual({ valor: '1', rotulo: 'recusada por você' });
+    expect(acertoDo(crm({ stats: com('retiradas_na_conferencia', 1) }), 'outubro')[3]).toEqual({ valor: '1', rotulo: 'barrada na conferência' });
+    // O que trouxeram: os pedidos com o cupom e o valor no caixa. Sem mensagem enviada no mês, o bloco não existe.
+    expect(trouxeDoCrm(crm())).toEqual([
+      { valor: '12', rotulo: 'pedidos com o cupom das mensagens' },
+      { valor: nbsp('R$ 540,00'), rotulo: 'confirmados no caixa' },
+    ]);
+    expect(trouxeDoCrm(crm({ stats: [...com('pedidos_com_cupom', 1).filter((s) => s.key !== 'caixa_com_cupom'), stat('caixa_com_cupom', '45000000', 'brl_micros')] }))![0]).toEqual({ valor: '1', rotulo: 'pedido com o cupom das mensagens' });
+    expect(trouxeDoCrm(crm({ stats: com('mensagens_enviadas', 0) }))).toBeNull();
+    expect(trouxeDoCrm(crm({ stats: SEM_MENSAGENS }))).toBeNull();
+    expect(custoDo(crm(), comCrm())).toEqual({ valor: nbsp('R$ 0,09'), rotulo: 'custo de IA para escrever 2 mensagens' });
+    expect(custoDo(crm({ stats: SEM_MENSAGENS, cost: { usd_micros: '0', calls: 0 } }), comCrm())).toEqual({ valor: nbsp('R$ 0,00'), rotulo: 'ele só custa quando escreve' });
+  });
+
+  it('o que a ficha diz de agora: esperando a pessoa, nada esperando, nenhuma proposta, sem RegemCast e sem oferta', () => {
+    expect(frase(crm())).toEqual({
+      faixa: null,
+      titulo: 'Esperando você',
+      texto: '1 mensagem espera a sua decisão em Aprovações. Lá você vê o texto, quem recebe, quando sai e quanto pode custar.',
+      aprovacoes: true,
+    });
+    expect(frase(crm({ stats: com('mensagens_esperando', 0) }))).toMatchObject({ titulo: 'Nada esperando você', texto: 'As mensagens de outubro já foram decididas. O que foi enviado e o que trouxe está em Mensagens.', aprovacoes: false });
+    expect(frase(crm({ stats: SEM_MENSAGENS }))).toMatchObject({ titulo: 'Nenhuma proposta ainda', texto: 'Nenhuma proposta de mensagem em outubro. Quando ele propuser uma, ela chega em Aprovações.' });
+    // Sem o RegemCast e sem oferta: só a faixa, com o caminho que resolve.
+    expect(frase(crm({ blocked_by: 'sem_regemcast', stats: SEM_MENSAGENS }))).toEqual({
+      faixa: { tipo: 'acao', icone: 'plug', titulo: 'O RegemCast não está conectado', texto: 'É o RegemCast que envia as mensagens e guarda os contatos. Sem ele, o CRM e mensageria não tem para quem propor.', destino: { href: '/contas', rotulo: 'Abrir Contas conectadas' } },
+      titulo: null,
+      texto: null,
+      aprovacoes: null,
+    });
+    expect(frase(crm({ blocked_by: 'sem_oferta', stats: SEM_MENSAGENS })).faixa).toMatchObject({ titulo: 'Minha marca ainda não tem oferta', destino: { href: '/marca', rotulo: 'Abrir Minha marca' } });
+    // Não ligado pela Liame: nada a dizer de agora.
+    expect(agoraDoCrm(crm({ status: 'desligado_pela_liame' }), comCrm())).toEqual({ faixa: null, bloco: null });
+  });
+
+  it('o histórico: a proposta, o envio aprovado, a recusa, o cancelamento, o prazo que acabou e a falha', () => {
+    const h = (over: Partial<TeamActivityItem>) => historicoDo(item(over), AGORA);
+    expect(h({ kind: 'propos_mensagem', subject: 'Sexta em dobro', count: 412 })).toMatchObject({
+      titulo: 'Propôs “Sexta em dobro” para 412 pessoas',
+      texto: 'O pedido foi para Aprovações: nenhuma mensagem sai sem a aprovação de uma pessoa, com o código do app.',
+    });
+    expect(h({ kind: 'propos_mensagem', subject: 'Combo', count: 1 }).titulo).toBe('Propôs “Combo” para 1 pessoa');
+    expect(h({ kind: 'propos_mensagem', subject: null, count: 412 }).titulo).toBe('Propôs uma mensagem');
+    expect(h({ kind: 'mensagem_enviada', subject: 'Sobremesa por nossa conta', count: 176, mine: true, by: RODRIGO })).toMatchObject({
+      titulo: '“Sobremesa por nossa conta” aprovada: o envio foi para o RegemCast',
+      texto: 'Você aprovou. O que foi entregue e o que trouxe está em Mensagens.',
+    });
+    expect(h({ kind: 'mensagem_enviada', by: RODRIGO }).texto).toBe('Rodrigo aprovou. O que foi entregue e o que trouxe está em Mensagens.');
+    expect(h({ kind: 'mensagem_recusada', subject: 'Combo kids' })).toMatchObject({ titulo: '“Combo kids” recusada', texto: 'Uma pessoa recusou o pedido. Nada foi enviado.' });
+    expect(h({ kind: 'mensagem_cancelada' })).toMatchObject({ titulo: 'Pedido de mensagem cancelado', texto: 'O pedido saiu da fila antes da decisão. Nada foi enviado.' });
+    expect(h({ kind: 'mensagem_expirou', subject: 'Promoção antiga' })).toMatchObject({ titulo: '“Promoção antiga” expirou sem decisão', texto: 'Ninguém decidiu no prazo. Nada foi enviado.' });
+    expect(h({ kind: 'mensagem_falhou', subject: 'Volte a pedir' })).toMatchObject({ titulo: '“Volte a pedir” aprovada, mas não enviada', texto: 'O envio falhou. O motivo está no pedido, em Aprovações.' });
+  });
+
+  it('desenhado: a ficha no desenho dos outros, com "Abrir Mensagens" no lugar de "Conversar sobre ele" e o modo Aprovação à vista', () => {
+    const html = desenhar({ t: comCrm(), escolhido: 'crm', comConversa: true });
+    expect(html).toContain('<h2 id="eqp-det-t" tabindex="-1">CRM e mensageria</h2>');
+    expect(html).toContain('Mensagens de WhatsApp');
+    expect(html).toContain('Modo: Aprovação');
+    expect(html).toContain('href="/mensagens"');
+    expect(html).toContain('Abrir Mensagens');
+    expect(html).not.toContain('Conversar sobre ele');
+    expect(html).toContain('<h3>Esperando você</h3>');
+    expect(html).toContain('<b>1 mensagem espera a sua decisão</b>');
+    expect(html).toContain('id="eqp-bt-aprovacoes"');
+    expect(html).toContain('href="/aprovacoes"');
+    expect(html).toContain('<h3>Como ele trabalha</h3>');
+    expect(html).toContain('nenhuma mensagem sai sozinha');
+    expect(html).toContain('<h3>Mensagens em outubro</h3>');
+    expect(html).not.toContain('<h3>Acerto</h3>');
+    expect(html).toContain('<h3>O que as mensagens trouxeram</h3>');
+    expect(html).toContain('O custo de cada envio, cobrado pela Meta, está em Mensagens: ele não entra no teto de IA nem na Verba do mês.');
+    expect(html).toContain('O custo de cada mensagem escrita é medido pelo Liame');
+    expect(html).toContain('Desligar este funcionário');
+    expect(html).toContain('<b>Nunca:</b> enviar sem a sua aprovação com o código do app; ver nome ou telefone de cliente;');
+    // Só dois funcionários seguem nas próximas fases.
+    expect(html.match(/Na fase A\d/g)).toHaveLength(2);
+    expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
+    // Nenhum telefone na ficha.
+    expect(html).not.toMatch(/\+55\d{10,11}/);
+  });
+
+  it('desenhado: sem RegemCast e sem oferta, o caminho que resolve; desligado, o que continua valendo; não ligado, sem botão nem números', () => {
+    const semRegemcast = desenhar({ t: comCrm({ blocked_by: 'sem_regemcast', stats: SEM_MENSAGENS }), escolhido: 'crm' });
+    expect(semRegemcast).toContain('O RegemCast não está conectado');
+    expect(semRegemcast).toContain('href="/contas"');
+    expect(semRegemcast).toContain('Abrir Contas conectadas');
+    expect(semRegemcast).not.toContain('id="eqp-crm-agora"');
+    // O modo dele continua à vista: ele pode trabalhar assim que houver para quem propor.
+    expect(semRegemcast).toContain('id="eqp-crm-modo"');
+    expect(semRegemcast).not.toContain('O que as mensagens trouxeram');
+    const semOferta = desenhar({ t: comCrm({ blocked_by: 'sem_oferta', stats: SEM_MENSAGENS }), escolhido: 'crm' });
+    expect(semOferta).toContain('Minha marca ainda não tem oferta');
+    expect(semOferta).toContain('href="/marca"');
+
+    const pausa = { by: RODRIGO, at: '2026-09-30T21:20:00.000Z', reason: null };
+    const desligado = desenhar({ t: comCrm({ status: 'desligado', paused: pausa }), escolhido: 'crm' });
+    expect(desligado).toContain('Desligado por Rodrigo em');
+    expect(desligado).toContain('ele não propõe mensagem nova e não custa nada. O pedido que já está em Aprovações segue lá: dá para aprovar ou recusar. Envio em andamento segue no RegemCast, e dá para pausar em Aprovações.');
+    expect(desligado).toContain('Ligar de novo');
+    expect(desligado).toContain('Abrir Mensagens');
+    expect(desligado).toContain('<h3>Esperando você</h3>');
+
+    const naoLigado = desenhar({ t: comCrm({ status: 'desligado_pela_liame', stats: SEM_MENSAGENS }), escolhido: 'crm' });
+    expect(naoLigado).toContain('O CRM e mensageria ainda não está ligado para esta empresa');
+    expect(naoLigado).toContain('Quem liga é a Liame, a pedido do dono. Enquanto isso, ninguém propõe mensagem e ele não custa nada.');
+    expect(naoLigado).toContain('Desligado pela Liame');
+    for (const fora of ['Abrir Mensagens', 'Ligar de novo', 'Desligar este funcionário', 'Mensagens em outubro', 'Custo em outubro', 'id="eqp-crm-agora"', 'id="eqp-crm-modo"']) expect(naoLigado, fora).not.toContain(fora);
+    // Quem não gerencia a equipe vê a ficha e o atalho, sem o botão de desligar.
+    const soVe = desenhar({ t: comCrm({}, { can_manage: false }), escolhido: 'crm' });
+    expect(soVe).toContain('Abrir Mensagens');
+    expect(soVe).not.toContain('Desligar este funcionário');
+    // Sobre ele não há "Conversar sobre ele": o atalho é a tela Mensagens.
+    expect(podeConversarSobre('crm', comCrm(), true)).toBe(false);
+    expect(perguntaSobre('crm')).toBe('Quero falar sobre o trabalho do CRM e mensageria: o que ele fez este mês?');
   });
 });
 
@@ -718,8 +896,8 @@ describe('o Criativo em Sua equipe (A4 · P12, aprovado em 09/10/2026)', () => {
     expect(html).toContain('O custo de cada pedido é medido pelo Liame');
     expect(html).toContain('Desligar este funcionário');
     expect(html).toContain('<b>Nunca:</b> inventar oferta ou preço; aprovar a própria peça; publicar ou mandar algo para a Meta; trabalhar sem alguém pedir.');
-    // Só três funcionários seguem nas próximas fases.
-    expect(html.match(/Na fase A\d/g)).toHaveLength(3);
+    // Só dois funcionários seguem nas próximas fases (o CRM e mensageria entrou na equipe com o P16).
+    expect(html.match(/Na fase A\d/g)).toHaveLength(2);
     expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
   });
 

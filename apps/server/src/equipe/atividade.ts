@@ -1,6 +1,7 @@
 import type { TeamActivityItem } from '@liame/contracts';
 import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
+import { PREFIXO_RECUSA } from '../actions/action.service.js';
 import { RECUSAS_DO_COMPLIANCE } from '../ai/recusas.js';
 import type { Membro } from './membros.js';
 
@@ -213,6 +214,32 @@ function ramosDoMembro(membro: Membro, q: QuemOlha): SQL[] {
           sql`from liame.ad_piece_decision x join liame.ad_piece p on p.id = x.piece_id
               left join liame.ad_piece_version v on v.piece_id = x.piece_id and v.version = x.version
               where x.tenant_id = ${q.tenantId} and p.brand_id = ${q.brandId} and x.created_at >= ${q.desde}::timestamptz`,
+        ),
+        retiradas(q, membro),
+        ...pausas(q, membro),
+      ];
+    }
+    case 'crm': {
+      // O nome da mensagem só para quem vê as campanhas (é quem vê a tela Mensagens e o pedido em Aprovações).
+      const nome = sql`case when ${q.podePecas}::boolean then m.name end`;
+      const doPedido = sql`from liame.message_request m join liame.action_request r on r.id = m.action_request_id
+                          where m.tenant_id = ${q.tenantId} and m.brand_id = ${q.brandId} and m.agent_key = ${membro}`;
+      return [
+        // O pedido de envio que ele montou: a mensagem e quantas pessoas podem receber.
+        ramo({ at: sql`m.created_at`, kind: 'propos_mensagem', subject: nome, n: sql`m.people_can_receive` }, sql`${doPedido} and m.created_at >= ${q.desde}::timestamptz`),
+        // O que aconteceu com o pedido: uma pessoa aprovou e o envio foi para o RegemCast, recusou, cancelou (quem opera
+        // tirou o pedido da fila), deixou expirar, ou o envio falhou. Quem aprovou é a aprovação mais recente; quem recusou
+        // não fica em coluna (o nome está no motivo).
+        ramo(
+          {
+            at: sql`r.updated_at`,
+            kind: sql`case when r.status = 'executada' then 'mensagem_enviada' when r.status = 'falhou' then 'mensagem_falhou' when r.status = 'expirada' then 'mensagem_expirou'
+                           when r.status_reason like ${`${PREFIXO_RECUSA}%`} then 'mensagem_recusada' else 'mensagem_cancelada' end`,
+            subject: nome,
+            n: sql`m.people_can_receive`,
+            by: sql`case when r.status = 'executada' then (select a.approved_by from liame.approval a where a.action_request_id = r.id order by a.created_at desc limit 1) end`,
+          },
+          sql`${doPedido} and r.status in ('executada', 'falhou', 'expirada', 'cancelada') and r.updated_at >= ${q.desde}::timestamptz`,
         ),
         retiradas(q, membro),
         ...pausas(q, membro),

@@ -1,5 +1,5 @@
 import type { TeamStat } from '@liame/contracts';
-import { CRIATIVO_DA_EQUIPE, type DefinicaoDoMembro, GESTOR_DE_TRAFEGO, type Membro } from './membros.js';
+import { CRIATIVO_DA_EQUIPE, CRM_DA_EQUIPE, type DefinicaoDoMembro, GESTOR_DE_TRAFEGO, type Membro } from './membros.js';
 
 // Sua equipe (A3, I13b): a situação de cada membro e o que ele fez no mês, montados pelo código a partir das
 // contagens que o serviço lê do banco. Funções puras.
@@ -17,14 +17,19 @@ export interface FatosDoMembro {
   sombra: boolean;
   /** A flag `criativo` da empresa (só o Criativo depende dela). */
   criativo: boolean;
+  /**
+   * O CRM e mensageria está ligado para a empresa: a flag `crm` e as duas do envio de mensagens (`mensageria` e
+   * `whatsapp_campaign`). Sem uma delas ele não consegue propor nada, e a tela diz que ainda não está ligado.
+   */
+  crm: boolean;
   /** Há uma parada (da empresa ou da Liame) que trava a IA desta marca. */
   parada: boolean;
 }
 
 /**
  * A situação de um membro, do que mais pesa ao que menos: desligado pela empresa; fora do plano; quem usa IA para
- * sem a IA e trava com a parada (o Criativo, além da IA, precisa da flag dele); o Gestor de tráfego só trabalha com a
- * sombra ligada. Quem trabalha por regra
+ * sem a IA e trava com a parada (o Criativo e o CRM e mensageria, além da IA, precisam das flags deles); o Gestor de
+ * tráfego só trabalha com a sombra ligada. Quem trabalha por regra
  * (Relatórios, Compliance, a sombra) segue com a parada: ela trava a IA e as ações, e eles não fazem nenhuma das duas
  * (a revisão da semana sai com o resumo do sistema).
  */
@@ -34,6 +39,7 @@ export function situacaoDoMembro(def: DefinicaoDoMembro, f: FatosDoMembro): Situ
   if (def.kind === 'ia') {
     if (!f.ia) return 'desligado_pela_liame';
     if (def.key === CRIATIVO_DA_EQUIPE && !f.criativo) return 'desligado_pela_liame';
+    if (def.key === CRM_DA_EQUIPE && !f.crm) return 'desligado_pela_liame';
     return f.parada ? 'parado' : 'ativo';
   }
   if (def.key === GESTOR_DE_TRAFEGO) return f.sombra ? 'sombra' : 'desligado_pela_liame';
@@ -73,6 +79,21 @@ export interface ContagensDoMes {
   recusasPorMembro: Map<string, { doCompliance: number; outras: number }>;
   /** O trabalho do Criativo (A4, X6): os pedidos e as peças do mês, as de hoje e as que esperam a pessoa agora. */
   pecas: PecasDoCriativo;
+  /** O trabalho do CRM e mensageria (A5, Y6): as mensagens que ele propôs no mês e o que elas trouxeram pelo cupom. */
+  mensagens: MensagensDoCrm;
+}
+
+export interface MensagensDoCrm {
+  /** Pedidos de envio que ele montou no mês. */
+  propostas: number;
+  /** Dos propostos no mês, os que uma pessoa aprovou e foram para o RegemCast, e os que foram recusados. */
+  enviadas: number;
+  recusadas: number;
+  /** Agora, na marca inteira: os pedidos dele que esperam a decisão em Aprovações. */
+  esperando: number;
+  /** Os pedidos confirmados no caixa com o cupom das mensagens propostas no mês, e a receita deles, em micros de real. */
+  pedidosComCupom: number;
+  caixaComCupomMicros: bigint;
 }
 
 export interface PecasDoCriativo {
@@ -134,6 +155,16 @@ export function numerosDoMembro(def: DefinicaoDoMembro, c: ContagensDoMes): Team
         qtd('pecas_hoje', c.pecas.hoje),
         qtd('pecas_esperando', c.pecas.esperando),
         qtd('pecas_barradas', c.pecas.barradas),
+        retiradas,
+      ];
+    case 'crm':
+      return [
+        qtd('mensagens_propostas', c.mensagens.propostas),
+        qtd('mensagens_enviadas', c.mensagens.enviadas),
+        qtd('mensagens_recusadas', c.mensagens.recusadas),
+        qtd('mensagens_esperando', c.mensagens.esperando),
+        qtd('pedidos_com_cupom', c.mensagens.pedidosComCupom),
+        { key: 'caixa_com_cupom', value: c.mensagens.caixaComCupomMicros.toString(), unit: 'brl_micros' },
         retiradas,
       ];
     case 'trafego':

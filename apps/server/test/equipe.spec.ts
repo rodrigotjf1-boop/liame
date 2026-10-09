@@ -1,6 +1,7 @@
 import { TEAM_MEMBERS } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
 import { WORKFLOW_DO_CRIATIVO } from '../src/ai/criativo/prompt.js';
+import { WORKFLOW_DO_CRM } from '../src/ai/crm/prompt.js';
 import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DOS_RESULTADOS } from '../src/ai/explicar/explicar.service.js';
 import { WORKFLOW_DO_REVISOR } from '../src/ai/revisor/prompt.js';
 import { WORKFLOW as WORKFLOW_DA_CONVERSA } from '../src/conversa/conversa.service.js';
@@ -12,8 +13,9 @@ import { WORKFLOW as WORKFLOW_DO_PESQUISADOR } from '../src/worker/pesquisa.serv
 // A3 · I13b: Sua equipe. A situação de cada membro vem de quatro chaves (a empresa, o plano, as flags e a parada);
 // o que ele fez no mês sai das contagens do banco; os fluxos de IA de cada um são os que os serviços gravam.
 
-const tudoLigado: FatosDoMembro = { pausado: false, peloPlano: true, ia: true, sombra: true, criativo: true, parada: false };
+const tudoLigado: FatosDoMembro = { pausado: false, peloPlano: true, ia: true, sombra: true, criativo: true, crm: true, parada: false };
 const semPecas = { pedidos: 0, escritas: 0, aprovadas: 0, recusadas: 0, refeitas: 0, hoje: 0, esperando: 0, barradas: 0 };
+const semMensagens = { propostas: 0, enviadas: 0, recusadas: 0, esperando: 0, pedidosComCupom: 0, caixaComCupomMicros: 0n };
 const vazio: ContagensDoMes = {
   respostasPorFluxo: new Map(),
   entreguesPorFluxo: new Map(),
@@ -34,6 +36,7 @@ const vazio: ContagensDoMes = {
   arrependimentoMicros: 0n,
   recusasPorMembro: new Map(),
   pecas: semPecas,
+  mensagens: semMensagens,
 };
 
 describe('Sua equipe (A3, I13b)', () => {
@@ -46,15 +49,17 @@ describe('Sua equipe (A3, I13b)', () => {
     expect(EQUIPE.pesquisador.fluxos).toEqual([WORKFLOW_DO_PESQUISADOR]);
     // O Compliance segue por regra e não desliga; o fluxo dele é o do revisor de IA (o custo, quando a empresa o tem).
     expect(EQUIPE.compliance).toMatchObject({ kind: 'regra', desligavel: false, fluxos: [WORKFLOW_DO_REVISOR] });
-    expect(MEMBROS.filter((m) => EQUIPE[m].kind === 'ia')).toEqual(['lia', 'analista', 'estrategista', 'pesquisador', 'criativo']);
+    expect(MEMBROS.filter((m) => EQUIPE[m].kind === 'ia')).toEqual(['lia', 'analista', 'estrategista', 'pesquisador', 'criativo', 'crm']);
     // O Criativo (A4; P12): o fluxo é o que o worker das peças grava, e a empresa pode desligar.
     expect(EQUIPE.criativo).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_CRIATIVO] });
+    // O CRM e mensageria (A5; P16): o fluxo é o das chamadas que escrevem a mensagem, e a empresa pode desligar.
+    expect(EQUIPE.crm).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_CRM] });
     for (const m of MEMBROS) expect(EQUIPE[m].funcionario?.key ?? m).toBe(m);
   });
 
   it('a situação: desligado pela empresa pesa mais; fora do plano; a IA e a parada só valem para quem usa IA; a sombra', () => {
     const s = (m: (typeof MEMBROS)[number], f: Partial<FatosDoMembro>) => situacaoDoMembro(EQUIPE[m], { ...tudoLigado, ...f });
-    expect(MEMBROS.map((m) => s(m, {}))).toEqual(['ativo', 'ativo', 'ativo', 'ativo', 'ativo', 'ativo', 'sombra', 'ativo']);
+    expect(MEMBROS.map((m) => s(m, {}))).toEqual(['ativo', 'ativo', 'ativo', 'ativo', 'ativo', 'ativo', 'sombra', 'ativo', 'ativo']);
     expect(s('lia', { pausado: true, peloPlano: false, ia: false })).toBe('desligado');
     expect(s('analista', { peloPlano: false })).toBe('desligado_pela_liame');
     expect(MEMBROS.map((m) => s(m, { ia: false }))).toEqual([
@@ -66,14 +71,21 @@ describe('Sua equipe (A3, I13b)', () => {
       'desligado_pela_liame',
       'sombra',
       'desligado_pela_liame',
+      'desligado_pela_liame',
     ]);
     // A parada trava a IA e as ações: quem trabalha por regra segue (a revisão sai com o resumo do sistema).
-    expect(MEMBROS.map((m) => s(m, { parada: true }))).toEqual(['parado', 'parado', 'ativo', 'ativo', 'parado', 'parado', 'sombra', 'parado']);
+    expect(MEMBROS.map((m) => s(m, { parada: true }))).toEqual(['parado', 'parado', 'ativo', 'ativo', 'parado', 'parado', 'sombra', 'parado', 'parado']);
     // O Criativo precisa da flag dele além da IA: sem ela, só ele fica desligado pela Liame; a empresa desligar pesa mais.
     expect(MEMBROS.filter((m) => s(m, { criativo: false }) !== s(m, {}))).toEqual(['criativo']);
     expect(s('criativo', { criativo: false })).toBe('desligado_pela_liame');
     expect(s('criativo', { criativo: false, pausado: true })).toBe('desligado');
     expect(s('criativo', { criativo: false, parada: true })).toBe('desligado_pela_liame');
+    // O CRM e mensageria precisa das flags dele (a dele e as do envio de mensagens) além da IA: sem elas, só ele fica
+    // desligado pela Liame ("ainda não ligado"); a empresa desligar pesa mais.
+    expect(MEMBROS.filter((m) => s(m, { crm: false }) !== s(m, {}))).toEqual(['crm']);
+    expect(s('crm', { crm: false })).toBe('desligado_pela_liame');
+    expect(s('crm', { crm: false, pausado: true })).toBe('desligado');
+    expect(s('crm', { ia: false })).toBe('desligado_pela_liame');
     expect(s('trafego', { sombra: false })).toBe('desligado_pela_liame');
     expect(s('trafego', { pausado: true })).toBe('desligado');
   });
@@ -127,6 +139,8 @@ describe('Sua equipe (A3, I13b)', () => {
       ]),
       // O Criativo: 2 pedidos atendidos, 5 peças no mês (2 aprovadas), 1 versão refeita, 3 de hoje; agora, 2 esperam e 1 está barrada.
       pecas: { pedidos: 2, escritas: 5, aprovadas: 2, recusadas: 0, refeitas: 1, hoje: 3, esperando: 2, barradas: 1 },
+      // O CRM e mensageria: 2 mensagens propostas no mês (1 enviada), 1 esperando agora, e 12 pedidos com o cupom delas (R$ 540,00).
+      mensagens: { propostas: 2, enviadas: 1, recusadas: 0, esperando: 1, pedidosComCupom: 12, caixaComCupomMicros: 540_000_000n },
     };
     const ver = (m: (typeof MEMBROS)[number]) => Object.fromEntries(numerosDoMembro(EQUIPE[m], c).map((x) => [x.key, `${x.value} ${x.unit}`]));
     expect(ver('lia')).toEqual({ respostas: '61 qtd', fez_sentido: '28 qtd', discordo: '5 qtd', demandas: '2 qtd', retiradas_na_conferencia: '5 qtd' });
@@ -152,6 +166,16 @@ describe('Sua equipe (A3, I13b)', () => {
       retiradas_na_conferencia: '1 qtd',
     });
     expect(numerosDoMembro(EQUIPE.criativo, vazio).every((x) => x.value === '0')).toBe(true);
+    expect(ver('crm')).toEqual({
+      mensagens_propostas: '2 qtd',
+      mensagens_enviadas: '1 qtd',
+      mensagens_recusadas: '0 qtd',
+      mensagens_esperando: '1 qtd',
+      pedidos_com_cupom: '12 qtd',
+      caixa_com_cupom: '540000000 brl_micros',
+      retiradas_na_conferencia: '0 qtd',
+    });
+    expect(numerosDoMembro(EQUIPE.crm, vazio).every((x) => x.value === '0')).toBe(true);
     // Sem nada no mês, tudo zero (e nada de buraco na lista).
     expect(numerosDoMembro(EQUIPE.lia, vazio).map((x) => x.value)).toEqual(['0', '0', '0', '0', '0']);
     expect(numerosDoMembro(EQUIPE.compliance, vazio).map((x) => `${x.key}=${x.value}`)).toEqual(['textos_conferidos=0', 'textos_barrados=0']);
