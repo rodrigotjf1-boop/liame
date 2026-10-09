@@ -185,6 +185,67 @@ export const OrcamentoRegemcast = z.object({
 });
 export type OrcamentoRegemcast = z.infer<typeof OrcamentoRegemcast>;
 
+// ---------------------------------------------------------------- o pedido de mensagem (A5, Y5; contrato §9)
+// O que as ferramentas que montam e disparam uma campanha devolvem. As de rascunho gravam no RegemCast e não fazem
+// mensagem sair; o disparo tem dois passos (o plano, que devolve a confirmação, e o disparo, que só roda com ela).
+// Nenhuma destas respostas traz telefone ou nome de contato: só contagens, custo e frases escritas pelo RegemCast.
+
+const Dias = z.number().int().min(0).max(3650);
+
+/** `publico_estimar` (`publicos.ler`): quantas pessoas podem receber, quantas estão em descanso e o custo (teto). Não cria nada. */
+export const EstimativaRegemcast = z.object({ pessoas: Contagem, emDescanso: Contagem, descansoDias: Dias, custo: CustoRegemcast });
+export type EstimativaRegemcast = z.infer<typeof EstimativaRegemcast>;
+
+/** `modelo_rascunhar` (`modelos.rascunhar`): o rascunho gravado no RegemCast (não vai para a Meta) e o que barraria o envio. */
+export const RascunhoDeModeloRegemcast = z.object({
+  id: Id,
+  nome: Texto(600),
+  idioma: Texto(40),
+  categoria: Texto(60),
+  situacao: Texto(60),
+  problemas: z.array(z.object({ campo: Texto(200), mensagem: Texto(2000) })).max(100),
+  prontoParaEnviar: z.boolean(),
+  proximoPasso: Texto(2000),
+});
+export type RascunhoDeModeloRegemcast = z.infer<typeof RascunhoDeModeloRegemcast>;
+
+/** `campanha_rascunhar` (`campanhas.rascunhar`): a campanha em rascunho (nada sai), com quantas pessoas entraram e o custo estimado. */
+export const RascunhoDeCampanhaRegemcast = z.object({ campanha: CampanhaRegemcast, custo: CustoRegemcast, descansoDias: Dias.nullable(), proximoPasso: Texto(2000) });
+export type RascunhoDeCampanhaRegemcast = z.infer<typeof RascunhoDeCampanhaRegemcast>;
+
+/**
+ * `campanha_disparo_planejar` (`campanhas.disparar`, só produto da DMS): os números que valem agora, o orçamento da
+ * conta, o que impede e a confirmação. Não muda nada. O plano que diz que pode disparar sem trazer a confirmação, ou
+ * que traz a confirmação com impedimento, está fora do contrato: o Liame não dispara em cima de um plano torto.
+ */
+export const PlanoDoDisparoRegemcast = z
+  .object({
+    campanha: CampanhaRegemcast,
+    custo: CustoRegemcast,
+    orcamento: z.object({
+      /** A conta tem pelo menos um teto de gasto definido pelo dono. Sem teto, o RegemCast não dispara. */
+      definido: z.boolean(),
+      periodos: z.array(z.object({ periodo: Codigo, rotulo: Texto(100), tetoCentavos: Centavos, gastoCentavos: Centavos, texto: Texto(500), sinal: Codigo })).max(10),
+      /** Quando o custo passa do que resta no orçamento: a campanha sai aos poucos. */
+      aviso: Texto(1000).nullable(),
+    }),
+    podeDisparar: z.boolean(),
+    /** As frases do RegemCast para o que impede o disparo agora. */
+    impedimentos: z.array(Texto(1000)).max(50),
+    /** A impressão digital do que o plano mostrou; o disparo só roda com ela, e só se nada mudou. */
+    confirmacao: z.string().min(16).max(64).nullable(),
+  })
+  .refine((p) => p.podeDisparar === (p.confirmacao !== null) && p.podeDisparar === (p.impedimentos.length === 0), { path: ['podeDisparar'] });
+export type PlanoDoDisparoRegemcast = z.infer<typeof PlanoDoDisparoRegemcast>;
+
+/** `campanha_disparar` (`campanhas.disparar`): a campanha na fila de envio. As mensagens saem e a Meta cobra. */
+export const DisparoRegemcast = z.object({ campanha: CampanhaRegemcast, custo: CustoRegemcast, proximoPasso: Texto(2000) });
+export type DisparoRegemcast = z.infer<typeof DisparoRegemcast>;
+
+/** `campanha_pausar` (`campanhas.disparar`): a campanha pausada. Quem retoma é uma pessoa, na tela do RegemCast. */
+export const PausaRegemcast = z.object({ campanha: CampanhaRegemcast, proximoPasso: Texto(2000) });
+export type PausaRegemcast = z.infer<typeof PausaRegemcast>;
+
 /** `integracao_revogar`: o próprio token desligado. */
 export const RevogacaoRegemcast = z.object({ revogado: z.boolean(), revogadoEm: Instante });
 
