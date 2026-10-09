@@ -1,6 +1,6 @@
 # ADR-021 — Onde ficam as fotos dos produtos e as imagens das peças
 
-- **Status:** Aceito pelo dono em 05/10/2026 ("vamos de AWS") · **a construção fica para o fim do roadmap**, como pendência final, por decisão dele no mesmo dia
+- **Status:** Aceito pelo dono em 05/10/2026 ("vamos de AWS") · **a construção fica para o fim do roadmap**, como pendência final, por decisão dele no mesmo dia · **antecipada em 09/10/2026 para a A6 (entrega Z4), só para a foto enviada pela empresa** (decisão D-A6-2 do `plano-a6.md`); a imagem gerada por IA e a campanha nova continuam no fim
 - **Decide:** onde o Liame guarda arquivos de imagem (a foto do produto que a empresa envia e a imagem que o Criativo gera), como eles entram, quem os lê e quando saem
 - **Base:** base de conhecimento §17.6 · ADR-011 (a conta AWS já em uso) · ADR-014 (ciclo de vida) · ADR-016 (imagem por finalidade) · `plano-a4.md` X5 e X7, D-A4-9 e D-A4-28
 
