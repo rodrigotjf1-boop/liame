@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Vendas ao Google em Resultados · Liame</title>
 <!--
-@prototipo Liame · A5 · P14, parte B (1 de 2) · A linha das vendas informadas ao Google, em Resultados (AGUARDA A APROVAÇÃO DO DONO; pronto em 09/10/2026)
+@prototipo Liame · A5 · P14, parte B (1 de 2) · A linha das vendas informadas ao Google, em Resultados (APROVADO PELO DONO EM 09/10/2026)
 base: prototipo-resultados-graficos.html (Resultados em gráficos, aprovado em 07/10/2026): a tela fica como está.
 pedido: do dono, em 09/10/2026, ao aprovar o P14 com a escolha B: a configuração fica em Contas conectadas, e entram
         uma linha em Resultados e um aviso em Atenção quando o envio parar. Esta é a linha; o aviso está em
@@ -935,7 +935,7 @@ select.input { padding-right: var(--sp-2); }
 <p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
 
 <div class="revisao" role="region" aria-label="Controles do protótipo">
-  <p class="revisao-marca"><b>Protótipo para aprovação · A5 · P14, parte B (1 de 2)</b><span>A linha das vendas informadas ao Google, em Resultados · dados de exemplo</span></p>
+  <p class="revisao-marca"><b>Protótipo aprovado em 09/10/2026 · A5 · P14, parte B (1 de 2)</b><span>A linha das vendas informadas ao Google, em Resultados · dados de exemplo</span></p>
   <label>Vendas ao Google <select id="rev-p14b"></select></label>
   <!-- O seletor da tela aprovada segue no arquivo (os cenários dela usam), fora da faixa. -->
   <span hidden><label>Cenário <select id="rev-cenario"></select></label></span>
@@ -1987,7 +1987,7 @@ function linhaCamp(c, vm) {
     <td class="n num">${fm(c.invest)}</td><td class="n num">${conv}</td><td class="n num">${fn(c.pedidos)}</td><td class="n num">${fm(c.receita)}</td>
     <td class="n num">${margem}</td><td class="n num">${fm(c.cpp)}</td><td class="n num">${plat}</td><td class="n num forte">${fx(c.roasCaixa)}</td><td>${halteres(c)}</td></tr>`;
 }
-/* ===== P14, parte B · a linha das vendas informadas ao Google (A5 · Y1; aguarda a aprovação do dono) =====
+/* ===== P14, parte B · a linha das vendas informadas ao Google (A5 · Y1; aprovado pelo dono em 09/10/2026) =====
    A situação e as contagens são as que o servidor já devolve para o cartão de Contas conectadas (os últimos 30 dias).
    Sem a função ligada para a marca, a tela é a aprovada, sem a linha. Dados fictícios. */
 var p14b = { estado: 'informando' };

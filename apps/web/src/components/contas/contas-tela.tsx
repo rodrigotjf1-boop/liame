@@ -227,6 +227,19 @@ export function ContasTela() {
   // Vendas informadas ao Google: as marcas com a função ligada e o cartão de cada conta, depois da autorização que a lê.
   const vendas = useMemo(() => juntarVendas(dados?.vendas ?? []), [dados]);
   const vendasDaAutorizacao = useMemo(() => vendasPorAutorizacao(vendas.contas, dados?.conexoes ?? [], autorizacoes), [vendas, dados, autorizacoes]);
+  // Quem chega pelo atalho de Resultados ou da Atenção (`#vendas-<conta>`, ou `#vendas-google` para o primeiro cartão)
+  // cai no cartão da conta, uma vez, quando os cartões aparecem (eles só existem depois da leitura).
+  const levouAoCartao = useRef(false);
+  useEffect(() => {
+    if (levouAoCartao.current || !vendas.contas.length) return;
+    const alvo = window.location.hash.slice(1);
+    if (!alvo.startsWith('vendas-')) return;
+    const cartao = document.getElementById(alvo) ?? document.querySelector<HTMLElement>('.autorizacao--larga[id^="vendas-"]');
+    if (!cartao) return;
+    levouAoCartao.current = true;
+    cartao.scrollIntoView({ block: 'start' });
+    cartao.focus({ preventScroll: true });
+  }, [vendas]);
 
   if (!podeVer) {
     return (

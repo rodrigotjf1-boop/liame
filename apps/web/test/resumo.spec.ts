@@ -348,6 +348,15 @@ describe('Resumo: precisa de você', () => {
     const r = resumo({ needs_you: { critical: 0, attention: 1, items: [itens[1]!], approvals: { actions: 3, plans: 0, autonomy: 0 } } });
     expect(precisaDe(r, true, true, NADA).map((i) => i.chave)).not.toContain('decisao');
     expect(precisaDe(r, false, true, NADA)[0]!.botao!.href).toBe('/atencao');
+    // O envio das vendas ao Google parou (P14, parte B): o botão diz o que fazer e abre Contas conectadas no cartão da conta.
+    const conta = '01a0e1a1-ea5a-7822-a16c-376c2c942655';
+    const dasVendas = (kind: string, podeVerContas = true) =>
+      precisaDe(resumo({ needs_you: { critical: 0, attention: 1, items: [aviso({ kind, severity: 'atencao', title: 'O Liame parou de informar as vendas ao Google', connected_account_id: conta, provider: 'google_ads' })], approvals: { actions: 0, plans: 0, autonomy: 0 } } }), true, podeVerContas, NADA)[0]!;
+    expect(dasVendas('vendas_google_sem_permissao').botao).toMatchObject({ rotulo: 'Autorizar', href: `/contas#vendas-${conta}` });
+    expect(dasVendas('vendas_google_recusadas').botao).toMatchObject({ rotulo: 'Ver o motivo', href: `/contas#vendas-${conta}` });
+    expect(dasVendas('vendas_google_sem_permissao').gravidade).toBe('atencao');
+    // Quem não vê as contas vai para a lista de avisos, como nos outros.
+    expect(dasVendas('vendas_google_sem_permissao', false).botao).toMatchObject({ rotulo: 'Ver', href: '/atencao' });
     expect(textoCorrido(precisaDe(resumo({ needs_you: { critical: 0, attention: 0, items: [], approvals: { actions: 1, plans: 0, autonomy: 0 } } }), true, true, TUDO)[0]!.sub)).toBe('Nada vai ao ar sem você.');
   });
 

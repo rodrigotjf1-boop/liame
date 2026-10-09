@@ -309,3 +309,96 @@ export function vendasPorAutorizacao(
 export function trocarAMarca(atual: GoogleConversionsResponse[], nova: GoogleConversionsResponse): GoogleConversionsResponse[] {
   return atual.some((r) => r.brand_id === nova.brand_id) ? atual.map((r) => (r.brand_id === nova.brand_id ? nova : r)) : [...atual, nova];
 }
+
+// ------------------------------------------------------------------ a linha em Resultados (protótipo P14, parte B)
+
+/** A linha das vendas informadas ao Google no cartão das campanhas: o tom, a frase em três pedaços e o atalho. */
+export type LinhaDasVendas = {
+  /** `atencao`: o envio parou sem ninguém mandar parar. */
+  tom: 'ok' | 'neutro' | 'atencao';
+  icone: NomeIcone;
+  antes: string;
+  forte: string;
+  depois: string;
+  atalho: { rotulo: string; href: string };
+};
+
+/** O cartão da conta em Contas conectadas (é para lá que os atalhos levam). */
+export const idDoCartaoDasVendas = (contaId: string): string => `vendas-${contaId}`;
+const atalhoPara = (conta: ContaDasVendas, rotulo: string) => ({ rotulo, href: `/contas#${idDoCartaoDasVendas(conta.conta.connected_account_id)}` });
+
+/** O que pesa mais primeiro: o que parou sem ninguém mandar, depois o que falta fazer, depois o que está parado de propósito. */
+function pesoDaLinha(v: ContaDasVendas): number {
+  const c = v.conta;
+  const ativo = c.destination !== null && c.destination.stopped_at === null;
+  if (c.status === 'sem_permissao' && ativo) return 0;
+  if (c.refusing && ativo && c.status !== 'equipe_parada') return 1;
+  if (c.status === 'equipe_parada') return 2;
+  if (c.status === 'sem_permissao') return 3;
+  if (c.status === 'sem_destino' || !c.destination) return 4;
+  if (c.status === 'parado') return 5;
+  return 6;
+}
+
+/**
+ * A linha de Resultados (protótipo P14, parte B, aprovado em 09/10/2026). Com mais de uma conta do Google Ads, soma as
+ * que informam e mostra a situação que mais pesa. Os números são sempre os da janela das contagens (30 dias), qualquer
+ * que seja o período da tela. Nula sem conta com a função ligada: a tela é a de sempre.
+ */
+export function linhaDasVendas(contas: readonly ContaDasVendas[], agora: Date): LinhaDasVendas | null {
+  if (!contas.length) return null;
+  const pior = [...contas].sort((a, b) => pesoDaLinha(a) - pesoDaLinha(b))[0]!;
+  const c = pior.conta;
+  const peso = pesoDaLinha(pior);
+  const naoMuda = ' Os números desta tela não mudam: eles vêm do caixa.';
+
+  if (peso === 0) {
+    const motivo = c.authorized ? 'o Google recusou a autorização.' : 'falta uma permissão do Google.';
+    return { tom: 'atencao', icone: 'alert', antes: '', forte: 'O Liame parou de informar as vendas ao Google:', depois: ` ${motivo}${naoMuda}`, atalho: atalhoPara(pior, 'Autorizar em Contas conectadas') };
+  }
+  if (peso === 1 && c.refusing) {
+    return {
+      tom: 'atencao',
+      icone: 'alert',
+      antes: '',
+      forte: 'O Google está recusando as vendas informadas:',
+      depois: ` ${c.refusing.refused} de ${c.refusing.answered} nos últimos ${c.refusing.days} dias.${naoMuda}`,
+      atalho: atalhoPara(pior, 'Ver o motivo em Contas conectadas'),
+    };
+  }
+  if (peso === 2) return { tom: 'neutro', icone: 'info', antes: 'A equipe está parada: nenhuma venda é informada ao Google enquanto estiver.', forte: '', depois: '', atalho: atalhoPara(pior, 'Ver em Contas conectadas') };
+  if (peso === 3) return { tom: 'neutro', icone: 'info', antes: 'Falta uma permissão do Google para o Liame informar as vendas: nada é informado ainda.', forte: '', depois: '', atalho: atalhoPara(pior, 'Autorizar em Contas conectadas') };
+  if (peso === 4) return { tom: 'neutro', icone: 'info', antes: 'Falta escolher onde o Google conta as vendas: nada é informado ainda.', forte: '', depois: '', atalho: atalhoPara(pior, 'Escolher em Contas conectadas') };
+  if (peso === 5 && c.destination) {
+    const quem = c.destination.stopped_by ? ` por ${primeiroNome(c.destination.stopped_by.name)}` : '';
+    const quando = c.destination.stopped_at ? ` em ${dataCompleta(c.destination.stopped_at)}` : '';
+    return { tom: 'neutro', icone: 'info', antes: `As vendas não estão sendo informadas ao Google: parado${quem}${quando}.`, forte: '', depois: '', atalho: atalhoPara(pior, 'Ver em Contas conectadas') };
+  }
+
+  // Informando (ou esperando o Google, que volta sozinho): a soma das contas que informam.
+  const informam = contas.filter((v) => pesoDaLinha(v) === 6);
+  const soma = (campo: 'informed' | 'refused' | 'waiting') => informam.reduce((s, v) => s + v.conta.counts[campo], 0);
+  const [informadas, recusadas, esperando] = [soma('informed'), soma('refused'), soma('waiting')];
+  const janela = pior.janelaDias;
+  const vendas = (n: number) => `${n} ${n === 1 ? 'venda' : 'vendas'}`;
+  const comeco = informam.map((v) => v.conta.destination?.starts_at ?? null).filter((x): x is string => x !== null).sort().at(-1) ?? null;
+  // Nada pode ter saído ainda: só entram os pedidos confirmados depois do começo, e cada um espera o prazo.
+  if (!informadas && !recusadas && comeco && agora.getTime() - new Date(comeco).getTime() < pior.esperaMin * 60_000) {
+    return {
+      tom: 'neutro',
+      icone: 'clock',
+      antes: 'O Liame começou a informar as vendas ao Google ',
+      forte: quandoComHora(comeco, agora),
+      depois: `. A primeira sai ${esperaPorExtenso(pior.esperaMin)} depois de confirmada no caixa.`,
+      atalho: atalhoPara(pior, 'Ver em Contas conectadas'),
+    };
+  }
+  if (!informadas && !recusadas) {
+    const naFila = esperando ? ` ${esperando === 1 ? '1 espera' : `${esperando} esperam`} a vez.` : '';
+    return { tom: 'neutro', icone: 'info', antes: `Nos últimos ${janela} dias, nenhuma venda foi informada ao Google ainda.${naFila}`, forte: '', depois: '', atalho: atalhoPara(pior, 'Ver em Contas conectadas') };
+  }
+  if (recusadas) {
+    return { tom: 'ok', icone: 'check-circle', antes: `Nos últimos ${janela} dias, o Liame informou `, forte: vendas(informadas), depois: ` ao Google; ele recusou ${recusadas}.`, atalho: atalhoPara(pior, 'Ver o motivo em Contas conectadas') };
+  }
+  return { tom: 'ok', icone: 'check-circle', antes: `Nos últimos ${janela} dias, o Liame informou `, forte: vendas(informadas), depois: ' ao Google, para ele buscar quem compra.', atalho: atalhoPara(pior, 'Ver em Contas conectadas') };
+}

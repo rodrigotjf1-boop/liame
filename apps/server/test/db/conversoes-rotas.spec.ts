@@ -476,6 +476,84 @@ describe.skipIf(!hasDb)('conversões para o Google pelas rotas: ver, escolher e 
     expect(await conta(e)).toMatchObject({ status: 'informando', team_stopped_at: null, last_failure: null });
   });
 
+  it('P14, parte B: a Atenção avisa quando o envio para sem ninguém mandar (falta a permissão, ou o Google recusando), e só então', async () => {
+    const e = await empresa();
+    type Aviso = { kind: string; severity: string; title: string; detail: string; provider: string | null; connected_account_id: string | null; brand_id: string | null };
+    const avisos = async (): Promise<Aviso[]> => {
+      const r = await api.call('GET', `/v1/results/attention?brand_id=${e.brandId}`, { cookie: e.cookie });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      return (r.body.items as Aviso[]).filter((i) => i.kind.startsWith('vendas_google_'));
+    };
+    // Função ligada, sem a conversão escolhida: não há envio para parar.
+    expect(await avisos()).toEqual([]);
+    expect((await escolher(e, PRINCIPAL.id)).status).toBe(200);
+    await ownerQuery(`update liame.conversion_destination set starts_at = now() - interval '7 days' where connected_account_id = $1`, [e.conta]);
+    expect(await avisos()).toEqual([]);
+    expect((await conta(e)).refusing).toBeNull();
+
+    // Recusa isolada não é aviso: duas recusadas e uma aceita.
+    await envio(e, 'recusado', { motivo: 'PROCESSING_ERROR_REASON_INVALID_GCLID' });
+    await envio(e, 'recusado', { motivo: 'PROCESSING_ERROR_REASON_INVALID_GCLID' });
+    await envio(e, 'aceito');
+    expect(await avisos()).toEqual([]);
+    expect((await conta(e)).refusing).toBeNull();
+
+    // A terceira recusa, de quatro com resposta: o Google está recusando. A que ainda espera resposta não conta.
+    await envio(e, 'recusado', { motivo: 'PROCESSING_ERROR_REASON_INVALID_GCLID' });
+    await envio(e, 'enviado');
+    const recusando = await avisos();
+    expect(recusando).toHaveLength(1);
+    expect(recusando[0]).toMatchObject({ kind: 'vendas_google_recusadas', severity: 'atencao', provider: 'google_ads', connected_account_id: e.conta, brand_id: e.brandId, title: 'O Google está recusando as vendas informadas' });
+    expect(recusando[0]!.detail).toContain('o Google recusou 3 das 4 vendas informadas pela conta Hamburgueria Ads');
+    expect((await conta(e)).refusing).toEqual({ days: 7, refused: 3, answered: 4 });
+
+    // Recusa de mais de 7 dias atrás sai da conta: ficam duas, e o aviso some sozinho.
+    await ownerQuery(
+      `update liame.conversion_upload set updated_at = now() - interval '8 days'
+        where id = (select id from liame.conversion_upload where connected_account_id = $1 and status = 'recusado' order by id limit 1)`,
+      [e.conta],
+    );
+    expect(await avisos()).toEqual([]);
+    expect((await conta(e)).refusing).toBeNull();
+    // De volta às três; com mais aceitas, deixa de ser mais da metade (3 de 6).
+    await envio(e, 'recusado', { motivo: 'PROCESSING_ERROR_REASON_INVALID_GCLID' });
+    expect(await avisos()).toHaveLength(1);
+    await envio(e, 'aceito');
+    await envio(e, 'aceito');
+    expect(await avisos()).toEqual([]);
+    await envio(e, 'recusado', { motivo: 'PROCESSING_ERROR_REASON_INVALID_GCLID' });
+    expect((await avisos()).map((a) => a.kind)).toEqual(['vendas_google_recusadas']);
+
+    // O Google recusou a autorização: falta a permissão pesa mais que as recusas, e é um aviso só.
+    await ownerQuery(`update liame.conversion_destination set last_error = 'invalid_grant: OAuth recusado (invalid_grant)', last_error_kind = 'permissao', last_run_at = now() where connected_account_id = $1`, [e.conta]);
+    let semPermissao = await avisos();
+    expect(semPermissao.map((a) => a.kind)).toEqual(['vendas_google_sem_permissao']);
+    expect(semPermissao[0]!.detail).toContain('O Google recusou a autorização que o Liame usa na conta Hamburgueria Ads');
+    // A autorização que lê a conta não inclui a permissão (foi trocada por uma só de leitura): o motivo é outro.
+    await ownerQuery(`update liame.conversion_destination set last_error = null, last_error_kind = null where connected_account_id = $1`, [e.conta]);
+    await ownerQuery(`update liame.oauth_connection set scopes = $2::text[] where id = (select connection_id from liame.connected_account where id = $1)`, [e.conta, LEITURA]);
+    semPermissao = await avisos();
+    expect(semPermissao.map((a) => a.kind)).toEqual(['vendas_google_sem_permissao']);
+    expect(semPermissao[0]!.detail).toContain('Falta uma permissão do Google na conta Hamburgueria Ads');
+
+    // Com a equipe parada, o aviso é o da parada: este não aparece.
+    await ownerQuery(`insert into liame.kill_switch (id, level, tenant_id, reason) values (gen_random_uuid(), 'tenant', $1, 'teste: equipe parada')`, [e.tenantId]);
+    expect(await avisos()).toEqual([]);
+    await ownerQuery(`update liame.kill_switch set deactivated_at = now() where tenant_id = $1`, [e.tenantId]);
+    expect(await avisos()).toHaveLength(1);
+
+    // Parado por uma pessoa: foi ela que mandou parar, não é aviso.
+    expect((await parar(e)).status).toBe(200);
+    expect(await avisos()).toEqual([]);
+    await ownerQuery(`update liame.conversion_destination set stopped_at = null, stopped_by = null where connected_account_id = $1`, [e.conta]);
+    expect(await avisos()).toHaveLength(1);
+
+    // Função desligada para a empresa: nenhum aviso.
+    await ownerQuery(`delete from liame.feature_flag_rule where flag_key = $1 and scope_type = 'tenant' and scope_id = $2`, [FLAG_CONVERSOES_GOOGLE, e.tenantId]);
+    flags.invalidate();
+    expect(await avisos()).toEqual([]);
+  });
+
   it('se o Google não responde ou recusa, nada muda e a pessoa sabe o que fazer', async () => {
     const e = await empresa();
     modos.set(e.cliente, 'fora_do_ar');

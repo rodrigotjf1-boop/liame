@@ -9,7 +9,7 @@ import { disparar } from '@/lib/disparar';
 import { inteiro } from '@/lib/formato';
 import { useModo } from '@/lib/modo';
 import { idDaConta } from './textos';
-import { ENVIA_AO_GOOGLE, esperaPorExtenso, numerosDasVendas, vendasDaConta } from './vendas-google';
+import { ENVIA_AO_GOOGLE, esperaPorExtenso, idDoCartaoDasVendas, numerosDasVendas, vendasDaConta } from './vendas-google';
 
 // "Vendas informadas ao Google" (protótipo P14, aprovado em 09/10/2026): um cartão por conta do Google Ads da marca
 // com a função ligada, depois das autorizações. Diz se o Liame está informando, para qual conversão da conta e quantas
@@ -81,7 +81,8 @@ export function CartaoVendasGoogle({ conta: c, agora, esperaMin, janelaDias, pod
   }
 
   return (
-    <li className="card autorizacao autorizacao--larga" aria-labelledby={`${ids}-t`}>
+    // O cartão tem endereço (`#vendas-<conta>`): é para ele que levam a linha de Resultados e o aviso da Atenção.
+    <li className="card autorizacao autorizacao--larga" id={idDoCartaoDasVendas(c.connected_account_id)} tabIndex={-1} aria-labelledby={`${ids}-t`}>
       <div className="aut-cab">
         <span className="plat plat--google">Google Ads</span>
         <b id={`${ids}-t`}>Vendas informadas ao Google</b>

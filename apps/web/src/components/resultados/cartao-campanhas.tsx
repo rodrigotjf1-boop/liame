@@ -1,11 +1,13 @@
 'use client';
 
+import type { LinhaDasVendas } from '@/components/contas/vendas-google';
 import { BotaoPedir, type PedirNaLista } from '@/components/pedir/botao-pedir';
 import { mostraOPedir, notaDoPedir } from '@/components/pedir/textos';
 import { useDetalhes } from '@/lib/modo';
 import { ListaDeCampanhas } from './campanhas-lite';
 import type { CampanhasLite } from './graficos';
 import { Halteres } from './halteres';
+import { LinhaVendasGoogle } from './linha-vendas-google';
 import { BotaoDetalhes, SeloVeredito, TextoRico } from './pecas';
 import type { CartaoCampanhas as Dados, Celula, LinhaCampanha } from './textos';
 
@@ -15,6 +17,8 @@ import type { CartaoCampanhas as Dados, Celula, LinhaCampanha } from './textos';
 // halteres. O clique só da plataforma fica numa linha à parte.
 // Com o pedido de mudança (protótipo P9), cada campanha em que o Liame pode mexer ganha o botão "Pedir mudança":
 // ao lado dela no Lite e na coluna "Mudar" do Pro (no celular, embaixo do nome).
+// Com "vendas informadas ao Google" ligado (protótipo P14, parte B), uma linha embaixo da lista diz quantas vendas o
+// Liame informou ao Google: no modo simples, antes de "Ver detalhes"; no Pro, embaixo da tabela (uma vez só).
 
 function Numero({ c }: { c: Celula }) {
   return (
@@ -47,9 +51,11 @@ type Props = {
   rotuloPeriodo: string;
   /** O pedido de mudança nas campanhas (nulo para quem não acompanha as campanhas, ou antes de a lista chegar). */
   pedir?: PedirNaLista | null;
+  /** A linha das vendas informadas ao Google; nula sem a função ligada ou para quem não vê as contas. */
+  vendasAoGoogle?: LinhaDasVendas | null;
 };
 
-export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null }: Props) {
+export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null, vendasAoGoogle = null }: Props) {
   const d = useDetalhes();
   // A coluna só existe quando alguma campanha à vista tem o que mostrar nela.
   const comPedir =
@@ -107,6 +113,7 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null }
               </p>
             ))}
           {!d.pro && nota && <p className="eixo-nota">{nota}</p>}
+          {!d.pro && vendasAoGoogle && <LinhaVendasGoogle linha={vendasAoGoogle} />}
           {!d.pro && <BotaoDetalhes aberto={d.aberto} controla="camp-pro" aoAlternar={d.alternar} />}
           <div className="res-pro" id="camp-pro" hidden={!d.mostraPro}>
             <div className="table-wrap">
@@ -208,6 +215,7 @@ export function CartaoCampanhas({ campanhas, lite, rotuloPeriodo, pedir = null }
             </div>
             <p className="eixo-nota">Escala de 0 a 7. A linha vertical marca ROAS 1, o ponto em que a mídia se paga.</p>
             {nota && <p className="eixo-nota">{nota}</p>}
+            {d.pro && vendasAoGoogle && <LinhaVendasGoogle linha={vendasAoGoogle} />}
           </div>
         </>
       )}

@@ -7,6 +7,7 @@ import { BlocoExplicacao } from '@/components/explicar/bloco-explicacao';
 import { BotaoExplicar } from '@/components/explicar/botao-explicar';
 import type { PedidoDeExplicacao } from '@/components/explicar/pedir';
 import { useExplicacao } from '@/components/explicar/use-explicacao';
+import type { LinhaDasVendas } from '@/components/contas/vendas-google';
 import type { PedirNaLista } from '@/components/pedir/botao-pedir';
 import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
@@ -51,6 +52,8 @@ type Props = {
   explicar?: ExplicarResultados | null;
   /** O pedido de mudança nas campanhas (protótipo P9); nulo para quem não acompanha as campanhas. */
   pedir?: PedirNaLista | null;
+  /** A linha das vendas informadas ao Google (protótipo P14, parte B); nula sem a função ligada ou para quem não vê as contas. */
+  vendasAoGoogle?: LinhaDasVendas | null;
 };
 
 /** "Ver por campanha": leva ao cartão das campanhas e, no Lite, abre os detalhes dele (como no protótipo). */
@@ -65,7 +68,7 @@ function verPorCampanha() {
   titulo.focus({ preventScroll: true });
 }
 
-export function ResultadosConteudo({ tela, graficos, modelo, consulta, loja, podeVerContas, reserva, explicar = null, pedir = null }: Props) {
+export function ResultadosConteudo({ tela, graficos, modelo, consulta, loja, podeVerContas, reserva, explicar = null, pedir = null, vendasAoGoogle = null }: Props) {
   const pro = useModo().modo === 'pro';
   const explicacao = useExplicacao(explicar?.pedido ?? null);
   const botao = useRef<HTMLButtonElement>(null);
@@ -116,7 +119,7 @@ export function ResultadosConteudo({ tela, graficos, modelo, consulta, loja, pod
         )}
         {pro && <CartaoFontes fontes={tela.fontes} />}
         <CartaoCiclo ciclo={tela.ciclo} lite={graficos.real} rotuloPeriodo={tela.base.rotuloPeriodo} datas={tela.contexto.datas} />
-        <CartaoCampanhas campanhas={tela.campanhas} lite={graficos.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} pedir={pedir} />
+        <CartaoCampanhas campanhas={tela.campanhas} lite={graficos.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} pedir={pedir} vendasAoGoogle={vendasAoGoogle} />
         {!pro && <CartaoConversas linhas={graficos.conversas} />}
         <CartaoOrigem origem={tela.origem} lite={graficos.origem} podeVerContas={podeVerContas} />
         <CartaoPedidos consulta={consulta} fuso={tela.base.fuso} loja={loja} modelo={modelo} reserva={reserva} />

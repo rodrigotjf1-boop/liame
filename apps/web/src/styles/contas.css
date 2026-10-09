@@ -117,7 +117,10 @@
 
 /* Vendas informadas ao Google (mockups/prototipo-contas-conversoes.html, P14 aprovado em 09/10/2026; A5 · Y1): um cartão
    da largura toda, depois da autorização do Google, com a conversão escolhida, os avisos e as contagens da janela. */
-.autorizacao--larga { grid-column: 1 / -1; }
+.autorizacao--larga { grid-column: 1 / -1; scroll-margin-top: var(--sp-4); }
+/* Quem chega pelo atalho de Resultados ou da Atenção cai no cartão: o foco aparece em volta dele. */
+.autorizacao--larga:focus { outline: none; }
+.autorizacao--larga:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .conv-destino { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); margin: 0; }
 .conv-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: var(--sp-2); }
 .conv-num { display: grid; gap: 2px; min-width: 0; margin: 0; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
