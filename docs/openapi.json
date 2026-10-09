@@ -6650,6 +6650,12 @@
                         "null"
                       ]
                     },
+                    "blocked_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "attempts": {
                       "type": "integer",
                       "minimum": 0,
@@ -7642,6 +7648,12 @@
                             ]
                           },
                           "status_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "blocked_reason": {
                             "type": [
                               "string",
                               "null"
@@ -9296,6 +9308,12 @@
                         "null"
                       ]
                     },
+                    "blocked_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "attempts": {
                       "type": "integer",
                       "minimum": 0,
@@ -10108,6 +10126,12 @@
                         "null"
                       ]
                     },
+                    "blocked_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "attempts": {
                       "type": "integer",
                       "minimum": 0,
@@ -10774,6 +10798,870 @@
         ]
       }
     },
+    "/v1/actions/{id}/recheck": {
+      "post": {
+        "description": "Para o pedido que espera aprovação e cujo plano muda sozinho na plataforma (a mensagem de WhatsApp): lê o plano de agora e guarda no pedido, sem mudar o que foi pedido. Com o plano novo, o hash muda e a aprovação dada ao anterior deixa de valer. O que impede a aprovação vem em `blocked_reason`. Para os outros pedidos, 409 `acao-nao-confere`.",
+        "operationId": "ActionsController_recheck",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "tool": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "brand_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "account_id": {
+                      "type": "string"
+                    },
+                    "resource_id": {
+                      "type": "string"
+                    },
+                    "params": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "risk_level": {
+                      "type": "string",
+                      "enum": [
+                        "R0",
+                        "R1",
+                        "R2",
+                        "R3"
+                      ]
+                    },
+                    "budget_impact": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "increase",
+                        "decrease",
+                        "new_spend"
+                      ]
+                    },
+                    "value_micros": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "current_value_micros": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "reserved_micros": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "plan_hash": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "SHADOW",
+                        "SUGGEST",
+                        "APPROVAL",
+                        "LIMITED_AUTO",
+                        "AUTO",
+                        "ESCALATE"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "sombra",
+                        "aguardando_aprovacao",
+                        "aprovada",
+                        "executando",
+                        "executada",
+                        "falhou",
+                        "cancelada",
+                        "expirada"
+                      ]
+                    },
+                    "status_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "blocked_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "attempts": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "next_attempt_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "undoes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "undone_by": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "sombra",
+                            "aguardando_aprovacao",
+                            "aprovada",
+                            "executando",
+                            "executada",
+                            "falhou",
+                            "cancelada",
+                            "expirada"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "allowed": {
+                          "type": "boolean"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "SHADOW",
+                            "SUGGEST",
+                            "APPROVAL",
+                            "LIMITED_AUTO",
+                            "AUTO",
+                            "ESCALATE"
+                          ]
+                        },
+                        "violations": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "platform",
+                                  "tenant",
+                                  "brand"
+                                ]
+                              },
+                              "rule_index": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "rule_index",
+                              "type",
+                              "message"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "versions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "allowed",
+                        "mode",
+                        "violations",
+                        "versions"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "approvals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "approved_by": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "approver_name": {
+                            "type": "string"
+                          },
+                          "approver_role": {
+                            "type": "string"
+                          },
+                          "sufficient": {
+                            "type": "boolean"
+                          },
+                          "current_plan": {
+                            "type": "boolean"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "approved_by",
+                          "approver_name",
+                          "approver_role",
+                          "sufficient",
+                          "current_plan",
+                          "created_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "workflow": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "em_andamento",
+                            "aguardando",
+                            "concluido",
+                            "falhou",
+                            "cancelado"
+                          ]
+                        },
+                        "steps": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "aguardando",
+                                  "concluido",
+                                  "falhou",
+                                  "pulado"
+                                ]
+                              },
+                              "attempts": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "finished_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "status",
+                              "attempts",
+                              "finished_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "steps"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "expires_at": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "type": "string"
+                    },
+                    "requested_by": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "account_name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "campaign": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "provider",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "recommendation": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "rule": {
+                          "type": "string"
+                        },
+                        "rule_version": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "confidence_pct": {
+                          "type": "string"
+                        },
+                        "percent": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 100
+                        },
+                        "decided_on": {
+                          "type": "string"
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "daily_budget_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "spend_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "orders": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_known_micros": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "margin_coverage_pct": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "tool",
+                        "rule",
+                        "rule_version",
+                        "confidence_pct",
+                        "percent",
+                        "decided_on",
+                        "window",
+                        "daily_budget_micros",
+                        "spend_micros",
+                        "orders",
+                        "revenue_micros",
+                        "margin_known_micros",
+                        "margin_coverage_pct"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "agent_key": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "maxLength": 60,
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "target": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "campaign": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "name",
+                        "campaign"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "to": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "daily_micros": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "daily_micros"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "execution": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        },
+                        "finished_at": {
+                          "type": "string"
+                        },
+                        "no_write": {
+                          "type": "boolean"
+                        },
+                        "observed": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "daily_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "provider_reply": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "code"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "finished_at",
+                        "no_write",
+                        "observed"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "tool",
+                    "action",
+                    "brand_id",
+                    "provider",
+                    "account_id",
+                    "resource_id",
+                    "params",
+                    "risk_level",
+                    "budget_impact",
+                    "value_micros",
+                    "current_value_micros",
+                    "reserved_micros",
+                    "plan_hash",
+                    "mode",
+                    "status",
+                    "status_reason",
+                    "attempts",
+                    "next_attempt_at",
+                    "undoes",
+                    "undone_by",
+                    "policy",
+                    "approvals",
+                    "workflow",
+                    "expires_at",
+                    "created_at",
+                    "updated_at",
+                    "requested_by",
+                    "account_name",
+                    "campaign"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Conferir de novo",
+        "tags": [
+          "actions"
+        ]
+      }
+    },
     "/v1/actions/{id}/approve": {
       "post": {
         "description": "Com o código do app autenticador agora e o hash do plano visto. Acima do limite de quem aprova (ou em ESCALATE), falta também o dono.",
@@ -10922,6 +11810,12 @@
                       ]
                     },
                     "status_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "blocked_reason": {
                       "type": [
                         "string",
                         "null"
@@ -11806,6 +12700,12 @@
                       ]
                     },
                     "status_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "blocked_reason": {
                       "type": [
                         "string",
                         "null"
@@ -12733,6 +13633,12 @@
                         "null"
                       ]
                     },
+                    "blocked_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "attempts": {
                       "type": "integer",
                       "minimum": 0,
@@ -13522,6 +14428,12 @@
                       ]
                     },
                     "status_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "blocked_reason": {
                       "type": [
                         "string",
                         "null"

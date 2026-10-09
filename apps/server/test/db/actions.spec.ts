@@ -187,6 +187,12 @@ describe.skipIf(!hasDb)('pedido de ação: política, orçamento, fingerprint e 
     expect(recusado.status, JSON.stringify(recusado.body)).toBe(401);
     expect(recusado.body.code).toBe('codigo-invalido');
 
+    // "Conferir de novo" é só do pedido cujo plano muda sozinho na plataforma (a mensagem de WhatsApp): aqui, não há o
+    // que conferir, e nada impede a aprovação.
+    const semConferir = await api.call('POST', `/v1/actions/${pedido.body.id}/recheck`, { cookie: dono.cookie });
+    expect([semConferir.status, semConferir.body.code], JSON.stringify(semConferir.body)).toEqual([409, 'acao-nao-confere']);
+    expect(pedido.body.blocked_reason).toBeNull();
+
     // Administradora com limite de R$ 5 aprova R$ 20: registra, mas falta o dono (ADR-017).
     const parcial = await approve(adm, pedido.body.plan_hash, await code(adm));
     expect(parcial.body).toMatchObject({ status: 'aguardando_aprovacao', approvals: [{ approver_role: 'administrador', sufficient: false, current_plan: true }] });

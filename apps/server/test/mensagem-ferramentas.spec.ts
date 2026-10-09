@@ -69,40 +69,59 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
   it('enviar: o plano que pode disparar vira o pedido, sem reservar verba de mídia; o que a pessoa aprova é o plano inteiro', () => {
     const antes = estado();
     const plano = TOOLS.mensagem_disparar!.plan(antes, {});
-    expect(plano).toEqual({ action: 'mensagem.disparar', budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: { ...antes, situacao: 'enviando' } });
+    expect(plano).toEqual({ action: 'mensagem.disparar', budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: { ...antes, situacao: 'enviando' }, blocked: null });
     // A confirmação, as pessoas e o custo vão no estado desejado: mudou um deles, é outro plano.
     expect(plano.desiredState).toMatchObject({ confirmacao: CONFIRMACAO, pessoas: 412, custo_centavos: 13_184 });
   });
 
-  it('enviar: cada coisa que impede vira recusa no pedido, com o motivo', () => {
+  it('enviar: o que não é uma mensagem em rascunho, ou não tem a quem enviar, é recusado no pedido, com o motivo', () => {
     expect(recusa('mensagem_disparar', { tipo: 'campanha', id: '123', status: 'ativo' })).toBe('Esta ferramenta é para uma mensagem montada no RegemCast.');
     expect(recusa('mensagem_disparar', { ...estado(), telefone: '+5521999990001' })).toBe('Esta ferramenta é para uma mensagem montada no RegemCast.');
-    // As frases do RegemCast para o que impede.
-    expect(recusa('mensagem_disparar', estado({ pode_disparar: false, confirmacao: null, impedimentos: ['O modelo desta campanha ainda não foi aprovado pela Meta.', 'A conta não tem teto de gasto de disparos definido.'] }))).toBe(
-      'O modelo desta campanha ainda não foi aprovado pela Meta. A conta não tem teto de gasto de disparos definido.',
-    );
-    expect(recusa('mensagem_disparar', estado({ pode_disparar: false, confirmacao: null }))).toBe('O RegemCast não deixa enviar esta mensagem agora.');
-    // "Pode disparar" sem a confirmação não é plano que se aprove.
-    expect(recusa('mensagem_disparar', estado({ confirmacao: null }))).toBe('O RegemCast não deixa enviar esta mensagem agora.');
     expect(recusa('mensagem_disparar', estado({ pessoas: 0 }))).toBe('Ninguém deste público pode receber esta mensagem agora.');
     for (const situacao of ['agendada', 'enviando', 'concluida', 'cancelada', 'situacao_nova']) expect(recusa('mensagem_disparar', estado({ situacao })), situacao).toBe('Esta mensagem já foi enviada ou cancelada: não dá para enviar de novo.');
     expect(recusa('mensagem_disparar', estado({ situacao: 'pausada' }))).toBe('Esta mensagem já foi enviada e está pausada. Quem retoma é uma pessoa, no RegemCast.');
   });
 
-  it('A5-12: o envio precisa caber no teto de gasto de mensagens do mês; os tetos do dia e da semana só espalham', () => {
+  it('enviar: o que impede não recusa o pedido: ele espera, com o motivo (P15), e a tela lê o mesmo motivo do estado guardado', () => {
+    const impede = (antes: Record<string, unknown>) => TOOLS.mensagem_disparar!.plan(antes, {}).blocked;
+    const doEstado = (antes: Record<string, unknown>) => TOOLS.mensagem_disparar!.blockedBy!(antes);
+    // As frases do RegemCast para o que impede.
+    const semModelo = estado({ pode_disparar: false, confirmacao: null, impedimentos: ['O modelo desta campanha ainda não foi aprovado pela Meta.', 'A conta não tem teto de gasto de disparos definido.'] });
+    expect(impede(semModelo)).toBe('O modelo desta campanha ainda não foi aprovado pela Meta. A conta não tem teto de gasto de disparos definido.');
+    expect(doEstado(semModelo)).toBe(impede(semModelo));
+    expect(impede(estado({ pode_disparar: false, confirmacao: null }))).toBe('O RegemCast não deixa enviar esta mensagem agora.');
+    // "Pode disparar" sem a confirmação não é plano que se aprove.
+    expect(impede(estado({ confirmacao: null }))).toBe('O RegemCast não deixa enviar esta mensagem agora.');
+    // O plano impedido guarda o que a pessoa vai ver: o estado inteiro, ainda sem a confirmação.
+    expect(TOOLS.mensagem_disparar!.plan(semModelo, {}).desiredState).toMatchObject({ situacao: 'enviando', confirmacao: null, pode_disparar: false });
+    // Nada impede: nulo no plano e no estado guardado.
+    expect([impede(estado()), doEstado(estado())]).toEqual([null, null]);
+    // O estado que não é uma mensagem em rascunho não tem impedimento a mostrar.
+    expect(doEstado({ tipo: 'campanha' })).toBeNull();
+    expect(doEstado(estado({ situacao: 'enviando', pode_disparar: false, confirmacao: null }))).toBeNull();
+    // Só o envio de mensagem espera com impedimento e lê o plano de novo na aprovação.
+    expect(Object.values(TOOLS).filter((t) => t.revalidateOnApproval || t.blockedBy).map((t) => t.name)).toEqual(['mensagem_disparar']);
+    expect(TOOLS.mensagem_disparar!.revalidateOnApproval).toBe(true);
+  });
+
+  it('A5-12: o envio precisa caber no teto de gasto de mensagens do mês (senão, o pedido espera); os tetos do dia e da semana só espalham', () => {
+    const impede = (antes: Record<string, unknown>) => (TOOLS.mensagem_disparar!.plan(antes, {}).blocked ?? '').replace(/\u00a0/g, ' ');
     // Sobram R$ 172,64: R$ 131,84 cabe, R$ 172,64 cabe (no limite), R$ 172,65 não.
     expect(motivoDeNaoCaberNoTeto(estado())).toBeNull();
     expect(motivoDeNaoCaberNoTeto(estado({ custo_centavos: 17_264 }))).toBeNull();
-    expect(recusa('mensagem_disparar', estado({ custo_centavos: 17_265 }))).toBe(
+    expect(impede(estado({ custo_centavos: 17_264 }))).toBe('');
+    expect(impede(estado({ custo_centavos: 17_265 }))).toBe(
       'Não cabe no teto de gasto de mensagens do mês: o envio pode custar até R$ 172,65, e sobram R$ 172,64 de R$ 300,00. Quem muda o teto é o dono da conta, no RegemCast; outra saída é um público menor.',
     );
     // O teto já estourado: sobra zero, e não um número negativo.
     const cheio = estado({ orcamento: { definido: true, periodos: [{ periodo: 'mes', rotulo: 'Outubro', teto_centavos: 30_000, gasto_centavos: 31_000, sinal: 'cheio' }], aviso: null } });
-    expect(recusa('mensagem_disparar', cheio)).toContain('sobram R$ 0,00 de R$ 300,00');
+    expect(impede(cheio)).toContain('sobram R$ 0,00 de R$ 300,00');
+    // O que o RegemCast diz vem antes do teto: sem a confirmação dele, a frase é a dele.
+    expect(impede(estado({ custo_centavos: 17_265, pode_disparar: false, confirmacao: null, impedimentos: ['O modelo desta campanha ainda não foi aprovado pela Meta.'] }))).toBe('O modelo desta campanha ainda não foi aprovado pela Meta.');
     // Só com teto do dia (menor que o custo): não barra; o RegemCast espalha o envio, e o aviso dele vai no estado.
     const soDia = estado({ orcamento: { definido: true, periodos: [{ periodo: 'dia', rotulo: 'Hoje', teto_centavos: 5_000, gasto_centavos: 0, sinal: 'ok' }], aviso: 'A campanha vai sair aos poucos.' } });
     expect(motivoDeNaoCaberNoTeto(soDia)).toBeNull();
-    expect(TOOLS.mensagem_disparar!.plan(soDia, {}).desiredState).toMatchObject({ orcamento: { aviso: 'A campanha vai sair aos poucos.' } });
+    expect(TOOLS.mensagem_disparar!.plan(soDia, {})).toMatchObject({ blocked: null, desiredState: { orcamento: { aviso: 'A campanha vai sair aos poucos.' } } });
     // Sem preço para estimar, o Liame não inventa: quem barra a conta sem preço é o RegemCast, no plano dele.
     expect(motivoDeNaoCaberNoTeto(estado({ custo_centavos: null }))).toBeNull();
   });

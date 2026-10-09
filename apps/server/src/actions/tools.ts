@@ -1,7 +1,7 @@
 import type { BudgetImpact, RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
-import { EstadoDaMensagem, faseDaMensagem, motivoDeNaoCaberNoTeto } from './mensagem-plano.js';
+import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
 // Registro de ferramentas (arquitetura §6, ADR-007): cada ferramenta declara risco, impacto financeiro,
@@ -18,6 +18,11 @@ export interface ToolPlan {
   /** Quanto reservar no envelope do mês. */
   reserveMicros: number;
   desiredState: ResourceState;
+  /**
+   * O que impede a aprovação agora (A5, Y5; P15): o pedido entra e espera em Aprovações com este motivo, e ninguém
+   * aprova enquanto ele durar. Diferente de `PlanoRecusado`, que é o pedido que nem nasce.
+   */
+  blocked?: string | null;
 }
 
 export interface ToolDefinition {
@@ -44,6 +49,17 @@ export interface ToolDefinition {
    * `autopilot` esteja ligado (A5, D-A5-11: mensagem de WhatsApp). A política ainda pode deixá-la em sombra.
    */
   alwaysApproval?: boolean;
+  /**
+   * O que impede a aprovação, lido do estado que o pedido guardou (o mesmo motivo de `plan().blocked`); nulo quando
+   * nada impede. É o que a tela mostra no lugar do botão de aprovar.
+   */
+  blockedBy?(before: ResourceState): string | null;
+  /**
+   * A aprovação lê o recurso de novo na plataforma (A5, Y5): o plano de uma mensagem muda sozinho (a Meta aprova o
+   * modelo, o público cresce, o teto enche), e a pessoa só aprova o plano de agora. Mudou, ela confere de novo;
+   * impedido, espera.
+   */
+  revalidateOnApproval?: boolean;
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -266,7 +282,12 @@ export const TOOLS: Record<string, ToolDefinition> = {
     providers: ['regemcast'],
     compensation: 'pausar_o_que_ainda_nao_saiu',
     alwaysApproval: true,
+    revalidateOnApproval: true,
     params: NoParams,
+    blockedBy(before) {
+      const lido = EstadoDaMensagem.safeParse(before);
+      return lido.success && faseDaMensagem(lido.data.situacao) === 'rascunho' ? impedimentoDaMensagem(lido.data) : null;
+    },
     plan(before) {
       const lido = EstadoDaMensagem.safeParse(before);
       if (!lido.success) throw new PlanoRecusado('Esta ferramenta é para uma mensagem montada no RegemCast.');
@@ -274,11 +295,7 @@ export const TOOLS: Record<string, ToolDefinition> = {
       const fase = faseDaMensagem(e.situacao);
       if (fase === 'pausada') throw new PlanoRecusado('Esta mensagem já foi enviada e está pausada. Quem retoma é uma pessoa, no RegemCast.');
       if (fase !== 'rascunho') throw new PlanoRecusado('Esta mensagem já foi enviada ou cancelada: não dá para enviar de novo.');
-      // O que impede vem nas frases do RegemCast (o modelo ainda não aprovado pela Meta, a conta sem teto de gasto…).
-      if (!e.pode_disparar || !e.confirmacao) throw new PlanoRecusado(e.impedimentos.join(' ') || 'O RegemCast não deixa enviar esta mensagem agora.');
       if (e.pessoas === 0) throw new PlanoRecusado('Ninguém deste público pode receber esta mensagem agora.');
-      const teto = motivoDeNaoCaberNoTeto(e);
-      if (teto) throw new PlanoRecusado(teto);
       return {
         action: 'mensagem.disparar',
         // O dinheiro das mensagens não é verba de mídia: vale o teto do RegemCast, conferido acima, e nada entra no
@@ -288,6 +305,10 @@ export const TOOLS: Record<string, ToolDefinition> = {
         currentValueMicros: null,
         reserveMicros: 0,
         desiredState: { ...e, situacao: 'enviando' },
+        // O que impede não recusa o pedido (P15, escolha 6; critério A5-12): ele espera em Aprovações com o motivo. São
+        // as frases do RegemCast (o modelo ainda em análise na Meta, a conta sem teto de gasto…) e o envio que não cabe no
+        // teto de gasto de mensagens do mês.
+        blocked: impedimentoDaMensagem(e),
       };
     },
     // A volta possível é pausar o que ainda não saiu; o que já foi entregue, fica.

@@ -141,6 +141,12 @@ export const ActionResponse = z.strictObject({
   status: ActionStatus,
   status_reason: z.string().nullable(),
   /**
+   * O que impede a aprovação agora, no pedido que espera aprovação (A5, Y5: a mensagem cujo modelo a Meta ainda
+   * analisa, ou que não cabe no teto de gasto de mensagens do mês). Com ele, a aprovação é recusada (409
+   * `pedido-impedido`) e a tela não oferece aprovar; nulo quando nada impede.
+   */
+  blocked_reason: z.string().nullable().optional(),
+  /**
    * Quantas vezes a execução esperou a plataforma (limite de uso da conta, fora do ar). A ação aprovada volta para a
    * fila com a hora da próxima tentativa, em vez de insistir; depois de seis esperas, falha.
    */

@@ -412,6 +412,42 @@ export class ActionService {
   }
 
   /**
+   * Conferir de novo (A5, Y5): lê o recurso na plataforma e guarda no pedido o plano de agora, sem mudar o que foi
+   * pedido. Só para a ferramenta cujo plano muda sozinho (`revalidateOnApproval`: a mensagem, que espera a Meta aprovar
+   * o modelo ou o teto de gasto caber) e só no pedido que espera aprovação. Com o plano novo, o hash muda: a aprovação
+   * dada ao plano anterior deixa de valer, como em alterar. A política não é avaliada de novo: o pedido é o mesmo.
+   */
+  async recheck(auth: AuthContext, id: string): Promise<ActionResponse> {
+    const tx = currentTx();
+    const tenantId = tenantOf(auth);
+    const row = await this.lock(tx, tenantId, id);
+    if (row.status !== 'aguardando_aprovacao') {
+      throw new AppProblem(409, 'acao-nao-aguarda', 'Não espera aprovação', 'Este pedido não está esperando aprovação.');
+    }
+    const { tool, connector } = this.resolve(row.tool, row.provider);
+    if (!tool.revalidateOnApproval) {
+      throw new AppProblem(409, 'acao-nao-confere', 'Não há o que conferir', 'O plano deste pedido não muda sozinho. Para mudar o pedido, altere-o.');
+    }
+    const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
+    const plan = this.planejar(tool, read.state, row.params);
+    const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params: row.params };
+    const planHash = planHashOf(request, plan, read.version);
+    if (planHash !== row.plan_hash) {
+      await this.budget.release(tx, tenantId, id);
+      await tx.execute(sql`
+        update liame.action_request
+           set action = ${plan.action}, budget_impact = ${plan.budgetImpact}, value_micros = ${plan.valueMicros},
+               current_value_micros = ${plan.currentValueMicros}, reserved_micros = ${plan.reserveMicros},
+               before_state = ${JSON.stringify(read.state)}::jsonb, before_version = ${read.version},
+               desired_state = ${JSON.stringify(plan.desiredState)}::jsonb, plan_hash = ${planHash}, updated_at = now()
+         where id = ${id} and tenant_id = ${tenantId}`);
+      await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) });
+    }
+    auditDetail({ before: { plan_hash: row.plan_hash }, after: { plan_hash: planHash, changed: planHash !== row.plan_hash, blocked: Boolean(plan.blocked) } });
+    return this.get(auth, id);
+  }
+
+  /**
    * Aprovar (ADR-007, ADR-017): código do app agora, para o plano que a pessoa viu. Basta sozinha quando o
    * limite dela cobre o valor; acima disso (ou se o modo é ESCALATE), falta o dono.
    */
@@ -425,6 +461,9 @@ export class ActionService {
     if (row.plan_hash !== input.plan_hash) {
       throw new AppProblem(409, 'plano-mudou', 'O plano mudou', 'O pedido foi alterado depois que você abriu. Confira o plano novo e aprove de novo.');
     }
+    // O plano de uma mensagem muda sozinho na plataforma: a pessoa aprova o de agora (A5, Y5). Antes do código do app,
+    // para ela não gastar um código num pedido que ainda não pode ser aprovado.
+    if (TOOLS[row.tool]?.revalidateOnApproval) await this.conferirOPlanoDeAgora(tx, tenantId, row);
     await this.mfa.verifyStepUp(tx, auth.userId, input.code);
 
     const m = await tx.execute<{ role_key: string; approve_limit_micros: string | null }>(sql`
@@ -462,6 +501,23 @@ export class ActionService {
     }
     auditDetail({ after: { plan_hash: row.plan_hash, sufficient, amount_micros: amount } });
     return this.get(auth, id);
+  }
+
+  /**
+   * A aprovação que lê o recurso de novo (A5, Y5: a mensagem de WhatsApp; `revalidateOnApproval`). O plano guardado no
+   * pedido é o da hora em que ele foi feito ou conferido, e a plataforma pode ter mudado desde então. Com um
+   * impedimento, ninguém aprova: o pedido espera. Com o plano diferente do que a pessoa viu, ela confere o de agora
+   * (alterar o pedido com os mesmos parâmetros lê e guarda o plano novo) e aprova de novo.
+   */
+  private async conferirOPlanoDeAgora(tx: Tx, tenantId: string, row: ActionRow): Promise<void> {
+    const { tool, connector } = this.resolve(row.tool, row.provider);
+    const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
+    const plan = this.planejar(tool, read.state, row.params);
+    if (plan.blocked) throw new AppProblem(409, 'pedido-impedido', 'Ainda não dá para aprovar', plan.blocked);
+    const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params: row.params };
+    if (planHashOf(request, plan, read.version) !== row.plan_hash) {
+      throw new AppProblem(409, 'plano-mudou', 'O plano mudou', 'O plano deste pedido mudou na plataforma depois que ele foi feito. Confira o plano de agora e aprove de novo.');
+    }
   }
 
   /**
@@ -969,6 +1025,7 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     mode: row.mode,
     status: row.status,
     status_reason: row.status_reason,
+    blocked_reason: row.status === 'aguardando_aprovacao' && row.before_state ? (TOOLS[row.tool]?.blockedBy?.(row.before_state) ?? null) : null,
     attempts: Number(row.attempts ?? 0),
     next_attempt_at: row.next_attempt_at ? new Date(row.next_attempt_at).toISOString() : null,
     undoes: row.compensates_action_id ?? null,
