@@ -42,6 +42,8 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **Z8** | **Pacote pronto** | Para TikTok, YouTube e redes sem acesso: o Liame monta o texto, a mídia e o horário, e a pessoa publica. Sem escrita em plataforma | A6-14 | Z4 |
 | **Z9** | **Telas** | Pelos protótipos da seção 5 | A6-15 | Aprovação dos protótipos |
 
+> **Andamento.** **P17 (09/10/2026; aguarda a aprovação do dono):** o protótipo `mockups/prototipo-avaliacoes.html`: a tela "Avaliações" (a nota, as sem resposta primeiro e a situação de cada resposta) e a resposta em Aprovações (a avaliação, o texto proposto e editável, "só o dono aprova" para 1 e 2 estrelas, a conferência do Google, publicada, recusada e apagada). Antes dele, a reconferência da seção 8 para a Z1 entrou na base de conhecimento (§3.3 e §16.1).
+
 ## 4. Decisões (aprovadas pelo dono em 09/10/2026, como recomendadas)
 
 | # | Decisão | Recomendação | Por quê |
@@ -116,7 +118,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
   - **Threads:** post só de texto (`media_type=TEXT`), até 500 caracteres e 5 links; imagem e vídeo por endereço público; dois passos (criar e publicar, com cerca de 30 segundos entre eles); 250 posts, 1.000 respostas e 100 exclusões a cada 24 horas; permissões `threads_basic`, `threads_content_publish`, `threads_manage_replies` e `threads_delete` (`developers.facebook.com/docs/threads`).
   - **Search Console:** 1.200 consultas por minuto por site e por usuário; até 50 mil linhas por dia por tipo de busca (`developers.google.com/webmaster-tools/limits`).
   - **TikTok:** "All content posted by unaudited clients will be restricted to private viewing mode" (`developers.tiktok.com/doc/content-posting-api-get-started`, atualizada em 04/08/2026); o limite de 5 contas a cada 24 horas veio só pelo trecho da busca.
-- **Reconferir antes da Z1:** os métodos e os campos das avaliações e dos números do perfil, e qual permissão do Google eles pedem; se ela é sensível ou restrita na verificação do app.
+- **Reconferido em 09/10/2026, para a Z1 (base §3.3):** os métodos e os campos das avaliações, das contas e lojas e dos números do perfil; todos pedem a permissão `business.manage`. **Segue a conferir:** se ela é sensível na verificação do app (uma fonte secundária diz que sim; conferir no Cloud Console).
 - **Reconferir antes da Z2:** o método de responder, o que a situação da resposta devolve e os limites de tamanho.
 - **Conferir num teste antes da Z5 (D-A6-10):** se a Meta aceita buscar a imagem num endereço assinado de curta duração; se não aceitar, a decisão volta ao dono antes do código.
 - **Reconferir antes da Z5:** publicar na Página do Facebook (a permissão e o método), o post no Perfil do Google, e se alguma das redes aceita agendar do lado dela.
