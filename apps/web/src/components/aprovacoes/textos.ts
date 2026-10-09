@@ -158,7 +158,9 @@ export function recusaDe(a: Pick<ActionResponse, 'status' | 'status_reason'>): {
 export function grupoDe(a: ActionResponse, agora: Date): Grupo | null {
   if (a.status === 'aguardando_aprovacao') return 'pendente';
   if (a.status === 'sombra' || diasAte(a.updated_at, agora) !== 0) return null;
-  const sozinho = (a.mode === 'AUTO' || a.mode === 'LIMITED_AUTO') && !a.approvals.length;
+  // A pausa de um envio de mensagem é pedida e feita por uma pessoa, direto (sem aprovação): não é "feito sozinho".
+  const direta = a.tool === 'mensagem_pausar' && !a.agent_key;
+  const sozinho = (a.mode === 'AUTO' || a.mode === 'LIMITED_AUTO') && !a.approvals.length && !direta;
   return sozinho && a.status === 'executada' ? 'auto' : 'feito';
 }
 

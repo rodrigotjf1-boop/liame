@@ -126,6 +126,7 @@ Este Contrato vale enquanto houver tratamento de dados do Cliente pelo Liame e, 
 - Registro de auditoria que não pode ser alterado, com prova diária publicada fora do sistema (registro público de transparência e carimbo de tempo).
 - Credenciais de terceiros nunca aparecem em registros técnicos, telas, respostas de API ou textos enviados à IA.
 - O telefone do comprador vindo do Regem ou do RegemCast é transformado, na chegada, num código pseudonimizado com a chave própria do Cliente e não é guardado; pedidos de marketplaces chegam sem identificação do comprador.
+- No envio de mensagens pelo RegemCast, o Liame não recebe a lista de contatos, os telefones nem os nomes: trata só o pedido de mensagem (o texto do modelo, o nome e a regra do público, contagens, a janela de envio e a regra do cupom) e os números do resultado. O envio, os contatos e os registros de consentimento e de saída ficam no RegemCast; cada envio depende da aprovação de uma pessoa do Cliente.
 - Registros técnicos por 30 dias; cópias de segurança por até 35 dias.
 - Acesso interno mínimo, individual e registrado; revisão periódica.
 - Verificação automática de dependências e de segredos no código a cada mudança; revisão de segurança externa antes da abertura comercial.

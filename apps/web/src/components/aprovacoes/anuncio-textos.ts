@@ -38,7 +38,7 @@ function naFrase(provider: string): { a: string; A: string; na: string; com: str
 /** Quem pediu: a pessoa, ou o funcionário de IA (no modo Aprovação). */
 export function quemPediu(a: Pick<Acao, 'agent_key' | 'requested_by'>): { nome: string; funcionario: boolean } {
   if (!a.agent_key) return { nome: a.requested_by.name, funcionario: false };
-  return { nome: a.agent_key === 'trafego' ? 'Gestor de tráfego' : 'Funcionário de IA', funcionario: true };
+  return { nome: a.agent_key === 'trafego' ? 'Gestor de tráfego' : a.agent_key === 'crm' ? 'CRM e mensageria' : 'Funcionário de IA', funcionario: true };
 }
 
 export function tipoDoAnuncio(a: AcaoDeAnuncio): TipoDoAnuncio {
