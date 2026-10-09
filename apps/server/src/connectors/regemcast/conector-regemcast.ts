@@ -1,7 +1,19 @@
 import type { z } from 'zod';
 import type { ClienteConector } from '../cliente-http.js';
 import { ErroConector } from '../cliente-http.js';
-import { ConversaAnuncio, PaginaConversas, RespostaMcp, RevogacaoRegemcast, SituacaoRegemcast } from './contrato-regemcast.js';
+import {
+  CampanhaDetalhadaRegemcast,
+  CampanhasRegemcast,
+  ContaRegemcast,
+  ConversaAnuncio,
+  ModelosRegemcast,
+  OrcamentoRegemcast,
+  PaginaConversas,
+  PublicosRegemcast,
+  RespostaMcp,
+  RevogacaoRegemcast,
+  SituacaoRegemcast,
+} from './contrato-regemcast.js';
 
 // Chamadas ao RegemCast pelo MCP dele (contrato v2, docs/integracoes/regemcast.md; emendas da ADR-008 e da
 // ADR-019 de 02/10/2026). MCP 2026-07-28, sem estado: cada chamada é um POST com um pedido JSON-RPC e a
@@ -115,6 +127,45 @@ export async function lerConversas(
   if (p.desde) argumentos.desde = p.desde;
   const pg = await chamarFerramenta(ctx, { token: p.token, contaChave: p.contaChave, ferramenta: 'conversas_anuncio_listar', argumentos, schema: PaginaConversas });
   return { itens: pg.itens, proximoCursor: pg.proximo_cursor, temMais: pg.tem_mais };
+}
+
+// ---------------------------------------------------------------- a mensageria (A5, Y4; contrato §8)
+// Leituras para o Liame saber o que dá para enviar e o que já foi enviado. Cada uma pede a permissão dela no token
+// (sem ela, a ferramenta "não existe" e a chamada sai como `permissao`). Nenhuma traz telefone nem nome de contato, e
+// nenhuma muda nada no RegemCast.
+
+type Acesso = { token: string; contaChave: string };
+
+/** Se a conta pode enviar agora (a saúde do WhatsApp na Meta, com o que resolver), o plano e o uso do ciclo. `conta.ler`. */
+export function lerContaDeMensagens(ctx: Contexto, a: Acesso): Promise<ContaRegemcast> {
+  return chamarFerramenta(ctx, { ...a, ferramenta: 'conta_situacao', argumentos: {}, schema: ContaRegemcast });
+}
+
+/** As campanhas de mensagens, das mais novas para as mais antigas, com os números de cada uma (até 50). `campanhas.ler`. */
+export function lerCampanhasDeMensagens(ctx: Contexto, a: Acesso & { situacao?: string | null; limite?: number }): Promise<CampanhasRegemcast> {
+  const argumentos: Record<string, unknown> = { limite: Math.min(50, Math.max(1, a.limite ?? 20)) };
+  if (a.situacao) argumentos.situacao = a.situacao;
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanhas_listar', argumentos, schema: CampanhasRegemcast });
+}
+
+/** Uma campanha: por que está pausada ou esperando, as falhas por motivo e o custo na Meta. Não diz quem recebeu. `campanhas.ler`. */
+export function detalharCampanhaDeMensagens(ctx: Contexto, a: Acesso & { id: string }): Promise<CampanhaDetalhadaRegemcast> {
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanha_detalhar', argumentos: { id: a.id }, schema: CampanhaDetalhadaRegemcast });
+}
+
+/** As listas, os públicos prontos e os perfis da base, com quantas pessoas de cada um podem receber. Só contagens. `publicos.ler`. */
+export function lerPublicos(ctx: Contexto, a: Acesso): Promise<PublicosRegemcast> {
+  return chamarFerramenta(ctx, { ...a, ferramenta: 'publicos_listar', argumentos: {}, schema: PublicosRegemcast });
+}
+
+/** Os modelos de mensagem como a Meta os tem agora (o RegemCast fala com a Meta nesta chamada). `modelos.ler`. */
+export function lerModelos(ctx: Contexto, a: Acesso & { soAprovados?: boolean }): Promise<ModelosRegemcast> {
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'modelos_listar', argumentos: a.soAprovados ? { soAprovados: true } : {}, schema: ModelosRegemcast });
+}
+
+/** Os tetos de gasto de mensagens que o dono da conta definiu no RegemCast e quanto já saiu em cada período. `orcamento.ler`. */
+export function lerOrcamentoDeMensagens(ctx: Contexto, a: Acesso): Promise<OrcamentoRegemcast> {
+  return chamarFerramenta(ctx, { ...a, ferramenta: 'orcamento_ler', argumentos: {}, schema: OrcamentoRegemcast });
 }
 
 /** Desliga o token no RegemCast (segunda camada: ele já saiu do cofre do Liame). */

@@ -123,4 +123,19 @@ O RegemCast não manda aviso (webhook) de conversa nova. A leitura é só pelo c
 
 ## 7. O resto da porta (fora do F7)
 
-O mesmo token pode receber outras permissões, que o F7 não usa: leitura de conta, campanhas, públicos, modelos e orçamento; rascunho de modelo e de campanha (com `chaveIdempotencia` obrigatória); e disparo em dois passos (`campanha_disparo_planejar` → `campanha_disparar` com a confirmação do plano), **só para produto da DMS** e só com o orçamento de disparos da conta definido. A lista e as regras estão em `docs/mcp.md` do RegemCast. Usá-las no Liame é trabalho do Action Service, com plano próprio.
+O mesmo token pode receber outras permissões, que o F7 não usa. As de **leitura** (conta, campanhas, públicos, modelos e orçamento) o conector do Liame já sabe chamar desde a A5 · Y4 (seção 8). As de **escrita** seguem fora: rascunho de modelo e de campanha (com `chaveIdempotencia` obrigatória) e disparo em dois passos (`campanha_disparo_planejar` → `campanha_disparar` com a confirmação do plano), **só para produto da DMS** e só com o orçamento de disparos da conta definido. A lista e as regras estão em `docs/mcp.md` do RegemCast. Usar as de escrita no Liame é trabalho do Action Service (A5 · Y5).
+
+## 8. As leituras da mensageria (A5 · Y4)
+
+Conferidas em 08/10/2026 em `docs/mcp.md` e em `backend/src/modules/integracao/mcp.leitura.ts` do RegemCast (commit `e88ae59`). O conector as chama pelo mesmo protocolo da seção 2 e confere cada resposta campo a campo (`connectors/regemcast/contrato-regemcast.ts`); o que vier a mais do que está na tabela é descartado, e o que vier torto é erro definitivo. **Nenhuma traz telefone, nome de contato ou conteúdo de conversa.** Nenhuma muda nada no RegemCast.
+
+| Ferramenta | Permissão | Entrada | O que o Liame recebe |
+| --- | --- | --- | --- |
+| `conta_situacao` | `conta.ler` | nada | `conta`, `fuso`; `whatsapp` (`conectado`, `sinal`: `pode_enviar`, `com_restricao`, `bloqueado` ou `desconhecido`, `titulo`, `resumo`, `lidaEm`, `problemas[]` com `onde`, `titulo`, `explicacao`, `acao`); `plano` (`nome`, `assinatura`, `gratisPeloRegem`, `disparosNoCiclo`, `tetoDoCiclo`, `restantes`, `cicloFim`) |
+| `campanhas_listar` | `campanhas.ler` | `situacao` (opcional), `limite` (1 a 50; o Liame pede 20) | `campanhas[]` e `total`. Cada campanha: `id`, `nome`, `situacao` (`rascunho`, `agendada`, `enviando`, `pausada`, `concluida`, `cancelada`), `pausaMotivo`, `modelo`, `categoria`, `publico`, e as contagens `destinatarios`, `naFila`, `enviadas`, `entregues`, `lidas`, `falhas`, `responderam`; `criadaEm`, `iniciadaEm`, `concluidaEm` |
+| `campanha_detalhar` | `campanhas.ler` | `id` | `campanha` (como acima); `pausa` (`motivo`, `explicacao`, `voltaEm`); `espera` (`motivo`, `ate`); `falhasPorMotivo[]` (`mensagens`, `titulo`, `explicacao`, `acao`); `custo`; `descansoDias`. **Não devolve quem recebeu** |
+| `publicos_listar` | `publicos.ler` | nada | `listas[]` (com `usadaEm`), `publicos[]` e `perfis[]`: `id`, `nome`, `regra` e `pessoas` (quantas podem receber). **Só contagens** |
+| `modelos_listar` | `modelos.ler` | `soAprovados` (opcional) | `modelos[]`: `id`, `nome`, `idioma`, `categoria`, `situacao`, `podeDisparar`, `qualidade`, `variaveis`, `cabecalho`, `corpo`, `rodape`, `botoes[]`, `alertas[]`. O RegemCast fala com a Meta nesta chamada |
+| `orcamento_ler` | `orcamento.ler` | nada | `moeda`; `tetos` (`dia`, `semana`, `mes`); `periodos[]` (`periodo`, `rotulo`, `tetoCentavos`, `gastoCentavos`, `percentual`, `texto`, `sinal`: `ok`, `atencao` ou `cheio`); `avisos[]` |
+
+`custo`: `moeda`, `gastoCentavos`, `aSairCentavos`, `linhas[]` (`rotulo`, `valor`, `detalhe`) e `avisos[]`; nulo quando a conta não tem preço. **Dinheiro sempre em centavos inteiros.** Os textos escritos pela loja (nome de campanha, texto de modelo) são dado, nunca instrução. Os valores de lista (`situacao`, `sinal`, `periodo`) são conferidos como texto com padrão, não como lista fechada: o RegemCast pode ampliar. `publico_estimar` fica para a Y5 (o plano do disparo).
