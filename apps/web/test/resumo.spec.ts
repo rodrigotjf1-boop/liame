@@ -698,9 +698,9 @@ describe('menu: o Resumo é a página inicial do Lite, a Atenção a do Pro', ()
   const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
 
   it('no Lite, o Resumo e não a Atenção; no Pro, o contrário; sem ver as vendas, a Atenção fica no Lite também', () => {
-    expect(itensVisiveis(agencia, tudoPode, 'lite').map((i) => i.href)).toEqual(['/resumo', '/aprovacoes', '/resultados', '/verba', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
-    expect(itensVisiveis(agencia, tudoPode, 'pro').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/resultados', '/verba', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
-    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver', 'lite').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/verba', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, tudoPode, 'lite').map((i) => i.href)).toEqual(['/resumo', '/aprovacoes', '/resultados', '/verba', '/mensagens', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, tudoPode, 'pro').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/resultados', '/verba', '/mensagens', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
+    expect(itensVisiveis(agencia, (p) => p !== 'vendas.ver', 'lite').map((i) => i.href)).toEqual(['/atencao', '/aprovacoes', '/verba', '/mensagens', '/criativos', '/equipe', '/marca', '/contas', '/pessoas']);
     expect(agencia.itens[0]).toMatchObject({ href: '/resumo', rotulo: 'Resumo', icone: 'home', permissao: 'vendas.ver', contador: 'resumo', soNo: 'lite' });
   });
 

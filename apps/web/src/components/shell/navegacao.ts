@@ -48,6 +48,7 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/aprovacoes', rotulo: 'Aprovações', icone: 'check-circle', permissao: 'campanhas.ver', contador: 'aprovacoes', modos: true },
       { href: '/resultados', rotulo: 'Resultados', icone: 'chart', permissao: 'vendas.ver', modos: true },
       { href: '/verba', rotulo: 'Verba do mês', icone: 'wallet', permissao: 'campanhas.ver', modos: true },
+      { href: '/mensagens', rotulo: 'Mensagens', icone: 'send', permissao: 'campanhas.ver', modos: true },
       { href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true },
       { href: '/equipe', rotulo: 'Sua equipe', icone: 'users', permissao: 'campanhas.ver', modos: true },
       { href: '/marca', rotulo: 'Minha marca', icone: 'palette', permissao: 'dossie.ver' },

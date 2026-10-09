@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// Mensageria (A5, Y4; `plano-a5.md` D-A5-10 e D-A5-12; protótipo P15, aguardando aprovação; sem tela ainda). O que a
+// Mensageria (A5, Y4; `plano-a5.md` D-A5-10 e D-A5-12; protótipo P15, aprovado em 09/10/2026). O que a
 // tela Mensagens lê: se a conta do WhatsApp pode enviar, o teto de gasto de mensagens que o dono definiu no RegemCast,
 // quantos modelos aprovados e públicos há, e as campanhas de mensagens com os números. Tudo é lido do RegemCast na hora
 // e nada é guardado no Liame. Só números e textos escritos pela loja ou pelo RegemCast: nenhum telefone e nenhum nome
