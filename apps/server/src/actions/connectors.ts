@@ -1,5 +1,6 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { googleAnunciosConnector } from './google-anuncios.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
 import { regemCupomConnector } from './regem-cupom.js';
 import type { ResourceState } from './tools.js';
@@ -9,10 +10,11 @@ import type { ResourceState } from './tools.js';
 // O da Meta chegou na A4 (X1): situação e verba diária de campanha, conjunto e anúncio; as ferramentas de
 // anúncio o usam desde a X2. Todos passam pelo mesmo Action Service.
 //
-// O do Google Ads (`google-anuncios.ts`, A5 · Y2) já existe, com a mesma interface, e é ligado na subida; ele só entra
-// neste registro na Y3, junto com as ferramentas que o aceitam. Entrar antes mudaria, para quem tem conta do Google
-// conectada, a maior verba diária da Verba do mês e o que a Autonomia diz da conta ("escrita desligada" no lugar de
-// "plataforma sem escrita"), sem haver ainda o que pedir.
+// O do Google Ads (`google-anuncios.ts`, A5 · Y2) entrou neste registro na Y3 (09/10/2026), com as ferramentas que o
+// aceitam (verba, pausar e retomar CAMPANHA) e atrás da flag `google_write`, que nasce desligada: sem ela, o pedido é
+// recusado antes de qualquer chamada ao Google, e a tela não oferece o botão. Com o registro, para quem tem conta do
+// Google conectada, a maior verba diária da Verba do mês passa a contar as campanhas do Google (o teto por campanha
+// vale nas duas plataformas) e a Autonomia diz "escrita desligada" no lugar de "plataforma sem escrita".
 
 export interface ResourceRef {
   tenantId: string;
@@ -96,4 +98,9 @@ export class SandboxConnector implements Connector {
   }
 }
 
-export const CONNECTORS: Record<string, Connector> = { sandbox: new SandboxConnector(), regem: regemCupomConnector, meta_ads: metaAnunciosConnector };
+export const CONNECTORS: Record<string, Connector> = {
+  sandbox: new SandboxConnector(),
+  regem: regemCupomConnector,
+  meta_ads: metaAnunciosConnector,
+  google_ads: googleAnunciosConnector,
+};

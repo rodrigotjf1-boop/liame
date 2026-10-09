@@ -16,7 +16,11 @@ const brl = (micros: number | bigint) => (Number(micros) / 1_000_000).toLocaleSt
 const FUSO_PADRAO = 'America/Sao_Paulo';
 /** Até onde a leitura do gasto volta, no máximo (uma conta parada há mais que isto entra sem ritmo). */
 const DIAS_DE_GASTO = 62;
-/** A plataforma em que o Liame muda verba nesta fase: é para ela que a tela mostra o teto por campanha. */
+/**
+ * A plataforma de referência para ler o teto por campanha e as regras da verba que a tela mostra. O teto que a empresa
+ * define não tem provedor e as regras da distribuição são as mesmas na Meta e no Google (D-A5-3): tanto faz qual das
+ * duas se usa aqui.
+ */
 const PLATAFORMA_DA_ESCRITA = 'meta_ads';
 
 /** O fuso em que o mês da empresa vira. */

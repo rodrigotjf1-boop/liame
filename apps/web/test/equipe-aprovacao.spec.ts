@@ -222,6 +222,14 @@ describe('a caixa da linha: a proposta, o modo de agora e a volta de um passo', 
     );
     expect(p.pontos.map((x) => x.forte)).toEqual(['Continua igual:', 'Se ele não conseguir pedir']);
     expect(p.pontos[1]!.texto).toBe('(a Meta não respondeu, já existe um pedido igual, falta um limite), a recomendação fica na Atenção, com o motivo.');
+    // Na linha do Google (protótipo P13, parte 2): as frases falam do Google, e a proposta diz o que é só dele.
+    const g = c({ ...comProposta, provider: 'google_ads' })!;
+    expect(g.titulo).toBe('Proposta do sistema: Google Ads · Reduzir a verba, de Sugerir para Aprovação');
+    expect(texto(g.texto!)).toContain('quando ele recomendar reduzir a verba de uma campanha do Google, ele mesmo faz o pedido');
+    expect(g.pontos.map((x) => x.forte)).toEqual(['Continua igual:', 'Se ele não conseguir pedir', 'No Google:']);
+    expect(g.pontos[0]!.texto).toContain('a conferência do Google antes de mudar');
+    expect(g.pontos[1]!.texto).toContain('(o Google não respondeu,');
+    expect(g.pontos[2]!.texto).toBe('o pedido é sempre na campanha inteira. Se a verba da campanha for dividida com outras campanhas, ele não pede a mudança: a recomendação fica na Atenção, com o motivo.');
     expect([p.proposta, p.voltar]).toEqual([{ id: uuid(80), para: 'APPROVAL' }, null]);
   });
 
@@ -462,7 +470,10 @@ describe('a ficha do Gestor de tráfego com o modo Aprovação', () => {
     expect(t).toContain('Proposta do sistema: Meta Ads · Reduzir a verba, de Sugerir para Aprovação');
     expect(t).toContain('Aprovar a promoção');
     expect(t).toContain('Fica registrado quem aprovou, quando e a versão da regra de autonomia. Dá para voltar um passo a qualquer momento.');
-    expect(t).toContain('em Aprovação, faz o pedido de mudar a verba ou pausar, na Meta.');
+    expect(t).toContain('em Aprovação, faz o pedido de mudar a verba ou pausar, na Meta e no Google.');
+    expect(t).toContain('No Google: o pedido é sempre na campanha inteira, com os mesmos limites da Meta (10% por pedido, teto por campanha e verba do mês).');
+    expect(t).toContain('criar ou apagar campanha; mexer em verba dividida entre campanhas do Google.');
+    expect(t).not.toContain('mexer no Google.');
     expect(t).toContain('Nunca: mudar qualquer coisa sem a aprovação de uma pessoa com o código do app');
     // No Lite não há portões nem tabela nem a legenda dos modos.
     expect(html).not.toContain('class="sinais"');

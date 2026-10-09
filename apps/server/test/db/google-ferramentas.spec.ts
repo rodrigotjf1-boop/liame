@@ -1,23 +1,18 @@
 import { resolve } from 'node:path';
 import type { Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { CONNECTORS } from '../../src/actions/connectors.js';
-import { googleAnunciosConnector } from '../../src/actions/google-anuncios.js';
 import type { ActionExecutor } from '../../src/worker/action-executor.js';
 import type { TestApi } from '../helpers/api.js';
 import type { CampanhaNoGoogle, EmpresaComGoogle, GoogleDeMentira } from '../helpers/google-de-mentira.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
-// A5 · Y3 (parte de servidor): as ferramentas de anúncio numa campanha do Google, do pedido à volta, pela API e contra
-// uma Google Ads API local. Em produção o conector do Google ainda NÃO está no registro (entra com a adaptação das
-// telas, depois do aceite do protótipo P13): aqui ele é registrado só neste arquivo, ANTES de o app carregar, para as
-// listas que o app monta na carga (as plataformas que gastam, as que têm pedido) já saírem com ele, como vão sair
-// quando o registro for de verdade. Por isso o app e os ajudantes entram por `import()` dentro do `beforeAll`.
-CONNECTORS.google_ads = googleAnunciosConnector;
+// A5 · Y3: as ferramentas de anúncio numa campanha do Google, do pedido à volta, pela API e contra uma Google Ads API
+// local. O conector do Google está no registro de verdade desde a Y3 (09/10/2026), atrás da flag `google_write`, que
+// este arquivo liga para a empresa de teste. O app e os ajudantes entram por `import()` dentro do `beforeAll`.
 
 const REAL = 1_000_000;
 
-describe.skipIf(!hasDb)('ferramentas de anúncio no Google: do pedido à volta (A5 · Y3, conector registrado só no teste)', () => {
+describe.skipIf(!hasDb)('ferramentas de anúncio no Google: do pedido à volta (A5 · Y3)', () => {
   let api: TestApi;
   let database: Database;
   let executor: ActionExecutor;
@@ -103,7 +98,6 @@ describe.skipIf(!hasDb)('ferramentas de anúncio no Google: do pedido à volta (
     await resetIpRateLimits();
   });
   afterAll(async () => {
-    delete CONNECTORS.google_ads;
     await api?.close();
     await database?.close();
     await google?.fechar();

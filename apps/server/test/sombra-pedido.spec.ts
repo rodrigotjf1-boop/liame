@@ -92,8 +92,12 @@ describe('o pedido que nasce de uma recomendação (A4, X3)', () => {
   });
 
   it('só na plataforma em que o Liame muda campanha, e só com o id da campanha na plataforma', () => {
-    expect(pedidoDaRecomendacao(rec({ provider: 'google_ads' }))).toBeNull();
-    expect(pedidoDaRecomendacao(rec({ provider: 'google_ads', tool: 'campanha_pausar' }))).toBeNull();
+    // No Google o pedido é o mesmo (a campanha é o recurso; a verba dividida é recusada mais adiante, no plano da ferramenta).
+    expect(pedidoDaRecomendacao(rec({ provider: 'google_ads' }))).toEqual({ tool: 'orcamento_ajustar', resource_id: 'campanha:120210000000001', params: { daily_budget_micros: 27_000_000 } });
+    expect(pedidoDaRecomendacao(rec({ provider: 'google_ads', tool: 'campanha_pausar', percent: null }))).toEqual({ tool: 'campanha_pausar', resource_id: 'campanha:120210000000001', params: {} });
+    // Plataforma que o Liame só lê (ou que ele não conhece): não há pedido.
+    expect(pedidoDaRecomendacao(rec({ provider: 'ga4' }))).toBeNull();
+    expect(pedidoDaRecomendacao(rec({ provider: 'tiktok_ads', tool: 'campanha_pausar' }))).toBeNull();
     expect(recursoDaCampanha('120210000000001')).toBe('campanha:120210000000001');
     for (const id of ['', 'c1', '12 3', '1'.repeat(26), '123/../456']) {
       expect(recursoDaCampanha(id)).toBeNull();

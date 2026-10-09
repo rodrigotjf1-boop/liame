@@ -238,6 +238,11 @@ export function DetalheDoMembro({
           <li>
             <b>Faz:</b> {comAprovacao ? LIMITES_DO_GESTOR.faz : `${f.faz.map(minuscula).join('; ')}.`}
           </li>
+          {comAprovacao && (
+            <li>
+              <b>No Google:</b> {LIMITES_DO_GESTOR.noGoogle}
+            </li>
+          )}
           {comAprovacao ? (
             <li>
               <b>Nunca:</b> {LIMITES_DO_GESTOR.nunca}

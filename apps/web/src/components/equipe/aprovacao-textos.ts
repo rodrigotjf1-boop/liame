@@ -163,6 +163,10 @@ export function caixaDaLinha(a: AutonomyItem, itens: readonly AutonomyItem[], li
         pontos: [
           { forte: 'Continua igual:', texto: `os limites da empresa (o passo por pedido, o teto por campanha e a verba do mês), a conferência ${pl.da} antes de mudar e o desfazer.` },
           { forte: 'Se ele não conseguir pedir', texto: `(${pl.nome} não respondeu, já existe um pedido igual, falta um limite), a recomendação fica na Atenção, com o motivo.` },
+          // O que é só do Google (protótipo P13, parte 2): a mudança é na campanha, e verba dividida não se mexe.
+          ...(a.provider === 'google_ads'
+            ? [{ forte: 'No Google:', texto: 'o pedido é sempre na campanha inteira. Se a verba da campanha for dividida com outras campanhas, ele não pede a mudança: a recomendação fica na Atenção, com o motivo.' }]
+            : []),
         ],
         proposta: { id: p.id, para: 'APPROVAL' },
       });
@@ -488,8 +492,10 @@ export const SUBTITULO_DA_EQUIPE =
 // ------------------------------------------------------------------ o que pode e o que não pode
 
 export const LIMITES_DO_GESTOR = {
-  faz: 'registra o que faria e compara com o que você fez; em Sugerir, mostra a recomendação na Atenção; em Aprovação, faz o pedido de mudar a verba ou pausar, na Meta.',
-  nunca: 'mudar qualquer coisa sem a aprovação de uma pessoa com o código do app; passar dos limites da empresa; criar ou apagar campanha; mexer no Google.',
+  faz: 'registra o que faria e compara com o que você fez; em Sugerir, mostra a recomendação na Atenção; em Aprovação, faz o pedido de mudar a verba ou pausar, na Meta e no Google.',
+  /** O que é só do Google (protótipo P13, parte 2). */
+  noGoogle: 'o pedido é sempre na campanha inteira, com os mesmos limites da Meta (10% por pedido, teto por campanha e verba do mês).',
+  nunca: 'mudar qualquer coisa sem a aprovação de uma pessoa com o código do app; passar dos limites da empresa; criar ou apagar campanha; mexer em verba dividida entre campanhas do Google.',
 };
 
 export const RESUMO_DO_GESTOR =
