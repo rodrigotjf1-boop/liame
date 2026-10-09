@@ -170,6 +170,31 @@ export class ActionService {
     if (!(await this.flags.isEnabled('modo_aprovacao', this.flags.context({ tenantId: alvo.tenantId, brandId: marca })))) {
       throw new AppProblem(403, 'modo-aprovacao-desligado', 'Modo Aprovação desligado', 'O modo Aprovação não está liberado para esta empresa: o funcionário de IA não faz pedidos.');
     }
+    return this.pedirEmNomeDoFuncionario(alvo, input, { recommendation_id: input.recommendation_id });
+  }
+
+  /**
+   * O pedido de envio de mensagem que o funcionário de CRM e mensageria propõe (A5, Y5 e Y6; D-A5-11), depois de montar
+   * a campanha em rascunho no RegemCast. Quem chama é o serviço do pedido de mensagem, na transação da empresa. Passa
+   * pelo mesmo trilho do pedido de uma pessoa (trava, flag de escrita, política) e sempre espera a aprovação com o
+   * código do app: a política da distribuição põe `mensagem.*` em Aprovação para quem quer que peça, e a ferramenta
+   * tem a trava `alwaysApproval`. Não depende do modo Aprovação do Gestor de tráfego: para mensagem não há sombra nem
+   * subida de autonomia nesta fase. `emNomeDe` é a pessoa em nome de quem o funcionário trabalha.
+   */
+  async pedirMensagemPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
+    if (input.tool !== 'mensagem_disparar') {
+      throw new AppProblem(400, 'ferramenta-nao-e-de-mensagem', 'Não é um envio de mensagem', 'Por aqui o funcionário só pede o envio de uma mensagem.');
+    }
+    return this.pedirEmNomeDoFuncionario(alvo, input, {});
+  }
+
+  /** O pedido do funcionário de IA pelo trilho, com a auditoria em nome dele. `extra` vai para a auditoria. */
+  private async pedirEmNomeDoFuncionario(
+    alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string },
+    input: CreateActionRequest,
+    extra: Record<string, unknown>,
+  ): Promise<string> {
+    const tx = currentTx();
     const id = await this.pedir({ tenantId: alvo.tenantId, userId: alvo.emNomeDe, ator: 'agent', agentKey: alvo.agentKey }, input, null);
     const r = await tx.execute<{ tool: string; action: string; mode: string; status: string; plan_hash: string; reserved_micros: string }>(sql`
       select tool, action, mode, status, plan_hash, reserved_micros::text as reserved_micros from liame.action_request where id = ${id} and tenant_id = ${alvo.tenantId}`);
@@ -189,7 +214,7 @@ export class ActionService {
         status: feito.status,
         plan_hash: feito.plan_hash,
         reserved_micros: Number(feito.reserved_micros),
-        recommendation_id: input.recommendation_id,
+        ...extra,
         agent_key: alvo.agentKey,
         on_behalf_of: alvo.emNomeDe,
       },
