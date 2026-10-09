@@ -42,7 +42,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **Z8** | **Pacote pronto** | Para TikTok, YouTube e redes sem acesso: o Liame monta o texto, a mídia e o horário, e a pessoa publica. Sem escrita em plataforma | A6-14 | Z4 |
 | **Z9** | **Telas** | Pelos protótipos da seção 5 | A6-15 | Aprovação dos protótipos |
 
-> **Andamento.** **P17 (09/10/2026; aguarda a aprovação do dono):** o protótipo `mockups/prototipo-avaliacoes.html`: a tela "Avaliações" (a nota, as sem resposta primeiro e a situação de cada resposta) e a resposta em Aprovações (a avaliação, o texto proposto e editável, "só o dono aprova" para 1 e 2 estrelas, a conferência do Google, publicada, recusada e apagada). Antes dele, a reconferência da seção 8 para a Z1 entrou na base de conhecimento (§3.3 e §16.1).
+> **Andamento.** **P17 (09/10/2026; aprovado pelo dono no mesmo dia):** o protótipo `mockups/prototipo-avaliacoes.html`: a tela "Avaliações" (a nota, as sem resposta primeiro e a situação de cada resposta) e a resposta em Aprovações (a avaliação, o texto proposto e editável, "só o dono aprova" para 1 e 2 estrelas, a conferência do Google, publicada, recusada e apagada). Antes dele, a reconferência da seção 8 para a Z1 entrou na base de conhecimento (§3.3 e §16.1).
 
 ## 4. Decisões (aprovadas pelo dono em 09/10/2026, como recomendadas)
 
@@ -135,7 +135,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | Z4 | O aceite da D-A6-2 e as primeiras fotos dos produtos |
 | Z5 | No piloto: o Instagram como conta profissional, ligado à Página do Facebook; autorizar a Meta de novo com as permissões de publicar; autorizar o Threads, se usar |
 | Z8 | Cadastro de desenvolvedor no TikTok e o pedido da auditoria (eu guio) |
-| Telas | Aprovar os protótipos P17 a P22 |
+| Telas | ✅ P17 aprovado (09/10/2026). Aprovar os protótipos P18 a P22 |
 | Antes de clientes de fora | A revisão do app da Meta e a verificação do app do Google com as permissões novas |
 
 ## 10. Riscos
