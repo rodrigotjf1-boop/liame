@@ -140,7 +140,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
       status: 'aguardando_aprovacao',
       status_reason: null,
       // A regra é da distribuição (desde a versão 3): na Meta, o que uma pessoa pede espera aprovação.
-      policy: { allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@4', 'empresa@1'] },
+      policy: { allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@5', 'empresa@1'] },
       undoes: null,
       undone_by: null,
     });
@@ -242,7 +242,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
 
     // Reduzir e pausar diminuem o gasto: não dependem dos limites da empresa.
     const reduz = await verba(27);
-    expect([reduz.status, reduz.body.status, reduz.body.policy.versions]).toEqual([201, 'aguardando_aprovacao', ['plataforma@4']]);
+    expect([reduz.status, reduz.body.status, reduz.body.policy.versions]).toEqual([201, 'aguardando_aprovacao', ['plataforma@5']]);
     await cancelar(sem, reduz.body.id);
 
     // Aumentar: falta o teto por campanha. O teto de outro provedor não serve.
@@ -267,7 +267,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
 
     // Dentro do teto e dos 10%: passa, reservando a diferença de um dia.
     const ok = await verba(32);
-    expect(ok.body).toMatchObject({ action: 'orcamento.aumentar', status: 'aguardando_aprovacao', reserved_micros: 2 * REAL, policy: { versions: ['plataforma@4', 'empresa@2'] } });
+    expect(ok.body).toMatchObject({ action: 'orcamento.aumentar', status: 'aguardando_aprovacao', reserved_micros: 2 * REAL, policy: { versions: ['plataforma@5', 'empresa@2'] } });
     await cancelar(sem, ok.body.id);
     // 10% cravados, mas acima do teto da empresa.
     const acima = await verba(33);
@@ -579,7 +579,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio na Meta: do pedido à volta (A4
         ).status,
       ).toBe(201);
       const p = await pedir(e, 'campanha_pausar', c.recurso, {}, { brand_id: e.brandId });
-      expect(p.body).toMatchObject({ mode: 'APPROVAL', status: 'aguardando_aprovacao', policy: { versions: ['plataforma@4', 'empresa@1', 'marca@1'] } });
+      expect(p.body).toMatchObject({ mode: 'APPROVAL', status: 'aguardando_aprovacao', policy: { versions: ['plataforma@5', 'empresa@1', 'marca@1'] } });
       await cancelar(e, p.body.id);
 
       // A empresa escreve AUTO para o pedido de uma pessoa: sem o autopilot (que nasce desligado), espera aprovação.

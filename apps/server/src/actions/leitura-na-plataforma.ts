@@ -6,7 +6,7 @@ import { AppProblem } from '../errors/problems.js';
 // com as mesmas palavras nos dois lugares, em vez de um erro interno.
 
 /** Como a pessoa chama cada provedor, na frase. */
-export const PLATAFORMA: Record<string, string> = { meta_ads: 'A Meta', google_ads: 'O Google', regem: 'O Regem' };
+export const PLATAFORMA: Record<string, string> = { meta_ads: 'A Meta', google_ads: 'O Google', regem: 'O Regem', regemcast: 'O RegemCast' };
 
 /** A falha do conector em palavras. O que não é falha do conector (um defeito nosso) devolve nulo, e quem chama deixa subir. */
 export function problemaDaLeitura(provider: string, err: unknown): AppProblem | null {

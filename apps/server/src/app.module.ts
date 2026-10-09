@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { ActionService } from './actions/action.service.js';
 import { EscritaGoogle } from './actions/escrita-google.provider.js';
+import { EscritaRegemcast } from './actions/escrita-regemcast.provider.js';
 import { EscritaMeta } from './actions/escrita-meta.provider.js';
 import { EscritaRegem } from './actions/escrita-regem.provider.js';
 import { ActionsController } from './actions/actions.controller.js';
@@ -74,6 +75,6 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
   controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController, PesquisaController, AutonomiaController, EquipeController, ResumoController, PecasController, ConversoesController, MensageriaController],
-  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, EscritaMeta, EscritaGoogle, BudgetService, OpcoesDoPedidoService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, RevisorService, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService, EquipeService, ResumoService, PecasService, DecisoesDePecaService, CustoDasPecasService, ConversoesService, MensageriaService],
+  providers: [TelemetryLifecycle, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, EscritaMeta, EscritaGoogle, EscritaRegemcast, BudgetService, OpcoesDoPedidoService, LifecycleService, ConnectionsService, MediaService, ResultsService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, RevisorService, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService, EquipeService, ResumoService, PecasService, DecisoesDePecaService, CustoDasPecasService, ConversoesService, MensageriaService],
 })
 export class AppModule {}

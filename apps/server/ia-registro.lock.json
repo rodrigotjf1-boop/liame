@@ -48,6 +48,14 @@
       "version": 1,
       "hash": "6f981dd73662bac3b88205137f27da3052598ea319f4f8b296318f88cecf4e04"
     },
+    "mensagem_disparar": {
+      "version": 1,
+      "hash": "e93aeb407d430e9d77e20ac93b33229dfc846611ff24a82fd710e0eb00bb2c67"
+    },
+    "mensagem_pausar": {
+      "version": 1,
+      "hash": "bbd08a3380a2f063a2982a9f93750f1a30f98dfc49ca84db0fbde08a68af71c9"
+    },
     "midia_entrega": {
       "version": 1,
       "hash": "d369a08516c8ba47f3b57e6c85e39fc4890340399eb045ccd242931a3aa4e968"

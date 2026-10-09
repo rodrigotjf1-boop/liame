@@ -175,6 +175,7 @@ describe('ferramentas de anúncio (A4 · X2)', () => {
     expect(TOOLS.anuncio_retomar!.undo!(objeto('anuncio', { status: 'pausado' }))).toEqual({ tool: 'anuncio_pausar', params: {} });
     expect(TOOLS.orcamento_ajustar!.undo!(objeto('conjunto', { daily_budget_micros: 45 * REAL }))).toEqual({ tool: 'orcamento_ajustar', params: { daily_budget_micros: 45 * REAL } });
     // Nenhuma ferramenta de anúncio na Meta fica sem volta; o cupom do Regem não se desfaz pelo Liame (desativa-se no Regem).
-    for (const t of Object.values(TOOLS)) expect(Boolean(t.undo), t.name).toBe(t.providers.includes('meta_ads'));
+    // A mensagem enviada não volta: a volta do envio é pausar o que ainda não saiu, e a pausa não tem volta pelo Liame.
+    for (const t of Object.values(TOOLS)) expect(Boolean(t.undo), t.name).toBe(t.providers.includes('meta_ads') || t.name === 'mensagem_disparar');
   });
 });

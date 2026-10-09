@@ -1,6 +1,7 @@
 import type { BudgetImpact, RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
+import { EstadoDaMensagem, faseDaMensagem, motivoDeNaoCaberNoTeto } from './mensagem-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
 // Registro de ferramentas (arquitetura §6, ADR-007): cada ferramenta declara risco, impacto financeiro,
@@ -38,6 +39,11 @@ export interface ToolDefinition {
    * Sem esta função, a ação não tem volta pelo Liame.
    */
   undo?(before: ResourceState): { tool: string; params: Record<string, unknown> };
+  /**
+   * Nunca roda sem a aprovação de uma pessoa, mesmo que a política da empresa ou da marca peça autonomia e o
+   * `autopilot` esteja ligado (A5, D-A5-11: mensagem de WhatsApp). A política ainda pode deixá-la em sombra.
+   */
+  alwaysApproval?: boolean;
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -247,4 +253,64 @@ export const TOOLS: Record<string, ToolDefinition> = {
   anuncio_retomar: retomada('anuncio', ['meta_ads']),
   conjunto_retomar: retomada('conjunto', ['meta_ads']),
   campanha_retomar: retomada('campanha', ['meta_ads', 'google_ads']),
+  // Mensagem de WhatsApp pelo RegemCast (A5, Y5). O estado do recurso é o plano do disparo que o RegemCast devolve para
+  // a campanha em rascunho que o Liame montou (`mensagem-plano.ts`): é esse plano, com as pessoas e o custo, que a
+  // pessoa aprova. O conector ainda não está no registro: nenhum pedido chega a estas ferramentas.
+  mensagem_disparar: {
+    name: 'mensagem_disparar',
+    version: 1,
+    owner: 'mensageria',
+    description: 'Envia uma mensagem de WhatsApp já montada no RegemCast, para o público e pelo custo do plano que a pessoa aprova. Mensagem enviada não volta.',
+    // Custa dinheiro, fala com clientes da loja e não tem volta: o risco mais alto, sempre com a aprovação de uma pessoa (D-A5-11).
+    risk: 'R3',
+    providers: ['regemcast'],
+    compensation: 'pausar_o_que_ainda_nao_saiu',
+    alwaysApproval: true,
+    params: NoParams,
+    plan(before) {
+      const lido = EstadoDaMensagem.safeParse(before);
+      if (!lido.success) throw new PlanoRecusado('Esta ferramenta é para uma mensagem montada no RegemCast.');
+      const e = lido.data;
+      const fase = faseDaMensagem(e.situacao);
+      if (fase === 'pausada') throw new PlanoRecusado('Esta mensagem já foi enviada e está pausada. Quem retoma é uma pessoa, no RegemCast.');
+      if (fase !== 'rascunho') throw new PlanoRecusado('Esta mensagem já foi enviada ou cancelada: não dá para enviar de novo.');
+      // O que impede vem nas frases do RegemCast (o modelo ainda não aprovado pela Meta, a conta sem teto de gasto…).
+      if (!e.pode_disparar || !e.confirmacao) throw new PlanoRecusado(e.impedimentos.join(' ') || 'O RegemCast não deixa enviar esta mensagem agora.');
+      if (e.pessoas === 0) throw new PlanoRecusado('Ninguém deste público pode receber esta mensagem agora.');
+      const teto = motivoDeNaoCaberNoTeto(e);
+      if (teto) throw new PlanoRecusado(teto);
+      return {
+        action: 'mensagem.disparar',
+        // O dinheiro das mensagens não é verba de mídia: vale o teto do RegemCast, conferido acima, e nada entra no
+        // envelope do mês (D-A5-12). O custo vai no estado (`custo_centavos`), que é o que a pessoa aprova.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: { ...e, situacao: 'enviando' },
+      };
+    },
+    // A volta possível é pausar o que ainda não saiu; o que já foi entregue, fica.
+    undo: () => ({ tool: 'mensagem_pausar', params: {} }),
+  },
+  mensagem_pausar: {
+    name: 'mensagem_pausar',
+    version: 1,
+    owner: 'mensageria',
+    description: 'Pausa o envio de uma mensagem de WhatsApp que o Liame disparou: segura o que ainda não saiu. Quem retoma é uma pessoa, no RegemCast.',
+    risk: 'R1',
+    providers: ['regemcast'],
+    compensation: 'sem_volta_pelo_liame',
+    params: NoParams,
+    plan(before) {
+      const lido = EstadoDaMensagem.safeParse(before);
+      if (!lido.success) throw new PlanoRecusado('Esta ferramenta é para uma mensagem montada no RegemCast.');
+      const e = lido.data;
+      const fase = faseDaMensagem(e.situacao);
+      if (fase === 'rascunho') throw new PlanoRecusado('Esta mensagem ainda não foi enviada: não há o que pausar.');
+      if (fase === 'pausada') throw new PlanoRecusado('O envio desta mensagem já está pausado.');
+      if (fase !== 'andamento') throw new PlanoRecusado('O envio desta mensagem já terminou: não há o que pausar.');
+      return { action: 'mensagem.pausar', budgetImpact: 'decrease', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: { ...e, situacao: 'pausada' } };
+    },
+  },
 };
