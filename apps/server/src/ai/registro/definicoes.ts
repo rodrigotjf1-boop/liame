@@ -6,6 +6,7 @@ import { PROPOR_CUPOM } from '../conversa/cupom.defs.js';
 import { ABRIR_DEMANDA } from '../conversa/demanda.defs.js';
 import { LIA, PROMPT_CONVERSA_LIA } from '../conversa/prompt.js';
 import { CRIATIVO, PROMPT_CRIATIVO_TEXTO } from '../criativo/prompt.js';
+import { CRM, PROMPT_CRM_MENSAGEM } from '../crm/prompt.js';
 import { ESTRATEGISTA, PROMPT_ESTRATEGISTA } from '../estrategista/prompt.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
 import { PESQUISADOR, PROMPT_PESQUISADOR } from '../pesquisador/prompt.js';
@@ -56,10 +57,12 @@ export interface FuncionarioDef {
  * trabalhar: sem rota de modelo ativa para a tarefa (publicada só depois do eval, I3), a tela usa o texto sem IA.
  * O revisor de IA do Compliance tem prompt e não é funcionário do registro: o Compliance trabalha por regra e não
  * desliga; o revisor é o segundo olhar dele, para a empresa com a flag `revisor` (I9). O Criativo (A4, X6) só
- * trabalha para a empresa com as flags `ia` e `criativo`; a rota de modelo dele entrou na migration 0051.
+ * trabalha para a empresa com as flags `ia` e `criativo`; a rota de modelo dele entrou na migration 0051. O funcionário
+ * de CRM e mensageria (A5, Y6) entra aqui com o prompt e o eval; a rota de modelo dele só entra depois da rodada do
+ * eval com o modelo de verdade, e nada o chama antes disso.
  */
-export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA, PROMPT_PESQUISADOR, PROMPT_REVISOR, PROMPT_CRIATIVO_TEXTO];
-export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR, CRIATIVO];
+export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA, PROMPT_PESQUISADOR, PROMPT_REVISOR, PROMPT_CRIATIVO_TEXTO, PROMPT_CRM_MENSAGEM];
+export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR, CRIATIVO, CRM];
 
 /**
  * Todas as ferramentas: as de escrita em plataforma (Action Service), as de leitura dos funcionários de IA e as
