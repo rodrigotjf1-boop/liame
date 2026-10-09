@@ -251,7 +251,21 @@ export class ConnectionsService {
       available: this.disponiveis(),
       // A mesma flag que o Action Service confere ao pedir e ao executar a criação do cupom.
       regem_write: await this.flags.isEnabled('regem_write', this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId: brandId ?? null })),
+      ads_write: await this.anunciosComEscrita(auth, brandId ?? null),
     };
+  }
+
+  /**
+   * As plataformas de anúncio em que mudar campanhas está ligado para a empresa: as mesmas flags do pedido. Na Meta,
+   * só quando existe a configuração de login que pede para gerenciar anúncios (sem ela, a autorização nova continua
+   * só de leitura, como em `iniciar`). No Google, a autorização é a mesma para ler e mudar: o que muda é o que o Liame faz.
+   */
+  private async anunciosComEscrita(auth: AuthContext, brandId: string | null): Promise<string[]> {
+    const ctx = this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId });
+    const ligadas: string[] = [];
+    if (this.config.oauth.meta?.writeConfigId && (await this.flags.isEnabled('meta_write', ctx))) ligadas.push('meta_ads');
+    if (await this.flags.isEnabled('google_write', ctx)) ligadas.push('google_ads');
+    return ligadas;
   }
 
   async detalhe(id: string): Promise<ConnectionResponse> {

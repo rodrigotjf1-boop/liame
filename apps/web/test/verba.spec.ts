@@ -1043,3 +1043,72 @@ describe('menu: a Verba do mês vem depois de Resultados', () => {
     expect(destinoPedeVendas('abrir-resultados')).toBe(true);
   });
 });
+
+describe('Verba do mês: onde o Liame muda campanhas (A5 · Y3)', () => {
+  /** O mês com a escrita ligada (ou não) em cada plataforma, como o servidor informa em `writes`. */
+  const comEscrita = (meta: boolean, google: boolean, over: Partial<BudgetMonthResponse> = {}) =>
+    verba({ platforms: [plataformaDoMes('meta_ads', { writes: meta }), plataformaDoMes('google_ads', { writes: google })], ...over });
+  const notas = (v: BudgetMonthResponse) => plataformasDaVerba(v).linhas.map((l) => l.nota);
+  const regras = (v: BudgetMonthResponse) => limitesDaVerba(v, AGORA).regras;
+
+  it('"só leitura" fica embaixo da plataforma em que a escrita está desligada, seja qual for', () => {
+    expect(notas(comEscrita(true, true))).toEqual([null, null]);
+    expect(notas(comEscrita(true, false))).toEqual([null, 'só leitura: o Liame ainda não muda campanhas do Google']);
+    expect(notas(comEscrita(false, true))).toEqual(['só leitura: o Liame ainda não muda campanhas da Meta', null]);
+    expect(notas(comEscrita(false, false))).toEqual(['só leitura: o Liame ainda não muda campanhas da Meta', 'só leitura: o Liame ainda não muda campanhas do Google']);
+    // A resposta de antes de 09/10/2026 não dizia: vale o que a tela dizia então.
+    expect(notas(verba())).toEqual([null, 'só leitura: o Liame ainda não muda campanhas do Google']);
+  });
+
+  it('as regras citam as plataformas em que o pedido existe: a Meta, o Google ou as duas', () => {
+    expect(regras(comEscrita(true, true))).toEqual([
+      'Nada muda na Meta nem no Google sem a aprovação de uma pessoa, com o código do app.',
+      'Cada pedido muda no máximo 10% da verba diária.',
+      'No máximo 3 mudanças de verba por hora na mesma campanha ou conjunto.',
+      'A plataforma confere antes, e o Liame não passa por cima do que alguém mudou lá.',
+      'O Liame não apaga nada na Meta nem no Google e não mexe no limite de gastos da conta.',
+      'No Google, a mudança é na campanha inteira, e a verba dividida entre campanhas não muda pelo Liame.',
+    ]);
+    expect(regras(comEscrita(false, true))).toEqual([
+      'Nada muda no Google sem a aprovação de uma pessoa, com o código do app.',
+      'Cada pedido muda no máximo 10% da verba diária.',
+      'No máximo 3 mudanças de verba por hora na mesma campanha ou conjunto.',
+      'O Google confere antes, e o Liame não passa por cima do que alguém mudou lá.',
+      'O Liame não apaga nada no Google e não mexe no limite de gastos da conta.',
+      'No Google, a mudança é na campanha inteira, e a verba dividida entre campanhas não muda pelo Liame.',
+    ]);
+    // Só a Meta, e nenhuma (ou sem o servidor dizer): as regras de sempre.
+    const deSempre = regras(verba());
+    expect(deSempre[0]).toBe('Nada muda na Meta sem a aprovação de uma pessoa, com o código do app.');
+    expect(regras(comEscrita(true, false))).toEqual(deSempre);
+    expect(regras(comEscrita(false, false))).toEqual(deSempre);
+    expect(deSempre.join(' ')).not.toContain('Google');
+  });
+
+  it('sem mudança nenhuma, o cartão "O que o Liame mudou" fala da plataforma em que o pedido existe', () => {
+    expect(mudancasDaVerba(comEscrita(true, true)).sub).toBe('Cada mudança, conferida todo dia com o que a plataforma informa e com o que ela gastou.');
+    expect(mudancasDaVerba(comEscrita(false, true)).sub).toBe('Cada mudança, conferida todo dia com o que o Google informa e com o que ela gastou.');
+    expect(mudancasDaVerba(comEscrita(false, true)).colunaInforma).toBe('O Google informa hoje');
+    // Só a Meta, nenhuma, ou sem o servidor dizer: a frase de sempre.
+    for (const v of [comEscrita(true, false), comEscrita(false, false), verba()]) expect(mudancasDaVerba(v).sub).toBe('Cada mudança, conferida todo dia com o que a Meta informa e com o que ela gastou.');
+  });
+
+  it('a leitura atrasada só fala do pedido novo na plataforma em que ele existe', () => {
+    const atrasada = (provider: string, writes: boolean | undefined) =>
+      verba({
+        forecast_days: null,
+        platforms: [
+          plataformaDoMes('meta_ads', provider === 'meta_ads' ? { read_through: '2026-09-27', forecast_days: 3, stale: true, last_success_at: '2026-09-28T09:12:00.000Z', writes } : { writes: true }),
+          plataformaDoMes('google_ads', provider === 'google_ads' ? { read_through: '2026-09-27', forecast_days: 3, stale: true, last_success_at: '2026-09-28T09:20:00.000Z', writes } : { writes: false }),
+        ],
+      });
+    const texto = (v: BudgetMonthResponse) => avisosDaVerba(v, AGORA)[0]!.texto;
+    expect(texto(atrasada('google_ads', true))).toBe('O gasto do Google abaixo vale até 27/09; o dia 28 entra na previsão pelo ritmo. O Liame tenta ler de novo sozinho. Enquanto isso, um pedido novo continua lendo a campanha no Google na hora.');
+    expect(texto(atrasada('google_ads', false))).toBe('O gasto do Google abaixo vale até 27/09; o dia 28 entra na previsão pelo ritmo. O Liame tenta ler de novo sozinho.');
+    expect(texto(atrasada('meta_ads', true))).toContain('um pedido novo continua lendo a campanha na Meta na hora.');
+    // Com a escrita na Meta desligada, a tela não promete pedido.
+    expect(texto(atrasada('meta_ads', false))).not.toContain('pedido novo');
+    // Sem o servidor dizer, vale o de sempre (a Meta com a frase).
+    expect(texto(atrasada('meta_ads', undefined))).toContain('um pedido novo continua lendo a campanha na Meta na hora.');
+  });
+});

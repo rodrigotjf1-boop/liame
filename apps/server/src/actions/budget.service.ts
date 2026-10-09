@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
+import { FlagService } from '../flags/flag.service.js';
 import { PLATFORM_POLICY } from '../policy/engine.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { regrasDaVerba, tetoDaVerba } from '../policy/teto-da-verba.js';
@@ -91,7 +92,10 @@ export const estadoNaResposta = (estado: Record<string, unknown> | null): { stat
  */
 @Injectable()
 export class BudgetService {
-  constructor(private readonly policies: PolicyService) {}
+  constructor(
+    private readonly policies: PolicyService,
+    private readonly flags: FlagService,
+  ) {}
 
   /**
    * Reserva no envelope da empresa e no da marca (quando houver); passou do teto, nega. `sobeOGasto`: o pedido aumenta
@@ -218,6 +222,7 @@ export class BudgetService {
     const regras = regrasDaVerba([PLATFORM_POLICY], PLATAFORMA_DA_ESCRITA);
     const { mes } = conta;
     const mudancas = await this.mudancasDoMes(tx, { tenantId, fuso, inicio: mes.inicio, hoje: mes.hoje });
+    const comEscrita = await this.plataformasComEscrita(tx, tenantId, auth.userId);
     return {
       period: mes.periodo,
       timezone: fuso,
@@ -250,6 +255,7 @@ export class BudgetService {
         forecast_days: p.diasPrevistos,
         stale: p.atrasada,
         last_success_at: p.lidoEm ? p.lidoEm.toISOString() : null,
+        writes: comEscrita.has(p.provider),
       })),
       days: conta.dias.map((d) => ({ day: d.dia, spend_micros: Number(d.gasto), missing: d.faltam })),
       rules: regras,
@@ -258,6 +264,26 @@ export class BudgetService {
       largest_daily_micros: await this.maiorVerbaDiaria(tx, tenantId),
       generated_at: agora.toISOString(),
     };
+  }
+
+  /**
+   * As plataformas em que mudar campanhas pelo Liame está ligado nesta empresa: a flag de escrita do conector vale para
+   * alguma conta conectada (a mesma conferência do pedido, conta a conta). A tela usa para não dizer "só leitura" de
+   * uma plataforma em que o pedido existe, nem prometer pedido onde ele não existe.
+   */
+  private async plataformasComEscrita(tx: Tx, tenantId: string, userId: string): Promise<Set<string>> {
+    const ligadas = new Set<string>();
+    if (!PROVEDORES_QUE_GASTAM.length) return ligadas;
+    const contas = await tx.execute<{ id: string; provider: string; brand_id: string }>(sql`
+      select a.id, a.provider, a.brand_id from liame.connected_account a
+       where a.tenant_id = ${tenantId} and a.disconnected_at is null and a.provider in ${PROVEDORES_QUE_GASTAM}
+       order by a.provider, a.id`);
+    for (const c of contas.rows) {
+      if (ligadas.has(c.provider)) continue;
+      const flag = CONNECTORS[c.provider]?.writeFlag;
+      if (!flag || (await this.flags.isEnabled(flag, this.flags.context({ tenantId, userId, brandId: c.brand_id, accountId: c.id })))) ligadas.add(c.provider);
+    }
+    return ligadas;
   }
 
   /**

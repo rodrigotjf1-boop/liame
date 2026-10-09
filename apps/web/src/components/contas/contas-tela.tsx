@@ -59,6 +59,8 @@ type Dados = {
   contas: AccountFreshness[];
   disponiveis: string[];
   escritaRegem: boolean;
+  /** As plataformas de anúncio em que mudar campanhas está ligado para a empresa (o diálogo de conectar diz o que a autorização permite). */
+  escritaAnuncios: string[];
   /** As vendas informadas ao Google, uma resposta por marca lida. */
   vendas: GoogleConversionsResponse[];
   /** A leitura das vendas falhou agora e o que aparece é o da leitura anterior. */
@@ -128,7 +130,7 @@ export function ContasTela() {
     vendasLidas.current = vendas;
     setEstado({
       tipo: 'ok',
-      dados: { marcas, conexoes: c.data.items, contas: f.data.items, disponiveis: c.data.available, escritaRegem: c.data.regem_write, vendas, vendasDesatualizadas },
+      dados: { marcas, conexoes: c.data.items, contas: f.data.items, disponiveis: c.data.available, escritaRegem: c.data.regem_write, escritaAnuncios: c.data.ads_write ?? [], vendas, vendasDesatualizadas },
     });
   }, []);
 
@@ -597,6 +599,7 @@ export function ContasTela() {
           aoIr={(a) => avisar(`Indo para a página ${a === 'meta' ? 'da Meta' : 'do Google'} para você autorizar…`)}
           aoRegem={podeRegem ? (marca) => setDialogo({ tipo: 'regem', marca }) : null}
           vendasAoGoogle={vendas.marcas}
+          mudaAnuncios={dados?.escritaAnuncios ?? []}
         />
       )}
       {dialogo?.tipo === 'regem' && (

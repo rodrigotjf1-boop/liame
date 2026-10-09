@@ -9,7 +9,7 @@ import { loadConfig } from '../../src/config.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { ConexaoProcessor } from '../../src/worker/conexao-processor.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
-import { ligarEscritaNaMeta } from '../helpers/meta-de-mentira.js';
+import { ligarEscritaNaMeta, ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { APP_URL, hasDb } from './env.js';
 
 // A2 · G3: conectar contas de ponta a ponta contra uma "plataforma" local (Meta, OAuth do Google,
@@ -276,8 +276,18 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     const primeira = await concluir(leitura);
     expect(primeira.body.linked).toEqual([expect.objectContaining({ connection_id: leitura.id, status: 'ativa' })]);
 
+    // A lista de conexões diz em quais plataformas mudar campanhas está ligado (o diálogo de conectar lê isso): nenhuma ainda.
+    const comEscrita = async (quem: { cookie: string }) => (await api.call('GET', '/v1/connections', { cookie: quem.cookie })).body.ads_write;
+    expect(await comEscrita(e)).toEqual([]);
+
     // Ligada para a empresa (e só para ela): conectar de novo manda autorizar pela configuração de escrita.
     await ligarEscritaNaMeta(api, e.tenantId, true);
+    expect(await comEscrita(e)).toEqual(['meta_ads']);
+    expect(await comEscrita(vizinha)).toEqual([]);
+    // O Google tem a flag dele; ligada, as duas aparecem, na ordem de sempre.
+    await ligarFlagDaEmpresa(api, 'google_write', e.tenantId, true);
+    expect(await comEscrita(e)).toEqual(['meta_ads', 'google_ads']);
+    await ligarFlagDaEmpresa(api, 'google_write', e.tenantId, false);
     const escrita = await iniciar(e);
     expect(escrita.config).toBe(CONFIG_ESCRITA);
     expect(await acessoPedido(e.tenantId, escrita.id)).toBe('escrita');
@@ -294,6 +304,7 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     // Desligada de novo, a próxima conexão volta para a configuração de leitura.
     await ligarEscritaNaMeta(api, e.tenantId, false);
     expect((await iniciar(e)).config).toBe(CONFIG_LEITURA);
+    expect(await comEscrita(e)).toEqual([]);
   });
 
   it('Google: PKCE, Google Ads e GA4 na mesma autorização, procurar de novo pelo refresh token e revogar', async () => {

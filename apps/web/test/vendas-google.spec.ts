@@ -9,7 +9,7 @@ import { CartaoVendasGoogle } from '@/components/contas/cartao-vendas-google';
 import { DialogoConectar } from '@/components/contas/dialogo-conectar';
 import { DialogoConversao } from '@/components/contas/dialogo-conversao';
 import { DialogoEscolher } from '@/components/contas/dialogo-escolher';
-import { contasExistentes, escolhiveis, faixaDaVolta, notaDeConectar } from '@/components/contas/textos';
+import { contasExistentes, descricaoDoGoogle, escolhiveis, faixaDaVolta, notaDeConectar } from '@/components/contas/textos';
 import {
   ENVIA_AO_GOOGLE,
   ESCOPO_DE_INFORMAR_VENDAS,
@@ -603,5 +603,57 @@ describe('autorizar o Google de novo: a autorização nova, com a permissão de 
     expect(notaDeConectar(true, true)).toBe(
       'Você vai para a página da plataforma, confirma lá e volta para cá. Na Meta, o Liame só lê. No Google, lê e informa as vendas confirmadas no caixa, para a conversão que você escolher. Não cria, não muda e não gasta nada. No Regem, a única escrita possível é o cupom de campanha, sempre com aprovação.',
     );
+  });
+});
+
+describe('o diálogo de conectar com a escrita ligada (A5 · Y3)', () => {
+  const IDA = 'Você vai para a página da plataforma, confirma lá e volta para cá.';
+  const REGEM = ' No Regem, a única escrita possível é o cupom de campanha, sempre com aprovação.';
+  const NUNCA = ' Não cria nem apaga campanha, e nada muda sem essa aprovação.';
+
+  it('a nota diz o que o Liame faz em cada plataforma: lê, e só muda com a aprovação de uma pessoa', () => {
+    expect(notaDeConectar(false, false, ['google_ads'])).toBe(
+      `${IDA} Na Meta, o Liame só lê. No Google, lê e, só com a aprovação de uma pessoa, muda a verba diária, pausa e retoma campanhas.${NUNCA}`,
+    );
+    expect(notaDeConectar(true, false, ['meta_ads'])).toBe(
+      `${IDA} Na Meta, o Liame lê e, só com a aprovação de uma pessoa, muda a verba diária, pausa e retoma campanhas, conjuntos e anúncios. No Google, o Liame só lê.${NUNCA}${REGEM}`,
+    );
+    expect(notaDeConectar(true, true, ['meta_ads', 'google_ads'])).toBe(
+      `${IDA} Na Meta, o Liame lê e, só com a aprovação de uma pessoa, muda a verba diária, pausa e retoma campanhas, conjuntos e anúncios. No Google, lê, informa as vendas confirmadas no caixa (para a conversão que você escolher) e, só com a aprovação de uma pessoa, muda a verba diária, pausa e retoma campanhas.${NUNCA}${REGEM}`,
+    );
+    // A Meta com a escrita e o Google só com as vendas informadas.
+    expect(notaDeConectar(false, true, ['meta_ads'])).toContain('No Google, lê e informa as vendas confirmadas no caixa, para a conversão que você escolher.');
+    // Com a escrita ligada, a nota não diz mais que o Liame "não muda" nada.
+    for (const quais of [['meta_ads'], ['google_ads'], ['meta_ads', 'google_ads']]) expect(notaDeConectar(true, false, quais)).not.toContain('não muda e não gasta nada');
+  });
+
+  it('sem a escrita ligada (ou sem o servidor dizer), a nota é a de sempre', () => {
+    expect(notaDeConectar(false, false, [])).toBe(notaDeConectar(false, false));
+    expect(notaDeConectar(true, true, [])).toBe(notaDeConectar(true, true));
+    expect(notaDeConectar(true, false, ['plataforma_nova'])).toBe(notaDeConectar(true, false));
+    expect(notaDeConectar(true, false)).toContain('Na Meta e no Google, o Liame só lê: não cria, não muda e não gasta nada.');
+  });
+
+  it('a linha do botão do Google: leitura, as vendas informadas e as mudanças que a pessoa aprovar', () => {
+    expect(descricaoDoGoogle(false)).toBe('Uma autorização só para os dois. Somente leitura.');
+    expect(descricaoDoGoogle(true)).toBe('Uma autorização só para os dois. Leitura, e a permissão de informar as vendas confirmadas.');
+    expect(descricaoDoGoogle(false, ['google_ads'])).toBe('Uma autorização só para os dois. Leitura e, no Google Ads, as mudanças que você aprovar.');
+    expect(descricaoDoGoogle(true, ['google_ads'])).toBe('Uma autorização só para os dois. Leitura, a permissão de informar as vendas confirmadas e, no Google Ads, as mudanças que você aprovar.');
+    // A escrita ligada só na Meta não muda a linha do Google.
+    expect(descricaoDoGoogle(false, ['meta_ads'])).toBe('Uma autorização só para os dois. Somente leitura.');
+  });
+
+  it('desenhado: com a escrita no Google ligada, o diálogo não promete "somente leitura"', () => {
+    const marcas = [{ id: MARCA, name: 'Mister Burgers', archived_at: null, purge_after: null }];
+    const dialogo = { marcas, marcaInicial: null, reserva: { current: null }, aoFechar: () => {}, aoIr: () => {} };
+    const com = renderToStaticMarkup(createElement(DialogoConectar, { ...dialogo, mudaAnuncios: ['google_ads'] }));
+    expect(com).toContain('Uma autorização só para os dois. Leitura e, no Google Ads, as mudanças que você aprovar.');
+    expect(com).toContain('No Google, lê e, só com a aprovação de uma pessoa, muda a verba diária, pausa e retoma campanhas.');
+    expect(com).not.toContain('Somente leitura');
+    expect(com).not.toContain('não muda e não gasta nada');
+    const sem = renderToStaticMarkup(createElement(DialogoConectar, dialogo));
+    expect(sem).toContain('Uma autorização só para os dois. Somente leitura.');
+    expect(sem).toContain('O Liame só lê: não cria, não muda e não gasta nada.');
+    expect(`${com}${sem}`).not.toMatch(/NaN|undefined|\[object Object\]/);
   });
 });
