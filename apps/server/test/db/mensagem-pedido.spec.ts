@@ -160,6 +160,8 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
   const ciclo = (emp: Empresa) => executor.runCycle(20, { tenantIds: [emp.tenantId] });
   const ver = async (emp: Empresa, id: string) => (await api.call('GET', `/v1/actions/${id}`, { cookie: emp.cookie })).body;
   const desfazer = (emp: Empresa, id: string) => api.call('POST', `/v1/actions/${id}/undo`, { cookie: emp.cookie });
+  /** "Conferir de novo": lê o plano de agora no RegemCast e guarda no pedido que espera aprovação. */
+  const conferir = (emp: Empresa, id: string): Promise<Resposta> => api.call('POST', `/v1/actions/${id}/recheck`, { cookie: emp.cookie });
   async function ligarFlag(emp: Empresa, flag: string, valor: boolean): Promise<void> {
     await ownerQuery(`delete from liame.feature_flag_rule where flag_key = $1 and scope_type = 'tenant' and scope_id = $2`, [flag, emp.tenantId]);
     if (valor) await ownerQuery(`insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), $1, 'tenant', $2, 'true'::jsonb, 'testes')`, [flag, emp.tenantId]);
@@ -307,20 +309,51 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
     expect(guardado).not.toMatch(/\+55\d{10,11}/);
   });
 
-  it('o plano mudou entre o pedido e a execução (o público cresceu): nada é enviado, e a pessoa pede de novo vendo os números novos', async () => {
+  it('o plano mudou antes da aprovação (o público cresceu): a aprovação é recusada; a pessoa confere de novo, vê os números de agora e aprova', async () => {
+    const c = rascunho(e);
+    const p = await pedir(e, 'mensagem_disparar', c);
+    expect([p.status, p.body.blocked_reason], JSON.stringify(p.body)).toEqual([201, null]);
+    // Entre o pedido e a aprovação, mais gente entrou no público: o plano (e a confirmação dele) não é mais o mesmo.
+    Object.assign(c, { destinatarios: 430, naFila: 430, custo: 13_760 });
+    const recusada = await aprovar(e, p.body);
+    expect([recusada.status, recusada.body.code], JSON.stringify(recusada.body)).toEqual([409, 'plano-mudou']);
+    await ciclo(e);
+    expect(c.situacao).toBe('rascunho');
+    expect(chamadas.filter((x) => x.ferramenta === 'campanha_disparar')).toHaveLength(0);
+    // Conferir de novo guarda o plano de agora: outro hash, com as pessoas e o custo novos.
+    const conferido = await conferir(e, p.body.id);
+    expect(conferido.status, JSON.stringify(conferido.body)).toBe(200);
+    expect(conferido.body).toMatchObject({ status: 'aguardando_aprovacao', blocked_reason: null });
+    expect(conferido.body.plan_hash).not.toBe(p.body.plan_hash);
+    const [guardado] = await ownerQuery<{ pessoas: number; custo: number }>(
+      `select (before_state->>'pessoas')::int as pessoas, (before_state->>'custo_centavos')::int as custo from liame.action_request where id = $1`,
+      [p.body.id],
+    );
+    expect(guardado).toEqual({ pessoas: 430, custo: 13_760 });
+    // Sem mudança, conferir de novo não troca o plano.
+    expect((await conferir(e, p.body.id)).body.plan_hash).toBe(conferido.body.plan_hash);
+    // O plano antigo não aprova mais; o de agora, sim.
+    expect((await aprovar(e, p.body)).body.code).toBe('plano-mudou');
+    expect((await aprovar(e, conferido.body)).body).toMatchObject({ status: 'aprovada' });
+    await ciclo(e);
+    expect(await ver(e, p.body.id)).toMatchObject({ status: 'executada' });
+    expect(c.situacao).toBe('enviando');
+    expect(chamadas.filter((x) => x.ferramenta === 'campanha_disparar')).toHaveLength(1);
+    // Depois de aprovado, não há o que conferir.
+    expect((await conferir(e, p.body.id)).body.code).toBe('acao-nao-aguarda');
+    const trilha = await ownerQuery<{ action: string }>(`select action from liame.audit_event where chain_key = $1 and resource_id = $2 order by chain_seq`, [e.tenantId, p.body.id]);
+    expect(trilha.map((t) => t.action)).toEqual(['acao.pedir', 'acao.conferir', 'acao.conferir', 'acao.aprovar', 'acao.executar']);
+  });
+
+  it('o plano mudou entre a aprovação e a execução: nada é enviado, e a pessoa pede de novo vendo os números novos', async () => {
     const c = rascunho(e);
     const p = await pedir(e, 'mensagem_disparar', c);
     expect(p.status, JSON.stringify(p.body)).toBe(201);
-    // Entre o pedido e a aprovação, mais gente entrou no público: o plano (e a confirmação dele) não é mais o mesmo.
+    expect((await aprovar(e, p.body)).body).toMatchObject({ status: 'aprovada' });
+    // Aprovado, e antes de o executor rodar o público cresceu: a confirmação que a pessoa aprovou não vale mais.
     Object.assign(c, { destinatarios: 430, naFila: 430, custo: 13_760 });
-    const aprovada = await aprovar(e, p.body);
-    if (aprovada.status === 200) {
-      await ciclo(e);
-      expect(await ver(e, p.body.id)).toMatchObject({ status: 'falhou', status_reason: 'o recurso mudou desde o pedido; nada foi sobrescrito', execution: { status: 'estado_mudou' } });
-    } else {
-      // A aprovação já confere o estado: o pedido não chega a ser aprovado.
-      expect([aprovada.status, aprovada.body.code], JSON.stringify(aprovada.body)).toEqual([409, 'estado-mudou']);
-    }
+    await ciclo(e);
+    expect(await ver(e, p.body.id)).toMatchObject({ status: 'falhou', status_reason: 'o recurso mudou desde o pedido; nada foi sobrescrito', execution: { status: 'estado_mudou' } });
     expect(c.situacao).toBe('rascunho');
     expect(chamadas.filter((x) => x.ferramenta === 'campanha_disparar')).toHaveLength(0);
     // O pedido novo já nasce com os números de agora.
@@ -329,34 +362,64 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
     expect(c.situacao).toBe('enviando');
   });
 
-  it('A5-12: o que impede vira recusa já no pedido, com o motivo: o que o RegemCast diz, a conta sem teto de gasto e o envio que não cabe no teto do mês', async () => {
+  it('A5-12: o que impede não recusa o pedido: ele espera com o motivo, e ninguém aprova enquanto durar; resolvido, a pessoa confere de novo e aprova', async () => {
     const antes = Number((await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.action_request where tenant_id = $1`, [e.tenantId]))[0]!.n);
     // O modelo ainda em análise na Meta: a frase é a do RegemCast.
     const semModelo = rascunho(e, { impedimentos: ['O modelo desta campanha ainda não foi aprovado pela Meta.'] });
     const r1 = await pedir(e, 'mensagem_disparar', semModelo);
-    expect([r1.status, r1.body.code, r1.body.detail], JSON.stringify(r1.body)).toEqual([422, 'plano-recusado', 'O modelo desta campanha ainda não foi aprovado pela Meta.']);
+    expect([r1.status, r1.body.status, r1.body.blocked_reason], JSON.stringify(r1.body)).toEqual([201, 'aguardando_aprovacao', 'O modelo desta campanha ainda não foi aprovado pela Meta.']);
+    // Com o impedimento, a aprovação é recusada (antes de gastar o código do app), e nada sai.
+    const cedo = await aprovar(e, r1.body);
+    expect([cedo.status, cedo.body.code, cedo.body.detail], JSON.stringify(cedo.body)).toEqual([409, 'pedido-impedido', 'O modelo desta campanha ainda não foi aprovado pela Meta.']);
+    await ciclo(e);
+    expect(semModelo.situacao).toBe('rascunho');
+    // Conferir de novo com o impedimento ainda lá: o mesmo plano, o mesmo motivo.
+    const ainda = await conferir(e, r1.body.id);
+    expect([ainda.status, ainda.body.plan_hash, ainda.body.blocked_reason], JSON.stringify(ainda.body)).toEqual([200, r1.body.plan_hash, 'O modelo desta campanha ainda não foi aprovado pela Meta.']);
+    // A Meta aprovou o modelo. O plano guardado ainda é o de antes: a pessoa confere o de agora e só então aprova.
+    semModelo.impedimentos = [];
+    const velho = await aprovar(e, r1.body);
+    expect([velho.status, velho.body.code], JSON.stringify(velho.body)).toEqual([409, 'plano-mudou']);
+    const conferido = await conferir(e, r1.body.id);
+    expect([conferido.status, conferido.body.blocked_reason], JSON.stringify(conferido.body)).toEqual([200, null]);
+    expect(conferido.body.plan_hash).not.toBe(r1.body.plan_hash);
+    expect((await aprovar(e, conferido.body)).body).toMatchObject({ status: 'aprovada', blocked_reason: null });
+    await ciclo(e);
+    expect(semModelo.situacao).toBe('enviando');
 
-    // Não cabe no teto do mês: sobram R$ 172,64 de R$ 300,00, e o envio pode custar até R$ 200,00.
+    // Não cabe no teto do mês: sobram R$ 172,64 de R$ 300,00, e o envio pode custar até R$ 200,00. O RegemCast deixaria
+    // (espalhando o envio pelos meses); no Liame o pedido espera.
     const cara = rascunho(e, { destinatarios: 625, naFila: 625, custo: 20_000 });
     const r2 = await pedir(e, 'mensagem_disparar', cara);
-    expect([r2.status, r2.body.code], JSON.stringify(r2.body)).toEqual([422, 'plano-recusado']);
-    expect(String(r2.body.detail).replace(/ /g, ' ')).toBe(
+    expect([r2.status, r2.body.status], JSON.stringify(r2.body)).toEqual([201, 'aguardando_aprovacao']);
+    expect(String(r2.body.blocked_reason).replace(/\u00a0/g, ' ')).toBe(
       'Não cabe no teto de gasto de mensagens do mês: o envio pode custar até R$ 200,00, e sobram R$ 172,64 de R$ 300,00. Quem muda o teto é o dono da conta, no RegemCast; outra saída é um público menor.',
     );
+    expect((await aprovar(e, r2.body)).body.code).toBe('pedido-impedido');
+    // Recusar continua possível: o pedido sai da fila, e o motivo do impedimento deixa de aparecer.
+    const fora = await api.call('POST', `/v1/actions/${r2.body.id}/reject`, { cookie: e.cookie, body: { plan_hash: r2.body.plan_hash, reason: 'Quero outro público' } });
+    expect([fora.status, fora.body.status, fora.body.blocked_reason], JSON.stringify(fora.body)).toEqual([200, 'cancelada', null]);
+    expect(cara.situacao).toBe('rascunho');
 
-    // A conta sem teto de gasto definido no RegemCast: ele não dispara, e o pedido nem nasce.
+    // A conta sem teto de gasto definido no RegemCast: ele não dispara, e o pedido espera com a frase dele.
     const semTeto = await empresa({ teto: null });
     const r3 = await pedir(semTeto, 'mensagem_disparar', rascunho(semTeto));
-    expect([r3.status, r3.body.code, r3.body.detail], JSON.stringify(r3.body)).toEqual([422, 'plano-recusado', 'A conta não tem teto de gasto de disparos definido.']);
+    expect([r3.status, r3.body.status, r3.body.blocked_reason], JSON.stringify(r3.body)).toEqual([201, 'aguardando_aprovacao', 'A conta não tem teto de gasto de disparos definido.']);
+    expect((await aprovar(semTeto, r3.body)).body.code).toBe('pedido-impedido');
 
+    // O que nem nasce: ninguém para receber, pausar o que nem saiu e disparar o que já saiu.
+    const r0 = await pedir(e, 'mensagem_disparar', rascunho(e, { destinatarios: 0, naFila: 0 }));
+    expect([r0.status, r0.body.code, r0.body.detail], JSON.stringify(r0.body)).toEqual([422, 'plano-recusado', 'Ninguém deste público pode receber esta mensagem agora.']);
     // Pausar o que nem saiu, e disparar o que já saiu.
     const r4 = await pedir(e, 'mensagem_pausar', rascunho(e));
     expect([r4.status, r4.body.detail], JSON.stringify(r4.body)).toEqual([422, 'Esta mensagem ainda não foi enviada: não há o que pausar.']);
     const r5 = await pedir(e, 'mensagem_disparar', rascunho(e, { situacao: 'enviando' }));
     expect([r5.status, r5.body.detail], JSON.stringify(r5.body)).toEqual([422, 'Esta mensagem já foi enviada ou cancelada: não dá para enviar de novo.']);
 
-    expect(Number((await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.action_request where tenant_id = $1`, [e.tenantId]))[0]!.n)).toBe(antes);
-    expect(chamadas.filter((x) => x.ferramenta !== 'campanha_disparo_planejar' && x.ferramenta !== 'integracao_situacao')).toHaveLength(0);
+    // Nesta empresa nasceram dois pedidos (o do modelo e o do teto); os recusados na criação não deixaram linha.
+    expect(Number((await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.action_request where tenant_id = $1`, [e.tenantId]))[0]!.n)).toBe(antes + 2);
+    // Um disparo só: o da mensagem cujo impedimento se resolveu.
+    expect(chamadas.filter((x) => x.ferramenta !== 'campanha_disparo_planejar' && x.ferramenta !== 'integracao_situacao').map((x) => [x.ferramenta, x.argumentos.id])).toEqual([['campanha_disparar', semModelo.id]]);
   });
 
   it('nem com a autonomia pedida pela empresa e o autopilot ligado o envio sai sem uma pessoa (D-A5-11)', async () => {

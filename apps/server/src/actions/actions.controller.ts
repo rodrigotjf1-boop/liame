@@ -132,6 +132,22 @@ export class ActionsController {
     return this.actions.update(auth, id, body);
   }
 
+  @Post('actions/:id/recheck')
+  @Permissao('acoes.aprovar')
+  @Auditar('acao.conferir', { recurso: 'action_request' })
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Conferir de novo',
+    description:
+      'Para o pedido que espera aprovação e cujo plano muda sozinho na plataforma (a mensagem de WhatsApp): lê o plano de agora e guarda no pedido, sem mudar o que foi pedido. Com o plano novo, o hash muda e a aprovação dada ao anterior deixa de valer. O que impede a aprovação vem em `blocked_reason`. Para os outros pedidos, 409 `acao-nao-confere`.',
+  })
+  @ApiOkResponse({ standardSchema: ActionResponse })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  recheck(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<ActionResponse> {
+    return this.actions.recheck(auth, id);
+  }
+
   @Post('actions/:id/approve')
   @Permissao('acoes.aprovar')
   @Auditar('acao.aprovar', { recurso: 'action_request' })

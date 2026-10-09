@@ -56,6 +56,9 @@ export function faseDaMensagem(situacao: unknown): FaseDaMensagem {
   return 'fim';
 }
 
+/** Sem frase do RegemCast para o que impede. */
+export const SEM_MOTIVO_DO_REGEMCAST = 'O RegemCast não deixa enviar esta mensagem agora.';
+
 const emReais = (centavos: number): string => (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /**
@@ -70,4 +73,14 @@ export function motivoDeNaoCaberNoTeto(e: Pick<EstadoDaMensagem, 'custo_centavos
   const sobra = Math.max(0, mes.teto_centavos - mes.gasto_centavos);
   if (e.custo_centavos <= sobra) return null;
   return `Não cabe no teto de gasto de mensagens do mês: o envio pode custar até ${emReais(e.custo_centavos)}, e sobram ${emReais(sobra)} de ${emReais(mes.teto_centavos)}. Quem muda o teto é o dono da conta, no RegemCast; outra saída é um público menor.`;
+}
+
+/**
+ * O que impede a aprovação do envio agora, ou nulo (P15, escolha 6; critério A5-12): as frases do RegemCast (o modelo
+ * ainda em análise na Meta, a conta sem teto de gasto, sem preço) e o envio que não cabe no teto do mês. Com um
+ * impedimento, o pedido entra e ESPERA em Aprovações com o motivo: ninguém aprova enquanto ele durar.
+ */
+export function impedimentoDaMensagem(e: Pick<EstadoDaMensagem, 'pode_disparar' | 'confirmacao' | 'impedimentos' | 'custo_centavos' | 'orcamento'>): string | null {
+  if (!e.pode_disparar || !e.confirmacao) return e.impedimentos.join(' ') || SEM_MOTIVO_DO_REGEMCAST;
+  return motivoDeNaoCaberNoTeto(e);
 }
