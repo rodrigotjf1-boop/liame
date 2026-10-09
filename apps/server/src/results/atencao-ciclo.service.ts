@@ -5,9 +5,13 @@ import { sql } from 'drizzle-orm';
 import { nomeDaPlataforma, textoDoGastoAcima, verbaDaLeitura } from '../actions/conferencia-do-gasto.js';
 import { CONNECTORS } from '../actions/connectors.js';
 import { MODELO_PADRAO } from '../attribution/motor.js';
+import { ESCOPO_DATA_MANAGER } from '../connectors/google-ads/data-manager.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
+import { FLAG_CONVERSOES_GOOGLE, type TipoDaFalha } from '../conversoes/conversoes-google.js';
+import { estaRecusando, JANELA_DAS_RECUSAS_DIAS } from '../conversoes/recusando.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
+import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { LinksService } from '../links/links.service.js';
 import type { LoadedPolicy } from '../policy/engine.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
@@ -24,6 +28,8 @@ import {
   avisoPlataformaNaoInformada,
   avisoSemRegem,
   avisosDaFonte,
+  avisoVendasAoGoogleRecusadas,
+  avisoVendasAoGoogleSemPermissao,
   avisoVendasNaoMedidas,
   type ItemCiclo,
   LIMIARES,
@@ -77,6 +83,7 @@ export class AtencaoCicloService {
   constructor(
     private readonly links: LinksService,
     private readonly flags: FlagService,
+    private readonly switches: KillSwitchService,
   ) {}
 
   /**
@@ -385,6 +392,24 @@ export class AtencaoCicloService {
       escritaLigada.set(conta, ligada);
       return ligada;
     };
+    // As vendas informadas ao Google (A5 · Y1; protótipo P14, parte B): as contas do Google Ads com a conversão escolhida
+    // e o envio valendo (o que uma pessoa parou não gera aviso), com a permissão da autorização, a última falha da
+    // passagem e as respostas do Google nos últimos dias. Uma consulta para todas as marcas.
+    const vendasAoGoogle = await tx.execute<{ conta: string; brand_id: string; nome: string; autorizada: boolean; falha: TipoDaFalha | null; recusadas: number; respondidas: number }>(sql`
+      select d.connected_account_id as conta, d.brand_id, a.name as nome,
+             coalesce(${ESCOPO_DATA_MANAGER} = any(c.scopes), false) as autorizada, d.last_error_kind as falha,
+             coalesce(n.recusadas, 0)::int as recusadas, coalesce(n.respondidas, 0)::int as respondidas
+        from liame.conversion_destination d
+        join liame.connected_account a on a.id = d.connected_account_id and a.provider = 'google_ads' and a.disconnected_at is null
+        left join liame.oauth_connection c on c.id = a.connection_id
+        left join lateral (
+          select count(*) filter (where x.status = 'recusado') as recusadas, count(*) as respondidas
+            from liame.conversion_upload x
+           where x.connected_account_id = d.connected_account_id and x.status in ('aceito', 'recusado')
+             and x.updated_at >= ${instante}::timestamptz - make_interval(days => ${JANELA_DAS_RECUSAS_DIAS})) n on true
+       where d.brand_id in ${marcas} and d.stopped_at is null
+       order by lower(a.name), a.id
+       limit 200`);
     for (const marca of marcas) {
       const inicio = itens.length;
       try {
@@ -446,6 +471,21 @@ export class AtencaoCicloService {
             nomeDaPlataforma(g.provider),
           );
           itens.push({ kind: 'gasto_acima_da_verba', severity: 'atencao', ...texto, connected_account_id: g.conta, campaign_id: g.campaign_id, provider: g.provider });
+        }
+
+        // O envio das vendas ao Google parou sem ninguém mandar parar: falta a permissão, ou o Google está recusando.
+        // Só com a função ligada para a marca; com a equipe parada, o aviso é o da parada.
+        const queInformam = vendasAoGoogle.rows.filter((v) => v.brand_id === marca);
+        const empresa = empresaDaMarca.get(marca) ?? null;
+        if (queInformam.length && empresa && (await this.flags.isEnabled(FLAG_CONVERSOES_GOOGLE, this.flags.context({ tenantId: empresa, userId: leitor?.userId ?? null, brandId: marca })))) {
+          for (const v of queInformam) {
+            const semPermissao = !v.autorizada || v.falha === 'permissao';
+            const recusando = estaRecusando(v.recusadas, v.respondidas);
+            if (!semPermissao && !recusando) continue;
+            if (await this.switches.check(tx, { tenantId: empresa, provider: 'google_ads', brandId: marca, accountId: v.conta })) continue;
+            const conta = { id: v.conta, nome: v.nome };
+            itens.push(semPermissao ? avisoVendasAoGoogleSemPermissao(conta, v.autorizada) : avisoVendasAoGoogleRecusadas(conta, v.recusadas, v.respondidas, JANELA_DAS_RECUSAS_DIAS));
+          }
         }
 
         const lojasDaMarca = lojas.rows.filter((l) => l.brand_id === marca);

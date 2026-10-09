@@ -121,6 +121,8 @@ export const AttentionItem = z.strictObject({
    * `gasto_da_campanha_fora_do_normal` e `custo_por_pedido_fora_do_normal`. A conferência do gasto de uma mudança do
    * Liame (A4, X4): `gasto_acima_da_verba`. A recomendação da sombra numa ação
    * que saiu de Sombra (A3, I13): `sugestao_pausar_campanha`, `sugestao_reduzir_verba` e `sugestao_aumentar_verba`.
+   * As vendas informadas ao Google que pararam sem ninguém mandar parar (A5, Y1): `vendas_google_sem_permissao` e
+   * `vendas_google_recusadas`, com a conta do Google Ads em `connected_account_id`.
    */
   kind: Slug,
   /** `critica`, `atencao` ou `info`. */

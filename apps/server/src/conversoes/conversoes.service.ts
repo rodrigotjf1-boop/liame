@@ -24,6 +24,7 @@ import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { ESPERA_ANTES_DE_INFORMAR_MIN, FLAG_CONVERSOES_GOOGLE, pedidosAInformar, type TipoDaFalha } from './conversoes-google.js';
+import { estaRecusando, JANELA_DAS_RECUSAS_DIAS } from './recusando.js';
 
 // Conversões para o Google, pelas rotas (A5, Y1; protótipo P14, aprovado em 09/10/2026): a situação de cada conta do Google Ads da marca, as
 // conversões da conta lidas do Google na hora, e escolher ou parar o destino. O envio em si é da rotina do worker
@@ -66,6 +67,8 @@ type LinhaDaConta = {
   queued: number;
   corrected: number;
   refused: number;
+  recent_refused: number;
+  recent_answered: number;
   refusal_at: Date | string | null;
   refusal_reason: string | null;
 };
@@ -136,6 +139,7 @@ export class ConversoesService {
              d.last_run_at, d.next_run_at, d.last_error, d.last_error_kind,
              coalesce(n.informed, 0)::int as informed, coalesce(n.queued, 0)::int as queued,
              coalesce(n.corrected, 0)::int as corrected, coalesce(n.refused, 0)::int as refused,
+             coalesce(n.recent_refused, 0)::int as recent_refused, coalesce(n.recent_answered, 0)::int as recent_answered,
              rec.at as refusal_at, rec.reason as refusal_reason
         from liame.connected_account a
         left join liame.oauth_connection c on c.id = a.connection_id
@@ -146,7 +150,10 @@ export class ConversoesService {
           select count(*) filter (where x.status in ('enviado', 'aceito')) as informed,
                  count(*) filter (where x.status = 'pendente') as queued,
                  count(*) filter (where x.corrections > 0) as corrected,
-                 count(*) filter (where x.status = 'recusado') as refused
+                 count(*) filter (where x.status = 'recusado') as refused,
+                 -- As que tiveram resposta do Google nos últimos dias (aceitas ou recusadas), para a regra de "está recusando".
+                 count(*) filter (where x.status = 'recusado' and x.updated_at >= now() - make_interval(days => ${JANELA_DAS_RECUSAS_DIAS})) as recent_refused,
+                 count(*) filter (where x.status in ('aceito', 'recusado') and x.updated_at >= now() - make_interval(days => ${JANELA_DAS_RECUSAS_DIAS})) as recent_answered
             from liame.conversion_upload x
            where x.connected_account_id = a.id and x.created_at >= now() - make_interval(days => ${JANELA_DAS_CONTAGENS_DIAS})) n on true
         left join lateral (
@@ -199,6 +206,10 @@ export class ConversoesService {
         next_run_at: temDestino && !parado ? ou(l.next_run_at) : null,
         last_failure: falhou && l.last_run_at ? { at: iso(l.last_run_at), reason: l.last_error!, kind: l.last_error_kind! } : null,
         last_refusal: l.refusal_at && l.refusal_reason ? { at: iso(l.refusal_at), reason: l.refusal_reason } : null,
+        refusing:
+          temDestino && !parado && estaRecusando(l.recent_refused, l.recent_answered)
+            ? { days: JANELA_DAS_RECUSAS_DIAS, refused: l.recent_refused, answered: l.recent_answered }
+            : null,
       });
     }
     return { ...base, enabled: true, accounts };

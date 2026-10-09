@@ -1,4 +1,5 @@
 import type { AttentionItem } from '@liame/contracts';
+import { idDoCartaoDasVendas } from '@/components/contas/vendas-google';
 import { quandoComHora } from '@/lib/formato';
 
 // Regras e frases de "Atenção de mídia" (mockups/prototipo-contas.html). A gravidade e o tipo chegam
@@ -69,6 +70,18 @@ export function acaoDoAviso(kind: string): AcaoDoAviso | null {
   // O que o Liame mudou e gastou mais do que a verba permite (A4, X4) se confere na Verba do mês.
   if (kind === 'gasto_acima_da_verba') return 'abrir-verba';
   return null;
+}
+
+/**
+ * O aviso de que o envio das vendas ao Google parou (A5 · Y1; protótipo P14, parte B) abre Contas conectadas já no
+ * cartão da conta. `rotulo` é o do botão na Atenção; `curto`, o do item no "Precisa de você" do Resumo.
+ */
+export function destinoDasVendasAoGoogle(item: { kind: string; connected_account_id: string | null }): { href: string; rotulo: string; curto: string } | null {
+  if (item.kind !== 'vendas_google_sem_permissao' && item.kind !== 'vendas_google_recusadas') return null;
+  const href = `/contas#${item.connected_account_id ? idDoCartaoDasVendas(item.connected_account_id) : 'vendas-google'}`;
+  return item.kind === 'vendas_google_sem_permissao'
+    ? { href, rotulo: 'Abrir Contas conectadas', curto: 'Autorizar' }
+    : { href, rotulo: 'Ver o motivo em Contas conectadas', curto: 'Ver o motivo' };
 }
 
 /** Para onde leva o botão de tela (os de Contas e de reconectar têm o próprio tratamento). */

@@ -1,14 +1,16 @@
 'use client';
 
-import type { ActionTargetsResponse, BrandResponse, ClosedLoopResponse, DailyResultsResponse } from '@liame/contracts';
+import type { ActionTargetsResponse, BrandResponse, ClosedLoopResponse, DailyResultsResponse, GoogleConversionsResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { juntarVendas, linhaDasVendas } from '@/components/contas/vendas-google';
 import { liaLigada } from '@/components/explicar/pedir';
 import { botaoPedirAVista, type PedirNaLista } from '@/components/pedir/botao-pedir';
 import { type CampanhaDoPedido, GavetaPedir } from '@/components/pedir/gaveta-pedir';
 import { pedirPorCampanha } from '@/components/pedir/textos';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
+import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
@@ -25,6 +27,8 @@ import { FUSO_PADRAO, fusoValido, intervaloDo, localDe, type Loja, lojasDoRegem,
 // de `GET /v1/actions/targets`, e o botão abre a gaveta do pedido.
 // No modo simples, os cartões são desenhos (mockups/prototipo-resultados-graficos.html, aprovado em 07/10/2026); a
 // linha dos dias e o período anterior vêm de `GET /v1/results/daily`.
+// Com "vendas informadas ao Google" ligado para a marca (A5 · Y1; protótipo P14, parte B), o cartão das campanhas
+// ganha uma linha com as vendas informadas nos últimos 30 dias e o atalho para Contas conectadas (só para quem as vê).
 
 type Carga =
   | { tipo: 'carregando' }
@@ -55,6 +59,8 @@ export function ResultadosTela() {
   const [versaoDosAlvos, setVersaoDosAlvos] = useState(0);
   /** A campanha com a gaveta "Pedir uma mudança" aberta. */
   const [pedindo, setPedindo] = useState<CampanhaDoPedido | null>(null);
+  /** As vendas informadas ao Google, pela marca (a linha do cartão das campanhas); nulo sem a leitura. */
+  const [vendasAoGoogle, setVendasAoGoogle] = useState<{ marca: string; dados: GoogleConversionsResponse } | null>(null);
   /** A linha dos dias e o período anterior, pela consulta a que pertencem. */
   const [serie, setSerie] = useState<{ chave: string; dados: DailyResultsResponse } | null>(null);
   // Fuso da loja: corta o dia dos pedidos (a API diz qual é; até a primeira resposta, o padrão dela).
@@ -62,6 +68,8 @@ export function ResultadosTela() {
   // Só a resposta mais nova vale (trocar de período no meio de uma leitura não mistura números).
   const seq = useRef(0);
   const aAnunciar = useRef<string | null>(null);
+  // O relógio da linha das vendas ao Google ("começou hoje, 10:40"): anda sozinho e acerta quando a leitura chega.
+  const agora = useAgora(60_000, vendasAoGoogle);
 
   const carregarMarcas = useCallback(async () => {
     setErroMarcas(null);
@@ -112,6 +120,21 @@ export function ResultadosTela() {
     disparar(
       chamar(() => api.GET('/v1/connections', { params: { query: { brand_id: marca } } })).then((r) => {
         if (vivo && r.ok) setLojas(lojasDoRegem(r.data.items));
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [marca, podeVerContas]);
+
+  // As vendas informadas ao Google da marca (só quem vê as contas). Se a leitura falhar, ou sem a função ligada, a
+  // tela é a de sempre, sem a linha: ela é um extra, e a configuração mora em Contas conectadas.
+  useEffect(() => {
+    if (!marca || !podeVerContas) return;
+    let vivo = true;
+    disparar(
+      chamar(() => api.GET('/v1/conversions/google', { params: { query: { brand_id: marca } } })).then((r) => {
+        if (vivo && r.ok) setVendasAoGoogle({ marca, dados: r.data });
       }),
     );
     return () => {
@@ -179,6 +202,12 @@ export function ResultadosTela() {
   const pedir = useMemo<PedirNaLista | null>(
     () => (alvosDaMarca ? { porCampanha: pedirPorCampanha(alvosDaMarca), podePedir, aberta: pedindo?.id ?? null, aoPedir: setPedindo } : null),
     [alvosDaMarca, podePedir, pedindo],
+  );
+
+  // Só a leitura da marca que está na tela (trocar de marca não mostra a linha da anterior).
+  const linhaDoGoogle = useMemo(
+    () => (vendasAoGoogle && dados && vendasAoGoogle.marca === dados.marca ? linhaDasVendas(juntarVendas([vendasAoGoogle.dados]).contas, agora) : null),
+    [vendasAoGoogle, dados, agora],
   );
 
   if (!podeVer) {
@@ -262,6 +291,7 @@ export function ResultadosTela() {
           reserva={titulo}
           explicar={explicar}
           pedir={pedir}
+          vendasAoGoogle={linhaDoGoogle}
         />
       </div>
     );

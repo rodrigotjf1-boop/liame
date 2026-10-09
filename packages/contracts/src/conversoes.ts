@@ -73,6 +73,12 @@ export const GoogleConversionAccount = z.strictObject({
   last_failure: z.strictObject({ at: z.iso.datetime(), reason: z.string(), kind: Slug }).nullable(),
   /** A recusa mais recente do Google a uma venda, na janela, com o motivo como ele respondeu (sem identificador). */
   last_refusal: z.strictObject({ at: z.iso.datetime(), reason: z.string() }).nullable(),
+  /**
+   * O Google está recusando as vendas desta conta: nos últimos `days` dias, recusou `refused` das `answered` que tiveram
+   * resposta (pelo menos 3, e mais da metade). Nulo quando não está, e sempre sem destino ou com ele parado. É a mesma
+   * regra do aviso da Atenção (`vendas_google_recusadas`).
+   */
+  refusing: z.strictObject({ days: z.int().min(1), refused: z.int().min(0), answered: z.int().min(0) }).nullable(),
 });
 export type GoogleConversionAccount = z.infer<typeof GoogleConversionAccount>;
 

@@ -1,7 +1,9 @@
-import { type ConnectionResponse, type DiscoveredAccount, GOOGLE_SALES_SCOPE, type GoogleConversionAccount, type GoogleConversionsResponse } from '@liame/contracts';
+import { type AttentionItem, type ConnectionResponse, type DiscoveredAccount, GOOGLE_SALES_SCOPE, type GoogleConversionAccount, type GoogleConversionsResponse } from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { ItemAviso } from '@/components/atencao/item-aviso';
+import { destinoDasVendasAoGoogle } from '@/components/atencao/textos';
 import { CartaoAutorizacao } from '@/components/contas/cartao-autorizacao';
 import { CartaoVendasGoogle } from '@/components/contas/cartao-vendas-google';
 import { DialogoConectar } from '@/components/contas/dialogo-conectar';
@@ -13,6 +15,7 @@ import {
   ESCOPO_DE_INFORMAR_VENDAS,
   esperaPorExtenso,
   juntarVendas,
+  linhaDasVendas,
   NUNCA_VAI_AO_GOOGLE,
   notaDaConversao,
   notaDaEscolha,
@@ -23,6 +26,7 @@ import {
   vendasDaConta,
   vendasPorAutorizacao,
 } from '@/components/contas/vendas-google';
+import { LinhaVendasGoogle } from '@/components/resultados/linha-vendas-google';
 import { type Modo, ModoProvider } from '@/lib/modo';
 
 // "Vendas informadas ao Google" em Contas conectadas (A5 · Y1; protótipo P14, aprovado em 09/10/2026): as regras e as
@@ -60,6 +64,7 @@ const conta = (extra: Partial<GoogleConversionAccount> = {}): GoogleConversionAc
   next_run_at: local(9, 11, 5),
   last_failure: null,
   last_refusal: null,
+  refusing: null,
   ...extra,
 });
 
@@ -351,6 +356,131 @@ describe('vendas informadas ao Google: o cartão', () => {
     const esperando = cartao(conta({ status: 'esperando_a_plataforma', last_failure: { at: local(9, 10, 5), reason: '429: Quota exceeded', kind: 'esperar' } }), { modo: 'pro' });
     expect(esperando).toContain('Esperando o Google');
     expect(esperando).toContain('Motivo: <code>429: Quota exceeded</code>');
+  });
+});
+
+describe('a linha das vendas ao Google em Resultados e o aviso de que o envio parou (P14, parte B)', () => {
+  const HREF = `/contas#vendas-${ID}`;
+  const daMarca = (contas: GoogleConversionAccount[], extra: Partial<GoogleConversionsResponse> = {}) => juntarVendas([resposta({ accounts: contas, ...extra })]).contas;
+  const linha = (c: GoogleConversionAccount) => linhaDasVendas(daMarca([c]), agora);
+
+  it('sem conta com a função ligada não há linha: a tela é a de sempre', () => {
+    expect(linhaDasVendas([], agora)).toBeNull();
+    expect(linhaDasVendas(juntarVendas([resposta({ enabled: false, accounts: [] })]).contas, agora)).toBeNull();
+  });
+
+  it('informando: as vendas dos últimos 30 dias, com o atalho para o cartão da conta', () => {
+    expect(linha(conta())).toEqual({
+      tom: 'ok',
+      icone: 'check-circle',
+      antes: 'Nos últimos 30 dias, o Liame informou ',
+      forte: '31 vendas',
+      depois: ' ao Google, para ele buscar quem compra.',
+      atalho: { rotulo: 'Ver em Contas conectadas', href: HREF },
+    });
+    expect(linha(conta({ counts: { informed: 1, waiting: 0, corrected: 0, refused: 0 } }))!.forte).toBe('1 venda');
+    // Esperando o Google (ele volta sozinho) segue como informando.
+    expect(linha(conta({ status: 'esperando_a_plataforma' }))!.forte).toBe('31 vendas');
+    // Recusas isoladas: o número aparece, sem virar aviso.
+    const comRecusas = linha(conta({ counts: { informed: 28, waiting: 2, corrected: 1, refused: 3 } }))!;
+    expect([comRecusas.tom, comRecusas.forte, comRecusas.depois, comRecusas.atalho.rotulo]).toEqual(['ok', '28 vendas', ' ao Google; ele recusou 3.', 'Ver o motivo em Contas conectadas']);
+  });
+
+  it('acabou de começar e ainda sem nenhuma: a frase não promete número que não existe', () => {
+    const comecou = linha(conta({ destination: destino({ starts_at: local(9, 10, 0) }), counts: { informed: 0, waiting: 0, corrected: 0, refused: 0 }, last_run_at: null }))!;
+    expect(comecou).toMatchObject({ tom: 'neutro', icone: 'clock', antes: 'O Liame começou a informar as vendas ao Google ', forte: 'hoje, 10:00', depois: '. A primeira sai duas horas depois de confirmada no caixa.' });
+    // Passado o prazo e ainda sem venda de anúncio do Google: diz que nenhuma foi informada, e quantas esperam.
+    const nenhuma = linha(conta({ counts: { informed: 0, waiting: 2, corrected: 0, refused: 0 } }))!;
+    expect([nenhuma.tom, nenhuma.antes, nenhuma.forte]).toEqual(['neutro', 'Nos últimos 30 dias, nenhuma venda foi informada ao Google ainda. 2 esperam a vez.', '']);
+    expect(linha(conta({ counts: { informed: 0, waiting: 1, corrected: 0, refused: 0 } }))!.antes).toContain('1 espera a vez.');
+    expect(linha(conta({ counts: { informed: 0, waiting: 0, corrected: 0, refused: 0 } }))!.antes).toBe('Nos últimos 30 dias, nenhuma venda foi informada ao Google ainda.');
+  });
+
+  it('o envio parou sem ninguém mandar: a linha vira aviso (falta a permissão, ou o Google recusando)', () => {
+    const falta = linha(conta({ status: 'sem_permissao', authorized: false }))!;
+    expect(falta).toEqual({
+      tom: 'atencao',
+      icone: 'alert',
+      antes: '',
+      forte: 'O Liame parou de informar as vendas ao Google:',
+      depois: ' falta uma permissão do Google. Os números desta tela não mudam: eles vêm do caixa.',
+      atalho: { rotulo: 'Autorizar em Contas conectadas', href: HREF },
+    });
+    expect(linha(conta({ status: 'sem_permissao' }))!.depois).toBe(' o Google recusou a autorização. Os números desta tela não mudam: eles vêm do caixa.');
+    const recusando = linha(conta({ refusing: { days: 7, refused: 9, answered: 12 } }))!;
+    expect([recusando.tom, recusando.forte, recusando.depois, recusando.atalho.rotulo]).toEqual([
+      'atencao',
+      'O Google está recusando as vendas informadas:',
+      ' 9 de 12 nos últimos 7 dias. Os números desta tela não mudam: eles vêm do caixa.',
+      'Ver o motivo em Contas conectadas',
+    ]);
+  });
+
+  it('sem envio por escolha, ou antes de configurar: tom neutro, sem aviso', () => {
+    // Nunca configurado e sem a permissão: não "parou", falta autorizar.
+    const semNada = linha(conta({ status: 'sem_permissao', authorized: false, destination: null }))!;
+    expect([semNada.tom, semNada.antes, semNada.atalho.rotulo]).toEqual(['neutro', 'Falta uma permissão do Google para o Liame informar as vendas: nada é informado ainda.', 'Autorizar em Contas conectadas']);
+    const escolher = linha(conta({ status: 'sem_destino', destination: null }))!;
+    expect([escolher.tom, escolher.antes, escolher.atalho.rotulo]).toEqual(['neutro', 'Falta escolher onde o Google conta as vendas: nada é informado ainda.', 'Escolher em Contas conectadas']);
+    const parado = linha(conta({ status: 'parado', destination: destino({ stopped_at: local(8, 14, 20), stopped_by: RODRIGO }) }))!;
+    expect([parado.tom, parado.antes]).toEqual(['neutro', 'As vendas não estão sendo informadas ao Google: parado por Rodrigo em 08/10/2026.']);
+    expect(linha(conta({ status: 'parado', destination: destino({ stopped_at: local(8, 14, 20) }) }))!.antes).toBe('As vendas não estão sendo informadas ao Google: parado em 08/10/2026.');
+    const equipe = linha(conta({ status: 'equipe_parada', team_stopped_at: local(9, 9, 52), refusing: { days: 7, refused: 9, answered: 12 } }))!;
+    expect([equipe.tom, equipe.antes]).toEqual(['neutro', 'A equipe está parada: nenhuma venda é informada ao Google enquanto estiver.']);
+  });
+
+  it('com mais de uma conta: soma as que informam, e a situação que mais pesa é a que aparece', () => {
+    const outra = '01a0e1a1-ea5a-7822-a16c-000000000099';
+    const duas = daMarca([conta(), conta({ connected_account_id: outra, name: 'Zona Sul', counts: { informed: 5, waiting: 0, corrected: 0, refused: 0 } })]);
+    expect(linhaDasVendas(duas, agora)!.forte).toBe('36 vendas');
+    // Uma informando e a outra sem a permissão: o aviso vence, e o atalho leva à conta que parou.
+    const mista = daMarca([conta(), conta({ connected_account_id: outra, name: 'Zona Sul', status: 'sem_permissao', authorized: false })]);
+    expect(linhaDasVendas(mista, agora)).toMatchObject({ tom: 'atencao', forte: 'O Liame parou de informar as vendas ao Google:', atalho: { href: `/contas#vendas-${outra}` } });
+    // Uma parada por uma pessoa e a outra informando: a que falta mexer pesa mais que a que informa.
+    const comParada = daMarca([conta(), conta({ connected_account_id: outra, status: 'parado', destination: destino({ stopped_at: local(8, 14, 20), stopped_by: RODRIGO }) })]);
+    expect(linhaDasVendas(comParada, agora)!.antes).toContain('parado por Rodrigo');
+  });
+
+  it('a linha desenhada: o número em destaque, o atalho como link, e "status" só quando é aviso', () => {
+    const html = (c: GoogleConversionAccount) => renderToStaticMarkup(createElement(LinhaVendasGoogle, { linha: linha(c)! }));
+    const ok = html(conta());
+    expect(ok).toContain('<p class="vg-linha vg-linha--ok">');
+    expect(ok).toContain('Nos últimos 30 dias, o Liame informou <b>31 vendas</b> ao Google, para ele buscar quem compra. <a href="/contas#vendas-');
+    expect(ok).toContain('>Ver em Contas conectadas</a>');
+    expect(ok).not.toContain('role="status"');
+    const aviso = html(conta({ status: 'sem_permissao', authorized: false }));
+    expect(aviso).toContain('<p class="vg-linha vg-linha--atencao" role="status">');
+    expect(aviso).toContain('<b>O Liame parou de informar as vendas ao Google:</b> falta uma permissão do Google.');
+    expect(html(conta({ status: 'sem_destino', destination: null }))).toContain('<p class="vg-linha">');
+  });
+
+  it('o aviso na Atenção: o botão abre Contas conectadas no cartão da conta, só para quem vê as contas, e sem "Explicar"', () => {
+    const item = (kind: string): AttentionItem => ({
+      kind,
+      severity: 'atencao',
+      title: kind === 'vendas_google_sem_permissao' ? 'O Liame parou de informar as vendas ao Google' : 'O Google está recusando as vendas informadas',
+      detail: 'Falta uma permissão do Google na conta Mister Burgers Google.',
+      action: 'Em Contas conectadas, autorize o Google de novo e, na volta, confirme as contas. Nada é desligado.',
+      connected_account_id: ID,
+      campaign_id: null,
+      provider: 'google_ads',
+      brand_id: MARCA,
+    });
+    expect(destinoDasVendasAoGoogle(item('vendas_google_sem_permissao'))).toEqual({ href: HREF, rotulo: 'Abrir Contas conectadas', curto: 'Autorizar' });
+    expect(destinoDasVendasAoGoogle(item('vendas_google_recusadas'))).toEqual({ href: HREF, rotulo: 'Ver o motivo em Contas conectadas', curto: 'Ver o motivo' });
+    expect(destinoDasVendasAoGoogle({ kind: 'vendas_google_recusadas', connected_account_id: null })!.href).toBe('/contas#vendas-google');
+    expect(destinoDasVendasAoGoogle({ kind: 'conta_desconectada', connected_account_id: ID })).toBeNull();
+
+    const desenhar = (i: AttentionItem, podeVerContas = true) => renderToStaticMarkup(createElement(ItemAviso, { item: i, podeVerContas, podeConectar: true, podeVerVendas: true, aoReconectar: () => {} }));
+    const html = desenhar(item('vendas_google_sem_permissao'));
+    expect(html).toContain('data-sev="atencao"');
+    expect(html).toContain('Google Ads</span>');
+    expect(html).toContain('<h2 class="aviso-titulo">O Liame parou de informar as vendas ao Google</h2>');
+    expect(html).toContain(`<a class="btn btn--sm" href="${HREF}">Abrir Contas conectadas</a>`);
+    expect(html).not.toContain('Explicar');
+    expect(desenhar(item('vendas_google_recusadas'))).toContain('>Ver o motivo em Contas conectadas</a>');
+    // Quem não vê as contas lê o aviso, sem o atalho.
+    expect(desenhar(item('vendas_google_sem_permissao'), false)).not.toContain('Contas conectadas</a>');
   });
 });
 

@@ -24,6 +24,9 @@ export type TipoCiclo =
   | 'custo_por_pedido_fora_do_normal'
   // A conferência do gasto de uma mudança do Liame (A4, X4): o texto está em `actions/conferencia-do-gasto.ts`.
   | 'gasto_acima_da_verba'
+  // As vendas informadas ao Google que pararam sem ninguém mandar parar (A5, Y1; protótipo P14, parte B).
+  | 'vendas_google_sem_permissao'
+  | 'vendas_google_recusadas'
   // A recomendação da sombra numa ação em Sugerir (A3, I13): o texto está em `sugestoes-da-sombra.ts`.
   | 'sugestao_pausar_campanha'
   | 'sugestao_reduzir_verba'
@@ -318,6 +321,45 @@ export function avisoPlataformaCaixa(provider: string, plataformaMicros: bigint,
   };
 }
 
+// ------------------------------------------------------------------ as vendas informadas ao Google (A5 · Y1; P14, parte B)
+
+/** A conta do Google Ads com a conversão escolhida e o envio valendo (não parado por uma pessoa nem pela equipe). */
+export type ContaQueInforma = { id: string; nome: string };
+
+/**
+ * O envio parou porque falta a permissão: a autorização do Google não a inclui (`autorizada` falso), ou o Google
+ * recusou a autorização que o Liame tem. Nos dois casos a saída é autorizar o Google de novo.
+ */
+export function avisoVendasAoGoogleSemPermissao(conta: ContaQueInforma, autorizada: boolean): ItemCiclo {
+  const motivo = autorizada
+    ? `O Google recusou a autorização que o Liame usa na conta ${conta.nome}. Enquanto ela não for refeita`
+    : `Falta uma permissão do Google na conta ${conta.nome}. Enquanto faltar`;
+  return {
+    kind: 'vendas_google_sem_permissao',
+    severity: 'atencao',
+    title: 'O Liame parou de informar as vendas ao Google',
+    detail: `${motivo}, nenhuma venda nova é informada. Os seus Resultados não mudam: eles vêm do caixa.`,
+    action: 'Em Contas conectadas, autorize o Google de novo e, na volta, confirme as contas. Nada é desligado.',
+    connected_account_id: conta.id,
+    campaign_id: null,
+    provider: 'google_ads',
+  };
+}
+
+/** O Google está recusando as vendas (a regra é `estaRecusando`, em `conversoes/recusando.ts`). */
+export function avisoVendasAoGoogleRecusadas(conta: ContaQueInforma, recusadas: number, respondidas: number, dias: number): ItemCiclo {
+  return {
+    kind: 'vendas_google_recusadas',
+    severity: 'atencao',
+    title: 'O Google está recusando as vendas informadas',
+    detail: `Nos últimos ${dias} dias, o Google recusou ${recusadas} das ${respondidas} vendas informadas pela conta ${conta.nome}. O Liame não tenta de novo sozinho, e essas vendas seguem contando nos seus Resultados.`,
+    action: 'Veja o motivo em Contas conectadas e confira, no Google Ads, se a conversão escolhida ainda existe. Trocar a conversão recomeça de agora.',
+    connected_account_id: conta.id,
+    campaign_id: null,
+    provider: 'google_ads',
+  };
+}
+
 // ------------------------------------------------------------------ ordem
 
 const ORDEM: Record<Severidade, number> = { critica: 0, atencao: 1, info: 2 };
@@ -328,6 +370,8 @@ const PRIORIDADE: TipoCiclo[] = [
   'dado_atrasado',
   'conta_sem_permissao',
   'conta_com_erro',
+  'vendas_google_sem_permissao',
+  'vendas_google_recusadas',
   'vendas_fora_do_normal',
   'anuncio_sem_rastreio',
   'campanha_sem_cupom',

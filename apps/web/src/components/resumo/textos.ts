@@ -1,5 +1,5 @@
 import type { AttentionItem, SourceFreshness, SummaryResponse, TeamResponse } from '@liame/contracts';
-import { acaoDoAviso, destinoDoAviso, destinoPedeVendas, gravidadeDe } from '@/components/atencao/textos';
+import { acaoDoAviso, destinoDasVendasAoGoogle, destinoDoAviso, destinoPedeVendas, gravidadeDe } from '@/components/atencao/textos';
 import { inteiro } from '@/lib/formato';
 import { diaMes, nomesDe, porcentagem, type Trecho } from '@/components/resultados/textos';
 
@@ -166,6 +166,9 @@ export type ItemPrecisa = {
 
 /** Para onde leva o "Ver" de cada aviso: a tela onde se resolve, ou a lista de avisos. */
 function destinoDe(item: AttentionItem, podeVerVendas: boolean, podeVerContas: boolean): { rotulo: string; href: string } {
+  // O envio das vendas ao Google parou: o botão diz o que fazer e abre Contas conectadas no cartão da conta.
+  const vendasAoGoogle = podeVerContas ? destinoDasVendasAoGoogle(item) : null;
+  if (vendasAoGoogle) return { rotulo: vendasAoGoogle.curto, href: vendasAoGoogle.href };
   const acao = acaoDoAviso(item.kind);
   if ((acao === 'abrir-contas' || acao === 'reconectar') && podeVerContas) return { rotulo: acao === 'reconectar' ? 'Reconectar' : 'Ver', href: '/contas' };
   const destino = acao && (podeVerVendas || !destinoPedeVendas(acao)) ? destinoDoAviso(acao) : null;
