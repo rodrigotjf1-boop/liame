@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -226,12 +227,108 @@ describe.skipIf(!hasDb)('ferramentas de anúncio no Google: do pedido à volta (
       ads: [],
     });
 
-    // Com a verba dividida, as opções não oferecem mudar a verba: só pausar.
-    const dividido = google.novoOrcamento(e.cliente, { amountMicros: 80 * REAL, explicitlyShared: true });
-    const d = await campanha(e, { orcamento: dividido.id });
+    // A verba é só desta campanha: não há com quem dividir, e o Google só foi perguntado pela campanha.
+    expect(opcoes.body.target.shared_budget).toBeNull();
+  });
+
+  it('no Google a mudança é na campanha inteira: os grupos de anúncios e os anúncios que o Liame leu não entram nas opções, e pedir neles é recusado', async () => {
+    const c = await campanha(e, { name: 'Busca com grupos' });
+    const [linha] = await ownerQuery<{ id: string }>(`select id from liame.campaign where connected_account_id = $1 and external_id = $2`, [e.conta, c.id]);
+    const grupo = randomUUID();
+    await ownerQuery(
+      `insert into liame.ad_group (id, tenant_id, connected_account_id, campaign_id, provider, external_id, name, status, daily_budget_micros, last_seen_at)
+       values ($1, $2, $3, $4, 'google_ads', '7001', 'Grupo hambúrguer', 'ativa', null, now())`,
+      [grupo, e.tenantId, e.conta, linha!.id],
+    );
+    await ownerQuery(
+      `insert into liame.ad (id, tenant_id, connected_account_id, ad_group_id, provider, external_id, name, status, last_seen_at)
+       values (gen_random_uuid(), $1, $2, $3, 'google_ads', '9001', 'Anúncio de busca', 'ativa', now())`,
+      [e.tenantId, e.conta, grupo],
+    );
+    const opcoes = await api.call('GET', `/v1/actions/options?campaign_id=${linha!.id}`, { cookie: e.cookie });
+    expect(opcoes.status, JSON.stringify(opcoes.body)).toBe(200);
+    expect(opcoes.body).toMatchObject({ target: { kind: 'campanha', resource_id: `campanha:${c.id}` }, ad_sets: [], ads: [], listed_at: expect.any(String) });
+    google.chamadas.length = 0;
+    for (const alvo of ['conjunto:7001', 'anuncio:9001']) {
+      const r = await api.call('GET', `/v1/actions/options?campaign_id=${linha!.id}&target=${alvo}`, { cookie: e.cookie });
+      expect([r.status, r.body.code], JSON.stringify(r.body)).toEqual([422, 'alvo-nao-e-da-campanha']);
+    }
+    // A recusa sai antes de falar com o Google.
+    expect(google.chamadasDe(e.cliente)).toHaveLength(0);
+  });
+
+  it('verba dividida nas opções: só pausar, com o orçamento inteiro, quantas campanhas usam e o nome das outras; sem o Google responder os nomes, o pedido segue', async () => {
+    const dividido = google.novoOrcamento(e.cliente, { amountMicros: 120 * REAL, explicitlyShared: true });
+    const d = await campanha(e, { orcamento: dividido.id, name: 'Busca hambúrguer perto' });
+    await campanha(e, { orcamento: dividido.id, name: 'Busca Mister Burgers' });
+    await campanha(e, { orcamento: dividido.id, name: 'Busca combo', status: 'PAUSED', primaryStatus: 'PAUSED' });
+    // A removida não usa mais o orçamento; a de outro orçamento e a de outra conta não entram.
+    await campanha(e, { orcamento: dividido.id, name: 'Busca antiga', status: 'REMOVED', primaryStatus: 'REMOVED' });
+    await campanha(e, { name: 'Busca de outro orçamento' });
     const [linhaD] = await ownerQuery<{ id: string }>(`select id from liame.campaign where connected_account_id = $1 and external_id = $2`, [e.conta, d.id]);
+    google.chamadas.length = 0;
     const daDividida = await api.call('GET', `/v1/actions/options?campaign_id=${linhaD!.id}`, { cookie: e.cookie });
-    expect(daDividida.body).toMatchObject({ target: { daily_micros: null }, tools: ['campanha_pausar'] });
+    expect(daDividida.status, JSON.stringify(daDividida.body)).toBe(200);
+    expect(daDividida.body).toMatchObject({ target: { daily_micros: null, shared_budget: { daily_micros: 120 * REAL, campaigns: 3, shared_with: ['Busca combo', 'Busca Mister Burgers'] } }, tools: ['campanha_pausar'] });
+    // Duas leituras: a campanha e, por ser dividida, as outras do orçamento (pelo campo do orçamento, sem as removidas).
+    const consultas = google.chamadasDe(e.cliente).map((x) => String(x.corpo.query));
+    expect(consultas).toHaveLength(2);
+    expect(consultas[1]).toBe(
+      `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.campaign_budget = 'customers/${e.cliente}/campaignBudgets/${dividido.id}' AND campaign.status != 'REMOVED' AND campaign.id != ${d.id} ORDER BY campaign.name LIMIT 10`,
+    );
+
+    // O Google não respondeu a segunda leitura: as opções saem do mesmo jeito, sem os nomes (a contagem veio com a campanha).
+    google.defeitos.set(e.cliente, (x) => (String(x.corpo.query ?? '').includes('campaign.campaign_budget =') ? google.erro(503, 'UNAVAILABLE', 'The service is currently unavailable.') : null));
+    try {
+      const semNomes = await api.call('GET', `/v1/actions/options?campaign_id=${linhaD!.id}`, { cookie: e.cookie });
+      expect(semNomes.status, JSON.stringify(semNomes.body)).toBe(200);
+      expect(semNomes.body).toMatchObject({ target: { shared_budget: { daily_micros: 120 * REAL, campaigns: 3, shared_with: [] } }, tools: ['campanha_pausar'] });
+    } finally {
+      google.defeitos.delete(e.cliente);
+    }
+
+    // Criado para ser dividido, mas hoje só uma campanha usa: é dividido do mesmo jeito, e não há outra para citar.
+    const deUma = google.novoOrcamento(e.cliente, { amountMicros: 40 * REAL, explicitlyShared: true });
+    const u = await campanha(e, { orcamento: deUma.id, name: 'Busca sozinha' });
+    const [linhaU] = await ownerQuery<{ id: string }>(`select id from liame.campaign where connected_account_id = $1 and external_id = $2`, [e.conta, u.id]);
+    const daSozinha = await api.call('GET', `/v1/actions/options?campaign_id=${linhaU!.id}`, { cookie: e.cookie });
+    expect(daSozinha.body).toMatchObject({ target: { daily_micros: null, shared_budget: { daily_micros: 40 * REAL, campaigns: 1, shared_with: [] } }, tools: ['campanha_pausar'] });
+  });
+
+  it('o Google recusou na conferência: o pedido guarda o motivo, e a resposta separa o texto do Google do código dele', async () => {
+    const c = await campanha(e, { name: 'Busca recusada' });
+    google.defeitos.set(e.cliente, (x) =>
+      x.tipo === 'validacao' ? google.erro(400, 'INVALID_ARGUMENT', 'Request contains an invalid argument.', { codigo: { campaignBudgetError: 'BUDGET_BELOW_PER_DAY_MINIMUM' }, texto: "Budget amount must be above this campaign's per-day minimum." }) : null,
+    );
+    try {
+      const recusada = await executar(e, 'orcamento_ajustar', c, { daily_budget_micros: 27 * REAL });
+      expect(recusada).toMatchObject({
+        status: 'falhou',
+        attempts: 0,
+        status_reason: "O Google recusou a mudança: Budget amount must be above this campaign's per-day minimum (campaignBudgetError.BUDGET_BELOW_PER_DAY_MINIMUM).",
+        execution: { status: 'falhou', no_write: false, provider_reply: { text: "Budget amount must be above this campaign's per-day minimum.", code: 'campaignBudgetError.BUDGET_BELOW_PER_DAY_MINIMUM' } },
+      });
+      expect(google.escritasDe(e.cliente).filter((x) => x.recurso === 'campaignBudgets')).toHaveLength(0);
+    } finally {
+      google.defeitos.delete(e.cliente);
+    }
+    // O pedido que foi executado não tem resposta de recusa.
+    const feita = await executar(e, 'campanha_pausar', c);
+    expect(feita).toMatchObject({ status: 'executada', execution: { status: 'executada', provider_reply: null } });
+  });
+
+  it('o Google pediu para esperar: o pedido aprovado fica na fila com a hora da próxima tentativa, e o motivo fala do limite do Google', async () => {
+    const c = await campanha(e, { name: 'Busca em espera' });
+    google.defeitos.set(e.cliente, (x) =>
+      x.tipo === 'leitura' ? null : google.erro(429, 'RESOURCE_EXHAUSTED', 'Resource has been exhausted (e.g. check quota).', { codigo: { quotaError: 'RESOURCE_EXHAUSTED_TEMPORARY' }, texto: 'Too many requests. Retry in 30 seconds.', esperar: '30s' }),
+    );
+    try {
+      const adiada = await executar(e, 'campanha_pausar', c);
+      expect(adiada).toMatchObject({ status: 'aprovada', status_reason: 'o Google pediu para esperar (limite de uso do Google)', attempts: 1, next_attempt_at: expect.any(String), execution: { status: 'adiada', provider_reply: null } });
+      expect(google.campanhas.get(c.id)!.status).toBe('ENABLED');
+    } finally {
+      google.defeitos.delete(e.cliente);
+    }
   });
 
   it('sem a escrita no Google ligada para a empresa, o pedido é negado e nada chega ao Google além do que já chegava', async () => {

@@ -11,6 +11,7 @@ import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { situacaoDaLeitura, verbaDaLeitura } from './conferencia-do-gasto.js';
 import { CONNECTORS, type Connector, type PreparedRead, type ReadResult } from './connectors.js';
 import { PLATAFORMA, problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
+import { orcamentoCompartilhado } from './orcamento-compartilhado.js';
 import { TOOLS } from './tools.js';
 
 // O pedido de mudança (A4, X8; D-A4-20): o que a tela precisa saber ANTES de a pessoa pedir.
@@ -47,6 +48,15 @@ export function ferramentasPara(provider: string, estado: { tipo: TipoDeObjeto; 
   const verba = estado.tipo !== 'anuncio' && estado.daily_budget_micros !== null ? ['orcamento_ajustar'] : [];
   return [...verba, `${estado.tipo}_pausar`].filter(cabe);
 }
+
+/**
+ * A plataforma aceita pedido neste nível? No Google Ads a mudança é na campanha inteira (A5, Y3): grupo de anúncios e
+ * anúncio não têm ferramenta, e a tela não oferece o que o pedido recusaria.
+ */
+export function nivelCabe(provider: string, tipo: TipoDeObjeto): boolean {
+  return [`${tipo}_pausar`, `${tipo}_retomar`].some((nome) => TOOLS[nome]?.providers.includes(provider) === true);
+}
+const SEM_OBJETOS: { rows: LinhaDeObjeto[] } = { rows: [] };
 
 /** A conexão com a plataforma só deixa ler: a autorização desta conta não pediu para gerenciar anúncios. */
 function conexaoSoLeitura(provider: string): AppProblem {
@@ -169,6 +179,9 @@ export class OpcoesDoPedidoService {
     if (!ehTipo(s.tipo) || typeof s.id !== 'string') throw new Error('opções do pedido: o conector devolveu um estado sem tipo');
     const verba = typeof s.daily_budget_micros === 'number' && s.daily_budget_micros > 0 ? s.daily_budget_micros : null;
     const status = typeof s.status === 'string' ? s.status : 'desconhecido';
+    // A verba dividida (só no Google): quanto é o orçamento inteiro, quantas campanhas usam e quais são as outras.
+    const dividido = orcamentoCompartilhado(s);
+    const com = dividido && pronto.conector.sharedBudgetWith ? await pronto.conector.sharedBudgetWith(pronto.preparada, s) : [];
     return {
       ...pronto.resposta,
       target: {
@@ -178,6 +191,7 @@ export class OpcoesDoPedidoService {
         status,
         effective_status: typeof s.status_efetivo === 'string' ? s.status_efetivo : null,
         daily_micros: verba,
+        shared_budget: dividido ? { daily_micros: dividido.diario_micros !== null && dividido.diario_micros > 0 ? dividido.diario_micros : null, campaigns: Math.max(0, dividido.campanhas), shared_with: com } : null,
       },
       read_at: new Date().toISOString(),
       tools: ferramentasPara(pronto.conector.provider, { tipo: s.tipo, status, daily_budget_micros: verba }),
@@ -219,13 +233,18 @@ export class OpcoesDoPedidoService {
     }
     if (conector.needsWriteAuthorization && campanha.requested_access !== 'escrita') throw conexaoSoLeitura(campanha.provider);
 
-    // Os conjuntos e os anúncios da campanha, pela leitura diária (o que saiu da lista da conta não aparece).
-    const conjuntos = await tx.execute<LinhaDeObjeto>(sql`
+    // Os conjuntos e os anúncios da campanha, pela leitura diária (o que saiu da lista da conta não aparece). Só nos
+    // níveis em que a plataforma aceita pedido: no Google a mudança é na campanha inteira, e as listas saem vazias.
+    const conjuntos = !nivelCabe(campanha.provider, 'conjunto')
+      ? SEM_OBJETOS
+      : await tx.execute<LinhaDeObjeto>(sql`
       select g.external_id, g.name, g.status, g.daily_budget_micros::text as verba, g.last_seen_at as visto
         from liame.ad_group g
        where g.tenant_id = ${quem.tenantId} and g.connected_account_id = ${campanha.conta} and g.campaign_id = ${campanha.id} and g.status in ('ativa', 'pausada')
        order by g.name, g.external_id limit 200`);
-    const anuncios = await tx.execute<LinhaDeObjeto>(sql`
+    const anuncios = !nivelCabe(campanha.provider, 'anuncio')
+      ? SEM_OBJETOS
+      : await tx.execute<LinhaDeObjeto>(sql`
       select d.external_id, d.name, d.status, null::text as verba, d.last_seen_at as visto, g.external_id as conjunto
         from liame.ad d join liame.ad_group g on g.id = d.ad_group_id
        where d.tenant_id = ${quem.tenantId} and d.connected_account_id = ${campanha.conta} and g.campaign_id = ${campanha.id} and d.status in ('ativa', 'pausada')

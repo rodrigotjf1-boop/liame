@@ -103,6 +103,9 @@
 .inbox-det .resultado--falha { background: var(--danger-soft); }
 .inbox-det .resultado--falha .ic { color: var(--danger); }
 .inbox-det .resultado b { font-weight: 600; outline: none; }
+/* O código que a plataforma mandou na recusa, só no Pro (protótipo P13). */
+.inbox-det .resultado-codigo { font-size: var(--text-sm); color: var(--text-subtle); }
+.inbox-det .resultado-codigo code { overflow-wrap: anywhere; }
 .inbox-det .secao > .resultado + *, .inbox-det .secao > .nota + .desfazer, .inbox-det .secao > .resultado + .resultado { margin-top: var(--sp-3); }
 /* O caminho do pedido: quem pediu, quem aprovou e o que aconteceu na plataforma. */
 .inbox-det .trilha-pedido { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }

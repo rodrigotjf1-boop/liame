@@ -436,3 +436,126 @@ describe('o pedido de anúncio aberto', () => {
     expect(desfeito).toContain('Ver o pedido de volta');
   });
 });
+
+describe('o pedido do Google em Aprovações (A5 · Y3; protótipo P13, parte 1)', () => {
+  const t = (a: AcaoDeAnuncio) => textosDoAnuncio(a, MES);
+  const resultado = (a: AcaoDeAnuncio) => {
+    const x = resultadoDoAnuncio(a, t(a));
+    return { tom: x.tom, texto: nbspFora(`${x.forte}${textoDe(x.texto)}`), tecnico: x.tecnico ?? null, depois: x.depois };
+  };
+  const nbspFora = (s: string) => s.replaceAll(String.fromCharCode(160), ' ');
+  /** O pedido do protótipo: reduzir a verba da Busca “hambúrguer perto”, de R$ 55,00 para R$ 49,50. */
+  const doGoogle = (o: Partial<ActionResponse> = {}) =>
+    pedido({
+      provider: 'google_ads',
+      resource_id: 'campanha:21000000004',
+      params: { daily_budget_micros: r(49.5) },
+      value_micros: r(49.5),
+      current_value_micros: r(55),
+      target: { kind: 'campanha', name: 'Busca “hambúrguer perto”', campaign: null },
+      from: { status: 'ativo', daily_micros: r(55) },
+      to: { status: 'ativo', daily_micros: r(49.5) },
+      ...o,
+    });
+  const falhou = (reply: { text: string; code: string | null } | null | undefined, motivo: string) =>
+    doGoogle({ status: 'falhou', approvals: [aprovado], status_reason: motivo, execution: { status: 'falhou', finished_at: local(14, 41), no_write: false, observed: null, ...(reply === undefined ? {} : { provider_reply: reply }) } });
+  const RECUSA = "O Google recusou a mudança: Budget amount must be above this campaign's per-day minimum (campaignBudgetError.BUDGET_BELOW_PER_DAY_MINIMUM).";
+  const DO_GOOGLE = { text: "Budget amount must be above this campaign's per-day minimum.", code: 'campaignBudgetError.BUDGET_BELOW_PER_DAY_MINIMUM' };
+  const aberto = (a: AcaoDeAnuncio, pro: boolean) =>
+    renderToStaticMarkup(
+      createElement(DetalheAnuncio, {
+        acao: a,
+        grupo: 'feito',
+        agora,
+        pro,
+        podeDecidir: true,
+        podeOperar: true,
+        temApp: true,
+        mes: MES,
+        pedindo: false,
+        titulo: createRef<HTMLHeadingElement>(),
+        campoCodigo: createRef<HTMLInputElement>(),
+        aoVoltar: () => {},
+        aoAprovar: async () => ({ ok: true as const }),
+        aoRecusar: async () => ({ ok: true as const }),
+        aoDesfazer: async () => ({ ok: true as const }),
+        aoPedirDeNovo: () => {},
+        aoAbrir: () => {},
+      }),
+    );
+
+  it('o pedido fala do Google: o Liame confere com o Google e faz a mudança no Google', () => {
+    const x = t(doGoogle());
+    expect(x.titulo).toBe('Reduzir a verba da campanha “Busca “hambúrguer perto””');
+    expect(nbspFora(textoDe(x.frase))).toContain('de R$ 55,00 para R$ 49,50 (−10%).');
+    expect(textoDe(x.frase)).toContain('Se você aprovar, o Liame confere com o Google e faz a mudança.');
+    expect(x.depoisDeAprovar).toBe('O Liame faz a mudança no Google em instantes.');
+    expect(colunasDoAnuncio(doGoogle()).legenda).toBe('O que muda no Google se o pedido for aprovado');
+    expect(`${textoDe(x.frase)}${x.depoisDeAprovar}${x.desfazer}${x.doRisco}`).not.toMatch(/\bMeta\b/);
+  });
+
+  it('executado: o Google confirmou, e o caminho do pedido passa pela validação e pela mudança no Google', () => {
+    const feito = doGoogle({ status: 'executada', approvals: [aprovado], execution: { status: 'executada', finished_at: local(14, 41), no_write: false, observed: null, provider_reply: null } });
+    expect(resultado(feito).texto).toBe(`Aprovado por Rodrigo às ${horaDe(local(14, 40))} e executado às ${horaDe(local(14, 41))}. O Google confirmou: a verba da campanha “Busca “hambúrguer perto”” está em R$ 49,50 por dia.`);
+    expect(caminhoDoAnuncio(feito, agora).map((p) => p.titulo).slice(2)).toEqual(['O Google validou a mudança', 'Mudança feita no Google', 'Leitura de conferência: está como o pedido']);
+    expect(etiquetaDoAnuncio(feito)).not.toMatch(/Meta|plataforma/);
+  });
+
+  it('o Google pediu para esperar: o selo, o motivo e a hora da próxima tentativa', () => {
+    const esperando = doGoogle({ status: 'aprovada', approvals: [aprovado], attempts: 1, next_attempt_at: local(15, 40), status_reason: 'o Google pediu para esperar (limite de uso do Google)', execution: { status: 'adiada', finished_at: local(14, 41), no_write: false, observed: null, provider_reply: null } });
+    expect(etiquetaDoAnuncio(esperando)).toBe('Esperando o Google');
+    expect(resultado(esperando).texto).toBe(`Aprovado por Rodrigo às ${horaDe(local(14, 40))}. Ainda não foi executado: o Google pediu para esperar (limite de uso do Google). O Liame tenta de novo às ${horaDe(local(15, 40))}, sem insistir antes.`);
+    expect(caminhoDoAnuncio(esperando, agora)[2]).toMatchObject({ situacao: 'espera', titulo: 'O Google pediu para esperar' });
+    // A plataforma que a tela ainda não conhece não ganha artigo errado.
+    expect(etiquetaDoAnuncio(doGoogle({ provider: 'plataforma_nova', status: 'aprovada', approvals: [aprovado], attempts: 1, next_attempt_at: local(15, 40) }))).toBe('Esperando a plataforma');
+  });
+
+  it('o Google recusou na conferência: o texto dele entre aspas, em inglês como ele escreve, e o código só no Pro', () => {
+    const recusou = falhou(DO_GOOGLE, RECUSA);
+    const x = resultado(recusou);
+    expect(x.texto).toBe(
+      `Aprovado por Rodrigo às ${horaDe(local(14, 40))}, mas o Google recusou na conferência. Nada mudou. O que o Google respondeu, em inglês, como ele escreve: “Budget amount must be above this campaign's per-day minimum.”`,
+    );
+    expect(x.tecnico).toEqual({ rotulo: 'Código do Google', valor: 'campaignBudgetError.BUDGET_BELOW_PER_DAY_MINIMUM' });
+    expect(x.depois).toEqual({ tipo: 'pedir-de-novo', rotulo: 'Pedir de novo', nota: 'O Liame pede ao Google que valide a mudança antes de escrever. Quando ele recusa, nada é escrito e o pedido não é repetido.' });
+    expect(etiquetaDoAnuncio(recusou)).toBe('O Google recusou');
+    expect(caminhoDoAnuncio(recusou, agora).at(-1)).toMatchObject({ situacao: 'falha', titulo: 'O Google recusou na conferência' });
+    // O motivo guardado no pedido (com "O Google recusou a mudança:" e o código) não aparece repetido na tela.
+    expect(x.texto).not.toContain('recusou a mudança');
+    expect(x.texto).not.toContain('campaignBudgetError');
+
+    const lite = aberto(recusou, false);
+    const pro = aberto(recusou, true);
+    expect(lite).toContain('em inglês, como ele escreve');
+    expect(lite).not.toContain('campaignBudgetError');
+    expect(lite).not.toContain('resultado-codigo');
+    expect(pro).toContain('<span class="resultado-codigo"> Código do Google: <code>campaignBudgetError.BUDGET_BELOW_PER_DAY_MINIMUM</code>.</span>');
+    expect(`${lite}${pro}`).not.toMatch(/NaN|undefined|\[object Object\]/);
+  });
+
+  it('o motivo que é uma frase do Liame sai sem aspas; a resposta de antes da separação segue como sempre saiu', () => {
+    // A autorização venceu: quem fala é o Liame, e não o Google.
+    const semAcesso = falhou(null, 'O Google recusou o acesso desta conta (a autorização foi revogada ou venceu). Conecte o Google de novo em Contas conectadas.');
+    expect(resultado(semAcesso).texto).toBe(
+      `Aprovado por Rodrigo às ${horaDe(local(14, 40))}, mas o Google recusou na conferência. Nada mudou. O Google recusou o acesso desta conta (a autorização foi revogada ou venceu). Conecte o Google de novo em Contas conectadas.`,
+    );
+    expect(resultado(semAcesso).tecnico).toBeNull();
+    expect(resultado(semAcesso).texto).not.toContain('“');
+    // Sem o campo novo (servidor de antes de 09/10/2026), o motivo inteiro entre aspas.
+    expect(resultado(falhou(undefined, 'Request contains an invalid argument.')).texto).toContain('O que o Google respondeu: “Request contains an invalid argument.”');
+    // Na Meta, o texto que ela escreve para a pessoa, sem "em inglês" e sem código.
+    const daMeta = pedido({ status: 'falhou', approvals: [aprovado], status_reason: 'A Meta recusou a mudança: O orçamento diário precisa ser de pelo menos R$ 6,00.', execution: { status: 'falhou', finished_at: local(14, 41), no_write: false, observed: null, provider_reply: { text: 'O orçamento diário precisa ser de pelo menos R$ 6,00.', code: null } } });
+    expect(resultado(daMeta).texto).toBe(`Aprovado por Rodrigo às ${horaDe(local(14, 40))}, mas a Meta recusou na conferência. Nada mudou. O que a Meta respondeu: “O orçamento diário precisa ser de pelo menos R$ 6,00.”`);
+    expect(resultado(daMeta).tecnico).toBeNull();
+    expect(resultado(daMeta).depois).toMatchObject({ nota: 'O Liame pede à Meta que valide a mudança antes de escrever. Quando ela recusa, nada é escrito e o pedido não é repetido.' });
+  });
+
+  it('alguém mudou no Google antes da execução: a tela diz o que encontrou, e o Liame não passa por cima', () => {
+    const mudou = doGoogle({ status: 'falhou', approvals: [aprovado], status_reason: 'o recurso mudou desde o pedido; nada foi sobrescrito', execution: { status: 'estado_mudou', finished_at: local(14, 41), no_write: false, observed: { status: 'ativo', daily_micros: r(52) }, provider_reply: null } });
+    expect(resultado(mudou).texto).toBe(
+      `Aprovado por Rodrigo às ${horaDe(local(14, 40))}, mas não foi executado: alguém mexeu na campanha no Google depois do pedido. A verba agora é de R$ 52,00 (era de R$ 55,00 quando o pedido foi feito). O Liame não passa por cima do que uma pessoa mudou. Nada mudou.`,
+    );
+    expect(caminhoDoAnuncio(mudou, agora).at(-1)).toMatchObject({ titulo: 'O que está no Google mudou depois do pedido' });
+    expect(erroAoDesfazer({ code: 'estado-mudou', title: 'x' }, doGoogle()).texto).toContain('alguém mexeu na campanha no Google depois');
+  });
+});

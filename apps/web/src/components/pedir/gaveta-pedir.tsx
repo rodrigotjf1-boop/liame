@@ -28,7 +28,9 @@ import {
   notaDoPedido,
   ondeDe,
   semOpcoes,
+  temOnde,
   tituloDoPedido,
+  verbaDividida,
   verbaNoCampo,
 } from './textos';
 
@@ -36,7 +38,9 @@ import {
 // PLATAFORMA (`GET /v1/actions/options`), para o pedido partir do que está valendo agora; cada escolha no campo "Onde"
 // é outra leitura. Os limites da empresa e a conta do mês vêm de `GET /v1/budget/month`. Enviar cria o pedido
 // (`POST /v1/actions`), que espera a aprovação com o código do app: nada muda na plataforma por aqui.
-// `<dialog>` nativo: foco preso, Esc fecha, foco volta a quem abriu.
+// Numa campanha do Google (protótipo P13, parte 1: mockups/prototipo-google-pedido.html) a mudança é na campanha
+// inteira: não há campo "Onde"; e, com a verba dividida entre campanhas, a gaveta diz com quem e só deixa pausar e
+// retomar. `<dialog>` nativo: foco preso, Esc fecha, foco volta a quem abriu.
 
 export type CampanhaDoPedido = { id: string; nome: string; provider: string };
 
@@ -84,6 +88,7 @@ export function GavetaPedir({ campanha, inicial, podeDefinirLimites, podeVerCont
   const focar = useRef<'form' | 'falha' | 'criado' | 'valor' | 'erro' | null>(null);
   const campoValor = useRef<HTMLInputElement>(null);
   const campoOnde = useRef<HTMLSelectElement>(null);
+  const escolha = useRef<HTMLDivElement>(null);
   const tituloDaFalha = useRef<HTMLElement>(null);
   const tituloDoCriado = useRef<HTMLHeadingElement>(null);
   const paragrafoDoErro = useRef<HTMLParagraphElement>(null);
@@ -144,9 +149,11 @@ export function GavetaPedir({ campanha, inicial, podeDefinirLimites, podeVerCont
   useEffect(() => {
     const destino = focar.current;
     if (!destino) return;
+    // Sem o campo da verba e sem o "Onde" (verba dividida no Google), o foco vai para a escolha do que mudar.
+    const naEscolha = escolha.current?.querySelector<HTMLInputElement>('input:checked') ?? escolha.current?.querySelector<HTMLInputElement>('input') ?? null;
     const elemento =
       destino === 'form'
-        ? (campoValor.current ?? campoOnde.current)
+        ? (campoValor.current ?? campoOnde.current ?? naEscolha)
         : destino === 'valor'
           ? campoValor.current
           : destino === 'erro'
@@ -165,6 +172,7 @@ export function GavetaPedir({ campanha, inicial, podeDefinirLimites, podeVerCont
   const agoraNoObjeto = useMemo(() => (opcoes ? agoraNaPlataforma(opcoes, fuso) : null), [opcoes, fuso]);
   const lista = useMemo(() => (ultima ? { onde: ondeDe(ultima), lidaEm: listaLidaEm(ultima, fuso, relogio) } : null), [ultima, fuso, relogio]);
   const limites = useMemo(() => limitesDaGaveta(verba), [verba]);
+  const dividida = useMemo(() => (opcoes ? verbaDividida(opcoes) : null), [opcoes]);
   const efeito = useMemo(() => (opcoes && acao ? efeitoDoPedido(opcoes, { acao, valor }, verba) : null), [opcoes, acao, valor, verba]);
   const dica = opcoes && acao === 'verba' && opcoes.target.daily_micros !== null ? dicaDaVerba(opcoes.target.daily_micros, verba) : null;
   const falha = leitura.tipo === 'falha' ? falhaDaLeitura(leitura.problema, campanha.provider) : null;
@@ -223,7 +231,7 @@ export function GavetaPedir({ campanha, inicial, podeDefinirLimites, podeVerCont
     </button>
   );
 
-  const campoDoOnde = lista && (
+  const campoDoOnde = lista && temOnde(lista.onde) && (
     <div className="campo">
       <label htmlFor="pd-alvo">Onde</label>
       <select ref={campoOnde} className="input" id="pd-alvo" value={alvo} disabled={enviando} aria-describedby={lista.lidaEm ? 'pd-lista' : undefined} onChange={(e) => mudarOnde(e.target.value)}>
@@ -348,6 +356,33 @@ export function GavetaPedir({ campanha, inicial, podeDefinirLimites, podeVerCont
             ))}
           </dl>
         </div>
+        {dividida && (
+          <div className="pd-aviso" id="pd-dividida">
+            <Icone nome="info" />
+            <div>
+              <b>{dividida.titulo}</b>
+              <span>
+                <TextoRico frase={dividida.texto} />
+              </span>
+              {dividida.campanhas.length > 0 && (
+                <ul className="pd-dividida" aria-label="Campanhas que dividem esta verba">
+                  {dividida.campanhas.map((c, i) => (
+                    <li key={`${i}-${c.nome}`}>
+                      <span>{c.nome}</span>
+                      <span>{c.papel}</span>
+                    </li>
+                  ))}
+                  {dividida.mais && (
+                    <li>
+                      <span>{dividida.mais}</span>
+                    </li>
+                  )}
+                </ul>
+              )}
+              <span>{dividida.depois}</span>
+            </div>
+          </div>
+        )}
         {acoes.length === 0 ? (
           <p className="pd-aviso">
             <Icone nome="alert" />
@@ -357,7 +392,7 @@ export function GavetaPedir({ campanha, inicial, podeDefinirLimites, podeVerCont
           <>
             <fieldset className="campo">
               <legend>O que você quer mudar?</legend>
-              <div className="pd-escolha">
+              <div className="pd-escolha" ref={escolha}>
                 {acoes.map((a) => (
                   <label className="pd-opcao" key={a.acao}>
                     <input type="radio" name="pd-acao" value={a.acao} checked={acao === a.acao} disabled={enviando} onChange={() => mudarAcao(a.acao)} />

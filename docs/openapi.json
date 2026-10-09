@@ -7170,6 +7170,28 @@
                             "daily_micros"
                           ],
                           "additionalProperties": false
+                        },
+                        "provider_reply": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "code"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -8145,6 +8167,28 @@
                                   "daily_micros"
                                 ],
                                 "additionalProperties": false
+                              },
+                              "provider_reply": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "text": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "text",
+                                  "code"
+                                ],
+                                "additionalProperties": false
                               }
                             },
                             "required": [
@@ -8503,6 +8547,39 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "shared_budget": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "daily_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "campaigns": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "shared_with": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "daily_micros",
+                            "campaigns",
+                            "shared_with"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -9739,6 +9816,28 @@
                             "daily_micros"
                           ],
                           "additionalProperties": false
+                        },
+                        "provider_reply": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "code"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -10527,6 +10626,28 @@
                           "required": [
                             "status",
                             "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "provider_reply": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "code"
                           ],
                           "additionalProperties": false
                         }
@@ -11324,6 +11445,28 @@
                           "required": [
                             "status",
                             "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "provider_reply": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "code"
                           ],
                           "additionalProperties": false
                         }
@@ -12186,6 +12329,28 @@
                           "required": [
                             "status",
                             "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "provider_reply": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "code"
                           ],
                           "additionalProperties": false
                         }
@@ -13088,6 +13253,28 @@
                             "daily_micros"
                           ],
                           "additionalProperties": false
+                        },
+                        "provider_reply": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "code"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -13858,6 +14045,28 @@
                           "required": [
                             "status",
                             "daily_micros"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "provider_reply": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "code": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "code"
                           ],
                           "additionalProperties": false
                         }

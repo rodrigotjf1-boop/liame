@@ -167,6 +167,12 @@ export function DetalheAnuncio({ acao, grupo, agora, pro, podeDecidir, podeOpera
             <span>
               {r.forte && <b>{r.forte}</b>}
               <TextoRico frase={r.texto} />
+              {r.tecnico && pro && (
+                <span className="resultado-codigo">
+                  {' '}
+                  {r.tecnico.rotulo}: <code>{r.tecnico.valor}</code>.
+                </span>
+              )}
             </span>
           </div>
           {d.tipo === 'nota' && (

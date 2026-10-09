@@ -51,6 +51,12 @@
 .pd-aviso b { outline: none; }
 .pd-aviso--perigo { background: var(--danger-soft); }
 .pd-aviso--perigo .ic { color: var(--danger); }
+/* A verba dividida (Google Ads; protótipo P13): as campanhas que usam o mesmo orçamento. */
+.pd-dividida { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: var(--sp-2); }
+.pd-dividida li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 var(--sp-3); font-size: var(--text-sm); min-width: 0; }
+.pd-dividida li span { min-width: 0; overflow-wrap: anywhere; }
+.pd-dividida li span:first-child { font-weight: 500; }
+.pd-dividida li span + span { color: var(--text-muted); }
 .pd-nota { display: flex; gap: var(--sp-3); font-size: var(--text-sm); color: var(--text-muted); }
 .pd-nota .ic { flex: none; margin-top: 2px; }
 .pd-feito { display: grid; justify-items: center; gap: var(--sp-3); padding: var(--sp-8) var(--sp-2); text-align: center; }

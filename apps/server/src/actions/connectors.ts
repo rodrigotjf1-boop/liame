@@ -64,6 +64,12 @@ export interface Connector {
   prepareRead?(tx: Tx, ref: ResourceRef): Promise<PreparedRead | null>;
   readPrepared?(prepared: PreparedRead): Promise<ReadResult | null>;
   /**
+   * Os nomes das outras campanhas que dividem a verba do objeto lido (A5, Y3), para a tela do pedido dizer com quem.
+   * Só tem a plataforma em que a verba mora fora da campanha (o orçamento do Google Ads). É detalhe da tela: o que a
+   * plataforma não responder a tempo volta como lista vazia, e o pedido segue.
+   */
+  sharedBudgetWith?(prepared: PreparedRead, state: ResourceState): Promise<string[]>;
+  /**
    * Aplica o estado desejado se a versão ainda for a esperada (concorrência otimista). O que é passageiro (limite de
    * uso da plataforma, fora do ar) sobe como `ErroConector`: quem executa adia a ação, em vez de insistir.
    */
