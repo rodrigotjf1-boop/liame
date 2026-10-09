@@ -5,7 +5,7 @@ import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import { inteiro } from '@/lib/formato';
 import type { Modo } from '@/lib/modo';
-import type { CaixaDoTeto, ContaDaTela, Enviadas, MensagemDaLista, Selo } from './textos';
+import { type CaixaDoTeto, centavos, type ContaDaTela, type Enviadas, type FaixaDoPedido, type MensagemDaLista, type Selo } from './textos';
 
 // O corpo da tela "Mensagens" para uma conta do RegemCast (protótipo P15): as faixas do que impede o envio, as três
 // caixas do topo (a conta do WhatsApp, o teto de gasto e o que há pronto) e "O que foi enviado". Só desenha o que
@@ -15,6 +15,8 @@ type Props = {
   conta: ContaDaTela;
   modo: Modo;
   podeVerContas: boolean;
+  /** O pedido de mensagem que espera a aprovação (a faixa leva a Aprovações); nulo quando não há. */
+  pedido?: FaixaDoPedido | null;
   aoVer: (id: string) => void;
   aoTentarDeNovo: () => void;
 };
@@ -50,7 +52,7 @@ function TentarDeNovo({ aoTentar, primario = true }: { aoTentar: () => void; pri
   );
 }
 
-export function MensagensConteudo({ conta, modo, podeVerContas, aoVer, aoTentarDeNovo }: Props) {
+export function MensagensConteudo({ conta, modo, podeVerContas, pedido = null, aoVer, aoTentarDeNovo }: Props) {
   if (conta.tipo === 'sem_autorizacao') {
     return (
       <div className="card">
@@ -84,6 +86,19 @@ export function MensagensConteudo({ conta, modo, podeVerContas, aoVer, aoTentarD
       {conta.avisos.map((a) => (
         <Faixa key={a.chave} tipo={a.tipo} icone={<Icone nome={a.icone} />} titulo={a.titulo} texto={a.texto} />
       ))}
+      {pedido && (
+        <Faixa
+          tipo="acao"
+          icone={<Icone nome="send" />}
+          titulo={pedido.titulo}
+          texto={pedido.texto}
+          acao={
+            <Link className="btn btn--primary" id="mens-ver-pedido" href={`/aprovacoes?pedido=${pedido.pedido}`}>
+              Ver o pedido
+            </Link>
+          }
+        />
+      )}
       <div className="mens-topo">
         <div className="mens-caixa" id="mens-conta">
           <span>Conta do WhatsApp</span>
@@ -176,7 +191,13 @@ function OQueFoiEnviado({ enviadas, modo, aoVer, aoTentarDeNovo }: { enviadas: E
   }
 
   return (
-    <Cartao sub="As campanhas de mensagens que o RegemCast enviou por esta conta, das mais novas para as mais antigas.">
+    <Cartao
+      sub={
+        enviadas.comCupom
+          ? 'As campanhas de mensagens que o RegemCast enviou por esta conta. A mensagem que o Liame monta leva um cupom só dela: é por ele que os pedidos que vieram dela são contados no caixa.'
+          : 'As campanhas de mensagens que o RegemCast enviou por esta conta, das mais novas para as mais antigas.'
+      }
+    >
       {modo === 'lite' ? (
         <>
           <p className="lite-frase lite-frase--grande">
@@ -190,7 +211,7 @@ function OQueFoiEnviado({ enviadas, modo, aoVer, aoTentarDeNovo }: { enviadas: E
         </>
       ) : (
         <div className="table-wrap">
-          <table className="tabela tabela--pilha">
+          <table className={enviadas.comCupom ? 'tabela tabela--pilha tabela--cupom' : 'tabela tabela--pilha'}>
             <caption className="sr-only">Mensagens enviadas, com o resultado de cada uma</caption>
             <thead>
               <tr>
@@ -207,6 +228,16 @@ function OQueFoiEnviado({ enviadas, modo, aoVer, aoTentarDeNovo }: { enviadas: E
                 <th scope="col" className="n">
                   Falharam
                 </th>
+                {enviadas.comCupom && (
+                  <>
+                    <th scope="col" className="n">
+                      Pedidos com o cupom
+                    </th>
+                    <th scope="col" className="n">
+                      No caixa
+                    </th>
+                  </>
+                )}
                 <th scope="col">
                   <span className="sr-only">Abrir</span>
                 </th>
@@ -235,6 +266,17 @@ function OQueFoiEnviado({ enviadas, modo, aoVer, aoTentarDeNovo }: { enviadas: E
                   <td className="n num" data-rot="Falharam">
                     {inteiro(m.falharam)}
                   </td>
+                  {enviadas.comCupom && (
+                    <>
+                      <td className="n num" data-rot="Pedidos com o cupom">
+                        {m.cupom?.pedidos === null || m.cupom?.pedidos === undefined ? '—' : inteiro(m.cupom.pedidos)}
+                        {m.cupom && <span className="sub">cupom {m.cupom.codigo}</span>}
+                      </td>
+                      <td className="n num" data-rot="No caixa">
+                        {m.cupom?.caixaCentavos === null || m.cupom?.caixaCentavos === undefined ? '—' : centavos(m.cupom.caixaCentavos)}
+                      </td>
+                    </>
+                  )}
                   <td className="n mens-acao">
                     <BotaoVer m={m} aoVer={aoVer} />
                   </td>
@@ -244,7 +286,9 @@ function OQueFoiEnviado({ enviadas, modo, aoVer, aoTentarDeNovo }: { enviadas: E
           </table>
         </div>
       )}
-      <p className="eixo-nota">“Receberam” é a mensagem entregue, que é a que a Meta cobra. O Liame não vê o nome nem o telefone de ninguém.</p>
+      <p className="eixo-nota">
+        “Receberam” é a mensagem entregue, que é a que a Meta cobra.{enviadas.comCupom ? ' Os pedidos e o valor vêm do caixa, pelo Regem, só dos pedidos que usaram o cupom da mensagem.' : ''} O Liame não vê o nome nem o telefone de ninguém.
+      </p>
       {enviadas.mais && <p className="eixo-nota">{enviadas.mais}</p>}
       {enviadas.fora && <p className="eixo-nota">{enviadas.fora}</p>}
     </Cartao>
@@ -273,12 +317,24 @@ function ItemDaLista({ m, aoVer }: { m: MensagemDaLista; aoVer: (id: string) => 
           </span>
         )}
       </div>
-      <div className="mens-item-valor">
-        <b>{m.receberam > 0 ? `${inteiro(m.leram)} ${m.leram === 1 ? 'leu' : 'leram'} (${m.leramPct}%)` : 'Ninguém recebeu ainda'}</b>
-        <span>
-          {inteiro(m.responderam)} {m.responderam === 1 ? 'respondeu' : 'responderam'} · {inteiro(m.falharam)} {m.falharam === 1 ? 'falhou' : 'falharam'}
-        </span>
-      </div>
+      {m.cupom && m.cupom.pedidos !== null && m.cupom.caixaCentavos !== null ? (
+        <div className="mens-item-valor">
+          <b>
+            {inteiro(m.cupom.pedidos)} {m.cupom.pedidos === 1 ? 'pedido' : 'pedidos'} com o cupom {m.cupom.codigo}
+          </b>
+          <span>
+            {centavos(m.cupom.caixaCentavos)} no caixa · {inteiro(m.leram)} {m.leram === 1 ? 'leu' : 'leram'}
+          </span>
+        </div>
+      ) : (
+        <div className="mens-item-valor">
+          <b>{m.receberam > 0 ? `${inteiro(m.leram)} ${m.leram === 1 ? 'leu' : 'leram'} (${m.leramPct}%)` : 'Ninguém recebeu ainda'}</b>
+          <span>
+            {inteiro(m.responderam)} {m.responderam === 1 ? 'respondeu' : 'responderam'} · {inteiro(m.falharam)} {m.falharam === 1 ? 'falhou' : 'falharam'}
+            {m.cupom ? ` · cupom ${m.cupom.codigo}` : ''}
+          </span>
+        </div>
+      )}
       <BotaoVer m={m} aoVer={aoVer} />
     </li>
   );

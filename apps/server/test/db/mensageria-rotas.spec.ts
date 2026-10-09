@@ -285,6 +285,8 @@ describe.skipIf(!hasDb)('mensageria pelas rotas: o que a tela Mensagens lê do R
         created_at: '2026-10-02T14:00:00.000Z',
         started_at: '2026-10-02T21:00:00.000Z',
         finished_at: '2026-10-02T21:19:00.000Z',
+        // A campanha que o Liame não montou não tem cupom dele.
+        coupon: null,
       },
     ]);
     // As cinco leituras, uma vez cada, com o token da conta; nenhuma ferramenta que escreve.
@@ -423,6 +425,64 @@ describe.skipIf(!hasDb)('mensageria pelas rotas: o que a tela Mensagens lê do R
     // A conta que não é desta empresa (um id qualquer).
     const semConta = await detalhar(e, CAMPANHA, randomUUID());
     expect(semConta.status).toBe(404);
+  });
+
+  it('o cupom da mensagem: o código e os pedidos confirmados no caixa com ele, desde que nasceu; a campanha sem cupom do Liame vem sem nada', async () => {
+    const e = await empresa();
+    // Sem pedido de mensagem do Liame para a campanha: nenhum cupom.
+    expect((await lida(e)).accounts[0]!.campaigns.items[0]!.coupon).toBeNull();
+    expect((await detalhar(e)).body.campaign.coupon).toBeNull();
+
+    // A loja do Regem e o pedido de mensagem com o cupom, já criado no Regem.
+    const loja = randomUUID();
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'regem', $4, 'Loja Centro', 'BRL', 'America/Sao_Paulo')`, [
+      loja,
+      e.tenantId,
+      e.brandId,
+      `loja-${randomUUID().slice(0, 8)}`,
+    ]);
+    const pedidoDeMensagem = (campanha: string, codigo: string, nascido: string | null) =>
+      ownerQuery(
+        `insert into liame.message_request (id, tenant_id, brand_id, connected_account_id, campaign_id, name, template_name, template_language, template_body, audience, audience_name,
+                                            people_can_receive, people_resting, window_days, window_start, window_end, coupon_account_id, coupon_code, coupon_rule, coupon_created_at, actor_type, agent_key)
+         values (gen_random_uuid(), $1, $2, $3, $4, 'Combo de domingo', 'combo_domingo_v2', 'pt_BR', 'Peça com o cupom.', '{"origem":"publico","id":"p"}'::jsonb, 'Clientes de domingo',
+                 412, 38, '{0,1,2,3,4,5,6}', '09:00', '20:00', $5, $6, '{"codigo":"X"}'::jsonb, $7::timestamptz, 'agent', 'crm')`,
+        [e.tenantId, e.brandId, e.conta, campanha, loja, codigo, nascido],
+      );
+    await pedidoDeMensagem(CAMPANHA, 'COMBO10', '2026-10-08T14:00:00Z');
+    // O cupom que ainda não nasceu (o pedido espera a aprovação) não aparece.
+    await pedidoDeMensagem(randomUUID(), 'AINDANAO', null);
+    const venda = (codigo: string | null, quando: string, status: 'confirmado' | 'cancelado', receita: number, devolvido = 0, conta = loja) =>
+      ownerQuery(
+        `insert into liame.order_fact (id, tenant_id, brand_id, connected_account_id, provider, external_id, channel, channel_group, status, currency, timezone, revenue_micros, refunded_micros, coupon_code,
+                                       confirmed_at, cancelled_at, source_version, source_updated_at)
+         values (gen_random_uuid(), $1, $2, $3, 'regem', $4, 'cardapio', 'cardapio', $5::text, 'BRL', 'America/Sao_Paulo', $6, $7, $8, $9::timestamptz, case when $5::text = 'cancelado' then $9::timestamptz + interval '1 hour' end, 1, now())`,
+        [e.tenantId, e.brandId, conta, `p-${randomUUID().slice(0, 12)}`, status, receita, devolvido, codigo, quando],
+      );
+    await venda('COMBO10', '2026-10-08T15:00:00Z', 'confirmado', 89_900_000);
+    await venda('COMBO10', '2026-10-08T19:30:00Z', 'confirmado', 120_000_000, 20_000_000);
+    // Não contam: o cancelado, o de antes de o cupom nascer, o de outro cupom, o sem cupom e o de outra loja.
+    await venda('COMBO10', '2026-10-08T16:00:00Z', 'cancelado', 50_000_000);
+    await venda('COMBO10', '2026-10-07T12:00:00Z', 'confirmado', 70_000_000);
+    await venda('OUTRO15', '2026-10-08T15:00:00Z', 'confirmado', 60_000_000);
+    await venda(null, '2026-10-08T15:00:00Z', 'confirmado', 40_000_000);
+    const outraLoja = randomUUID();
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'regem', $4, 'Loja Praia', 'BRL', 'America/Sao_Paulo')`, [
+      outraLoja,
+      e.tenantId,
+      e.brandId,
+      `loja-${randomUUID().slice(0, 8)}`,
+    ]);
+    await venda('COMBO10', '2026-10-08T15:00:00Z', 'confirmado', 99_000_000, 0, outraLoja);
+
+    // Dois pedidos, R$ 89,90 + (R$ 120,00 − R$ 20,00 devolvidos) = R$ 189,90.
+    const cupom = { code: 'COMBO10', orders: 2, revenue_cents: 18_990 };
+    expect((await lida(e)).accounts[0]!.campaigns.items[0]!.coupon).toEqual(cupom);
+    const perto = await detalhar(e);
+    expect([perto.status, perto.body.campaign.coupon], JSON.stringify(perto.body)).toEqual([200, cupom]);
+    // Outra empresa, com a mesma campanha no RegemCast falso, não vê o cupom desta.
+    const outra = await empresa();
+    expect((await lida(outra)).accounts[0]!.campaigns.items[0]!.coupon).toBeNull();
   });
 
   it('a conexão sem a leitura das campanhas diz isso ao abrir uma campanha', async () => {

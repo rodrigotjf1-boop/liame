@@ -225,6 +225,11 @@ export function textosDaMensagem(a: AcaoDeMensagem): TextosDaMensagem {
   };
 }
 
+/** O envio foi para o RegemCast com o cupom criado: os pedidos que usarem o cupom são contados na tela Mensagens. */
+export function cupomContaEmMensagens(a: AcaoDeMensagem): boolean {
+  return !ehPausa(a) && a.status === 'executada' && Boolean(a.message.coupon?.created);
+}
+
 // ---------------------------------------------------------------- a lista
 
 const PREFIXO_RECUSA = 'recusada por ';

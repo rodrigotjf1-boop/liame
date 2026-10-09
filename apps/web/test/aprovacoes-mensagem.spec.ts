@@ -7,6 +7,7 @@ import { DetalheMensagem } from '@/components/aprovacoes/detalhe-mensagem';
 import {
   type AcaoDeMensagem,
   bolhaDaMensagem,
+  cupomContaEmMensagens,
   ehPedidoDeMensagem,
   etiquetaDaMensagem,
   horaCurta,
@@ -415,5 +416,22 @@ describe('pedido de mensagem: o detalhe desenhado', () => {
     expect(semMarcas(pausa)).toContain('Pausar o envio de “Combo família de domingo”');
     expect(semMarcas(pausa)).toContain(`Pausada por Rodrigo às ${horaDe(local(11, 7))}.`);
     expect(pausa).not.toContain('data-mens-pausar');
+  });
+
+  it('o envio que foi para o RegemCast com o cupom criado diz onde os pedidos do cupom aparecem; antes disso, não', () => {
+    const criado = mensagem({ coupon: { ...mensagem().coupon!, created: true } });
+    const enviado = pedido({ status: 'executada', approvals: aprovacao(), message: criado });
+    expect(cupomContaEmMensagens(enviado)).toBe(true);
+    const html = desenho(enviado);
+    expect(html).toContain('id="mens-cupom-onde"');
+    expect(semMarcas(html)).toContain('Os pedidos com o cupom COMBO10 aparecem em Mensagens conforme forem confirmados no caixa.');
+    // Esperando a decisão, o cupom ainda não existe; e o envio que falhou não tem o que contar.
+    expect(cupomContaEmMensagens(pedido())).toBe(false);
+    expect(desenho(pedido())).not.toContain('id="mens-cupom-onde"');
+    expect(cupomContaEmMensagens(pedido({ status: 'falhou', approvals: aprovacao(), message: criado }))).toBe(false);
+    // Sem cupom, e no pedido de pausa, a linha não aparece.
+    expect(cupomContaEmMensagens(pedido({ status: 'executada', approvals: aprovacao(), message: mensagem({ coupon: null }) }))).toBe(false);
+    expect(cupomContaEmMensagens(pedido({ tool: 'mensagem_pausar', action: 'mensagem.pausar', mode: 'AUTO', agent_key: null, status: 'executada', message: criado }))).toBe(false);
+    expect(desenho(pedido({ status: 'executada', approvals: aprovacao(), message: mensagem({ coupon: { ...mensagem().coupon!, created: false } }) }))).not.toContain('id="mens-cupom-onde"');
   });
 });

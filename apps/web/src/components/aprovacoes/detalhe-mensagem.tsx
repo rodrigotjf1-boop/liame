@@ -10,7 +10,7 @@ import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
 import { quemPediu } from './anuncio-textos';
 import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
-import { type AcaoDeMensagem, impedimentoDoPedido, MOTIVOS_DA_MENSAGEM, type Pausa, resultadoDaPausa, resultadoDoEnvio, textosDaMensagem, type Trecho } from './mensagem-textos';
+import { type AcaoDeMensagem, cupomContaEmMensagens, impedimentoDoPedido, MOTIVOS_DA_MENSAGEM, type Pausa, resultadoDaPausa, resultadoDoEnvio, textosDaMensagem, type Trecho } from './mensagem-textos';
 import { aprovacaoParcial, type Grupo, identidadeDoPlano, prazoDe, ROTULO_RISCO } from './textos';
 
 // O pedido de mensagem de WhatsApp aberto (mockups/prototipo-mensagens.html, P15 aprovado em 09/10/2026). Esperando a
@@ -185,6 +185,14 @@ export function DetalheMensagem({ acao, grupo, agora, pro, podeDecidir, podeOper
           <b>{t.cupom.codigo}</b>: {t.cupom.texto}
         </span>
       </p>
+      {cupomContaEmMensagens(acao) && (
+        <p className="nota" id="mens-cupom-onde">
+          <Icone nome="send" />
+          <span>
+            Os pedidos com o cupom <b>{t.cupom.codigo}</b> aparecem em Mensagens conforme forem confirmados no caixa.
+          </span>
+        </p>
+      )}
     </div>
   );
 

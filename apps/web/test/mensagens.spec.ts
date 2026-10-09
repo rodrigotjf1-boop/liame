@@ -1,9 +1,9 @@
-import type { MessagingAccount, MessagingCampaign, MessagingCampaignDetailResponse, MessagingResponse } from '@liame/contracts';
+import type { ActionResponse, MessagingAccount, MessagingCampaign, MessagingCampaignDetailResponse, MessagingResponse } from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { MensagensConteudo } from '@/components/mensagens/mensagens-conteudo';
-import { centavos, contaDaTela, dadosDa, detalheDaMensagem, fraseDasEnviadas, jaSaiu, numerosDa, porCento, seloDaCampanha, telaDasMensagens } from '@/components/mensagens/textos';
+import { centavos, contaDaTela, cupomDa, dadosDa, detalheDaMensagem, faixaDosPedidos, type FaixaDoPedido, fraseDasEnviadas, jaSaiu, numerosDa, oQueTrouxe, porCento, seloDaCampanha, telaDasMensagens } from '@/components/mensagens/textos';
 import { itensVisiveis, NAVEGACAO, temModos, tituloDa } from '@/components/shell/navegacao';
 import { Icone } from '@/components/ui/icone';
 import { quandoComHora } from '@/lib/formato';
@@ -79,8 +79,8 @@ function pronta(c: MessagingAccount) {
   return t;
 }
 
-function desenho(c: MessagingAccount, modo: 'lite' | 'pro' = 'lite', podeVerContas = true) {
-  return renderToStaticMarkup(createElement(MensagensConteudo, { conta: contaDaTela(c, AGORA), modo, podeVerContas, aoVer: () => {}, aoTentarDeNovo: () => {} }));
+function desenho(c: MessagingAccount, modo: 'lite' | 'pro' = 'lite', podeVerContas = true, pedido: FaixaDoPedido | null = null) {
+  return renderToStaticMarkup(createElement(MensagensConteudo, { conta: contaDaTela(c, AGORA), modo, podeVerContas, pedido, aoVer: () => {}, aoTentarDeNovo: () => {} }));
 }
 
 describe('formatos da tela', () => {
@@ -233,6 +233,7 @@ describe('o que foi enviado', () => {
       leramPct: 78,
       responderam: 23,
       falharam: 7,
+      cupom: null,
     });
     expect(textoCorrido(e.frase)).toBe('As 2 mensagens foram entregues 398 vezes, foram lidas 311 vezes e tiveram 23 respostas.');
     expect(e.fora).toBe('Mais 1 campanha não aparece aqui porque nada saiu dela (rascunho, agendada ou cancelada antes do envio). O RegemCast mostra todas.');
@@ -257,6 +258,106 @@ describe('o que foi enviado', () => {
     expect(pronta(conta({ campaigns: { status: 'ok', total: 2, items: [campanha({ status: 'rascunho', sent: 0 }), campanha({ id: 'c9', status: 'agendada', sent: 0 })] } })).enviadas).toMatchObject({ tipo: 'vazia', fora: expect.stringContaining('Mais 2 campanhas não aparecem aqui') });
     expect(pronta(conta({ campaigns: SEM_LEITURA.campaigns })).enviadas).toEqual({ tipo: 'sem_permissao' });
     expect(pronta(conta({ campaigns: { status: 'indisponivel', total: null, items: [] } })).enviadas).toEqual({ tipo: 'indisponivel' });
+  });
+});
+
+describe('o cupom da mensagem e o pedido que espera aprovação', () => {
+  const comCupom = (orders: number | null = 12, revenue_cents: number | null = 107_880) => campanha({ coupon: { code: 'COMBO10', orders, revenue_cents } });
+  const naConta = (...itens: MessagingCampaign[]) => conta({ campaigns: { status: 'ok', total: itens.length, items: itens } });
+
+  it('o cupom como a tela o usa: o código e, para quem vê as vendas, os pedidos e o caixa', () => {
+    expect(cupomDa(comCupom())).toEqual({ codigo: 'COMBO10', pedidos: 12, caixaCentavos: 107_880 });
+    expect(cupomDa(comCupom(null, null))).toEqual({ codigo: 'COMBO10', pedidos: null, caixaCentavos: null });
+    expect(cupomDa(campanha())).toBeNull();
+    expect(cupomDa(campanha({ coupon: null }))).toBeNull();
+  });
+
+  it('a frase do modo simples ganha o que os cupons trouxeram, só quando há o que somar', () => {
+    const uma = pronta(naConta(comCupom())).enviadas;
+    if (uma.tipo !== 'lista') throw new Error(uma.tipo);
+    expect(uma.comCupom).toBe(true);
+    expect(textoCorrido(uma.frase)).toBe(`A mensagem foi entregue 398 vezes, foi lida 311 vezes e teve 23 respostas. O cupom dela trouxe 12 pedidos, com ${RS}1.078,80 confirmados no caixa.`);
+    const duas = pronta(naConta(comCupom(), campanha({ id: 'c2', coupon: { code: 'SEXTA15', orders: 1, revenue_cents: 8_990 } }))).enviadas;
+    if (duas.tipo !== 'lista') throw new Error(duas.tipo);
+    expect(textoCorrido(duas.frase)).toContain(`Os cupons delas trouxeram 13 pedidos, com ${RS}1.168,70 confirmados no caixa.`);
+    // Nenhum pedido ainda, e quem não vê as vendas.
+    const zero = pronta(naConta(comCupom(0, 0))).enviadas;
+    if (zero.tipo !== 'lista') throw new Error(zero.tipo);
+    expect(textoCorrido(zero.frase)).toContain('Nenhum pedido usou o cupom de uma mensagem até agora.');
+    const semVendas = pronta(naConta(comCupom(null, null))).enviadas;
+    if (semVendas.tipo !== 'lista') throw new Error(semVendas.tipo);
+    expect([semVendas.comCupom, textoCorrido(semVendas.frase)]).toEqual([true, 'A mensagem foi entregue 398 vezes, foi lida 311 vezes e teve 23 respostas.']);
+    // Sem cupom nenhum, a tela é a de antes.
+    expect(pronta(conta()).enviadas).toMatchObject({ comCupom: false });
+  });
+
+  it('o que a mensagem trouxe, na gaveta: os pedidos, o caixa e quanto voltou para cada real gasto', () => {
+    const cupom = { codigo: 'COMBO10', pedidos: 12, caixaCentavos: 107_880 };
+    expect(oQueTrouxe(cupom, 12_736)).toEqual({ texto: `12 pedidos com o cupom COMBO10, com ${RS}1.078,80 confirmados no caixa.`, voltou: `Voltou ${RS}8,47 para cada R$ 1 gasto no envio.` });
+    // Sem o gasto (ou com gasto zero), a tela não faz a conta.
+    expect(oQueTrouxe(cupom, null)!.voltou).toBeNull();
+    expect(oQueTrouxe(cupom, 0)!.voltou).toBeNull();
+    expect(oQueTrouxe({ ...cupom, pedidos: 1, caixaCentavos: 8_990 }, 12_736)).toEqual({ texto: `1 pedido com o cupom COMBO10, com ${RS}89,90 confirmados no caixa.`, voltou: `Voltou ${RS}0,70 para cada R$ 1 gasto no envio.` });
+    expect(oQueTrouxe({ ...cupom, pedidos: 0, caixaCentavos: 0 }, 12_736)).toEqual({ texto: 'Nenhum pedido usou o cupom COMBO10 até agora.', voltou: null });
+    expect(oQueTrouxe({ codigo: 'COMBO10', pedidos: null, caixaCentavos: null }, 12_736)).toEqual({ texto: 'Esta mensagem leva o cupom COMBO10. Os pedidos com ele aparecem para quem vê as vendas.', voltou: null });
+    expect(oQueTrouxe(null, 12_736)).toBeNull();
+  });
+
+  it('a lista e a tabela mostram o cupom só quando alguma mensagem tem um', () => {
+    const c = naConta(comCupom(), campanha({ id: 'c2', name: 'Sem cupom' }));
+    const lite = textoDe(desenho(c));
+    expect(lite).toContain('12 pedidos com o cupom COMBO10');
+    expect(lite).toContain(`${RS}1.078,80 no caixa · 311 leram`);
+    // A mensagem sem cupom segue com as leituras.
+    expect(lite).toContain('311 leram (78%)');
+    expect(lite).toContain('A mensagem que o Liame monta leva um cupom só dela');
+    expect(lite).toContain('Os pedidos e o valor vêm do caixa, pelo Regem, só dos pedidos que usaram o cupom da mensagem.');
+    const pro = desenho(c, 'pro');
+    for (const coluna of ['Pedidos com o cupom', 'No caixa']) expect(pro).toContain(`data-rot="${coluna}"`);
+    expect(textoDe(pro)).toContain('cupom COMBO10');
+    expect(textoDe(pro)).toContain(`${RS}1.078,80`);
+    // Para quem não vê as vendas: o código aparece, os números não.
+    const semVendas = naConta(comCupom(null, null));
+    expect(textoDe(desenho(semVendas))).toContain('· cupom COMBO10');
+    expect(textoDe(desenho(semVendas))).not.toContain('pedidos com o cupom');
+    expect(textoDe(desenho(semVendas, 'pro'))).toContain('—');
+    // Sem cupom em nenhuma, nenhuma coluna a mais.
+    expect(desenho(conta(), 'pro')).not.toContain('Pedidos com o cupom');
+  });
+
+  const pedido = (o: Partial<ActionResponse> = {}): ActionResponse =>
+    ({
+      id: 'a0000000-0000-4000-8000-000000000801',
+      tool: 'mensagem_disparar',
+      status: 'aguardando_aprovacao',
+      account_id: CONTA,
+      blocked_reason: null,
+      expires_at: '2026-10-12T15:00:00.000Z',
+      message: { name: 'Combo família de domingo', audience: { name: 'Clientes de domingo', rule: null, can_receive: 412, resting: 38, rest_days: 7 }, plan: { status: 'rascunho', people: 412, recipients: 412, cost_cents: 13_184, currency: 'BRL', budget: { defined: true, periods: [], notice: null } } },
+      ...o,
+    }) as ActionResponse;
+
+  it('a faixa do pedido que espera: quantas mensagens, a primeira da fila e para onde o botão leva', () => {
+    expect(faixaDosPedidos([pedido()], CONTA)).toEqual({ titulo: '1 mensagem espera a sua aprovação', texto: `“Combo família de domingo”, para 412 pessoas, até ${RS}131,84.`, pedido: 'a0000000-0000-4000-8000-000000000801' });
+    // Duas na fila: a que expira antes vem primeiro.
+    const depois = pedido({ id: 'a0000000-0000-4000-8000-000000000802', expires_at: '2026-10-13T15:00:00.000Z' });
+    expect(faixaDosPedidos([depois, pedido()], CONTA)).toMatchObject({ titulo: '2 mensagens esperam a sua aprovação', pedido: 'a0000000-0000-4000-8000-000000000801', texto: expect.stringContaining('E mais uma.') });
+    expect(faixaDosPedidos([pedido({ blocked_reason: 'O modelo ainda não foi aprovado.' })], CONTA)!.texto).toContain('Ainda não pode ser aprovada: algo impede o envio.');
+    // Não entram: o de outra conta, o que já foi decidido, a pausa e o pedido que não é de mensagem.
+    expect(faixaDosPedidos([pedido({ account_id: MARCA })], CONTA)).toBeNull();
+    expect(faixaDosPedidos([pedido({ status: 'aprovada' })], CONTA)).toBeNull();
+    expect(faixaDosPedidos([pedido({ tool: 'mensagem_pausar' })], CONTA)).toBeNull();
+    expect(faixaDosPedidos([pedido({ message: null })], CONTA)).toBeNull();
+    expect(faixaDosPedidos([], CONTA)).toBeNull();
+  });
+
+  it('a faixa desenhada leva a Aprovações, aberta no pedido', () => {
+    const html = desenho(conta(), 'lite', true, faixaDosPedidos([pedido()], CONTA));
+    expect(html).toContain('class="faixa faixa--acao" role="status"');
+    expect(textoDe(html)).toContain('1 mensagem espera a sua aprovação');
+    expect(html).toContain('href="/aprovacoes?pedido=a0000000-0000-4000-8000-000000000801"');
+    expect(textoDe(html)).toContain('Ver o pedido');
+    expect(desenho(conta())).not.toContain('faixa--acao');
   });
 });
 
@@ -303,6 +404,12 @@ describe('uma mensagem de perto', () => {
     });
     expect(d.custo).toEqual({ linhas: [{ rotulo: 'Gasto na Meta', valor: 'R$ 127,36', detalhe: '398 mensagens entregues' }], avisos: [] });
     expect(d.descanso).toBe('No RegemCast, quem recebe uma mensagem de marketing só recebe outra depois de 7 dias.');
+    // Sem cupom do Liame, a gaveta não fala de pedidos; com ele e o gasto, diz quanto voltou.
+    expect(d.trouxe).toBeNull();
+    expect(detalheDaMensagem(detalhe({ campaign: campanha({ coupon: { code: 'COMBO10', orders: 12, revenue_cents: 107_880 } }) }), AGORA).trouxe).toEqual({
+      texto: `12 pedidos com o cupom COMBO10, com ${RS}1.078,80 confirmados no caixa.`,
+      voltou: `Voltou ${RS}8,47 para cada R$ 1 gasto no envio.`,
+    });
   });
 
   it('sem falha não há bloco; com falha sem motivo, a tela diz que o RegemCast não informou', () => {

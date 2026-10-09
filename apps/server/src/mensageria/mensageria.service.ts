@@ -1,4 +1,4 @@
-import type { MessagingAccount, MessagingCampaign, MessagingCampaignDetailResponse, MessagingResponse } from '@liame/contracts';
+import type { MessagingAccount, MessagingCampaign, MessagingCampaignDetailResponse, MessagingCoupon, MessagingResponse } from '@liame/contracts';
 import type { Database } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -52,6 +52,9 @@ const semAutorizacao = () =>
 const indisponivel = () =>
   new AppProblem(502, 'plataforma-indisponivel', 'O RegemCast não respondeu', 'Não foi possível ler esta campanha no RegemCast agora. Nada mudou; tente de novo em instantes.');
 
+/** Pedidos e receita são do ciclo fechado: só para quem vê as vendas (ADR-013). */
+const veVendas = (auth: AuthContext): boolean => auth.permissions.has('vendas.ver');
+
 function quemPede(auth: AuthContext): Quem {
   if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
   return { tenantId: auth.tenantId, userId: auth.userId };
@@ -80,6 +83,15 @@ export function campanhaDaRota(c: CampanhaRegemcast): MessagingCampaign {
   };
 }
 
+/**
+ * O cupom de uma mensagem como a rota o devolve. O código aparece para quem vê as campanhas; os pedidos e a receita
+ * são do ciclo fechado, só para quem vê as vendas (ADR-013). Micros viram centavos sem ponto flutuante (1 centavo são
+ * 10.000 micros).
+ */
+export function cupomDaRota(l: { coupon_code: string; pedidos: number | string; receita_micros: string }, comVendas: boolean): MessagingCoupon {
+  return { code: l.coupon_code, orders: comVendas ? Number(l.pedidos) : null, revenue_cents: comVendas ? Number(BigInt(l.receita_micros) / 10_000n) : null };
+}
+
 @Injectable()
 export class MensageriaService {
   private readonly logger = new Logger('mensageria');
@@ -105,7 +117,12 @@ export class MensageriaService {
     });
     const base = { brand_id: brandId, read_at: new Date().toISOString() };
     if (contas === null) return { ...base, enabled: false, accounts: [] };
-    return { ...base, enabled: true, accounts: await Promise.all(contas.map((c) => this.lerConta(c))) };
+    const lidas = await Promise.all(contas.map((c) => this.lerConta(c)));
+    // O cupom de cada mensagem que o Liame montou, e o que ele trouxe no caixa: do banco, numa transação curta.
+    const pares = lidas.flatMap((a) => a.campaigns.items.map((c) => ({ conta: a.connected_account_id, campanha: c.id })));
+    const cupons = pares.length ? await naTransacaoDaEmpresa(this.banco(), quem, () => this.cuponsDasCampanhas(pares, veVendas(auth))) : new Map<string, MessagingCoupon>();
+    const accounts = lidas.map((a) => ({ ...a, campaigns: { ...a.campaigns, items: a.campaigns.items.map((c) => ({ ...c, coupon: cupons.get(`${a.connected_account_id}/${c.id}`) ?? null })) } }));
+    return { ...base, enabled: true, accounts };
   }
 
   /** Uma campanha de perto: por que está pausada ou esperando, as falhas por motivo e o custo. */
@@ -122,9 +139,10 @@ export class MensageriaService {
     if (!apiUrl) throw indisponivel();
     try {
       const d = await detalharCampanhaDeMensagens({ cliente: this.cliente(), apiUrl }, { token: conta.token, contaChave: chaveDaTela(conta), id: campanhaId });
+      const cupons = await naTransacaoDaEmpresa(this.banco(), quem, () => this.cuponsDasCampanhas([{ conta: conta.id, campanha: d.campanha.id }], veVendas(auth)));
       return {
         connected_account_id: conta.id,
-        campaign: campanhaDaRota(d.campanha),
+        campaign: { ...campanhaDaRota(d.campanha), coupon: cupons.get(`${conta.id}/${d.campanha.id}`) ?? null },
         pause: d.pausa ? { reason: d.pausa.motivo, explanation: d.pausa.explicacao, resumes_at: iso(d.pausa.voltaEm) } : null,
         waiting: d.espera ? { reason: d.espera.motivo, until: iso(d.espera.ate) } : null,
         failures: d.falhasPorMotivo.map((f) => ({ messages: f.mensagens, title: f.titulo, explanation: f.explicacao, action: f.acao })),
@@ -150,6 +168,29 @@ export class MensageriaService {
       if (err.tipo === 'definitivo') throw new AppProblem(422, 'plataforma-recusou', 'O RegemCast não devolveu esta campanha', 'O RegemCast não encontrou esta campanha nesta conta. Leia a lista de novo.');
       throw indisponivel();
     }
+  }
+
+  /**
+   * O cupom de cada campanha que o Liame montou com um (o retrato do pedido de mensagem), pela chave `conta/campanha`.
+   * Só o cupom que já nasceu no Regem (junto com o envio). Para quem vê as vendas, vêm também os pedidos confirmados
+   * na loja do cupom, com ele, desde que nasceu, e a receita deles, sem o que foi devolvido.
+   */
+  private async cuponsDasCampanhas(pares: { conta: string; campanha: string }[], comVendas: boolean): Promise<Map<string, MessagingCoupon>> {
+    const contas = [...new Set(pares.map((p) => p.conta))];
+    const campanhas = [...new Set(pares.map((p) => p.campanha))];
+    const r = await currentTx().execute<{ connected_account_id: string; campaign_id: string; coupon_code: string; pedidos: number; receita_micros: string }>(sql`
+      select m.connected_account_id, m.campaign_id, m.coupon_code,
+             count(o.id)::int as pedidos, coalesce(sum(o.revenue_micros - o.refunded_micros), 0)::text as receita_micros
+        from liame.message_request m
+        left join liame.order_fact o
+          on o.tenant_id = m.tenant_id and o.connected_account_id = m.coupon_account_id and o.coupon_code = m.coupon_code
+         and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at
+       where m.connected_account_id in ${contas} and m.campaign_id in ${campanhas}
+         and m.coupon_code is not null and m.coupon_created_at is not null
+       group by m.connected_account_id, m.campaign_id, m.coupon_code`);
+    const cupons = new Map<string, MessagingCoupon>();
+    for (const l of r.rows) cupons.set(`${l.connected_account_id}/${l.campaign_id}`, cupomDaRota(l, comVendas));
+    return cupons;
   }
 
   private banco(): Database {
