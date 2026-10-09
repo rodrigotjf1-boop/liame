@@ -271,7 +271,7 @@ export class ActionService {
     }
 
     const id = uuidv7();
-    const { mode, status, reason } = await this.statusFor(decision.mode, quem, brandId);
+    const { mode, status, reason } = await this.statusFor(decision.mode, quem, brandId, tool);
     const fingerprint = sha256(canonicalJson({ tenantId, tool: tool.name, provider: input.provider, account: input.account_id, resource: input.resource_id }));
     const planHash = planHashOf({ ...input, brand_id: brandId, tool: tool.name, params }, plan, read.version);
     try {
@@ -383,7 +383,7 @@ export class ActionService {
     const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params };
     // Quem altera é uma pessoa: o plano novo é avaliado como pedido dela, também no pedido que o funcionário de IA fez.
     const decision = await this.decide(tx, tenantId, row.brand_id, tool, connector, request, plan);
-    const { mode, status, reason } = await this.statusFor(decision.mode, { tenantId, userId: auth.userId }, row.brand_id);
+    const { mode, status, reason } = await this.statusFor(decision.mode, { tenantId, userId: auth.userId }, row.brand_id, tool);
     const planHash = planHashOf(request, plan, read.version);
     // O pedido que nasceu de uma recomendação e passa a fazer outra coisa (de reduzir para aumentar) deixa de ser dela:
     // a ligação sai, para a prontidão do funcionário não contar o que a pessoa decidiu por conta própria.
@@ -698,10 +698,19 @@ export class ActionService {
     return decision;
   }
 
-  /** Autonomia sem o autopilot ligado volta para aprovação (ADR-012: flag de escrita nasce desligada). */
-  private async statusFor(mode: AutonomyMode, quem: Pick<Solicitante, 'tenantId' | 'userId'>, brandId: string | null): Promise<{ mode: AutonomyMode; status: ActionStatus; reason: string | null }> {
+  /**
+   * Autonomia sem o autopilot ligado volta para aprovação (ADR-012: flag de escrita nasce desligada). A ferramenta que
+   * sempre espera uma pessoa (`alwaysApproval`) volta para aprovação mesmo com ele ligado.
+   */
+  private async statusFor(
+    mode: AutonomyMode,
+    quem: Pick<Solicitante, 'tenantId' | 'userId'>,
+    brandId: string | null,
+    tool?: Pick<ToolDefinition, 'alwaysApproval'>,
+  ): Promise<{ mode: AutonomyMode; status: ActionStatus; reason: string | null }> {
     if (mode === 'SHADOW') return { mode, status: 'sombra', reason: 'modo sombra: registra, não executa' };
     if (mode === 'LIMITED_AUTO' || mode === 'AUTO') {
+      if (tool?.alwaysApproval) return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: `autonomia ${mode} pedida, mas esta ação sempre espera a aprovação de uma pessoa` };
       const autopilot = await this.flags.isEnabled('autopilot', this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId }));
       if (autopilot) return { mode, status: 'aprovada', reason: 'aprovada pela política (autonomia)' };
       return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: `autonomia ${mode} pedida, mas o autopilot está desligado` };

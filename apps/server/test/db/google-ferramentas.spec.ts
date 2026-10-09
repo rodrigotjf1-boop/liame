@@ -137,7 +137,7 @@ describe.skipIf(!hasDb)('ferramentas de anúncio no Google: do pedido à volta (
       from: { status: 'ativo', daily_micros: 30 * REAL },
       to: { status: 'ativo', daily_micros: 27 * REAL },
     });
-    expect(p.body.policy.versions[0]).toBe('plataforma@4');
+    expect(p.body.policy.versions[0]).toBe('plataforma@5');
     // O pedido leu a campanha no Google, e mais nada. Sem a aprovação, o executor nem olha para ele.
     expect(google.resumo(e.cliente)).toEqual(['leitura']);
     await ciclo(e);

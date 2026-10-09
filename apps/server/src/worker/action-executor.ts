@@ -24,7 +24,7 @@ const ESPERA_MAXIMA_MS = 2 * 3_600_000;
 
 /** O que a plataforma manda esperar: limite de uso, falha passageira e o disjuntor aberto. O resto é recusa ou defeito. */
 const ADIA = new Set(['limite', 'transitorio', 'circuito_aberto']);
-const NOME_DO_PROVEDOR: Record<string, string> = { meta_ads: 'a Meta', google_ads: 'o Google', regem: 'o Regem' };
+const NOME_DO_PROVEDOR: Record<string, string> = { meta_ads: 'a Meta', google_ads: 'o Google', regem: 'o Regem', regemcast: 'o RegemCast' };
 
 /**
  * Quanto esperar até a próxima tentativa: o que a plataforma pediu, ou 1 minuto dobrando a cada vez; no máximo 2 horas.
