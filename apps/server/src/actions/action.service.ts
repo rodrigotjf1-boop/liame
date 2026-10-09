@@ -1,4 +1,5 @@
 import type {
+  ActionMessage,
   ActionProposal,
   ActionResponse,
   ActionStatus,
@@ -34,6 +35,9 @@ import { advance, workflowOf } from '../workflow/workflow.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
+import { EstadoDaMensagem } from './mensagem-plano.js';
+import type { RegraDoCupom } from './regem-cupom.js';
+import { mensagemDoRecurso } from './regemcast-mensagem.js';
 import { respostaDaPlataforma } from './resposta-da-plataforma.js';
 import { PlanoRecusado, type ResourceState, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
 
@@ -95,7 +99,65 @@ type Apresentacao = {
   campanhasDosObjetos: Map<string, { id: string; name: string }>;
   /** A tentativa de execução mais recente de cada pedido. */
   execucoes: Map<string, NonNullable<ActionResponse['execution']>>;
+  /** O retrato da mensagem de cada pedido de envio ou de pausa (A5, Y5), pela chave `conta/campanha do RegemCast`. */
+  mensagens: Map<string, RetratoDaMensagem>;
 };
+
+/** O retrato da mensagem, como a resposta o mostra (sem o plano do disparo, que é de cada pedido). */
+type RetratoDaMensagem = Omit<ActionMessage, 'campaign_id' | 'plan'>;
+type VariavelGuardada = { origem: string; valor?: string };
+type LinhaDaMensagem = {
+  connected_account_id: string;
+  campaign_id: string;
+  name: string;
+  template_name: string;
+  template_language: string;
+  template_category: string | null;
+  template_header: string | null;
+  template_body: string;
+  template_footer: string | null;
+  template_buttons: string[];
+  variables: VariavelGuardada[];
+  header_variable: VariavelGuardada | null;
+  audience_name: string;
+  audience_rule: string | null;
+  people_can_receive: number;
+  people_resting: number;
+  rest_days: number | null;
+  window_days: number[];
+  window_start: string;
+  window_end: string;
+  coupon_code: string | null;
+  coupon_rule: RegraDoCupom | null;
+  coupon_created_at: Date | string | null;
+};
+
+const variavelDaResposta = (v: VariavelGuardada) => ({ origin: v.origem, value: v.valor ?? null });
+
+function retratoDaMensagem(l: LinhaDaMensagem): RetratoDaMensagem {
+  const regra = l.coupon_rule;
+  return {
+    name: l.name,
+    template: { name: l.template_name, language: l.template_language, category: l.template_category, header: l.template_header, body: l.template_body, footer: l.template_footer, buttons: l.template_buttons },
+    variables: l.variables.map(variavelDaResposta),
+    header_variable: l.header_variable ? variavelDaResposta(l.header_variable) : null,
+    audience: { name: l.audience_name, rule: l.audience_rule, can_receive: Number(l.people_can_receive), resting: Number(l.people_resting), rest_days: l.rest_days === null ? null : Number(l.rest_days) },
+    window: { days: l.window_days.map(Number), start: l.window_start, end: l.window_end },
+    coupon:
+      l.coupon_code && regra
+        ? {
+            code: l.coupon_code,
+            kind: regra.tipo,
+            percent: regra.percentual === undefined ? null : Number(regra.percentual),
+            value_cents: regra.valor_centavos ?? null,
+            min_order_cents: regra.pedido_minimo_centavos ?? null,
+            valid_from: regra.valido_de,
+            valid_until: regra.valido_ate,
+            created: l.coupon_created_at !== null,
+          }
+        : null,
+  };
+}
 
 /** `campanha`, `conjunto` ou `anuncio` quando o recurso é um objeto de anúncio (`tipo:id na plataforma`); senão, nulo. */
 function tipoDoObjeto(resourceId: string): 'campanha' | 'conjunto' | 'anuncio' | null {
@@ -817,8 +879,20 @@ export class ActionService {
    * do caixa no retrato da recomendação (pedidos, receita, margem) só saem para quem vê as vendas.
    */
   private async apresentacaoDe(tx: Tx, rows: ActionRow[], comVendas: boolean): Promise<Apresentacao> {
-    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map(), recomendacoes: new Map(), campanhasDosObjetos: new Map(), execucoes: new Map() };
+    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map(), recomendacoes: new Map(), campanhasDosObjetos: new Map(), execucoes: new Map(), mensagens: new Map() };
     if (!rows.length) return ap;
+    // O retrato da mensagem (A5, Y5): o envio e a pausa são da mesma campanha em rascunho que o Liame montou.
+    const deMensagem = rows.filter((r) => r.provider === 'regemcast' && mensagemDoRecurso(r.resource_id) !== null);
+    if (deMensagem.length) {
+      const m = await tx.execute<LinhaDaMensagem>(sql`
+        select connected_account_id, campaign_id, name, template_name, template_language, template_category, template_header, template_body,
+               template_footer, template_buttons, variables, header_variable, audience_name, audience_rule, people_can_receive,
+               people_resting, rest_days, window_days, window_start, window_end, coupon_code, coupon_rule, coupon_created_at
+          from liame.message_request
+         where connected_account_id in ${[...new Set(deMensagem.map((r) => r.account_id))]}
+           and campaign_id in ${[...new Set(deMensagem.map((r) => mensagemDoRecurso(r.resource_id)!))]}`);
+      for (const l of m.rows) ap.mensagens.set(`${l.connected_account_id}/${l.campaign_id}`, retratoDaMensagem(l));
+    }
     const recomendacoes = [...new Set(rows.map((r) => r.shadow_decision_id).filter((id): id is string => id !== null))];
     if (recomendacoes.length) {
       const d = await tx.execute<{
@@ -1020,6 +1094,33 @@ function flowAfterRequest(
   return { steps: [policy, budget, { name: 'aprovacao', status: 'aguardando' }], run: 'aguardando' };
 }
 
+/** A mensagem do pedido de envio ou de pausa: o retrato guardado e o plano do disparo que o pedido leu. Nulo nos outros pedidos. */
+function mensagemDaResposta(row: ActionRow, ap: Apresentacao): ActionMessage | null {
+  const campanha = row.provider === 'regemcast' ? mensagemDoRecurso(row.resource_id) : null;
+  const retrato = campanha ? ap.mensagens.get(`${row.account_id}/${campanha}`) : undefined;
+  if (!campanha || !retrato) return null;
+  const lido = EstadoDaMensagem.safeParse(row.before_state);
+  const e = lido.success ? lido.data : null;
+  return {
+    campaign_id: campanha,
+    ...retrato,
+    plan: e
+      ? {
+          status: e.situacao,
+          people: e.pessoas,
+          recipients: e.destinatarios,
+          cost_cents: e.custo_centavos,
+          currency: e.moeda,
+          budget: {
+            defined: e.orcamento.definido,
+            periods: e.orcamento.periodos.map((p) => ({ period: p.periodo, label: p.rotulo, limit_cents: p.teto_centavos, spent_cents: p.gasto_centavos, signal: p.sinal })),
+            notice: e.orcamento.aviso,
+          },
+        }
+      : null,
+  };
+}
+
 function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionResponse['workflow'], ap: Apresentacao): ActionResponse {
   const campanha = row.params.campaign_id;
   const execucao = ap.execucoes.get(row.id) ?? null;
@@ -1079,6 +1180,7 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     from: alvo ? estadoNaResposta(row.before_state) : null,
     to: alvo ? estadoNaResposta(row.desired_state) : null,
     execution: execucao ? { ...execucao, provider_reply: execucao.status === 'falhou' ? respostaDaPlataforma(row.provider, row.status_reason) : null } : null,
+    message: mensagemDaResposta(row, ap),
   };
 }
 

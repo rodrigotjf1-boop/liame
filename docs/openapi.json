@@ -7207,6 +7207,356 @@
                         "observed"
                       ],
                       "additionalProperties": false
+                    },
+                    "message": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "campaign_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "template": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "header": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "footer": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "buttons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "language",
+                            "category",
+                            "header",
+                            "body",
+                            "footer",
+                            "buttons"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "variables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "origin": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "value": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "origin",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "header_variable": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "origin": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "value": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "origin",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "audience": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "rule": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "can_receive": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "resting": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "rest_days": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "rule",
+                            "can_receive",
+                            "resting",
+                            "rest_days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 6
+                              }
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "days",
+                            "start",
+                            "end"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coupon": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "percent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "value_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "min_order_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "valid_from": {
+                              "type": "string"
+                            },
+                            "valid_until": {
+                              "type": "string"
+                            },
+                            "created": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "kind",
+                            "percent",
+                            "value_cents",
+                            "min_order_cents",
+                            "valid_from",
+                            "valid_until",
+                            "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "plan": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recipients": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cost_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "currency": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "defined": {
+                                  "type": "boolean"
+                                },
+                                "periods": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "period": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "limit_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "spent_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "signal": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "period",
+                                      "label",
+                                      "limit_cents",
+                                      "spent_cents",
+                                      "signal"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "notice": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "defined",
+                                "periods",
+                                "notice"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "people",
+                            "recipients",
+                            "cost_cents",
+                            "currency",
+                            "budget"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "campaign_id",
+                        "name",
+                        "template",
+                        "variables",
+                        "header_variable",
+                        "audience",
+                        "window",
+                        "coupon",
+                        "plan"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -8208,6 +8558,356 @@
                               "finished_at",
                               "no_write",
                               "observed"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "message": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "campaign_id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "template": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "language": {
+                                    "type": "string"
+                                  },
+                                  "category": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "header": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "body": {
+                                    "type": "string"
+                                  },
+                                  "footer": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "buttons": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "language",
+                                  "category",
+                                  "header",
+                                  "body",
+                                  "footer",
+                                  "buttons"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "variables": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "origin": {
+                                      "type": "string",
+                                      "maxLength": 60,
+                                      "pattern": "^[a-z0-9_]+$"
+                                    },
+                                    "value": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "origin",
+                                    "value"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "header_variable": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "origin": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "value": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "origin",
+                                  "value"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "audience": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "rule": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "can_receive": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "resting": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "rest_days": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "rule",
+                                  "can_receive",
+                                  "resting",
+                                  "rest_days"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "window": {
+                                "type": "object",
+                                "properties": {
+                                  "days": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 6
+                                    }
+                                  },
+                                  "start": {
+                                    "type": "string"
+                                  },
+                                  "end": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "days",
+                                  "start",
+                                  "end"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "coupon": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "percent": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "value_cents": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "min_order_cents": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "valid_from": {
+                                    "type": "string"
+                                  },
+                                  "valid_until": {
+                                    "type": "string"
+                                  },
+                                  "created": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "kind",
+                                  "percent",
+                                  "value_cents",
+                                  "min_order_cents",
+                                  "valid_from",
+                                  "valid_until",
+                                  "created"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "plan": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "people": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "recipients": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "cost_cents": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "currency": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "budget": {
+                                    "type": "object",
+                                    "properties": {
+                                      "defined": {
+                                        "type": "boolean"
+                                      },
+                                      "periods": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "period": {
+                                              "type": "string",
+                                              "maxLength": 60,
+                                              "pattern": "^[a-z0-9_]+$"
+                                            },
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "limit_cents": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 9007199254740991
+                                            },
+                                            "spent_cents": {
+                                              "type": "integer",
+                                              "minimum": 0,
+                                              "maximum": 9007199254740991
+                                            },
+                                            "signal": {
+                                              "type": "string",
+                                              "maxLength": 60,
+                                              "pattern": "^[a-z0-9_]+$"
+                                            }
+                                          },
+                                          "required": [
+                                            "period",
+                                            "label",
+                                            "limit_cents",
+                                            "spent_cents",
+                                            "signal"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "notice": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "defined",
+                                      "periods",
+                                      "notice"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "required": [
+                                  "status",
+                                  "people",
+                                  "recipients",
+                                  "cost_cents",
+                                  "currency",
+                                  "budget"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "campaign_id",
+                              "name",
+                              "template",
+                              "variables",
+                              "header_variable",
+                              "audience",
+                              "window",
+                              "coupon",
+                              "plan"
                             ],
                             "additionalProperties": false
                           }
@@ -9865,6 +10565,356 @@
                         "observed"
                       ],
                       "additionalProperties": false
+                    },
+                    "message": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "campaign_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "template": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "header": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "footer": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "buttons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "language",
+                            "category",
+                            "header",
+                            "body",
+                            "footer",
+                            "buttons"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "variables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "origin": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "value": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "origin",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "header_variable": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "origin": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "value": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "origin",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "audience": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "rule": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "can_receive": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "resting": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "rest_days": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "rule",
+                            "can_receive",
+                            "resting",
+                            "rest_days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 6
+                              }
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "days",
+                            "start",
+                            "end"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coupon": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "percent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "value_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "min_order_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "valid_from": {
+                              "type": "string"
+                            },
+                            "valid_until": {
+                              "type": "string"
+                            },
+                            "created": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "kind",
+                            "percent",
+                            "value_cents",
+                            "min_order_cents",
+                            "valid_from",
+                            "valid_until",
+                            "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "plan": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recipients": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cost_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "currency": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "defined": {
+                                  "type": "boolean"
+                                },
+                                "periods": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "period": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "limit_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "spent_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "signal": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "period",
+                                      "label",
+                                      "limit_cents",
+                                      "spent_cents",
+                                      "signal"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "notice": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "defined",
+                                "periods",
+                                "notice"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "people",
+                            "recipients",
+                            "cost_cents",
+                            "currency",
+                            "budget"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "campaign_id",
+                        "name",
+                        "template",
+                        "variables",
+                        "header_variable",
+                        "audience",
+                        "window",
+                        "coupon",
+                        "plan"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -10683,6 +11733,356 @@
                         "observed"
                       ],
                       "additionalProperties": false
+                    },
+                    "message": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "campaign_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "template": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "header": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "footer": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "buttons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "language",
+                            "category",
+                            "header",
+                            "body",
+                            "footer",
+                            "buttons"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "variables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "origin": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "value": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "origin",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "header_variable": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "origin": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "value": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "origin",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "audience": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "rule": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "can_receive": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "resting": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "rest_days": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "rule",
+                            "can_receive",
+                            "resting",
+                            "rest_days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 6
+                              }
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "days",
+                            "start",
+                            "end"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coupon": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "percent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "value_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "min_order_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "valid_from": {
+                              "type": "string"
+                            },
+                            "valid_until": {
+                              "type": "string"
+                            },
+                            "created": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "kind",
+                            "percent",
+                            "value_cents",
+                            "min_order_cents",
+                            "valid_from",
+                            "valid_until",
+                            "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "plan": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recipients": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cost_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "currency": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "defined": {
+                                  "type": "boolean"
+                                },
+                                "periods": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "period": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "limit_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "spent_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "signal": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "period",
+                                      "label",
+                                      "limit_cents",
+                                      "spent_cents",
+                                      "signal"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "notice": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "defined",
+                                "periods",
+                                "notice"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "people",
+                            "recipients",
+                            "cost_cents",
+                            "currency",
+                            "budget"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "campaign_id",
+                        "name",
+                        "template",
+                        "variables",
+                        "header_variable",
+                        "audience",
+                        "window",
+                        "coupon",
+                        "plan"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -11481,6 +12881,356 @@
                         "finished_at",
                         "no_write",
                         "observed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "message": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "campaign_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "template": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "header": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "footer": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "buttons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "language",
+                            "category",
+                            "header",
+                            "body",
+                            "footer",
+                            "buttons"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "variables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "origin": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "value": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "origin",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "header_variable": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "origin": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "value": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "origin",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "audience": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "rule": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "can_receive": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "resting": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "rest_days": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "rule",
+                            "can_receive",
+                            "resting",
+                            "rest_days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 6
+                              }
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "days",
+                            "start",
+                            "end"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coupon": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "percent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "value_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "min_order_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "valid_from": {
+                              "type": "string"
+                            },
+                            "valid_until": {
+                              "type": "string"
+                            },
+                            "created": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "kind",
+                            "percent",
+                            "value_cents",
+                            "min_order_cents",
+                            "valid_from",
+                            "valid_until",
+                            "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "plan": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recipients": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cost_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "currency": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "defined": {
+                                  "type": "boolean"
+                                },
+                                "periods": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "period": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "limit_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "spent_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "signal": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "period",
+                                      "label",
+                                      "limit_cents",
+                                      "spent_cents",
+                                      "signal"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "notice": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "defined",
+                                "periods",
+                                "notice"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "people",
+                            "recipients",
+                            "cost_cents",
+                            "currency",
+                            "budget"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "campaign_id",
+                        "name",
+                        "template",
+                        "variables",
+                        "header_variable",
+                        "audience",
+                        "window",
+                        "coupon",
+                        "plan"
                       ],
                       "additionalProperties": false
                     }
@@ -12372,6 +14122,356 @@
                         "observed"
                       ],
                       "additionalProperties": false
+                    },
+                    "message": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "campaign_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "template": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "header": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "footer": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "buttons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "language",
+                            "category",
+                            "header",
+                            "body",
+                            "footer",
+                            "buttons"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "variables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "origin": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "value": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "origin",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "header_variable": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "origin": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "value": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "origin",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "audience": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "rule": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "can_receive": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "resting": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "rest_days": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "rule",
+                            "can_receive",
+                            "resting",
+                            "rest_days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 6
+                              }
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "days",
+                            "start",
+                            "end"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coupon": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "percent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "value_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "min_order_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "valid_from": {
+                              "type": "string"
+                            },
+                            "valid_until": {
+                              "type": "string"
+                            },
+                            "created": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "kind",
+                            "percent",
+                            "value_cents",
+                            "min_order_cents",
+                            "valid_from",
+                            "valid_until",
+                            "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "plan": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recipients": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cost_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "currency": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "defined": {
+                                  "type": "boolean"
+                                },
+                                "periods": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "period": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "limit_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "spent_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "signal": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "period",
+                                      "label",
+                                      "limit_cents",
+                                      "spent_cents",
+                                      "signal"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "notice": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "defined",
+                                "periods",
+                                "notice"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "people",
+                            "recipients",
+                            "cost_cents",
+                            "currency",
+                            "budget"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "campaign_id",
+                        "name",
+                        "template",
+                        "variables",
+                        "header_variable",
+                        "audience",
+                        "window",
+                        "coupon",
+                        "plan"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -13260,6 +15360,356 @@
                         "finished_at",
                         "no_write",
                         "observed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "message": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "campaign_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "template": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "header": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "footer": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "buttons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "language",
+                            "category",
+                            "header",
+                            "body",
+                            "footer",
+                            "buttons"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "variables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "origin": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "value": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "origin",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "header_variable": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "origin": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "value": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "origin",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "audience": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "rule": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "can_receive": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "resting": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "rest_days": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "rule",
+                            "can_receive",
+                            "resting",
+                            "rest_days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 6
+                              }
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "days",
+                            "start",
+                            "end"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coupon": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "percent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "value_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "min_order_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "valid_from": {
+                              "type": "string"
+                            },
+                            "valid_until": {
+                              "type": "string"
+                            },
+                            "created": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "kind",
+                            "percent",
+                            "value_cents",
+                            "min_order_cents",
+                            "valid_from",
+                            "valid_until",
+                            "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "plan": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recipients": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cost_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "currency": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "defined": {
+                                  "type": "boolean"
+                                },
+                                "periods": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "period": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "limit_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "spent_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "signal": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "period",
+                                      "label",
+                                      "limit_cents",
+                                      "spent_cents",
+                                      "signal"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "notice": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "defined",
+                                "periods",
+                                "notice"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "people",
+                            "recipients",
+                            "cost_cents",
+                            "currency",
+                            "budget"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "campaign_id",
+                        "name",
+                        "template",
+                        "variables",
+                        "header_variable",
+                        "audience",
+                        "window",
+                        "coupon",
+                        "plan"
                       ],
                       "additionalProperties": false
                     }
@@ -14190,6 +16640,356 @@
                         "observed"
                       ],
                       "additionalProperties": false
+                    },
+                    "message": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "campaign_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "template": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "header": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "footer": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "buttons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "language",
+                            "category",
+                            "header",
+                            "body",
+                            "footer",
+                            "buttons"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "variables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "origin": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "value": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "origin",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "header_variable": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "origin": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "value": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "origin",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "audience": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "rule": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "can_receive": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "resting": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "rest_days": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "rule",
+                            "can_receive",
+                            "resting",
+                            "rest_days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 6
+                              }
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "days",
+                            "start",
+                            "end"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coupon": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "percent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "value_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "min_order_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "valid_from": {
+                              "type": "string"
+                            },
+                            "valid_until": {
+                              "type": "string"
+                            },
+                            "created": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "kind",
+                            "percent",
+                            "value_cents",
+                            "min_order_cents",
+                            "valid_from",
+                            "valid_until",
+                            "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "plan": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recipients": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cost_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "currency": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "defined": {
+                                  "type": "boolean"
+                                },
+                                "periods": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "period": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "limit_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "spent_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "signal": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "period",
+                                      "label",
+                                      "limit_cents",
+                                      "spent_cents",
+                                      "signal"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "notice": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "defined",
+                                "periods",
+                                "notice"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "people",
+                            "recipients",
+                            "cost_cents",
+                            "currency",
+                            "budget"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "campaign_id",
+                        "name",
+                        "template",
+                        "variables",
+                        "header_variable",
+                        "audience",
+                        "window",
+                        "coupon",
+                        "plan"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -14988,6 +17788,356 @@
                         "finished_at",
                         "no_write",
                         "observed"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "message": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "campaign_id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "template": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string"
+                            },
+                            "category": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "header": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "footer": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "buttons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "language",
+                            "category",
+                            "header",
+                            "body",
+                            "footer",
+                            "buttons"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "variables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "origin": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "value": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "origin",
+                              "value"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "header_variable": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "origin": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "value": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "origin",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "audience": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "rule": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "can_receive": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "resting": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "rest_days": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "rule",
+                            "can_receive",
+                            "resting",
+                            "rest_days"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "window": {
+                          "type": "object",
+                          "properties": {
+                            "days": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 6
+                              }
+                            },
+                            "start": {
+                              "type": "string"
+                            },
+                            "end": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "days",
+                            "start",
+                            "end"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "coupon": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "percent": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "value_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "min_order_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "valid_from": {
+                              "type": "string"
+                            },
+                            "valid_until": {
+                              "type": "string"
+                            },
+                            "created": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "kind",
+                            "percent",
+                            "value_cents",
+                            "min_order_cents",
+                            "valid_from",
+                            "valid_until",
+                            "created"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "plan": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            },
+                            "people": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "recipients": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cost_cents": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "currency": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "budget": {
+                              "type": "object",
+                              "properties": {
+                                "defined": {
+                                  "type": "boolean"
+                                },
+                                "periods": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "period": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "limit_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "spent_cents": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      "signal": {
+                                        "type": "string",
+                                        "maxLength": 60,
+                                        "pattern": "^[a-z0-9_]+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "period",
+                                      "label",
+                                      "limit_cents",
+                                      "spent_cents",
+                                      "signal"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                },
+                                "notice": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "defined",
+                                "periods",
+                                "notice"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "people",
+                            "recipients",
+                            "cost_cents",
+                            "currency",
+                            "budget"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "campaign_id",
+                        "name",
+                        "template",
+                        "variables",
+                        "header_variable",
+                        "audience",
+                        "window",
+                        "coupon",
+                        "plan"
                       ],
                       "additionalProperties": false
                     }

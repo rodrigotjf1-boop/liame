@@ -107,6 +107,79 @@ export type ActionTarget = z.infer<typeof ActionTarget>;
  * sobrescrito, e `observed` diz como ele estava); `bloqueada` (trava, aprovação que deixou de valer ou escrita
  * desligada); ou `adiada` (a plataforma mandou esperar: `next_attempt_at` no pedido diz quando o Liame tenta de novo).
  */
+const Contagem = z.int().min(0);
+const Centavos = z.int().min(0);
+/** O valor de uma variável do texto: `fixo` com o valor, ou o que o RegemCast preenche na hora (`primeiro_nome`…), sem valor. */
+const MessageVariable = z.strictObject({ origin: Slug, value: z.string().nullable() });
+
+/**
+ * A mensagem de WhatsApp de um pedido de envio (A5, Y5; protótipo P15): o que a pessoa aprova. O texto é o do modelo
+ * como a Meta o aprovou, na hora do pedido; o público vem com a conta de quem recebe; a janela é a do envio, no fuso da
+ * conta do RegemCast; o cupom nasce no Regem junto com o envio; e `plan` é o plano do disparo guardado no pedido (as
+ * pessoas, o custo como teto e o teto de gasto de mensagens). Só números e textos escritos pela loja ou pelo
+ * RegemCast: nenhum telefone e nenhum nome de contato.
+ */
+export const ActionMessage = z.strictObject({
+  /** O id da campanha no RegemCast (o mesmo de `GET /v1/messaging/campaigns/:id`). */
+  campaign_id: z.string(),
+  name: z.string(),
+  template: z.strictObject({
+    name: z.string(),
+    language: z.string(),
+    category: z.string().nullable(),
+    header: z.string().nullable(),
+    body: z.string(),
+    footer: z.string().nullable(),
+    buttons: z.array(z.string()),
+  }),
+  /** Em ordem: a primeira é `{{1}}` do texto. */
+  variables: z.array(MessageVariable),
+  header_variable: MessageVariable.nullable(),
+  audience: z.strictObject({
+    name: z.string(),
+    rule: z.string().nullable(),
+    /** Quantas pessoas do público podiam receber na hora do pedido, e quantas ficaram de fora pelo descanso. */
+    can_receive: Contagem,
+    resting: Contagem,
+    rest_days: Contagem.nullable(),
+  }),
+  /** Os dias (0 = domingo) e o horário de envio, sempre dentro de 09:00 a 20:00. */
+  window: z.strictObject({ days: z.array(z.int().min(0).max(6)), start: z.string(), end: z.string() }),
+  coupon: z
+    .strictObject({
+      code: z.string(),
+      /** `percentual`, `valor` ou `frete_gratis`. */
+      kind: Slug,
+      percent: z.number().nullable(),
+      value_cents: Centavos.nullable(),
+      min_order_cents: Centavos.nullable(),
+      valid_from: z.string(),
+      valid_until: z.string(),
+      /** O cupom já existe no Regem (ele nasce junto com o envio). */
+      created: z.boolean(),
+    })
+    .nullable(),
+  /** O plano do disparo guardado no pedido; nulo se o estado guardado não é o de uma mensagem. */
+  plan: z
+    .strictObject({
+      /** A situação da campanha no RegemCast quando o plano foi lido. */
+      status: Slug,
+      /** Quantas pessoas ainda vão receber, e quantas a campanha tem ao todo. */
+      people: Contagem,
+      recipients: Contagem,
+      /** O custo estimado do que ainda vai sair: é teto, a Meta só cobra a mensagem entregue. Nulo sem preço. */
+      cost_cents: Centavos.nullable(),
+      currency: z.string().nullable(),
+      budget: z.strictObject({
+        defined: z.boolean(),
+        periods: z.array(z.strictObject({ period: Slug, label: z.string(), limit_cents: Centavos, spent_cents: Centavos, signal: Slug })),
+        notice: z.string().nullable(),
+      }),
+    })
+    .nullable(),
+});
+export type ActionMessage = z.infer<typeof ActionMessage>;
+
 export const ActionExecution = z.strictObject({
   status: z.string(),
   finished_at: z.string(),
@@ -195,6 +268,8 @@ export const ActionResponse = z.strictObject({
   to: BudgetChangeState.nullable().optional(),
   /** A tentativa de execução mais recente; nula enquanto o executor não pegou o pedido. */
   execution: ActionExecution.nullable().optional(),
+  /** A mensagem de WhatsApp do pedido de envio ou de pausa (A5, Y5); nula nos outros pedidos. */
+  message: ActionMessage.nullable().optional(),
 });
 export type ActionResponse = z.infer<typeof ActionResponse>;
 

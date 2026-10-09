@@ -59,6 +59,8 @@ const MENSAGEM: Record<string, string> = {
   'token-invalido': 'O Regem recusou o acesso desta loja (a autorização foi revogada). Conecte de novo em Contas conectadas.',
 };
 
+const SEM_ESCRITA = 'A escrita no Regem não está disponível neste ambiente.';
+
 /** A recusa do Regem em palavras de gente: pelo tipo do problema (`…/problemas/<tipo>`, lido pelo cliente HTTP). */
 function recusaDoRegem(erro: ErroConector): string {
   const tipo = erro.codigoProvider;
@@ -130,12 +132,38 @@ export class RegemCupomConnector implements Connector {
     // devolve o mesmo cupom; qualquer outro caso é 409 (ele nunca sobrescreve cupom pelo código).
     if (options.validateOnly) return { ok: true, state: desired, version: atual.version };
 
+    const nascido = await this.criarNoRegem(tx, conta, regra);
+    if (!nascido.ok) return { ok: false, reason: 'recusado', mensagem: nascido.mensagem };
+    const { criado, cupomId } = nascido;
+    const estado: ResourceState = { codigo: criado.codigo, existe: true, cupom_id: cupomId, external_id: criado.id, ativo: criado.ativo, pode_criar: conta.pode_criar };
+    if (!cupomId) return { ok: true, state: { ...estado, vinculo: 'pendente', vinculo_motivo: 'o cupom criado ainda não entrou na lista do Liame' }, version: Number(criado.versao) };
+
+    // Liga à campanha escolhida no pedido. Se a campanha deixou de valer entre o pedido e a execução, o cupom
+    // fica criado e sem vínculo (a pessoa liga a outra na aba Cupons) — a criação não é desfeita por isso.
+    try {
+      const cupom = await travarCupom(tx, cupomId);
+      const feito = await ligarCupom(tx, { userId: options.requestedBy ?? null, cupom, body: { campaign_id: vinculo.id, exclusive: vinculo.exclusivo }, agora: new Date() });
+      return { ok: true, state: { ...estado, vinculo: 'feito', campanha_id: vinculo.id, exclusivo: vinculo.exclusivo, ligacao_id: feito.ligacaoId }, version: Number(criado.versao) };
+    } catch (err) {
+      if (err instanceof AppProblem) {
+        return { ok: true, state: { ...estado, vinculo: 'pendente', vinculo_motivo: err.detail }, version: Number(criado.versao) };
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * A criação no Regem (contrato de cupons §3.3) e a gravação do cupom na lista do Liame. É a mesma para o cupom de
+   * campanha e para o cupom de uma mensagem. A chave de idempotência sai da loja e da regra: a mesma criação repetida
+   * (o worker que caiu no meio) devolve o mesmo cupom. O que é passageiro (rede, 5xx, limite) sobe para quem chama.
+   */
+  private async criarNoRegem(tx: Tx, conta: Conta, regra: RegraDoCupom): Promise<{ ok: true; criado: CupomRegem; cupomId: string | null } | { ok: false; mensagem: string }> {
     const deps = this.deps;
-    if (!deps) return { ok: false, reason: 'recusado', mensagem: 'A escrita no Regem não está disponível neste ambiente.' };
+    if (!deps) return { ok: false, mensagem: SEM_ESCRITA };
     const guardada = conta.credential_secret_id ? await deps.lerSegredo(tx, conta.credential_secret_id) : null;
     const lojas = guardada ? ((JSON.parse(guardada) as { lojas?: { loja_id: string; token: string }[] }).lojas ?? []) : [];
     const token = lojas.find((l) => l.loja_id === conta.external_id)?.token;
-    if (!token) return { ok: false, reason: 'recusado', mensagem: MENSAGEM['token-invalido']! };
+    if (!token) return { ok: false, mensagem: MENSAGEM['token-invalido']! };
 
     let criado: CupomRegem;
     try {
@@ -154,13 +182,13 @@ export class RegemCupomConnector implements Connector {
         apiVersion: VERSAO_CONTRATO_REGEM,
       });
       const lido = CupomRegem.safeParse(r.corpo);
-      if (!lido.success) return { ok: false, reason: 'recusado', mensagem: 'O Regem criou o cupom, mas a resposta veio fora do contrato. Confira o cupom no Regem.' };
+      if (!lido.success) return { ok: false, mensagem: 'O Regem criou o cupom, mas a resposta veio fora do contrato. Confira o cupom no Regem.' };
       criado = lido.data;
     } catch (err) {
       // Recusa definitiva do Regem (código em uso, regra inválida, sem permissão): não adianta repetir.
       // O que é passageiro (rede, 5xx, limite) sobe: a ação volta para a fila e repete com a mesma chave.
       if (err instanceof ErroConector && (err.tipo === 'definitivo' || err.tipo === 'autenticacao' || err.tipo === 'permissao')) {
-        return { ok: false, reason: 'recusado', mensagem: recusaDoRegem(err) };
+        return { ok: false, mensagem: recusaDoRegem(err) };
       }
       throw err;
     }
@@ -169,21 +197,32 @@ export class RegemCupomConnector implements Connector {
     const gravado = await tx.execute<{ id: string }>(sql`
       select id from liame.coupon where connected_account_id = ${conta.id} and external_id = ${criado.id}`);
     const cupomId = gravado.rows[0]?.id ?? null;
-    const estado: ResourceState = { codigo: criado.codigo, existe: true, cupom_id: cupomId, external_id: criado.id, ativo: criado.ativo, pode_criar: conta.pode_criar };
-    if (!cupomId) return { ok: true, state: { ...estado, vinculo: 'pendente', vinculo_motivo: 'o cupom criado ainda não entrou na lista do Liame' }, version: Number(criado.versao) };
+    return { ok: true, criado, cupomId };
+  }
 
-    // Liga à campanha escolhida no pedido. Se a campanha deixou de valer entre o pedido e a execução, o cupom
-    // fica criado e sem vínculo (a pessoa liga a outra na aba Cupons) — a criação não é desfeita por isso.
-    try {
-      const cupom = await travarCupom(tx, cupomId);
-      const feito = await ligarCupom(tx, { userId: options.requestedBy ?? null, cupom, body: { campaign_id: vinculo.id, exclusive: vinculo.exclusivo }, agora: new Date() });
-      return { ok: true, state: { ...estado, vinculo: 'feito', campanha_id: vinculo.id, exclusivo: vinculo.exclusivo, ligacao_id: feito.ligacaoId }, version: Number(criado.versao) };
-    } catch (err) {
-      if (err instanceof AppProblem) {
-        return { ok: true, state: { ...estado, vinculo: 'pendente', vinculo_motivo: err.detail }, version: Number(criado.versao) };
-      }
-      throw err;
-    }
+  /**
+   * O cupom de uma mensagem de WhatsApp (A5, Y5; D-A5-16) pode nascer agora? Sem criar nada: a loja ainda está
+   * conectada e liberou "criar cupom de campanha". Devolve o motivo, ou nulo. Se o código já existe, quem diz é o Regem,
+   * na criação.
+   */
+  async conferirCupomDaMensagem(tx: Tx, alvo: { tenantId: string; lojaId: string }): Promise<string | null> {
+    const conta = await this.conta(tx, { tenantId: alvo.tenantId, accountId: alvo.lojaId, resourceId: '' });
+    if (!conta) return 'A loja do cupom foi desconectada do Regem.';
+    if (!conta.pode_criar) return MENSAGEM['escopo-insuficiente']!;
+    if (!this.deps) return SEM_ESCRITA;
+    return null;
+  }
+
+  /**
+   * Cria o cupom de uma mensagem na loja do Regem. Ele não nasce ligado a campanha de anúncio: o que o liga à
+   * mensagem é o pedido dela (`message_request`). Devolve o cupom na lista do Liame (nulo se ele ainda não entrou).
+   */
+  async criarCupomDaMensagem(tx: Tx, alvo: { tenantId: string; lojaId: string; regra: RegraDoCupom }): Promise<{ ok: true; cupomId: string | null } | { ok: false; mensagem: string }> {
+    const conta = await this.conta(tx, { tenantId: alvo.tenantId, accountId: alvo.lojaId, resourceId: '' });
+    if (!conta) return { ok: false, mensagem: 'A loja do cupom foi desconectada do Regem.' };
+    if (!conta.pode_criar) return { ok: false, mensagem: MENSAGEM['escopo-insuficiente']! };
+    const feito = await this.criarNoRegem(tx, conta, alvo.regra);
+    return feito.ok ? { ok: true, cupomId: feito.cupomId } : feito;
   }
 }
 

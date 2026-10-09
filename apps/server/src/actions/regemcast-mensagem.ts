@@ -7,6 +7,7 @@ import { dispararCampanha, pausarCampanha, planejarDisparo } from '../connectors
 import type { CampanhaRegemcast, PlanoDoDisparoRegemcast } from '../connectors/regemcast/contrato-regemcast.js';
 import type { ApplyOptions, ApplyResult, Connector, PreparedRead, ReadResult, ResourceRef } from './connectors.js';
 import { type EstadoDaMensagem, faseDaMensagem } from './mensagem-plano.js';
+import type { RegraDoCupom } from './regem-cupom.js';
 import type { ResourceState } from './tools.js';
 
 // O pedido de mensagem de WhatsApp pelo Action Service (A5, Y5; `plano-a5.md` D-A5-10 a D-A5-13): disparar uma campanha
@@ -28,6 +29,8 @@ import type { ResourceState } from './tools.js';
 // - Mensagem enviada não volta. A volta possível é pausar o que ainda não saiu; quem retoma é uma pessoa, no RegemCast.
 // - O token da conta sai do cofre só na hora de chamar e nunca vai para log, estado ou auditoria. Nenhum telefone e
 //   nenhum nome de contato passam por aqui.
+// - O cupom da mensagem (D-A5-16; P15) nasce no Regem junto com o envio: depois da aprovação, ANTES do disparo. Se o
+//   cupom não pode ser criado, nada é enviado: mensagem que cita um cupom que não existe é pior do que não enviar.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROVIDER = 'regemcast';
@@ -120,6 +123,15 @@ export type DependenciasDaEscritaRegemcast = {
   apiUrl: string | null;
   /** Quanto a leitura da hora do pedido espera o RegemCast (há uma pessoa esperando). */
   tempoDaLeituraDoPedidoMs?: number;
+  /**
+   * O cupom da mensagem, criado no Regem junto com o envio (D-A5-16). `conferir` não cria nada e devolve o motivo de
+   * não poder criar, ou nulo; `criar` é idempotente (a mesma loja e a mesma regra devolvem o mesmo cupom). Sem isto,
+   * a mensagem que leva cupom não sai.
+   */
+  cupom?: {
+    conferir(tx: Tx, alvo: { tenantId: string; lojaId: string }): Promise<string | null>;
+    criar(tx: Tx, alvo: { tenantId: string; lojaId: string; regra: RegraDoCupom }): Promise<{ ok: true; cupomId: string | null } | { ok: false; mensagem: string }>;
+  };
 };
 
 type Conta = { id: string; tenant_id: string; external_id: string; credential_secret_id: string | null };
@@ -133,6 +145,10 @@ const SEM_ACESSO = 'O RegemCast recusou o acesso desta conta (a conexão foi des
 const SEM_PERMISSAO = 'A conexão com o RegemCast não inclui enviar mensagens. Quem dá essa permissão é o dono da conta, no RegemCast.';
 const SUMIU = 'Esta mensagem não está mais disponível nesta conta do RegemCast (a conta foi desconectada). Nada foi enviado.';
 const FORA_DO_AMBIENTE = 'O envio de mensagens pelo RegemCast não está disponível neste ambiente.';
+const LOJA_SUMIU = 'A loja do cupom foi desconectada do Regem.';
+
+/** O cupom que a mensagem leva e ainda não foi criado. */
+type CupomPorCriar = { pedidoId: string; lojaId: string | null; codigo: string; regra: RegraDoCupom };
 
 /**
  * A recusa definitiva do RegemCast em palavras; nulo para o que é passageiro (limite, fora do ar): isso sobe para quem
@@ -190,6 +206,17 @@ export class RegemcastMensagemConnector implements Connector {
     return { estado, versao: versaoDaMensagem(estado) };
   }
 
+  /** O cupom desta mensagem que ainda falta criar (do retrato do pedido); nulo quando ela não leva cupom, ou ele já nasceu. */
+  private async cupomPorCriar(tx: Tx, p: Preparada): Promise<CupomPorCriar | null> {
+    const r = await tx.execute<{ id: string; coupon_account_id: string | null; coupon_code: string | null; coupon_rule: RegraDoCupom | null; coupon_created_at: string | null }>(sql`
+      select id, coupon_account_id, coupon_code, coupon_rule, coupon_created_at
+        from liame.message_request
+       where tenant_id = ${p.conta.tenant_id} and connected_account_id = ${p.conta.id} and campaign_id = ${p.campanha}`);
+    const linha = r.rows[0];
+    if (!linha?.coupon_code || !linha.coupon_rule || linha.coupon_created_at) return null;
+    return { pedidoId: linha.id, lojaId: linha.coupon_account_id, codigo: linha.coupon_code, regra: linha.coupon_rule };
+  }
+
   /** A leitura da hora do pedido, com o tempo curto de quem tem uma pessoa esperando. A do executor é a de `apply`. */
   async read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null> {
     if (!this.deps) throw new Error('escrita no RegemCast: dependências não ligadas');
@@ -240,7 +267,23 @@ export class RegemcastMensagemConnector implements Connector {
       // Sem a confirmação não há disparo; e ela precisa ser a do plano que a pessoa aprovou.
       if (!lido.estado.pode_disparar || !confirmacao) return recusado(`O RegemCast não deixa enviar agora: ${lido.estado.impedimentos.join(' ') || 'o plano do envio veio sem a confirmação'}`);
       if (desired.confirmacao !== confirmacao) return { ok: false, reason: 'estado-mudou', current: { state: lido.estado, version: lido.versao } };
+      // O cupom da mensagem: conferido na validação e de novo na hora, e criado ANTES do disparo. Sem o cupom, nada sai.
+      const cupom = await this.cupomPorCriar(tx, p);
+      if (cupom) {
+        const motivo = !p.deps.cupom ? 'A criação de cupom no Regem não está disponível neste ambiente.' : !cupom.lojaId ? LOJA_SUMIU : await p.deps.cupom.conferir(tx, { tenantId: p.conta.tenant_id, lojaId: cupom.lojaId });
+        if (motivo) return recusado(`O cupom ${cupom.codigo} desta mensagem não pode ser criado no Regem. ${motivo} Nada foi enviado.`);
+      }
       if (options.validateOnly) return { ok: true, state: desired, version: lido.versao };
+      let cupomCriado = '';
+      if (cupom && cupom.lojaId && p.deps.cupom) {
+        const nascido = await p.deps.cupom.criar(tx, { tenantId: p.conta.tenant_id, lojaId: cupom.lojaId, regra: cupom.regra });
+        if (!nascido.ok) return recusado(`O cupom ${cupom.codigo} desta mensagem não foi criado no Regem. ${nascido.mensagem} Nada foi enviado.`);
+        await tx.execute(sql`
+          update liame.message_request set coupon_id = ${nascido.cupomId}, coupon_created_at = now(), updated_at = now()
+           where id = ${cupom.pedidoId} and tenant_id = ${p.conta.tenant_id}`);
+        // Se o RegemCast recusar o disparo agora, o cupom já existe: a recusa diz isso.
+        cupomCriado = ` O cupom ${cupom.codigo} já foi criado no Regem: se a mensagem não for enviada, desative-o lá.`;
+      }
       try {
         // A chave sai do pedido (a conta, a campanha e o plano aprovado): a mesma execução repetida não dispara de novo.
         const chave = `liame:disparo:${sha256(canonicalJson([p.conta.id, p.campanha, confirmacao])).slice(0, 48)}`;
@@ -259,7 +302,7 @@ export class RegemcastMensagemConnector implements Connector {
         return { ok: true, state: estado, version: versaoDaMensagem(estado) };
       } catch (err) {
         const motivo = recusaDoRegemcast(err, 'disparo');
-        if (motivo) return recusado(motivo);
+        if (motivo) return recusado(`${motivo}${cupomCriado}`);
         throw err;
       }
     }
