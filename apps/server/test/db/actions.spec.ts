@@ -99,7 +99,7 @@ describe.skipIf(!hasDb)('pedido de ação: política, orçamento, fingerprint e 
       mode: 'APPROVAL',
       status: 'aguardando_aprovacao',
       reserved_micros: 20 * REAL,
-      policy: { allowed: true, versions: ['plataforma@3', 'empresa@1'] },
+      policy: { allowed: true, versions: ['plataforma@4', 'empresa@1'] },
       approvals: [],
     });
     expect(r.body.plan_hash).toMatch(/^[0-9a-f]{64}$/);

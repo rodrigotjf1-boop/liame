@@ -112,7 +112,8 @@ export class OpcoesDoPedidoService {
     for (const c of contas.rows) {
       const flag = CONNECTORS[c.provider]?.writeFlag;
       const on = !flag || (await this.flags.isEnabled(flag, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId, accountId: c.id })));
-      if (on) ligadas.set(c.id, c.requested_access === 'escrita' ? 'ligada' : 'so_leitura');
+      // Só a plataforma que pede uma autorização própria para mudar (a Meta) pode estar "só leitura".
+      if (on) ligadas.set(c.id, !CONNECTORS[c.provider]?.needsWriteAuthorization || c.requested_access === 'escrita' ? 'ligada' : 'so_leitura');
     }
     if (!ligadas.size) return { campaigns: [] };
 
@@ -216,7 +217,7 @@ export class OpcoesDoPedidoService {
       const on = await this.flags.isEnabled(conector.writeFlag, this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId: campanha.brand_id, accountId: campanha.conta }));
       if (!on) throw new AppProblem(403, 'escrita-desligada', 'Escrita desligada', `A escrita em ${conector.provider} não está liberada para esta conta.`);
     }
-    if (campanha.requested_access !== 'escrita') throw conexaoSoLeitura(campanha.provider);
+    if (conector.needsWriteAuthorization && campanha.requested_access !== 'escrita') throw conexaoSoLeitura(campanha.provider);
 
     // Os conjuntos e os anúncios da campanha, pela leitura diária (o que saiu da lista da conta não aparece).
     const conjuntos = await tx.execute<LinhaDeObjeto>(sql`

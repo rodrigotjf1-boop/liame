@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 3,
+  version: 4,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -42,6 +42,12 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // funcionário de IA em cada conta (Sombra, Sugerir, Aprovação) é outra regra, com `actor: 'agent'`: esta não o
       // muda. Os modos automáticos seguem presos pela flag `autopilot`.
       { type: 'autonomy', provider: 'meta_ads', actor: 'human', mode: 'APPROVAL' },
+      // v4 (A5, D-A5-3): no Google Ads valem as mesmas regras da Meta, para a regra ser uma só. Cada pedido mexe no máximo
+      // 10% da verba, e o que uma pessoa pede espera a aprovação com o código do app. O limite de mudanças por hora no
+      // mesmo objeto não é exigência do Google: é a mesma proteção contra mexer demais na mesma campanha.
+      { type: 'rate_limit', action: 'orcamento.*', provider: 'google_ads', per: 'resource', max: 3, window_minutes: 60 },
+      { type: 'max_change_percent', action: 'orcamento.*', provider: 'google_ads', max_percent: VARIACAO_MAXIMA_DA_VERBA_PCT, direction: 'both' },
+      { type: 'autonomy', provider: 'google_ads', actor: 'human', mode: 'APPROVAL' },
     ],
   },
 };

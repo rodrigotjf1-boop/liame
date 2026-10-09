@@ -47,6 +47,12 @@ export interface Connector {
    * limites que a empresa define (o teto por ação e o envelope do mês). Sem eles, o pedido é negado.
    */
   readonly requiresSpendLimits: boolean;
+  /**
+   * A escrita pede uma autorização própria da plataforma, além da de leitura (na Meta, a configuração de login que
+   * também pede para gerenciar anúncios): a conexão feita só para ler precisa ser refeita antes de o Liame mudar algo.
+   * Sem isto, a mesma autorização cobre ler e mudar (no Google Ads, o escopo é um só).
+   */
+  readonly needsWriteAuthorization?: boolean;
   read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null>;
   /**
    * A mesma leitura em duas partes, para quem não quer segurar a transação enquanto espera a plataforma (a rota

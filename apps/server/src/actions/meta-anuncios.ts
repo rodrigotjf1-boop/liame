@@ -181,6 +181,8 @@ export class MetaAnunciosConnector implements Connector {
   readonly provider = PROVIDER;
   readonly writeFlag = 'meta_write';
   readonly requiresSpendLimits = true;
+  /** Gerenciar anúncios é outra configuração do login da Meta: a conexão só de leitura precisa ser refeita. */
+  readonly needsWriteAuthorization = true;
   private readonly logger = new Logger('escrita-meta');
   private deps: DependenciasDaEscritaMeta | null = null;
 

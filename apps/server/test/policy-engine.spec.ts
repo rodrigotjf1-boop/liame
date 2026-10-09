@@ -24,7 +24,7 @@ const run = (policies: LoadedPolicy[], p = proposal(), at = AT) => evaluatePolic
 
 describe('A1-11: motor de políticas determinístico', () => {
   it('sem política da empresa: permitido, em SHADOW (ferramenta nova começa em sombra), com a versão da plataforma', () => {
-    expect(run([])).toEqual({ allowed: true, mode: 'SHADOW', violations: [], versions: ['plataforma@3'] });
+    expect(run([])).toEqual({ allowed: true, mode: 'SHADOW', violations: [], versions: ['plataforma@4'] });
   });
 
   it('teto por ação', () => {
@@ -101,8 +101,9 @@ describe('A1-11: motor de políticas determinístico', () => {
     expect(run([], naMeta({ recent_count: 3 })).violations).toEqual([
       { source: 'platform', rule_index: 1, type: 'rate_limit', message: 'Limite de 3 execuções a cada 60 min atingido neste objeto.' },
     ]);
-    // A regra é da Meta, com o nome que as contas conectadas usam (na versão 2 ela dizia `meta`, e nunca casaria).
-    expect(run([], proposal({ provider: 'google_ads', recent_count: 10 })).allowed).toBe(true);
+    // A regra é por provedor, com o nome que as contas conectadas usam (na versão 2 ela dizia `meta`, e nunca casaria);
+    // no sandbox e em provedor desconhecido ela não vale. O Google tem a dele desde a versão 4 (teste abaixo).
+    expect(run([], proposal({ provider: 'sandbox', recent_count: 10 })).allowed).toBe(true);
     expect(run([], proposal({ provider: 'meta', recent_count: 10 })).allowed).toBe(true);
     // Só a verba entra na conta: pausar, não.
     expect(run([], naMeta({ action: 'anuncio.pausar', value_micros: null, current_value_micros: null, recent_count: 10 })).allowed).toBe(true);
@@ -145,6 +146,31 @@ describe('A1-11: motor de políticas determinístico', () => {
     expect(run([tenant(teto)], volta).allowed).toBe(true);
     // O limite de frequência continua valendo para ela.
     expect(run([tenant(teto)], { ...volta, recent_count: 3 }).violations.map((v) => v.type)).toEqual(['rate_limit']);
+  });
+
+  it('no Google Ads valem as mesmas regras da Meta (versão 4, D-A5-3): 10% por pedido, 3 mudanças de verba por hora por objeto e aprovação para o que a pessoa pede', () => {
+    expect(PLATFORM_POLICY.version).toBe(4);
+    const noGoogle = (valor: number, over: Partial<ActionProposal> = {}) => proposal({ provider: 'google_ads', value_micros: valor, current_value_micros: 100_000_000, ...over });
+    // A variação: até 10%, para cima e para baixo; a volta fica fora.
+    expect(run([], noGoogle(110_000_000)).allowed).toBe(true);
+    expect(run([], noGoogle(90_000_000)).allowed).toBe(true);
+    expect(run([], noGoogle(110_010_000)).violations).toEqual([{ source: 'platform', rule_index: 7, type: 'max_change_percent', message: 'A variação de 10,01% passa do máximo de 10%.' }]);
+    expect(run([], noGoogle(80_000_000)).allowed).toBe(false);
+    expect(run([], noGoogle(100_000_000, { current_value_micros: 80_000_000, undo: true })).allowed).toBe(true);
+    // A frequência: a terceira mudança de verba na hora, no mesmo objeto, é a última; pausar não entra na conta.
+    expect(run([], noGoogle(110_000_000, { recent_count: 2 })).allowed).toBe(true);
+    expect(run([], noGoogle(110_000_000, { recent_count: 3 })).violations).toEqual([
+      { source: 'platform', rule_index: 6, type: 'rate_limit', message: 'Limite de 3 execuções a cada 60 min atingido neste objeto.' },
+    ]);
+    expect(run([], noGoogle(110_000_000, { action: 'campanha.pausar', value_micros: null, current_value_micros: null, recent_count: 10 })).allowed).toBe(true);
+    expect(rateLimitsFor([PLATFORM_POLICY], noGoogle(110_000_000)).map((r) => [r.provider, r.per, r.max])).toEqual([['google_ads', 'resource', 3]]);
+    // Quem pede: a pessoa espera a aprovação com o código do app; o funcionário de IA começa em sombra, como na Meta.
+    expect(run([], noGoogle(110_000_000, { actor: 'human' }))).toMatchObject({ allowed: true, mode: 'APPROVAL', versions: ['plataforma@4'] });
+    expect(run([], noGoogle(110_000_000, { actor: 'agent' })).mode).toBe('SHADOW');
+    // O teto por campanha que a empresa define na tela não tem provedor: vale para o Google também.
+    const teto: PolicyDocument = { rules: [{ type: 'max_value', action: 'orcamento.*', max_micros: 105_000_000 }] };
+    expect(run([tenant(teto)], noGoogle(110_000_000)).violations.map((v) => v.type)).toEqual(['max_value']);
+    expect(run([tenant(teto)], noGoogle(95_000_000)).allowed).toBe(true);
   });
 
   it('teto com provedor: a regra só vale para as ações naquele provedor', () => {
@@ -203,7 +229,7 @@ describe('A1-11: motor de políticas determinístico', () => {
     expect(run([tenant(doc)], proposal({ value_micros: 400_000_000, current_value_micros: 380_000_000 })).mode).toBe('APPROVAL');
     expect(run([tenant(doc)], proposal({ action: 'anuncio.pausar', value_micros: null })).mode).toBe('AUTO');
     const daMarca: PolicyDocument = { rules: [{ type: 'autonomy', action: 'orcamento.aumentar', up_to_percent: 10, mode: 'APPROVAL' }] };
-    expect(run([tenant(doc), brand(daMarca)], proposal({ value_micros: 110_000_000 }))).toMatchObject({ mode: 'APPROVAL', versions: ['plataforma@3', 'empresa@1', 'marca@1'] });
+    expect(run([tenant(doc), brand(daMarca)], proposal({ value_micros: 110_000_000 }))).toMatchObject({ mode: 'APPROVAL', versions: ['plataforma@4', 'empresa@1', 'marca@1'] });
     // A plataforma manda escalar o apagar, mesmo que a empresa diga AUTO.
     const auto: PolicyDocument = { rules: [{ type: 'autonomy', action: 'campanha.apagar', mode: 'AUTO' }] };
     expect(run([tenant(auto)], proposal({ action: 'campanha.apagar', value_micros: null })).mode).toBe('ESCALATE');

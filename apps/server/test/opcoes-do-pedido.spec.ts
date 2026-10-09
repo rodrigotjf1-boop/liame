@@ -81,7 +81,14 @@ describe('o que dá para pedir num objeto de anúncio (A4 · X8)', () => {
     // No provedor de mentira só existem a verba e a pausa do anúncio; numa plataforma que o Liame só lê, nada.
     expect(ferramentasPara('sandbox', { tipo: 'campanha', status: 'ativo', daily_budget_micros: 30 * REAL })).toEqual(['orcamento_ajustar']);
     expect(ferramentasPara('sandbox', { tipo: 'anuncio', status: 'pausado', daily_budget_micros: null })).toEqual([]);
-    expect(ferramentasPara('google_ads', { tipo: 'campanha', status: 'ativo', daily_budget_micros: 30 * REAL })).toEqual([]);
+    expect(ferramentasPara('ga4', { tipo: 'campanha', status: 'ativo', daily_budget_micros: 30 * REAL })).toEqual([]);
+    // No Google (A5 · Y3) o Liame mexe só na campanha: a verba que é só dela, pausar e retomar.
+    expect(ferramentasPara('google_ads', { tipo: 'campanha', status: 'ativo', daily_budget_micros: 30 * REAL })).toEqual(['orcamento_ajustar', 'campanha_pausar']);
+    expect(ferramentasPara('google_ads', { tipo: 'campanha', status: 'ativo', daily_budget_micros: null })).toEqual(['campanha_pausar']);
+    expect(ferramentasPara('google_ads', { tipo: 'campanha', status: 'pausado', daily_budget_micros: 30 * REAL })).toEqual(['campanha_retomar']);
+    // Pausar e retomar grupo de anúncios e anúncio não existem no Google (o conector dele só lê campanha).
+    expect(ferramentasPara('google_ads', { tipo: 'conjunto', status: 'ativo', daily_budget_micros: null })).toEqual([]);
+    expect(ferramentasPara('google_ads', { tipo: 'anuncio', status: 'pausado', daily_budget_micros: null })).toEqual([]);
   });
 });
 
