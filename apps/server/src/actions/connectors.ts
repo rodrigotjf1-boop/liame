@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { googleAnunciosConnector } from './google-anuncios.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
 import { regemCupomConnector } from './regem-cupom.js';
+import { regemcastMensagemConnector } from './regemcast-mensagem.js';
 import type { ResourceState } from './tools.js';
 
 // Connectors (arquitetura §6): um por provedor, com a mesma interface. Na A1 só existia o sandbox
@@ -109,4 +110,6 @@ export const CONNECTORS: Record<string, Connector> = {
   regem: regemCupomConnector,
   meta_ads: metaAnunciosConnector,
   google_ads: googleAnunciosConnector,
+  // A5, Y5: o pedido de mensagem de WhatsApp. Só com a flag de escrita `whatsapp_campaign` ligada para a empresa.
+  regemcast: regemcastMensagemConnector,
 };

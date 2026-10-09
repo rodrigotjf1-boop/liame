@@ -4,8 +4,6 @@ import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 import type { Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { CONNECTORS } from '../../src/actions/connectors.js';
-import { regemcastMensagemConnector } from '../../src/actions/regemcast-mensagem.js';
 import type { PedidoDeMensagemService, Proponente } from '../../src/mensageria/pedido-de-mensagem.service.js';
 import type { ActionExecutor } from '../../src/worker/action-executor.js';
 import type { TestApi } from '../helpers/api.js';
@@ -14,10 +12,8 @@ import { APP_URL, hasDb, OWNER_URL } from './env.js';
 // A5 · Y5 (partes 4 e 5): montar o pedido de mensagem a partir da proposta do funcionário de CRM e mensageria, e
 // enviá-lo depois da aprovação, com o cupom da mensagem criado no Regem ANTES do disparo. Contra um RegemCast falso
 // que fala o MCP sem estado (os modelos, os públicos, a conta de quem recebe, o rascunho, o plano e o disparo) e um
-// Regem falso (a loja e a criação de cupom, com chave de idempotência). Em produção o conector do RegemCast ainda NÃO está no
-// registro: aqui ele é registrado só neste arquivo, ANTES de o app carregar. Por isso o app e os ajudantes entram por
-// `import()` dentro do `beforeAll`.
-CONNECTORS.regemcast = regemcastMensagemConnector;
+// Regem falso (a loja e a criação de cupom, com chave de idempotência). O app e os ajudantes entram por `import()`
+// dentro do `beforeAll`, depois de os endereços dos dois falsos estarem no ambiente.
 
 const TODAS = ['conta.ler', 'campanhas.ler', 'publicos.ler', 'modelos.ler', 'orcamento.ler', 'campanhas.rascunhar', 'campanhas.disparar'];
 const TOKEN_DA_LOJA = `rgm_it_${'m'.repeat(32)}`;
@@ -30,7 +26,7 @@ type Perfil = { contaId: string; permissoes: string[] };
 type Chamada = { token: string; ferramenta: string; argumentos: Record<string, unknown> };
 type Empresa = { cookie: string; tenantId: string; userId: string; brandId: string; secret: string; token: string; contaId: string; conta: string; loja: string; lojaSoLeitura: string };
 
-describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 · Y5, parte 4; conector registrado só no teste)', () => {
+describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e enviá-lo com o cupom (A5 · Y5, partes 4 e 5)', () => {
   let api: TestApi;
   let database: Database;
   let regemcast: Server;
@@ -361,7 +357,6 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
     await resetIpRateLimits();
   });
   afterAll(async () => {
-    delete CONNECTORS.regemcast;
     for (const [nome, valor] of Object.entries(anterior)) {
       if (valor === undefined) delete process.env[nome];
       else process.env[nome] = valor;

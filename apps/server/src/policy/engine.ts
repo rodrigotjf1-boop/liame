@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 5,
+  version: 6,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -49,10 +49,15 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       { type: 'max_change_percent', action: 'orcamento.*', provider: 'google_ads', max_percent: VARIACAO_MAXIMA_DA_VERBA_PCT, direction: 'both' },
       { type: 'autonomy', provider: 'google_ads', actor: 'human', mode: 'APPROVAL' },
       // v5 (A5, D-A5-11): mensagem de WhatsApp pelo RegemCast só sai com a aprovação de uma pessoa, com o código do app,
-      // peça quem pedir (uma pessoa ou um funcionário de IA). Pausar segue o mesmo caminho. A regra mais específica de uma
+      // peça quem pedir (uma pessoa ou um funcionário de IA). A regra mais específica de uma
       // empresa ou de uma marca venceria esta; por isso o envio tem também a trava na ferramenta (`alwaysApproval`): nem
       // com a autonomia pedida e o `autopilot` ligado ele sai sem uma pessoa.
       { type: 'autonomy', action: 'mensagem.*', mode: 'APPROVAL' },
+      // v6 (A5, Y5; decisão do dono de 09/10/2026, com o protótipo P15): pausar um envio é direto quando quem pede é uma
+      // pessoa. Ela confirma na tela, o pedido fica com o nome dela e executa sem o código do app (a ferramenta declara
+      // `directByPerson`, e por isso não depende do `autopilot`). Pausar só segura o que ainda não saiu: não gasta, não
+      // envia e não desfaz nada. O funcionário de IA continua na regra de cima.
+      { type: 'autonomy', action: 'mensagem.pausar', actor: 'human', mode: 'AUTO' },
     ],
   },
 };

@@ -10,7 +10,8 @@ import { chooseMode, evaluatePolicy, PLATFORM_POLICY } from '../src/policy/engin
 
 // A5 · Y5 (parte 2): as regras puras do pedido de mensagem de WhatsApp. O estado do recurso é o plano do disparo que o
 // RegemCast devolve; as ferramentas `mensagem_disparar` e `mensagem_pausar` montam o plano da ação a partir dele; a
-// versão diz quando o plano mudou; e a política da distribuição (versão 5) manda esperar a aprovação de uma pessoa.
+// versão diz quando o plano mudou; e a política da distribuição manda o envio esperar a aprovação de uma pessoa
+// (versão 5) e deixa a pausa direta quando quem pede é uma pessoa (versão 6).
 
 const CAMPANHA = '0199f1aa-2222-7333-8444-555566667777';
 const CONFIRMACAO = 'c0nf1rmacao-do-plano-0123456789ab';
@@ -45,7 +46,7 @@ const recusa = (ferramenta: string, antes: unknown): string => {
 };
 
 describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
-  it('o registro: risco, provedor, compensação e a trava de sempre esperar uma pessoa; o conector ainda fora do registro', () => {
+  it('o registro: risco, provedor, compensação, a trava de sempre esperar uma pessoa e a pausa direta; o conector no registro', () => {
     const resumo = Object.fromEntries(
       Object.values(TOOLS)
         .filter((t) => t.providers.includes('regemcast'))
@@ -60,10 +61,12 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
     // Nenhuma outra ferramenta tem a trava; e as duas não aceitam parâmetro.
     expect(Object.values(TOOLS).filter((t) => t.alwaysApproval).map((t) => t.name)).toEqual(['mensagem_disparar']);
     for (const nome of ['mensagem_disparar', 'mensagem_pausar']) expect(TOOLS[nome]!.params.safeParse({ pessoas: 1 }).success).toBe(false);
-    // O conector existe, com a flag de escrita das mensagens e sem exigir os tetos de verba de mídia (D-A5-12), mas não
-    // está no registro: nenhum pedido chega a ele por enquanto.
+    // Só a pausa é direta para uma pessoa: não gasta, não envia e não desfaz nada.
+    expect(Object.values(TOOLS).filter((t) => t.directByPerson).map((t) => t.name)).toEqual(['mensagem_pausar']);
+    // O conector está no registro (Y5, parte 6), com a flag de escrita das mensagens e sem exigir os tetos de verba de
+    // mídia (D-A5-12): sem a flag, que nasce desligada, nenhum pedido passa do trilho.
     expect([regemcastMensagemConnector.provider, regemcastMensagemConnector.writeFlag, regemcastMensagemConnector.requiresSpendLimits]).toEqual(['regemcast', 'whatsapp_campaign', false]);
-    expect(Object.keys(CONNECTORS)).not.toContain('regemcast');
+    expect(CONNECTORS.regemcast).toBe(regemcastMensagemConnector);
   });
 
   it('enviar: o plano que pode disparar vira o pedido, sem reservar verba de mídia; o que a pessoa aprova é o plano inteiro', () => {
@@ -220,8 +223,8 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
     expect(recusaDoRegemcast(new Error('defeito nosso'), 'disparo')).toBeNull();
   });
 
-  it('D-A5-11: a política da distribuição (versão 5) manda esperar a aprovação de uma pessoa, peça quem pedir; enviar e pausar', () => {
-    expect(PLATFORM_POLICY.version).toBe(5);
+  it('D-A5-11: a política da distribuição manda o envio esperar a aprovação de uma pessoa, peça quem pedir; a pausa é direta só para uma pessoa (versão 6)', () => {
+    expect(PLATFORM_POLICY.version).toBe(6);
     const proposta = (action: string, actor: 'human' | 'agent') =>
       ActionProposal.parse({
         tool: action === 'mensagem.disparar' ? 'mensagem_disparar' : 'mensagem_pausar',
@@ -234,14 +237,15 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
         current_value_micros: null,
         actor,
       });
-    for (const action of ['mensagem.disparar', 'mensagem.pausar']) {
-      for (const actor of ['human', 'agent'] as const) {
-        expect(chooseMode([PLATFORM_POLICY], proposta(action, actor)), `${action} ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 5 });
-      }
+    for (const actor of ['human', 'agent'] as const) {
+      expect(chooseMode([PLATFORM_POLICY], proposta('mensagem.disparar', actor)), `enviar ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 6 });
     }
+    // Pausar: a pessoa pausa direto (decisão do dono de 09/10/2026); o funcionário de IA continua esperando a aprovação.
+    expect(chooseMode([PLATFORM_POLICY], proposta('mensagem.pausar', 'human'))).toEqual({ mode: 'AUTO', source: 'platform', version: 6 });
+    expect(chooseMode([PLATFORM_POLICY], proposta('mensagem.pausar', 'agent'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 6 });
     // Sábado, 26/09/2026, 15:00 em São Paulo.
     const em = { at: new Date('2026-09-26T18:00:00Z'), timezone: 'America/Sao_Paulo' };
-    expect(evaluatePolicy([PLATFORM_POLICY], proposta('mensagem.disparar', 'human'), em)).toMatchObject({ allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@5'] });
+    expect(evaluatePolicy([PLATFORM_POLICY], proposta('mensagem.disparar', 'human'), em)).toMatchObject({ allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@6'] });
     // A regra mais específica de uma marca venceria a da distribuição no modo: por isso a trava também está na ferramenta.
     const daMarca = { source: 'brand' as const, version: 1, document: { rules: [{ type: 'autonomy' as const, action: 'mensagem.disparar', provider: 'regemcast', mode: 'AUTO' as const }] } };
     expect(chooseMode([PLATFORM_POLICY, daMarca], proposta('mensagem.disparar', 'human')).mode).toBe('AUTO');

@@ -66,7 +66,7 @@ describe('autonomia das ações da sombra (A3, I13)', () => {
   it('o modo do funcionário de IA e o pedido de uma pessoa são regras separadas (A4, X2)', () => {
     // Na Meta, a plataforma manda o pedido de uma pessoa esperar aprovação; isso não tira o funcionário da Sombra.
     const daPessoa = { ...propostaDaAcao(alvo), actor: 'human' as const };
-    expect(chooseMode([PLATFORM_POLICY], daPessoa)).toEqual({ mode: 'APPROVAL', source: 'platform', version: 5 });
+    expect(chooseMode([PLATFORM_POLICY], daPessoa)).toEqual({ mode: 'APPROVAL', source: 'platform', version: 6 });
     expect(modoDaAcao([PLATFORM_POLICY], alvo).mode).toBe('SHADOW');
     // A regra que a promoção e a volta para Sombra escrevem é do funcionário: o pedido da pessoa segue em aprovação.
     for (const mode of ['SUGGEST', 'SHADOW'] as const) {
