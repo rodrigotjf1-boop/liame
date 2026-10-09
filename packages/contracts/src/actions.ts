@@ -113,6 +113,12 @@ export const ActionExecution = z.strictObject({
   /** O objeto já estava como o pedido queria: nada foi escrito (e não há o que desfazer). */
   no_write: z.boolean(),
   observed: BudgetChangeState.nullable(),
+  /**
+   * O que a plataforma respondeu ao recusar, nas palavras dela (`text`; o Google escreve em inglês) e com o código
+   * dela, quando há (`code`: `campaignBudgetError.MONEY_AMOUNT_TOO_LARGE`). Nulo quando a execução não foi recusada
+   * por ela, ou quando o motivo em `status_reason` é uma frase do Liame (a autorização venceu, o objeto sumiu).
+   */
+  provider_reply: z.strictObject({ text: z.string(), code: z.string().nullable() }).nullable().optional(),
 });
 export type ActionExecution = z.infer<typeof ActionExecution>;
 
@@ -433,6 +439,24 @@ export const AdObject = z.strictObject({
 });
 export type AdObject = z.infer<typeof AdObject>;
 
+/**
+ * A verba dividida (A5, Y3; D-A5-4). No Google Ads a verba não mora na campanha: mora num orçamento que pode servir a
+ * várias. O Liame nunca muda um orçamento dividido (mudar a verba de uma campanha mudaria a das outras sem ninguém
+ * pedir): a tela diz com quem a campanha divide, e nela só cabe pausar e retomar.
+ */
+export const SharedBudget = z.strictObject({
+  /** A média diária do orçamento inteiro; nula quando ele é de período. */
+  daily_micros: Micros.nullable(),
+  /** Quantas campanhas usam o orçamento agora, como a plataforma informa (contando esta). */
+  campaigns: z.int().min(0),
+  /**
+   * Os nomes das outras campanhas que usam o orçamento, em ordem alfabética (até 10). Vazia quando só esta usa (o
+   * orçamento foi criado para ser dividido) e quando a plataforma não respondeu a tempo: o pedido segue sem os nomes.
+   */
+  shared_with: z.array(z.string()),
+});
+export type SharedBudget = z.infer<typeof SharedBudget>;
+
 export const ActionOptionsQuery = z.strictObject({
   campaign_id: z.uuid(),
   /** O objeto escolhido na gaveta: um conjunto ou um anúncio desta campanha (o `resource_id` dele). Sem ele, a campanha. */
@@ -458,6 +482,8 @@ export const ActionOptionsResponse = z.strictObject({
   target: AdObject.extend({
     /** A situação de entrega que a plataforma informa (`CAMPAIGN_PAUSED` quando o pai está em pausa, por exemplo). */
     effective_status: z.string().nullable(),
+    /** A verba do objeto é dividida com outras campanhas (só no Google Ads); nulo quando a verba é só dele. */
+    shared_budget: SharedBudget.nullable().optional(),
   }),
   /** Quando o objeto foi lido na plataforma (agora). */
   read_at: z.iso.datetime(),
@@ -466,7 +492,10 @@ export const ActionOptionsResponse = z.strictObject({
    * própria) e pausar, ou retomar. Vazia quando o objeto foi arquivado ou removido na plataforma.
    */
   tools: z.array(Slug),
-  /** Os conjuntos e os anúncios da campanha pela leitura diária: a situação e a verba são as da última leitura. */
+  /**
+   * Os conjuntos e os anúncios da campanha pela leitura diária: a situação e a verba são as da última leitura. Vazias
+   * na plataforma em que o pedido só cabe na campanha inteira (o Google Ads).
+   */
   ad_sets: z.array(AdObject),
   ads: z.array(AdObject.extend({ /** O conjunto do anúncio (o `resource_id` dele). */ ad_set: Ref.nullable() })),
   /** Quando a lista foi vista pela última vez na plataforma; nulo se a conta ainda não foi lida. */

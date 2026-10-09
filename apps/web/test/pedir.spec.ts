@@ -25,6 +25,8 @@ import {
   pedirPorCampanha,
   type Rascunho,
   semOpcoes,
+  temOnde,
+  verbaDividida,
   tituloDoPedido,
   verbaNoCampo,
 } from '@/components/pedir/textos';
@@ -561,5 +563,131 @@ describe('quando a gaveta não abre o formulário, e depois do pedido', () => {
     expect(html).toContain('>Fechar</button>');
     expect(html).not.toContain('Pedir aprovação');
     expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
+  });
+});
+
+describe('o Google no pedido de mudança (A5 · Y3; protótipo P13, parte 1)', () => {
+  /** A campanha do protótipo: Busca “hambúrguer perto”, no Google, com a verba que é só dela. */
+  const doGoogle = (over: Partial<ActionOptionsResponse> = {}, alvo: Partial<Alvo> = {}) =>
+    opcoes(
+      { campaign: { id: uuid(4), name: 'Busca “hambúrguer perto”', provider: 'google_ads', brand_id: uuid(900), account_id: uuid(801), account_name: 'Mister Burgers Ads' }, ad_sets: [], ads: [], ...over },
+      { resource_id: 'campanha:21000000004', name: 'Busca “hambúrguer perto”', effective_status: 'ELIGIBLE', daily_micros: r(55), shared_budget: null, ...alvo },
+    );
+  /** A mesma campanha com a verba dividida: o servidor não oferece mudar a verba, só pausar. */
+  const dividida = (com: string[], campanhas = com.length + 1, diario: number | null = r(120)) =>
+    doGoogle({ tools: ['campanha_pausar'] }, { daily_micros: null, shared_budget: { daily_micros: diario, campaigns: campanhas, shared_with: com } });
+  const aviso = (o: ActionOptionsResponse) => {
+    const v = verbaDividida(o)!;
+    return { ...v, texto: sp(textoDe(v.texto)) };
+  };
+
+  it('a nota do botão fala do Google e diz que nele a mudança é na campanha inteira', () => {
+    expect(notaDoPedir(['meta_ads', 'google_ads'], [])).toBe(
+      '“Pedir mudança” vale para as campanhas da Meta e do Google: mudar a verba, pausar e retomar, sempre com a sua aprovação. No Google, a mudança é na campanha inteira.',
+    );
+    expect(notaDoPedir(['google_ads'], ['meta_ads'])).toBe(
+      '“Pedir mudança” vale para as campanhas do Google: mudar a verba, pausar e retomar, sempre com a sua aprovação. No Google, a mudança é na campanha inteira. As da Meta seguem só para leitura.',
+    );
+    expect(notaDoPedir(['meta_ads'], ['google_ads'])).not.toContain('campanha inteira');
+    // A ordem das plataformas na frase é sempre a mesma, venha a lista de campanhas como vier.
+    expect(notaDoPedir(['google_ads', 'meta_ads', 'google_ads'], [])).toContain('vale para as campanhas da Meta e do Google:');
+    expect(notaDoPedir(['plataforma_nova'], ['google_ads', 'meta_ads'])).toContain('As da Meta e do Google seguem só para leitura.');
+  });
+
+  it('sem conjunto nem anúncio para escolher, a gaveta não tem o campo "Onde"', () => {
+    expect(temOnde(ondeDe(doGoogle()))).toBe(false);
+    expect(listaLidaEm(doGoogle(), FUSO, AGORA)).toBeNull();
+    // Na Meta o campo segue, com o que houver para escolher.
+    expect(temOnde(ondeDe(opcoes()))).toBe(true);
+    expect(temOnde(ondeDe(opcoes({ ads: [] })))).toBe(true);
+  });
+
+  it('"Agora, no Google": a verba que é só da campanha, e as frases do caminho falam do Google', () => {
+    const a = agoraNaPlataforma(doGoogle(), FUSO);
+    expect(a.titulo).toBe('Agora, no Google');
+    expect(a.linhas.map((l) => [l.rotulo, sp(l.valor), l.sub])).toEqual([
+      ['Situação', 'Ativa', null],
+      ['Verba diária', 'R$ 55,00', 'na campanha'],
+      ['Lido no Google', 'agora, às 14:32', null],
+    ]);
+    expect(verbaDividida(doGoogle())).toBeNull();
+    expect(acoesDe(doGoogle().tools).map((x) => x.acao)).toEqual(['verba', 'pausar']);
+    expect(efeito(doGoogle(), { acao: 'verba', valor: '49,50' })).toContain('cai R$ 5,50 por dia');
+    expect(notaDoPedido('google_ads')).toContain('o Liame confere com o Google, faz a mudança e avisa');
+    expect(depoisDeCriar('aguardando_aprovacao', 'google_ads')).toBe('Ele espera a aprovação com o código do app. Nada muda no Google antes disso.');
+    expect(lendoNaPlataforma('google_ads')).toBe('Lendo a campanha no Google, para o pedido partir do que está valendo agora…');
+    expect(falhaDaLeitura({ status: 502, code: 'plataforma-indisponivel', title: 'A plataforma não respondeu' }, 'google_ads')).toMatchObject({ tipo: 'fora', titulo: 'Não foi possível ler a campanha no Google agora' });
+    // O pedido vai com a plataforma e a conta da campanha.
+    const c = conferirPedido(doGoogle(), { acao: 'verba', valor: '49,50' }, verba());
+    expect(c).toMatchObject({ ok: true, corpo: { tool: 'orcamento_ajustar', provider: 'google_ads', account_id: uuid(801), resource_id: 'campanha:21000000004', params: { daily_budget_micros: r(49.5) } } });
+  });
+
+  it('a verba dividida com outra campanha: o Liame não muda, diz com quem e de quanto é o orçamento, e deixa pausar', () => {
+    const o = dividida(['Busca “Mister Burgers”']);
+    expect(agoraNaPlataforma(o, FUSO).linhas.map((l) => [l.rotulo, sp(l.valor), l.sub])[1]).toEqual(['Verba diária', 'R$ 120,00', 'dividida com outra campanha']);
+    expect(aviso(o)).toEqual({
+      titulo: 'O Liame não muda esta verba',
+      texto: 'No Google, esta campanha divide um orçamento de R$ 120,00 por dia com outra campanha. Mudar aqui mudaria a verba dela também, sem ninguém ter pedido.',
+      campanhas: [
+        { nome: 'Busca “hambúrguer perto”', papel: 'esta campanha' },
+        { nome: 'Busca “Mister Burgers”', papel: 'divide a mesma verba' },
+      ],
+      mais: null,
+      depois: 'Pausar e retomar esta campanha pode: só ela para. Para mudar a verba, mude no Google Ads, onde você vê as campanhas juntas.',
+    });
+    // O valor do orçamento sai em destaque, como no protótipo.
+    expect(verbaDividida(o)!.texto.find((t) => t.b)?.t).toBe(`R$${String.fromCharCode(160)}120,00 por dia`);
+    // Só pausar cabe: a gaveta não oferece a verba, e a pausa diz o que acontece sem citar verba que não é dela.
+    expect(acoesDe(o.tools).map((x) => x.acao)).toEqual(['pausar']);
+    expect(efeito(o, { acao: 'pausar', valor: '' })).toBe('A campanha “Busca “hambúrguer perto”” para de aparecer e de gastar. Fica pausada, não apagada.');
+    expect(conferirPedido(o, { acao: 'pausar', valor: '' }, verba())).toMatchObject({ ok: true, corpo: { tool: 'campanha_pausar', provider: 'google_ads', params: {} } });
+    expect(conferirPedido(o, { acao: 'verba', valor: '100' }, verba())).toMatchObject({ ok: false, noValor: false });
+  });
+
+  it('com várias campanhas na mesma verba: o plural, e "e mais N" quando o Google informa mais campanhas do que os nomes que vieram', () => {
+    const tres = dividida(['Busca combo', 'Busca “Mister Burgers”']);
+    expect(agoraNaPlataforma(tres, FUSO).linhas[1]!.sub).toBe('dividida com outras 2 campanhas');
+    expect(aviso(tres).texto).toBe('No Google, esta campanha divide um orçamento de R$ 120,00 por dia com outras 2 campanhas. Mudar aqui mudaria a verba delas também, sem ninguém ter pedido.');
+    expect(aviso(tres).campanhas).toHaveLength(3);
+    expect(aviso(tres).mais).toBeNull();
+    // Doze campanhas no orçamento, dez nomes: a lista diz quantas ficaram de fora.
+    const nomes = Array.from({ length: 10 }, (_, i) => `Busca ${String(i + 1).padStart(2, '0')}`);
+    const muitas = dividida(nomes, 13);
+    expect(aviso(muitas).texto).toContain('com outras 12 campanhas');
+    expect(aviso(muitas).campanhas).toHaveLength(11);
+    expect(aviso(muitas).mais).toBe('e mais 2 campanhas');
+    expect(aviso(dividida(nomes, 12)).mais).toBe('e mais 1 campanha');
+  });
+
+  it('além do protótipo: o Google não disse os nomes, o orçamento é de período, ou só esta campanha usa o orçamento dividido', () => {
+    // Sem os nomes (o Google não respondeu a tempo), a contagem que veio com a campanha basta para a frase; não há lista.
+    const semNomes = dividida([], 3);
+    expect(aviso(semNomes).texto).toContain('divide um orçamento de R$ 120,00 por dia com outras 2 campanhas');
+    expect(aviso(semNomes).campanhas).toEqual([]);
+    expect(aviso(semNomes).mais).toBeNull();
+    expect(agoraNaPlataforma(semNomes, FUSO).linhas[1]!.sub).toBe('dividida com outras 2 campanhas');
+    // Orçamento de período: não há valor por dia para citar.
+    const dePeriodo = dividida(['Busca combo'], 2, null);
+    expect(aviso(dePeriodo).texto).toBe('No Google, esta campanha divide um orçamento com outra campanha. Mudar aqui mudaria a verba dela também, sem ninguém ter pedido.');
+    expect(agoraNaPlataforma(dePeriodo, FUSO).linhas[1]).toMatchObject({ valor: 'Dividida', sub: 'dividida com outra campanha' });
+    // Criado para ser dividido, e hoje só esta usa: é dividido do mesmo jeito, sem "outra campanha" que não existe.
+    const sozinha = dividida([], 1, r(40));
+    expect(aviso(sozinha)).toEqual({
+      titulo: 'O Liame não muda esta verba',
+      texto: 'No Google, a verba desta campanha vem de um orçamento de R$ 40,00 por dia criado para ser dividido entre campanhas. Hoje só ela usa, mas o Liame não muda orçamento dividido.',
+      campanhas: [],
+      mais: null,
+      depois: 'Pausar e retomar esta campanha pode. Para mudar a verba, mude no Google Ads.',
+    });
+    expect(agoraNaPlataforma(sozinha, FUSO).linhas[1]).toMatchObject({ sub: 'de um orçamento criado para ser dividido' });
+    // A contagem estranha (zero) não vira número negativo nem "outras 0 campanhas".
+    expect(aviso(dividida([], 0)).texto).not.toMatch(/outras? -?\d|NaN/);
+  });
+
+  it('retomar a campanha em pausa com a verba dividida: volta a gastar dentro da verba que já existe', () => {
+    const pausada = doGoogle({ tools: ['campanha_retomar'] }, { status: 'pausado', effective_status: 'PAUSED', daily_micros: null, shared_budget: { daily_micros: r(120), campaigns: 2, shared_with: ['Busca “Mister Burgers”'] } });
+    expect(acoesDe(pausada.tools).map((x) => x.acao)).toEqual(['retomar']);
+    expect(efeito(pausada, { acao: 'retomar', valor: '' })).toBe('A campanha “Busca “hambúrguer perto”” volta a aparecer e a gastar, dentro da verba que já existe: a verba não muda.');
+    expect(verbaDividida(pausada)).not.toBeNull();
   });
 });

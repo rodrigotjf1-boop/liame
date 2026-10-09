@@ -108,7 +108,8 @@ describe.skipIf(!hasDb)('as opções do pedido de mudança (A4 · X8)', () => {
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     const o = ActionOptionsResponse.parse(r.body);
     expect(o.campaign).toEqual({ id: t.campanha.linha, name: 'Combo sexta', provider: 'meta_ads', brand_id: e.brandId, account_id: e.conta, account_name: 'CA - Mister Burgers' });
-    expect(o.target).toEqual({ resource_id: t.campanha.recurso, kind: 'campanha', name: 'Combo sexta', status: 'ativo', effective_status: 'ACTIVE', daily_micros: 45 * REAL });
+    // Na Meta a verba mora no objeto: não há verba dividida entre campanhas (`shared_budget` é do Google).
+    expect(o.target).toEqual({ resource_id: t.campanha.recurso, kind: 'campanha', name: 'Combo sexta', status: 'ativo', effective_status: 'ACTIVE', daily_micros: 45 * REAL, shared_budget: null });
     expect(o.tools).toEqual(['orcamento_ajustar', 'campanha_pausar']);
     expect(new Date(o.read_at).getTime()).toBeGreaterThanOrEqual(antes);
     // A lista é a da leitura diária, em ordem de nome: a situação e a verba são as de quando o Liame leu.

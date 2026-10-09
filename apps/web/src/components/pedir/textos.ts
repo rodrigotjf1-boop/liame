@@ -1,6 +1,6 @@
 import type { ActionOpenRequest, ActionOptionsResponse, ActionTargetsResponse, AdObject, BudgetMonthResponse, CreateActionRequest } from '@liame/contracts';
 import { enderecoDoPedido } from '@/components/aprovacoes/textos';
-import { artigo, autorizadorDa } from '@/components/contas/textos';
+import { artigo, autorizadorDa, plataforma } from '@/components/contas/textos';
 import { type Frase, horaNoFuso, quandoNoFuso, type Trecho } from '@/components/resultados/textos';
 import { reaisDigitados } from '@/components/verba/textos';
 import type { NomeIcone } from '@/components/ui/icone';
@@ -8,6 +8,8 @@ import { mensagemDe, type Problema } from '@/lib/api';
 import { reaisDeMicros } from '@/lib/formato';
 
 // Regras e frases do pedido de mudança (A4 · X8; protótipo P9, aprovado em 05/10/2026: mockups/prototipo-anuncios.html).
+// O Google no pedido (A5 · Y3; protótipo P13, parte 1, aprovado em 09/10/2026: mockups/prototipo-google-pedido.html): a
+// mudança é na campanha inteira, e a verba dividida entre campanhas não muda pelo Liame.
 // O botão "Pedir mudança" de Resultados e a gaveta "Pedir uma mudança". Quem decide se o pedido entra é o servidor
 // (`POST /v1/actions`: a política, os limites da empresa, a conta do mês e a leitura na plataforma). Aqui o que o
 // servidor devolve vira as frases do protótipo, e a gaveta confere antes de enviar só o que dá para saber com
@@ -49,6 +51,12 @@ export function pedirPorCampanha(alvos: ActionTargetsResponse | null): Map<strin
 }
 
 const juntar = (itens: string[]): string => (itens.length <= 1 ? itens.join('') : `${itens.slice(0, -1).join(', ')} e ${itens.at(-1)}`);
+/** As plataformas saem sempre na mesma ordem (a Meta, o Google, depois as outras), e não na ordem da lista de campanhas. */
+const ORDEM_DAS_PLATAFORMAS = ['meta_ads', 'google_ads'];
+function emOrdem(provedores: readonly string[]): string[] {
+  const lugar = (p: string) => (ORDEM_DAS_PLATAFORMAS.includes(p) ? ORDEM_DAS_PLATAFORMAS.indexOf(p) : ORDEM_DAS_PLATAFORMAS.length);
+  return [...new Set(provedores)].sort((a, b) => lugar(a) - lugar(b));
+}
 /** "da Meta", "do Google". */
 function daPlataforma(provider: string): string {
   const quem = artigo(autorizadorDa(provider), false);
@@ -60,10 +68,12 @@ function daPlataforma(provider: string): string {
  * das outras plataformas da lista (`soLeitura`) seguem só para leitura.
  */
 export function notaDoPedir(comPedido: readonly string[], soLeitura: readonly string[]): string {
-  const onde = juntar([...new Set(comPedido.map(daPlataforma))]);
+  const onde = juntar([...new Set(emOrdem(comPedido).map(daPlataforma))]);
   // A campanha sem botão de uma plataforma que tem botão (arquivada, ou de conta sem a escrita) não entra na frase.
-  const outras = juntar([...new Set(soLeitura.filter((p) => !comPedido.includes(p)).map(daPlataforma))]);
-  return `“Pedir mudança” vale para as campanhas ${onde}: mudar a verba, pausar e retomar, sempre com a sua aprovação.${outras ? ` As ${outras} seguem só para leitura.` : ''}`;
+  const outras = juntar([...new Set(emOrdem(soLeitura.filter((p) => !comPedido.includes(p))).map(daPlataforma))]);
+  // No Google o pedido não desce ao grupo de anúncios nem ao anúncio (P13).
+  const noGoogle = comPedido.includes('google_ads') ? ' No Google, a mudança é na campanha inteira.' : '';
+  return `“Pedir mudança” vale para as campanhas ${onde}: mudar a verba, pausar e retomar, sempre com a sua aprovação.${noGoogle}${outras ? ` As ${outras} seguem só para leitura.` : ''}`;
 }
 
 /**
@@ -115,6 +125,64 @@ export function ondeDe(o: Pick<ActionOptionsResponse, 'ad_sets' | 'ads'>): OndeD
   return { conjuntos: o.ad_sets.map(noCampo), anuncios: o.ads.map(noCampo) };
 }
 
+/**
+ * O campo "Onde" só aparece quando há o que escolher. No Google a mudança é na campanha inteira (P13): o servidor
+ * manda as duas listas vazias, e a gaveta abre direto na campanha.
+ */
+export const temOnde = (onde: OndeDaGaveta): boolean => onde.conjuntos.length + onde.anuncios.length > 0;
+
+// ------------------------------------------------------------------ a verba dividida (Google Ads)
+
+type Dividida = NonNullable<ActionOptionsResponse['target']['shared_budget']>;
+
+/** Com quantas OUTRAS campanhas a verba é dividida: os nomes que vieram, ou a contagem da plataforma sem esta. */
+const outrasNaVerba = (d: Dividida): number => Math.max(d.shared_with.length, d.campaigns - 1, 0);
+const comOutras = (n: number): string => (n === 1 ? 'outra campanha' : `outras ${n} campanhas`);
+
+export type VerbaDividida = {
+  titulo: string;
+  /** Por que o Liame não muda: com quantas campanhas a verba é dividida, e de quanto é o orçamento inteiro. */
+  texto: Frase;
+  /** Esta campanha e as outras de que a plataforma disse o nome. Vazia quando os nomes não vieram, ou só esta usa. */
+  campanhas: { nome: string; papel: string }[];
+  /** "e mais 2 campanhas": a plataforma informa mais campanhas do que os nomes que vieram. */
+  mais: string | null;
+  /** O que dá para fazer: pausar e retomar aqui, e a verba na plataforma. */
+  depois: string;
+};
+
+/**
+ * O aviso da verba dividida (P13): no Google a verba mora num orçamento que pode servir a várias campanhas, e o Liame
+ * nunca muda um orçamento dividido (D-A5-4). Nulo quando a verba é só do objeto.
+ */
+export function verbaDividida(o: ActionOptionsResponse): VerbaDividida | null {
+  const d = o.target.shared_budget ?? null;
+  if (!d) return null;
+  const n = outrasNaVerba(d);
+  const Na = maiuscula(naPlataforma(o.campaign.provider));
+  const nome = plataforma(o.campaign.provider).nome;
+  const valor: Frase = d.daily_micros !== null ? [{ t: ' de ' }, b(`${reais(d.daily_micros)} por dia`)] : [];
+  const titulo = 'O Liame não muda esta verba';
+  if (n === 0) {
+    // O orçamento foi criado para ser dividido, mas hoje só esta campanha usa: é dividido do mesmo jeito.
+    return {
+      titulo,
+      texto: [{ t: `${Na}, a verba desta campanha vem de um orçamento` }, ...valor, { t: ' criado para ser dividido entre campanhas. Hoje só ela usa, mas o Liame não muda orçamento dividido.' }],
+      campanhas: [],
+      mais: null,
+      depois: `Pausar e retomar esta campanha pode. Para mudar a verba, mude no ${nome}.`,
+    };
+  }
+  const faltam = n - d.shared_with.length;
+  return {
+    titulo,
+    texto: [{ t: `${Na}, esta campanha divide um orçamento` }, ...valor, { t: ` com ${comOutras(n)}. Mudar aqui mudaria a verba ${n === 1 ? 'dela' : 'delas'} também, sem ninguém ter pedido.` }],
+    campanhas: d.shared_with.length ? [{ nome: o.target.name, papel: 'esta campanha' }, ...d.shared_with.map((x) => ({ nome: x, papel: 'divide a mesma verba' }))] : [],
+    mais: d.shared_with.length && faltam > 0 ? `e mais ${faltam === 1 ? '1 campanha' : `${faltam} campanhas`}` : null,
+    depois: `Pausar e retomar esta campanha pode: só ela para. Para mudar a verba, mude no ${nome}, onde você vê as campanhas juntas.`,
+  };
+}
+
 // ------------------------------------------------------------------ o objeto, em palavras
 
 type Tipo = 'campanha' | 'conjunto' | 'anuncio';
@@ -160,7 +228,12 @@ export function agoraNaPlataforma(o: ActionOptionsResponse, fuso: string): Agora
   linhas.push({ rotulo: 'Situação', valor: situacaoEscrita(alvo.status, tipo === 'campanha'), sub: entregaParada(alvo) });
 
   let verba: Pick<LinhaDeAgora, 'valor' | 'sub'>;
-  if (alvo.daily_micros !== null) {
+  const dividida = alvo.shared_budget ?? null;
+  if (dividida) {
+    // A verba é do orçamento inteiro, e não desta campanha (P13): o valor dele, e com quantas ela divide.
+    const n = outrasNaVerba(dividida);
+    verba = { valor: dividida.daily_micros !== null ? reais(dividida.daily_micros) : 'Dividida', sub: n > 0 ? `dividida com ${comOutras(n)}` : 'de um orçamento criado para ser dividido' };
+  } else if (alvo.daily_micros !== null) {
     verba = { valor: reais(alvo.daily_micros), sub: tipo === 'campanha' ? 'na campanha' : 'no conjunto' };
   } else if (tipo === 'campanha') {
     const nosConjuntos = o.ad_sets.filter((c) => c.daily_micros !== null).map((c) => `${c.name}: ${reais(c.daily_micros!)}${c.status === 'pausado' ? ' (pausado)' : ''}`);

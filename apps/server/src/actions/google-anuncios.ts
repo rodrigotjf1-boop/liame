@@ -8,13 +8,14 @@ import { type ClienteConector, ErroConector } from '../connectors/cliente-http.j
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { soDigitos } from '../connectors/validacao.js';
 import type { ApplyOptions, ApplyResult, Connector, PreparedRead, ReadResult, ResourceRef } from './connectors.js';
-import { motivoDoCompartilhado, type OrcamentoDaCampanha } from './orcamento-compartilhado.js';
+import { motivoDoCompartilhado, type OrcamentoDaCampanha, orcamentoCompartilhado } from './orcamento-compartilhado.js';
+import { motivoDaRecusa } from './resposta-da-plataforma.js';
 import type { ResourceState } from './tools.js';
 
 // Escrita no Google Ads pelo Action Service (A5, Y2; base de conhecimento §3.1, reconferida em 08/10/2026): mudar a
 // situação (ativar e pausar) de uma campanha e a verba diária dela. Só depois da aprovação de uma pessoa, com a flag
-// `google_write` ligada para a conta. Nesta entrega nenhuma ferramenta aceita `google_ads` ainda (isso é a Y3): o
-// conector fica pronto e desligado.
+// `google_write` ligada para a conta. Desde a Y3 (09/10/2026) o conector está no registro e as ferramentas de verba,
+// pausar e retomar campanha o aceitam; a flag nasce desligada para todos.
 //
 // O recurso é a campanha no Google: `resource_id` = `campanha:<id>`; `account_id` é a conta conectada no Liame. A
 // campanha precisa estar na lista que o Liame leu dessa conta, e a leitura no Google é feita dentro dela.
@@ -41,6 +42,8 @@ const PROVIDER = 'google_ads';
 export const OPERACOES_DE_ESCRITA_POR_DIA = 300;
 /** O balde da cota diária por empresa: enche devagar, ao longo do dia. */
 export const BALDE_DA_ESCRITA_GOOGLE = { capacidade: OPERACOES_DE_ESCRITA_POR_DIA, porSegundo: OPERACOES_DE_ESCRITA_POR_DIA / 86_400 };
+/** Quantos nomes a tela do pedido recebe, no máximo, das outras campanhas que dividem a verba. */
+export const CAMPANHAS_NA_VERBA_DIVIDIDA = 10;
 /** O limite diário do Google não volta em um minuto: a ação espera pelo menos isto. */
 const ESPERA_DO_LIMITE_DIARIO_MS = 60 * 60_000;
 
@@ -172,9 +175,11 @@ export function recusaDoGoogle(err: unknown, passo: 'leitura' | 'escrita' = 'esc
   if (err.tipo === 'permissao') return SEM_PERMISSAO;
   if (err.tipo !== 'definitivo') return null;
   // O texto do erro específico do Google, quando vem; senão, o do erro geral. Nenhum dos dois leva o token.
-  const motivo = (err.mensagemUsuario ?? err.message).replace(/[.!?]\s*$/, '');
+  const resposta = err.mensagemUsuario ?? err.message;
+  // A recusa da mudança sai no formato que a resposta do pedido sabe separar (`resposta-da-plataforma.ts`).
+  if (passo === 'escrita') return motivoDaRecusa('google_ads', resposta, err.subcodigo);
   const codigo = err.subcodigo ? ` (${err.subcodigo})` : '';
-  return passo === 'leitura' ? `O Google não deixou ler a campanha antes de mudar: ${motivo}${codigo}. Nada foi mudado.` : `O Google recusou a mudança: ${motivo}${codigo}.`;
+  return `O Google não deixou ler a campanha antes de mudar: ${resposta.replace(/[.!?]\s*$/, '')}${codigo}. Nada foi mudado.`;
 }
 
 /** O limite DIÁRIO de operações do projeto no Google (`QuotaError.RESOURCE_EXHAUSTED`): não volta em um minuto. */
@@ -317,6 +322,44 @@ export class GoogleAnunciosConnector implements Connector {
     const p = prepared as Preparada;
     const lido = await this.lerNoGoogle(p, p.deps.tempoDaLeituraDoPedidoMs ?? TEMPO_DA_LEITURA_DO_PEDIDO_MS);
     return lido ? { state: lido.estado, version: lido.versao } : null;
+  }
+
+  /**
+   * As outras campanhas que usam o mesmo orçamento, pelo nome (base de conhecimento §3.1: `campaign.campaign_budget`
+   * aceita filtro). Sem transação, com o tempo curto de quem tem uma pessoa esperando, e só quando o orçamento é
+   * dividido. É detalhe da tela: se o Google não responder, a lista volta vazia, e a pessoa ainda lê quantas dividem
+   * (o número veio com a campanha).
+   */
+  async sharedBudgetWith(prepared: PreparedRead, state: ResourceState): Promise<string[]> {
+    if (prepared.conector !== PROVIDER) throw new Error('escrita no Google: leitura preparada por outro conector');
+    const p = prepared as Preparada;
+    const orcamento = orcamentoCompartilhado(state);
+    if (!orcamento || !soDigitos(orcamento.id)) return [];
+    const versao = await p.deps.versao('entity_state');
+    // O id da conta, o do orçamento e o da campanha são só dígitos (conferidos): entram na consulta sem risco.
+    const consulta =
+      `SELECT campaign.id, campaign.name FROM campaign WHERE campaign.campaign_budget = 'customers/${p.conta.external_id}/campaignBudgets/${orcamento.id}'` +
+      ` AND campaign.status != 'REMOVED' AND campaign.id != ${p.campanha} ORDER BY campaign.name LIMIT ${CAMPANHAS_NA_VERBA_DIVIDIDA}`;
+    try {
+      const r = await p.deps.cliente().requisitar<Array<{ results?: LinhaDoGoogle[] }> | null>({
+        provider: PROVIDER,
+        conta: this.chave(p),
+        url: `${p.deps.googleAdsUrl}/${versao}/customers/${p.conta.external_id}/googleAds:searchStream`,
+        metodo: 'POST',
+        corpo: { query: consulta },
+        endpoint: 'entity_state',
+        apiVersion: versao,
+        cabecalhos: await this.cabecalhos(p),
+        tempoLimiteMs: p.deps.tempoDaLeituraDoPedidoMs ?? TEMPO_DA_LEITURA_DO_PEDIDO_MS,
+      });
+      const linhas = Array.isArray(r.corpo) ? r.corpo.flatMap((lote) => lote.results ?? []) : [];
+      const nomes = linhas.flatMap((l) => (typeof l.campaign?.name === 'string' && l.campaign.name.trim() && String(l.campaign.id ?? '') !== p.campanha ? [l.campaign.name.trim()] : []));
+      return nomes.slice(0, CAMPANHAS_NA_VERBA_DIVIDIDA);
+    } catch (err) {
+      if (!(err instanceof ErroConector)) throw err;
+      this.logger.warn(`campanha ${p.campanha}: o Google não disse com quem a verba é dividida (${err.tipo}); o pedido segue sem os nomes`);
+      return [];
+    }
   }
 
   async apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options: ApplyOptions = {}): Promise<ApplyResult> {

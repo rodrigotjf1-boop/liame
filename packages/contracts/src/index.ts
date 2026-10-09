@@ -107,6 +107,7 @@ export {
   RejectActionRequest,
   SandboxResourceRequest,
   SandboxResourceResponse,
+  SharedBudget,
   UpdateActionRequest,
 } from './actions.js';
 export {

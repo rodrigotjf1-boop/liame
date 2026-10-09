@@ -35,7 +35,7 @@ import { hasDb, OWNER_URL } from './env.js';
 
 const REAL = 1_000_000;
 
-type Acao = { status: string; status_reason: string | null; attempts: number; next_attempt_at: string | null; workflow: { status: string; steps: { name: string; status: string; attempts: number }[] } };
+type Acao = { status: string; status_reason: string | null; attempts: number; next_attempt_at: string | null; execution?: { status: string; provider_reply?: { text: string; code: string | null } | null } | null; workflow: { status: string; steps: { name: string; status: string; attempts: number }[] } };
 
 describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () => {
   let api: TestApi;
@@ -201,6 +201,8 @@ describe.skipIf(!hasDb)('escrita na Meta: conector e execução (A4 · X1)', () 
     expect(resumo(c.id)).toEqual(['ler', 'validar']);
     expect(objetos.get(c.id)!.daily_budget).toBe('3000');
     expect(await acao(id)).toMatchObject({ status: 'falhou', status_reason: 'A Meta recusou a mudança: O orçamento diário precisa ser de pelo menos R$ 6,00.', attempts: 0, next_attempt_at: null });
+    // A resposta do pedido separa o que a Meta escreveu do que o Liame diz em volta (a tela põe entre aspas só o dela).
+    expect((await acao(id)).execution).toMatchObject({ status: 'falhou', provider_reply: { text: 'O orçamento diário precisa ser de pelo menos R$ 6,00.', code: null } });
     expect((await execucoes(id)).map((x) => x.status)).toEqual(['falhou']);
     await ciclo();
     expect(resumo(c.id)).toEqual(['ler', 'validar']);

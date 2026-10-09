@@ -27,12 +27,12 @@ const maiuscula = (t: string): string => t.charAt(0).toLocaleUpperCase('pt-BR') 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const ANDANDO = new Set(['aguardando_aprovacao', 'aprovada', 'executando']);
 
-/** Como a frase chama a plataforma do pedido: "a Meta", "na Meta", "com a Meta". */
-function naFrase(provider: string): { a: string; A: string; na: string; com: string } {
-  if (provider === 'meta_ads') return { a: 'a Meta', A: 'A Meta', na: 'na Meta', com: 'com a Meta' };
-  if (provider === 'google_ads') return { a: 'o Google', A: 'O Google', na: 'no Google', com: 'com o Google' };
+/** Como a frase chama a plataforma do pedido: "a Meta", "na Meta", "com a Meta", "à Meta", "ela". */
+function naFrase(provider: string): { a: string; A: string; na: string; com: string; ao: string; ela: string } {
+  if (provider === 'meta_ads') return { a: 'a Meta', A: 'A Meta', na: 'na Meta', com: 'com a Meta', ao: 'à Meta', ela: 'ela' };
+  if (provider === 'google_ads') return { a: 'o Google', A: 'O Google', na: 'no Google', com: 'com o Google', ao: 'ao Google', ela: 'ele' };
   const nome = plataforma(provider).nome;
-  return { a: nome, A: nome, na: `em ${nome}`, com: `com ${nome}` };
+  return { a: nome, A: nome, na: `em ${nome}`, com: `com ${nome}`, ao: `a ${nome}`, ela: 'ela' };
 }
 
 /** Quem pediu: a pessoa, ou o funcionário de IA (no modo Aprovação). */
@@ -291,7 +291,32 @@ export type DepoisDoAnuncio =
   | { tipo: 'pedir-de-novo'; rotulo: string; nota: string | null }
   | { tipo: 'nota'; texto: string };
 
-export type ResultadoDoAnuncio = { tom: 'ok' | 'espera' | 'falha' | 'neutro'; icone: NomeIcone; forte: string; texto: Frase; depois: DepoisDoAnuncio };
+export type ResultadoDoAnuncio = {
+  tom: 'ok' | 'espera' | 'falha' | 'neutro';
+  icone: NomeIcone;
+  forte: string;
+  texto: Frase;
+  /** Só no Pro: o código que a plataforma mandou na recusa ("Código do Google"). */
+  tecnico?: { rotulo: string; valor: string } | null;
+  depois: DepoisDoAnuncio;
+};
+
+/**
+ * O que vem depois de "recusou na conferência. Nada mudou.": o que a plataforma respondeu, entre aspas e nas palavras
+ * dela (o Google escreve em inglês; protótipo P13), com o código dela para o Pro. O motivo que é uma frase do Liame
+ * (a autorização venceu, a campanha sumiu) sai sem aspas. A resposta de antes de 09/10/2026 não separava as duas
+ * coisas (`provider_reply` não vinha): o motivo sai inteiro entre aspas, como sempre saiu.
+ */
+function respostaDaRecusa(a: AcaoDeAnuncio, p: ReturnType<typeof naFrase>): Pick<ResultadoDoAnuncio, 'texto' | 'tecnico'> {
+  const resposta = a.execution?.provider_reply;
+  if (resposta === undefined) return { texto: a.status_reason ? [{ t: ` O que ${p.a} respondeu: “${a.status_reason}”` }] : [], tecnico: null };
+  if (resposta === null) return { texto: a.status_reason ? [{ t: ` ${maiuscula(a.status_reason)}` }] : [], tecnico: null };
+  const emIngles = a.provider === 'google_ads' ? ', em inglês, como ele escreve' : '';
+  return {
+    texto: [{ t: ` O que ${p.a} respondeu${emIngles}: “${resposta.text}”` }],
+    tecnico: resposta.code ? { rotulo: `Código ${a.provider === 'google_ads' ? 'do Google' : 'da plataforma'}`, valor: resposta.code } : null,
+  };
+}
 
 const BLOQUEIO: Array<[comeco: string, texto: string]> = [
   ['trava ativa', 'há uma trava ativa na empresa'],
@@ -346,8 +371,8 @@ export function resultadoDoAnuncio(a: AcaoDeAnuncio, t: TextosDoAnuncio): Result
         tom: 'falha',
         icone: 'x',
         forte: `${aprov}, mas ${p.a} recusou na conferência. Nada mudou.`,
-        texto: a.status_reason ? [{ t: ` O que ${p.a} respondeu: “${a.status_reason}”` }] : [],
-        depois: { tipo: 'pedir-de-novo', rotulo: 'Pedir de novo', nota: `O Liame pede ${p.a === 'a Meta' ? 'à Meta' : p.a === 'o Google' ? 'ao Google' : `a ${p.a}`} que valide a mudança antes de escrever. Quando ela recusa, nada é escrito e o pedido não é repetido.` },
+        ...respostaDaRecusa(a, p),
+        depois: { tipo: 'pedir-de-novo', rotulo: 'Pedir de novo', nota: `O Liame pede ${p.ao} que valide a mudança antes de escrever. Quando ${p.ela} recusa, nada é escrito e o pedido não é repetido.` },
       };
     }
     return { tom: 'falha', icone: 'x', forte: '', texto: [{ t: resultadoDe(a).texto }], depois: { tipo: 'nada' } };
@@ -422,8 +447,10 @@ export function caminhoDoAnuncio(a: AcaoDeAnuncio, agora: Date): PassoDoPedido[]
 /** A segunda linha do pedido de anúncio decidido, na lista. */
 export function etiquetaDoAnuncio(a: AcaoDeAnuncio): string {
   if (a.status === 'executada' && a.undone_by?.status === 'executada') return 'Desfeito';
-  if ((a.status === 'aprovada' || a.status === 'executando') && a.next_attempt_at) return a.provider === 'meta_ads' ? 'Esperando a Meta' : 'Esperando a plataforma';
-  if (a.status === 'falhou' && a.execution?.status === 'falhou' && a.attempts === 0) return a.provider === 'meta_ads' ? 'A Meta recusou' : 'A plataforma recusou';
+  // "Esperando a Meta", "O Google recusou" (P13); a plataforma que a tela ainda não conhece sai como "a plataforma".
+  const conhecida = a.provider === 'meta_ads' || a.provider === 'google_ads' ? naFrase(a.provider) : null;
+  if ((a.status === 'aprovada' || a.status === 'executando') && a.next_attempt_at) return `Esperando ${conhecida?.a ?? 'a plataforma'}`;
+  if (a.status === 'falhou' && a.execution?.status === 'falhou' && a.attempts === 0) return `${conhecida?.A ?? 'A plataforma'} recusou`;
   return etiquetaDoDecidido(a);
 }
 

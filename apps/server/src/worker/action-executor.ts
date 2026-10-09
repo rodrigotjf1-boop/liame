@@ -38,7 +38,8 @@ export function esperaDoAdiamento(esperarMs: number | null, tentativa: number): 
 /** Por que a execução esperou, em palavras (sem o texto da plataforma: ele pode trazer o que não é para a tela). */
 function motivoDoAdiamento(err: ErroConector): string {
   const quem = NOME_DO_PROVEDOR[err.provider] ?? 'a plataforma';
-  if (err.tipo === 'limite') return `${quem} pediu para esperar (limite de uso da conta)`;
+  // No Google o limite de operações é do projeto, para todas as contas juntas (não há limite por conta de anúncios).
+  if (err.tipo === 'limite') return `${quem} pediu para esperar (${err.provider === 'google_ads' ? 'limite de uso do Google' : 'limite de uso da conta'})`;
   if (err.tipo === 'circuito_aberto') return `${quem} falhou várias vezes seguidas`;
   return `${quem} não respondeu`;
 }

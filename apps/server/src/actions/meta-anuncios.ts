@@ -8,6 +8,7 @@ import type { CredencialGuardada } from '../connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { emMenorUnidade, orcamentoEmMicros } from '../connectors/meta/verba.js';
 import type { ApplyOptions, ApplyResult, Connector, PreparedRead, ReadResult, ResourceRef } from './connectors.js';
+import { motivoDaRecusa } from './resposta-da-plataforma.js';
 import type { ResourceState } from './tools.js';
 
 // Escrita na Meta pelo Action Service (A4, X1; base de conhecimento §2.1, conferida em 04/10/2026): mudar a situação
@@ -159,7 +160,8 @@ export function recusaDaMeta(err: unknown, passo: 'leitura' | 'escrita' = 'escri
   if (err.tipo !== 'definitivo') return null;
   // O texto que a Meta escreve para a pessoa, quando vem; senão, a mensagem do erro. Nenhum dos dois leva o token.
   const motivo = err.mensagemUsuario ?? err.message;
-  return passo === 'leitura' ? `A Meta não deixou ler o objeto antes de mudar: ${motivo.replace(/[.!?]\s*$/, '')}. Nada foi mudado.` : `A Meta recusou a mudança: ${motivo}`;
+  // A recusa da mudança sai no formato que a resposta do pedido sabe separar (`resposta-da-plataforma.ts`).
+  return passo === 'leitura' ? `A Meta não deixou ler o objeto antes de mudar: ${motivo.replace(/[.!?]\s*$/, '')}. Nada foi mudado.` : motivoDaRecusa('meta_ads', motivo);
 }
 
 /**

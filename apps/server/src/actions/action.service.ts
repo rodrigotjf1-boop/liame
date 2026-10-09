@@ -34,6 +34,7 @@ import { advance, workflowOf } from '../workflow/workflow.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
+import { respostaDaPlataforma } from './resposta-da-plataforma.js';
 import { PlanoRecusado, type ResourceState, TOOLS, type ToolDefinition, type ToolPlan } from './tools.js';
 
 /** Pedido que ninguém aprova expira (e devolve a reserva). */
@@ -940,6 +941,7 @@ function flowAfterRequest(
 
 function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionResponse['workflow'], ap: Apresentacao): ActionResponse {
   const campanha = row.params.campaign_id;
+  const execucao = ap.execucoes.get(row.id) ?? null;
   // O objeto de anúncio do pedido: o tipo e o nome são os da leitura na plataforma, guardados com o pedido.
   const tipo = tipoDoObjeto(row.resource_id);
   const alvo = tipo
@@ -994,7 +996,7 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     target: alvo,
     from: alvo ? estadoNaResposta(row.before_state) : null,
     to: alvo ? estadoNaResposta(row.desired_state) : null,
-    execution: ap.execucoes.get(row.id) ?? null,
+    execution: execucao ? { ...execucao, provider_reply: execucao.status === 'falhou' ? respostaDaPlataforma(row.provider, row.status_reason) : null } : null,
   };
 }
 

@@ -7,7 +7,7 @@ import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, type TestApi 
 
 // Um "Google" local para os testes da escrita no Google Ads (A5, Y2): o OAuth (a troca do refresh token) e a Google
 // Ads API v25 por REST, no que o conector usa e como a referência conferida em 08/10/2026 descreve (base §3.1):
-// `googleAds:searchStream` com a campanha e o orçamento dela; `campaigns:mutate` e `campaignBudgets:mutate` com
+// `googleAds:searchStream` com a campanha e o orçamento dela, e com as outras campanhas de um orçamento dividido; `campaigns:mutate` e `campaignBudgets:mutate` com
 // `operations[].updateMask` em snake_case, o corpo em camelCase e `validateOnly` (não muda nada e só devolve erros);
 // erros com o `GoogleAdsFailure` dentro de `error.details`.
 
@@ -187,6 +187,16 @@ export class GoogleDeMentira {
 
     if (recurso === 'searchStream') {
       const consulta = String(corpo.query ?? '');
+      // Com quem a verba é dividida: as campanhas do orçamento, menos a que perguntou e as removidas, pelo nome.
+      const dividida = /^SELECT campaign\.id, campaign\.name FROM campaign WHERE campaign\.campaign_budget = 'customers\/(\d+)\/campaignBudgets\/(\d+)' AND campaign\.status != 'REMOVED' AND campaign\.id != (\d+) ORDER BY campaign\.name LIMIT (\d+)$/.exec(consulta);
+      if (dividida) {
+        const [, daConta, orcamento, menos, limite] = dividida;
+        const outras = [...this.campanhas.values()]
+          .filter((x) => daConta === cliente && x.cliente === cliente && x.orcamento === orcamento && x.status !== 'REMOVED' && x.id !== menos)
+          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+          .slice(0, Number(limite));
+        return { status: 200, corpo: outras.length ? [{ results: outras.map((x) => ({ campaign: { resourceName: `customers/${cliente}/campaigns/${x.id}`, id: x.id, name: x.name } })), fieldMask: 'campaign.id,campaign.name', requestId: 'leitura-de-teste' }] : [] };
+      }
       const id = /FROM campaign WHERE campaign\.id = (\d+)$/.exec(consulta)?.[1];
       if (!id) return this.erro(400, 'INVALID_ARGUMENT', 'Request contains an invalid argument.', { codigo: { queryError: 'UNRECOGNIZED_FIELD' }, texto: 'Error in query: unexpected input.' });
       const c = this.campanhas.get(id);
