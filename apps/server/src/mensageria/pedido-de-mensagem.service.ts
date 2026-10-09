@@ -31,6 +31,8 @@ import { campanhaDoRascunho, chaveDoRascunho, citaOCupom, conferirVariaveis, jan
 // repetida devolve a mesma campanha (a chave de idempotência sai da proposta).
 
 export const FLAG_DO_ENVIO = 'whatsapp_campaign';
+/** A escrita no Regem: é por ela que o cupom da mensagem nasce, junto com o envio. */
+export const FLAG_DO_CUPOM = 'regem_write';
 /** A rotina tem este tempo para cada chamada ao RegemCast: ninguém espera na tela, mas uma proposta não trava a fila. */
 const TEMPO_DO_REGEMCAST_MS = 20_000;
 
@@ -197,6 +199,10 @@ export class PedidoDeMensagemService {
     const loja = r.rows[0];
     if (!loja) throw recusada('A loja do cupom não é uma loja do Regem conectada a esta marca.');
     if (!loja.pode_criar) throw recusada('A loja não liberou "criar cupom de campanha" no Regem. Autorize de novo em Contas conectadas e ligue essa chave lá.');
+    // O cupom nasce junto com o envio, pela escrita no Regem: sem ela ligada, a mensagem com cupom nunca sairia.
+    if (!(await this.flags.isEnabled(FLAG_DO_CUPOM, this.flags.context({ tenantId, brandId, accountId: lojaId })))) {
+      throw recusada('A criação de cupom no Regem não está ligada para esta empresa: a mensagem com cupom não pode ser enviada. Quem liga é a Liame, a pedido do dono.');
+    }
     const existe = await tx.execute(sql`select 1 from liame.coupon where connected_account_id = ${lojaId} and code = ${codigo} and removed_at is null limit 1`);
     if (existe.rows[0]) throw recusada(`Já existe um cupom com o código ${codigo} nesta loja. Proponha outro código.`);
   }

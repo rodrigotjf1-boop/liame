@@ -7,12 +7,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { CONNECTORS } from '../../src/actions/connectors.js';
 import { regemcastMensagemConnector } from '../../src/actions/regemcast-mensagem.js';
 import type { PedidoDeMensagemService, Proponente } from '../../src/mensageria/pedido-de-mensagem.service.js';
+import type { ActionExecutor } from '../../src/worker/action-executor.js';
 import type { TestApi } from '../helpers/api.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
-// A5 · Y5 (parte 4): montar o pedido de mensagem a partir da proposta do funcionário de CRM e mensageria, contra um
-// RegemCast falso que fala o MCP sem estado (os modelos, os públicos, a conta de quem recebe, o rascunho da campanha e
-// o plano do disparo) e um Regem falso (a loja do cupom). Em produção o conector do RegemCast ainda NÃO está no
+// A5 · Y5 (partes 4 e 5): montar o pedido de mensagem a partir da proposta do funcionário de CRM e mensageria, e
+// enviá-lo depois da aprovação, com o cupom da mensagem criado no Regem ANTES do disparo. Contra um RegemCast falso
+// que fala o MCP sem estado (os modelos, os públicos, a conta de quem recebe, o rascunho, o plano e o disparo) e um
+// Regem falso (a loja e a criação de cupom, com chave de idempotência). Em produção o conector do RegemCast ainda NÃO está no
 // registro: aqui ele é registrado só neste arquivo, ANTES de o app carregar. Por isso o app e os ajudantes entram por
 // `import()` dentro do `beforeAll`.
 CONNECTORS.regemcast = regemcastMensagemConnector;
@@ -41,6 +43,10 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
   let registrar: typeof import('../../src/connections/distribuicao.js').registrarConexaoDaDistribuicao;
   let deps: Parameters<typeof import('../../src/connections/distribuicao.js').registrarConexaoDaDistribuicao>[0];
   let invalidarFlags: () => void;
+  let executor: ActionExecutor;
+  let codigoDoApp: (segredo: string) => string;
+  /** O que saiu para fora, na ordem: `cupom:CODIGO` (criado no Regem) e `disparo:<campanha>` (aceito pelo RegemCast). */
+  const ordem: string[] = [];
   const anterior: Record<string, string | undefined> = {};
 
   // ---------------------------------------------------------------- o RegemCast falso
@@ -87,6 +93,7 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
     concluidaEm: null,
   });
   const idDoPublico = (p: Record<string, unknown>) => String(p.origemId ?? p.publico ?? p.segmento ?? '');
+  const confirmacaoDe = (c: Campanha) => createHash('sha256').update(JSON.stringify([c.id, c.destinatarios, TETO])).digest('hex').slice(0, 40);
 
   function responder(credencial: string, corpo: { id?: unknown; params?: { name?: string; arguments?: Record<string, unknown> } }): { status: number; corpo: unknown } {
     const perfil = perfis.get(credencial);
@@ -127,15 +134,70 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
         campanha: paraFora(c),
         custo: custoDe(c.destinatarios),
         orcamento: { definido: true, periodos: [{ periodo: 'mes', rotulo: 'Outubro', tetoCentavos: TETO.teto, gastoCentavos: TETO.gasto, texto: `${TETO.gasto} de ${TETO.teto}`, sinal: 'ok' }], aviso: null },
-        podeDisparar: true,
-        impedimentos: [],
-        confirmacao: createHash('sha256').update(JSON.stringify([c.id, c.situacao, c.destinatarios, TETO])).digest('hex').slice(0, 40),
+        podeDisparar: c.situacao === 'rascunho',
+        impedimentos: c.situacao === 'rascunho' ? [] : ['A campanha não está em rascunho.'],
+        confirmacao: c.situacao === 'rascunho' ? confirmacaoDe(c) : null,
       });
+    }
+    if (nome === 'campanha_disparar') {
+      const c = campanhas.get(String(args.id));
+      if (!c || c.conta !== perfil.contaId) return { status: 200, corpo: comId(recusada('Campanha não encontrada.')) };
+      const chave = `disparo:${perfil.contaId}:${String(args.chaveIdempotencia)}`;
+      const guardada = chaves.get(chave);
+      if (guardada) return { status: 200, corpo: comId(guardada.resposta as object) };
+      if (c.nome.includes('NAODISPARA')) return { status: 200, corpo: comId(recusada('A conta do WhatsApp está com restrição na Meta.')) };
+      if (c.situacao !== 'rascunho' || args.confirmacao !== confirmacaoDe(c)) return { status: 200, corpo: comId(recusada('O plano mudou desde a confirmação. Peça um plano novo com campanha_disparo_planejar.')) };
+      c.situacao = 'enviando';
+      ordem.push(`disparo:${c.id}`);
+      const resposta = resultado({ campanha: paraFora(c), custo: custoDe(c.destinatarios), proximoPasso: 'A campanha entrou na fila de envio.' });
+      chaves.set(chave, { pedido: JSON.stringify(args), resposta });
+      return { status: 200, corpo: comId(resposta) };
     }
     return semFerramenta;
   }
 
-  // ---------------------------------------------------------------- o Regem falso: só a loja (o cupom nasce na execução)
+  // ---------------------------------------------------------------- o Regem falso: a loja e a criação de cupom (contrato de cupons §3.3)
+  const PROBLEMA = 'https://api.dmsregem.com/problemas/';
+  type CriacaoDeCupom = { token: string; chave: string; corpo: Record<string, unknown> };
+  const criacoes: CriacaoDeCupom[] = [];
+  const cuponsDoRegem = new Map<string, Record<string, unknown>>();
+  const porChaveDoRegem = new Map<string, { status: number; corpo: unknown }>();
+  /** Códigos que já existem no Regem, criados lá, fora do Liame. */
+  const jaNoRegem = new Set<string>(['NOREGEM10']);
+  function criarCupomNoRegem(token: string, loja: { escopos: string[] }, chave: string, corpo: Record<string, unknown>): { status: number; corpo: unknown } {
+    criacoes.push({ token, chave, corpo });
+    if (!chave) return { status: 400, corpo: { type: `${PROBLEMA}requisicao-invalida`, title: 'Falta Idempotency-Key', status: 400 } };
+    if (!loja.escopos.includes('cupons.criar')) return { status: 403, corpo: { type: `${PROBLEMA}escopo-insuficiente`, title: 'Escopo insuficiente', status: 403, detail: 'falta cupons.criar' } };
+    const guardada = porChaveDoRegem.get(chave);
+    if (guardada) return guardada;
+    const codigo = String(corpo.codigo);
+    let resposta: { status: number; corpo: unknown };
+    if (jaNoRegem.has(codigo) || cuponsDoRegem.has(codigo)) {
+      resposta = { status: 409, corpo: { type: `${PROBLEMA}codigo-em-uso`, title: 'Código em uso', status: 409, detail: `O código ${codigo} já existe` } };
+    } else {
+      const cupom = {
+        id: `cp-${cuponsDoRegem.size + 1}-${randomUUID().slice(0, 8)}`,
+        versao: 1,
+        atualizado_em: new Date().toISOString(),
+        codigo,
+        nome: corpo.nome ?? null,
+        tipo: corpo.tipo,
+        percentual: corpo.percentual ?? null,
+        valor_centavos: corpo.valor_centavos ?? null,
+        pedido_minimo_centavos: corpo.pedido_minimo_centavos ?? null,
+        valido_de: corpo.valido_de ?? null,
+        valido_ate: corpo.valido_ate ?? null,
+        fuso: 'America/Sao_Paulo',
+        ativo: true,
+        usos: 0,
+      };
+      cuponsDoRegem.set(codigo, cupom);
+      ordem.push(`cupom:${codigo}`);
+      resposta = { status: 201, corpo: cupom };
+    }
+    porChaveDoRegem.set(chave, resposta);
+    return resposta;
+  }
   const lojas: Record<string, { loja_id: string; loja_nome: string; escopos: string[] }> = {
     [TOKEN_DA_LOJA]: { loja_id: `loja-msg-${randomUUID().slice(0, 8)}`, loja_nome: 'Mister Burgers — Centro', escopos: ['pedidos.ler', 'cupons.ler', 'cupons.uso.ler', 'cupons.criar'] },
     [TOKEN_SO_LEITURA]: { loja_id: `loja-msg-${randomUUID().slice(0, 8)}`, loja_nome: 'Mister Burgers — Praia', escopos: ['pedidos.ler', 'cupons.ler', 'cupons.uso.ler'] },
@@ -165,6 +227,21 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
     throw new Error('a proposta não foi recusada');
   }
   const doToken = (emp: Empresa) => chamadas.filter((c) => c.token === emp.token).map((c) => c.ferramenta);
+  const ver = async (emp: Empresa, id: string) => (await api.call('GET', `/v1/actions/${id}`, { cookie: emp.cookie })).body;
+  const ciclo = (emp: Empresa) => executor.runCycle(20, { tenantIds: [emp.tenantId] });
+  /** Aprova com o código do app de agora (o passo usado e o limite de tentativas são zerados: o teste aprova muito). */
+  async function aprovar(emp: Empresa, id: string) {
+    const pedido = await ver(emp, id);
+    await ownerQuery(`update liame.app_user set totp_last_step = null where id = $1`, [emp.userId]);
+    await ownerQuery(`delete from liame.rate_limit where key = $1`, [`segundo-fator:${emp.userId}`]);
+    const r = await api.call('POST', `/v1/actions/${id}/approve`, { cookie: emp.cookie, body: { plan_hash: pedido.plan_hash, code: codigoDoApp(emp.secret) } });
+    expect([r.status, r.body.status], JSON.stringify(r.body)).toEqual([200, 'aprovada']);
+  }
+  /** Uma proposta com o cupom `codigo` citado na mensagem. */
+  const comCupom = (emp: Empresa, codigo: string, extra: Record<string, unknown> = {}) =>
+    proposta(emp, { variaveis: [{ origem: 'primeiro_nome' }, { origem: 'fixo', valor: codigo }], cupom: cupom(emp, { codigo }), ...extra });
+  const retratoDe = async (id: string) =>
+    (await ownerQuery<{ coupon_id: string | null; criado: boolean }>(`select coupon_id, coupon_created_at is not null as criado from liame.message_request where id = $1`, [id]))[0]!;
   const linhas = async (emp: Empresa) => Number((await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.message_request where tenant_id = $1`, [emp.tenantId]))[0]!.n);
   async function ligarFlag(emp: Empresa, flag: string, valor: boolean): Promise<void> {
     await ownerQuery(`delete from liame.feature_flag_rule where flag_key = $1 and scope_type = 'tenant' and scope_id = $2`, [flag, emp.tenantId]);
@@ -200,6 +277,8 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
     const emp: Empresa = { cookie: s.cookie, tenantId, userId: s.me.user.id as string, brandId, secret, token, contaId, conta: ligada.body.linked[0].id as string, loja, lojaSoLeitura };
     await ligarFlag(emp, 'whatsapp_campaign', true);
     await ligarFlag(emp, 'mensageria', true);
+    // O cupom da mensagem nasce pela escrita no Regem.
+    if (opcoes.comLojas) await ligarFlag(emp, 'regem_write', true);
     return emp;
   }
 
@@ -224,13 +303,21 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
       });
     });
     regem = createServer((req, res) => {
-      req.on('data', () => {});
+      let texto = '';
+      req.on('data', (d: Buffer) => {
+        texto += d.toString('utf8');
+      });
       req.on('end', () => {
         const caminho = new URL(req.url ?? '/', 'http://x').pathname;
         chamadasAoRegem.push(`${req.method} ${caminho}`);
-        const loja = lojas[req.headers.authorization?.replace(/^Bearer /, '') ?? ''];
-        const r = !loja ? { status: 401, corpo: { title: 'Token inválido', status: 401 } } : caminho === '/regem/loja' ? { status: 200, corpo: { ...loja, empresa_nome: 'Mister Burgers', fuso: 'America/Sao_Paulo', moeda: 'BRL' } } : { status: 404, corpo: { title: 'Não encontrado', status: 404 } };
-        res.writeHead(r.status, { 'content-type': 'application/json' });
+        const token = req.headers.authorization?.replace(/^Bearer /, '') ?? '';
+        const loja = lojas[token];
+        let r: { status: number; corpo: unknown };
+        if (!loja) r = { status: 401, corpo: { type: `${PROBLEMA}token-invalido`, title: 'Token inválido', status: 401 } };
+        else if (caminho === '/regem/loja') r = { status: 200, corpo: { ...loja, empresa_nome: 'Mister Burgers', fuso: 'America/Sao_Paulo', moeda: 'BRL' } };
+        else if (caminho === '/regem/cupons' && req.method === 'POST') r = criarCupomNoRegem(token, loja, String(req.headers['idempotency-key'] ?? ''), JSON.parse(texto) as Record<string, unknown>);
+        else r = { status: 404, corpo: { type: 'about:blank', title: 'Não encontrado', status: 404 } };
+        res.writeHead(r.status, { 'content-type': r.status >= 400 ? 'application/problem+json' : 'application/json' });
         res.end(JSON.stringify(r.corpo));
       });
     });
@@ -245,15 +332,22 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
     ({ ownerQuery, resetIpRateLimits } = ajuda);
     api = await ajuda.startApi();
     database = createDatabase({ connectionString: APP_URL, max: 4, applicationName: 'liame-test' });
-    const [{ FlagService }, distribuicao, { VaultService }, { loadConfig }, { PedidoDeMensagemService: Servico }] = await Promise.all([
+    const [{ FlagService }, distribuicao, { VaultService }, { loadConfig }, { PedidoDeMensagemService: Servico }, { ActionExecutor: Executor }, { BudgetService }, { KillSwitchService }, { DATABASE }, totp] = await Promise.all([
       import('../../src/flags/flag.service.js'),
       import('../../src/connections/distribuicao.js'),
       import('../../src/vault/vault.service.js'),
       import('../../src/config.js'),
       import('../../src/mensageria/pedido-de-mensagem.service.js'),
+      import('../../src/worker/action-executor.js'),
+      import('../../src/actions/budget.service.js'),
+      import('../../src/kill-switch/kill-switch.service.js'),
+      import('../../src/database/database.module.js'),
+      import('../../src/auth/totp.js'),
     ]);
     const flags = api.app.get(FlagService);
     invalidarFlags = () => flags.invalidate();
+    codigoDoApp = (segredo) => totp.totpCode(segredo, totp.currentStep());
+    executor = new Executor(api.app.get(DATABASE), api.app.get(BudgetService), api.app.get(KillSwitchService), flags);
     servico = api.app.get(Servico);
     registrar = distribuicao.registrarConexaoDaDistribuicao;
     deps = { db: database.db, vault: api.app.get(VaultService), config: loadConfig() };
@@ -262,6 +356,8 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
   beforeEach(async () => {
     chamadas.length = 0;
     chamadasAoRegem.length = 0;
+    criacoes.length = 0;
+    ordem.length = 0;
     await resetIpRateLimits();
   });
   afterAll(async () => {
@@ -432,6 +528,120 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta (A5 ·
     expect(await linhas(e)).toBe(antes);
     expect([...campanhas.values()].filter((c) => c.nome === primeira.nome)).toHaveLength(1);
     expect((await api.call('GET', `/v1/actions/${feito.action_id}`, { cookie: e.cookie })).body.status).toBe('aguardando_aprovacao');
+  });
+
+  it('aprovada, a mensagem cria o cupom no Regem e só então dispara, uma vez; a resposta do pedido traz a mensagem inteira', async () => {
+    const p = comCupom(e, 'SABADO10');
+    const feito = await servico.propor(quem(e), p);
+    // Antes da aprovação: a resposta do pedido já traz o que a pessoa aprova, com o cupom ainda por criar.
+    const antes = await ver(e, feito.action_id);
+    expect(antes.message, JSON.stringify(antes)).toEqual({
+      campaign_id: feito.campaign_id,
+      name: p.nome,
+      template: { name: 'combo_domingo_v2', language: 'pt_BR', category: 'marketing', header: null, body: MODELOS[0]!.corpo, footer: 'Responda SAIR para não receber mais.', buttons: ['Ver o cardápio'] },
+      variables: [{ origin: 'primeiro_nome', value: null }, { origin: 'fixo', value: 'SABADO10' }],
+      header_variable: null,
+      audience: { name: 'Quem pediu nos últimos 30 dias', rule: 'Pediu pelo menos uma vez nos últimos 30 dias', can_receive: 412, resting: 38, rest_days: 7 },
+      window: { days: [0, 1, 2, 3, 4, 5, 6], start: '09:00', end: '20:00' },
+      coupon: { code: 'SABADO10', kind: 'percentual', percent: 10, value_cents: null, min_order_cents: null, valid_from: '2026-10-10', valid_until: '2026-10-12', created: false },
+      plan: {
+        status: 'rascunho',
+        people: 412,
+        recipients: 412,
+        cost_cents: 412 * CENTAVOS_POR_MENSAGEM,
+        currency: 'BRL',
+        budget: { defined: true, periods: [{ period: 'mes', label: 'Outubro', limit_cents: TETO.teto, spent_cents: TETO.gasto, signal: 'ok' }], notice: null },
+      },
+    });
+    // Sem a aprovação, o executor não cria cupom nem dispara.
+    await ciclo(e);
+    expect(ordem).toEqual([]);
+
+    await aprovar(e, feito.action_id);
+    await ciclo(e);
+    const depois = await ver(e, feito.action_id);
+    expect(depois, JSON.stringify(depois)).toMatchObject({ status: 'executada', status_reason: null, execution: { status: 'executada', no_write: false } });
+    // O cupom primeiro, o disparo depois; um de cada.
+    expect(ordem).toEqual(['cupom:SABADO10', `disparo:${feito.campaign_id}`]);
+    expect(criacoes).toHaveLength(1);
+    expect(criacoes[0]).toMatchObject({ token: TOKEN_DA_LOJA, corpo: { codigo: 'SABADO10', tipo: 'percentual', percentual: '10.00', valido_de: '2026-10-10', valido_ate: '2026-10-12' } });
+    expect(criacoes[0]!.chave).toMatch(/^liame-[0-9a-f]{48}$/);
+    // O cupom entrou na lista do Liame, sem campanha de anúncio, e o retrato aponta para ele.
+    const retrato = await retratoDe(feito.id);
+    expect(retrato.criado).toBe(true);
+    const [naLista] = await ownerQuery<{ id: string; code: string; connected_account_id: string; ligacoes: string }>(
+      `select c.id, c.code, c.connected_account_id, (select count(*)::text from liame.campaign_coupon l where l.coupon_id = c.id) as ligacoes from liame.coupon c where c.id = $1`,
+      [retrato.coupon_id],
+    );
+    expect(naLista).toEqual({ id: retrato.coupon_id, code: 'SABADO10', connected_account_id: e.loja, ligacoes: '0' });
+    expect(depois.message.coupon).toMatchObject({ code: 'SABADO10', created: true });
+    // Rodar o executor de novo não cria outro cupom nem dispara outra vez.
+    await ciclo(e);
+    expect(ordem).toHaveLength(2);
+    expect(criacoes).toHaveLength(1);
+  });
+
+  it('a mensagem sem cupom dispara sem passar pelo Regem', async () => {
+    const feito = await servico.propor(quem(e), proposta(e));
+    expect((await ver(e, feito.action_id)).message.coupon).toBeNull();
+    await aprovar(e, feito.action_id);
+    await ciclo(e);
+    expect(await ver(e, feito.action_id)).toMatchObject({ status: 'executada' });
+    expect(ordem).toEqual([`disparo:${feito.campaign_id}`]);
+    expect(chamadasAoRegem.filter((c) => c.startsWith('POST'))).toEqual([]);
+  });
+
+  it('o cupom que não pode nascer segura o envio: o código que o Regem já tem, a loja que tirou a permissão e a escrita no Regem desligada', async () => {
+    // O código existe no Regem (criado lá), e o Liame ainda não o leu: quem diz é o Regem, na criação.
+    const emUso = await servico.propor(quem(e), comCupom(e, 'NOREGEM10'));
+    await aprovar(e, emUso.action_id);
+    await ciclo(e);
+    expect(await ver(e, emUso.action_id)).toMatchObject({
+      status: 'falhou',
+      status_reason: 'O cupom NOREGEM10 desta mensagem não foi criado no Regem. Já existe um cupom com este código no Regem. Escolha outro código. Nada foi enviado.',
+    });
+    expect((await retratoDe(emUso.id)).criado).toBe(false);
+
+    // A loja tirou "criar cupom de campanha" entre o pedido e o envio: a conferência barra antes de chamar o Regem.
+    const semChave = await servico.propor(quem(e), comCupom(e, 'SEMCHAVE10'));
+    await aprovar(e, semChave.action_id);
+    const [atributos] = await ownerQuery<{ provider_attributes: Record<string, unknown> }>(`select provider_attributes from liame.connected_account where id = $1`, [e.loja]);
+    await ownerQuery(`update liame.connected_account set provider_attributes = jsonb_set(provider_attributes, '{escopos}', '["pedidos.ler", "cupons.ler"]'::jsonb) where id = $1`, [e.loja]);
+    const criacoesAntes = criacoes.length;
+    await ciclo(e);
+    await ownerQuery(`update liame.connected_account set provider_attributes = $2::jsonb where id = $1`, [e.loja, JSON.stringify(atributos!.provider_attributes)]);
+    expect(await ver(e, semChave.action_id)).toMatchObject({
+      status: 'falhou',
+      status_reason: 'O cupom SEMCHAVE10 desta mensagem não pode ser criado no Regem. A loja não liberou "criar cupom de campanha" no Regem. Autorize de novo em Contas conectadas. Nada foi enviado.',
+    });
+    expect(criacoes.length).toBe(criacoesAntes);
+
+    // A escrita no Regem desligada depois do pedido: o mesmo, com o motivo dela.
+    const semEscrita = await servico.propor(quem(e), comCupom(e, 'SEMESCRITA10'));
+    await aprovar(e, semEscrita.action_id);
+    await ligarFlag(e, 'regem_write', false);
+    await ciclo(e);
+    expect((await ver(e, semEscrita.action_id)).status_reason).toBe('O cupom SEMESCRITA10 desta mensagem não pode ser criado no Regem. A criação de cupom no Regem não está ligada para esta empresa. Nada foi enviado.');
+    // E, desligada, a proposta com cupom nem vira pedido; a sem cupom, vira.
+    expect((await recusa(e, comCupom(e, 'OUTRA10')))[2]).toBe('A criação de cupom no Regem não está ligada para esta empresa: a mensagem com cupom não pode ser enviada. Quem liga é a Liame, a pedido do dono.');
+    await ligarFlag(e, 'regem_write', true);
+
+    // Em nenhum dos três casos saiu mensagem.
+    expect(ordem.filter((o) => o.startsWith('disparo:'))).toEqual([]);
+    for (const id of [emUso.campaign_id, semChave.campaign_id, semEscrita.campaign_id]) expect(campanhas.get(id)!.situacao).toBe('rascunho');
+  });
+
+  it('o RegemCast recusa o disparo depois de o cupom nascer: nada é enviado, e a recusa diz que o cupom ficou criado', async () => {
+    const feito = await servico.propor(quem(e), comCupom(e, 'FICOU10', { nome: `NAODISPARA ${randomUUID().slice(0, 6)}` }));
+    await aprovar(e, feito.action_id);
+    await ciclo(e);
+    expect(await ver(e, feito.action_id)).toMatchObject({
+      status: 'falhou',
+      status_reason: 'O RegemCast recusou o envio: A conta do WhatsApp está com restrição na Meta. Nada foi enviado. O cupom FICOU10 já foi criado no Regem: se a mensagem não for enviada, desative-o lá.',
+      message: { coupon: { code: 'FICOU10', created: true } },
+    });
+    expect(ordem).toEqual(['cupom:FICOU10']);
+    expect(campanhas.get(feito.campaign_id)!.situacao).toBe('rascunho');
   });
 
   it('com a função ou o envio desligados, nada é lido nem montado; a recusa do RegemCast vira o motivo; sem permissão, a proposta diz onde resolve', async () => {
