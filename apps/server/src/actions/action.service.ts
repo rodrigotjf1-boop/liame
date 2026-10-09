@@ -19,6 +19,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { activeTraceId, canonicalJson, sha256, writeAudit } from '../audit/audit.js';
 import { MfaService } from '../auth/mfa.service.js';
+import { pessoasQuePodem } from '../auth/pessoa-pode.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { afterCommit, type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, issuesToErrors, ValidationProblem } from '../errors/problems.js';
@@ -35,7 +36,7 @@ import { advance, workflowOf } from '../workflow/workflow.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
-import { EstadoDaMensagem } from './mensagem-plano.js';
+import { avisoDeMensagemLiberada, EstadoDaMensagem } from './mensagem-plano.js';
 import type { RegraDoCupom } from './regem-cupom.js';
 import { mensagemDoRecurso } from './regemcast-mensagem.js';
 import { respostaDaPlataforma } from './resposta-da-plataforma.js';
@@ -81,6 +82,8 @@ export type ActionRow = {
   agent_key: string | null;
   /** A pessoa que pediu; no pedido de um funcionário de IA, a que o deixou pedir. */
   requested_by: string;
+  /** Quando a rotina do worker olhou pela última vez o plano do pedido que espera aprovação (migration 0060). */
+  plan_checked_at: Date | string | null;
   expires_at: Date | string;
   created_at: Date | string;
   updated_at: Date | string;
@@ -171,6 +174,19 @@ type RetratoDaRecomendacao = {
   plataforma?: { spend_micros?: string | null };
   caixa?: { orders?: number | null; revenue_micros?: string | null; margin_known_micros?: string | null; margin_coverage_pct?: string | null };
 };
+
+/** O que a conferência feita pelo sistema achou no pedido que espera aprovação (A5, Y5). */
+export type ConferenciaDoSistema =
+  /** Não havia o que conferir: o pedido saiu da fila, não tem mais impedimento, ou o plano dele não muda sozinho. */
+  | { resultado: 'fora' }
+  /** A escrita desta conta está desligada: o Liame nem lê a plataforma. */
+  | { resultado: 'desligada' }
+  /** A plataforma não respondeu, ou o recurso não está mais como o pedido precisa. Fica para a próxima volta. */
+  | { resultado: 'sem-leitura'; motivo: string }
+  /** O impedimento continua. `mudou`: o plano guardado é outro (o motivo, o custo ou o público mudaram). */
+  | { resultado: 'continua'; mudou: boolean }
+  /** O impedimento saiu: o pedido já pode ser aprovado, e `avisados` pessoas recebem o e-mail. */
+  | { resultado: 'liberou'; avisados: number };
 
 /** Como a recusa fica gravada no motivo do pedido (a aba Cupons e a tela Aprovações reconhecem por aqui). */
 export const PREFIXO_RECUSA = 'recusada por ';
@@ -517,21 +533,104 @@ export class ActionService {
     }
     const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
     const plan = this.planejar(tool, read.state, row.params);
-    const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params: row.params };
-    const planHash = planHashOf(request, plan, read.version);
-    if (planHash !== row.plan_hash) {
-      await this.budget.release(tx, tenantId, id);
-      await tx.execute(sql`
-        update liame.action_request
-           set action = ${plan.action}, budget_impact = ${plan.budgetImpact}, value_micros = ${plan.valueMicros},
-               current_value_micros = ${plan.currentValueMicros}, reserved_micros = ${plan.reserveMicros},
-               before_state = ${JSON.stringify(read.state)}::jsonb, before_version = ${read.version},
-               desired_state = ${JSON.stringify(plan.desiredState)}::jsonb, plan_hash = ${planHash}, updated_at = now()
-         where id = ${id} and tenant_id = ${tenantId}`);
-      await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) });
-    }
+    const planHash = await this.guardarOPlanoDeAgora(tx, tenantId, row, connector, read, plan);
     auditDetail({ before: { plan_hash: row.plan_hash }, after: { plan_hash: planHash, changed: planHash !== row.plan_hash, blocked: Boolean(plan.blocked) } });
     return this.get(auth, id);
+  }
+
+  /** Guarda no pedido o plano lido agora, quando ele é outro (a reserva acompanha). Devolve o hash do plano de agora. */
+  private async guardarOPlanoDeAgora(tx: Tx, tenantId: string, row: ActionRow, connector: Connector, read: ReadResult, plan: ToolPlan): Promise<string> {
+    const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params: row.params };
+    const planHash = planHashOf(request, plan, read.version);
+    if (planHash === row.plan_hash) return planHash;
+    await this.budget.release(tx, tenantId, row.id);
+    await tx.execute(sql`
+      update liame.action_request
+         set action = ${plan.action}, budget_impact = ${plan.budgetImpact}, value_micros = ${plan.valueMicros},
+             current_value_micros = ${plan.currentValueMicros}, reserved_micros = ${plan.reserveMicros},
+             before_state = ${JSON.stringify(read.state)}::jsonb, before_version = ${read.version},
+             desired_state = ${JSON.stringify(plan.desiredState)}::jsonb, plan_hash = ${planHash}, updated_at = now()
+       where id = ${row.id} and tenant_id = ${tenantId}`);
+    await this.budget.reserve(tx, { tenantId, brandId: row.brand_id, actionId: row.id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) });
+    return planHash;
+  }
+
+  /**
+   * A conferência que o Liame faz sozinho (A5, Y5; P15: "o Liame avisa"): o pedido que espera aprovação COM um
+   * impedimento é lido de novo na plataforma, e o plano de agora fica guardado, como em "Conferir de novo". Quem chama
+   * é a rotina do worker (`worker/pedidos-que-esperam.ts`), na transação da empresa, sem a sessão de ninguém.
+   *
+   * O que ela não faz: não aprova, não recusa, não cancela e não avalia a política de novo (o pedido é o mesmo). Com a
+   * escrita da conta desligada, nem lê. Quando o impedimento sai, quem pode aprovar recebe um e-mail; quando o motivo
+   * só muda (a Meta recusou o modelo, por exemplo), o motivo novo fica no pedido, e a tela o mostra. A auditoria ganha
+   * uma linha só quando o plano guardado mudou: conferir e achar tudo igual não deixa rastro a cada volta.
+   */
+  async conferirPeloSistema(tenantId: string, id: string, agora?: Date): Promise<ConferenciaDoSistema> {
+    const tx = currentTx();
+    const row = await this.lock(tx, tenantId, id);
+    // O relógio de quem chama vale para a marca de "olhado" (V34): é por ela que a rotina não olha de novo antes da hora.
+    const instante = agora ? sql`${agora.toISOString()}::timestamptz` : sql`now()`;
+    const conferido = () => tx.execute(sql`update liame.action_request set plan_checked_at = ${instante} where id = ${id} and tenant_id = ${tenantId}`);
+    const tool = TOOLS[row.tool];
+    const connector = CONNECTORS[row.provider];
+    const antes = row.status === 'aguardando_aprovacao' && row.before_state ? (tool?.blockedBy?.(row.before_state) ?? null) : null;
+    // Saiu da fila, alguém já conferiu (não há mais impedimento) ou a ferramenta não tem plano que mude sozinho.
+    if (!tool?.revalidateOnApproval || !connector || !tool.providers.includes(row.provider) || !antes) {
+      await conferido();
+      return { resultado: 'fora' };
+    }
+    if (connector.writeFlag && !(await this.flags.isEnabled(connector.writeFlag, this.flags.context({ tenantId, brandId: row.brand_id, accountId: row.account_id })))) {
+      await conferido();
+      return { resultado: 'desligada' };
+    }
+    let read: ReadResult;
+    let plan: ToolPlan;
+    try {
+      read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
+      plan = this.planejar(tool, read.state, row.params);
+    } catch (err) {
+      // A plataforma não respondeu, a autorização caiu ou o recurso não está mais como o pedido precisa: fica para a
+      // próxima volta, com o motivo (quem abre o pedido e confere pelo botão vê a mesma frase).
+      if (!(err instanceof AppProblem)) throw err;
+      await conferido();
+      return { resultado: 'sem-leitura', motivo: `${err.code}: ${err.detail}` };
+    }
+    const planHash = await this.guardarOPlanoDeAgora(tx, tenantId, row, connector, read, plan);
+    await conferido();
+    const depois = plan.blocked ?? null;
+    const mudou = planHash !== row.plan_hash;
+    if (mudou || !depois) {
+      await writeAudit(tx, {
+        tenantId,
+        actorType: 'system',
+        actorId: null,
+        actorLabel: 'Liame (conferência do pedido)',
+        action: 'acao.conferir',
+        resourceType: 'action_request',
+        resourceId: id,
+        before: { plan_hash: row.plan_hash, blocked: true },
+        after: { plan_hash: planHash, changed: mudou, blocked: Boolean(depois) },
+        tool: row.tool,
+        traceId: activeTraceId(),
+        origin: 'worker',
+      });
+    }
+    if (depois) return { resultado: 'continua', mudou };
+    return { resultado: 'liberou', avisados: await this.avisarQueLiberou(tx, tenantId, row, read.state, antes) };
+  }
+
+  /**
+   * O e-mail de "já pode ser aprovada", para quem pode aprovar na empresa (`acoes.aprovar`), depois do commit. Hoje só
+   * o envio de mensagem tem plano que muda sozinho; para outra ferramenta, não há texto, e ninguém é avisado.
+   */
+  private async avisarQueLiberou(tx: Tx, tenantId: string, row: ActionRow, estado: ResourceState, antes: string): Promise<number> {
+    if (row.tool !== 'mensagem_disparar') return 0;
+    const lido = EstadoDaMensagem.safeParse(estado);
+    const nome = lido.success && lido.data.nome ? lido.data.nome : 'sem nome';
+    const aviso = avisoDeMensagemLiberada({ nome, antes, link: `${this.config.appUrl}/aprovacoes?pedido=${row.id}` });
+    const pessoas = await pessoasQuePodem(tx, { tenantId, permissao: 'acoes.aprovar' });
+    for (const { email } of pessoas) afterCommit(() => this.mailer.send({ to: email, subject: aviso.subject, text: aviso.text }));
+    return pessoas.length;
   }
 
   /**

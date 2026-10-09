@@ -245,13 +245,13 @@ describe('pedido de mensagem: as quatro partes', () => {
 });
 
 describe('pedido de mensagem: o que impede a aprovação', () => {
-  it('a frase do RegemCast faz o pedido esperar, com o caminho para conferir de novo', () => {
+  it('a frase do RegemCast faz o pedido esperar, e a tela diz que o Liame confere de novo sozinho e avisa', () => {
     expect(impedimentoDoPedido(pedido())).toBeNull();
     expect(impedimentoDoPedido(pedido({ blocked_reason: 'O modelo desta campanha ainda não foi aprovado pela Meta' }))).toEqual({
       tom: 'espera',
       icone: 'clock',
       forte: 'Ainda não dá para aprovar.',
-      texto: 'O modelo desta campanha ainda não foi aprovado pela Meta. Quando isso se resolver, confira de novo: o pedido passa a poder ser aprovado.',
+      texto: 'O modelo desta campanha ainda não foi aprovado pela Meta. O Liame confere de novo sozinho, de 15 em 15 minutos, e avisa por e-mail quando der para aprovar.',
     });
     // Depois de decidido, o impedimento não aparece mais.
     expect(impedimentoDoPedido(pedido({ status: 'cancelada', blocked_reason: 'x' }))).toBeNull();
@@ -382,7 +382,7 @@ describe('pedido de mensagem: o detalhe desenhado', () => {
     expect(html).toContain('id="mens-impede"');
     expect(html).toContain('class="resultado resultado--espera" role="status"');
     expect(t).toContain('Ainda não dá para aprovar.');
-    expect(t).toContain('Enquanto isso não se resolve, o pedido espera aqui. Você pode recusar agora.');
+    expect(t).toContain('Enquanto isso não se resolve, o pedido espera aqui, e o Liame confere de novo sozinho. Você também pode conferir agora, ou recusar.');
     expect(html).toContain('data-mens-conferir');
     expect(t).toContain('Conferir de novo');
     expect(t).toContain('Recusar');

@@ -54,6 +54,8 @@ export const actionRequest = liame.table('action_request', {
   agentKey: text('agent_key'),
   requestedBy: uuid('requested_by').notNull(),
   traceContext: text('trace_context'),
+  // Quando a rotina do worker olhou pela última vez o plano do pedido que espera aprovação (0060).
+  planCheckedAt: ts('plan_checked_at'),
   expiresAt: ts('expires_at').notNull(),
   createdAt: ts('created_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),

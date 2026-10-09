@@ -84,3 +84,20 @@ export function impedimentoDaMensagem(e: Pick<EstadoDaMensagem, 'pode_disparar' 
   if (!e.pode_disparar || !e.confirmacao) return e.impedimentos.join(' ') || SEM_MOTIVO_DO_REGEMCAST;
   return motivoDeNaoCaberNoTeto(e);
 }
+
+/**
+ * O e-mail de quando o pedido de envio passa a poder ser aprovado (P15: "o Liame avisa"). Leva o nome da campanha,
+ * que é texto da loja, o que impedia e o endereço do pedido em Aprovações: nada de quem recebe a mensagem. O aviso não
+ * aprova nada: a decisão continua sendo de uma pessoa, com o código do app.
+ */
+export function avisoDeMensagemLiberada(a: { nome: string; antes: string; link: string }): { subject: string; text: string } {
+  return {
+    subject: 'Liame: uma mensagem já pode ser aprovada',
+    text:
+      `A mensagem “${a.nome}” já pode ser aprovada.\n\n` +
+      `O que impedia o envio: ${a.antes}\n` +
+      'O Liame conferiu de novo no RegemCast, e isso foi resolvido.\n\n' +
+      'Ela continua esperando a decisão de uma pessoa, com o código do app. Nada é enviado sem essa aprovação.\n\n' +
+      a.link,
+  };
+}

@@ -34,6 +34,7 @@ import { ResultsService } from '../results/results.service.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { RevisaoSemanalService } from './revisao-semanal.service.js';
 import { PedidosDoGestor } from './pedidos-do-gestor.js';
+import { PedidosQueEsperam } from './pedidos-que-esperam.js';
 import { SombraLoop } from './sombra-loop.js';
 import { SombraService } from './sombra.service.js';
 import { eventoDoRegem, VendasLoop } from './vendas-loop.js';
@@ -115,6 +116,9 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     MfaService,
     ActionService,
     CouponsService,
+    // A conferência dos pedidos que esperam (A5, Y5): o pedido de mensagem com impedimento é lido de novo de tempos em
+    // tempos, pelo Action Service, e quem pode aprovar é avisado quando o impedimento sai.
+    PedidosQueEsperam,
     // As leituras da IA incluem a de Sua equipe (só da conversa): o serviço dela entra aqui pela injeção, sem rota.
     // Ela lê o custo das peças para dizer por que o Criativo não pode escrever (A4, P12).
     CustoDasPecasService,
