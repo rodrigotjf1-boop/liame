@@ -124,7 +124,8 @@ export function avisosDaVerba(v: Verba, agora: Date): AvisoDaVerba[] {
       titulo: `${maiuscula(f.a)} não foi ${f.lida} hoje: a última leitura é de ${quandoNoFuso(p.last_success_at, v.timezone, agora)}`,
       texto:
         `O gasto ${f.da} abaixo vale até ${diaMes(p.read_through)}; ${faltou} na previsão pelo ritmo. O Liame tenta ler de novo sozinho.` +
-        (p.provider === 'meta_ads' ? ' Enquanto isso, um pedido novo continua lendo a campanha na Meta na hora.' : ''),
+        // Só onde o pedido existe: a plataforma com a escrita ligada (a resposta de antes de 09/10/2026 não dizia: valia a Meta).
+        ((p.writes ?? p.provider === 'meta_ads') ? ` Enquanto isso, um pedido novo continua lendo a campanha ${f.na} na hora.` : ''),
       acao: 'contas',
     });
   }
@@ -262,6 +263,26 @@ export function heroiDaVerba(v: Verba, fontes: Fontes, agora: Date): HeroiDaVerb
 export type LinhaDaPlataforma = { provider: string; nome: string; classe: string; nota: string | null; gasto: string; ritmo: string; previsto: string };
 export type PlataformasDaVerba = { legenda: string; linhas: LinhaDaPlataforma[]; total: { gasto: string; ritmo: string; previsto: string }; nota: string };
 
+/**
+ * "só leitura" embaixo do nome da plataforma em que o Liame não muda campanhas nesta empresa (a escrita desligada). A
+ * resposta de antes de 09/10/2026 não dizia onde a escrita está ligada: valia o que a tela dizia então (só o Google).
+ */
+function soLeitura(p: Verba['platforms'][number]): string | null {
+  const semEscrita = p.writes === undefined ? p.provider === 'google_ads' : !p.writes;
+  return semEscrita ? `só leitura: o Liame ainda não muda campanhas ${naFrase(p.provider).da}` : null;
+}
+
+/**
+ * As plataformas em que o Liame muda campanhas nesta empresa, na ordem de sempre (a Meta, o Google, as outras). Sem
+ * nenhuma ligada (ou sem o servidor dizer), as regras falam da Meta, como sempre falaram.
+ */
+function plataformasComPedido(v: Verba): string[] {
+  const ORDEM = ['meta_ads', 'google_ads'];
+  const lugar = (p: string) => (ORDEM.includes(p) ? ORDEM.indexOf(p) : ORDEM.length);
+  const ligadas = [...new Set(v.platforms.filter((p) => p.writes === true).map((p) => p.provider))].sort((a, b) => lugar(a) - lugar(b));
+  return ligadas.length ? ligadas : ['meta_ads'];
+}
+
 /** A tabela por plataforma (Pro, ou "Ver detalhes" no Lite), com o total. */
 export function plataformasDaVerba(v: Verba): PlataformasDaVerba {
   return {
@@ -269,7 +290,7 @@ export function plataformasDaVerba(v: Verba): PlataformasDaVerba {
     linhas: v.platforms.map((p) => ({
       provider: p.provider,
       ...plataforma(p.provider),
-      nota: p.provider === 'google_ads' ? 'só leitura: o Liame ainda não muda campanhas do Google' : null,
+      nota: soLeitura(p),
       gasto: reais(p.spend_micros),
       ritmo: reais(p.daily_micros),
       previsto: reais(p.forecast_micros),
@@ -296,13 +317,17 @@ export function limitesDaVerba(v: Verba, agora: Date): LimitesDaVerba {
   const { month_micros: mes, campaign_daily_micros: campanha, set_by: por, set_at: em } = v.limits;
   const dia = em ? dataNoFuso(new Date(em), v.timezone) : null;
   const quando = dia === null ? null : dia === dataNoFuso(agora, v.timezone) ? 'hoje' : `em ${diaMes(dia)}${dia.slice(0, 4) === v.today.slice(0, 4) ? '' : `/${dia.slice(0, 4)}`}`;
-  const regras = ['Nada muda na Meta sem a aprovação de uma pessoa, com o código do app.'];
+  // As regras citam as plataformas em que o pedido existe nesta empresa (A5 · Y3: a Meta, o Google ou as duas).
+  const onde = plataformasComPedido(v).map(naFrase);
+  const nas = onde.map((f) => f.na).join(' nem ');
+  const regras = [`Nada muda ${nas} sem a aprovação de uma pessoa, com o código do app.`];
   if (v.rules.change_percent_max !== null) regras.push(`Cada pedido muda no máximo ${String(v.rules.change_percent_max).replace('.', ',')}% da verba diária.`);
   if (v.rules.rate_limit) {
     const { max, window_minutes: janela } = v.rules.rate_limit;
     regras.push(`No máximo ${plural(max, 'mudança', 'mudanças')} de verba ${janela === 60 ? 'por hora' : `a cada ${janela} minutos`} na mesma campanha ou conjunto.`);
   }
-  regras.push('A Meta confere antes, e o Liame não passa por cima do que alguém mudou lá.', 'O Liame não apaga nada na Meta e não mexe no limite de gastos da conta.');
+  regras.push(`${onde.length === 1 ? maiuscula(onde[0]!.a) : 'A plataforma'} confere antes, e o Liame não passa por cima do que alguém mudou lá.`, `O Liame não apaga nada ${nas} e não mexe no limite de gastos da conta.`);
+  if (plataformasComPedido(v).includes('google_ads')) regras.push('No Google, a mudança é na campanha inteira, e a verba dividida entre campanhas não muda pelo Liame.');
   return {
     definidos: mes !== null && campanha !== null,
     mes: mes === null ? null : reais(mes),
@@ -531,8 +556,9 @@ export type MudancasDaVerba = {
 
 export function mudancasDaVerba(v: Verba): MudancasDaVerba {
   const mes = mesDaVerba(v).nome;
-  // Hoje o Liame só muda campanhas da Meta; com outra plataforma na lista, a frase fala "a plataforma".
-  const provedores = [...new Set(v.changes.map((m) => m.provider))];
+  // A frase cita a plataforma das mudanças da lista; sem mudança nenhuma, a das plataformas em que o pedido existe
+  // nesta empresa (a Meta, quando o servidor não diz). Com mais de uma, fala "a plataforma".
+  const provedores = v.changes.length ? [...new Set(v.changes.map((m) => m.provider))] : plataformasComPedido(v);
   const quem = provedores.length <= 1 ? naFrase(provedores[0] ?? 'meta_ads').a : 'a plataforma';
   return {
     titulo: `O que o Liame mudou em ${mes}`,

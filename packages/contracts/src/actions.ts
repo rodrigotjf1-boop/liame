@@ -249,6 +249,11 @@ export const BudgetMonthPlatform = z.strictObject({
   stale: z.boolean(),
   /** A leitura boa mais antiga entre as contas; nula se alguma nunca foi lida. */
   last_success_at: z.iso.datetime().nullable(),
+  /**
+   * Mudar campanhas pelo Liame está ligado para alguma conta conectada desta plataforma (a mesma flag que o pedido
+   * confere). Com `false`, o Liame só lê a plataforma nesta empresa. Opcional: a resposta de antes de 09/10/2026 não traz.
+   */
+  writes: z.boolean().optional(),
 });
 export type BudgetMonthPlatform = z.infer<typeof BudgetMonthPlatform>;
 

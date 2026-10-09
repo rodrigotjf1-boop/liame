@@ -57,13 +57,41 @@ export function enderecoSeguro(url: string): string | null {
   }
 }
 
+/** O que o Liame muda numa plataforma de anúncio com a escrita ligada (A4 · X8 e A5 · Y3), sempre depois da aprovação. */
+const MUDA_COM_APROVACAO = 'só com a aprovação de uma pessoa, muda a verba diária, pausa e retoma';
+
+/**
+ * A linha do botão do Google no diálogo de conectar: o que a autorização (uma só, para o Google Ads e o Analytics)
+ * deixa o Liame fazer. `mudaAnuncios`: as plataformas com a escrita ligada (`ads_write` da lista de conexões).
+ */
+export function descricaoDoGoogle(informaVendas: boolean, mudaAnuncios: readonly string[] = []): string {
+  const muda = mudaAnuncios.includes('google_ads');
+  const comeco = 'Uma autorização só para os dois.';
+  if (muda && informaVendas) return `${comeco} Leitura, a permissão de informar as vendas confirmadas e, no Google Ads, as mudanças que você aprovar.`;
+  if (muda) return `${comeco} Leitura e, no Google Ads, as mudanças que você aprovar.`;
+  return informaVendas ? `${comeco} Leitura, e a permissão de informar as vendas confirmadas.` : `${comeco} Somente leitura.`;
+}
+
 /**
  * O que a pessoa lê antes de ir autorizar: o que o Liame faz em cada plataforma com a autorização que ela vai dar.
  * `informaVendas`: a marca tem "vendas informadas ao Google" ligado, e a autorização do Google pede essa permissão.
+ * `mudaAnuncios`: as plataformas em que mudar campanhas está ligado para a empresa; sem nenhuma, o Liame só lê.
  */
-export function notaDeConectar(comRegem: boolean, informaVendas: boolean): string {
+export function notaDeConectar(comRegem: boolean, informaVendas: boolean, mudaAnuncios: readonly string[] = []): string {
   const ida = 'Você vai para a página da plataforma, confirma lá e volta para cá.';
   const regem = comRegem ? ' No Regem, a única escrita possível é o cupom de campanha, sempre com aprovação.' : '';
+  const [naMeta, noGoogle] = [mudaAnuncios.includes('meta_ads'), mudaAnuncios.includes('google_ads')];
+  if (naMeta || noGoogle) {
+    // Com a escrita ligada em alguma plataforma, a nota diz o que o Liame faz em cada uma, e o que nunca faz.
+    const meta = naMeta ? `Na Meta, o Liame lê e, ${MUDA_COM_APROVACAO} campanhas, conjuntos e anúncios.` : 'Na Meta, o Liame só lê.';
+    const vendas = informaVendas ? ', informa as vendas confirmadas no caixa (para a conversão que você escolher)' : '';
+    const google = noGoogle
+      ? `No Google, lê${vendas} e, ${MUDA_COM_APROVACAO} campanhas.`
+      : informaVendas
+        ? 'No Google, lê e informa as vendas confirmadas no caixa, para a conversão que você escolher.'
+        : 'No Google, o Liame só lê.';
+    return `${ida} ${meta} ${google} Não cria nem apaga campanha, e nada muda sem essa aprovação.${regem}`;
+  }
   if (informaVendas) {
     return `${ida} Na Meta, o Liame só lê. No Google, lê e informa as vendas confirmadas no caixa, para a conversão que você escolher. Não cria, não muda e não gasta nada.${regem}`;
   }

@@ -203,17 +203,22 @@ export async function empresaComMeta(api: TestApi, meta: MetaDeMentira, nome: st
   return { cookie: s.cookie, userId: s.me.user.id as string, secret, tenantId, brandId, conta, contaSemToken };
 }
 
-/** Liga ou desliga a flag `meta_write` para a empresa. */
-export async function ligarEscritaNaMeta(api: TestApi, tenantId: string, valor: boolean): Promise<void> {
-  await ownerQuery(`delete from liame.feature_flag_rule where flag_key = 'meta_write' and scope_type = 'tenant' and scope_id = $1`, [tenantId]);
+/** Liga ou desliga uma flag de escrita (`meta_write`, `google_write`) para a empresa. */
+export async function ligarFlagDaEmpresa(api: TestApi, chave: 'meta_write' | 'google_write', tenantId: string, valor: boolean): Promise<void> {
+  await ownerQuery(`delete from liame.feature_flag_rule where flag_key = $1 and scope_type = 'tenant' and scope_id = $2`, [chave, tenantId]);
   if (valor) {
     await ownerQuery(
       `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, rollout_percent, created_by)
-       values (gen_random_uuid(), 'meta_write', 'tenant', $1, 'true'::jsonb, null, 'testes')`,
-      [tenantId],
+       values (gen_random_uuid(), $1, 'tenant', $2, 'true'::jsonb, null, 'testes')`,
+      [chave, tenantId],
     );
   }
   api.app.get(FlagService).invalidate();
+}
+
+/** Liga ou desliga a flag `meta_write` para a empresa. */
+export async function ligarEscritaNaMeta(api: TestApi, tenantId: string, valor: boolean): Promise<void> {
+  await ligarFlagDaEmpresa(api, 'meta_write', tenantId, valor);
 }
 
 /**

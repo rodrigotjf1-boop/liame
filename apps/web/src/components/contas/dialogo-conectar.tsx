@@ -6,7 +6,7 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
-import { type Autorizador, enderecoSeguro, notaDeConectar } from './textos';
+import { type Autorizador, descricaoDoGoogle, enderecoSeguro, notaDeConectar } from './textos';
 
 // "Conectar plataforma" (protótipo aprovado): a marca e a plataforma (Meta, ou Google com Ads e Analytics
 // numa autorização só). O navegador vai para a página da plataforma; nenhum token passa por aqui. O Regem
@@ -27,9 +27,14 @@ type Props = {
    * de informar vendas, e o diálogo diz isso antes de a pessoa ir.
    */
   vendasAoGoogle?: ReadonlySet<string>;
+  /**
+   * As plataformas de anúncio em que mudar campanhas está ligado para a empresa (`ads_write`; A5, Y3): o diálogo diz
+   * o que o Liame faz com a autorização, em vez de "só lê".
+   */
+  mudaAnuncios?: readonly string[];
 };
 
-export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr, aoRegem = null, vendasAoGoogle, irPara = (url) => window.location.assign(url) }: Props) {
+export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr, aoRegem = null, vendasAoGoogle, mudaAnuncios = [], irPara = (url) => window.location.assign(url) }: Props) {
   const campoMarca = useRef<HTMLSelectElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: campoMarca, reserva });
   const ids = useId();
@@ -102,7 +107,7 @@ export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr,
             <button className="plataforma" type="button" onClick={() => disparar(conectar('google'))} disabled={indo !== null} aria-busy={indo === 'google'}>
               <span className="plat plat--google">Google</span>
               <b>{indo === 'google' ? 'Indo para o Google…' : 'Google Ads e Google Analytics'}</b>
-              <span>{informaVendas ? 'Uma autorização só para os dois. Leitura, e a permissão de informar as vendas confirmadas.' : 'Uma autorização só para os dois. Somente leitura.'}</span>
+              <span>{descricaoDoGoogle(informaVendas, mudaAnuncios)}</span>
             </button>
             {aoRegem && (
               <button
@@ -122,7 +127,7 @@ export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr,
           </div>
           <p className="dialogo-nota">
             <Icone nome="shield" pequeno />
-            <span>{notaDeConectar(aoRegem !== null, informaVendas)}</span>
+            <span>{notaDeConectar(aoRegem !== null, informaVendas, mudaAnuncios)}</span>
           </p>
         </div>
       </div>

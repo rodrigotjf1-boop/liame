@@ -111,6 +111,13 @@ export const ConnectionListResponse = z.strictObject({
   available: z.array(ConnectionProvider),
   /** Criar cupom no Regem pelo Liame (com aprovação) está ligado para a empresa: a permissão que a loja liberou no Regem passa a valer. */
   regem_write: z.boolean(),
+  /**
+   * As plataformas de anúncio (`meta_ads`, `google_ads`) em que mudar campanhas pelo Liame está ligado para a empresa
+   * (ou para a marca do filtro): as mesmas flags que o pedido confere. Na Meta, só quando a autorização nova também pede
+   * para gerenciar anúncios. É o que o diálogo de conectar diz que a autorização permite. Opcional: a resposta de
+   * antes de 09/10/2026 não traz.
+   */
+  ads_write: z.array(z.string()).optional(),
 });
 export type ConnectionListResponse = z.infer<typeof ConnectionListResponse>;
 

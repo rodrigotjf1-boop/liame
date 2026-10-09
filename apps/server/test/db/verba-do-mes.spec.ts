@@ -12,7 +12,7 @@ import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js'
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { ActionExecutor } from '../../src/worker/action-executor.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
-import { type EmpresaComMeta, empresaComMeta, ligarConectorNaMetaDeMentira, ligarEscritaNaMeta, MetaDeMentira, objetoLido } from '../helpers/meta-de-mentira.js';
+import { type EmpresaComMeta, empresaComMeta, ligarConectorNaMetaDeMentira, ligarEscritaNaMeta, ligarFlagDaEmpresa, MetaDeMentira, objetoLido } from '../helpers/meta-de-mentira.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // A4 · X4, parte 1 (D-A4-19 e D-A4-22): a verba do mês pela API. O teto do mês conta tudo o que as contas de anúncio
@@ -167,7 +167,8 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
     });
     const metaNoMes = META_POR_DIA * diasNoMes();
     expect(v.platforms).toEqual([
-      { provider: 'meta_ads', accounts: 1, spend_micros: metaNoMes, daily_micros: META_POR_DIA, forecast_micros: metaNoMes + META_POR_DIA * dias, read_through: mes.ontem, forecast_days: dias, stale: false, last_success_at: expect.any(String) },
+      // `writes`: a escrita na Meta está ligada para esta empresa; a do Google, não (o Liame só lê o Google nela).
+      { provider: 'meta_ads', accounts: 1, spend_micros: metaNoMes, daily_micros: META_POR_DIA, forecast_micros: metaNoMes + META_POR_DIA * dias, read_through: mes.ontem, forecast_days: dias, stale: false, last_success_at: expect.any(String), writes: true },
       {
         provider: 'google_ads',
         accounts: 1,
@@ -179,6 +180,7 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
         forecast_days: dias,
         stale: false,
         last_success_at: expect.any(String),
+        writes: false,
       },
     ]);
     expect([v.spend_micros, v.daily_micros, v.forecast_micros]).toEqual([metaNoMes + googleNoMes(diasNoMes()), META_POR_DIA + GOOGLE_RITMO, previstoNormal()]);
@@ -193,6 +195,23 @@ describe.skipIf(!hasDb)('a verba do mês: o teto conta o gasto inteiro (A4 · X4
     // Ontem: os R$ 70,00 da Meta e os R$ 20,55 ou R$ 20,56 do Google, conforme o centavo que o acumulado ganhou.
     const ontem = lidos.at(-1);
     if (ontem) expect([META_POR_DIA + 20_550_000, META_POR_DIA + 20_560_000]).toContain(ontem.spend_micros);
+  });
+
+  it('em quais plataformas o Liame muda campanhas: segue a flag de escrita de cada uma, conta a conta', async () => {
+    const escreve = async () => Object.fromEntries((await verba()).platforms.map((p) => [p.provider, p.writes]));
+    expect(await escreve()).toEqual({ meta_ads: true, google_ads: false });
+    try {
+      // O Google ligado para a empresa: as duas plataformas passam a ter pedido.
+      await ligarFlagDaEmpresa(api, 'google_write', e.tenantId, true);
+      expect(await escreve()).toEqual({ meta_ads: true, google_ads: true });
+      // A Meta desligada: o Liame só lê a Meta, e a tela não pode prometer pedido nela.
+      await ligarEscritaNaMeta(api, e.tenantId, false);
+      expect(await escreve()).toEqual({ meta_ads: false, google_ads: true });
+    } finally {
+      await ligarFlagDaEmpresa(api, 'google_write', e.tenantId, false);
+      await ligarEscritaNaMeta(api, e.tenantId, true);
+    }
+    expect(await escreve()).toEqual({ meta_ads: true, google_ads: false });
   });
 
   it('D-A4-22: os dois limites juntos, só por quem gerencia o orçamento; o teto por campanha vira regra da política da empresa', async () => {
