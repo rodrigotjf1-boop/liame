@@ -1,5 +1,5 @@
 import type { TeamStat } from '@liame/contracts';
-import { type DefinicaoDoMembro, GESTOR_DE_TRAFEGO, type Membro } from './membros.js';
+import { CRIATIVO_DA_EQUIPE, type DefinicaoDoMembro, GESTOR_DE_TRAFEGO, type Membro } from './membros.js';
 
 // Sua equipe (A3, I13b): a situação de cada membro e o que ele fez no mês, montados pelo código a partir das
 // contagens que o serviço lê do banco. Funções puras.
@@ -15,13 +15,16 @@ export interface FatosDoMembro {
   ia: boolean;
   /** A flag `sombra` da empresa. */
   sombra: boolean;
+  /** A flag `criativo` da empresa (só o Criativo depende dela). */
+  criativo: boolean;
   /** Há uma parada (da empresa ou da Liame) que trava a IA desta marca. */
   parada: boolean;
 }
 
 /**
  * A situação de um membro, do que mais pesa ao que menos: desligado pela empresa; fora do plano; quem usa IA para
- * sem a IA e trava com a parada; o Gestor de tráfego só trabalha com a sombra ligada. Quem trabalha por regra
+ * sem a IA e trava com a parada (o Criativo, além da IA, precisa da flag dele); o Gestor de tráfego só trabalha com a
+ * sombra ligada. Quem trabalha por regra
  * (Relatórios, Compliance, a sombra) segue com a parada: ela trava a IA e as ações, e eles não fazem nenhuma das duas
  * (a revisão da semana sai com o resumo do sistema).
  */
@@ -30,6 +33,7 @@ export function situacaoDoMembro(def: DefinicaoDoMembro, f: FatosDoMembro): Situ
   if (!f.peloPlano) return 'desligado_pela_liame';
   if (def.kind === 'ia') {
     if (!f.ia) return 'desligado_pela_liame';
+    if (def.key === CRIATIVO_DA_EQUIPE && !f.criativo) return 'desligado_pela_liame';
     return f.parada ? 'parado' : 'ativo';
   }
   if (def.key === GESTOR_DE_TRAFEGO) return f.sombra ? 'sombra' : 'desligado_pela_liame';
@@ -67,6 +71,24 @@ export interface ContagensDoMes {
    * Compliance (regra de texto ou revisor de IA) e as outras recusas (número, formato, dado velho).
    */
   recusasPorMembro: Map<string, { doCompliance: number; outras: number }>;
+  /** O trabalho do Criativo (A4, X6): os pedidos e as peças do mês, as de hoje e as que esperam a pessoa agora. */
+  pecas: PecasDoCriativo;
+}
+
+export interface PecasDoCriativo {
+  /** Pedidos de peças novas atendidos no mês. */
+  pedidos: number;
+  /** Peças que nasceram no mês e, delas, as que uma pessoa aprovou ou recusou. */
+  escritas: number;
+  aprovadas: number;
+  recusadas: number;
+  /** Outras versões de uma peça, pedidas e entregues no mês. */
+  refeitas: number;
+  /** Peças que nasceram hoje (no fuso da empresa). */
+  hoje: number;
+  /** Agora, na marca inteira: as que passaram na conferência e esperam a decisão, e as que a conferência barrou. */
+  esperando: number;
+  barradas: number;
 }
 
 const qtd = (key: string, n: number): TeamStat => ({ key, value: String(n), unit: 'qtd' });
@@ -102,6 +124,18 @@ export function numerosDoMembro(def: DefinicaoDoMembro, c: ContagensDoMes): Team
       return [qtd('planos_aprovados', c.planosAprovados), qtd('planos_recusados', c.planosRecusados), qtd('planos_esperando', c.planosEsperando), qtd('em_preparo', c.emPreparo), retiradas];
     case 'pesquisador':
       return [qtd('paginas_lidas', c.paginasLidas), qtd('recusadas', c.paginasRecusadas), qtd('sugestoes', c.sugestoesDoPesquisador), retiradas];
+    case 'criativo':
+      return [
+        qtd('pedidos', c.pecas.pedidos),
+        qtd('pecas_escritas', c.pecas.escritas),
+        qtd('pecas_aprovadas', c.pecas.aprovadas),
+        qtd('pecas_recusadas', c.pecas.recusadas),
+        qtd('versoes_refeitas', c.pecas.refeitas),
+        qtd('pecas_hoje', c.pecas.hoje),
+        qtd('pecas_esperando', c.pecas.esperando),
+        qtd('pecas_barradas', c.pecas.barradas),
+        retiradas,
+      ];
     case 'trafego':
       return [
         qtd('recomendacoes', c.recomendacoes),

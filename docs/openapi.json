@@ -48313,6 +48313,69 @@
                           "working_now": {
                             "type": "boolean"
                           },
+                          "in_progress": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "subject": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "count": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "by": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "since": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              }
+                            },
+                            "required": [
+                              "subject",
+                              "count",
+                              "by",
+                              "since"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "blocked_by": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 60,
+                            "pattern": "^[a-z0-9_]+$"
+                          },
                           "can_pause": {
                             "type": "boolean"
                           },
@@ -48673,7 +48736,8 @@
                 "compliance",
                 "estrategista",
                 "pesquisador",
-                "trafego"
+                "trafego",
+                "criativo"
               ]
             }
           },
@@ -48775,6 +48839,14 @@
                             "additionalProperties": false
                           },
                           "count": {
+                            "type": [
+                              "integer",
+                              "null"
+                            ],
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "barred": {
                             "type": [
                               "integer",
                               "null"
@@ -49588,7 +49660,8 @@
                 "compliance",
                 "estrategista",
                 "pesquisador",
-                "trafego"
+                "trafego",
+                "criativo"
               ]
             }
           }
@@ -49793,6 +49866,69 @@
                           },
                           "working_now": {
                             "type": "boolean"
+                          },
+                          "in_progress": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "subject": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "count": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "by": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "since": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              }
+                            },
+                            "required": [
+                              "subject",
+                              "count",
+                              "by",
+                              "since"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "blocked_by": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 60,
+                            "pattern": "^[a-z0-9_]+$"
                           },
                           "can_pause": {
                             "type": "boolean"
@@ -50282,7 +50418,8 @@
                 "compliance",
                 "estrategista",
                 "pesquisador",
-                "trafego"
+                "trafego",
+                "criativo"
               ]
             }
           }
@@ -50482,6 +50619,69 @@
                           },
                           "working_now": {
                             "type": "boolean"
+                          },
+                          "in_progress": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "subject": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "count": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "by": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "since": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              }
+                            },
+                            "required": [
+                              "subject",
+                              "count",
+                              "by",
+                              "since"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "blocked_by": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 60,
+                            "pattern": "^[a-z0-9_]+$"
                           },
                           "can_pause": {
                             "type": "boolean"

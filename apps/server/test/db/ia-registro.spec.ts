@@ -189,7 +189,7 @@ describe.skipIf(!hasDb)('registros da IA no banco, ativação por empresa e ferr
     expect(await usar(de(b, 'contas.ver'), 'fontes_frescor', { brand_id: a.brandId })).toEqual({ ok: true, valor: { fuso: 'America/Sao_Paulo', contas: [] } });
     expect(await usar(de(b, 'contas.ver'), 'fontes_frescor', {})).toEqual({ ok: true, valor: { fuso: 'America/Sao_Paulo', contas: [] } });
 
-    // Sua equipe: A lê a equipe da marca dela (os sete, pelo nome da tela); B, pedindo a marca da A, não acha a marca.
+    // Sua equipe: A lê a equipe da marca dela (os oito, pelo nome da tela; o Criativo entrou na A4); B, pedindo a marca da A, não acha a marca.
     const equipeDaA = await usar(de(a, 'campanhas.ver', 'vendas.ver'), 'equipe_trabalho', { brand_id: a.brandId });
     expect(equipeDaA).toMatchObject({ ok: true, valor: { ia_da_empresa: { ligada: 'não' } } });
     expect((equipeDaA as { valor: { equipe: Array<{ funcionario: string }> } }).valor.equipe.map((m) => m.funcionario)).toEqual([
@@ -200,7 +200,11 @@ describe.skipIf(!hasDb)('registros da IA no banco, ativação por empresa e ferr
       'Estrategista',
       'Pesquisador',
       'Gestor de tráfego',
+      'Criativo',
     ]);
+    // Com `funcionario`, só ele; o Criativo é um dos nomes que a leitura aceita desde a versão 2.
+    const soOCriativo = await usar(de(a, 'campanhas.ver', 'vendas.ver'), 'equipe_trabalho', { brand_id: a.brandId, funcionario: 'criativo' });
+    expect((soOCriativo as { valor: { equipe: Array<{ funcionario: string }> } }).valor.equipe.map((m) => m.funcionario)).toEqual(['Criativo']);
     expect(await usar(de(b, 'campanhas.ver', 'vendas.ver'), 'equipe_trabalho', { brand_id: a.brandId })).toEqual({ ok: false, erro: 'Marca não encontrada nesta empresa.' });
     expect(await usar(de(a, 'campanhas.ver', 'vendas.ver'), 'equipe_trabalho', { brand_id: a.brandId, funcionario: 'diretor' })).toEqual({ ok: false, erro: 'Parâmetros inválidos para esta ferramenta.' });
 

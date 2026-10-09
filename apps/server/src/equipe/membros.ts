@@ -1,4 +1,5 @@
 import { LIA } from '../ai/conversa/prompt.js';
+import { CRIATIVO, WORKFLOW_DO_CRIATIVO } from '../ai/criativo/prompt.js';
 import { ESTRATEGISTA } from '../ai/estrategista/prompt.js';
 import { ANALISTA } from '../ai/explicar/prompt.js';
 import { PESQUISADOR } from '../ai/pesquisador/prompt.js';
@@ -8,7 +9,8 @@ import type { FuncionarioDef } from '../ai/registro/definicoes.js';
 // A equipe da A3 (I13b; protótipo P7, aprovado em 03/10/2026): quem trabalha para a marca. Os funcionários de IA têm
 // definição no registro (`ai/registro/definicoes.ts`) e a ativação da distribuição; Relatórios, Compliance e o Gestor
 // de tráfego trabalham por regra (sem modelo próprio) e entram aqui pela chave. A descrição de cada um (o que faz e o
-// que nunca faz) é da tela. Os da fase seguinte não estão aqui: a tela mostra com a fase deles.
+// que nunca faz) é da tela. Os da fase seguinte não estão aqui: a tela mostra com a fase deles. O Criativo (A4) entrou
+// com o protótipo P12, aprovado em 09/10/2026: ele só trabalha a pedido, e só para a empresa com a flag `criativo`.
 
 /** Relatórios: a revisão da semana (a leitura dela usa o mesmo prompt do Analista). */
 export const RELATORIOS = 'relatorios';
@@ -20,7 +22,10 @@ export const COMPLIANCE = 'compliance';
 /** Gestor de tráfego: a sombra por regra (I5), sem modelo. */
 export const GESTOR_DE_TRAFEGO = 'trafego';
 
-export const MEMBROS = ['lia', 'analista', RELATORIOS, COMPLIANCE, 'estrategista', 'pesquisador', GESTOR_DE_TRAFEGO] as const;
+/** Criativo: escreve as peças de anúncio que alguém pede em Criativos (A4, X6). */
+export const CRIATIVO_DA_EQUIPE = 'criativo';
+
+export const MEMBROS = ['lia', 'analista', RELATORIOS, COMPLIANCE, 'estrategista', 'pesquisador', GESTOR_DE_TRAFEGO, CRIATIVO_DA_EQUIPE] as const;
 export type Membro = (typeof MEMBROS)[number];
 
 export interface DefinicaoDoMembro {
@@ -46,6 +51,8 @@ export const EQUIPE: Record<Membro, DefinicaoDoMembro> = {
   estrategista: { key: 'estrategista', kind: 'ia', funcionario: ESTRATEGISTA, fluxos: ['estrategista.plano'], desligavel: true },
   pesquisador: { key: 'pesquisador', kind: 'ia', funcionario: PESQUISADOR, fluxos: ['pesquisador.pagina'], desligavel: true },
   trafego: { key: GESTOR_DE_TRAFEGO, kind: 'regra', funcionario: null, fluxos: [], desligavel: true },
+  // A chave da pausa (`agent_pause`) é a do funcionário no registro: é ela que o serviço das peças confere ao pedir.
+  criativo: { key: CRIATIVO_DA_EQUIPE, kind: 'ia', funcionario: CRIATIVO, fluxos: [WORKFLOW_DO_CRIATIVO], desligavel: true },
 };
 
 export const ehMembro = (key: string): key is Membro => (MEMBROS as readonly string[]).includes(key);

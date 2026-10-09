@@ -1,5 +1,6 @@
 import { TEAM_MEMBERS } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
+import { WORKFLOW_DO_CRIATIVO } from '../src/ai/criativo/prompt.js';
 import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DOS_RESULTADOS } from '../src/ai/explicar/explicar.service.js';
 import { WORKFLOW_DO_REVISOR } from '../src/ai/revisor/prompt.js';
 import { WORKFLOW as WORKFLOW_DA_CONVERSA } from '../src/conversa/conversa.service.js';
@@ -11,7 +12,8 @@ import { WORKFLOW as WORKFLOW_DO_PESQUISADOR } from '../src/worker/pesquisa.serv
 // A3 · I13b: Sua equipe. A situação de cada membro vem de quatro chaves (a empresa, o plano, as flags e a parada);
 // o que ele fez no mês sai das contagens do banco; os fluxos de IA de cada um são os que os serviços gravam.
 
-const tudoLigado: FatosDoMembro = { pausado: false, peloPlano: true, ia: true, sombra: true, parada: false };
+const tudoLigado: FatosDoMembro = { pausado: false, peloPlano: true, ia: true, sombra: true, criativo: true, parada: false };
+const semPecas = { pedidos: 0, escritas: 0, aprovadas: 0, recusadas: 0, refeitas: 0, hoje: 0, esperando: 0, barradas: 0 };
 const vazio: ContagensDoMes = {
   respostasPorFluxo: new Map(),
   entreguesPorFluxo: new Map(),
@@ -31,6 +33,7 @@ const vazio: ContagensDoMes = {
   mesmaDirecao: 0,
   arrependimentoMicros: 0n,
   recusasPorMembro: new Map(),
+  pecas: semPecas,
 };
 
 describe('Sua equipe (A3, I13b)', () => {
@@ -43,13 +46,15 @@ describe('Sua equipe (A3, I13b)', () => {
     expect(EQUIPE.pesquisador.fluxos).toEqual([WORKFLOW_DO_PESQUISADOR]);
     // O Compliance segue por regra e não desliga; o fluxo dele é o do revisor de IA (o custo, quando a empresa o tem).
     expect(EQUIPE.compliance).toMatchObject({ kind: 'regra', desligavel: false, fluxos: [WORKFLOW_DO_REVISOR] });
-    expect(MEMBROS.filter((m) => EQUIPE[m].kind === 'ia')).toEqual(['lia', 'analista', 'estrategista', 'pesquisador']);
+    expect(MEMBROS.filter((m) => EQUIPE[m].kind === 'ia')).toEqual(['lia', 'analista', 'estrategista', 'pesquisador', 'criativo']);
+    // O Criativo (A4; P12): o fluxo é o que o worker das peças grava, e a empresa pode desligar.
+    expect(EQUIPE.criativo).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_CRIATIVO] });
     for (const m of MEMBROS) expect(EQUIPE[m].funcionario?.key ?? m).toBe(m);
   });
 
   it('a situação: desligado pela empresa pesa mais; fora do plano; a IA e a parada só valem para quem usa IA; a sombra', () => {
     const s = (m: (typeof MEMBROS)[number], f: Partial<FatosDoMembro>) => situacaoDoMembro(EQUIPE[m], { ...tudoLigado, ...f });
-    expect(MEMBROS.map((m) => s(m, {}))).toEqual(['ativo', 'ativo', 'ativo', 'ativo', 'ativo', 'ativo', 'sombra']);
+    expect(MEMBROS.map((m) => s(m, {}))).toEqual(['ativo', 'ativo', 'ativo', 'ativo', 'ativo', 'ativo', 'sombra', 'ativo']);
     expect(s('lia', { pausado: true, peloPlano: false, ia: false })).toBe('desligado');
     expect(s('analista', { peloPlano: false })).toBe('desligado_pela_liame');
     expect(MEMBROS.map((m) => s(m, { ia: false }))).toEqual([
@@ -60,9 +65,15 @@ describe('Sua equipe (A3, I13b)', () => {
       'desligado_pela_liame',
       'desligado_pela_liame',
       'sombra',
+      'desligado_pela_liame',
     ]);
     // A parada trava a IA e as ações: quem trabalha por regra segue (a revisão sai com o resumo do sistema).
-    expect(MEMBROS.map((m) => s(m, { parada: true }))).toEqual(['parado', 'parado', 'ativo', 'ativo', 'parado', 'parado', 'sombra']);
+    expect(MEMBROS.map((m) => s(m, { parada: true }))).toEqual(['parado', 'parado', 'ativo', 'ativo', 'parado', 'parado', 'sombra', 'parado']);
+    // O Criativo precisa da flag dele além da IA: sem ela, só ele fica desligado pela Liame; a empresa desligar pesa mais.
+    expect(MEMBROS.filter((m) => s(m, { criativo: false }) !== s(m, {}))).toEqual(['criativo']);
+    expect(s('criativo', { criativo: false })).toBe('desligado_pela_liame');
+    expect(s('criativo', { criativo: false, pausado: true })).toBe('desligado');
+    expect(s('criativo', { criativo: false, parada: true })).toBe('desligado_pela_liame');
     expect(s('trafego', { sombra: false })).toBe('desligado_pela_liame');
     expect(s('trafego', { pausado: true })).toBe('desligado');
   });
@@ -112,7 +123,10 @@ describe('Sua equipe (A3, I13b)', () => {
         ['analista', { doCompliance: 3, outras: 2 }],
         ['relatorios', { doCompliance: 1, outras: 0 }],
         ['pesquisador', { doCompliance: 1, outras: 1 }],
+        ['criativo', { doCompliance: 0, outras: 1 }],
       ]),
+      // O Criativo: 2 pedidos atendidos, 5 peças no mês (2 aprovadas), 1 versão refeita, 3 de hoje; agora, 2 esperam e 1 está barrada.
+      pecas: { pedidos: 2, escritas: 5, aprovadas: 2, recusadas: 0, refeitas: 1, hoje: 3, esperando: 2, barradas: 1 },
     };
     const ver = (m: (typeof MEMBROS)[number]) => Object.fromEntries(numerosDoMembro(EQUIPE[m], c).map((x) => [x.key, `${x.value} ${x.unit}`]));
     expect(ver('lia')).toEqual({ respostas: '61 qtd', fez_sentido: '28 qtd', discordo: '5 qtd', demandas: '2 qtd', retiradas_na_conferencia: '5 qtd' });
@@ -126,6 +140,18 @@ describe('Sua equipe (A3, I13b)', () => {
     expect(ver('estrategista')).toEqual({ planos_aprovados: '2 qtd', planos_recusados: '1 qtd', planos_esperando: '1 qtd', em_preparo: '1 qtd', retiradas_na_conferencia: '0 qtd' });
     expect(ver('pesquisador')).toEqual({ paginas_lidas: '3 qtd', recusadas: '1 qtd', sugestoes: '2 qtd', retiradas_na_conferencia: '2 qtd' });
     expect(ver('trafego')).toEqual({ recomendacoes: '26 qtd', comparaveis: '19 qtd', mesma_direcao: '15 qtd', arrependimento: '-41200000 brl_micros' });
+    expect(ver('criativo')).toEqual({
+      pedidos: '2 qtd',
+      pecas_escritas: '5 qtd',
+      pecas_aprovadas: '2 qtd',
+      pecas_recusadas: '0 qtd',
+      versoes_refeitas: '1 qtd',
+      pecas_hoje: '3 qtd',
+      pecas_esperando: '2 qtd',
+      pecas_barradas: '1 qtd',
+      retiradas_na_conferencia: '1 qtd',
+    });
+    expect(numerosDoMembro(EQUIPE.criativo, vazio).every((x) => x.value === '0')).toBe(true);
     // Sem nada no mês, tudo zero (e nada de buraco na lista).
     expect(numerosDoMembro(EQUIPE.lia, vazio).map((x) => x.value)).toEqual(['0', '0', '0', '0', '0']);
     expect(numerosDoMembro(EQUIPE.compliance, vazio).map((x) => `${x.key}=${x.value}`)).toEqual(['textos_conferidos=0', 'textos_barrados=0']);

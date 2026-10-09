@@ -12,7 +12,8 @@ import { PedidosDoGestor } from '../../src/worker/pedidos-do-gestor.js';
 import { SombraLoop } from '../../src/worker/sombra-loop.js';
 import { SombraService } from '../../src/worker/sombra.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
-import { ligarIa } from '../helpers/ia.js';
+import { ligarCriativo, ligarIa } from '../helpers/ia.js';
+import { pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // A3 · I13b: Sua equipe. A leitura mostra a situação de cada membro (pelas chaves da empresa, do plano, das flags e da
@@ -112,6 +113,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
       estrategista: 'desligado_pela_liame',
       pesquisador: 'desligado_pela_liame',
       trafego: 'desligado_pela_liame',
+      criativo: 'desligado_pela_liame',
     });
     expect(t).toMatchObject({ ai: { enabled: false, spent_usd_micros: '0', band: 'livre' }, stop: null, can_manage: true, can_stop: true });
     expect(t.month.from <= hoje && hoje <= t.month.to).toBe(true);
@@ -122,16 +124,101 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     await ligarIa(flags, e.tenantId);
     await ligarSombra(e.tenantId);
     t = await ver(e, e.brandId);
-    expect(situacoes(t)).toEqual({ lia: 'ativo', analista: 'ativo', relatorios: 'ativo', compliance: 'ativo', estrategista: 'ativo', pesquisador: 'ativo', trafego: 'sombra' });
+    // O Criativo precisa da flag dele além da IA: sem ela, segue desligado pela distribuição.
+    expect(situacoes(t)).toEqual({ lia: 'ativo', analista: 'ativo', relatorios: 'ativo', compliance: 'ativo', estrategista: 'ativo', pesquisador: 'ativo', trafego: 'sombra', criativo: 'desligado_pela_liame' });
+    await ligarCriativo(flags, e.tenantId);
+    t = await ver(e, e.brandId);
+    expect(situacoes(t).criativo).toBe('ativo');
 
     // A parada da empresa (a mesma da A1) trava quem usa IA; quem trabalha por regra segue.
     const parada = await api.call('POST', '/v1/kill-switches', { cookie: e.cookie, body: { level: 'tenant', reason: 'Revisando os textos da semana' } });
     expect(parada.status).toBe(201);
     t = await ver(e, e.brandId);
     expect(t.stop).toMatchObject({ id: parada.body.id, level: 'tenant', by_company: true, reason: 'Revisando os textos da semana', by: { id: e.userId } });
-    expect(situacoes(t)).toEqual({ lia: 'parado', analista: 'parado', relatorios: 'ativo', compliance: 'ativo', estrategista: 'parado', pesquisador: 'parado', trafego: 'sombra' });
+    expect(situacoes(t)).toEqual({ lia: 'parado', analista: 'parado', relatorios: 'ativo', compliance: 'ativo', estrategista: 'parado', pesquisador: 'parado', trafego: 'sombra', criativo: 'parado' });
     expect((await api.call('DELETE', `/v1/kill-switches/${parada.body.id}`, { cookie: e.cookie })).status).toBe(204);
     expect((await ver(e, e.brandId)).stop).toBeNull();
+  });
+
+  it('o Criativo (A4 · P12): só trabalha a pedido; as peças do mês, o que espera a pessoa, o que escreve agora, por que não pode escrever, e desligar', async () => {
+    const e = await empresa();
+    await ligarIa(flags, e.tenantId);
+    await ligarCriativo(flags, e.tenantId);
+    const criativo = async (quem: { cookie: string } = e) => doMembro(await ver(quem, e.brandId), 'criativo');
+    const zerado = { pedidos: '0', pecas_escritas: '0', pecas_aprovadas: '0', pecas_recusadas: '0', versoes_refeitas: '0', pecas_hoje: '0', pecas_esperando: '0', pecas_barradas: '0', retiradas_na_conferencia: '0' };
+
+    // Ligado, sem oferta em Minha marca: ele não tem do que partir (não inventa oferta nem preço).
+    let t = await ver(e, e.brandId);
+    expect(doMembro(t, 'criativo')).toMatchObject({ kind: 'ia', status: 'ativo', working_now: false, can_pause: true, paused: null, in_progress: null, blocked_by: 'sem_oferta', cost: { usd_micros: '0', calls: 0 } });
+    expect(numeros(t, 'criativo')).toEqual(zerado);
+    // Só o Criativo traz os dois campos: os outros seguem como eram.
+    expect(doMembro(t, 'lia')).not.toHaveProperty('blocked_by');
+    expect(doMembro(t, 'estrategista')).not.toHaveProperty('in_progress');
+
+    const dossie = {
+      identity: { summary: 'Hamburgueria de bairro com smash feito na chapa', audience: 'Quem mora ou trabalha no Centro', differentiator: 'Pão feito na casa todo dia', since: '2019' },
+      voice: { traits: ['Direta'], rules: ['Frases curtas.'], do_example: 'Bateu a fome? O smash sai da chapa rapidinho.', dont_example: '' },
+      products: { items: ['Smash Clássico R$ 29,90'] },
+      offers: { items: ['Combo sexta: smash, batata e refri por R$ 34,90'] },
+      forbidden: { items: [] },
+      competitors: { items: [] },
+      region: { area: 'Centro e Lapa', pickup: true },
+    };
+    const salvo = await api.call('PUT', '/v1/brand-dossier', { cookie: e.cookie, body: { brand_id: e.brandId, base_version: 0, content: dossie } });
+    expect(salvo.status, JSON.stringify(salvo.body)).toBe(200);
+    expect(await criativo()).toMatchObject({ status: 'ativo', blocked_by: null, in_progress: null });
+
+    // Um pedido atendido hoje, com três peças (uma aprovada, uma esperando, uma barrada), uma versão refeita e o custo.
+    const dono = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId };
+    const uso = await chamada(e, 'criativo.peca', 90_000);
+    const lote = await pedidoDePecas(dono, { pecas: 3, uso });
+    const aprovada = await pecaEscrita(dono, lote, { titulo: 'Sexta é dia de combo', status: 'aprovada' });
+    await pecaEscrita(dono, lote, { titulo: 'Combo sexta no capricho', conferencia: 'aviso' });
+    await pecaEscrita(dono, lote, { titulo: 'Entrega em 20 minutos', conferencia: 'barrou' });
+    const outra = await pedidoDePecas(dono, { peca: aprovada, pecas: 0, uso: await chamada(e, 'criativo.peca', 30_000) });
+    await versaoDaPeca(dono, aprovada, { versao: 2, titulo: 'Sexta é dia de combo, mais curto', pedido: outra });
+    // Um pedido que ele recusou e uma peça de outro mês não entram nas contas do mês.
+    await pedidoDePecas(dono, { status: 'recusado', motivo: 'sem_peca' });
+    const antigo = await pedidoDePecas(dono, { pecas: 1, criadoEm: '2026-01-10T12:00:00Z', terminouEm: '2026-01-10T12:01:00Z' });
+    await pecaEscrita(dono, antigo, { titulo: 'Peça de janeiro', status: 'recusada', criadaEm: '2026-01-10T12:01:00Z' });
+    t = await ver(e, e.brandId);
+    expect(numeros(t, 'criativo')).toEqual({ ...zerado, pedidos: '1', pecas_escritas: '3', pecas_aprovadas: '1', versoes_refeitas: '1', pecas_hoje: '3', pecas_esperando: '1', pecas_barradas: '1' });
+    expect(doMembro(t, 'criativo')).toMatchObject({ working_now: false, in_progress: null, blocked_by: null, cost: { usd_micros: '120000', calls: 2 } });
+
+    // Um pedido na fila: ele está trabalhando, e a tela sabe o quê (a oferta, quantas peças, quem pediu e quando).
+    const naFila = await pedidoDePecas(dono, { status: 'gerando', variacoes: 2, oferta: 'Combo sexta: smash, batata e refri por R$ 34,90' });
+    expect(await criativo()).toMatchObject({ working_now: true, in_progress: { subject: 'Combo sexta: smash, batata e refri por R$ 34,90', count: 2, by: { id: e.userId }, since: expect.any(String) } });
+    await ownerQuery(`update liame.ad_piece_request set status = 'concluido', finished_at = now() where id = $1`, [naFila]);
+    // Outra versão de uma peça na fila: trabalha do mesmo jeito, sem oferta nem quantidade para dizer.
+    const refazendo = await pedidoDePecas(dono, { status: 'pendente', peca: aprovada });
+    expect(await criativo()).toMatchObject({ working_now: true, in_progress: { subject: null, count: null, by: { id: e.userId } } });
+    await ownerQuery(`update liame.ad_piece_request set status = 'falhou', reason = 'ia_fora_do_ar', finished_at = now() where id = $1`, [refazendo]);
+
+    // O limite de IA do dia acabou: ligado, mas um pedido novo não cabe (e a tela diz qual limite aperta).
+    await ownerQuery(`insert into liame.ai_budget (tenant_id, daily_usd_micros, monthly_usd_micros, set_by, reason) values ($1, 100000, 100000000, 'testes', 'teste do Criativo na equipe')`, [e.tenantId]);
+    expect(await criativo()).toMatchObject({ status: 'ativo', blocked_by: 'limite_de_ia_do_dia' });
+    await ownerQuery(`delete from liame.ai_budget where tenant_id = $1`, [e.tenantId]);
+    expect((await criativo()).blocked_by).toBeNull();
+
+    // A empresa desliga: ninguém pede peça nova (o serviço das peças confere a mesma chave), e o motivo de não
+    // escrever deixa de ser o limite ou a oferta.
+    const desligado = await api.call('POST', '/v1/team/members/criativo/pause', { cookie: e.cookie, body: { brand_id: e.brandId, reason: 'Vamos rever os textos' } });
+    expect(desligado.status, JSON.stringify(desligado.body)).toBe(200);
+    expect(doMembro(TeamResponse.parse(desligado.body), 'criativo')).toMatchObject({ status: 'desligado', blocked_by: null, paused: { by: { id: e.userId }, reason: 'Vamos rever os textos' } });
+    const opcoes = await api.call('GET', `/v1/ad-pieces/options?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(opcoes.body).toMatchObject({ available: false, reason: 'criativo_desligado' });
+    const pedido = await api.call('POST', '/v1/ad-pieces/requests', { cookie: e.cookie, body: { brand_id: e.brandId, offer: 'Combo sexta: smash, batata e refri por R$ 34,90', destination: 'cardapio', variations: 2 } });
+    expect([pedido.status, pedido.body.code], JSON.stringify(pedido.body)).toEqual([409, 'criativo-desligado']);
+    // As peças que já existem seguem valendo: os números não mudam por ele estar desligado.
+    expect(numeros(await ver(e, e.brandId), 'criativo')).toMatchObject({ pecas_escritas: '3', pecas_esperando: '1', pecas_barradas: '1' });
+    const ligado = await api.call('POST', '/v1/team/members/criativo/resume', { cookie: e.cookie, body: { brand_id: e.brandId } });
+    expect(doMembro(TeamResponse.parse(ligado.body), 'criativo')).toMatchObject({ status: 'ativo', paused: null });
+    expect((await api.call('GET', `/v1/ad-pieces/options?brand_id=${e.brandId}`, { cookie: e.cookie })).body).toMatchObject({ available: true, reason: null });
+
+    // Com a parada da empresa ele para com os outros de IA, e não há motivo próprio para mostrar.
+    const parada = await api.call('POST', '/v1/kill-switches', { cookie: e.cookie, body: { level: 'tenant', reason: 'Revisando tudo' } });
+    expect(await criativo()).toMatchObject({ status: 'parado', blocked_by: null });
+    expect((await api.call('DELETE', `/v1/kill-switches/${parada.body.id}`, { cookie: e.cookie })).status).toBe(204);
   });
 
   it('o custo de IA de cada um e o que fez no mês saem do banco, por marca', async () => {
@@ -248,7 +335,8 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     expect(await ativo()).toBe(false);
     expect((await api.call('POST', '/v1/team/members/lia/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).body.code).toBe('ja-desligado');
     expect((await api.call('POST', '/v1/team/members/compliance/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).body.code).toBe('nao-desliga');
-    expect((await api.call('POST', '/v1/team/members/criativo/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).status).toBe(400);
+    // Quem não é da equipe desta fase não tem o que desligar.
+    expect((await api.call('POST', '/v1/team/members/crm/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).status).toBe(400);
 
     const volta = await api.call('POST', '/v1/team/members/lia/resume', { cookie: e.cookie, body: { brand_id: e.brandId } });
     expect(volta.status).toBe(200);

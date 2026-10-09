@@ -8,6 +8,7 @@ import { EquipeConteudo } from '@/components/equipe/equipe-conteudo';
 import {
   acaoDa,
   acertoDo,
+  agoraDoCriativo,
   alvoDe,
   atividadeDo,
   avisosDa,
@@ -419,7 +420,9 @@ describe('Sua equipe: a tela', () => {
     });
     expect(html).toContain('Trabalhando para você');
     expect(html).toContain('Chegam nas próximas fases');
-    expect(html).toContain('Na fase A4');
+    // O Criativo saiu das próximas fases (P12): a primeira que falta é a do CRM e mensageria.
+    expect(html).toContain('Na fase A5');
+    expect(html).not.toContain('Na fase A4');
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('Modo: Explica');
     expect(html).toContain('Custo em outubro');
@@ -479,8 +482,8 @@ describe('Sua equipe: a tela', () => {
   });
 
   it('funcionário de uma fase seguinte: entra depois, não trabalha ainda', () => {
-    const html = desenhar({ escolhido: 'criativo' });
-    expect(html).toContain('Ele entra na fase <b>A4</b> do roadmap. Até lá, não trabalha para a Mister Burgers.');
+    const html = desenhar({ escolhido: 'crm' });
+    expect(html).toContain('Ele entra na fase <b>A5</b> do roadmap. Até lá, não trabalha para a Mister Burgers.');
     expect(html).not.toContain('O que fez');
   });
 
@@ -581,5 +584,168 @@ describe('Sua equipe: "Conversar sobre ele" (P7)', () => {
     expect(desenhar({ escolhido: 'analista' })).not.toContain('Conversar sobre ele');
     // Confirmando o desligamento, a linha é só da confirmação.
     expect(desenhar({ escolhido: 'analista', comConversa: true, desligando: 'analista' })).not.toContain('Conversar sobre ele');
+  });
+});
+
+describe('o Criativo em Sua equipe (A4 · P12, aprovado em 09/10/2026)', () => {
+  const RODRIGO = { id: uuid(9), name: 'Rodrigo' };
+  /** As peças do protótipo: 5 escritas em 2 pedidos, 2 aprovadas, 2 esperando, 1 barrada, 1 versão refeita, 3 de hoje. */
+  const PECAS = [stat('pedidos', 2), stat('pecas_escritas', 5), stat('pecas_aprovadas', 2), stat('pecas_recusadas', 0), stat('versoes_refeitas', 1), stat('pecas_hoje', 3), stat('pecas_esperando', 2), stat('pecas_barradas', 1), stat('retiradas_na_conferencia', 0)];
+  const SEM_PECAS = PECAS.map((s) => stat(s.key, 0));
+  const criativo = (over: Partial<TeamMember> = {}): TeamMember => membro('criativo', { stats: PECAS, in_progress: null, blocked_by: null, cost: { usd_micros: '30000', calls: 3 }, ...over });
+  const comCriativo = (over: Partial<TeamMember> = {}, daEquipe: Partial<TeamResponse> = {}): TeamResponse => {
+    const t = equipe(daEquipe);
+    return { ...t, members: [...t.members, criativo(over)] };
+  };
+  const nomes = (ms: TeamMember[]) => ms.map((m) => m.key);
+  const frase = (m: TeamMember, t = comCriativo()) => {
+    const a = agoraDoCriativo(m, t, AGORA);
+    return { faixa: a.faixa, titulo: a.bloco?.titulo ?? null, texto: a.bloco ? a.bloco.frase.map((p) => p.texto).join('') : null };
+  };
+
+  it('sai de "Chegam nas próximas fases" e entra com quem trabalha; desligado, ou ainda não ligado pela Liame, fica com os desligados', () => {
+    expect(nomes(gruposDa(comCriativo()).ativos)).toEqual(['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'criativo']);
+    expect(nomes(gruposDa(comCriativo({ status: 'desligado' })).desligados)).toEqual(['criativo']);
+    // A IA está ligada e a chave dele, não: fica com os desligados, com o selo da Liame.
+    const naoLigado = comCriativo({ status: 'desligado_pela_liame' });
+    expect(nomes(gruposDa(naoLigado).desligados)).toEqual(['criativo']);
+    expect(nomes(gruposDa(naoLigado).ativos)).not.toContain('criativo');
+    expect(situacaoDo(criativo({ status: 'desligado_pela_liame' })).rotulo).toBe('Desligado pela Liame');
+    // Com a IA inteira desligada, ele segue como os outros funcionários de IA (na lista de sempre).
+    const semIa = comCriativo({ status: 'desligado_pela_liame' }, { ai: { enabled: false, spent_usd_micros: '0', ceiling_usd_micros: '20000000', band: 'livre' } });
+    expect(nomes(gruposDa(semIa).ativos)).toContain('criativo');
+    // A resposta de um servidor que ainda não manda o Criativo: ele só não aparece.
+    expect(nomes(gruposDa(equipe()).ativos)).not.toContain('criativo');
+  });
+
+  it('o selo, o modo "A pedido" e a linha da lista em cada situação', () => {
+    expect(situacaoDo(criativo()).rotulo).toBe('Em espera');
+    expect(situacaoDo(criativo({ working_now: true })).rotulo).toBe('Trabalhando');
+    expect(modoDo(criativo(), null).rotulo).toBe('A pedido');
+    expect(modoDo(criativo({ status: 'desligado' }), null).rotulo).toBe('Desligado');
+    const linha = (over: Partial<TeamMember>) => atividadeDo(criativo(over), 'outubro', AGORA);
+    expect(linha({})).toBe('Escreveu 3 peças hoje; 2 esperam você');
+    expect(linha({ working_now: true, in_progress: { subject: 'Combo sexta', count: 3, by: RODRIGO, since: '2026-10-03T17:20:00.000Z' } })).toBe('Escrevendo 3 peças');
+    expect(linha({ working_now: true, in_progress: { subject: null, count: null, by: RODRIGO, since: '2026-10-03T17:20:00.000Z' } })).toBe('Escrevendo outra versão de uma peça');
+    expect(linha({ blocked_by: 'sem_oferta', stats: SEM_PECAS })).toBe('Espera a primeira oferta em Minha marca');
+    expect(linha({ blocked_by: 'limite_de_ia_do_dia' })).toBe('O limite de IA de hoje acabou; 2 esperam você');
+    expect(linha({ blocked_by: 'limite_de_ia_do_mes', stats: SEM_PECAS })).toBe('O limite de IA do mês acabou');
+    expect(linha({ stats: SEM_PECAS })).toBe('Sem pedido de peça em outubro');
+    expect(linha({ stats: [...SEM_PECAS.filter((s) => s.key !== 'pecas_escritas'), stat('pecas_escritas', 1)] })).toBe('Escreveu 1 peça em outubro');
+    expect(linha({ stats: [...SEM_PECAS.filter((s) => s.key !== 'pecas_esperando'), stat('pecas_esperando', 1)] })).toBe('1 peça espera você');
+    expect(linha({ status: 'desligado_pela_liame' })).toBe('Ainda não ligado para esta empresa');
+    expect(linha({ status: 'parado' })).toBe('Parado com a equipe');
+  });
+
+  it('"Peças em outubro" e o custo: o que foi escrito, o que a pessoa decidiu, o que espera e o que a conferência barrou', () => {
+    expect(acertoDo(criativo(), 'outubro')).toEqual([
+      { valor: '5', rotulo: 'peças escritas, em 2 pedidos' },
+      { valor: '2', rotulo: 'aprovadas por você' },
+      { valor: '2', rotulo: 'esperando a sua decisão' },
+      { valor: '1', rotulo: 'barrada na conferência' },
+    ]);
+    // Sem nada, só os três de sempre; a recusada só aparece quando há.
+    expect(acertoDo(criativo({ stats: SEM_PECAS }), 'outubro').map((n) => n.rotulo)).toEqual(['peças escritas', 'aprovadas por você', 'esperando a sua decisão']);
+    expect(acertoDo(criativo({ stats: [...PECAS.filter((s) => s.key !== 'pecas_recusadas'), stat('pecas_recusadas', 2)] }), 'outubro').at(-1)).toEqual({ valor: '2', rotulo: 'recusadas por você' });
+    expect(custoDo(criativo(), comCriativo())).toEqual({ valor: nbsp('R$ 0,16'), rotulo: '2 pedidos e 1 versão refeita' });
+    expect(custoDo(criativo({ stats: SEM_PECAS, cost: { usd_micros: '0', calls: 0 } }), comCriativo())).toEqual({ valor: nbsp('R$ 0,00'), rotulo: 'ele só custa quando alguém pede' });
+  });
+
+  it('o que a ficha diz de agora: esperando a pessoa, escrevendo, sem pedido, sem oferta e sem limite de IA', () => {
+    expect(frase(criativo())).toEqual({
+      faixa: null,
+      titulo: 'Esperando você',
+      texto: '2 peças passaram na conferência e esperam a sua decisão. 1 foi barrada: dá para editar o texto, pedir outra ou recusar.',
+    });
+    expect(frase(criativo({ stats: [...PECAS.filter((s) => s.key !== 'pecas_esperando'), stat('pecas_esperando', 0)] })).texto).toBe('1 peça foi barrada na conferência: dá para editar o texto, pedir outra ou recusar.');
+    const escrevendo = criativo({ working_now: true, in_progress: { subject: 'Combo sexta: smash, batata e refri por R$ 34,90', count: 3, by: RODRIGO, since: '2026-10-03T17:20:00.000Z' } });
+    expect(frase(escrevendo)).toMatchObject({ titulo: 'Agora' });
+    expect(frase(escrevendo).texto).toBe(`Está escrevendo 3 peças para a oferta “Combo sexta: smash, batata e refri por R$ 34,90”, pedidas por Rodrigo ${quandoNaFrase('2026-10-03T17:20:00.000Z', AGORA)}. Elas aparecem em Criativos já conferidas.`);
+    const refazendo = criativo({ working_now: true, in_progress: { subject: null, count: null, by: null, since: '2026-10-03T17:20:00.000Z' } });
+    expect(frase(refazendo).texto).toBe(`Está escrevendo outra versão de uma peça, pedida ${quandoNaFrase('2026-10-03T17:20:00.000Z', AGORA)}. Ela aparece em Criativos já conferida.`);
+    expect(frase(criativo({ stats: SEM_PECAS }))).toEqual({
+      faixa: null,
+      titulo: 'Ele só trabalha quando alguém pede',
+      texto: 'Nenhum pedido de peça em outubro. Quem opera campanhas pede uma peça em Criativos, para uma oferta de Minha marca.',
+    });
+    expect(frase(criativo({ stats: [...SEM_PECAS.filter((s) => s.key !== 'pecas_escritas'), stat('pecas_escritas', 2)] }))).toMatchObject({ titulo: 'Nada esperando você', texto: 'As peças de outubro já foram decididas. Para pedir outra, abra Criativos.' });
+    // Minha marca sem oferta: só a faixa, com o caminho para lá.
+    expect(frase(criativo({ blocked_by: 'sem_oferta', stats: SEM_PECAS }))).toEqual({
+      faixa: { tipo: 'acao', icone: 'info', titulo: 'Minha marca ainda não tem oferta', texto: 'O Criativo parte de uma oferta de lá: o nome, o que é e o preço que uma pessoa conferiu. Ele não inventa oferta nem preço.', marca: true },
+      titulo: null,
+      texto: null,
+    });
+    // O limite de IA: a faixa diz quando volta, e o que espera a pessoa segue à vista.
+    const noLimite = frase(criativo({ blocked_by: 'limite_de_ia_do_dia' }));
+    expect(noLimite.faixa).toEqual({ tipo: 'atencao', icone: 'alert', titulo: 'O limite de uso de IA de hoje foi atingido', texto: 'Pedir peça nova ou outra versão volta amanhã. As peças que já existem seguem em Criativos, para decidir.', marca: false });
+    expect(noLimite.titulo).toBe('Esperando você');
+    expect(frase(criativo({ blocked_by: 'limite_de_ia_do_mes' })).faixa).toMatchObject({ titulo: 'O limite de uso de IA de outubro foi atingido', texto: expect.stringContaining('volta quando o mês virar') });
+    // Não ligado pela Liame: nada a dizer de agora.
+    expect(agoraDoCriativo(criativo({ status: 'desligado_pela_liame' }), comCriativo(), AGORA)).toEqual({ faixa: null, bloco: null });
+  });
+
+  it('o histórico: o pedido atendido, a outra versão, o que ele não atendeu e o que as pessoas decidiram', () => {
+    const h = (over: Partial<TeamActivityItem>) => historicoDo(item(over), AGORA);
+    expect(h({ kind: 'escreveu_pecas', subject: 'Combo sexta', count: 3, barred: 1, by: RODRIGO, mine: true })).toMatchObject({
+      titulo: 'Escreveu 3 peças para a oferta “Combo sexta”',
+      texto: 'A seu pedido. A conferência barrou 1. Quem decide cada uma é uma pessoa, em Criativos.',
+    });
+    expect(h({ kind: 'escreveu_pecas', subject: null, count: 2, barred: 0, by: RODRIGO })).toMatchObject({ titulo: 'Escreveu 2 peças', texto: 'A pedido de Rodrigo. Todas passaram na conferência. Quem decide cada uma é uma pessoa, em Criativos.' });
+    expect(h({ kind: 'escreveu_pecas', count: 1, barred: 0 }).texto).toBe('Ela passou na conferência. Quem decide cada uma é uma pessoa, em Criativos.');
+    expect(h({ kind: 'escreveu_pecas', count: 2, barred: 2 }).texto).toContain('A conferência barrou todas.');
+    expect(h({ kind: 'refez_peca', subject: 'Sexta é dia de combo', count: 2, detail: 'passou', mine: true, by: RODRIGO })).toMatchObject({ titulo: 'Refez a peça “Sexta é dia de combo”', texto: 'A seu pedido. A versão 2 passou na conferência.' });
+    expect(h({ kind: 'refez_peca', count: 3, detail: 'barrou' })).toMatchObject({ titulo: 'Refez uma peça', texto: 'A versão 3 foi barrada na conferência.' });
+    expect(h({ kind: 'pedido_recusado', subject: 'Smash e chope', detail: 'bebida_alcoolica' })).toMatchObject({ titulo: 'Não escreveu para a oferta “Smash e chope”', texto: 'Ele não escreve anúncio de bebida alcoólica.' });
+    expect(h({ kind: 'pedido_falhou', detail: 'ia_fora_do_ar' })).toMatchObject({ titulo: 'Não conseguiu atender um pedido de peça', texto: 'A IA não respondeu. Dá para pedir de novo em Criativos.' });
+    expect(h({ kind: 'pedido_recusado', detail: 'motivo_novo' }).texto).toBe('O pedido foi recusado.');
+    expect(h({ kind: 'peca_aprovada', subject: 'Sexta é dia de combo', mine: true, by: RODRIGO })).toMatchObject({ titulo: 'Peça “Sexta é dia de combo” aprovada', texto: 'Você aprovou. Ela está na biblioteca.' });
+    expect(h({ kind: 'peca_recusada', by: RODRIGO })).toMatchObject({ titulo: 'Peça recusada', texto: 'Rodrigo recusou. O motivo ficou guardado.' });
+    expect(h({ kind: 'peca_contestada', subject: 'Entrega em 20 minutos', by: RODRIGO }).texto).toBe('Rodrigo achou que a conferência errou. A peça segue barrada, e o motivo ficou guardado.');
+  });
+
+  it('desenhado: a ficha no desenho dos outros, com "Abrir Criativos" no lugar de "Conversar sobre ele"', () => {
+    const html = desenhar({ t: comCriativo(), escolhido: 'criativo', comConversa: true });
+    expect(html).toContain('<h2 id="eqp-det-t" tabindex="-1">Criativo</h2>');
+    expect(html).toContain('Textos de anúncio');
+    expect(html).toContain('Modo: A pedido');
+    expect(html).toContain('href="/criativos"');
+    expect(html).toContain('Abrir Criativos');
+    expect(html).not.toContain('Conversar sobre ele');
+    expect(html).toContain('<h3>Esperando você</h3>');
+    expect(html).toContain('<b>2 peças passaram na conferência</b>');
+    expect(html).toContain('<h3>Peças em outubro</h3>');
+    expect(html).not.toContain('<h3>Acerto</h3>');
+    expect(html).toContain('O custo de cada pedido é medido pelo Liame');
+    expect(html).toContain('Desligar este funcionário');
+    expect(html).toContain('<b>Nunca:</b> inventar oferta ou preço; aprovar a própria peça; publicar ou mandar algo para a Meta; trabalhar sem alguém pedir.');
+    // Só três funcionários seguem nas próximas fases.
+    expect(html.match(/Na fase A\d/g)).toHaveLength(3);
+    expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
+  });
+
+  it('desenhado: sem oferta, o caminho para Minha marca; desligado, o que continua valendo; não ligado, sem botão nem números', () => {
+    const semOferta = desenhar({ t: comCriativo({ blocked_by: 'sem_oferta', stats: SEM_PECAS }), escolhido: 'criativo' });
+    expect(semOferta).toContain('Minha marca ainda não tem oferta');
+    expect(semOferta).toContain('href="/marca"');
+    expect(semOferta).toContain('Abrir Minha marca');
+    expect(semOferta).not.toContain('id="eqp-criativo-agora"');
+
+    const pausa = { by: RODRIGO, at: '2026-09-30T21:20:00.000Z', reason: null };
+    const desligado = desenhar({ t: comCriativo({ status: 'desligado', paused: pausa }), escolhido: 'criativo' });
+    expect(desligado).toContain('Desligado por Rodrigo em');
+    expect(desligado).toContain('ninguém pede peça nova nem outra versão, e ele não custa nada. As peças que já existem seguem em Criativos: dá para editar, aprovar ou recusar.');
+    expect(desligado).toContain('Ligar de novo');
+    expect(desligado).toContain('Abrir Criativos');
+    expect(desligado).toContain('<h3>Esperando você</h3>');
+
+    const naoLigado = desenhar({ t: comCriativo({ status: 'desligado_pela_liame', stats: SEM_PECAS }), escolhido: 'criativo' });
+    expect(naoLigado).toContain('O Criativo ainda não está ligado para esta empresa');
+    expect(naoLigado).toContain('Quem liga é a Liame, a pedido do dono. Enquanto isso, ninguém pede peça e ele não custa nada.');
+    expect(naoLigado).toContain('Desligado pela Liame');
+    for (const fora of ['Abrir Criativos', 'Ligar de novo', 'Desligar este funcionário', 'Peças em outubro', 'Custo em outubro', 'id="eqp-criativo-agora"']) expect(naoLigado, fora).not.toContain(fora);
+    // Quem não gerencia a equipe vê a ficha e o atalho, sem o botão de desligar.
+    const soVe = desenhar({ t: comCriativo({}, { can_manage: false }), escolhido: 'criativo' });
+    expect(soVe).toContain('Abrir Criativos');
+    expect(soVe).not.toContain('Desligar este funcionário');
   });
 });

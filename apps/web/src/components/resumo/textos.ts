@@ -272,7 +272,7 @@ export function pontosFalados(n: number): string {
 // ------------------------------------------------------------------ o que a equipe fez
 
 /** `sep`: o que vai entre o nome e o texto ("Gestor de tráfego, em sombra, anotou…"). */
-export type LinhaDaEquipe = { chave: string; icone: 'sparkles' | 'chart' | 'file' | 'shield' | 'megaphone' | 'compass' | 'search'; nome: string; sep: ' ' | ', '; texto: string };
+export type LinhaDaEquipe = { chave: string; icone: 'sparkles' | 'chart' | 'file' | 'shield' | 'megaphone' | 'compass' | 'search' | 'image'; nome: string; sep: ' ' | ', '; texto: string };
 
 const NOMES: Record<string, string> = {
   lia: 'LIA',
@@ -281,6 +281,7 @@ const NOMES: Record<string, string> = {
   compliance: 'Compliance',
   estrategista: 'Estrategista',
   pesquisador: 'Pesquisador',
+  criativo: 'Criativo',
   trafego: 'Gestor de tráfego',
 };
 const ICONES: Record<string, LinhaDaEquipe['icone']> = {
@@ -290,6 +291,7 @@ const ICONES: Record<string, LinhaDaEquipe['icone']> = {
   compliance: 'shield',
   estrategista: 'compass',
   pesquisador: 'search',
+  criativo: 'image',
   trafego: 'megaphone',
 };
 
@@ -327,6 +329,14 @@ export function equipeDo(t: TeamResponse): LinhaDaEquipe[] {
       case 'pesquisador':
         texto = s('paginas_lidas') > 0n ? `leu ${vezesDe(s('paginas_lidas'), 'página', 'páginas')} que você indicou.` : 'lê as páginas que você indicar em Minha marca.';
         break;
+      case 'criativo': {
+        // O Criativo (A4; P12) só trabalha a pedido: as peças do mês e as que esperam a decisão agora.
+        const esperando = s('pecas_esperando');
+        const esperam = esperando > 0n ? `: ${esperando === 1n ? '1 espera' : `${inteiro(esperando)} esperam`} você.` : '.';
+        if (s('pecas_escritas') > 0n) texto = `escreveu ${vezesDe(s('pecas_escritas'), 'peça de anúncio', 'peças de anúncio')}${esperam}`;
+        else texto = esperando > 0n ? `tem ${vezesDe(esperando, 'peça de anúncio esperando', 'peças de anúncio esperando')} você.` : 'escreve peças de anúncio quando você pede, em Criativos.';
+        break;
+      }
       case 'trafego':
         // Na A3 o Gestor de tráfego só trabalha em sombra: anota o que faria e compara, sem mexer em nada.
         texto = m.status === 'sombra' ? `em sombra, anotou ${vezesDe(s('recomendacoes'), 'recomendação', 'recomendações')}, sem mexer em nada.` : null;

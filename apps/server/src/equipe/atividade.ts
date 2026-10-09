@@ -5,8 +5,8 @@ import { RECUSAS_DO_COMPLIANCE } from '../ai/recusas.js';
 import type { Membro } from './membros.js';
 
 // "O que fez" (A3; protótipo P7, aprovado em 03/10/2026): os acontecimentos de cada membro da equipe, lidos do que já
-// está guardado (uso de IA, demandas, planos, revisões, páginas lidas, sombra, propostas de autonomia, recusas da
-// conferência e as vezes em que a empresa desligou ou ligou). Nada novo é gravado. Roda na requisição, sob a RLS da
+// está guardado (uso de IA, demandas, planos, revisões, páginas lidas, sombra, propostas de autonomia, pedidos de peças
+// e as decisões delas, recusas da conferência e as vezes em que a empresa desligou ou ligou). Nada novo é gravado. Roda na requisição, sob a RLS da
 // empresa, com a empresa e a marca em cada ramo.
 //
 // O que a pessoa vê aqui é o que ela já pode ver na tela de origem: o título da conversa, só o da própria (a RLS da
@@ -26,6 +26,8 @@ export interface QuemOlha {
   podePlanos: boolean;
   /** Vê o dossiê e as páginas lidas (`dossie.ver`). */
   podeDossie: boolean;
+  /** Vê as campanhas e, com elas, a tela de Criativos (`campanhas.ver`): a oferta do pedido e o título da peça. */
+  podePecas: boolean;
 }
 
 interface Colunas {
@@ -38,6 +40,8 @@ interface Colunas {
   d1?: SQL;
   d2?: SQL;
   n?: SQL;
+  /** Um segundo número do acontecimento (as peças barradas de um pedido). */
+  n2?: SQL;
   by?: SQL;
   rules?: SQL;
 }
@@ -50,6 +54,7 @@ function ramo(c: Colunas, origem: SQL): SQL {
   return sql`
     select (${c.at})::timestamptz as at, (${kind})::text as kind, (${c.ref ?? NULO})::uuid as ref, (${c.subject ?? NULO})::text as subject,
            (${c.detail ?? NULO})::text as detail, (${c.d1 ?? NULO})::date as d1, (${c.d2 ?? NULO})::date as d2, (${c.n ?? NULO})::integer as n,
+           (${c.n2 ?? NULO})::integer as n2,
            (${c.by ?? NULO})::uuid as by_id, (${c.rules ?? sql`'[]'`})::jsonb as rules
       ${origem}`;
 }
@@ -167,6 +172,52 @@ function ramosDoMembro(membro: Membro, q: QuemOlha): SQL[] {
         retiradas(q, membro),
         ...pausas(q, membro),
       ];
+    case 'criativo': {
+      // O título da versão: o que a pessoa leu ao decidir, ou o que o pedido de outra versão entregou.
+      const titulo = sql`case when ${q.podePecas}::boolean then v.title end`;
+      const doPedido = sql`from liame.ad_piece_request r where r.tenant_id = ${q.tenantId} and r.brand_id = ${q.brandId}`;
+      return [
+        // Um pedido de peças novas atendido: quantas saíram e quantas a conferência barrou de saída.
+        ramo(
+          {
+            at: sql`r.finished_at`,
+            kind: 'escreveu_pecas',
+            ref: sql`r.usage_id`,
+            subject: sql`case when ${q.podePecas}::boolean then r.offer end`,
+            n: sql`r.pieces`,
+            n2: sql`(select count(*) from liame.ad_piece_version x where x.request_id = r.id and x.version = 1 and x.review_status = 'barrou')`,
+            by: sql`r.requested_by`,
+          },
+          sql`${doPedido} and r.piece_id is null and r.status = 'concluido' and r.finished_at >= ${q.desde}::timestamptz`,
+        ),
+        // Outra versão de uma peça, a pedido: a versão que saiu e o resultado da conferência dela.
+        ramo(
+          { at: sql`r.finished_at`, kind: 'refez_peca', ref: sql`r.usage_id`, subject: titulo, detail: sql`v.review_status`, n: sql`v.version`, by: sql`r.requested_by` },
+          sql`from liame.ad_piece_request r join liame.ad_piece_version v on v.request_id = r.id
+              where r.tenant_id = ${q.tenantId} and r.brand_id = ${q.brandId} and r.piece_id is not null and r.status = 'concluido' and r.finished_at >= ${q.desde}::timestamptz`,
+        ),
+        // O pedido que ele não atendeu: recusado (não escreve sobre aquilo, ou nenhuma peça serviu) ou com falha.
+        ramo(
+          {
+            at: sql`r.finished_at`,
+            kind: sql`case r.status when 'recusado' then 'pedido_recusado' else 'pedido_falhou' end`,
+            subject: sql`case when ${q.podePecas}::boolean and r.piece_id is null then r.offer end`,
+            detail: sql`r.reason`,
+            by: sql`r.requested_by`,
+          },
+          sql`${doPedido} and r.status in ('recusado', 'falhou') and r.finished_at >= ${q.desde}::timestamptz`,
+        ),
+        // O que as pessoas decidiram das peças dele.
+        ramo(
+          { at: sql`x.created_at`, kind: sql`'peca_' || x.decision`, subject: titulo, detail: sql`x.reason`, n: sql`x.version`, by: sql`x.decided_by` },
+          sql`from liame.ad_piece_decision x join liame.ad_piece p on p.id = x.piece_id
+              left join liame.ad_piece_version v on v.piece_id = x.piece_id and v.version = x.version
+              where x.tenant_id = ${q.tenantId} and p.brand_id = ${q.brandId} and x.created_at >= ${q.desde}::timestamptz`,
+        ),
+        retiradas(q, membro),
+        ...pausas(q, membro),
+      ];
+    }
     case 'trafego': {
       const daSombra = sql`from liame.shadow_decision d join liame.campaign c on c.id = d.campaign_id where d.tenant_id = ${q.tenantId} and d.brand_id = ${q.brandId}`;
       const daProposta = sql`from liame.autonomy_proposal a join liame.connected_account ca on ca.id = a.connected_account_id where a.tenant_id = ${q.tenantId} and a.brand_id = ${q.brandId}`;
@@ -222,6 +273,7 @@ type Linha = {
   d1: string | null;
   d2: string | null;
   n: number | string | null;
+  n2: number | string | null;
   by_id: string | null;
   by_name: string | null;
   rules: unknown;
@@ -241,7 +293,7 @@ export async function atividadeDoMembro(tx: Tx, membro: Membro, q: QuemOlha, lim
        order by t.at desc, t.kind
        limit ${limite + 1}
     )
-    select ev.at, ev.kind, ev.detail, ev.d1::text as d1, ev.d2::text as d2, ev.n, ev.by_id, ev.rules, u.name as by_name,
+    select ev.at, ev.kind, ev.detail, ev.d1::text as d1, ev.d2::text as d2, ev.n, ev.n2, ev.by_id, ev.rules, u.name as by_name,
            coalesce(ev.subject, case when ev.kind = 'respondeu' then (
              select c.title from liame.conversation c join liame.conversation_message m on m.conversation_id = c.id
               where c.user_id = ${q.userId} and c.brand_id = ${q.brandId} and m.usage_id = ev.ref
@@ -260,6 +312,7 @@ export async function atividadeDoMembro(tx: Tx, membro: Membro, q: QuemOlha, lim
       detail: l.detail,
       period: l.d1 && l.d2 ? { from: l.d1, to: l.d2 } : null,
       count: l.n === null ? null : Number(l.n),
+      barred: l.kind === 'escreveu_pecas' && l.n2 !== null ? Number(l.n2) : null,
       rules: Array.isArray(l.rules) ? l.rules.filter((x): x is string => typeof x === 'string' && NOME_DE_REGRA.test(x)) : [],
       by: l.by_id ? { id: l.by_id, name: l.by_name ?? 'Pessoa removida' } : null,
       mine: l.by_id === q.userId,

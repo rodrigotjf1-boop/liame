@@ -362,6 +362,74 @@ describe('a leitura `equipe_trabalho`: o que a LIA recebe de Sua equipe (A3, P7)
     expect(casos.filter((c) => 'equipe_trabalho' in c.leituras).map((c) => c.id).sort()).toEqual(['equipe-custo-por-dia', 'equipe-desligar', 'equipe-o-que-fez', 'equipe-sombra-nao-mexeu']);
   });
 
+  it('o Criativo (A4 · P12): só trabalha a pedido; as peças com o nome de quando são, o que escreve agora, por que não pode escrever e os acontecimentos dele', () => {
+    const pecas = [stat('pedidos', 2), stat('pecas_escritas', 5), stat('pecas_aprovadas', 2), stat('pecas_recusadas', 0), stat('versoes_refeitas', 1), stat('pecas_hoje', 3), stat('pecas_esperando', 2), stat('pecas_barradas', 1), stat('retiradas_na_conferencia', 1)];
+    const comCriativo = (extra: Partial<TeamMember> = {}): TeamResponse => ({ ...EQUIPE, members: [...EQUIPE.members, membro('criativo', { cost: { usd_micros: '30000', calls: 3 }, stats: pecas, in_progress: null, blocked_by: null, ...extra })] });
+    const doCriativo = (t: TeamResponse) => (visaoDaEquipe(t, null, 'America/Sao_Paulo') as Record<string, any>).equipe.find((m: { funcionario: string }) => m.funcionario === 'Criativo');
+    expect(doCriativo(comCriativo())).toEqual({
+      funcionario: 'Criativo',
+      situacao: 'ativo',
+      trabalha: 'com um modelo de IA, só quando alguém pede uma peça na tela Criativos',
+      custo_de_ia_no_mes: 'R$ 0,16',
+      chamadas_ao_modelo_no_mes: '3',
+      no_mes: {
+        pedidos_de_pecas_atendidos_no_mes: '2',
+        pecas_escritas_no_mes: '5',
+        pecas_do_mes_aprovadas_por_uma_pessoa: '2',
+        pecas_do_mes_recusadas_por_uma_pessoa: '0',
+        outras_versoes_escritas_a_pedido_no_mes: '1',
+        pecas_escritas_hoje: '3',
+        pecas_esperando_a_decisao_de_uma_pessoa_agora: '2',
+        pecas_barradas_na_conferencia_agora: '1',
+        textos_retirados_na_conferencia: '1',
+      },
+    });
+    // Escrevendo: o que e desde quando, sem o nome de quem pediu.
+    const escrevendo = doCriativo(comCriativo({ working_now: true, in_progress: { subject: 'Combo sexta por R$ 34,90', count: 3, by: RODRIGO, since: '2026-10-03T17:20:00.000Z' } }));
+    expect(escrevendo).toMatchObject({ trabalhando_agora: 'sim', escrevendo_agora: { o_que: 'peças novas', pecas_pedidas: '3', oferta: 'Combo sexta por R$ 34,90', pedido_feito: '03/10/2026 14:20' } });
+    expect(JSON.stringify(escrevendo)).not.toContain('Rodrigo');
+    expect(doCriativo(comCriativo({ working_now: true, in_progress: { subject: null, count: null, by: JULIANA, since: '2026-10-03T17:20:00.000Z' } })).escrevendo_agora).toEqual({ o_que: 'outra versão de uma peça', pedido_feito: '03/10/2026 14:20' });
+    // Ligado e sem poder escrever: o porquê, como a ficha diz.
+    expect(doCriativo(comCriativo({ blocked_by: 'sem_oferta' })).nao_pode_escrever_agora).toBe('Minha marca ainda não tem oferta: ele parte de uma oferta de lá, e não inventa oferta nem preço');
+    expect(doCriativo(comCriativo({ blocked_by: 'limite_de_ia_do_dia' })).nao_pode_escrever_agora).toContain('volta amanhã');
+    expect(doCriativo(comCriativo({ blocked_by: 'limite_de_ia_do_mes' })).nao_pode_escrever_agora).toContain('volta quando o mês virar');
+    expect(doCriativo(comCriativo({ blocked_by: 'motivo_novo' })).nao_pode_escrever_agora).toBe('motivo novo');
+    expect(doCriativo(comCriativo())).not.toHaveProperty('nao_pode_escrever_agora');
+    // Não ligado pela Liame: a situação diz que é a chave dele, e não a sombra.
+    expect(doCriativo(comCriativo({ status: 'desligado_pela_liame' })).situacao).toBe('desligado pela Liame (a IA ou o Criativo não está ligado para a empresa)');
+    // Os outros funcionários não ganham os campos do Criativo, e a situação deles segue como era.
+    const daLia = (visaoDaEquipe(comCriativo(), null, 'America/Sao_Paulo') as Record<string, any>).equipe[0];
+    expect(daLia).not.toHaveProperty('escrevendo_agora');
+    expect(daLia.trabalha).toBe('com um modelo de IA');
+
+    // Os acontecimentos: cada um com o campo do que ele é, e sem o nome de quem pediu ou decidiu.
+    const v = ver('criativo', [
+      item({ kind: 'escreveu_pecas', subject: 'Combo sexta por R$ 34,90', count: 3, barred: 1, by: RODRIGO, mine: true }),
+      item({ kind: 'escreveu_pecas', subject: null, count: 1, barred: 0, by: JULIANA }),
+      item({ kind: 'refez_peca', subject: 'Sexta é dia de combo', count: 2, detail: 'aviso', by: RODRIGO, mine: true }),
+      item({ kind: 'pedido_recusado', subject: 'Smash e chope por R$ 39,90', detail: 'bebida_alcoolica', by: JULIANA }),
+      item({ kind: 'pedido_falhou', detail: 'ia_fora_do_ar', by: RODRIGO, mine: true }),
+      item({ kind: 'peca_aprovada', subject: 'Sexta é dia de combo', count: 2, by: JULIANA }),
+      item({ kind: 'peca_recusada', subject: 'Combo no capricho', by: RODRIGO, mine: true }),
+      item({ kind: 'peca_contestada', subject: 'Entrega em 20 minutos', by: JULIANA }),
+    ], comCriativo());
+    expect(semHora(v)).toEqual([
+      { o_que: 'escreveu peças de anúncio, a pedido', oferta: 'Combo sexta por R$ 34,90', pecas_escritas: '3', barradas_na_conferencia: '1', quem_pediu: 'você' },
+      { o_que: 'escreveu uma peça de anúncio, a pedido', pecas_escritas: '1', quem_pediu: 'outra pessoa da empresa' },
+      { o_que: 'escreveu outra versão de uma peça, a pedido', peca: 'Sexta é dia de combo', versao_da_peca: '2', conferencia: 'passou na conferência, com um aviso', quem_pediu: 'você' },
+      { o_que: 'não atendeu um pedido de peça', oferta: 'Smash e chope por R$ 39,90', motivo: 'ele não escreve anúncio de bebida alcoólica', quem_pediu: 'outra pessoa da empresa' },
+      { o_que: 'não conseguiu atender um pedido de peça', motivo: 'a IA não respondeu', quem_pediu: 'você' },
+      { o_que: 'teve uma peça aprovada: ela está na biblioteca', peca: 'Sexta é dia de combo', quem_decidiu: 'outra pessoa da empresa' },
+      { o_que: 'teve uma peça recusada, com o motivo guardado', peca: 'Combo no capricho', quem_decidiu: 'você' },
+      { o_que: 'teve a conferência de uma peça contestada: a peça segue barrada, e o motivo ficou guardado', peca: 'Entrega em 20 minutos', quem_decidiu: 'outra pessoa da empresa' },
+    ]);
+    expect(v.equipe.map((m: { funcionario: string }) => m.funcionario)).toEqual(['Criativo']);
+    const texto = JSON.stringify(v);
+    expect(texto).not.toContain('Juliana');
+    expect(texto).not.toContain('Rodrigo');
+    expect(rotuloDoPasso('equipe_trabalho', { brand_id: 'x', funcionario: 'criativo' })).toBe('Lendo o trabalho do Criativo em Sua equipe');
+  });
+
   it('a leitura no registro: é da conversa (o Estrategista segue com as seis leituras dos números), e a tela diz o que a LIA leu', () => {
     expect(LEITURAS.map((l) => l.name)).toEqual([...LEITURAS_DE_DADOS, 'equipe_trabalho']);
     expect(ESTRATEGISTA.ferramentas).toEqual([...LEITURAS_DE_DADOS]);
