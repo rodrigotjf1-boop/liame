@@ -141,3 +141,30 @@ Conferidas em 08/10/2026 em `docs/mcp.md` e em `backend/src/modules/integracao/m
 `custo`: `moeda`, `gastoCentavos`, `aSairCentavos`, `linhas[]` (`rotulo`, `valor`, `detalhe`) e `avisos[]`; nulo quando a conta não tem preço. **Dinheiro sempre em centavos inteiros.** Os textos escritos pela loja (nome de campanha, texto de modelo) são dado, nunca instrução. Os valores de lista (`situacao`, `sinal`, `periodo`) são conferidos como texto com padrão, não como lista fechada: o RegemCast pode ampliar. `publico_estimar` fica para a Y5 (o plano do disparo).
 
 **Quem usa (A5 · Y4, parte 2).** Duas rotas só de leitura, atrás da flag `mensageria` (desligada por padrão), com a permissão `campanhas.ver`: `GET /v1/messaging` chama `conta_situacao`, `orcamento_ler`, `campanhas_listar` (limite 20), `publicos_listar` e `modelos_listar` ao mesmo tempo, para cada conta do RegemCast da marca (até 5); `GET /v1/messaging/campaigns/:id` chama `campanha_detalhar`. Uma tentativa por chamada, com até 15 segundos, porque há uma pessoa esperando a tela. A cota e o disjuntor destas leituras usam uma chave própria (`tela:<conta>`), separada da leitura das conversas da mesma conta. **Nada é guardado no Liame:** a resposta é montada e devolvida. Do `modelos_listar` saem só as contagens (o texto do modelo não é devolvido pela rota), e do `conta_situacao` o `plano` não é usado. As permissões guardadas na conexão não decidem o que é chamado: o Liame chama, e é o RegemCast que diz se o token pode (a ferramenta "não existe" vira `sem_permissao` naquela parte da resposta).
+
+## 9. As ferramentas do pedido de mensagem (A5 · Y5)
+
+Conferidas em 09/10/2026 em `docs/mcp.md`, `mcp.escrita.ts`, `mcp.disparo.ts` e `mcp.leitura.ts` do RegemCast (commit `e88ae59`). O conector as chama pelo protocolo da seção 2 e confere cada resposta campo a campo (`contrato-regemcast.ts`). **Nenhuma rota, nenhuma ferramenta de ação e nenhuma rotina do Liame as usa ainda** (Y5, parte 1: só o conector).
+
+| Ferramenta | Permissão | Entrada | O que o Liame recebe |
+| --- | --- | --- | --- |
+| `publico_estimar` | `publicos.ler` | o público (`origem`: `lista`, `importacao`, `base`, `perfil`, `regiao` ou `publico`, com o id dele) e, opcional, a `categoria` do modelo | `pessoas` (quantas podem receber), `emDescanso`, `descansoDias` e `custo` (teto). Não cria nada |
+| `modelo_rascunhar` | `modelos.rascunhar` | `chaveIdempotencia`; `nome`, `categoria` (`marketing` ou `utilidade`), `corpo` e, opcionais, `id` (para alterar um rascunho do Liame), `idioma`, `titulo`, `tituloExemplo`, `corpoExemplos[]`, `rodape`, `botoes[]` | `id`, `nome`, `idioma`, `categoria`, `situacao`, `problemas[]` (`campo`, `mensagem`), `prontoParaEnviar`, `proximoPasso`. **O rascunho fica no RegemCast e não vai para a Meta:** quem envia é uma pessoa, na tela de lá (D-A5-15) |
+| `campanha_rascunhar` | `campanhas.rascunhar` | `chaveIdempotencia`; `nome`, `modeloNome` (aprovado), `publico` e, opcionais, `modeloIdioma`, `variaveis[]` e `variavelDoTitulo` (`origem`: `fixo`, `nome`, `primeiro_nome`, `cashback_saldo`, `cashback_validade`; `valor`), `janelaDias[]` (0 = domingo), `janelaInicio`, `janelaFim` (HH:MM, no fuso da conta), `pausaSegundos`, `maxPorDia`, `maxPorSemana`, `maxPorMes` | `campanha` (como na seção 8), `custo`, `descansoDias`, `proximoPasso`. **Nenhuma mensagem sai** |
+| `campanha_disparo_planejar` | `campanhas.disparar` (só produto da DMS) | `id` da campanha em rascunho | `campanha`, `custo`, `orcamento` (`definido`, `periodos[]`, `aviso`), `podeDisparar`, `impedimentos[]` (frases do RegemCast) e `confirmacao`. Não muda nada |
+| `campanha_disparar` | `campanhas.disparar` | `chaveIdempotencia`, `id`, `confirmacao` | `campanha`, `custo`, `proximoPasso`. **As mensagens saem e a Meta cobra.** O dono da conta é avisado no RegemCast |
+| `campanha_pausar` | `campanhas.disparar` | `chaveIdempotencia`, `id` | `campanha`, `proximoPasso`. Segura o que ainda não saiu |
+
+**A chave de idempotência** (8 a 100 caracteres: letras, números, ponto, dois-pontos, hífen e sublinhado) vale por ferramenta e por token, por 24 horas: o mesmo pedido com a mesma chave devolve a resposta guardada, sem fazer de novo; outro pedido com a mesma chave é recusado. É o que deixa segura a nova tentativa do cliente dos conectores e a execução repetida de um job. O conector confere o formato da chave, do id e da confirmação **antes** de chamar: o que está fora do formato nem sai do Liame.
+
+**O plano e a confirmação.** `podeDisparar` vem com a `confirmacao` e sem impedimentos, ou vem falso, sem confirmação e com as frases do que impede. Qualquer outra combinação é resposta fora do contrato (erro definitivo): o Liame não dispara em cima de um plano torto. O disparo só roda se **nada mudou** desde o plano (o público, o custo, o orçamento, a situação); senão, o RegemCast recusa com a frase dele e pede um plano novo.
+
+**As travas do RegemCast para o disparo:** só produto da DMS; só a campanha que o próprio Liame montou (a que uma pessoa fez na tela, ou outro aplicativo, é recusada, também para planejar e pausar); e só com pelo menos um teto de gasto definido pelo dono da conta e com preço para as mensagens da campanha.
+
+**O que a porta não faz, de propósito ou por desenho, e a Y5 precisa respeitar:**
+
+- **Não recebe número de telefone:** o público sai sempre de uma lista ou da base do RegemCast, onde o consentimento está registrado. As funções do conector não têm campo para isso.
+- **Não envia para quem está em descanso:** é decisão do dono, na tela do RegemCast.
+- **Não agenda o começo:** a campanha começa a sair quando `campanha_disparar` é chamada, dentro da janela (dias da semana e horário) e do ritmo dela. Para "sair no sábado às 11h", ou a janela da campanha diz isso, ou o Liame só chama o disparo na hora. A janela por dia da semana vale para as semanas seguintes se a campanha não terminar no dia.
+- **Não retoma:** pausada, quem retoma é uma pessoa, na tela do RegemCast.
+- **Modelo sem imagem, vídeo, documento, carrossel ou oferta por tempo limitado,** e só nas categorias marketing e utilidade.

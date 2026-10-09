@@ -6,10 +6,16 @@ import {
   CampanhasRegemcast,
   ContaRegemcast,
   ConversaAnuncio,
+  DisparoRegemcast,
+  EstimativaRegemcast,
   ModelosRegemcast,
   OrcamentoRegemcast,
   PaginaConversas,
+  PausaRegemcast,
+  PlanoDoDisparoRegemcast,
   PublicosRegemcast,
+  RascunhoDeCampanhaRegemcast,
+  RascunhoDeModeloRegemcast,
   RespostaMcp,
   RevogacaoRegemcast,
   SituacaoRegemcast,
@@ -166,6 +172,127 @@ export function lerModelos(ctx: Contexto, a: Acesso & { soAprovados?: boolean })
 /** Os tetos de gasto de mensagens que o dono da conta definiu no RegemCast e quanto já saiu em cada período. `orcamento.ler`. */
 export function lerOrcamentoDeMensagens(ctx: Contexto, a: Acesso): Promise<OrcamentoRegemcast> {
   return chamarFerramenta(ctx, { ...a, ferramenta: 'orcamento_ler', argumentos: {}, schema: OrcamentoRegemcast });
+}
+
+// ---------------------------------------------------------------- o pedido de mensagem (A5, Y5; contrato §9)
+// As ferramentas que montam e disparam uma campanha. As de rascunho gravam no RegemCast e não fazem mensagem sair. O
+// disparo é a única que custa dinheiro: só roda com a confirmação do plano e só se nada mudou desde ele. Toda
+// ferramenta que grava leva uma chave de idempotência: repetir o MESMO pedido com a mesma chave devolve a mesma
+// resposta, sem fazer de novo (é o que deixa a nova tentativa do cliente dos conectores segura). O público sai sempre
+// de uma lista ou da base do RegemCast: estas funções não têm por onde mandar um número de telefone.
+
+/** De onde sai o público, como o RegemCast o descreve (`publicos_listar` dá os ids). */
+export type PublicoDaCampanha = {
+  origem: 'lista' | 'importacao' | 'base' | 'perfil' | 'regiao' | 'publico';
+  /** O id da lista ou da importação. */
+  origemId?: string;
+  /** O id do perfil. */
+  segmento?: string;
+  uf?: string;
+  /** O id do público pronto. */
+  publico?: string;
+  /** O bairro, o mês ou o produto, quando o público pede. */
+  publicoValor?: string;
+};
+
+/** O valor de uma variável da mensagem. O nome de cada pessoa é posto pelo RegemCast: o Liame nunca o vê. */
+export type VariavelDaMensagem = { origem: 'fixo' | 'nome' | 'primeiro_nome' | 'cashback_saldo' | 'cashback_validade'; valor?: string };
+
+export type ModeloParaRascunhar = {
+  /** O rascunho a alterar: só um que o Liame criou e que ainda não foi enviado à Meta. */
+  id?: string;
+  nome: string;
+  categoria: 'marketing' | 'utilidade';
+  idioma?: string;
+  titulo?: string;
+  tituloExemplo?: string;
+  corpo: string;
+  corpoExemplos?: string[];
+  rodape?: string;
+  botoes?: Array<{ tipo: 'URL' | 'PHONE_NUMBER' | 'QUICK_REPLY' | 'COPY_CODE'; texto: string; url?: string; telefone?: string }>;
+};
+
+export type CampanhaParaRascunhar = {
+  nome: string;
+  /** O nome do modelo aprovado, como veio em `modelos_listar`. */
+  modeloNome: string;
+  modeloIdioma?: string;
+  publico: PublicoDaCampanha;
+  variaveis?: VariavelDaMensagem[];
+  variavelDoTitulo?: VariavelDaMensagem;
+  /** 0 = domingo … 6 = sábado. */
+  janelaDias?: number[];
+  /** HH:MM, no fuso da conta. */
+  janelaInicio?: string;
+  janelaFim?: string;
+  pausaSegundos?: number;
+  maxPorDia?: number;
+  maxPorSemana?: number;
+  maxPorMes?: number;
+};
+
+/** A chave de idempotência como o RegemCast a aceita: 8 a 100 letras, números, ponto, dois-pontos, hífen e sublinhado. */
+export const FORMATO_DA_CHAVE_REGEMCAST = /^[A-Za-z0-9_.:-]{8,100}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** O que não tem o formato que o RegemCast exige nem sai do Liame. */
+function exigir(cond: boolean, oque: string): void {
+  if (!cond) throw new ErroConector('definitivo', 'regemcast', `${oque} fora do formato do RegemCast`);
+}
+
+/** Sem os campos vazios: o RegemCast confere o pedido campo a campo, e a chave de idempotência compara o pedido inteiro. */
+function semVazios<T extends Record<string, unknown>>(o: T): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null));
+}
+
+/** Quantas pessoas de um público podem receber, quantas estão em descanso e, com a categoria, o custo estimado (teto). `publicos.ler`. */
+export function estimarPublico(ctx: Contexto, a: Acesso & { publico: PublicoDaCampanha; categoria?: 'marketing' | 'utilidade' }): Promise<EstimativaRegemcast> {
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'publico_estimar', argumentos: semVazios({ ...a.publico, categoria: a.categoria }), schema: EstimativaRegemcast });
+}
+
+/** Grava um rascunho de modelo no RegemCast e devolve o que barraria o envio. Não vai para a Meta: quem envia é uma pessoa. `modelos.rascunhar`. */
+export function rascunharModelo(ctx: Contexto, a: Acesso & { chave: string; modelo: ModeloParaRascunhar }): Promise<RascunhoDeModeloRegemcast> {
+  exigir(FORMATO_DA_CHAVE_REGEMCAST.test(a.chave), 'chave de idempotência');
+  exigir(a.modelo.id === undefined || UUID.test(a.modelo.id), 'id do rascunho');
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'modelo_rascunhar', argumentos: { chaveIdempotencia: a.chave, ...semVazios(a.modelo) }, schema: RascunhoDeModeloRegemcast });
+}
+
+/** Monta uma campanha em rascunho (modelo aprovado, público, variáveis, janela e ritmo). Nenhuma mensagem sai. `campanhas.rascunhar`. */
+export function rascunharCampanha(ctx: Contexto, a: Acesso & { chave: string; campanha: CampanhaParaRascunhar }): Promise<RascunhoDeCampanhaRegemcast> {
+  exigir(FORMATO_DA_CHAVE_REGEMCAST.test(a.chave), 'chave de idempotência');
+  const { publico, ...resto } = a.campanha;
+  return chamarFerramenta(ctx, {
+    token: a.token,
+    contaChave: a.contaChave,
+    ferramenta: 'campanha_rascunhar',
+    argumentos: { chaveIdempotencia: a.chave, ...semVazios(resto), publico: semVazios(publico) },
+    schema: RascunhoDeCampanhaRegemcast,
+  });
+}
+
+/** O plano do disparo de uma campanha que o Liame montou: pessoas, custo, orçamento, o que impede e a confirmação. Não muda nada. `campanhas.disparar`. */
+export function planejarDisparo(ctx: Contexto, a: Acesso & { id: string }): Promise<PlanoDoDisparoRegemcast> {
+  exigir(UUID.test(a.id), 'id da campanha');
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanha_disparo_planejar', argumentos: { id: a.id }, schema: PlanoDoDisparoRegemcast });
+}
+
+/**
+ * DISPARA a campanha: as mensagens saem e a Meta cobra. Só com a confirmação que veio no plano; se o público, o custo,
+ * o orçamento ou a situação mudaram desde ele, o RegemCast recusa e pede um plano novo (erro definitivo, com a frase
+ * dele). `campanhas.disparar`.
+ */
+export function dispararCampanha(ctx: Contexto, a: Acesso & { chave: string; id: string; confirmacao: string }): Promise<DisparoRegemcast> {
+  exigir(FORMATO_DA_CHAVE_REGEMCAST.test(a.chave), 'chave de idempotência');
+  exigir(UUID.test(a.id), 'id da campanha');
+  exigir(a.confirmacao.length >= 16 && a.confirmacao.length <= 64, 'confirmação do plano');
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanha_disparar', argumentos: { chaveIdempotencia: a.chave, id: a.id, confirmacao: a.confirmacao }, schema: DisparoRegemcast });
+}
+
+/** Pausa uma campanha que o Liame disparou: segura o que ainda não saiu. Quem retoma é uma pessoa, na tela do RegemCast. `campanhas.disparar`. */
+export function pausarCampanha(ctx: Contexto, a: Acesso & { chave: string; id: string }): Promise<PausaRegemcast> {
+  exigir(FORMATO_DA_CHAVE_REGEMCAST.test(a.chave), 'chave de idempotência');
+  exigir(UUID.test(a.id), 'id da campanha');
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanha_pausar', argumentos: { chaveIdempotencia: a.chave, id: a.id }, schema: PausaRegemcast });
 }
 
 /** Desliga o token no RegemCast (segunda camada: ele já saiu do cofre do Liame). */
