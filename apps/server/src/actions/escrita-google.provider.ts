@@ -12,8 +12,8 @@ import { BALDE_DA_ESCRITA_GOOGLE, googleAnunciosConnector } from './google-anunc
 /**
  * Liga o connector de escrita do Google Ads (A5, Y2) ao cofre, ao cliente HTTP, ao endereço da Google Ads API, à troca
  * do token e ao registro de capacidades quando o app sobe: na API (que lê o estado da campanha para montar o pedido) e
- * no worker (que valida e aplica). Como o da Meta, o connector é um registro simples (`CONNECTORS`); é aqui que ele
- * recebe o que precisa.
+ * no worker (que valida e aplica). Como o da Meta, o connector é um registro simples (`CONNECTORS`, onde ele está desde
+ * a Y3, atrás da flag `google_write`); é aqui que ele recebe o que precisa.
  */
 @Injectable()
 export class EscritaGoogle implements OnModuleInit {

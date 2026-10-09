@@ -477,7 +477,7 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
     }
   });
 
-  it('A4 · X3: a proposta de Aprovação que deixa de valer sai; a aprovada sem efeito se encerra; no Google o modo não existe', async () => {
+  it('A4 · X3: a proposta de Aprovação que deixa de valer sai; a aprovada sem efeito se encerra; no Google o modo espera a escrita ligada', async () => {
     const { e, alvo } = await emSugerir();
     try {
       await ligarModoAprovacao(e.tenantId, true);
@@ -533,7 +533,8 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
         { to_mode: 'SUGGEST', status: 'desfeita', reason: 'A política da marca voltou a ação para Sombra por outro caminho.', next_request_count: null },
       ]);
 
-      // (5) No Google, o Liame não muda anúncios: o modo vai até Sugerir.
+      // (5) No Google (A5, Y3) o modo Aprovação existe, e fica bloqueado enquanto a escrita no Google (`google_write`)
+      // não estiver ligada para a conta: a flag da Meta não vale para ele.
       const google = randomUUID();
       await ownerQuery(
         `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'google_ads', $4, 'Google Ads - Hamburgueria', 'BRL', $5)`,
@@ -546,7 +547,7 @@ describe.skipIf(!hasDb)('promoção de autonomia: proposta, decisão, política 
         [uuidv7(), e.tenantId, e.brandId, google],
       );
       const doGoogle = (await ver(e, e.brandId)).items.find((i) => i.provider === 'google_ads')!;
-      expect(doGoogle.approval).toEqual({ sample_size: 0, approved: 0, failed: 0, missing: ['pedidos', 'aprovacao'], blocked_by: 'plataforma_sem_escrita' });
+      expect(doGoogle.approval).toEqual({ sample_size: 0, approved: 0, failed: 0, missing: ['pedidos', 'aprovacao'], blocked_by: 'escrita_desligada' });
     } finally {
       await ligarModoAprovacao(e.tenantId, false);
       await ligarEscritaNaMeta(api, e.tenantId, false);

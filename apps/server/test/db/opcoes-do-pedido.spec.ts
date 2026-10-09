@@ -208,9 +208,10 @@ describe.skipIf(!hasDb)('as opções do pedido de mudança (A4 · X8)', () => {
     // A outra empresa não ligou a escrita: para ela, nenhuma campanha aceita pedido.
     expect(await alvos(outra)).toEqual([]);
 
-    // E as opções: a campanha do Google é de uma plataforma que o Liame só lê; a de outra empresa não existe para esta.
+    // E as opções: no Google a escrita existe desde a Y3 da A5 e está desligada para esta conta (a flag é `google_write`,
+    // e a da Meta não vale para ele); a campanha de outra empresa não existe para esta.
     const g = await opcoes(e, doGoogle);
-    expect([g.status, g.body.code]).toEqual([422, 'plataforma-so-leitura']);
+    expect([g.status, g.body.code]).toEqual([403, 'escrita-desligada']);
     const o = await opcoes(e, daOutra.campanha.linha);
     expect([o.status, o.body.code]).toEqual([404, 'nao-encontrado']);
     // O conjunto de outra campanha não entra como alvo desta.

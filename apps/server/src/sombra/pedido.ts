@@ -7,8 +7,11 @@ import type { AcaoSombra } from './regras.js';
 // (política, limites da empresa, aprovação com o código do app, validação na plataforma) e fica ligado à recomendação.
 // Aqui fica só a conta: qual pedido corresponde a uma recomendação, e se um pedido confere com ela. Funções puras.
 
-/** As plataformas em que o Liame muda campanha por pedido (a escrita no Google chega na A5). */
-const PLATAFORMAS_COM_PEDIDO: readonly string[] = ['meta_ads'];
+/**
+ * As plataformas em que o Liame muda campanha por pedido: a Meta (A4) e o Google (A5, Y3). Se o pedido entra mesmo na
+ * conta, quem decide é o trilho de ação (a flag de escrita do conector, a política e os limites da empresa).
+ */
+const PLATAFORMAS_COM_PEDIDO: readonly string[] = ['meta_ads', 'google_ads'];
 
 /** O menor valor de verba diária que um pedido aceita (o mesmo das ferramentas: 1 unidade da moeda). */
 const VERBA_MINIMA_MICROS = 1_000_000n;
