@@ -1,8 +1,8 @@
 'use client';
 
-import type { AccountFreshness, BrandResponse, ConnectionResponse } from '@liame/contracts';
+import type { AccountFreshness, BrandResponse, ConnectionResponse, GoogleConversionsResponse } from '@liame/contracts';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Faixa as FaixaDeAviso } from '@/components/ui/faixa';
@@ -14,8 +14,10 @@ import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
 import { CartaoAutorizacao } from './cartao-autorizacao';
 import { CartaoAutorizacaoRegem } from './cartao-autorizacao-regem';
+import { CartaoVendasGoogle } from './cartao-vendas-google';
 import { DialogoConectar } from './dialogo-conectar';
 import { DialogoConectarRegem } from './dialogo-conectar-regem';
+import { DialogoConversao } from './dialogo-conversao';
 import { DialogoEscolher } from './dialogo-escolher';
 import { DialogoLojasRegem } from './dialogo-lojas-regem';
 import { DialogoRevogar } from './dialogo-revogar';
@@ -28,6 +30,7 @@ import {
   type ContaExistente,
   contasExistentes,
   emConferencia,
+  enderecoSeguro,
   escolhiveis,
   type Faixa,
   faixaDaVolta,
@@ -39,27 +42,43 @@ import {
   situacaoDaLoja,
   subDaLoja,
 } from './textos';
+import { type ContaDasVendas, ESCOPO_DE_INFORMAR_VENDAS, esperaPorExtenso, juntarVendas, trocarAMarca, vendasPorAutorizacao } from './vendas-google';
 
 // "Contas conectadas" (mockups/prototipo-contas.html e, para as lojas do Regem, prototipo-contas-regem.html,
 // P2): as plataformas de onde a equipe lê os números, com o frescor de cada conta, as autorizações e a volta
 // do OAuth (escolher, conferindo, recusada). A loja do Regem mostra a leitura dos pedidos e o que ela libera.
 // Parte 2 da P2: "Conectar o Regem" (o diálogo que explica antes de ir), "Ligar as lojas do Regem" na volta e
 // "Revogar" por loja — o Regem só é oferecido quando a API diz que dá para conectar (`available`).
+// A5 · Y1 (mockups/prototipo-contas-conversoes.html, P14): com "vendas informadas ao Google" ligado para a marca,
+// um cartão por conta do Google Ads depois da autorização do Google. Sem a função, a tela é a de sempre.
 // Nenhum token passa pelo navegador; quem pode ver e conectar é o servidor que decide.
 
-type Dados = { marcas: BrandResponse[]; conexoes: ConnectionResponse[]; contas: AccountFreshness[]; disponiveis: string[]; escritaRegem: boolean };
+type Dados = {
+  marcas: BrandResponse[];
+  conexoes: ConnectionResponse[];
+  contas: AccountFreshness[];
+  disponiveis: string[];
+  escritaRegem: boolean;
+  /** As vendas informadas ao Google, uma resposta por marca lida. */
+  vendas: GoogleConversionsResponse[];
+  /** A leitura das vendas falhou agora e o que aparece é o da leitura anterior. */
+  vendasDesatualizadas: boolean;
+};
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: Dados } | { tipo: 'erro'; problema: Problema };
 type Dialogo =
   | { tipo: 'conectar'; marca: string | null }
   | { tipo: 'regem'; marca: string | null }
   | { tipo: 'escolher'; conexao: ConnectionResponse }
-  | { tipo: 'revogar'; conexao: ConnectionResponse };
+  | { tipo: 'revogar'; conexao: ConnectionResponse }
+  | { tipo: 'conversao'; vendas: ContaDasVendas };
 /** A conexão sendo acompanhada: a da volta da plataforma ou a de um "procurar contas de novo". */
 type Acompanhamento = { id: string; origem: 'volta' | 'procurar'; conexao: ConnectionResponse | null; tentativas: number; perdida: boolean };
 
 /** Conferência curta: a cada 2 s, até 45 vezes (1,5 min). Depois, a pessoa pede de novo. */
 const INTERVALO_MS = 2000;
 const MAX_TENTATIVAS = 45;
+/** As vendas informadas ao Google são lidas por marca: uma chamada para cada, até este tanto (a empresa comum tem uma). */
+const MAX_MARCAS_COM_VENDAS = 8;
 
 export function ContasTela() {
   const { empresa, pode } = useSessao();
@@ -79,6 +98,10 @@ export function ContasTela() {
   const agora = useAgora(60_000, estado);
   const podeVer = pode('contas.ver');
   const podeConectar = pode('contas.conectar');
+  // A última leitura boa das vendas informadas ao Google, por marca (o cartão não some numa falha passageira).
+  const vendasLidas = useRef<GoogleConversionsResponse[]>([]);
+  // O cartão que recebe o foco depois de a pessoa escolher a conversão no diálogo.
+  const [focoDasVendas, setFocoDasVendas] = useState({ conta: '', n: 0 });
 
   const carregar = useCallback(async () => {
     const [m, c, f] = await Promise.all([
@@ -89,7 +112,24 @@ export function ContasTela() {
     if (!m.ok) return setEstado({ tipo: 'erro', problema: m.problema });
     if (!c.ok) return setEstado({ tipo: 'erro', problema: c.problema });
     if (!f.ok) return setEstado({ tipo: 'erro', problema: f.problema });
-    setEstado({ tipo: 'ok', dados: { marcas: m.data.items.filter((b) => !b.archived_at), conexoes: c.data.items, contas: f.data.items, disponiveis: c.data.available, escritaRegem: c.data.regem_write } });
+    const marcas = m.data.items.filter((b) => !b.archived_at);
+    // As vendas informadas ao Google (A5, Y1), por marca. A função nasce desligada: sem ela, ou se a leitura falhar
+    // sem nunca ter dado certo, a tela é a de sempre. Falha depois de uma leitura boa: fica o que havia, com o aviso.
+    const comVendas = marcas.slice(0, MAX_MARCAS_COM_VENDAS);
+    const lidas = await Promise.all(comVendas.map((b) => chamar(() => api.GET('/v1/conversions/google', { params: { query: { brand_id: b.id } } }))));
+    const antes = vendasLidas.current;
+    const guardada = (i: number) => antes.find((x) => x.brand_id === comVendas[i]?.id) ?? null;
+    const vendas = lidas.flatMap((r, i) => {
+      if (r.ok) return [r.data];
+      const anterior = guardada(i);
+      return anterior ? [anterior] : [];
+    });
+    const vendasDesatualizadas = lidas.some((r, i) => !r.ok && guardada(i)?.enabled === true);
+    vendasLidas.current = vendas;
+    setEstado({
+      tipo: 'ok',
+      dados: { marcas, conexoes: c.data.items, contas: f.data.items, disponiveis: c.data.available, escritaRegem: c.data.regem_write, vendas, vendasDesatualizadas },
+    });
   }, []);
 
   useEffect(() => {
@@ -184,6 +224,9 @@ export function ContasTela() {
     [linhas],
   );
   const autorizacoes = useMemo(() => (dados ? autorizacoesVisiveis(dados.conexoes) : []), [dados]);
+  // Vendas informadas ao Google: as marcas com a função ligada e o cartão de cada conta, depois da autorização que a lê.
+  const vendas = useMemo(() => juntarVendas(dados?.vendas ?? []), [dados]);
+  const vendasDaAutorizacao = useMemo(() => vendasPorAutorizacao(vendas.contas, dados?.conexoes ?? [], autorizacoes), [vendas, dados, autorizacoes]);
 
   if (!podeVer) {
     return (
@@ -247,6 +290,90 @@ export function ContasTela() {
     avisar(`Procurando contas novas ${naPlataforma(autorizadorDa(c.provider))}. Aparecem aqui em alguns segundos.`);
     setAcomp({ id: c.id, origem: 'procurar', conexao: r.data, tentativas: 1, perdida: false });
   }
+
+  /** A resposta de escolher, voltar ou parar traz a situação nova das contas da marca: entra no lugar da antiga. */
+  function aplicarVendas(resposta: GoogleConversionsResponse) {
+    vendasLidas.current = trocarAMarca(vendasLidas.current, resposta);
+    setEstado((e) => (e.tipo === 'ok' ? { tipo: 'ok', dados: { ...e.dados, vendas: trocarAMarca(e.dados.vendas, resposta) } } : e));
+  }
+
+  async function pararVendas(v: ContaDasVendas): Promise<boolean> {
+    const r = await chamar(() => api.POST('/v1/conversions/google/destination/stop', { body: { connected_account_id: v.conta.connected_account_id } }));
+    if (!r.ok) {
+      avisar(mensagemDe(r.problema), { tipo: 'perigo' });
+      return false;
+    }
+    aplicarVendas(r.data);
+    avisar('O Liame parou de informar as vendas ao Google. Dá para voltar quando quiser.');
+    return true;
+  }
+
+  /** Voltar depois de uma parada é escolher de novo a mesma conversão: o servidor a confere no Google e recomeça de agora. */
+  async function voltarVendas(v: ContaDasVendas): Promise<boolean> {
+    const conversao = v.conta.destination?.conversion_action_id;
+    if (!conversao) return false;
+    const r = await chamar(() =>
+      api.PUT('/v1/conversions/google/destination', { body: { connected_account_id: v.conta.connected_account_id, conversion_action_id: conversao } }),
+    );
+    if (!r.ok) {
+      avisar(mensagemDe(r.problema), { tipo: 'perigo' });
+      // A conversão de antes não existe mais no Google: a saída é escolher outra.
+      if (r.problema.code === 'conversao-nao-encontrada') setDialogo({ tipo: 'conversao', vendas: v });
+      return false;
+    }
+    aplicarVendas(r.data);
+    avisar('O Liame voltou a informar as vendas. Só entram os pedidos confirmados a partir de agora.');
+    return true;
+  }
+
+  /** "Autorizar o Google de novo": direto para a página do Google, com a marca da conta. Verdadeiro = está indo. */
+  async function autorizarGoogle(brandId: string): Promise<boolean> {
+    const r = await chamar(() => api.POST('/v1/connections', { body: { provider: 'google', brand_id: brandId } }));
+    if (!r.ok) {
+      avisar(mensagemDe(r.problema), { tipo: 'perigo' });
+      return false;
+    }
+    const destino = enderecoSeguro(r.data.authorize_url);
+    if (!destino) {
+      avisar('A plataforma devolveu um endereço inválido. Tente de novo; se continuar, fale com o suporte.', { tipo: 'perigo' });
+      return false;
+    }
+    avisar('Indo para a página do Google para você autorizar…');
+    window.location.assign(destino);
+    return true;
+  }
+
+  /** A conversão foi escolhida no diálogo: a situação nova entra na tela e o foco vai para o cartão da conta. */
+  function conversaoEscolhida(v: ContaDasVendas, resposta: GoogleConversionsResponse) {
+    const antes = v.conta.destination;
+    const depois = resposta.accounts.find((a) => a.connected_account_id === v.conta.connected_account_id)?.destination ?? null;
+    // Confirmar a mesma conversão, com ela informando, não muda nada no servidor: o aviso não promete um recomeço.
+    const igual = antes !== null && antes.stopped_at === null && depois !== null && depois.conversion_action_id === antes.conversion_action_id && depois.starts_at === antes.starts_at;
+    aplicarVendas(resposta);
+    setDialogo(null);
+    setFocoDasVendas((f) => ({ conta: v.conta.connected_account_id, n: f.n + 1 }));
+    avisar(
+      igual
+        ? 'Nada mudou: o Liame já informa as vendas para esta conversão.'
+        : `Pronto. O Liame começa a informar as vendas confirmadas a partir de agora; a primeira sai ${esperaPorExtenso(v.esperaMin)} depois da confirmação.`,
+    );
+  }
+
+  const cartaoDasVendas = (v: ContaDasVendas) => (
+    <CartaoVendasGoogle
+      key={v.conta.connected_account_id}
+      conta={v.conta}
+      agora={agora}
+      esperaMin={v.esperaMin}
+      janelaDias={v.janelaDias}
+      podeGerir={v.podeGerir}
+      pedirFoco={focoDasVendas.conta === v.conta.connected_account_id ? focoDasVendas.n : 0}
+      aoAutorizar={() => autorizarGoogle(v.brandId)}
+      aoEscolher={() => setDialogo({ tipo: 'conversao', vendas: v })}
+      aoParar={() => pararVendas(v)}
+      aoVoltar={() => voltarVendas(v)}
+    />
+  );
 
   const conexaoDaFaixa = acomp?.conexao ?? null;
   const vazio = dados !== null && !linhas.length && !autorizacoes.length;
@@ -397,15 +524,24 @@ export function ContasTela() {
         </div>
       )}
 
-      {dados && autorizacoes.length > 0 && (
+      {dados && (autorizacoes.length > 0 || vendas.contas.length > 0) && (
         <div className="anima" style={{ ['--i' as string]: 2 }}>
           <h2 className="sub-titulo">Autorizações</h2>
           <p className="sub-desc">Cada autorização é o &ldquo;sim&rdquo; que alguém deu na Meta, no Google ou no Regem. Revogar para a leitura de todas as contas dela.</p>
+          {dados.vendasDesatualizadas && (
+            <p className="aut-txt aut-txt--atencao conv-desatualizado" role="status">
+              <Icone nome="alert" pequeno />
+              <span>Não deu para atualizar as vendas informadas ao Google agora. O que aparece é o da última leitura.</span>
+              <button className="btn btn--sm" type="button" onClick={() => disparar(carregar())}>
+                Tentar de novo
+              </button>
+            </p>
+          )}
           <ul className="autorizacoes">
-            {autorizacoes.map((c) =>
-              c.provider === 'regem' ? (
+            {autorizacoes.map((c) => (
+              <Fragment key={c.id}>
+              {c.provider === 'regem' ? (
                 <CartaoAutorizacaoRegem
-                  key={c.id}
                   conexao={c}
                   podeConectar={podeConectar}
                   aoEscolher={c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length ? () => setDialogo({ tipo: 'escolher', conexao: c }) : null}
@@ -415,14 +551,14 @@ export function ContasTela() {
                 />
               ) : (
               <CartaoAutorizacao
-                key={c.id}
                 conexao={c}
                 agora={agora}
                 podeConectar={podeConectar}
+                informaVendas={vendas.marcas.has(c.brand_id) && c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS)}
                 procurando={acomp?.origem === 'procurar' && acomp.id === c.id && (!acomp.conexao || emConferencia(acomp.conexao))}
                 aoEscolher={
                   // Esperando a escolha, ou já valendo e com conta de outra autorização que vence antes (renovar).
-                  (c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length) || (c.status === 'ativa' && escolhiveis(c, existentes).some((o) => o.renovar))
+                  (c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length) || (c.status === 'ativa' && escolhiveis(c, existentes).some((o) => o.renovar || o.permissao))
                     ? () => setDialogo({ tipo: 'escolher', conexao: c })
                     : null
                 }
@@ -430,8 +566,11 @@ export function ContasTela() {
                 aoProcurar={() => disparar(procurar(c))}
                 aoRevogar={() => setDialogo({ tipo: 'revogar', conexao: c })}
               />
-              ),
-            )}
+              )}
+              {(vendasDaAutorizacao.get(c.id) ?? []).map(cartaoDasVendas)}
+              </Fragment>
+            ))}
+            {(vendasDaAutorizacao.get('') ?? []).map(cartaoDasVendas)}
           </ul>
         </div>
       )}
@@ -444,6 +583,7 @@ export function ContasTela() {
           aoFechar={() => setDialogo((d) => (d?.tipo === 'conectar' ? null : d))}
           aoIr={(a) => avisar(`Indo para a página ${a === 'meta' ? 'da Meta' : 'do Google'} para você autorizar…`)}
           aoRegem={podeRegem ? (marca) => setDialogo({ tipo: 'regem', marca }) : null}
+          vendasAoGoogle={vendas.marcas}
         />
       )}
       {dialogo?.tipo === 'regem' && (
@@ -483,6 +623,16 @@ export function ContasTela() {
             recarregarAvisos();
             disparar(carregar());
           }}
+        />
+      )}
+      {dialogo?.tipo === 'conversao' && (
+        <DialogoConversao
+          conta={dialogo.vendas.conta}
+          esperaMin={dialogo.vendas.esperaMin}
+          reserva={titulo}
+          aoFechar={() => setDialogo((d) => (d?.tipo === 'conversao' ? null : d))}
+          aoEscolher={(resposta) => conversaoEscolhida(dialogo.vendas, resposta)}
+          aoAutorizar={() => disparar(autorizarGoogle(dialogo.vendas.brandId))}
         />
       )}
       {dialogo?.tipo === 'revogar' && (

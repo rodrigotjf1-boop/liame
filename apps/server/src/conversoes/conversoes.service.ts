@@ -25,7 +25,7 @@ import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { ESPERA_ANTES_DE_INFORMAR_MIN, FLAG_CONVERSOES_GOOGLE, pedidosAInformar, type TipoDaFalha } from './conversoes-google.js';
 
-// Conversões para o Google, pelas rotas (A5, Y1; protótipo P14): a situação de cada conta do Google Ads da marca, as
+// Conversões para o Google, pelas rotas (A5, Y1; protótipo P14, aprovado em 09/10/2026): a situação de cada conta do Google Ads da marca, as
 // conversões da conta lidas do Google na hora, e escolher ou parar o destino. O envio em si é da rotina do worker
 // (`conversoes-google.ts`): aqui nada é enviado.
 //
@@ -197,7 +197,7 @@ export class ConversoesService {
         counts: { informed: l.informed, waiting: parado ? 0 : l.queued + aCaminho, corrected: l.corrected, refused: l.refused },
         last_run_at: ou(l.last_run_at),
         next_run_at: temDestino && !parado ? ou(l.next_run_at) : null,
-        last_failure: falhou && l.last_run_at ? { at: iso(l.last_run_at), reason: l.last_error! } : null,
+        last_failure: falhou && l.last_run_at ? { at: iso(l.last_run_at), reason: l.last_error!, kind: l.last_error_kind! } : null,
         last_refusal: l.refusal_at && l.refusal_reason ? { at: iso(l.refusal_at), reason: l.refusal_reason } : null,
       });
     }

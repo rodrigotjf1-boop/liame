@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-// Conversões para o Google (A5, Y1; `plano-a5.md` D-A5-5 a D-A5-8; protótipo P14, aguardando aprovação; sem tela ainda).
+// Conversões para o Google (A5, Y1; `plano-a5.md` D-A5-5 a D-A5-8; protótipo P14, aprovado em 09/10/2026; a tela é o
+// cartão "Vendas informadas ao Google" em Contas conectadas).
 // A venda confirmada no caixa que veio de um clique num anúncio do Google é informada ao Google, para a ação de
 // conversão que uma pessoa da empresa escolhe em cada conta do Google Ads. Sai só o id do clique, o instante, o valor
 // e um id interno do pedido. Estas rotas mostram a situação de cada conta, listam as conversões da conta e escolhem ou
@@ -10,6 +11,12 @@ const Slug = z.string().regex(/^[a-z0-9_]+$/).max(60);
 const Pessoa = z.strictObject({ id: z.uuid(), name: z.string() });
 /** O id de uma ação de conversão do Google Ads: só dígitos. */
 const IdDaAcao = z.string().regex(/^[0-9]{1,20}$/);
+
+/**
+ * A permissão do Google que deixa informar vendas (Data Manager API). Aparece em `scopes` da autorização do Google que
+ * a inclui: é por ela que a tela reconhece a autorização nova que pode assumir as contas já ligadas.
+ */
+export const GOOGLE_SALES_SCOPE = 'https://www.googleapis.com/auth/datamanager';
 
 export const GoogleConversionCounts = z.strictObject({
   /** Vendas que o Google recebeu (aceitas ou ainda esperando o resultado dele). */
@@ -59,8 +66,11 @@ export const GoogleConversionAccount = z.strictObject({
   last_run_at: z.iso.datetime().nullable(),
   /** Quando a conta volta para a fila (nulo sem destino ou com ele parado). */
   next_run_at: z.iso.datetime().nullable(),
-  /** A última passagem que falhou, se a conta ainda não voltou ao normal: quando, e o motivo (sem identificador). */
-  last_failure: z.strictObject({ at: z.iso.datetime(), reason: z.string() }).nullable(),
+  /**
+   * A última passagem que falhou, se a conta ainda não voltou ao normal: quando, o motivo (sem identificador) e o tipo:
+   * `esperar` (o Google pediu para esperar ou estava fora do ar), `permissao` (ele recusou a autorização) ou `outro`.
+   */
+  last_failure: z.strictObject({ at: z.iso.datetime(), reason: z.string(), kind: Slug }).nullable(),
   /** A recusa mais recente do Google a uma venda, na janela, com o motivo como ele respondeu (sem identificador). */
   last_refusal: z.strictObject({ at: z.iso.datetime(), reason: z.string() }).nullable(),
 });

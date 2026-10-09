@@ -60248,7 +60248,7 @@
     },
     "/v1/conversions/google": {
       "get": {
-        "description": "A situação de cada conta do Google Ads da marca: se a autorização do Google inclui a permissão de informar vendas (`authorized`), a conversão escolhida (`destination`, com quem escolheu, desde quando e, se parado, quem parou), a situação (`informando`, `esperando_a_plataforma`, `sem_permissao`, `sem_destino`, `parado` ou `equipe_parada`), as vendas dos últimos 30 dias (informadas, esperando a vez, com o valor corrigido e recusadas), a última e a próxima passagem, a última falha da passagem e a recusa mais recente do Google, com o motivo sem identificador. Com a função desligada para a empresa, `enabled` é falso e `accounts` vem vazia. `can_manage` diz se quem pediu pode escolher, trocar e parar. O pedido sai `wait_minutes` minutos depois de confirmado.",
+        "description": "A situação de cada conta do Google Ads da marca: se a autorização do Google inclui a permissão de informar vendas (`authorized`), a conversão escolhida (`destination`, com quem escolheu, desde quando e, se parado, quem parou), a situação (`informando`, `esperando_a_plataforma`, `sem_permissao`, `sem_destino`, `parado` ou `equipe_parada`), as vendas dos últimos 30 dias (informadas, esperando a vez, com o valor corrigido e recusadas), a última e a próxima passagem, a última falha da passagem (com o tipo: `esperar`, `permissao` ou `outro`) e a recusa mais recente do Google, com o motivo sem identificador. Com a função desligada para a empresa, `enabled` é falso e `accounts` vem vazia. `can_manage` diz se quem pediu pode escolher, trocar e parar. O pedido sai `wait_minutes` minutos depois de confirmado.",
         "operationId": "ConversoesController_ver",
         "parameters": [
           {
@@ -60463,11 +60463,17 @@
                               },
                               "reason": {
                                 "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
                               }
                             },
                             "required": [
                               "at",
-                              "reason"
+                              "reason",
+                              "kind"
                             ],
                             "additionalProperties": false
                           },
@@ -61426,11 +61432,17 @@
                               },
                               "reason": {
                                 "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
                               }
                             },
                             "required": [
                               "at",
-                              "reason"
+                              "reason",
+                              "kind"
                             ],
                             "additionalProperties": false
                           },
@@ -62110,11 +62122,17 @@
                               },
                               "reason": {
                                 "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "maxLength": 60,
+                                "pattern": "^[a-z0-9_]+$"
                               }
                             },
                             "required": [
                               "at",
-                              "reason"
+                              "reason",
+                              "kind"
                             ],
                             "additionalProperties": false
                           },

@@ -13,6 +13,8 @@ type Props = {
   agora: Date;
   podeConectar: boolean;
   procurando: boolean;
+  /** A autorização do Google inclui a permissão de informar vendas, e a função está ligada para a marca (A5, Y1). */
+  informaVendas?: boolean;
   /** Autorização que ainda espera a escolha (a pessoa fechou com "Agora não"): reabre a escolha. */
   aoEscolher: (() => void) | null;
   aoReconectar: () => void;
@@ -20,7 +22,7 @@ type Props = {
   aoRevogar: () => void;
 };
 
-export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando, aoEscolher, aoReconectar, aoProcurar, aoRevogar }: Props) {
+export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando, informaVendas = false, aoEscolher, aoReconectar, aoProcurar, aoRevogar }: Props) {
   const a = autorizadorDa(c.provider);
   const plat = plataforma(c.provider);
   const n = contasDaAutorizacao(c);
@@ -66,6 +68,7 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
       ) : (
         <p className="aut-txt">
           {a === 'google' ? 'Google Ads e Google Analytics numa autorização só, sem prazo de validade.' : 'Autorização da empresa, sem prazo de validade.'}
+          {a === 'google' && informaVendas && ' Inclui a permissão de informar vendas.'}
         </p>
       )}
       {conferindo && (

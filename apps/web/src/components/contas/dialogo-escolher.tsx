@@ -34,6 +34,8 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const reconectaveis = new Set(opcoes.filter((o) => o.reconectar).map((o) => chave(o.conta.provider, o.conta.external_id)));
   // Lidas hoje por uma autorização que vence antes desta: ligar aqui só troca a autorização (sem primeira leitura).
   const renovaveis = new Set(opcoes.filter((o) => o.renovar).map((o) => chave(o.conta.provider, o.conta.external_id)));
+  // Lidas hoje por uma autorização sem a permissão de informar vendas ao Google, que esta inclui (A5, Y1): também só troca.
+  const comPermissao = new Set(opcoes.filter((o) => o.permissao).map((o) => chave(o.conta.provider, o.conta.external_id)));
   // Reconectar já vem marcado; uma conta nova só, também. Várias novas: a pessoa escolhe (nada ligado sem querer).
   const [marcadas, setMarcadas] = useState<Set<string>>(() => {
     const iniciais = new Set(reconectaveis);
@@ -44,6 +46,8 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const [erro, setErro] = useState('');
   const grupos = gruposDaEscolha(conexao.discovered);
   const primeiraLivre = livres[0] ? chave(livres[0].provider, livres[0].external_id) : null;
+  // Tudo o que há para ligar já é lido por outra autorização: ligar aqui só troca a autorização, sem primeira leitura.
+  const soTroca = livres.length > 0 && livres.every((d) => renovaveis.has(chave(d.provider, d.external_id)) || comPermissao.has(chave(d.provider, d.external_id)));
 
   function alternar(k: string, marcar: boolean) {
     setMarcadas((atual) => {
@@ -70,11 +74,14 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
     if (!r.ok) return setErro(mensagemDe(r.problema));
     const ja = r.data.already_linked.length;
     const novas = r.data.linked.length;
-    const soRenovou = novas > 0 && contas.every((d) => renovaveis.has(chave(d.provider, d.external_id)));
+    const soRenovou = novas > 0 && contas.every((d) => renovaveis.has(chave(d.provider, d.external_id)) || comPermissao.has(chave(d.provider, d.external_id)));
+    const ganhouPermissao = contas.some((d) => comPermissao.has(chave(d.provider, d.external_id)));
     aoLigar(
       !novas
         ? `Nada novo: ${ja === 1 ? 'a conta já estava ligada' : 'as contas já estavam ligadas'} a uma marca.`
-        : soRenovou
+        : soRenovou && ganhouPermissao
+          ? `${novas === 1 ? 'A conta passou' : 'As contas passaram'} para a autorização nova, que inclui a permissão de informar vendas ao Google. A leitura segue sem parar.`
+          : soRenovou
           ? `Autorização renovada: ${novas === 1 ? 'a conta passa' : 'as contas passam'} a ser ${novas === 1 ? 'lida' : 'lidas'} pela autorização nova. A leitura segue sem parar.`
           : `${novas === 1 ? 'Conta ligada' : 'Contas ligadas'}. A primeira leitura (90 dias) começou e leva alguns minutos.${
               ja ? ` ${ja === 1 ? '1 já estava ligada' : `${ja} já estavam ligadas`} a uma marca.` : ''
@@ -133,8 +140,11 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
                     </span>
                     {d.via && <span className="lite-chip">via {d.via}</span>}
                     {travada && <span className="lite-chip">já ligada</span>}
-                    {reconectar && !renovaveis.has(k) && <span className="lite-chip lite-chip--perigo">desconectada: ligar de novo</span>}
+                    {reconectar && !renovaveis.has(k) && !comPermissao.has(k) && <span className="lite-chip lite-chip--perigo">desconectada: ligar de novo</span>}
                     {renovaveis.has(k) && <span className="lite-chip lite-chip--atraso">a autorização atual vence antes: renovar</span>}
+                    {comPermissao.has(k) && !renovaveis.has(k) && (
+                      <span className="lite-chip">{d.provider === 'google_ads' ? 'passa a poder informar vendas' : 'passa para esta autorização'}</span>
+                    )}
                   </label>
                 );
               })}
@@ -142,7 +152,11 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
           ))}
           <p className="dialogo-nota">
             <Icone nome="clock" pequeno />
-            <span>A primeira leitura traz os últimos 90 dias e leva alguns minutos. Depois, os números são atualizados todo dia.</span>
+            <span>
+              {soTroca
+                ? 'Estas contas já são lidas pelo Liame. Ligar aqui só passa a leitura para a autorização nova: nada é desligado, e os números seguem sem parar.'
+                : 'A primeira leitura traz os últimos 90 dias e leva alguns minutos. Depois, os números são atualizados todo dia.'}
+            </span>
           </p>
         </div>
         <div className="dialogo-acoes">

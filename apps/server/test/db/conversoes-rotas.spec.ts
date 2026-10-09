@@ -456,13 +456,13 @@ describe.skipIf(!hasDb)('conversões para o Google pelas rotas: ver, escolher e 
     // O Google pediu para esperar: a conta volta sozinha, e a tela sabe quando.
     await marcar('esperar', '429: Quota exceeded for quota metric', 1);
     let c = await conta(e);
-    expect(c).toMatchObject({ status: 'esperando_a_plataforma', last_failure: { reason: '429: Quota exceeded for quota metric' } });
+    expect(c).toMatchObject({ status: 'esperando_a_plataforma', last_failure: { reason: '429: Quota exceeded for quota metric', kind: 'esperar' } });
     expect(new Date(c.next_run_at!).getTime()).toBeGreaterThan(Date.now() + 20 * MIN);
 
     // O Google recusou a autorização: é autorizar de novo, mesmo com a permissão no papel.
     await marcar('permissao', 'invalid_grant: OAuth recusado (invalid_grant)', 1);
     c = await conta(e);
-    expect(c).toMatchObject({ status: 'sem_permissao', authorized: true, last_failure: { reason: 'invalid_grant: OAuth recusado (invalid_grant)' } });
+    expect(c).toMatchObject({ status: 'sem_permissao', authorized: true, last_failure: { reason: 'invalid_grant: OAuth recusado (invalid_grant)', kind: 'permissao' } });
 
     // A parada da empresa pesa mais que tudo, e a tela sabe desde quando.
     await marcar(null, null, 0);

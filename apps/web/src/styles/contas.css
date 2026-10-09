@@ -114,3 +114,23 @@
 .loja-ligar { display: grid; gap: var(--sp-3); margin: 0; padding: var(--sp-3) var(--sp-4) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); min-width: 0; }
 .loja-ligar legend { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-1); font-weight: 600; }
 .escopos-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+
+/* Vendas informadas ao Google (mockups/prototipo-contas-conversoes.html, P14 aprovado em 09/10/2026; A5 · Y1): um cartão
+   da largura toda, depois da autorização do Google, com a conversão escolhida, os avisos e as contagens da janela. */
+.autorizacao--larga { grid-column: 1 / -1; }
+.conv-destino { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); margin: 0; }
+.conv-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: var(--sp-2); }
+.conv-num { display: grid; gap: 2px; min-width: 0; margin: 0; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.conv-num b { font-size: var(--text-lg); font-weight: 600; line-height: 1.2; }
+.conv-num span { font-size: var(--text-sm); color: var(--text-muted); }
+.conv-num--atencao { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); background: var(--warning-soft); }
+.conv-so-pro { font-size: var(--text-sm); color: var(--text-subtle); }
+.conv-so-pro code { overflow-wrap: anywhere; }
+.conv-desatualizado { flex-wrap: wrap; align-items: center; margin-bottom: var(--sp-3); }
+/* o diálogo de escolher a conversão */
+.conv-lista { display: grid; gap: var(--sp-2); margin-top: var(--sp-2); }
+.conv-lendo { display: flex; align-items: center; gap: var(--sp-2); margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.conv-lendo .girando { flex: none; width: 14px; height: 14px; }
+@media (prefers-reduced-motion: reduce) {
+  .conv-lendo .girando { animation: none; border-color: var(--border-strong); border-top-color: var(--fio); }
+}

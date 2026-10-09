@@ -6,7 +6,7 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
-import { type Autorizador, enderecoSeguro } from './textos';
+import { type Autorizador, enderecoSeguro, notaDeConectar } from './textos';
 
 // "Conectar plataforma" (protótipo aprovado): a marca e a plataforma (Meta, ou Google com Ads e Analytics
 // numa autorização só). O navegador vai para a página da plataforma; nenhum token passa por aqui. O Regem
@@ -22,15 +22,21 @@ type Props = {
   aoIr: (a: Autorizador) => void;
   /** A API diz que dá para conectar o Regem: a opção aparece e leva ao diálogo dele, com a marca escolhida. */
   aoRegem?: ((marca: string) => void) | null;
+  /**
+   * As marcas com "vendas informadas ao Google" ligado (A5, Y1): a autorização do Google delas pede também a permissão
+   * de informar vendas, e o diálogo diz isso antes de a pessoa ir.
+   */
+  vendasAoGoogle?: ReadonlySet<string>;
 };
 
-export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr, aoRegem = null, irPara = (url) => window.location.assign(url) }: Props) {
+export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr, aoRegem = null, vendasAoGoogle, irPara = (url) => window.location.assign(url) }: Props) {
   const campoMarca = useRef<HTMLSelectElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: campoMarca, reserva });
   const ids = useId();
   const [marca, setMarca] = useState(marcaInicial ?? marcas[0]?.id ?? '');
   const [indo, setIndo] = useState<Autorizador | null>(null);
   const [erro, setErro] = useState('');
+  const informaVendas = Boolean(marca && vendasAoGoogle?.has(marca));
 
   async function conectar(provider: Exclude<Autorizador, 'regem'>) {
     setErro('');
@@ -96,7 +102,7 @@ export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr,
             <button className="plataforma" type="button" onClick={() => disparar(conectar('google'))} disabled={indo !== null} aria-busy={indo === 'google'}>
               <span className="plat plat--google">Google</span>
               <b>{indo === 'google' ? 'Indo para o Google…' : 'Google Ads e Google Analytics'}</b>
-              <span>Uma autorização só para os dois. Somente leitura.</span>
+              <span>{informaVendas ? 'Uma autorização só para os dois. Leitura, e a permissão de informar as vendas confirmadas.' : 'Uma autorização só para os dois. Somente leitura.'}</span>
             </button>
             {aoRegem && (
               <button
@@ -116,11 +122,7 @@ export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr,
           </div>
           <p className="dialogo-nota">
             <Icone nome="shield" pequeno />
-            <span>
-              {aoRegem
-                ? 'Você vai para a página da plataforma, confirma lá e volta para cá. Na Meta e no Google, o Liame só lê: não cria, não muda e não gasta nada. No Regem, a única escrita possível é o cupom de campanha, sempre com aprovação.'
-                : 'Você vai para a página da plataforma, confirma lá e volta para cá. O Liame só lê: não cria, não muda e não gasta nada.'}
-            </span>
+            <span>{notaDeConectar(aoRegem !== null, informaVendas)}</span>
           </p>
         </div>
       </div>

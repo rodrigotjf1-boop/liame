@@ -26,7 +26,8 @@ import type { AuthContext } from '../context/request-context.js';
 import { SemTransacao } from '../context/sem-transacao.js';
 import { ACAO_DEFINIR, ACAO_PARAR, ConversoesService } from './conversoes.service.js';
 
-// Conversões para o Google (A5, Y1; protótipo P14, aguardando aprovação; sem tela ainda): a venda confirmada no caixa
+// Conversões para o Google (A5, Y1; protótipo P14, aprovado em 09/10/2026; a tela é o cartão "Vendas informadas ao
+// Google" em Contas conectadas): a venda confirmada no caixa
 // que veio de um clique num anúncio do Google é informada ao Google, para a conversão que uma pessoa da empresa
 // escolhe em cada conta do Google Ads. Estas rotas mostram a situação de cada conta, listam as conversões da conta e
 // escolhem ou param o destino. Quem envia é a rotina do worker; por aqui nada sai para o Google além da leitura da
@@ -45,7 +46,7 @@ export class ConversoesController {
   @ApiOperation({
     summary: 'As vendas informadas ao Google, por conta',
     description:
-      'A situação de cada conta do Google Ads da marca: se a autorização do Google inclui a permissão de informar vendas (`authorized`), a conversão escolhida (`destination`, com quem escolheu, desde quando e, se parado, quem parou), a situação (`informando`, `esperando_a_plataforma`, `sem_permissao`, `sem_destino`, `parado` ou `equipe_parada`), as vendas dos últimos 30 dias (informadas, esperando a vez, com o valor corrigido e recusadas), a última e a próxima passagem, a última falha da passagem e a recusa mais recente do Google, com o motivo sem identificador. Com a função desligada para a empresa, `enabled` é falso e `accounts` vem vazia. `can_manage` diz se quem pediu pode escolher, trocar e parar. O pedido sai `wait_minutes` minutos depois de confirmado.',
+      'A situação de cada conta do Google Ads da marca: se a autorização do Google inclui a permissão de informar vendas (`authorized`), a conversão escolhida (`destination`, com quem escolheu, desde quando e, se parado, quem parou), a situação (`informando`, `esperando_a_plataforma`, `sem_permissao`, `sem_destino`, `parado` ou `equipe_parada`), as vendas dos últimos 30 dias (informadas, esperando a vez, com o valor corrigido e recusadas), a última e a próxima passagem, a última falha da passagem (com o tipo: `esperar`, `permissao` ou `outro`) e a recusa mais recente do Google, com o motivo sem identificador. Com a função desligada para a empresa, `enabled` é falso e `accounts` vem vazia. `can_manage` diz se quem pediu pode escolher, trocar e parar. O pedido sai `wait_minutes` minutos depois de confirmado.',
   })
   @ApiOkResponse({ standardSchema: GoogleConversionsResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })

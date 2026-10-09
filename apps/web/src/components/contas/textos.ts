@@ -1,5 +1,6 @@
 import type { AccountFreshness, ConnectedAccountResponse, ConnectionResponse, DiscoveredAccount } from '@liame/contracts';
 import { dataCompleta, dia, diasAte, quandoComHora } from '@/lib/formato';
+import { ESCOPO_DE_INFORMAR_VENDAS } from './vendas-google';
 
 // Regras e frases de "Contas conectadas" (mockups/prototipo-contas.html). Funções puras: o "agora" entra
 // como parâmetro (LIC-006). A API manda listas que crescem como texto (V23): valor desconhecido tem saída.
@@ -56,6 +57,19 @@ export function enderecoSeguro(url: string): string | null {
   }
 }
 
+/**
+ * O que a pessoa lê antes de ir autorizar: o que o Liame faz em cada plataforma com a autorização que ela vai dar.
+ * `informaVendas`: a marca tem "vendas informadas ao Google" ligado, e a autorização do Google pede essa permissão.
+ */
+export function notaDeConectar(comRegem: boolean, informaVendas: boolean): string {
+  const ida = 'Você vai para a página da plataforma, confirma lá e volta para cá.';
+  const regem = comRegem ? ' No Regem, a única escrita possível é o cupom de campanha, sempre com aprovação.' : '';
+  if (informaVendas) {
+    return `${ida} Na Meta, o Liame só lê. No Google, lê e informa as vendas confirmadas no caixa, para a conversão que você escolher. Não cria, não muda e não gasta nada.${regem}`;
+  }
+  return comRegem ? `${ida} Na Meta e no Google, o Liame só lê: não cria, não muda e não gasta nada.${regem}` : `${ida} O Liame só lê: não cria, não muda e não gasta nada.`;
+}
+
 /** Id como a plataforma mostra: o Google Ads usa 444-555-6667. */
 export function idDaConta(provider: string, externalId: string): string {
   if (provider === 'google_ads' && /^\d{10}$/.test(externalId)) return `${externalId.slice(0, 3)}-${externalId.slice(3, 6)}-${externalId.slice(6)}`;
@@ -94,26 +108,40 @@ export function naoLigadas(c: Pick<ConnectionResponse, 'discovered'>): Discovere
 export type ContaExistente = Pick<ConnectedAccountResponse, 'provider' | 'external_id' | 'status' | 'connection_id' | 'disconnected_at'> & {
   /** Quando vence a autorização que hoje lê esta conta (Google em fase de teste); ausente ou nulo = não vence. */
   vence_em?: string | null;
+  /** A autorização que hoje lê esta conta inclui a permissão de informar vendas ao Google; ausente = não se sabe. */
+  informa_vendas?: boolean;
 };
 
-/** As contas já ligadas, cada uma com o vencimento da autorização que a lê hoje. */
-export function contasExistentes(conexoes: Pick<ConnectionResponse, 'accounts' | 'refresh_expires_at'>[]): ContaExistente[] {
-  return conexoes.flatMap((c) => c.accounts.map((a) => ({ ...a, vence_em: c.refresh_expires_at ?? null })));
+/** As contas já ligadas, cada uma com o vencimento e a permissão de informar vendas da autorização que a lê hoje. */
+export function contasExistentes(conexoes: (Pick<ConnectionResponse, 'accounts' | 'refresh_expires_at'> & Partial<Pick<ConnectionResponse, 'scopes'>>)[]): ContaExistente[] {
+  return conexoes.flatMap((c) =>
+    c.accounts.map((a) => ({ ...a, vence_em: c.refresh_expires_at ?? null, ...(c.scopes ? { informa_vendas: c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS) } : {}) })),
+  );
 }
 
-export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean; renovar?: boolean };
+/** `renovar`: a autorização de hoje vence antes; `permissao`: esta inclui informar vendas ao Google e a de hoje não. */
+export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean; renovar?: boolean; permissao?: boolean };
 
 /**
  * O que a pessoa pode ligar com esta autorização: as contas novas e as que estão ligadas por outra
  * autorização que a plataforma recusou ("Desconectada"): ligar de novo passa a conta para a credencial
  * nova (a API faz isso quando a marca é a mesma). Também as que são lidas por outra autorização que VENCE
  * antes desta (Google em fase de teste): é assim que "conectar de novo antes" renova a leitura sem ela
- * parar (ERR-052). As outras já ligadas ficam travadas.
+ * parar (ERR-052). E as contas do Google lidas por outra autorização SEM a permissão de informar vendas, quando esta
+ * a inclui: é assim que "autorizar o Google de novo" faz a conta poder informar (A5, Y1; no servidor, a autorização
+ * nova assume a conta). As outras já ligadas ficam travadas.
  */
 export function escolhiveis(
-  c: Pick<ConnectionResponse, 'id' | 'discovered'> & Partial<Pick<ConnectionResponse, 'refresh_expires_at'>>,
+  c: Pick<ConnectionResponse, 'id' | 'discovered'> & Partial<Pick<ConnectionResponse, 'refresh_expires_at' | 'scopes'>>,
   existentes: ContaExistente[],
 ): Escolhivel[] {
+  const ganhamPermissao = new Set(
+    c.scopes?.includes(ESCOPO_DE_INFORMAR_VENDAS)
+      ? existentes
+          .filter((e) => e.disconnected_at === null && e.connection_id !== c.id && (e.provider === 'google_ads' || e.provider === 'ga4') && e.informa_vendas === false)
+          .map((e) => `${e.provider}:${e.external_id}`)
+      : [],
+  );
   const fimDesta = c.refresh_expires_at ? new Date(c.refresh_expires_at).getTime() : Number.POSITIVE_INFINITY;
   const renovaveis = new Set(
     existentes
@@ -134,7 +162,8 @@ export function escolhiveis(
     if (!d.linked) return [{ conta: d, reconectar: false }];
     const k = `${d.provider}:${d.external_id}`;
     if (recusadas.has(k) || trocaDeToken.has(k)) return [{ conta: d, reconectar: true }];
-    return renovaveis.has(k) ? [{ conta: d, reconectar: true, renovar: true }] : [];
+    if (renovaveis.has(k)) return [{ conta: d, reconectar: true, renovar: true, ...(ganhamPermissao.has(k) ? { permissao: true } : {}) }];
+    return ganhamPermissao.has(k) ? [{ conta: d, reconectar: true, permissao: true }] : [];
   });
 }
 
