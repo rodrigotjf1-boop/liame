@@ -160,4 +160,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // modelo, escrito pela loja; o nome e a regra do público; contagens; a janela; a regra do cupom) e quem propôs.
   // Nenhum telefone, nome de contato ou conteúdo de conversa: os contatos ficam no RegemCast.
   message_request: { class: 'PERSONAL', retention: 'com a marca ou a conta conectada (a pessoa em nome de quem o funcionário propôs fica ligada ao pedido)' },
+  // A proposta de mensagem do funcionário de CRM e mensageria (A5, Y6): onde ela está entre "ele decidiu propor" e "o
+  // pedido de envio está em Aprovações" (o que recebeu para escrever, o texto já conferido, o rascunho do modelo no
+  // RegemCast e o pedido que saiu). O texto que a conferência barrou não fica: só os nomes do que barrou. Do público,
+  // só o nome, a regra e a contagem; nenhum telefone nem nome de contato.
+  message_proposal: { class: 'PERSONAL', retention: 'com a marca ou a conta conectada (a pessoa em nome de quem o funcionário propôs fica ligada à proposta)' },
 };
