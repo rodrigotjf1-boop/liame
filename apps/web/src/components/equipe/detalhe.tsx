@@ -278,9 +278,12 @@ export function DetalheDoMembro({
           titulo={doCrm.faixa.titulo}
           texto={doCrm.faixa.texto}
           acao={
-            <Link className="btn btn--sm" href={doCrm.faixa.destino.href}>
-              {doCrm.faixa.destino.rotulo}
-            </Link>
+            // A espera pelo modelo é fora do Liame (no RegemCast e na Meta): não há caminho para abrir aqui.
+            doCrm.faixa.destino ? (
+              <Link className="btn btn--sm" href={doCrm.faixa.destino.href}>
+                {doCrm.faixa.destino.rotulo}
+              </Link>
+            ) : undefined
           }
         />
       )}

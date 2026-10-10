@@ -37,7 +37,8 @@ export const TeamStat = z.strictObject({
    * pessoa ainda pode editar, pedir outra ou recusar). CRM e mensageria: do mês, `mensagens_propostas` (os pedidos de
    * envio que ele montou), `mensagens_enviadas` (as que uma pessoa aprovou e foram para o RegemCast),
    * `mensagens_recusadas` e `retiradas_na_conferencia` (os textos dele que a conferência barrou); de agora,
-   * `mensagens_esperando` (os pedidos que esperam a decisão em Aprovações); e o que as mensagens do mês trouxeram pelo
+   * `mensagens_esperando` (os pedidos que esperam a decisão em Aprovações) e `rascunhos_esperando_o_modelo` (as
+   * propostas cujo rascunho de modelo está no RegemCast, esperando a Meta); e o que as mensagens do mês trouxeram pelo
    * cupom de cada uma, `pedidos_com_cupom` (contagem) e `caixa_com_cupom` (receita confirmada no caixa, em micros de
    * real).
    */
@@ -64,16 +65,25 @@ export const TeamMember = z.strictObject({
   /** Tem trabalho em andamento agora (um plano em preparo, uma página sendo lida, um pedido de peças na fila ou sendo escrito). */
   working_now: z.boolean(),
   /**
-   * O que ele está fazendo agora, quando a tela consegue dizer (hoje, só o Criativo): a oferta do pedido de peças
-   * (`subject`; nula para quem não vê as campanhas, e no pedido de outra versão de uma peça), quantas peças foram
-   * pedidas (`count`; nula na outra versão), quem pediu e quando.
+   * O trabalho em andamento, quando a tela consegue dizer. Criativo: a oferta do pedido de peças (`subject`; nula
+   * para quem não vê as campanhas, e no pedido de outra versão de uma peça), quantas peças foram pedidas (`count`;
+   * nula na outra versão), quem pediu e quando. CRM e mensageria: a proposta em andamento, com o motivo em `kind`
+   * (`promocao` ou `volte_a_pedir`) e quantas pessoas podem receber em `count`. Enquanto ele a prepara
+   * (`working_now`), `subject` é a oferta de Minha marca (nula no "volte a pedir") e `since`, quando começou; com o
+   * rascunho do modelo esperando a Meta (`blocked_by` `modelo_sem_envio` ou `modelo_em_analise`), `subject` é o nome
+   * da mensagem e `since`, quando o rascunho nasceu. `subject` é nulo para quem não vê as campanhas.
    */
-  in_progress: z.strictObject({ subject: z.string().nullable(), count: z.int().nullable(), by: Pessoa, since: z.iso.datetime() }).nullable().optional(),
+  in_progress: z
+    .strictObject({ subject: z.string().nullable(), count: z.int().nullable(), by: Pessoa, since: z.iso.datetime(), kind: Slug.nullable().optional() })
+    .nullable()
+    .optional(),
   /**
    * Por que ele não pode trabalhar agora, estando ligado. Criativo (só trabalha a pedido): `sem_oferta` (Minha marca
    * ainda não tem oferta), `limite_de_ia_do_dia` ou `limite_de_ia_do_mes` (um pedido novo não cabe no que resta do
    * limite de uso de IA da empresa). CRM e mensageria: `sem_regemcast` (nenhuma conta do RegemCast conectada nesta
-   * marca: não há para quem propor) ou `sem_oferta`. Nulo quando ele pode trabalhar, e quando está desligado ou parado.
+   * marca: não há para quem propor); `modelo_sem_envio` (o rascunho do modelo está no RegemCast e uma pessoa ainda não
+   * o enviou para a análise da Meta) ou `modelo_em_analise` (a Meta ainda analisa): só com o modelo aprovado ele monta
+   * o pedido de envio; ou `sem_oferta`. Nulo quando ele pode trabalhar, e quando está desligado ou parado.
    */
   blocked_by: Slug.nullable().optional(),
   /** A empresa pode desligar (o Compliance não). */
@@ -133,7 +143,10 @@ export const TeamActivityItem = z.strictObject({
    * `peca_contestada`. CRM e mensageria: `propos_mensagem` (montou um pedido de envio: `subject` é o nome da mensagem e
    * `count` quantas pessoas podem receber) e o que aconteceu com o pedido, `mensagem_enviada` (uma pessoa aprovou e o
    * envio foi para o RegemCast), `mensagem_recusada`, `mensagem_cancelada` (quem opera tirou o pedido da fila),
-   * `mensagem_expirou` e `mensagem_falhou`. Gestor de tráfego, no modo Aprovação: `pediu` (ele mesmo fez o pedido
+   * `mensagem_expirou` e `mensagem_falhou`; e, antes do pedido, o caminho da proposta: `escreveu_rascunho` (o texto
+   * passou na conferência e o rascunho do modelo foi para o RegemCast: `subject` é o nome da mensagem),
+   * `mensagem_barrada` (a conferência não deixou o texto passar: os nomes do que barrou vão em `rules`, e o texto não
+   * é guardado), `proposta_descartada` e `proposta_falhou` (o porquê em `detail`). Gestor de tráfego, no modo Aprovação: `pediu` (ele mesmo fez o pedido
    * da mudança, que espera uma pessoa) e `nao_pediu` (tentou e não conseguiu: o motivo vai no `detail`). De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
    * aparecer), `desligado` e `ligado` (pela empresa, nesta marca).
    */

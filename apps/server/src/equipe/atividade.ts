@@ -224,7 +224,22 @@ function ramosDoMembro(membro: Membro, q: QuemOlha): SQL[] {
       const nome = sql`case when ${q.podePecas}::boolean then m.name end`;
       const doPedido = sql`from liame.message_request m join liame.action_request r on r.id = m.action_request_id
                           where m.tenant_id = ${q.tenantId} and m.brand_id = ${q.brandId} and m.agent_key = ${membro}`;
+      // O caminho da proposta antes do pedido (a fila `message_proposal`, migration 0062).
+      const nomeDaProposta = sql`case when ${q.podePecas}::boolean then p.name end`;
+      const daFila = sql`from liame.message_proposal p where p.tenant_id = ${q.tenantId} and p.brand_id = ${q.brandId} and p.agent_key = ${membro}`;
       return [
+        // O texto passou na conferência e o rascunho do modelo foi para o RegemCast: falta a Meta aprovar o modelo.
+        ramo({ at: sql`p.drafted_at`, kind: 'escreveu_rascunho', subject: nomeDaProposta, detail: sql`p.motive`, n: sql`p.people` }, sql`${daFila} and p.drafted_at >= ${q.desde}::timestamptz`),
+        // A conferência não deixou o texto passar: ficam os nomes do que barrou; o texto (e o nome da mensagem) não é guardado.
+        ramo(
+          { at: sql`p.finished_at`, kind: 'mensagem_barrada', detail: sql`p.motive`, n: sql`p.people`, rules: sql`to_jsonb(p.barred_by)` },
+          sql`${daFila} and p.status = 'barrada' and p.finished_at >= ${q.desde}::timestamptz`,
+        ),
+        // A proposta que não virou pedido, com o porquê em código.
+        ramo(
+          { at: sql`p.finished_at`, kind: sql`case p.status when 'descartada' then 'proposta_descartada' else 'proposta_falhou' end`, subject: nomeDaProposta, detail: sql`p.reason`, n: sql`p.people` },
+          sql`${daFila} and p.status in ('descartada', 'falhou') and p.finished_at >= ${q.desde}::timestamptz`,
+        ),
         // O pedido de envio que ele montou: a mensagem e quantas pessoas podem receber.
         ramo({ at: sql`m.created_at`, kind: 'propos_mensagem', subject: nome, n: sql`m.people_can_receive` }, sql`${doPedido} and m.created_at >= ${q.desde}::timestamptz`),
         // O que aconteceu com o pedido: uma pessoa aprovou e o envio foi para o RegemCast, recusou, cancelou (quem opera

@@ -13,7 +13,7 @@ import { SombraLoop } from '../../src/worker/sombra-loop.js';
 import { SombraService } from '../../src/worker/sombra.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import { ligarCriativo, ligarIa } from '../helpers/ia.js';
-import { contaDoRegemcast, semearMensagemDoCrm } from '../helpers/mensagens-semeadas.js';
+import { contaDoRegemcast, semearMensagemDoCrm, semearPropostaDoCrm } from '../helpers/mensagens-semeadas.js';
 import { pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
@@ -231,7 +231,16 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
       await ownerQuery(`insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), $1, 'tenant', $2, 'true'::jsonb, 'testes')`, [flag, e.tenantId]);
       flags.invalidate();
     };
-    const zerado = { mensagens_propostas: '0', mensagens_enviadas: '0', mensagens_recusadas: '0', mensagens_esperando: '0', pedidos_com_cupom: '0', caixa_com_cupom: '0', retiradas_na_conferencia: '0' };
+    const zerado = {
+      mensagens_propostas: '0',
+      mensagens_enviadas: '0',
+      mensagens_recusadas: '0',
+      mensagens_esperando: '0',
+      rascunhos_esperando_o_modelo: '0',
+      pedidos_com_cupom: '0',
+      caixa_com_cupom: '0',
+      retiradas_na_conferencia: '0',
+    };
 
     // Com a IA ligada e sem as flags dele: ainda não está ligado para a empresa, e não há o que dizer do que falta.
     let t = await ver(e, e.brandId);
@@ -307,7 +316,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     t = await ver(e, e.brandId);
     // Cinco propostas no mês (a enviada, a que espera, a recusada, a tirada da fila e a que passou do prazo); dois
     // pedidos com o cupom, R$ 30,00 + (R$ 24,00 − R$ 4,00 devolvidos) = R$ 50,00.
-    expect(numeros(t, 'crm')).toEqual({ mensagens_propostas: '5', mensagens_enviadas: '1', mensagens_recusadas: '1', mensagens_esperando: '1', pedidos_com_cupom: '2', caixa_com_cupom: '50000000', retiradas_na_conferencia: '0' });
+    expect(numeros(t, 'crm')).toEqual({ ...zerado, mensagens_propostas: '5', mensagens_enviadas: '1', mensagens_recusadas: '1', mensagens_esperando: '1', pedidos_com_cupom: '2', caixa_com_cupom: '50000000' });
     expect(doMembro(t, 'crm')).toMatchObject({ status: 'ativo', blocked_by: null, cost: { usd_micros: '90000', calls: 2 } });
     // Os outros funcionários seguem sem os números dele, e ele sem os deles.
     expect(numeros(t, 'criativo')).not.toHaveProperty('mensagens_propostas');
@@ -324,6 +333,64 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     // Outra empresa não vê nada disto.
     const vizinha = await empresa();
     expect(numeros(await ver(vizinha, vizinha.brandId), 'crm')).toEqual(zerado);
+  });
+
+  it('o CRM e mensageria e a fila das propostas (A5 · P16): preparando é trabalho em andamento; o rascunho que espera o modelo diz o que falta', async () => {
+    const e = await empresa();
+    await ligarIa(flags, e.tenantId);
+    for (const flag of ['crm', 'mensageria', 'whatsapp_campaign']) {
+      await ownerQuery(`insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), $1, 'tenant', $2, 'true'::jsonb, 'testes')`, [flag, e.tenantId]);
+    }
+    flags.invalidate();
+    const crm = async () => doMembro(await ver(e, e.brandId), 'crm');
+    const conta = await contaDoRegemcast(e);
+    const alvo = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId, conta };
+    // Sem oferta em Minha marca e sem nada na fila: o que falta é a oferta.
+    expect(await crm()).toMatchObject({ status: 'ativo', working_now: false, in_progress: null, blocked_by: 'sem_oferta' });
+    // A proposta de outro funcionário na fila não é dele: nada muda. (Ela sai da fila em seguida: a marca tem uma
+    // proposta em andamento por motivo.)
+    const deOutro = await semearPropostaDoCrm(alvo, { situacao: 'rascunho', motivo: 'volte_a_pedir', funcionario: 'trafego', nome: 'De outro funcionário' });
+    expect(await crm()).toMatchObject({ working_now: false, in_progress: null, blocked_by: 'sem_oferta' });
+    expect(numeros(await ver(e, e.brandId), 'crm').rascunhos_esperando_o_modelo).toBe('0');
+    await ownerQuery(`update liame.message_proposal set status = 'descartada', reason = 'prazo', finished_at = now() where id = $1`, [deOutro]);
+
+    // Um "volte a pedir" cujo rascunho de modelo está no RegemCast e ninguém enviou ainda para a Meta: a ficha diz
+    // isso (e não "sem oferta"), com o nome da mensagem, as pessoas e desde quando o rascunho existe.
+    const rascunho = await semearPropostaDoCrm(alvo, { situacao: 'rascunho', motivo: 'volte_a_pedir', nome: 'Volte a pedir', pessoas: 96, haMinutos: 60, rascunhoHaMinutos: 50 });
+    let m = await crm();
+    expect(m).toMatchObject({ status: 'ativo', working_now: false, blocked_by: 'modelo_sem_envio', in_progress: { subject: 'Volte a pedir', count: 96, by: null, kind: 'volte_a_pedir' } });
+    expect(Math.round((Date.now() - new Date(m.in_progress!.since).getTime()) / 60_000)).toBe(50);
+    expect(numeros(await ver(e, e.brandId), 'crm').rascunhos_esperando_o_modelo).toBe('1');
+    // Uma pessoa enviou o modelo, e a Meta analisa.
+    await ownerQuery(`update liame.message_proposal set template_status = 'em análise' where id = $1`, [rascunho]);
+    expect((await crm()).blocked_by).toBe('modelo_em_analise');
+
+    // Ele começa a preparar uma promoção: é trabalho em andamento, sem impedimento, e vem antes do rascunho que espera.
+    const preparando = await semearPropostaDoCrm(alvo, { situacao: 'preparando', motivo: 'promocao', oferta: 'Combo sexta: smash, batata e refri por R$ 34,90', pessoas: 412, haMinutos: 2 });
+    m = await crm();
+    expect(m).toMatchObject({ working_now: true, blocked_by: null, in_progress: { subject: 'Combo sexta: smash, batata e refri por R$ 34,90', count: 412, by: null, kind: 'promocao' } });
+    // O rascunho segue contado; as propostas que acabaram não entram.
+    await semearPropostaDoCrm(alvo, { situacao: 'barrada', motivo: 'promocao', acabouHaMinutos: 30 });
+    await semearPropostaDoCrm(alvo, { situacao: 'descartada', motivo: 'promocao', porque: 'modelo_recusado', rascunhoHaMinutos: 300, acabouHaMinutos: 200 });
+    expect(numeros(await ver(e, e.brandId), 'crm').rascunhos_esperando_o_modelo).toBe('1');
+
+    // Acabou o preparo (a conferência barrou): volta a valer o rascunho que espera.
+    await ownerQuery(`update liame.message_proposal set status = 'barrada', barred_by = '{oferta}', finished_at = now() where id = $1`, [preparando]);
+    expect(await crm()).toMatchObject({ working_now: false, blocked_by: 'modelo_em_analise', in_progress: { subject: 'Volte a pedir' } });
+
+    // A empresa desliga: nada disso se diz, e o rascunho segue contado.
+    const desligado = await api.call('POST', '/v1/team/members/crm/pause', { cookie: e.cookie, body: { brand_id: e.brandId } });
+    expect(doMembro(TeamResponse.parse(desligado.body), 'crm')).toMatchObject({ status: 'desligado', working_now: false, in_progress: null, blocked_by: null });
+    expect(numeros(TeamResponse.parse(desligado.body), 'crm').rascunhos_esperando_o_modelo).toBe('1');
+
+    // Sem o RegemCast conectado, é só isso que a ficha diz, mesmo com o rascunho na fila.
+    await api.call('POST', '/v1/team/members/crm/resume', { cookie: e.cookie, body: { brand_id: e.brandId } });
+    await ownerQuery(`update liame.connected_account set disconnected_at = now() where id = $1`, [conta]);
+    expect(await crm()).toMatchObject({ status: 'ativo', working_now: false, in_progress: null, blocked_by: 'sem_regemcast' });
+
+    // Outra empresa não vê a fila desta.
+    const vizinha = await empresa();
+    expect(numeros(await ver(vizinha, vizinha.brandId), 'crm').rascunhos_esperando_o_modelo).toBe('0');
   });
 
   it('o custo de IA de cada um e o que fez no mês saem do banco, por marca', async () => {

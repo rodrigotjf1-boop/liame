@@ -491,6 +491,86 @@ describe('a leitura `equipe_trabalho`: o que a LIA recebe de Sua equipe (A3, P7)
     expect(rotuloDoPasso('equipe_trabalho', { brand_id: 'x', funcionario: 'crm' })).toBe('Lendo o trabalho do CRM e mensageria em Sua equipe');
   });
 
+  it('o CRM e mensageria e a fila das propostas (A5 · P16): a proposta em andamento em palavras, o que falta ao modelo e os acontecimentos da fila', () => {
+    const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
+    const mensagens = [stat('mensagens_propostas', 1), stat('mensagens_esperando', 0), stat('rascunhos_esperando_o_modelo', 1), stat('retiradas_na_conferencia', 0)];
+    const comCrm = (extra: Partial<TeamMember> = {}): TeamResponse => ({ ...EQUIPE, members: [...EQUIPE.members, membro('crm', { cost: { usd_micros: '30000', calls: 2 }, stats: mensagens, in_progress: null, blocked_by: null, ...extra })] });
+    const doCrm = (t: TeamResponse) => (visaoDaEquipe(t, null, 'America/Sao_Paulo') as Record<string, any>).equipe.find((m: { funcionario: string }) => m.funcionario === 'CRM e mensageria');
+    const DESDE = '2026-10-09T12:00:00.000Z';
+    expect(doCrm(comCrm()).no_mes.rascunhos_de_modelo_no_regemcast_esperando_a_meta_agora).toBe('1');
+    expect(doCrm(comCrm())).not.toHaveProperty('proposta_em_andamento');
+
+    // Preparando uma promoção: trabalho em andamento, com a oferta de onde ela parte; ainda não há mensagem.
+    const preparando = doCrm(comCrm({ working_now: true, in_progress: { subject: OFERTA, count: 412, by: null, since: DESDE, kind: 'promocao' } }));
+    expect(preparando.trabalhando_agora).toBe('sim');
+    expect(preparando.proposta_em_andamento).toMatchObject({
+      para: 'divulgar uma oferta de Minha marca',
+      situacao: 'preparando: ele escreve o texto e o código confere antes de qualquer pessoa ver',
+      oferta: OFERTA,
+      pessoas_que_podem_receber: '412',
+    });
+    expect(preparando.proposta_em_andamento.desde).toContain('09/10');
+    expect(preparando.proposta_em_andamento).not.toHaveProperty('mensagem');
+    expect(preparando).not.toHaveProperty('nao_pode_propor_agora');
+    // Não é o Criativo: o campo do que ele "escreve agora" é das peças.
+    expect(preparando).not.toHaveProperty('escrevendo_agora');
+
+    // O rascunho que espera o modelo: o nome da mensagem, e o que falta em palavras.
+    const esperando = doCrm(comCrm({ blocked_by: 'modelo_sem_envio', in_progress: { subject: 'Volte a pedir', count: 96, by: null, since: DESDE, kind: 'volte_a_pedir' } }));
+    expect(esperando).not.toHaveProperty('trabalhando_agora');
+    expect(esperando.proposta_em_andamento).toMatchObject({
+      para: 'chamar de volta clientes que não pedem há algum tempo',
+      situacao: 'o rascunho do modelo está no RegemCast, esperando a Meta aprovar',
+      mensagem: 'Volte a pedir',
+      pessoas_que_podem_receber: '96',
+    });
+    expect(esperando.proposta_em_andamento).not.toHaveProperty('oferta');
+    expect(esperando.nao_pode_propor_agora).toBe(
+      'o rascunho do modelo está no RegemCast e ainda não foi enviado para a análise da Meta: quem envia é uma pessoa, no RegemCast, e só com o modelo aprovado ele monta o pedido de envio',
+    );
+    expect(doCrm(comCrm({ blocked_by: 'modelo_em_analise' })).nao_pode_propor_agora).toBe('o modelo da mensagem está em análise na Meta: só com o modelo aprovado ele monta o pedido de envio');
+    // Quem não vê as campanhas (sem o nome) e um motivo que a visão não conhece: os campos somem, o resto fica.
+    expect(doCrm(comCrm({ blocked_by: 'modelo_em_analise', in_progress: { subject: null, count: 96, by: null, since: DESDE, kind: 'motivo_novo' } })).proposta_em_andamento).toEqual({
+      situacao: 'o rascunho do modelo está no RegemCast, esperando a Meta aprovar',
+      pessoas_que_podem_receber: '96',
+      desde: expect.stringContaining('09/10'),
+    });
+    // Os outros funcionários não ganham o campo, nem com trabalho em andamento.
+    const todos = (visaoDaEquipe(comCrm(), null, 'America/Sao_Paulo') as Record<string, any>).equipe;
+    expect(todos.filter((m: Record<string, unknown>) => 'proposta_em_andamento' in m)).toEqual([]);
+
+    // Os acontecimentos da fila: cada um com o campo do que ele é; o que barrou em palavras; o que a visão não conhece, sem os traços.
+    const v = ver('crm', [
+      item({ kind: 'escreveu_rascunho', subject: 'Volte a pedir', detail: 'volte_a_pedir', count: 96 }),
+      item({ kind: 'mensagem_barrada', detail: 'promocao', count: 412, rules: ['oferta', 'regras_da_liame', 'regras_da_marca', 'formato', 'item_novo'] }),
+      item({ kind: 'proposta_descartada', subject: 'Sexta em dobro', detail: 'modelo_recusado' }),
+      item({ kind: 'proposta_falhou', detail: 'ia_fora_do_ar' }),
+      item({ kind: 'proposta_descartada', detail: 'motivo_novo' }),
+    ], comCrm());
+    expect(semHora(v)).toEqual([
+      {
+        o_que: 'escreveu uma mensagem, que passou na conferência, e deixou o rascunho do modelo no RegemCast: falta uma pessoa enviar o modelo para a análise da Meta',
+        mensagem: 'Volte a pedir',
+        para: 'chamar de volta clientes que não pedem há algum tempo',
+        pessoas_que_podem_receber: '96',
+      },
+      {
+        o_que: 'teve uma mensagem barrada na conferência, antes de qualquer pessoa ver: nada foi para o RegemCast, e o texto não é guardado',
+        para: 'divulgar uma oferta de Minha marca',
+        o_que_barrou: [
+          'preço, número ou benefício que não está na oferta nem no cupom',
+          'regra de texto da Liame',
+          'o que a marca nunca diz, ou o nome de um concorrente',
+          'formato que a Meta não aceita num modelo',
+          'item novo',
+        ],
+      },
+      { o_que: 'teve uma proposta de mensagem que não virou pedido', mensagem: 'Sexta em dobro', motivo: 'a Meta recusou o modelo' },
+      { o_que: 'não conseguiu concluir uma proposta de mensagem', motivo: 'a IA não respondeu' },
+      { o_que: 'teve uma proposta de mensagem que não virou pedido', motivo: 'motivo novo' },
+    ]);
+  });
+
   it('a leitura no registro: é da conversa (o Estrategista segue com as seis leituras dos números), e a tela diz o que a LIA leu', () => {
     expect(LEITURAS.map((l) => l.name)).toEqual([...LEITURAS_DE_DADOS, 'equipe_trabalho']);
     expect(ESTRATEGISTA.ferramentas).toEqual([...LEITURAS_DE_DADOS]);

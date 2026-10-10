@@ -342,9 +342,13 @@ export function atividadeDo(m: TeamMember, mes: string, agora: Date): string {
     }
     case 'crm': {
       const esperam = numero(m, 'mensagens_esperando');
+      const eEsperam = esperam > 0n ? `; ${vezes(esperam, 'mensagem espera', 'mensagens esperam')} você` : '';
       if (m.blocked_by === 'sem_regemcast') return 'Espera a conexão com o RegemCast';
-      if (m.blocked_by === 'sem_oferta') return 'Espera a primeira oferta em Minha marca';
+      if (m.working_now && m.in_progress) return `Preparando uma proposta de ${motivoDaProposta(m.in_progress.kind)}${eEsperam}`;
       if (esperam > 0n) return `${vezes(esperam, 'mensagem espera', 'mensagens esperam')} a sua decisão`;
+      if (m.blocked_by === 'modelo_sem_envio') return 'O rascunho do modelo espera o envio para a Meta';
+      if (m.blocked_by === 'modelo_em_analise') return 'O modelo da mensagem está em análise na Meta';
+      if (m.blocked_by === 'sem_oferta') return 'Espera a primeira oferta em Minha marca';
       return numero(m, 'mensagens_propostas') > 0n ? `Propôs ${vezes(numero(m, 'mensagens_propostas'), 'mensagem', 'mensagens')} em ${mes}` : `Sem proposta de mensagem em ${mes}`;
     }
     case 'trafego':
@@ -421,10 +425,13 @@ export function acertoDo(m: TeamMember, mes: string): Numero[] {
     case 'crm': {
       // As mensagens que ele propôs no mês e o que as pessoas decidiram delas; o que espera a decisão é de agora.
       const [propostas, enviadas, recusadas, barradas] = [numero(m, 'mensagens_propostas'), numero(m, 'mensagens_enviadas'), numero(m, 'mensagens_recusadas'), numero(m, 'retiradas_na_conferencia')];
+      // O rascunho que espera o modelo só aparece quando há: é uma espera de agora, fora do Liame.
+      const rascunhos = numero(m, 'rascunhos_esperando_o_modelo');
       return [
         { valor: n('mensagens_propostas'), rotulo: propostas === 1n ? 'mensagem proposta' : 'mensagens propostas' },
         { valor: n('mensagens_enviadas'), rotulo: enviadas === 1n ? 'aprovada e enviada' : 'aprovadas e enviadas' },
         { valor: n('mensagens_esperando'), rotulo: 'esperando a sua decisão' },
+        ...(rascunhos > 0n ? [{ valor: n('rascunhos_esperando_o_modelo'), rotulo: rascunhos === 1n ? 'rascunho esperando o modelo' : 'rascunhos esperando o modelo' }] : []),
         { valor: n('retiradas_na_conferencia'), rotulo: barradas === 1n ? 'barrada na conferência' : 'barradas na conferência' },
         ...(recusadas > 0n ? [{ valor: n('mensagens_recusadas'), rotulo: recusadas === 1n ? 'recusada por você' : 'recusadas por você' }] : []),
       ];
@@ -546,19 +553,79 @@ export function agoraDoCriativo(m: TeamMember, t: TeamResponse, agora: Date): Ag
 // ------------------------------------------------------------------ o CRM e mensageria: o que acontece agora
 
 export interface AgoraDoCrm {
-  /** A faixa de cima: por que ele não tem como propor agora, com o caminho que resolve. */
-  faixa: { tipo: 'acao'; icone: NomeIcone; titulo: string; texto: string; destino: { href: string; rotulo: string } } | null;
-  /** O bloco: o que espera a pessoa, ou que nada espera. `aprovacoes`: leva o atalho para Aprovações. */
+  /**
+   * A faixa de cima: por que ele não tem como seguir agora. `acao`: falta algo que a pessoa resolve no Liame, com o
+   * caminho (`destino`); `atencao`: a espera é fora do Liame (o modelo, no RegemCast e na Meta), sem caminho aqui.
+   */
+  faixa: { tipo: 'acao' | 'atencao'; icone: NomeIcone; titulo: string; texto: string; destino: { href: string; rotulo: string } | null } | null;
+  /** O bloco: o que ele faz agora, o que espera a pessoa, ou que nada espera. `aprovacoes`: leva o atalho para Aprovações. */
   bloco: { titulo: string; frase: Array<{ texto: string; forte?: boolean }>; aprovacoes: boolean } | null;
 }
 
+/** Por que a mensagem existe (`in_progress.kind`), como a ficha escreve. O que a tela não conhece vira "mensagem". */
+const MOTIVO_DA_PROPOSTA: Record<string, string> = { promocao: 'promoção', volte_a_pedir: 'volte a pedir' };
+const motivoDaProposta = (kind: string | null | undefined): string => MOTIVO_DA_PROPOSTA[kind ?? ''] ?? 'mensagem';
+
 /**
- * O que a ficha do CRM e mensageria diz de agora (P16). Toda mensagem dele é um pedido em Aprovações: a ficha diz
- * quantos esperam a decisão e, quando ele não tem como propor, por quê. Não ligado pela Liame, não há o que dizer.
+ * O que a ficha do CRM e mensageria diz de agora (P16). Toda mensagem dele é um pedido em Aprovações: a ficha diz o
+ * que ele prepara, o rascunho que espera o modelo ser aprovado pela Meta, quantos pedidos esperam a decisão e, quando
+ * ele não tem como propor, por quê. Não ligado pela Liame, não há o que dizer.
  */
 export function agoraDoCrm(m: TeamMember, t: TeamResponse): AgoraDoCrm {
   if (m.status === 'desligado_pela_liame') return { faixa: null, bloco: null };
   const mes = mesDe(t.month.from);
+  const esperam = numero(m, 'mensagens_esperando');
+  // O pedido que espera a decisão nunca some da ficha: quando o bloco fala de outra coisa, ele entra como frase a mais.
+  const eEsperam = esperam > 0n ? [{ texto: ` ${vezes(esperam, 'mensagem espera', 'mensagens esperam')} a sua decisão em Aprovações.` }] : [];
+  const esperandoVoce: AgoraDoCrm['bloco'] =
+    esperam > 0n
+      ? {
+          titulo: 'Esperando você',
+          frase: [{ texto: `${vezes(esperam, 'mensagem espera', 'mensagens esperam')} a sua decisão`, forte: true }, { texto: ' em Aprovações. Lá você vê o texto, quem recebe, quando sai e quanto pode custar.' }],
+          aprovacoes: true,
+        }
+      : null;
+  const andamento = m.in_progress ?? null;
+  const pessoas = andamento?.count ? `, para ${vezes(andamento.count, 'pessoa', 'pessoas')}` : '';
+  if (m.working_now && andamento) {
+    return {
+      faixa: null,
+      bloco: {
+        titulo: 'Agora',
+        frase: [
+          { texto: 'Está preparando uma proposta de ' },
+          { texto: motivoDaProposta(andamento.kind), forte: true },
+          {
+            texto: `${andamento.subject ? ` da oferta “${andamento.subject}”` : ''}${pessoas}: escreve o texto, que passa pela conferência, e deixa o rascunho do modelo no RegemCast. Com o modelo aprovado pela Meta, o pedido chega em Aprovações.`,
+          },
+          ...eEsperam,
+        ],
+        aprovacoes: esperam > 0n,
+      },
+    };
+  }
+  if (m.blocked_by === 'modelo_sem_envio' || m.blocked_by === 'modelo_em_analise') {
+    const enviado = m.blocked_by === 'modelo_em_analise';
+    const doModelo = andamento?.subject ? `O modelo de “${andamento.subject}”` : 'O modelo da mensagem';
+    const oRascunho = andamento?.subject ? [{ texto: 'O rascunho de ' }, { texto: `“${andamento.subject}”`, forte: true }] : [{ texto: 'O rascunho da mensagem' }];
+    return {
+      faixa: {
+        tipo: 'atencao',
+        icone: 'clock',
+        titulo: enviado ? `${doModelo} está em análise na Meta` : `${doModelo} ainda não foi enviado para a análise da Meta`,
+        texto: enviado
+          ? 'Uma pessoa já enviou o modelo para a Meta, que ainda analisa. Só com o modelo aprovado ele consegue montar o pedido de envio.'
+          : 'Ele escreveu o rascunho, e o Compliance conferiu. Quem envia o modelo para a Meta é uma pessoa, no RegemCast. Só com o modelo aprovado ele consegue montar o pedido de envio.',
+        destino: null,
+      },
+      // O que espera a decisão da pessoa vem antes: é o que ela resolve no Liame. A faixa de cima já fala do modelo.
+      bloco: esperandoVoce ?? {
+        titulo: 'Esperando o modelo',
+        frase: [...oRascunho, { texto: `${enviado ? ' foi enviado para a Meta' : ' está pronto no RegemCast'}. Depois que a Meta aprovar o modelo, ele monta o pedido de envio, que chega em Aprovações.` }],
+        aprovacoes: false,
+      },
+    };
+  }
   if (m.blocked_by === 'sem_regemcast') {
     return {
       faixa: {
@@ -580,20 +647,11 @@ export function agoraDoCrm(m: TeamMember, t: TeamResponse): AgoraDoCrm {
         texto: 'Para uma promoção, ele parte de uma oferta de lá: o nome, o que é e o preço que uma pessoa conferiu. Ele não inventa oferta nem preço.',
         destino: { href: '/marca', rotulo: 'Abrir Minha marca' },
       },
-      bloco: null,
+      // O pedido que já espera a decisão (um "volte a pedir", que não precisa de oferta) segue à vista.
+      bloco: esperandoVoce,
     };
   }
-  const esperam = numero(m, 'mensagens_esperando');
-  if (esperam > 0n) {
-    return {
-      faixa: null,
-      bloco: {
-        titulo: 'Esperando você',
-        frase: [{ texto: `${vezes(esperam, 'mensagem espera', 'mensagens esperam')} a sua decisão`, forte: true }, { texto: ' em Aprovações. Lá você vê o texto, quem recebe, quando sai e quanto pode custar.' }],
-        aprovacoes: true,
-      },
-    };
-  }
+  if (esperandoVoce) return { faixa: null, bloco: esperandoVoce };
   if (numero(m, 'mensagens_propostas') > 0n) {
     return { faixa: null, bloco: { titulo: 'Nada esperando você', frase: [{ texto: `As mensagens de ${mes} já foram decididas. O que foi enviado e o que trouxe está em Mensagens.` }], aprovacoes: false } };
   }
@@ -735,6 +793,23 @@ const PEDIDO_DE_PECA: Record<string, string> = {
   ia_fora_do_ar: 'A IA não respondeu.',
   ia_desligada: 'A IA estava desligada.',
   teto: 'O limite de uso de IA tinha acabado.',
+};
+/** O que a conferência da mensagem apontou quando barrou (os itens de `conferirMensagem`, no servidor), como a pessoa lê. */
+const ITEM_DA_MENSAGEM: Record<string, string> = {
+  oferta: 'preço, número ou benefício que não está na oferta nem no cupom',
+  regras_da_liame: 'regra de texto da Liame',
+  regras_da_marca: 'o que a marca nunca diz, ou o nome de um concorrente',
+  formato: 'formato que a Meta não aceita num modelo',
+};
+/** Por que uma proposta de mensagem não virou pedido (`message_proposal.reason`), como a pessoa lê. */
+const PROPOSTA_ENCERRADA: Record<string, string> = {
+  politica: 'Ele não escreve mensagem de conteúdo político.',
+  bebida_alcoolica: 'Ele não escreve mensagem de bebida alcoólica.',
+  categoria_proibida: 'A oferta é de uma categoria que ele não divulga.',
+  modelo_recusado: 'A Meta recusou o modelo.',
+  prazo: 'O modelo não foi aprovado no prazo.',
+  ia_fora_do_ar: 'A IA não respondeu.',
+  regemcast_fora_do_ar: 'O RegemCast não respondeu.',
 };
 const CONFERENCIA_DA_PECA: Record<string, string> = {
   passou: 'passou na conferência',
@@ -919,6 +994,24 @@ export function historicoDo(i: TeamActivityItem, agora: Date): LinhaDoHistorico 
       return { quando, titulo: i.subject ? `“${i.subject}” expirou sem decisão` : 'Pedido de mensagem expirou', texto: 'Ninguém decidiu no prazo. Nada foi enviado.' };
     case 'mensagem_falhou':
       return { quando, titulo: i.subject ? `“${i.subject}” aprovada, mas não enviada` : 'Mensagem aprovada, mas não enviada', texto: 'O envio falhou. O motivo está no pedido, em Aprovações.' };
+    case 'escreveu_rascunho':
+      return {
+        quando,
+        titulo: i.subject ? `Escreveu o rascunho do modelo de “${i.subject}”` : 'Escreveu o rascunho do modelo de uma mensagem',
+        texto: 'O Compliance conferiu e o texto passou. Falta uma pessoa enviar o modelo para a análise da Meta, no RegemCast.',
+      };
+    case 'mensagem_barrada': {
+      const oQueBarrou = i.rules.map((r) => ITEM_DA_MENSAGEM[r] ?? nomeDaRegra(r));
+      return {
+        quando,
+        titulo: i.detail && MOTIVO_DA_PROPOSTA[i.detail] ? `A conferência barrou uma mensagem de ${MOTIVO_DA_PROPOSTA[i.detail]}` : 'A conferência barrou uma mensagem dele',
+        texto: `${oQueBarrou.length ? `Motivo: ${emLista(oQueBarrou)}. ` : ''}Nada foi para o RegemCast, e o texto não foi guardado.`,
+      };
+    }
+    case 'proposta_descartada':
+      return { quando, titulo: i.subject ? `A proposta “${i.subject}” não virou pedido` : 'Uma proposta de mensagem não virou pedido', texto: `${PROPOSTA_ENCERRADA[i.detail ?? ''] ?? 'A proposta foi descartada.'} Nada foi enviado.` };
+    case 'proposta_falhou':
+      return { quando, titulo: i.subject ? `Não conseguiu concluir a proposta “${i.subject}”` : 'Não conseguiu concluir uma proposta de mensagem', texto: `${PROPOSTA_ENCERRADA[i.detail ?? ''] ?? 'A proposta falhou.'} Nada foi enviado.` };
     case 'desligado':
       return { quando, titulo: 'Desligado nesta marca', texto: `${quemFez(i, 'desligou', 'Desligado pela empresa')}. O histórico ficou guardado.` };
     case 'ligado':

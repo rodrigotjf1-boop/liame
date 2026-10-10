@@ -91,9 +91,65 @@ export interface MensagensDoCrm {
   recusadas: number;
   /** Agora, na marca inteira: os pedidos dele que esperam a decisão em Aprovações. */
   esperando: number;
+  /** Agora: as propostas cujo rascunho de modelo está no RegemCast, esperando a Meta (a fila `message_proposal`). */
+  rascunhos: number;
   /** Os pedidos confirmados no caixa com o cupom das mensagens propostas no mês, e a receita deles, em micros de real. */
   pedidosComCupom: number;
   caixaComCupomMicros: bigint;
+}
+
+/** Uma proposta dele que ainda está no caminho (a fila `message_proposal`), como o serviço a leu. */
+export interface PropostaEmAndamento {
+  situacao: 'preparando' | 'rascunho';
+  /** `promocao` ou `volte_a_pedir`. */
+  motivo: string;
+  /** A oferta de Minha marca de onde ela parte (nula no "volte a pedir" sem oferta). */
+  oferta: string | null;
+  /** O nome da mensagem, depois de escrita e conferida. */
+  nome: string | null;
+  /** Quantas pessoas do público podiam receber quando ele propôs. */
+  pessoas: number;
+  /** A situação do modelo que o RegemCast informou por último: `rascunho` enquanto ninguém o enviou para a Meta. */
+  situacaoDoModelo: string | null;
+  /** Quando ele começou a preparar e quando o rascunho do modelo nasceu no RegemCast, em ISO. */
+  abertaEm: string;
+  rascunhoEm: string | null;
+}
+
+export interface AgoraDoCrm {
+  workingNow: boolean;
+  inProgress: { subject: string | null; count: number; by: null; since: string; kind: string } | null;
+  blockedBy: string | null;
+}
+
+/** O rascunho que o RegemCast guarda e ninguém enviou ainda para a análise da Meta (`modelo_rascunhar` devolve assim). */
+const MODELO_SO_NO_REGEMCAST = 'rascunho';
+
+/**
+ * O que o CRM e mensageria tem em andamento e o que o segura agora (protótipo P16), do que mais pesa ao que menos:
+ * sem o RegemCast conectado não há para quem propor, e nada mais importa; a proposta que ele prepara é trabalho em
+ * andamento, sem impedimento; o rascunho que espera o modelo diz o que falta (uma pessoa enviar para a Meta, ou a
+ * Meta terminar a análise); por fim, Minha marca sem oferta. Desligado ou parado, nada disso se diz. A oferta e o
+ * nome da mensagem só vão para quem vê as campanhas.
+ */
+export function agoraDoCrm(f: { ativo: boolean; semRegemcast: boolean; semOferta: boolean; emAndamento: PropostaEmAndamento[]; veAsCampanhas: boolean }): AgoraDoCrm {
+  if (!f.ativo) return { workingNow: false, inProgress: null, blockedBy: null };
+  if (f.semRegemcast) return { workingNow: false, inProgress: null, blockedBy: 'sem_regemcast' };
+  const preparando = f.emAndamento.find((p) => p.situacao === 'preparando');
+  if (preparando) {
+    const subject = f.veAsCampanhas ? preparando.oferta : null;
+    return { workingNow: true, inProgress: { subject, count: preparando.pessoas, by: null, since: preparando.abertaEm, kind: preparando.motivo }, blockedBy: null };
+  }
+  const rascunho = f.emAndamento.find((p) => p.situacao === 'rascunho');
+  if (rascunho) {
+    const semEnvio = rascunho.situacaoDoModelo === null || rascunho.situacaoDoModelo === MODELO_SO_NO_REGEMCAST;
+    return {
+      workingNow: false,
+      inProgress: { subject: f.veAsCampanhas ? rascunho.nome : null, count: rascunho.pessoas, by: null, since: rascunho.rascunhoEm ?? rascunho.abertaEm, kind: rascunho.motivo },
+      blockedBy: semEnvio ? 'modelo_sem_envio' : 'modelo_em_analise',
+    };
+  }
+  return { workingNow: false, inProgress: null, blockedBy: f.semOferta ? 'sem_oferta' : null };
 }
 
 export interface PecasDoCriativo {
@@ -163,6 +219,7 @@ export function numerosDoMembro(def: DefinicaoDoMembro, c: ContagensDoMes): Team
         qtd('mensagens_enviadas', c.mensagens.enviadas),
         qtd('mensagens_recusadas', c.mensagens.recusadas),
         qtd('mensagens_esperando', c.mensagens.esperando),
+        qtd('rascunhos_esperando_o_modelo', c.mensagens.rascunhos),
         qtd('pedidos_com_cupom', c.mensagens.pedidosComCupom),
         { key: 'caixa_com_cupom', value: c.mensagens.caixaComCupomMicros.toString(), unit: 'brl_micros' },
         retiradas,

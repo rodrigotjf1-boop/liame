@@ -47,6 +47,8 @@
 .eqp-motivo { display: grid; gap: 4px; min-width: min(100%, 260px); font-size: var(--text-xs); color: var(--text-muted); }
 .eqp-bloco { display: grid; gap: var(--sp-3); padding: var(--sp-4) var(--sp-5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
 .eqp-bloco > * { min-width: 0; }
+/* O nome de uma oferta ou de uma mensagem entra nas frases e nas faixas da ficha: o nome comprido e sem espaço quebra na linha. */
+.eqp-det .lite-frase, .eqp-det .faixa-txt { overflow-wrap: anywhere; }
 .eqp-bloco-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .eqp-bloco-cab h3 { margin: 0; font-size: var(--text-md); }
 .eqp-numeros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }

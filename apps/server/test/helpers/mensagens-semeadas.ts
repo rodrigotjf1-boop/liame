@@ -16,6 +16,72 @@ const SITUACAO: Record<MensagemSemeada, { status: string; motivo: string | null 
   aguardando: { status: 'aguardando_aprovacao', motivo: null },
 };
 
+/**
+ * Uma proposta do funcionário de CRM e mensageria na fila (`message_proposal`), já na situação dada. Gravada direto no
+ * banco para poder voltar no tempo; os passos de verdade estão provados em `proposta-do-crm.spec.ts`. `haMinutos`: quando
+ * ele começou; `rascunhoHaMinutos`: quando o rascunho do modelo nasceu; `acabouHaMinutos`: quando a proposta acabou.
+ */
+export async function semearPropostaDoCrm(
+  alvo: { tenantId: string; brandId: string; userId: string; conta: string },
+  o: {
+    situacao: 'preparando' | 'rascunho' | 'pedido' | 'barrada' | 'descartada' | 'falhou';
+    motivo?: 'promocao' | 'volte_a_pedir';
+    oferta?: string | null;
+    nome?: string;
+    pessoas?: number;
+    /** A situação do modelo que o RegemCast informou por último (`rascunho`: ninguém o enviou ainda para a Meta). */
+    situacaoDoModelo?: string;
+    oQueBarrou?: string[];
+    porque?: string;
+    haMinutos?: number;
+    rascunhoHaMinutos?: number;
+    acabouHaMinutos?: number;
+    funcionario?: string;
+  },
+): Promise<string> {
+  const id = uuidv7();
+  const motivo = o.motivo ?? 'promocao';
+  const oferta = o.oferta === undefined ? (motivo === 'promocao' ? 'Combo sexta: smash, batata e refri por R$ 34,90' : null) : o.oferta;
+  const minutos = o.haMinutos ?? 10;
+  const escrita = ['rascunho', 'pedido', 'descartada', 'falhou'].includes(o.situacao) && o.rascunhoHaMinutos !== undefined;
+  const comRascunho = o.situacao === 'rascunho' || o.situacao === 'pedido' || escrita;
+  const acabou = ['pedido', 'barrada', 'descartada', 'falhou'].includes(o.situacao);
+  const nome = o.situacao === 'barrada' || (!comRascunho && o.nome === undefined) ? null : (o.nome ?? 'Sexta em dobro');
+  await ownerQuery(
+    `insert into liame.message_proposal (id, tenant_id, brand_id, connected_account_id, motive, destination, offer, dossier_version, audience, audience_name, people,
+                                         status, reason, barred_by, name, body, template_id, template_name, template_language, template_status, template_checked_at, drafted_at,
+                                         agent_key, requested_by, created_at, updated_at, finished_at)
+     values ($1, $2, $3, $4, $5, 'cardapio', $6, $7, '{"origem":"publico","id":"p"}'::jsonb, 'Quem pediu nos últimos 30 dias', $8,
+             $9, $10, $11::text[], $12, $13, $14, $15, $16, $17, $18::timestamptz, $18::timestamptz,
+             $19, $20, now() - make_interval(mins => $21), now() - make_interval(mins => $21), $22::timestamptz)`,
+    [
+      id,
+      alvo.tenantId,
+      alvo.brandId,
+      alvo.conta,
+      motivo,
+      oferta,
+      oferta ? 1 : null,
+      o.pessoas ?? 412,
+      o.situacao,
+      o.situacao === 'descartada' || o.situacao === 'falhou' ? (o.porque ?? 'prazo') : null,
+      o.situacao === 'barrada' ? `{${(o.oQueBarrou ?? ['oferta']).join(',')}}` : null,
+      nome,
+      nome ? 'Oi, {{1}}! Use o cupom {{2}}.' : null,
+      comRascunho ? randomUUID() : null,
+      comRascunho ? 'sexta_em_dobro_v1' : null,
+      comRascunho ? 'pt_BR' : null,
+      comRascunho ? (o.situacaoDoModelo ?? 'rascunho') : null,
+      comRascunho ? new Date(Date.now() - (o.rascunhoHaMinutos ?? minutos) * 60_000).toISOString() : null,
+      o.funcionario ?? 'crm',
+      alvo.userId,
+      minutos,
+      acabou ? new Date(Date.now() - (o.acabouHaMinutos ?? 0) * 60_000).toISOString() : null,
+    ],
+  );
+  return id;
+}
+
 /** Uma conta do RegemCast conectada à marca, direto no banco (a conexão de verdade está provada em `mensageria-rotas.spec.ts`). */
 export async function contaDoRegemcast(alvo: { tenantId: string; brandId: string }): Promise<string> {
   const id = randomUUID();

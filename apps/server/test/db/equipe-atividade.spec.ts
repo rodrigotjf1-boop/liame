@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { atividadeDoMembro } from '../../src/equipe/atividade.js';
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
-import { contaDoRegemcast, semearMensagemDoCrm } from '../helpers/mensagens-semeadas.js';
+import { contaDoRegemcast, semearMensagemDoCrm, semearPropostaDoCrm } from '../helpers/mensagens-semeadas.js';
 import { decisaoDaPeca, pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
@@ -445,6 +445,42 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     expect(semNome.items.map((i) => i.subject)).toEqual(new Array(11).fill(null));
     expect(semNome.items[10]).toMatchObject({ kind: 'propos_mensagem', count: 176 });
     // Outra empresa não vê as mensagens desta.
+    const outraEmpresa = await empresa();
+    expect((await atividade(outraEmpresa, outraEmpresa.brandId, 'crm')).items).toEqual([]);
+  });
+
+  it('CRM e mensageria (A5 · P16): o caminho da proposta na fila: o rascunho do modelo, a barrada sem o texto, a descartada e a que falhou', async () => {
+    const e = await empresa();
+    const conta = await contaDoRegemcast(e);
+    const alvo = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId, conta };
+    // Há 50: o rascunho de "Volte a pedir" foi para o RegemCast, e segue esperando a Meta.
+    await semearPropostaDoCrm(alvo, { situacao: 'rascunho', motivo: 'volte_a_pedir', nome: 'Volte a pedir', pessoas: 96, haMinutos: 55, rascunhoHaMinutos: 50 });
+    // Há 40: a conferência barrou uma promoção (o preço não estava na oferta, e uma regra da Liame).
+    await semearPropostaDoCrm(alvo, { situacao: 'barrada', motivo: 'promocao', oQueBarrou: ['oferta', 'regras_da_liame'], haMinutos: 45, acabouHaMinutos: 40 });
+    // Há 30: o rascunho de "Sexta em dobro" nasceu; há 20, a Meta recusou o modelo e a proposta foi descartada.
+    await semearPropostaDoCrm(alvo, { situacao: 'descartada', motivo: 'promocao', nome: 'Sexta em dobro', porque: 'modelo_recusado', haMinutos: 35, rascunhoHaMinutos: 30, acabouHaMinutos: 20 });
+    // Há 10: a IA não respondeu, e a proposta falhou antes de ter texto.
+    await semearPropostaDoCrm(alvo, { situacao: 'falhou', motivo: 'promocao', porque: 'ia_fora_do_ar', haMinutos: 15, acabouHaMinutos: 10 });
+    // A proposta de outro funcionário não entra no histórico dele.
+    await semearPropostaDoCrm(alvo, { situacao: 'descartada', motivo: 'volte_a_pedir', funcionario: 'trafego', nome: 'De outro funcionário', rascunhoHaMinutos: 8, acabouHaMinutos: 5 });
+
+    const t = await atividade(e, e.brandId, 'crm');
+    expect(tipos(t)).toEqual(['proposta_falhou', 'proposta_descartada', 'escreveu_rascunho', 'mensagem_barrada', 'escreveu_rascunho']);
+    expect(t.items[0]).toMatchObject({ subject: null, detail: 'ia_fora_do_ar', by: null, mine: false });
+    expect(t.items[1]).toMatchObject({ subject: 'Sexta em dobro', detail: 'modelo_recusado' });
+    expect(t.items[2]).toMatchObject({ subject: 'Sexta em dobro', detail: 'promocao', count: 412 });
+    // A barrada diz o que barrou, em código; o texto e o nome da mensagem não foram guardados.
+    expect(t.items[3]).toMatchObject({ subject: null, detail: 'promocao', count: 412, rules: ['oferta', 'regras_da_liame'] });
+    expect(t.items[4]).toMatchObject({ subject: 'Volte a pedir', detail: 'volte_a_pedir', count: 96 });
+    expect(t.items.map((i) => i.subject)).not.toContain('De outro funcionário');
+
+    // Sem a permissão das campanhas, o acontecimento aparece sem o nome da mensagem.
+    const semNome = await withContext(database.db, { tenantId: e.tenantId, userId: e.userId }, (tx) =>
+      atividadeDoMembro(tx, 'crm', { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId, desde: ha(60 * 24), podePlanos: true, podeDossie: true, podePecas: false }, 20),
+    );
+    expect(semNome.items.map((i) => i.subject)).toEqual(new Array(5).fill(null));
+    expect(semNome.items[3]?.rules).toEqual(['oferta', 'regras_da_liame']);
+    // Outra empresa não vê a fila desta.
     const outraEmpresa = await empresa();
     expect((await atividade(outraEmpresa, outraEmpresa.brandId, 'crm')).items).toEqual([]);
   });
