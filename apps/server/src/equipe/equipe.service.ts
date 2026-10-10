@@ -27,7 +27,7 @@ import { REGRAS_VERSAO } from '../sombra/regras.js';
 import { atividadeDoMembro, DIAS_DA_ATIVIDADE } from './atividade.js';
 import { PREFIXO_RECUSA } from '../actions/action.service.js';
 import { CRIATIVO_DA_EQUIPE, CRM_DA_EQUIPE, EQUIPE, ehMembro, type Membro, MEMBROS } from './membros.js';
-import { type ContagensDoMes, numerosDoMembro, situacaoDoMembro } from './numeros.js';
+import { agoraDoCrm, type ContagensDoMes, numerosDoMembro, type PropostaEmAndamento, situacaoDoMembro } from './numeros.js';
 
 // Sua equipe (A3, I13b; protótipo P7, aprovado em 03/10/2026). Na requisição, sob a RLS da empresa: quem
 // trabalha para a marca, a situação de cada um, o custo de IA e o que fez no mês. A empresa desliga e liga um membro
@@ -178,6 +178,24 @@ export class EquipeService {
                                     and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at
             where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE} and m.created_at >= ${inicio}::timestamptz and m.coupon_created_at is not null)::text as caixa_com_cupom`)
     ).rows[0]!;
+    // As propostas dele que ainda estão no caminho (a fila `message_proposal`, migration 0062): a que ele prepara e o
+    // rascunho que espera o modelo. Uma por motivo de cada vez; a que está em preparo vem primeiro.
+    const propostas: PropostaEmAndamento[] = (
+      await tx.execute<{ status: 'preparando' | 'rascunho'; motive: string; offer: string | null; name: string | null; people: number; template_status: string | null; created_at: Date | string; drafted_at: Date | string | null }>(sql`
+        select status, motive, offer, name, people, template_status, created_at, drafted_at
+          from liame.message_proposal
+         where brand_id = ${brandId} and agent_key = ${CRM_DA_EQUIPE} and status in ('preparando', 'rascunho')
+         order by (status = 'preparando') desc, created_at, id`)
+    ).rows.map((p) => ({
+      situacao: p.status,
+      motivo: p.motive,
+      oferta: p.offer,
+      nome: p.name,
+      pessoas: Number(p.people),
+      situacaoDoModelo: p.template_status,
+      abertaEm: iso(p.created_at),
+      rascunhoEm: p.drafted_at ? iso(p.drafted_at) : null,
+    }));
     const contagens: ContagensDoMes = {
       respostasPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.respostas)])),
       entreguesPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.entregues)])),
@@ -212,6 +230,7 @@ export class EquipeService {
         enviadas: Number(mensagens.enviadas),
         recusadas: Number(mensagens.recusadas),
         esperando: Number(mensagens.esperando),
+        rascunhos: propostas.filter((p) => p.situacao === 'rascunho').length,
         pedidosComCupom: Number(mensagens.pedidos_com_cupom),
         caixaComCupomMicros: BigInt(mensagens.caixa_com_cupom as string),
       },
@@ -250,11 +269,14 @@ export class EquipeService {
       const doMembro = def.fluxos.map((f) => usos.get(f)).filter((u) => u !== undefined);
       const status = situacaoDoMembro(def, { pausado: pausa !== undefined, peloPlano, ia, sombra, criativo, crm, parada: parada !== undefined });
       const doCriativo = key === CRIATIVO_DA_EQUIPE;
+      // O CRM e mensageria: o que ele tem em andamento e o que o segura agora, numa regra só (`agoraDoCrm`).
+      const doCrm = key === CRM_DA_EQUIPE ? agoraDoCrm({ ativo: status === 'ativo', ...(await this.oQueFaltaAoCrm(status === 'ativo', brandId, org.fuso, agora)), emAndamento: propostas, veAsCampanhas: auth.permissions.has('campanhas.ver') }) : null;
       membros.push({
         key,
         kind: def.kind,
         status,
-        working_now: (key === 'estrategista' && Number(n.preparando_agora) > 0) || (key === 'pesquisador' && Number(n.lendo_agora) > 0) || (doCriativo && escrevendo !== undefined),
+        working_now:
+          (key === 'estrategista' && Number(n.preparando_agora) > 0) || (key === 'pesquisador' && Number(n.lendo_agora) > 0) || (doCriativo && escrevendo !== undefined) || doCrm?.workingNow === true,
         // O que o Criativo está escrevendo: a oferta só para quem vê as campanhas (é quem vê a tela de Criativos).
         ...(doCriativo
           ? {
@@ -269,8 +291,8 @@ export class EquipeService {
               blocked_by: status === 'ativo' ? await this.oQueSeguraOCriativo(tenantId, brandId, org.fuso, agora) : null,
             }
           : {}),
-        // O CRM e mensageria ligado que não tem como propor: a tela diz o que falta.
-        ...(key === CRM_DA_EQUIPE ? { in_progress: null, blocked_by: status === 'ativo' ? await this.oQueSeguraOCrm(brandId, org.fuso, agora) : null } : {}),
+        // O CRM e mensageria: a proposta em andamento e, ligado e sem ter como seguir, o que falta.
+        ...(doCrm ? { in_progress: doCrm.inProgress, blocked_by: doCrm.blockedBy } : {}),
         can_pause: def.desligavel,
         paused: pausa ? { by: quem(pausa.paused_by, pausa.name), at: iso(pausa.paused_at), reason: pausa.reason } : null,
         cost: { usd_micros: doMembro.reduce((s, u) => s + BigInt(u.custo), 0n).toString(), calls: doMembro.reduce((s, u) => s + Number(u.chamadas), 0) },
@@ -316,15 +338,16 @@ export class EquipeService {
   }
 
   /**
-   * Por que o CRM e mensageria, ligado, não tem como propor agora: nenhuma conta do RegemCast conectada nesta marca (é
-   * ele que envia e guarda os contatos), ou Minha marca sem oferta (a promoção parte de uma oferta de lá).
+   * O que falta ao CRM e mensageria para propor: nenhuma conta do RegemCast conectada nesta marca (é ele que envia e
+   * guarda os contatos), ou Minha marca sem oferta (a promoção parte de uma oferta de lá). Só é lido para quem está
+   * ligado; o que pesa mais, e o que a proposta em andamento muda, é decidido em `agoraDoCrm`.
    */
-  private async oQueSeguraOCrm(brandId: string, fuso: string, agora: Date): Promise<string | null> {
+  private async oQueFaltaAoCrm(ativo: boolean, brandId: string, fuso: string, agora: Date): Promise<{ semRegemcast: boolean; semOferta: boolean }> {
+    if (!ativo) return { semRegemcast: false, semOferta: false };
     const conta = await currentTx().execute(sql`select 1 from liame.connected_account where brand_id = ${brandId} and provider = 'regemcast' and disconnected_at is null limit 1`);
-    if (!conta.rows[0]) return 'sem_regemcast';
+    if (!conta.rows[0]) return { semRegemcast: true, semOferta: false };
     const marca = await marcaDoCriativo(brandId, fuso, agora);
-    if (!marca || !marca.conteudo.offers.items.length) return 'sem_oferta';
-    return null;
+    return { semRegemcast: false, semOferta: !marca || !marca.conteudo.offers.items.length };
   }
 
   /** "O que fez": os acontecimentos do membro nesta marca nos últimos 90 dias, do mais novo para o mais antigo. */

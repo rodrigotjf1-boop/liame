@@ -80,12 +80,38 @@ const NUMERO: Record<string, string> = {
   mensagens_enviadas: 'mensagens_do_mes_aprovadas_por_uma_pessoa_e_enviadas',
   mensagens_recusadas: 'mensagens_do_mes_recusadas_por_uma_pessoa',
   mensagens_esperando: 'mensagens_esperando_a_decisao_de_uma_pessoa_agora',
+  rascunhos_esperando_o_modelo: 'rascunhos_de_modelo_no_regemcast_esperando_a_meta_agora',
   pedidos_com_cupom: 'pedidos_confirmados_no_caixa_com_o_cupom_das_mensagens_do_mes',
 };
 /** Por que o CRM e mensageria, ligado, não tem como propor agora (`blocked_by`), como a ficha dele diz. */
 const NAO_PODE_PROPOR: Record<string, string> = {
   sem_regemcast: 'o RegemCast não está conectado nesta marca: é ele que envia as mensagens e guarda os contatos',
   sem_oferta: 'Minha marca ainda não tem oferta: para uma promoção ele parte de uma oferta de lá, e não inventa oferta nem preço',
+  modelo_sem_envio:
+    'o rascunho do modelo está no RegemCast e ainda não foi enviado para a análise da Meta: quem envia é uma pessoa, no RegemCast, e só com o modelo aprovado ele monta o pedido de envio',
+  modelo_em_analise: 'o modelo da mensagem está em análise na Meta: só com o modelo aprovado ele monta o pedido de envio',
+};
+/** Por que a mensagem existe (`in_progress.kind` e o `detail` dos acontecimentos da proposta). */
+const MOTIVO_DA_MENSAGEM: Record<string, string> = {
+  promocao: 'divulgar uma oferta de Minha marca',
+  volte_a_pedir: 'chamar de volta clientes que não pedem há algum tempo',
+};
+/** O que a conferência da mensagem apontou quando barrou (os itens de `conferirMensagem`), em palavras. */
+const ITEM_DA_MENSAGEM: Record<string, string> = {
+  oferta: 'preço, número ou benefício que não está na oferta nem no cupom',
+  regras_da_liame: 'regra de texto da Liame',
+  regras_da_marca: 'o que a marca nunca diz, ou o nome de um concorrente',
+  formato: 'formato que a Meta não aceita num modelo',
+};
+/** Por que uma proposta não virou pedido (`message_proposal.reason`); o que a visão não conhece vira o código sem os traços. */
+const PROPOSTA_ENCERRADA: Record<string, string> = {
+  politica: 'ele não escreve mensagem de conteúdo político',
+  bebida_alcoolica: 'ele não escreve mensagem de bebida alcoólica',
+  categoria_proibida: 'a oferta é de uma categoria que ele não divulga',
+  modelo_recusado: 'a Meta recusou o modelo',
+  prazo: 'o modelo não foi aprovado no prazo',
+  ia_fora_do_ar: 'a IA não respondeu',
+  regemcast_fora_do_ar: 'o RegemCast não respondeu',
 };
 /** Por que o Criativo, ligado, não pode escrever agora (`blocked_by`), como a ficha dele diz. */
 const NAO_PODE_ESCREVER: Record<string, string> = {
@@ -221,6 +247,18 @@ function doMembro(m: TeamMember, naTela: (usdMicros: string) => string, fuso: st
       ? soOQueExiste({ o_que: escrevendo.count ? 'peças novas' : 'outra versão de uma peça', pecas_pedidas: escrevendo.count ? inteiro(escrevendo.count) : null, oferta: escrevendo.subject, pedido_feito: quando(escrevendo.since, fuso) })
       : null,
     nao_pode_escrever_agora: criativo && m.blocked_by ? (NAO_PODE_ESCREVER[m.blocked_by] ?? m.blocked_by.replaceAll('_', ' ')) : null,
+    // A proposta que ele tem em andamento: a que prepara agora, ou a que espera o modelo ser aprovado pela Meta.
+    proposta_em_andamento:
+      crm && m.in_progress
+        ? soOQueExiste({
+            para: MOTIVO_DA_MENSAGEM[m.in_progress.kind ?? ''] ?? null,
+            situacao: m.working_now ? 'preparando: ele escreve o texto e o código confere antes de qualquer pessoa ver' : 'o rascunho do modelo está no RegemCast, esperando a Meta aprovar',
+            oferta: m.working_now ? m.in_progress.subject : null,
+            mensagem: m.working_now ? null : m.in_progress.subject,
+            pessoas_que_podem_receber: m.in_progress.count === null ? null : inteiro(m.in_progress.count),
+            desde: quando(m.in_progress.since, fuso),
+          })
+        : null,
     nao_pode_propor_agora: crm && m.blocked_by ? (NAO_PODE_PROPOR[m.blocked_by] ?? m.blocked_by.replaceAll('_', ' ')) : null,
     desligado_desde: m.paused ? quando(m.paused.at, fuso) : null,
     motivo_de_estar_desligado: m.paused?.reason ?? null,
@@ -338,6 +376,23 @@ function doAcontecimento(i: TeamActivityItem, fuso: string) {
       return o({ o_que: 'teve um pedido de mensagem que expirou sem decisão: nada foi enviado', mensagem: i.subject });
     case 'mensagem_falhou':
       return o({ o_que: 'teve uma mensagem aprovada que não foi enviada: o envio falhou', mensagem: i.subject });
+    case 'escreveu_rascunho':
+      return o({
+        o_que: 'escreveu uma mensagem, que passou na conferência, e deixou o rascunho do modelo no RegemCast: falta uma pessoa enviar o modelo para a análise da Meta',
+        mensagem: i.subject,
+        para: MOTIVO_DA_MENSAGEM[detalhe] ?? null,
+        pessoas_que_podem_receber: i.count === null ? null : inteiro(n),
+      });
+    case 'mensagem_barrada':
+      return o({
+        o_que: 'teve uma mensagem barrada na conferência, antes de qualquer pessoa ver: nada foi para o RegemCast, e o texto não é guardado',
+        para: MOTIVO_DA_MENSAGEM[detalhe] ?? null,
+        o_que_barrou: i.rules.map((r) => ITEM_DA_MENSAGEM[r] ?? REGRA[r] ?? r.replaceAll('_', ' ')),
+      });
+    case 'proposta_descartada':
+      return o({ o_que: 'teve uma proposta de mensagem que não virou pedido', mensagem: i.subject, motivo: PROPOSTA_ENCERRADA[detalhe] ?? (detalhe ? detalhe.replaceAll('_', ' ') : null) });
+    case 'proposta_falhou':
+      return o({ o_que: 'não conseguiu concluir uma proposta de mensagem', mensagem: i.subject, motivo: PROPOSTA_ENCERRADA[detalhe] ?? (detalhe ? detalhe.replaceAll('_', ' ') : null) });
     case 'desligado':
       return o({ o_que: 'foi desligado pela empresa nesta marca', quem_decidiu: pessoa });
     case 'ligado':

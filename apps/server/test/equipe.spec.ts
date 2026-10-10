@@ -6,7 +6,7 @@ import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DOS_RESULTADOS } from 
 import { WORKFLOW_DO_REVISOR } from '../src/ai/revisor/prompt.js';
 import { WORKFLOW as WORKFLOW_DA_CONVERSA } from '../src/conversa/conversa.service.js';
 import { EQUIPE, MEMBROS } from '../src/equipe/membros.js';
-import { type ContagensDoMes, type FatosDoMembro, numerosDoMembro, situacaoDoMembro } from '../src/equipe/numeros.js';
+import { agoraDoCrm, type ContagensDoMes, type FatosDoMembro, numerosDoMembro, type PropostaEmAndamento, situacaoDoMembro } from '../src/equipe/numeros.js';
 import { WORKFLOW as WORKFLOW_DO_ESTRATEGISTA } from '../src/worker/estrategista.service.js';
 import { WORKFLOW as WORKFLOW_DO_PESQUISADOR } from '../src/worker/pesquisa.service.js';
 
@@ -15,7 +15,7 @@ import { WORKFLOW as WORKFLOW_DO_PESQUISADOR } from '../src/worker/pesquisa.serv
 
 const tudoLigado: FatosDoMembro = { pausado: false, peloPlano: true, ia: true, sombra: true, criativo: true, crm: true, parada: false };
 const semPecas = { pedidos: 0, escritas: 0, aprovadas: 0, recusadas: 0, refeitas: 0, hoje: 0, esperando: 0, barradas: 0 };
-const semMensagens = { propostas: 0, enviadas: 0, recusadas: 0, esperando: 0, pedidosComCupom: 0, caixaComCupomMicros: 0n };
+const semMensagens = { propostas: 0, enviadas: 0, recusadas: 0, esperando: 0, rascunhos: 0, pedidosComCupom: 0, caixaComCupomMicros: 0n };
 const vazio: ContagensDoMes = {
   respostasPorFluxo: new Map(),
   entreguesPorFluxo: new Map(),
@@ -139,8 +139,9 @@ describe('Sua equipe (A3, I13b)', () => {
       ]),
       // O Criativo: 2 pedidos atendidos, 5 peças no mês (2 aprovadas), 1 versão refeita, 3 de hoje; agora, 2 esperam e 1 está barrada.
       pecas: { pedidos: 2, escritas: 5, aprovadas: 2, recusadas: 0, refeitas: 1, hoje: 3, esperando: 2, barradas: 1 },
-      // O CRM e mensageria: 2 mensagens propostas no mês (1 enviada), 1 esperando agora, e 12 pedidos com o cupom delas (R$ 540,00).
-      mensagens: { propostas: 2, enviadas: 1, recusadas: 0, esperando: 1, pedidosComCupom: 12, caixaComCupomMicros: 540_000_000n },
+      // O CRM e mensageria: 2 mensagens propostas no mês (1 enviada), 1 esperando agora, 1 rascunho esperando o modelo, e
+      // 12 pedidos com o cupom delas (R$ 540,00).
+      mensagens: { propostas: 2, enviadas: 1, recusadas: 0, esperando: 1, rascunhos: 1, pedidosComCupom: 12, caixaComCupomMicros: 540_000_000n },
     };
     const ver = (m: (typeof MEMBROS)[number]) => Object.fromEntries(numerosDoMembro(EQUIPE[m], c).map((x) => [x.key, `${x.value} ${x.unit}`]));
     expect(ver('lia')).toEqual({ respostas: '61 qtd', fez_sentido: '28 qtd', discordo: '5 qtd', demandas: '2 qtd', retiradas_na_conferencia: '5 qtd' });
@@ -171,6 +172,7 @@ describe('Sua equipe (A3, I13b)', () => {
       mensagens_enviadas: '1 qtd',
       mensagens_recusadas: '0 qtd',
       mensagens_esperando: '1 qtd',
+      rascunhos_esperando_o_modelo: '1 qtd',
       pedidos_com_cupom: '12 qtd',
       caixa_com_cupom: '540000000 brl_micros',
       retiradas_na_conferencia: '0 qtd',
@@ -179,5 +181,46 @@ describe('Sua equipe (A3, I13b)', () => {
     // Sem nada no mês, tudo zero (e nada de buraco na lista).
     expect(numerosDoMembro(EQUIPE.lia, vazio).map((x) => x.value)).toEqual(['0', '0', '0', '0', '0']);
     expect(numerosDoMembro(EQUIPE.compliance, vazio).map((x) => `${x.key}=${x.value}`)).toEqual(['textos_conferidos=0', 'textos_barrados=0']);
+  });
+
+  it('o CRM e mensageria agora (A5 · P16): o que ele tem em andamento e o que o segura, do que mais pesa ao que menos', () => {
+    const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
+    const preparando: PropostaEmAndamento = { situacao: 'preparando', motivo: 'promocao', oferta: OFERTA, nome: null, pessoas: 412, situacaoDoModelo: null, abertaEm: '2026-10-09T12:00:00.000Z', rascunhoEm: null };
+    const rascunho: PropostaEmAndamento = {
+      situacao: 'rascunho',
+      motivo: 'volte_a_pedir',
+      oferta: null,
+      nome: 'Volte a pedir',
+      pessoas: 96,
+      situacaoDoModelo: 'rascunho',
+      abertaEm: '2026-10-08T12:00:00.000Z',
+      rascunhoEm: '2026-10-08T12:05:00.000Z',
+    };
+    const agora = (over: Partial<Parameters<typeof agoraDoCrm>[0]> = {}) => agoraDoCrm({ ativo: true, semRegemcast: false, semOferta: false, emAndamento: [], veAsCampanhas: true, ...over });
+
+    // Ligado, com tudo no lugar e nada em andamento: nada a dizer.
+    expect(agora()).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
+    // Preparando: é trabalho em andamento, sem impedimento; a oferta, o motivo, as pessoas e desde quando.
+    expect(agora({ emAndamento: [preparando] })).toEqual({ workingNow: true, inProgress: { subject: OFERTA, count: 412, by: null, since: preparando.abertaEm, kind: 'promocao' }, blockedBy: null });
+    // O rascunho que ninguém enviou ainda para a Meta, e o que a Meta ainda analisa: o nome da mensagem e desde quando o rascunho nasceu.
+    const esperando = { subject: 'Volte a pedir', count: 96, by: null, since: rascunho.rascunhoEm, kind: 'volte_a_pedir' };
+    expect(agora({ emAndamento: [rascunho] })).toEqual({ workingNow: false, inProgress: esperando, blockedBy: 'modelo_sem_envio' });
+    expect(agora({ emAndamento: [{ ...rascunho, situacaoDoModelo: null }] }).blockedBy).toBe('modelo_sem_envio');
+    for (const daMeta of ['em análise', 'em recurso']) expect(agora({ emAndamento: [{ ...rascunho, situacaoDoModelo: daMeta }] }).blockedBy).toBe('modelo_em_analise');
+    // Com as duas, o que ele prepara agora vem primeiro (em qualquer ordem da lista).
+    expect(agora({ emAndamento: [rascunho, preparando] })).toMatchObject({ workingNow: true, inProgress: { kind: 'promocao' }, blockedBy: null });
+
+    // Sem o RegemCast não há para quem propor: pesa mais que a proposta em andamento, que nem aparece.
+    expect(agora({ semRegemcast: true, emAndamento: [preparando, rascunho] })).toEqual({ workingNow: false, inProgress: null, blockedBy: 'sem_regemcast' });
+    // Minha marca sem oferta só é o impedimento quando nada está em andamento: o "volte a pedir" não precisa de oferta.
+    expect(agora({ semOferta: true }).blockedBy).toBe('sem_oferta');
+    expect(agora({ semOferta: true, emAndamento: [rascunho] }).blockedBy).toBe('modelo_sem_envio');
+    expect(agora({ semOferta: true, emAndamento: [{ ...preparando, motivo: 'volte_a_pedir', oferta: null }] })).toMatchObject({ workingNow: true, blockedBy: null });
+
+    // Quem não vê as campanhas não recebe a oferta nem o nome da mensagem; o resto fica.
+    expect(agora({ veAsCampanhas: false, emAndamento: [preparando] }).inProgress).toEqual({ subject: null, count: 412, by: null, since: preparando.abertaEm, kind: 'promocao' });
+    expect(agora({ veAsCampanhas: false, emAndamento: [rascunho] }).inProgress?.subject).toBeNull();
+    // Desligado, não ligado ou parado: nada disso se diz.
+    expect(agora({ ativo: false, semRegemcast: true, semOferta: true, emAndamento: [preparando, rascunho] })).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
   });
 });

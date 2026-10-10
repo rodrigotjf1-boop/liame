@@ -682,6 +682,117 @@ describe('o CRM e mensageria em Sua equipe (A5 · P16, aprovado em 09/10/2026)',
     expect(agoraDoCrm(crm({ status: 'desligado_pela_liame' }), comCrm())).toEqual({ faixa: null, bloco: null });
   });
 
+  it('a fila das propostas: preparando é trabalho em andamento; o rascunho que espera o modelo diz o que falta; o pedido que espera a decisão nunca some', () => {
+    const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
+    const DESDE = '2026-10-09T12:00:00.000Z';
+    const preparando = (kind: string | null, subject: string | null, count: number) => ({ working_now: true, in_progress: { subject, count, by: null, since: DESDE, kind } });
+    const esperandoOModelo = (blocked_by: string, subject: string | null) => ({ blocked_by, in_progress: { subject, count: 412, by: null, since: DESDE, kind: 'promocao' } });
+    const semEspera = com('mensagens_esperando', 0);
+
+    // O selo e a linha da lista.
+    expect(situacaoDo(crm(preparando('promocao', OFERTA, 412))).rotulo).toBe('Trabalhando');
+    const linha = (over: Partial<TeamMember>) => atividadeDo(crm(over), 'outubro', AGORA);
+    expect(linha({ ...preparando('promocao', OFERTA, 412), stats: semEspera })).toBe('Preparando uma proposta de promoção');
+    expect(linha(preparando('volte_a_pedir', null, 96))).toBe('Preparando uma proposta de volte a pedir; 1 mensagem espera você');
+    expect(linha({ ...preparando('motivo_novo', null, 96), stats: semEspera })).toBe('Preparando uma proposta de mensagem');
+    expect(linha({ ...esperandoOModelo('modelo_sem_envio', 'Sexta em dobro'), stats: semEspera })).toBe('O rascunho do modelo espera o envio para a Meta');
+    expect(linha({ ...esperandoOModelo('modelo_em_analise', 'Sexta em dobro'), stats: semEspera })).toBe('O modelo da mensagem está em análise na Meta');
+    // O que espera a decisão da pessoa vem antes do que espera a Meta.
+    expect(linha(esperandoOModelo('modelo_sem_envio', 'Sexta em dobro'))).toBe('1 mensagem espera a sua decisão');
+
+    // Preparando: o bloco "Agora", com o motivo, a oferta e as pessoas; sem faixa.
+    expect(frase(crm({ ...preparando('promocao', OFERTA, 412), stats: semEspera }))).toEqual({
+      faixa: null,
+      titulo: 'Agora',
+      texto: `Está preparando uma proposta de promoção da oferta “${OFERTA}”, para 412 pessoas: escreve o texto, que passa pela conferência, e deixa o rascunho do modelo no RegemCast. Com o modelo aprovado pela Meta, o pedido chega em Aprovações.`,
+      aprovacoes: false,
+    });
+    // Sem a oferta (o "volte a pedir", ou quem não vê as campanhas), com 1 pessoa, e com um pedido esperando a decisão.
+    expect(frase(crm(preparando('volte_a_pedir', null, 1)))).toMatchObject({
+      titulo: 'Agora',
+      texto: 'Está preparando uma proposta de volte a pedir, para 1 pessoa: escreve o texto, que passa pela conferência, e deixa o rascunho do modelo no RegemCast. Com o modelo aprovado pela Meta, o pedido chega em Aprovações. 1 mensagem espera a sua decisão em Aprovações.',
+      aprovacoes: true,
+    });
+
+    // O rascunho que ninguém enviou ainda para a Meta: a faixa (sem caminho: a espera é fora do Liame) e o bloco.
+    expect(frase(crm({ ...esperandoOModelo('modelo_sem_envio', 'Sexta em dobro'), stats: semEspera }))).toEqual({
+      faixa: {
+        tipo: 'atencao',
+        icone: 'clock',
+        titulo: 'O modelo de “Sexta em dobro” ainda não foi enviado para a análise da Meta',
+        texto: 'Ele escreveu o rascunho, e o Compliance conferiu. Quem envia o modelo para a Meta é uma pessoa, no RegemCast. Só com o modelo aprovado ele consegue montar o pedido de envio.',
+        destino: null,
+      },
+      titulo: 'Esperando o modelo',
+      texto: 'O rascunho de “Sexta em dobro” está pronto no RegemCast. Depois que a Meta aprovar o modelo, ele monta o pedido de envio, que chega em Aprovações.',
+      aprovacoes: false,
+    });
+    // Enviado, em análise na Meta; e sem o nome da mensagem (quem não vê as campanhas).
+    const emAnalise = frase(crm({ ...esperandoOModelo('modelo_em_analise', null), stats: semEspera }));
+    expect(emAnalise.faixa).toMatchObject({ tipo: 'atencao', titulo: 'O modelo da mensagem está em análise na Meta', texto: 'Uma pessoa já enviou o modelo para a Meta, que ainda analisa. Só com o modelo aprovado ele consegue montar o pedido de envio.', destino: null });
+    expect(emAnalise.texto).toBe('O rascunho da mensagem foi enviado para a Meta. Depois que a Meta aprovar o modelo, ele monta o pedido de envio, que chega em Aprovações.');
+    // Com um pedido esperando a decisão, o bloco é o dele (com o atalho), e a faixa do modelo fica.
+    const comDecisao = frase(crm(esperandoOModelo('modelo_sem_envio', 'Sexta em dobro')));
+    expect(comDecisao).toMatchObject({ titulo: 'Esperando você', aprovacoes: true });
+    expect(comDecisao.faixa?.titulo).toContain('ainda não foi enviado');
+    // Sem oferta em Minha marca, o pedido que já espera a decisão também segue à vista.
+    expect(frase(crm({ blocked_by: 'sem_oferta' }))).toMatchObject({ titulo: 'Esperando você', aprovacoes: true, faixa: { titulo: 'Minha marca ainda não tem oferta' } });
+
+    // O número do rascunho só aparece quando há.
+    const numeros = (n: number) => acertoDo(crm({ stats: [...MENSAGENS, stat('rascunhos_esperando_o_modelo', n)] }), 'outubro').map((x) => `${x.valor} ${x.rotulo}`);
+    expect(numeros(1)).toEqual(['2 mensagens propostas', '1 aprovada e enviada', '1 esperando a sua decisão', '1 rascunho esperando o modelo', '0 barradas na conferência']);
+    expect(numeros(2)[3]).toBe('2 rascunhos esperando o modelo');
+    expect(numeros(0)).toEqual(['2 mensagens propostas', '1 aprovada e enviada', '1 esperando a sua decisão', '0 barradas na conferência']);
+  });
+
+  it('o histórico da fila: o rascunho do modelo, a barrada sem o texto, a descartada e a que falhou', () => {
+    const h = (over: Partial<TeamActivityItem>) => historicoDo(item(over), AGORA);
+    expect(h({ kind: 'escreveu_rascunho', subject: 'Sexta em dobro', detail: 'promocao', count: 412 })).toMatchObject({
+      titulo: 'Escreveu o rascunho do modelo de “Sexta em dobro”',
+      texto: 'O Compliance conferiu e o texto passou. Falta uma pessoa enviar o modelo para a análise da Meta, no RegemCast.',
+    });
+    expect(h({ kind: 'escreveu_rascunho', subject: null }).titulo).toBe('Escreveu o rascunho do modelo de uma mensagem');
+    // A barrada diz o que barrou, em palavras; o texto não foi guardado, e não há nome de mensagem.
+    expect(h({ kind: 'mensagem_barrada', detail: 'promocao', rules: ['oferta', 'regras_da_liame'] })).toMatchObject({
+      titulo: 'A conferência barrou uma mensagem de promoção',
+      texto: 'Motivo: preço, número ou benefício que não está na oferta nem no cupom e regra de texto da Liame. Nada foi para o RegemCast, e o texto não foi guardado.',
+    });
+    expect(h({ kind: 'mensagem_barrada', detail: 'volte_a_pedir', rules: ['regras_da_marca', 'formato', 'item_novo'] }).texto).toBe(
+      'Motivo: o que a marca nunca diz, ou o nome de um concorrente, formato que a Meta não aceita num modelo e item novo. Nada foi para o RegemCast, e o texto não foi guardado.',
+    );
+    expect(h({ kind: 'mensagem_barrada', detail: null, rules: [] })).toMatchObject({ titulo: 'A conferência barrou uma mensagem dele', texto: 'Nada foi para o RegemCast, e o texto não foi guardado.' });
+    expect(h({ kind: 'proposta_descartada', subject: 'Sexta em dobro', detail: 'modelo_recusado' })).toMatchObject({ titulo: 'A proposta “Sexta em dobro” não virou pedido', texto: 'A Meta recusou o modelo. Nada foi enviado.' });
+    expect(h({ kind: 'proposta_descartada', detail: 'motivo_novo' })).toMatchObject({ titulo: 'Uma proposta de mensagem não virou pedido', texto: 'A proposta foi descartada. Nada foi enviado.' });
+    expect(h({ kind: 'proposta_falhou', detail: 'ia_fora_do_ar' })).toMatchObject({ titulo: 'Não conseguiu concluir uma proposta de mensagem', texto: 'A IA não respondeu. Nada foi enviado.' });
+    expect(h({ kind: 'proposta_falhou', subject: 'Volte a pedir', detail: 'regemcast_fora_do_ar' })).toMatchObject({ titulo: 'Não conseguiu concluir a proposta “Volte a pedir”', texto: 'O RegemCast não respondeu. Nada foi enviado.' });
+  });
+
+  it('desenhado: preparando (o selo "Trabalhando" e o bloco "Agora") e esperando o modelo (a faixa sem botão e o bloco)', () => {
+    const DESDE = '2026-10-09T12:00:00.000Z';
+    const semEspera = com('mensagens_esperando', 0);
+    const preparando = desenhar({ t: comCrm({ working_now: true, stats: semEspera, in_progress: { subject: 'Combo sexta', count: 412, by: null, since: DESDE, kind: 'promocao' } }), escolhido: 'crm' });
+    expect(preparando).toContain('Trabalhando');
+    expect(preparando).toContain('<h3>Agora</h3>');
+    expect(preparando).toContain('<b>promoção</b>');
+    expect(preparando).toContain('da oferta “Combo sexta”, para 412 pessoas');
+    expect(preparando).not.toContain('id="eqp-bt-aprovacoes"');
+    expect(preparando).toContain('Preparando uma proposta de promoção');
+
+    const esperando = desenhar({
+      t: comCrm({ blocked_by: 'modelo_sem_envio', stats: [...semEspera, stat('rascunhos_esperando_o_modelo', 1)], in_progress: { subject: 'Sexta em dobro', count: 412, by: null, since: DESDE, kind: 'promocao' } }),
+      escolhido: 'crm',
+    });
+    expect(esperando).toContain('O modelo de “Sexta em dobro” ainda não foi enviado para a análise da Meta');
+    expect(esperando).toContain('<h3>Esperando o modelo</h3>');
+    expect(esperando).toContain('<b>“Sexta em dobro”</b>');
+    expect(esperando).toContain('rascunho esperando o modelo');
+    expect(esperando).toContain('O rascunho do modelo espera o envio para a Meta');
+    // A espera é fora do Liame: a faixa não leva a lugar nenhum daqui.
+    for (const fora of ['href="/contas"', 'href="/marca"', 'id="eqp-bt-aprovacoes"']) expect(esperando, fora).not.toContain(fora);
+    expect(esperando).toContain('id="eqp-crm-modo"');
+    expect(`${preparando}${esperando}`).not.toMatch(/NaN|undefined|\[object Object\]/);
+  });
+
   it('o histórico: a proposta, o envio aprovado, a recusa, o cancelamento, o prazo que acabou e a falha', () => {
     const h = (over: Partial<TeamActivityItem>) => historicoDo(item(over), AGORA);
     expect(h({ kind: 'propos_mensagem', subject: 'Sexta em dobro', count: 412 })).toMatchObject({
