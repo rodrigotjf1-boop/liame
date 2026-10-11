@@ -165,4 +165,8 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // RegemCast e o pedido que saiu). O texto que a conferência barrou não fica: só os nomes do que barrou. Do público,
   // só o nome, a regra e a contagem; nenhum telefone nem nome de contato.
   message_proposal: { class: 'PERSONAL', retention: 'com a marca ou a conta conectada (a pessoa em nome de quem o funcionário propôs fica ligada à proposta)' },
+  // O desconto padrão do cupom das mensagens (A5, Y6): o que o cupom de cada mensagem dá, o pedido mínimo, a validade
+  // em dias e a loja do Regem onde ele nasce, com quem definiu por último (uma pessoa da própria empresa). É regra
+  // comercial da empresa; nenhum dado de cliente.
+  message_discount: { class: 'CONFIDENTIAL', retention: 'com a marca ou a loja do cupom' },
 };

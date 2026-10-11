@@ -46,7 +46,8 @@ type Parte<T> = { status: 'ok'; dado: T } | { status: 'sem_permissao' | 'indispo
 const iso = (v: string | null) => (v === null ? null : new Date(v).toISOString());
 
 const contaNaoEncontrada = () => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conta do RegemCast não encontrada nesta empresa.');
-const desligada = () =>
+/** A função das mensagens não está ligada para a empresa (a mesma recusa em toda rota que depende dela). */
+export const desligada = () =>
   new AppProblem(409, 'mensageria-desligada', 'A função não está ligada', 'As mensagens pelo RegemCast ainda não estão ligadas para esta empresa. Quem liga é a Liame, a pedido do dono.');
 const semAutorizacao = () =>
   new AppProblem(409, 'regemcast-sem-autorizacao', 'Conecte o RegemCast de novo', 'O RegemCast não aceitou a conexão desta conta (ela foi desligada lá, ou não vale mais). Conecte o RegemCast de novo em Contas conectadas.');
