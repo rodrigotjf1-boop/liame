@@ -380,8 +380,10 @@ describe.skipIf(!hasDb)('conector do Perfil da Empresa no Google (leitura; A6 ·
 
   it('Z2: o registro tem a leitura de uma avaliação e a única escrita, e a flag de escrita nasce desligada, sem regra', async () => {
     const { ownerQuery } = await import('../helpers/api.js');
+    // A ordem é a dos bytes (`collate "C"`): a colação do banco muda de máquina para máquina, e numa delas o sublinhado
+    // não conta (`reviews` vem antes de `review_state`).
     const capacidades = await ownerQuery<{ capability: string; api_version: string; read: boolean; write: boolean; required_scope: string[] }>(
-      `select capability, api_version, read, write, required_scope from liame.connector_capability where provider = 'google_business' order by capability`,
+      `select capability, api_version, read, write, required_scope from liame.connector_capability where provider = 'google_business' order by capability collate "C"`,
     );
     expect(capacidades.map((c) => [c.capability, c.api_version, c.read, c.write])).toEqual([
       ['accounts', 'v1', true, false],
