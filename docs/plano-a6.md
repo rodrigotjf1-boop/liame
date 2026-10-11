@@ -42,7 +42,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **Z8** | **Pacote pronto** | Para TikTok, YouTube e redes sem acesso: o Liame monta o texto, a mídia e o horário, e a pessoa publica. Sem escrita em plataforma | A6-14 | Z4 |
 | **Z9** | **Telas** | Pelos protótipos da seção 5 | A6-15 | Aprovação dos protótipos |
 
-> **Andamento.** **P17 (09/10/2026; aprovado pelo dono no mesmo dia):** o protótipo `mockups/prototipo-avaliacoes.html`: a tela "Avaliações" (a nota, as sem resposta primeiro e a situação de cada resposta) e a resposta em Aprovações (a avaliação, o texto proposto e editável, "só o dono aprova" para 1 e 2 estrelas, a conferência do Google, publicada, recusada e apagada). Antes dele, a reconferência da seção 8 para a Z1 entrou na base de conhecimento (§3.3 e §16.1).
+> **Andamento.** **P17 (09/10/2026; aprovado pelo dono no mesmo dia):** o protótipo `mockups/prototipo-avaliacoes.html`: a tela "Avaliações" (a nota, as sem resposta primeiro e a situação de cada resposta) e a resposta em Aprovações (a avaliação, o texto proposto e editável, "só o dono aprova" para 1 e 2 estrelas, a conferência do Google, publicada, recusada e apagada). Antes dele, a reconferência da seção 8 para a Z1 entrou na base de conhecimento (§3.3 e §16.1). **Z1, parte a (11/10/2026):** o conector de leitura do Perfil da Empresa (as lojas, as avaliações e os números do perfil), contra um Google local, com os critérios A6-1 e A6-2 provados no conector; o registro de capacidades na migration 0066. Nada o chama ainda. Faltam as tabelas e a sincronização (b), a conexão com a permissão do Perfil (c) e o aviso em Atenção com a rota da tela (d).
 
 ## 4. Decisões (aprovadas pelo dono em 09/10/2026, como recomendadas)
 

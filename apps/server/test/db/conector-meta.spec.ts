@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { createDatabase, type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
-import { enderecosDasPlataformas } from '../../src/connectors/enderecos.js';
+import { enderecosDasPlataformas, PERFIL_GOOGLE_OFICIAL } from '../../src/connectors/enderecos.js';
 import { fatias } from '../../src/connectors/janela.js';
 import { ConectorMeta, criarConectorMeta, METRICAS_CANONICAS_META, orcamentoEmMicros } from '../../src/connectors/meta/conector-meta.js';
 import { gravarMetricas, type PontoMetrica } from '../../src/media/metric-store.js';
@@ -104,7 +104,7 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
     await api?.close();
   });
 
-  const plataformas = () => ({ metaGraphUrl: base, googleAdsUrl: 'https://googleads.googleapis.com', ga4DataUrl: 'https://analyticsdata.googleapis.com', ga4AdminUrl: 'https://analyticsadmin.googleapis.com', dataManagerUrl: 'https://datamanager.googleapis.com', metaAppSecret: SEGREDO });
+  const plataformas = () => ({ metaGraphUrl: base, googleAdsUrl: 'https://googleads.googleapis.com', ga4DataUrl: 'https://analyticsdata.googleapis.com', ga4AdminUrl: 'https://analyticsadmin.googleapis.com', dataManagerUrl: 'https://datamanager.googleapis.com', perfilGoogle: PERFIL_GOOGLE_OFICIAL, metaAppSecret: SEGREDO });
   const cliente = () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(plataformas()), tentativas: 2, esperaMaximaMs: 2_000, balde: { capacidade: 500, porSegundo: 50 } });
   const conector = (opcoes = {}) => new ConectorMeta(cliente(), base, 'v26.0', SEGREDO, { intervaloRelatorioMs: 10, ...opcoes });
   const conta = (externalId = CONTA) => ({ credencial: { accessToken: TOKEN }, externalId, timezone: 'America/Sao_Paulo', currency: 'BRL' });

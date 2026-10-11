@@ -107,8 +107,17 @@ describe('fail-fast da configuração em produção', () => {
       ga4DataUrl: 'https://analyticsdata.googleapis.com',
       ga4AdminUrl: 'https://analyticsadmin.googleapis.com',
       dataManagerUrl: 'https://datamanager.googleapis.com',
+      perfilGoogle: {
+        contas: 'https://mybusinessaccountmanagement.googleapis.com',
+        lojas: 'https://mybusinessbusinessinformation.googleapis.com',
+        avaliacoes: 'https://mybusiness.googleapis.com',
+        numeros: 'https://businessprofileperformance.googleapis.com',
+      },
       metaAppSecret: null,
     });
+    // O Perfil da Empresa no Google (A6, Z1): as quatro APIs dele também só nos endereços oficiais.
+    expect(() => loadConfig({ ...prod, GOOGLE_BUSINESS_REVIEWS_URL: 'https://mybusiness.googleapis.com.outro.site' })).toThrow('endereço oficial');
+    expect(() => loadConfig({ ...prod, GOOGLE_BUSINESS_PERFORMANCE_URL: 'http://127.0.0.1:4000' })).toThrow('endereço oficial');
     expect(() => loadConfig({ ...prod, META_GRAPH_URL: 'https://graph.facebook.com.outro.site' })).toThrow('endereço oficial');
     expect(() => loadConfig({ ...prod, GA4_DATA_URL: 'http://127.0.0.1:4000' })).toThrow('endereço oficial');
     expect(() => loadConfig({ ...prod, GOOGLE_DATA_MANAGER_URL: 'https://datamanager.googleapis.com.outro.site' })).toThrow('endereço oficial');

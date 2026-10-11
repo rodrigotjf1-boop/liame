@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { createDatabase, type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
-import { enderecosDasPlataformas } from '../../src/connectors/enderecos.js';
+import { enderecosDasPlataformas, PERFIL_GOOGLE_OFICIAL } from '../../src/connectors/enderecos.js';
 import { ConectorGa4, criarConectorGa4, esperaPelaCota, METRICAS_CANONICAS_GA4, type OpcoesGa4 } from '../../src/connectors/ga4/conector-ga4.js';
 import { gravarMetricas, type PontoMetrica } from '../../src/media/metric-store.js';
 import { ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
@@ -95,7 +95,7 @@ describe.skipIf(!hasDb)('conector do GA4 (leitura, v1beta)', () => {
     await api?.close();
   });
 
-  const plataformas = () => ({ metaGraphUrl: 'https://graph.facebook.com', googleAdsUrl: 'https://googleads.googleapis.com', ga4DataUrl: baseDados, ga4AdminUrl: baseAdmin, dataManagerUrl: 'https://datamanager.googleapis.com', metaAppSecret: null });
+  const plataformas = () => ({ metaGraphUrl: 'https://graph.facebook.com', googleAdsUrl: 'https://googleads.googleapis.com', ga4DataUrl: baseDados, ga4AdminUrl: baseAdmin, dataManagerUrl: 'https://datamanager.googleapis.com', perfilGoogle: PERFIL_GOOGLE_OFICIAL, metaAppSecret: null });
   const cliente = () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(plataformas()), tentativas: 1, esperaMaximaMs: 2_000, balde: { capacidade: 500, porSegundo: 50 } });
   const conector = (opcoes: OpcoesGa4 = {}) => new ConectorGa4(cliente(), { data: baseDados, admin: baseAdmin }, 'v1beta', 'v1beta', opcoes);
   const conta = (externalId = PROPRIEDADE) => ({ credencial: { accessToken: TOKEN }, externalId, timezone: 'America/Sao_Paulo', currency: 'BRL' });
