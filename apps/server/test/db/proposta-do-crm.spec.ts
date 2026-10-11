@@ -7,6 +7,7 @@ import {
   anotarModelo,
   barrarProposta,
   encerrarProposta,
+  esperarProposta,
   guardarEscrita,
   lerProposta,
   type PropostaNova,
@@ -97,7 +98,18 @@ describe.skipIf(!hasDb)('a proposta de mensagem do CRM e mensageria no banco (A5
 
     // Sem o texto conferido não há rascunho; com ele, o rascunho do modelo fica registrado.
     expect(await naEmpresa(e, (tx) => registrarRascunho(tx, alvo, MODELO))).toBe(false);
+    // Enquanto ele não escreve: a IA fora do ar conta a tentativa; a espera (a IA desligada, ele desligado) não conta.
+    const naFila = () => ownerQuery<{ attempts: number; next_attempt_at: Date | null }>(`select attempts, next_attempt_at from liame.message_proposal where id = $1`, [id]);
+    expect(await naEmpresa(e, (tx) => adiarProposta(tx, alvo, new Date(Date.now() + 15 * 60_000)))).toBe(true);
+    const ate = new Date(Date.now() + 60 * 60_000);
+    expect(await naEmpresa(e, (tx) => esperarProposta(tx, alvo, ate))).toBe(true);
+    expect(await naFila()).toEqual([{ attempts: 1, next_attempt_at: ate }]);
+    // A proposta diz quando nasceu: o prazo de escrever conta daí.
+    const nascida = new Date((await naEmpresa(e, (tx) => lerProposta(tx, alvo)))!.created_at).getTime();
+    expect(Math.abs(Date.now() - nascida)).toBeLessThan(120_000);
+    // O texto guardado zera as tentativas e a espera: o passo seguinte (o rascunho do modelo) começa do zero, e na hora.
     expect(await naEmpresa(e, (tx) => guardarEscrita(tx, alvo, ESCRITA))).toBe(true);
+    expect(await naFila()).toEqual([{ attempts: 0, next_attempt_at: null }]);
     // O RegemCast não respondeu: a tentativa conta, e a proposta segue no preparo, com o texto guardado.
     expect(await naEmpresa(e, (tx) => adiarProposta(tx, alvo, new Date(Date.now() + 10 * 60_000)))).toBe(true);
     expect(await naEmpresa(e, (tx) => lerProposta(tx, alvo))).toMatchObject({ status: 'preparando', attempts: 1, name: ESCRITA.nome, body: ESCRITA.corpo });
@@ -111,6 +123,7 @@ describe.skipIf(!hasDb)('a proposta de mensagem do CRM e mensageria no banco (A5
     expect(await naEmpresa(e, (tx) => guardarEscrita(tx, alvo, { ...ESCRITA, corpo: 'Outro texto' }))).toBe(false);
     expect(await naEmpresa(e, (tx) => barrarProposta(tx, alvo, ['oferta']))).toBe(false);
     expect(await naEmpresa(e, (tx) => adiarProposta(tx, alvo, new Date()))).toBe(false);
+    expect(await naEmpresa(e, (tx) => esperarProposta(tx, alvo, new Date()))).toBe(false);
 
     // A rotina olha o modelo: uma pessoa enviou para a Meta, que ainda analisa.
     expect(await naEmpresa(e, (tx) => anotarModelo(tx, alvo, 'em_analise'))).toBe(true);

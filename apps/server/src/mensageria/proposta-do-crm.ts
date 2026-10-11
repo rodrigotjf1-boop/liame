@@ -87,12 +87,13 @@ export async function abrirProposta(tx: Tx, p: PropostaNova): Promise<string | n
 
 /**
  * O que ele escreveu, já conferido, fica guardado antes de o rascunho ir para o RegemCast: se a chamada de lá falhar,
- * a rotina tenta o rascunho de novo sem pedir outro texto (e sem gastar IA de novo).
+ * a rotina tenta o rascunho de novo sem pedir outro texto (e sem gastar IA de novo). As tentativas de escrever e a
+ * espera acabam aqui: o passo seguinte (o rascunho do modelo) começa do zero, e na hora.
  */
 export async function guardarEscrita(tx: Tx, alvo: DonoDaProposta, escrita: { nome: string; corpo: string; usoDeIa: string | null }): Promise<boolean> {
   const r = await tx.execute(sql`
     update liame.message_proposal
-       set name = ${escrita.nome}, body = ${escrita.corpo}, usage_id = ${escrita.usoDeIa}, updated_at = now()
+       set name = ${escrita.nome}, body = ${escrita.corpo}, usage_id = ${escrita.usoDeIa}, attempts = 0, next_attempt_at = null, updated_at = now()
      where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'preparando'
     returning id`);
   return r.rows.length === 1;
@@ -173,6 +174,19 @@ export async function adiarProposta(tx: Tx, alvo: DonoDaProposta, ate: Date): Pr
   return r.rows.length === 1;
 }
 
+/**
+ * Não é a vez dela agora, e não por falha dela (a IA desligada ou no teto, o funcionário desligado): só marca quando
+ * olhar de novo, sem contar tentativa.
+ */
+export async function esperarProposta(tx: Tx, alvo: DonoDaProposta, ate: Date): Promise<boolean> {
+  const r = await tx.execute(sql`
+    update liame.message_proposal
+       set next_attempt_at = ${ate.toISOString()}::timestamptz, updated_at = now()
+     where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'preparando'
+    returning id`);
+  return r.rows.length === 1;
+}
+
 export type PropostaGuardada = {
   id: string;
   brand_id: string;
@@ -201,6 +215,8 @@ export type PropostaGuardada = {
   attempts: number;
   agent_key: string;
   requested_by: string | null;
+  /** Quando a rotina a abriu: o prazo para ela andar conta daqui. */
+  created_at: Date | string;
 };
 
 /** A proposta como está guardada, para a rotina retomar de onde parou. Nula se não é desta empresa. */
@@ -208,7 +224,7 @@ export async function lerProposta(tx: Tx, alvo: DonoDaProposta): Promise<Propost
   const r = await tx.execute<PropostaGuardada>(sql`
     select id, brand_id, connected_account_id, motive, destination, offer, dossier_version, audience, audience_name, audience_rule, people, coupon,
            status, reason, barred_by, name, body, template_id, template_name, template_language, template_status, drafted_at, message_request_id, attempts,
-           agent_key, requested_by
+           agent_key, requested_by, created_at
       from liame.message_proposal
      where id = ${alvo.id} and tenant_id = ${alvo.tenantId}`);
   return r.rows[0] ?? null;

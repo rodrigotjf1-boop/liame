@@ -58,8 +58,9 @@ export interface FuncionarioDef {
  * O revisor de IA do Compliance tem prompt e não é funcionário do registro: o Compliance trabalha por regra e não
  * desliga; o revisor é o segundo olhar dele, para a empresa com a flag `revisor` (I9). O Criativo (A4, X6) só
  * trabalha para a empresa com as flags `ia` e `criativo`; a rota de modelo dele entrou na migration 0051. O funcionário
- * de CRM e mensageria (A5, Y6) entra aqui com o prompt e o eval; a rota de modelo dele só entra depois da rodada do
- * eval com o modelo de verdade, e nada o chama antes disso.
+ * de CRM e mensageria (A5, Y6) só trabalha para a empresa com as flags `ia`, `crm`, `mensageria` e `whatsapp_campaign`;
+ * a rota de modelo dele entrou na migration 0061, depois da rodada do eval, e quem o chama é a rotina do worker
+ * (`worker/escrita-do-crm.service.ts`).
  */
 export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA, PROMPT_PESQUISADOR, PROMPT_REVISOR, PROMPT_CRIATIVO_TEXTO, PROMPT_CRM_MENSAGEM];
 export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR, CRIATIVO, CRM];

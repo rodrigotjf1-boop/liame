@@ -14,11 +14,17 @@ import {
   cupomNoDia,
   DIAS_ENTRE_PROPOSTAS,
   DIAS_PARA_REPETIR_A_OFERTA,
+  DIAS_PARA_ESCREVER,
   diasDoCupom,
   fimDoIntervalo,
   HORAS_DEPOIS_DE_FALHA,
   HORAS_ENTRE_OLHADAS,
   IDIOMA_DO_MODELO,
+  itensQueBarraram,
+  MINUTOS_DE_ESPERA_SEM_IA,
+  minutosAteATentativa,
+  prazoDeEscreverAcabou,
+  TENTATIVAS_DA_ESCRITA,
   LETRAS_DO_CODIGO,
   modeloParaRascunhar,
   nomeDoModelo,
@@ -159,6 +165,34 @@ describe('a rotina do CRM: o que ele decide ao olhar e quando olha de novo', () 
     expect(tetoCheio({ periodos: [] })).toBe(false);
     expect(tetoCheio({ periodos: [{ sinal: 'ok' }, { sinal: 'atencao' }] })).toBe(false);
     expect(tetoCheio({ periodos: [{ sinal: 'ok' }, { sinal: 'cheio' }] })).toBe(true);
+  });
+});
+
+describe('a rotina do CRM: a escrita da mensagem', () => {
+  it('três tentativas, cada uma mais longe da outra; três dias para escrever; uma hora de espera sem IA', () => {
+    expect([TENTATIVAS_DA_ESCRITA, DIAS_PARA_ESCREVER, MINUTOS_DE_ESPERA_SEM_IA]).toEqual([3, 3, 60]);
+    expect([0, 1, 2, 3].map(minutosAteATentativa)).toEqual([15, 30, 60, 120]);
+    // Um valor fora do esperado não vira espera negativa nem sem fim.
+    expect(minutosAteATentativa(-2)).toBe(15);
+    expect(minutosAteATentativa(40)).toBe(15 * 64);
+    const aberta = antes(3 * DIA);
+    expect(prazoDeEscreverAcabou(aberta, AGORA)).toBe(true);
+    expect(prazoDeEscreverAcabou(new Date(aberta.getTime() + 1), AGORA)).toBe(false);
+    expect(prazoDeEscreverAcabou(antes(HORA), AGORA)).toBe(false);
+  });
+
+  it('o que barrou vai para a fila pelo nome do item, nunca pelo trecho; o aviso de tamanho não barra', () => {
+    const base: BaseDaMensagem = { oferta: 'Combo sexta: smash, batata e refri por R$ 34,90', cupom: cupomEmPalavras(cupom()), fatos: 'Mister Burgers.', proibidas: ['gourmet'], concorrentes: [] };
+    const conferida = (corpo: string, nome = 'Combo da sexta') => conferirMensagem({ nome, corpo }, base);
+    expect(itensQueBarraram(conferida('Oi, {{1}}! Combo por R$ 34,90. Com o cupom {{2}} você ganha 10% de desconto, válido por 2 dias, contando hoje.'))).toEqual([]);
+    // Outro desconto, uma palavra que a marca nunca diz e uma variável a mais: três itens, na ordem da conferência.
+    const barrada = conferida('Oi, {{1}}! Combo gourmet com 20% de desconto no cupom {{2}}, para {{3}}.');
+    expect(itensQueBarraram(barrada)).toEqual(['oferta', 'regras_da_marca', 'formato']);
+    for (const item of itensQueBarraram(barrada)) expect(ehCodigo(item), item).toBe(true);
+    // O nome comprido só avisa: a mensagem passa, e nada vai para a fila como barrado.
+    const comAviso = conferida('Oi, {{1}}! Combo por R$ 34,90. Use o cupom {{2}}.', 'Combo da sexta com batata e refri para a família toda');
+    expect(comAviso.situacao).toBe('aviso');
+    expect(itensQueBarraram(comAviso)).toEqual([]);
   });
 });
 

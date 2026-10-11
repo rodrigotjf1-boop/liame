@@ -52,6 +52,7 @@ import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { RotinaDoCrmService } from './rotina-do-crm.service.js';
 import { VigiaService } from './vigia.service.js';
 import { CambioService } from './cambio.service.js';
+import { EscritaDoCrmService } from './escrita-do-crm.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
 import { LifecyclePurgeService } from './lifecycle-purge.service.js';
@@ -136,8 +137,10 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     CriativoService,
     CriativoLoop,
     // A rotina do CRM e mensageria (A5, Y6): olha cada marca com o RegemCast conectado e abre a proposta quando há
-    // motivo. Só com as flags `crm`, `ia`, `mensageria` e `whatsapp_campaign` ligadas; nenhuma mensagem sai daqui.
+    // motivo; depois ele escreve a mensagem da proposta, e o código confere. Só com as flags `crm`, `ia`, `mensageria`
+    // e `whatsapp_campaign` ligadas; nenhuma mensagem sai daqui.
     RotinaDoCrmService,
+    EscritaDoCrmService,
     RotinaDoCrmLoop,
     VigiaService,
     // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, para mostrar o custo de IA em reais.

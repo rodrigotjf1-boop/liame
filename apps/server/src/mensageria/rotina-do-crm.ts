@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import { conferirPedidoDoCrm } from '../ai/crm/contexto.js';
-import { type MotivoDaMensagem, NOME_DE_EXEMPLO, RODAPE_DE_SAIDA } from '../ai/crm/mensagem.js';
+import { type ConferenciaDaMensagem, type MotivoDaMensagem, NOME_DE_EXEMPLO, RODAPE_DE_SAIDA } from '../ai/crm/mensagem.js';
 import type { ModeloParaRascunhar, VariavelDaMensagem } from '../connectors/regemcast/conector-regemcast.js';
 import type { PublicosRegemcast } from '../connectors/regemcast/contrato-regemcast.js';
 import { somarDias } from './desconto.js';
@@ -151,6 +151,36 @@ export function fimDoIntervalo(motivo: MotivoDaMensagem, ultima: Date): Date {
 /** O teto de gasto de mensagens do RegemCast está cheio em algum período (dia, semana ou mês)? Com ele cheio, ele não propõe (P16). */
 export function tetoCheio(orcamento: { periodos: ReadonlyArray<{ sinal: string }> }): boolean {
   return orcamento.periodos.some((p) => p.sinal === 'cheio');
+}
+
+// ---------------------------------------------------------------- a escrita da mensagem (o segundo passo da rotina)
+
+/**
+ * Depois de tantas tentativas que não deram texto (a IA fora do ar, a resposta fora do formato, um texto que nem
+ * chegou à conferência), a proposta fecha como `falhou`.
+ */
+export const TENTATIVAS_DA_ESCRITA = 3;
+/** A proposta que ele não conseguiu escrever em tantos dias é descartada: a oferta e a contagem do público envelheceram. */
+export const DIAS_PARA_ESCREVER = 3;
+/** Sem IA agora (desligada, no teto, parada) ou com ele desligado: a proposta espera, sem contar tentativa. */
+export const MINUTOS_DE_ESPERA_SEM_IA = 60;
+
+/** Quantos minutos até a próxima tentativa de escrever, pelas que já falharam: 15, 30, 60… */
+export function minutosAteATentativa(tentativasAntes: number): number {
+  return 15 * 2 ** Math.max(0, Math.min(6, Math.trunc(tentativasAntes)));
+}
+
+/** O prazo de escrever acabou? Conta de quando a rotina abriu a proposta. */
+export function prazoDeEscreverAcabou(abertaEm: Date, agora: Date): boolean {
+  return agora.getTime() - abertaEm.getTime() >= DIAS_PARA_ESCREVER * DIA_MS;
+}
+
+/**
+ * O que a conferência barrou, para a fila (`barred_by`): os nomes dos itens (`oferta`, `regras_da_liame`,
+ * `regras_da_marca`, `formato`), que são os que a ficha dele em Sua equipe explica. Nunca o trecho barrado.
+ */
+export function itensQueBarraram(c: Pick<ConferenciaDaMensagem, 'itens'>): string[] {
+  return c.itens.filter((i) => i.situacao === 'barrou').map((i) => i.item);
 }
 
 /** Sem as letras e os números que se confundem ao ler e ao digitar (O e 0, I e 1). */
