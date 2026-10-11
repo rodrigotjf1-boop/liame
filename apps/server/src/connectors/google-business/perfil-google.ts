@@ -2,8 +2,9 @@
 // rede e sem banco. Duas coisas: as avaliações e os números do perfil por dia.
 //
 // Das avaliações, o Liame guarda a nota, as datas, o texto e a situação da resposta (D-A6-5). **O nome e a foto de
-// quem avaliou não passam daqui:** o tipo que sai não tem campo para eles, e o que a sincronização grava é esse tipo
-// (critério A6-1). A foto que a pessoa anexou à avaliação também fica de fora.
+// quem avaliou não entram no que é guardado:** o tipo que a leitura devolve (`AvaliacaoLida`) não tem campo para eles,
+// e o que a sincronização grava é esse tipo (critério A6-1). A foto que a pessoa anexou à avaliação também fica de fora.
+// O nome só sai por `quemAvaliou`, uma função à parte, para a tela mostrar na hora; a foto nunca é lida.
 
 import type { TipoErroConector } from '../cliente-http.js';
 
@@ -114,6 +115,26 @@ export function avaliacaoDoGoogle(bruta: unknown): AvaliacaoLida | null {
           }
         : null,
   };
+}
+
+/** O nome de quem avaliou, para a tela: até aqui e não mais longe. */
+export const TAMANHO_DO_NOME = 200;
+export type QuemAvaliou = { id: string; nome: string };
+
+/**
+ * Quem fez uma avaliação, **só para a tela Avaliações, lido na hora** (P17, decisão 9): o id da avaliação e o nome que a
+ * pessoa mostra no Google. Nada disto é guardado, e a foto não é lida. Nulo quando falta o id, quando a pessoa avaliou
+ * sem se identificar ou quando o nome não veio. É uma função à parte de `avaliacaoDoGoogle` de propósito: o que a
+ * leitura guarda nunca passa por aqui.
+ */
+export function quemAvaliou(bruta: unknown): QuemAvaliou | null {
+  if (!bruta || typeof bruta !== 'object') return null;
+  const r = bruta as Record<string, unknown>;
+  const id = typeof r.reviewId === 'string' && r.reviewId.length >= 1 && r.reviewId.length <= 200 ? r.reviewId : null;
+  const autor = r.reviewer && typeof r.reviewer === 'object' ? (r.reviewer as Record<string, unknown>) : null;
+  if (!id || !autor || autor.isAnonymous === true) return null;
+  const nome = typeof autor.displayName === 'string' ? autor.displayName.split('\u0000').join('').trim().slice(0, TAMANHO_DO_NOME) : '';
+  return nome ? { id, nome } : null;
 }
 
 /** A nota média que o Google informa da loja, de 1 a 5; nula quando não vem ou não faz sentido. */

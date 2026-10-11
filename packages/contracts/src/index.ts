@@ -307,6 +307,7 @@ export {
   MessagingResponse,
   MessagingWhatsapp,
 } from './mensageria.js';
+export { ReviewAuthorsResponse, ReviewItem, ReviewReply, ReviewsQuery, ReviewsResponse, ReviewsSummary, ReviewStore } from './reviews.js';
 export {
   CouponCampaign,
   CouponCode,

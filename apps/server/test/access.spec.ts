@@ -55,11 +55,14 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // As duas das conversões leem a lista de conversões no Google: `actions` só lê; `destination` confere o id
     // escolhido no Google e só então grava, noutra transação curta, com o evento de auditoria junto (manual).
     // As duas da mensageria só leem do RegemCast, na hora, e não gravam nada.
+    // `GET /v1/reviews/authors` (A6, Z1) lê do Google o nome de quem avaliou, só para a tela: o banco numa transação
+    // curta, o Google depois, e nada gravado (nem o nome, nem auditoria).
     expect(semTransacao).toEqual([
       'GET /v1/actions/options',
       'GET /v1/conversions/google/actions',
       'GET /v1/messaging',
       'GET /v1/messaging/campaigns/:id',
+      'GET /v1/reviews/authors',
       'POST /v1/ai/explain/attention',
       'POST /v1/ai/explain/results',
       'POST /v1/conversations/messages',
