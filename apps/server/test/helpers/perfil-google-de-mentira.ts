@@ -1,0 +1,212 @@
+import { createHash } from 'node:crypto';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { expect } from 'vitest';
+import { ESCOPOS_GOOGLE } from '../../src/connections/oauth.js';
+import { ESCOPO_PERFIL_GOOGLE } from '../../src/connectors/google-business/perfil-google.js';
+import type { ConexaoProcessor } from '../../src/worker/conexao-processor.js';
+import { enableMfa, ownerQuery, signupAndLogin, type TestApi } from './api.js';
+import { ligarFlagDaEmpresa } from './meta-de-mentira.js';
+
+// Um Google local para os testes do Perfil da Empresa (A6, Z1): o OAuth (o código com PKCE e a renovação), o Google
+// Ads e o GA4 sem conta nenhuma, e as quatro APIs do Perfil (as contas, as lojas, as avaliações e os números), cada
+// uma num caminho. O teste escolhe o que a loja tem no Google e como cada API responde.
+
+export const API_PUBLICA_DE_TESTE = 'http://api.liame.test';
+const VOLTA = `${API_PUBLICA_DE_TESTE}/v1/oauth/callback`;
+export const CONTA_DO_PERFIL = 'accounts/111000111';
+export const LOJA_DO_PERFIL = 'locations/222000222';
+// Os valores de mentira que o OAuth devolve ficam em constantes de nome neutro, longe da chave da resposta: o texto
+// escrito ao lado de `access_token:` ou `refresh_token:` é lido pelo gitleaks como chave de verdade (ERR-131).
+export const ACESSO_RENOVADO = 'acesso-do-perfil-renovado';
+const ACESSO_DA_TROCA = 'acesso-do-perfil-1';
+const RENOVACAO_DA_TROCA = 'renovacao-do-perfil-1';
+
+/** Como uma API do Perfil responde: bem, com a cota esgotada, com a leitura recusada, fora do ar ou "pedido errado". */
+export type RespostaDoPerfil = 'ok' | 'sem-cota' | 'recusa' | 'fora' | 'invalido';
+
+export type AvaliacaoNoGoogle = {
+  reviewId: string;
+  starRating: 'ONE' | 'TWO' | 'THREE' | 'FOUR' | 'FIVE';
+  comment?: string;
+  createTime: string;
+  updateTime: string;
+  reviewReply?: { comment: string; updateTime?: string; reviewReplyState?: string; policyViolation?: string };
+};
+
+type Visto = { caminho: string; busca: URLSearchParams; autorizacao?: string };
+
+const erroDe = (r: RespostaDoPerfil): { status: number; corpo: unknown; cabecalhos?: Record<string, string> } | null => {
+  if (r === 'sem-cota') return { status: 429, corpo: { error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded for quota metric Requests and limit Requests per minute' } } };
+  if (r === 'recusa') return { status: 403, corpo: { error: { code: 403, status: 'PERMISSION_DENIED', message: 'The caller does not have permission' } } };
+  if (r === 'fora') return { status: 503, corpo: { error: { code: 503, status: 'UNAVAILABLE', message: 'The service is currently unavailable' } } };
+  if (r === 'invalido') return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Request contains an invalid argument' } } };
+  return null;
+};
+
+export class GoogleComPerfil {
+  base = '';
+  readonly vistos: Visto[] = [];
+  private servidor: Server | null = null;
+  private readonly desafios = new Set<string>();
+  private readonly anterior: Record<string, string | undefined> = {};
+  /** As permissões que o Google diz ter concedido na troca do código. */
+  concedidos: string[] = [...ESCOPOS_GOOGLE, ESCOPO_PERFIL_GOOGLE];
+  /** A renovação do acesso é recusada (a autorização foi revogada no Google). */
+  renovacaoRecusada = false;
+  avaliacoes: RespostaDoPerfil = 'ok';
+  numeros: RespostaDoPerfil = 'ok';
+  /** Quanto o Google manda esperar junto com a cota esgotada (segundos), quando manda. */
+  esperar: string | null = null;
+  /** As avaliações que a loja tem no Google, com o nome e a foto de quem avaliou (que o Liame não pode guardar). */
+  lista: AvaliacaoNoGoogle[] = [];
+  resumo: { averageRating?: number; totalReviewCount?: number } = { averageRating: 4.6, totalReviewCount: 128 };
+  /** Os números do perfil que o Google devolve (as séries, como ele as manda). */
+  series: unknown[] = [];
+
+  async subir(): Promise<void> {
+    this.servidor = createServer((req, res) => {
+      let texto = '';
+      req.on('data', (c: Buffer) => {
+        texto += c.toString('utf8');
+      });
+      req.on('end', () => {
+        const r = this.responder(req, texto);
+        res.writeHead(r.status, { 'content-type': 'application/json', ...(r.cabecalhos ?? {}) });
+        res.end(JSON.stringify(r.corpo));
+      });
+    });
+    const servidor = this.servidor;
+    await new Promise<void>((ok) => servidor.listen(0, '127.0.0.1', ok));
+    this.base = `http://127.0.0.1:${(servidor.address() as AddressInfo).port}`;
+    const ambiente = this.ambiente();
+    for (const k of Object.keys(ambiente)) this.anterior[k] = process.env[k];
+    Object.assign(process.env, ambiente);
+  }
+
+  async fechar(): Promise<void> {
+    const servidor = this.servidor;
+    if (servidor) await new Promise((ok) => servidor.close(ok));
+    for (const [k, v] of Object.entries(this.anterior)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+
+  /** As variáveis que apontam a API e o worker para este Google. */
+  ambiente(): Record<string, string> {
+    return {
+      API_URL: API_PUBLICA_DE_TESTE,
+      GOOGLE_OAUTH_CLIENT_ID: 'cliente-google-teste.apps.googleusercontent.com',
+      GOOGLE_OAUTH_CLIENT_SECRET: 'segredo-cliente-google-teste',
+      GOOGLE_AUTH_URL: `${this.base}/google`,
+      GOOGLE_TOKEN_URL: `${this.base}/oauth2`,
+      GOOGLE_ADS_URL: `${this.base}/ads`,
+      GA4_DATA_URL: `${this.base}/ga4data`,
+      GA4_ADMIN_URL: `${this.base}/ga4admin`,
+      GOOGLE_BUSINESS_ACCOUNTS_URL: `${this.base}/contas`,
+      GOOGLE_BUSINESS_LOCATIONS_URL: `${this.base}/lojas`,
+      GOOGLE_BUSINESS_REVIEWS_URL: `${this.base}/avaliacoes`,
+      GOOGLE_BUSINESS_PERFORMANCE_URL: `${this.base}/numeros`,
+    };
+  }
+
+  /** A API do Liame vai mandar este desafio de PKCE na troca do código. */
+  registrarDesafio(desafio: string): void {
+    this.desafios.add(desafio);
+  }
+
+  /** As chamadas a uma API do Perfil (`avaliacoes`, `numeros`, `contas`, `lojas`). */
+  de(api: 'avaliacoes' | 'numeros' | 'contas' | 'lojas'): Visto[] {
+    return this.vistos.filter((v) => v.caminho.startsWith(`/${api}/`));
+  }
+
+  /** Volta ao padrão entre um teste e outro. */
+  limpar(): void {
+    this.vistos.length = 0;
+    this.concedidos = [...ESCOPOS_GOOGLE, ESCOPO_PERFIL_GOOGLE];
+    this.renovacaoRecusada = false;
+    this.avaliacoes = 'ok';
+    this.numeros = 'ok';
+    this.esperar = null;
+    this.lista = [];
+    this.resumo = { averageRating: 4.6, totalReviewCount: 128 };
+    this.series = [];
+  }
+
+  private responder(req: IncomingMessage, texto: string): { status: number; corpo: unknown; cabecalhos?: Record<string, string> } {
+    const url = new URL(req.url ?? '/', this.base);
+    const corpo = req.headers['content-type']?.includes('x-www-form-urlencoded') ? new URLSearchParams(texto) : undefined;
+    const p = url.pathname;
+    this.vistos.push({ caminho: p, busca: url.searchParams, autorizacao: req.headers.authorization });
+    // OAuth do Google: o código (com PKCE) e a renovação.
+    if (p === '/oauth2/token' && corpo?.get('grant_type') === 'authorization_code') {
+      const desafio = createHash('sha256').update(corpo.get('code_verifier') ?? '').digest('base64url');
+      if (corpo.get('code') !== 'codigo-google-bom' || !this.desafios.has(desafio) || corpo.get('redirect_uri') !== VOLTA) return { status: 400, corpo: { error: 'invalid_grant' } };
+      return { status: 200, corpo: { access_token: ACESSO_DA_TROCA, expires_in: 3599, refresh_token: RENOVACAO_DA_TROCA, scope: this.concedidos.join(' '), token_type: 'Bearer' } };
+    }
+    if (p === '/oauth2/token' && corpo?.get('grant_type') === 'refresh_token') {
+      if (this.renovacaoRecusada) return { status: 400, corpo: { error: 'invalid_grant', error_description: 'Token has been expired or revoked.' } };
+      return { status: 200, corpo: { access_token: ACESSO_RENOVADO, expires_in: 3599, token_type: 'Bearer' } };
+    }
+    if (p === '/oauth2/revoke') return { status: 200, corpo: {} };
+    // Google Ads e GA4: esta conta do Google não tem nenhum dos dois.
+    if (p === '/ads/v25/customers:listAccessibleCustomers') return { status: 200, corpo: { resourceNames: [] } };
+    if (p === '/ga4admin/v1beta/accountSummaries') return { status: 200, corpo: { accountSummaries: [] } };
+    // O Perfil da Empresa.
+    if (p === '/contas/v1/accounts') return { status: 200, corpo: { accounts: [{ name: CONTA_DO_PERFIL, accountName: 'Mister Burgers' }] } };
+    if (p === `/lojas/v1/${CONTA_DO_PERFIL}/locations`) {
+      return { status: 200, corpo: { locations: [{ name: LOJA_DO_PERFIL, title: 'Mister Burgers — Centro', websiteUri: 'https://misterburgers.exemplo.test', metadata: { placeId: 'ChIJ-centro' } }] } };
+    }
+    if (p === `/avaliacoes/v4/${CONTA_DO_PERFIL}/${LOJA_DO_PERFIL}/reviews`) {
+      const erro = erroDe(this.avaliacoes);
+      if (erro) return { ...erro, cabecalhos: this.esperar ? { 'retry-after': this.esperar } : undefined };
+      // Da mais recente para a mais antiga, com o nome e a foto de quem avaliou, como o Google manda.
+      const reviews = [...this.lista]
+        .sort((a, b) => (a.updateTime < b.updateTime ? 1 : -1))
+        .map((a, i) => ({
+          ...a,
+          name: `${CONTA_DO_PERFIL}/${LOJA_DO_PERFIL}/reviews/${a.reviewId}`,
+          reviewer: { displayName: `Pessoa Número ${i + 1}`, profilePhotoUrl: `https://lh3.googleusercontent.com/a/foto-${i + 1}`, isAnonymous: false },
+        }));
+      return { status: 200, corpo: { reviews, ...this.resumo } };
+    }
+    if (p === `/numeros/v1/${LOJA_DO_PERFIL}:fetchMultiDailyMetricsTimeSeries`) {
+      const erro = erroDe(this.numeros);
+      if (erro) return { ...erro, cabecalhos: this.esperar ? { 'retry-after': this.esperar } : undefined };
+      return { status: 200, corpo: { multiDailyMetricTimeSeries: [{ dailyMetricTimeSeries: this.series }] } };
+    }
+    return { status: 404, corpo: { error: { code: 404, status: 'NOT_FOUND', message: p } } };
+  }
+}
+
+export type EmpresaComLoja = { cookie: string; tenantId: string; userId: string; brandId: string; conexaoId: string; contaId: string };
+
+/**
+ * Uma empresa com a função do Perfil ligada e a loja do Perfil ligada à marca, pelo caminho do produto (V46): a pessoa
+ * autoriza o Google, o worker troca o código e acha a loja, e a pessoa a escolhe.
+ */
+export async function empresaComLojaDoPerfil(api: TestApi, google: GoogleComPerfil, processador: ConexaoProcessor, nome: string): Promise<EmpresaComLoja> {
+  const s = await signupAndLogin(api, undefined, nome);
+  await enableMfa(api, s.cookie);
+  const tenantId = s.me.active_organization_id as string;
+  const [marca] = await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [tenantId]);
+  const brandId = marca!.id;
+  await ligarFlagDaEmpresa(api, 'perfil_google', tenantId, true);
+
+  const inicio = await api.call('POST', '/v1/connections', { cookie: s.cookie, body: { provider: 'google', brand_id: brandId } });
+  expect(inicio.status, JSON.stringify(inicio.body)).toBe(201);
+  const url = new URL(inicio.body.authorize_url);
+  google.registrarDesafio(url.searchParams.get('code_challenge')!);
+  const volta = await fetch(`${api.base}/v1/oauth/callback?${new URLSearchParams({ state: url.searchParams.get('state')!, code: 'codigo-google-bom' }).toString()}`, {
+    headers: { cookie: s.cookie },
+    redirect: 'manual',
+  });
+  expect(volta.status).toBe(303);
+  expect(await processador.processarLote(5, { tenantIds: [tenantId] })).toBe(1);
+  const conexaoId = inicio.body.id as string;
+  const ligar = await api.call('POST', `/v1/connections/${conexaoId}/accounts`, { cookie: s.cookie, body: { accounts: [{ provider: 'google_business', external_id: LOJA_DO_PERFIL }] } });
+  expect(ligar.status, JSON.stringify(ligar.body)).toBe(200);
+  expect(ligar.body.linked).toHaveLength(1);
+  return { cookie: s.cookie, tenantId, userId: s.me.user.id as string, brandId, conexaoId, contaId: ligar.body.linked[0].id as string };
+}

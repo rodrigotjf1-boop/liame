@@ -8,6 +8,7 @@ import { CriativoLoop } from './criativo-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { PedidosQueEsperam } from './pedidos-que-esperam.js';
+import { PerfilLoop } from './perfil-loop.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
@@ -19,7 +20,7 @@ import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador, conferir o gasto de cada mudança feita numa conta de anúncio, conferir de novo os pedidos que esperam aprovação com um impedimento e olhar as marcas pela rotina do CRM e mensageria. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador, conferir o gasto de cada mudança feita numa conta de anúncio, conferir de novo os pedidos que esperam aprovação com um impedimento, olhar as marcas pela rotina do CRM e mensageria e ler as lojas do Perfil da Empresa no Google. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -49,6 +50,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly conversoes: ConversoesLoop,
     private readonly esperam: PedidosQueEsperam,
     private readonly rotinaDoCrm: RotinaDoCrmLoop,
+    private readonly perfil: PerfilLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -83,6 +85,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // O texto conferido vira rascunho de modelo no RegemCast; depois, cada rascunho é olhado de 15 em 15 minutos, até a Meta aprovar.
       this.loop('rascunho-do-crm', 3, 60_000, async (n) => (await this.rotinaDoCrm.rascunharLote(n)).length),
       this.loop('modelo-do-crm', 10, 300_000, async (n) => (await this.rotinaDoCrm.acompanharLote(n)).length),
+      // O Perfil da Empresa no Google: as avaliações de cada loja a cada hora e os números uma vez por dia; a fila é olhada a cada minuto.
+      this.loop('perfil-google', 3, 60_000, async (n) => (await this.perfil.executarLote(n)).length),
     );
   }
 
