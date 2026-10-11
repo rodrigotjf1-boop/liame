@@ -4,11 +4,16 @@ import {
   DATASETS_DO_PERFIL,
   desdeDasAvaliacoes,
   DIAS_DE_AVALIACOES,
+  DIAS_ENTRE_RELEITURAS,
+  DIAS_RECONFERIDOS,
   esperaDaFalhaDoPerfil,
+  HORAS_ENTRE_RECONFERENCIAS,
   INTERVALO_DO_PERFIL_MIN,
   janelaDosNumeros,
   MAXIMO_NA_PRIMEIRA_LEITURA,
+  MAXIMO_NA_RECONFERENCIA,
   MAXIMO_NAS_SEGUINTES,
+  planoDaLeitura,
 } from '../src/avaliacoes/sincronizador-do-perfil.js';
 import { METRICAS_CANONICAS_DO_PERFIL, type AvaliacaoLida } from '../src/connectors/google-business/perfil-google.js';
 
@@ -66,6 +71,48 @@ describe('leitura do Perfil da Empresa no Google: as regras (A6 · Z1)', () => {
     // A loja ficou muito tempo sem ler: a leitura não recua além do que o Liame guarda.
     expect(desdeDasAvaliacoes({ primeira_em: '2024-01-01T00:00:00.000Z', lido_ate: '2024-01-01T00:00:00.000Z' }, AGORA)).toEqual(haUmAno);
     expect(desdeDasAvaliacoes({ primeira_em: '2026-10-01T00:00:00.000Z', lido_ate: 'ontem' }, AGORA)).toEqual(haUmAno);
+  });
+
+  // A referência do Google não diz que responder muda a data da AVALIAÇÃO (a resposta tem a data dela), e a leitura de
+  // hora em hora para na primeira avaliação que não mudou. Por isso a leitura não depende disso: reconfere 45 dias por
+  // dia e relê os 12 meses por semana.
+  it('qual leitura fazer: a de hora em hora, a reconferência de 45 dias uma vez por dia e a releitura dos 12 meses uma vez por semana', () => {
+    const ha = (ms: number) => new Date(AGORA.getTime() - ms).toISOString();
+    const haUmAno = new Date(AGORA.getTime() - DIAS_DE_AVALIACOES * DIA);
+    const ha45 = new Date(AGORA.getTime() - DIAS_RECONFERIDOS * DIA);
+    expect([DIAS_RECONFERIDOS, HORAS_ENTRE_RECONFERENCIAS, DIAS_ENTRE_RELEITURAS]).toEqual([45, 24, 7]);
+    // A reconferência cobre os 30 dias em que a avaliação sem resposta avisa na Atenção, com folga.
+    expect(DIAS_RECONFERIDOS).toBeGreaterThan(30);
+    expect(MAXIMO_NA_PRIMEIRA_LEITURA).toBeGreaterThan(MAXIMO_NA_RECONFERENCIA);
+    expect(MAXIMO_NA_RECONFERENCIA).toBeGreaterThan(MAXIMO_NAS_SEGUINTES);
+
+    expect(planoDaLeitura({}, AGORA)).toEqual({ tipo: 'primeira', desde: haUmAno, maximo: MAXIMO_NA_PRIMEIRA_LEITURA });
+
+    // Uma hora depois da primeira leitura: só o que mudou.
+    const lida = { primeira_em: ha(HORA), lido_ate: ha(HORA), reconferido_em: ha(HORA), relido_em: ha(HORA) };
+    expect(planoDaLeitura(lida, AGORA)).toEqual({ tipo: 'seguinte', desde: new Date(AGORA.getTime() - 2 * HORA), maximo: MAXIMO_NAS_SEGUINTES });
+
+    // Um minuto antes de fechar o dia ainda é a de hora em hora; no dia fechado, a reconferência.
+    const quase = { primeira_em: ha(3 * DIA), lido_ate: ha(HORA), reconferido_em: ha(DIA - MIN), relido_em: ha(3 * DIA) };
+    expect(planoDaLeitura(quase, AGORA).tipo).toBe('seguinte');
+    expect(planoDaLeitura({ ...quase, reconferido_em: ha(DIA) }, AGORA)).toEqual({ tipo: 'reconferencia', desde: ha45, maximo: MAXIMO_NA_RECONFERENCIA });
+
+    // Na semana fechada, a releitura dos 12 meses (e ela vem antes da reconferência).
+    expect(planoDaLeitura({ ...quase, relido_em: ha(7 * DIA - MIN), reconferido_em: ha(HORA) }, AGORA).tipo).toBe('seguinte');
+    expect(planoDaLeitura({ ...quase, relido_em: ha(7 * DIA), reconferido_em: ha(2 * DIA) }, AGORA)).toEqual({ tipo: 'releitura', desde: haUmAno, maximo: MAXIMO_NA_PRIMEIRA_LEITURA });
+
+    // A loja ligada antes de as marcas existirem: vale a data da primeira leitura, e ela converge sozinha.
+    expect(planoDaLeitura({ primeira_em: ha(2 * HORA), lido_ate: ha(HORA) }, AGORA).tipo).toBe('seguinte');
+    expect(planoDaLeitura({ primeira_em: ha(2 * DIA), lido_ate: ha(HORA) }, AGORA).tipo).toBe('reconferencia');
+    expect(planoDaLeitura({ primeira_em: ha(10 * DIA), lido_ate: ha(HORA) }, AGORA).tipo).toBe('releitura');
+
+    // A marca que não é data conta como vencida: a leitura maior é devida.
+    expect(planoDaLeitura({ ...lida, reconferido_em: 'ontem' }, AGORA).tipo).toBe('reconferencia');
+    expect(planoDaLeitura({ ...lida, relido_em: 'semana passada' }, AGORA).tipo).toBe('releitura');
+
+    // A rotina ficou 60 dias parada: a reconferência não lê menos do que a leitura de hora em hora leria.
+    const parada = { primeira_em: ha(61 * DIA), lido_ate: ha(60 * DIA), reconferido_em: ha(60 * DIA), relido_em: ha(DIA) };
+    expect(planoDaLeitura(parada, AGORA)).toEqual({ tipo: 'reconferencia', desde: new Date(AGORA.getTime() - 60 * DIA - HORA), maximo: MAXIMO_NA_RECONFERENCIA });
   });
 
   it('a janela dos números vai até ontem: 90 dias na primeira leitura e 10 nas seguintes', () => {

@@ -185,46 +185,110 @@ describe.skipIf(!hasDb)('ler o Perfil da Empresa no Google (A6 · Z1)', () => {
     expect(vistas).toBe('0');
   });
 
-  it('a leitura seguinte traz só o que mudou: a avaliação nova entra, a que ganhou resposta é atualizada, e os números releem 10 dias', async () => {
+  it('a leitura seguinte traz só o que mudou; a resposta dada no Google, que não muda a data da avaliação, chega na reconferência do dia; e os números releem 10 dias', async () => {
     const e = await empresa('Mister Burgers Seguinte');
     google.lista = [avaliacao('rev-1', 'FIVE', 2), avaliacao('rev-2', 'THREE', 5)];
     expect((await rodar(e, AGORA)).map((r) => r.status)).toEqual(['ok', 'ok']);
+    // A primeira leitura já conta como reconferência e como releitura.
+    expect((await estado(e, DATASET_AVALIACOES)).cursor).toMatchObject({ reconferido_em: AGORA.toISOString(), relido_em: AGORA.toISOString() });
 
     // Antes da hora, nada é devido.
     google.vistos.length = 0;
     expect(await rodar(e, em(30))).toEqual([]);
     expect(google.vistos).toEqual([]);
 
-    // Uma hora depois: a rev-2 ganhou resposta (o Google ainda confere) e chegou a rev-3, de 2 estrelas.
+    // Uma hora depois: a rev-2 ganhou resposta no Google (ele ainda confere) e chegou a rev-3, de 2 estrelas. A
+    // resposta tem a data dela: a data da AVALIAÇÃO não muda (a referência do Google não diz que mudaria).
     const depois = em(61);
     const naHora = new Date(AGORA.getTime() + 10 * MIN_MS).toISOString();
     google.lista = [
       avaliacao('rev-1', 'FIVE', 2),
-      { ...avaliacao('rev-2', 'THREE', 5), updateTime: naHora, reviewReply: { comment: 'Vamos melhorar a batata.', reviewReplyState: 'PENDING' } },
+      { ...avaliacao('rev-2', 'THREE', 5), reviewReply: { comment: 'Vamos melhorar a batata.', updateTime: naHora, reviewReplyState: 'PENDING' } },
       { reviewId: 'rev-3', starRating: 'TWO', comment: 'Pedido errado.', createTime: naHora, updateTime: naHora },
     ];
     const lote = await rodar(e, depois);
     expect(lote.map((r) => [r.dataset, r.status])).toEqual([[DATASET_AVALIACOES, 'ok']]);
-    // A rev-1 não mudou desde o corte (o começo da leitura anterior menos uma hora): a leitura para nela.
-    expect(lote[0]!.avaliacoes).toBe(2);
+    // A lista vem pela data da avaliação: a leitura lê a rev-3 e para na rev-1, que não mudou desde o corte. A rev-2,
+    // mais antiga ainda, não é lida: a leitura de hora em hora NÃO vê a resposta dela.
+    expect(lote[0]!.avaliacoes).toBe(1);
     expect(lote[0]!.novas).toEqual([{ externalId: 'rev-3', estrelas: 2 }]);
     expect((await avaliacoes(e)).map((a) => [a.external_id, a.stars, a.reply_text, a.reply_state])).toEqual([
       ['rev-1', 5, null, null],
-      ['rev-2', 3, 'Vamos melhorar a batata.', 'pendente'],
+      ['rev-2', 3, null, null],
       ['rev-3', 2, null, null],
     ]);
-    expect((await execucoes(e, DATASET_AVALIACOES)).map((x) => [x.kind, x.status, x.entities_written])).toEqual([['carga_inicial', 'ok', 2], ['incremental', 'ok', 2]]);
-    expect((await estado(e, DATASET_AVALIACOES)).cursor).toMatchObject({ primeira_em: AGORA.toISOString(), lido_ate: depois.toISOString(), proxima: new Date(depois.getTime() + 60 * MIN_MS).toISOString() });
+    expect((await execucoes(e, DATASET_AVALIACOES)).map((x) => [x.kind, x.status, x.entities_written])).toEqual([['carga_inicial', 'ok', 2], ['incremental', 'ok', 1]]);
+    // A leitura de hora em hora não gasta a vez da reconferência.
+    expect((await estado(e, DATASET_AVALIACOES)).cursor).toMatchObject({
+      primeira_em: AGORA.toISOString(), lido_ate: depois.toISOString(), proxima: new Date(depois.getTime() + 60 * MIN_MS).toISOString(), reconferido_em: AGORA.toISOString(),
+    });
 
-    // No dia seguinte, os números releem os últimos 10 dias, até a véspera.
+    // No dia seguinte: a reconferência relê os últimos 45 dias, e a resposta da rev-2 chega. Nenhuma avaliação conta
+    // como nova (é dela que sai o aviso de nota baixa). Os números releem os últimos 10 dias, até a véspera.
     const amanha = em(1441);
     google.vistos.length = 0;
     const doDia = await rodar(e, amanha);
     expect(doDia.map((r) => [r.dataset, r.status]).sort()).toEqual([[DATASET_AVALIACOES, 'ok'], [DATASET_NUMEROS, 'ok']]);
+    const reconferida = doDia.find((r) => r.dataset === DATASET_AVALIACOES)!;
+    expect([reconferida.avaliacoes, reconferida.novas]).toEqual([3, []]);
+    expect((await avaliacoes(e)).map((a) => [a.external_id, a.reply_text, a.reply_state])).toEqual([
+      ['rev-1', null, null],
+      ['rev-2', 'Vamos melhorar a batata.', 'pendente'],
+      ['rev-3', null, null],
+    ]);
+    expect((await estado(e, DATASET_AVALIACOES)).cursor).toMatchObject({ lido_ate: amanha.toISOString(), reconferido_em: amanha.toISOString(), relido_em: AGORA.toISOString() });
     const pedido = google.de('numeros')[0]!.busca;
     const pedida = (p: string) => `${pedido.get(`dailyRange.${p}.year`)}-${pedido.get(`dailyRange.${p}.month`)!.padStart(2, '0')}-${pedido.get(`dailyRange.${p}.day`)!.padStart(2, '0')}`;
     expect([pedida('start_date'), pedida('end_date')]).toEqual([dia(new Date(amanha.getTime() - 10 * DIA_MS)), dia(new Date(amanha.getTime() - DIA_MS))]);
     expect((await execucoes(e, DATASET_NUMEROS)).map((x) => x.kind)).toEqual(['carga_inicial', 'incremental']);
+  });
+
+  it('a resposta dada (ou retirada) direto no Google, sem a data da avaliação mudar: até 45 dias chega na reconferência do dia; mais antiga, na releitura da semana; e a falha não gasta a vez', async () => {
+    const e = await empresa('Mister Burgers Respondeu no Google');
+    const dasAvaliacoes = (lote: Awaited<ReturnType<typeof rodar>>) => lote.find((r) => r.dataset === DATASET_AVALIACOES);
+    const respostas = async () => (await avaliacoes(e)).map((a) => [a.external_id, a.reply_text, a.reply_state]);
+    google.lista = [
+      avaliacao('recente', 'ONE', 10),
+      avaliacao('tinha', 'FOUR', 20, { reviewReply: { comment: 'Obrigado!', reviewReplyState: 'APPROVED' } }),
+      avaliacao('velha', 'TWO', 60),
+    ];
+    expect(situacoes(await rodar(e, AGORA))).toEqual(['ok', 'ok']);
+    expect(await respostas()).toEqual([['recente', null, null], ['tinha', 'Obrigado!', 'aprovada'], ['velha', null, null]]);
+
+    // No Google, a empresa responde as duas sem resposta e apaga a que tinha. As datas das avaliações não mudam.
+    const respondeu = new Date(AGORA.getTime() + 10 * MIN_MS).toISOString();
+    google.lista = [
+      avaliacao('recente', 'ONE', 10, { reviewReply: { comment: 'Vamos rever a entrega.', updateTime: respondeu, reviewReplyState: 'APPROVED' } }),
+      avaliacao('tinha', 'FOUR', 20),
+      avaliacao('velha', 'TWO', 60, { reviewReply: { comment: 'Sentimos muito.', updateTime: respondeu, reviewReplyState: 'APPROVED' } }),
+    ];
+
+    // A leitura de hora em hora não lê nenhuma delas: nada mudou pela data da avaliação.
+    const daHora = dasAvaliacoes(await rodar(e, em(61)))!;
+    expect([daHora.status, daHora.avaliacoes]).toEqual(['ok', 0]);
+    expect(await respostas()).toEqual([['recente', null, null], ['tinha', 'Obrigado!', 'aprovada'], ['velha', null, null]]);
+
+    // No dia seguinte o Google está fora do ar: a reconferência falha, e a vez dela continua valendo.
+    google.avaliacoes = 'fora';
+    const caiu = em(24 * 60 + 1);
+    expect(dasAvaliacoes(await rodar(e, caiu))!.status).toBe('falhou');
+    expect((await estado(e, DATASET_AVALIACOES)).cursor).toMatchObject({ falha: 'transitorio', reconferido_em: AGORA.toISOString(), relido_em: AGORA.toISOString() });
+
+    // Meia hora depois ele volta: a reconferência lê os últimos 45 dias. A resposta nova chega, a retirada sai, e a
+    // avaliação de 60 dias fica de fora desta vez.
+    google.avaliacoes = 'ok';
+    const voltou = new Date(caiu.getTime() + 31 * MIN_MS);
+    const doDia = dasAvaliacoes(await rodar(e, voltou))!;
+    expect([doDia.status, doDia.avaliacoes, doDia.novas]).toEqual(['ok', 2, []]);
+    expect(await respostas()).toEqual([['recente', 'Vamos rever a entrega.', 'aprovada'], ['tinha', null, null], ['velha', null, null]]);
+    expect((await estado(e, DATASET_AVALIACOES)).cursor).toMatchObject({ reconferido_em: voltou.toISOString(), relido_em: AGORA.toISOString() });
+
+    // Na semana fechada, a releitura dos 12 meses traz a resposta da avaliação antiga.
+    const semana = em(7 * 24 * 60 + 1);
+    const daSemana = dasAvaliacoes(await rodar(e, semana))!;
+    expect([daSemana.status, daSemana.avaliacoes, daSemana.novas]).toEqual(['ok', 3, []]);
+    expect(await respostas()).toEqual([['recente', 'Vamos rever a entrega.', 'aprovada'], ['tinha', null, null], ['velha', 'Sentimos muito.', 'aprovada']]);
+    expect((await estado(e, DATASET_AVALIACOES)).cursor).toMatchObject({ reconferido_em: semana.toISOString(), relido_em: semana.toISOString() });
   });
 
   it('com a função desligada para a empresa, nada é lido do Google, e a loja é olhada de novo no dia seguinte', async () => {
