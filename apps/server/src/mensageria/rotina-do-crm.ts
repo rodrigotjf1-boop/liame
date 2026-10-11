@@ -206,6 +206,11 @@ export const SITUACOES_SEM_VOLTA_DO_MODELO: readonly string[] = ['recusado', 'de
 
 export type PassoDoModelo = { passo: 'pedir' } | { passo: 'esperar'; situacao: string } | { passo: 'descartar'; motivo: 'modelo_recusado' | 'prazo' };
 
+/** O prazo do modelo acabou? Conta de quando o rascunho nasceu no RegemCast. */
+export function prazoDoModeloAcabou(rascunhoEm: Date, agora: Date): boolean {
+  return agora.getTime() - rascunhoEm.getTime() >= DIAS_PELO_MODELO * DIA_MS;
+}
+
 /**
  * O que fazer com um rascunho, pelo que o RegemCast diz dos modelos agora. A lista de lá é a dos modelos como a Meta
  * os tem: o rascunho que ninguém enviou não aparece nela, e continua como `semEnvio`. O modelo é o da proposta pelo
@@ -221,7 +226,7 @@ export function passoDoModelo(
   const modelo = modelos.modelos.find((m) => m.nome === doRascunho.nome && m.idioma === doRascunho.idioma);
   if (modelo?.podeDisparar) return { passo: 'pedir' };
   if (modelo && SITUACOES_SEM_VOLTA_DO_MODELO.includes(modelo.situacao)) return { passo: 'descartar', motivo: 'modelo_recusado' };
-  if (agora.getTime() - rascunhoEm.getTime() >= DIAS_PELO_MODELO * DIA_MS) return { passo: 'descartar', motivo: 'prazo' };
+  if (prazoDoModeloAcabou(rascunhoEm, agora)) return { passo: 'descartar', motivo: 'prazo' };
   return { passo: 'esperar', situacao: modelo?.situacao.trim().slice(0, 60) || doRascunho.semEnvio };
 }
 

@@ -5,17 +5,32 @@ import { CRM } from '../ai/crm/prompt.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
+import { pessoaPode } from '../auth/pessoa-pode.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { lerModelos, rascunharModelo } from '../connectors/regemcast/conector-regemcast.js';
 import { currentTx } from '../context/request-context.js';
+import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
+import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { type ContaDoRegemcast, lerContaDoRegemcast } from '../mensageria/conta-do-regemcast.js';
 import { FLAG_MENSAGERIA } from '../mensageria/mensageria.service.js';
-import { FLAG_DO_ENVIO } from '../mensageria/pedido-de-mensagem.service.js';
-import { adiarProposta, anotarModelo, type DonoDaProposta, encerrarProposta, esperarProposta, lerProposta, MODELO_SEM_ENVIO, type PropostaGuardada, registrarRascunho } from '../mensageria/proposta-do-crm.js';
+import { FLAG_DO_ENVIO, PedidoDeMensagemService, type PedidoMontado } from '../mensageria/pedido-de-mensagem.service.js';
+import type { CupomDaMensagem } from '../mensageria/proposta-de-mensagem.js';
+import {
+  adiarProposta,
+  anotarModelo,
+  type DonoDaProposta,
+  encerrarProposta,
+  esperarProposta,
+  lerProposta,
+  MODELO_SEM_ENVIO,
+  type PropostaGuardada,
+  registrarRascunho,
+  virarPedido,
+} from '../mensageria/proposta-do-crm.js';
 import {
   chaveDoModelo,
   IDIOMA_DO_MODELO,
@@ -24,8 +39,11 @@ import {
   modeloParaRascunhar,
   nomeDoModelo,
   passoDoModelo,
+  prazoDoModeloAcabou,
+  propostaParaOPedido,
   TENTATIVAS_DO_RASCUNHO,
 } from '../mensageria/rotina-do-crm.js';
+import { ResultsService } from '../results/results.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { FLAG_DO_CRM } from './rotina-do-crm.service.js';
 
@@ -71,12 +89,13 @@ export type Rascunho =
 
 /**
  * O que a vez do acompanhamento viu. `esperando`: ninguém enviou o modelo ainda (`rascunho`), ou a Meta analisa.
- * `aprovado`: o modelo pode ser disparado. `descartada`: a Meta recusou, ou o prazo acabou. `sem_leitura`: não deu
- * para ler agora (a função desligada, o RegemCast fora do ar); olha de novo no próximo intervalo.
+ * `pedido`: a Meta aprovou, e o pedido de envio foi montado (está em Aprovações). `descartada`: a Meta recusou, o
+ * prazo acabou, ou as regras de agora não deixam mais pedir. `sem_leitura`: não deu para ler ou pedir agora (a função
+ * desligada, o RegemCast fora do ar); olha de novo no próximo intervalo.
  */
 export type Acompanhamento =
   | { status: 'esperando'; situacao: string }
-  | { status: 'aprovado' }
+  | { status: 'pedido'; pedido: string }
   | { status: 'descartada'; motivo: string }
   | { status: 'sem_leitura'; motivo: string }
   | { status: 'fora' };
@@ -84,6 +103,9 @@ export type Acompanhamento =
 type Acesso = { conta: ContaDoRegemcast; token: string; apiUrl: string };
 type ParaRascunhar = Acesso & { p: PropostaGuardada; corpo: string; codigoDoCupom: string };
 type ParaAcompanhar = Acesso & { p: PropostaGuardada; nome: string; idioma: string };
+type ParaPedir = { responsavel: string; hoje: string; nome: string; cupom: CupomDaMensagem; modelo: string };
+/** Quem define o desconto das mensagens responde pelas propostas: a mesma permissão de quando ele propôs. */
+const PODE_RESPONDER = 'orcamento.gerenciar';
 
 @Injectable()
 export class ModeloDoCrmService {
@@ -94,6 +116,8 @@ export class ModeloDoCrmService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly flags: FlagService,
     private readonly vault: VaultService,
+    private readonly resultados: ResultsService,
+    private readonly pedidos: PedidoDeMensagemService,
   ) {}
 
   /** Grava no RegemCast o rascunho do modelo de uma proposta que já tem o texto conferido. O relógio injetado vale para a operação inteira (V34). */
@@ -163,12 +187,66 @@ export class ModeloDoCrmService {
     }
 
     const passo = passoDoModelo(modelos, { nome: lido.nome, idioma: lido.idioma, semEnvio: MODELO_SEM_ENVIO }, rascunhoEm, agora);
+    // A Meta aprovou o modelo: é hora do pedido de envio.
+    if (passo.passo === 'pedir') return this.pedir(alvo, lido.p, rascunhoEm, agora);
     return this.naEmpresa<Acompanhamento>(alvo, async (tx) => {
       if (passo.passo === 'descartar') return this.descartar(tx, alvo, passo.motivo);
-      const situacao = passo.passo === 'pedir' ? MODELO_APROVADO : passo.situacao;
-      if (!(await anotarModelo(tx, alvo, situacao, agora))) return { status: 'fora' };
-      return passo.passo === 'pedir' ? { status: 'aprovado' } : { status: 'esperando', situacao };
+      if (!(await anotarModelo(tx, alvo, passo.situacao, agora))) return { status: 'fora' };
+      return { status: 'esperando', situacao: passo.situacao };
     });
+  }
+
+  /**
+   * Com o modelo aprovado, monta o pedido de envio (a campanha em rascunho no RegemCast e o pedido que espera a
+   * aprovação de uma pessoa, com o código do app), e a proposta acaba: daqui em diante quem manda é Aprovações.
+   * Antes, as regras de agora valem de novo: quem responde pela proposta e a oferta de Minha marca.
+   */
+  private async pedir(alvo: DonoDaProposta, p: PropostaGuardada, rascunhoEm: Date, agora: Date): Promise<Acompanhamento> {
+    // ---- 1. O banco: o modelo fica anotado como aprovado; quem responde, a oferta e o dia de hoje na marca.
+    const lido = await this.naEmpresa<ParaPedir | Acompanhamento>(alvo, async (tx) => {
+      if (!(await anotarModelo(tx, alvo, MODELO_APROVADO, agora))) return { status: 'fora' };
+      if (!p.name || !p.coupon || !p.template_name) return this.descartar(tx, alvo, 'proposta_incompleta');
+      // A rotina caiu entre montar o pedido e anotar na proposta: o pedido com o cupom desta proposta já existe.
+      const jaMontado = (
+        await tx.execute<{ id: string }>(sql`
+          select id from liame.message_request
+           where tenant_id = ${alvo.tenantId} and brand_id = ${p.brand_id} and agent_key = ${CRM.key}
+             and coupon_account_id = ${p.coupon.loja} and coupon_code = ${p.coupon.codigo}
+           limit 1`)
+      ).rows[0];
+      if (jaMontado) return (await virarPedido(tx, alvo, jaMontado.id)) ? { status: 'pedido', pedido: jaMontado.id } : { status: 'fora' };
+      // O funcionário nunca pode mais do que quem o deixou propor (ADR-017): a pessoa segue na empresa, podendo definir o desconto?
+      if (!p.requested_by || !(await pessoaPode(tx, { tenantId: alvo.tenantId, userId: p.requested_by, permissao: PODE_RESPONDER }))) return this.descartar(tx, alvo, 'sem_responsavel');
+      const fuso = await this.resultados.fusoDaMarca(p.brand_id);
+      // A oferta saiu de Minha marca enquanto o modelo esperava a Meta: a mensagem divulgaria o que a empresa já tirou.
+      if (p.offer !== null) {
+        const marca = await marcaDoCriativo(p.brand_id, fuso, agora);
+        if (!marca || !marca.conteudo.offers.items.includes(p.offer)) return this.descartar(tx, alvo, 'oferta_mudou');
+      }
+      const hoje = (await tx.execute<{ dia: string }>(sql`select (${agora.toISOString()}::timestamptz at time zone ${fuso})::date::text as dia`)).rows[0]!.dia;
+      return { responsavel: p.requested_by, hoje, nome: p.name, cupom: p.coupon, modelo: p.template_name };
+    });
+    if ('status' in lido) return lido;
+
+    // ---- 2. O pedido de envio. O serviço abre as transações dele e fala com o RegemCast; nenhuma mensagem sai.
+    let montado: PedidoMontado;
+    try {
+      montado = await this.pedidos.propor(
+        { tenantId: alvo.tenantId, agentKey: CRM.key, agentLabel: ROTULO_DO_CRM, emNomeDe: lido.responsavel },
+        propostaParaOPedido({ brandId: p.brand_id, conta: p.connected_account_id, nome: lido.nome, modelo: { nome: lido.modelo, idioma: p.template_language ?? IDIOMA_DO_MODELO }, publico: p.audience, cupom: lido.cupom }, lido.hoje),
+      );
+    } catch (err) {
+      if (!(err instanceof AppProblem)) throw err;
+      this.logger.warn(`proposta ${alvo.id}: o pedido de envio não foi montado (${err.code}): ${err.detail}`);
+      // O que a proposta tem de errado não muda tentando de novo. O resto (uma chave desligada no meio, o RegemCast
+      // fora do ar) espera a próxima olhada, até o prazo do modelo.
+      if (err.code === 'proposta-recusada' || err.code === 'nao-encontrado') return this.naEmpresa(alvo, (tx) => this.descartar(tx, alvo, 'pedido_recusado'));
+      if (prazoDoModeloAcabou(rascunhoEm, agora)) return this.naEmpresa(alvo, (tx) => this.descartar(tx, alvo, 'prazo'));
+      return { status: 'sem_leitura', motivo: err.code.replace(/[^a-z_]/g, '_').slice(0, 40) };
+    }
+
+    // ---- 3. A proposta acaba: o que vale daqui em diante é o pedido, em Aprovações.
+    return this.naEmpresa<Acompanhamento>(alvo, async (tx) => ((await virarPedido(tx, alvo, montado.id)) ? { status: 'pedido', pedido: montado.id } : { status: 'fora' }));
   }
 
   private async lerParaRascunhar(tx: Tx, alvo: DonoDaProposta, agora: Date): Promise<ParaRascunhar | Rascunho> {

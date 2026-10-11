@@ -37,6 +37,7 @@ import {
   PERFIS_DO_MOTIVO,
   PESSOAS_NO_MINIMO,
   prazoDeEscreverAcabou,
+  prazoDoModeloAcabou,
   propostaParaOPedido,
   proximaOlhada,
   publicoDoMotivo,
@@ -248,6 +249,8 @@ describe('a rotina do CRM: o modelo no RegemCast e a espera pela Meta', () => {
     expect(passoDoModelo(naMeta('aprovado'), doRascunho, antes(9 * DIA), AGORA)).toEqual({ passo: 'pedir' });
     // Recusado depois do prazo: o motivo é a recusa, que é o que a pessoa precisa saber.
     expect(passoDoModelo(naMeta('recusado'), doRascunho, antes(9 * DIA), AGORA)).toEqual({ passo: 'descartar', motivo: 'modelo_recusado' });
+    // O mesmo prazo vale para o pedido de envio que não consegue ser montado (o RegemCast fora do ar por dias).
+    expect([prazoDoModeloAcabou(noLimite, AGORA), prazoDoModeloAcabou(new Date(noLimite.getTime() + 1), AGORA), prazoDoModeloAcabou(antes(HORA), AGORA)]).toEqual([true, false, false]);
   });
 });
 

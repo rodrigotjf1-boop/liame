@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
@@ -37,7 +37,27 @@ const DIA = 24 * HORA;
 type Perfil = { id: string; nome: string; regra: string | null; pessoas: number };
 /** Um modelo no RegemCast falso: nasce rascunho, e só aparece na lista (a da Meta) depois de uma pessoa enviá-lo. */
 type ModeloFalso = { id: string; nome: string; idioma: string; corpo: string; rodape: string | null; situacao: string; naMeta: boolean; pedido: Record<string, unknown> };
-type ContaFalsa = { contaId: string; permissoes: string[]; perfis: Perfil[]; sinal: string; modo: 'ok' | 'erro_interno'; modelos: ModeloFalso[] };
+/** `erro_interno`: as ferramentas da rotina respondem com erro interno. `sem_campanha`: só a de montar a campanha. */
+type ContaFalsa = { contaId: string; permissoes: string[]; perfis: Perfil[]; sinal: string; modo: 'ok' | 'erro_interno' | 'sem_campanha'; modelos: ModeloFalso[] };
+type PedidoGuardado = {
+  id: string;
+  name: string;
+  template_name: string;
+  template_body: string;
+  template_footer: string | null;
+  variables: unknown;
+  audience: unknown;
+  audience_name: string;
+  people_can_receive: number;
+  coupon_account_id: string | null;
+  coupon_code: string | null;
+  coupon_rule: Record<string, unknown> | null;
+  actor_type: string;
+  agent_key: string | null;
+  requested_by: string | null;
+  action_request_id: string | null;
+};
+type CampanhaFalsa = { id: string; conta: string; nome: string; modelo: string; destinatarios: number; pedido: Record<string, unknown> };
 type Empresa = { cookie: string; tenantId: string; userId: string; brandId: string; token: string; conta: string; loja: string };
 type Proposta = {
   id: string;
@@ -115,6 +135,29 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
 
   /** As chaves de idempotência do rascunho de modelo: a mesma chave com o mesmo pedido devolve a mesma resposta. */
   const chavesDeModelo = new Map<string, { pedido: string; resposta: object }>();
+  /** As campanhas em rascunho que o pedido de envio monta, e as chaves delas. */
+  const campanhas = new Map<string, CampanhaFalsa>();
+  const chavesDeCampanha = new Map<string, { pedido: string; resposta: object }>();
+  const custoDe = (pessoas: number) => ({ moeda: 'BRL', gastoCentavos: 0, aSairCentavos: pessoas * 32, linhas: [], avisos: [] });
+  const paraFora = (c: CampanhaFalsa) => ({
+    id: c.id,
+    nome: c.nome,
+    situacao: 'rascunho',
+    pausaMotivo: null,
+    modelo: c.modelo,
+    categoria: 'marketing',
+    publico: 'Perfil de clientes',
+    destinatarios: c.destinatarios,
+    naFila: c.destinatarios,
+    enviadas: 0,
+    entregues: 0,
+    lidas: 0,
+    falhas: 0,
+    responderam: 0,
+    criadaEm: '2026-10-11T12:00:00.000Z',
+    iniciadaEm: null,
+    concluidaEm: null,
+  });
 
   function responder(credencial: string, corpo: { id?: unknown; params?: { name?: string; arguments?: Record<string, unknown> } }): { status: number; corpo: unknown } {
     const conta = contas.get(credencial);
@@ -155,6 +198,37 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
       const resposta = resultado({ id: m.id, nome: m.nome, idioma: m.idioma, categoria: String(pedido.categoria), situacao: 'rascunho', problemas: [], prontoParaEnviar: true, proximoPasso: 'O rascunho está salvo. Uma pessoa da conta confere e envia para a Meta, em Modelos.' });
       chavesDeModelo.set(chave, { pedido: JSON.stringify(pedido), resposta });
       return { status: 200, corpo: comId(resposta) };
+    }
+    // O que o pedido de envio usa: quantas pessoas podem receber, a campanha em rascunho e o plano do disparo.
+    if (nome === 'publico_estimar') {
+      const pessoas = conta.perfis.find((p) => p.id === String(args.segmento ?? ''))?.pessoas ?? 0;
+      return ok({ pessoas, emDescanso: 0, descansoDias: 7, custo: custoDe(pessoas) });
+    }
+    if (nome === 'campanha_rascunhar') {
+      if (!conta.permissoes.includes('campanhas.rascunhar')) return semFerramenta;
+      if (conta.modo !== 'ok') return { status: 200, corpo: comId(recusada('Erro interno ao montar a campanha.')) };
+      const { chaveIdempotencia, ...pedido } = args;
+      const chave = `${conta.contaId}:${String(chaveIdempotencia)}`;
+      const guardada = chavesDeCampanha.get(chave);
+      if (guardada) return guardada.pedido === JSON.stringify(pedido) ? { status: 200, corpo: comId(guardada.resposta) } : { status: 200, corpo: comId(recusada('Esta chave já foi usada com outro pedido. Use uma chave nova.')) };
+      const publico = (pedido.publico ?? {}) as Record<string, unknown>;
+      const c: CampanhaFalsa = { id: randomUUID(), conta: conta.contaId, nome: String(pedido.nome), modelo: String(pedido.modeloNome), destinatarios: conta.perfis.find((p) => p.id === String(publico.segmento ?? ''))?.pessoas ?? 0, pedido };
+      campanhas.set(c.id, c);
+      const resposta = resultado({ campanha: paraFora(c), custo: custoDe(c.destinatarios), descansoDias: 7, proximoPasso: 'A campanha está em rascunho. Nada foi enviado.' });
+      chavesDeCampanha.set(chave, { pedido: JSON.stringify(pedido), resposta });
+      return { status: 200, corpo: comId(resposta) };
+    }
+    if (nome === 'campanha_disparo_planejar') {
+      const c = campanhas.get(String(args.id));
+      if (!c || c.conta !== conta.contaId) return { status: 200, corpo: comId(recusada('Campanha não encontrada.')) };
+      return ok({
+        campanha: paraFora(c),
+        custo: custoDe(c.destinatarios),
+        orcamento: { definido: true, periodos: [{ periodo: 'mes', rotulo: 'Outubro', tetoCentavos: 30_000, gastoCentavos: 12_736, texto: 'do teto do mês', sinal: 'ok' }], aviso: null },
+        podeDisparar: true,
+        impedimentos: [],
+        confirmacao: createHash('sha256').update(c.id).digest('hex').slice(0, 40),
+      });
     }
     if (nome === 'modelos_listar') {
       if (!conta.permissoes.includes('modelos.ler')) return semFerramenta;
@@ -236,8 +310,14 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     );
   const fila = (e: Empresa) => ownerQuery<Linha>(`select motive, outcome, checked_at, next_check_at from liame.message_routine where tenant_id = $1 order by motive`, [e.tenantId]);
   const doToken = (e: Empresa) => chamadas.filter((c) => c.token === e.token).map((c) => c.ferramenta).sort();
-  /** O dia de hoje no fuso da marca, como o banco o calcula. */
-  const hojeEm = async (fuso: string, mais = 0) => (await ownerQuery<{ dia: string }>(`select ((now() at time zone $1)::date + $2::int)::text as dia`, [fuso, mais]))[0]!.dia;
+  /** O dia de um instante no fuso da marca (São Paulo), como o banco o calcula, mais tantos dias. O instante é o mesmo relógio que foi para a rotina (V89). */
+  const diaEm = async (instante: Date, mais = 0) => (await ownerQuery<{ dia: string }>(`select ((($1::timestamptz) at time zone 'America/Sao_Paulo')::date + $2::int)::text as dia`, [instante, mais]))[0]!.dia;
+  const pedidosDe = (e: Empresa) =>
+    ownerQuery<PedidoGuardado>(
+      `select id, name, template_name, template_body, template_footer, variables, audience, audience_name, people_can_receive, coupon_account_id, coupon_code, coupon_rule, actor_type, agent_key, requested_by, action_request_id
+         from liame.message_request where tenant_id = $1 order by created_at, id`,
+      [e.tenantId],
+    );
 
   // ---------------------------------------------------------------- a escrita: o modelo simulado e a fila
   const modelo = (mock: MockLanguageModelV4) => {
@@ -314,7 +394,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     ajuda = await import('../helpers/api.js');
     ({ ownerQuery } = ajuda);
     api = await ajuda.startApi();
-    const [{ FlagService }, distribuicao, { VaultService }, { loadConfig }, { DATABASE }, { ResultsService }, { RotinaDoCrmService: Servico }, doLoop, { EscritaDoCrmService: DaEscrita }, { AiGateway }, { ModelosIa }, doTeste, { ModeloDoCrmService: DoModelo }] =
+    const [{ FlagService }, distribuicao, { VaultService }, { loadConfig }, { DATABASE }, { ResultsService }, { RotinaDoCrmService: Servico }, doLoop, { EscritaDoCrmService: DaEscrita }, { AiGateway }, { ModelosIa }, doTeste, { ModeloDoCrmService: DoModelo }, { PedidoDeMensagemService: DoPedido }] =
       await Promise.all([
         import('../../src/flags/flag.service.js'),
         import('../../src/connections/distribuicao.js'),
@@ -329,6 +409,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
         import('../../src/ai/modelos.js'),
         import('../helpers/ia.js'),
         import('../../src/worker/modelo-do-crm.service.js'),
+        import('../../src/mensageria/pedido-de-mensagem.service.js'),
       ]);
     ia = doTeste;
     database = api.app.get<Database>(DATABASE);
@@ -341,7 +422,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
     servico = new Servico(database, loadConfig(), flags, api.app.get(VaultService), api.app.get(ResultsService));
     escrita = new DaEscrita(database, flags, api.app.get(AiGateway), api.app.get(ResultsService));
-    doModelo = new DoModelo(database, loadConfig(), flags, api.app.get(VaultService));
+    doModelo = new DoModelo(database, loadConfig(), flags, api.app.get(VaultService), api.app.get(ResultsService), api.app.get(DoPedido));
     Loop = doLoop.RotinaDoCrmLoop;
     loop = new Loop(database, servico, escrita, doModelo);
     // A rota desta tarefa pode ser dividida com outro arquivo de teste: nome fixo, ninguém apaga (V76).
@@ -361,7 +442,8 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
 
   it('com motivo, ele abre a proposta: a oferta da vez, o perfil com mais gente, o cupom do desconto padrão e a auditoria; nada vai para o RegemCast', async () => {
     const e = await empresa();
-    const olhada = await olhar(e, 'promocao');
+    const agora = new Date();
+    const olhada = await olhar(e, 'promocao', agora);
     expect(olhada.resultado).toBe('proposta_aberta');
     const [p] = await propostas(e);
     expect(p).toMatchObject({
@@ -386,7 +468,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     // O cupom: o desconto padrão (10%, 2 dias contando hoje), na loja que cria cupom, com o código sorteado.
     const codigo = String(p!.coupon.codigo);
     expect(codigo).toMatch(/^PROMO[A-HJ-NP-Z2-9]{4}$/);
-    expect(p!.coupon).toEqual({ loja: e.loja, codigo, tipo: 'percentual', percentual: 10, pedido_minimo_centavos: 0, valido_de: await hojeEm('America/Sao_Paulo'), valido_ate: await hojeEm('America/Sao_Paulo', 1) });
+    expect(p!.coupon).toEqual({ loja: e.loja, codigo, tipo: 'percentual', percentual: 10, pedido_minimo_centavos: 0, valido_de: await diaEm(agora), valido_ate: await diaEm(agora, 1) });
     // Do RegemCast, só leituras: os públicos e o teto. Nenhuma ferramenta de escrita.
     expect(doToken(e)).toEqual(['orcamento_ler', 'publicos_listar']);
     // A auditoria, em nome do funcionário, sem a oferta e sem o nome do público.
@@ -537,11 +619,24 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     expect(doToken(e)).toEqual([]);
     // De volta à empresa, a proposta sai em nome dela, com o desconto que ela definiu.
     await ownerQuery(`update liame.membership set revoked_at = null where tenant_id = $1 and user_id = $2`, [e.tenantId, admin]);
-    expect((await olhar(e, 'promocao')).resultado).toBe('proposta_aberta');
+    const agora = new Date();
+    expect((await olhar(e, 'promocao', agora)).resultado).toBe('proposta_aberta');
     const [p] = await propostas(e);
     expect(p).toMatchObject({ requested_by: admin });
-    expect(p!.coupon).toMatchObject({ tipo: 'frete_gratis', pedido_minimo_centavos: 4000, valido_de: await hojeEm('America/Sao_Paulo'), valido_ate: await hojeEm('America/Sao_Paulo', 2) });
+    expect(p!.coupon).toMatchObject({ tipo: 'frete_gratis', pedido_minimo_centavos: 4000, valido_de: await diaEm(agora), valido_ate: await diaEm(agora, 2) });
     expect(p!.coupon).not.toHaveProperty('percentual');
+
+    // E, se ela sair da empresa enquanto o modelo espera a Meta, o pedido de envio não é montado: o funcionário nunca
+    // pode mais do que quem o deixou propor.
+    comResposta({ recusa: null, mensagem: { nome: 'Combo da sexta', corpo: 'Oi, {{1}}! Sexta é dia de combo: smash, batata e refri por R$ 34,90. Com o cupom {{2}} você tem entrega grátis em pedidos a partir de R$ 40,00, válido por 3 dias, contando hoje. Peça pelo cardápio.' } });
+    expect((await escrever(e)).map((v) => v.feito)).toEqual([{ status: 'escrita', situacao: 'passou' }]);
+    expect((await rascunhar(e)).map((v) => v.feito.status)).toEqual(['rascunhado']);
+    naMeta(e, `liame_promocao_${p!.id.replaceAll('-', '')}`, 'aprovado');
+    await ownerQuery(`update liame.membership set revoked_at = now() where tenant_id = $1 and user_id = $2`, [e.tenantId, admin]);
+    const em20 = new Date((await doModeloDe(p!.id)).drafted_at!.getTime() + 20 * MIN);
+    expect((await acompanhar(e, em20)).map((v) => v.visto)).toEqual([{ status: 'descartada', motivo: 'sem_responsavel' }]);
+    expect(await doModeloDe(p!.id)).toMatchObject({ status: 'descartada', reason: 'sem_responsavel', template_status: 'aprovado' });
+    expect(await pedidosDe(e)).toEqual([]);
   });
 
   it('a fila do olhar: a marca com o RegemCast ganha as duas linhas, cada olhada deixa registro e marca a próxima', async () => {
@@ -819,10 +914,81 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     expect((await acompanhar(e, olhada(2))).map((v) => v.visto)).toEqual([{ status: 'esperando', situacao: 'em análise' }]);
     expect(await doModeloDe(p.id)).toMatchObject({ status: 'rascunho', template_status: 'em análise' });
     expect(await naFicha(e)).toEqual({ working_now: false, blocked_by: 'modelo_em_analise' });
-    // A Meta aprovou: é hora do pedido de envio.
+    // A Meta aprovou: ele monta o pedido de envio, que espera a aprovação de uma pessoa, e a proposta acaba.
     naMeta(e, nome, 'aprovado');
-    expect((await acompanhar(e, olhada(3))).map((v) => v.visto)).toEqual([{ status: 'aprovado' }]);
-    expect(await doModeloDe(p.id)).toMatchObject({ status: 'rascunho', template_status: 'aprovado', acabou: false });
+    chamadas.length = 0;
+    const [vez] = await acompanhar(e, olhada(3));
+    const [pedido] = await pedidosDe(e);
+    expect(vez!.visto).toEqual({ status: 'pedido', pedido: pedido!.id });
+    expect(await doModeloDe(p.id)).toMatchObject({ status: 'pedido', template_status: 'aprovado', acabou: true });
+    expect((await ownerQuery(`select message_request_id from liame.message_proposal where id = $1`, [p.id]))[0]).toEqual({ message_request_id: pedido!.id });
+    // O retrato do pedido: o nome que ele escreveu, o modelo como a Meta aprovou, o público, as duas variáveis e o cupom.
+    expect(pedido).toMatchObject({
+      name: 'Combo da sexta',
+      template_name: nome,
+      template_body: BOA,
+      template_footer: 'Responda SAIR para não receber mais.',
+      variables: [{ origem: 'primeiro_nome' }, { origem: 'fixo', valor: codigo }],
+      audience: { origem: 'perfil', id: 'novos' },
+      audience_name: 'Novos',
+      people_can_receive: 310,
+      coupon_account_id: e.loja,
+      coupon_code: codigo,
+      actor_type: 'agent',
+      agent_key: 'crm',
+      requested_by: e.userId,
+    });
+    // O cupom vale pelos dias do desconto, a contar do dia em que o pedido foi montado.
+    expect(pedido!.coupon_rule).toMatchObject({ codigo, tipo: 'percentual', percentual: '10.00', valido_de: await diaEm(olhada(3)), valido_ate: await diaEm(olhada(3), 1) });
+    // O pedido espera a aprovação de uma pessoa, com o código do app: nada foi disparado.
+    const acao = await api.call('GET', `/v1/actions/${pedido!.action_request_id}`, { cookie: e.cookie });
+    expect(acao.status, JSON.stringify(acao.body)).toBe(200);
+    expect(acao.body).toMatchObject({ tool: 'mensagem_disparar', status: 'aguardando_aprovacao' });
+    expect(doToken(e)).toEqual(['campanha_disparo_planejar', 'campanha_rascunhar', 'modelos_listar', 'modelos_listar', 'publico_estimar', 'publicos_listar']);
+    // A ficha não tem mais o que o segure: o que falta agora é a decisão de uma pessoa, em Aprovações.
+    expect(await naFicha(e)).toEqual({ working_now: false, blocked_by: null });
+    const ficha = await api.call('GET', `/v1/team?brand_id=${e.brandId}`, { cookie: e.cookie });
+    const numeros = Object.fromEntries((ficha.body.members as Array<{ key: string; stats: Array<{ key: string; value: string }> }>).find((m) => m.key === 'crm')!.stats.map((s) => [s.key, s.value]));
+    expect(numeros).toMatchObject({ mensagens_propostas: '1', mensagens_esperando: '1' });
+    // A proposta que virou pedido sai da fila da espera.
+    expect(await acompanhar(e, olhada(5))).toEqual([]);
+  });
+
+  it('com o modelo aprovado, as regras de agora valem de novo; o RegemCast fora do ar só adia; e o pedido que já existe não é montado duas vezes', async () => {
+    const e = await empresa();
+    const promo = await comTexto(e);
+    const volte = await comTexto(e, 'volte_a_pedir');
+    expect((await rascunhar(e)).map((v) => v.feito.status)).toEqual(['rascunhado', 'rascunhado']);
+    const nomeDe = (p: Guardada) => `liame_${p.motive}_${p.id.replaceAll('-', '')}`;
+    naMeta(e, nomeDe(promo), 'aprovado');
+    naMeta(e, nomeDe(volte), 'aprovado');
+    const nascido = (await doModeloDe(promo.id)).drafted_at!;
+    const em = (minutos: number) => new Date(nascido.getTime() + minutos * MIN + 1000);
+    const vistos = async (agora: Date) => Object.fromEntries((await acompanhar(e, agora)).map((v) => [v.id === promo.id ? 'promo' : 'volte', v.visto]));
+
+    // O RegemCast não deixa montar a campanha agora: as duas ficam para a próxima olhada, com o modelo já anotado como aprovado.
+    contas.get(e.token)!.modo = 'sem_campanha';
+    expect(await vistos(em(20))).toEqual({ promo: { status: 'sem_leitura', motivo: 'plataforma_indisponivel' }, volte: { status: 'sem_leitura', motivo: 'plataforma_indisponivel' } });
+    expect(await doModeloDe(promo.id)).toMatchObject({ status: 'rascunho', template_status: 'aprovado', template_checked_at: em(20) });
+    expect(await pedidosDe(e)).toEqual([]);
+    contas.get(e.token)!.modo = 'ok';
+
+    // A oferta da promoção saiu de Minha marca enquanto o modelo esperava: a promoção não vira pedido. O "volte a pedir" não leva oferta.
+    await salvarDossie(e, [OFERTAS[1]!], 1);
+    expect(await vistos(em(40))).toEqual({ promo: { status: 'descartada', motivo: 'oferta_mudou' }, volte: { status: 'pedido', pedido: expect.any(String) } });
+    expect(await doModeloDe(promo.id)).toMatchObject({ status: 'descartada', reason: 'oferta_mudou', acabou: true });
+    const [pedido] = await pedidosDe(e);
+    expect(await pedidosDe(e)).toHaveLength(1);
+    expect(pedido).toMatchObject({ name: 'Volte a pedir', template_name: nomeDe(volte), audience: { origem: 'perfil', id: 'em_risco' }, people_can_receive: 75, agent_key: 'crm' });
+
+    // A rotina caiu entre montar o pedido e anotar na proposta (aqui, a proposta volta a "rascunho" direto no banco):
+    // na olhada seguinte ela acha o pedido pelo cupom, e não monta outro nem chama o RegemCast para isso.
+    await ownerQuery(`update liame.message_proposal set status = 'rascunho', message_request_id = null, finished_at = null where id = $1`, [volte.id]);
+    chamadas.length = 0;
+    expect(await vistos(em(60))).toEqual({ volte: { status: 'pedido', pedido: pedido!.id } });
+    expect(doToken(e)).toEqual(['modelos_listar']);
+    expect(await pedidosDe(e)).toHaveLength(1);
+    expect(await doModeloDe(volte.id)).toMatchObject({ status: 'pedido', acabou: true });
   });
 
   it('a Meta recusa o modelo, ou ninguém o envia no prazo: a proposta é descartada, com o motivo', async () => {
