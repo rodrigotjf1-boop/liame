@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mensagens em Resultados · Liame</title>
 <!--
-@prototipo Liame · A5 · P15, parte C · As mensagens de WhatsApp em Resultados (AGUARDA A APROVAÇÃO DO DONO)
+@prototipo Liame · A5 · P15, parte C · As mensagens de WhatsApp em Resultados (APROVADO PELO DONO EM 10/10/2026)
 base: prototipo-resultados-graficos.html (Resultados em gráficos, aprovado em 07/10/2026): a tela fica como está.
 pedido: o plano da A5 (D-A5-16): cada mensagem leva um cupom próprio, e "o resultado aparece em Resultados como um
         canal a mais". O protótipo P15 (Mensagens), aprovado em 09/10/2026, deixou esta linha para depois.
@@ -15,7 +15,9 @@ o que tem: (1) no cartão "De onde vieram os pedidos", uma linha a mais: quantos
            pelo cupom de uma mensagem diz isso, e a gaveta dele mostra a evidência.
 o que não muda: o número principal (o retorno dos anúncios), as campanhas, o gasto e a barra do modo simples. Mensagem
            não é anúncio, e o custo dela não entra no investimento desta tela: ele está em Mensagens.
-decisão pedida ao dono: quando o MESMO pedido tem o cupom de uma mensagem e um clique em anúncio, com quem ele fica?
+decisão do dono em 10/10/2026: (1), o pedido fica com o anúncio. O estado "Fica com a mensagem" segue no seletor só
+           como registro da alternativa que não foi escolhida.
+a decisão que o protótipo levava: quando o MESMO pedido tem o cupom de uma mensagem e um clique em anúncio, com quem ele fica?
            (1) Com o anúncio (recomendado): nada muda nos números que a tela já mostra nem no que o Liame informa ao
            Google; a mensagem fica com os pedidos sem prova de anúncio, e a linha diz quantos outros usaram o cupom.
            (2) Com a mensagem: é a regra que o modelo já tem para o cupom exclusivo de uma campanha ("o cupom vem antes
@@ -950,7 +952,7 @@ select.input { padding-right: var(--sp-2); }
 <p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
 
 <div class="revisao" role="region" aria-label="Controles do protótipo">
-  <p class="revisao-marca"><b>Protótipo para aprovar · A5 · P15, parte C</b><span>As mensagens de WhatsApp em Resultados · dados de exemplo</span></p>
+  <p class="revisao-marca"><b>Protótipo aprovado em 10/10/2026 · A5 · P15, parte C</b><span>As mensagens de WhatsApp em Resultados · dados de exemplo</span></p>
   <label>Mensagens <select id="rev-p15c"></select></label>
   <!-- O seletor da tela aprovada segue no arquivo (os cenários dela usam), fora da faixa. -->
   <span hidden><label>Cenário <select id="rev-cenario"></select></label></span>
@@ -2102,7 +2104,7 @@ function cardOrigem(vm) {
     <button class="detalhes-bt so-lite" type="button" data-detalhes="#card-origem" aria-controls="origem-pro" aria-expanded="false"><span class="rot">Ver detalhes</span>${ic('i-chevron-down')}</button>
     ${pro}${linhaMensagens(vm, 'so-pro-puro')}</article>`;
 }
-/* ===== P15, parte C · as mensagens de WhatsApp em Resultados (A5 · D-A5-16; aguarda a aprovação do dono) =====
+/* ===== P15, parte C · as mensagens de WhatsApp em Resultados (A5 · D-A5-16; aprovado pelo dono em 10/10/2026: com cupom de mensagem e clique em anúncio, o pedido fica com o anúncio) =====
    O pedido se liga à mensagem só pelo cupom dela: nenhum nome, nenhum telefone. Sem as mensagens ligadas, ou sem
    mensagem enviada no período, a tela é a aprovada. Dados fictícios. */
 var p15c = { estado: 'com-pedidos' };
@@ -2112,9 +2114,9 @@ const ESTADOS_P15C = {
     'um-pedido': '1 pedido veio pelo cupom de uma mensagem',
     'sem-pedido': 'Mensagem enviada, nenhum pedido com o cupom ainda',
   },
-  'O mesmo pedido com cupom de mensagem e clique em anúncio (decisão sua)': {
-    'fica-anuncio': 'Fica com o anúncio (recomendado)',
-    'fica-mensagem': 'Fica com a mensagem',
+  'O mesmo pedido com cupom de mensagem e clique em anúncio': {
+    'fica-anuncio': 'Fica com o anúncio (escolhido pelo dono em 10/10/2026)',
+    'fica-mensagem': 'Fica com a mensagem (a alternativa que não foi escolhida)',
   },
   'Sem mensagens': { desligado: 'Mensagens desligadas, ou nenhuma mensagem no período (a tela de hoje)' },
 };
