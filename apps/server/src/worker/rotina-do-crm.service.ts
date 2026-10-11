@@ -9,7 +9,6 @@ import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { pessoaPode } from '../auth/pessoa-pode.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
-import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { lerOrcamentoDeMensagens, lerPublicos } from '../connectors/regemcast/conector-regemcast.js';
@@ -17,6 +16,7 @@ import { currentTx } from '../context/request-context.js';
 import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
+import { lerContaDoRegemcast } from '../mensageria/conta-do-regemcast.js';
 import { cupomDoDesconto, type DescontoGuardado } from '../mensageria/desconto.js';
 import { FLAG_MENSAGERIA } from '../mensageria/mensageria.service.js';
 import { FLAG_DO_CUPOM, FLAG_DO_ENVIO } from '../mensageria/pedido-de-mensagem.service.js';
@@ -227,19 +227,13 @@ export class RotinaDoCrmService {
     if (!d.updated_by || !(await pessoaPode(tx, { tenantId, userId: d.updated_by, permissao: PODE_RESPONDER }))) return { resultado: 'sem_responsavel' };
 
     // A conta do RegemCast da marca, com o token do cofre. Uma marca tem, na prática, uma conta.
-    const conta = (
-      await tx.execute<{ id: string; external_id: string; credential_secret_id: string | null }>(sql`
-        select a.id, a.external_id, a.credential_secret_id
-          from liame.connected_account a
-         where a.tenant_id = ${tenantId} and a.brand_id = ${brandId} and a.provider = 'regemcast' and a.disconnected_at is null
-         order by a.name, a.id
-         limit 1`)
-    ).rows[0];
+    const conta = await lerContaDoRegemcast(tx, this.vault, { tenantId, brandId });
     if (!conta) return { resultado: 'sem_regemcast' };
-    const guardada = conta.credential_secret_id ? await this.vault.readSecret(tx, conta.credential_secret_id) : null;
-    const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
-    const token = credencial?.tipo === 'regemcast' ? credencial.lojas.find((l) => l.loja_id === conta.external_id)?.token : undefined;
-    if (!token) return { resultado: 'sem_autorizacao' };
+    if (!conta.token) return { resultado: 'sem_autorizacao' };
+    // Sem poder gravar o rascunho do modelo, montar a campanha e pedir o disparo, a proposta pararia no meio (e a IA
+    // já teria sido gasta no texto).
+    if (!conta.escreve) return { resultado: 'sem_permissao' };
+    const token = conta.token;
     const apiUrl = this.config.produtos.regemcastApiUrl;
     if (!apiUrl) return { resultado: 'regemcast_fora' };
 

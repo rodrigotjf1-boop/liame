@@ -4,47 +4,55 @@ import { describe, expect, it } from 'vitest';
 import { conferirPedidoDoCrm } from '../src/ai/crm/contexto.js';
 import { type BaseDaMensagem, conferirMensagem, corpoDeExemplo, NOME_DE_EXEMPLO, RODAPE_DE_SAIDA, TAMANHO_DA_META } from '../src/ai/crm/mensagem.js';
 import { FORMATO_DA_CHAVE_REGEMCAST } from '../src/connectors/regemcast/conector-regemcast.js';
+import { agoraDoCrm } from '../src/equipe/numeros.js';
 import { cupomDoDesconto, type DescontoGuardado } from '../src/mensageria/desconto.js';
 import { type CupomDaMensagem, PropostaDeMensagem, textoComVariaveis } from '../src/mensageria/proposta-de-mensagem.js';
-import { ehCodigo } from '../src/mensageria/proposta-do-crm.js';
+import { ehCodigo, MODELO_SEM_ENVIO } from '../src/mensageria/proposta-do-crm.js';
 import {
   chaveDoModelo,
   codigoDoCupom,
   cupomEmPalavras,
   cupomNoDia,
   DIAS_ENTRE_PROPOSTAS,
-  DIAS_PARA_REPETIR_A_OFERTA,
   DIAS_PARA_ESCREVER,
+  DIAS_PARA_REPETIR_A_OFERTA,
+  DIAS_PELO_MODELO,
   diasDoCupom,
+  ESCOPOS_DE_ESCRITA_NO_REGEMCAST,
   fimDoIntervalo,
   HORAS_DEPOIS_DE_FALHA,
   HORAS_ENTRE_OLHADAS,
   IDIOMA_DO_MODELO,
   itensQueBarraram,
-  MINUTOS_DE_ESPERA_SEM_IA,
-  minutosAteATentativa,
-  prazoDeEscreverAcabou,
-  TENTATIVAS_DA_ESCRITA,
   LETRAS_DO_CODIGO,
+  MINUTOS_DE_ESPERA_SEM_IA,
+  MINUTOS_ENTRE_OLHADAS_DO_MODELO,
+  minutosAteATentativa,
   modeloParaRascunhar,
   nomeDoModelo,
   ofertaDaVez,
   ofertaPodeVirarMensagem,
+  passoDoModelo,
   passouOIntervalo,
   PERFIS_DO_MOTIVO,
   PESSOAS_NO_MINIMO,
+  prazoDeEscreverAcabou,
   propostaParaOPedido,
   proximaOlhada,
   publicoDoMotivo,
   RESULTADOS_DO_OLHAR,
+  SITUACOES_SEM_VOLTA_DO_MODELO,
+  TENTATIVAS_DA_ESCRITA,
+  TENTATIVAS_DO_RASCUNHO,
   tetoCheio,
   variaveisDaMensagem,
 } from '../src/mensageria/rotina-do-crm.js';
 
-// A5 · Y6, partes 6a e 6b: as regras puras da rotina do funcionário de CRM e mensageria, sem banco, sem modelo de IA e
+// A5 · Y6, partes 6a a 6c: as regras puras da rotina do funcionário de CRM e mensageria, sem banco, sem modelo de IA e
 // sem RegemCast. Para quem vai cada mensagem, de quanto em quanto tempo ele propõe, qual oferta divulga, o que ele
-// decide ao olhar uma marca e quando olha de novo, o código e as palavras do cupom (a validade em dias, e não em
-// data), o modelo que vai como rascunho e a proposta que vira pedido.
+// decide ao olhar uma marca e quando olha de novo, as tentativas e o prazo de escrever, o código e as palavras do
+// cupom (a validade em dias, e não em data), o modelo que vai como rascunho, a espera pela Meta e a proposta que vira
+// pedido.
 
 const LOJA = '0199a000-0000-7000-8000-00000000000a';
 const MARCA = '0199a000-0000-7000-8000-00000000000b';
@@ -193,6 +201,53 @@ describe('a rotina do CRM: a escrita da mensagem', () => {
     const comAviso = conferida('Oi, {{1}}! Combo por R$ 34,90. Use o cupom {{2}}.', 'Combo da sexta com batata e refri para a família toda');
     expect(comAviso.situacao).toBe('aviso');
     expect(itensQueBarraram(comAviso)).toEqual([]);
+  });
+});
+
+describe('a rotina do CRM: o modelo no RegemCast e a espera pela Meta', () => {
+  const NOME = 'liame_promocao_0199a1b2c3d47e5f8a6b0123456789ab';
+  const doRascunho = { nome: NOME, idioma: 'pt_BR', semEnvio: MODELO_SEM_ENVIO };
+  const naMeta = (situacao: string, podeDisparar = situacao === 'aprovado', nome = NOME, idioma = 'pt_BR') => ({ modelos: [{ nome, idioma, situacao, podeDisparar }] });
+  const rascunhoEm = antes(2 * DIA);
+
+  it('os padrões: três tentativas de rascunho, uma olhada a cada 15 minutos, sete dias de prazo e as três permissões de escrita', () => {
+    expect([TENTATIVAS_DO_RASCUNHO, MINUTOS_ENTRE_OLHADAS_DO_MODELO, DIAS_PELO_MODELO]).toEqual([3, 15, 7]);
+    expect(ESCOPOS_DE_ESCRITA_NO_REGEMCAST).toEqual(['modelos.rascunhar', 'campanhas.rascunhar', 'campanhas.disparar']);
+    expect(SITUACOES_SEM_VOLTA_DO_MODELO).toEqual(['recusado', 'desativado', 'sendo excluído']);
+  });
+
+  it('o rascunho que ninguém enviou não está na lista da Meta: a proposta espera, como "rascunho"', () => {
+    expect(passoDoModelo({ modelos: [] }, doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'esperar', situacao: 'rascunho' });
+    // Outro modelo da conta, ou o mesmo nome em outro idioma, não é o da proposta.
+    expect(passoDoModelo(naMeta('aprovado', true, 'combo_domingo_v2'), doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'esperar', situacao: 'rascunho' });
+    expect(passoDoModelo(naMeta('aprovado', true, NOME, 'en_US'), doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'esperar', situacao: 'rascunho' });
+    // É a mesma palavra que a ficha dele em Sua equipe lê para dizer "o modelo ainda não foi enviado".
+    const ficha = (situacaoDoModelo: string | null) =>
+      agoraDoCrm({ ativo: true, semRegemcast: false, semOferta: false, veAsCampanhas: true, emAndamento: [{ situacao: 'rascunho', motivo: 'promocao', oferta: null, nome: 'Combo', pessoas: 310, situacaoDoModelo, abertaEm: AGORA.toISOString(), rascunhoEm: AGORA.toISOString() }] }).blockedBy;
+    expect([ficha(MODELO_SEM_ENVIO), ficha(null), ficha('em análise')]).toEqual(['modelo_sem_envio', 'modelo_sem_envio', 'modelo_em_analise']);
+  });
+
+  it('enviado: a Meta analisa e a proposta espera; aprovado, é hora do pedido; recusado, a proposta é descartada', () => {
+    expect(passoDoModelo(naMeta('em análise'), doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'esperar', situacao: 'em análise' });
+    expect(passoDoModelo(naMeta('pausado'), doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'esperar', situacao: 'pausado' });
+    expect(passoDoModelo(naMeta('aprovado'), doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'pedir' });
+    // Aprovado, mas o RegemCast ainda não sabe disparar o que o modelo pede: espera.
+    expect(passoDoModelo(naMeta('aprovado', false), doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'esperar', situacao: 'aprovado' });
+    for (const semVolta of SITUACOES_SEM_VOLTA_DO_MODELO) expect(passoDoModelo(naMeta(semVolta), doRascunho, rascunhoEm, AGORA), semVolta).toEqual({ passo: 'descartar', motivo: 'modelo_recusado' });
+    // A situação cabe no que a fila guarda (60 caracteres), e a vazia vira a de quem não foi enviado.
+    expect(passoDoModelo(naMeta('x'.repeat(80)), doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'esperar', situacao: 'x'.repeat(60) });
+    expect(passoDoModelo(naMeta('  '), doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'esperar', situacao: 'rascunho' });
+  });
+
+  it('o prazo de sete dias conta do rascunho: no limite, a proposta é descartada; o modelo já aprovado ainda vira pedido', () => {
+    const noLimite = antes(7 * DIA);
+    expect(passoDoModelo({ modelos: [] }, doRascunho, new Date(noLimite.getTime() + 1), AGORA)).toEqual({ passo: 'esperar', situacao: 'rascunho' });
+    expect(passoDoModelo({ modelos: [] }, doRascunho, noLimite, AGORA)).toEqual({ passo: 'descartar', motivo: 'prazo' });
+    expect(passoDoModelo(naMeta('em análise'), doRascunho, noLimite, AGORA)).toEqual({ passo: 'descartar', motivo: 'prazo' });
+    // A Meta aprovou depois do prazo, antes de a rotina olhar: a mensagem ainda pode sair.
+    expect(passoDoModelo(naMeta('aprovado'), doRascunho, antes(9 * DIA), AGORA)).toEqual({ passo: 'pedir' });
+    // Recusado depois do prazo: o motivo é a recusa, que é o que a pessoa precisa saber.
+    expect(passoDoModelo(naMeta('recusado'), doRascunho, antes(9 * DIA), AGORA)).toEqual({ passo: 'descartar', motivo: 'modelo_recusado' });
   });
 });
 

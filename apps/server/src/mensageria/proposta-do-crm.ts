@@ -47,6 +47,12 @@ const exigirCodigo = (c: string, oQue: string): void => {
   if (!ehCodigo(c)) throw new Error(`proposta do CRM: ${oQue} fora do formato de código`);
 };
 
+/**
+ * A situação do modelo que só existe como rascunho no RegemCast: ninguém o enviou ainda para a análise da Meta. É o
+ * que `modelo_rascunhar` devolve, e o que a ficha dele em Sua equipe lê para dizer "o modelo ainda não foi enviado".
+ */
+export const MODELO_SEM_ENVIO = 'rascunho';
+
 export type DonoDaProposta = { tenantId: string; id: string };
 
 export type PropostaNova = {
@@ -129,11 +135,15 @@ export async function registrarRascunho(tx: Tx, alvo: DonoDaProposta, modelo: { 
   return r.rows.length === 1;
 }
 
-/** A rotina olhou o modelo no RegemCast: guarda a situação de agora e a hora, para olhar de novo só no próximo intervalo. */
-export async function anotarModelo(tx: Tx, alvo: DonoDaProposta, situacao: string): Promise<boolean> {
+/**
+ * A rotina olhou o modelo no RegemCast: guarda a situação de agora e a hora, para olhar de novo só no próximo
+ * intervalo. A hora é a do relógio de quem olhou (`quando`), para a operação inteira usar um relógio só; sem ela, a do banco.
+ */
+export async function anotarModelo(tx: Tx, alvo: DonoDaProposta, situacao: string, quando?: Date): Promise<boolean> {
+  const hora = quando ? sql`${quando.toISOString()}::timestamptz` : sql`now()`;
   const r = await tx.execute(sql`
     update liame.message_proposal
-       set template_status = ${situacao}, template_checked_at = now(), updated_at = now()
+       set template_status = ${situacao}, template_checked_at = ${hora}, updated_at = now()
      where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'rascunho'
     returning id`);
   return r.rows.length === 1;

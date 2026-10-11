@@ -80,6 +80,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('rotina-do-crm', 5, 300_000, async (n) => (await this.rotinaDoCrm.olharLote(n)).length),
       // A proposta aberta espera o texto: a fila da escrita é olhada a cada minuto.
       this.loop('escrita-do-crm', 3, 60_000, async (n) => (await this.rotinaDoCrm.escreverLote(n)).length),
+      // O texto conferido vira rascunho de modelo no RegemCast; depois, cada rascunho é olhado de 15 em 15 minutos, até a Meta aprovar.
+      this.loop('rascunho-do-crm', 3, 60_000, async (n) => (await this.rotinaDoCrm.rascunharLote(n)).length),
+      this.loop('modelo-do-crm', 10, 300_000, async (n) => (await this.rotinaDoCrm.acompanharLote(n)).length),
     );
   }
 
