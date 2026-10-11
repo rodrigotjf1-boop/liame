@@ -93,6 +93,15 @@
 .vg-linha--atencao { max-width: none; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--warning-soft); color: var(--text); }
 .vg-linha--atencao > .ic { color: var(--warning); }
 #camp-pro .vg-linha { margin-top: var(--sp-3); }
+/* A linha das mensagens de WhatsApp, no cartão de onde vieram os pedidos (mockups/prototipo-mensagens-resultados.html,
+   A5 · P15, parte C, aprovado em 10/10/2026): o mesmo desenho de linha das vendas informadas ao Google. */
+.ms-linha { display: flex; align-items: flex-start; gap: var(--sp-2); max-width: 78ch; margin: 0; font-size: var(--text-sm); line-height: 1.55; color: var(--text-muted); }
+.ms-linha > .ic { flex: none; margin-top: 3px; color: var(--text-subtle); }
+.ms-linha > span { flex: 1; min-width: 0; }
+.ms-linha b { color: var(--text); font-weight: 600; }
+.ms-linha a { color: var(--link); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.ms-linha a:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; border-radius: 2px; }
+.card > .ms-linha { margin-top: var(--sp-3); }
 
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); }
 .kpi { display: grid; align-content: start; gap: 2px; min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
@@ -144,11 +153,13 @@
 .det-bloco { display: grid; gap: var(--sp-2); }
 .det-resultado { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--text-md); }
 .det-resultado b { font-weight: 600; }
+/* O nome de campanha ou de mensagem vem de dado: o comprido e sem espaço quebra, em vez de estourar a gaveta (V107). */
+.det-resultado > span { min-width: 0; overflow-wrap: anywhere; }
 .evid { padding: var(--sp-3) var(--sp-4); border-left: 4px solid var(--fio); border-radius: 0 var(--radius) var(--radius) 0; background: var(--primary-soft); font-weight: 500; line-height: 1.55; overflow-wrap: anywhere; }
 .evid--sem { border-left-color: var(--border-strong); background: var(--bg-subtle); }
 .evid--cancelado { border-left-color: var(--danger); background: var(--danger-soft); }
 .det-lista { display: grid; gap: 6px; font-size: var(--text-sm); color: var(--text-muted); }
-.det-lista li { display: flex; gap: var(--sp-2); }
+.det-lista li { display: flex; gap: var(--sp-2); overflow-wrap: anywhere; }
 .det-lista li::before { content: ""; flex: none; width: 5px; height: 5px; margin-top: .6em; border-radius: 50%; background: var(--border-strong); }
 .linha-tempo { display: grid; }
 .linha-tempo li { position: relative; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-3); padding: 0 0 var(--sp-3) 0; font-size: var(--text-sm); }

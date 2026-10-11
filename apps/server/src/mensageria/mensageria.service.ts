@@ -21,6 +21,7 @@ import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
+import { PEDIDO_USOU_O_CUPOM_DA_MENSAGEM } from './cupom-no-pedido.js';
 
 // Mensageria pelas rotas (A5, Y4; protótipo P15): o que a tela Mensagens lê. Tudo vem do RegemCast na hora em que a
 // pessoa abre a tela, e nada é guardado no Liame: se a conta do WhatsApp pode enviar, o teto de gasto de mensagens,
@@ -183,8 +184,7 @@ export class MensageriaService {
              count(o.id)::int as pedidos, coalesce(sum(o.revenue_micros - o.refunded_micros), 0)::text as receita_micros
         from liame.message_request m
         left join liame.order_fact o
-          on o.tenant_id = m.tenant_id and o.connected_account_id = m.coupon_account_id and o.coupon_code = m.coupon_code
-         and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at
+          on ${PEDIDO_USOU_O_CUPOM_DA_MENSAGEM} and o.status = 'confirmado'
        where m.connected_account_id in ${contas} and m.campaign_id in ${campanhas}
          and m.coupon_code is not null and m.coupon_created_at is not null
        group by m.connected_account_id, m.campaign_id, m.coupon_code`);

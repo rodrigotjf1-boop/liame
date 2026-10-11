@@ -88,6 +88,19 @@ export function GavetaOrigem({ pedido, fuso, loja, modelo, reserva, aoFechar }: 
                   <span className="eixo-nota">{r.nota}</span>
                 </>
               )}
+              {r.tipo === 'mensagem' && (
+                <>
+                  <span>
+                    <b>{r.mensagem}</b>
+                  </span>
+                  <span className="plat">Mensagem de WhatsApp</span>
+                  <span className={`st st--${d.confianca.classe}`}>
+                    {d.confianca.ponto && <span className="dot" aria-hidden="true" />}
+                    {d.confianca.rotulo}
+                  </span>
+                  <span className="eixo-nota">{r.nota}</span>
+                </>
+              )}
               {r.tipo === 'sem' && (
                 <>
                   <span className="st st--espera">Sem origem</span>

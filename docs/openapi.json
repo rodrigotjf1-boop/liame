@@ -24557,6 +24557,37 @@
                             "revenue_micros"
                           ],
                           "additionalProperties": false
+                        },
+                        "messages": {
+                          "type": "object",
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "own_channel_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "own_channel_orders",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -25748,6 +25779,29 @@
                               "window_days",
                               "counted",
                               "reason"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "message": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "coupon_code": {
+                                "type": "string"
+                              },
+                              "sent_at": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "coupon_code",
+                              "sent_at"
                             ],
                             "additionalProperties": false
                           }

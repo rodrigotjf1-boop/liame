@@ -5,14 +5,26 @@ import { Estado } from '@/components/ui/estado';
 import { useDetalhes } from '@/lib/modo';
 import { BarraDividida } from './desenhos';
 import type { OrigemLite } from './graficos';
+import { LinhaMensagens } from './linha-mensagens';
 import { BotaoDetalhes, TextoRico } from './pecas';
 import type { CartaoOrigem as Dados } from './textos';
 
 // "De onde vieram os pedidos": pedido só ganha campanha com evidência. No modo simples (protótipo de Resultados em
 // gráficos, 07/10/2026), uma barra só: com prova de anúncio, canais sem clique e cardápio e WhatsApp sem prova. No
 // Pro (protótipo P1), os sem origem (com a porcentagem sobre os canais com clique), os canais sem clique e os cancelados.
+// Com cupom de mensagem no período (protótipo P15, parte C), uma linha a mais diz o que veio pelas mensagens de
+// WhatsApp: no modo simples, embaixo da barra; no Pro, embaixo dos dois blocos.
 
-export function CartaoOrigem({ origem, lite, podeVerContas }: { origem: Dados; /** O desenho do modo simples (nulo sem o Regem ou sem pedido). */ lite: OrigemLite | null; podeVerContas: boolean }) {
+type Props = {
+  origem: Dados;
+  /** O desenho do modo simples (nulo sem o Regem ou sem pedido). */
+  lite: OrigemLite | null;
+  podeVerContas: boolean;
+  /** Quem pode abrir a tela Mensagens ganha o atalho na linha das mensagens. */
+  podeVerMensagens: boolean;
+};
+
+export function CartaoOrigem({ origem, lite, podeVerContas, podeVerMensagens }: Props) {
   const d = useDetalhes();
   return (
     <article className="card" aria-labelledby="t-origem">
@@ -60,6 +72,7 @@ export function CartaoOrigem({ origem, lite, podeVerContas }: { origem: Dados; /
                   </span>
                 </p>
               )}
+              {origem.mensagens && <LinhaMensagens frase={origem.mensagens} podeVerMensagens={podeVerMensagens} />}
             </div>
           )}
           {!d.pro && <BotaoDetalhes aberto={d.aberto} controla="origem-pro" aoAlternar={d.alternar} />}
@@ -69,6 +82,7 @@ export function CartaoOrigem({ origem, lite, podeVerContas }: { origem: Dados; /
               <p className="bloco-num num">{origem.semOrigem.porcentagem}</p>
               <p className="lite-frase">{origem.semOrigem.frase}</p>
               <p className="eixo-nota">O motivo de cada um aparece em Pedido a pedido, no filtro “Sem origem”.</p>
+              {origem.notaDasMensagens && <p className="eixo-nota">{origem.notaDasMensagens}</p>}
               {origem.cancelados && <p className="eixo-nota">{origem.cancelados}</p>}
             </section>
             <section className="bloco" aria-labelledby="t-canais">
@@ -116,6 +130,7 @@ export function CartaoOrigem({ origem, lite, podeVerContas }: { origem: Dados; /
               <p className="eixo-nota">{origem.loja}</p>
             </section>
           </div>
+          {d.pro && origem.mensagens && <LinhaMensagens frase={origem.mensagens} podeVerMensagens={podeVerMensagens} />}
         </>
       )}
     </article>

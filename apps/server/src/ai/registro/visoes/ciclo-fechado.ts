@@ -62,6 +62,17 @@ export function visaoDoCicloFechado(r: ClosedLoopResponse) {
       receita_confirmada: dinheiro(t.revenue_micros, moeda),
       com_origem_provada: confirmado(t.confirmed, moeda),
       sem_origem: soOQueExiste({ pedidos: inteiro(t.without_origin.orders), receita: dinheiro(t.without_origin.revenue_micros, moeda), parte_dos_pedidos_com_clique: porcento(t.without_origin.share_pct) }),
+      // Só vem quando a marca tem cupom de mensagem no período. Mensagem não é anúncio: estes pedidos ficam fora de
+      // `com_origem_provada` e, os do cardápio e do WhatsApp, fora de `sem_origem` (a origem deles é a mensagem).
+      ...(t.messages
+        ? {
+            pelo_cupom_das_mensagens_de_whatsapp: {
+              pedidos_sem_prova_de_anuncio: inteiro(t.messages.orders),
+              receita_desses_pedidos: dinheiro(t.messages.revenue_micros, moeda),
+              pedidos_com_o_cupom_e_com_prova_de_anuncio_que_ficam_com_o_anuncio: inteiro(t.messages.with_ad_orders),
+            },
+          }
+        : {}),
       canais_sem_clique: t.no_click_channels.map((c) => ({ canal: c.channel_group, pedidos: inteiro(c.orders), receita: dinheiro(c.revenue_micros, moeda) })),
       cancelados_depois: { pedidos: inteiro(t.cancelled.orders), receita: dinheiro(t.cancelled.revenue_micros, moeda) },
     },

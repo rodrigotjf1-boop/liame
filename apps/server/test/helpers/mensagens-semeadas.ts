@@ -105,7 +105,8 @@ export async function semearMensagemDoCrm(
     situacao: MensagemSemeada;
     nome?: string;
     pessoas?: number;
-    cupom?: { loja: string; codigo: string; nascido: string | null };
+    /** `validoAte`: o último dia em que o cupom vale (AAAA-MM-DD), como na regra que vai ao Regem. */
+    cupom?: { loja: string; codigo: string; nascido: string | null; validoAte?: string };
     haMinutos?: number;
     /** Há quantos minutos o pedido mudou de situação (aprovado e enviado, recusado…); sem isto, na mesma hora em que nasceu. */
     decididaHaMinutos?: number;
@@ -149,7 +150,7 @@ export async function semearMensagemDoCrm(
      values (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'combo_sexta_v1', 'pt_BR', 'Oi, {{1}}! Use o cupom {{2}}.', '{"origem":"publico","id":"p"}'::jsonb, 'Quem pediu nos últimos 30 dias',
              $7, 0, '{0,1,2,3,4,5,6}', '09:00', '20:00', $8, $9, $10::jsonb, $11::timestamptz, 'agent', $14, $12,
              now() - make_interval(mins => $13), now() - make_interval(mins => $13))`,
-    [alvo.tenantId, alvo.brandId, alvo.conta, campanha, acao, o.nome ?? 'Sexta em dobro', o.pessoas ?? 412, c?.loja ?? null, c?.codigo ?? null, c ? JSON.stringify({ codigo: c.codigo }) : null, c?.nascido ?? null, alvo.userId, minutos, funcionario],
+    [alvo.tenantId, alvo.brandId, alvo.conta, campanha, acao, o.nome ?? 'Sexta em dobro', o.pessoas ?? 412, c?.loja ?? null, c?.codigo ?? null, c ? JSON.stringify({ codigo: c.codigo, ...(c.validoAte ? { valido_ate: c.validoAte } : {}) }) : null, c?.nascido ?? null, alvo.userId, minutos, funcionario],
   );
   return acao;
 }
