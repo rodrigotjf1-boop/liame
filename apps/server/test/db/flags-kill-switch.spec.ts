@@ -56,7 +56,8 @@ describe.skipIf(!hasDb)('feature flags (A1-12) e kill switch (A1-10)', () => {
       `select key, default_value from liame.feature_flag where is_write and key not like 'teste_%' order by key`,
     );
     // `conversoes_google` (A5, Y1): informar venda ao Google também é mandar dado para uma plataforma.
-    expect(seeded.map((f) => f.key)).toEqual(['autopilot', 'conversoes_google', 'creative_generation', 'google_write', 'mcp_write', 'meta_write', 'regem_write', 'whatsapp_campaign']);
+    // `perfil_google_write` (A6, Z2): publicar a resposta da empresa a uma avaliação no Google.
+    expect(seeded.map((f) => f.key)).toEqual(['autopilot', 'conversoes_google', 'creative_generation', 'google_write', 'mcp_write', 'meta_write', 'perfil_google_write', 'regem_write', 'whatsapp_campaign']);
     expect(seeded.every((f) => f.default_value === false)).toBe(true);
     await expect(
       ownerQuery(`insert into liame.feature_flag (key, kind, default_value, description, owner, is_write) values ('ligada_errada', 'boolean', 'true', 'x', 'x', true)`),

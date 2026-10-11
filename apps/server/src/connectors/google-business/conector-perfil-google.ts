@@ -5,15 +5,31 @@ import type { Balde } from '../cota.js';
 import { dataValida } from '../janela.js';
 import { type Credencial, versaoRegistrada } from '../tipos.js';
 import { soDigitos } from '../validacao.js';
-import { type AvaliacaoLida, avaliacaoDoGoogle, METRICAS_DO_PERFIL, notaMedia, numerosDoPerfil, type PontoDoPerfil, type QuemAvaliou, quemAvaliou, totalDeAvaliacoes } from './perfil-google.js';
+import {
+  type AvaliacaoLida,
+  avaliacaoDoGoogle,
+  idDaAvaliacao,
+  METRICAS_DO_PERFIL,
+  notaMedia,
+  numerosDoPerfil,
+  type PontoDoPerfil,
+  type QuemAvaliou,
+  quemAvaliou,
+  type RespostaLida,
+  respostaDoGoogle,
+  textoDaResposta,
+  totalDeAvaliacoes,
+} from './perfil-google.js';
 
-// Conector de LEITURA do Perfil da Empresa no Google (A6, Z1; base de conhecimento §3.3). Quatro APIs, cada uma no
-// endereço e na versão dela (as versões vêm do registro de capacidades):
+// Conector do Perfil da Empresa no Google (A6, Z1 e Z2; base de conhecimento §3.3). Quatro APIs, cada uma no endereço
+// e na versão dela (as versões vêm do registro de capacidades):
 //   - as contas que a autorização alcança (Account Management API);
 //   - as lojas de cada conta (Business Information API);
 //   - as avaliações de uma loja, das mais recentes para as mais antigas (My Business API v4);
 //   - os números do perfil por dia (Business Profile Performance API).
-// Nada aqui escreve no Google: responder avaliação é a Z2, pelo trilho de ação.
+// **A única escrita é a resposta a uma avaliação** (`responderAvaliacao` e `apagarResposta`, Z2): quem chama é só o
+// trilho de ação, depois de uma pessoa aprovar com o código do app. Horário, endereço e cardápio não são tocados
+// (D-A6-18).
 //
 // A cota é do app do Liame no Google, e não da empresa: todas as empresas dividem as mesmas 300 chamadas por minuto
 // de cada API, e antes de o Google liberar o acesso a cota é zero. Por isso toda chamada sai pela mesma chave de
@@ -59,6 +75,9 @@ export type OpcoesDeAvaliacoes = {
   /** Quantas avaliações ler no máximo (padrão 500). */
   maximo?: number;
 };
+
+/** Uma avaliação de uma loja: a conta (`accounts/123`), a loja (`locations/456`) e o id da avaliação no Google. */
+export type AlvoDaAvaliacao = { conta: string; loja: string; avaliacao: string };
 
 /** `accounts/123` ou `locations/456`: o prefixo certo e só dígitos depois (vai para o caminho do endereço). */
 function recurso(prefixo: 'accounts' | 'locations', valor: string): string {
@@ -202,6 +221,84 @@ export class ConectorPerfilGoogle {
       token = r.corpo.nextPageToken || undefined;
     }
     return nomes;
+  }
+
+  /** `accounts/1/locations/2/reviews/abc`: o nome da avaliação no Google, com cada parte conferida antes de virar endereço. */
+  private nomeDaAvaliacao(alvo: AlvoDaAvaliacao): string {
+    const conta = recurso('accounts', alvo.conta);
+    const loja = recurso('locations', alvo.loja);
+    if (!idDaAvaliacao(alvo.avaliacao)) throw new ErroConector('definitivo', PROVIDER, 'avaliação do Perfil no Google com um id que o Liame não usa em endereço');
+    return `${conta}/${loja}/reviews/${alvo.avaliacao}`;
+  }
+
+  /**
+   * Uma avaliação, lida agora: é o que o trilho confere antes de publicar a resposta aprovada (critério A6-4). Nula
+   * quando o Google responde que ela não existe mais (quem escreveu apagou, ou o Google tirou).
+   */
+  async lerAvaliacao(credencial: Credencial, alvo: AlvoDaAvaliacao, opcoes: { tempoLimiteMs?: number } = {}): Promise<AvaliacaoLida | null> {
+    const nome = this.nomeDaAvaliacao(alvo);
+    let corpo: unknown;
+    try {
+      const r = await this.cliente.requisitar<unknown>({
+        provider: PROVIDER,
+        conta: this.chaveDaCota,
+        url: `${this.bases.avaliacoes}/${this.versoes.avaliacoes}/${nome}`,
+        endpoint: 'reviews.get',
+        apiVersion: this.versoes.avaliacoes,
+        cabecalhos: { authorization: `Bearer ${credencial.accessToken}` },
+        ...(opcoes.tempoLimiteMs ? { tempoLimiteMs: opcoes.tempoLimiteMs } : {}),
+      });
+      corpo = r.corpo;
+    } catch (err) {
+      if (err instanceof ErroConector && err.status === 404) return null;
+      throw err;
+    }
+    const lida = avaliacaoDoGoogle(corpo);
+    // O Google devolveu outra coisa: não é com ela que o trilho vai comparar o que foi aprovado.
+    if (!lida || lida.id !== alvo.avaliacao) throw new ErroConector('definitivo', PROVIDER, 'o Google devolveu a avaliação sem o que a identifica, ou outra avaliação');
+    return lida;
+  }
+
+  /**
+   * Publica a resposta da empresa a uma avaliação (ou troca a que existe: o Google cria a resposta se ela não existir).
+   * O texto vai inteiro ou não vai: nunca é cortado para caber. Devolve a resposta como o Google a gravou, com a
+   * situação dela (ele confere antes de mostrar). Quem chama decide quantas vezes tentar: o trilho usa uma.
+   */
+  async responderAvaliacao(credencial: Credencial, alvo: AlvoDaAvaliacao, texto: string): Promise<RespostaLida> {
+    const nome = this.nomeDaAvaliacao(alvo);
+    const comentario = textoDaResposta(texto);
+    if (!comentario) throw new ErroConector('definitivo', PROVIDER, 'resposta vazia ou maior do que o Liame publica');
+    const r = await this.cliente.requisitar<unknown>({
+      provider: PROVIDER,
+      conta: this.chaveDaCota,
+      url: `${this.bases.avaliacoes}/${this.versoes.avaliacoes}/${nome}/reply`,
+      metodo: 'PUT',
+      corpo: { comment: comentario },
+      endpoint: 'reviews.updateReply',
+      apiVersion: this.versoes.avaliacoes,
+      cabecalhos: { authorization: `Bearer ${credencial.accessToken}` },
+    });
+    // Se o Google não devolver o texto, vale o que foi enviado, com a situação que ele ainda não disse.
+    return respostaDoGoogle(r.corpo) ?? { texto: comentario, atualizadaEm: null, situacao: 'desconhecida', violacao: null };
+  }
+
+  /** Apaga a resposta da empresa a uma avaliação (a "volta" do pedido). A resposta que já não existe conta como apagada. */
+  async apagarResposta(credencial: Credencial, alvo: AlvoDaAvaliacao): Promise<void> {
+    const nome = this.nomeDaAvaliacao(alvo);
+    try {
+      await this.cliente.requisitar<unknown>({
+        provider: PROVIDER,
+        conta: this.chaveDaCota,
+        url: `${this.bases.avaliacoes}/${this.versoes.avaliacoes}/${nome}/reply`,
+        metodo: 'DELETE',
+        endpoint: 'reviews.deleteReply',
+        apiVersion: this.versoes.avaliacoes,
+        cabecalhos: { authorization: `Bearer ${credencial.accessToken}` },
+      });
+    } catch (err) {
+      if (err instanceof ErroConector && err.status === 404) return;
+      throw err;
+    }
   }
 
   /** Os números do perfil por dia, na janela [inicio, fim] (AAAA-MM-DD). O dia que o Google ainda não fechou não vem. */

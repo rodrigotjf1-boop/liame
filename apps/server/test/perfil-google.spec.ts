@@ -3,7 +3,21 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ErroConector } from '../src/connectors/cliente-http.js';
 import { dataValida } from '../src/connectors/janela.js';
-import { avaliacaoDoGoogle, METRICAS_CANONICAS_DO_PERFIL, METRICAS_DO_PERFIL, notaMedia, numerosDoPerfil, SITUACOES_DA_RESPOSTA, TAMANHO_DO_TEXTO, totalDeAvaliacoes } from '../src/connectors/google-business/perfil-google.js';
+import {
+  avaliacaoDoGoogle,
+  BYTES_DA_RESPOSTA_NO_GOOGLE,
+  idDaAvaliacao,
+  METRICAS_CANONICAS_DO_PERFIL,
+  METRICAS_DO_PERFIL,
+  notaMedia,
+  numerosDoPerfil,
+  respostaDoGoogle,
+  SITUACOES_DA_RESPOSTA,
+  TAMANHO_DA_RESPOSTA,
+  TAMANHO_DO_TEXTO,
+  textoDaResposta,
+  totalDeAvaliacoes,
+} from '../src/connectors/google-business/perfil-google.js';
 
 // A6 · Z1 (parte a), sem rede e sem banco: o que o Liame tira das respostas da API do Perfil da Empresa no Google. A
 // avaliação sai sem o nome e sem a foto de quem avaliou (critério A6-1: o tipo não tem campo para eles), e os números
@@ -65,6 +79,36 @@ describe('Perfil no Google: a avaliação que o Liame guarda (A6 · Z1)', () => 
     expect(SITUACOES_DA_RESPOSTA).toEqual(['pendente', 'aprovada', 'recusada', 'desconhecida']);
   });
 
+  it('Z2: a resposta como o Google a devolve ao gravar; sem o texto, não há o que ler', () => {
+    expect(respostaDoGoogle({ comment: ' Obrigado pela visita! ', updateTime: '2026-10-11T12:00:00Z', reviewReplyState: 'PENDING' })).toEqual({
+      texto: 'Obrigado pela visita!',
+      atualizadaEm: '2026-10-11T12:00:00.000Z',
+      situacao: 'pendente',
+      violacao: null,
+    });
+    expect(respostaDoGoogle({ comment: 'Ligue para nós.', reviewReplyState: 'REJECTED', policyViolation: 'CODIGO_DE_EXEMPLO' })).toMatchObject({ situacao: 'recusada', violacao: 'CODIGO_DE_EXEMPLO' });
+    for (const ruim of [null, undefined, 'texto', {}, { comment: '   ' }, { reviewReplyState: 'APPROVED' }]) expect(respostaDoGoogle(ruim), JSON.stringify(ruim)).toBeNull();
+  });
+
+  it('Z2: o texto que o Liame publica vai inteiro ou não vai: 1.500 caracteres no máximo, dentro dos 4.096 bytes do Google', () => {
+    expect([TAMANHO_DA_RESPOSTA, BYTES_DA_RESPOSTA_NO_GOOGLE]).toEqual([1500, 4096]);
+    expect(textoDaResposta('  Obrigado pela visita!  ')).toBe('Obrigado pela visita!');
+    // O caractere nulo sai; as quebras de linha do meio ficam.
+    expect(textoDaResposta(`Obri${String.fromCharCode(0)}gado.\nVolte sempre.`)).toBe('Obrigado.\nVolte sempre.');
+    expect(textoDaResposta('x'.repeat(1500))).toHaveLength(1500);
+    // Com acento, 1.500 caracteres são 3.000 bytes: cabem.
+    expect(textoDaResposta('ç'.repeat(1500))).not.toBeNull();
+    // O emoji conta como um caractere e pesa 4 bytes: 1.000 cabem (4.000 bytes), 1.100 não (4.400).
+    expect(textoDaResposta('😀'.repeat(1000))).not.toBeNull();
+    expect(textoDaResposta('😀'.repeat(1100))).toBeNull();
+    for (const ruim of ['', '   ', String.fromCharCode(0), 'x'.repeat(1501), null, undefined, 42, { comment: 'x' }]) expect(textoDaResposta(ruim), String(ruim).slice(0, 20)).toBeNull();
+  });
+
+  it('Z2: o id da avaliação só entra num endereço com letras, dígitos, hífen e sublinhado', () => {
+    for (const bom of ['AbCdEf', 'rev-8', 'A_b-9', 'a', 'a'.repeat(200)]) expect(idDaAvaliacao(bom), bom).toBe(true);
+    for (const ruim of ['', 'a'.repeat(201), 'rev/8', '..', '.', 'rev 8', 'rev?x=1', 'rev#1', 'rev.8', 'rév', 'rev%2F8', 'rev\n8', null, undefined, 8, ['rev-8']]) expect(idDaAvaliacao(ruim), String(ruim)).toBe(false);
+  });
+
   it('a nota média e o total da loja, só quando fazem sentido', () => {
     expect([notaMedia(4.6349998), notaMedia(5), notaMedia(1)]).toEqual([4.63, 5, 1]);
     for (const ruim of [0, 5.1, '4.6', null, undefined, Number.NaN]) expect(notaMedia(ruim)).toBeNull();
@@ -114,6 +158,13 @@ describe('Perfil no Google: os números do perfil por dia (A6 · Z1)', () => {
     const migration = readFileSync(resolve(process.cwd(), '../../packages/database/migrations/0066_perfil_no_google.sql'), 'utf8');
     for (const capacidade of ['accounts', 'locations', 'reviews', 'performance_daily']) expect(migration).toContain(`('google_business', '${capacidade}',`);
     expect(migration.split('https://www.googleapis.com/auth/business.manage')).toHaveLength(5);
+    // A Z2 (migration 0069) acrescenta a leitura de uma avaliação e a única escrita, com a flag de escrita dela.
+    const escrita = readFileSync(resolve(process.cwd(), '../../packages/database/migrations/0069_resposta_a_avaliacao.sql'), 'utf8');
+    expect(escrita).toContain(`('google_business', 'review_state', 'v4', true, false,`);
+    expect(escrita).toContain(`('google_business', 'review_reply', 'v4', false, true,`);
+    expect(escrita).toContain(`('perfil_google_write', 'boolean', 'false',`);
+    // É flag de escrita (o último campo): nasce desligada, e a parada geral a alcança.
+    expect(escrita).toContain(`'social', true)`);
   });
 
   it('o dia sem valor é zero; o dia que não veio não é inventado; o valor chega como texto', () => {
