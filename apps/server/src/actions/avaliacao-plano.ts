@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { canonicalJson, sha256 } from '../audit/audit.js';
-import { type AvaliacaoLida, TAMANHO_DA_RESPOSTA, textoDaResposta } from '../connectors/google-business/perfil-google.js';
+import { type AvaliacaoLida, TAMANHO_DA_RESPOSTA, textoDaResposta, textoGuardado } from '../connectors/google-business/perfil-google.js';
 import { conferirTexto, normalizar } from '../policy/texto.js';
 
 // O estado de uma avaliação do perfil da empresa no Google, como o Action Service o guarda no pedido de resposta (A6,
@@ -37,6 +37,15 @@ export type EstadoDaAvaliacao = z.infer<typeof EstadoDaAvaliacao>;
 /** O que o plano confere e o pedido não guarda: o nome de quem avaliou, lido do Google na hora (nulo se anônima). */
 export type ContextoDaAvaliacao = { quem: string | null };
 
+/**
+ * O resumo criptográfico do texto de uma avaliação, tirado do texto como o Liame o guarda (`textoGuardado`): o do
+ * pedido e o do que está em `profile_review` se comparam. Nulo quando a avaliação só tem a nota.
+ */
+export function resumoDoTexto(texto: string | null | undefined): string | null {
+  const guardado = textoGuardado(texto);
+  return guardado ? sha256(guardado) : null;
+}
+
 /** A avaliação lida do Google agora → o estado do pedido. `lida` nula: o Google diz que ela não existe mais. */
 export function estadoDaAvaliacao(alvo: { id: string; googleId: string }, lida: AvaliacaoLida | null): EstadoDaAvaliacao {
   const base = { tipo: 'avaliacao' as const, id: alvo.id, google_id: alvo.googleId };
@@ -47,19 +56,47 @@ export function estadoDaAvaliacao(alvo: { id: string; googleId: string }, lida: 
     estrelas: lida.estrelas,
     feita_em: lida.criadaEm,
     mudou_em: lida.atualizadaEm,
-    texto_resumo: lida.texto ? sha256(lida.texto) : null,
+    texto_resumo: resumoDoTexto(lida.texto),
     resposta: lida.resposta ? { situacao: lida.resposta.situacao, texto: lida.resposta.texto, violacao: lida.resposta.violacao } : null,
   };
 }
 
 /**
- * A versão do estado, tirada dele mesmo: muda quando a avaliação muda (a nota, o texto, a data de mudança), some ou
- * ganha, perde ou troca de resposta. É o que impede publicar a resposta aprovada numa avaliação que já é outra
- * (critério A6-4). Cabe na coluna inteira do pedido e nunca é zero.
+ * A versão do estado, tirada dele mesmo: muda quando a avaliação muda no que a pessoa leu para decidir (a nota e o
+ * texto), some, ou ganha, perde ou troca de resposta. É o que impede publicar a resposta aprovada numa avaliação que já
+ * é outra (critério A6-4), e apagar uma resposta que já não é a que o Liame publicou. Cabe na coluna inteira do pedido
+ * e nunca é zero.
+ *
+ * Duas coisas ficam de fora de propósito. **A data de mudança da avaliação:** a referência do Google não diz se
+ * responder mexe nela (base de conhecimento §3.3, [NC]); com ela na versão, a resposta do próprio Liame poderia fazer a
+ * avaliação parecer outra. **A conferência do Google** (a resposta que passa de "pendente" a "aprovada"): quem mexe é
+ * o Google, sem mudar o que foi publicado, e a resposta precisa continuar podendo ser apagada. A resposta que ele
+ * recusa muda a versão: ela não aparece no perfil, e o que cabe ali é responder de novo.
  */
-export function versaoDaAvaliacao(e: Pick<EstadoDaAvaliacao, 'existe' | 'estrelas' | 'mudou_em' | 'texto_resumo' | 'resposta'>): number {
-  const base = { existe: e.existe, estrelas: e.estrelas, mudou_em: e.mudou_em, texto_resumo: e.texto_resumo, resposta: e.resposta ? { situacao: e.resposta.situacao, texto: e.resposta.texto } : null };
+export function versaoDaAvaliacao(e: Pick<EstadoDaAvaliacao, 'existe' | 'estrelas' | 'texto_resumo' | 'resposta'>): number {
+  const base = { existe: e.existe, estrelas: e.estrelas, texto_resumo: e.texto_resumo, resposta: e.resposta ? { texto: textoComparavel(e.resposta.texto), recusada: e.resposta.situacao === 'recusada' } : null };
   return (Number.parseInt(sha256(canonicalJson(base)).slice(0, 12), 16) % 2_147_483_646) + 1;
+}
+
+/**
+ * O texto de uma resposta, para comparar o que o Liame mandou com o que o Google devolve: na mesma forma Unicode, com
+ * cada trecho de espaço em branco como um espaço só e sem espaço nas pontas. A referência do Google não diz se ele
+ * devolve o texto exatamente como recebeu (base de conhecimento §3.3, [NC]): se ele acertar os espaços ou a forma das
+ * letras, a resposta continua sendo a mesma para o Liame. Qualquer outra diferença conta como outro texto.
+ */
+export function textoComparavel(s: string): string {
+  let saida = '';
+  let espaco = false;
+  for (const c of s.normalize('NFC')) {
+    if (c.trim() === '') {
+      espaco = saida.length > 0;
+      continue;
+    }
+    if (espaco) saida += ' ';
+    espaco = false;
+    saida += c;
+  }
+  return saida;
 }
 
 /** Avaliação de 1 ou 2 estrelas: a resposta só sai com a aprovação do dono (D-A6-4). */
@@ -68,6 +105,8 @@ export const ehNotaBaixa = (estrelas: number | null): boolean => estrelas !== nu
 /** A resposta de nota baixa é outra ação para a política: é nela que a regra do dono (ESCALATE) casa. */
 export const ACAO_DA_RESPOSTA = 'avaliacao.responder';
 export const ACAO_DA_RESPOSTA_DE_NOTA_BAIXA = 'avaliacao.responder_nota_baixa';
+/** Apagar a resposta que o Liame publicou (a volta de `avaliacao_responder`; P17). */
+export const ACAO_DE_APAGAR_A_RESPOSTA = 'avaliacao.apagar_resposta';
 
 const letra = (c: string | undefined): boolean => c !== undefined && ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'));
 
@@ -152,5 +191,29 @@ export function planoDaResposta(before: unknown, params: unknown, contexto?: Con
 /** A avaliação está como o pedido queria (a tentativa anterior caiu depois de o Google aceitar)? */
 export function respostaJaPublicada(atual: EstadoDaAvaliacao, desejado: unknown): boolean {
   const quer = EstadoDaAvaliacao.safeParse(desejado);
-  return quer.success && atual.resposta !== null && quer.data.resposta !== null && atual.resposta.texto === quer.data.resposta.texto && atual.resposta.situacao !== 'recusada';
+  return (
+    quer.success &&
+    atual.resposta !== null &&
+    quer.data.resposta !== null &&
+    textoComparavel(atual.resposta.texto) === textoComparavel(quer.data.resposta.texto) &&
+    atual.resposta.situacao !== 'recusada'
+  );
+}
+
+/** O plano de apagar a resposta (a volta da resposta publicada). Função pura. */
+export type PlanoDeApagar = { ok: false; motivo: string } | { ok: true; acao: string; desejado: EstadoDaAvaliacao };
+
+export function planoDeApagar(before: unknown): PlanoDeApagar {
+  const lido = EstadoDaAvaliacao.safeParse(before);
+  if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para uma avaliação do perfil da empresa no Google.' };
+  const e = lido.data;
+  if (!e.existe) return { ok: false, motivo: 'Esta avaliação não está mais no Google: quem escreveu apagou, ou o Google tirou. A resposta saiu junto.' };
+  if (!e.resposta) return { ok: false, motivo: 'Esta avaliação não tem resposta no Google: não há o que apagar.' };
+  return { ok: true, acao: ACAO_DE_APAGAR_A_RESPOSTA, desejado: { ...e, resposta: null } };
+}
+
+/** A resposta já saiu do Google (a tentativa anterior de apagar caiu depois de ele aceitar)? */
+export function respostaJaApagada(atual: EstadoDaAvaliacao, desejado: unknown): boolean {
+  const quer = EstadoDaAvaliacao.safeParse(desejado);
+  return quer.success && quer.data.resposta === null && atual.existe && atual.resposta === null;
 }

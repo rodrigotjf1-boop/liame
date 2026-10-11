@@ -83,6 +83,11 @@ export const ReviewsResponse = z.strictObject({
   reviews: z.array(ReviewItem),
   /** Há mais avaliações guardadas do que as devolvidas (a lista traz até 200). */
   has_more: z.boolean(),
+  /**
+   * As respostas que esperam a aprovação de uma pessoa (A6, Z2): a avaliação, o pedido em Aprovações
+   * (`/aprovacoes?pedido={action_id}`) e se só o dono decide. Vazia com a função de responder desligada.
+   */
+  pending_replies: z.array(z.strictObject({ review_id: z.uuid(), action_id: z.uuid(), owner_only: z.boolean() })).optional(),
   generated_at: z.iso.datetime(),
 });
 export type ReviewsResponse = z.infer<typeof ReviewsResponse>;

@@ -69,6 +69,17 @@ export type AvaliacaoLida = {
 /** O tamanho que o Liame aceita guardar de um texto de avaliação e de uma resposta (a resposta do Google vai até 4.096 bytes). */
 export const TAMANHO_DO_TEXTO = 5000;
 
+/**
+ * Um texto de avaliação ou de resposta como o Liame o guarda: sem o caractere nulo (o Postgres não o aceita), aparado
+ * e no tamanho máximo; nulo quando não sobra nada. É a mesma conta na gravação (`perfil-store.ts`) e no resumo
+ * criptográfico que o pedido de resposta leva (`avaliacao-plano.ts`): assim os dois se comparam.
+ */
+export function textoGuardado(s: string | null | undefined): string | null {
+  if (typeof s !== 'string') return null;
+  const limpo = s.split('\u0000').join('').trim().slice(0, TAMANHO_DO_TEXTO);
+  return limpo.length ? limpo : null;
+}
+
 const ESTRELAS: Record<string, AvaliacaoLida['estrelas']> = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 };
 const SITUACAO: Record<string, SituacaoDaResposta> = { PENDING: 'pendente', APPROVED: 'aprovada', REJECTED: 'recusada' };
 const LETRAS_DE_CODIGO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ_';

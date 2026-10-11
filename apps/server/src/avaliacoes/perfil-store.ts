@@ -1,6 +1,6 @@
 import { type Tx, uuidv7 } from '@liame/database';
 import { sql } from 'drizzle-orm';
-import { type AvaliacaoLida, METRICAS_CANONICAS_DO_PERFIL, type PontoDoPerfil, TAMANHO_DO_TEXTO } from '../connectors/google-business/perfil-google.js';
+import { type AvaliacaoLida, METRICAS_CANONICAS_DO_PERFIL, type PontoDoPerfil, textoGuardado } from '../connectors/google-business/perfil-google.js';
 
 // O que o Liame guarda do Perfil da Empresa no Google (A6, Z1; migration 0068): as avaliações, o resumo da loja (a nota
 // média e o total) e os números do perfil por dia. Poucas instruções por lote, na transação de quem chama, sob a RLS da
@@ -18,11 +18,7 @@ export type AvaliacaoNova = { externalId: string; estrelas: number };
 const LOTE = 500;
 /** O Postgres não aceita o caractere nulo num texto. */
 const semNulo = (s: string): string => s.split('\u0000').join('');
-const textoLimpo = (s: string | null): string | null => {
-  if (s === null) return null;
-  const limpo = semNulo(s).trim().slice(0, TAMANHO_DO_TEXTO);
-  return limpo.length ? limpo : null;
-};
+const textoLimpo = textoGuardado;
 
 type LinhaDeAvaliacao = {
   new_id: string;

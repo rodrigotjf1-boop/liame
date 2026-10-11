@@ -2,6 +2,7 @@ import type {
   ActionMessage,
   ActionProposal,
   ActionResponse,
+  ActionReview,
   ActionStatus,
   ApproveActionRequest,
   AutonomyMode,
@@ -21,6 +22,7 @@ import { activeTraceId, canonicalJson, sha256, writeAudit } from '../audit/audit
 import { MfaService } from '../auth/mfa.service.js';
 import { pessoasQuePodem } from '../auth/pessoa-pode.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { PROVEDOR_PERFIL_GOOGLE as PROVEDOR_DO_PERFIL } from '../connectors/google-business/perfil-google.js';
 import { afterCommit, type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, issuesToErrors, ValidationProblem } from '../errors/problems.js';
 import { emitEvent } from '../events/outbox.js';
@@ -34,10 +36,12 @@ import { currentTraceparent, inSpan } from '../observability/trace.js';
 import { alvoDaRecomendacao, direcaoDaRecomendacao, type FalhaDaLigacao } from '../sombra/pedido.js';
 import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
+import { EstadoDaAvaliacao, resumoDoTexto } from './avaliacao-plano.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
 import { avisoDeMensagemLiberada, EstadoDaMensagem } from './mensagem-plano.js';
+import { avaliacaoDoRecurso } from './perfil-avaliacao.js';
 import type { RegraDoCupom } from './regem-cupom.js';
 import { mensagemDoRecurso } from './regemcast-mensagem.js';
 import { respostaDaPlataforma } from './resposta-da-plataforma.js';
@@ -107,6 +111,8 @@ type Apresentacao = {
   mensagens: Map<string, RetratoDaMensagem>;
   /** As datas que o cupom teria se a mensagem saísse hoje, só do cupom que ainda não nasceu nem foi datado (mesma chave). */
   cuponsSemData: Map<string, { de: string; ate: string }>;
+  /** A avaliação do Google de cada pedido de resposta (A6, Z2), como o Liame a guarda agora, pelo id dela. */
+  avaliacoes: Map<string, NonNullable<ActionReview['current']>>;
 };
 
 /** O retrato da mensagem, como a resposta o mostra (sem o plano do disparo, que é de cada pedido). */
@@ -324,6 +330,8 @@ export class ActionService {
     const tenantId = tenantOf(auth);
     const row = await this.lock(tx, tenantId, id);
     if (row.status !== 'executada') throw new AppProblem(409, 'acao-nao-desfaz', 'Não dá para desfazer', 'Só dá para desfazer uma ação que foi executada.');
+    // O pedido que só o dono decidiu, só o dono desfaz (A6, D-A6-4: a resposta a uma avaliação de 1 ou 2 estrelas).
+    await this.exigirODono(tx, tenantId, auth, row, 'desfazer');
     const semVolta = (detalhe: string) => new AppProblem(409, 'acao-sem-volta', 'Esta ação não tem volta', detalhe);
     const volta = TOOLS[row.tool]?.undo;
     if (!volta || !row.before_state) throw semVolta('Esta ação não tem volta pelo Liame.');
@@ -359,6 +367,10 @@ export class ActionService {
     const tx = currentTx();
     const tenantId = quem.tenantId;
     const { tool, connector } = this.resolve(input.tool, input.provider);
+    // A ferramenta que só existe como a volta de outra ação não se pede direto (A6, Z2: apagar a resposta a uma avaliação).
+    if (tool.onlyAsUndo && !volta) {
+      throw new AppProblem(422, 'acao-so-como-volta', 'Esta ação não se pede direto', 'Esta ação só existe como a volta de outra: desfaça o pedido que foi executado.');
+    }
     if (input.brand_id) await this.assertBrand(tx, tenantId, input.brand_id);
     const brandId = await this.marcaDoPedido(tx, tenantId, input);
     const target = { tenantId, provider: input.provider, brandId, accountId: input.account_id, tool: tool.name };
@@ -987,16 +999,17 @@ export class ActionService {
 
   /**
    * O pedido que só o dono decide (a ferramenta declara `ownerOnly`; A6, D-A6-4: a resposta a uma avaliação de 1 ou 2
-   * estrelas): quem não é o dono lê o pedido e não o aprova, não o recusa e não o altera. O papel é lido do banco agora,
-   * e não da sessão. A política põe a mesma ação em ESCALATE (a aprovação de outro papel nunca bastaria); isto barra a
-   * tentativa antes, com a frase certa.
+   * estrelas): quem não é o dono lê o pedido e não o aprova, não o recusa, não o altera e, depois de executado, não o
+   * desfaz. O papel é lido do banco agora, e não da sessão. A política põe a mesma ação em ESCALATE (a aprovação de
+   * outro papel nunca bastaria); isto barra a tentativa antes, com a frase certa.
    */
-  private async exigirODono(tx: Tx, tenantId: string, auth: AuthContext, row: ActionRow, verbo: 'aprovar' | 'recusar' | 'alterar'): Promise<void> {
+  private async exigirODono(tx: Tx, tenantId: string, auth: AuthContext, row: ActionRow, verbo: 'aprovar' | 'recusar' | 'alterar' | 'desfazer'): Promise<void> {
     if (!row.before_state || !TOOLS[row.tool]?.ownerOnly?.(row.before_state)) return;
     const m = await tx.execute<{ role_key: string }>(sql`
       select role_key from liame.membership where tenant_id = ${tenantId} and user_id = ${auth.userId} and revoked_at is null`);
     if (m.rows[0]?.role_key === 'dono') return;
-    throw new AppProblem(403, 'so-o-dono', 'Só o dono decide este pedido', `Só o dono da empresa pode ${verbo} este pedido. Ele espera o dono em Aprovações.`);
+    const espera = verbo === 'desfazer' ? '' : ' Ele espera o dono em Aprovações.';
+    throw new AppProblem(403, 'so-o-dono', 'Só o dono decide este pedido', `Só o dono da empresa pode ${verbo} este pedido.${espera}`);
   }
 
   /**
@@ -1035,8 +1048,53 @@ export class ActionService {
    * do caixa no retrato da recomendação (pedidos, receita, margem) só saem para quem vê as vendas.
    */
   private async apresentacaoDe(tx: Tx, rows: ActionRow[], comVendas: boolean): Promise<Apresentacao> {
-    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map(), recomendacoes: new Map(), campanhasDosObjetos: new Map(), execucoes: new Map(), mensagens: new Map(), cuponsSemData: new Map() };
+    const ap: Apresentacao = {
+      pessoas: new Map(),
+      contas: new Map(),
+      campanhas: new Map(),
+      voltas: new Map(),
+      recomendacoes: new Map(),
+      campanhasDosObjetos: new Map(),
+      execucoes: new Map(),
+      mensagens: new Map(),
+      cuponsSemData: new Map(),
+      avaliacoes: new Map(),
+    };
     if (!rows.length) return ap;
+    // A avaliação do pedido de resposta (A6, Z2), do que o Liame guarda dela: o pedido não leva o texto.
+    const deAvaliacao = [...new Set(rows.flatMap((r) => (r.provider === PROVEDOR_DO_PERFIL ? (avaliacaoDoRecurso(r.resource_id) ?? []) : [])))];
+    if (deAvaliacao.length) {
+      const a = await tx.execute<{
+        id: string;
+        store_id: string;
+        stars: number;
+        comment: string | null;
+        reviewed_at: Date | string;
+        changed_at: Date | string;
+        reply_text: string | null;
+        reply_state: string | null;
+        reply_changed_at: Date | string | null;
+        reply_violation: string | null;
+      }>(sql`
+        select r.id, r.connected_account_id as store_id, r.stars, r.comment, r.reviewed_at, r.changed_at,
+               r.reply_text, r.reply_state, r.reply_changed_at, r.reply_violation
+          from liame.profile_review r
+         where r.tenant_id = ${rows[0]!.tenant_id} and r.id in ${deAvaliacao}`);
+      for (const l of a.rows) {
+        ap.avaliacoes.set(l.id, {
+          id: l.id,
+          store_id: l.store_id,
+          stars: Number(l.stars),
+          text: l.comment,
+          reviewed_at: new Date(l.reviewed_at).toISOString(),
+          changed_at: new Date(l.changed_at).toISOString(),
+          reply:
+            l.reply_text === null
+              ? null
+              : { text: l.reply_text, state: l.reply_state ?? 'desconhecida', changed_at: l.reply_changed_at ? new Date(l.reply_changed_at).toISOString() : null, violation: l.reply_violation },
+        });
+      }
+    }
     // O retrato da mensagem (A5, Y5): o envio e a pausa são da mesma campanha em rascunho que o Liame montou.
     const deMensagem = rows.filter((r) => r.provider === 'regemcast' && mensagemDoRecurso(r.resource_id) !== null);
     if (deMensagem.length) {
@@ -1288,6 +1346,29 @@ function mensagemDaResposta(row: ActionRow, ap: Apresentacao): ActionMessage | n
   };
 }
 
+/**
+ * A avaliação do pedido de resposta, ou de apagar a resposta: a nota e o texto da resposta saem do que o pedido
+ * guardou; o texto da avaliação e a resposta que está no Google, do que o Liame guarda dela agora. Nulo nos outros
+ * pedidos.
+ */
+function avaliacaoDaResposta(row: ActionRow, ap: Apresentacao): ActionReview | null {
+  const id = row.provider === PROVEDOR_DO_PERFIL ? avaliacaoDoRecurso(row.resource_id) : null;
+  if (!id) return null;
+  const antes = EstadoDaAvaliacao.safeParse(row.before_state);
+  const depois = EstadoDaAvaliacao.safeParse(row.desired_state);
+  const atual = ap.avaliacoes.get(id) ?? null;
+  const pedida = depois.success ? depois.data.resposta : null;
+  const deAntes = antes.success ? antes.data.resposta : null;
+  return {
+    id,
+    stars: antes.success ? antes.data.estrelas : null,
+    owner_only: Boolean(row.before_state && TOOLS[row.tool]?.ownerOnly?.(row.before_state)),
+    reply_text: pedida?.texto ?? deAntes?.texto ?? null,
+    current: atual,
+    changed: antes.success && atual !== null && (atual.stars !== antes.data.estrelas || resumoDoTexto(atual.text) !== antes.data.texto_resumo),
+  };
+}
+
 function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionResponse['workflow'], ap: Apresentacao): ActionResponse {
   const campanha = row.params.campaign_id;
   const execucao = ap.execucoes.get(row.id) ?? null;
@@ -1348,6 +1429,7 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     to: alvo ? estadoNaResposta(row.desired_state) : null,
     execution: execucao ? { ...execucao, provider_reply: execucao.status === 'falhou' ? respostaDaPlataforma(row.provider, row.status_reason) : null } : null,
     message: mensagemDaResposta(row, ap),
+    review: avaliacaoDaResposta(row, ap),
   };
 }
 

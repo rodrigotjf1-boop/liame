@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AutonomyMode, BudgetImpact, PolicyDecision, RiskLevel } from './policy.js';
+import { ReviewItem } from './reviews.js';
 
 // Pedido de ação (ADR-007): toda escrita fora do Liame passa por aqui. Risco, impacto e valores vêm
 // do registro de ferramentas e do estado lido no provedor, nunca de quem pede.
@@ -180,6 +181,30 @@ export const ActionMessage = z.strictObject({
 });
 export type ActionMessage = z.infer<typeof ActionMessage>;
 
+/**
+ * A avaliação do Google de um pedido de resposta, ou de apagar a resposta (A6, Z2; protótipo P17). O pedido não guarda
+ * o texto da avaliação nem nada de quem avaliou: o texto vem do que o Liame tem guardado dela agora (`current`), e o
+ * nome de quem avaliou, só para a tela, de `GET /v1/reviews/authors`, pelo `id`.
+ */
+export const ActionReview = z.strictObject({
+  /** O id da avaliação no Liame (o mesmo de `GET /v1/reviews`). */
+  id: z.uuid(),
+  /** A nota da avaliação na hora do pedido; nula se a avaliação já não existia no Google. */
+  stars: z.int().min(1).max(5).nullable(),
+  /** Só o dono da empresa aprova, recusa, altera e desfaz este pedido (a resposta a uma avaliação de 1 ou 2 estrelas). */
+  owner_only: z.boolean(),
+  /** O texto da resposta de que o pedido trata: o que será publicado ou, no pedido de apagar, o que sai do perfil. */
+  reply_text: z.string().nullable(),
+  /** A avaliação como o Liame a guarda agora, com a resposta que está no Google; nula quando ela saiu da guarda do Liame. */
+  current: ReviewItem.nullable(),
+  /**
+   * A nota ou o texto da avaliação já não são os da hora do pedido (a pessoa editou o que escreveu). No pedido que
+   * espera aprovação, a resposta foi escrita para a avaliação de antes: aprovada assim, ela não é publicada.
+   */
+  changed: z.boolean(),
+});
+export type ActionReview = z.infer<typeof ActionReview>;
+
 export const ActionExecution = z.strictObject({
   status: z.string(),
   finished_at: z.string(),
@@ -270,6 +295,8 @@ export const ActionResponse = z.strictObject({
   execution: ActionExecution.nullable().optional(),
   /** A mensagem de WhatsApp do pedido de envio ou de pausa (A5, Y5); nula nos outros pedidos. */
   message: ActionMessage.nullable().optional(),
+  /** A avaliação do Google do pedido de resposta ou de apagar a resposta (A6, Z2); nula nos outros pedidos. */
+  review: ActionReview.nullable().optional(),
 });
 export type ActionResponse = z.infer<typeof ActionResponse>;
 

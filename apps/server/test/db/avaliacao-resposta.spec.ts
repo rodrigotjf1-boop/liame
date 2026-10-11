@@ -22,6 +22,9 @@ import { APP_URL, hasDb } from './env.js';
 //   - A6-4: o que sai é exatamente o texto aprovado, uma vez; a avaliação que mudou depois do pedido não é respondida;
 //   - A6-5: o texto passa pelo Compliance antes de o pedido existir;
 //   - o nome de quem avaliou é conferido contra o texto e não fica no pedido, na auditoria nem no e-mail (D-A6-5).
+// Parte c: o que a tela do pedido lê (`review`, `pending_replies`) e apagar a resposta pelo desfazer (direto para a
+// pessoa, só a que o Liame publicou). Nestes, o Google local é ligado no pior caso do que a referência não diz: mexe
+// na data da avaliação ao responder e devolve o texto da resposta com os espaços acertados.
 
 const DIA_MS = 86_400_000;
 const TEXTO = 'Que bom ler isso! Ficamos felizes com a visita, e até o próximo smash.';
@@ -143,7 +146,7 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
       status: 'aguardando_aprovacao',
       policy: { allowed: true, mode: 'APPROVAL', violations: [] },
     });
-    expect(p.body.policy.versions[0]).toBe('plataforma@7');
+    expect(p.body.policy.versions[0]).toBe('plataforma@8');
     // O pedido leu a avaliação no Google, com o acesso renovado, e mais nada. Sem a aprovação, o executor nem olha para ele.
     expect(google.de('avaliacoes').map((v) => [v.metodo, v.caminho, v.autorizacao])).toEqual([['GET', `/avaliacoes/v4/${CONTA_DO_PERFIL}/${LOJA_DO_PERFIL}/reviews/rev-5`, `Bearer ${ACESSO_RENOVADO}`]]);
     await ciclo(e);
@@ -157,11 +160,15 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
       [p.body.id],
     );
     const auditoria = await ownerQuery<{ tudo: string }>(`select coalesce(before::text, '') || coalesce(after::text, '') || coalesce(actor_label, '') as tudo from liame.audit_event where chain_key = $1`, [e.tenantId]);
-    for (const onde of [linha!.tudo, JSON.stringify(p.body), auditoria.map((a) => a.tudo).join(' ')]) {
+    // Na resposta da API, o texto da avaliação aparece num lugar só (`review.current`, lido de `profile_review` para a
+    // tela); o resto do pedido não o leva.
+    for (const onde of [linha!.tudo, JSON.stringify({ ...p.body, review: null }), auditoria.map((a) => a.tudo).join(' ')]) {
       expect(onde).not.toContain('Pessoa Número');
       expect(onde).not.toContain(nomeDeQuemAvaliou('rev-5'));
       expect(onde).not.toContain('Comentário da avaliação rev-5');
     }
+    expect(p.body.review.current.text).toBe('Comentário da avaliação rev-5');
+    expect(JSON.stringify(p.body.review)).not.toContain('Pessoa Número');
 
     expect((await aprovar(dono(e), p.body)).body).toMatchObject({ status: 'aprovada' });
     await ciclo(e);
@@ -315,5 +322,172 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
     await ciclo(e);
     expect(await ver(e, p.body.id)).toMatchObject({ status: 'falhou', status_reason: 'escrita em google_business desligada' });
     expect(google.respostasGravadas()).toEqual([]);
+  });
+
+  it('parte c: o pedido leva a avaliação para a tela (o texto vem do que o Liame guarda), e a tela Avaliações sabe da resposta que espera', async () => {
+    const { e, ids } = await empresa('Mister Burgers Resposta na Tela', [avaliacao('rev-5', 'FIVE', 2), avaliacao('rev-1', 'ONE', 3), avaliacao('rev-4', 'FOUR', 4)]);
+    const [id5, id1] = [ids.get('rev-5')!, ids.get('rev-1')!];
+    const telaDasAvaliacoes = async () => (await api.call('GET', `/v1/reviews?brand_id=${e.brandId}`, { cookie: e.cookie })).body;
+    expect((await telaDasAvaliacoes()).pending_replies).toEqual([]);
+
+    const p = await pedir(dono(e), e, id5, `  ${TEXTO}  `);
+    expect(p.status, JSON.stringify(p.body)).toBe(201);
+    expect(p.body.review).toEqual({
+      id: id5,
+      stars: 5,
+      owner_only: false,
+      reply_text: TEXTO,
+      current: { id: id5, store_id: e.contaId, stars: 5, text: 'Comentário da avaliação rev-5', reviewed_at: expect.any(String), changed_at: expect.any(String), reply: null },
+      changed: false,
+    });
+    const baixa = await pedir(dono(e), e, id1, PEDIR_DESCULPAS);
+    expect(baixa.body.review).toMatchObject({ id: id1, stars: 1, owner_only: true, reply_text: PEDIR_DESCULPAS, changed: false });
+    // A tela Avaliações: as duas respostas que esperam, na ordem em que foram pedidas, com o pedido de cada uma.
+    expect((await telaDasAvaliacoes()).pending_replies).toEqual([
+      { review_id: id5, action_id: p.body.id, owner_only: false },
+      { review_id: id1, action_id: baixa.body.id, owner_only: true },
+    ]);
+    // Na lista de pedidos, o mesmo objeto; e o pedido de outra coisa não tem avaliação.
+    const lista = (await api.call('GET', '/v1/actions', { cookie: e.cookie })).body.items as Array<{ id: string; review: { id: string } | null }>;
+    expect(lista.find((a) => a.id === p.body.id)!.review).toMatchObject({ id: id5, reply_text: TEXTO });
+
+    // Quem avaliou edita o que escreveu, e a leitura de hora em hora traz a avaliação nova: o pedido que espera diz que
+    // ela mudou (a resposta foi escrita para a de antes), com a nota da hora do pedido e a avaliação de agora.
+    google.lista = [avaliacao('rev-5', 'FOUR', 2, { comment: 'Editei: a batata veio fria.', updateTime: new Date().toISOString() }), avaliacao('rev-1', 'ONE', 3), avaliacao('rev-4', 'FOUR', 4)];
+    await loop.executarLote(10, { tenantIds: [e.tenantId] }, new Date(Date.now() + 2 * 3_600_000));
+    expect((await ver(e, p.body.id)).review).toMatchObject({ stars: 5, reply_text: TEXTO, changed: true, current: { stars: 4, text: 'Editei: a batata veio fria.' } });
+    expect((await ver(e, baixa.body.id)).review).toMatchObject({ changed: false });
+    // Aprovada assim, ela não é publicada (A6-4), e deixa de esperar.
+    expect((await aprovar(dono(e), p.body)).body.status).toBe('aprovada');
+    await ciclo(e);
+    expect(await ver(e, p.body.id)).toMatchObject({ status: 'falhou', execution: { status: 'estado_mudou' } });
+    expect(google.respostasGravadas()).toEqual([]);
+
+    // A de 1 estrela, aprovada pelo dono: publicada, o pedido mostra a resposta que está no Google, e ninguém mais espera.
+    expect((await aprovar(dono(e), baixa.body)).body.status).toBe('aprovada');
+    await ciclo(e);
+    const feita = await ver(e, baixa.body.id);
+    expect(feita).toMatchObject({ status: 'executada', review: { owner_only: true, reply_text: PEDIR_DESCULPAS, changed: false, current: { reply: { text: PEDIR_DESCULPAS, state: 'pendente', violation: null } } } });
+    expect((await telaDasAvaliacoes()).pending_replies).toEqual([]);
+    // D-A6-5: o objeto da tela não leva nada de quem avaliou.
+    expect(JSON.stringify([p.body.review, feita.review])).not.toContain('Pessoa Número');
+  });
+
+  it('parte c: apagar a resposta é direto para a pessoa, só a que o Liame publicou e só enquanto ela é a mesma', async () => {
+    const { e, ids } = await empresa('Mister Burgers Apagar a Resposta', [avaliacao('rev-5', 'FIVE', 2), avaliacao('rev-4', 'FOUR', 3), avaliacao('rev-3', 'THREE', 4)]);
+    const adm = await membro(e, 'administrador');
+    const [id5, id4, id3] = [ids.get('rev-5')!, ids.get('rev-4')!, ids.get('rev-3')!];
+    const desfazer = (quem: Quem, pedido: string) => api.call('POST', `/v1/actions/${pedido}/undo`, { cookie: quem.cookie });
+    const noGoogle = (reviewId: string) => google.lista.find((a) => a.reviewId === reviewId)!;
+    async function publicar(avaliacaoId: string, texto: string): Promise<{ id: string }> {
+      const p = await pedir(dono(e), e, avaliacaoId, texto);
+      expect(p.status, JSON.stringify(p.body)).toBe(201);
+      expect((await aprovar(dono(e), p.body)).body.status).toBe('aprovada');
+      await ciclo(e);
+      return p.body;
+    }
+
+    // O pior caso do que a referência do Google não diz: responder mexe na data da avaliação, e o Google guarda o texto
+    // com os espaços acertados. E a volta da gravação se perde: a tentativa seguinte reconhece a resposta e não manda de novo.
+    google.responderMexeNaData = true;
+    google.acertaOsEspacos = true;
+    google.respostaCaiDepoisDeGravar = true;
+    const COM_ESPACOS = 'Que bom ler isso!  Ficamos felizes com a visita,\n\naté o próximo smash.';
+    const ACERTADO = 'Que bom ler isso! Ficamos felizes com a visita, até o próximo smash.';
+    const p = await publicar(id5, COM_ESPACOS);
+    expect(await ver(e, p.id)).toMatchObject({ status: 'aprovada', status_reason: 'o Google não respondeu' });
+    google.respostaCaiDepoisDeGravar = false;
+    await ownerQuery(`update liame.action_request set next_attempt_at = now() - interval '1 minute' where id = $1`, [p.id]);
+    await ciclo(e);
+    expect(await ver(e, p.id)).toMatchObject({ status: 'executada', undone_by: null });
+    expect(google.respostasGravadas().map((v) => v.corpo)).toEqual([{ comment: COM_ESPACOS }]);
+    expect(await guardada(id5)).toEqual({ reply_text: ACERTADO, reply_state: 'pendente' });
+    // O Google termina de conferir e libera a resposta: quem mexeu foi ele, e a resposta continua sendo a do Liame.
+    noGoogle('rev-5').reviewReply!.reviewReplyState = 'APPROVED';
+
+    // Não se pede direto: a ferramenta só existe como a volta. E a resposta dada direto no Google não é do Liame.
+    noGoogle('rev-3').reviewReply = { comment: 'Respondido direto no Google.', updateTime: new Date().toISOString(), reviewReplyState: 'APPROVED' };
+    google.vistos.length = 0;
+    const direto = await api.call('POST', '/v1/actions', { cookie: e.cookie, body: { tool: 'avaliacao_apagar_resposta', provider: 'google_business', account_id: e.contaId, resource_id: `avaliacao:${id3}`, params: {} } });
+    expect([direto.status, direto.body.code]).toEqual([422, 'acao-so-como-volta']);
+    expect(google.vistos).toEqual([]);
+
+    // Quem opera as campanhas apaga, sem o código do app: o pedido nasce aprovado, com o nome de quem pediu.
+    const volta = await desfazer(adm, p.id);
+    expect(volta.body, JSON.stringify(volta.body)).toMatchObject({
+      tool: 'avaliacao_apagar_resposta',
+      action: 'avaliacao.apagar_resposta',
+      provider: 'google_business',
+      resource_id: `avaliacao:${id5}`,
+      mode: 'AUTO',
+      status: 'aprovada',
+      status_reason: 'pedida por uma pessoa: esta ação não espera aprovação',
+      undoes: p.id,
+      approvals: [],
+      requested_by: { id: adm.userId },
+      review: { id: id5, stars: 5, owner_only: false, reply_text: ACERTADO },
+    });
+    expect(volta.body.policy.versions[0]).toBe('plataforma@8');
+    expect((await desfazer(adm, p.id)).body.code).toBe('volta-ja-pedida');
+    // O Google apaga, e a conexão cai antes de ele responder: a tentativa seguinte vê a resposta fora e não apaga de novo.
+    google.apagarCaiDepoisDeApagar = true;
+    await ciclo(e);
+    expect(await ver(e, volta.body.id)).toMatchObject({ status: 'aprovada', status_reason: 'o Google não respondeu' });
+    expect(noGoogle('rev-5').reviewReply).toBeUndefined();
+    google.apagarCaiDepoisDeApagar = false;
+    await ownerQuery(`update liame.action_request set next_attempt_at = now() - interval '1 minute' where id = $1`, [volta.body.id]);
+    await ciclo(e);
+    expect(await ver(e, volta.body.id)).toMatchObject({ status: 'executada', status_reason: null });
+    expect(google.respostasApagadas().map((v) => v.caminho)).toEqual([`/avaliacoes/v4/${CONTA_DO_PERFIL}/${LOJA_DO_PERFIL}/reviews/rev-5/reply`]);
+    // O Liame já mostra a avaliação sem resposta, e o pedido da resposta diz quem a desfez.
+    expect(await guardada(id5)).toEqual({ reply_text: null, reply_state: null });
+    expect(await ver(e, p.id)).toMatchObject({ status: 'executada', undone_by: { id: volta.body.id, status: 'executada' }, review: { current: { reply: null } } });
+    // Sem resposta, a avaliação pode ganhar outra.
+    expect((await pedir(dono(e), e, id5, TEXTO)).status).toBe(201);
+
+    // A resposta que alguém editou direto no Google depois de publicada não é mais a do Liame: ele não apaga. (A
+    // publicação desta saiu de primeira, e o Google segue mexendo na data da avaliação ao responder.)
+    google.acertaOsEspacos = false;
+    const q = await publicar(id4, TEXTO);
+    expect(await ver(e, q.id)).toMatchObject({ status: 'executada' });
+    noGoogle('rev-4').reviewReply!.comment = 'Editada direto no Google.';
+    const mexida = await desfazer(dono(e), q.id);
+    expect([mexida.status, mexida.body.code]).toEqual([409, 'estado-mudou']);
+    // A resposta que o Google recusou também não: ela não aparece no perfil, e o que cabe é responder de novo.
+    Object.assign(noGoogle('rev-4').reviewReply!, { comment: TEXTO, reviewReplyState: 'REJECTED', policyViolation: 'CODIGO_DE_EXEMPLO' });
+    expect((await desfazer(dono(e), q.id)).body.code).toBe('estado-mudou');
+    // Com a escrita desligada, nem o apagar passa.
+    Object.assign(noGoogle('rev-4').reviewReply!, { reviewReplyState: 'APPROVED' });
+    await ligarFlagDaEmpresa(api, 'perfil_google_write', e.tenantId, false);
+    expect((await desfazer(dono(e), q.id)).body.code).toBe('escrita-desligada');
+    expect(google.respostasApagadas()).toHaveLength(1);
+    expect(noGoogle('rev-4').reviewReply!.comment).toBe(TEXTO);
+    // Ligada de novo, e com a resposta como o Liame a publicou (o Google só a liberou e mexeu na data): apaga.
+    await ligarFlagDaEmpresa(api, 'perfil_google_write', e.tenantId, true);
+    const outraVolta = await desfazer(dono(e), q.id);
+    expect(outraVolta.body, JSON.stringify(outraVolta.body)).toMatchObject({ tool: 'avaliacao_apagar_resposta', status: 'aprovada', undoes: q.id });
+    await ciclo(e);
+    expect(await ver(e, outraVolta.body.id)).toMatchObject({ status: 'executada' });
+    expect(google.respostasApagadas()).toHaveLength(2);
+    expect(noGoogle('rev-4').reviewReply).toBeUndefined();
+  });
+
+  it('parte c: a resposta a 1 ou 2 estrelas, que só o dono aprovou, só o dono apaga', async () => {
+    const { e, ids } = await empresa('Mister Burgers Apagar Nota Baixa', [avaliacao('duas', 'TWO', 3)]);
+    const adm = await membro(e, 'administrador');
+    const p = await pedir(dono(e), e, ids.get('duas')!, PEDIR_DESCULPAS);
+    expect((await aprovar(dono(e), p.body)).body.status).toBe('aprovada');
+    await ciclo(e);
+    expect(await ver(e, p.body.id)).toMatchObject({ status: 'executada', review: { owner_only: true } });
+
+    const doAdm = await api.call('POST', `/v1/actions/${p.body.id}/undo`, { cookie: adm.cookie });
+    expect([doAdm.status, doAdm.body.code, doAdm.body.detail]).toEqual([403, 'so-o-dono', 'Só o dono da empresa pode desfazer este pedido.']);
+    expect(google.respostasApagadas()).toEqual([]);
+    const doDono = await api.call('POST', `/v1/actions/${p.body.id}/undo`, { cookie: e.cookie });
+    expect(doDono.body, JSON.stringify(doDono.body)).toMatchObject({ tool: 'avaliacao_apagar_resposta', status: 'aprovada', review: { stars: 2, owner_only: false, reply_text: PEDIR_DESCULPAS } });
+    await ciclo(e);
+    expect(await ver(e, doDono.body.id)).toMatchObject({ status: 'executada' });
+    expect(google.lista.find((a) => a.reviewId === 'duas')!.reviewReply).toBeUndefined();
+    expect(await guardada(ids.get('duas')!)).toEqual({ reply_text: null, reply_state: null });
   });
 });

@@ -1,7 +1,7 @@
 import type { BudgetImpact, RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
-import { type ContextoDaAvaliacao, EstadoDaAvaliacao, ehNotaBaixa, ParametrosDaResposta, planoDaResposta } from './avaliacao-plano.js';
+import { type ContextoDaAvaliacao, EstadoDaAvaliacao, ehNotaBaixa, ParametrosDaResposta, planoDaResposta, planoDeApagar } from './avaliacao-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
@@ -79,9 +79,15 @@ export interface ToolDefinition {
   /**
    * Só o dono da empresa decide este pedido: aprovar, recusar e alterar (A6, D-A6-4; P17: a resposta a uma avaliação
    * de 1 ou 2 estrelas). Lido do estado que o pedido guardou. Os outros leem o pedido e não mexem nele. A política põe
-   * a mesma ação em ESCALATE, para a aprovação de outro papel nunca bastar; isto barra a tentativa antes.
+   * a mesma ação em ESCALATE, para a aprovação de outro papel nunca bastar; isto barra a tentativa antes. A volta de um
+   * pedido assim também é só do dono.
    */
   ownerOnly?(before: ResourceState): boolean;
+  /**
+   * Só existe como a volta de outra ação (A6, Z2: apagar a resposta que o Liame publicou). Não se pede direto
+   * (`POST /v1/actions`), nem por um funcionário de IA: o Liame não apaga o que não publicou.
+   */
+  onlyAsUndo?: boolean;
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -391,6 +397,27 @@ export const TOOLS: Record<string, ToolDefinition> = {
         desiredState: plano.desejado,
         text: plano.texto,
       };
+    },
+    // A volta é apagar a resposta do perfil. O aviso que quem avaliou já recebeu do Google não volta.
+    undo: () => ({ tool: 'avaliacao_apagar_resposta', params: {} }),
+  },
+  avaliacao_apagar_resposta: {
+    name: 'avaliacao_apagar_resposta',
+    version: 1,
+    owner: 'social',
+    description: 'Apaga do perfil no Google a resposta a uma avaliação que o Liame publicou. Quem avaliou já foi avisado da resposta: apagar não desfaz esse aviso.',
+    risk: 'R1',
+    providers: ['google_business'],
+    compensation: 'sem_volta_pelo_liame',
+    // Tirar do ar o que a própria empresa publicou não gasta, não envia e não fala com ninguém: uma pessoa apaga direto,
+    // com a confirmação na tela (P17, aprovado em 09/10/2026). Só como a volta da resposta que o Liame publicou.
+    directByPerson: true,
+    onlyAsUndo: true,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDeApagar(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return { action: plano.acao, budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado };
     },
   },
 };
