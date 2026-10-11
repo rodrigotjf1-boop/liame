@@ -63,7 +63,7 @@ export type DescontoGuardado = {
 };
 
 /** O dia (AAAA-MM-DD) tantos dias depois: conta de calendário, sem fuso. */
-function somarDias(dia: string, dias: number): string {
+export function somarDias(dia: string, dias: number): string {
   return new Date(Date.parse(`${dia}T12:00:00Z`) + dias * 86_400_000).toISOString().slice(0, 10);
 }
 
