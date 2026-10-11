@@ -6,9 +6,14 @@ import type { ProviderId } from './tipos.js';
 const DIA_MS = 86_400_000;
 const dia = (d: Date) => d.toISOString().slice(0, 10);
 
-/** Só AAAA-MM-DD de verdade: nada de aspas, operador ou data impossível. */
+/**
+ * Só AAAA-MM-DD de verdade: nada de aspas, operador ou data impossível. O mês 13 e o dia 32 nem viram data (o
+ * `toISOString` deles estoura um erro que não é do conector): a conferência vem antes.
+ */
 export function dataValida(provider: ProviderId, d: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || dia(new Date(`${d}T00:00:00Z`)) !== d) {
+  const formato = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  const data = formato ? new Date(`${d}T00:00:00Z`) : null;
+  if (!data || Number.isNaN(data.getTime()) || dia(data) !== d) {
     throw new ErroConector('definitivo', provider, `data inválida: ${String(d).slice(0, 20)}`);
   }
   return d;

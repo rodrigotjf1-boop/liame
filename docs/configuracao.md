@@ -70,6 +70,7 @@ ser os oficiais, senão a API não sobe; fora dela, os testes apontam para uma p
 | `GOOGLE_ADS_URL` | Google Ads API (REST) | `https://googleads.googleapis.com` |
 | `GA4_DATA_URL` · `GA4_ADMIN_URL` | GA4 Data API e Admin API | `https://analyticsdata.googleapis.com` · `https://analyticsadmin.googleapis.com` |
 | `GOOGLE_DATA_MANAGER_URL` | Data Manager API do Google: as vendas confirmadas (A5 · Y1) | `https://datamanager.googleapis.com` |
+| `GOOGLE_BUSINESS_ACCOUNTS_URL` · `GOOGLE_BUSINESS_LOCATIONS_URL` · `GOOGLE_BUSINESS_REVIEWS_URL` · `GOOGLE_BUSINESS_PERFORMANCE_URL` | Perfil da Empresa no Google (A6 · Z1): as contas, as lojas, as avaliações e os números do perfil, cada um numa API. Em produção, só os endereços oficiais | `https://mybusinessaccountmanagement.googleapis.com` · `https://mybusinessbusinessinformation.googleapis.com` · `https://mybusiness.googleapis.com` · `https://businessprofileperformance.googleapis.com` |
 | `META_APP_SECRET` | Segredo do app da Meta (**da distribuição**, só no EasyPanel): assina cada chamada com `appsecret_proof` | vazio (sem assinatura) |
 
 A versão de cada API não é variável: vem do Capability Registry (`connector_capability`, migration 0018).

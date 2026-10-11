@@ -8,8 +8,8 @@ import type { PontoMetrica } from '../media/metric-store.js';
 
 /** Plataformas de anúncio e de análise (A2). */
 export type ProviderMidia = 'meta_ads' | 'google_ads' | 'ga4';
-/** Toda origem lida por um conector: as plataformas e os produtos DMS (A2.5). */
-export type ProviderId = ProviderMidia | 'regem' | 'regemcast';
+/** Toda origem lida por um conector: as plataformas, os produtos DMS (A2.5) e o Perfil da Empresa no Google (A6). */
+export type ProviderId = ProviderMidia | 'regem' | 'regemcast' | 'google_business';
 
 /** Credencial já decifrada do cofre, só na memória da chamada (nunca em log, API ou tela). */
 export type Credencial = { accessToken: string };
