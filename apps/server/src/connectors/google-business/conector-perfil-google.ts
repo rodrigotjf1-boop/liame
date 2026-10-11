@@ -5,7 +5,7 @@ import type { Balde } from '../cota.js';
 import { dataValida } from '../janela.js';
 import { type Credencial, versaoRegistrada } from '../tipos.js';
 import { soDigitos } from '../validacao.js';
-import { type AvaliacaoLida, avaliacaoDoGoogle, METRICAS_DO_PERFIL, notaMedia, numerosDoPerfil, type PontoDoPerfil, totalDeAvaliacoes } from './perfil-google.js';
+import { type AvaliacaoLida, avaliacaoDoGoogle, METRICAS_DO_PERFIL, notaMedia, numerosDoPerfil, type PontoDoPerfil, type QuemAvaliou, quemAvaliou, totalDeAvaliacoes } from './perfil-google.js';
 
 // Conector de LEITURA do Perfil da Empresa no Google (A6, Z1; base de conhecimento §3.3). Quatro APIs, cada uma no
 // endereço e na versão dela (as versões vêm do registro de capacidades):
@@ -168,6 +168,40 @@ export class ConectorPerfilGoogle {
       token = r.corpo.nextPageToken || undefined;
     }
     return lidas;
+  }
+
+  /**
+   * Quem fez as avaliações mais recentes de uma loja (o id da avaliação e o nome), **só para a tela, na hora**: quem
+   * chama não guarda. Poucas páginas, e sem insistir: a pessoa está esperando a tela, e a cota é de todas as empresas.
+   */
+  async lerQuemAvaliou(credencial: Credencial, alvo: { conta: string; loja: string }, opcoes: { maximo?: number; tempoLimiteMs?: number } = {}): Promise<QuemAvaliou[]> {
+    const conta = recurso('accounts', alvo.conta);
+    const loja = recurso('locations', alvo.loja);
+    const maximo = Math.max(1, Math.min(200, Math.trunc(opcoes.maximo ?? 100)));
+    type Pagina = { reviews?: unknown[]; nextPageToken?: string };
+    const nomes: QuemAvaliou[] = [];
+    let token: string | undefined;
+    let lidas = 0;
+    for (let i = 0; (i === 0 || token) && lidas < maximo; i++) {
+      const q = new URLSearchParams({ pageSize: String(PAGINA_DE_AVALIACOES), orderBy: 'updateTime desc', ...(token ? { pageToken: token } : {}) });
+      const r = await this.cliente.requisitar<Pagina>({
+        provider: PROVIDER,
+        conta: this.chaveDaCota,
+        url: `${this.bases.avaliacoes}/${this.versoes.avaliacoes}/${conta}/${loja}/reviews?${q.toString()}`,
+        endpoint: 'reviews.list',
+        apiVersion: this.versoes.avaliacoes,
+        cabecalhos: { authorization: `Bearer ${credencial.accessToken}` },
+        ...(opcoes.tempoLimiteMs ? { tempoLimiteMs: opcoes.tempoLimiteMs } : {}),
+      });
+      for (const bruta of r.corpo.reviews ?? []) {
+        if (lidas === maximo) break;
+        lidas++;
+        const q2 = quemAvaliou(bruta);
+        if (q2) nomes.push(q2);
+      }
+      token = r.corpo.nextPageToken || undefined;
+    }
+    return nomes;
   }
 
   /** Os números do perfil por dia, na janela [inicio, fim] (AAAA-MM-DD). O dia que o Google ainda não fechou não vem. */

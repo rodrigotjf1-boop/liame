@@ -32,7 +32,12 @@ export type AvaliacaoNoGoogle = {
   createTime: string;
   updateTime: string;
   reviewReply?: { comment: string; updateTime?: string; reviewReplyState?: string; policyViolation?: string };
+  /** Só do Google de mentira: a pessoa avaliou sem se identificar (o Google manda `isAnonymous`). */
+  anonima?: boolean;
 };
+
+/** O nome que o Google de mentira dá a quem fez cada avaliação (o Liame só pode mostrá-lo na tela, na hora). */
+export const nomeDeQuemAvaliou = (reviewId: string): string => `Pessoa Número ${reviewId}`;
 
 type Visto = { caminho: string; busca: URLSearchParams; autorizacao?: string };
 
@@ -171,10 +176,12 @@ export class GoogleComPerfil {
       // Da mais recente para a mais antiga, com o nome e a foto de quem avaliou, como o Google manda.
       const reviews = [...this.lista]
         .sort((a, b) => (a.updateTime < b.updateTime ? 1 : -1))
-        .map((a, i) => ({
+        .map(({ anonima, ...a }, i) => ({
           ...a,
           name: `${CONTA_DO_PERFIL}/${LOJA_DO_PERFIL}/reviews/${a.reviewId}`,
-          reviewer: { displayName: `Pessoa Número ${i + 1}`, profilePhotoUrl: `https://lh3.googleusercontent.com/a/foto-${i + 1}`, isAnonymous: false },
+          reviewer: anonima
+            ? { displayName: 'Pessoa Número anônima', isAnonymous: true }
+            : { displayName: nomeDeQuemAvaliou(a.reviewId), profilePhotoUrl: `https://lh3.googleusercontent.com/a/foto-${i + 1}`, isAnonymous: false },
         }));
       return { status: 200, corpo: { reviews, ...this.resumo } };
     }
