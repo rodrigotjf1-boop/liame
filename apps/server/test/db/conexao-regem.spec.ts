@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config.js';
 import { registrarConexaoDaDistribuicao } from '../../src/connections/distribuicao.js';
 import { newWebhookSecret, webhookHeaders } from '../../src/events/standard-webhooks.js';
+import { FlagService } from '../../src/flags/flag.service.js';
 import { gravarPedidos } from '../../src/orders/order-store.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { ConexaoProcessor } from '../../src/worker/conexao-processor.js';
@@ -90,7 +91,7 @@ describe.skipIf(!hasDb)('conectar o Regem (A2.5 · F3)', () => {
     api = await startApi();
     await resetIpRateLimits();
     database = createDatabase({ connectionString: APP_URL, max: 3, applicationName: 'liame-test' });
-    processador = new ConexaoProcessor(database, loadConfig(), api.app.get(VaultService));
+    processador = new ConexaoProcessor(database, loadConfig(), api.app.get(VaultService), api.app.get(FlagService));
   });
   afterAll(async () => {
     await api?.close();

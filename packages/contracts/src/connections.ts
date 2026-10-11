@@ -12,8 +12,8 @@ import { z } from 'zod';
 export const ConnectionProvider = z.enum(['meta', 'google', 'regem', 'regemcast']);
 export type ConnectionProvider = z.infer<typeof ConnectionProvider>;
 
-/** Plataforma da conta ligada. */
-export const AccountProvider = z.enum(['meta_ads', 'google_ads', 'ga4', 'regem', 'regemcast']);
+/** Plataforma da conta ligada. `google_business`: a loja do Perfil da Empresa no Google (vem na autorização do Google, com a função ligada). */
+export const AccountProvider = z.enum(['meta_ads', 'google_ads', 'ga4', 'regem', 'regemcast', 'google_business']);
 export type AccountProvider = z.infer<typeof AccountProvider>;
 
 const Slug = z.string().regex(/^[a-z0-9_]+$/);

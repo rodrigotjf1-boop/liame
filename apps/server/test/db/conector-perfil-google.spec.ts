@@ -17,8 +17,9 @@ import { APP_URL, hasDb, OWNER_URL } from './env.js';
 const TOKEN = 'token-de-teste-perfil-google';
 const CONTA = 'accounts/111000111';
 const LOJA = 'locations/222000222';
+const CHAVE_DO_BALDE_APERTADO = 'teste-do-balde-apertado';
 
-type Pedido = { api: string; caminho: string; busca: URLSearchParams; autorizacao: string | undefined };
+type Pedido ={ api: string; caminho: string; busca: URLSearchParams; autorizacao: string | undefined };
 
 /** Uma avaliação como o Google a manda, com o nome e a foto de quem avaliou. */
 const avaliacao = (n: number, atualizadaEm: string, extra: Record<string, unknown> = {}) => ({
@@ -100,7 +101,8 @@ describe.skipIf(!hasDb)('conector do Perfil da Empresa no Google (leitura; A6 ·
   });
   const cliente = (extra: Partial<ConstructorParameters<typeof ClienteConector>[1]> = {}) =>
     new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(plataformas()), tentativas: 1, esperaMaximaMs: 2_000, balde: { capacidade: 500, porSegundo: 50 }, ...extra });
-  const conector = (c = cliente()) => new ConectorPerfilGoogle(c, plataformas().perfilGoogle, { contas: 'v1', lojas: 'v1', avaliacoes: 'v4', numeros: 'v1' });
+  /** `chaveDaCota`: só o teste que esvazia o balde usa uma chave dele (a do projeto é dividida com os outros arquivos de teste). */
+  const conector = (c = cliente(), chaveDaCota?: string) => new ConectorPerfilGoogle(c, plataformas().perfilGoogle, { contas: 'v1', lojas: 'v1', avaliacoes: 'v4', numeros: 'v1' }, chaveDaCota);
   const credencial = { accessToken: TOKEN };
   const daApi = (api: string) => pedidos.filter((p) => p.api === api);
   /** O erro que a chamada devolve. */
@@ -263,8 +265,9 @@ describe.skipIf(!hasDb)('conector do Perfil da Empresa no Google (leitura; A6 ·
   it('A6-2: a cota é uma só para todas as lojas, e o balde do conector fica abaixo das 300 chamadas por minuto do Google', async () => {
     expect(BALDE_DO_PERFIL_GOOGLE.porSegundo * 60).toBeLessThan(300);
     expect(BALDE_DO_PERFIL_GOOGLE.capacidade).toBeLessThanOrEqual(BALDE_DO_PERFIL_GOOGLE.porSegundo * 60);
-    // Um balde de duas fichas que quase não enche: a terceira chamada, de outra loja, já não sai (a chave é do projeto).
-    const apertado = conector(cliente({ balde: { capacidade: 2, porSegundo: 0.001 }, esperaMaximaMs: 200 }));
+    // Um balde de duas fichas que quase não enche: a terceira chamada, de outra loja, já não sai (a chave é uma só para
+    // todas as lojas). A chave é deste teste: esvaziar a do projeto deixaria sem ficha quem roda ao mesmo tempo (V76).
+    const apertado = conector(cliente({ balde: { capacidade: 2, porSegundo: 0.001 }, esperaMaximaMs: 200 }), CHAVE_DO_BALDE_APERTADO);
     await ownerLimpa();
     await apertado.lerNumeros(credencial, { loja: LOJA }, { inicio: '2026-10-01', fim: '2026-10-02' });
     await apertado.lerAvaliacoes(credencial, { conta: CONTA, loja: LOJA }, { maximo: 1 });
@@ -276,10 +279,10 @@ describe.skipIf(!hasDb)('conector do Perfil da Empresa no Google (leitura; A6 ·
     await ownerLimpa();
   });
 
-  /** Zera o balde de cota do Perfil no banco de teste (a chave é uma só, e outra rodada pode tê-la deixado vazia). */
+  /** Zera o balde do teste do balde apertado (outra rodada pode tê-lo deixado vazio). */
   async function ownerLimpa(): Promise<void> {
     const { ownerQuery } = await import('../helpers/api.js');
     const { chaveDe } = await import('../../src/connectors/cota.js');
-    await ownerQuery(`delete from liame.quota_bucket where bucket_key = $1`, [chaveDe('google_business', 'projeto')]);
+    await ownerQuery(`delete from liame.quota_bucket where bucket_key = $1`, [chaveDe('google_business', CHAVE_DO_BALDE_APERTADO)]);
   }
 });

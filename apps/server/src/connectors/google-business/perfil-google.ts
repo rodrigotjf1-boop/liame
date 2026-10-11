@@ -5,6 +5,41 @@
 // quem avaliou não passam daqui:** o tipo que sai não tem campo para eles, e o que a sincronização grava é esse tipo
 // (critério A6-1). A foto que a pessoa anexou à avaliação também fica de fora.
 
+import type { TipoErroConector } from '../cliente-http.js';
+
+/** A função, por empresa, desligada de fábrica: ligada, o Liame pede a permissão do Perfil e lê as lojas dele (D-A6-17). */
+export const FLAG_PERFIL_GOOGLE = 'perfil_google';
+/** A permissão que todas as leituras do Perfil pedem. Só entra na autorização da empresa com a função ligada. */
+export const ESCOPO_PERFIL_GOOGLE = 'https://www.googleapis.com/auth/business.manage';
+/** O código da loja do Perfil entre as contas ligadas (`connected_account.provider`). */
+export const PROVEDOR_PERFIL_GOOGLE = 'google_business';
+
+/**
+ * Como terminou a procura das lojas do Perfil numa autorização do Google (`oauth_connection.discovery_notes`):
+ * `ok` (com quantas lojas, que pode ser zero); `limite`, a cota acabou ou o Google ainda não liberou o acesso do Liame
+ * à API (até lá a cota é zero); `sem_permissao`, o Google recusou a leitura; `falhou`, o resto.
+ */
+export const RESULTADOS_DA_PROCURA = ['ok', 'limite', 'sem_permissao', 'falhou'] as const;
+export type ResultadoDaProcura = (typeof RESULTADOS_DA_PROCURA)[number];
+export type ProcuraDoPerfil = { resultado: ResultadoDaProcura; em: string; lojas: number };
+
+/** A falha da procura, pelo tipo do erro do conector (nulo = erro que não veio do conector). */
+export function falhaDaProcura(tipo: TipoErroConector | null): Exclude<ResultadoDaProcura, 'ok'> {
+  if (tipo === 'limite') return 'limite';
+  if (tipo === 'permissao') return 'sem_permissao';
+  return 'falhou';
+}
+
+/** A anotação da procura como está guardada: só o que tem o formato certo vale (o resto é "não procurou"). */
+export function procuraGuardada(notas: unknown): ProcuraDoPerfil | null {
+  const n = notas && typeof notas === 'object' ? (notas as Record<string, unknown>)[PROVEDOR_PERFIL_GOOGLE] : null;
+  if (!n || typeof n !== 'object') return null;
+  const { resultado, em, lojas } = n as Record<string, unknown>;
+  if (typeof resultado !== 'string' || !(RESULTADOS_DA_PROCURA as readonly string[]).includes(resultado)) return null;
+  if (typeof em !== 'string' || Number.isNaN(new Date(em).getTime())) return null;
+  return { resultado: resultado as ResultadoDaProcura, em, lojas: typeof lojas === 'number' && Number.isInteger(lojas) && lojas >= 0 ? lojas : 0 };
+}
+
 /** A situação da resposta, como o Google a diz (`ReviewReplyState`), em palavras do Liame. */
 export const SITUACOES_DA_RESPOSTA = ['pendente', 'aprovada', 'recusada', 'desconhecida'] as const;
 export type SituacaoDaResposta = (typeof SITUACOES_DA_RESPOSTA)[number];

@@ -20,6 +20,7 @@ import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { ClienteConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
+import { FLAG_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
 import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
 import { revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
 import { FLAG_CONVERSOES_GOOGLE } from '../conversoes/conversoes-google.js';
@@ -62,9 +63,9 @@ type LinhaConexao = {
   scopes?: string[] | null;
 };
 
-/** Conta descoberta, como o worker guarda em `oauth_connection.discovered`. */
+/** Conta descoberta, como o worker guarda em `oauth_connection.discovered`. `google_business`: a loja do Perfil da Empresa no Google. */
 export type DescobertaGuardada = {
-  provider: 'meta_ads' | 'google_ads' | 'ga4' | 'regem' | 'regemcast';
+  provider: 'meta_ads' | 'google_ads' | 'ga4' | 'regem' | 'regemcast' | 'google_business';
   external_id: string;
   name: string;
   currency: string | null;
@@ -174,6 +175,10 @@ export class ConnectionsService {
     // permissão de informar vendas; as outras seguem só com a leitura.
     const conversoes =
       provedor === 'google' && (await this.flags.isEnabled(FLAG_CONVERSOES_GOOGLE, this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id })));
+    // E a empresa com o Perfil ligado autoriza também a permissão do Perfil da Empresa (D-A6-17): é por ela que o Liame
+    // alcança as lojas, as avaliações e os números do perfil. A mesma flag que a procura das lojas confere, no worker.
+    const perfil =
+      provedor === 'google' && (await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id })));
 
     const id = uuidv7();
     const estado = novoEstado();
@@ -187,7 +192,10 @@ export class ConnectionsService {
       values (${id}, ${tenantId}, ${body.brand_id}, ${provedor}, ${auth.userId}, ${hashEstado(estado)}, ${redirectUri}, ${verificadorCifrado},
               now() + make_interval(mins => ${VALIDADE_MIN}), ${meta?.acesso ?? null})
       returning expires_at`);
-    auditDetail({ resourceId: id, after: { provider: provedor, brand_id: body.brand_id, ...(meta ? { acesso: meta.acesso } : {}), ...(conversoes ? { informar_vendas: true } : {}) } });
+    auditDetail({
+      resourceId: id,
+      after: { provider: provedor, brand_id: body.brand_id, ...(meta ? { acesso: meta.acesso } : {}), ...(conversoes ? { informar_vendas: true } : {}), ...(perfil ? { perfil_no_google: true } : {}) },
+    });
     return {
       id,
       authorize_url: urlDeAutorizacao(provedor, this.config, {
@@ -196,7 +204,7 @@ export class ConnectionsService {
         verificador: verificador ?? undefined,
         versaoMeta,
         configMeta: meta?.configId,
-        ...(provedor === 'google' ? { escoposGoogle: escoposDoGoogle(conversoes) } : {}),
+        ...(provedor === 'google' ? { escoposGoogle: escoposDoGoogle(conversoes, perfil) } : {}),
       }),
       expires_at: iso(r.rows[0]!.expires_at),
     };
