@@ -42,7 +42,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **Z8** | **Pacote pronto** | Para TikTok, YouTube e redes sem acesso: o Liame monta o texto, a mídia e o horário, e a pessoa publica. Sem escrita em plataforma | A6-14 | Z4 |
 | **Z9** | **Telas** | Pelos protótipos da seção 5 | A6-15 | Aprovação dos protótipos |
 
-> **Andamento.** **P17 (09/10/2026; aprovado pelo dono no mesmo dia):** o protótipo `mockups/prototipo-avaliacoes.html`: a tela "Avaliações" (a nota, as sem resposta primeiro e a situação de cada resposta) e a resposta em Aprovações (a avaliação, o texto proposto e editável, "só o dono aprova" para 1 e 2 estrelas, a conferência do Google, publicada, recusada e apagada). Antes dele, a reconferência da seção 8 para a Z1 entrou na base de conhecimento (§3.3 e §16.1). **Z1, parte a (11/10/2026):** o conector de leitura do Perfil da Empresa (as lojas, as avaliações e os números do perfil), contra um Google local, com os critérios A6-1 e A6-2 provados no conector; o registro de capacidades na migration 0066. Nada o chamava ainda. **Z1, parte b (11/10/2026):** a conexão. A flag `perfil_google` (por empresa, desligada) e a migration 0067; com a função ligada, a autorização do Google pede a permissão do Perfil (D-A6-17), a procura das contas acha as lojas, e a loja é ligada à marca como qualquer conta; o que der errado no Perfil (o limite, a recusa, a queda) fica anotado na conexão e não derruba o Google Ads nem o GA4. A ordem mudou: a conexão veio antes das tabelas, para os testes seguintes criarem a loja pelo caminho do produto. Faltam: as tabelas e a sincronização (com o A6-1 no que é guardado); a tela Contas com a loja do Perfil (pede protótipo); o aviso em Atenção com a rota da tela; e a tela Avaliações (P17). A função não deve ser ligada antes da tela Contas.
+> **Andamento.** **P17 (09/10/2026; aprovado pelo dono no mesmo dia):** o protótipo `mockups/prototipo-avaliacoes.html`: a tela "Avaliações" (a nota, as sem resposta primeiro e a situação de cada resposta) e a resposta em Aprovações (a avaliação, o texto proposto e editável, "só o dono aprova" para 1 e 2 estrelas, a conferência do Google, publicada, recusada e apagada). Antes dele, a reconferência da seção 8 para a Z1 entrou na base de conhecimento (§3.3 e §16.1). **Z1, parte a (11/10/2026):** o conector de leitura do Perfil da Empresa (as lojas, as avaliações e os números do perfil), contra um Google local, com os critérios A6-1 e A6-2 provados no conector; o registro de capacidades na migration 0066. Nada o chamava ainda. **Z1, parte b (11/10/2026):** a conexão. A flag `perfil_google` (por empresa, desligada) e a migration 0067; com a função ligada, a autorização do Google pede a permissão do Perfil (D-A6-17), a procura das contas acha as lojas, e a loja é ligada à marca como qualquer conta; o que der errado no Perfil (o limite, a recusa, a queda) fica anotado na conexão e não derruba o Google Ads nem o GA4. A ordem mudou: a conexão veio antes das tabelas, para os testes seguintes criarem a loja pelo caminho do produto. Faltam: as tabelas e a sincronização (com o A6-1 no que é guardado); a tela Contas com a loja do Perfil (o protótipo é o **P17, parte B**, de 11/10/2026, `mockups/prototipo-contas-perfil.html`, que aguarda a aprovação do dono); o aviso em Atenção com a rota da tela; e a tela Avaliações (P17). A função não deve ser ligada antes da tela Contas.
 
 ## 4. Decisões (aprovadas pelo dono em 09/10/2026, como recomendadas)
 
@@ -72,6 +72,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | # | Tela | O que mostra |
 | --- | --- | --- |
 | **P17** | Avaliações | A nota, as avaliações sem resposta primeiro, a resposta proposta em Aprovações, e a situação da resposta no Google |
+| **P17, parte B** | A loja do perfil em Contas conectadas | A loja na lista de contas, o que a autorização do Google diz do perfil, o aviso da permissão a mais no diálogo de conectar e as lojas no diálogo de escolher |
 | **P18** | Como te acham no Google | Em Resultados: os números do perfil e as buscas que levaram ao cardápio |
 | **P19** | O post para aprovar e o calendário | O post em Aprovações, com a prévia por canal, a foto, o link e a hora; o calendário da semana com o que saiu e o que espera |
 | **P20** | Fotos | Enviar, ver e apagar as fotos da empresa |
@@ -135,7 +136,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | Z4 | O aceite da D-A6-2 e as primeiras fotos dos produtos |
 | Z5 | No piloto: o Instagram como conta profissional, ligado à Página do Facebook; autorizar a Meta de novo com as permissões de publicar; autorizar o Threads, se usar |
 | Z8 | Cadastro de desenvolvedor no TikTok e o pedido da auditoria (eu guio) |
-| Telas | ✅ P17 aprovado (09/10/2026). Aprovar os protótipos P18 a P22 |
+| Telas | ✅ P17 aprovado (09/10/2026). Aprovar o P17, parte B (Contas conectadas com a loja do perfil; publicado em 11/10/2026) e os protótipos P18 a P22 |
 | Antes de clientes de fora | A revisão do app da Meta e a verificação do app do Google com as permissões novas |
 
 ## 10. Riscos
