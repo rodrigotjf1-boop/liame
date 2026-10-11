@@ -49,6 +49,8 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/resultados', rotulo: 'Resultados', icone: 'chart', permissao: 'vendas.ver', modos: true },
       { href: '/verba', rotulo: 'Verba do mês', icone: 'wallet', permissao: 'campanhas.ver', modos: true },
       { href: '/mensagens', rotulo: 'Mensagens', icone: 'send', permissao: 'campanhas.ver', modos: true },
+      // A tela Avaliações é uma só nos dois modos (protótipo P17): sem o seletor de modo.
+      { href: '/avaliacoes', rotulo: 'Avaliações', icone: 'message', permissao: 'campanhas.ver' },
       { href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true },
       { href: '/equipe', rotulo: 'Sua equipe', icone: 'users', permissao: 'campanhas.ver', modos: true },
       { href: '/marca', rotulo: 'Minha marca', icone: 'palette', permissao: 'dossie.ver' },

@@ -553,12 +553,12 @@ describe('a tela desenhada', () => {
   });
 });
 
-describe('menu: "Criativos" depois de Mensagens, para quem acompanha as campanhas, com Lite e Pro', () => {
+describe('menu: "Criativos" depois de Mensagens e de Avaliações, para quem acompanha as campanhas, com Lite e Pro', () => {
   it('o item, a permissão e o título', () => {
     const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
     const i = agencia.itens.findIndex((x) => x.href === '/criativos');
     expect(agencia.itens[i]).toEqual({ href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true });
-    expect(agencia.itens[i - 1]!.href).toBe('/mensagens');
+    expect(agencia.itens.slice(i - 2, i).map((x) => x.href)).toEqual(['/mensagens', '/avaliacoes']);
     expect(itensVisiveis(agencia, (p) => p !== 'campanhas.ver').map((x) => x.href)).not.toContain('/criativos');
     expect(tituloDa('/criativos')).toBe('Criativos');
     expect(temModos('/criativos', () => true)).toBe(true);

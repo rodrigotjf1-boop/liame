@@ -527,7 +527,7 @@ describe('menu: "Mensagens" depois da Verba do mês, para quem acompanha as camp
     const i = agencia.itens.findIndex((x) => x.href === '/mensagens');
     expect(agencia.itens[i]).toEqual({ href: '/mensagens', rotulo: 'Mensagens', icone: 'send', permissao: 'campanhas.ver', modos: true });
     expect(agencia.itens[i - 1]!.href).toBe('/verba');
-    expect(agencia.itens[i + 1]!.href).toBe('/criativos');
+    expect(agencia.itens[i + 1]!.href).toBe('/avaliacoes');
     expect(itensVisiveis(agencia, (p) => p !== 'campanhas.ver').map((x) => x.href)).not.toContain('/mensagens');
     expect(renderToStaticMarkup(createElement(Icone, { nome: 'send' }))).toContain('<svg class="ic"');
   });

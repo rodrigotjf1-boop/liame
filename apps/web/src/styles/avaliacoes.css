@@ -1,0 +1,32 @@
+/* Avaliações (mockups/prototipo-avaliacoes.html, P17): o que as pessoas escreveram sobre a empresa no Google. */
+.av { display: grid; gap: var(--sp-4); }
+/* Dentro da grade, o espaço entre as faixas e o resto é o da grade (a faixa solta tem margem própria). */
+.av > .faixa { margin-bottom: 0; }
+.av-filtros { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.av-topo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
+.av-caixa { display: grid; align-content: start; gap: var(--sp-1); min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.av-caixa b { font-size: var(--text-md); font-weight: 600; overflow-wrap: anywhere; }
+.av-caixa span { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.estrelas { display: inline-flex; gap: 1px; font-size: var(--text-md); line-height: 1; letter-spacing: 1px; color: var(--warning); white-space: nowrap; }
+.estrelas i { font-style: normal; color: var(--border-strong); }
+.av-lista { display: grid; list-style: none; margin: 0; padding: 0; }
+.av-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--sp-2) var(--sp-4); padding: var(--sp-4) 0; border-bottom: 1px solid var(--border); }
+.av-item:last-child { border-bottom: 0; }
+.av-item > div { min-width: 0; }
+.av-item-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); font-size: var(--text-sm); color: var(--text-muted); }
+/* O nome de quem avaliou e o da loja vêm de fora: quebram em qualquer ponto em vez de alargar a linha. */
+.av-item-cab > span:not(.estrelas) { min-width: 0; overflow-wrap: anywhere; }
+.av-item-txt { margin-top: var(--sp-1); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.av-item-txt--vazio { color: var(--text-muted); font-style: italic; }
+.av-item-acao { display: grid; gap: var(--sp-2); justify-items: end; }
+/* O selo tem altura fixa: o texto dele é curto e fixo, e não quebra. */
+.av-item-acao .st { white-space: nowrap; }
+.av .card > .eixo-nota { margin-top: var(--sp-3); }
+.av .card > .eixo-nota + .eixo-nota { margin-top: var(--sp-1); }
+.av .faixa-txt { overflow-wrap: anywhere; }
+
+@container pagina (max-width: 699px) {
+  .av-topo { grid-template-columns: minmax(0, 1fr); }
+  .av-item { grid-template-columns: minmax(0, 1fr); }
+  .av-item-acao { justify-items: start; }
+}
