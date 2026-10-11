@@ -6,7 +6,7 @@ import type { CredencialGuardada } from '../connections/oauth.js';
 import { ErroConector } from '../connectors/cliente-http.js';
 import type { AlvoDaAvaliacao, ConectorPerfilGoogle } from '../connectors/google-business/conector-perfil-google.js';
 import type { AvaliacaoLida } from '../connectors/google-business/perfil-google.js';
-import { type ContextoDaAvaliacao, EstadoDaAvaliacao, estadoDaAvaliacao, respostaJaPublicada, versaoDaAvaliacao } from './avaliacao-plano.js';
+import { type ContextoDaAvaliacao, EstadoDaAvaliacao, estadoDaAvaliacao, respostaJaApagada, respostaJaPublicada, versaoDaAvaliacao } from './avaliacao-plano.js';
 import type { ApplyOptions, ApplyResult, Connector, ReadResult, ResourceRef } from './connectors.js';
 import type { ResourceState } from './tools.js';
 
@@ -25,6 +25,8 @@ import type { ResourceState } from './tools.js';
 //   a avaliação, ou alguém respondeu direto no Google), nada é publicado: é "estado mudou" (critério A6-4).
 // - Cada execução manda a resposta UMA vez. Se a tentativa cair sem resposta do Google, a seguinte lê a avaliação
 //   antes: com a resposta já lá, não manda de novo (quem avaliou é avisado pelo Google quando a resposta sai).
+// - Apagar a resposta (a volta, `avaliacao_apagar_resposta`) é o mesmo caminho com o estado desejado sem resposta: só
+//   apaga se a resposta que está no Google ainda é a que o Liame publicou (a versão), e a que já saiu conta como feita.
 // - O token da loja sai do cofre só na hora de chamar e nunca vai para log, estado ou auditoria.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,25 +60,32 @@ type Preparada = { conta: Conta; alvo: AlvoDaAvaliacao; avaliacao: { id: string;
 
 const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recusado', mensagem });
 
-const SEM_ACESSO = 'O Google recusou a autorização desta loja. Conecte o Google de novo em Contas conectadas. Nada foi publicado.';
+/** O que o pedido faz no Google: publicar a resposta, ou apagar a que o Liame publicou. */
+export type EscritaNoPerfil = 'publicar' | 'apagar';
+/** Como termina a frase da recusa: o que NÃO aconteceu. */
+const NADA_FEITO: Record<EscritaNoPerfil, string> = { publicar: 'Nada foi publicado.', apagar: 'A resposta continua no perfil.' };
+
+const SEM_ACESSO = 'O Google recusou a autorização desta loja. Conecte o Google de novo em Contas conectadas.';
 const SEM_PERMISSAO =
-  'O Google não deixou o Liame responder por esta loja: a conta do Google que autorizou não cuida mais do perfil, ou o perfil não está verificado. Autorize de novo em Contas conectadas, com a conta que cuida do perfil. Nada foi publicado.';
-const SUMIU_A_LOJA = 'A loja desta avaliação foi desligada do Liame depois do pedido. Nada foi publicado.';
-const SUMIU_A_AVALIACAO = 'Esta avaliação não está mais no Google: quem escreveu apagou, ou o Google tirou. Nada foi publicado.';
+  'O Google não deixou o Liame responder por esta loja: a conta do Google que autorizou não cuida mais do perfil, ou o perfil não está verificado. Autorize de novo em Contas conectadas, com a conta que cuida do perfil.';
+const SUMIU_A_LOJA = 'A loja desta avaliação foi desligada do Liame depois do pedido.';
+const SUMIU_A_AVALIACAO = 'Esta avaliação não está mais no Google: quem escreveu apagou, ou o Google tirou.';
 const FORA_DO_AMBIENTE = 'A resposta a avaliações do Google não está disponível neste ambiente.';
-const NAO_E_DESTA = 'O pedido não é desta avaliação. Nada foi publicado.';
+const NAO_E_DESTA = 'O pedido não é desta avaliação.';
+const NAO_ACEITOU: Record<EscritaNoPerfil, string> = { publicar: 'O Google não aceitou a resposta.', apagar: 'O Google não deixou apagar a resposta.' };
 
 /**
  * A recusa definitiva do Google em palavras; nulo para o que é passageiro (limite, fora do ar): isso sobe para quem
  * executa adiar. O texto do Google não vai para a pessoa (vem em inglês e é de quem programa): fica no registro.
+ * A avaliação que sumiu levou a resposta junto: ao apagar, a frase não diz que a resposta continua lá.
  */
-export function recusaDoPerfil(err: unknown): string | null {
+export function recusaDoPerfil(err: unknown, escrita: EscritaNoPerfil = 'publicar'): string | null {
   if (!(err instanceof ErroConector)) return null;
-  if (err.tipo === 'autenticacao') return SEM_ACESSO;
-  if (err.tipo === 'permissao') return SEM_PERMISSAO;
+  if (err.tipo === 'autenticacao') return `${SEM_ACESSO} ${NADA_FEITO[escrita]}`;
+  if (err.tipo === 'permissao') return `${SEM_PERMISSAO} ${NADA_FEITO[escrita]}`;
   if (err.tipo !== 'definitivo') return null;
-  if (err.status === 404) return SUMIU_A_AVALIACAO;
-  return 'O Google não aceitou a resposta. Nada foi publicado.';
+  if (err.status === 404) return escrita === 'publicar' ? `${SUMIU_A_AVALIACAO} ${NADA_FEITO.publicar}` : SUMIU_A_AVALIACAO;
+  return `${NAO_ACEITOU[escrita]} ${NADA_FEITO[escrita]}`;
 }
 
 export class PerfilAvaliacaoConnector implements Connector {
@@ -140,6 +149,10 @@ export class PerfilAvaliacaoConnector implements Connector {
   async apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options: ApplyOptions = {}): Promise<ApplyResult> {
     const deps = this.deps;
     if (!deps) return recusado(FORA_DO_AMBIENTE);
+    const quer = EstadoDaAvaliacao.safeParse(desired);
+    // O estado desejado sem resposta é o pedido de apagar a que o Liame publicou.
+    const escrita: EscritaNoPerfil = quer.success && quer.data.resposta === null ? 'apagar' : 'publicar';
+    const nada = NADA_FEITO[escrita];
     let p: Preparada | null;
     let lida: AvaliacaoLida | null = null;
     let accessToken = '';
@@ -152,36 +165,41 @@ export class PerfilAvaliacaoConnector implements Connector {
         lida = await conector.lerAvaliacao({ accessToken }, p.alvo);
       }
     } catch (err) {
-      const motivo = recusaDoPerfil(err);
+      const motivo = recusaDoPerfil(err, escrita);
       if (motivo) return recusado(motivo);
       throw err;
     }
-    if (!p || !conector) return recusado(SUMIU_A_LOJA);
+    if (!p || !conector) return recusado(`${SUMIU_A_LOJA} ${nada}`);
 
     const atual = estadoDaAvaliacao(p.avaliacao, lida);
     const versao = versaoDaAvaliacao(atual);
     // Já está como o pedido queria (a tentativa anterior caiu depois de o Google aceitar): nada a mandar de novo.
-    if (lida && respostaJaPublicada(atual, desired)) {
+    if (lida && (respostaJaPublicada(atual, desired) || respostaJaApagada(atual, desired))) {
       if (!options.validateOnly) await this.guardar(tx, p, lida);
       return { ok: true, state: atual, version: versao };
     }
-    // A avaliação mudou desde o pedido, sumiu, ou ganhou resposta por outro caminho: nada é publicado (A6-4).
+    // A avaliação mudou desde o pedido, sumiu, ou a resposta já não é a mesma: nada é publicado nem apagado (A6-4).
     if (versao !== expectedVersion) return { ok: false, reason: 'estado-mudou', current: { state: atual, version: versao } };
-    const quer = EstadoDaAvaliacao.safeParse(desired);
-    if (!quer.success || !quer.data.resposta || quer.data.id !== atual.id) return recusado(NAO_E_DESTA);
-    if (!lida) return recusado(SUMIU_A_AVALIACAO);
+    if (!quer.success || quer.data.id !== atual.id) return recusado(`${NAO_E_DESTA} ${nada}`);
+    if (!lida) return recusado(escrita === 'publicar' ? `${SUMIU_A_AVALIACAO} ${nada}` : SUMIU_A_AVALIACAO);
     if (options.validateOnly) return { ok: true, state: desired, version: versao };
 
     try {
+      if (quer.data.resposta === null) {
+        await conector.apagarResposta({ accessToken }, p.alvo);
+        await this.guardar(tx, p, { ...lida, resposta: null });
+        const semResposta: EstadoDaAvaliacao = { ...atual, resposta: null };
+        return { ok: true, state: semResposta, version: versaoDaAvaliacao(semResposta) };
+      }
       const gravada = await conector.responderAvaliacao({ accessToken }, p.alvo, quer.data.resposta.texto);
       await this.guardar(tx, p, { ...lida, resposta: gravada });
       const estado: EstadoDaAvaliacao = { ...atual, resposta: { situacao: gravada.situacao, texto: gravada.texto, violacao: gravada.violacao } };
       return { ok: true, state: estado, version: versaoDaAvaliacao(estado) };
     } catch (err) {
-      const motivo = recusaDoPerfil(err);
+      const motivo = recusaDoPerfil(err, escrita);
       if (!motivo) throw err;
       // O que o Google disse fica no registro, para quem cuida do produto; a pessoa lê a frase em português.
-      if (err instanceof ErroConector) this.logger.warn(`loja ${p.conta.id}: o Google recusou a resposta (${err.tipo}, HTTP ${err.status ?? '?'}): ${err.message}`);
+      if (err instanceof ErroConector) this.logger.warn(`loja ${p.conta.id}: o Google recusou ${escrita} a resposta (${err.tipo}, HTTP ${err.status ?? '?'}): ${err.message}`);
       return recusado(motivo);
     }
   }

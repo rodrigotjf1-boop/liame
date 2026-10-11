@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 7,
+  version: 8,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -64,6 +64,12 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // plano escolhe pela nota) e só o dono aprova: ESCALATE vence qualquer outra regra, da empresa ou da marca.
       { type: 'autonomy', action: 'avaliacao.*', mode: 'APPROVAL' },
       { type: 'autonomy', action: 'avaliacao.responder_nota_baixa', mode: 'ESCALATE' },
+      // v8 (A6, Z2; P17, aprovado em 09/10/2026): apagar a resposta que o Liame publicou é direto quando quem pede é uma
+      // pessoa. Ela confirma na tela, o pedido fica com o nome dela e executa sem o código do app (a ferramenta declara
+      // `directByPerson`). Tirar do ar o que a própria empresa publicou não gasta, não envia e não fala com ninguém; o
+      // aviso que quem avaliou já recebeu não volta, com ou sem aprovação. O funcionário de IA continua na regra de cima,
+      // e nem chega a pedir: a ferramenta só existe como a volta de uma resposta publicada (`onlyAsUndo`).
+      { type: 'autonomy', action: 'avaliacao.apagar_resposta', actor: 'human', mode: 'AUTO' },
     ],
   },
 };

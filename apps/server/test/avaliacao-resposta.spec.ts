@@ -3,13 +3,17 @@ import { describe, expect, it } from 'vitest';
 import {
   ACAO_DA_RESPOSTA,
   ACAO_DA_RESPOSTA_DE_NOTA_BAIXA,
+  ACAO_DE_APAGAR_A_RESPOSTA,
   citaONome,
   type EstadoDaAvaliacao,
   estadoDaAvaliacao,
   planoDaResposta,
   primeiroNome,
   problemasDaResposta,
+  respostaJaApagada,
   respostaJaPublicada,
+  resumoDoTexto,
+  textoComparavel,
   versaoDaAvaliacao,
 } from '../src/actions/avaliacao-plano.js';
 import { CONNECTORS } from '../src/actions/connectors.js';
@@ -22,6 +26,8 @@ import { chooseMode, evaluatePolicy, type LoadedPolicy, PLATFORM_POLICY } from '
 // A6 · Z2 (parte b), sem rede e sem banco: a ferramenta `avaliacao_responder`. O estado que o pedido guarda (sem o
 // texto da avaliação e sem o nome de quem avaliou), a versão que nota a avaliação que mudou (A6-4), a conferência do
 // texto da resposta (A6-5), quem decide (A6-3: sempre uma pessoa; a de 1 ou 2 estrelas, só o dono) e a política v7.
+// Parte c: a volta (`avaliacao_apagar_resposta`, direta para a pessoa e só como volta; política v8) e a versão que não
+// muda com a conferência do Google nem com a data de mudança da avaliação.
 
 const ID = '44444444-4444-4444-8444-444444444444';
 const NO_GOOGLE = 'AbCdEf-123';
@@ -49,9 +55,10 @@ const recusa = (fn: () => unknown): string => {
 };
 
 describe('avaliacao_responder: o registro e o conector (A6 · Z2)', () => {
-  it('a ferramenta: só no perfil do Google, sempre com uma pessoa, sem parâmetro que ela não conhece, e sem volta nesta entrega', () => {
+  it('a ferramenta: só no perfil do Google, sempre com uma pessoa, sem parâmetro que ela não conhece, e a volta é apagar a resposta', () => {
     expect(tool).toMatchObject({ name: 'avaliacao_responder', version: 1, owner: 'social', risk: 'R2', providers: ['google_business'], compensation: 'apagar_a_resposta', alwaysApproval: true });
-    expect(tool.undo).toBeUndefined();
+    expect(tool.undo!(estado())).toEqual({ tool: 'avaliacao_apagar_resposta', params: {} });
+    expect(tool.onlyAsUndo).toBeUndefined();
     expect(tool.directByPerson).toBeUndefined();
     expect(tool.revalidateOnApproval).toBeUndefined();
     expect(tool.params.safeParse({ texto: TEXTO }).success).toBe(true);
@@ -73,9 +80,46 @@ describe('avaliacao_responder: o registro e o conector (A6 · Z2)', () => {
     expect(recusaDoPerfil(erro('definitivo', 404))).toContain('não está mais no Google');
     expect(recusaDoPerfil(erro('definitivo', 400))).toBe('O Google não aceitou a resposta. Nada foi publicado.');
     // A frase do Google (em inglês) não vai para a pessoa.
-    for (const frase of [erro('permissao', 403), erro('definitivo', 400)].map(recusaDoPerfil)) expect(frase).not.toContain('caller');
+    for (const frase of [erro('permissao', 403), erro('definitivo', 400)].map((e) => recusaDoPerfil(e))) expect(frase).not.toContain('caller');
     for (const passageiro of ['limite', 'transitorio', 'circuito_aberto'] as const) expect(recusaDoPerfil(erro(passageiro, 429))).toBeNull();
     expect(recusaDoPerfil(new Error('defeito nosso'))).toBeNull();
+    // Ao apagar, a frase diz o que não aconteceu com a resposta; a avaliação que sumiu levou a resposta junto.
+    expect(recusaDoPerfil(erro('autenticacao', 401), 'apagar')).toBe('O Google recusou a autorização desta loja. Conecte o Google de novo em Contas conectadas. A resposta continua no perfil.');
+    expect(recusaDoPerfil(erro('definitivo', 400), 'apagar')).toBe('O Google não deixou apagar a resposta. A resposta continua no perfil.');
+    expect(recusaDoPerfil(erro('definitivo', 404), 'apagar')).toBe('Esta avaliação não está mais no Google: quem escreveu apagou, ou o Google tirou.');
+    for (const passageiro of ['limite', 'transitorio'] as const) expect(recusaDoPerfil(erro(passageiro, 503), 'apagar')).toBeNull();
+  });
+
+  it('apagar a resposta: só como a volta de uma resposta publicada, direto para a pessoa, e sem volta', () => {
+    const apagar = TOOLS.avaliacao_apagar_resposta!;
+    expect(apagar).toMatchObject({ name: 'avaliacao_apagar_resposta', version: 1, owner: 'social', risk: 'R1', providers: ['google_business'], compensation: 'sem_volta_pelo_liame', directByPerson: true, onlyAsUndo: true });
+    expect(apagar.undo).toBeUndefined();
+    expect(apagar.alwaysApproval).toBeUndefined();
+    expect(apagar.ownerOnly).toBeUndefined();
+    expect(apagar.params.safeParse({}).success).toBe(true);
+    expect(apagar.params.safeParse({ texto: TEXTO }).success).toBe(false);
+    // Só as duas ferramentas de avaliação existem neste provedor, e só a de apagar nasce como volta.
+    expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_business')).map((t) => t.name)).toEqual(['avaliacao_responder', 'avaliacao_apagar_resposta']);
+    expect(Object.values(TOOLS).filter((t) => t.onlyAsUndo).map((t) => t.name)).toEqual(['avaliacao_apagar_resposta']);
+
+    const publicada = estado({ resposta: { texto: TEXTO, atualizadaEm: null, situacao: 'aprovada', violacao: null } });
+    const plano = apagar.plan(publicada, {});
+    expect(plano).toMatchObject({ action: ACAO_DE_APAGAR_A_RESPOSTA, budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0 });
+    expect(plano.desiredState).toEqual({ ...publicada, resposta: null });
+    // Apagar não publica texto: nada vai para as palavras proibidas da política.
+    expect(plano.text).toBeUndefined();
+    expect(recusa(() => apagar.plan(estado(), {}))).toBe('Esta avaliação não tem resposta no Google: não há o que apagar.');
+    expect(recusa(() => apagar.plan(estadoDaAvaliacao({ id: ID, googleId: NO_GOOGLE }, null), {}))).toContain('A resposta saiu junto');
+    expect(recusa(() => apagar.plan({ tipo: 'mensagem' }, {}))).toContain('é para uma avaliação do perfil da empresa no Google');
+
+    // A resposta já saiu (a tentativa anterior caiu depois de o Google aceitar): não se manda de novo.
+    expect(respostaJaApagada(estado(), plano.desiredState)).toBe(true);
+    expect(respostaJaApagada(publicada, plano.desiredState)).toBe(false);
+    expect(respostaJaApagada(estadoDaAvaliacao({ id: ID, googleId: NO_GOOGLE }, null), plano.desiredState)).toBe(false);
+    // O pedido de publicar nunca é lido como "já apagada".
+    const dePublicar = planoDaResposta(estado(), { texto: TEXTO });
+    if (!dePublicar.ok) throw new Error(dePublicar.motivo);
+    expect(respostaJaApagada(estado(), dePublicar.desejado)).toBe(false);
   });
 });
 
@@ -106,20 +150,34 @@ describe('avaliacao_responder: o estado e a versão (A6-4)', () => {
     expect(base).toBeGreaterThan(0);
     expect(Number.isInteger(base) && base <= 2_147_483_647).toBe(true);
     expect(versaoDaAvaliacao(estado())).toBe(base);
+    const resposta = (texto: string, situacao: 'pendente' | 'aprovada' | 'recusada' | 'desconhecida', atualizadaEm: string | null = null) => estado({ resposta: { texto, atualizadaEm, situacao, violacao: null } });
     const outras = [
       estado({ estrelas: 4 }),
       estado({ texto: 'Melhor smash da região! A entrega foi rápida. Editei.' }),
       estado({ texto: null }),
-      estado({ atualizadaEm: '2026-10-11T08:00:00.000Z' }),
-      estado({ resposta: { texto: 'Obrigado!', atualizadaEm: null, situacao: 'pendente', violacao: null } }),
-      estado({ resposta: { texto: 'Obrigado!', atualizadaEm: null, situacao: 'aprovada', violacao: null } }),
+      resposta('Obrigado!', 'pendente'),
+      resposta('Obrigado mesmo!', 'pendente'),
+      resposta('Obrigado!', 'recusada'),
       estadoDaAvaliacao({ id: ID, googleId: NO_GOOGLE }, null),
     ].map(versaoDaAvaliacao);
     for (const v of outras) expect(v).not.toBe(base);
     expect(new Set(outras).size).toBe(outras.length);
-    // A data em que a RESPOSTA mudou não entra: o que conta é o texto e a situação dela.
-    const comResposta = (atualizadaEm: string | null) => versaoDaAvaliacao(estado({ resposta: { texto: 'Obrigado!', atualizadaEm, situacao: 'aprovada', violacao: null } }));
-    expect(comResposta('2026-10-11T12:00:00.000Z')).toBe(comResposta(null));
+    // A data de mudança da AVALIAÇÃO não entra: a referência do Google não diz se responder mexe nela (pior caso: mexe).
+    expect(versaoDaAvaliacao(estado({ atualizadaEm: '2026-10-11T08:00:00.000Z' }))).toBe(base);
+    // A conferência do Google (de pendente a aprovada) e a data da resposta não mudam a versão: a resposta publicada
+    // continua podendo ser apagada depois que ele a libera.
+    const publicada = versaoDaAvaliacao(resposta('Obrigado!', 'pendente'));
+    expect(versaoDaAvaliacao(resposta('Obrigado!', 'aprovada', '2026-10-11T12:00:00.000Z'))).toBe(publicada);
+    expect(versaoDaAvaliacao(resposta('Obrigado!', 'desconhecida'))).toBe(publicada);
+    // O Google devolvendo o texto com os espaços ou a forma das letras acertados ([NC]): é a mesma resposta.
+    expect(versaoDaAvaliacao(resposta('  Obrigado!\n', 'aprovada'))).toBe(publicada);
+    expect(textoComparavel('  Que  bom!\n\nVolte\tsempre. ')).toBe('Que bom! Volte sempre.');
+    expect(textoComparavel('Café da manhã')).toBe('Café da manhã');
+    expect(textoComparavel('')).toBe('');
+    // O resumo do texto da avaliação sai do texto como o Liame o guarda: os dois lados se comparam.
+    expect(resumoDoTexto('  Bom\u0000 demais  ')).toBe(resumoDoTexto('Bom demais'));
+    expect(resumoDoTexto('Bom demais')).not.toBe(resumoDoTexto('Bom demais!'));
+    expect([resumoDoTexto(null), resumoDoTexto('   ')]).toEqual([null, null]);
   });
 
   it('a resposta já está lá (a tentativa anterior caiu depois de o Google aceitar): não se manda de novo', () => {
@@ -128,6 +186,8 @@ describe('avaliacao_responder: o estado e a versão (A6-4)', () => {
     const comA = (texto: string, situacao: string) => estado({ resposta: { texto, atualizadaEm: null, situacao: situacao as 'pendente', violacao: null } });
     expect(respostaJaPublicada(comA(TEXTO, 'pendente'), plano.desejado)).toBe(true);
     expect(respostaJaPublicada(comA(TEXTO, 'aprovada'), plano.desejado)).toBe(true);
+    // O Google devolvendo o mesmo texto com os espaços acertados: é a resposta que o Liame mandou.
+    expect(respostaJaPublicada(comA(` ${TEXTO.replace(', ', ',  ')}\n`, 'aprovada'), plano.desejado)).toBe(true);
     expect(respostaJaPublicada(comA('Outro texto.', 'aprovada'), plano.desejado)).toBe(false);
     // A que o Google recusou não conta como publicada.
     expect(respostaJaPublicada(comA(TEXTO, 'recusada'), plano.desejado)).toBe(false);
@@ -206,7 +266,7 @@ describe('avaliacao_responder: o plano e a conferência do texto (A6-3 e A6-5)',
   });
 });
 
-describe('política da distribuição, versão 7: a resposta a uma avaliação (A6-3)', () => {
+describe('política da distribuição, versões 7 e 8: a resposta a uma avaliação (A6-3) e apagar a resposta', () => {
   const proposta = (action: string, extra: Partial<ActionProposal> = {}): ActionProposal => ({
     tool: 'avaliacao_responder',
     action,
@@ -225,11 +285,22 @@ describe('política da distribuição, versão 7: a resposta a uma avaliação (
   });
 
   it('sempre espera a aprovação de uma pessoa, peça quem pedir; a de nota baixa, só o dono', () => {
-    expect(PLATFORM_POLICY.version).toBe(7);
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 7 });
+    expect(PLATFORM_POLICY.version).toBe(8);
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 8 });
     expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA, { actor: 'agent' })).mode).toBe('APPROVAL');
-    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA_DE_NOTA_BAIXA))).toEqual({ mode: 'ESCALATE', source: 'platform', version: 7 });
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA_DE_NOTA_BAIXA))).toEqual({ mode: 'ESCALATE', source: 'platform', version: 8 });
     expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA_DE_NOTA_BAIXA, { actor: 'agent' })).mode).toBe('ESCALATE');
+  });
+
+  it('versão 8: apagar a resposta é direto para uma pessoa; o funcionário de IA segue esperando a aprovação', () => {
+    const apagar = (extra: Partial<ActionProposal> = {}) => proposta(ACAO_DE_APAGAR_A_RESPOSTA, { tool: 'avaliacao_apagar_resposta', risk_level: 'R1', text: null, ...extra });
+    expect(chooseMode([PLATFORM_POLICY], apagar())).toEqual({ mode: 'AUTO', source: 'platform', version: 8 });
+    expect(chooseMode([PLATFORM_POLICY], apagar({ actor: 'agent' })).mode).toBe('APPROVAL');
+    // A regra é só de apagar: responder continua esperando a aprovação, peça quem pedir.
+    expect(chooseMode([PLATFORM_POLICY], proposta(ACAO_DA_RESPOSTA)).mode).toBe('APPROVAL');
+    // A empresa que quer aprovar também o apagar publica a regra dela, e ela vence a da distribuição.
+    const daEmpresa: LoadedPolicy = { source: 'tenant', version: 2, document: { rules: [{ type: 'autonomy', action: ACAO_DE_APAGAR_A_RESPOSTA, actor: 'human', mode: 'APPROVAL' }] } };
+    expect(chooseMode([PLATFORM_POLICY, daEmpresa], apagar()).mode).toBe('APPROVAL');
   });
 
   it('a regra da empresa ou da marca que pede autonomia não tira o dono da resposta de nota baixa', () => {
@@ -245,6 +316,6 @@ describe('política da distribuição, versão 7: a resposta a uma avaliação (
     const agora = { at: new Date('2026-10-11T15:00:00Z'), timezone: 'America/Sao_Paulo' };
     const negada = evaluatePolicy([PLATFORM_POLICY, daEmpresa], proposta(ACAO_DA_RESPOSTA, { text: 'O nosso hambúrguer GOURMET agradece.' }), agora);
     expect(negada).toMatchObject({ allowed: false, violations: [{ source: 'tenant', type: 'forbidden_words', message: 'Texto com termo proibido: gourmet.' }] });
-    expect(evaluatePolicy([PLATFORM_POLICY, daEmpresa], proposta(ACAO_DA_RESPOSTA), agora)).toMatchObject({ allowed: true, mode: 'APPROVAL', versions: ['plataforma@7', 'empresa@1'] });
+    expect(evaluatePolicy([PLATFORM_POLICY, daEmpresa], proposta(ACAO_DA_RESPOSTA), agora)).toMatchObject({ allowed: true, mode: 'APPROVAL', versions: ['plataforma@8', 'empresa@1'] });
   });
 });

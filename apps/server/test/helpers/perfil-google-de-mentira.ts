@@ -77,6 +77,16 @@ export class GoogleComPerfil {
   conferencia: 'PENDING' | 'APPROVED' | 'REJECTED' = 'PENDING';
   /** O Google grava a resposta e a conexão cai antes de ele responder (503): a resposta ficou lá. */
   respostaCaiDepoisDeGravar = false;
+  /**
+   * Dois comportamentos que a referência do Google NÃO descreve (base de conhecimento §3.3, [NC]), ligados no pior caso
+   * pelos testes: responder mexe na data de mudança da AVALIAÇÃO; e o Google guarda o texto da resposta com os espaços
+   * acertados (cada trecho de espaço em branco vira um, sem espaço nas pontas), e não como recebeu.
+   */
+  responderMexeNaData = false;
+  acertaOsEspacos = false;
+  /** Como responde o apagar da resposta (`DELETE …/reply`), e a queda depois de apagar (503 com a resposta já fora). */
+  apagar: RespostaDoPerfil = 'ok';
+  apagarCaiDepoisDeApagar = false;
 
   async subir(): Promise<void> {
     this.servidor = createServer((req, res) => {
@@ -151,11 +161,20 @@ export class GoogleComPerfil {
     this.resposta = 'ok';
     this.conferencia = 'PENDING';
     this.respostaCaiDepoisDeGravar = false;
+    this.responderMexeNaData = false;
+    this.acertaOsEspacos = false;
+    this.apagar = 'ok';
+    this.apagarCaiDepoisDeApagar = false;
   }
 
   /** As gravações de resposta que chegaram ao Google (o `PUT …/reply`), com o corpo de cada uma. */
   respostasGravadas(): Visto[] {
     return this.vistos.filter((v) => v.metodo === 'PUT' && v.caminho.endsWith('/reply'));
+  }
+
+  /** Os pedidos de apagar a resposta que chegaram ao Google (o `DELETE …/reply`). */
+  respostasApagadas(): Visto[] {
+    return this.vistos.filter((v) => v.metodo === 'DELETE' && v.caminho.endsWith('/reply'));
   }
 
   private responder(req: IncomingMessage, texto: string): { status: number; corpo: unknown; cabecalhos?: Record<string, string> } {
@@ -210,6 +229,7 @@ export class GoogleComPerfil {
     if (p.startsWith(daLoja)) {
       const [id = '', sufixo, ...mais] = p.slice(daLoja.length).split('/');
       const naoAchou = { status: 404, corpo: { error: { code: 404, status: 'NOT_FOUND', message: 'Requested entity was not found.' } } };
+      const foraDoAr = { status: 503, corpo: { error: { code: 503, status: 'UNAVAILABLE', message: 'The service is currently unavailable' } } };
       const item = this.lista.find((a) => a.reviewId === id);
       if (mais.length || (sufixo !== undefined && sufixo !== 'reply')) return naoAchou;
       if (sufixo === undefined && req.method === 'GET') {
@@ -232,13 +252,19 @@ export class GoogleComPerfil {
         if (!item) return naoAchou;
         const comment = (json as { comment?: unknown } | undefined)?.comment;
         if (typeof comment !== 'string' || !comment) return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Request contains an invalid argument' } } };
-        item.reviewReply = { comment, updateTime: new Date().toISOString(), reviewReplyState: this.conferencia };
-        if (this.respostaCaiDepoisDeGravar) return { status: 503, corpo: { error: { code: 503, status: 'UNAVAILABLE', message: 'The service is currently unavailable' } } };
+        const guardado = this.acertaOsEspacos ? comment.split(/\s+/).filter(Boolean).join(' ') : comment;
+        item.reviewReply = { comment: guardado, updateTime: new Date().toISOString(), reviewReplyState: this.conferencia };
+        if (this.responderMexeNaData) item.updateTime = item.reviewReply.updateTime!;
+        if (this.respostaCaiDepoisDeGravar) return foraDoAr;
         return { status: 200, corpo: item.reviewReply };
       }
       if (sufixo === 'reply' && req.method === 'DELETE') {
+        const erro = erroDe(this.apagar);
+        if (erro) return { ...erro, cabecalhos: this.esperar ? { 'retry-after': this.esperar } : undefined };
         if (!item?.reviewReply) return naoAchou;
         delete item.reviewReply;
+        if (this.responderMexeNaData) item.updateTime = new Date().toISOString();
+        if (this.apagarCaiDepoisDeApagar) return foraDoAr;
         return { status: 200, corpo: {} };
       }
       return naoAchou;

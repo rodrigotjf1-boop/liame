@@ -2,6 +2,8 @@ import type { ReviewAuthorsResponse, ReviewItem, ReviewsResponse, ReviewStore } 
 import type { Database } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { avaliacaoDoRecurso } from '../actions/perfil-avaliacao.js';
+import { TOOLS } from '../actions/tools.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { acessoGoogle, type CredencialGuardada } from '../connections/oauth.js';
@@ -27,6 +29,8 @@ import { DATASET_AVALIACOES } from './sincronizador-do-perfil.js';
 
 /** Quantas avaliações a tela recebe de uma vez. */
 export const AVALIACOES_NA_TELA = 200;
+/** A ferramenta do pedido de resposta (`actions/tools.ts`). */
+const FERRAMENTA_DA_RESPOSTA = 'avaliacao_responder';
 /** A tela olha as avaliações feitas nos últimos 30 dias à parte (a caixa "Nos últimos 30 dias"). */
 const DIAS_RECENTES = 30;
 /** Há uma pessoa esperando a tela: o Google tem este tempo para responder, e o Liame não fica esperando ficha de cota. */
@@ -115,7 +119,7 @@ export class AvaliacoesService {
     const tx = currentTx();
     const marca = await tx.execute(sql`select 1 from liame.brand where id = ${brandId} and archived_at is null`);
     if (!marca.rows[0]) throw marcaNaoEncontrada();
-    const base = { brand_id: brandId, stores: [], summary: null, reviews: [], has_more: false, generated_at: agora.toISOString() };
+    const base = { brand_id: brandId, stores: [], summary: null, reviews: [], has_more: false, pending_replies: [], generated_at: agora.toISOString() };
     if (!(await this.ligada(auth, brandId))) return { ...base, state: 'desligada' };
 
     const lojas = await tx.execute<LinhaLoja>(sql`
@@ -178,6 +182,17 @@ export class AvaliacoesService {
       changed_at: iso(r.changed_at),
       reply: r.reply_text === null ? null : { text: r.reply_text, state: r.reply_state ?? 'desconhecida', changed_at: isoOuNulo(r.reply_changed_at), violation: r.reply_violation },
     }));
+    // As respostas que esperam a aprovação de uma pessoa (A6, Z2): a tela leva ao pedido, em Aprovações.
+    const pendentes = await tx.execute<{ id: string; resource_id: string; before_state: Record<string, unknown> | null }>(sql`
+      select q.id, q.resource_id, q.before_state
+        from liame.action_request q
+       where q.provider = ${PROVEDOR_PERFIL_GOOGLE} and q.tool = ${FERRAMENTA_DA_RESPOSTA} and q.status = 'aguardando_aprovacao' and q.account_id in ${ids}
+       order by q.created_at, q.id`);
+    const soODono = TOOLS[FERRAMENTA_DA_RESPOSTA]?.ownerOnly;
+    const pending_replies = pendentes.rows.flatMap((q) => {
+      const avaliacao = avaliacaoDoRecurso(q.resource_id);
+      return avaliacao ? [{ review_id: avaliacao, action_id: q.id, owner_only: Boolean(q.before_state && soODono?.(q.before_state)) }] : [];
+    });
     return {
       ...base,
       state: 'pronta',
@@ -190,6 +205,7 @@ export class AvaliacoesService {
       },
       reviews,
       has_more: avaliacoes.rows.length > AVALIACOES_NA_TELA,
+      pending_replies,
     };
   }
 
