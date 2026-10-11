@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 6,
+  version: 7,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -58,6 +58,12 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // `directByPerson`, e por isso não depende do `autopilot`). Pausar só segura o que ainda não saiu: não gasta, não
       // envia e não desfaz nada. O funcionário de IA continua na regra de cima.
       { type: 'autonomy', action: 'mensagem.pausar', actor: 'human', mode: 'AUTO' },
+      // v7 (A6, D-A6-3 e D-A6-4; P17): a resposta da empresa a uma avaliação do Google só sai com a aprovação de uma
+      // pessoa, com o código do app, peça quem pedir (uma pessoa ou um funcionário de IA); a ferramenta tem também a
+      // trava `alwaysApproval`. A resposta a uma avaliação de 1 ou 2 estrelas é outra ação (`responder_nota_baixa`, que o
+      // plano escolhe pela nota) e só o dono aprova: ESCALATE vence qualquer outra regra, da empresa ou da marca.
+      { type: 'autonomy', action: 'avaliacao.*', mode: 'APPROVAL' },
+      { type: 'autonomy', action: 'avaliacao.responder_nota_baixa', mode: 'ESCALATE' },
     ],
   },
 };

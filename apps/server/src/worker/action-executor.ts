@@ -25,7 +25,9 @@ const ESPERA_MAXIMA_MS = 2 * 3_600_000;
 
 /** O que a plataforma manda esperar: limite de uso, falha passageira e o disjuntor aberto. O resto é recusa ou defeito. */
 const ADIA = new Set(['limite', 'transitorio', 'circuito_aberto']);
-const NOME_DO_PROVEDOR: Record<string, string> = { meta_ads: 'a Meta', google_ads: 'o Google', regem: 'o Regem', regemcast: 'o RegemCast' };
+const NOME_DO_PROVEDOR: Record<string, string> = { meta_ads: 'a Meta', google_ads: 'o Google', regem: 'o Regem', regemcast: 'o RegemCast', google_business: 'o Google' };
+/** No Google, o limite de uso é do projeto do Liame, para todas as empresas juntas (Google Ads e Perfil da Empresa). */
+const LIMITE_DO_PROJETO = new Set(['google_ads', 'google_business']);
 
 /**
  * Quanto esperar até a próxima tentativa: o que a plataforma pediu, ou 1 minuto dobrando a cada vez; no máximo 2 horas.
@@ -40,7 +42,7 @@ export function esperaDoAdiamento(esperarMs: number | null, tentativa: number): 
 function motivoDoAdiamento(err: ErroConector): string {
   const quem = NOME_DO_PROVEDOR[err.provider] ?? 'a plataforma';
   // No Google o limite de operações é do projeto, para todas as contas juntas (não há limite por conta de anúncios).
-  if (err.tipo === 'limite') return `${quem} pediu para esperar (${err.provider === 'google_ads' ? 'limite de uso do Google' : 'limite de uso da conta'})`;
+  if (err.tipo === 'limite') return `${quem} pediu para esperar (${LIMITE_DO_PROJETO.has(err.provider) ? 'limite de uso do Google' : 'limite de uso da conta'})`;
   if (err.tipo === 'circuito_aberto') return `${quem} falhou várias vezes seguidas`;
   return `${quem} não respondeu`;
 }

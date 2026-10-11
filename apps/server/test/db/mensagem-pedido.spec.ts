@@ -279,7 +279,7 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
       policy: { allowed: true, mode: 'APPROVAL', violations: [] },
     });
     // A regra é da distribuição: mensagem só sai com a aprovação de uma pessoa.
-    expect(p.body.policy.versions[0]).toBe('plataforma@6');
+    expect(p.body.policy.versions[0]).toBe('plataforma@7');
     // O pedido leu o plano no RegemCast, e mais nada. Sem a aprovação, o executor nem olha para ele.
     expect(doToken(e)).toEqual(['campanha_disparo_planejar']);
     await ciclo(e);
@@ -449,7 +449,7 @@ describe.skipIf(!hasDb)('pedido de mensagem pelo trilho de ação: do pedido à 
     // Pausar é direto para uma pessoa (política da distribuição, versão 6): o pedido já nasce aprovado pela política,
     // com o nome de quem pausou, sem aprovação e sem o código do app. Quem executa é o worker.
     expect([volta.status, volta.body.tool, volta.body.action, volta.body.status, volta.body.mode, volta.body.undoes], JSON.stringify(volta.body)).toEqual([201, 'mensagem_pausar', 'mensagem.pausar', 'aprovada', 'AUTO', enviada.id]);
-    expect(volta.body).toMatchObject({ status_reason: 'pedida por uma pessoa: esta ação não espera aprovação', requested_by: { id: e.userId }, approvals: [], policy: { versions: ['plataforma@6'] } });
+    expect(volta.body).toMatchObject({ status_reason: 'pedida por uma pessoa: esta ação não espera aprovação', requested_by: { id: e.userId }, approvals: [], policy: { versions: ['plataforma@7'] } });
     expect(c.situacao).toBe('enviando');
     await ciclo(e);
     expect(await ver(e, volta.body.id)).toMatchObject({ status: 'executada' });

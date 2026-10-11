@@ -236,6 +236,15 @@ export class ConectorPerfilGoogle {
    * quando o Google responde que ela não existe mais (quem escreveu apagou, ou o Google tirou).
    */
   async lerAvaliacao(credencial: Credencial, alvo: AlvoDaAvaliacao, opcoes: { tempoLimiteMs?: number } = {}): Promise<AvaliacaoLida | null> {
+    return (await this.lerAvaliacaoComQuem(credencial, alvo, opcoes))?.avaliacao ?? null;
+  }
+
+  /**
+   * A mesma leitura, com o nome de quem fez a avaliação À PARTE (nulo se ela é anônima): o trilho o usa só para
+   * conferir, na hora do pedido, que a resposta não cita esse nome. **Quem chama não guarda o nome** (D-A6-5): ele não
+   * entra no estado do pedido, na auditoria nem em registro.
+   */
+  async lerAvaliacaoComQuem(credencial: Credencial, alvo: AlvoDaAvaliacao, opcoes: { tempoLimiteMs?: number } = {}): Promise<{ avaliacao: AvaliacaoLida; quem: string | null } | null> {
     const nome = this.nomeDaAvaliacao(alvo);
     let corpo: unknown;
     try {
@@ -256,7 +265,7 @@ export class ConectorPerfilGoogle {
     const lida = avaliacaoDoGoogle(corpo);
     // O Google devolveu outra coisa: não é com ela que o trilho vai comparar o que foi aprovado.
     if (!lida || lida.id !== alvo.avaliacao) throw new ErroConector('definitivo', PROVIDER, 'o Google devolveu a avaliação sem o que a identifica, ou outra avaliação');
-    return lida;
+    return { avaliacao: lida, quem: quemAvaliou(corpo)?.nome ?? null };
   }
 
   /**

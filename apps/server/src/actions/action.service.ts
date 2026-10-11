@@ -373,7 +373,7 @@ export class ActionService {
     if (volta && read.version !== volta.versaoDepois) {
       throw new AppProblem(409, 'estado-mudou', 'Alguém mexeu depois', 'O objeto mudou depois desta ação. A volta não é feita, para não sobrescrever o que foi mudado.');
     }
-    const plan = this.planejar(tool, read.state, params);
+    const plan = this.planejar(tool, read.state, params, read.transient);
     // Com o estado lido, a direção: reduzir quando a recomendação é de reduzir (o valor pode ser outro).
     if (recomendacao) naoLiga(direcaoDaRecomendacao(recomendacao.tool, plan.action));
     const decision = await inSpan('politica.avaliar', { 'liame.tool': tool.name, 'liame.action': plan.action }, () =>
@@ -422,6 +422,8 @@ export class ActionService {
     }
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
     await emitEvent(tx, { tenantId, type: 'liame.action.requested', subject: id, data: { action_id: id, tool: tool.name, action: plan.action, mode, status } });
+    // O pedido que só o dono decide e que outra pessoa fez: o dono é avisado na hora (A6, D-A6-4; P17).
+    if (status === 'aguardando_aprovacao' && tool.ownerOnly?.(read.state)) await this.avisarODono(tx, tenantId, tool, id, quem.ator === 'human' ? quem.userId : null);
     auditDetail({
       resourceId: id,
       after: {
@@ -491,10 +493,11 @@ export class ActionService {
     }
     // A volta devolve o que estava antes: não tem parâmetro para escolher. Para mudar de ideia, cancela-se a volta.
     if (row.compensates_action_id) throw new AppProblem(409, 'acao-nao-altera', 'Não dá para alterar', 'O pedido de volta não se altera: cancele e peça outra ação.');
+    await this.exigirODono(tx, tenantId, auth, row, 'alterar');
     const { tool, connector } = this.resolve(row.tool, row.provider);
     const params = this.parseParams(tool, input.params);
     const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
-    const plan = this.planejar(tool, read.state, params);
+    const plan = this.planejar(tool, read.state, params, read.transient);
     const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params };
     // Quem altera é uma pessoa: o plano novo é avaliado como pedido dela, também no pedido que o funcionário de IA fez.
     const decision = await this.decide(tx, tenantId, row.brand_id, tool, connector, request, plan);
@@ -543,7 +546,7 @@ export class ActionService {
       throw new AppProblem(409, 'acao-nao-confere', 'Não há o que conferir', 'O plano deste pedido não muda sozinho. Para mudar o pedido, altere-o.');
     }
     const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
-    const plan = this.planejar(tool, read.state, row.params);
+    const plan = this.planejar(tool, read.state, row.params, read.transient);
     const planHash = await this.guardarOPlanoDeAgora(tx, tenantId, row, connector, read, plan);
     auditDetail({ before: { plan_hash: row.plan_hash }, after: { plan_hash: planHash, changed: planHash !== row.plan_hash, blocked: Boolean(plan.blocked) } });
     return this.get(auth, id);
@@ -598,7 +601,7 @@ export class ActionService {
     let plan: ToolPlan;
     try {
       read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
-      plan = this.planejar(tool, read.state, row.params);
+      plan = this.planejar(tool, read.state, row.params, read.transient);
     } catch (err) {
       // A plataforma não respondeu, a autorização caiu ou o recurso não está mais como o pedido precisa: fica para a
       // próxima volta, com o motivo (quem abre o pedido e confere pelo botão vê a mesma frase).
@@ -658,6 +661,8 @@ export class ActionService {
     if (row.plan_hash !== input.plan_hash) {
       throw new AppProblem(409, 'plano-mudou', 'O plano mudou', 'O pedido foi alterado depois que você abriu. Confira o plano novo e aprove de novo.');
     }
+    // Antes do código do app: quem não pode decidir este pedido não gasta um código nele.
+    await this.exigirODono(tx, tenantId, auth, row, 'aprovar');
     // O plano de uma mensagem muda sozinho na plataforma: a pessoa aprova o de agora (A5, Y5). Antes do código do app,
     // para ela não gastar um código num pedido que ainda não pode ser aprovado.
     if (TOOLS[row.tool]?.revalidateOnApproval) await this.conferirOPlanoDeAgora(tx, tenantId, row);
@@ -709,7 +714,7 @@ export class ActionService {
   private async conferirOPlanoDeAgora(tx: Tx, tenantId: string, row: ActionRow): Promise<void> {
     const { tool, connector } = this.resolve(row.tool, row.provider);
     const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
-    const plan = this.planejar(tool, read.state, row.params);
+    const plan = this.planejar(tool, read.state, row.params, read.transient);
     if (plan.blocked) throw new AppProblem(409, 'pedido-impedido', 'Ainda não dá para aprovar', plan.blocked);
     const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params: row.params };
     if (planHashOf(request, plan, read.version) !== row.plan_hash) {
@@ -731,6 +736,7 @@ export class ActionService {
     if (row.plan_hash !== input.plan_hash) {
       throw new AppProblem(409, 'plano-mudou', 'O plano mudou', 'O pedido foi alterado depois que você abriu. Confira o plano novo antes de recusar.');
     }
+    await this.exigirODono(tx, tenantId, auth, row, 'recusar');
     const motivo = `${PREFIXO_RECUSA}${auth.name}: ${input.reason}`;
     await tx.execute(sql`update liame.action_request set status = 'cancelada', status_reason = ${motivo}, updated_at = now() where id = ${id}`);
     const released = await this.budget.release(tx, tenantId, id);
@@ -808,10 +814,13 @@ export class ActionService {
     return { tool, connector };
   }
 
-  /** O plano da ferramenta; o que ela recusa pelo estado do recurso (`PlanoRecusado`) volta como 422, com o motivo. */
-  private planejar(tool: ToolDefinition, before: ResourceState, params: Record<string, unknown>): ToolPlan {
+  /**
+   * O plano da ferramenta; o que ela recusa pelo estado do recurso (`PlanoRecusado`) volta como 422, com o motivo.
+   * `context` é o que o conector leu junto e o pedido não guarda (`ReadResult.transient`): só o plano o vê.
+   */
+  private planejar(tool: ToolDefinition, before: ResourceState, params: Record<string, unknown>, context?: ResourceState | null): ToolPlan {
     try {
-      return tool.plan(before, params);
+      return tool.plan(before, params, context ?? null);
     } catch (err) {
       if (err instanceof PlanoRecusado) throw new AppProblem(422, 'plano-recusado', 'Não dá para pedir isto', err.message);
       throw err;
@@ -931,7 +940,9 @@ export class ActionService {
       value_micros: plan.valueMicros,
       current_value_micros: plan.currentValueMicros,
       categories: [],
-      text: null,
+      // O texto que a ação publica em nome da empresa (a resposta a uma avaliação): as palavras que a empresa ou a
+      // marca proíbem na política valem para ele. As outras ações não publicam texto.
+      text: plan.text ?? null,
       recent_count: Math.max(0, ...recent.values()),
       // Quem pede: uma pessoa (a regra da distribuição para a Meta manda esperar aprovação) ou o funcionário de IA (vale
       // o modo dele nesta conta, a regra com `actor: 'agent'`).
@@ -972,6 +983,39 @@ export class ActionService {
       return { mode: 'APPROVAL', status: 'aguardando_aprovacao', reason: `autonomia ${mode} pedida, mas o autopilot está desligado` };
     }
     return { mode, status: 'aguardando_aprovacao', reason: mode === 'ESCALATE' ? 'precisa do dono' : null };
+  }
+
+  /**
+   * O pedido que só o dono decide (a ferramenta declara `ownerOnly`; A6, D-A6-4: a resposta a uma avaliação de 1 ou 2
+   * estrelas): quem não é o dono lê o pedido e não o aprova, não o recusa e não o altera. O papel é lido do banco agora,
+   * e não da sessão. A política põe a mesma ação em ESCALATE (a aprovação de outro papel nunca bastaria); isto barra a
+   * tentativa antes, com a frase certa.
+   */
+  private async exigirODono(tx: Tx, tenantId: string, auth: AuthContext, row: ActionRow, verbo: 'aprovar' | 'recusar' | 'alterar'): Promise<void> {
+    if (!row.before_state || !TOOLS[row.tool]?.ownerOnly?.(row.before_state)) return;
+    const m = await tx.execute<{ role_key: string }>(sql`
+      select role_key from liame.membership where tenant_id = ${tenantId} and user_id = ${auth.userId} and revoked_at is null`);
+    if (m.rows[0]?.role_key === 'dono') return;
+    throw new AppProblem(403, 'so-o-dono', 'Só o dono decide este pedido', `Só o dono da empresa pode ${verbo} este pedido. Ele espera o dono em Aprovações.`);
+  }
+
+  /**
+   * O pedido que só o dono decide, feito por outra pessoa ou por um funcionário de IA: o dono é avisado por e-mail,
+   * depois do commit. Hoje só a resposta a uma avaliação de nota baixa é assim; para outra ferramenta, não há texto.
+   * O e-mail não leva o texto da avaliação nem o da resposta: só o endereço do pedido.
+   */
+  private async avisarODono(tx: Tx, tenantId: string, tool: ToolDefinition, id: string, pessoaQuePediu: string | null): Promise<void> {
+    if (tool.name !== 'avaliacao_responder') return;
+    const donos = await tx.execute<{ id: string; email: string }>(sql`
+      select u.id, u.email from liame.membership m join liame.app_user u on u.id = m.user_id
+       where m.tenant_id = ${tenantId} and m.role_key = 'dono' and m.revoked_at is null`);
+    // Foi o próprio dono que pediu, pela tela: ele já sabe. O pedido de um funcionário de IA sempre avisa.
+    if (pessoaQuePediu !== null && donos.rows.some((d) => d.id === pessoaQuePediu)) return;
+    const text =
+      'Há uma resposta a uma avaliação de 1 ou 2 estrelas do Google esperando a sua decisão.\n\n' +
+      'A resposta é pública e sai em nome da empresa: neste caso, só o dono aprova, com o código do app. Nada é publicado sem essa aprovação.\n\n' +
+      `${this.config.appUrl}/aprovacoes?pedido=${id}`;
+    for (const { email } of donos.rows) afterCommit(() => this.mailer.send({ to: email, subject: 'Liame: uma resposta a avaliação espera a sua decisão', text }));
   }
 
   private async lock(tx: Tx, tenantId: string, id: string): Promise<ActionRow> {
