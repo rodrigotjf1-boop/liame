@@ -96,8 +96,6 @@ export function avaliacaoDoGoogle(bruta: unknown): AvaliacaoLida | null {
   const criadaEm = instante(r.createTime);
   const atualizadaEm = instante(r.updateTime) ?? criadaEm;
   if (!id || !estrelas || !criadaEm || !atualizadaEm) return null;
-  const resposta = r.reviewReply && typeof r.reviewReply === 'object' ? (r.reviewReply as Record<string, unknown>) : null;
-  const textoDaResposta = resposta ? texto(resposta.comment) : null;
   return {
     id,
     estrelas,
@@ -105,15 +103,50 @@ export function avaliacaoDoGoogle(bruta: unknown): AvaliacaoLida | null {
     criadaEm,
     atualizadaEm,
     // A resposta sem texto não é uma resposta.
-    resposta:
-      resposta && textoDaResposta
-        ? {
-            texto: textoDaResposta,
-            atualizadaEm: instante(resposta.updateTime),
-            situacao: typeof resposta.reviewReplyState === 'string' ? (SITUACAO[resposta.reviewReplyState] ?? 'desconhecida') : 'desconhecida',
-            violacao: codigo(resposta.policyViolation),
-          }
-        : null,
+    resposta: respostaDoGoogle(r.reviewReply),
+  };
+}
+
+/**
+ * A resposta que o Liame publica (A6, Z2; P17, decisão 12): até 1.500 caracteres, bem abaixo dos 4.096 bytes que o
+ * Google aceita. Resposta curta, e nunca perto do teto dele.
+ */
+export const TAMANHO_DA_RESPOSTA = 1500;
+export const BYTES_DA_RESPOSTA_NO_GOOGLE = 4096;
+
+const LETRAS_DE_ID = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+/**
+ * O id de uma avaliação pode entrar no caminho de um endereço? Só letras, dígitos, hífen e sublinhado, de 1 a 200,
+ * conferido letra a letra. A referência do Google não descreve o formato do `reviewId`: o que fugir disto não vira
+ * chamada (melhor não responder do que montar um endereço com o que veio de fora).
+ */
+export function idDaAvaliacao(v: unknown): v is string {
+  return typeof v === 'string' && v.length >= 1 && v.length <= 200 && [...v].every((c) => LETRAS_DE_ID.includes(c));
+}
+
+/**
+ * O texto de uma resposta como ele vai para o Google: sem o caractere nulo e aparado. Nulo quando sobra vazio, passa
+ * dos 1.500 caracteres do Liame ou dos 4.096 bytes do Google: o texto aprovado nunca é cortado para caber.
+ */
+export function textoDaResposta(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const limpo = v.split('\u0000').join('').trim();
+  if (!limpo || [...limpo].length > TAMANHO_DA_RESPOSTA || Buffer.byteLength(limpo, 'utf8') > BYTES_DA_RESPOSTA_NO_GOOGLE) return null;
+  return limpo;
+}
+
+/** A resposta como o Google a devolve ao gravar (`ReviewReply`); nula quando não vem o texto. */
+export function respostaDoGoogle(bruta: unknown): RespostaLida | null {
+  if (!bruta || typeof bruta !== 'object') return null;
+  const r = bruta as Record<string, unknown>;
+  const comentario = texto(r.comment);
+  if (!comentario) return null;
+  return {
+    texto: comentario,
+    atualizadaEm: instante(r.updateTime),
+    situacao: typeof r.reviewReplyState === 'string' ? (SITUACAO[r.reviewReplyState] ?? 'desconhecida') : 'desconhecida',
+    violacao: codigo(r.policyViolation),
   };
 }
 

@@ -19,7 +19,7 @@ const CONTA = 'accounts/111000111';
 const LOJA = 'locations/222000222';
 const CHAVE_DO_BALDE_APERTADO = 'teste-do-balde-apertado';
 
-type Pedido ={ api: string; caminho: string; busca: URLSearchParams; autorizacao: string | undefined };
+type Pedido = { api: string; metodo: string; caminho: string; busca: URLSearchParams; autorizacao: string | undefined; corpo: unknown };
 
 /** Uma avaliação como o Google a manda, com o nome e a foto de quem avaliou. */
 const avaliacao = (n: number, atualizadaEm: string, extra: Record<string, unknown> = {}) => ({
@@ -44,11 +44,11 @@ describe.skipIf(!hasDb)('conector do Perfil da Empresa no Google (leitura; A6 ·
   const json = (status: number, corpo: unknown, cabecalhos: Record<string, string> = {}) => ({ status, corpo, cabecalhos });
   const naoAchou = () => json(404, { error: { code: 404, status: 'NOT_FOUND', message: 'not found' } });
 
-  function responder(req: IncomingMessage) {
+  function responder(req: IncomingMessage, corpo: unknown) {
     const url = new URL(req.url ?? '/', base);
     const [, api, ...resto] = url.pathname.split('/');
     const caminho = `/${resto.join('/')}`;
-    pedidos.push({ api: api ?? '', caminho, busca: url.searchParams, autorizacao: req.headers.authorization });
+    pedidos.push({ api: api ?? '', metodo: req.method ?? '', caminho, busca: url.searchParams, autorizacao: req.headers.authorization, corpo });
     const pagina = url.searchParams.get('pageToken');
 
     if (api === 'contas' && caminho === '/v1/accounts') {
@@ -73,6 +73,31 @@ describe.skipIf(!hasDb)('conector do Perfil da Empresa no Google (leitura; A6 ·
       if (!pagina) return json(200, { reviews: [avaliacao(8, '2026-10-10T10:00:00Z'), avaliacao(7, '2026-10-09T10:00:00Z', { reviewReply: { comment: 'Obrigado!', updateTime: '2026-10-09T15:00:00Z', reviewReplyState: 'APPROVED' } })], averageRating: 4.6, totalReviewCount: 1284, nextPageToken: 'av-2' });
       if (pagina === 'av-2') return json(200, { reviews: [avaliacao(6, '2026-10-08T10:00:00Z'), { reviewId: 'sem-nota', reviewer: { displayName: 'Sem Nota' }, starRating: 'STAR_RATING_UNSPECIFIED', createTime: '2026-10-07T12:00:00Z' }, avaliacao(5, '2026-10-07T10:00:00Z')], averageRating: 4.6, totalReviewCount: 1284, nextPageToken: 'av-3' });
       if (pagina === 'av-3') return json(200, { reviews: [avaliacao(4, '2026-10-01T10:00:00Z')], averageRating: 4.6, totalReviewCount: 1284 });
+      return naoAchou();
+    }
+    // Uma avaliação pelo nome, a resposta e o apagar da resposta, como a referência REST da v4 descreve (lida em
+    // 11/10/2026): `reviews.get`; `reviews.updateReply` é PUT em `…/reply`, com `ReviewReply` no corpo e na volta ("A
+    // reply is created if one does not exist"); `reviews.deleteReply` é DELETE, sem corpo, e devolve um objeto vazio.
+    // O que o Google responde para a avaliação que não existe não está na referência: aqui é o 404 NOT_FOUND das APIs
+    // dele. Se for outro erro, a leitura falha classificada, e nada é respondido.
+    const umaAvaliacao = `/v4/${CONTA}/${LOJA}/reviews/`;
+    if (api === 'avaliacoes' && caminho.startsWith(umaAvaliacao)) {
+      const [id = '', sufixo, ...mais] = caminho.slice(umaAvaliacao.length).split('/');
+      if (mais.length || (sufixo !== undefined && sufixo !== 'reply') || id === 'rev-sumiu') return naoAchou();
+      if (sufixo === undefined && req.method === 'GET') {
+        // O Google devolve outra avaliação no lugar da pedida: o conector não a aceita.
+        if (id === 'rev-trocada') return json(200, avaliacao(99, '2026-10-10T10:00:00Z'));
+        if (id === 'rev-7') return json(200, avaliacao(7, '2026-10-09T10:00:00Z', { reviewReply: { comment: 'Obrigado!', updateTime: '2026-10-09T15:00:00Z', reviewReplyState: 'APPROVED' } }));
+        return json(200, avaliacao(Number(id.split('-')[1]), '2026-10-10T10:00:00Z'));
+      }
+      if (sufixo === 'reply' && req.method === 'PUT') {
+        if (id === 'rev-recusa') return json(403, { error: { code: 403, status: 'PERMISSION_DENIED', message: 'The caller does not have permission' } });
+        // A volta sem o texto (não é o que a referência diz, mas o conector não depende dela).
+        if (id === 'rev-calada') return json(200, {});
+        return json(200, { comment: (corpo as { comment?: unknown } | null)?.comment, updateTime: '2026-10-11T12:00:00Z', reviewReplyState: 'PENDING' });
+      }
+      // A avaliação 6 não tem resposta para apagar.
+      if (sufixo === 'reply' && req.method === 'DELETE') return id === 'rev-6' ? naoAchou() : json(200, {});
       return naoAchou();
     }
     if (api === 'numeros' && caminho === `/v1/${LOJA}:fetchMultiDailyMetricsTimeSeries`) {
@@ -120,9 +145,11 @@ describe.skipIf(!hasDb)('conector do Perfil da Empresa no Google (leitura; A6 ·
     await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
     database = createDatabase({ connectionString: APP_URL, max: 2, applicationName: 'liame-test' });
     google = createServer((req, res) => {
-      req.on('data', () => undefined);
+      const partes: Buffer[] = [];
+      req.on('data', (p: Buffer) => partes.push(p));
       req.on('end', () => {
-        const r = responder(req);
+        const recebido = Buffer.concat(partes).toString('utf8');
+        const r = responder(req, recebido ? JSON.parse(recebido) : null);
         res.writeHead(r.status, { 'content-type': 'application/json', ...r.cabecalhos });
         res.end(JSON.stringify(r.corpo));
       });
@@ -277,6 +304,99 @@ describe.skipIf(!hasDb)('conector do Perfil da Empresa no Google (leitura; A6 ·
     // Só as duas primeiras chegaram ao Google.
     expect(pedidos).toHaveLength(2);
     await ownerLimpa();
+  });
+
+  // ---------------------------------------------------------------- Z2: a resposta a uma avaliação
+
+  it('Z2: uma avaliação lida agora, sem nada de quem avaliou; a que não existe mais volta nula; e a que o Google troca não serve', async () => {
+    const c = conector();
+    const lida = await c.lerAvaliacao(credencial, { conta: CONTA, loja: LOJA, avaliacao: 'rev-7' });
+    expect(lida).toEqual({
+      id: 'rev-7',
+      estrelas: 3,
+      texto: 'Comentário 7',
+      criadaEm: '2026-09-01T12:00:00.000Z',
+      atualizadaEm: '2026-10-09T10:00:00.000Z',
+      resposta: { texto: 'Obrigado!', atualizadaEm: '2026-10-09T15:00:00.000Z', situacao: 'aprovada', violacao: null },
+    });
+    // O Google local mandou o nome e a foto (A6-1).
+    for (const proibido of ['Pessoa Número', 'foto-', 'reviewer']) expect(JSON.stringify(lida), proibido).not.toContain(proibido);
+    expect(daApi('avaliacoes').map((p) => [p.metodo, p.caminho, p.autorizacao])).toEqual([['GET', `/v4/${CONTA}/${LOJA}/reviews/rev-7`, `Bearer ${TOKEN}`]]);
+
+    expect(await c.lerAvaliacao(credencial, { conta: CONTA, loja: LOJA, avaliacao: 'rev-sumiu' })).toBeNull();
+    expect((await erroDe(() => c.lerAvaliacao(credencial, { conta: CONTA, loja: LOJA, avaliacao: 'rev-trocada' }))).tipo).toBe('definitivo');
+  });
+
+  it('Z2: a resposta sai por PUT, com o texto inteiro, e volta como o Google a gravou (ele ainda confere)', async () => {
+    const c = conector();
+    const alvo = { conta: CONTA, loja: LOJA, avaliacao: 'rev-8' };
+    expect(await c.responderAvaliacao(credencial, alvo, '  Obrigado pela visita! Volte sempre.  ')).toEqual({
+      texto: 'Obrigado pela visita! Volte sempre.',
+      atualizadaEm: '2026-10-11T12:00:00.000Z',
+      situacao: 'pendente',
+      violacao: null,
+    });
+    expect(daApi('avaliacoes').map((p) => [p.metodo, p.caminho, p.corpo, p.autorizacao])).toEqual([
+      ['PUT', `/v4/${CONTA}/${LOJA}/reviews/rev-8/reply`, { comment: 'Obrigado pela visita! Volte sempre.' }, `Bearer ${TOKEN}`],
+    ]);
+    // O Google não devolveu o texto: vale o que foi enviado, com a situação que ele ainda não disse.
+    expect(await c.responderAvaliacao(credencial, { ...alvo, avaliacao: 'rev-calada' }, 'Obrigado!')).toEqual({ texto: 'Obrigado!', atualizadaEm: null, situacao: 'desconhecida', violacao: null });
+    // A avaliação que sumiu e a recusa do Google sobem classificadas: quem chama decide.
+    const sumiu = await erroDe(() => c.responderAvaliacao(credencial, { ...alvo, avaliacao: 'rev-sumiu' }, 'Obrigado!'));
+    expect([sumiu.tipo, sumiu.status]).toEqual(['definitivo', 404]);
+    expect((await erroDe(() => c.responderAvaliacao(credencial, { ...alvo, avaliacao: 'rev-recusa' }, 'Obrigado!'))).tipo).toBe('permissao');
+  });
+
+  it('Z2: o texto vazio ou grande demais, e o id que não serve para endereço, não viram chamada; o texto no limite sai inteiro', async () => {
+    const c = conector();
+    const alvo = { conta: CONTA, loja: LOJA, avaliacao: 'rev-8' };
+    // 1.501 caracteres passam do limite do Liame; 1.100 emojis são 4.400 bytes, acima dos 4.096 do Google.
+    for (const texto of ['', '   ', String.fromCharCode(0), 'x'.repeat(1501), '😀'.repeat(1100)]) {
+      expect((await erroDe(() => c.responderAvaliacao(credencial, alvo, texto))).tipo, `texto de ${texto.length}`).toBe('definitivo');
+    }
+    for (const avaliacao of ['', 'rev/8', '..', 'rev 8', 'rev?x=1', 'rev.8', 'rév-8', 'a'.repeat(201)]) {
+      const ruim = { ...alvo, avaliacao };
+      expect((await erroDe(() => c.responderAvaliacao(credencial, ruim, 'Obrigado!'))).tipo, avaliacao).toBe('definitivo');
+      expect((await erroDe(() => c.lerAvaliacao(credencial, ruim))).tipo, avaliacao).toBe('definitivo');
+      expect((await erroDe(() => c.apagarResposta(credencial, ruim))).tipo, avaliacao).toBe('definitivo');
+    }
+    expect((await erroDe(() => c.responderAvaliacao(credencial, { ...alvo, loja: 'locations/../x' }, 'Obrigado!'))).tipo).toBe('definitivo');
+    expect(pedidos).toEqual([]);
+
+    const noLimite = 'x'.repeat(1500);
+    expect((await c.responderAvaliacao(credencial, alvo, noLimite)).texto).toBe(noLimite);
+    expect((pedidos[0]!.corpo as { comment: string }).comment).toHaveLength(1500);
+  });
+
+  it('Z2: apagar a resposta é um DELETE sem corpo; a que já não existe conta como apagada', async () => {
+    const c = conector();
+    await c.apagarResposta(credencial, { conta: CONTA, loja: LOJA, avaliacao: 'rev-7' });
+    await c.apagarResposta(credencial, { conta: CONTA, loja: LOJA, avaliacao: 'rev-6' });
+    expect(daApi('avaliacoes').map((p) => [p.metodo, p.caminho, p.corpo, p.autorizacao])).toEqual([
+      ['DELETE', `/v4/${CONTA}/${LOJA}/reviews/rev-7/reply`, null, `Bearer ${TOKEN}`],
+      ['DELETE', `/v4/${CONTA}/${LOJA}/reviews/rev-6/reply`, null, `Bearer ${TOKEN}`],
+    ]);
+  });
+
+  it('Z2: o registro tem a leitura de uma avaliação e a única escrita, e a flag de escrita nasce desligada, sem regra', async () => {
+    const { ownerQuery } = await import('../helpers/api.js');
+    const capacidades = await ownerQuery<{ capability: string; api_version: string; read: boolean; write: boolean; required_scope: string[] }>(
+      `select capability, api_version, read, write, required_scope from liame.connector_capability where provider = 'google_business' order by capability`,
+    );
+    expect(capacidades.map((c) => [c.capability, c.api_version, c.read, c.write])).toEqual([
+      ['accounts', 'v1', true, false],
+      ['locations', 'v1', true, false],
+      ['performance_daily', 'v1', true, false],
+      ['review_reply', 'v4', false, true],
+      ['review_state', 'v4', true, false],
+      ['reviews', 'v4', true, false],
+    ]);
+    expect(capacidades.every((c) => c.required_scope.length === 1 && c.required_scope[0] === 'https://www.googleapis.com/auth/business.manage')).toBe(true);
+    const flag = await ownerQuery<{ default_value: unknown; is_write: boolean; owner: string; regras: number }>(
+      `select f.default_value, f.is_write, f.owner, (select count(*)::int from liame.feature_flag_rule r where r.flag_key = f.key and r.created_by <> 'testes') as regras
+         from liame.feature_flag f where f.key = 'perfil_google_write'`,
+    );
+    expect(flag).toEqual([{ default_value: false, is_write: true, owner: 'social', regras: 0 }]);
   });
 
   /** Zera o balde do teste do balde apertado (outra rodada pode tê-lo deixado vazio). */
