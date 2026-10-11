@@ -9,11 +9,14 @@ import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { criarConectorGa4 } from '../connectors/ga4/conector-ga4.js';
 import { criarConectorGoogleAds } from '../connectors/google-ads/conector-google-ads.js';
+import { BALDE_DO_PERFIL_GOOGLE, criarConectorPerfilGoogle, type LojaDoPerfil } from '../connectors/google-business/conector-perfil-google.js';
+import { ESCOPO_PERFIL_GOOGLE, FLAG_PERFIL_GOOGLE, falhaDaProcura, PROVEDOR_PERFIL_GOOGLE, type ProcuraDoPerfil } from '../connectors/google-business/perfil-google.js';
 import { criarConectorMeta } from '../connectors/meta/conector-meta.js';
 import { lerLoja, trocarCodigoRegem } from '../connectors/regem/conector-regem.js';
-import type { ContaDescoberta } from '../connectors/tipos.js';
+import type { ContaDescoberta, Credencial } from '../connectors/tipos.js';
 import { versaoRegistrada } from '../connectors/tipos.js';
 import { DATABASE } from '../database/database.module.js';
+import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
@@ -37,6 +40,7 @@ export class ConexaoProcessor {
     @Inject(DATABASE) private readonly database: Database | null,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly vault: VaultService,
+    private readonly flags: FlagService,
   ) {}
 
   private get db() {
@@ -82,14 +86,15 @@ export class ConexaoProcessor {
   }
 
   private async concluir(id: string, tenantId: string, tentativa: number): Promise<void> {
-    type Linha = { provider: ProvedorOAuth; redirect_uri: string; code_enc: string | null; pkce_verifier_enc: string | null; credential_secret_id: string | null };
+    type Linha = { provider: ProvedorOAuth; brand_id: string; redirect_uri: string; code_enc: string | null; pkce_verifier_enc: string | null; credential_secret_id: string | null };
     const dados = await withTenant(this.db, tenantId, async (tx) => {
       const r = await tx.execute<Linha>(sql`
-        select provider, redirect_uri, code_enc, pkce_verifier_enc, credential_secret_id from liame.oauth_connection where id = ${id}`);
+        select provider, brand_id, redirect_uri, code_enc, pkce_verifier_enc, credential_secret_id from liame.oauth_connection where id = ${id}`);
       const l = r.rows[0];
       if (!l) return null;
       return {
         provider: l.provider,
+        brandId: l.brand_id,
         redirectUri: l.redirect_uri,
         codigo: l.code_enc ? await this.vault.decryptForTenant(tx, tenantId, `oauth_code:${id}`, l.code_enc) : null,
         verificador: l.pkce_verifier_enc ? await this.vault.decryptForTenant(tx, tenantId, `oauth_pkce:${id}`, l.pkce_verifier_enc) : null,
@@ -159,18 +164,29 @@ export class ConexaoProcessor {
 
     // Etapa 2: descobrir as contas que a credencial alcança.
     let descobertas: DescobertaGuardada[];
+    let perfil: ProcuraDoPerfil | null;
     try {
-      descobertas = await this.descobrir(provedor, accessToken, credencial);
+      ({ descobertas, perfil } = await this.descobrir(provedor, accessToken, credencial, { tenantId, brandId: dados.brandId }));
     } catch (err) {
       await this.falhar(id, tenantId, err, tentativa, false);
       return;
     }
+    // A procura das lojas do Perfil que não deu certo (o limite do Google, uma falha passageira) não apaga as lojas que
+    // a conexão já conhecia: elas seguem na lista, e a anotação diz o que aconteceu desta vez. Sem procura (função
+    // desligada ou permissão não concedida), não fica anotação nem loja.
+    const manterAsLojas = perfil !== null && perfil.resultado !== 'ok';
     await withTenant(this.db, tenantId, async (tx) => {
       await tx.execute(sql`
         update liame.oauth_connection
            set status = case when exists (select 1 from liame.connected_account a where a.connection_id = ${id} and a.disconnected_at is null)
                              then 'ativa' else 'aguardando_escolha' end,
-               discovered = ${JSON.stringify(descobertas)}::jsonb, error_code = null, locked_at = null, updated_at = now()
+               discovered = ${JSON.stringify(descobertas)}::jsonb || case when ${manterAsLojas}::boolean
+                 then coalesce((select jsonb_agg(d) from jsonb_array_elements(liame.oauth_connection.discovered) as d where d ->> 'provider' = ${PROVEDOR_PERFIL_GOOGLE}), '[]'::jsonb)
+                 else '[]'::jsonb end,
+               discovery_notes = case when ${perfil !== null}::boolean
+                 then liame.oauth_connection.discovery_notes || jsonb_build_object(${PROVEDOR_PERFIL_GOOGLE}::text, ${JSON.stringify(perfil ?? {})}::jsonb)
+                 else liame.oauth_connection.discovery_notes - ${PROVEDOR_PERFIL_GOOGLE}::text end,
+               error_code = null, locked_at = null, updated_at = now()
          where id = ${id} and status = 'processando'`);
       await writeAudit(tx, {
         tenantId,
@@ -180,7 +196,7 @@ export class ConexaoProcessor {
         action: 'conexao.concluir',
         resourceType: 'oauth_connection',
         resourceId: id,
-        after: { provider: provedor, contas_encontradas: descobertas.length },
+        after: { provider: provedor, contas_encontradas: descobertas.length, ...(perfil ? { perfil_no_google: perfil.resultado } : {}) },
         origin: 'worker',
       });
     });
@@ -207,10 +223,21 @@ export class ConexaoProcessor {
     return acessoGoogle(this.config, this.config.oauth.google?.tokenUrl ?? '', refreshToken);
   }
 
-  /** Meta: contas de anúncio. Google: clientes do Google Ads e propriedades do GA4 (cada uma se o escopo veio). */
-  private async descobrir(provedor: ProvedorOAuth, accessToken: string, credencial: CredencialGuardada): Promise<DescobertaGuardada[]> {
+  /**
+   * Meta: contas de anúncio. Google: clientes do Google Ads e propriedades do GA4 (cada uma se o escopo veio) e, para a
+   * empresa com a função ligada, as lojas do Perfil da Empresa. `perfil`: como terminou a procura das lojas (nulo = o
+   * Liame não procurou).
+   */
+  private async descobrir(
+    provedor: ProvedorOAuth,
+    accessToken: string,
+    credencial: CredencialGuardada,
+    alvo: { tenantId: string; brandId: string },
+  ): Promise<{ descobertas: DescobertaGuardada[]; perfil: ProcuraDoPerfil | null }> {
     const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos) });
-    if (credencial.tipo === 'regem' || credencial.tipo === 'regemcast') return descobrirLojas(cliente, this.config.produtos.regemApiUrl, credencial);
+    if (credencial.tipo === 'regem' || credencial.tipo === 'regemcast') {
+      return { descobertas: await descobrirLojas(cliente, this.config.produtos.regemApiUrl, credencial), perfil: null };
+    }
     const credencialLeitura = { accessToken };
     const guardar = (provider: DescobertaGuardada['provider'], contas: ContaDescoberta[]) =>
       contas.map(
@@ -225,7 +252,7 @@ export class ConexaoProcessor {
       );
     if (provedor === 'meta') {
       const meta = await criarConectorMeta(this.db, cliente, this.config.plataformas);
-      return guardar('meta_ads', await meta.descobrirContas(credencialLeitura));
+      return { descobertas: guardar('meta_ads', await meta.descobrirContas(credencialLeitura)), perfil: null };
     }
     const escopos = credencial.tipo === 'google' ? credencial.escopos : [];
     // Escopo não concedido (a pessoa desmarcou na tela do Google) ou sem acesso: aquela plataforma fica vazia.
@@ -238,11 +265,45 @@ export class ConexaoProcessor {
         throw err;
       }
     };
-    const [ads, ga4] = await Promise.all([
+    const [ads, ga4, lojas] = await Promise.all([
       seConcedido(ESCOPOS_GOOGLE[0]!, async () => guardar('google_ads', await (await criarConectorGoogleAds(this.db, cliente, this.config.plataformas)).descobrirContas(credencialLeitura))),
       seConcedido(ESCOPOS_GOOGLE[1]!, async () => guardar('ga4', await (await criarConectorGa4(this.db, cliente, this.config.plataformas)).descobrirContas(credencialLeitura))),
+      this.procurarLojasDoPerfil(escopos, credencialLeitura, alvo),
     ]);
-    return [...ads, ...ga4];
+    return { descobertas: [...ads, ...ga4, ...lojas.descobertas], perfil: lojas.perfil };
+  }
+
+  /**
+   * As lojas do Perfil da Empresa no Google: só para a empresa com a função ligada E com a permissão concedida nesta
+   * autorização (D-A6-17). Sem a lista de permissões (credencial antiga), o Liame não procura: cada chamada gasta a
+   * cota do app, que é uma só para todas as empresas.
+   * Nada do que acontece aqui derruba a conexão: a cota do Perfil é zero até o Google liberar o acesso, e o Google Ads e
+   * o GA4 não têm nada com isso (V42). O que aconteceu fica anotado na conexão, para a tela dizer. Uma tentativa só:
+   * no limite, a procura espera a próxima vez em vez de insistir (critério A6-2).
+   */
+  private async procurarLojasDoPerfil(
+    escopos: string[],
+    credencial: Credencial,
+    alvo: { tenantId: string; brandId: string },
+    agora = new Date(),
+  ): Promise<{ descobertas: DescobertaGuardada[]; perfil: ProcuraDoPerfil | null }> {
+    if (!escopos.includes(ESCOPO_PERFIL_GOOGLE)) return { descobertas: [], perfil: null };
+    if (!(await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, this.flags.context(alvo)))) return { descobertas: [], perfil: null };
+    const em = agora.toISOString();
+    try {
+      const cliente = new ClienteConector(this.db, {
+        enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos),
+        balde: BALDE_DO_PERFIL_GOOGLE,
+        tentativas: 1,
+      });
+      const conector = await criarConectorPerfilGoogle(this.db, cliente, this.config.plataformas);
+      const lojas = await conector.descobrirLojas(credencial);
+      return { descobertas: lojas.map(lojaDoPerfilDescoberta), perfil: { resultado: 'ok', em, lojas: lojas.length } };
+    } catch (err) {
+      const resultado = falhaDaProcura(err instanceof ErroConector ? err.tipo : null);
+      this.logger.warn(`lojas do Perfil no Google (empresa ${alvo.tenantId}): ${resultado}: ${err instanceof Error ? err.message : String(err)}`);
+      return { descobertas: [], perfil: { resultado, em, lojas: 0 } };
+    }
   }
 
   /**
@@ -287,6 +348,21 @@ export class ConexaoProcessor {
       }
     });
   }
+}
+
+/**
+ * A loja do Perfil da Empresa como conta descoberta. O código dela é a loja (`locations/…`); a conta do Perfil
+ * (`accounts/…`) vai junto, porque as avaliações são lidas por conta e loja. Sem moeda e sem fuso: não é conta de anúncio.
+ */
+export function lojaDoPerfilDescoberta(l: LojaDoPerfil): DescobertaGuardada {
+  return {
+    provider: PROVEDOR_PERFIL_GOOGLE,
+    external_id: l.loja,
+    name: l.nome,
+    currency: null,
+    timezone: null,
+    provider_attributes: { conta: l.conta, site: l.site, place_id: l.placeId, maps_uri: l.mapsUri },
+  };
 }
 
 /**

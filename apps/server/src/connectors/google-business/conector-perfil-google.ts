@@ -72,14 +72,19 @@ const textoCurto = (v: unknown, max: number): string | null => (typeof v === 'st
 export class ConectorPerfilGoogle {
   readonly provider = PROVIDER;
 
+  /**
+   * `chaveDaCota`: a chave do balde e do disjuntor. Em produção é sempre a do projeto; só o teste que esvazia o balde
+   * de propósito passa outra, para não deixar sem ficha os testes que rodam ao mesmo tempo no mesmo banco.
+   */
   constructor(
     private readonly cliente: ClienteConector,
     private readonly bases: AppConfig['plataformas']['perfilGoogle'],
     private readonly versoes: { contas: string; lojas: string; avaliacoes: string; numeros: string },
+    private readonly chaveDaCota: string = CHAVE_DA_COTA,
   ) {}
 
   private pedir<T>(url: string, endpoint: string, apiVersion: string, credencial: Credencial) {
-    return this.cliente.requisitar<T>({ provider: PROVIDER, conta: CHAVE_DA_COTA, url, endpoint, apiVersion, cabecalhos: { authorization: `Bearer ${credencial.accessToken}` } });
+    return this.cliente.requisitar<T>({ provider: PROVIDER, conta: this.chaveDaCota, url, endpoint, apiVersion, cabecalhos: { authorization: `Bearer ${credencial.accessToken}` } });
   }
 
   /**

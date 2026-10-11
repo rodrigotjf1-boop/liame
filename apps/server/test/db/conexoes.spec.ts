@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { createDatabase, type Database } from '@liame/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config.js';
+import { FlagService } from '../../src/flags/flag.service.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { ConexaoProcessor } from '../../src/worker/conexao-processor.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
@@ -121,7 +122,7 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     api = await startApi();
     await resetIpRateLimits();
     database = createDatabase({ connectionString: APP_URL, max: 3, applicationName: 'liame-test' });
-    processador = new ConexaoProcessor(database, loadConfig(), api.app.get(VaultService));
+    processador = new ConexaoProcessor(database, loadConfig(), api.app.get(VaultService), api.app.get(FlagService));
   });
   afterAll(async () => {
     await api?.close();
