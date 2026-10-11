@@ -53,7 +53,7 @@ export function oQueFazer(acao: string): string {
   return acao;
 }
 
-export type AcaoDoAviso = 'abrir-contas' | 'reconectar' | 'abrir-links' | 'abrir-cupons' | 'abrir-resultados' | 'abrir-verba';
+export type AcaoDoAviso = 'abrir-contas' | 'reconectar' | 'abrir-links' | 'abrir-cupons' | 'abrir-resultados' | 'abrir-verba' | 'abrir-avaliacoes';
 
 /**
  * O botão de cada aviso, como no protótipo: conta desconectada leva a Contas; autorização vencendo reconecta.
@@ -70,6 +70,8 @@ export function acaoDoAviso(kind: string): AcaoDoAviso | null {
   if (kind === 'vendas_fora_do_normal' || kind === 'gasto_da_campanha_fora_do_normal' || kind === 'custo_por_pedido_fora_do_normal') return 'abrir-resultados';
   // O que o Liame mudou e gastou mais do que a verba permite (A4, X4) se confere na Verba do mês.
   if (kind === 'gasto_acima_da_verba') return 'abrir-verba';
+  // A avaliação de nota baixa sem resposta (A6, Z1) se vê na tela Avaliações; a resposta ainda é dada no Google.
+  if (kind === 'avaliacao_sem_resposta') return 'abrir-avaliacoes';
   return null;
 }
 
@@ -91,15 +93,16 @@ export function destinoDoAviso(acao: AcaoDoAviso): { href: string; rotulo: strin
   if (acao === 'abrir-cupons') return { href: '/links#cupons', rotulo: 'Abrir os cupons' };
   if (acao === 'abrir-resultados') return { href: '/resultados', rotulo: 'Abrir Resultados' };
   if (acao === 'abrir-verba') return { href: '/verba', rotulo: 'Abrir a Verba do mês' };
+  if (acao === 'abrir-avaliacoes') return { href: '/avaliacoes', rotulo: 'Abrir as Avaliações' };
   return null;
 }
 
 /**
- * A tela de destino é de quem vê as vendas (Links e cupons, Resultados)? A Verba do mês é de quem acompanha as
- * campanhas, como a própria Atenção: o botão dela não depende de ver as vendas.
+ * A tela de destino é de quem vê as vendas (Links e cupons, Resultados)? A Verba do mês e as Avaliações são de quem
+ * acompanha as campanhas, como a própria Atenção: o botão delas não depende de ver as vendas.
  */
 export function destinoPedeVendas(acao: AcaoDoAviso): boolean {
-  return acao !== 'abrir-verba';
+  return acao !== 'abrir-verba' && acao !== 'abrir-avaliacoes';
 }
 
 // ------------------------------------------------------------------ a recomendação do Gestor de tráfego (A4, X8)
