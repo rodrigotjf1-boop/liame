@@ -1,6 +1,7 @@
 import type { BudgetImpact, RiskLevel } from '@liame/contracts';
 import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
+import { type ContextoDaAvaliacao, EstadoDaAvaliacao, ehNotaBaixa, ParametrosDaResposta, planoDaResposta } from './avaliacao-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
@@ -23,6 +24,11 @@ export interface ToolPlan {
    * aprova enquanto ele durar. Diferente de `PlanoRecusado`, que é o pedido que nem nasce.
    */
   blocked?: string | null;
+  /**
+   * O texto que a ação publica em nome da empresa (A6, Z2: a resposta a uma avaliação). Vai para a política, para as
+   * palavras que a empresa ou a marca proíbem valerem para ele. Nulo ou ausente: a ação não publica texto.
+   */
+  text?: string | null;
 }
 
 export interface ToolDefinition {
@@ -36,8 +42,12 @@ export interface ToolDefinition {
   providers: readonly string[];
   compensation: string;
   params: z.ZodType<Record<string, unknown>>;
-  /** Do estado atual e dos parâmetros, o plano. Função pura: a mesma entrada dá o mesmo plano. */
-  plan(before: ResourceState, params: Record<string, unknown>): ToolPlan;
+  /**
+   * Do estado atual e dos parâmetros, o plano. Função pura: a mesma entrada dá o mesmo plano. `context` é o que o
+   * conector leu junto com o estado e que o pedido NÃO guarda (A6, Z2: o nome de quem fez a avaliação, só para conferir
+   * que a resposta não o cita): serve para recusar o plano, e nunca entra nele.
+   */
+  plan(before: ResourceState, params: Record<string, unknown>, context?: ResourceState | null): ToolPlan;
   /**
    * A volta (A4, X2): a ferramenta e os parâmetros que desfazem a ação, a partir do estado de ANTES dela. A volta é um
    * pedido novo, pelo mesmo trilho (política, aprovação, validação), e só é aceita se ninguém mexeu no objeto depois.
@@ -66,6 +76,12 @@ export interface ToolDefinition {
    * nome dela. Só para ação que não gasta, não envia e não desfaz nada. O funcionário de IA não ganha isto.
    */
   directByPerson?: boolean;
+  /**
+   * Só o dono da empresa decide este pedido: aprovar, recusar e alterar (A6, D-A6-4; P17: a resposta a uma avaliação
+   * de 1 ou 2 estrelas). Lido do estado que o pedido guardou. Os outros leem o pedido e não mexem nele. A política põe
+   * a mesma ação em ESCALATE, para a aprovação de outro papel nunca bastar; isto barra a tentativa antes.
+   */
+  ownerOnly?(before: ResourceState): boolean;
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -340,6 +356,41 @@ export const TOOLS: Record<string, ToolDefinition> = {
       if (fase === 'pausada') throw new PlanoRecusado('O envio desta mensagem já está pausado.');
       if (fase !== 'andamento') throw new PlanoRecusado('O envio desta mensagem já terminou: não há o que pausar.');
       return { action: 'mensagem.pausar', budgetImpact: 'decrease', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: { ...e, situacao: 'pausada' } };
+    },
+  },
+  // A resposta da empresa a uma avaliação do perfil no Google (A6, Z2; P17). O estado do recurso é a avaliação, lida
+  // do Google na hora, sem o texto dela e sem nada de quem avaliou (`avaliacao-plano.ts`). O texto da resposta é o
+  // parâmetro: entra no hash do plano, e a aprovação vale só para ele. Sem a flag de escrita `perfil_google_write`,
+  // nenhum pedido chega a esta ferramenta.
+  avaliacao_responder: {
+    name: 'avaliacao_responder',
+    version: 1,
+    owner: 'social',
+    description: 'Publica a resposta da empresa a uma avaliação do perfil no Google, com o texto que a pessoa aprova. A resposta é pública; quem avaliou é avisado pelo Google.',
+    // Fala em público em nome da empresa, e o aviso a quem avaliou não se desfaz: sempre com a aprovação de uma pessoa (D-A6-3).
+    risk: 'R2',
+    providers: ['google_business'],
+    compensation: 'apagar_a_resposta',
+    alwaysApproval: true,
+    params: ParametrosDaResposta,
+    // 1 ou 2 estrelas: só o dono decide (D-A6-4).
+    ownerOnly(before) {
+      const lido = EstadoDaAvaliacao.safeParse(before);
+      return lido.success && ehNotaBaixa(lido.data.estrelas);
+    },
+    plan(before, params, context) {
+      const plano = planoDaResposta(before, params, (context ?? null) as ContextoDaAvaliacao | null);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: plano.acao,
+        // Responder não gasta verba: nada a reservar no envelope do mês.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado,
+        text: plano.texto,
+      };
     },
   },
 };

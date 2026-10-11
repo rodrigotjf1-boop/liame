@@ -138,3 +138,13 @@ Amarrada ao `plan_hash`; plano alterado invalida a aprovação. Ações com risc
 - **O aviso:** `gasto_acima_da_verba` na Atenção do ciclo fechado, enquanto a conferência mais recente (de hoje ou de ontem) disser `acima` e nenhum outro pedido tiver mudado o objeto depois.
 - **A leitura:** `GET /v1/budget/month` traz `changes` (as mudanças do mês e, de antes, as que continuam valendo), com a conferência mais recente, desde quando ela dá aquele resultado (`since`) e o pedido que trocou a mudança (`superseded_by`); `overspend`, os avisos de gasto acima da verba já em palavras (o mesmo texto da Atenção, escrito num lugar só: `textoDoGastoAcima`); e `largest_daily_micros`, a maior verba diária entre as campanhas e os conjuntos ativos das contas em que o Liame muda verba (ajuda a escolher o teto por campanha).
 - **Nada é escrito nem desfeito** na plataforma por causa da conferência: ela registra e avisa.
+
+## A resposta a uma avaliação no trilho (A6 · Z2, 11/10/2026)
+
+A primeira ferramenta que publica texto em nome da empresa fora de um anúncio (`avaliacao_responder`, provedor `google_business`, flag de escrita `perfil_google_write`; política da distribuição na versão 7). O que entrou no trilho por causa dela e vale para qualquer ferramenta:
+
+- **O texto do plano** (`ToolPlan.text`): o que a ferramenta vai publicar chega à política como texto, e a regra `forbidden_words` da empresa ou da marca vale para ele. O que é da ferramenta (o tamanho, a compensação prometida em público, o dado pessoal) ela mesma recusa ao montar o plano (`PlanoRecusado`, 422).
+- **O contexto de passagem** (`ReadResult.transient`): o conector pode ler, junto do estado, algo que o plano precisa conferir e o Liame não guarda (o nome de quem avaliou). Vai só à função `plan`; não entra no estado, no resumo do plano, no pedido nem na auditoria.
+- **O pedido que só o dono decide** (`ownerOnly(estado)`): além do modo `ESCALATE`, em que a aprovação de outro papel é registrada e não basta, a ferramenta pode dizer que o pedido é do dono. Quem não é o dono lê o pedido e recebe 403 `so-o-dono` ao aprovar, recusar ou alterar, antes do código do app; o dono é avisado por e-mail quando o pedido não é dele.
+- **A versão, quando a plataforma não dá uma:** o conector tira a versão do próprio estado (um resumo do que importa ter mudado). A regra é a de sempre: versão diferente na execução é `estado_mudou`, e nada é escrito.
+- **Uma escrita por execução, com leitura antes:** onde repetir a chamada tem efeito para fora que não se desfaz (o Google avisa quem avaliou), o conector de ação usa um cliente HTTP sem repetição e, a cada execução, lê primeiro: se o recurso já está como o plano queria, termina sem escrever de novo.

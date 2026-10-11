@@ -203,8 +203,13 @@ export async function empresaComMeta(api: TestApi, meta: MetaDeMentira, nome: st
   return { cookie: s.cookie, userId: s.me.user.id as string, secret, tenantId, brandId, conta, contaSemToken };
 }
 
-/** Liga ou desliga uma flag (`meta_write`, `google_write`, `conversoes_google`, `perfil_google`) para a empresa. */
-export async function ligarFlagDaEmpresa(api: TestApi, chave: 'meta_write' | 'google_write' | 'conversoes_google' | 'perfil_google', tenantId: string, valor: boolean): Promise<void> {
+/** Liga ou desliga uma flag (`meta_write`, `google_write`, `conversoes_google`, `perfil_google`, `perfil_google_write`) para a empresa. */
+export async function ligarFlagDaEmpresa(
+  api: TestApi,
+  chave: 'meta_write' | 'google_write' | 'conversoes_google' | 'perfil_google' | 'perfil_google_write',
+  tenantId: string,
+  valor: boolean,
+): Promise<void> {
   await ownerQuery(`delete from liame.feature_flag_rule where flag_key = $1 and scope_type = 'tenant' and scope_id = $2`, [chave, tenantId]);
   if (valor) {
     await ownerQuery(

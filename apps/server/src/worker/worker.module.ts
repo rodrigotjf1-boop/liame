@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ActionService } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
 import { EscritaGoogle } from '../actions/escrita-google.provider.js';
+import { EscritaPerfil } from '../actions/escrita-perfil.provider.js';
 import { EscritaRegemcast } from '../actions/escrita-regemcast.provider.js';
 import { EscritaMeta } from '../actions/escrita-meta.provider.js';
 import { EscritaRegem } from '../actions/escrita-regem.provider.js';
@@ -87,6 +88,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     EscritaGoogle,
     // O do pedido de mensagem pelo RegemCast (A5, Y5): pronto e ainda fora do registro de conectores.
     EscritaRegemcast,
+    // O da resposta a avaliações do perfil no Google (A6, Z2): o cofre, a troca do token e o conector do Perfil.
+    EscritaPerfil,
     LifecyclePurgeService,
     // Grava na subida as versões de ferramenta, prompt e funcionário de IA que este código traz (A3, I2).
     RegistroIaService,

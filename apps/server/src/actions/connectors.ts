@@ -2,6 +2,7 @@ import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { googleAnunciosConnector } from './google-anuncios.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
+import { perfilAvaliacaoConnector } from './perfil-avaliacao.js';
 import { regemCupomConnector } from './regem-cupom.js';
 import { regemcastMensagemConnector } from './regemcast-mensagem.js';
 import type { ResourceState } from './tools.js';
@@ -26,6 +27,11 @@ export interface ResourceRef {
 export interface ReadResult {
   state: ResourceState;
   version: number;
+  /**
+   * O que o conector leu junto e que o pedido NÃO guarda (A6, Z2: o nome de quem fez a avaliação). Vai só para o plano
+   * da ferramenta conferir; não entra no estado, no pedido nem na auditoria.
+   */
+  transient?: ResourceState;
 }
 
 /** O que a parte do banco de uma leitura deixa pronto para a parte da plataforma. Opaco para quem chama: só o conector sabe abrir. */
@@ -112,4 +118,6 @@ export const CONNECTORS: Record<string, Connector> = {
   google_ads: googleAnunciosConnector,
   // A5, Y5: o pedido de mensagem de WhatsApp. Só com a flag de escrita `whatsapp_campaign` ligada para a empresa.
   regemcast: regemcastMensagemConnector,
+  // A6, Z2: a resposta a uma avaliação do perfil no Google. Só com a flag de escrita `perfil_google_write` ligada.
+  google_business: perfilAvaliacaoConnector,
 };

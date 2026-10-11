@@ -39,7 +39,7 @@ export type AvaliacaoNoGoogle = {
 /** O nome que o Google de mentira dá a quem fez cada avaliação (o Liame só pode mostrá-lo na tela, na hora). */
 export const nomeDeQuemAvaliou = (reviewId: string): string => `Pessoa Número ${reviewId}`;
 
-type Visto = { caminho: string; busca: URLSearchParams; autorizacao?: string };
+type Visto = { metodo: string; caminho: string; busca: URLSearchParams; autorizacao?: string; corpo?: unknown };
 
 const erroDe = (r: RespostaDoPerfil): { status: number; corpo: unknown; cabecalhos?: Record<string, string> } | null => {
   if (r === 'sem-cota') return { status: 429, corpo: { error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded for quota metric Requests and limit Requests per minute' } } };
@@ -70,6 +70,13 @@ export class GoogleComPerfil {
   resumo: { averageRating?: number; totalReviewCount?: number } = { averageRating: 4.6, totalReviewCount: 128 };
   /** Os números do perfil que o Google devolve (as séries, como ele as manda). */
   series: unknown[] = [];
+  /** Como respondem a leitura de UMA avaliação e a gravação da resposta (Z2). */
+  umaAvaliacao: RespostaDoPerfil = 'ok';
+  resposta: RespostaDoPerfil = 'ok';
+  /** A situação com que o Google devolve a resposta gravada: ele confere antes de mostrar (`PENDING`). */
+  conferencia: 'PENDING' | 'APPROVED' | 'REJECTED' = 'PENDING';
+  /** O Google grava a resposta e a conexão cai antes de ele responder (503): a resposta ficou lá. */
+  respostaCaiDepoisDeGravar = false;
 
   async subir(): Promise<void> {
     this.servidor = createServer((req, res) => {
@@ -140,13 +147,23 @@ export class GoogleComPerfil {
     this.lista = [];
     this.resumo = { averageRating: 4.6, totalReviewCount: 128 };
     this.series = [];
+    this.umaAvaliacao = 'ok';
+    this.resposta = 'ok';
+    this.conferencia = 'PENDING';
+    this.respostaCaiDepoisDeGravar = false;
+  }
+
+  /** As gravações de resposta que chegaram ao Google (o `PUT …/reply`), com o corpo de cada uma. */
+  respostasGravadas(): Visto[] {
+    return this.vistos.filter((v) => v.metodo === 'PUT' && v.caminho.endsWith('/reply'));
   }
 
   private responder(req: IncomingMessage, texto: string): { status: number; corpo: unknown; cabecalhos?: Record<string, string> } {
     const url = new URL(req.url ?? '/', this.base);
     const corpo = req.headers['content-type']?.includes('x-www-form-urlencoded') ? new URLSearchParams(texto) : undefined;
     const p = url.pathname;
-    this.vistos.push({ caminho: p, busca: url.searchParams, autorizacao: req.headers.authorization });
+    const json = req.headers['content-type']?.includes('application/json') && texto ? (JSON.parse(texto) as unknown) : undefined;
+    this.vistos.push({ metodo: req.method ?? '', caminho: p, busca: url.searchParams, autorizacao: req.headers.authorization, ...(json === undefined ? {} : { corpo: json }) });
     // OAuth do Google: o código (com PKCE) e a renovação.
     if (p === '/oauth2/token' && corpo?.get('grant_type') === 'authorization_code') {
       const desafio = createHash('sha256').update(corpo.get('code_verifier') ?? '').digest('base64url');
@@ -185,6 +202,47 @@ export class GoogleComPerfil {
         }));
       return { status: 200, corpo: { reviews, ...this.resumo } };
     }
+    // Uma avaliação pelo nome e a resposta da empresa (Z2), como a referência REST da v4 descreve (lida em 11/10/2026):
+    // `reviews.get`; `reviews.updateReply` é PUT em `…/reply`, com `ReviewReply` no corpo e na volta, e cria a resposta
+    // se ela não existir; `reviews.deleteReply` devolve um objeto vazio. A resposta tem a data DELA: a data da avaliação
+    // não muda (a referência não diz que mudaria). Para a avaliação que não existe, o 404 NOT_FOUND das APIs do Google.
+    const daLoja = `/avaliacoes/v4/${CONTA_DO_PERFIL}/${LOJA_DO_PERFIL}/reviews/`;
+    if (p.startsWith(daLoja)) {
+      const [id = '', sufixo, ...mais] = p.slice(daLoja.length).split('/');
+      const naoAchou = { status: 404, corpo: { error: { code: 404, status: 'NOT_FOUND', message: 'Requested entity was not found.' } } };
+      const item = this.lista.find((a) => a.reviewId === id);
+      if (mais.length || (sufixo !== undefined && sufixo !== 'reply')) return naoAchou;
+      if (sufixo === undefined && req.method === 'GET') {
+        const erro = erroDe(this.umaAvaliacao);
+        if (erro) return { ...erro, cabecalhos: this.esperar ? { 'retry-after': this.esperar } : undefined };
+        if (!item) return naoAchou;
+        const { anonima, ...a } = item;
+        return {
+          status: 200,
+          corpo: {
+            ...a,
+            name: `${CONTA_DO_PERFIL}/${LOJA_DO_PERFIL}/reviews/${a.reviewId}`,
+            reviewer: anonima ? { displayName: 'Pessoa Número anônima', isAnonymous: true } : { displayName: nomeDeQuemAvaliou(a.reviewId), profilePhotoUrl: 'https://lh3.googleusercontent.com/a/foto-1', isAnonymous: false },
+          },
+        };
+      }
+      if (sufixo === 'reply' && req.method === 'PUT') {
+        const erro = erroDe(this.resposta);
+        if (erro) return { ...erro, cabecalhos: this.esperar ? { 'retry-after': this.esperar } : undefined };
+        if (!item) return naoAchou;
+        const comment = (json as { comment?: unknown } | undefined)?.comment;
+        if (typeof comment !== 'string' || !comment) return { status: 400, corpo: { error: { code: 400, status: 'INVALID_ARGUMENT', message: 'Request contains an invalid argument' } } };
+        item.reviewReply = { comment, updateTime: new Date().toISOString(), reviewReplyState: this.conferencia };
+        if (this.respostaCaiDepoisDeGravar) return { status: 503, corpo: { error: { code: 503, status: 'UNAVAILABLE', message: 'The service is currently unavailable' } } };
+        return { status: 200, corpo: item.reviewReply };
+      }
+      if (sufixo === 'reply' && req.method === 'DELETE') {
+        if (!item?.reviewReply) return naoAchou;
+        delete item.reviewReply;
+        return { status: 200, corpo: {} };
+      }
+      return naoAchou;
+    }
     if (p === `/numeros/v1/${LOJA_DO_PERFIL}:fetchMultiDailyMetricsTimeSeries`) {
       const erro = erroDe(this.numeros);
       if (erro) return { ...erro, cabecalhos: this.esperar ? { 'retry-after': this.esperar } : undefined };
@@ -194,7 +252,8 @@ export class GoogleComPerfil {
   }
 }
 
-export type EmpresaAutorizada = { cookie: string; tenantId: string; userId: string; brandId: string; conexaoId: string };
+/** `segredoDoApp`: o do app autenticador do dono, para os testes que aprovam com o código. */
+export type EmpresaAutorizada = { cookie: string; tenantId: string; userId: string; email: string; segredoDoApp: string; brandId: string; conexaoId: string };
 export type EmpresaComLoja = EmpresaAutorizada & { contaId: string };
 
 /**
@@ -203,7 +262,7 @@ export type EmpresaComLoja = EmpresaAutorizada & { contaId: string };
  */
 export async function empresaComPerfilAutorizado(api: TestApi, google: GoogleComPerfil, processador: ConexaoProcessor, nome: string): Promise<EmpresaAutorizada> {
   const s = await signupAndLogin(api, undefined, nome);
-  await enableMfa(api, s.cookie);
+  const { secret: segredoDoApp } = await enableMfa(api, s.cookie);
   const tenantId = s.me.active_organization_id as string;
   const [marca] = await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [tenantId]);
   const brandId = marca!.id;
@@ -219,7 +278,7 @@ export async function empresaComPerfilAutorizado(api: TestApi, google: GoogleCom
   });
   expect(volta.status).toBe(303);
   expect(await processador.processarLote(5, { tenantIds: [tenantId] })).toBe(1);
-  return { cookie: s.cookie, tenantId, userId: s.me.user.id as string, brandId, conexaoId: inicio.body.id as string };
+  return { cookie: s.cookie, tenantId, userId: s.me.user.id as string, email: s.email, segredoDoApp, brandId, conexaoId: inicio.body.id as string };
 }
 
 /** A pessoa escolhe a loja do Perfil entre as contas que a autorização achou; devolve a conta ligada. */
