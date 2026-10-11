@@ -165,3 +165,69 @@ export const MessagingCampaignDetailResponse = z.strictObject({
   rest_days: z.int().min(0).nullable(),
 });
 export type MessagingCampaignDetailResponse = z.infer<typeof MessagingCampaignDetailResponse>;
+
+// O desconto padrão do cupom das mensagens (A5, Y6; decisão do dono em 10/10/2026; protótipo P15, parte D). O cupom de
+// cada mensagem tem o mesmo desconto, e quem o define é a empresa, uma vez. O funcionário de CRM e mensageria usa este
+// desconto e não inventa oferta nem preço; sem ele, não propõe. Nenhum dado de cliente.
+
+/** Os três tipos do cupom de campanha do Regem. */
+export const MessageDiscountKind = z.enum(['percentual', 'valor', 'frete_gratis']);
+export type MessageDiscountKind = z.infer<typeof MessageDiscountKind>;
+
+/** Uma loja do Regem da marca, onde o cupom de cada mensagem pode nascer. */
+export const MessageDiscountStore = z.strictObject({
+  connected_account_id: z.uuid(),
+  name: z.string(),
+  /** A loja liberou "criar cupom de campanha" na autorização do Regem. Sem isso, o cupom não nasce nela. */
+  can_create: z.boolean(),
+});
+export type MessageDiscountStore = z.infer<typeof MessageDiscountStore>;
+
+export const MessageDiscount = z.strictObject({
+  /** `percentual`, `valor` ou `frete_gratis`. */
+  kind: Slug,
+  /** Só no cupom percentual. */
+  percent: z.int().min(1).max(100).nullable(),
+  /** Só no cupom de valor fixo. */
+  value_cents: Centavos.nullable(),
+  /** Nulo: o cupom vale para qualquer pedido. */
+  min_order_cents: Centavos.nullable(),
+  /** Por quantos dias o cupom vale, contando o dia do envio. */
+  valid_days: z.int().min(1).max(90),
+  /** A loja do Regem onde o cupom nasce. `connected` falso: a loja foi desconectada, e o desconto precisa de outra. */
+  store: MessageDiscountStore.extend({ connected: z.boolean() }),
+  /** Quem definiu por último (nulo se a pessoa saiu da empresa). */
+  set_by: z.strictObject({ id: z.uuid(), name: z.string() }).nullable(),
+  set_at: z.iso.datetime(),
+});
+export type MessageDiscount = z.infer<typeof MessageDiscount>;
+
+export const MessageDiscountResponse = z.strictObject({
+  brand_id: z.uuid(),
+  /** A função das mensagens está ligada para a empresa. Desligada, nada é lido: `discount` nulo e `stores` vazia. */
+  enabled: z.boolean(),
+  /** Nulo: ninguém definiu ainda (e o funcionário de CRM e mensageria não propõe). */
+  discount: MessageDiscount.nullable(),
+  /** As lojas do Regem conectadas à marca. */
+  stores: z.array(MessageDiscountStore),
+  /** Até onde o Liame aceita o desconto (mais estreito que o Regem, porque ele se repete em toda mensagem). */
+  limits: z.strictObject({ percent_max: z.int().min(1), value_cents_max: Centavos, min_order_cents_max: Centavos, valid_days_max: z.int().min(1) }),
+  /** Quem pede pode definir e mudar o desconto (os mesmos que definem os limites da Verba do mês). */
+  can_edit: z.boolean(),
+});
+export type MessageDiscountResponse = z.infer<typeof MessageDiscountResponse>;
+
+export const MessageDiscountRequest = z.strictObject({
+  brand_id: z.uuid(),
+  kind: MessageDiscountKind,
+  /** Obrigatório no cupom percentual, e só nele. */
+  percent: z.int().min(1).max(100).optional(),
+  /** Obrigatório no cupom de valor fixo, e só nele. */
+  value_cents: z.int().min(1).max(100_000_000).optional(),
+  /** Opcional; obrigatório e maior que o desconto no cupom de valor fixo. */
+  min_order_cents: z.int().min(1).max(100_000_000).optional(),
+  valid_days: z.int().min(1).max(90),
+  /** A loja do Regem onde o cupom nasce. Pode faltar quando a marca tem uma só loja que cria cupom. */
+  connected_account_id: z.uuid().optional(),
+});
+export type MessageDiscountRequest = z.infer<typeof MessageDiscountRequest>;

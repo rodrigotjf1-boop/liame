@@ -163,6 +163,7 @@ export {
   ConfirmedResult,
   DailyResult,
   DailyResultsResponse,
+  MessageTotals,
   OrderOrigin,
   OrderOriginQuery,
   OrderOriginResponse,
@@ -286,6 +287,11 @@ export {
   StopGoogleConversionDestinationRequest,
 } from './conversoes.js';
 export {
+  MessageDiscount,
+  MessageDiscountKind,
+  MessageDiscountRequest,
+  MessageDiscountResponse,
+  MessageDiscountStore,
   MessagingAccount,
   MessagingBudget,
   MessagingBudgetPeriod,
