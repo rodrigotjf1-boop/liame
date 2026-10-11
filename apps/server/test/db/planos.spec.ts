@@ -228,7 +228,10 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     expect(p).toMatchObject({ author: 'estrategista', edited_by: null, reanalysis: null, decisions: [], can_decide: true });
     const fonte = (valor: string) => p.numbers.find((n) => n.value === valor)?.sources ?? [];
     expect(fonte('R$ 200,00')[0]).toMatch(/^Resultados de /);
-    expect(fonte(br(amanha))).toEqual(['Proposta do Estrategista nesta versão do plano']);
+    // O dia da oferta é "amanhã", que muda com o dia em que o teste roda. Quando amanhã também está no calendário
+    // comercial do Liame (em 11/10/2026 a suíte falhou por isso: 12/10 é feriado nacional), a data tem as duas fontes.
+    const noCalendario = (await ownerQuery<{ n: number }>(`select count(*)::int as n from liame.commercial_date where day = $1::date`, [amanha]))[0]!.n > 0;
+    expect(fonte(br(amanha))).toEqual(['Proposta do Estrategista nesta versão do plano', ...(noCalendario ? ['Liame · calendário comercial (feriados nacionais e datas do varejo)'] : [])]);
     // A hora solta fica como texto (não ganha marcação), mas passou pela conferência como os outros números.
     expect(fonte('18:00')).toEqual([]);
     expect(p.marked.map((m) => m.path)).toEqual(['summary', 'reasons.0']);
