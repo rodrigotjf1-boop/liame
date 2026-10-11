@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { conferirPedidoDoCrm } from '../src/ai/crm/contexto.js';
 import { type BaseDaMensagem, conferirMensagem, corpoDeExemplo, NOME_DE_EXEMPLO, RODAPE_DE_SAIDA, TAMANHO_DA_META } from '../src/ai/crm/mensagem.js';
 import { FORMATO_DA_CHAVE_REGEMCAST } from '../src/connectors/regemcast/conector-regemcast.js';
 import { cupomDoDesconto, type DescontoGuardado } from '../src/mensageria/desconto.js';
 import { type CupomDaMensagem, PropostaDeMensagem, textoComVariaveis } from '../src/mensageria/proposta-de-mensagem.js';
+import { ehCodigo } from '../src/mensageria/proposta-do-crm.js';
 import {
   chaveDoModelo,
   codigoDoCupom,
@@ -12,6 +15,9 @@ import {
   DIAS_ENTRE_PROPOSTAS,
   DIAS_PARA_REPETIR_A_OFERTA,
   diasDoCupom,
+  fimDoIntervalo,
+  HORAS_DEPOIS_DE_FALHA,
+  HORAS_ENTRE_OLHADAS,
   IDIOMA_DO_MODELO,
   LETRAS_DO_CODIGO,
   modeloParaRascunhar,
@@ -22,13 +28,17 @@ import {
   PERFIS_DO_MOTIVO,
   PESSOAS_NO_MINIMO,
   propostaParaOPedido,
+  proximaOlhada,
   publicoDoMotivo,
+  RESULTADOS_DO_OLHAR,
+  tetoCheio,
   variaveisDaMensagem,
 } from '../src/mensageria/rotina-do-crm.js';
 
-// A5 · Y6, parte 6a: as regras puras da rotina do funcionário de CRM e mensageria, sem banco, sem modelo de IA e sem
-// RegemCast. Para quem vai cada mensagem, de quanto em quanto tempo ele propõe, qual oferta divulga, o código e as
-// palavras do cupom (a validade em dias, e não em data), o modelo que vai como rascunho e a proposta que vira pedido.
+// A5 · Y6, partes 6a e 6b: as regras puras da rotina do funcionário de CRM e mensageria, sem banco, sem modelo de IA e
+// sem RegemCast. Para quem vai cada mensagem, de quanto em quanto tempo ele propõe, qual oferta divulga, o que ele
+// decide ao olhar uma marca e quando olha de novo, o código e as palavras do cupom (a validade em dias, e não em
+// data), o modelo que vai como rascunho e a proposta que vira pedido.
 
 const LOJA = '0199a000-0000-7000-8000-00000000000a';
 const MARCA = '0199a000-0000-7000-8000-00000000000b';
@@ -38,6 +48,8 @@ const AGORA = new Date('2026-10-11T15:00:00Z');
 const HORA = 3_600_000;
 const DIA = 24 * HORA;
 const antes = (ms: number) => new Date(AGORA.getTime() - ms);
+
+const migration0064 = readFileSync(resolve(process.cwd(), '../../packages/database/migrations/0064_rotina_do_crm.sql'), 'utf8');
 
 const perfil = (id: string, pessoas: number, nome = id) => ({ id, nome, regra: `Regra de ${nome}`, pessoas });
 const padrao: DescontoGuardado = { kind: 'percentual', percent: 10, value_cents: null, min_order_cents: null, valid_days: 2, coupon_account_id: LOJA };
@@ -107,6 +119,46 @@ describe('a rotina do CRM: qual oferta e com que frequência', () => {
     expect(passouOIntervalo('volte_a_pedir', antes(8 * DIA), AGORA)).toBe(false);
     expect(passouOIntervalo('volte_a_pedir', antes(30 * DIA - HORA), AGORA)).toBe(false);
     expect(passouOIntervalo('volte_a_pedir', antes(30 * DIA), AGORA)).toBe(true);
+  });
+});
+
+describe('a rotina do CRM: o que ele decide ao olhar e quando olha de novo', () => {
+  it('cada resultado é um código que o banco aceita, sem repetição, e só um quer dizer que ele propôs', () => {
+    for (const r of RESULTADOS_DO_OLHAR) expect(ehCodigo(r), r).toBe(true);
+    expect(new Set(RESULTADOS_DO_OLHAR).size).toBe(RESULTADOS_DO_OLHAR.length);
+    expect(RESULTADOS_DO_OLHAR[0]).toBe('proposta_aberta');
+    // O formato é o que a migration 0064 confere, e os tipos de mensagem da fila são os da proposta.
+    expect(migration0064).toContain(`constraint message_routine_resultado check (outcome ~ '^[a-z_]{2,40}$')`);
+    expect(migration0064).toContain(`check (motive in ('promocao', 'volte_a_pedir'))`);
+    expect(Object.keys(DIAS_ENTRE_PROPOSTAS)).toEqual(['promocao', 'volte_a_pedir']);
+  });
+
+  it('uma vez por dia; o que falhou, em 1 hora; e, se só o intervalo impede, quando ele acabar', () => {
+    expect([HORAS_ENTRE_OLHADAS, HORAS_DEPOIS_DE_FALHA]).toEqual([24, 1]);
+    const em = (ms: number) => new Date(AGORA.getTime() + ms);
+    for (const r of ['proposta_aberta', 'crm_desligado', 'sem_oferta', 'sem_publico', 'teto_cheio', 'em_andamento', 'sem_autorizacao'] as const) expect(proximaOlhada(r, AGORA), r).toEqual(em(24 * HORA));
+    expect(proximaOlhada('regemcast_fora', AGORA)).toEqual(em(HORA));
+    expect(proximaOlhada('erro', AGORA)).toEqual(em(HORA));
+    // O intervalo acaba em 5 dias: ele volta em 5 dias, e não todo dia até lá.
+    expect(proximaOlhada('intervalo', AGORA, em(5 * DIA))).toEqual(em(5 * DIA));
+    // O intervalo acaba em 3 horas, ou não veio a data: amanhã, como os outros.
+    expect(proximaOlhada('intervalo', AGORA, em(3 * HORA))).toEqual(em(24 * HORA));
+    expect(proximaOlhada('intervalo', AGORA)).toEqual(em(24 * HORA));
+    expect(proximaOlhada('intervalo', AGORA, null)).toEqual(em(24 * HORA));
+    // A data só vale para o intervalo.
+    expect(proximaOlhada('sem_oferta', AGORA, em(5 * DIA))).toEqual(em(24 * HORA));
+    // O fim do intervalo é a última proposta mais os dias do tipo, e é quando `passouOIntervalo` passa a dizer sim.
+    const ultima = antes(2 * DIA);
+    expect(fimDoIntervalo('promocao', ultima)).toEqual(new Date(ultima.getTime() + 7 * DIA));
+    expect(fimDoIntervalo('volte_a_pedir', ultima)).toEqual(new Date(ultima.getTime() + 30 * DIA));
+    expect(passouOIntervalo('promocao', ultima, fimDoIntervalo('promocao', ultima))).toBe(true);
+    expect(passouOIntervalo('promocao', ultima, new Date(fimDoIntervalo('promocao', ultima).getTime() - 1))).toBe(false);
+  });
+
+  it('o teto de gasto de mensagens cheio em qualquer período impede a proposta; em atenção, não', () => {
+    expect(tetoCheio({ periodos: [] })).toBe(false);
+    expect(tetoCheio({ periodos: [{ sinal: 'ok' }, { sinal: 'atencao' }] })).toBe(false);
+    expect(tetoCheio({ periodos: [{ sinal: 'ok' }, { sinal: 'cheio' }] })).toBe(true);
   });
 });
 
