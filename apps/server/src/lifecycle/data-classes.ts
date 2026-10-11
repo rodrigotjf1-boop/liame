@@ -172,4 +172,12 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // A fila do olhar da rotina do CRM e mensageria (A5, Y6): por marca e por tipo de mensagem, quando ele olha de novo,
   // quando olhou e o que decidiu, em código. Nenhum texto e nenhum dado de pessoa.
   message_routine: { class: 'INTERNAL', retention: 'com a marca' },
+  // As avaliações da loja no Perfil da Empresa no Google (A6, Z1): a nota, o texto, as datas e a resposta da empresa.
+  // O nome e a foto de quem avaliou não são guardados (critério A6-1), mas o texto é de terceiro e pode trazer dado
+  // pessoal de quem escreveu: por isso PERSONAL, com guarda de 12 meses (D-A6-5).
+  profile_review: { class: 'PERSONAL', retention: '12 meses depois da última mudança da avaliação no Google', purge: { job: 'avaliacao', days: 365 } },
+  // A nota média e o total de avaliações da loja, e os números do perfil por dia (vistas, rotas, ligações, cliques).
+  // Contagens da própria empresa; nenhum dado de pessoa.
+  profile_summary: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  profile_metric_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
 };

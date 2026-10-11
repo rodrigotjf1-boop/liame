@@ -46,6 +46,7 @@ import { EstrategistaService } from './estrategista.service.js';
 import { CustoDasPecasService } from '../criativo/custo.service.js';
 import { CriativoLoop } from './criativo-loop.js';
 import { CriativoService } from './criativo.service.js';
+import { PerfilLoop } from './perfil-loop.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { PesquisadorService } from './pesquisa.service.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
@@ -95,6 +96,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     SincronizacaoLoop,
     VendasLoop,
     ConversasLoop,
+    // Perfil da Empresa no Google (A6, Z1): as avaliações e os números do perfil das lojas ligadas; só com a função `perfil_google` ligada.
+    PerfilLoop,
     // Conversões para o Google (A5, Y1): a venda confirmada que veio de um anúncio do Google volta para ele; nasce desligada.
     ConversoesLoop,
     // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.

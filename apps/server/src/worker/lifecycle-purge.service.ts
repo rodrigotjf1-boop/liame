@@ -129,6 +129,14 @@ export class LifecyclePurgeService {
           returning tenant_id`,
       true,
     );
+    // A avaliação do Perfil no Google: 12 meses contados da última mudança dela lá (D-A6-5). O texto é de terceiro.
+    await run(
+      'avaliacao',
+      sql`delete from liame.profile_review where id in (
+            select id from liame.profile_review e where e.changed_at < now() - interval '365 days' and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH})
+          returning tenant_id`,
+      true,
+    );
     await run(
       'execucao_atribuicao',
       sql`delete from liame.attribution_run where id in (

@@ -79,7 +79,8 @@ export class ConectorPerfilGoogle {
   constructor(
     private readonly cliente: ClienteConector,
     private readonly bases: AppConfig['plataformas']['perfilGoogle'],
-    private readonly versoes: { contas: string; lojas: string; avaliacoes: string; numeros: string },
+    /** A versão de cada API, do registro de capacidades (quem lê anota a versão na execução). */
+    readonly versoes: { contas: string; lojas: string; avaliacoes: string; numeros: string },
     private readonly chaveDaCota: string = CHAVE_DA_COTA,
   ) {}
 
