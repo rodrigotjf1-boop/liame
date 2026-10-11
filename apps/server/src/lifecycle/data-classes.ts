@@ -169,4 +169,7 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // em dias e a loja do Regem onde ele nasce, com quem definiu por último (uma pessoa da própria empresa). É regra
   // comercial da empresa; nenhum dado de cliente.
   message_discount: { class: 'CONFIDENTIAL', retention: 'com a marca ou a loja do cupom' },
+  // A fila do olhar da rotina do CRM e mensageria (A5, Y6): por marca e por tipo de mensagem, quando ele olha de novo,
+  // quando olhou e o que decidiu, em código. Nenhum texto e nenhum dado de pessoa.
+  message_routine: { class: 'INTERNAL', retention: 'com a marca' },
 };

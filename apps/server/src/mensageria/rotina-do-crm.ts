@@ -90,6 +90,69 @@ export function passouOIntervalo(motivo: MotivoDaMensagem, ultima: Date | null, 
   return agora.getTime() - ultima.getTime() >= DIAS_ENTRE_PROPOSTAS[motivo] * DIA_MS;
 }
 
+/**
+ * O que ele decidiu ao olhar uma marca, para um tipo de mensagem. Fica na fila do olhar (`message_routine.outcome`),
+ * como código: serve a quem dá suporte e à próxima olhada. Só `proposta_aberta` quer dizer que ele propôs.
+ */
+export const RESULTADOS_DO_OLHAR = [
+  'proposta_aberta',
+  // A marca e as chaves.
+  'marca_arquivada',
+  'ia_desligada',
+  'crm_desligado',
+  'mensageria_desligada',
+  'envio_desligado',
+  'funcionario_desligado',
+  // O que já existe.
+  'em_andamento',
+  'intervalo',
+  // O que falta para propor.
+  'sem_desconto',
+  'sem_loja_do_cupom',
+  'sem_responsavel',
+  'sem_regemcast',
+  'sem_autorizacao',
+  'sem_permissao',
+  'sem_dossie',
+  'sem_oferta',
+  'sem_publico',
+  'teto_cheio',
+  // O que não deu para saber agora.
+  'regemcast_fora',
+  'erro',
+] as const;
+export type ResultadoDoOlhar = (typeof RESULTADOS_DO_OLHAR)[number];
+
+/** De quanto em quanto tempo ele olha cada marca, quando nada diz outra coisa. */
+export const HORAS_ENTRE_OLHADAS = 24;
+/** Quando o RegemCast não respondeu, ou algo falhou: ele olha de novo logo. */
+export const HORAS_DEPOIS_DE_FALHA = 1;
+
+const HORA_MS = 3_600_000;
+
+/**
+ * Quando ele olha a marca de novo. Uma vez por dia basta: o que muda a resposta (uma oferta nova, o desconto definido,
+ * o público que cresceu) muda devagar. Duas exceções: o que falhou (o RegemCast fora do ar, um erro) é olhado de novo
+ * em 1 hora; e, quando o que impede é só o intervalo entre propostas, ele volta quando o intervalo acabar (`ate`), se
+ * isso for depois de amanhã.
+ */
+export function proximaOlhada(resultado: ResultadoDoOlhar, agora: Date, ate?: Date | null): Date {
+  if (resultado === 'regemcast_fora' || resultado === 'erro') return new Date(agora.getTime() + HORAS_DEPOIS_DE_FALHA * HORA_MS);
+  const amanha = agora.getTime() + HORAS_ENTRE_OLHADAS * HORA_MS;
+  if (resultado === 'intervalo' && ate && ate.getTime() > amanha) return new Date(ate.getTime());
+  return new Date(amanha);
+}
+
+/** Quando o intervalo desde a última proposta deste tipo acaba. */
+export function fimDoIntervalo(motivo: MotivoDaMensagem, ultima: Date): Date {
+  return new Date(ultima.getTime() + DIAS_ENTRE_PROPOSTAS[motivo] * DIA_MS);
+}
+
+/** O teto de gasto de mensagens do RegemCast está cheio em algum período (dia, semana ou mês)? Com ele cheio, ele não propõe (P16). */
+export function tetoCheio(orcamento: { periodos: ReadonlyArray<{ sinal: string }> }): boolean {
+  return orcamento.periodos.some((p) => p.sinal === 'cheio');
+}
+
 /** Sem as letras e os números que se confundem ao ler e ao digitar (O e 0, I e 1). */
 export const LETRAS_DO_CODIGO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const COMECO_DO_CODIGO: Record<MotivoDaMensagem, string> = { promocao: 'PROMO', volte_a_pedir: 'VOLTE' };

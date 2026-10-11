@@ -10,6 +10,7 @@ import { EstrategistaLoop } from './estrategista-loop.js';
 import { PedidosQueEsperam } from './pedidos-que-esperam.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
+import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
 import { VendasLoop } from './vendas-loop.js';
@@ -18,7 +19,7 @@ import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador, conferir o gasto de cada mudança feita numa conta de anúncio e conferir de novo os pedidos que esperam aprovação com um impedimento. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador, conferir o gasto de cada mudança feita numa conta de anúncio, conferir de novo os pedidos que esperam aprovação com um impedimento e olhar as marcas pela rotina do CRM e mensageria. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -47,6 +48,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly conferencia: ConferenciaDoGasto,
     private readonly conversoes: ConversoesLoop,
     private readonly esperam: PedidosQueEsperam,
+    private readonly rotinaDoCrm: RotinaDoCrmLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -74,6 +76,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('conversoes-google', 2, 300_000, async (n) => (await this.conversoes.executarLote(n)).length),
       // Os pedidos que esperam com um impedimento: cada um é conferido de 15 em 15 minutos; a fila é olhada a cada minuto.
       this.loop('pedidos-que-esperam', 20, 60_000, async (n) => (await this.esperam.executarLote(n)).length),
+      // A rotina do CRM e mensageria: cada marca é olhada uma vez por dia; a fila das marcas é olhada de 5 em 5 minutos.
+      this.loop('rotina-do-crm', 5, 300_000, async (n) => (await this.rotinaDoCrm.olharLote(n)).length),
     );
   }
 
