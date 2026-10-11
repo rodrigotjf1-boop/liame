@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { MotivoDaMensagem } from '../../src/ai/crm/mensagem.js';
 import { proximaOlhada, type ResultadoDoOlhar } from '../../src/mensageria/rotina-do-crm.js';
 import type { Escrita, EscritaDoCrmService } from '../../src/worker/escrita-do-crm.service.js';
+import type { ModeloDoCrmService } from '../../src/worker/modelo-do-crm.service.js';
 import type { RotinaDoCrmLoop } from '../../src/worker/rotina-do-crm-loop.js';
 import type { Olhada, RotinaDoCrmService } from '../../src/worker/rotina-do-crm.service.js';
 import type { TestApi } from '../helpers/api.js';
@@ -21,7 +22,7 @@ import { hasDb, OWNER_URL } from './env.js';
 // (a conexão de verdade está provada em `regem-conexao.spec.ts`). O app e os ajudantes entram por `import()` dentro do
 // `beforeAll`, depois de o endereço do RegemCast falso estar no ambiente.
 
-const TODAS = ['conta.ler', 'campanhas.ler', 'publicos.ler', 'modelos.ler', 'orcamento.ler'];
+const TODAS = ['conta.ler', 'campanhas.ler', 'publicos.ler', 'modelos.ler', 'orcamento.ler', 'modelos.rascunhar', 'campanhas.rascunhar', 'campanhas.disparar'];
 const OFERTAS = ['Combo sexta: smash, batata e refri por R$ 34,90', 'Milk-shake de 400 ml por R$ 16,90 na terça'];
 const PERFIS = [
   { id: 'fieis', nome: 'Fiéis', regra: '4+ pedidos, última compra entre 31 e 90 dias.', pessoas: 120 },
@@ -34,7 +35,9 @@ const HORA = 3_600_000;
 const DIA = 24 * HORA;
 
 type Perfil = { id: string; nome: string; regra: string | null; pessoas: number };
-type ContaFalsa = { contaId: string; permissoes: string[]; perfis: Perfil[]; sinal: string; modo: 'ok' | 'erro_interno' };
+/** Um modelo no RegemCast falso: nasce rascunho, e só aparece na lista (a da Meta) depois de uma pessoa enviá-lo. */
+type ModeloFalso = { id: string; nome: string; idioma: string; corpo: string; rodape: string | null; situacao: string; naMeta: boolean; pedido: Record<string, unknown> };
+type ContaFalsa = { contaId: string; permissoes: string[]; perfis: Perfil[]; sinal: string; modo: 'ok' | 'erro_interno'; modelos: ModeloFalso[] };
 type Empresa = { cookie: string; tenantId: string; userId: string; brandId: string; token: string; conta: string; loja: string };
 type Proposta = {
   id: string;
@@ -67,6 +70,19 @@ type Guardada = {
   next_attempt_at: Date | null;
   created_at: Date;
 };
+type DoModelo = {
+  status: string;
+  reason: string | null;
+  template_id: string | null;
+  template_name: string | null;
+  template_language: string | null;
+  template_status: string | null;
+  drafted_at: Date | null;
+  template_checked_at: Date | null;
+  next_attempt_at: Date | null;
+  attempts: number;
+  acabou: boolean;
+};
 const MIN = 60_000;
 /** O que o funcionário escreve quando escreve certo: o preço da oferta, o benefício e a validade do cupom, como vieram. */
 const BOA = 'Oi, {{1}}! Sexta é dia de combo: smash, batata e refri por R$ 34,90. Com o cupom {{2}} você ganha 10% de desconto, válido por 2 dias, contando hoje. Peça pelo cardápio.';
@@ -78,6 +94,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
   let regemcast: Server;
   let servico: RotinaDoCrmService;
   let escrita: EscritaDoCrmService;
+  let doModelo: ModeloDoCrmService;
   let loop: RotinaDoCrmLoop;
   let Loop: typeof import('../../src/worker/rotina-do-crm-loop.js').RotinaDoCrmLoop;
   let ia: typeof import('../helpers/ia.js');
@@ -96,10 +113,14 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
   const resultado = (sc: unknown) => ({ result: { content: [{ type: 'text', text: JSON.stringify(sc) }], structuredContent: sc, resultType: 'complete' } });
   const recusada = (texto: string) => ({ result: { content: [{ type: 'text', text: texto }], isError: true, resultType: 'complete' } });
 
-  function responder(credencial: string, corpo: { id?: unknown; params?: { name?: string } }): { status: number; corpo: unknown } {
+  /** As chaves de idempotência do rascunho de modelo: a mesma chave com o mesmo pedido devolve a mesma resposta. */
+  const chavesDeModelo = new Map<string, { pedido: string; resposta: object }>();
+
+  function responder(credencial: string, corpo: { id?: unknown; params?: { name?: string; arguments?: Record<string, unknown> } }): { status: number; corpo: unknown } {
     const conta = contas.get(credencial);
     if (!conta) return { status: 401, corpo: { mensagem: 'Token de integração inválido ou revogado.' } };
     const nome = corpo.params?.name ?? '';
+    const args = corpo.params?.arguments ?? {};
     chamadas.push({ token: credencial, ferramenta: nome });
     const comId = (r: object) => ({ jsonrpc: '2.0', id: corpo.id, ...r });
     const ok = (sc: unknown) => ({ status: 200, corpo: comId(resultado(sc)) });
@@ -119,6 +140,30 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
         tetos: { dia: null, semana: null, mes: 30_000 },
         periodos: [{ periodo: 'mes', rotulo: 'Outubro', tetoCentavos: 30_000, gastoCentavos: conta.sinal === 'cheio' ? 30_000 : 12_736, percentual: conta.sinal === 'cheio' ? 100 : 42.5, texto: 'do teto do mês', sinal: conta.sinal }],
         avisos: [],
+      });
+    }
+    if (nome === 'modelo_rascunhar') {
+      if (!conta.permissoes.includes('modelos.rascunhar')) return semFerramenta;
+      if (conta.modo === 'erro_interno') return { status: 200, corpo: comId(recusada('Erro interno ao gravar o rascunho.')) };
+      const { chaveIdempotencia, ...pedido } = args;
+      const chave = `${conta.contaId}:${String(chaveIdempotencia)}`;
+      const guardada = chavesDeModelo.get(chave);
+      if (guardada) return guardada.pedido === JSON.stringify(pedido) ? { status: 200, corpo: comId(guardada.resposta) } : { status: 200, corpo: comId(recusada('Esta chave já foi usada com outro pedido. Use uma chave nova.')) };
+      if (String(pedido.corpo).includes('NAOACEITA')) return { status: 200, corpo: comId(recusada('O texto do modelo tem uma palavra que a Meta não aceita.')) };
+      const m: ModeloFalso = { id: randomUUID(), nome: String(pedido.nome), idioma: String(pedido.idioma ?? 'pt_BR'), corpo: String(pedido.corpo), rodape: pedido.rodape ? String(pedido.rodape) : null, situacao: 'rascunho', naMeta: false, pedido: { chaveIdempotencia, ...pedido } };
+      conta.modelos.push(m);
+      const resposta = resultado({ id: m.id, nome: m.nome, idioma: m.idioma, categoria: String(pedido.categoria), situacao: 'rascunho', problemas: [], prontoParaEnviar: true, proximoPasso: 'O rascunho está salvo. Uma pessoa da conta confere e envia para a Meta, em Modelos.' });
+      chavesDeModelo.set(chave, { pedido: JSON.stringify(pedido), resposta });
+      return { status: 200, corpo: comId(resposta) };
+    }
+    if (nome === 'modelos_listar') {
+      if (!conta.permissoes.includes('modelos.ler')) return semFerramenta;
+      if (conta.modo === 'erro_interno') return { status: 200, corpo: comId(recusada('Erro interno ao ler os modelos.')) };
+      // A lista é a dos modelos como a Meta os tem: o rascunho que ninguém enviou não aparece.
+      return ok({
+        modelos: conta.modelos
+          .filter((m) => m.naMeta)
+          .map((m) => ({ id: `meta-${m.id.slice(0, 8)}`, nome: m.nome, idioma: m.idioma, categoria: 'marketing', situacao: m.situacao, podeDisparar: m.situacao === 'aprovado', qualidade: 'desconhecida', variaveis: 2, cabecalho: null, corpo: m.corpo, rodape: m.rodape, botoes: [], alertas: [] })),
       });
     }
     return semFerramenta;
@@ -151,7 +196,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
    * Uma empresa com o RegemCast conectado pelo caminho de verdade, uma loja do Regem que cria cupom, as cinco chaves
    * ligadas e, a pedido, o desconto e o dossiê. `sem` deixa de fora o que o teste quer ver faltando.
    */
-  async function empresa(sem: Array<'regemcast' | 'loja' | 'desconto' | 'dossie' | 'cardapio' | 'crm'> = []): Promise<Empresa> {
+  async function empresa(sem: Array<'regemcast' | 'loja' | 'desconto' | 'dossie' | 'cardapio' | 'crm'> = [], permissoes?: string[]): Promise<Empresa> {
     await ajuda.resetIpRateLimits();
     const s = await ajuda.signupAndLogin(api, undefined, 'Hamburgueria da Rotina do CRM');
     await ajuda.enableMfa(api, s.cookie);
@@ -161,7 +206,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     let conta = '';
     if (!sem.includes('regemcast')) {
       const contaId = randomUUID();
-      contas.set(token, { contaId, permissoes: TODAS, perfis: PERFIS, sinal: 'ok', modo: 'ok' });
+      contas.set(token, { contaId, permissoes: permissoes ?? TODAS, perfis: PERFIS, sinal: 'ok', modo: 'ok', modelos: [] });
       const conexao = await registrar(deps, { tenantId, brandId, produto: 'regemcast', tokens: [token] });
       const ligada = await api.call('POST', `/v1/connections/${conexao.connectionId}/accounts`, { cookie: s.cookie, body: { accounts: [{ provider: 'regemcast', external_id: contaId }] } });
       expect(ligada.status, JSON.stringify(ligada.body)).toBe(200);
@@ -211,6 +256,37 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
   const trilha = (e: Empresa, acao: string) => ownerQuery<{ resource_id: string; after: Record<string, unknown> }>(`select resource_id, "after" from liame.audit_event where tenant_id = $1 and action = $2 order by chain_seq`, [e.tenantId, acao]);
   const recusas = (e: Empresa) => ownerQuery<{ member: string; workflow: string; kind: string; rules: string[]; items: number }>(`select member, workflow, kind, rules, items from liame.ai_refusal where tenant_id = $1 order by created_at, id`, [e.tenantId]);
 
+  // ---------------------------------------------------------------- o modelo: o rascunho no RegemCast e a espera pela Meta
+  const rascunhar = (e: Empresa, agora = new Date()) => loop.rascunharLote(5, { tenantIds: [e.tenantId] }, agora);
+  const acompanhar = (e: Empresa, agora = new Date()) => loop.acompanharLote(5, { tenantIds: [e.tenantId] }, agora);
+  /** Abre a proposta e faz o funcionário escrever um texto que passa: ela fica pronta para o rascunho do modelo. */
+  async function comTexto(e: Empresa, motivo: MotivoDaMensagem = 'promocao', corpo = motivo === 'promocao' ? BOA : VOLTE): Promise<Guardada> {
+    expect((await olhar(e, motivo)).resultado).toBe('proposta_aberta');
+    comResposta({ recusa: null, mensagem: { nome: motivo === 'promocao' ? 'Combo da sexta' : 'Volte a pedir', corpo } });
+    expect((await escrever(e)).map((v) => v.feito.status)).toEqual(['escrita']);
+    return (await guardadas(e)).find((p) => p.motive === motivo)!;
+  }
+  const doModeloDe = async (id: string) =>
+    (
+      await ownerQuery<DoModelo>(
+        `select status, reason, template_id, template_name, template_language, template_status, drafted_at, template_checked_at, next_attempt_at, attempts, finished_at is not null as acabou from liame.message_proposal where id = $1`,
+        [id],
+      )
+    )[0]!;
+  /** O que a ficha dele em Sua equipe diz que o segura agora. */
+  const naFicha = async (e: Empresa) => {
+    const r = await api.call('GET', `/v1/team?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const crm = (r.body.members as Array<{ key: string; working_now?: boolean; blocked_by?: string | null }>).find((m) => m.key === 'crm')!;
+    return { working_now: crm.working_now, blocked_by: crm.blocked_by };
+  };
+  /** Uma pessoa envia o rascunho para a análise da Meta, no RegemCast; a Meta responde com a situação dada. */
+  const naMeta = (e: Empresa, nome: string, situacao: string) => {
+    const m = contas.get(e.token)!.modelos.find((x) => x.nome === nome)!;
+    m.naMeta = true;
+    m.situacao = situacao;
+  };
+
   beforeAll(async () => {
     const { runMigrations } = await import('@liame/database');
     await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
@@ -238,7 +314,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     ajuda = await import('../helpers/api.js');
     ({ ownerQuery } = ajuda);
     api = await ajuda.startApi();
-    const [{ FlagService }, distribuicao, { VaultService }, { loadConfig }, { DATABASE }, { ResultsService }, { RotinaDoCrmService: Servico }, doLoop, { EscritaDoCrmService: DaEscrita }, { AiGateway }, { ModelosIa }, doTeste] =
+    const [{ FlagService }, distribuicao, { VaultService }, { loadConfig }, { DATABASE }, { ResultsService }, { RotinaDoCrmService: Servico }, doLoop, { EscritaDoCrmService: DaEscrita }, { AiGateway }, { ModelosIa }, doTeste, { ModeloDoCrmService: DoModelo }] =
       await Promise.all([
         import('../../src/flags/flag.service.js'),
         import('../../src/connections/distribuicao.js'),
@@ -252,6 +328,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
         import('../../src/ai/gateway.js'),
         import('../../src/ai/modelos.js'),
         import('../helpers/ia.js'),
+        import('../../src/worker/modelo-do-crm.service.js'),
       ]);
     ia = doTeste;
     database = api.app.get<Database>(DATABASE);
@@ -264,8 +341,9 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
     servico = new Servico(database, loadConfig(), flags, api.app.get(VaultService), api.app.get(ResultsService));
     escrita = new DaEscrita(database, flags, api.app.get(AiGateway), api.app.get(ResultsService));
+    doModelo = new DoModelo(database, loadConfig(), flags, api.app.get(VaultService));
     Loop = doLoop.RotinaDoCrmLoop;
-    loop = new Loop(database, servico, escrita);
+    loop = new Loop(database, servico, escrita, doModelo);
     // A rota desta tarefa pode ser dividida com outro arquivo de teste: nome fixo, ninguém apaga (V76).
     rota = await ia.rotaCompartilhada(modelos, 'crm_mensagem', new MockLanguageModelV4({ doGenerate: [] }));
   }, 120_000);
@@ -523,7 +601,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     const e = await empresa();
     const escopo = { tenantIds: [e.tenantId] };
     const agora = new Date();
-    const quebrado = new Loop(database, { olhar: () => Promise.reject(new Error('falha de propósito')) } as unknown as RotinaDoCrmService, escrita);
+    const quebrado = new Loop(database, { olhar: () => Promise.reject(new Error('falha de propósito')) } as unknown as RotinaDoCrmService, escrita, doModelo);
     const vezes = await quebrado.olharLote(10, escopo, agora);
     expect(vezes.map((v) => v.resultado)).toEqual(['erro', 'erro']);
     const emUmaHora = new Date(agora.getTime() + HORA);
@@ -689,10 +767,168 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
 
     // O serviço que quebra de um jeito que ninguém previu: a tentativa conta, e a proposta volta mais tarde.
     expect((await olhar(e, 'volte_a_pedir')).resultado).toBe('proposta_aberta');
-    const quebrada = new Loop(database, servico, { escrever: () => Promise.reject(new Error('falha de propósito')), falhou: escrita.falhou.bind(escrita) } as unknown as EscritaDoCrmService);
+    const quebrada = new Loop(database, servico, { escrever: () => Promise.reject(new Error('falha de propósito')), falhou: escrita.falhou.bind(escrita) } as unknown as EscritaDoCrmService, doModelo);
     const agora = new Date();
     expect((await quebrada.escreverLote(5, { tenantIds: [e.tenantId] }, agora)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'erro', deVez: false }]);
     expect((await guardadas(e)).find((x) => x.motive === 'volte_a_pedir')).toMatchObject({ status: 'preparando', attempts: 1, next_attempt_at: new Date(agora.getTime() + 15 * MIN) });
+  });
+
+  it('o texto conferido vira rascunho de modelo no RegemCast, e ele acompanha: ninguém enviou, a Meta analisa, a Meta aprovou', async () => {
+    const e = await empresa();
+    const p = await comTexto(e);
+    const codigo = String((await propostas(e))[0]!.coupon.codigo);
+    // Antes do rascunho, ele está trabalhando na proposta.
+    expect(await naFicha(e)).toEqual({ working_now: true, blocked_by: null });
+    chamadas.length = 0;
+    const agora = new Date();
+    const nome = `liame_promocao_${p.id.replaceAll('-', '')}`;
+    expect(await rascunhar(e, agora)).toEqual([{ id: p.id, tenantId: e.tenantId, feito: { status: 'rascunhado', modelo: nome, problemas: 0 } }]);
+    // O que foi para o RegemCast: o texto conferido, o rodapé de saída, um exemplo por variável e a chave da proposta.
+    const [noRegemcast] = contas.get(e.token)!.modelos;
+    expect(noRegemcast!.pedido).toEqual({
+      chaveIdempotencia: `liame:modelo:${p.id}`,
+      nome,
+      categoria: 'marketing',
+      idioma: 'pt_BR',
+      corpo: BOA,
+      corpoExemplos: ['Maria', codigo],
+      rodape: 'Responda SAIR para não receber mais.',
+    });
+    expect(doToken(e)).toEqual(['modelo_rascunhar']);
+    // A proposta passa a esperar a Meta, com o rascunho de lá.
+    const guardado = await doModeloDe(p.id);
+    expect(guardado).toMatchObject({ status: 'rascunho', template_id: noRegemcast!.id, template_name: nome, template_language: 'pt_BR', template_status: 'rascunho', next_attempt_at: null, attempts: 0, acabou: false });
+    expect(guardado.drafted_at).toBeInstanceOf(Date);
+    expect(await trilha(e, 'mensagem.rascunhar_modelo')).toEqual([
+      { resource_id: p.id, after: { template_id: noRegemcast!.id, template_name: nome, template_language: 'pt_BR', problems: 0, ready_to_send: true, agent_key: 'crm' } },
+    ]);
+    // A fila do rascunho não a pega de novo, e a ficha diz o que falta: uma pessoa enviar o modelo para a Meta.
+    expect(await rascunhar(e, new Date(agora.getTime() + HORA))).toEqual([]);
+    expect(await naFicha(e)).toEqual({ working_now: false, blocked_by: 'modelo_sem_envio' });
+
+    // O acompanhamento olha de 15 em 15 minutos, a contar do rascunho.
+    const olhada = (n: number) => new Date(guardado.drafted_at!.getTime() + n * 15 * MIN + 1000);
+    expect(await acompanhar(e, new Date(olhada(1).getTime() - 2 * MIN))).toEqual([]);
+    // Ninguém enviou ainda: o modelo não está na lista da Meta, e a proposta segue como estava.
+    expect((await acompanhar(e, olhada(1))).map((v) => v.visto)).toEqual([{ status: 'esperando', situacao: 'rascunho' }]);
+    expect(await doModeloDe(p.id)).toMatchObject({ status: 'rascunho', template_status: 'rascunho', template_checked_at: olhada(1) });
+    // Olhou agora: só de novo no próximo intervalo.
+    expect(await acompanhar(e, new Date(olhada(1).getTime() + 10 * MIN))).toEqual([]);
+    // Uma pessoa enviou o modelo, e a Meta analisa.
+    naMeta(e, nome, 'em análise');
+    expect((await acompanhar(e, olhada(2))).map((v) => v.visto)).toEqual([{ status: 'esperando', situacao: 'em análise' }]);
+    expect(await doModeloDe(p.id)).toMatchObject({ status: 'rascunho', template_status: 'em análise' });
+    expect(await naFicha(e)).toEqual({ working_now: false, blocked_by: 'modelo_em_analise' });
+    // A Meta aprovou: é hora do pedido de envio.
+    naMeta(e, nome, 'aprovado');
+    expect((await acompanhar(e, olhada(3))).map((v) => v.visto)).toEqual([{ status: 'aprovado' }]);
+    expect(await doModeloDe(p.id)).toMatchObject({ status: 'rascunho', template_status: 'aprovado', acabou: false });
+  });
+
+  it('a Meta recusa o modelo, ou ninguém o envia no prazo: a proposta é descartada, com o motivo', async () => {
+    const e = await empresa();
+    const promo = await comTexto(e);
+    const volte = await comTexto(e, 'volte_a_pedir');
+    expect((await rascunhar(e)).map((v) => v.feito.status)).toEqual(['rascunhado', 'rascunhado']);
+    const nascido = (await doModeloDe(promo.id)).drafted_at!;
+    // A Meta recusou o modelo da promoção.
+    naMeta(e, `liame_promocao_${promo.id.replaceAll('-', '')}`, 'recusado');
+    const em20 = new Date(nascido.getTime() + 20 * MIN);
+    const vistos = await acompanhar(e, em20);
+    expect(vistos.find((v) => v.id === promo.id)!.visto).toEqual({ status: 'descartada', motivo: 'modelo_recusado' });
+    expect(vistos.find((v) => v.id === volte.id)!.visto).toEqual({ status: 'esperando', situacao: 'rascunho' });
+    expect(await doModeloDe(promo.id)).toMatchObject({ status: 'descartada', reason: 'modelo_recusado', acabou: true });
+    // O "volte a pedir" ficou sete dias sem ninguém enviar: acabou o prazo. Um minuto antes, ainda esperava.
+    const rascunhoDoVolte = (await doModeloDe(volte.id)).drafted_at!;
+    const noPrazo = new Date(rascunhoDoVolte.getTime() + 7 * DIA);
+    expect((await acompanhar(e, new Date(noPrazo.getTime() - MIN))).map((v) => v.visto)).toEqual([{ status: 'esperando', situacao: 'rascunho' }]);
+    expect((await acompanhar(e, new Date(noPrazo.getTime() + 15 * MIN))).map((v) => v.visto)).toEqual([{ status: 'descartada', motivo: 'prazo' }]);
+    expect(await doModeloDe(volte.id)).toMatchObject({ status: 'descartada', reason: 'prazo', acabou: true });
+    expect((await trilha(e, 'mensagem.descartar')).map((t) => [t.resource_id, t.after.reason])).toEqual([
+      [promo.id, 'modelo_recusado'],
+      [volte.id, 'prazo'],
+    ]);
+    // Quem acabou sai das duas filas.
+    expect(await acompanhar(e, new Date(noPrazo.getTime() + DIA))).toEqual([]);
+    expect(await rascunhar(e, new Date(noPrazo.getTime() + DIA))).toEqual([]);
+  });
+
+  it('o RegemCast fora do ar no rascunho conta tentativa, e na terceira a proposta falha; o que ele não aceita fecha na hora', async () => {
+    const e = await empresa();
+    const p = await comTexto(e);
+    const conta = contas.get(e.token)!;
+    conta.modo = 'erro_interno';
+    const agora = new Date();
+    expect((await rascunhar(e, agora)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'regemcast_fora_do_ar', deVez: false }]);
+    const em15 = new Date(agora.getTime() + 15 * MIN);
+    // O texto conferido segue guardado: a nova tentativa não pede outro texto.
+    expect((await guardadas(e))[0]).toMatchObject({ status: 'preparando', attempts: 1, next_attempt_at: em15, body: BOA });
+    expect(await rascunhar(e, new Date(em15.getTime() - MIN))).toEqual([]);
+    expect((await rascunhar(e, em15)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'regemcast_fora_do_ar', deVez: false }]);
+    const em45 = new Date(em15.getTime() + 30 * MIN);
+    expect((await rascunhar(e, em45)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'regemcast_fora_do_ar', deVez: true }]);
+    expect(await doModeloDe(p.id)).toMatchObject({ status: 'falhou', reason: 'regemcast_fora_do_ar', template_id: null, acabou: true });
+    expect(await trilha(e, 'mensagem.falhar')).toEqual([{ resource_id: p.id, after: { reason: 'regemcast_fora_do_ar', attempts: 3, agent_key: 'crm' } }]);
+    expect(conta.modelos).toEqual([]);
+
+    // O texto que o RegemCast não aceita como modelo: não adianta tentar de novo.
+    conta.modo = 'ok';
+    const volte = await comTexto(e, 'volte_a_pedir', VOLTE.replace('Faz um tempo', 'NAOACEITA faz um tempo'));
+    expect((await rascunhar(e)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'modelo_nao_aceito', deVez: true }]);
+    expect(await doModeloDe(volte.id)).toMatchObject({ status: 'falhou', reason: 'modelo_nao_aceito', acabou: true });
+  });
+
+  it('desligado, ele não grava rascunho nem lê o RegemCast; a conta desconectada descarta; sem as permissões de escrita, nem propõe', async () => {
+    const e = await empresa();
+    const p = await comTexto(e);
+    chamadas.length = 0;
+    const agora = new Date();
+    // Uma chave desligada: a proposta espera 1 hora, sem contar tentativa.
+    await ligarFlag(e.tenantId, 'crm', false);
+    expect((await rascunhar(e, agora)).map((v) => v.feito)).toEqual([{ status: 'esperando', motivo: 'crm_desligado' }]);
+    expect((await guardadas(e))[0]).toMatchObject({ status: 'preparando', attempts: 0, next_attempt_at: new Date(agora.getTime() + HORA) });
+    await ligarFlag(e.tenantId, 'crm', true);
+    expect(doToken(e)).toEqual([]);
+    expect((await rascunhar(e, new Date(agora.getTime() + HORA))).map((v) => v.feito.status)).toEqual(['rascunhado']);
+    // No rascunho, com ele desligado em Sua equipe: a rotina não chama o RegemCast, e olha de novo no próximo intervalo.
+    const pausa = await api.call('POST', '/v1/team/members/crm/pause', { cookie: e.cookie, body: { brand_id: e.brandId } });
+    expect(pausa.status, JSON.stringify(pausa.body)).toBe(200);
+    chamadas.length = 0;
+    const nascido = (await doModeloDe(p.id)).drafted_at!;
+    const em20 = new Date(nascido.getTime() + 20 * MIN);
+    expect((await acompanhar(e, em20)).map((v) => v.visto)).toEqual([{ status: 'sem_leitura', motivo: 'funcionario_desligado' }]);
+    expect(await doModeloDe(p.id)).toMatchObject({ status: 'rascunho', template_status: 'rascunho', template_checked_at: em20 });
+    expect(doToken(e)).toEqual([]);
+    const volta = await api.call('POST', '/v1/team/members/crm/resume', { cookie: e.cookie, body: { brand_id: e.brandId } });
+    expect(volta.status, JSON.stringify(volta.body)).toBe(200);
+    // O RegemCast fora do ar na leitura: nada muda, e o prazo segue contando.
+    contas.get(e.token)!.modo = 'erro_interno';
+    expect((await acompanhar(e, new Date(em20.getTime() + 15 * MIN))).map((v) => v.visto)).toEqual([{ status: 'sem_leitura', motivo: 'regemcast_fora_do_ar' }]);
+    contas.get(e.token)!.modo = 'ok';
+    // A conta do RegemCast foi desconectada: a mensagem não tem por onde sair.
+    await ownerQuery(`update liame.connected_account set disconnected_at = now() where id = $1`, [e.conta]);
+    expect((await acompanhar(e, new Date(em20.getTime() + 30 * MIN))).map((v) => v.visto)).toEqual([{ status: 'descartada', motivo: 'sem_regemcast' }]);
+
+    // A conexão que só lê: ele nem abre a proposta (ela gastaria IA e pararia no rascunho).
+    const soLeitura = await empresa([], ['conta.ler', 'campanhas.ler', 'publicos.ler', 'modelos.ler', 'orcamento.ler']);
+    expect(await olhar(soLeitura, 'promocao')).toEqual({ resultado: 'sem_permissao' });
+    expect(doToken(soLeitura)).toEqual([]);
+    expect(await propostas(soLeitura)).toEqual([]);
+  });
+
+  it('quatro voltas ao mesmo tempo gravam um rascunho só, e olham o modelo uma vez', async () => {
+    const e = await empresa();
+    const p = await comTexto(e);
+    chamadas.length = 0;
+    const voltas = await Promise.all([1, 2, 3, 4].map(() => rascunhar(e)));
+    expect(voltas.flat().map((v) => v.feito.status)).toEqual(['rascunhado']);
+    expect(doToken(e)).toEqual(['modelo_rascunhar']);
+    expect(contas.get(e.token)!.modelos).toHaveLength(1);
+    chamadas.length = 0;
+    const em20 = new Date((await doModeloDe(p.id)).drafted_at!.getTime() + 20 * MIN);
+    const olhadas = await Promise.all([1, 2, 3, 4].map(() => acompanhar(e, em20)));
+    expect(olhadas.flat().map((v) => v.visto)).toEqual([{ status: 'esperando', situacao: 'rascunho' }]);
+    expect(doToken(e)).toEqual(['modelos_listar']);
   });
 
   it('a tabela da fila (migration 0064): uma linha por marca e tipo, o resultado em código, e só quem olhou diz o que decidiu', async () => {

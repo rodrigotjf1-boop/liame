@@ -55,6 +55,7 @@ import { CambioService } from './cambio.service.js';
 import { EscritaDoCrmService } from './escrita-do-crm.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
+import { ModeloDoCrmService } from './modelo-do-crm.service.js';
 import { LifecyclePurgeService } from './lifecycle-purge.service.js';
 import { OutboxPublisher } from './outbox-publisher.js';
 import { QueueService } from './queue.service.js';
@@ -141,6 +142,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // e `whatsapp_campaign` ligadas; nenhuma mensagem sai daqui.
     RotinaDoCrmService,
     EscritaDoCrmService,
+    // O rascunho do modelo no RegemCast e a espera pela Meta: quem envia o modelo para a análise é uma pessoa, lá.
+    ModeloDoCrmService,
     RotinaDoCrmLoop,
     VigiaService,
     // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, para mostrar o custo de IA em reais.

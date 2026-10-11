@@ -183,6 +183,48 @@ export function itensQueBarraram(c: Pick<ConferenciaDaMensagem, 'itens'>): strin
   return c.itens.filter((i) => i.situacao === 'barrou').map((i) => i.item);
 }
 
+// ---------------------------------------------------------------- o rascunho do modelo e a espera pela Meta (o terceiro passo)
+
+/**
+ * O que a conexão com o RegemCast precisa deixar o Liame fazer para uma proposta chegar ao envio: gravar o rascunho
+ * do modelo, montar a campanha em rascunho e pedir o disparo. Sem uma delas, ele nem propõe: a proposta gastaria IA
+ * e pararia no meio.
+ */
+export const ESCOPOS_DE_ESCRITA_NO_REGEMCAST = ['modelos.rascunhar', 'campanhas.rascunhar', 'campanhas.disparar'] as const;
+
+/** Depois de tantas tentativas de gravar o rascunho sem o RegemCast responder, a proposta fecha como `falhou`. */
+export const TENTATIVAS_DO_RASCUNHO = 3;
+/** De quanto em quanto tempo ele olha, no RegemCast, como está o modelo de cada rascunho. */
+export const MINUTOS_ENTRE_OLHADAS_DO_MODELO = 15;
+/**
+ * O prazo do modelo: uma pessoa envia o rascunho para a análise da Meta, no RegemCast, e a Meta aprova. Sem isso em
+ * tantos dias, contados do rascunho, a proposta é descartada: a oferta e o público já são outros.
+ */
+export const DIAS_PELO_MODELO = 7;
+/** As situações em que o modelo não vai ser aprovado, com as palavras do RegemCast. */
+export const SITUACOES_SEM_VOLTA_DO_MODELO: readonly string[] = ['recusado', 'desativado', 'sendo excluído'];
+
+export type PassoDoModelo = { passo: 'pedir' } | { passo: 'esperar'; situacao: string } | { passo: 'descartar'; motivo: 'modelo_recusado' | 'prazo' };
+
+/**
+ * O que fazer com um rascunho, pelo que o RegemCast diz dos modelos agora. A lista de lá é a dos modelos como a Meta
+ * os tem: o rascunho que ninguém enviou não aparece nela, e continua como `semEnvio`. O modelo é o da proposta pelo
+ * nome técnico e pelo idioma. Aprovado e pronto para disparar: é hora do pedido de envio, mesmo depois do prazo.
+ * Recusado, ou fora do prazo: a proposta é descartada. No resto, ela espera, com a situação que o RegemCast disse.
+ */
+export function passoDoModelo(
+  modelos: { modelos: ReadonlyArray<{ nome: string; idioma: string; situacao: string; podeDisparar: boolean }> },
+  doRascunho: { nome: string; idioma: string; semEnvio: string },
+  rascunhoEm: Date,
+  agora: Date,
+): PassoDoModelo {
+  const modelo = modelos.modelos.find((m) => m.nome === doRascunho.nome && m.idioma === doRascunho.idioma);
+  if (modelo?.podeDisparar) return { passo: 'pedir' };
+  if (modelo && SITUACOES_SEM_VOLTA_DO_MODELO.includes(modelo.situacao)) return { passo: 'descartar', motivo: 'modelo_recusado' };
+  if (agora.getTime() - rascunhoEm.getTime() >= DIAS_PELO_MODELO * DIA_MS) return { passo: 'descartar', motivo: 'prazo' };
+  return { passo: 'esperar', situacao: modelo?.situacao.trim().slice(0, 60) || doRascunho.semEnvio };
+}
+
 /** Sem as letras e os números que se confundem ao ler e ao digitar (O e 0, I e 1). */
 export const LETRAS_DO_CODIGO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const COMECO_DO_CODIGO: Record<MotivoDaMensagem, string> = { promocao: 'PROMO', volte_a_pedir: 'VOLTE' };
