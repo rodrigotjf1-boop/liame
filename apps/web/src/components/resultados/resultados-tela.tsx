@@ -292,6 +292,7 @@ export function ResultadosTela() {
           explicar={explicar}
           pedir={pedir}
           vendasAoGoogle={linhaDoGoogle}
+          podeVerMensagens={podeVerCampanhas}
         />
       </div>
     );

@@ -1,6 +1,6 @@
 import type { ClosedLoopResponse, OrderOrigin } from '@liame/contracts';
 import { reaisDeMicros } from '@/lib/formato';
-import { diaHoraNoFuso, grupoDeCanal, nomesDe } from './textos';
+import { dataNoFuso, diaHoraNoFuso, diaMes, grupoDeCanal, nomesDe } from './textos';
 
 // "Pedido a pedido" e a gaveta "Origem do pedido" (protótipo P1): de onde veio cada pedido, com a
 // evidência, a janela e a confiança que a API devolve (`GET /v1/results/orders`). Sem dado pessoal: o
@@ -20,9 +20,20 @@ export const LIMITE_DE_PEDIDOS = 200;
 
 const cancelado = (o: OrderOrigin) => o.status === 'cancelado';
 
+type Mensagem = NonNullable<OrderOrigin['message']>;
+
+/**
+ * O pedido usou o cupom de uma mensagem de WhatsApp e o modelo não achou prova de anúncio: a origem dele é a mensagem
+ * (mockups/prototipo-mensagens-resultados.html, A5 · P15, parte C). Com prova de anúncio, o pedido fica com o anúncio
+ * (decisão do dono em 10/10/2026), e isto dá falso.
+ */
+export function daMensagem(o: OrderOrigin): o is OrderOrigin & { message: Mensagem } {
+  return !!o.message && o.attribution.status === 'sem_origem' && !o.attribution.counted;
+}
+
 export function filtrarPedidos(lista: OrderOrigin[], f: FiltroPedidos): OrderOrigin[] {
-  if (f === 'com') return lista.filter((o) => !cancelado(o) && o.attribution.counted);
-  if (f === 'sem') return lista.filter((o) => !cancelado(o) && o.attribution.status === 'sem_origem');
+  if (f === 'com') return lista.filter((o) => !cancelado(o) && (o.attribution.counted || daMensagem(o)));
+  if (f === 'sem') return lista.filter((o) => !cancelado(o) && o.attribution.status === 'sem_origem' && !daMensagem(o));
   if (f === 'cancelados') return lista.filter(cancelado);
   return lista;
 }
@@ -68,6 +79,8 @@ export type Confianca = { rotulo: string; classe: 'concluido' | 'info' | 'espera
 
 export function confiancaDe(o: OrderOrigin): Confianca {
   if (cancelado(o)) return { rotulo: 'Cancelado · fora do ROAS', classe: 'perigo', ponto: true };
+  // O cupom é só daquela mensagem: quem o usou veio por ela.
+  if (daMensagem(o)) return { rotulo: 'Alta', classe: 'concluido', ponto: true };
   if (o.attribution.status === 'sem_origem') return { rotulo: 'Sem origem', classe: 'espera', ponto: false };
   if (o.attribution.status === 'plataforma') return { rotulo: 'Só a plataforma', classe: 'espera', ponto: true };
   if (o.attribution.confidence === 'alta') return { rotulo: 'Alta', classe: 'concluido', ponto: true };
@@ -111,6 +124,7 @@ export function origemDoPedido(o: OrderOrigin): CelulaOrigem {
     return { principal: a.campaign.name, sub: [plat, tipo].filter(Boolean).join(' · ') || null, forte: true };
   }
   if (a.status === 'plataforma' && a.provider) return { principal: nomesDe(a.provider).nome, sub: 'sem campanha identificada', forte: true };
+  if (daMensagem(o)) return { principal: o.message.name, sub: 'Mensagem de WhatsApp · cupom da mensagem', forte: true };
   return { principal: motivoDe(a.reason, a.window_days), sub: null, forte: false };
 }
 
@@ -132,6 +146,7 @@ export type DetalheDoPedido = {
   resultado:
     | { tipo: 'campanha'; campanha: string; plataforma: { nome: string; classe: string } | null; nota: string }
     | { tipo: 'plataforma'; plataforma: { nome: string; classe: string }; nota: string }
+    | { tipo: 'mensagem'; mensagem: string; nota: string }
     | { tipo: 'sem'; motivo: string }
     | { tipo: 'cancelado'; campanha: string | null; plataforma: string | null };
   confianca: Confianca;
@@ -142,9 +157,19 @@ export type DetalheDoPedido = {
   modelo: string;
 };
 
-function frasesDaEvidencia(o: OrderOrigin, janela: number): string[] {
+/** "26/09": o dia em que a mensagem saiu, no fuso da loja. */
+const diaDoEnvio = (m: Mensagem, fuso: string) => diaMes(dataNoFuso(new Date(m.sent_at), fuso));
+
+function frasesDaEvidencia(o: OrderOrigin, janela: number, fuso: string): string[] {
   const a = o.attribution;
   const quem = a.provider ? nomesDe(a.provider) : null;
+  if (daMensagem(o)) {
+    return [
+      `O cupom ${o.message.coupon_code} nasceu com a mensagem “${o.message.name}”, enviada em ${diaDoEnvio(o.message, fuso)}, e é só dela.`,
+      'Quem recebeu a mensagem é com o RegemCast: o Liame não vê nome nem telefone, só o cupom no pedido.',
+      'O pedido conta em Mensagens e fica fora do retorno dos anúncios: mensagem não é anúncio.',
+    ];
+  }
   switch (a.evidence) {
     case 'cupom':
       return [
@@ -201,20 +226,31 @@ function frasesDaEvidencia(o: OrderOrigin, janela: number): string[] {
   }
 }
 
+/**
+ * O anúncio ou a campanha do toque, já com a preposição: "no anúncio “X”" e "pelo anúncio “X”", ou "na campanha Y" e
+ * "pela campanha Y". O clique do Google chega com a campanha e sem o anúncio, e a frase saía "Clique no campanha Y".
+ */
+function alvoDoToque(a: OrderOrigin['attribution']): { em: string; por: string } | null {
+  if (a.ad) return { em: `no anúncio “${a.ad.name}”`, por: `pelo anúncio “${a.ad.name}”` };
+  if (a.campaign) return { em: `na campanha ${a.campaign.name}`, por: `pela campanha ${a.campaign.name}` };
+  return null;
+}
+
 function textoDaEvidencia(o: OrderOrigin, fuso: string, janela: number): string {
   const a = o.attribution;
+  if (daMensagem(o)) return `Cupom ${o.message.coupon_code}, da mensagem “${o.message.name}” · usado no próprio pedido · confiança alta`;
   const partes: string[] = [];
   const quem = a.provider ? nomesDe(a.provider) : null;
-  const alvo = a.ad ? `anúncio “${a.ad.name}”` : a.campaign ? `campanha ${a.campaign.name}` : null;
+  const alvo = alvoDoToque(a);
   switch (a.evidence) {
     case 'cupom':
       partes.push(`Cupom exclusivo da campanha ${a.campaign?.name ?? ''}`.trim(), 'usado no próprio pedido');
       break;
     case 'clique_campanha':
-      partes.push(alvo ? `Clique no ${alvo}` : 'Clique com campanha');
+      partes.push(alvo ? `Clique ${alvo.em}` : 'Clique com campanha');
       break;
     case 'conversa_anuncio':
-      partes.push(alvo ? `Conversa aberta pelo ${alvo}` : 'Conversa aberta por anúncio');
+      partes.push(alvo ? `Conversa aberta ${alvo.por}` : 'Conversa aberta por anúncio');
       break;
     case 'clique_plataforma':
       partes.push(`Clique vindo ${quem?.de ?? 'da plataforma'}, sem o id da campanha`);
@@ -239,13 +275,13 @@ function textoDaEvidencia(o: OrderOrigin, fuso: string, janela: number): string 
 
 function oQueFoiOToque(o: OrderOrigin): string {
   const a = o.attribution;
-  const alvo = a.ad ? `anúncio “${a.ad.name}”` : a.campaign ? `campanha ${a.campaign.name}` : null;
+  const alvo = alvoDoToque(a);
   const quem = a.provider ? nomesDe(a.provider).de : 'da plataforma';
   switch (a.evidence) {
     case 'clique_campanha':
-      return alvo ? `Clique no ${alvo}` : 'Clique com campanha';
+      return alvo ? `Clique ${alvo.em}` : 'Clique com campanha';
     case 'conversa_anuncio':
-      return alvo ? `Conversa aberta pelo ${alvo}` : 'Conversa aberta por anúncio';
+      return alvo ? `Conversa aberta ${alvo.por}` : 'Conversa aberta por anúncio';
     case 'clique_plataforma':
       return `Clique vindo ${quem}, sem campanha no link`;
     case 'conversa_plataforma':
@@ -288,19 +324,26 @@ export function detalheDoPedido(o: OrderOrigin, ctx: { fuso: string; loja: strin
   if (cancel) resultado = { tipo: 'cancelado', campanha: a.campaign?.name ?? null, plataforma: plat?.nome ?? null };
   else if (a.campaign) resultado = { tipo: 'campanha', campanha: a.campaign.name, plataforma: plat ? { nome: plat.nome, classe: plat.classe } : null, nota: 'conta no ROAS confirmado' };
   else if (a.status === 'plataforma' && plat) resultado = { tipo: 'plataforma', plataforma: { nome: plat.nome, classe: plat.classe }, nota: `conta no total ${plat.de}, fora das campanhas` };
+  else if (daMensagem(o)) resultado = { tipo: 'mensagem', mensagem: o.message.name, nota: 'conta em Mensagens, fora do retorno dos anúncios' };
   else resultado = { tipo: 'sem', motivo: motivoDe(a.reason, janela) };
 
   const comoSabe = cancel
     ? ['Cancelado no Regem: saiu do ROAS no recálculo. Pedido cancelado ou estornado não conta.', 'A origem continua registrada no pedido, para a conferência.']
-    : frasesDaEvidencia(o, janela);
+    : frasesDaEvidencia(o, janela, ctx.fuso);
+  // O pedido que usou o cupom de uma mensagem e tem prova de anúncio fica com o anúncio: a gaveta diz por quê, porque
+  // em Mensagens ele aparece entre os pedidos do cupom.
+  if (!cancel && o.message && a.counted) comoSabe.push(`Este pedido também usou o cupom da mensagem “${o.message.name}”. Como tem prova de anúncio, ele fica com o anúncio.`);
 
+  // A mensagem que trouxe o pedido (nula quando a origem é outra, ou o pedido foi cancelado).
+  const msg = !cancel && daMensagem(o) ? o.message : null;
   const linhaDoTempo: DetalheDoPedido['linhaDoTempo'] = [];
+  if (msg) linhaDoTempo.push({ iso: msg.sent_at, quando: diaHoraNoFuso(msg.sent_at, ctx.fuso), oque: `Mensagem “${msg.name}” enviada pelo RegemCast`, usado: false });
   if (a.touch_at && a.evidence && a.evidence !== 'cupom') linhaDoTempo.push({ iso: a.touch_at, quando: diaHoraNoFuso(a.touch_at, ctx.fuso), oque: oQueFoiOToque(o), usado: true });
   linhaDoTempo.push({
     iso: o.confirmed_at,
     quando: diaHoraNoFuso(o.confirmed_at, ctx.fuso),
-    oque: a.evidence === 'cupom' ? 'Pedido confirmado no caixa, com o cupom exclusivo' : 'Pedido confirmado no caixa',
-    usado: a.evidence === 'cupom',
+    oque: msg ? `Pedido confirmado no caixa, com o cupom ${msg.coupon_code}` : a.evidence === 'cupom' ? 'Pedido confirmado no caixa, com o cupom exclusivo' : 'Pedido confirmado no caixa',
+    usado: msg !== null || a.evidence === 'cupom',
   });
 
   return {
@@ -308,7 +351,7 @@ export function detalheDoPedido(o: OrderOrigin, ctx: { fuso: string; loja: strin
     dados,
     resultado,
     confianca: confiancaDe(o),
-    evidencia: { texto: textoDaEvidencia(o, ctx.fuso, janela), tom: cancel ? 'cancelado' : a.status === 'sem_origem' ? 'sem' : 'normal' },
+    evidencia: { texto: textoDaEvidencia(o, ctx.fuso, janela), tom: cancel ? 'cancelado' : a.status === 'sem_origem' && !daMensagem(o) ? 'sem' : 'normal' },
     comoSabe,
     linhaDoTempo,
     margem: cancel

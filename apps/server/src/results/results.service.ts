@@ -5,6 +5,7 @@ import { MODELO_PADRAO } from '../attribution/motor.js';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { frescor } from '../media/frescor.js';
+import { PEDIDO_USOU_O_CUPOM_DA_MENSAGEM } from '../mensageria/cupom-no-pedido.js';
 import { montarSerie, periodoAntes } from './serie-diaria.js';
 
 // Resultados do ciclo fechado (A2.5, F8; ADR-020, D-A2.5-6 a 8). Tudo na transação da requisição, sob
@@ -141,6 +142,7 @@ export class ResultsService {
       campaign_id: string | null;
       counted: boolean | null;
       reason: string | null;
+      da_mensagem: boolean;
       n: string;
       receita: string;
       receita_bruta: string;
@@ -149,8 +151,10 @@ export class ResultsService {
       pedidos_com_margem: string;
     }>(sql`
       with pedidos as (
-        select o.id, o.status, o.channel_group, o.revenue_micros, o.revenue_micros - o.refunded_micros as liquido
+        select o.id, o.status, o.channel_group, o.revenue_micros, o.revenue_micros - o.refunded_micros as liquido,
+               (m.id is not null) as da_mensagem
           from liame.order_fact o
+          left join liame.message_request m on ${PEDIDO_USOU_O_CUPOM_DA_MENSAGEM}
          where o.brand_id = ${q.brand_id} ${q.unit_id ? sql`and o.unit_id = ${q.unit_id}` : sql``}
            and o.status <> 'removido'
            and coalesce(o.billed_at, o.confirmed_at) >= (${q.from}::date - 1)::timestamp at time zone ${fuso}
@@ -170,11 +174,11 @@ export class ResultsService {
           left join liame.attribution_result r on r.order_id = p.id and r.model_id = ${modelo.id}
           left join custos c on c.order_id = p.id
       )
-      select status, channel_group, a_status, provider, campaign_id, counted, reason, count(*)::text as n,
+      select status, channel_group, a_status, provider, campaign_id, counted, reason, da_mensagem, count(*)::text as n,
              sum(liquido)::text as receita, sum(revenue_micros)::text as receita_bruta, sum(margem)::text as margem,
              coalesce(sum(liquido) filter (where margem is not null), 0)::text as receita_com_margem,
              count(*) filter (where margem is not null)::text as pedidos_com_margem
-        from base group by 1, 2, 3, 4, 5, 6, 7`);
+        from base group by 1, 2, 3, 4, 5, 6, 7, 8`);
 
     let pedidosConfirmados = 0;
     let receitaConfirmada = 0n;
@@ -182,6 +186,9 @@ export class ResultsService {
     const semOrigem = { orders: 0, revenue: 0n };
     const cancelados = { orders: 0, revenue: 0n };
     const semClique = new Map<string, { orders: number; revenue: bigint }>();
+    // Os pedidos com o cupom de uma mensagem de WhatsApp (protótipo P15, parte C). Com prova de anúncio, o pedido
+    // fica com o anúncio (decisão do dono em 10/10/2026) e só é contado em `comAnuncio`; sem, a origem é a mensagem.
+    const mensagens = { orders: 0, revenue: 0n, canalProprio: 0, comAnuncio: 0 };
     const confirmadoPorCampanha = new Map<string, Confirmado>();
     const confirmadoPorProvider = new Map<string, Confirmado>();
     const soPlataforma = new Map<string, number>();
@@ -200,8 +207,13 @@ export class ResultsService {
       }
       pedidosConfirmados += Number(l.n);
       receitaConfirmada += BigInt(l.receita);
+      if (l.da_mensagem && !l.counted) {
+        mensagens.orders += Number(l.n);
+        mensagens.revenue += BigInt(l.receita);
+      }
       if (l.counted) {
         somar(confirmado, l);
+        if (l.da_mensagem) mensagens.comAnuncio += Number(l.n);
         if (l.provider) {
           const p = confirmadoPorProvider.get(l.provider) ?? zeroConfirmado();
           somar(p, l);
@@ -219,11 +231,16 @@ export class ResultsService {
         s.orders += Number(l.n);
         s.revenue += BigInt(l.receita);
         semClique.set(l.channel_group, s);
+      } else if (l.da_mensagem) {
+        // Do cardápio ou do WhatsApp, pelo cupom de uma mensagem: a origem é conhecida, e ele não conta como "sem
+        // origem" (esse número mede link mal marcado). O de canal sem clique, acima, segue no canal dele.
+        mensagens.canalProprio += Number(l.n);
       } else {
         semOrigem.orders += Number(l.n);
         semOrigem.revenue += BigInt(l.receita);
       }
     }
+    const comMensagens = mensagens.orders + mensagens.comAnuncio > 0 || (await this.haCupomDeMensagem(q, fuso));
 
     // 3. Campanhas: nome e situação das que gastaram ou venderam no período.
     const idsCampanhas = [...new Set([...porCampanha.keys(), ...confirmadoPorCampanha.keys()])];
@@ -267,6 +284,9 @@ export class ResultsService {
           .map(([channel_group, s]) => ({ channel_group, orders: s.orders, revenue_micros: s.revenue.toString() }))
           .sort((a, b) => a.channel_group.localeCompare(b.channel_group)),
         cancelled: { orders: cancelados.orders, revenue_micros: cancelados.revenue.toString() },
+        ...(comMensagens
+          ? { messages: { orders: mensagens.orders, revenue_micros: mensagens.revenue.toString(), own_channel_orders: mensagens.canalProprio, with_ad_orders: mensagens.comAnuncio } }
+          : {}),
       },
       platforms: provedores.map((p) => ({
         provider: p,
@@ -356,9 +376,14 @@ export class ResultsService {
       window_days: number | null;
       counted: boolean | null;
       reason: string | null;
+      mensagem_nome: string | null;
+      mensagem_cupom: string | null;
+      mensagem_enviada_em: Date | string | null;
     }>(sql`
       with pedidos as (
-        select o.* from liame.order_fact o
+        select o.*, m.name as mensagem_nome, m.coupon_code as mensagem_cupom, m.coupon_created_at as mensagem_enviada_em
+          from liame.order_fact o
+          left join liame.message_request m on ${PEDIDO_USOU_O_CUPOM_DA_MENSAGEM}
          where o.brand_id = ${q.brand_id} ${q.unit_id ? sql`and o.unit_id = ${q.unit_id}` : sql``}
            and o.status <> 'removido'
            and coalesce(o.billed_at, o.confirmed_at) >= (${q.from}::date - 1)::timestamp at time zone ${fuso}
@@ -370,7 +395,8 @@ export class ResultsService {
              (select case when bool_and(i.cost_known) and count(*) > 0 then (p.revenue_micros - p.refunded_micros - sum(i.cost_micros))::text end
                 from liame.order_item_fact i where i.order_id = p.id and i.removed_at is null) as margem,
              r.status as a_status, r.evidence, r.confidence, r.provider, r.campaign_id, c.name as campaign_name,
-             r.ad_id, a.name as ad_name, r.touch_at, r.window_days, r.counted, r.reason
+             r.ad_id, a.name as ad_name, r.touch_at, r.window_days, r.counted, r.reason,
+             p.mensagem_nome, p.mensagem_cupom, p.mensagem_enviada_em
         from pedidos p
         left join liame.attribution_result r on r.order_id = p.id and r.model_id = ${modelo.id}
         left join liame.campaign c on c.id = r.campaign_id
@@ -405,6 +431,10 @@ export class ResultsService {
             counted: l.counted ?? false,
             reason: l.reason ?? (l.a_status ? null : 'sem_evidencia'),
           },
+          message:
+            l.mensagem_nome && l.mensagem_cupom && l.mensagem_enviada_em
+              ? { name: l.mensagem_nome, coupon_code: l.mensagem_cupom, sent_at: new Date(l.mensagem_enviada_em).toISOString() }
+              : null,
         };
       }),
     };
@@ -417,6 +447,24 @@ export class ResultsService {
         from liame.brand b where b.id = ${brandId} and b.archived_at is null`);
     if (!r.rows.length) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
     return r.rows[0]!.fuso ?? FUSO_PADRAO;
+  }
+
+  /**
+   * A marca tem cupom de mensagem valendo em algum dia do período: nasceu até o fim dele (o dia no fuso da loja) e a
+   * regra o deixa valer até o começo dele ou depois. É o que faz a linha das mensagens aparecer mesmo sem pedido
+   * ("nenhum pedido com o cupom no período"). A validade é comparada como texto: a regra guarda o dia em AAAA-MM-DD,
+   * e uma regra sem esse campo não faz a consulta falhar (só não conta).
+   */
+  private async haCupomDeMensagem(q: { brand_id: string; unit_id?: string; from: string; to: string }, fuso: string): Promise<boolean> {
+    const r = await currentTx().execute<{ ha: boolean }>(sql`
+      select exists (
+        select 1 from liame.message_request m
+         where m.brand_id = ${q.brand_id} and m.coupon_created_at is not null
+           and (m.coupon_created_at at time zone ${fuso})::date <= ${q.to}::date
+           and m.coupon_rule->>'valido_ate' >= ${q.from}
+           ${q.unit_id ? sql`and exists (select 1 from liame.connected_account ca where ca.id = m.coupon_account_id and ca.unit_id = ${q.unit_id})` : sql``}
+      ) as ha`);
+    return r.rows[0]?.ha === true;
   }
 
   /** Marca da empresa, loja (se veio), fuso que corta o dia e o modelo de atribuição em uso. */

@@ -5,6 +5,8 @@ import { type RefObject, useCallback, useEffect, useRef } from 'react';
 /**
  * Diálogo nativo (`<dialog>`) aberto ao montar, com o foco no elemento pedido e de volta em quem abriu
  * ao fechar. Se quem abriu sumiu da tela (linha removida), o foco vai para a reserva (o título da tela).
+ * O mesmo quando quem abriu não levou o foco: o Safari não foca botão no clique, e o foco de antes era o corpo
+ * da página (devolver para lá é perder o foco).
  * O modo estrito do React roda o efeito duas vezes: por isso a guarda do `open`.
  */
 export function useDialogo({
@@ -30,7 +32,7 @@ export function useDialogo({
 
   const devolverFoco = useCallback(() => {
     const alvo = origem.current;
-    if (alvo instanceof HTMLElement && alvo.isConnected) alvo.focus({ preventScroll: true });
+    if (alvo instanceof HTMLElement && alvo !== document.body && alvo.isConnected) alvo.focus({ preventScroll: true });
     else reserva?.current?.focus({ preventScroll: true });
   }, [reserva]);
 

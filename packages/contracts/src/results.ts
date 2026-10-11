@@ -105,6 +105,21 @@ export const ChannelTotals = z.strictObject({
   revenue_micros: Micros,
 });
 
+/**
+ * O cupom de cada mensagem é só dela: é por ele que o pedido se liga à mensagem, sem nome e sem telefone de ninguém.
+ * O pedido que tem o cupom de uma mensagem E prova de anúncio fica com o anúncio (decisão do dono em 10/10/2026).
+ */
+export const MessageTotals = z.strictObject({
+  /** Confirmados, com o cupom de uma mensagem e sem prova de anúncio, de qualquer canal. */
+  orders: z.number().int().min(0),
+  revenue_micros: Micros,
+  /** Os de `orders` que são do cardápio e do WhatsApp: já saíram de `without_origin` (a origem deles é a mensagem). */
+  own_channel_orders: z.number().int().min(0),
+  /** Usaram o cupom de uma mensagem e têm prova de anúncio: contam em `confirmed`, e não em `orders`. */
+  with_ad_orders: z.number().int().min(0),
+});
+export type MessageTotals = z.infer<typeof MessageTotals>;
+
 export const ClosedLoopResponse = z.strictObject({
   period: z.strictObject({
     from: z.string(),
@@ -129,6 +144,12 @@ export const ClosedLoopResponse = z.strictObject({
     no_click_channels: z.array(ChannelTotals),
     /** Confirmados no período e cancelados depois: saem das contas. */
     cancelled: z.strictObject({ orders: z.number().int().min(0), revenue_micros: Micros }),
+    /**
+     * Os pedidos que vieram pelo cupom de uma mensagem de WhatsApp (A5, D-A5-16; protótipo P15, parte C). Só vem
+     * quando a marca tem cupom de mensagem valendo em algum dia do período, ou pedido com ele; sem isso, o campo
+     * falta e a resposta é a de sempre. Mensagem não é anúncio: nada aqui entra em `confirmed`.
+     */
+    messages: MessageTotals.optional(),
   }),
   platforms: z.array(PlatformResult),
   campaigns: z.array(CampaignResult),
@@ -208,6 +229,20 @@ export const OrderOrigin = z.strictObject({
     /** Para sem origem: `sem_evidencia`, `fora_da_janela`, `canal_sem_clique`, `sem_id`; ou `cancelado`. */
     reason: Slug.nullable(),
   }),
+  /**
+   * A mensagem de WhatsApp cujo cupom o pedido usou (protótipo P15, parte C); falta ou é nula quando o pedido não
+   * usou cupom de mensagem. Com `attribution.counted`, o pedido fica com o anúncio; sem, a origem dele é a mensagem.
+   */
+  message: z
+    .strictObject({
+      /** O nome que a loja deu à mensagem. */
+      name: z.string(),
+      coupon_code: z.string(),
+      /** Quando o cupom nasceu, junto com o envio. */
+      sent_at: z.string(),
+    })
+    .nullable()
+    .optional(),
 });
 export type OrderOrigin = z.infer<typeof OrderOrigin>;
 

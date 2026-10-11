@@ -91,6 +91,22 @@ describe('resultados do ciclo fechado para o modelo', () => {
     expect(v.campanhas[0]!.campanha).toBe(`Campanha ${CAMPANHAS_MAXIMO + 3}`);
     expect(v).toMatchObject({ campanhas_fora_da_lista: 3, periodo: { fusos_das_contas_de_anuncio: ['America/Los_Angeles'] } });
   });
+
+  it('com cupom de mensagem no período, diz em palavras o que veio pelas mensagens; sem ele, a visão é a de sempre', () => {
+    expect(visaoDoCicloFechado(resposta).totais).not.toHaveProperty('pelo_cupom_das_mensagens_de_whatsapp');
+    const comMensagens: ClosedLoopResponse = { ...resposta, totals: { ...resposta.totals, messages: { orders: 12, revenue_micros: '540000000', own_channel_orders: 9, with_ad_orders: 3 } } };
+    const v = visaoDoCicloFechado(comMensagens);
+    expect(v.totais).toMatchObject({
+      pelo_cupom_das_mensagens_de_whatsapp: {
+        pedidos_sem_prova_de_anuncio: '12',
+        receita_desses_pedidos: 'R$ 540,00',
+        pedidos_com_o_cupom_e_com_prova_de_anuncio_que_ficam_com_o_anuncio: '3',
+      },
+    });
+    // O resto da visão não muda com as mensagens.
+    expect(v.totais.sem_origem).toEqual(visaoDoCicloFechado(resposta).totais.sem_origem);
+    intacto(v);
+  });
 });
 
 describe('cupons, links e entrega de mídia para o modelo', () => {

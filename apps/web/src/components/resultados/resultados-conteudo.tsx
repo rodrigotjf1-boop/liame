@@ -54,6 +54,8 @@ type Props = {
   pedir?: PedirNaLista | null;
   /** A linha das vendas informadas ao Google (protótipo P14, parte B); nula sem a função ligada ou para quem não vê as contas. */
   vendasAoGoogle?: LinhaDasVendas | null;
+  /** Quem pode abrir a tela Mensagens ganha o atalho na linha das mensagens (protótipo P15, parte C). */
+  podeVerMensagens?: boolean;
 };
 
 /** "Ver por campanha": leva ao cartão das campanhas e, no Lite, abre os detalhes dele (como no protótipo). */
@@ -68,7 +70,7 @@ function verPorCampanha() {
   titulo.focus({ preventScroll: true });
 }
 
-export function ResultadosConteudo({ tela, graficos, modelo, consulta, loja, podeVerContas, reserva, explicar = null, pedir = null, vendasAoGoogle = null }: Props) {
+export function ResultadosConteudo({ tela, graficos, modelo, consulta, loja, podeVerContas, reserva, explicar = null, pedir = null, vendasAoGoogle = null, podeVerMensagens = false }: Props) {
   const pro = useModo().modo === 'pro';
   const explicacao = useExplicacao(explicar?.pedido ?? null);
   const botao = useRef<HTMLButtonElement>(null);
@@ -121,7 +123,7 @@ export function ResultadosConteudo({ tela, graficos, modelo, consulta, loja, pod
         <CartaoCiclo ciclo={tela.ciclo} lite={graficos.real} rotuloPeriodo={tela.base.rotuloPeriodo} datas={tela.contexto.datas} />
         <CartaoCampanhas campanhas={tela.campanhas} lite={graficos.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} pedir={pedir} vendasAoGoogle={vendasAoGoogle} />
         {!pro && <CartaoConversas linhas={graficos.conversas} />}
-        <CartaoOrigem origem={tela.origem} lite={graficos.origem} podeVerContas={podeVerContas} />
+        <CartaoOrigem origem={tela.origem} lite={graficos.origem} podeVerContas={podeVerContas} podeVerMensagens={podeVerMensagens} />
         <CartaoPedidos consulta={consulta} fuso={tela.base.fuso} loja={loja} modelo={modelo} reserva={reserva} />
       </div>
       <DicaDosDesenhos />

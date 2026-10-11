@@ -882,7 +882,41 @@ export type CartaoOrigem =
       totalCanais: LinhaCanal;
       loja: string;
       cancelados: string | null;
+      /** A linha das mensagens de WhatsApp; nula quando a marca não tem cupom de mensagem no período. */
+      mensagens: Frase | null;
+      /** No Pro, em "Pedidos sem origem": os pedidos que saíram da conta por terem vindo pelo cupom de uma mensagem. */
+      notaDasMensagens: string | null;
     };
+
+/**
+ * A linha das mensagens de WhatsApp no cartão "De onde vieram os pedidos" (mockups/prototipo-mensagens-resultados.html,
+ * A5 · P15, parte C, aprovado em 10/10/2026). Cada mensagem leva um cupom só dela, e é por ele que o pedido se liga a
+ * ela. Mensagem não é anúncio: estes pedidos ficam fora do retorno. O pedido que usou o cupom e tem prova de anúncio
+ * fica com o anúncio (decisão do dono), e a linha diz quantos são.
+ */
+export function linhaDasMensagens(m: NonNullable<ClosedLoopResponse['totals']['messages']>, hoje: boolean): Frase {
+  const comAnuncio = m.with_ad_orders;
+  const um = comAnuncio === 1;
+  if (m.orders === 0) {
+    const quando = hoje ? 'hoje, até agora' : 'no período';
+    // O caso que o protótipo não desenhou: todo pedido com o cupom tem prova de anúncio. Dizer "nenhum pedido com o
+    // cupom" seria falso: a linha diz que eles existem e com quem ficam.
+    if (comAnuncio > 0) {
+      return [n(`${plural(comAnuncio, 'pedido usou', 'pedidos usaram')} o cupom das mensagens de WhatsApp ${quando}`), { t: ` e ${um ? 'tem' : 'têm'} prova de anúncio: ${um ? 'fica' : 'ficam'} com o anúncio.` }];
+    }
+    return [{ t: `Nenhum pedido com o cupom das mensagens de WhatsApp ${quando}.` }];
+  }
+  const frase: Frase = [
+    n(`${plural(m.orders, 'pedido veio', 'pedidos vieram')} pelo cupom das mensagens de WhatsApp`),
+    { t: `: ${reais(m.revenue_micros)} no caixa. ${m.orders === 1 ? 'Ele fica' : 'Eles ficam'} fora do retorno dos anúncios: mensagem não é anúncio.` },
+  ];
+  if (comAnuncio > 0) {
+    // No singular, "Outro pedido usou" (o protótipo escrevia "Outros 1 pedido usou").
+    const outros = um ? 'Outro pedido usou' : `Outros ${plural(comAnuncio, 'pedido usou', 'pedidos usaram')}`;
+    frase.push({ t: ` ${outros} o cupom e ${um ? 'tem' : 'têm'} prova de anúncio: ${um ? 'fica' : 'ficam'} com o anúncio.` });
+  }
+  return frase;
+}
 
 export function origemDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): CartaoOrigem {
   if (b.semRegem) return { tipo: 'sem-regem' };
@@ -902,8 +936,14 @@ export function origemDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): Carta
   }
   const semClique = tot.no_click_channels.reduce((s, c) => ({ pedidos: s.pedidos + c.orders, receita: s.receita + BigInt(c.revenue_micros) }), { pedidos: 0, receita: 0n });
   const comClique = tot.orders_confirmed - semClique.pedidos;
+  // Os pedidos do cardápio e do WhatsApp que vieram pelo cupom de uma mensagem já saíram de `without_origin` no servidor.
+  const saem = tot.messages?.own_channel_orders ?? 0;
   return {
     tipo: 'ok',
+    mensagens: tot.messages ? linhaDasMensagens(tot.messages, b.hoje) : null,
+    notaDasMensagens: saem
+      ? `Fora desta conta: ${plural(saem, 'pedido', 'pedidos')} do cardápio e do WhatsApp que ${saem === 1 ? 'veio' : 'vieram'} pelo cupom de uma mensagem. A origem ${saem === 1 ? 'dele' : 'deles'} é a mensagem.`
+      : null,
     semOrigem: {
       porcentagem: porcentagem(tot.without_origin.share_pct),
       frase: `${inteiro(tot.without_origin.orders)} de ${inteiro(comClique)} pedidos do cardápio online e do WhatsApp não têm evidência de anúncio. Pedido sem evidência fica sem origem: o Liame não chuta.`,
