@@ -1,8 +1,11 @@
 import type { AccountFreshness, MediaAttentionResponse, MediaFreshnessResponse, MediaMetricsQuery, MediaMetricsResponse } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { avisosDoPerfilDaMarca, lerDadosDosAvisosDoPerfil } from '../avaliacoes/avisos-do-perfil.js';
+import { FLAG_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
+import { FlagService } from '../flags/flag.service.js';
 import { campanhaParou, gastoForaDoNormal, type ItemAtencao, nomePlataforma, ordenar } from './atencao.js';
 import { frescor } from './frescor.js';
 import { hojeNoFuso } from './sincronizador.js';
@@ -83,6 +86,8 @@ export const ENTREGA_CAMPANHAS_MAXIMO = 30;
 
 @Injectable()
 export class MediaService {
+  constructor(private readonly flags: FlagService) {}
+
   /** Frescor de cada conta ligada (e de cada conjunto de dados dela). */
   async frescor(brandId: string | undefined, agora = new Date()): Promise<MediaFreshnessResponse> {
     const r = await currentTx().execute<LinhaEstado>(sql`
@@ -361,11 +366,27 @@ export class MediaService {
         });
       }
     }
+    // O Perfil da Empresa no Google (A6, Z1): as lojas por ligar, a avaliação de nota baixa sem resposta e a loja que
+    // parou de ser lida. Só para a marca com a função ligada: desligada, nem o que já foi lido vira aviso.
+    const marcaDoAviso = new Map<ItemAtencao, string>();
+    const perfil = await lerDadosDosAvisosDoPerfil(tx, brandId, agora);
+    const marcasDoPerfil = [...new Set([...perfil.lojas.map((l) => l.marca), ...perfil.porLigar.map((p) => p.marca)])];
+    if (marcasDoPerfil.length) {
+      const empresas = await tx.execute<{ id: string; tenant_id: string }>(sql`select id, tenant_id from liame.brand where id in ${marcasDoPerfil} and archived_at is null`);
+      for (const m of empresas.rows) {
+        if (!(await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, this.flags.context({ tenantId: m.tenant_id, brandId: m.id })))) continue;
+        for (const item of avisosDoPerfilDaMarca(m.id, perfil)) {
+          itens.push(item);
+          marcaDoAviso.set(item, m.id);
+        }
+      }
+    }
+
     // A marca de cada aviso é a da conta dele: é com ela que a tela pede a explicação (I4). O aviso da
     // autorização (que pode cobrir contas de várias marcas) e o da versão de API não têm marca.
     const marcaDaConta = new Map(contas.rows.map((c) => [c.id, c.brand_id]));
     return {
-      items: ordenar(itens).map((i) => ({ ...i, brand_id: i.connected_account_id ? (marcaDaConta.get(i.connected_account_id) ?? null) : null })),
+      items: ordenar(itens).map((i) => ({ ...i, brand_id: marcaDoAviso.get(i) ?? (i.connected_account_id ? (marcaDaConta.get(i.connected_account_id) ?? null) : null) })),
       generated_at: agora.toISOString(),
     };
   }

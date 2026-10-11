@@ -61,6 +61,11 @@ describe('atenção de mídia', () => {
     expect(acaoDoAviso('tipo_novo')).toBeNull();
   });
 
+  it('avisos do perfil da empresa no Google (A6, Z1): as lojas por ligar levam a Contas; a avaliação sem resposta se resolve no Google, sem botão', () => {
+    expect(acaoDoAviso('perfil_lojas_por_ligar')).toBe('abrir-contas');
+    expect(acaoDoAviso('avaliacao_sem_resposta')).toBeNull();
+  });
+
   it('avisos do ciclo fechado (F9): cada tipo leva à tela onde se resolve', () => {
     expect(acaoDoAviso('vendas_nao_conectadas')).toBe('abrir-contas');
     expect([acaoDoAviso('anuncio_sem_rastreio'), acaoDoAviso('plataforma_nao_informada')]).toEqual(['abrir-links', 'abrir-links']);

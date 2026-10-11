@@ -87,6 +87,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('modelo-do-crm', 10, 300_000, async (n) => (await this.rotinaDoCrm.acompanharLote(n)).length),
       // O Perfil da Empresa no Google: as avaliações de cada loja a cada hora e os números uma vez por dia; a fila é olhada a cada minuto.
       this.loop('perfil-google', 3, 60_000, async (n) => (await this.perfil.executarLote(n)).length),
+      // As lojas do Perfil que a procura não achou (o Google ainda não liberou o acesso, ou falhou): de novo uma vez por dia; a fila é olhada de 10 em 10 minutos.
+      this.loop('perfil-lojas', 3, 600_000, (n) => this.conexoes.procurarLojasDeNovo(n)),
     );
   }
 
