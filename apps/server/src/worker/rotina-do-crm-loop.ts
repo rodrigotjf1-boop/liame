@@ -4,13 +4,17 @@ import { sql } from 'drizzle-orm';
 import type { MotivoDaMensagem } from '../ai/crm/mensagem.js';
 import { DATABASE } from '../database/database.module.js';
 import { proximaOlhada, type ResultadoDoOlhar } from '../mensageria/rotina-do-crm.js';
+import { type Escrita, EscritaDoCrmService } from './escrita-do-crm.service.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 import { type Olhada, RotinaDoCrmService } from './rotina-do-crm.service.js';
 
 /** A linha reservada volta para a fila depois disto se o worker cair no meio da olhada. */
 const RESERVA = '15 minutes';
+/** A proposta reservada para a escrita volta para a fila depois disto se o worker cair no meio. */
+const RESERVA_DA_ESCRITA = '10 minutes';
 
 export type VezDoOlhar = { id: string; tenantId: string; brandId: string; motivo: MotivoDaMensagem; resultado: ResultadoDoOlhar; proposta?: string };
+export type VezDaEscrita = { id: string; tenantId: string; feito: Escrita };
 
 type Reservada = { id: string; tenant_id: string; brand_id: string; motive: MotivoDaMensagem };
 
@@ -19,6 +23,7 @@ type Reservada = { id: string; tenant_id: string; brand_id: string; motive: Moti
  * uma linha por tipo de mensagem; o laço reserva as devidas (SKIP LOCKED na mesma linha que a reserva altera, V35),
  * pede ao serviço que olhe cada uma e grava o que ele decidiu e quando olha de novo. A olhada sempre deixa registro:
  * a marca que não tem o que propor sai da frente da fila até a próxima vez, e não tira a vez das outras (V106).
+ * A proposta aberta entra na segunda fila, a da escrita (`escreverLote`).
  */
 @Injectable()
 export class RotinaDoCrmLoop {
@@ -27,7 +32,59 @@ export class RotinaDoCrmLoop {
   constructor(
     @Inject(DATABASE) private readonly database: Database | null,
     private readonly rotina: RotinaDoCrmService,
+    private readonly escrita: EscritaDoCrmService,
   ) {}
+
+  /**
+   * A fila da escrita: as propostas em `preparando` que ainda não têm texto (migration 0062). Reserva com SKIP LOCKED,
+   * empurrando `next_attempt_at` (se o worker cair no meio, a proposta volta sozinha), e pede ao serviço que escreva
+   * cada uma. Toda vez deixa rastro na proposta: o texto guardado, o fim dela, a tentativa contada ou a espera.
+   */
+  async escreverLote(limite = 3, scope: JobScope = {}, agora?: Date): Promise<VezDaEscrita[]> {
+    if (!this.database) return [];
+    const quando = agora ?? new Date();
+    const ref = sql`${quando.toISOString()}::timestamptz`;
+    const reservadas = await withSystem(this.database.db, async (tx) =>
+      (
+        await tx.execute<{ id: string; tenant_id: string }>(sql`
+          with devidas as materialized (
+            select p.id
+              from liame.message_proposal p
+             where p.status = 'preparando' and p.body is null
+               and (p.next_attempt_at is null or p.next_attempt_at <= ${ref})
+               ${tenantFilter(scope, sql`p.tenant_id`)}
+             order by coalesce(p.next_attempt_at, p.created_at), p.id
+             limit ${limite}
+             for update of p skip locked
+          )
+          update liame.message_proposal p
+             set next_attempt_at = ${ref} + ${RESERVA_DA_ESCRITA}::interval, updated_at = now()
+            from devidas x
+           where p.id = x.id
+          returning p.id, p.tenant_id`)
+      ).rows,
+    );
+
+    const vezes: VezDaEscrita[] = [];
+    for (const l of reservadas) {
+      const alvo = { tenantId: l.tenant_id, id: l.id };
+      let feito: Escrita;
+      try {
+        feito = await this.escrita.escrever(alvo, quando);
+      } catch (err) {
+        // Falha fora do previsto: conta como tentativa; se nem isso gravar, a reserva vence e a proposta volta (LIC-001).
+        this.logger.error(`proposta ${l.id}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+        try {
+          feito = await this.escrita.falhou(alvo, 'erro', quando);
+        } catch (err2) {
+          this.logger.error(`proposta ${l.id}: não foi possível registrar a falha: ${err2 instanceof Error ? err2.message : String(err2)}`);
+          feito = { status: 'falhou', motivo: 'erro', deVez: false };
+        }
+      }
+      vezes.push({ id: l.id, tenantId: l.tenant_id, feito });
+    }
+    return vezes;
+  }
 
   async olharLote(limite = 5, scope: JobScope = {}, agora?: Date): Promise<VezDoOlhar[]> {
     if (!this.database) return [];

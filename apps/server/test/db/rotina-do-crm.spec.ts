@@ -3,19 +3,22 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 import type { Database } from '@liame/database';
+import { MockLanguageModelV4 } from 'ai/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { MotivoDaMensagem } from '../../src/ai/crm/mensagem.js';
 import { proximaOlhada, type ResultadoDoOlhar } from '../../src/mensageria/rotina-do-crm.js';
+import type { Escrita, EscritaDoCrmService } from '../../src/worker/escrita-do-crm.service.js';
 import type { RotinaDoCrmLoop } from '../../src/worker/rotina-do-crm-loop.js';
 import type { Olhada, RotinaDoCrmService } from '../../src/worker/rotina-do-crm.service.js';
 import type { TestApi } from '../helpers/api.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // A5 · Y6, parte 6b: a rotina do funcionário de CRM e mensageria olha cada marca e abre a proposta quando há motivo
-// (migration 0064, a fila do olhar). Contra um RegemCast falso que fala o MCP sem estado (os públicos, só com a
-// contagem, e o teto de gasto de mensagens). A conta do RegemCast entra pelo caminho de verdade (a conexão da
-// distribuição e a rota de ligar a conta), o desconto e o dossiê pelas rotas; a loja do Regem entra direto no banco (a
-// conexão de verdade está provada em `regem-conexao.spec.ts`). O app e os ajudantes entram por `import()` dentro do
+// (migration 0064, a fila do olhar), e depois ele escreve a mensagem da proposta, que o código confere. Contra um
+// RegemCast falso que fala o MCP sem estado (os públicos, só com a contagem, e o teto de gasto de mensagens) e com o
+// modelo de IA simulado (nenhum fornecedor é chamado). A conta do RegemCast entra pelo caminho de verdade (a conexão
+// da distribuição e a rota de ligar a conta), o desconto e o dossiê pelas rotas; a loja do Regem entra direto no banco
+// (a conexão de verdade está provada em `regem-conexao.spec.ts`). O app e os ajudantes entram por `import()` dentro do
 // `beforeAll`, depois de o endereço do RegemCast falso estar no ambiente.
 
 const TODAS = ['conta.ler', 'campanhas.ler', 'publicos.ler', 'modelos.ler', 'orcamento.ler'];
@@ -51,14 +54,35 @@ type Proposta = {
   name: string | null;
 };
 type Linha = { motive: string; outcome: string | null; checked_at: Date | null; next_check_at: Date };
+type Guardada = {
+  id: string;
+  status: string;
+  motive: string;
+  reason: string | null;
+  barred_by: string[] | null;
+  name: string | null;
+  body: string | null;
+  usage_id: string | null;
+  attempts: number;
+  next_attempt_at: Date | null;
+  created_at: Date;
+};
+const MIN = 60_000;
+/** O que o funcionário escreve quando escreve certo: o preço da oferta, o benefício e a validade do cupom, como vieram. */
+const BOA = 'Oi, {{1}}! Sexta é dia de combo: smash, batata e refri por R$ 34,90. Com o cupom {{2}} você ganha 10% de desconto, válido por 2 dias, contando hoje. Peça pelo cardápio.';
+const VOLTE = 'Oi, {{1}}! Faz um tempo que a gente não se vê. Com o cupom {{2}} você ganha 10% de desconto, válido por 2 dias, contando hoje. Peça pelo cardápio.';
 
 describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a proposta (A5 · Y6, parte 6b)', () => {
   let api: TestApi;
   let database: Database;
   let regemcast: Server;
   let servico: RotinaDoCrmService;
+  let escrita: EscritaDoCrmService;
   let loop: RotinaDoCrmLoop;
   let Loop: typeof import('../../src/worker/rotina-do-crm-loop.js').RotinaDoCrmLoop;
+  let ia: typeof import('../helpers/ia.js');
+  let modelos: import('../helpers/ia.js').ModelosDeTeste;
+  let rota: { provider: string; model: string };
   let ajuda: typeof import('../helpers/api.js');
   let ownerQuery: typeof import('../helpers/api.js').ownerQuery;
   let registrar: typeof import('../../src/connections/distribuicao.js').registrarConexaoDaDistribuicao;
@@ -170,6 +194,23 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
   /** O dia de hoje no fuso da marca, como o banco o calcula. */
   const hojeEm = async (fuso: string, mais = 0) => (await ownerQuery<{ dia: string }>(`select ((now() at time zone $1)::date + $2::int)::text as dia`, [fuso, mais]))[0]!.dia;
 
+  // ---------------------------------------------------------------- a escrita: o modelo simulado e a fila
+  const modelo = (mock: MockLanguageModelV4) => {
+    modelos.porChave.set(`${rota.provider}/${rota.model}`, mock);
+    return mock;
+  };
+  /** O modelo simulado passa a devolver esta resposta. */
+  const comResposta = (resposta: Record<string, unknown>) => modelo(ia.responde(JSON.stringify(resposta), ia.uso(2000, 300)));
+  const enviado = (mock: MockLanguageModelV4, n = 0) => JSON.stringify(mock.doGenerateCalls[n]!.prompt);
+  const escrever = (e: Empresa, agora = new Date()) => loop.escreverLote(5, { tenantIds: [e.tenantId] }, agora);
+  const guardadas = (e: Empresa) =>
+    ownerQuery<Guardada>(
+      `select id, status, motive, reason, barred_by, name, body, usage_id, attempts, next_attempt_at, created_at from liame.message_proposal where tenant_id = $1 order by created_at, id`,
+      [e.tenantId],
+    );
+  const trilha = (e: Empresa, acao: string) => ownerQuery<{ resource_id: string; after: Record<string, unknown> }>(`select resource_id, "after" from liame.audit_event where tenant_id = $1 and action = $2 order by chain_seq`, [e.tenantId, acao]);
+  const recusas = (e: Empresa) => ownerQuery<{ member: string; workflow: string; kind: string; rules: string[]; items: number }>(`select member, workflow, kind, rules, items from liame.ai_refusal where tenant_id = $1 order by created_at, id`, [e.tenantId]);
+
   beforeAll(async () => {
     const { runMigrations } = await import('@liame/database');
     await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
@@ -197,24 +238,36 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     ajuda = await import('../helpers/api.js');
     ({ ownerQuery } = ajuda);
     api = await ajuda.startApi();
-    const [{ FlagService }, distribuicao, { VaultService }, { loadConfig }, { DATABASE }, { ResultsService }, { RotinaDoCrmService: Servico }, doLoop] = await Promise.all([
-      import('../../src/flags/flag.service.js'),
-      import('../../src/connections/distribuicao.js'),
-      import('../../src/vault/vault.service.js'),
-      import('../../src/config.js'),
-      import('../../src/database/database.module.js'),
-      import('../../src/results/results.service.js'),
-      import('../../src/worker/rotina-do-crm.service.js'),
-      import('../../src/worker/rotina-do-crm-loop.js'),
-    ]);
+    const [{ FlagService }, distribuicao, { VaultService }, { loadConfig }, { DATABASE }, { ResultsService }, { RotinaDoCrmService: Servico }, doLoop, { EscritaDoCrmService: DaEscrita }, { AiGateway }, { ModelosIa }, doTeste] =
+      await Promise.all([
+        import('../../src/flags/flag.service.js'),
+        import('../../src/connections/distribuicao.js'),
+        import('../../src/vault/vault.service.js'),
+        import('../../src/config.js'),
+        import('../../src/database/database.module.js'),
+        import('../../src/results/results.service.js'),
+        import('../../src/worker/rotina-do-crm.service.js'),
+        import('../../src/worker/rotina-do-crm-loop.js'),
+        import('../../src/worker/escrita-do-crm.service.js'),
+        import('../../src/ai/gateway.js'),
+        import('../../src/ai/modelos.js'),
+        import('../helpers/ia.js'),
+      ]);
+    ia = doTeste;
     database = api.app.get<Database>(DATABASE);
     const flags = api.app.get(FlagService);
     invalidarFlags = () => flags.invalidate();
     registrar = distribuicao.registrarConexaoDaDistribuicao;
     deps = { db: database.db, vault: api.app.get(VaultService), config: loadConfig() };
+    // O modelo de IA é o simulado: nenhum fornecedor é chamado.
+    modelos = new ia.ModelosDeTeste(loadConfig());
+    api.app.get(ModelosIa).modelo = (provider, model) => modelos.modelo(provider, model);
     servico = new Servico(database, loadConfig(), flags, api.app.get(VaultService), api.app.get(ResultsService));
+    escrita = new DaEscrita(database, flags, api.app.get(AiGateway), api.app.get(ResultsService));
     Loop = doLoop.RotinaDoCrmLoop;
-    loop = new Loop(database, servico);
+    loop = new Loop(database, servico, escrita);
+    // A rota desta tarefa pode ser dividida com outro arquivo de teste: nome fixo, ninguém apaga (V76).
+    rota = await ia.rotaCompartilhada(modelos, 'crm_mensagem', new MockLanguageModelV4({ doGenerate: [] }));
   }, 120_000);
   beforeEach(() => {
     chamadas.length = 0;
@@ -470,7 +523,7 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     const e = await empresa();
     const escopo = { tenantIds: [e.tenantId] };
     const agora = new Date();
-    const quebrado = new Loop(database, { olhar: () => Promise.reject(new Error('falha de propósito')) } as unknown as RotinaDoCrmService);
+    const quebrado = new Loop(database, { olhar: () => Promise.reject(new Error('falha de propósito')) } as unknown as RotinaDoCrmService, escrita);
     const vezes = await quebrado.olharLote(10, escopo, agora);
     expect(vezes.map((v) => v.resultado)).toEqual(['erro', 'erro']);
     const emUmaHora = new Date(agora.getTime() + HORA);
@@ -483,6 +536,163 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     expect((await loop.olharLote(10, escopo, emUmaHora)).map((v) => v.resultado)).toEqual(['regemcast_fora', 'regemcast_fora']);
     expect((await fila(e)).map((l) => l.next_check_at)).toEqual([new Date(emUmaHora.getTime() + HORA), new Date(emUmaHora.getTime() + HORA)]);
     expect(await propostas(e)).toEqual([]);
+  });
+
+  it('ele escreve a mensagem da proposta e o código confere: o texto que passa fica guardado; o que a conferência barra, não', async () => {
+    const e = await empresa();
+    expect((await olhar(e, 'promocao')).resultado).toBe('proposta_aberta');
+    const codigo = String((await propostas(e))[0]!.coupon.codigo);
+    const mock = comResposta({ recusa: null, mensagem: { nome: 'Combo da sexta', corpo: BOA } });
+    const vez = await escrever(e);
+    const [p] = await guardadas(e);
+    expect(vez).toEqual([{ id: p!.id, tenantId: e.tenantId, feito: { status: 'escrita', situacao: 'passou' } }]);
+    // O texto conferido fica na proposta, que segue no preparo (o rascunho do modelo é o passo seguinte), sem espera.
+    expect(p).toMatchObject({ status: 'preparando', name: 'Combo da sexta', body: BOA, attempts: 0, next_attempt_at: null, reason: null, barred_by: null });
+    expect(p!.usage_id).toEqual(expect.any(String));
+    // O que ele recebeu: a oferta, o público só com o nome e a contagem, e o cupom em palavras, com a validade em dias.
+    const pedido = enviado(mock);
+    for (const trecho of [OFERTAS[0]!, 'Nome: Novos', 'Pessoas que podem receber: 310', 'Benefício: 10% de desconto', 'Validade: válido por 2 dias, contando hoje', 'pelo cardápio online da loja']) expect(pedido, trecho).toContain(trecho);
+    // O código do cupom não vai ao modelo (ele escreve `{{2}}`), nem quem responde pela proposta.
+    expect(pedido).not.toContain(codigo);
+    expect(pedido).not.toContain(e.userId);
+    // A chamada é da rotina (sem pessoa), no fluxo dele, e conta como resposta.
+    expect(await ownerQuery(`select workflow, prompt_version, user_id is null as do_sistema, answered from liame.ai_usage where tenant_id = $1 and task = 'crm_mensagem'`, [e.tenantId])).toEqual([
+      { workflow: 'crm.mensagem', prompt_version: 'crm.mensagem@1', do_sistema: true, answered: true },
+    ]);
+    // Na trilha, só números: o texto fica na proposta.
+    expect(await trilha(e, 'mensagem.escrever')).toEqual([
+      { resource_id: p!.id, after: { review: 'passou', characters: { nome: 14, corpo: Array.from(BOA).length }, cites_value: true, usage_id: p!.usage_id, agent_key: 'crm' } },
+    ]);
+    // A proposta com texto saiu da fila da escrita: o modelo não é chamado de novo.
+    expect(await escrever(e)).toEqual([]);
+    expect(mock.doGenerateCalls).toHaveLength(1);
+
+    // O "volte a pedir", com um desconto que não é o do cupom: a conferência barra, e o texto não é guardado.
+    expect((await olhar(e, 'volte_a_pedir')).resultado).toBe('proposta_aberta');
+    comResposta({ recusa: null, mensagem: { nome: 'Volte a pedir', corpo: VOLTE.replace('10% de desconto', '20% de desconto') } });
+    const barrada = await escrever(e);
+    expect(barrada.map((v) => v.feito)).toEqual([{ status: 'barrada', itens: ['oferta'] }]);
+    const volte = (await guardadas(e)).find((x) => x.motive === 'volte_a_pedir')!;
+    expect(volte).toMatchObject({ status: 'barrada', barred_by: ['oferta'], name: null, body: null, next_attempt_at: null });
+    expect(await trilha(e, 'mensagem.barrar')).toEqual([{ resource_id: volte.id, after: { barred_by: ['oferta'], findings: ['preco_fora'], usage_id: expect.any(String), agent_key: 'crm' } }]);
+    // A barrada já está na fila dele, com o que barrou: não entra também como texto retirado (apareceria duas vezes na ficha).
+    expect(await recusas(e)).toEqual([]);
+    // A de promoção segue como estava.
+    expect((await guardadas(e)).find((x) => x.motive === 'promocao')).toMatchObject({ status: 'preparando', body: BOA });
+  });
+
+  it('o que ele não escreve: a recusa dele e o pedido que as regras de agora não deixam ir fecham a proposta, com o motivo', async () => {
+    const e = await empresa();
+    expect((await olhar(e, 'promocao')).resultado).toBe('proposta_aberta');
+    expect((await olhar(e, 'volte_a_pedir')).resultado).toBe('proposta_aberta');
+    // A proposta de "volte a pedir" ganha, direto no banco, uma oferta que as regras não deixam divulgar.
+    await ownerQuery(`update liame.message_proposal set offer = 'Chope em dobro na quinta' where tenant_id = $1 and motive = 'volte_a_pedir'`, [e.tenantId]);
+    const mock = comResposta({ recusa: 'politica', mensagem: null });
+    const vezes = await escrever(e);
+    const [promo, volte] = await guardadas(e);
+    expect(vezes).toEqual([
+      { id: promo!.id, tenantId: e.tenantId, feito: { status: 'descartada', motivo: 'politica' } },
+      { id: volte!.id, tenantId: e.tenantId, feito: { status: 'descartada', motivo: 'bebida_alcoolica' } },
+    ]);
+    expect(promo).toMatchObject({ status: 'descartada', reason: 'politica', body: null, next_attempt_at: null });
+    expect(volte).toMatchObject({ status: 'descartada', reason: 'bebida_alcoolica', body: null });
+    // O modelo só foi chamado para a primeira: a segunda nem chegou a ele.
+    expect(mock.doGenerateCalls).toHaveLength(1);
+    expect((await trilha(e, 'mensagem.descartar')).map((t) => [t.resource_id, t.after.reason])).toEqual([
+      [promo!.id, 'politica'],
+      [volte!.id, 'bebida_alcoolica'],
+    ]);
+    expect(await escrever(e, new Date(Date.now() + DIA))).toEqual([]);
+  });
+
+  it('quando não sai texto: a IA fora do ar e o texto que nem chega à conferência contam tentativa; na terceira, a proposta falha', async () => {
+    const e = await empresa();
+    expect((await olhar(e, 'promocao')).resultado).toBe('proposta_aberta');
+    const agora = new Date();
+    modelo(ia.recusa(500));
+    expect((await escrever(e, agora)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'ia_fora_do_ar', deVez: false }]);
+    const em15 = new Date(agora.getTime() + 15 * MIN);
+    expect((await guardadas(e))[0]).toMatchObject({ status: 'preparando', attempts: 1, next_attempt_at: em15, body: null });
+    // Antes da hora, a fila não a pega.
+    expect(await escrever(e, new Date(em15.getTime() - MIN))).toEqual([]);
+    expect((await escrever(e, em15)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'ia_fora_do_ar', deVez: false }]);
+    const em45 = new Date(em15.getTime() + 30 * MIN);
+    expect((await guardadas(e))[0]).toMatchObject({ status: 'preparando', attempts: 2, next_attempt_at: em45 });
+    // A terceira fecha a proposta.
+    expect((await escrever(e, em45)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'ia_fora_do_ar', deVez: true }]);
+    const [promo] = await guardadas(e);
+    expect(promo).toMatchObject({ status: 'falhou', reason: 'ia_fora_do_ar', next_attempt_at: null, body: null });
+    expect(await trilha(e, 'mensagem.falhar')).toEqual([{ resource_id: promo!.id, after: { reason: 'ia_fora_do_ar', attempts: 3, agent_key: 'crm' } }]);
+    expect(await escrever(e, new Date(em45.getTime() + DIA))).toEqual([]);
+
+    // O texto com um telefone nem chega à conferência: conta em Sua equipe como barrado pelo Compliance, sem o texto,
+    // e a proposta tenta de novo. O gateway já trocou o telefone pela marca da limpeza.
+    expect((await olhar(e, 'volte_a_pedir')).resultado).toBe('proposta_aberta');
+    comResposta({ recusa: null, mensagem: { nome: 'Volte a pedir', corpo: 'Oi, {{1}}! Ligue para (21) 99999-0000 e use o cupom {{2}} no pedido.' } });
+    const depois = new Date();
+    expect((await escrever(e, depois)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'dado_pessoal', deVez: false }]);
+    expect(await recusas(e)).toEqual([{ member: 'crm', workflow: 'crm.mensagem', kind: 'compliance', rules: ['dado_pessoal'], items: 1 }]);
+    const volte = (await guardadas(e)).find((x) => x.motive === 'volte_a_pedir')!;
+    expect(volte).toMatchObject({ status: 'preparando', attempts: 1, body: null, name: null });
+    // A marca foi arquivada no meio: a proposta não vira mensagem.
+    await ownerQuery(`update liame.brand set archived_at = now() where id = $1`, [e.brandId]);
+    expect((await escrever(e, new Date(depois.getTime() + 15 * MIN))).map((v) => v.feito)).toEqual([{ status: 'descartada', motivo: 'marca_arquivada' }]);
+  });
+
+  it('sem IA agora, ou com ele desligado, a proposta espera sem contar tentativa; passado o prazo de escrever, é descartada', async () => {
+    const e = await empresa();
+    expect((await olhar(e, 'promocao')).resultado).toBe('proposta_aberta');
+    const [p] = await guardadas(e);
+    const alvo = { tenantId: e.tenantId, id: p!.id };
+    const mock = comResposta({ recusa: null, mensagem: { nome: 'Combo da sexta', corpo: BOA } });
+    const agora = new Date();
+    const emUmaHora = new Date(agora.getTime() + HORA);
+    const espera = async (motivo: string) => {
+      expect(await escrita.escrever(alvo, agora), motivo).toEqual({ status: 'esperando', motivo } satisfies Escrita);
+      expect((await guardadas(e))[0], motivo).toMatchObject({ status: 'preparando', attempts: 0, next_attempt_at: emUmaHora, body: null });
+    };
+    // A flag `ia` quem confere é o gateway; as outras três, o serviço, antes de montar o pedido.
+    for (const [flag, motivo] of [
+      ['ia', 'ia_desligada'],
+      ['crm', 'crm_desligado'],
+      ['mensageria', 'mensageria_desligada'],
+      ['whatsapp_campaign', 'envio_desligado'],
+    ] as const) {
+      await ligarFlag(e.tenantId, flag, false);
+      await espera(motivo);
+      await ligarFlag(e.tenantId, flag, true);
+    }
+    // Desligado pela empresa, em Sua equipe.
+    const pausa = await api.call('POST', '/v1/team/members/crm/pause', { cookie: e.cookie, body: { brand_id: e.brandId } });
+    expect(pausa.status, JSON.stringify(pausa.body)).toBe(200);
+    await espera('funcionario_desligado');
+    expect(mock.doGenerateCalls).toHaveLength(0);
+    // A fila respeita a espera.
+    expect(await escrever(e, new Date(emUmaHora.getTime() - MIN))).toEqual([]);
+    // Três dias depois de aberta, ainda sem texto: a oferta e a contagem envelheceram, e a proposta é descartada.
+    const prazo = new Date(p!.created_at.getTime() + 3 * DIA);
+    expect((await escrever(e, prazo)).map((v) => v.feito)).toEqual([{ status: 'descartada', motivo: 'prazo_de_escrever' }]);
+    expect((await guardadas(e))[0]).toMatchObject({ status: 'descartada', reason: 'prazo_de_escrever', next_attempt_at: null });
+    expect(mock.doGenerateCalls).toHaveLength(0);
+    // Quem acabou não é escrita de novo.
+    expect(await escrita.escrever(alvo)).toEqual({ status: 'fora' });
+    expect(await escrita.falhou(alvo, 'erro')).toEqual({ status: 'fora' });
+  });
+
+  it('quatro voltas ao mesmo tempo escrevem cada proposta uma vez só; a falha fora do previsto conta como tentativa', async () => {
+    const e = await empresa();
+    expect((await olhar(e, 'promocao')).resultado).toBe('proposta_aberta');
+    const mock = comResposta({ recusa: null, mensagem: { nome: 'Combo da sexta', corpo: BOA } });
+    const voltas = await Promise.all([1, 2, 3, 4].map(() => escrever(e)));
+    expect(voltas.flat().map((v) => v.feito)).toEqual([{ status: 'escrita', situacao: 'passou' }]);
+    expect(mock.doGenerateCalls).toHaveLength(1);
+
+    // O serviço que quebra de um jeito que ninguém previu: a tentativa conta, e a proposta volta mais tarde.
+    expect((await olhar(e, 'volte_a_pedir')).resultado).toBe('proposta_aberta');
+    const quebrada = new Loop(database, servico, { escrever: () => Promise.reject(new Error('falha de propósito')), falhou: escrita.falhou.bind(escrita) } as unknown as EscritaDoCrmService);
+    const agora = new Date();
+    expect((await quebrada.escreverLote(5, { tenantIds: [e.tenantId] }, agora)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'erro', deVez: false }]);
+    expect((await guardadas(e)).find((x) => x.motive === 'volte_a_pedir')).toMatchObject({ status: 'preparando', attempts: 1, next_attempt_at: new Date(agora.getTime() + 15 * MIN) });
   });
 
   it('a tabela da fila (migration 0064): uma linha por marca e tipo, o resultado em código, e só quem olhou diz o que decidiu', async () => {

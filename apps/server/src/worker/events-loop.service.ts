@@ -78,6 +78,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('pedidos-que-esperam', 20, 60_000, async (n) => (await this.esperam.executarLote(n)).length),
       // A rotina do CRM e mensageria: cada marca é olhada uma vez por dia; a fila das marcas é olhada de 5 em 5 minutos.
       this.loop('rotina-do-crm', 5, 300_000, async (n) => (await this.rotinaDoCrm.olharLote(n)).length),
+      // A proposta aberta espera o texto: a fila da escrita é olhada a cada minuto.
+      this.loop('escrita-do-crm', 3, 60_000, async (n) => (await this.rotinaDoCrm.escreverLote(n)).length),
     );
   }
 
