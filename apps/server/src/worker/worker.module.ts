@@ -55,6 +55,7 @@ import { CambioService } from './cambio.service.js';
 import { EscritaDoCrmService } from './escrita-do-crm.service.js';
 import { EventsLoopService } from './events-loop.service.js';
 import { INBOX_HANDLERS, type InboxHandler, InboxProcessor } from './inbox-processor.js';
+import { PedidoDeMensagemService } from '../mensageria/pedido-de-mensagem.service.js';
 import { ModeloDoCrmService } from './modelo-do-crm.service.js';
 import { LifecyclePurgeService } from './lifecycle-purge.service.js';
 import { OutboxPublisher } from './outbox-publisher.js';
@@ -143,6 +144,9 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     RotinaDoCrmService,
     EscritaDoCrmService,
     // O rascunho do modelo no RegemCast e a espera pela Meta: quem envia o modelo para a análise é uma pessoa, lá.
+    // Com o modelo aprovado, o pedido de envio é montado pelo mesmo serviço das propostas (ele espera a aprovação de
+    // uma pessoa, com o código do app).
+    PedidoDeMensagemService,
     ModeloDoCrmService,
     RotinaDoCrmLoop,
     VigiaService,
