@@ -226,18 +226,25 @@ describe.skipIf(!hasDb)('a procura diária das lojas e os avisos do Perfil na At
     expect(await avisosDoPerfil(e)).toEqual([]);
     await ligarFlagDaEmpresa(api, 'perfil_google', e.tenantId, true);
 
-    // A de 2 estrelas ganhou resposta no Google: na leitura seguinte, sobra uma, e o aviso diz a nota dela.
+    // A de 2 estrelas ganhou resposta no Google. A resposta tem a data dela, e a data da AVALIAÇÃO não muda (a
+    // referência do Google não diz que mudaria): a leitura de hora em hora não a vê, e o aviso segue igual.
     const mudou = new Date(AGORA.getTime() + 10 * MIN_MS).toISOString();
-    google.lista = google.lista.map((a) => (a.reviewId === 'duas-estrelas' ? { ...a, updateTime: mudou, reviewReply: { comment: 'Obrigado por avisar.', reviewReplyState: 'PENDING' } } : a));
+    google.lista = google.lista.map((a) => (a.reviewId === 'duas-estrelas' ? { ...a, reviewReply: { comment: 'Obrigado por avisar.', updateTime: mudou, reviewReplyState: 'PENDING' } } : a));
     const depois = new Date(AGORA.getTime() + 61 * MIN_MS);
     expect((await loop.executarLote(10, { tenantIds: [e.tenantId] }, depois)).map((r) => r.status)).toEqual(['ok']);
+    expect((await avisosDoPerfil(e)).map((a) => a.title)).toEqual(['2 avaliações de 1 ou 2 estrelas sem resposta']);
+
+    // No dia seguinte, a reconferência dos últimos 45 dias traz a resposta: sobra uma, e o aviso diz a nota dela.
+    const d1 = new Date(AGORA.getTime() + (24 * 60 + 1) * MIN_MS);
+    expect((await loop.executarLote(10, { tenantIds: [e.tenantId] }, d1)).map((r) => r.status)).toEqual(['ok', 'ok']);
     const [sobrou] = await avisosDoPerfil(e);
     expect([sobrou!.title, sobrou!.detail]).toEqual(['Avaliação de 1 estrela sem resposta', `Em Mister Burgers — Centro, no Google, feita em ${diaDaLoja(ha(2))}.`]);
 
-    // A última também foi respondida: o aviso sai.
-    const mudou2 = new Date(depois.getTime() + 10 * MIN_MS).toISOString();
-    google.lista = google.lista.map((a) => (a.reviewId === 'uma-estrela' ? { ...a, updateTime: mudou2, reviewReply: { comment: 'Vamos rever a entrega.', reviewReplyState: 'APPROVED' } } : a));
-    expect((await loop.executarLote(10, { tenantIds: [e.tenantId] }, new Date(depois.getTime() + 61 * MIN_MS))).map((r) => r.status)).toEqual(['ok']);
+    // A última também foi respondida no Google: na reconferência seguinte, o aviso sai.
+    const mudou2 = new Date(d1.getTime() + 10 * MIN_MS).toISOString();
+    google.lista = google.lista.map((a) => (a.reviewId === 'uma-estrela' ? { ...a, reviewReply: { comment: 'Vamos rever a entrega.', updateTime: mudou2, reviewReplyState: 'APPROVED' } } : a));
+    const d2 = new Date(d1.getTime() + (24 * 60 + 1) * MIN_MS);
+    expect((await loop.executarLote(10, { tenantIds: [e.tenantId] }, d2)).map((r) => r.status)).toEqual(['ok', 'ok']);
     expect(await avisosDoPerfil(e)).toEqual([]);
   });
 

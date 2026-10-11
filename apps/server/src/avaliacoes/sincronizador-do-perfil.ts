@@ -5,7 +5,7 @@ import type { AppConfig } from '../config.js';
 import { acessoGoogle, type CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector, type TipoErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
-import { BALDE_DO_PERFIL_GOOGLE, type ConectorPerfilGoogle, criarConectorPerfilGoogle } from '../connectors/google-business/conector-perfil-google.js';
+import { BALDE_DO_PERFIL_GOOGLE, criarConectorPerfilGoogle } from '../connectors/google-business/conector-perfil-google.js';
 import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
 import type { FlagService } from '../flags/flag.service.js';
 import type { VaultService } from '../vault/vault.service.js';
@@ -14,7 +14,9 @@ import { type AvaliacaoNova, type ContaDoPerfil, gravarAvaliacoes, gravarNumeros
 // Leitura de uma loja do Perfil da Empresa no Google (A6, Z1; base de conhecimento §3.3). Dois conjuntos, cada um com
 // o frescor e a fila dele em `sync_state`:
 //   - `avaliacoes_perfil`: as avaliações, a cada hora. A primeira leitura traz os últimos 12 meses (é o que o Liame
-//     guarda: D-A6-5); as seguintes, o que mudou desde a última, com uma hora de folga.
+//     guarda: D-A6-5); as seguintes, o que mudou desde a última, com uma hora de folga. Uma vez por dia, a leitura
+//     reconfere os últimos 45 dias e, uma vez por semana, relê os 12 meses: é assim que a resposta dada direto no
+//     Google chega ao Liame sem depender de o Google mudar a data da avaliação (`planoDaLeitura`).
 //   - `numeros_perfil`: os números do perfil por dia, uma vez por dia. A primeira leitura traz 90 dias; as seguintes
 //     releem os últimos 10, porque o Google fecha e revê os dias com atraso.
 // As chamadas ao Google ficam fora de transação; o que foi lido é gravado numa transação curta da empresa, junto com
@@ -38,6 +40,16 @@ export const FOLGA_DAS_AVALIACOES_MIN = 60;
 /** Quantas avaliações uma leitura traz no máximo: na primeira (12 meses) e nas seguintes (uma hora). */
 export const MAXIMO_NA_PRIMEIRA_LEITURA = 3000;
 export const MAXIMO_NAS_SEGUINTES = 500;
+/**
+ * A resposta dada direto no Google. A leitura de hora em hora segue a data de mudança da AVALIAÇÃO, e a referência do
+ * Google não diz que responder mexe nessa data (a resposta tem a data dela). Para não depender disso, uma vez por dia
+ * a leitura reconfere as avaliações dos últimos 45 dias (cobre os 30 dias do aviso da Atenção, com folga) e, uma vez
+ * por semana, relê os 12 meses inteiros (acerta a contagem das sem resposta da tela).
+ */
+export const DIAS_RECONFERIDOS = 45;
+export const HORAS_ENTRE_RECONFERENCIAS = 24;
+export const DIAS_ENTRE_RELEITURAS = 7;
+export const MAXIMO_NA_RECONFERENCIA = 1000;
 export const DIAS_DA_PRIMEIRA_LEITURA_DOS_NUMEROS = 90;
 export const DIAS_RELIDOS_DOS_NUMEROS = 10;
 
@@ -55,6 +67,10 @@ export type CursorDoPerfil = {
   lido_ate?: string;
   /** Avaliações: a última leitura parou no teto antes de chegar ao corte. */
   parou_no_teto?: boolean;
+  /** Avaliações: a última vez em que os últimos 45 dias foram reconferidos (a primeira leitura e a releitura também contam). */
+  reconferido_em?: string;
+  /** Avaliações: a última vez em que os 12 meses foram lidos inteiros (a primeira leitura conta). */
+  relido_em?: string;
   falhas_seguidas?: number;
   /** Depois de uma falha, a conta só é lida de novo a partir daqui. */
   espera_ate?: string;
@@ -107,6 +123,38 @@ export function desdeDasAvaliacoes(cursor: CursorDoPerfil, agora: Date): Date {
   const anterior = cursor.primeira_em && cursor.lido_ate ? Date.parse(cursor.lido_ate) : Number.NaN;
   if (Number.isNaN(anterior)) return new Date(limite);
   return new Date(Math.max(limite, anterior - FOLGA_DAS_AVALIACOES_MIN * MIN_MS));
+}
+
+export type PlanoDaLeitura = {
+  /** `primeira` e `releitura` leem os 12 meses; `reconferencia`, os últimos 45 dias; `seguinte`, só o que mudou desde a anterior. */
+  tipo: 'primeira' | 'releitura' | 'reconferencia' | 'seguinte';
+  desde: Date;
+  maximo: number;
+};
+
+/** Passou `prazoMs` desde `marca`? Sem a marca, ou com uma que não é data, a leitura é devida. */
+function venceu(marca: string | undefined, prazoMs: number, agora: Date): boolean {
+  const quando = marca ? Date.parse(marca) : Number.NaN;
+  return Number.isNaN(quando) || agora.getTime() - quando >= prazoMs;
+}
+
+/**
+ * Qual leitura das avaliações fazer agora. A releitura semanal e a reconferência diária existem para a resposta dada
+ * direto no Google chegar ao Liame mesmo que o Google não mude a data da avaliação. A falha não gasta a vez: as marcas
+ * só andam na leitura boa.
+ */
+export function planoDaLeitura(cursor: CursorDoPerfil, agora: Date): PlanoDaLeitura {
+  const dozeMeses = new Date(agora.getTime() - DIAS_DE_AVALIACOES * DIA_MS);
+  if (!cursor.primeira_em) return { tipo: 'primeira', desde: dozeMeses, maximo: MAXIMO_NA_PRIMEIRA_LEITURA };
+  const relido = cursor.relido_em ?? cursor.primeira_em;
+  if (venceu(relido, DIAS_ENTRE_RELEITURAS * DIA_MS, agora)) return { tipo: 'releitura', desde: dozeMeses, maximo: MAXIMO_NA_PRIMEIRA_LEITURA };
+  const seguinte = desdeDasAvaliacoes(cursor, agora);
+  if (venceu(cursor.reconferido_em ?? relido, HORAS_ENTRE_RECONFERENCIAS * 60 * MIN_MS, agora)) {
+    // Nunca mais curta que a leitura do dia a dia: se a rotina ficou parada mais de 45 dias, vale o corte mais antigo.
+    const quarentaECinco = agora.getTime() - DIAS_RECONFERIDOS * DIA_MS;
+    return { tipo: 'reconferencia', desde: new Date(Math.min(quarentaECinco, seguinte.getTime())), maximo: MAXIMO_NA_RECONFERENCIA };
+  }
+  return { tipo: 'seguinte', desde: seguinte, maximo: MAXIMO_NAS_SEGUINTES };
 }
 
 /** A janela dos números do perfil: até ontem (o Google só informa dia fechado); 90 dias na primeira, 10 depois. */
@@ -181,7 +229,8 @@ export class SincronizadorDoPerfil {
       const proximo: CursorDoPerfil = { ...inicial, primeira_em: inicial.primeira_em ?? agora.toISOString(), proxima: depois(INTERVALO_DO_PERFIL_MIN[dataset]), falhas_seguidas: 0 };
       if (dataset === DATASET_AVALIACOES) {
         if (!contaDoPerfil) throw new ErroConector('definitivo', PROVEDOR_PERFIL_GOOGLE, 'a loja não tem a conta do Perfil guardada: ligue a loja de novo');
-        const lidas = await this.lerAvaliacoes(conector, accessToken, contaDoPerfil, conta.external_id, inicial, agora);
+        const plano = planoDaLeitura(inicial, agora);
+        const lidas = await conector.lerAvaliacoes({ accessToken }, { conta: contaDoPerfil, loja: conta.external_id }, { desde: plano.desde, maximo: plano.maximo });
         const gravado = await withTenant(this.db, conta.tenant_id, async (tx) => {
           const g = await gravarAvaliacoes(tx, alvo, lidas.avaliacoes, agora);
           await gravarResumo(tx, alvo, { media: lidas.media, total: lidas.total }, agora);
@@ -190,8 +239,14 @@ export class SincronizadorDoPerfil {
         resultado.avaliacoes = gravado.gravadas;
         resultado.novas = gravado.novas;
         // O teto só corta as mais antigas: a leitura seguinte parte de agora do mesmo jeito, e o corte fica anotado.
-        await this.marcarEstado(conta, dataset, agora, null, { ...proximo, lido_ate: agora.toISOString(), parou_no_teto: !lidas.completa });
-        if (!lidas.completa) this.logger.warn(`conta ${conta.id}: a leitura das avaliações parou no teto (${lidas.avaliacoes.length})`);
+        // As marcas da reconferência e da releitura só andam aqui, na leitura boa: a falha não gasta a vez.
+        const quando = agora.toISOString();
+        const marcas: CursorDoPerfil = {
+          ...(plano.tipo === 'seguinte' ? {} : { reconferido_em: quando }),
+          ...(plano.tipo === 'primeira' || plano.tipo === 'releitura' ? { relido_em: quando } : {}),
+        };
+        await this.marcarEstado(conta, dataset, agora, null, { ...proximo, ...marcas, lido_ate: quando, parou_no_teto: !lidas.completa });
+        if (!lidas.completa) this.logger.warn(`conta ${conta.id}: a leitura das avaliações (${plano.tipo}) parou no teto (${lidas.avaliacoes.length})`);
       } else {
         const pontos = await conector.lerNumeros({ accessToken }, { loja: conta.external_id }, janelaDosNumeros(inicial, agora));
         const gravado = await withTenant(this.db, conta.tenant_id, (tx) => gravarNumeros(tx, alvo, pontos, agora));
@@ -236,14 +291,6 @@ export class SincronizadorDoPerfil {
     if (falhas.includes('permissao')) await this.situacaoDaConta(conta, 'sem_permissao', MOTIVO_SEM_PERMISSAO, agora);
     else if (falhas.includes('definitivo') || falhas.includes('interno')) await this.situacaoDaConta(conta, 'erro', MOTIVO_ERRO, agora);
     else await this.situacaoDaConta(conta, 'ativa', null, agora);
-  }
-
-  private lerAvaliacoes(conector: ConectorPerfilGoogle, accessToken: string, contaDoPerfil: string, loja: string, cursor: CursorDoPerfil, agora: Date) {
-    return conector.lerAvaliacoes(
-      { accessToken },
-      { conta: contaDoPerfil, loja },
-      { desde: desdeDasAvaliacoes(cursor, agora), maximo: cursor.primeira_em ? MAXIMO_NAS_SEGUINTES : MAXIMO_NA_PRIMEIRA_LEITURA },
-    );
   }
 
   private async abrirExecucao(conta: LinhaConta, dataset: DatasetDoPerfil, tipo: 'carga_inicial' | 'incremental', versao: string, agora: Date): Promise<string> {
