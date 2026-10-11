@@ -1,10 +1,11 @@
-import type { Database } from '@liame/database';
+import { type Database, withTenant } from '@liame/database';
 import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { ClienteConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
+import { fixarDatasDoCupom } from '../mensageria/data-do-cupom.js';
 import { VaultService } from '../vault/vault.service.js';
 import { regemCupomConnector } from './regem-cupom.js';
 import { regemcastMensagemConnector } from './regemcast-mensagem.js';
@@ -42,6 +43,9 @@ export class EscritaRegemcast implements OnModuleInit {
         },
         criar: (tx, alvo) => regemCupomConnector.criarCupomDaMensagem(tx, alvo),
       },
+      // As datas do cupom contam do dia do envio: fixadas numa transação da empresa à parte, que confirma antes de o
+      // cupom ser criado no Regem (a execução que cair depois repete com a mesma regra).
+      fixarDatasDoCupom: (alvo) => withTenant(database.db, alvo.tenantId, (tx) => fixarDatasDoCupom(tx, alvo)),
     });
   }
 }

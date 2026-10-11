@@ -132,6 +132,12 @@ export type DependenciasDaEscritaRegemcast = {
     conferir(tx: Tx, alvo: { tenantId: string; lojaId: string }): Promise<string | null>;
     criar(tx: Tx, alvo: { tenantId: string; lojaId: string; regra: RegraDoCupom }): Promise<{ ok: true; cupomId: string | null } | { ok: false; mensagem: string }>;
   };
+  /**
+   * Fixa as datas do cupom de um pedido no dia de hoje (o dia do envio, no fuso da loja do cupom), pelos mesmos dias
+   * da regra, e devolve a regra que vale. Só fixa uma vez; grava numa transação à parte, que fica mesmo que a
+   * execução caia depois: a nova tentativa cria o cupom com a mesma regra. Nulo quando o pedido não tem cupom.
+   */
+  fixarDatasDoCupom?: (alvo: { tenantId: string; pedidoId: string }) => Promise<RegraDoCupom | null>;
 };
 
 type Conta = { id: string; tenant_id: string; external_id: string; credential_secret_id: string | null };
@@ -276,7 +282,11 @@ export class RegemcastMensagemConnector implements Connector {
       if (options.validateOnly) return { ok: true, state: desired, version: lido.versao };
       let cupomCriado = '';
       if (cupom && cupom.lojaId && p.deps.cupom) {
-        const nascido = await p.deps.cupom.criar(tx, { tenantId: p.conta.tenant_id, lojaId: cupom.lojaId, regra: cupom.regra });
+        // O cupom vale por tantos dias, contando o dia do envio: as datas são fixadas agora, uma vez, e gravadas à
+        // parte ANTES de o cupom ser criado. A chave de idempotência do Regem sai da regra: a nova tentativa (em outro
+        // dia, inclusive) precisa levar as mesmas datas, ou o Regem recusaria o código como já usado.
+        const regra = (await p.deps.fixarDatasDoCupom?.({ tenantId: p.conta.tenant_id, pedidoId: cupom.pedidoId })) ?? cupom.regra;
+        const nascido = await p.deps.cupom.criar(tx, { tenantId: p.conta.tenant_id, lojaId: cupom.lojaId, regra });
         if (!nascido.ok) return recusado(`O cupom ${cupom.codigo} desta mensagem não foi criado no Regem. ${nascido.mensagem} Nada foi enviado.`);
         await tx.execute(sql`
           update liame.message_request set coupon_id = ${nascido.cupomId}, coupon_created_at = now(), updated_at = now()

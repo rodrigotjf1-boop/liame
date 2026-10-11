@@ -239,6 +239,13 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
   const retratoDe = async (id: string) =>
     (await ownerQuery<{ coupon_id: string | null; criado: boolean }>(`select coupon_id, coupon_created_at is not null as criado from liame.message_request where id = $1`, [id]))[0]!;
   const linhas = async (emp: Empresa) => Number((await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.message_request where tenant_id = $1`, [emp.tenantId]))[0]!.n);
+  /** O dia de hoje na loja do cupom (São Paulo), como o banco o calcula. Perto da meia-noite, quem usa aceita o dia de antes e o de depois da chamada. */
+  const hojeNaLoja = async () => (await ownerQuery<{ dia: string }>(`select (now() at time zone 'America/Sao_Paulo')::date::text as dia`))[0]!.dia;
+  /** O dia tantos dias depois: conta de calendário, sem fuso. */
+  const maisDias = (dia: string, dias: number) => new Date(Date.parse(`${dia}T12:00:00Z`) + dias * 86_400_000).toISOString().slice(0, 10);
+  /** As datas do cupom como estão gravadas no pedido, e o dia em que foram fixadas. */
+  const cupomGuardado = async (id: string) =>
+    (await ownerQuery<{ valido_de: string; valido_ate: string; datado: string | null }>(`select coupon_rule ->> 'valido_de' as valido_de, coupon_rule ->> 'valido_ate' as valido_ate, coupon_dated_on::text as datado from liame.message_request where id = $1`, [id]))[0]!;
   async function ligarFlag(emp: Empresa, flag: string, valor: boolean): Promise<void> {
     await ownerQuery(`delete from liame.feature_flag_rule where flag_key = $1 and scope_type = 'tenant' and scope_id = $2`, [flag, emp.tenantId]);
     if (valor) await ownerQuery(`insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), $1, 'tenant', $2, 'true'::jsonb, 'testes')`, [flag, emp.tenantId]);
@@ -528,8 +535,14 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
   it('aprovada, a mensagem cria o cupom no Regem e só então dispara, uma vez; a resposta do pedido traz a mensagem inteira', async () => {
     const p = comCupom(e, 'SABADO10');
     const feito = await servico.propor(quem(e), p);
-    // Antes da aprovação: a resposta do pedido já traz o que a pessoa aprova, com o cupom ainda por criar.
+    // Antes da aprovação: a resposta do pedido já traz o que a pessoa aprova, com o cupom ainda por criar. O cupom vale
+    // por tantos dias, contando o dia do envio (a proposta trazia 3: de 10 a 12/10): enquanto o pedido espera, as datas
+    // são as que ele teria saindo hoje, no fuso da loja.
+    const hojeAntes = await hojeNaLoja();
     const antes = await ver(e, feito.action_id);
+    const hojeDepois = await hojeNaLoja();
+    expect([hojeAntes, hojeDepois]).toContain(antes.message.coupon.valid_from);
+    const seSairHoje = antes.message.coupon.valid_from as string;
     expect(antes.message, JSON.stringify(antes)).toEqual({
       campaign_id: feito.campaign_id,
       name: p.nome,
@@ -538,7 +551,7 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
       header_variable: null,
       audience: { name: 'Quem pediu nos últimos 30 dias', rule: 'Pediu pelo menos uma vez nos últimos 30 dias', can_receive: 412, resting: 38, rest_days: 7 },
       window: { days: [0, 1, 2, 3, 4, 5, 6], start: '09:00', end: '20:00' },
-      coupon: { code: 'SABADO10', kind: 'percentual', percent: 10, value_cents: null, min_order_cents: null, valid_from: '2026-10-10', valid_until: '2026-10-12', created: false },
+      coupon: { code: 'SABADO10', kind: 'percentual', percent: 10, value_cents: null, min_order_cents: null, valid_from: seSairHoje, valid_until: maisDias(seSairHoje, 2), created: false },
       plan: {
         status: 'rascunho',
         people: 412,
@@ -548,9 +561,12 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
         budget: { defined: true, periods: [{ period: 'mes', label: 'Outubro', limit_cents: TETO.teto, spent_cents: TETO.gasto, signal: 'ok' }], notice: null },
       },
     });
-    // Sem a aprovação, o executor não cria cupom nem dispara.
+    // No banco, o pedido que espera segue com as datas da proposta, sem data fixada.
+    expect(await cupomGuardado(feito.id)).toEqual({ valido_de: '2026-10-10', valido_ate: '2026-10-12', datado: null });
+    // Sem a aprovação, o executor não cria cupom nem dispara, e não fixa data nenhuma.
     await ciclo(e);
     expect(ordem).toEqual([]);
+    expect((await cupomGuardado(feito.id)).datado).toBeNull();
 
     await aprovar(e, feito.action_id);
     await ciclo(e);
@@ -559,7 +575,13 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
     // O cupom primeiro, o disparo depois; um de cada.
     expect(ordem).toEqual(['cupom:SABADO10', `disparo:${feito.campaign_id}`]);
     expect(criacoes).toHaveLength(1);
-    expect(criacoes[0]).toMatchObject({ token: TOKEN_DA_LOJA, corpo: { codigo: 'SABADO10', tipo: 'percentual', percentual: '10.00', valido_de: '2026-10-10', valido_ate: '2026-10-12' } });
+    // As datas do cupom foram fixadas no dia do envio, pelos mesmos 3 dias, e gravadas no pedido: é com elas que o
+    // cupom nasce no Regem, e são elas que a resposta mostra daqui em diante.
+    const fixado = await cupomGuardado(feito.id);
+    expect([hojeDepois, await hojeNaLoja()]).toContain(fixado.datado);
+    expect(fixado).toEqual({ valido_de: fixado.datado, valido_ate: maisDias(fixado.datado!, 2), datado: fixado.datado });
+    expect(criacoes[0]).toMatchObject({ token: TOKEN_DA_LOJA, corpo: { codigo: 'SABADO10', tipo: 'percentual', percentual: '10.00', valido_de: fixado.valido_de, valido_ate: fixado.valido_ate } });
+    expect(depois.message.coupon).toMatchObject({ valid_from: fixado.valido_de, valid_until: fixado.valido_ate });
     expect(criacoes[0]!.chave).toMatch(/^liame-[0-9a-f]{48}$/);
     // O cupom entrou na lista do Liame, sem campanha de anúncio, e o retrato aponta para ele.
     const retrato = await retratoDe(feito.id);
@@ -574,6 +596,35 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
     await ciclo(e);
     expect(ordem).toHaveLength(2);
     expect(criacoes).toHaveLength(1);
+  });
+
+  it('as datas do cupom são fixadas uma vez só: a tentativa de outro dia cria o cupom com a mesma regra; o pedido que acabou sem enviar mostra as da proposta', async () => {
+    const feito = await servico.propor(quem(e), comCupom(e, 'OUTRODIA1'));
+    await aprovar(e, feito.action_id);
+    // A primeira tentativa de envio foi ontem: fixou as datas, criou o cupom no Regem e caiu antes de registrar. A
+    // regra gravada é a de ontem (3 dias a partir de ontem).
+    const hoje = await hojeNaLoja();
+    const ontem = maisDias(hoje, -1);
+    await ownerQuery(
+      `update liame.message_request set coupon_rule = coupon_rule || jsonb_build_object('valido_de', $2::text, 'valido_ate', $3::text), coupon_dated_on = $2::date where id = $1`,
+      [feito.id, ontem, maisDias(ontem, 2)],
+    );
+    // A resposta do pedido já mostra as datas fixadas, e não as de hoje.
+    expect((await ver(e, feito.action_id)).message.coupon).toMatchObject({ valid_from: ontem, valid_until: maisDias(ontem, 2), created: false });
+    await ciclo(e);
+    expect(await ver(e, feito.action_id)).toMatchObject({ status: 'executada' });
+    // A nova tentativa não mexe nas datas: o cupom nasce com a regra gravada (a mesma chave de idempotência no Regem).
+    expect(criacoes).toHaveLength(1);
+    expect(criacoes[0]!.corpo).toMatchObject({ codigo: 'OUTRODIA1', valido_de: ontem, valido_ate: maisDias(ontem, 2) });
+    expect(await cupomGuardado(feito.id)).toEqual({ valido_de: ontem, valido_ate: maisDias(ontem, 2), datado: ontem });
+
+    // O pedido que expirou sem enviar: o cupom nunca nasceu, e a resposta mostra as datas com que foi montado.
+    const parado = await servico.propor(quem(e), comCupom(e, 'PARADO10'));
+    await ownerQuery(`update liame.action_request set status = 'expirada', status_reason = 'ninguém aprovou no prazo' where id = $1`, [parado.action_id]);
+    expect((await ver(e, parado.action_id)).message.coupon).toMatchObject({ valid_from: '2026-10-10', valid_until: '2026-10-12', created: false });
+    // Só o pedido que leva cupom tem data de cupom.
+    const semCupom = await servico.propor(quem(e), proposta(e));
+    await expect(ownerQuery(`update liame.message_request set coupon_dated_on = current_date where id = $1`, [semCupom.id])).rejects.toThrow(/message_request_cupom_datado/);
   });
 
   it('a mensagem sem cupom dispara sem passar pelo Regem', async () => {

@@ -25,6 +25,7 @@ import { afterCommit, type AuthContext, auditDetail, currentTx } from '../contex
 import { AppProblem, issuesToErrors, ValidationProblem } from '../errors/problems.js';
 import { emitEvent } from '../events/outbox.js';
 import { FlagService } from '../flags/flag.service.js';
+import { DATAS_SE_SAIR_HOJE } from '../mensageria/data-do-cupom.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { Mailer } from '../mail/mailer.js';
 import { actionMatches, evaluatePolicy, type LoadedPolicy, rateLimitsFor } from '../policy/engine.js';
@@ -104,6 +105,8 @@ type Apresentacao = {
   execucoes: Map<string, NonNullable<ActionResponse['execution']>>;
   /** O retrato da mensagem de cada pedido de envio ou de pausa (A5, Y5), pela chave `conta/campanha do RegemCast`. */
   mensagens: Map<string, RetratoDaMensagem>;
+  /** As datas que o cupom teria se a mensagem saísse hoje, só do cupom que ainda não nasceu nem foi datado (mesma chave). */
+  cuponsSemData: Map<string, { de: string; ate: string }>;
 };
 
 /** O retrato da mensagem, como a resposta o mostra (sem o plano do disparo, que é de cada pedido). */
@@ -133,7 +136,15 @@ type LinhaDaMensagem = {
   coupon_code: string | null;
   coupon_rule: RegraDoCupom | null;
   coupon_created_at: Date | string | null;
+  /** O dia em que as datas do cupom foram fixadas (o do envio); nulo enquanto o pedido espera. */
+  coupon_dated_on: Date | string | null;
+  /** As datas que o cupom teria se a mensagem saísse hoje (nulas no pedido sem cupom). */
+  se_sair_hoje_de: string | null;
+  se_sair_hoje_ate: string | null;
 };
+
+/** Enquanto o pedido está numa destas situações, o envio ainda pode acontecer. */
+const AINDA_PODE_SAIR: readonly ActionStatus[] = ['aguardando_aprovacao', 'aprovada', 'executando'];
 
 const variavelDaResposta = (v: VariavelGuardada) => ({ origin: v.origem, value: v.valor ?? null });
 
@@ -980,19 +991,25 @@ export class ActionService {
    * do caixa no retrato da recomendação (pedidos, receita, margem) só saem para quem vê as vendas.
    */
   private async apresentacaoDe(tx: Tx, rows: ActionRow[], comVendas: boolean): Promise<Apresentacao> {
-    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map(), recomendacoes: new Map(), campanhasDosObjetos: new Map(), execucoes: new Map(), mensagens: new Map() };
+    const ap: Apresentacao = { pessoas: new Map(), contas: new Map(), campanhas: new Map(), voltas: new Map(), recomendacoes: new Map(), campanhasDosObjetos: new Map(), execucoes: new Map(), mensagens: new Map(), cuponsSemData: new Map() };
     if (!rows.length) return ap;
     // O retrato da mensagem (A5, Y5): o envio e a pausa são da mesma campanha em rascunho que o Liame montou.
     const deMensagem = rows.filter((r) => r.provider === 'regemcast' && mensagemDoRecurso(r.resource_id) !== null);
     if (deMensagem.length) {
       const m = await tx.execute<LinhaDaMensagem>(sql`
-        select connected_account_id, campaign_id, name, template_name, template_language, template_category, template_header, template_body,
-               template_footer, template_buttons, variables, header_variable, audience_name, audience_rule, people_can_receive,
-               people_resting, rest_days, window_days, window_start, window_end, coupon_code, coupon_rule, coupon_created_at
-          from liame.message_request
-         where connected_account_id in ${[...new Set(deMensagem.map((r) => r.account_id))]}
-           and campaign_id in ${[...new Set(deMensagem.map((r) => mensagemDoRecurso(r.resource_id)!))]}`);
-      for (const l of m.rows) ap.mensagens.set(`${l.connected_account_id}/${l.campaign_id}`, retratoDaMensagem(l));
+        select m.connected_account_id, m.campaign_id, m.name, m.template_name, m.template_language, m.template_category, m.template_header, m.template_body,
+               m.template_footer, m.template_buttons, m.variables, m.header_variable, m.audience_name, m.audience_rule, m.people_can_receive,
+               m.people_resting, m.rest_days, m.window_days, m.window_start, m.window_end, m.coupon_code, m.coupon_rule, m.coupon_created_at,
+               m.coupon_dated_on, ${DATAS_SE_SAIR_HOJE.de} as se_sair_hoje_de, ${DATAS_SE_SAIR_HOJE.ate} as se_sair_hoje_ate
+          from liame.message_request m
+         where m.connected_account_id in ${[...new Set(deMensagem.map((r) => r.account_id))]}
+           and m.campaign_id in ${[...new Set(deMensagem.map((r) => mensagemDoRecurso(r.resource_id)!))]}`);
+      for (const l of m.rows) {
+        const chave = `${l.connected_account_id}/${l.campaign_id}`;
+        ap.mensagens.set(chave, retratoDaMensagem(l));
+        // O cupom que ainda não nasceu nem teve as datas fixadas: as datas dele são as do dia em que a mensagem sair.
+        if (l.coupon_rule && !l.coupon_dated_on && !l.coupon_created_at && l.se_sair_hoje_de && l.se_sair_hoje_ate) ap.cuponsSemData.set(chave, { de: l.se_sair_hoje_de, ate: l.se_sair_hoje_ate });
+      }
     }
     const recomendacoes = [...new Set(rows.map((r) => r.shadow_decision_id).filter((id): id is string => id !== null))];
     if (recomendacoes.length) {
@@ -1202,9 +1219,14 @@ function mensagemDaResposta(row: ActionRow, ap: Apresentacao): ActionMessage | n
   if (!campanha || !retrato) return null;
   const lido = EstadoDaMensagem.safeParse(row.before_state);
   const e = lido.success ? lido.data : null;
+  // O cupom vale por tantos dias, contando o dia do envio. Enquanto o envio ainda pode acontecer e as datas não foram
+  // fixadas, a resposta mostra as que ele teria saindo hoje; depois do envio, as de verdade. No pedido que acabou sem
+  // enviar, ficam as do dia em que foi montado.
+  const seSairHoje = row.tool === 'mensagem_disparar' && AINDA_PODE_SAIR.includes(row.status) ? ap.cuponsSemData.get(`${row.account_id}/${campanha}`) : undefined;
   return {
     campaign_id: campanha,
     ...retrato,
+    coupon: retrato.coupon && seSairHoje ? { ...retrato.coupon, valid_from: seSairHoje.de, valid_until: seSairHoje.ate } : retrato.coupon,
     plan: e
       ? {
           status: e.situacao,
