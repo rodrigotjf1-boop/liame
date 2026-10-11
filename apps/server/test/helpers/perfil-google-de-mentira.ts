@@ -54,6 +54,8 @@ export class GoogleComPerfil {
   concedidos: string[] = [...ESCOPOS_GOOGLE, ESCOPO_PERFIL_GOOGLE];
   /** A renovação do acesso é recusada (a autorização foi revogada no Google). */
   renovacaoRecusada = false;
+  /** Como respondem a lista de contas e a de lojas do Perfil (a procura das lojas). */
+  lojas: RespostaDoPerfil = 'ok';
   avaliacoes: RespostaDoPerfil = 'ok';
   numeros: RespostaDoPerfil = 'ok';
   /** Quanto o Google manda esperar junto com a cota esgotada (segundos), quando manda. */
@@ -126,6 +128,7 @@ export class GoogleComPerfil {
     this.vistos.length = 0;
     this.concedidos = [...ESCOPOS_GOOGLE, ESCOPO_PERFIL_GOOGLE];
     this.renovacaoRecusada = false;
+    this.lojas = 'ok';
     this.avaliacoes = 'ok';
     this.numeros = 'ok';
     this.esperar = null;
@@ -154,6 +157,10 @@ export class GoogleComPerfil {
     if (p === '/ads/v25/customers:listAccessibleCustomers') return { status: 200, corpo: { resourceNames: [] } };
     if (p === '/ga4admin/v1beta/accountSummaries') return { status: 200, corpo: { accountSummaries: [] } };
     // O Perfil da Empresa.
+    if (p.startsWith('/contas/') || p.startsWith('/lojas/')) {
+      const erro = erroDe(this.lojas);
+      if (erro) return erro;
+    }
     if (p === '/contas/v1/accounts') return { status: 200, corpo: { accounts: [{ name: CONTA_DO_PERFIL, accountName: 'Mister Burgers' }] } };
     if (p === `/lojas/v1/${CONTA_DO_PERFIL}/locations`) {
       return { status: 200, corpo: { locations: [{ name: LOJA_DO_PERFIL, title: 'Mister Burgers — Centro', websiteUri: 'https://misterburgers.exemplo.test', metadata: { placeId: 'ChIJ-centro' } }] } };
@@ -180,13 +187,14 @@ export class GoogleComPerfil {
   }
 }
 
-export type EmpresaComLoja = { cookie: string; tenantId: string; userId: string; brandId: string; conexaoId: string; contaId: string };
+export type EmpresaAutorizada = { cookie: string; tenantId: string; userId: string; brandId: string; conexaoId: string };
+export type EmpresaComLoja = EmpresaAutorizada & { contaId: string };
 
 /**
- * Uma empresa com a função do Perfil ligada e a loja do Perfil ligada à marca, pelo caminho do produto (V46): a pessoa
- * autoriza o Google, o worker troca o código e acha a loja, e a pessoa a escolhe.
+ * Uma empresa com a função do Perfil ligada e o Google autorizado com a permissão do Perfil, pelo caminho do produto
+ * (V46): a pessoa autoriza o Google, e o worker troca o código e procura as lojas. A loja ainda não está ligada.
  */
-export async function empresaComLojaDoPerfil(api: TestApi, google: GoogleComPerfil, processador: ConexaoProcessor, nome: string): Promise<EmpresaComLoja> {
+export async function empresaComPerfilAutorizado(api: TestApi, google: GoogleComPerfil, processador: ConexaoProcessor, nome: string): Promise<EmpresaAutorizada> {
   const s = await signupAndLogin(api, undefined, nome);
   await enableMfa(api, s.cookie);
   const tenantId = s.me.active_organization_id as string;
@@ -204,9 +212,19 @@ export async function empresaComLojaDoPerfil(api: TestApi, google: GoogleComPerf
   });
   expect(volta.status).toBe(303);
   expect(await processador.processarLote(5, { tenantIds: [tenantId] })).toBe(1);
-  const conexaoId = inicio.body.id as string;
-  const ligar = await api.call('POST', `/v1/connections/${conexaoId}/accounts`, { cookie: s.cookie, body: { accounts: [{ provider: 'google_business', external_id: LOJA_DO_PERFIL }] } });
+  return { cookie: s.cookie, tenantId, userId: s.me.user.id as string, brandId, conexaoId: inicio.body.id as string };
+}
+
+/** A pessoa escolhe a loja do Perfil entre as contas que a autorização achou; devolve a conta ligada. */
+export async function ligarLojaDoPerfil(api: TestApi, e: EmpresaAutorizada): Promise<string> {
+  const ligar = await api.call('POST', `/v1/connections/${e.conexaoId}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'google_business', external_id: LOJA_DO_PERFIL }] } });
   expect(ligar.status, JSON.stringify(ligar.body)).toBe(200);
   expect(ligar.body.linked).toHaveLength(1);
-  return { cookie: s.cookie, tenantId, userId: s.me.user.id as string, brandId, conexaoId, contaId: ligar.body.linked[0].id as string };
+  return ligar.body.linked[0].id as string;
+}
+
+/** A mesma empresa, já com a loja do Perfil ligada à marca. */
+export async function empresaComLojaDoPerfil(api: TestApi, google: GoogleComPerfil, processador: ConexaoProcessor, nome: string): Promise<EmpresaComLoja> {
+  const e = await empresaComPerfilAutorizado(api, google, processador, nome);
+  return { ...e, contaId: await ligarLojaDoPerfil(api, e) };
 }

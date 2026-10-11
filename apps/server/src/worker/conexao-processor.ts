@@ -23,6 +23,11 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 /** Processando por mais que isto (worker caiu no meio) volta para a fila. */
 const TRAVADA_MIN = 10;
 const MAX_TENTATIVAS = 3;
+/**
+ * A procura das lojas do Perfil que não deu certo (o limite do Google, uma falha) é refeita uma vez por dia, sozinha:
+ * é o que a tela promete enquanto o Google não libera o acesso do Liame à API. Uma chamada por dia e por autorização.
+ */
+export const HORAS_ENTRE_PROCURAS_DO_PERFIL = 24;
 
 type Reclamada = { id: string; tenant_id: string; attempts: number };
 
@@ -199,6 +204,106 @@ export class ConexaoProcessor {
         after: { provider: provedor, contas_encontradas: descobertas.length, ...(perfil ? { perfil_no_google: perfil.resultado } : {}) },
         origin: 'worker',
       });
+    });
+  }
+
+  /**
+   * A procura diária das lojas do Perfil (A6, Z1): as autorizações do Google em que a última procura parou no limite
+   * (o Google ainda não liberou o acesso, ou a cota acabou) ou falhou, há pelo menos um dia. Só as lojas do Perfil são
+   * procuradas de novo: as contas de anúncio da autorização ficam como estão, e a situação dela não muda. A reserva
+   * (SKIP LOCKED, na linha da autorização) já empurra o instante da anotação: se o worker cair no meio, a autorização
+   * volta no dia seguinte. A autorização que a procura recusa (a função desligada, a permissão que saiu) perde a
+   * anotação e sai da fila (V106). O relógio é o de quem chama (V34).
+   */
+  async procurarLojasDeNovo(limite = 3, scope: JobScope = {}, agora: Date = new Date()): Promise<number> {
+    if (!this.database) return 0;
+    const referencia = sql`${agora.toISOString()}::timestamptz`;
+    const caminhoDoInstante = `{${PROVEDOR_PERFIL_GOOGLE},em}`;
+    const reservadas = await withSystem(this.db, async (tx) => {
+      const r = await tx.execute<{ id: string; tenant_id: string; brand_id: string }>(sql`
+        with devidas as materialized (
+          select c.id
+            from liame.oauth_connection c
+           where c.provider = 'google' and c.status in ('ativa', 'aguardando_escolha') and c.credential_secret_id is not null
+             and c.discovery_notes -> ${PROVEDOR_PERFIL_GOOGLE}::text ->> 'resultado' in ('limite', 'falhou')
+             and (c.discovery_notes -> ${PROVEDOR_PERFIL_GOOGLE}::text ->> 'em')::timestamptz <= ${referencia} - make_interval(hours => ${HORAS_ENTRE_PROCURAS_DO_PERFIL})
+             ${tenantFilter(scope, sql`c.tenant_id`)}
+           order by (c.discovery_notes -> ${PROVEDOR_PERFIL_GOOGLE}::text ->> 'em')::timestamptz, c.id
+           limit ${limite}
+           for update skip locked
+        )
+        update liame.oauth_connection c
+           set discovery_notes = jsonb_set(c.discovery_notes, ${caminhoDoInstante}::text[], to_jsonb(${agora.toISOString()}::text)), updated_at = ${referencia}
+          from devidas d
+         where c.id = d.id
+        returning c.id, c.tenant_id, c.brand_id`);
+      return r.rows;
+    });
+    for (const c of reservadas) {
+      try {
+        await this.procurarLojasDaConexao(c.id, c.tenant_id, c.brand_id, agora);
+      } catch (err) {
+        // Erro inesperado (banco, cofre): fica o registro; a autorização volta no dia seguinte (LIC-001).
+        this.logger.error(`lojas do Perfil no Google, conexão ${c.id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    return reservadas.length;
+  }
+
+  /** Procura de novo só as lojas do Perfil de uma autorização do Google e guarda o resultado. */
+  private async procurarLojasDaConexao(id: string, tenantId: string, brandId: string, agora: Date): Promise<void> {
+    const guardada = await withTenant(this.db, tenantId, async (tx) => {
+      const r = await tx.execute<{ credential_secret_id: string | null }>(sql`select credential_secret_id from liame.oauth_connection where id = ${id}`);
+      const segredo = r.rows[0]?.credential_secret_id;
+      return segredo ? await this.vault.readSecret(tx, segredo) : null;
+    });
+    const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
+    let procura: { descobertas: DescobertaGuardada[]; perfil: ProcuraDoPerfil | null };
+    if (credencial?.tipo !== 'google') {
+      // A credencial saiu do cofre no meio do caminho (revogada): não há o que procurar.
+      procura = { descobertas: [], perfil: null };
+    } else {
+      try {
+        const accessToken = await this.acessoGoogle(credencial.refresh_token);
+        procura = await this.procurarLojasDoPerfil(credencial.escopos, { accessToken }, { tenantId, brandId }, agora);
+      } catch (err) {
+        // A renovação do acesso falhou (o Google fora do ar, ou a autorização recusada): fica como falha, e a leitura
+        // das contas da autorização é quem trata a recusa.
+        this.logger.warn(`lojas do Perfil no Google, conexão ${id}: a renovação do acesso falhou: ${err instanceof Error ? err.message : String(err)}`);
+        procura = { descobertas: [], perfil: { resultado: 'falhou', em: agora.toISOString(), lojas: 0 } };
+      }
+    }
+    const { descobertas, perfil } = procura;
+    // Achou: a lista de lojas da autorização passa a ser a do Google. Não achou (limite, falha): as lojas que ela já
+    // conhecia ficam. Sem procura (a função desligada ou a permissão que saiu): não fica anotação nem loja.
+    const trocarAsLojas = perfil === null || perfil.resultado === 'ok';
+    await withTenant(this.db, tenantId, async (tx) => {
+      const r = await tx.execute(sql`
+        update liame.oauth_connection
+           set discovered = case when ${trocarAsLojas}::boolean
+                 then coalesce((select jsonb_agg(d) from jsonb_array_elements(liame.oauth_connection.discovered) as d where d ->> 'provider' <> ${PROVEDOR_PERFIL_GOOGLE}), '[]'::jsonb)
+                      || ${JSON.stringify(descobertas)}::jsonb
+                 else liame.oauth_connection.discovered end,
+               discovery_notes = case when ${perfil !== null}::boolean
+                 then liame.oauth_connection.discovery_notes || jsonb_build_object(${PROVEDOR_PERFIL_GOOGLE}::text, ${JSON.stringify(perfil ?? {})}::jsonb)
+                 else liame.oauth_connection.discovery_notes - ${PROVEDOR_PERFIL_GOOGLE}::text end,
+               updated_at = ${agora.toISOString()}::timestamptz
+         where id = ${id} and status in ('ativa', 'aguardando_escolha')
+        returning id`);
+      // Só o que muda alguma coisa para a empresa entra na auditoria: as lojas apareceram.
+      if (r.rows.length && perfil?.resultado === 'ok') {
+        await writeAudit(tx, {
+          tenantId,
+          actorType: 'system',
+          actorId: null,
+          actorLabel: 'Liame',
+          action: 'conexao.procurar_lojas',
+          resourceType: 'oauth_connection',
+          resourceId: id,
+          after: { perfil_no_google: 'ok', lojas: perfil.lojas },
+          origin: 'worker',
+        });
+      }
     });
   }
 

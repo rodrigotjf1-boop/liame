@@ -4,7 +4,18 @@
 export type Severidade = 'critica' | 'atencao' | 'info';
 
 export type ItemAtencao = {
-  kind: 'conta_desconectada' | 'conta_sem_permissao' | 'conta_com_erro' | 'dado_atrasado' | 'reconectar_em_breve' | 'gasto_fora_do_normal' | 'campanha_parou' | 'versao_api';
+  /** Os dois últimos são do Perfil da Empresa no Google (A6, Z1): `avaliacoes/avisos-do-perfil.ts`. */
+  kind:
+    | 'conta_desconectada'
+    | 'conta_sem_permissao'
+    | 'conta_com_erro'
+    | 'dado_atrasado'
+    | 'reconectar_em_breve'
+    | 'gasto_fora_do_normal'
+    | 'campanha_parou'
+    | 'versao_api'
+    | 'avaliacao_sem_resposta'
+    | 'perfil_lojas_por_ligar';
   severity: Severidade;
   title: string;
   detail: string;
@@ -109,10 +120,13 @@ const PRIORIDADE: ItemAtencao['kind'][] = [
   'conta_desconectada',
   'campanha_parou',
   'gasto_fora_do_normal',
+  // A avaliação de nota baixa sem resposta está à vista de quem procura a empresa: vem logo depois do dinheiro.
+  'avaliacao_sem_resposta',
   'conta_sem_permissao',
   'conta_com_erro',
   'dado_atrasado',
   'reconectar_em_breve',
+  'perfil_lojas_por_ligar',
   'versao_api',
 ];
 

@@ -60,7 +60,8 @@ export type AcaoDoAviso = 'abrir-contas' | 'reconectar' | 'abrir-links' | 'abrir
  * Os avisos do ciclo fechado (F9) levam à tela onde se resolve: Links e cupons ou Resultados.
  */
 export function acaoDoAviso(kind: string): AcaoDoAviso | null {
-  if (kind === 'conta_desconectada' || kind === 'vendas_nao_conectadas') return 'abrir-contas';
+  // As lojas do perfil no Google que ninguém ligou ainda (A6, Z1) se escolhem em Contas conectadas.
+  if (kind === 'conta_desconectada' || kind === 'vendas_nao_conectadas' || kind === 'perfil_lojas_por_ligar') return 'abrir-contas';
   if (kind === 'reconectar_em_breve') return 'reconectar';
   if (kind === 'anuncio_sem_rastreio' || kind === 'plataforma_nao_informada') return 'abrir-links';
   if (kind === 'campanha_sem_cupom' || kind === 'cupom_sem_uso') return 'abrir-cupons';

@@ -28,7 +28,7 @@ export class MediaController {
   @ApiOperation({
     summary: 'Atenção de mídia',
     description:
-      'O que precisa de alguém agora, mais grave primeiro: conta desconectada ou sem permissão, dado atrasado, autorização perto de vencer, gasto fora do normal, campanha que parou de entregar e versão de API que a plataforma vai desligar. Calculado na hora, com o motivo e o que fazer.',
+      'O que precisa de alguém agora, mais grave primeiro: conta desconectada ou sem permissão, dado atrasado, autorização perto de vencer, gasto fora do normal, campanha que parou de entregar e versão de API que a plataforma vai desligar. Para a marca com o Perfil da Empresa no Google ligado: as lojas do perfil por ligar, a avaliação de 1 ou 2 estrelas sem resposta e a loja que parou de ser lida. Calculado na hora, com o motivo e o que fazer.',
   })
   @ApiOkResponse({ standardSchema: MediaAttentionResponse })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
