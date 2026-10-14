@@ -8,6 +8,14 @@
 .mens-caixa { display: grid; align-content: start; gap: var(--sp-1); min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
 .mens-caixa b { font-size: var(--text-md); font-weight: 600; overflow-wrap: anywhere; }
 .mens-caixa > span, .mens-periodo > span { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+/* P15, parte D: a quarta caixa (o desconto do cupom das mensagens), com o botão; duas por linha até 1099 px. */
+.mens-topo--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@container pagina (max-width: 1099px) { .mens-topo--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mens-caixa .btn { justify-self: start; margin-top: var(--sp-1); }
+.mens-caixa > .mens-desconto-aviso { color: var(--danger); font-weight: 500; }
+/* Na gaveta do desconto: o campo com o sufixo depois do número ("%", "dias"). */
+.desc-fim { width: 7rem; }
+.desc-fim span { padding: 0 var(--sp-3) 0 0; }
 .mens-periodo { display: grid; gap: var(--sp-1); min-width: 0; }
 .mens-periodo + .mens-periodo { margin-top: var(--sp-2); }
 .mens-teto { height: 8px; border-radius: var(--radius-full); background: var(--chart-grade); overflow: hidden; }

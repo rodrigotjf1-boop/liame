@@ -5,11 +5,18 @@ import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import { inteiro } from '@/lib/formato';
 import type { Modo } from '@/lib/modo';
+import type { CaixaDoDesconto, faixaDoDesconto } from './desconto-textos';
 import { type CaixaDoTeto, centavos, type ContaDaTela, type Enviadas, type FaixaDoPedido, type MensagemDaLista, type Selo } from './textos';
 
-// O corpo da tela "Mensagens" para uma conta do RegemCast (protótipo P15): as faixas do que impede o envio, as três
-// caixas do topo (a conta do WhatsApp, o teto de gasto e o que há pronto) e "O que foi enviado". Só desenha o que
-// `contaDaTela` montou.
+// O corpo da tela "Mensagens" para uma conta do RegemCast (protótipo P15): as faixas do que impede o envio, as caixas
+// do topo (a conta do WhatsApp, o teto de gasto, o que há pronto e, com o P15 parte D, o desconto do cupom das
+// mensagens) e "O que foi enviado". Só desenha o que `contaDaTela` e `caixaDoDesconto` montaram.
+
+/** O desconto do cupom das mensagens (P15, parte D): lido à parte, por marca. */
+export type DescontoNaTela =
+  | { tipo: 'carregando' }
+  | { tipo: 'erro' }
+  | { tipo: 'ok'; caixa: CaixaDoDesconto; faixa: ReturnType<typeof faixaDoDesconto> };
 
 type Props = {
   conta: ContaDaTela;
@@ -17,6 +24,10 @@ type Props = {
   podeVerContas: boolean;
   /** O pedido de mensagem que espera a aprovação (a faixa leva a Aprovações); nulo quando não há. */
   pedido?: FaixaDoPedido | null;
+  /** O desconto do cupom das mensagens; ausente, a tela fica com as três caixas. */
+  desconto?: DescontoNaTela | null;
+  aoDefinirDesconto?: () => void;
+  aoLerDesconto?: () => void;
   aoVer: (id: string) => void;
   aoTentarDeNovo: () => void;
 };
@@ -52,7 +63,7 @@ function TentarDeNovo({ aoTentar, primario = true }: { aoTentar: () => void; pri
   );
 }
 
-export function MensagensConteudo({ conta, modo, podeVerContas, pedido = null, aoVer, aoTentarDeNovo }: Props) {
+export function MensagensConteudo({ conta, modo, podeVerContas, pedido = null, desconto = null, aoDefinirDesconto, aoLerDesconto, aoVer, aoTentarDeNovo }: Props) {
   if (conta.tipo === 'sem_autorizacao') {
     return (
       <div className="card">
@@ -86,6 +97,21 @@ export function MensagensConteudo({ conta, modo, podeVerContas, pedido = null, a
       {conta.avisos.map((a) => (
         <Faixa key={a.chave} tipo={a.tipo} icone={<Icone nome={a.icone} />} titulo={a.titulo} texto={a.texto} />
       ))}
+      {desconto?.tipo === 'ok' && desconto.faixa && (
+        <Faixa
+          tipo="acao"
+          icone={<Icone nome="ticket" />}
+          titulo={desconto.faixa.titulo}
+          texto={desconto.faixa.texto}
+          acao={
+            desconto.faixa.botao && aoDefinirDesconto ? (
+              <button className="btn btn--primary" type="button" aria-haspopup="dialog" onClick={aoDefinirDesconto}>
+                {desconto.faixa.botao}
+              </button>
+            ) : undefined
+          }
+        />
+      )}
       {pedido && (
         <Faixa
           tipo="acao"
@@ -99,7 +125,7 @@ export function MensagensConteudo({ conta, modo, podeVerContas, pedido = null, a
           }
         />
       )}
-      <div className="mens-topo">
+      <div className={desconto ? 'mens-topo mens-topo--4' : 'mens-topo'}>
         <div className="mens-caixa" id="mens-conta">
           <span>Conta do WhatsApp</span>
           <b>{conta.conta.selo ? <SeloDaMensagem selo={conta.conta.selo} /> : conta.conta.titulo}</b>
@@ -111,8 +137,54 @@ export function MensagensConteudo({ conta, modo, podeVerContas, pedido = null, a
           <b>{conta.pronto.titulo}</b>
           <span>{conta.pronto.sub}</span>
         </div>
+        {desconto && <CaixaDoDescontoNaTela desconto={desconto} aoDefinir={aoDefinirDesconto} aoLer={aoLerDesconto} />}
       </div>
       <OQueFoiEnviado enviadas={conta.enviadas} modo={modo} aoVer={aoVer} aoTentarDeNovo={aoTentarDeNovo} />
+    </div>
+  );
+}
+
+/** A quarta caixa do topo (P15, parte D): o que o cupom de cada mensagem dá, por quantos dias vale e quem definiu. */
+function CaixaDoDescontoNaTela({ desconto, aoDefinir, aoLer }: { desconto: DescontoNaTela; aoDefinir?: () => void; aoLer?: () => void }) {
+  if (desconto.tipo === 'carregando') {
+    return (
+      <div className="mens-caixa" id="mens-desconto" aria-busy="true">
+        <span>Desconto do cupom das mensagens</span>
+        <span className="esqueleto esqueleto--medio" aria-hidden="true" />
+        <span className="sr-only">Carregando o desconto…</span>
+      </div>
+    );
+  }
+  if (desconto.tipo === 'erro') {
+    return (
+      <div className="mens-caixa" id="mens-desconto">
+        <span>Desconto do cupom das mensagens</span>
+        <b>Não deu para ler agora</b>
+        <span>Nada mudou; tente de novo em instantes.</span>
+        {aoLer && (
+          <button className="btn btn--sm" type="button" id="mens-desconto-bt" onClick={aoLer}>
+            Tentar de novo
+          </button>
+        )}
+      </div>
+    );
+  }
+  const c = desconto.caixa;
+  return (
+    <div className="mens-caixa" id="mens-desconto">
+      <span>Desconto do cupom das mensagens</span>
+      <b>{c.titulo}</b>
+      {c.linhas.map((l) => (
+        <span key={l}>{l}</span>
+      ))}
+      {c.aviso && <span className="mens-desconto-aviso">{c.aviso}</span>}
+      {c.botao && aoDefinir ? (
+        <button className="btn btn--sm" type="button" id="mens-desconto-bt" aria-haspopup="dialog" onClick={aoDefinir}>
+          {c.botao}
+        </button>
+      ) : (
+        c.quem && <span>{c.quem}</span>
+      )}
     </div>
   );
 }
