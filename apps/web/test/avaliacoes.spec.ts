@@ -262,6 +262,65 @@ describe('mais de uma loja, e a loja que parou de ser lida', () => {
   });
 });
 
+describe('Z2: responder pelo Liame, a partir das Avaliações', () => {
+  const PEDIDO = (n: number) => `44444444-4444-4444-8444-${String(n).padStart(12, '0')}`;
+  const ligada = (parcial: Partial<ReviewsResponse> = {}) => pronta({ can_reply: true, pending_replies: [], ...parcial });
+
+  it('"Responder" na sem resposta e na que o Google recusou, para quem pode pedir, com a resposta pelo Liame ligada', () => {
+    const itens = lista(telaDasAvaliacoes(ligada(), AGORA, NOMES, { podePedir: true })).itens;
+    expect(itens.map((i) => i.acao)).toEqual([
+      { tipo: 'responder', href: `/aprovacoes?responder=${id(1)}&marca=${MARCA}` },
+      { tipo: 'responder', href: `/aprovacoes?responder=${id(3)}&marca=${MARCA}` },
+      { tipo: 'responder', href: `/aprovacoes?responder=${id(6)}&marca=${MARCA}` },
+      null,
+      null,
+    ]);
+    // Sem a função ligada para a marca, ou sem poder pedir, a tela só lê.
+    expect(lista(telaDasAvaliacoes(ligada({ can_reply: false }), AGORA, NOMES, { podePedir: true })).itens.every((i) => i.acao === null)).toBe(true);
+    expect(lista(telaDasAvaliacoes(pronta(), AGORA, NOMES, { podePedir: true })).itens.every((i) => i.acao === null)).toBe(true);
+    expect(lista(telaDasAvaliacoes(ligada(), AGORA, NOMES)).itens.every((i) => i.acao === null)).toBe(true);
+  });
+
+  it('a resposta que espera a aprovação: o selo, "Ver a resposta" e a faixa no topo, também para quem só lê', () => {
+    const DONO = { podeAprovar: true, souDono: true };
+    const t = lista(telaDasAvaliacoes(ligada({ pending_replies: [{ review_id: id(1), action_id: PEDIDO(1), owner_only: true }] }), AGORA, NOMES, DONO));
+    expect(t.itens[0]).toMatchObject({ selo: { classe: 'info', rotulo: 'Resposta espera você' }, acao: { tipo: 'ver', href: `/aprovacoes?pedido=${PEDIDO(1)}` } });
+    expect(t.itens[1]!.selo).toEqual(situacaoDaResposta(null));
+    expect(t.esperando).toEqual({ titulo: '1 resposta espera a sua aprovação', texto: 'Paulo R. deu 1 estrela; a resposta está pronta para você ler.', botao: 'Ver a resposta', href: `/aprovacoes?pedido=${PEDIDO(1)}` });
+    // Sem o nome (o Google não informou), a nota; sem a avaliação na lista (mais de 200), só a frase.
+    expect(lista(telaDasAvaliacoes(ligada({ pending_replies: [{ review_id: id(3), action_id: PEDIDO(3), owner_only: false }] }), AGORA, null, DONO)).esperando?.texto).toBe('Uma avaliação de 4 estrelas; a resposta está pronta para você ler.');
+    expect(lista(telaDasAvaliacoes(ligada({ pending_replies: [{ review_id: id(99), action_id: PEDIDO(9), owner_only: false }] }), AGORA, NOMES, DONO)).esperando?.texto).toBe('A resposta está pronta para você ler.');
+    // Várias: a faixa leva a Aprovações.
+    const duasEsperando = ligada({ pending_replies: [{ review_id: id(1), action_id: PEDIDO(1), owner_only: true }, { review_id: id(3), action_id: PEDIDO(3), owner_only: false }] });
+    const varias = lista(telaDasAvaliacoes(duasEsperando, AGORA, NOMES, { podePedir: true, ...DONO }));
+    expect(varias.esperando).toEqual({ titulo: '2 respostas esperam a sua aprovação', texto: 'Estão em Aprovações, cada uma com a avaliação ao lado.', botao: 'Abrir Aprovações', href: '/aprovacoes' });
+    expect(varias.itens.slice(0, 2).map((i) => i.acao?.tipo)).toEqual(['ver', 'ver']);
+    // Sem resposta esperando, sem faixa.
+    expect(lista(telaDasAvaliacoes(ligada(), AGORA, NOMES, DONO)).esperando).toBeNull();
+  });
+
+  it('"a sua aprovação" só para quem aprova: a de 1 ou 2 estrelas espera o dono; quem não aprova lê "espera aprovação"', () => {
+    const baixa = ligada({ pending_replies: [{ review_id: id(1), action_id: PEDIDO(1), owner_only: true }] });
+    const comum = ligada({ pending_replies: [{ review_id: id(3), action_id: PEDIDO(3), owner_only: false }] });
+    // Quem aprova ações, mas não é o dono: a comum é dele; a de nota baixa, do dono.
+    const gerente = { podePedir: true, podeAprovar: true, souDono: false };
+    expect(lista(telaDasAvaliacoes(comum, AGORA, NOMES, gerente)).esperando?.titulo).toBe('1 resposta espera a sua aprovação');
+    const doDono = lista(telaDasAvaliacoes(baixa, AGORA, NOMES, gerente));
+    expect(doDono.itens[0]!.selo).toEqual({ classe: 'info', rotulo: 'Resposta espera o dono' });
+    expect(doDono.esperando).toEqual({ titulo: '1 resposta espera a aprovação do dono', texto: 'Paulo R. deu 1 estrela; só o dono da empresa aprova a resposta.', botao: 'Ver a resposta', href: `/aprovacoes?pedido=${PEDIDO(1)}` });
+    expect(lista(telaDasAvaliacoes(baixa, AGORA, null, gerente)).esperando?.texto).toBe('Uma avaliação de 1 estrela; só o dono da empresa aprova a resposta.');
+    // Quem não aprova ações lê a mesma resposta, sem "a sua".
+    const soLe = lista(telaDasAvaliacoes(comum, AGORA, NOMES));
+    expect(soLe.itens.find((i) => i.id === id(3))!.selo).toEqual({ classe: 'info', rotulo: 'Resposta espera aprovação' });
+    expect(soLe.esperando).toMatchObject({ titulo: '1 resposta espera aprovação', texto: 'Diego A. deu 4 estrelas; a resposta está pronta para ler.' });
+    expect(lista(telaDasAvaliacoes(ligada({ pending_replies: [{ review_id: id(99), action_id: PEDIDO(9), owner_only: false }] }), AGORA, NOMES)).esperando?.texto).toBe('A resposta está pronta para ler.');
+    // Várias, uma delas do dono: "esperam aprovação", sem "a sua".
+    const duas = ligada({ pending_replies: [{ review_id: id(1), action_id: PEDIDO(1), owner_only: true }, { review_id: id(3), action_id: PEDIDO(3), owner_only: false }] });
+    expect(lista(telaDasAvaliacoes(duas, AGORA, NOMES, gerente)).esperando?.titulo).toBe('2 respostas esperam aprovação');
+    expect(lista(telaDasAvaliacoes(duas, AGORA, NOMES)).esperando?.titulo).toBe('2 respostas esperam aprovação');
+  });
+});
+
 describe('a tela desenhada', () => {
   it('a lista do protótipo: as caixas, as estrelas com nome para quem ouve, o texto e a situação; e só leitura', () => {
     const html = desenhar(telaDasAvaliacoes(pronta(), AGORA, NOMES));
@@ -278,12 +337,26 @@ describe('a tela desenhada', () => {
     expect(html).toContain('<span class="st st--aguardando"><span class="dot" aria-hidden="true"></span>Sem resposta</span>');
     expect(html).toContain('<span class="st st--perigo"><span class="dot" aria-hidden="true"></span>O Google recusou a resposta</span>');
     expect(html).toContain('o Liame não guarda o nome nem a foto');
-    // Na Z1 a tela só lê: nem o botão de responder, nem o código do Google, nem o texto da resposta da empresa.
+    // Com a resposta pelo Liame desligada, a tela só lê: nem o botão de responder, nem o código do Google, nem o texto
+    // da resposta da empresa.
     expect(html).not.toContain('Responder');
     expect(html).not.toContain('<button');
     expect(html).not.toContain('SPAM');
     expect(html).not.toContain('Obrigado pela visita!');
     expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
+  });
+
+  it('Z2: com a resposta pelo Liame ligada, "Responder" leva ao rascunho; a resposta que espera ganha o selo, o caminho e a faixa', () => {
+    const PEDIDO = '44444444-4444-4444-8444-000000000001';
+    const html = desenhar(telaDasAvaliacoes(pronta({ can_reply: true, pending_replies: [{ review_id: id(3), action_id: PEDIDO, owner_only: false }] }), AGORA, NOMES, { podePedir: true, podeAprovar: true }));
+    expect(html).toContain('<div class="faixa faixa--acao" role="status">');
+    expect(html).toContain('<b>1 resposta espera a sua aprovação</b><span>Diego A. deu 4 estrelas; a resposta está pronta para você ler.</span>');
+    expect(html).toContain(`<a class="btn btn--primary" href="/aprovacoes?pedido=${PEDIDO}">Ver a resposta</a>`);
+    expect(html).toContain('<span class="st st--info"><span class="dot" aria-hidden="true"></span>Resposta espera você</span>');
+    expect(html).toContain(`<a class="btn btn--sm btn--primary" href="/aprovacoes?pedido=${PEDIDO}">Ver a resposta</a>`);
+    expect(html).toContain(`href="/aprovacoes?responder=${id(1)}&amp;marca=${MARCA}"`);
+    expect(html.split('>Responder</a>')).toHaveLength(3);
+    expect(html).not.toContain('<button');
   });
 
   it('o texto de quem avaliou entra como texto, nunca como marcação', () => {

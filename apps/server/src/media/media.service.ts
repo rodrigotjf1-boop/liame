@@ -2,7 +2,7 @@ import type { AccountFreshness, MediaAttentionResponse, MediaFreshnessResponse, 
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { avisosDoPerfilDaMarca, lerDadosDosAvisosDoPerfil } from '../avaliacoes/avisos-do-perfil.js';
-import { FLAG_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
+import { FLAG_PERFIL_GOOGLE, FLAG_PERFIL_GOOGLE_ESCRITA } from '../connectors/google-business/perfil-google.js';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -374,8 +374,11 @@ export class MediaService {
     if (marcasDoPerfil.length) {
       const empresas = await tx.execute<{ id: string; tenant_id: string }>(sql`select id, tenant_id from liame.brand where id in ${marcasDoPerfil} and archived_at is null`);
       for (const m of empresas.rows) {
-        if (!(await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, this.flags.context({ tenantId: m.tenant_id, brandId: m.id })))) continue;
-        for (const item of avisosDoPerfilDaMarca(m.id, perfil)) {
+        const contexto = this.flags.context({ tenantId: m.tenant_id, brandId: m.id });
+        if (!(await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, contexto))) continue;
+        // Com a resposta pelo Liame ligada (A6, Z2), a avaliação sem resposta se responde na tela Avaliações.
+        const respondePeloLiame = await this.flags.isEnabled(FLAG_PERFIL_GOOGLE_ESCRITA, contexto);
+        for (const item of avisosDoPerfilDaMarca(m.id, perfil, { respondePeloLiame })) {
           itens.push(item);
           marcaDoAviso.set(item, m.id);
         }

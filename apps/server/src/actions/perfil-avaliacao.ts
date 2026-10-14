@@ -6,7 +6,7 @@ import { DATASET_AVALIACOES } from '../avaliacoes/sincronizador-do-perfil.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { ErroConector } from '../connectors/cliente-http.js';
 import type { AlvoDaAvaliacao, ConectorPerfilGoogle } from '../connectors/google-business/conector-perfil-google.js';
-import type { AvaliacaoLida } from '../connectors/google-business/perfil-google.js';
+import { type AvaliacaoLida, FLAG_PERFIL_GOOGLE_ESCRITA } from '../connectors/google-business/perfil-google.js';
 import { type ContextoDaAvaliacao, EstadoDaAvaliacao, estadoDaAvaliacao, respostaJaApagada, respostaJaPublicada, versaoDaAvaliacao } from './avaliacao-plano.js';
 import type { ApplyOptions, ApplyResult, Connector, ReadResult, ResourceRef } from './connectors.js';
 import type { ResourceState } from './tools.js';
@@ -93,7 +93,7 @@ export function recusaDoPerfil(err: unknown, escrita: EscritaNoPerfil = 'publica
 
 export class PerfilAvaliacaoConnector implements Connector {
   readonly provider = PROVIDER;
-  readonly writeFlag = 'perfil_google_write';
+  readonly writeFlag = FLAG_PERFIL_GOOGLE_ESCRITA;
   // Responder a uma avaliação não gasta verba de mídia.
   readonly requiresSpendLimits = false;
   private readonly logger = new Logger('resposta-no-perfil');

@@ -88,6 +88,11 @@ export const ReviewsResponse = z.strictObject({
    * (`/aprovacoes?pedido={action_id}`) e se só o dono decide. Vazia com a função de responder desligada.
    */
   pending_replies: z.array(z.strictObject({ review_id: z.uuid(), action_id: z.uuid(), owner_only: z.boolean() })).optional(),
+  /**
+   * Responder pelo Liame está ligado para a marca (a função `perfil_google_write`, A6 · Z2): a tela oferece
+   * "Responder" a quem pode pedir ações. Desligado, a resposta é dada no próprio Google.
+   */
+  can_reply: z.boolean().optional(),
   generated_at: z.iso.datetime(),
 });
 export type ReviewsResponse = z.infer<typeof ReviewsResponse>;

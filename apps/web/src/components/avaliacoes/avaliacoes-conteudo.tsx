@@ -5,7 +5,8 @@ import { Icone } from '@/components/ui/icone';
 import type { Aviso, ItemDaLista, Selo, TelaDasAvaliacoes } from './textos';
 
 // O corpo da tela "Avaliações" (protótipo P17): o que falta para haver avaliações, ou as faixas da loja que parou de
-// ser lida, as três caixas do topo e a lista. Só desenha o que `telaDasAvaliacoes` montou; a tela só lê.
+// ser lida e da resposta que espera a aprovação, as três caixas do topo e a lista, com "Responder" e "Ver a resposta".
+// Só desenha o que `telaDasAvaliacoes` montou: a resposta é escrita e aprovada em Aprovações.
 
 type Props = {
   tela: TelaDasAvaliacoes;
@@ -71,6 +72,17 @@ function Item({ item }: { item: ItemDaLista }) {
       </div>
       <div className="av-item-acao">
         <SeloDaResposta selo={item.selo} />
+        {item.acao?.tipo === 'ver' && (
+          <Link className="btn btn--sm btn--primary" href={item.acao.href}>
+            Ver a resposta
+          </Link>
+        )}
+        {item.acao?.tipo === 'responder' && (
+          <Link className="btn btn--sm" href={item.acao.href}>
+            <Icone nome="pencil" pequeno />
+            Responder
+          </Link>
+        )}
       </div>
     </li>
   );
@@ -150,6 +162,19 @@ export function AvaliacoesConteudo({ tela, podeVerContas }: Props) {
   return (
     <div className="av">
       <Avisos avisos={tela.avisos} podeVerContas={podeVerContas} />
+      {tela.esperando && (
+        <Faixa
+          tipo="acao"
+          icone={<Icone nome="message" />}
+          titulo={tela.esperando.titulo}
+          texto={tela.esperando.texto}
+          acao={
+            <Link className="btn btn--primary" href={tela.esperando.href}>
+              {tela.esperando.botao}
+            </Link>
+          }
+        />
+      )}
       {tela.tudoRespondido && <Faixa icone={<Icone nome="check-circle" />} titulo="Nenhuma avaliação sem resposta" texto="Quando chegar uma nova, ela aparece no topo da lista." />}
       <div className="av-topo">
         {tela.caixas.map((c) => (

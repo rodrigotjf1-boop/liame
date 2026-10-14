@@ -39,8 +39,11 @@ export function avisoLojasPorLigar(lojas: number): ItemAtencao {
   };
 }
 
-/** As avaliações de nota baixa sem resposta de uma loja: uma só diz a nota dela; várias, quantas são. */
-export function avisoAvaliacoesSemResposta(loja: { id: string; nome: string }, a: { quantas: number; estrelas: number; maisRecente: Date }, fuso = FUSO_PADRAO): ItemAtencao {
+/**
+ * As avaliações de nota baixa sem resposta de uma loja: uma só diz a nota dela; várias, quantas são. Com a resposta
+ * pelo Liame ligada para a marca (Z2), o caminho é a tela Avaliações; sem ela, o próprio Google.
+ */
+export function avisoAvaliacoesSemResposta(loja: { id: string; nome: string }, a: { quantas: number; estrelas: number; maisRecente: Date }, fuso = FUSO_PADRAO, respondePeloLiame = false): ItemAtencao {
   const dia = a.maisRecente.toLocaleDateString('pt-BR', { timeZone: fuso, day: '2-digit', month: '2-digit' });
   const uma = a.quantas === 1;
   return {
@@ -49,7 +52,7 @@ export function avisoAvaliacoesSemResposta(loja: { id: string; nome: string }, a
     title: uma ? `Avaliação de ${a.estrelas} ${a.estrelas === 1 ? 'estrela' : 'estrelas'} sem resposta` : `${a.quantas} avaliações de 1 ou 2 estrelas sem resposta`,
     // "Em <loja>": a preposição não muda com o nome da loja (V121).
     detail: uma ? `Em ${loja.nome}, no Google, feita em ${dia}.` : `Em ${loja.nome}, no Google. A mais recente é de ${dia}.`,
-    action: 'Responda no perfil da empresa no Google.',
+    action: respondePeloLiame ? 'Responda em Avaliações: a resposta só sai com a aprovação de uma pessoa da empresa.' : 'Responda no perfil da empresa no Google.',
     connected_account_id: loja.id,
     campaign_id: null,
     provider: null,
@@ -93,16 +96,17 @@ export function avisoDaSituacaoDaLoja(loja: Pick<LojaDoAviso, 'id' | 'nome' | 's
 
 /**
  * Os avisos de uma marca, na ordem em que entram na lista. As avaliações só contam na loja que está sendo lida (a
- * desconectada já tem o aviso dela, e o número parado enganaria).
+ * desconectada já tem o aviso dela, e o número parado enganaria). `respondePeloLiame`: a resposta pelo Liame está
+ * ligada para a marca (Z2), e o aviso da avaliação sem resposta leva à tela Avaliações.
  */
-export function avisosDoPerfilDaMarca(marca: string, dados: DadosDosAvisosDoPerfil): ItemAtencao[] {
+export function avisosDoPerfilDaMarca(marca: string, dados: DadosDosAvisosDoPerfil, opcoes: { respondePeloLiame?: boolean } = {}): ItemAtencao[] {
   const itens: ItemAtencao[] = [];
   const lojas = dados.lojas.filter((l) => l.marca === marca);
   for (const l of lojas) {
     const situacao = avisoDaSituacaoDaLoja(l);
     if (situacao) itens.push(situacao);
     const notas = dados.notasBaixas.find((n) => n.conta === l.id);
-    if (notas && notas.quantas > 0 && l.status !== 'desconectada') itens.push(avisoAvaliacoesSemResposta(l, notas));
+    if (notas && notas.quantas > 0 && l.status !== 'desconectada') itens.push(avisoAvaliacoesSemResposta(l, notas, undefined, opcoes.respondePeloLiame ?? false));
     const recusadas = dados.respostasRecusadas.find((n) => n.conta === l.id);
     if (recusadas && recusadas.quantas > 0 && l.status !== 'desconectada') itens.push(avisoRespostasRecusadas(l, recusadas.quantas));
   }

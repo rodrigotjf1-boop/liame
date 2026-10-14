@@ -53,6 +53,11 @@ describe('avisos do Perfil da Empresa no Google na Atenção (A6 · Z1)', () => 
     // Feita às 02h da madrugada de 10/10 em UTC: no horário de Brasília ainda é dia 9.
     expect(avisoAvaliacoesSemResposta(LOJA, { quantas: 1, estrelas: 1, maisRecente: new Date('2026-10-10T02:00:00.000Z') }).detail).toContain('feita em 09/10');
     expect(avisoAvaliacoesSemResposta(LOJA, { quantas: 1, estrelas: 1, maisRecente: new Date('2026-10-10T02:00:00.000Z') }, 'UTC').detail).toContain('feita em 10/10');
+    // Z2: com a resposta pelo Liame ligada para a marca, o caminho é a tela Avaliações.
+    expect(avisoAvaliacoesSemResposta(LOJA, { quantas: 1, estrelas: 1, maisRecente: EM }, undefined, true).action).toBe('Responda em Avaliações: a resposta só sai com a aprovação de uma pessoa da empresa.');
+    const dados: DadosDosAvisosDoPerfil = { lojas: [{ id: 'conta-1', marca: 'm1', nome: 'Centro', status: 'ativa', motivo: null }], notasBaixas: [{ conta: 'conta-1', quantas: 1, estrelas: 2, maisRecente: EM }], respostasRecusadas: [], porLigar: [] };
+    expect(avisosDoPerfilDaMarca('m1', dados, { respondePeloLiame: true })[0]!.action).toContain('Responda em Avaliações');
+    expect(avisosDoPerfilDaMarca('m1', dados)[0]!.action).toBe('Responda no perfil da empresa no Google.');
   });
 
   it('Z2: a resposta que o Google recusou, no singular e no plural, com o caminho das Avaliações', () => {
