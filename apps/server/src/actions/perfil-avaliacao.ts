@@ -2,6 +2,7 @@ import type { Tx } from '@liame/database';
 import { Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { gravarAvaliacoes } from '../avaliacoes/perfil-store.js';
+import { DATASET_AVALIACOES } from '../avaliacoes/sincronizador-do-perfil.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { ErroConector } from '../connectors/cliente-http.js';
 import type { AlvoDaAvaliacao, ConectorPerfilGoogle } from '../connectors/google-business/conector-perfil-google.js';
@@ -35,6 +36,8 @@ const PREFIXO = 'avaliacao:';
 
 /** A leitura da hora do pedido não espera o Google mais que isto: passou, a pessoa recebe "tente de novo". */
 const TEMPO_DA_LEITURA_DO_PEDIDO_MS = 10_000;
+/** Depois de publicar uma resposta, em quanto tempo a loja é lida de novo (o Google costuma conferir em até 10 minutos). */
+export const MINUTOS_ATE_A_CONFERENCIA = 10;
 
 /** `avaliacao:<id>` → o id da avaliação no Liame. */
 export function avaliacaoDoRecurso(resourceId: string): string | null {
@@ -131,6 +134,22 @@ export class PerfilAvaliacaoConnector implements Connector {
     await gravarAvaliacoes(tx, { tenantId: p.conta.tenant_id, brandId: p.conta.brand_id, connectedAccountId: p.conta.id }, [lida], new Date());
   }
 
+  /**
+   * Depois de publicar, a leitura das avaliações desta loja vem em dez minutos, e não só na hora cheia: é ela que traz
+   * a conferência do Google (`conferirRespostas`, no sincronizador). Só adianta a vez; a loja que espera depois de uma
+   * falha (o limite de cota, a autorização) continua esperando. Mexe só na chave `proxima` do cursor: se a leitura
+   * estiver no meio e gravar o cursor dela por cima, a conferência fica para a volta seguinte, e nada se perde.
+   */
+  private async apressarALeitura(tx: Tx, p: Preparada): Promise<void> {
+    const quando = new Date(Date.now() + MINUTOS_ATE_A_CONFERENCIA * 60_000).toISOString();
+    await tx.execute(sql`
+      update liame.sync_state s
+         set cursor = s.cursor || jsonb_build_object('proxima', ${quando}::text)
+       where s.connected_account_id = ${p.conta.id} and s.dataset = ${DATASET_AVALIACOES}
+         and s.cursor ->> 'espera_ate' is null
+         and (s.cursor ->> 'proxima')::timestamptz > ${quando}::timestamptz`);
+  }
+
   /** A leitura da hora do pedido, com o tempo curto de quem tem uma pessoa esperando. */
   async read(tx: Tx, ref: ResourceRef): Promise<ReadResult | null> {
     if (!this.deps) throw new Error('resposta no Perfil do Google: dependências não ligadas');
@@ -175,7 +194,10 @@ export class PerfilAvaliacaoConnector implements Connector {
     const versao = versaoDaAvaliacao(atual);
     // Já está como o pedido queria (a tentativa anterior caiu depois de o Google aceitar): nada a mandar de novo.
     if (lida && (respostaJaPublicada(atual, desired) || respostaJaApagada(atual, desired))) {
-      if (!options.validateOnly) await this.guardar(tx, p, lida);
+      if (!options.validateOnly) {
+        await this.guardar(tx, p, lida);
+        if (escrita === 'publicar') await this.apressarALeitura(tx, p);
+      }
       return { ok: true, state: atual, version: versao };
     }
     // A avaliação mudou desde o pedido, sumiu, ou a resposta já não é a mesma: nada é publicado nem apagado (A6-4).
@@ -193,6 +215,7 @@ export class PerfilAvaliacaoConnector implements Connector {
       }
       const gravada = await conector.responderAvaliacao({ accessToken }, p.alvo, quer.data.resposta.texto);
       await this.guardar(tx, p, { ...lida, resposta: gravada });
+      await this.apressarALeitura(tx, p);
       const estado: EstadoDaAvaliacao = { ...atual, resposta: { situacao: gravada.situacao, texto: gravada.texto, violacao: gravada.violacao } };
       return { ok: true, state: estado, version: versaoDaAvaliacao(estado) };
     } catch (err) {

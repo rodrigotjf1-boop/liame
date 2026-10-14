@@ -490,4 +490,44 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
     expect(google.lista.find((a) => a.reviewId === 'duas')!.reviewReply).toBeUndefined();
     expect(await guardada(ids.get('duas')!)).toEqual({ reply_text: null, reply_state: null });
   });
+
+  it('parte d: depois de publicar, a loja é lida de novo em 10 minutos, e a conferência do Google chega ao pedido; a loja que espera depois de uma falha não é apressada', async () => {
+    const { e, ids } = await empresa('Mister Burgers Conferência da Resposta', [avaliacao('rev-5', 'FIVE', 2), avaliacao('rev-4', 'FOUR', 3)]);
+    const MIN = 60_000;
+    const proxima = async () =>
+      new Date((await ownerQuery<{ proxima: string }>(`select cursor ->> 'proxima' as proxima from liame.sync_state where connected_account_id = $1 and dataset = 'avaliacoes_perfil'`, [e.contaId]))[0]!.proxima).getTime();
+    // A leitura das avaliações acabou de rodar: a próxima seria daqui a uma hora.
+    const antes = await proxima();
+    expect(antes).toBeGreaterThan(Date.now() + 50 * MIN);
+    const p = await pedir(dono(e), e, ids.get('rev-5')!, TEXTO);
+    expect((await aprovar(dono(e), p.body)).body.status).toBe('aprovada');
+    // O pedido e a aprovação não adiantam a leitura: só a publicação.
+    expect(await proxima()).toBe(antes);
+    await ciclo(e);
+    expect(await ver(e, p.body.id)).toMatchObject({ status: 'executada', review: { current: { reply: { text: TEXTO, state: 'pendente' } } } });
+    const adiantada = await proxima();
+    expect(adiantada).toBeLessThanOrEqual(Date.now() + 10 * MIN);
+    expect(adiantada).toBeGreaterThan(Date.now() + 9 * MIN);
+
+    // O Google libera a resposta, sem mexer na data da avaliação. Dez minutos depois, a leitura a relê pela conferência
+    // das respostas, e o pedido mostra a resposta no ar.
+    google.lista.find((a) => a.reviewId === 'rev-5')!.reviewReply!.reviewReplyState = 'APPROVED';
+    const lote = await loop.executarLote(10, { tenantIds: [e.tenantId] }, new Date(Date.now() + 11 * MIN));
+    expect(lote.map((r) => [r.status, r.avaliacoes, r.respostas])).toEqual([['ok', 0, 1]]);
+    expect(await guardada(ids.get('rev-5')!)).toEqual({ reply_text: TEXTO, reply_state: 'aprovada' });
+    expect((await ver(e, p.body.id)).review.current.reply).toMatchObject({ text: TEXTO, state: 'aprovada' });
+
+    // A loja que espera depois de uma falha (aqui, o Google sem cota para a lista) continua esperando: publicar outra
+    // resposta não a traz de volta antes da hora.
+    google.avaliacoes = 'sem-cota';
+    expect((await loop.executarLote(10, { tenantIds: [e.tenantId] }, new Date(Date.now() + 80 * MIN))).map((r) => r.status)).toEqual(['falhou']);
+    google.avaliacoes = 'ok';
+    const esperando = await proxima();
+    expect(esperando).toBeGreaterThan(Date.now() + 100 * MIN);
+    const q = await pedir(dono(e), e, ids.get('rev-4')!, TEXTO);
+    expect((await aprovar(dono(e), q.body)).body.status).toBe('aprovada');
+    await ciclo(e);
+    expect(await ver(e, q.body.id)).toMatchObject({ status: 'executada' });
+    expect(await proxima()).toBe(esperando);
+  });
 });

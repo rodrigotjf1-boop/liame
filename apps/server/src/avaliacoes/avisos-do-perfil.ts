@@ -6,6 +6,7 @@ import type { ItemAtencao } from '../media/atencao.js';
 // Os avisos do Perfil da Empresa no Google na Atenção (A6, Z1), calculados na hora sobre o que o Liame guardou:
 //   - as lojas do perfil que a autorização do Google alcança e que ninguém ligou ainda;
 //   - a avaliação de 1 ou 2 estrelas que segue sem resposta;
+//   - a resposta a uma avaliação que o Google recusou (Z2): ela não aparece no perfil;
 //   - a loja do perfil que parou de ser lida (desconectada, sem permissão ou com defeito).
 // O limite de cota (o Google ainda não liberou o acesso, ou pediu para esperar) NÃO vira aviso: não há o que a pessoa
 // fazer, e ele passa sozinho. Nenhum aviso leva o texto da avaliação nem nada de quem avaliou: só a contagem, a nota
@@ -20,7 +21,9 @@ const FUSO_PADRAO = 'America/Sao_Paulo';
 export type LojaDoAviso = { id: string; marca: string; nome: string; status: string; motivo: string | null };
 export type NotasBaixasDaLoja = { conta: string; quantas: number; estrelas: number; maisRecente: Date };
 export type LojasPorLigar = { marca: string; lojas: number };
-export type DadosDosAvisosDoPerfil = { lojas: LojaDoAviso[]; notasBaixas: NotasBaixasDaLoja[]; porLigar: LojasPorLigar[] };
+/** As respostas que o Google recusou nos últimos 30 dias, por loja. */
+export type RespostasRecusadasDaLoja = { conta: string; quantas: number };
+export type DadosDosAvisosDoPerfil = { lojas: LojaDoAviso[]; notasBaixas: NotasBaixasDaLoja[]; respostasRecusadas: RespostasRecusadasDaLoja[]; porLigar: LojasPorLigar[] };
 
 /** A autorização do Google alcança lojas do perfil, e a marca não tem nenhuma ligada. */
 export function avisoLojasPorLigar(lojas: number): ItemAtencao {
@@ -47,6 +50,26 @@ export function avisoAvaliacoesSemResposta(loja: { id: string; nome: string }, a
     // "Em <loja>": a preposição não muda com o nome da loja (V121).
     detail: uma ? `Em ${loja.nome}, no Google, feita em ${dia}.` : `Em ${loja.nome}, no Google. A mais recente é de ${dia}.`,
     action: 'Responda no perfil da empresa no Google.',
+    connected_account_id: loja.id,
+    campaign_id: null,
+    provider: null,
+  };
+}
+
+/**
+ * As respostas que o Google recusou (A6, Z2): ele confere toda resposta antes de mostrar, e a recusada não aparece no
+ * perfil. Vale para a resposta publicada pelo Liame e para a dada direto no Google. Sem o texto da resposta e sem a
+ * avaliação: a tela Avaliações mostra qual é.
+ */
+export function avisoRespostasRecusadas(loja: { id: string; nome: string }, quantas: number): ItemAtencao {
+  const uma = quantas === 1;
+  return {
+    kind: 'resposta_recusada',
+    severity: 'atencao',
+    title: uma ? 'O Google recusou a resposta a uma avaliação' : `O Google recusou ${quantas} respostas a avaliações`,
+    // "Em <loja>": a preposição não muda com o nome da loja (V121).
+    detail: uma ? `Em ${loja.nome}. A resposta não aparece no perfil.` : `Em ${loja.nome}. Essas respostas não aparecem no perfil.`,
+    action: uma ? 'Veja em Avaliações qual é, e escreva outra resposta.' : 'Veja em Avaliações quais são, e escreva outras respostas.',
     connected_account_id: loja.id,
     campaign_id: null,
     provider: null,
@@ -80,6 +103,8 @@ export function avisosDoPerfilDaMarca(marca: string, dados: DadosDosAvisosDoPerf
     if (situacao) itens.push(situacao);
     const notas = dados.notasBaixas.find((n) => n.conta === l.id);
     if (notas && notas.quantas > 0 && l.status !== 'desconectada') itens.push(avisoAvaliacoesSemResposta(l, notas));
+    const recusadas = dados.respostasRecusadas.find((n) => n.conta === l.id);
+    if (recusadas && recusadas.quantas > 0 && l.status !== 'desconectada') itens.push(avisoRespostasRecusadas(l, recusadas.quantas));
   }
   const porLigar = dados.porLigar.find((p) => p.marca === marca);
   if (porLigar && porLigar.lojas > 0 && !lojas.length) itens.push(avisoLojasPorLigar(porLigar.lojas));
@@ -106,6 +131,16 @@ export async function lerDadosDosAvisosDoPerfil(tx: Tx, brandId: string | undefi
            and r.reviewed_at >= ${instante} - make_interval(days => ${DIAS_DO_AVISO_DE_AVALIACAO})
          group by r.connected_account_id`)
     : { rows: [] };
+  // As respostas que o Google recusou nos últimos 30 dias, pela data da resposta (sem ela, pela da avaliação).
+  const recusadas = lojas.rows.length
+    ? await tx.execute<{ conta: string; quantas: number }>(sql`
+        select r.connected_account_id as conta, count(*)::int as quantas
+          from liame.profile_review r
+         where r.connected_account_id in ${lojas.rows.map((l) => l.id)}
+           and r.reply_state = 'recusada'
+           and coalesce(r.reply_changed_at, r.changed_at) >= ${instante} - make_interval(days => ${DIAS_DO_AVISO_DE_AVALIACAO})
+         group by r.connected_account_id`)
+    : { rows: [] };
   // As lojas que alguma autorização do Google da marca alcança e que não estão ligadas a marca nenhuma da empresa.
   const porLigar = await tx.execute<{ marca: string; lojas: number }>(sql`
     select c.brand_id as marca, count(distinct d ->> 'external_id')::int as lojas
@@ -120,6 +155,7 @@ export async function lerDadosDosAvisosDoPerfil(tx: Tx, brandId: string | undefi
   return {
     lojas: lojas.rows,
     notasBaixas: notas.rows.map((n) => ({ conta: n.conta, quantas: n.quantas, estrelas: n.estrelas, maisRecente: new Date(n.mais_recente) })),
+    respostasRecusadas: recusadas.rows,
     porLigar: porLigar.rows,
   };
 }

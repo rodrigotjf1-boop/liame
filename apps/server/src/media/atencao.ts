@@ -4,7 +4,7 @@
 export type Severidade = 'critica' | 'atencao' | 'info';
 
 export type ItemAtencao = {
-  /** Os dois últimos são do Perfil da Empresa no Google (A6, Z1): `avaliacoes/avisos-do-perfil.ts`. */
+  /** Os três últimos são do Perfil da Empresa no Google (A6, Z1 e Z2): `avaliacoes/avisos-do-perfil.ts`. */
   kind:
     | 'conta_desconectada'
     | 'conta_sem_permissao'
@@ -15,6 +15,7 @@ export type ItemAtencao = {
     | 'campanha_parou'
     | 'versao_api'
     | 'avaliacao_sem_resposta'
+    | 'resposta_recusada'
     | 'perfil_lojas_por_ligar';
   severity: Severidade;
   title: string;
@@ -122,6 +123,8 @@ const PRIORIDADE: ItemAtencao['kind'][] = [
   'gasto_fora_do_normal',
   // A avaliação de nota baixa sem resposta está à vista de quem procura a empresa: vem logo depois do dinheiro.
   'avaliacao_sem_resposta',
+  // A resposta que o Google recusou deixa a avaliação sem resposta à vista: vem junto.
+  'resposta_recusada',
   'conta_sem_permissao',
   'conta_com_erro',
   'dado_atrasado',

@@ -64,6 +64,8 @@ describe('atenção de mídia', () => {
   it('avisos do perfil da empresa no Google (A6, Z1): as lojas por ligar levam a Contas; a avaliação sem resposta abre a tela Avaliações, que é de quem acompanha as campanhas', () => {
     expect(acaoDoAviso('perfil_lojas_por_ligar')).toBe('abrir-contas');
     expect(acaoDoAviso('avaliacao_sem_resposta')).toBe('abrir-avaliacoes');
+    // Z2: a resposta que o Google recusou também se vê na tela Avaliações.
+    expect(acaoDoAviso('resposta_recusada')).toBe('abrir-avaliacoes');
     expect(destinoDoAviso('abrir-avaliacoes')).toEqual({ href: '/avaliacoes', rotulo: 'Abrir as Avaliações' });
     expect(destinoPedeVendas('abrir-avaliacoes')).toBe(false);
   });

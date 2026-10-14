@@ -5,8 +5,8 @@ import type { AppConfig } from '../config.js';
 import { acessoGoogle, type CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector, type TipoErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
-import { BALDE_DO_PERFIL_GOOGLE, criarConectorPerfilGoogle } from '../connectors/google-business/conector-perfil-google.js';
-import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
+import { BALDE_DO_PERFIL_GOOGLE, type ConectorPerfilGoogle, criarConectorPerfilGoogle } from '../connectors/google-business/conector-perfil-google.js';
+import { type AvaliacaoLida, FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
 import type { FlagService } from '../flags/flag.service.js';
 import type { VaultService } from '../vault/vault.service.js';
 import { type AvaliacaoNova, type ContaDoPerfil, gravarAvaliacoes, gravarNumeros, gravarResumo } from './perfil-store.js';
@@ -50,6 +50,18 @@ export const DIAS_RECONFERIDOS = 45;
 export const HORAS_ENTRE_RECONFERENCIAS = 24;
 export const DIAS_ENTRE_RELEITURAS = 7;
 export const MAXIMO_NA_RECONFERENCIA = 1000;
+/**
+ * A conferência do Google das respostas (A6, Z2). O Google confere toda resposta antes de mostrar: "usually take up to
+ * 10 minutes to review, but sometimes a review can take up to 30 days" (a ajuda do Perfil, base de conhecimento §16.1).
+ * A resposta que o Liame guarda como "pendente" é relida uma a uma, junto com a leitura das avaliações: a leitura do
+ * dia a dia segue a data da AVALIAÇÃO, e a referência não diz se a conferência mexe nela. Enquanto houver resposta
+ * dada há menos de duas horas ainda em conferência, a loja volta para a fila em 15 minutos, e não em uma hora. Depois
+ * de 30 dias, a resposta deixa de ser seguida de perto (a reconferência diária e a releitura semanal ainda a alcançam).
+ */
+export const DIAS_DE_CONFERENCIA_DA_RESPOSTA = 30;
+export const MAXIMO_DE_RESPOSTAS_CONFERIDAS = 20;
+export const HORAS_DE_CONFERENCIA_DE_PERTO = 2;
+export const INTERVALO_COM_RESPOSTA_EM_CONFERENCIA_MIN = 15;
 export const DIAS_DA_PRIMEIRA_LEITURA_DOS_NUMEROS = 90;
 export const DIAS_RELIDOS_DOS_NUMEROS = 10;
 
@@ -94,6 +106,8 @@ export type ResultadoDoPerfil = {
   /** Avaliações gravadas e, delas, as que são novas. */
   avaliacoes?: number;
   novas?: AvaliacaoNova[];
+  /** Respostas em conferência no Google que foram relidas uma a uma nesta leitura. */
+  respostas?: number;
   /** Números do perfil gravados (um por dia e métrica). */
   pontos?: number;
   erro?: string;
@@ -238,12 +252,17 @@ export class SincronizadorDoPerfil {
         });
         resultado.avaliacoes = gravado.gravadas;
         resultado.novas = gravado.novas;
+        // As respostas que o Google ainda confere (Z2): relidas uma a uma, fora as que esta leitura já trouxe.
+        const conferencia = await this.conferirRespostas(conector, accessToken, conta, contaDoPerfil, alvo, new Set(lidas.avaliacoes.map((a) => a.id)), agora);
+        resultado.respostas = conferencia.relidas;
         // O teto só corta as mais antigas: a leitura seguinte parte de agora do mesmo jeito, e o corte fica anotado.
         // As marcas da reconferência e da releitura só andam aqui, na leitura boa: a falha não gasta a vez.
         const quando = agora.toISOString();
         const marcas: CursorDoPerfil = {
           ...(plano.tipo === 'seguinte' ? {} : { reconferido_em: quando }),
           ...(plano.tipo === 'primeira' || plano.tipo === 'releitura' ? { relido_em: quando } : {}),
+          // Com resposta recém-dada ainda em conferência, a loja volta logo para a fila.
+          ...(conferencia.dePerto ? { proxima: depois(INTERVALO_COM_RESPOSTA_EM_CONFERENCIA_MIN) } : {}),
         };
         await this.marcarEstado(conta, dataset, agora, null, { ...proximo, ...marcas, lido_ate: quando, parou_no_teto: !lidas.completa });
         if (!lidas.completa) this.logger.warn(`conta ${conta.id}: a leitura das avaliações (${plano.tipo}) parou no teto (${lidas.avaliacoes.length})`);
@@ -274,6 +293,67 @@ export class SincronizadorDoPerfil {
     await this.fecharExecucao(conta, runId, 'ok', cliente.chamadas, (resultado.avaliacoes ?? 0) + (resultado.pontos ?? 0), null, agora);
     await this.situacaoPelosConjuntos(conta, agora);
     return resultado;
+  }
+
+  /**
+   * A conferência do Google das respostas (Z2): relê, uma a uma, as avaliações cuja resposta o Liame guarda como
+   * "pendente", fora as que a leitura desta volta já trouxe, e grava cada uma como o Google a tem agora. É um extra da
+   * leitura: o que o Google não responder agora fica para a próxima volta, e a leitura das avaliações não falha por
+   * isso. `dePerto`: ainda há resposta dada há pouco em conferência, e a loja deve voltar logo para a fila.
+   *
+   * A avaliação que o Google diz não existir mais segue como está no Liame (ela sai da conta dos 30 dias sozinha): as
+   * mais novas vêm primeiro, e por isso a que ficou para trás não tira a vez de uma resposta recém-publicada.
+   */
+  private async conferirRespostas(
+    conector: ConectorPerfilGoogle,
+    accessToken: string,
+    conta: LinhaConta,
+    contaDoPerfil: string,
+    alvo: ContaDoPerfil,
+    jaLidas: Set<string>,
+    agora: Date,
+  ): Promise<{ relidas: number; dePerto: boolean }> {
+    const instante = sql`${agora.toISOString()}::timestamptz`;
+    // A data da resposta é a do Google; sem ela, vale a da avaliação.
+    const pendente = sql`r.connected_account_id = ${conta.id} and r.reply_state = 'pendente'`;
+    const dadaEm = sql`coalesce(r.reply_changed_at, r.changed_at)`;
+    const pendentes = await withTenant(this.db, conta.tenant_id, async (tx) => {
+      const r = await tx.execute<{ external_id: string }>(sql`
+        select r.external_id from liame.profile_review r
+         where ${pendente} and ${dadaEm} >= ${instante} - make_interval(days => ${DIAS_DE_CONFERENCIA_DA_RESPOSTA})
+         order by ${dadaEm} desc, r.id
+         limit ${MAXIMO_DE_RESPOSTAS_CONFERIDAS}`);
+      return r.rows.map((l) => l.external_id);
+    });
+    const relidas: AvaliacaoLida[] = [];
+    let parou = false;
+    for (const avaliacao of pendentes) {
+      if (jaLidas.has(avaliacao)) continue;
+      try {
+        const lida = await conector.lerAvaliacao({ accessToken }, { conta: contaDoPerfil, loja: conta.external_id, avaliacao });
+        if (lida) relidas.push(lida);
+      } catch (err) {
+        const tipo = err instanceof ErroConector ? err.tipo : 'interno';
+        this.logger.warn(`conta ${conta.id}: a conferência de uma resposta não foi lida (${tipo})`);
+        // O Google não está respondendo (limite, fora do ar, autorização): não insiste nesta volta, e a loja volta na
+        // hora cheia, e não em 15 minutos (critério A6-2). O defeito de uma avaliação só (um id que não serve para
+        // endereço) não segura as outras.
+        if (tipo !== 'definitivo') {
+          parou = true;
+          break;
+        }
+      }
+    }
+    if (relidas.length) await withTenant(this.db, conta.tenant_id, (tx) => gravarAvaliacoes(tx, alvo, relidas, agora));
+    if (parou) return { relidas: relidas.length, dePerto: false };
+    const dePerto = await withTenant(this.db, conta.tenant_id, async (tx) => {
+      const r = await tx.execute<{ tem: boolean }>(sql`
+        select exists (
+          select 1 from liame.profile_review r
+           where ${pendente} and ${dadaEm} >= ${instante} - make_interval(hours => ${HORAS_DE_CONFERENCIA_DE_PERTO})) as tem`);
+      return r.rows[0]?.tem === true;
+    });
+    return { relidas: relidas.length, dePerto };
   }
 
   /**

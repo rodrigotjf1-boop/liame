@@ -291,6 +291,78 @@ describe.skipIf(!hasDb)('ler o Perfil da Empresa no Google (A6 · Z1)', () => {
     expect((await estado(e, DATASET_AVALIACOES)).cursor).toMatchObject({ reconferido_em: semana.toISOString(), relido_em: semana.toISOString() });
   });
 
+  it('Z2: a resposta que o Google ainda confere é relida uma a uma, sem depender da data da avaliação; recém-dada, a loja volta em 15 minutos; e o limite na conferência não derruba a leitura', async () => {
+    const e = await empresa('Mister Burgers Conferência do Google');
+    const daLoja = `/avaliacoes/v4/${CONTA_DO_PERFIL}/${LOJA_DO_PERFIL}/reviews/`;
+    /** As leituras de UMA avaliação que chegaram ao Google (a lista não entra). */
+    const umaAUma = () => google.de('avaliacoes').filter((v) => v.metodo === 'GET' && v.caminho.startsWith(daLoja)).map((v) => v.caminho.slice(daLoja.length));
+    const proxima = async () => (await estado(e, DATASET_AVALIACOES)).cursor.proxima;
+    const respostas = async () => (await avaliacoes(e)).map((a) => [a.external_id, a.reply_text, a.reply_state, a.reply_violation]);
+    // A rev-2 foi respondida há 5 minutos; a rev-3, há 3 dias. O Google ainda confere as duas.
+    google.lista = [
+      avaliacao('rev-1', 'FIVE', 2),
+      { ...avaliacao('rev-2', 'THREE', 5), reviewReply: { comment: 'Vamos melhorar a batata.', updateTime: em(-5).toISOString(), reviewReplyState: 'PENDING' } },
+      { ...avaliacao('rev-3', 'FOUR', 9), reviewReply: { comment: 'Obrigado pela visita!', updateTime: ha(3), reviewReplyState: 'PENDING' } },
+    ];
+    google.vistos.length = 0;
+    const primeira = await rodar(e, AGORA);
+    expect(situacoes(primeira)).toEqual(['ok', 'ok']);
+    // A primeira leitura já trouxe as duas como estão: nada a reler uma a uma. Com resposta recém-dada em conferência,
+    // a loja volta para a fila em 15 minutos, e não em uma hora.
+    expect(primeira.find((r) => r.dataset === DATASET_AVALIACOES)!.respostas).toBe(0);
+    expect(umaAUma()).toEqual([]);
+    expect(await proxima()).toBe(em(15).toISOString());
+    expect((await estado(e, DATASET_AVALIACOES)).expected_every_minutes).toBe(60);
+
+    // O Google libera a rev-2 e recusa a rev-3, SEM mexer na data de nenhuma avaliação (a referência não diz que
+    // mexeria). Na volta seguinte ele está sem cota para a leitura de uma avaliação: a leitura das avaliações segue
+    // boa, a conferência para na primeira chamada, e a loja volta na hora cheia (não insiste: A6-2).
+    google.lista[1]!.reviewReply!.reviewReplyState = 'APPROVED';
+    Object.assign(google.lista[2]!.reviewReply!, { reviewReplyState: 'REJECTED', policyViolation: 'CODIGO_DE_EXEMPLO' });
+    google.umaAvaliacao = 'sem-cota';
+    google.vistos.length = 0;
+    const semCota = await rodar(e, em(16));
+    expect(semCota.map((r) => [r.dataset, r.status, r.avaliacoes, r.respostas])).toEqual([[DATASET_AVALIACOES, 'ok', 0, 0]]);
+    expect(umaAUma()).toEqual(['rev-2']);
+    expect(await respostas()).toEqual([['rev-1', null, null, null], ['rev-2', 'Vamos melhorar a batata.', 'pendente', null], ['rev-3', 'Obrigado pela visita!', 'pendente', null]]);
+    expect(await proxima()).toBe(em(16 + 60).toISOString());
+    expect(await conta(e)).toEqual({ status: 'ativa', status_reason: null });
+
+    // Uma hora depois, com cota: a lista não traz nenhuma das duas (pela data, nada mudou), e a conferência relê as
+    // duas, a respondida há menos tempo primeiro. O que o Liame guarda fica como o Google as tem.
+    google.umaAvaliacao = 'ok';
+    google.vistos.length = 0;
+    const conferida = await rodar(e, em(77));
+    expect(conferida.map((r) => [r.dataset, r.status, r.avaliacoes, r.respostas])).toEqual([[DATASET_AVALIACOES, 'ok', 0, 2]]);
+    expect(umaAUma()).toEqual(['rev-2', 'rev-3']);
+    expect(await respostas()).toEqual([
+      ['rev-1', null, null, null],
+      ['rev-2', 'Vamos melhorar a batata.', 'aprovada', null],
+      ['rev-3', 'Obrigado pela visita!', 'recusada', 'CODIGO_DE_EXEMPLO'],
+    ]);
+    // Nenhuma segue em conferência: a loja volta na hora cheia, e a volta seguinte não relê nada uma a uma.
+    expect(await proxima()).toBe(em(77 + 60).toISOString());
+    google.vistos.length = 0;
+    expect((await rodar(e, em(77 + 61))).map((r) => [r.dataset, r.status, r.respostas])).toEqual([[DATASET_AVALIACOES, 'ok', 0]]);
+    expect(umaAUma()).toEqual([]);
+    // A6-1: a leitura de uma avaliação também traz o nome e a foto de quem avaliou, e nada disso é guardado.
+    const guardado = await ownerQuery<{ tudo: string }>(`select row_to_json(r)::text as tudo from liame.profile_review r where r.connected_account_id = $1`, [e.contaId]);
+    for (const proibido of ['Pessoa Número', 'googleusercontent', 'reviewer']) expect(guardado.map((g) => g.tudo).join(' '), proibido).not.toContain(proibido);
+
+    // A resposta que segue em conferência há mais de 2 horas não apressa a loja; e depois de 30 dias deixa de ser relida.
+    Object.assign(google.lista[1]!.reviewReply!, { reviewReplyState: 'PENDING' });
+    await ownerQuery(`update liame.profile_review set reply_state = 'pendente' where connected_account_id = $1 and external_id = 'rev-2'`, [e.contaId]);
+    google.vistos.length = 0;
+    const tresHoras = em(77 + 61 + 61);
+    expect((await rodar(e, tresHoras)).map((r) => [r.dataset, r.respostas])).toEqual([[DATASET_AVALIACOES, 1]]);
+    expect(umaAUma()).toEqual(['rev-2']);
+    expect(await proxima()).toBe(new Date(tresHoras.getTime() + 60 * MIN_MS).toISOString());
+    await ownerQuery(`update liame.profile_review set reply_changed_at = $2::timestamptz - interval '31 days' where connected_account_id = $1 and external_id = 'rev-2'`, [e.contaId, tresHoras.toISOString()]);
+    google.vistos.length = 0;
+    expect((await rodar(e, new Date(tresHoras.getTime() + 61 * MIN_MS))).map((r) => [r.dataset, r.respostas])).toEqual([[DATASET_AVALIACOES, 0]]);
+    expect(umaAUma()).toEqual([]);
+  });
+
   it('com a função desligada para a empresa, nada é lido do Google, e a loja é olhada de novo no dia seguinte', async () => {
     const e = await empresa('Casa Brasa Desligou');
     google.lista = [avaliacao('rev-1', 'FIVE', 2)];

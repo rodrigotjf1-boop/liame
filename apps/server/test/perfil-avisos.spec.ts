@@ -3,6 +3,7 @@ import {
   avisoAvaliacoesSemResposta,
   avisoDaSituacaoDaLoja,
   avisoLojasPorLigar,
+  avisoRespostasRecusadas,
   avisosDoPerfilDaMarca,
   type DadosDosAvisosDoPerfil,
   DIAS_DO_AVISO_DE_AVALIACAO,
@@ -54,6 +55,25 @@ describe('avisos do Perfil da Empresa no Google na Atenção (A6 · Z1)', () => 
     expect(avisoAvaliacoesSemResposta(LOJA, { quantas: 1, estrelas: 1, maisRecente: new Date('2026-10-10T02:00:00.000Z') }, 'UTC').detail).toContain('feita em 10/10');
   });
 
+  it('Z2: a resposta que o Google recusou, no singular e no plural, com o caminho das Avaliações', () => {
+    expect(avisoRespostasRecusadas(LOJA, 1)).toEqual({
+      kind: 'resposta_recusada',
+      severity: 'atencao',
+      title: 'O Google recusou a resposta a uma avaliação',
+      detail: 'Em Mister Burgers — Centro. A resposta não aparece no perfil.',
+      action: 'Veja em Avaliações qual é, e escreva outra resposta.',
+      connected_account_id: 'conta-1',
+      campaign_id: null,
+      provider: null,
+    });
+    const varias = avisoRespostasRecusadas(LOJA, 3);
+    expect([varias.title, varias.detail, varias.action]).toEqual([
+      'O Google recusou 3 respostas a avaliações',
+      'Em Mister Burgers — Centro. Essas respostas não aparecem no perfil.',
+      'Veja em Avaliações quais são, e escreva outras respostas.',
+    ]);
+  });
+
   it('a loja que parou de ser lida: desconectada, sem permissão e com defeito; a loja ativa não tem aviso', () => {
     const loja = (status: string, motivo: string | null = null) => avisoDaSituacaoDaLoja({ ...LOJA, status, motivo });
     expect(loja('ativa')).toBeNull();
@@ -82,13 +102,21 @@ describe('avisos do Perfil da Empresa no Google na Atenção (A6 · Z1)', () => 
         // A loja desconectada tem o aviso dela; o número parado das avaliações não entra.
         { conta: 'c2', quantas: 5, estrelas: 1, maisRecente: EM },
       ],
+      respostasRecusadas: [
+        { conta: 'c1', quantas: 1 },
+        // Como as avaliações: o que a loja desconectada guardava não vira aviso.
+        { conta: 'c2', quantas: 2 },
+        { conta: 'c3', quantas: 0 },
+      ],
       porLigar: [{ marca: 'm1', lojas: 1 }, { marca: 'm3', lojas: 2 }],
     };
     expect(avisosDoPerfilDaMarca('m1', dados).map((i) => [i.kind, i.connected_account_id])).toEqual([
       ['avaliacao_sem_resposta', 'c1'],
+      ['resposta_recusada', 'c1'],
       ['conta_desconectada', 'c2'],
     ]);
     expect(avisosDoPerfilDaMarca('m2', dados).map((i) => [i.kind, i.connected_account_id])).toEqual([['conta_com_erro', 'c3']]);
+    expect(avisosDoPerfilDaMarca('m1', { ...dados, respostasRecusadas: [] }).map((i) => i.kind)).toEqual(['avaliacao_sem_resposta', 'conta_desconectada']);
     // Sem loja ligada, a marca ganha o convite.
     expect(avisosDoPerfilDaMarca('m3', dados).map((i) => i.kind)).toEqual(['perfil_lojas_por_ligar']);
     expect(avisosDoPerfilDaMarca('m4', dados)).toEqual([]);
@@ -96,7 +124,12 @@ describe('avisos do Perfil da Empresa no Google na Atenção (A6 · Z1)', () => 
   });
 
   it('nenhum aviso leva o código da loja, o provedor em código ou algo de quem avaliou', () => {
-    const todos = [avisoLojasPorLigar(2), avisoAvaliacoesSemResposta(LOJA, { quantas: 2, estrelas: 1, maisRecente: EM }), avisoDaSituacaoDaLoja({ ...LOJA, status: 'sem_permissao', motivo: null })!];
+    const todos = [
+      avisoLojasPorLigar(2),
+      avisoAvaliacoesSemResposta(LOJA, { quantas: 2, estrelas: 1, maisRecente: EM }),
+      avisoRespostasRecusadas(LOJA, 2),
+      avisoDaSituacaoDaLoja({ ...LOJA, status: 'sem_permissao', motivo: null })!,
+    ];
     const texto = todos.map((i) => `${i.title} ${i.detail} ${i.action}`).join(' ');
     for (const proibido of ['google_business', 'locations/', 'accounts/', 'reviewer']) expect(texto, proibido).not.toContain(proibido);
   });
@@ -108,10 +141,12 @@ describe('avisos do Perfil da Empresa no Google na Atenção (A6 · Z1)', () => 
       item('perfil_lojas_por_ligar'),
       item('reconectar_em_breve'),
       item('conta_sem_permissao'),
+      item('resposta_recusada'),
       item('avaliacao_sem_resposta'),
       item('gasto_fora_do_normal'),
       item('conta_desconectada', 'critica'),
     ]).map((i) => i.kind);
-    expect(ordenados).toEqual(['conta_desconectada', 'gasto_fora_do_normal', 'avaliacao_sem_resposta', 'conta_sem_permissao', 'reconectar_em_breve', 'perfil_lojas_por_ligar', 'versao_api']);
+    // A resposta que o Google recusou (Z2) vem logo depois da avaliação sem resposta.
+    expect(ordenados).toEqual(['conta_desconectada', 'gasto_fora_do_normal', 'avaliacao_sem_resposta', 'resposta_recusada', 'conta_sem_permissao', 'reconectar_em_breve', 'perfil_lojas_por_ligar', 'versao_api']);
   });
 });
