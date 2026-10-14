@@ -3,7 +3,24 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { MensagensConteudo } from '@/components/mensagens/mensagens-conteudo';
-import { centavos, contaDaTela, cupomDa, dadosDa, detalheDaMensagem, faixaDosPedidos, type FaixaDoPedido, fraseDasEnviadas, jaSaiu, numerosDa, oQueTrouxe, porCento, seloDaCampanha, telaDasMensagens } from '@/components/mensagens/textos';
+import {
+  centavos,
+  contaDaTela,
+  cupomDa,
+  dadosDa,
+  detalheDaMensagem,
+  faixaDosPedidos,
+  type FaixaDoPedido,
+  fraseDasEnviadas,
+  jaSaiu,
+  numerosDa,
+  oQueTrouxe,
+  porCento,
+  type QuemVe,
+  quemDecideOPedido,
+  seloDaCampanha,
+  telaDasMensagens,
+} from '@/components/mensagens/textos';
 import { itensVisiveis, NAVEGACAO, temModos, tituloDa } from '@/components/shell/navegacao';
 import { Icone } from '@/components/ui/icone';
 import { quandoComHora } from '@/lib/formato';
@@ -333,26 +350,53 @@ describe('o cupom da mensagem e o pedido que espera aprovação', () => {
       account_id: CONTA,
       blocked_reason: null,
       expires_at: '2026-10-12T15:00:00.000Z',
+      mode: 'APPROVAL',
+      approvals: [],
       message: { name: 'Combo família de domingo', audience: { name: 'Clientes de domingo', rule: null, can_receive: 412, resting: 38, rest_days: 7 }, plan: { status: 'rascunho', people: 412, recipients: 412, cost_cents: 13_184, currency: 'BRL', budget: { defined: true, periods: [], notice: null } } },
       ...o,
     }) as ActionResponse;
+  const EU = 'b0000000-0000-4000-8000-000000000001';
+  const DONO: QuemVe = { podeAprovar: true, souDono: true, eu: EU };
+  const ADMIN: QuemVe = { podeAprovar: true, souDono: false, eu: EU };
+  const SO_LE: QuemVe = { podeAprovar: false, souDono: false, eu: EU };
 
   it('a faixa do pedido que espera: quantas mensagens, a primeira da fila e para onde o botão leva', () => {
-    expect(faixaDosPedidos([pedido()], CONTA)).toEqual({ titulo: '1 mensagem espera a sua aprovação', texto: `“Combo família de domingo”, para 412 pessoas, até ${RS}131,84.`, pedido: 'a0000000-0000-4000-8000-000000000801' });
+    expect(faixaDosPedidos([pedido()], CONTA, DONO)).toEqual({ titulo: '1 mensagem espera a sua aprovação', texto: `“Combo família de domingo”, para 412 pessoas, até ${RS}131,84.`, pedido: 'a0000000-0000-4000-8000-000000000801' });
     // Duas na fila: a que expira antes vem primeiro.
     const depois = pedido({ id: 'a0000000-0000-4000-8000-000000000802', expires_at: '2026-10-13T15:00:00.000Z' });
-    expect(faixaDosPedidos([depois, pedido()], CONTA)).toMatchObject({ titulo: '2 mensagens esperam a sua aprovação', pedido: 'a0000000-0000-4000-8000-000000000801', texto: expect.stringContaining('E mais uma.') });
-    expect(faixaDosPedidos([pedido({ blocked_reason: 'O modelo ainda não foi aprovado.' })], CONTA)!.texto).toContain('Ainda não pode ser aprovada: algo impede o envio.');
+    expect(faixaDosPedidos([depois, pedido()], CONTA, DONO)).toMatchObject({ titulo: '2 mensagens esperam a sua aprovação', pedido: 'a0000000-0000-4000-8000-000000000801', texto: expect.stringContaining('E mais uma.') });
+    expect(faixaDosPedidos([pedido({ blocked_reason: 'O modelo ainda não foi aprovado.' })], CONTA, DONO)!.texto).toContain('Ainda não pode ser aprovada: algo impede o envio.');
     // Não entram: o de outra conta, o que já foi decidido, a pausa e o pedido que não é de mensagem.
-    expect(faixaDosPedidos([pedido({ account_id: MARCA })], CONTA)).toBeNull();
-    expect(faixaDosPedidos([pedido({ status: 'aprovada' })], CONTA)).toBeNull();
-    expect(faixaDosPedidos([pedido({ tool: 'mensagem_pausar' })], CONTA)).toBeNull();
-    expect(faixaDosPedidos([pedido({ message: null })], CONTA)).toBeNull();
-    expect(faixaDosPedidos([], CONTA)).toBeNull();
+    expect(faixaDosPedidos([pedido({ account_id: MARCA })], CONTA, DONO)).toBeNull();
+    expect(faixaDosPedidos([pedido({ status: 'aprovada' })], CONTA, DONO)).toBeNull();
+    expect(faixaDosPedidos([pedido({ tool: 'mensagem_pausar' })], CONTA, DONO)).toBeNull();
+    expect(faixaDosPedidos([pedido({ message: null })], CONTA, DONO)).toBeNull();
+    expect(faixaDosPedidos([], CONTA, DONO)).toBeNull();
+  });
+
+  it('ERR-136: "a sua aprovação" só para quem decide o pedido; o ESCALATE e a aprovação que não bastou esperam o dono', () => {
+    const titulo = (acoes: ActionResponse[], q: QuemVe) => faixaDosPedidos(acoes, CONTA, q)!.titulo;
+    // Quem aprova sem ser o dono decide o pedido comum.
+    expect(titulo([pedido()], ADMIN)).toBe('1 mensagem espera a sua aprovação');
+    // No modo ESCALATE, só a aprovação do dono basta (`approve` no servidor).
+    expect(titulo([pedido({ mode: 'ESCALATE' })], ADMIN)).toBe('1 mensagem espera a aprovação do dono');
+    expect(titulo([pedido({ mode: 'ESCALATE' })], DONO)).toBe('1 mensagem espera a sua aprovação');
+    // A aprovação dele já ficou registrada e não bastou: o pedido espera o dono, também para quem só lê.
+    const aprovou = pedido({ approvals: [{ approved_by: EU, approver_name: 'Ana', approver_role: 'aprovador', sufficient: false, current_plan: true, created_at: '2026-10-12T10:00:00.000Z' }] });
+    expect(titulo([aprovou], ADMIN)).toBe('1 mensagem espera a aprovação do dono');
+    expect(titulo([aprovou], SO_LE)).toBe('1 mensagem espera a aprovação do dono');
+    // Quem não aprova ações: "espera aprovação".
+    expect(titulo([pedido()], SO_LE)).toBe('1 mensagem espera aprovação');
+    // Várias: "a sua" só se todas são de quem vê.
+    const outra = pedido({ id: 'a0000000-0000-4000-8000-000000000802', mode: 'ESCALATE' });
+    expect(titulo([pedido(), outra], ADMIN)).toBe('2 mensagens esperam aprovação');
+    expect(titulo([pedido({ mode: 'ESCALATE' }), outra], ADMIN)).toBe('2 mensagens esperam a aprovação do dono');
+    expect(titulo([pedido(), outra], DONO)).toBe('2 mensagens esperam a sua aprovação');
+    expect(quemDecideOPedido(pedido(), { ...ADMIN, eu: null })).toBe('voce');
   });
 
   it('a faixa desenhada leva a Aprovações, aberta no pedido', () => {
-    const html = desenho(conta(), 'lite', true, faixaDosPedidos([pedido()], CONTA));
+    const html = desenho(conta(), 'lite', true, faixaDosPedidos([pedido()], CONTA, DONO));
     expect(html).toContain('class="faixa faixa--acao" role="status"');
     expect(textoDe(html)).toContain('1 mensagem espera a sua aprovação');
     expect(html).toContain('href="/aprovacoes?pedido=a0000000-0000-4000-8000-000000000801"');

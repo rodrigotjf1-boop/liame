@@ -17,6 +17,7 @@ import {
   notaDosPortoes,
   O_QUE_O_MODO_FAZ,
   portoesDaLinha,
+  type QuemVeAFicha,
   resumoDosModos,
   rodadaDoGestor,
 } from './aprovacao-textos';
@@ -31,8 +32,22 @@ import { modoEscrito } from './textos';
 const EmFrase = ({ frase }: { frase: Frase }) => <>{frase.map((x, i) => (x.b ? <b key={i}>{x.t}</b> : <span key={i}>{x.t}</span>))}</>;
 
 /** "Rodada de hoje": o que ele pediu, o que deixou na Atenção e o que não conseguiu pedir. */
-export function BlocoRodadaDoGestor({ sombra, autonomia, equipe, modo, agora }: { sombra: TeamShadowResponse | null; autonomia: AutonomyResponse; equipe: TeamResponse; modo: Modo; agora: Date }) {
-  const r = rodadaDoGestor(sombra, autonomia.items, equipe, agora);
+export function BlocoRodadaDoGestor({
+  sombra,
+  autonomia,
+  equipe,
+  modo,
+  agora,
+  quem,
+}: {
+  sombra: TeamShadowResponse | null;
+  autonomia: AutonomyResponse;
+  equipe: TeamResponse;
+  modo: Modo;
+  agora: Date;
+  quem: QuemVeAFicha;
+}) {
+  const r = rodadaDoGestor(sombra, autonomia.items, equipe, agora, quem);
   if (!r) return null;
   return (
     <div className="eqp-bloco" id="eqp-rodada">

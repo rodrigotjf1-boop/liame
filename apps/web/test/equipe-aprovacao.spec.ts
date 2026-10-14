@@ -300,7 +300,9 @@ describe('a caixa da linha: a proposta, o modo de agora e a volta de um passo', 
 
 describe('a rodada da manhã', () => {
   const itens = [emAprovacao, aumentar, pausar, google];
-  const r = (ds: TeamShadowDecision[], over: Partial<TeamShadowResponse> = {}) => rodadaDoGestor(sombra(ds, over), itens, SEM_PARADA, AGORA)!;
+  // As frases conferidas abaixo são as do dono (pode pedir, e a aprovação dele basta); os outros níveis, no fim.
+  const DONO = { souDono: true, podePedir: true };
+  const r = (ds: TeamShadowDecision[], over: Partial<TeamShadowResponse> = {}, quem = DONO) => rodadaDoGestor(sombra(ds, over), itens, SEM_PARADA, AGORA, quem)!;
 
   it('pediu uma mudança e sugeriu outra', () => {
     const rodada = r([pedida, sugerida]);
@@ -373,6 +375,23 @@ describe('a rodada da manhã', () => {
     expect(gestorNaLista({ key: 'lia', status: 'sombra' }, r([pedida]))).toBeNull();
     expect(rodadaDoGestor(sombra([], { last_run: null }), itens, SEM_PARADA, AGORA)).toBeNull();
   });
+
+  it('ERR-136: "a sua aprovação" só para o dono; "peça a mudança" só para quem pode pedir; sem saber, a frase fala com quem só lê', () => {
+    const GERENTE = { souDono: false, podePedir: true };
+    const SO_LE = { souDono: false, podePedir: false };
+    expect(texto(r([pedida, sugerida], {}, GERENTE).frase)).toBe(
+      'Ele pediu 1 mudança e sugeriu outra. A redução da verba da campanha “Smash em dobro” espera a aprovação de uma pessoa com o código do app; a recomendação de aumentar a verba em 10% da campanha “Combo sexta” está na Atenção, para você pedir se concordar.',
+    );
+    expect(texto(r([pedida, sugerida], {}, SO_LE).frase)).toBe(
+      'Ele pediu 1 mudança e sugeriu outra. A redução da verba da campanha “Smash em dobro” espera a aprovação de uma pessoa com o código do app; a recomendação de aumentar a verba em 10% da campanha “Combo sexta” está na Atenção.',
+    );
+    expect(texto(r([naoPedida], {}, SO_LE).frase)).toBe(`Ele não conseguiu fazer o pedido desta rodada. ${INDISPONIVEL} A recomendação ficou na Atenção, com o motivo.`);
+    expect(texto(r([sugerida], {}, SO_LE).frase)).toBe('Ele deixou 1 recomendação na Atenção. Aumentar a verba em 10% da campanha “Combo sexta”.');
+    // No Google quem muda é a pessoa, na plataforma: a frase vale para qualquer um.
+    expect(texto(r([decisao({ connected_account_id: GOOGLE, campaign: { id: uuid(64), name: 'Busca', provider: 'google_ads' } })], {}, SO_LE).frase)).toContain('quem muda a campanha é você, na plataforma.');
+    // Sem dizer quem vê, a frase é a de quem só lê.
+    expect(texto(rodadaDoGestor(sombra([pedida, sugerida]), itens, SEM_PARADA, AGORA)!.frase)).toBe(texto(r([pedida, sugerida], {}, SO_LE).frase));
+  });
 });
 
 describe('o histórico: os tipos do modo Aprovação', () => {
@@ -427,7 +446,7 @@ describe('a ficha do Gestor de tráfego com o modo Aprovação', () => {
     can_stop: true,
     generated_at: AGORA.toISOString(),
   };
-  function desenhar(a: AutonomyResponse, over: { modo?: Modo; sombra?: TeamShadowResponse | null; acoes?: Partial<AcoesDaProntidao> } = {}): string {
+  function desenhar(a: AutonomyResponse, over: { modo?: Modo; sombra?: TeamShadowResponse | null; acoes?: Partial<AcoesDaProntidao>; quem?: { souDono: boolean; podePedir: boolean } } = {}): string {
     return renderToStaticMarkup(
       createElement(EquipeConteudo, {
         t: equipe,
@@ -442,6 +461,7 @@ describe('a ficha do Gestor de tráfego com o modo Aprovação', () => {
         topo: { ocupado: null, parando: false, aoPedirParada: nada, aoParar: nada, aoRetomar: nada },
         membro: { ocupado: null, desligando: null, aoPedirDesligar: nada, aoDesligar: nada, aoLigar: nada, aoIrParaPro: nada, aoRecarregarHistorico: nada },
         prontidao: { ocupado: null, recusando: null, aoAprovar: nada, aoPedirRecusa: nada, aoRecusar: nada, aoVoltarParaSombra: nada, linha: null, voltando: null, aoEscolherLinha: nada, aoPedirVolta: nada, ...over.acoes },
+        quem: over.quem ?? { souDono: true, podePedir: true },
         aoEscolher: nada,
         aoVoltar: nada,
       }),

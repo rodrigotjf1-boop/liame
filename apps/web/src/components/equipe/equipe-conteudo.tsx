@@ -9,7 +9,7 @@ import type { Historico } from './bloco-historico';
 import type { AcoesDaProntidao } from './bloco-prontidao';
 import { type AcoesDoMembro, DetalheDaProximaFase, DetalheDoMembro } from './detalhe';
 import { Avatar, ConfirmaNaLinha, SeloDaSituacao } from './pecas';
-import { gestorNaLista, rodadaDoGestor, SUBTITULO_DA_EQUIPE, temModoAprovacao } from './aprovacao-textos';
+import { gestorNaLista, type QuemVeAFicha, rodadaDoGestor, SUBTITULO_DA_EQUIPE, temModoAprovacao } from './aprovacao-textos';
 import { atividadeDo, avisosDa, ehMembro, FICHAS, gruposDa, mesDe, PROXIMAS_FASES, seloDaIa } from './textos';
 
 // "Sua equipe" (mockups/prototipo-equipe.html, P7 aprovado em 03/10/2026): a lista dos funcionários e o detalhe do
@@ -43,6 +43,8 @@ interface Props {
   topo: AcoesDoTopo;
   membro: AcoesDoMembro;
   prontidao: AcoesDaProntidao;
+  /** Quem vê a tela: se é o dono e se pode pedir ações (a frase da rodada do Gestor depende disso). */
+  quem: QuemVeAFicha;
   aoEscolher: (chave: string) => void;
   aoVoltar: () => void;
 }
@@ -60,11 +62,11 @@ function Grupo({ rotulo, quantos, children }: { rotulo: string; quantos: number;
   );
 }
 
-export function EquipeConteudo({ t, autonomia, sombra, historicos, escolhido, mostraDetalhe, modo, agora, nomeDaMarca, seletor, tituloRef, topo, membro, prontidao, aoEscolher, aoVoltar }: Props) {
+export function EquipeConteudo({ t, autonomia, sombra, historicos, escolhido, mostraDetalhe, modo, agora, nomeDaMarca, seletor, tituloRef, topo, membro, prontidao, quem, aoEscolher, aoVoltar }: Props) {
   const mes = mesDe(t.month.from);
   // Com o modo Aprovação (P11), o Gestor de tráfego aparece na lista com o que fez na rodada.
   const comAprovacao = temModoAprovacao(autonomia);
-  const rodada = comAprovacao && autonomia ? rodadaDoGestor(sombra, autonomia.items, t, agora) : null;
+  const rodada = comAprovacao && autonomia ? rodadaDoGestor(sombra, autonomia.items, t, agora, quem) : null;
   const grupos = gruposDa(t, comAprovacao);
   const avisos = avisosDa(t, agora);
   const doEscolhido = t.members.find((m) => m.key === escolhido);
@@ -178,6 +180,7 @@ export function EquipeConteudo({ t, autonomia, sombra, historicos, escolhido, mo
                 agora={agora}
                 acoes={membro}
                 prontidao={prontidao}
+                quem={quem}
                 aoVoltar={aoVoltar}
               />
             ) : (

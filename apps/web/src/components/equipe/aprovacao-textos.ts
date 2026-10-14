@@ -368,11 +368,28 @@ function oQueFaria(d: TeamShadowDecision): string {
 }
 
 /**
+ * Quem vê a ficha (ERR-136): a tela é de quem vê campanhas e vendas, um grupo maior do que quem pede ações
+ * (`campanhas.operar`) e do que o dono, cuja aprovação sempre basta. Sem saber, a frase fala com quem só lê.
+ */
+export interface QuemVeAFicha {
+  souDono: boolean;
+  podePedir: boolean;
+}
+const QUEM_SO_LE: QuemVeAFicha = { souDono: false, podePedir: false };
+
+/**
  * O bloco "Rodada de hoje": o que ele fez com cada recomendação do último dia em que a rotina terminou. Em Aprovação,
  * pediu (ou não conseguiu pedir, e o motivo fica); em Sugerir, deixou na Atenção; em Sombra, só registrou. Com a equipe
- * parada, ninguém pede nada. Nulo sem a lista da sombra ou antes da primeira rodada.
+ * parada, ninguém pede nada. Nulo sem a lista da sombra ou antes da primeira rodada. "A sua aprovação" só para o dono, e
+ * "peça a mudança" só para quem pode pedir.
  */
-export function rodadaDoGestor(sombra: TeamShadowResponse | null, itens: readonly AutonomyItem[], equipe: Pick<TeamResponse, 'stop'>, agora: Date): RodadaDoGestor | null {
+export function rodadaDoGestor(
+  sombra: TeamShadowResponse | null,
+  itens: readonly AutonomyItem[],
+  equipe: Pick<TeamResponse, 'stop'>,
+  agora: Date,
+  quem: QuemVeAFicha = QUEM_SO_LE,
+): RodadaDoGestor | null {
   if (equipe.stop) {
     return {
       titulo: 'Rodada de hoje',
@@ -413,20 +430,21 @@ export function rodadaDoGestor(sombra: TeamShadowResponse | null, itens: readonl
       P > 1
         ? 'Cada pedido espera a aprovação de uma pessoa com o código do app'
         : primeiro.request?.status === 'aguardando_aprovacao'
-          ? `${SUBSTANTIVO[primeiro.tool] ?? 'A mudança'} ${daCampanha(primeiro)} espera a sua aprovação com o código do app`
+          ? `${SUBSTANTIVO[primeiro.tool] ?? 'A mudança'} ${daCampanha(primeiro)} espera ${quem.souDono ? 'a sua aprovação' : 'a aprovação de uma pessoa'} com o código do app`
           : `O pedido de ${oQueFaria(primeiro)} já foi decidido: está em Aprovações`;
+    const paraPedir = quem.podePedir ? ', para você pedir se concordar' : '';
     const daAtencao =
       outras === 0
         ? ''
         : outras === 1
-          ? `; a recomendação de ${oQueFaria((mostradas[0] ?? semPedido[0])!)} está na Atenção${N ? ', com o motivo de ele não ter pedido' : ', para você pedir se concordar'}`
-          : `; as outras ${outras} recomendações estão na Atenção${N ? ', com o motivo das que ele não conseguiu pedir' : ', para você pedir se concordar'}`;
+          ? `; a recomendação de ${oQueFaria((mostradas[0] ?? semPedido[0])!)} está na Atenção${N ? ', com o motivo de ele não ter pedido' : paraPedir}`
+          : `; as outras ${outras} recomendações estão na Atenção${N ? ', com o motivo das que ele não conseguiu pedir' : paraPedir}`;
     frase = [b(`Ele pediu ${vezes(P, 'mudança', 'mudanças')}${outras ? ` e sugeriu ${outras === 1 ? 'outra' : `outras ${outras}`}` : ''}.`), { t: ` ${doPedido}${daAtencao}.` }];
   } else if (N > 0) {
     const motivo = N === 1 ? ` ${semPedido[0]!.not_requested!.detail}` : ' O motivo de cada um está na Atenção.';
     frase = [
       b(N === 1 ? 'Ele não conseguiu fazer o pedido desta rodada.' : `Ele não conseguiu fazer os ${N} pedidos desta rodada.`),
-      { t: `${motivo} ${N + S === 1 ? 'A recomendação ficou' : 'As recomendações ficaram'} na Atenção${N === 1 ? ', com o motivo' : ''}: se você concordar, peça a mudança por lá.` },
+      { t: `${motivo} ${N + S === 1 ? 'A recomendação ficou' : 'As recomendações ficaram'} na Atenção${N === 1 ? ', com o motivo' : ''}${quem.podePedir ? ': se você concordar, peça a mudança por lá.' : '.'}` },
     ];
   } else if (S > 0) {
     const lista = S <= 2 ? ` ${maiuscula(mostradas.map(oQueFaria).join(' e '))}.` : '';
@@ -435,10 +453,13 @@ export function rodadaDoGestor(sombra: TeamShadowResponse | null, itens: readonl
       const a = modoDe(d);
       return a?.approval !== undefined && !a.approval.blocked_by;
     });
-    frase = [
-      b(`Ele deixou ${vezes(S, 'recomendação', 'recomendações')} na Atenção.`),
-      { t: `${lista} ${daParaPedir ? 'Se você concordar, peça a mudança por lá; ela ainda passa pela aprovação com o código do app.' : 'Se você concordar, quem muda a campanha é você, na plataforma.'}` },
-    ];
+    // Quem não pede ações não ganha o "peça a mudança".
+    const comoMudar = !daParaPedir
+      ? ' Se você concordar, quem muda a campanha é você, na plataforma.'
+      : quem.podePedir
+        ? ' Se você concordar, peça a mudança por lá; ela ainda passa pela aprovação com o código do app.'
+        : '';
+    frase = [b(`Ele deixou ${vezes(S, 'recomendação', 'recomendações')} na Atenção.`), { t: `${lista}${comoMudar}` }];
   } else if (R > 0) {
     frase = [b(`Ele registrou ${vezes(R, 'recomendação', 'recomendações')}, sem mexer em nada.`), { t: ' Em Sombra, nada aparece na Atenção: ele só compara com o que você fizer.' }];
   } else {

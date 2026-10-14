@@ -22,9 +22,12 @@ import { contaDaTela, faixaDosPedidos, telaDasMensagens } from './textos';
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: MessagingResponse } | { tipo: 'erro'; problema: Problema };
 
 export function MensagensTela() {
-  const { pode } = useSessao();
+  const { me, pode } = useSessao();
   const { modo } = useModo();
   const podeVer = pode('campanhas.ver');
+  // A faixa diz "a sua aprovação" só a quem decide o pedido (ERR-136): a lista é de quem vê campanhas.
+  const podeAprovar = pode('acoes.aprovar');
+  const souDono = me.organizations.find((o) => o.id === me.active_organization_id)?.role === 'dono';
   const podeVerContas = pode('contas.ver');
   const titulo = useRef<HTMLHeadingElement>(null);
   const [marcas, setMarcas] = useState<BrandResponse[] | null>(null);
@@ -95,7 +98,10 @@ export function MensagensTela() {
     return carga.dados.accounts.find((a) => a.connected_account_id === contaEscolhida) ?? carga.dados.accounts[0] ?? null;
   }, [carga, contaEscolhida]);
   const daConta = useMemo(() => (conta ? contaDaTela(conta, agora) : null), [conta, agora]);
-  const pedido = useMemo(() => (conta ? faixaDosPedidos(esperando, conta.connected_account_id) : null), [esperando, conta]);
+  const pedido = useMemo(
+    () => (conta ? faixaDosPedidos(esperando, conta.connected_account_id, { podeAprovar, souDono, eu: me.user.id }) : null),
+    [esperando, conta, podeAprovar, souDono, me.user.id],
+  );
   const campanhaAberta = aberta && conta ? (conta.campaigns.items.find((c) => c.id === aberta) ?? null) : null;
 
   if (!podeVer) {
