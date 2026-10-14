@@ -14,14 +14,19 @@ import { type Autores, telaDasAvaliacoes } from './textos';
 // "Avaliações" (mockups/prototipo-avaliacoes.html, P17 aprovado em 09/10/2026; Z1 da A6): o que as pessoas escreveram
 // sobre a empresa no Google. A lista e o resumo vêm do que o Liame guardou (`GET /v1/reviews`, de quem acompanha as
 // campanhas); o nome de quem avaliou é lido do Google na hora (`GET /v1/reviews/authors`), só para esta tela, e a
-// lista aparece sem esperar por ele. Esta tela só lê: responder pelo Liame, com aprovação, é da Z2.
+// lista aparece sem esperar por ele. Responder pelo Liame (Z2) começa aqui e segue em Aprovações, com aprovação.
 
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: ReviewsResponse } | { tipo: 'erro'; problema: Problema };
 
 export function AvaliacoesTela() {
-  const { pode } = useSessao();
+  const { me, pode } = useSessao();
   const podeVer = pode('campanhas.ver');
   const podeVerContas = pode('contas.ver');
+  // Escrever uma resposta é pedir uma ação: só para quem pode pedir (o servidor confere; a tela só não oferece).
+  const podePedir = pode('campanhas.operar');
+  // A resposta que espera: "a sua aprovação" só para quem aprova; a de 1 ou 2 estrelas, só o dono (D-A6-4).
+  const podeAprovar = pode('acoes.aprovar');
+  const souDono = me.organizations.find((o) => o.id === me.active_organization_id)?.role === 'dono';
   const titulo = useRef<HTMLHeadingElement>(null);
   const [marcas, setMarcas] = useState<BrandResponse[] | null>(null);
   const [erroMarcas, setErroMarcas] = useState<Problema | null>(null);
@@ -71,7 +76,10 @@ export function AvaliacoesTela() {
     titulo.current?.focus({ preventScroll: true });
   }, [carga]);
 
-  const tela = useMemo(() => (carga.tipo === 'ok' ? telaDasAvaliacoes(carga.dados, agora, autores) : null), [carga, agora, autores]);
+  const tela = useMemo(
+    () => (carga.tipo === 'ok' ? telaDasAvaliacoes(carga.dados, agora, autores, { podePedir, podeAprovar, souDono }) : null),
+    [carga, agora, autores, podePedir, podeAprovar, souDono],
+  );
 
   if (!podeVer) {
     return (

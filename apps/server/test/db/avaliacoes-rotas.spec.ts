@@ -172,6 +172,12 @@ describe.skipIf(!hasDb)('as rotas da tela Avaliações (A6 · Z1)', () => {
     expect(depois.has_more).toBe(false);
     // Nada de quem avaliou nesta rota.
     expect(JSON.stringify(depois)).not.toContain('Pessoa Número');
+    // Z2: responder pelo Liame é outra função; desligada, a tela não oferece "Responder", e nenhuma resposta espera.
+    expect([depois.can_reply, depois.pending_replies]).toEqual([false, []]);
+    await ligarFlagDaEmpresa(api, 'perfil_google_write', e.tenantId, true);
+    expect((await ver(e)).can_reply).toBe(true);
+    // Fora do estado "pronta", nunca.
+    expect(antes.can_reply).toBe(false);
   });
 
   it('a leitura que espera o Google aparece na loja; a loja sem permissão segue na tela com a situação dela', async () => {

@@ -226,6 +226,12 @@ describe.skipIf(!hasDb)('a procura diária das lojas e os avisos do Perfil na At
     expect(await avisosDoPerfil(e)).toEqual([]);
     await ligarFlagDaEmpresa(api, 'perfil_google', e.tenantId, true);
 
+    // Z2: com a resposta pelo Liame ligada, o aviso leva à tela Avaliações; desligada de novo, ao Google.
+    await ligarFlagDaEmpresa(api, 'perfil_google_write', e.tenantId, true);
+    expect((await avisosDoPerfil(e)).map((a) => a.action)).toEqual(['Responda em Avaliações: a resposta só sai com a aprovação de uma pessoa da empresa.']);
+    await ligarFlagDaEmpresa(api, 'perfil_google_write', e.tenantId, false);
+    expect((await avisosDoPerfil(e)).map((a) => a.action)).toEqual(['Responda no perfil da empresa no Google.']);
+
     // A de 2 estrelas ganhou resposta no Google. A resposta tem a data dela, e a data da AVALIAÇÃO não muda (a
     // referência do Google não diz que mudaria): a leitura de hora em hora não a vê, e o aviso segue igual.
     const mudou = new Date(AGORA.getTime() + 10 * MIN_MS).toISOString();

@@ -70861,6 +70861,9 @@
                         "additionalProperties": false
                       }
                     },
+                    "can_reply": {
+                      "type": "boolean"
+                    },
                     "generated_at": {
                       "type": "string",
                       "format": "date-time",

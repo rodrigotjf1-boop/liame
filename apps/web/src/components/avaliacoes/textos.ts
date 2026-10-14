@@ -4,7 +4,9 @@ import { dia, diasAte, inteiro, quandoComHora } from '@/lib/formato';
 
 // Textos e contas da tela "Avaliações" (mockups/prototipo-avaliacoes.html, P17 aprovado em 09/10/2026; Z1 da A6).
 // A lista e o resumo vêm de `GET /v1/reviews` (o que o Liame guardou); o nome de quem avaliou vem de
-// `GET /v1/reviews/authors`, lido do Google na hora, e pode faltar. A tela só lê: responder pelo Liame é da Z2.
+// `GET /v1/reviews/authors`, lido do Google na hora, e pode faltar. Com a resposta pelo Liame ligada para a marca
+// (`can_reply`, Z2), quem pode pedir ações ganha "Responder", que abre o rascunho em Aprovações; a resposta que já
+// espera a aprovação ganha o selo ("Resposta espera você" para quem aprova) e o caminho até ela.
 
 const umaCasa = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -33,7 +35,16 @@ function daMaisAntiga(iso: string, agora: Date): string {
   return `a mais antiga é de ${dia(iso, agora)}`;
 }
 
-export type Selo = { classe: 'aguardando' | 'espera' | 'concluido' | 'perigo'; rotulo: string };
+export type Selo = { classe: 'aguardando' | 'espera' | 'concluido' | 'perigo' | 'info'; rotulo: string };
+
+/**
+ * A resposta que espera a aprovação, em Aprovações (P17): "espera você" só para quem aprova esta resposta; a de 1 ou 2
+ * estrelas só o dono aprova (D-A6-4).
+ */
+export function seloDaRespostaQueEspera(quemAprova: 'voce' | 'dono' | 'outra_pessoa'): Selo {
+  const rotulo = quemAprova === 'voce' ? 'Resposta espera você' : quemAprova === 'dono' ? 'Resposta espera o dono' : 'Resposta espera aprovação';
+  return { classe: 'info', rotulo };
+}
 
 /** A situação da resposta da empresa, como o Google a tem. Resposta com situação que o Google não informa conta como respondida. */
 export function situacaoDaResposta(reply: ReviewItem['reply']): Selo {
@@ -68,6 +79,16 @@ export interface ItemDaLista {
   /** Nulo quando a pessoa só deu a nota. */
   texto: string | null;
   selo: Selo;
+  /** "Responder" (abre o rascunho em Aprovações) ou "Ver a resposta" (a que espera a aprovação); nulo sem ação. */
+  acao: { tipo: 'responder' | 'ver'; href: string } | null;
+}
+
+/** A faixa das respostas que esperam a aprovação: o que diz e para onde leva. */
+export interface Esperando {
+  titulo: string;
+  texto: string;
+  botao: string;
+  href: string;
 }
 
 export type TelaDasAvaliacoes =
@@ -81,7 +102,7 @@ export type TelaDasAvaliacoes =
   | { tipo: 'primeira_leitura'; avisos: Aviso[] }
   /** O Google não tem avaliação nenhuma da empresa. */
   | { tipo: 'vazia'; lido: string | null; avisos: Aviso[] }
-  | { tipo: 'lista'; lido: string | null; avisos: Aviso[]; caixas: Caixa[]; tudoRespondido: boolean; itens: ItemDaLista[]; notas: string[] };
+  | { tipo: 'lista'; lido: string | null; avisos: Aviso[]; caixas: Caixa[]; tudoRespondido: boolean; esperando: Esperando | null; itens: ItemDaLista[]; notas: string[] };
 
 /** Os nomes lidos do Google: a resposta da rota, `falhou` (a rota não respondeu) ou nulo (ainda não chegou). */
 export type Autores = ReviewAuthorsResponse | 'falhou' | null;
@@ -118,8 +139,17 @@ function notaDosNomes(autores: Autores): string {
   return `O nome de quem avaliou é lido do Google na hora, só para esta tela: ${naoGuarda}. Avaliação sem nome: quem avaliou não se identificou, ou o Google não informou o nome agora.`;
 }
 
-/** O que a tela mostra para a resposta do servidor. `autores` chega depois da lista, e a lista aparece sem esperar por ele. */
-export function telaDasAvaliacoes(r: ReviewsResponse, agora: Date, autores: Autores = null): TelaDasAvaliacoes {
+/**
+ * O que a tela mostra para a resposta do servidor. `autores` chega depois da lista, e a lista aparece sem esperar por
+ * ele. `podePedir`: quem vê pode pedir ações (`campanhas.operar`); com a resposta pelo Liame ligada para a marca, é
+ * quem ganha "Responder". `podeAprovar` (`acoes.aprovar`) e `souDono` decidem se a resposta que espera espera por quem vê.
+ */
+export function telaDasAvaliacoes(
+  r: ReviewsResponse,
+  agora: Date,
+  autores: Autores = null,
+  opcoes: { podePedir?: boolean; podeAprovar?: boolean; souDono?: boolean } = {},
+): TelaDasAvaliacoes {
   if (r.state === 'desligada' || r.state === 'sem_perfil' || r.state === 'sem_permissao' || r.state === 'esperando_google') return { tipo: r.state };
   if (r.state !== 'pronta' || !r.summary) return { tipo: 'outra' };
 
@@ -153,13 +183,53 @@ export function telaDasAvaliacoes(r: ReviewsResponse, agora: Date, autores: Auto
   const nomes = new Map(autores && autores !== 'falhou' ? autores.items.map((a) => [a.review_id, a.name] as const) : []);
   const lojas = new Map(r.stores.map((l) => [l.id, l.name] as const));
   const variasLojas = r.stores.length > 1;
-  const itens: ItemDaLista[] = r.reviews.map((a) => ({
-    id: a.id,
-    estrelas: a.stars,
-    sob: [nomes.get(a.id), haQuanto(a.reviewed_at, agora), variasLojas ? lojas.get(a.store_id) : undefined].filter(Boolean).join(' · '),
-    texto: a.text && a.text.trim() ? a.text : null,
-    selo: situacaoDaResposta(a.reply),
-  }));
+  // A resposta que espera a aprovação de cada avaliação, e quem pode escrever uma resposta pelo Liame.
+  const pendentes = r.pending_replies ?? [];
+  const esperandoDe = new Map(pendentes.map((p) => [p.review_id, p] as const));
+  const responde = Boolean(r.can_reply) && Boolean(opcoes.podePedir);
+  // A de 1 ou 2 estrelas só o dono aprova (D-A6-4); a tela não diz "a sua aprovação" a quem não aprova.
+  const quemAprova = (p: { owner_only: boolean }) => (opcoes.podeAprovar && (!p.owner_only || opcoes.souDono) ? 'voce' : p.owner_only ? 'dono' : 'outra_pessoa');
+  const acaoDe = (a: ReviewsResponse['reviews'][number]): ItemDaLista['acao'] => {
+    const pedido = esperandoDe.get(a.id);
+    if (pedido) return { tipo: 'ver', href: `/aprovacoes?pedido=${pedido.action_id}` };
+    // A recusada pelo Google não aparece no perfil: ela pode ganhar outra resposta.
+    if (responde && (!a.reply || a.reply.state === 'recusada')) return { tipo: 'responder', href: `/aprovacoes?responder=${a.id}&marca=${r.brand_id}` };
+    return null;
+  };
+  const itens: ItemDaLista[] = r.reviews.map((a) => {
+    const pedido = esperandoDe.get(a.id);
+    return {
+      id: a.id,
+      estrelas: a.stars,
+      sob: [nomes.get(a.id), haQuanto(a.reviewed_at, agora), variasLojas ? lojas.get(a.store_id) : undefined].filter(Boolean).join(' · '),
+      texto: a.text && a.text.trim() ? a.text : null,
+      selo: pedido ? seloDaRespostaQueEspera(quemAprova(pedido)) : situacaoDaResposta(a.reply),
+      acao: acaoDe(a),
+    };
+  });
+  let esperando: Esperando | null = null;
+  if (pendentes.length === 1) {
+    const p = pendentes[0]!;
+    const avaliacao = r.reviews.find((a) => a.id === p.review_id);
+    const nome = nomes.get(p.review_id);
+    const quem = avaliacao ? (nome ? `${nome} deu ${plural(avaliacao.stars, 'estrela', 'estrelas')}` : `Uma avaliação de ${plural(avaliacao.stars, 'estrela', 'estrelas')}`) : null;
+    const aprova = quemAprova(p);
+    const [titulo, depois] =
+      aprova === 'voce'
+        ? ['1 resposta espera a sua aprovação', 'a resposta está pronta para você ler.']
+        : aprova === 'dono'
+          ? ['1 resposta espera a aprovação do dono', 'só o dono da empresa aprova a resposta.']
+          : ['1 resposta espera aprovação', 'a resposta está pronta para ler.'];
+    esperando = { titulo, texto: quem ? `${quem}; ${depois}` : `${depois.charAt(0).toUpperCase()}${depois.slice(1)}`, botao: 'Ver a resposta', href: `/aprovacoes?pedido=${p.action_id}` };
+  } else if (pendentes.length > 1) {
+    const todasSuas = pendentes.every((p) => quemAprova(p) === 'voce');
+    esperando = {
+      titulo: `${inteiro(pendentes.length)} respostas esperam ${todasSuas ? 'a sua aprovação' : 'aprovação'}`,
+      texto: 'Estão em Aprovações, cada uma com a avaliação ao lado.',
+      botao: 'Abrir Aprovações',
+      href: '/aprovacoes',
+    };
+  }
 
   const notas = [
     `${notaDosNomes(autores)} O Liame não apaga avaliação; para denunciar uma avaliação indevida, o caminho é o próprio Google.`,
@@ -170,5 +240,5 @@ export function telaDasAvaliacoes(r: ReviewsResponse, agora: Date, autores: Auto
     if (l.waiting_until) notas.push(`O Google pediu para o Liame esperar: a próxima leitura de ${l.name} fica para depois de ${quandoComHora(l.waiting_until, agora)}.`);
   }
 
-  return { tipo: 'lista', lido, avisos, caixas, tudoRespondido: s.unanswered === 0 && itens.length > 0, itens, notas };
+  return { tipo: 'lista', lido, avisos, caixas, tudoRespondido: s.unanswered === 0 && itens.length > 0 && !esperando, esperando, itens, notas };
 }

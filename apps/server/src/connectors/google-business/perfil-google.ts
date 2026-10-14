@@ -10,6 +10,8 @@ import type { TipoErroConector } from '../cliente-http.js';
 
 /** A função, por empresa, desligada de fábrica: ligada, o Liame pede a permissão do Perfil e lê as lojas dele (D-A6-17). */
 export const FLAG_PERFIL_GOOGLE = 'perfil_google';
+/** A escrita no Perfil (A6, Z2: responder a uma avaliação e apagar a resposta), por empresa e desligada, à parte da leitura. */
+export const FLAG_PERFIL_GOOGLE_ESCRITA = 'perfil_google_write';
 /** A permissão que todas as leituras do Perfil pedem. Só entra na autorização da empresa com a função ligada. */
 export const ESCOPO_PERFIL_GOOGLE = 'https://www.googleapis.com/auth/business.manage';
 /** O código da loja do Perfil entre as contas ligadas (`connected_account.provider`). */

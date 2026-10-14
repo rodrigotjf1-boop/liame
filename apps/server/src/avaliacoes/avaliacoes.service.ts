@@ -10,7 +10,7 @@ import { acessoGoogle, type CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { BALDE_DO_PERFIL_GOOGLE, criarConectorPerfilGoogle } from '../connectors/google-business/conector-perfil-google.js';
-import { ESCOPO_PERFIL_GOOGLE, FLAG_PERFIL_GOOGLE, procuraGuardada, PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
+import { ESCOPO_PERFIL_GOOGLE, FLAG_PERFIL_GOOGLE, FLAG_PERFIL_GOOGLE_ESCRITA, procuraGuardada, PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
 import { type AuthContext, currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
@@ -119,7 +119,7 @@ export class AvaliacoesService {
     const tx = currentTx();
     const marca = await tx.execute(sql`select 1 from liame.brand where id = ${brandId} and archived_at is null`);
     if (!marca.rows[0]) throw marcaNaoEncontrada();
-    const base = { brand_id: brandId, stores: [], summary: null, reviews: [], has_more: false, pending_replies: [], generated_at: agora.toISOString() };
+    const base = { brand_id: brandId, stores: [], summary: null, reviews: [], has_more: false, pending_replies: [], can_reply: false, generated_at: agora.toISOString() };
     if (!(await this.ligada(auth, brandId))) return { ...base, state: 'desligada' };
 
     const lojas = await tx.execute<LinhaLoja>(sql`
@@ -206,6 +206,8 @@ export class AvaliacoesService {
       reviews,
       has_more: avaliacoes.rows.length > AVALIACOES_NA_TELA,
       pending_replies,
+      // Responder pelo Liame é outra função, ligada à parte (a escrita no Perfil): sem ela, a resposta é dada no Google.
+      can_reply: await this.flags.isEnabled(FLAG_PERFIL_GOOGLE_ESCRITA, this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId })),
     };
   }
 
