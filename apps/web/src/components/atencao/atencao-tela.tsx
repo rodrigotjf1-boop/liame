@@ -83,11 +83,12 @@ export function AtencaoTela() {
       return false;
     }
     definir(contadorDoMenu(r.data.items));
-    // Sem avisos: "tudo em dia" só vale se há conta ligada; sem nenhuma, o convite é conectar.
+    // Sem avisos: "tudo em dia" só vale se há conta ligada; sem nenhuma, o convite é conectar. A loja do perfil da
+    // empresa no Google (P17, parte B) não é conta de anúncio: ligada sozinha, o convite continua.
     let semContas = false;
     if (!r.data.items.length && podeVerContas) {
       const f = await chamar(() => api.GET('/v1/media/freshness'));
-      semContas = f.ok && !f.data.items.length;
+      semContas = f.ok && !f.data.items.some((c) => c.provider !== 'google_business');
     }
     setEstado({ tipo: 'ok', dados: r.data, semContas });
     return true;

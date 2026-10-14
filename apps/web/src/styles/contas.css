@@ -34,6 +34,8 @@
 .escolha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
 .escolha > span:first-of-type { flex: 1; min-width: 0; display: grid; overflow-wrap: anywhere; }
 .escolha .mono { font-size: 11px; color: var(--text-subtle); }
+/* A6 · P17, parte B: a loja do perfil mostra o site do perfil (texto, não código). */
+.escolha .escolha-sub { font-size: var(--text-xs); color: var(--text-subtle); overflow-wrap: anywhere; }
 .escolha input { width: 18px; height: 18px; flex: none; accent-color: var(--link); }
 .escolha--ligada { opacity: .7; cursor: default; }
 .escolha:has(input:focus-visible) { box-shadow: var(--focus-ring); }
@@ -70,6 +72,7 @@
   .contas-tabela td, .contas-tabela tbody th { padding: 4px 0; border: 0; white-space: normal; }
   .contas-tabela td.acoes { text-align: left; padding-top: var(--sp-2); }
   .contas-tabela td.acoes .seg-acoes { justify-content: flex-start; }
+  .contas-tabela td.acoes .confirma-txt { text-align: left; }
   .contas-tabela .motivo { max-width: none; }
   .rotulo-celular { display: inline; }
   .linha-vazia td { text-align: left; }
@@ -82,6 +85,8 @@
    linha de baixo do nome em texto, a autorização revogada e a lista do que o Liame recebe. */
 .plat--regem { --plat-cor: var(--marca-coral); }
 .plat--regemcast { --plat-cor: var(--marca-lavanda); }
+/* A6 · P17, parte B (mockups/prototipo-contas-perfil.html): a loja do perfil da empresa no Google. */
+.plat--perfil { --plat-cor: var(--marca-ciano); }
 .conta-id--txt { font-family: var(--font-sans); font-size: var(--text-xs); color: var(--text-muted); }
 .contas-tabela .st .girando { width: 10px; height: 10px; border-width: 1.5px; }
 .aut-txt--perigo { display: flex; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--danger-soft); color: var(--text); }

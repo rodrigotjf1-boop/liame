@@ -120,6 +120,7 @@ export {
   ConnectionProvider,
   ConnectionResponse,
   DiscoveredAccount,
+  GOOGLE_BUSINESS_SCOPE,
   LinkAccountsRequest,
   LinkAccountsResponse,
   OAuthCallbackQuery,

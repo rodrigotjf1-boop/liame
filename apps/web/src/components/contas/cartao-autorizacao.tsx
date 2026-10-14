@@ -3,10 +3,12 @@
 import type { ConnectionResponse } from '@liame/contracts';
 import { Icone } from '@/components/ui/icone';
 import { dataCompleta } from '@/lib/formato';
-import { autorizadorDa, contasDaAutorizacao, emConferencia, erroDaConexao, plataforma, quemAutorizou, vencimentoDaAutorizacao } from './textos';
+import { contasELojas, ligadasDaAutorizacao, type perfilNaAutorizacao } from './perfil-google';
+import { autorizadorDa, emConferencia, erroDaConexao, plataforma, quemAutorizou, vencimentoDaAutorizacao } from './textos';
 
 // Uma autorização (o "sim" que alguém deu na Meta ou no Google): quando, quantas contas, se vence
-// (Google em modo de teste) e as ações: conectar de novo, procurar contas de novo e revogar.
+// (Google em modo de teste) e as ações: conectar de novo, procurar contas de novo e revogar. Com o perfil da empresa no
+// Google ligado para a empresa (P17, parte B), a do Google diz o que traz do perfil e o que falta quando falta.
 
 type Props = {
   conexao: ConnectionResponse;
@@ -15,25 +17,33 @@ type Props = {
   procurando: boolean;
   /** A autorização do Google inclui a permissão de informar vendas, e a função está ligada para a marca (A5, Y1). */
   informaVendas?: boolean;
+  /** O que a autorização do Google diz do perfil da empresa (`perfilNaAutorizacao`); nulo ou ausente sem a função. */
+  perfil?: ReturnType<typeof perfilNaAutorizacao>;
   /** Autorização que ainda espera a escolha (a pessoa fechou com "Agora não"): reabre a escolha. */
   aoEscolher: (() => void) | null;
   aoReconectar: () => void;
+  /** "Autorizar o Google de novo", direto para a página do Google (o perfil recusado ou numa conta sem perfil). */
+  aoAutorizar?: () => void;
   aoProcurar: () => void;
   aoRevogar: () => void;
 };
 
-export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando, informaVendas = false, aoEscolher, aoReconectar, aoProcurar, aoRevogar }: Props) {
+const ICONE_DA_NOTA = { lock: 'lock', info: 'info', clock: 'clock', alert: 'alert' } as const;
+
+export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando, informaVendas = false, perfil = null, aoEscolher, aoReconectar, aoAutorizar, aoProcurar, aoRevogar }: Props) {
   const a = autorizadorDa(c.provider);
   const plat = plataforma(c.provider);
-  const n = contasDaAutorizacao(c);
   const vence = vencimentoDaAutorizacao(c, agora);
   const falhou = c.status === 'erro' ? erroDaConexao(c.error_code, a) : null;
   const conferindo = emConferencia(c) || procurando;
   const reconectar = Boolean(falhou || vence);
   const quando = dataCompleta(c.completed_at ?? c.created_at);
   const quem = quemAutorizou(c);
-  const contas = n === 1 ? '1 conta' : `${n} contas`;
+  // "3 contas e 1 loja": a loja do perfil conta à parte.
+  const contas = contasELojas(ligadasDaAutorizacao(c));
   const qual = `${a === 'google' ? 'do Google' : 'da Meta'} de ${quando}`;
+  const nota = !falhou ? (perfil?.nota ?? null) : null;
+  const autorizar = !reconectar && perfil?.acao === 'autorizar' && aoAutorizar;
 
   return (
     <li className="card autorizacao">
@@ -69,6 +79,15 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
         <p className="aut-txt">
           {a === 'google' ? 'Google Ads e Google Analytics numa autorização só, sem prazo de validade.' : 'Autorização da empresa, sem prazo de validade.'}
           {a === 'google' && informaVendas && ' Inclui a permissão de informar vendas.'}
+          {a === 'google' && perfil?.inclui && ' Inclui a permissão do perfil da empresa.'}
+        </p>
+      )}
+      {nota && (
+        <p className="aut-txt aut-txt--atencao">
+          <Icone nome={ICONE_DA_NOTA[nota.icone]} pequeno />
+          <span>
+            {nota.destaque && <b>{nota.destaque}</b>} {nota.texto}
+          </span>
         </p>
       )}
       {conferindo && (
@@ -86,6 +105,11 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
           {reconectar && (
             <button className="btn btn--sm btn--primary" type="button" onClick={aoReconectar} aria-label={`Conectar de novo: autorização ${qual}`}>
               Conectar de novo
+            </button>
+          )}
+          {autorizar && (
+            <button className="btn btn--sm btn--primary" type="button" onClick={aoAutorizar} aria-label={`Autorizar o Google de novo: autorização ${qual}`}>
+              Autorizar o Google de novo
             </button>
           )}
           <button

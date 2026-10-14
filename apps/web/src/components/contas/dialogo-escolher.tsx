@@ -1,11 +1,12 @@
 'use client';
 
-import type { ConnectionResponse } from '@liame/contracts';
+import type { AccountProvider, ConnectionResponse } from '@liame/contracts';
 import { type FormEvent, type RefObject, useId, useRef, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { avisoDeLigarComLoja, ehLojaDoPerfil, notaDaEscolhaComLoja, siteDaLoja } from './perfil-google';
 import { botaoLigar, type ContaExistente, escolhiveis, gruposDaEscolha, idDaConta } from './textos';
 
 // "Escolher contas" depois da autorização (protótipo aprovado): as contas que ela alcança, agrupadas
@@ -48,6 +49,8 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const primeiraLivre = livres[0] ? chave(livres[0].provider, livres[0].external_id) : null;
   // Tudo o que há para ligar já é lido por outra autorização: ligar aqui só troca a autorização, sem primeira leitura.
   const soTroca = livres.length > 0 && livres.every((d) => renovaveis.has(chave(d.provider, d.external_id)) || comPermissao.has(chave(d.provider, d.external_id)));
+  // As lojas do perfil da empresa no Google (P17, parte B) contam à parte no botão, na nota e no aviso.
+  const comLoja = livres.some((d) => ehLojaDoPerfil(d.provider));
 
   function alternar(k: string, marcar: boolean) {
     setMarcadas((atual) => {
@@ -67,7 +70,7 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
     const r = await chamar(() =>
       api.POST('/v1/connections/{id}/accounts', {
         params: { path: { id: conexao.id } },
-        body: { accounts: contas.map((d) => ({ provider: d.provider as 'meta_ads' | 'google_ads' | 'ga4', external_id: d.external_id })) },
+        body: { accounts: contas.map((d) => ({ provider: d.provider as AccountProvider, external_id: d.external_id })) },
       }),
     );
     setEnviando(false);
@@ -76,8 +79,11 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
     const novas = r.data.linked.length;
     const soRenovou = novas > 0 && contas.every((d) => renovaveis.has(chave(d.provider, d.external_id)) || comPermissao.has(chave(d.provider, d.external_id)));
     const ganhouPermissao = contas.some((d) => comPermissao.has(chave(d.provider, d.external_id)));
+    const lojasLigadas = r.data.linked.filter((a) => ehLojaDoPerfil(a.provider)).length;
     aoLigar(
-      !novas
+      novas && comLoja && !soRenovou
+        ? `${avisoDeLigarComLoja(novas - lojasLigadas, lojasLigadas)}${ja ? ` ${ja === 1 ? '1 já estava ligada' : `${ja} já estavam ligadas`} a uma marca.` : ''}`
+        : !novas
         ? `Nada novo: ${ja === 1 ? 'a conta já estava ligada' : 'as contas já estavam ligadas'} a uma marca.`
         : soRenovou && ganhouPermissao
           ? `${novas === 1 ? 'A conta passou' : 'As contas passaram'} para a autorização nova, que inclui a permissão de informar vendas ao Google. A leitura segue sem parar.`
@@ -91,6 +97,7 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   }
 
   const n = marcadas.size;
+  const lojasMarcadas = livres.filter((d) => ehLojaDoPerfil(d.provider) && marcadas.has(chave(d.provider, d.external_id))).length;
   return (
     <dialog
       ref={ref}
@@ -136,7 +143,12 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
                     />
                     <span>
                       <b>{d.name}</b>
-                      <span className="mono">{idDaConta(d.provider, d.external_id)}</span>
+                      {ehLojaDoPerfil(d.provider) ? (
+                        // A loja do perfil: o site que o perfil informa, no lugar do código do Google.
+                        <span className="escolha-sub">{siteDaLoja(d.site)}</span>
+                      ) : (
+                        <span className="mono">{idDaConta(d.provider, d.external_id)}</span>
+                      )}
                     </span>
                     {d.via && <span className="lite-chip">via {d.via}</span>}
                     {travada && <span className="lite-chip">já ligada</span>}
@@ -155,7 +167,9 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
             <span>
               {soTroca
                 ? 'Estas contas já são lidas pelo Liame. Ligar aqui só passa a leitura para a autorização nova: nada é desligado, e os números seguem sem parar.'
-                : 'A primeira leitura traz os últimos 90 dias e leva alguns minutos. Depois, os números são atualizados todo dia.'}
+                : comLoja
+                  ? notaDaEscolhaComLoja(livres.some((d) => !ehLojaDoPerfil(d.provider)))
+                  : 'A primeira leitura traz os últimos 90 dias e leva alguns minutos. Depois, os números são atualizados todo dia.'}
             </span>
           </p>
         </div>
@@ -164,7 +178,7 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
             Agora não
           </button>
           <button className="btn btn--primary" type="submit" disabled={!n || enviando} aria-busy={enviando}>
-            {enviando ? 'Ligando…' : botaoLigar(n)}
+            {enviando ? 'Ligando…' : botaoLigar(n, lojasMarcadas)}
           </button>
         </div>
       </form>

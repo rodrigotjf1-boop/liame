@@ -24,6 +24,16 @@ import { DialogoRevogar } from './dialogo-revogar';
 import { FaixaVolta } from './faixa-volta';
 import { type ContaDaTabela, LinhaConta } from './linha-conta';
 import {
+  AVISO_LOJA_DESLIGADA,
+  CONFIRMA_DESLIGAR_LOJA,
+  CONVITE_DO_PERFIL,
+  conviteDoPerfil,
+  ehLojaDoPerfil,
+  perfilNaAutorizacao,
+  situacaoDaLojaDoPerfil,
+  SUB_DA_LOJA,
+} from './perfil-google';
+import {
   artigo,
   autorizacoesVisiveis,
   autorizadorDa,
@@ -51,6 +61,9 @@ import { type ContaDasVendas, ESCOPO_DE_INFORMAR_VENDAS, esperaPorExtenso, junta
 // "Revogar" por loja — o Regem só é oferecido quando a API diz que dá para conectar (`available`).
 // A5 · Y1 (mockups/prototipo-contas-conversoes.html, P14): com "vendas informadas ao Google" ligado para a marca,
 // um cartão por conta do Google Ads depois da autorização do Google. Sem a função, a tela é a de sempre.
+// A6 · P17, parte B (mockups/prototipo-contas-perfil.html): com o perfil da empresa no Google ligado para a empresa
+// (`business_profile`), a loja do perfil é mais uma linha da lista, a autorização do Google diz o que traz do perfil e o
+// topo convida quem ainda não deu a permissão. Sem a função, a tela é a de sempre.
 // Nenhum token passa pelo navegador; quem pode ver e conectar é o servidor que decide.
 
 type Dados = {
@@ -65,6 +78,8 @@ type Dados = {
   vendas: GoogleConversionsResponse[];
   /** A leitura das vendas falhou agora e o que aparece é o da leitura anterior. */
   vendasDesatualizadas: boolean;
+  /** O perfil da empresa no Google ligado para a empresa (`business_profile`; ausente na resposta antiga = desligado). */
+  perfil: boolean;
 };
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: Dados } | { tipo: 'erro'; problema: Problema };
 type Dialogo =
@@ -130,7 +145,17 @@ export function ContasTela() {
     vendasLidas.current = vendas;
     setEstado({
       tipo: 'ok',
-      dados: { marcas, conexoes: c.data.items, contas: f.data.items, disponiveis: c.data.available, escritaRegem: c.data.regem_write, escritaAnuncios: c.data.ads_write ?? [], vendas, vendasDesatualizadas },
+      dados: {
+        marcas,
+        conexoes: c.data.items,
+        contas: f.data.items,
+        disponiveis: c.data.available,
+        escritaRegem: c.data.regem_write,
+        escritaAnuncios: c.data.ads_write ?? [],
+        vendas,
+        vendasDesatualizadas,
+        perfil: c.data.business_profile === true,
+      },
     });
   }, []);
 
@@ -211,6 +236,10 @@ export function ContasTela() {
         const situacao = situacaoDaLoja(c, loja, agora);
         return { ...base, sub: subDaLoja(ligada?.unit_name ?? null), revogar: true, situacao: { ...situacao, reconectar: situacao.reconectar && podeRegem }, loja };
       }
+      // A loja do perfil da empresa no Google (P17, parte B): a leitura das avaliações, sem o código do Google.
+      if (ehLojaDoPerfil(c.provider)) {
+        return { ...base, sub: SUB_DA_LOJA, confirmacao: CONFIRMA_DESLIGAR_LOJA, situacao: situacaoDaLojaDoPerfil(c, dados.perfil, agora) };
+      }
       return { ...base, situacao: situacaoDaConta(c) };
     });
   }, [dados, agora, podeRegem]);
@@ -226,6 +255,8 @@ export function ContasTela() {
     [linhas],
   );
   const autorizacoes = useMemo(() => (dados ? autorizacoesVisiveis(dados.conexoes) : []), [dados]);
+  // O perfil da empresa no Google ligado, o Google conectado e nenhuma autorização com a permissão do perfil: o convite.
+  const convite = useMemo(() => (dados ? conviteDoPerfil(autorizacoes, dados.perfil) : null), [dados, autorizacoes]);
   // Vendas informadas ao Google: as marcas com a função ligada e o cartão de cada conta, depois da autorização que a lê.
   const vendas = useMemo(() => juntarVendas(dados?.vendas ?? []), [dados]);
   const vendasDaAutorizacao = useMemo(() => vendasPorAutorizacao(vendas.contas, dados?.conexoes ?? [], autorizacoes), [vendas, dados, autorizacoes]);
@@ -271,9 +302,25 @@ export function ContasTela() {
     const f = faixaDaVolta({ conexao: acomp.id, erro: null }, acomp.conexao, marcaDaVolta, { esgotou: acomp.tentativas >= MAX_TENTATIVAS, existentes });
     // O "procurar de novo" só ganha faixa quando há contas para escolher; a espera aparece no cartão.
     if (acomp.origem === 'procurar') {
-      const n = f?.tipo === 'escolher' ? escolhiveis(acomp.conexao, existentes).length : 0;
+      const novas = f?.tipo === 'escolher' ? escolhiveis(acomp.conexao, existentes) : [];
+      const lojas = novas.filter((o) => ehLojaDoPerfil(o.conta.provider)).length;
+      const n = novas.length - lojas;
       const onde = naPlataforma(autorizadorDa(acomp.conexao.provider));
-      faixa = f?.tipo === 'escolher' ? { ...f, titulo: `Encontramos ${n} ${n === 1 ? 'conta para ligar' : 'contas para ligar'} ${onde}.` } : null;
+      const contas = `${n} ${n === 1 ? 'conta' : 'contas'}`;
+      const doPerfil = `${lojas} ${lojas === 1 ? 'loja do perfil' : 'lojas do perfil'}`;
+      faixa =
+        f?.tipo !== 'escolher'
+          ? null
+          : !lojas
+            ? { ...f, titulo: `Encontramos ${n} ${n === 1 ? 'conta para ligar' : 'contas para ligar'} ${onde}.` }
+            : !n
+              ? // Só lojas do perfil (P17, parte B): o texto diz de onde elas vêm.
+                {
+                  ...f,
+                  titulo: `Encontramos ${doPerfil} para ligar ${onde}.`,
+                  texto: `São as lojas do perfil da empresa que esta autorização alcança. Escolha quais ligar à marca ${marcaDaVolta}.`,
+                }
+              : { ...f, titulo: `Encontramos ${contas} e ${doPerfil} para ligar ${onde}.` };
     } else faixa = f;
   }
 
@@ -291,7 +338,9 @@ export function ContasTela() {
     avisar(
       l.revogar
         ? 'Loja desligada. O token foi revogado no Regem e no Liame; o que já foi lido segue o prazo de guarda.'
-        : 'Conta desligada. O histórico de números fica.',
+        : ehLojaDoPerfil(l.provider)
+          ? AVISO_LOJA_DESLIGADA
+          : 'Conta desligada. O histórico de números fica.',
     );
     recarregarAvisos();
     await carregar();
@@ -442,6 +491,22 @@ export function ContasTela() {
         />
       )}
 
+      {convite && (
+        <FaixaDeAviso
+          tipo="acao"
+          icone={<Icone nome="plug" />}
+          titulo={CONVITE_DO_PERFIL.titulo}
+          texto={CONVITE_DO_PERFIL.texto}
+          acao={
+            podeConectar ? (
+              <button className="btn btn--primary" type="button" onClick={() => disparar(autorizarGoogle(convite.brandId))}>
+                {CONVITE_DO_PERFIL.botao}
+              </button>
+            ) : undefined
+          }
+        />
+      )}
+
       {estado.tipo === 'carregando' && <TabelaCarregando />}
       {estado.tipo === 'erro' && (
         <div className="card">
@@ -570,14 +635,18 @@ export function ContasTela() {
                 agora={agora}
                 podeConectar={podeConectar}
                 informaVendas={vendas.marcas.has(c.brand_id) && c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS)}
+                perfil={c.provider === 'google' ? perfilNaAutorizacao(c, dados.perfil) : null}
                 procurando={acomp?.origem === 'procurar' && acomp.id === c.id && (!acomp.conexao || emConferencia(acomp.conexao))}
                 aoEscolher={
-                  // Esperando a escolha, ou já valendo e com conta de outra autorização que vence antes (renovar).
-                  (c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length) || (c.status === 'ativa' && escolhiveis(c, existentes).some((o) => o.renovar || o.permissao))
+                  // Esperando a escolha; ou já valendo, com conta de outra autorização que vence antes (renovar) ou com loja
+                  // do perfil ainda por ligar (P17, parte B).
+                  (c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length) ||
+                  (c.status === 'ativa' && escolhiveis(c, existentes).some((o) => o.renovar || o.permissao || (ehLojaDoPerfil(o.conta.provider) && !o.conta.linked)))
                     ? () => setDialogo({ tipo: 'escolher', conexao: c })
                     : null
                 }
                 aoReconectar={() => setDialogo({ tipo: 'conectar', marca: c.brand_id })}
+                aoAutorizar={() => disparar(autorizarGoogle(c.brand_id))}
                 aoProcurar={() => disparar(procurar(c))}
                 aoRevogar={() => setDialogo({ tipo: 'revogar', conexao: c })}
               />
@@ -600,6 +669,7 @@ export function ContasTela() {
           aoRegem={podeRegem ? (marca) => setDialogo({ tipo: 'regem', marca }) : null}
           vendasAoGoogle={vendas.marcas}
           mudaAnuncios={dados?.escritaAnuncios ?? []}
+          comPerfil={Boolean(dados?.perfil)}
         />
       )}
       {dialogo?.tipo === 'regem' && (

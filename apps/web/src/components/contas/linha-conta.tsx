@@ -18,6 +18,8 @@ export type ContaDaTabela = {
   sub?: string;
   /** Loja do Regem: a ação da linha é "Revogar" (o token dela para de valer no Regem também). */
   revogar?: boolean;
+  /** O que a confirmação na linha diz antes de desligar (loja do perfil: "O Liame para de ler as avaliações…"). */
+  confirmacao?: string;
   brandId: string;
   situacao: SituacaoConta;
 };
@@ -90,6 +92,7 @@ export function LinhaConta({ conta: c, agora, podeConectar, aoReconectar, aoDesl
             </button>
           ) : confirmando ? (
             <div className="seg-acoes">
+              {c.confirmacao && <span className="confirma-txt">{c.confirmacao}</span>}
               <button
                 ref={confirmar}
                 className="btn btn--sm btn--perigo-cheio"
