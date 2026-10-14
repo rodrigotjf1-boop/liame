@@ -196,7 +196,8 @@ describe('Sua equipe (A3, I13b)', () => {
       abertaEm: '2026-10-08T12:00:00.000Z',
       rascunhoEm: '2026-10-08T12:05:00.000Z',
     };
-    const agora = (over: Partial<Parameters<typeof agoraDoCrm>[0]> = {}) => agoraDoCrm({ ativo: true, semRegemcast: false, semOferta: false, emAndamento: [], veAsCampanhas: true, ...over });
+    const agora = (over: Partial<Parameters<typeof agoraDoCrm>[0]> = {}) =>
+      agoraDoCrm({ ativo: true, semRegemcast: false, semDesconto: false, semOferta: false, emAndamento: [], veAsCampanhas: true, ...over });
 
     // Ligado, com tudo no lugar e nada em andamento: nada a dizer.
     expect(agora()).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
@@ -216,11 +217,19 @@ describe('Sua equipe (A3, I13b)', () => {
     expect(agora({ semOferta: true }).blockedBy).toBe('sem_oferta');
     expect(agora({ semOferta: true, emAndamento: [rascunho] }).blockedBy).toBe('modelo_sem_envio');
     expect(agora({ semOferta: true, emAndamento: [{ ...preparando, motivo: 'volte_a_pedir', oferta: null }] })).toMatchObject({ workingNow: true, blockedBy: null });
+    // Sem o desconto do cupom das mensagens, nenhuma mensagem sai (nem o "volte a pedir"): pesa mais que a falta da
+    // oferta, e menos que o RegemCast e o que já está em andamento.
+    expect(agora({ semDesconto: true })).toEqual({ workingNow: false, inProgress: null, blockedBy: 'sem_desconto' });
+    expect(agora({ semDesconto: true, semOferta: true }).blockedBy).toBe('sem_desconto');
+    expect(agora({ semDesconto: true, semRegemcast: true }).blockedBy).toBe('sem_regemcast');
+    expect(agora({ semDesconto: true, emAndamento: [rascunho] }).blockedBy).toBe('modelo_sem_envio');
+    expect(agora({ semDesconto: true, emAndamento: [preparando] })).toMatchObject({ workingNow: true, blockedBy: null });
 
     // Quem não vê as campanhas não recebe a oferta nem o nome da mensagem; o resto fica.
     expect(agora({ veAsCampanhas: false, emAndamento: [preparando] }).inProgress).toEqual({ subject: null, count: 412, by: null, since: preparando.abertaEm, kind: 'promocao' });
     expect(agora({ veAsCampanhas: false, emAndamento: [rascunho] }).inProgress?.subject).toBeNull();
     // Desligado, não ligado ou parado: nada disso se diz.
-    expect(agora({ ativo: false, semRegemcast: true, semOferta: true, emAndamento: [preparando, rascunho] })).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
+    expect(agora({ ativo: false, semRegemcast: true, semDesconto: true, semOferta: true, emAndamento: [preparando, rascunho] })).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
+    expect(agora({ ativo: false, semDesconto: true })).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
   });
 });

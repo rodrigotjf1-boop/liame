@@ -83,7 +83,8 @@ export const TeamMember = z.strictObject({
    * limite de uso de IA da empresa). CRM e mensageria: `sem_regemcast` (nenhuma conta do RegemCast conectada nesta
    * marca: não há para quem propor); `modelo_sem_envio` (o rascunho do modelo está no RegemCast e uma pessoa ainda não
    * o enviou para a análise da Meta) ou `modelo_em_analise` (a Meta ainda analisa): só com o modelo aprovado ele monta
-   * o pedido de envio; ou `sem_oferta`. Nulo quando ele pode trabalhar, e quando está desligado ou parado.
+   * o pedido de envio; `sem_desconto` (ninguém definiu o desconto do cupom das mensagens: toda mensagem leva um cupom);
+   * ou `sem_oferta`. Nulo quando ele pode trabalhar, e quando está desligado ou parado.
    */
   blocked_by: Slug.nullable().optional(),
   /** A empresa pode desligar (o Compliance não). */

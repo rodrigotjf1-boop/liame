@@ -224,7 +224,7 @@ describe('a rotina do CRM: o modelo no RegemCast e a espera pela Meta', () => {
     expect(passoDoModelo(naMeta('aprovado', true, NOME, 'en_US'), doRascunho, rascunhoEm, AGORA)).toEqual({ passo: 'esperar', situacao: 'rascunho' });
     // É a mesma palavra que a ficha dele em Sua equipe lê para dizer "o modelo ainda não foi enviado".
     const ficha = (situacaoDoModelo: string | null) =>
-      agoraDoCrm({ ativo: true, semRegemcast: false, semOferta: false, veAsCampanhas: true, emAndamento: [{ situacao: 'rascunho', motivo: 'promocao', oferta: null, nome: 'Combo', pessoas: 310, situacaoDoModelo, abertaEm: AGORA.toISOString(), rascunhoEm: AGORA.toISOString() }] }).blockedBy;
+      agoraDoCrm({ ativo: true, semRegemcast: false, semDesconto: false, semOferta: false, veAsCampanhas: true, emAndamento: [{ situacao: 'rascunho', motivo: 'promocao', oferta: null, nome: 'Combo', pessoas: 310, situacaoDoModelo, abertaEm: AGORA.toISOString(), rascunhoEm: AGORA.toISOString() }] }).blockedBy;
     expect([ficha(MODELO_SEM_ENVIO), ficha(null), ficha('em análise')]).toEqual(['modelo_sem_envio', 'modelo_sem_envio', 'modelo_em_analise']);
   });
 

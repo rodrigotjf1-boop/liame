@@ -86,7 +86,9 @@ const NUMERO: Record<string, string> = {
 /** Por que o CRM e mensageria, ligado, não tem como propor agora (`blocked_by`), como a ficha dele diz. */
 const NAO_PODE_PROPOR: Record<string, string> = {
   sem_regemcast: 'o RegemCast não está conectado nesta marca: é ele que envia as mensagens e guarda os contatos',
-  sem_oferta: 'Minha marca ainda não tem oferta: para uma promoção ele parte de uma oferta de lá, e não inventa oferta nem preço',
+  sem_desconto:
+    'falta definir o desconto do cupom das mensagens: cada mensagem leva um cupom só dela, e o desconto é definido uma vez pelo Dono ou pelo Administrador, em Mensagens',
+  sem_oferta:'Minha marca ainda não tem oferta: para uma promoção ele parte de uma oferta de lá, e não inventa oferta nem preço',
   modelo_sem_envio:
     'o rascunho do modelo está no RegemCast e ainda não foi enviado para a análise da Meta: quem envia é uma pessoa, no RegemCast, e só com o modelo aprovado ele monta o pedido de envio',
   modelo_em_analise: 'o modelo da mensagem está em análise na Meta: só com o modelo aprovado ele monta o pedido de envio',

@@ -129,10 +129,18 @@ const MODELO_SO_NO_REGEMCAST = 'rascunho';
  * O que o CRM e mensageria tem em andamento e o que o segura agora (protótipo P16), do que mais pesa ao que menos:
  * sem o RegemCast conectado não há para quem propor, e nada mais importa; a proposta que ele prepara é trabalho em
  * andamento, sem impedimento; o rascunho que espera o modelo diz o que falta (uma pessoa enviar para a Meta, ou a
- * Meta terminar a análise); por fim, Minha marca sem oferta. Desligado ou parado, nada disso se diz. A oferta e o
- * nome da mensagem só vão para quem vê as campanhas.
+ * Meta terminar a análise); depois, a falta do desconto do cupom das mensagens (toda mensagem leva um cupom: sem ele,
+ * nenhuma sai, nem o "volte a pedir"); por fim, Minha marca sem oferta. Desligado ou parado, nada disso se diz. A
+ * oferta e o nome da mensagem só vão para quem vê as campanhas.
  */
-export function agoraDoCrm(f: { ativo: boolean; semRegemcast: boolean; semOferta: boolean; emAndamento: PropostaEmAndamento[]; veAsCampanhas: boolean }): AgoraDoCrm {
+export function agoraDoCrm(f: {
+  ativo: boolean;
+  semRegemcast: boolean;
+  semDesconto: boolean;
+  semOferta: boolean;
+  emAndamento: PropostaEmAndamento[];
+  veAsCampanhas: boolean;
+}): AgoraDoCrm {
   if (!f.ativo) return { workingNow: false, inProgress: null, blockedBy: null };
   if (f.semRegemcast) return { workingNow: false, inProgress: null, blockedBy: 'sem_regemcast' };
   const preparando = f.emAndamento.find((p) => p.situacao === 'preparando');
@@ -149,7 +157,7 @@ export function agoraDoCrm(f: { ativo: boolean; semRegemcast: boolean; semOferta
       blockedBy: semEnvio ? 'modelo_sem_envio' : 'modelo_em_analise',
     };
   }
-  return { workingNow: false, inProgress: null, blockedBy: f.semOferta ? 'sem_oferta' : null };
+  return { workingNow: false, inProgress: null, blockedBy: f.semDesconto ? 'sem_desconto' : f.semOferta ? 'sem_oferta' : null };
 }
 
 export interface PecasDoCriativo {

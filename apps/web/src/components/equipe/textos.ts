@@ -348,6 +348,7 @@ export function atividadeDo(m: TeamMember, mes: string, agora: Date): string {
       if (esperam > 0n) return `${vezes(esperam, 'mensagem espera', 'mensagens esperam')} a sua decisão`;
       if (m.blocked_by === 'modelo_sem_envio') return 'O rascunho do modelo espera o envio para a Meta';
       if (m.blocked_by === 'modelo_em_analise') return 'O modelo da mensagem está em análise na Meta';
+      if (m.blocked_by === 'sem_desconto') return 'Espera o desconto do cupom em Mensagens';
       if (m.blocked_by === 'sem_oferta') return 'Espera a primeira oferta em Minha marca';
       return numero(m, 'mensagens_propostas') > 0n ? `Propôs ${vezes(numero(m, 'mensagens_propostas'), 'mensagem', 'mensagens')} em ${mes}` : `Sem proposta de mensagem em ${mes}`;
     }
@@ -569,7 +570,8 @@ const motivoDaProposta = (kind: string | null | undefined): string => MOTIVO_DA_
 /**
  * O que a ficha do CRM e mensageria diz de agora (P16). Toda mensagem dele é um pedido em Aprovações: a ficha diz o
  * que ele prepara, o rascunho que espera o modelo ser aprovado pela Meta, quantos pedidos esperam a decisão e, quando
- * ele não tem como propor, por quê. Não ligado pela Liame, não há o que dizer.
+ * ele não tem como propor (sem o RegemCast, sem o desconto do cupom, sem oferta), por quê, com o caminho que resolve.
+ * Não ligado pela Liame, não há o que dizer.
  */
 export function agoraDoCrm(m: TeamMember, t: TeamResponse): AgoraDoCrm {
   if (m.status === 'desligado_pela_liame') return { faixa: null, bloco: null };
@@ -636,6 +638,21 @@ export function agoraDoCrm(m: TeamMember, t: TeamResponse): AgoraDoCrm {
         destino: { href: '/contas', rotulo: 'Abrir Contas conectadas' },
       },
       bloco: null,
+    };
+  }
+  if (m.blocked_by === 'sem_desconto') {
+    return {
+      // Pelo desenho da faixa da oferta (protótipo P15, parte D), com o título da faixa de Mensagens. Quem define o
+      // desconto é o Dono ou o Administrador, e quem vê esta ficha nem sempre é um deles: a frase vale para todos.
+      faixa: {
+        tipo: 'acao',
+        icone: 'ticket',
+        titulo: 'Falta definir o desconto do cupom das mensagens',
+        texto: 'Cada mensagem leva um cupom só dela, e o desconto dele é definido uma vez pelo Dono ou pelo Administrador, em Mensagens. Sem isso, o CRM e mensageria não propõe mensagem.',
+        destino: { href: '/mensagens', rotulo: 'Abrir Mensagens' },
+      },
+      // O pedido que já espera a decisão segue à vista, como na falta da oferta.
+      bloco: esperandoVoce,
     };
   }
   if (m.blocked_by === 'sem_oferta') {

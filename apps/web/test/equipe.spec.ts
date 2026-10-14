@@ -636,6 +636,9 @@ describe('o CRM e mensageria em Sua equipe (A5 · P16, aprovado em 09/10/2026)',
     expect(linha({ stats: SEM_MENSAGENS })).toBe('Sem proposta de mensagem em outubro');
     expect(linha({ blocked_by: 'sem_regemcast', stats: SEM_MENSAGENS })).toBe('Espera a conexão com o RegemCast');
     expect(linha({ blocked_by: 'sem_oferta', stats: SEM_MENSAGENS })).toBe('Espera a primeira oferta em Minha marca');
+    expect(linha({ blocked_by: 'sem_desconto', stats: SEM_MENSAGENS })).toBe('Espera o desconto do cupom em Mensagens');
+    // O pedido que espera a decisão vem antes: é o que a pessoa resolve agora.
+    expect(linha({ blocked_by: 'sem_desconto' })).toBe('1 mensagem espera a sua decisão');
     expect(linha({ status: 'desligado_pela_liame' })).toBe('Ainda não ligado para esta empresa');
     expect(linha({ status: 'parado' })).toBe('Parado com a equipe');
   });
@@ -662,7 +665,7 @@ describe('o CRM e mensageria em Sua equipe (A5 · P16, aprovado em 09/10/2026)',
     expect(custoDo(crm({ stats: SEM_MENSAGENS, cost: { usd_micros: '0', calls: 0 } }), comCrm())).toEqual({ valor: nbsp('R$ 0,00'), rotulo: 'ele só custa quando escreve' });
   });
 
-  it('o que a ficha diz de agora: esperando a pessoa, nada esperando, nenhuma proposta, sem RegemCast e sem oferta', () => {
+  it('o que a ficha diz de agora: esperando a pessoa, nada esperando, nenhuma proposta, sem RegemCast, sem o desconto e sem oferta', () => {
     expect(frase(crm())).toEqual({
       faixa: null,
       titulo: 'Esperando você',
@@ -679,6 +682,21 @@ describe('o CRM e mensageria em Sua equipe (A5 · P16, aprovado em 09/10/2026)',
       aprovacoes: null,
     });
     expect(frase(crm({ blocked_by: 'sem_oferta', stats: SEM_MENSAGENS })).faixa).toMatchObject({ titulo: 'Minha marca ainda não tem oferta', destino: { href: '/marca', rotulo: 'Abrir Minha marca' } });
+    // Sem o desconto do cupom das mensagens: a faixa de Mensagens, numa frase que vale para quem define e para quem só vê.
+    expect(frase(crm({ blocked_by: 'sem_desconto', stats: SEM_MENSAGENS }))).toEqual({
+      faixa: {
+        tipo: 'acao',
+        icone: 'ticket',
+        titulo: 'Falta definir o desconto do cupom das mensagens',
+        texto: 'Cada mensagem leva um cupom só dela, e o desconto dele é definido uma vez pelo Dono ou pelo Administrador, em Mensagens. Sem isso, o CRM e mensageria não propõe mensagem.',
+        destino: { href: '/mensagens', rotulo: 'Abrir Mensagens' },
+      },
+      titulo: null,
+      texto: null,
+      aprovacoes: null,
+    });
+    // O pedido que já espera a decisão segue à vista, embaixo da faixa.
+    expect(frase(crm({ blocked_by: 'sem_desconto' }))).toMatchObject({ titulo: 'Esperando você', aprovacoes: true, faixa: { titulo: 'Falta definir o desconto do cupom das mensagens' } });
     // Não ligado pela Liame: nada a dizer de agora.
     expect(agoraDoCrm(crm({ status: 'desligado_pela_liame' }), comCrm())).toEqual({ faixa: null, bloco: null });
   });
@@ -841,7 +859,7 @@ describe('o CRM e mensageria em Sua equipe (A5 · P16, aprovado em 09/10/2026)',
     expect(html).not.toMatch(/\+55\d{10,11}/);
   });
 
-  it('desenhado: sem RegemCast e sem oferta, o caminho que resolve; desligado, o que continua valendo; não ligado, sem botão nem números', () => {
+  it('desenhado: sem RegemCast, sem o desconto e sem oferta, o caminho que resolve; desligado, o que continua valendo; não ligado, sem botão nem números', () => {
     const semRegemcast = desenhar({ t: comCrm({ blocked_by: 'sem_regemcast', stats: SEM_MENSAGENS }), escolhido: 'crm' });
     expect(semRegemcast).toContain('O RegemCast não está conectado');
     expect(semRegemcast).toContain('href="/contas"');
@@ -853,6 +871,11 @@ describe('o CRM e mensageria em Sua equipe (A5 · P16, aprovado em 09/10/2026)',
     const semOferta = desenhar({ t: comCrm({ blocked_by: 'sem_oferta', stats: SEM_MENSAGENS }), escolhido: 'crm' });
     expect(semOferta).toContain('Minha marca ainda não tem oferta');
     expect(semOferta).toContain('href="/marca"');
+    const semDesconto = desenhar({ t: comCrm({ blocked_by: 'sem_desconto', stats: SEM_MENSAGENS }), escolhido: 'crm' });
+    expect(semDesconto).toContain('Falta definir o desconto do cupom das mensagens');
+    expect(semDesconto).toContain('href="/mensagens"');
+    expect(semDesconto).not.toContain('id="eqp-crm-agora"');
+    expect(semDesconto).toContain('id="eqp-crm-modo"');
 
     const pausa = { by: RODRIGO, at: '2026-09-30T21:20:00.000Z', reason: null };
     const desligado = desenhar({ t: comCrm({ status: 'desligado', paused: pausa }), escolhido: 'crm' });

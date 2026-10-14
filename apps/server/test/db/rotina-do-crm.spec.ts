@@ -553,7 +553,10 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
   it('o que falta para propor, um de cada vez: o desconto, a loja do cupom, o dossiê, a oferta e o RegemCast', async () => {
     const e = await empresa(['desconto', 'dossie']);
     expect(await olhar(e, 'promocao')).toEqual({ resultado: 'sem_desconto' });
+    // A ficha dele em Sua equipe diz o mesmo; com o desconto definido pela rota, passa a dizer que falta a oferta.
+    expect(await naFicha(e)).toEqual({ working_now: false, blocked_by: 'sem_desconto' });
     await definirDesconto(e);
+    expect(await naFicha(e)).toEqual({ working_now: false, blocked_by: 'sem_oferta' });
     // Minha marca ainda sem dossiê: ele não tem como escrever na voz da marca.
     expect(await olhar(e, 'promocao')).toEqual({ resultado: 'sem_dossie' });
     expect(await olhar(e, 'volte_a_pedir')).toEqual({ resultado: 'sem_dossie' });
