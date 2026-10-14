@@ -180,4 +180,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // Contagens da própria empresa; nenhum dado de pessoa.
   profile_summary: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
   profile_metric_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  // Search Console (A6, Z3): os números do site por dia são contagens da própria empresa. As buscas da semana são o
+  // que as pessoas digitaram no Google: o Google esconde a busca de poucas pessoas, mas o texto pode trazer, raramente,
+  // algo pessoal. Por isso PERSONAL, com a mesma guarda do texto das avaliações (12 meses, D-A6-5).
+  search_console_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
+  search_console_query_week: { class: 'PERSONAL', retention: '12 meses contados do começo da semana', purge: { job: 'busca', days: 365 } },
 };

@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { expect } from 'vitest';
 import { ESCOPOS_GOOGLE } from '../../src/connections/oauth.js';
 import { ESCOPO_PERFIL_GOOGLE } from '../../src/connectors/google-business/perfil-google.js';
+import { ESCOPO_SEARCH_CONSOLE } from '../../src/connectors/search-console/search-console.js';
 import type { ConexaoProcessor } from '../../src/worker/conexao-processor.js';
 import { enableMfa, ownerQuery, signupAndLogin, type TestApi } from './api.js';
 import { ligarFlagDaEmpresa } from './meta-de-mentira.js';
@@ -16,6 +17,11 @@ export const API_PUBLICA_DE_TESTE = 'http://api.liame.test';
 const VOLTA = `${API_PUBLICA_DE_TESTE}/v1/oauth/callback`;
 export const CONTA_DO_PERFIL = 'accounts/111000111';
 export const LOJA_DO_PERFIL = 'locations/222000222';
+/** O site do Search Console da empresa de teste (o domínio inteiro) e o segundo, de começo de endereço (A6, Z3). */
+export const SITE_DO_SEARCH_CONSOLE = 'sc-domain:misterburgers.exemplo.test';
+export const SITE_DO_CARDAPIO = 'https://cardapio.misterburgers.exemplo.test/';
+/** Uma linha da consulta do Search Console, como o Google a manda. */
+export type LinhaDaConsulta = { keys: string[]; clicks: number; impressions: number; ctr?: number; position?: number };
 // Os valores de mentira que o OAuth devolve ficam em constantes de nome neutro, longe da chave da resposta: o texto
 // escrito ao lado de `access_token:` ou `refresh_token:` é lido pelo gitleaks como chave de verdade (ERR-131).
 export const ACESSO_RENOVADO = 'acesso-do-perfil-renovado';
@@ -87,6 +93,19 @@ export class GoogleComPerfil {
   /** Como responde o apagar da resposta (`DELETE …/reply`), e a queda depois de apagar (503 com a resposta já fora). */
   apagar: RespostaDoPerfil = 'ok';
   apagarCaiDepoisDeApagar = false;
+  /** Search Console (A6, Z3): como respondem a lista de sites e a consulta, e o que o site tem. */
+  sites: RespostaDoPerfil = 'ok';
+  consulta: RespostaDoPerfil | 'cota-antiga' = 'ok';
+  listaDeSites: { siteUrl: string; permissionLevel: string }[] = [
+    { siteUrl: SITE_DO_SEARCH_CONSOLE, permissionLevel: 'siteOwner' },
+    { siteUrl: SITE_DO_CARDAPIO, permissionLevel: 'siteFullUser' },
+  ];
+  /** Os números de cada dia (o dia que não está aqui não vem na resposta, como no Google). */
+  diasDoSite = new Map<string, Omit<LinhaDaConsulta, 'keys'>>();
+  /** As buscas de cada semana (a segunda-feira dela), na ordem do Google. */
+  buscasDaSemana = new Map<string, LinhaDaConsulta[]>();
+  /** A consulta das buscas desta semana (a segunda-feira) cai fora do ar. */
+  semanaQueCai: string | null = null;
 
   async subir(): Promise<void> {
     this.servidor = createServer((req, res) => {
@@ -132,6 +151,7 @@ export class GoogleComPerfil {
       GOOGLE_BUSINESS_LOCATIONS_URL: `${this.base}/lojas`,
       GOOGLE_BUSINESS_REVIEWS_URL: `${this.base}/avaliacoes`,
       GOOGLE_BUSINESS_PERFORMANCE_URL: `${this.base}/numeros`,
+      SEARCH_CONSOLE_URL: `${this.base}/sc`,
     };
   }
 
@@ -141,7 +161,7 @@ export class GoogleComPerfil {
   }
 
   /** As chamadas a uma API do Perfil (`avaliacoes`, `numeros`, `contas`, `lojas`). */
-  de(api: 'avaliacoes' | 'numeros' | 'contas' | 'lojas'): Visto[] {
+  de(api: 'avaliacoes' | 'numeros' | 'contas' | 'lojas' | 'sc'): Visto[] {
     return this.vistos.filter((v) => v.caminho.startsWith(`/${api}/`));
   }
 
@@ -165,6 +185,23 @@ export class GoogleComPerfil {
     this.acertaOsEspacos = false;
     this.apagar = 'ok';
     this.apagarCaiDepoisDeApagar = false;
+    this.sites = 'ok';
+    this.consulta = 'ok';
+    this.listaDeSites = [
+      { siteUrl: SITE_DO_SEARCH_CONSOLE, permissionLevel: 'siteOwner' },
+      { siteUrl: SITE_DO_CARDAPIO, permissionLevel: 'siteFullUser' },
+    ];
+    this.diasDoSite = new Map();
+    this.buscasDaSemana = new Map();
+    this.semanaQueCai = null;
+  }
+
+  /** As consultas do Search Console que chegaram ao Google, com o site (decodificado) e o corpo de cada uma. */
+  consultas(): { site: string; corpo: { startDate: string; endDate: string; dimensions: string[]; rowLimit: number; type: string } }[] {
+    const prefixo = '/sc/webmasters/v3/sites/';
+    return this.vistos
+      .filter((v) => v.metodo === 'POST' && v.caminho.startsWith(prefixo) && v.caminho.endsWith('/searchAnalytics/query'))
+      .map((v) => ({ site: decodeURIComponent(v.caminho.slice(prefixo.length, -'/searchAnalytics/query'.length)), corpo: v.corpo as never }));
   }
 
   /** As gravações de resposta que chegaram ao Google (o `PUT …/reply`), com o corpo de cada uma. */
@@ -269,6 +306,30 @@ export class GoogleComPerfil {
       }
       return naoAchou;
     }
+    // O Search Console (A6, Z3): os erros no formato antigo das APIs do Google (`error.errors[].reason`).
+    if (p === '/sc/webmasters/v3/sites' && req.method === 'GET') {
+      const erro = erroDe(this.sites);
+      return erro ?? { status: 200, corpo: { siteEntry: this.listaDeSites } };
+    }
+    if (p.startsWith('/sc/webmasters/v3/sites/') && p.endsWith('/searchAnalytics/query') && req.method === 'POST') {
+      if (this.consulta === 'cota-antiga') {
+        return { status: 403, corpo: { error: { code: 403, message: 'Search Analytics load quota exceeded', errors: [{ domain: 'usageLimits', reason: 'quotaExceeded' }] } } };
+      }
+      if (this.consulta === 'recusa') return { status: 403, corpo: { error: { code: 403, message: 'Forbidden', errors: [{ domain: 'global', reason: 'forbidden' }] } } };
+      const erro = erroDe(this.consulta);
+      if (erro) return erro;
+      const pedido = json as { startDate: string; endDate: string; dimensions: string[]; rowLimit: number };
+      if (pedido.dimensions[0] === 'date') {
+        const rows = [...this.diasDoSite.entries()]
+          .filter(([d]) => d >= pedido.startDate && d <= pedido.endDate)
+          .sort(([a], [b]) => (a < b ? -1 : 1))
+          .map(([d, n]) => ({ keys: [d], ...n }));
+        return { status: 200, corpo: { rows, responseAggregationType: 'byProperty' } };
+      }
+      if (this.semanaQueCai === pedido.startDate) return { status: 503, corpo: { error: { code: 503, message: 'Backend Error', errors: [{ domain: 'global', reason: 'backendError' }] } } };
+      const rows = (this.buscasDaSemana.get(pedido.startDate) ?? []).slice(0, pedido.rowLimit);
+      return { status: 200, corpo: { rows, responseAggregationType: 'byProperty' } };
+    }
     if (p === `/numeros/v1/${LOJA_DO_PERFIL}:fetchMultiDailyMetricsTimeSeries`) {
       const erro = erroDe(this.numeros);
       if (erro) return { ...erro, cabecalhos: this.esperar ? { 'retry-after': this.esperar } : undefined };
@@ -313,6 +374,35 @@ export async function ligarLojaDoPerfil(api: TestApi, e: EmpresaAutorizada): Pro
   expect(ligar.status, JSON.stringify(ligar.body)).toBe(200);
   expect(ligar.body.linked).toHaveLength(1);
   return ligar.body.linked[0].id as string;
+}
+
+/**
+ * Uma empresa com a função do Search Console ligada, o Google autorizado com a permissão dele e o site ligado à marca,
+ * pelo caminho do produto (V46): a pessoa autoriza o Google, o worker procura os sites e a pessoa escolhe o site.
+ */
+export async function empresaComSiteDoSearchConsole(api: TestApi, google: GoogleComPerfil, processador: ConexaoProcessor, nome: string): Promise<EmpresaComLoja> {
+  const s = await signupAndLogin(api, undefined, nome);
+  const { secret: segredoDoApp } = await enableMfa(api, s.cookie);
+  const tenantId = s.me.active_organization_id as string;
+  const [marca] = await ownerQuery<{ id: string }>(`select id from liame.brand where tenant_id = $1 limit 1`, [tenantId]);
+  const brandId = marca!.id;
+  await ligarFlagDaEmpresa(api, 'search_console', tenantId, true);
+  google.concedidos = [...ESCOPOS_GOOGLE, ESCOPO_SEARCH_CONSOLE];
+  const inicio = await api.call('POST', '/v1/connections', { cookie: s.cookie, body: { provider: 'google', brand_id: brandId } });
+  expect(inicio.status, JSON.stringify(inicio.body)).toBe(201);
+  const url = new URL(inicio.body.authorize_url);
+  google.registrarDesafio(url.searchParams.get('code_challenge')!);
+  const volta = await fetch(`${api.base}/v1/oauth/callback?${new URLSearchParams({ state: url.searchParams.get('state')!, code: 'codigo-google-bom' }).toString()}`, {
+    headers: { cookie: s.cookie },
+    redirect: 'manual',
+  });
+  expect(volta.status).toBe(303);
+  expect(await processador.processarLote(5, { tenantIds: [tenantId] })).toBe(1);
+  const conexaoId = inicio.body.id as string;
+  const ligar = await api.call('POST', `/v1/connections/${conexaoId}/accounts`, { cookie: s.cookie, body: { accounts: [{ provider: 'search_console', external_id: SITE_DO_SEARCH_CONSOLE }] } });
+  expect(ligar.status, JSON.stringify(ligar.body)).toBe(200);
+  expect(ligar.body.linked).toHaveLength(1);
+  return { cookie: s.cookie, tenantId, userId: s.me.user.id as string, email: s.email, segredoDoApp, brandId, conexaoId, contaId: ligar.body.linked[0].id as string };
 }
 
 /** A mesma empresa, já com a loja do Perfil ligada à marca. */

@@ -11,6 +11,7 @@ import { PedidosQueEsperam } from './pedidos-que-esperam.js';
 import { PerfilLoop } from './perfil-loop.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
+import { SearchConsoleLoop } from './search-console-loop.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
@@ -51,6 +52,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly esperam: PedidosQueEsperam,
     private readonly rotinaDoCrm: RotinaDoCrmLoop,
     private readonly perfil: PerfilLoop,
+    private readonly searchConsole: SearchConsoleLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -89,6 +91,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('perfil-google', 3, 60_000, async (n) => (await this.perfil.executarLote(n)).length),
       // As lojas do Perfil que a procura não achou (o Google ainda não liberou o acesso, ou falhou): de novo uma vez por dia; a fila é olhada de 10 em 10 minutos.
       this.loop('perfil-lojas', 3, 600_000, (n) => this.conexoes.procurarLojasDeNovo(n)),
+      // O Search Console: os números por dia e as buscas das semanas fechadas de cada site, uma vez por dia; a fila é olhada de 5 em 5 minutos.
+      this.loop('search-console', 3, 300_000, async (n) => (await this.searchConsole.executarLote(n)).length),
     );
   }
 

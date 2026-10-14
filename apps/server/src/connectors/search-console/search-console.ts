@@ -175,8 +175,8 @@ export function diasDoGoogle(corpo: unknown, janela: { inicio: string; fim: stri
 
 /**
  * As buscas que levaram ao site (a leitura agrupada por `query`), na ordem do Google (mais cliques primeiro), até
- * `maximo`. A busca vazia, a comprida demais e a repetida ficam de fora; o texto é o que a pessoa buscou, sem os
- * espaços das pontas.
+ * `maximo`. A busca vazia, a comprida demais, a com caractere nulo e a repetida ficam de fora; o texto é o que a pessoa
+ * buscou, sem os espaços das pontas.
  */
 export function buscasDoGoogle(corpo: unknown, maximo: number): BuscaLida[] {
   const vistas = new Set<string>();
@@ -185,7 +185,8 @@ export function buscasDoGoogle(corpo: unknown, maximo: number): BuscaLida[] {
     if (buscas.length >= maximo) break;
     const bruta = primeiraChave(l);
     const busca = typeof bruta === 'string' ? bruta.trim() : '';
-    if (!busca || busca.length > TAMANHO_DA_BUSCA || vistas.has(busca)) continue;
+    // O caractere nulo o banco não guarda em texto (V43): a busca que o traz fica de fora.
+    if (!busca || busca.length > TAMANHO_DA_BUSCA || busca.includes('\u0000') || vistas.has(busca)) continue;
     const n = numerosDaLinha(l);
     if (!n) continue;
     vistas.add(busca);
