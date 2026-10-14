@@ -122,6 +122,7 @@ describe.skipIf(!hasDb)('conector do Perfil da Empresa no Google (leitura; A6 ·
     ga4AdminUrl: 'https://analyticsadmin.googleapis.com',
     dataManagerUrl: 'https://datamanager.googleapis.com',
     perfilGoogle: { contas: `${base}/contas`, lojas: `${base}/lojas`, avaliacoes: `${base}/avaliacoes`, numeros: `${base}/numeros` },
+    searchConsoleUrl: 'https://searchconsole.googleapis.com',
     metaAppSecret: null,
   });
   const cliente = (extra: Partial<ConstructorParameters<typeof ClienteConector>[1]> = {}) =>

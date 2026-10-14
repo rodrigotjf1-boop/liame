@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import { createDatabase, type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
-import { enderecosDasPlataformas, PERFIL_GOOGLE_OFICIAL } from '../../src/connectors/enderecos.js';
+import { enderecosDasPlataformas, PERFIL_GOOGLE_OFICIAL, SEARCH_CONSOLE_OFICIAL } from '../../src/connectors/enderecos.js';
 import { ConectorGoogleAds, criarConectorGoogleAds, METRICAS_CANONICAS_GOOGLE_ADS, microsParaUnidade } from '../../src/connectors/google-ads/conector-google-ads.js';
 import { gravarMetricas, type PontoMetrica } from '../../src/media/metric-store.js';
 import { ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
@@ -88,7 +88,7 @@ describe.skipIf(!hasDb)('conector do Google Ads (leitura, v25)', () => {
     await api?.close();
   });
 
-  const plataformas = () => ({ metaGraphUrl: 'https://graph.facebook.com', googleAdsUrl: base, ga4DataUrl: 'https://analyticsdata.googleapis.com', ga4AdminUrl: 'https://analyticsadmin.googleapis.com', dataManagerUrl: 'https://datamanager.googleapis.com', perfilGoogle: PERFIL_GOOGLE_OFICIAL, metaAppSecret: null });
+  const plataformas = () => ({ metaGraphUrl: 'https://graph.facebook.com', googleAdsUrl: base, ga4DataUrl: 'https://analyticsdata.googleapis.com', ga4AdminUrl: 'https://analyticsadmin.googleapis.com', dataManagerUrl: 'https://datamanager.googleapis.com', perfilGoogle: PERFIL_GOOGLE_OFICIAL, searchConsoleUrl: SEARCH_CONSOLE_OFICIAL, metaAppSecret: null });
   const cliente = () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(plataformas()), tentativas: 1, esperaMaximaMs: 2_000, balde: { capacidade: 500, porSegundo: 50 } });
   const conector = () => new ConectorGoogleAds(cliente(), base, 'v25');
   const conta = (externalId = CLIENTE, loginCustomerId: string | null = GERENTE) => ({ credencial: { accessToken: TOKEN }, externalId, timezone: 'America/Sao_Paulo', currency: 'BRL', loginCustomerId });
