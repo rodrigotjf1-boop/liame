@@ -1,8 +1,9 @@
 'use client';
 
-import type { ActionResponse, BrandResponse, MessagingResponse } from '@liame/contracts';
+import type { ActionResponse, BrandResponse, MessageDiscountResponse, MessagingResponse } from '@liame/contracts';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
@@ -10,16 +11,20 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
+import { caixaDoDesconto, faixaDoDesconto } from './desconto-textos';
+import { GavetaDesconto } from './gaveta-desconto';
 import { GavetaMensagem } from './gaveta-mensagem';
-import { MensagensConteudo } from './mensagens-conteudo';
+import { type DescontoNaTela, MensagensConteudo } from './mensagens-conteudo';
 import { contaDaTela, faixaDosPedidos, telaDasMensagens } from './textos';
 
 // "Mensagens" (mockups/prototipo-mensagens.html, P15 aprovado em 09/10/2026; Y4 da A5): o que a empresa enviou de
 // WhatsApp pelo RegemCast, com os números de cada mensagem, se a conta pode enviar e o teto de gasto. Tudo é lido do
 // RegemCast na hora pelo servidor (`GET /v1/messaging`, de quem acompanha as campanhas); nada é guardado no Liame e
-// esta tela não envia nem pausa nada.
+// esta tela não envia nem pausa nada. O desconto do cupom das mensagens (P15, parte D) é a exceção: é do Liame, por
+// marca (`GET` e `PUT /v1/messaging/discount`), e quem o define é o Dono ou o Administrador.
 
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: MessagingResponse } | { tipo: 'erro'; problema: Problema };
+type CargaDoDesconto = { tipo: 'carregando' } | { tipo: 'ok'; dados: MessageDiscountResponse } | { tipo: 'erro' };
 
 export function MensagensTela() {
   const { me, pode } = useSessao();
@@ -39,6 +44,21 @@ export function MensagensTela() {
   const [aberta, setAberta] = useState<string | null>(null);
   /** Os pedidos que esperam aprovação (para a faixa do pedido de mensagem). Se a leitura falhar, a tela segue sem a faixa. */
   const [esperando, setEsperando] = useState<ActionResponse[]>([]);
+  /** O desconto do cupom das mensagens da marca (P15, parte D); nulo sem conta do RegemCast na tela. */
+  const [desconto, setDesconto] = useState<CargaDoDesconto | null>(null);
+  const [lerDesconto, setLerDesconto] = useState(0);
+  const [definindo, setDefinindo] = useState(false);
+  const avisar = useAvisar();
+  // Ao fechar a gaveta, o foco volta a quem abriu; se foi a faixa (que some quando o desconto é definido), vai para o
+  // botão da caixa, e sem ele para o título.
+  const reservaDoDesconto = useMemo<RefObject<HTMLElement | null>>(
+    () => ({
+      get current() {
+        return document.getElementById('mens-desconto-bt') ?? document.getElementById('h-mensagens');
+      },
+    }),
+    [],
+  );
   /** Depois de "Tentar de novo", o foco volta ao título quando a leitura chega. */
   const focarTitulo = useRef(false);
   // Só a resposta mais nova vale (trocar de marca no meio de uma leitura não mistura as contas).
@@ -85,6 +105,43 @@ export function MensagensTela() {
       vivo = false;
     };
   }, [temConta, tentativa, marca]);
+
+  // O desconto do cupom das mensagens da marca: só com a função ligada e conta conectada (a tela das mensagens).
+  useEffect(() => {
+    if (!temConta || !marca) return setDesconto(null);
+    let vivo = true;
+    setDesconto({ tipo: 'carregando' });
+    disparar(
+      chamar(() => api.GET('/v1/messaging/discount', { params: { query: { brand_id: marca } } })).then((r) => {
+        if (vivo) setDesconto(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro' });
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [temConta, marca, tentativa, lerDesconto]);
+  const descontoNaTela = useMemo<DescontoNaTela | null>(() => {
+    if (!desconto) return null;
+    if (desconto.tipo !== 'ok') return desconto;
+    if (!desconto.dados.enabled) return null;
+    return { tipo: 'ok', caixa: caixaDoDesconto(desconto.dados), faixa: faixaDoDesconto(desconto.dados) };
+  }, [desconto]);
+
+  // Depois de salvar, o foco vai para o botão da caixa, já redesenhada: a faixa que abriu a gaveta some no mesmo
+  // desenho, e devolver o foco a ela o perderia (V82).
+  const focarACaixa = useRef(false);
+  useEffect(() => {
+    if (!focarACaixa.current || desconto?.tipo !== 'ok') return;
+    focarACaixa.current = false;
+    document.getElementById('mens-desconto-bt')?.focus({ preventScroll: true });
+  }, [desconto]);
+
+  function descontoSalvo(r: MessageDiscountResponse) {
+    const primeira = desconto?.tipo === 'ok' && !desconto.dados.discount;
+    focarACaixa.current = true;
+    setDesconto({ tipo: 'ok', dados: r });
+    avisar(primeira ? 'Desconto do cupom das mensagens definido.' : 'Desconto do cupom das mensagens mudado. Vale para as próximas propostas.');
+  }
 
   useEffect(() => {
     if (!focarTitulo.current || carga.tipo === 'carregando') return;
@@ -179,7 +236,19 @@ export function MensagensTela() {
       </div>
     );
   } else {
-    corpo = <MensagensConteudo conta={daConta} modo={modo} podeVerContas={podeVerContas} pedido={pedido} aoVer={setAberta} aoTentarDeNovo={tentarDeNovo} />;
+    corpo = (
+      <MensagensConteudo
+        conta={daConta}
+        modo={modo}
+        podeVerContas={podeVerContas}
+        pedido={pedido}
+        desconto={descontoNaTela}
+        aoDefinirDesconto={() => setDefinindo(true)}
+        aoLerDesconto={() => setLerDesconto((n) => n + 1)}
+        aoVer={setAberta}
+        aoTentarDeNovo={tentarDeNovo}
+      />
+    );
   }
 
   const contas = tela?.tipo === 'contas' ? tela.contas : [];
@@ -239,6 +308,9 @@ export function MensagensTela() {
       {seletores}
       {corpo}
       {campanhaAberta && conta && <GavetaMensagem key={campanhaAberta.id} contaId={conta.connected_account_id} campanha={campanhaAberta} agora={agora} reserva={titulo} aoFechar={() => setAberta(null)} />}
+      {definindo && desconto?.tipo === 'ok' && (
+        <GavetaDesconto resposta={desconto.dados} agora={agora} reserva={reservaDoDesconto} aoSalvar={descontoSalvo} aoFechar={() => setDefinindo(false)} />
+      )}
     </section>
   );
 }
