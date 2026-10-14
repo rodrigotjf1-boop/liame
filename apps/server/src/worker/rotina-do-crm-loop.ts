@@ -6,6 +6,7 @@ import { DATABASE } from '../database/database.module.js';
 import { MINUTOS_ENTRE_OLHADAS_DO_MODELO, proximaOlhada, type ResultadoDoOlhar } from '../mensageria/rotina-do-crm.js';
 import { type Escrita, EscritaDoCrmService } from './escrita-do-crm.service.js';
 import { type Acompanhamento, ModeloDoCrmService, type Rascunho } from './modelo-do-crm.service.js';
+import { naOrdemDaFila, vezNaFila } from './ordem-da-fila.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 import { type Olhada, RotinaDoCrmService } from './rotina-do-crm.service.js';
 
@@ -19,7 +20,9 @@ export type VezDaEscrita = { id: string; tenantId: string; feito: Escrita };
 export type VezDoRascunho = { id: string; tenantId: string; feito: Rascunho };
 export type VezDoAcompanhamento = { id: string; tenantId: string; visto: Acompanhamento };
 
-type Reservada = { id: string; tenant_id: string; brand_id: string; motive: MotivoDaMensagem };
+type Reservada = { id: string; tenant_id: string; brand_id: string; motive: MotivoDaMensagem; vez: string };
+/** A proposta reservada, com a vez dela na fila: o lote é tratado nessa ordem (ERR-135). */
+type PropostaReservada = { id: string; tenant_id: string; vez: string };
 
 /**
  * A fila do olhar da rotina do CRM e mensageria (A5, Y6; migration 0064). Cada marca com o RegemCast conectado tem
@@ -50,9 +53,9 @@ export class RotinaDoCrmLoop {
     const ref = sql`${quando.toISOString()}::timestamptz`;
     const reservadas = await withSystem(this.database.db, async (tx) =>
       (
-        await tx.execute<{ id: string; tenant_id: string }>(sql`
+        await tx.execute<PropostaReservada>(sql`
           with devidas as materialized (
-            select p.id
+            select p.id, ${vezNaFila(sql`coalesce(p.next_attempt_at, p.created_at)`)} as vez
               from liame.message_proposal p
              where p.status = 'preparando' and p.body is not null
                and (p.next_attempt_at is null or p.next_attempt_at <= ${ref})
@@ -65,12 +68,12 @@ export class RotinaDoCrmLoop {
              set next_attempt_at = ${ref} + ${RESERVA_DA_ESCRITA}::interval, updated_at = now()
             from devidas x
            where p.id = x.id
-          returning p.id, p.tenant_id`)
+          returning p.id, p.tenant_id, x.vez`)
       ).rows,
     );
 
     const vezes: VezDoRascunho[] = [];
-    for (const l of reservadas) {
+    for (const l of naOrdemDaFila(reservadas)) {
       const alvo = { tenantId: l.tenant_id, id: l.id };
       let feito: Rascunho;
       try {
@@ -101,9 +104,9 @@ export class RotinaDoCrmLoop {
     const ref = sql`${quando.toISOString()}::timestamptz`;
     const reservadas = await withSystem(this.database.db, async (tx) =>
       (
-        await tx.execute<{ id: string; tenant_id: string }>(sql`
+        await tx.execute<PropostaReservada>(sql`
           with devidas as materialized (
-            select p.id
+            select p.id, ${vezNaFila(sql`coalesce(p.template_checked_at, p.drafted_at, p.created_at)`)} as vez
               from liame.message_proposal p
              where p.status = 'rascunho'
                and coalesce(p.template_checked_at, p.drafted_at, p.created_at) <= ${ref} - make_interval(mins => ${MINUTOS_ENTRE_OLHADAS_DO_MODELO})
@@ -116,12 +119,12 @@ export class RotinaDoCrmLoop {
              set template_checked_at = ${ref}, updated_at = now()
             from devidas x
            where p.id = x.id
-          returning p.id, p.tenant_id`)
+          returning p.id, p.tenant_id, x.vez`)
       ).rows,
     );
 
     const vezes: VezDoAcompanhamento[] = [];
-    for (const l of reservadas) {
+    for (const l of naOrdemDaFila(reservadas)) {
       let visto: Acompanhamento;
       try {
         visto = await this.modelo.acompanhar({ tenantId: l.tenant_id, id: l.id }, quando);
@@ -145,9 +148,9 @@ export class RotinaDoCrmLoop {
     const ref = sql`${quando.toISOString()}::timestamptz`;
     const reservadas = await withSystem(this.database.db, async (tx) =>
       (
-        await tx.execute<{ id: string; tenant_id: string }>(sql`
+        await tx.execute<PropostaReservada>(sql`
           with devidas as materialized (
-            select p.id
+            select p.id, ${vezNaFila(sql`coalesce(p.next_attempt_at, p.created_at)`)} as vez
               from liame.message_proposal p
              where p.status = 'preparando' and p.body is null
                and (p.next_attempt_at is null or p.next_attempt_at <= ${ref})
@@ -160,12 +163,12 @@ export class RotinaDoCrmLoop {
              set next_attempt_at = ${ref} + ${RESERVA_DA_ESCRITA}::interval, updated_at = now()
             from devidas x
            where p.id = x.id
-          returning p.id, p.tenant_id`)
+          returning p.id, p.tenant_id, x.vez`)
       ).rows,
     );
 
     const vezes: VezDaEscrita[] = [];
-    for (const l of reservadas) {
+    for (const l of naOrdemDaFila(reservadas)) {
       const alvo = { tenantId: l.tenant_id, id: l.id };
       let feito: Escrita;
       try {
@@ -204,7 +207,7 @@ export class RotinaDoCrmLoop {
       return (
         await tx.execute<Reservada>(sql`
           with devidas as materialized (
-            select r.id
+            select r.id, ${vezNaFila(sql`r.next_check_at`)} as vez
               from liame.message_routine r
              where r.next_check_at <= ${ref}
                ${tenantFilter(scope, sql`r.tenant_id`)}
@@ -216,12 +219,12 @@ export class RotinaDoCrmLoop {
              set next_check_at = ${ref} + ${RESERVA}::interval, updated_at = now()
             from devidas x
            where r.id = x.id
-          returning r.id, r.tenant_id, r.brand_id, r.motive`)
+          returning r.id, r.tenant_id, r.brand_id, r.motive, x.vez`)
       ).rows;
     });
 
     const vezes: VezDoOlhar[] = [];
-    for (const l of reservadas) {
+    for (const l of naOrdemDaFila(reservadas)) {
       let olhada: Olhada;
       try {
         olhada = await this.rotina.olhar({ tenantId: l.tenant_id, brandId: l.brand_id, motivo: l.motive }, quando);
