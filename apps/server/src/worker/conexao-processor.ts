@@ -12,6 +12,15 @@ import { criarConectorGoogleAds } from '../connectors/google-ads/conector-google
 import { BALDE_DO_PERFIL_GOOGLE, criarConectorPerfilGoogle, type LojaDoPerfil } from '../connectors/google-business/conector-perfil-google.js';
 import { ESCOPO_PERFIL_GOOGLE, FLAG_PERFIL_GOOGLE, falhaDaProcura, PROVEDOR_PERFIL_GOOGLE, type ProcuraDoPerfil } from '../connectors/google-business/perfil-google.js';
 import { criarConectorMeta } from '../connectors/meta/conector-meta.js';
+import { BALDE_DO_SEARCH_CONSOLE, criarConectorSearchConsole } from '../connectors/search-console/conector-search-console.js';
+import {
+  ESCOPO_SEARCH_CONSOLE,
+  FLAG_SEARCH_CONSOLE,
+  type ProcuraDosSites,
+  PROVEDOR_SEARCH_CONSOLE,
+  type SiteDoSearchConsole,
+  TAMANHO_DO_SITE_LIGADO,
+} from '../connectors/search-console/search-console.js';
 import { lerLoja, trocarCodigoRegem } from '../connectors/regem/conector-regem.js';
 import type { ContaDescoberta, Credencial } from '../connectors/tipos.js';
 import { versaoRegistrada } from '../connectors/tipos.js';
@@ -170,16 +179,19 @@ export class ConexaoProcessor {
     // Etapa 2: descobrir as contas que a credencial alcança.
     let descobertas: DescobertaGuardada[];
     let perfil: ProcuraDoPerfil | null;
+    let sites: ProcuraDosSites | null;
     try {
-      ({ descobertas, perfil } = await this.descobrir(provedor, accessToken, credencial, { tenantId, brandId: dados.brandId }));
+      ({ descobertas, perfil, sites } = await this.descobrir(provedor, accessToken, credencial, { tenantId, brandId: dados.brandId }));
     } catch (err) {
       await this.falhar(id, tenantId, err, tentativa, false);
       return;
     }
-    // A procura das lojas do Perfil que não deu certo (o limite do Google, uma falha passageira) não apaga as lojas que
-    // a conexão já conhecia: elas seguem na lista, e a anotação diz o que aconteceu desta vez. Sem procura (função
-    // desligada ou permissão não concedida), não fica anotação nem loja.
+    // A procura das lojas do Perfil (ou dos sites do Search Console) que não deu certo (o limite do Google, uma falha
+    // passageira) não apaga as que a conexão já conhecia: elas seguem na lista, e a anotação diz o que aconteceu desta
+    // vez. Sem procura (função desligada ou permissão não concedida), não fica anotação nem loja ou site.
     const manterAsLojas = perfil !== null && perfil.resultado !== 'ok';
+    const manterOsSites = sites !== null && sites.resultado !== 'ok';
+    const notas = { ...(perfil ? { [PROVEDOR_PERFIL_GOOGLE]: perfil } : {}), ...(sites ? { [PROVEDOR_SEARCH_CONSOLE]: sites } : {}) };
     await withTenant(this.db, tenantId, async (tx) => {
       await tx.execute(sql`
         update liame.oauth_connection
@@ -187,10 +199,11 @@ export class ConexaoProcessor {
                              then 'ativa' else 'aguardando_escolha' end,
                discovered = ${JSON.stringify(descobertas)}::jsonb || case when ${manterAsLojas}::boolean
                  then coalesce((select jsonb_agg(d) from jsonb_array_elements(liame.oauth_connection.discovered) as d where d ->> 'provider' = ${PROVEDOR_PERFIL_GOOGLE}), '[]'::jsonb)
+                 else '[]'::jsonb end
+                 || case when ${manterOsSites}::boolean
+                 then coalesce((select jsonb_agg(d) from jsonb_array_elements(liame.oauth_connection.discovered) as d where d ->> 'provider' = ${PROVEDOR_SEARCH_CONSOLE}), '[]'::jsonb)
                  else '[]'::jsonb end,
-               discovery_notes = case when ${perfil !== null}::boolean
-                 then liame.oauth_connection.discovery_notes || jsonb_build_object(${PROVEDOR_PERFIL_GOOGLE}::text, ${JSON.stringify(perfil ?? {})}::jsonb)
-                 else liame.oauth_connection.discovery_notes - ${PROVEDOR_PERFIL_GOOGLE}::text end,
+               discovery_notes = (liame.oauth_connection.discovery_notes - ${PROVEDOR_PERFIL_GOOGLE}::text - ${PROVEDOR_SEARCH_CONSOLE}::text) || ${JSON.stringify(notas)}::jsonb,
                error_code = null, locked_at = null, updated_at = now()
          where id = ${id} and status = 'processando'`);
       await writeAudit(tx, {
@@ -201,7 +214,12 @@ export class ConexaoProcessor {
         action: 'conexao.concluir',
         resourceType: 'oauth_connection',
         resourceId: id,
-        after: { provider: provedor, contas_encontradas: descobertas.length, ...(perfil ? { perfil_no_google: perfil.resultado } : {}) },
+        after: {
+          provider: provedor,
+          contas_encontradas: descobertas.length,
+          ...(perfil ? { perfil_no_google: perfil.resultado } : {}),
+          ...(sites ? { search_console: sites.resultado } : {}),
+        },
         origin: 'worker',
       });
     });
@@ -330,18 +348,18 @@ export class ConexaoProcessor {
 
   /**
    * Meta: contas de anúncio. Google: clientes do Google Ads e propriedades do GA4 (cada uma se o escopo veio) e, para a
-   * empresa com a função ligada, as lojas do Perfil da Empresa. `perfil`: como terminou a procura das lojas (nulo = o
-   * Liame não procurou).
+   * empresa com cada função ligada, as lojas do Perfil da Empresa e os sites do Search Console. `perfil` e `sites`: como
+   * terminou cada procura (nulo = o Liame não procurou).
    */
   private async descobrir(
     provedor: ProvedorOAuth,
     accessToken: string,
     credencial: CredencialGuardada,
     alvo: { tenantId: string; brandId: string },
-  ): Promise<{ descobertas: DescobertaGuardada[]; perfil: ProcuraDoPerfil | null }> {
+  ): Promise<{ descobertas: DescobertaGuardada[]; perfil: ProcuraDoPerfil | null; sites: ProcuraDosSites | null }> {
     const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos) });
     if (credencial.tipo === 'regem' || credencial.tipo === 'regemcast') {
-      return { descobertas: await descobrirLojas(cliente, this.config.produtos.regemApiUrl, credencial), perfil: null };
+      return { descobertas: await descobrirLojas(cliente, this.config.produtos.regemApiUrl, credencial), perfil: null, sites: null };
     }
     const credencialLeitura = { accessToken };
     const guardar = (provider: DescobertaGuardada['provider'], contas: ContaDescoberta[]) =>
@@ -357,7 +375,7 @@ export class ConexaoProcessor {
       );
     if (provedor === 'meta') {
       const meta = await criarConectorMeta(this.db, cliente, this.config.plataformas);
-      return { descobertas: guardar('meta_ads', await meta.descobrirContas(credencialLeitura)), perfil: null };
+      return { descobertas: guardar('meta_ads', await meta.descobrirContas(credencialLeitura)), perfil: null, sites: null };
     }
     const escopos = credencial.tipo === 'google' ? credencial.escopos : [];
     // Escopo não concedido (a pessoa desmarcou na tela do Google) ou sem acesso: aquela plataforma fica vazia.
@@ -370,12 +388,43 @@ export class ConexaoProcessor {
         throw err;
       }
     };
-    const [ads, ga4, lojas] = await Promise.all([
+    const [ads, ga4, lojas, sites] = await Promise.all([
       seConcedido(ESCOPOS_GOOGLE[0]!, async () => guardar('google_ads', await (await criarConectorGoogleAds(this.db, cliente, this.config.plataformas)).descobrirContas(credencialLeitura))),
       seConcedido(ESCOPOS_GOOGLE[1]!, async () => guardar('ga4', await (await criarConectorGa4(this.db, cliente, this.config.plataformas)).descobrirContas(credencialLeitura))),
       this.procurarLojasDoPerfil(escopos, credencialLeitura, alvo),
+      this.procurarSites(escopos, credencialLeitura, alvo),
     ]);
-    return { descobertas: [...ads, ...ga4, ...lojas.descobertas], perfil: lojas.perfil };
+    return { descobertas: [...ads, ...ga4, ...lojas.descobertas, ...sites.descobertas], perfil: lojas.perfil, sites: sites.procura };
+  }
+
+  /**
+   * Os sites do Search Console (A6, Z3): só para a empresa com a função ligada E com a permissão concedida nesta
+   * autorização, como as lojas do Perfil (D-A6-17). Nada do que acontece aqui derruba a conexão: o Google Ads e o GA4
+   * não têm nada com isso (V42). O que aconteceu fica anotado na conexão. Uma tentativa só, sem insistir no limite.
+   */
+  private async procurarSites(
+    escopos: string[],
+    credencial: Credencial,
+    alvo: { tenantId: string; brandId: string },
+    agora = new Date(),
+  ): Promise<{ descobertas: DescobertaGuardada[]; procura: ProcuraDosSites | null }> {
+    if (!escopos.includes(ESCOPO_SEARCH_CONSOLE)) return { descobertas: [], procura: null };
+    if (!(await this.flags.isEnabled(FLAG_SEARCH_CONSOLE, this.flags.context(alvo)))) return { descobertas: [], procura: null };
+    const em = agora.toISOString();
+    try {
+      const cliente = new ClienteConector(this.db, {
+        enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos),
+        balde: BALDE_DO_SEARCH_CONSOLE,
+        tentativas: 1,
+      });
+      const conector = await criarConectorSearchConsole(this.db, cliente, this.config.plataformas);
+      const descobertas = (await conector.descobrirSites(credencial)).map(siteDescoberto).filter((d) => d !== null);
+      return { descobertas, procura: { resultado: 'ok', em, sites: descobertas.length } };
+    } catch (err) {
+      const resultado = falhaDaProcura(err instanceof ErroConector ? err.tipo : null);
+      this.logger.warn(`sites do Search Console (empresa ${alvo.tenantId}): ${resultado}: ${err instanceof Error ? err.message : String(err)}`);
+      return { descobertas: [], procura: { resultado, em, sites: 0 } };
+    }
   }
 
   /**
@@ -468,6 +517,16 @@ export function lojaDoPerfilDescoberta(l: LojaDoPerfil): DescobertaGuardada {
     timezone: null,
     provider_attributes: { conta: l.conta, site: l.site, place_id: l.placeId, maps_uri: l.mapsUri },
   };
+}
+
+/**
+ * O site do Search Console como conta descoberta: o código é o site como o Google o escreve, e o nome é o da tela. Sem
+ * moeda e sem fuso (as datas do Search Console são as do fuso do Pacífico, e quem lê trata disso). O site com o
+ * endereço mais comprido que o código de uma conta ligada aceita fica de fora (nulo).
+ */
+export function siteDescoberto(s: SiteDoSearchConsole): DescobertaGuardada | null {
+  if (s.site.length > TAMANHO_DO_SITE_LIGADO) return null;
+  return { provider: PROVEDOR_SEARCH_CONSOLE, external_id: s.site, name: s.nome, currency: null, timezone: null, provider_attributes: { permissao: s.permissao } };
 }
 
 /**
