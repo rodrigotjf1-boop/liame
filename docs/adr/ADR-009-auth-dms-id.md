@@ -69,3 +69,7 @@ Condições obrigatórias:
 ## Revisar quando
 
 A spec MCP mudar requisitos de autorização; Keycloak 26.8+ estabilizar 8707 e CIMD; o Logto documentar política de CIMD; ou a operação própria virar gargalo.
+
+## Emendas
+
+- **14/10/2026, decisões do dono no Hub DMS (o hub virou projeto próprio).** O DMS ID começa só com os aplicativos e as contas de quem desenvolve: a credencial de produto com produto e de parceiro. O login único das pessoas (o lojista entrar com a conta da DMS) fica para a F7 do hub, e é opcional. **O Logto segue escolhido** (a prova dele está na fase 0 do hub). A parte (a) não muda: o Liame segue com o login próprio. Ver a emenda de 14/10/2026 no ADR-008 e o ADR-001 do Hub DMS ("O hub fica ao lado do dado").
