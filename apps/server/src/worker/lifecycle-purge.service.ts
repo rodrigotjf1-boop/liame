@@ -137,6 +137,17 @@ export class LifecyclePurgeService {
           returning tenant_id`,
       true,
     );
+    // As buscas da semana do Search Console (A6, Z3): 12 meses contados do começo da semana. O texto é o que as
+    // pessoas digitaram no Google. A chave é composta (site, semana, busca): a linha sai pela chave inteira.
+    await run(
+      'busca',
+      sql`delete from liame.search_console_query_week q using (
+            select e.connected_account_id, e.week_start, e.query from liame.search_console_query_week e
+             where e.week_start < (now() - interval '365 days')::date and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH}) v
+           where q.connected_account_id = v.connected_account_id and q.week_start = v.week_start and q.query = v.query
+          returning q.tenant_id`,
+      true,
+    );
     await run(
       'execucao_atribuicao',
       sql`delete from liame.attribution_run where id in (

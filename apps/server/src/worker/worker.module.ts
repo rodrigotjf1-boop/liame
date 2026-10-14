@@ -51,6 +51,7 @@ import { PerfilLoop } from './perfil-loop.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { PesquisadorService } from './pesquisa.service.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
+import { SearchConsoleLoop } from './search-console-loop.js';
 import { RotinaDoCrmService } from './rotina-do-crm.service.js';
 import { VigiaService } from './vigia.service.js';
 import { CambioService } from './cambio.service.js';
@@ -101,6 +102,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ConversasLoop,
     // Perfil da Empresa no Google (A6, Z1): as avaliações e os números do perfil das lojas ligadas; só com a função `perfil_google` ligada.
     PerfilLoop,
+    // Search Console (A6, Z3): os números por dia e as buscas da semana dos sites ligados; só com a função `search_console` ligada.
+    SearchConsoleLoop,
     // Conversões para o Google (A5, Y1): a venda confirmada que veio de um anúncio do Google volta para ele; nasce desligada.
     ConversoesLoop,
     // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.

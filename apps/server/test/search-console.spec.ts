@@ -123,6 +123,8 @@ describe('Search Console: as buscas', () => {
         { keys: ['mister burgers'], clicks: 18, impressions: 60, position: 1.1 },
         { keys: ['hamburgueria perto de mim'], clicks: 5, impressions: 50, position: 4 },
         { keys: ['smash burger centro'], clicks: 3, impressions: 120, position: 9.8 },
+        // O caractere nulo o banco não guarda em texto: a busca fica de fora.
+        { keys: ['burger\u0000lapa'], clicks: 2, impressions: 90, position: 7 },
         { keys: ['delivery lapa'], clicks: 1, impressions: 80, position: 12 },
       ],
     };
