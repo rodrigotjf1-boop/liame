@@ -30,10 +30,13 @@ type Carga =
 const MOTIVO_DA_PARADA = 'Equipe parada pela tela Sua equipe.';
 
 export function EquipeTela() {
-  const { pode } = useSessao();
+  const { me, pode } = useSessao();
   const { modo, definir } = useModo();
   const avisar = useAvisar();
   const podeVer = pode('campanhas.ver') && pode('vendas.ver');
+  // A frase da rodada do Gestor: "a sua aprovação" só ao dono, e "peça a mudança" só a quem pode pedir (ERR-136).
+  const souDono = me.organizations.find((o) => o.id === me.active_organization_id)?.role === 'dono';
+  const podePedir = pode('campanhas.operar');
   const titulo = useRef<HTMLHeadingElement>(null);
   const [marcas, setMarcas] = useState<BrandResponse[] | null>(null);
   const [erroMarcas, setErroMarcas] = useState<Problema | null>(null);
@@ -378,6 +381,7 @@ export function EquipeTela() {
             setVoltando(chave);
           },
         }}
+        quem={{ souDono, podePedir }}
         aoEscolher={(chave) => {
           setEscolhido(chave);
           setMostraDetalhe(true);

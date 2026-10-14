@@ -7,7 +7,7 @@ import { useConversa } from '@/components/conversa/contexto';
 import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import type { Modo } from '@/lib/modo';
-import { chaveDaLinha, gestorNaLista, LIMITES_DO_GESTOR, RESUMO_DO_GESTOR, rodadaDoGestor, temModoAprovacao } from './aprovacao-textos';
+import { chaveDaLinha, gestorNaLista, LIMITES_DO_GESTOR, type QuemVeAFicha, RESUMO_DO_GESTOR, rodadaDoGestor, temModoAprovacao } from './aprovacao-textos';
 import { BlocoDaLinha, BlocoModos, BlocoRodadaDoGestor } from './bloco-aprovacao';
 import { BlocoHistorico, type Historico } from './bloco-historico';
 import { type AcoesDaProntidao, BlocoProntidao } from './bloco-prontidao';
@@ -164,6 +164,7 @@ export function DetalheDoMembro({
   agora,
   acoes,
   prontidao,
+  quem,
   aoVoltar,
 }: {
   m: TeamMember;
@@ -176,6 +177,8 @@ export function DetalheDoMembro({
   agora: Date;
   acoes: AcoesDoMembro;
   prontidao: AcoesDaProntidao;
+  /** Quem vê a ficha: a frase da rodada só diz "a sua aprovação" ao dono e "peça a mudança" a quem pode pedir. */
+  quem: QuemVeAFicha;
   aoVoltar: () => void;
 }) {
   const f = FICHAS[chave];
@@ -205,7 +208,7 @@ export function DetalheDoMembro({
           </h2>
           <p>{f.cargo}</p>
           <div className="eqp-tags">
-            <SeloDaSituacao m={m} selo={comAprovacao && autonomia ? gestorNaLista(m, rodadaDoGestor(sombra, autonomia.items, t, agora))?.selo : undefined} />
+            <SeloDaSituacao m={m} selo={comAprovacao && autonomia ? gestorNaLista(m, rodadaDoGestor(sombra, autonomia.items, t, agora, quem))?.selo : undefined} />
             <span className={selo.classe}>Modo: {selo.rotulo}</span>
           </div>
         </div>
@@ -315,7 +318,7 @@ export function DetalheDoMembro({
       )}
       {autonomia && linha ? (
         <>
-          <BlocoRodadaDoGestor sombra={sombra} autonomia={autonomia} equipe={t} modo={modo} agora={agora} />
+          <BlocoRodadaDoGestor sombra={sombra} autonomia={autonomia} equipe={t} modo={modo} agora={agora} quem={quem} />
           <BlocoModos autonomia={autonomia} modo={modo} alvo={linha} aoEscolher={prontidao.aoEscolherLinha} />
           <BlocoDaLinha autonomia={autonomia} alvo={linha} modo={modo} agora={agora} acoes={prontidao} />
           <BlocoSombra m={m} mes={mes} sombra={sombra} modo={modo} agora={agora} comAprovacao />

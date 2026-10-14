@@ -351,8 +351,29 @@ export interface FaixaDoPedido {
   pedido: string;
 }
 
-/** Os pedidos de envio de mensagem desta conta que esperam a aprovação, em uma faixa; nulo quando não há. */
-export function faixaDosPedidos(acoes: ActionResponse[], contaId: string): FaixaDoPedido | null {
+/** Quem vê a tela: se aprova ações (`acoes.aprovar`), se é o dono da empresa e o id dela. */
+export interface QuemVe {
+  podeAprovar: boolean;
+  souDono: boolean;
+  eu: string | null;
+}
+
+/**
+ * Por quem o pedido espera, do ponto de vista de quem vê (ERR-136). Como no servidor (`approve`): a aprovação do dono
+ * sempre basta; a de outra pessoa que aprova, só fora do modo ESCALATE, e a dela que já ficou registrada sem bastar
+ * deixa o pedido esperando o dono. O limite de valor de cada pessoa não chega à tela (`/v1/me`).
+ */
+export function quemDecideOPedido(a: Pick<ActionResponse, 'mode' | 'approvals'>, q: QuemVe): 'voce' | 'dono' | 'outra_pessoa' {
+  const jaAprovei = q.eu !== null && a.approvals.some((x) => x.approved_by === q.eu);
+  if (q.podeAprovar && (q.souDono || (a.mode !== 'ESCALATE' && !jaAprovei))) return 'voce';
+  return a.mode === 'ESCALATE' || a.approvals.length > 0 ? 'dono' : 'outra_pessoa';
+}
+
+/**
+ * Os pedidos de envio de mensagem desta conta que esperam a aprovação, em uma faixa; nulo quando não há. "A sua
+ * aprovação" só quando todos esperam por quem vê.
+ */
+export function faixaDosPedidos(acoes: ActionResponse[], contaId: string, quem: QuemVe): FaixaDoPedido | null {
   const esperando = acoes
     .filter((a) => a.status === 'aguardando_aprovacao' && a.tool === 'mensagem_disparar' && a.account_id === contaId && a.message)
     .sort((x, y) => x.expires_at.localeCompare(y.expires_at));
@@ -363,8 +384,10 @@ export function faixaDosPedidos(acoes: ActionResponse[], contaId: string): Faixa
   const custo = m.plan?.cost_cents ?? null;
   const impedida = primeiro.blocked_reason ? ' Ainda não pode ser aprovada: algo impede o envio.' : '';
   const mais = esperando.length > 1 ? ` E mais ${esperando.length === 2 ? 'uma' : inteiro(esperando.length - 1)}.` : '';
+  const por = esperando.map((a) => quemDecideOPedido(a, quem));
+  const espera = por.every((p) => p === 'voce') ? 'a sua aprovação' : por.every((p) => p === 'dono') ? 'a aprovação do dono' : 'aprovação';
   return {
-    titulo: esperando.length === 1 ? '1 mensagem espera a sua aprovação' : `${inteiro(esperando.length)} mensagens esperam a sua aprovação`,
+    titulo: esperando.length === 1 ? `1 mensagem espera ${espera}` : `${inteiro(esperando.length)} mensagens esperam ${espera}`,
     texto: `“${m.name}”, para ${plural(pessoas, 'pessoa', 'pessoas')}${custo === null ? '' : `, até ${centavos(custo)}`}.${impedida}${mais}`,
     pedido: primeiro.id,
   };
