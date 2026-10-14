@@ -7,7 +7,7 @@
 | Trilha | Conteúdo | Relação com o MVP |
 | --- | --- | --- |
 | **A · Liame** | O produto: A0 → A8 | Caminho crítico |
-| **B · MCP central** | B1 DMS ID · B2 MCP Hub · B3 Regem + RegemCast via MCP · B4 Liame + demais produtos · B5 A2A se necessário | **Paralela; nunca bloqueia o MVP** |
+| **B · MCP central** | **Agora no projeto do Hub DMS, com roteiro próprio (F0 a F7) e as decisões do dono de 14/10/2026:** a primeira porta é a do Farol (F1, D2 do hub); a ligação do RegemCast com o Liame é a F2. O hub fica ao lado do dado (D11 do hub; ver a emenda no ADR-008). O Liame entra pelo pedido de cada fase, com plano. Antes: B1 DMS ID · B2 MCP Hub · B3 Regem + RegemCast via MCP · B4 Liame + demais produtos · B5 A2A se necessário | **Paralela; nunca bloqueia o MVP** |
 | **C · Ajustes nos produtos DMS** | C1 token por loja do Regem · C2 API de serviço do RegemCast · C3 eventos, UTM e consentimento no Regem | **Começa com a A1**: a A2.5 depende dela |
 | **D · Trâmites** | Meta, Google, TikTok, GBP, jurídico | Começa na A0; tempo de espera externo |
 
