@@ -6,6 +6,7 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { ligadasDaAutorizacao, oQueParaDeLer } from './perfil-google';
 import { autorizadorDa, contasDaAutorizacao } from './textos';
 
 // "Revogar a autorização?" (protótipo aprovado): a leitura das contas dela para na hora; o histórico
@@ -27,6 +28,8 @@ export function DialogoRevogar({ conexao, reserva, aoRevogar, aoFechar }: Props)
   const n = contasDaAutorizacao(conexao);
   const meta = autorizadorDa(conexao.provider) === 'meta';
   const regem = conexao.provider === 'regem';
+  // A loja do perfil da empresa no Google (P17, parte B) conta à parte: "das 3 contas e da loja do perfil".
+  const ligadas = ligadasDaAutorizacao(conexao);
 
   async function revogar() {
     setErro('');
@@ -68,7 +71,15 @@ export function DialogoRevogar({ conexao, reserva, aoRevogar, aoFechar }: Props)
           <p>
             {n ? (
               <>
-                A leitura {n === 1 ? 'da' : 'das'} <b>{n === 1 ? (regem ? 'loja' : 'conta') : `${n} ${regem ? 'lojas' : 'contas'}`}</b> desta autorização para agora. O histórico de números fica.
+                {regem || !ligadas.lojas ? (
+                  <>
+                    A leitura {n === 1 ? 'da' : 'das'} <b>{n === 1 ? (regem ? 'loja' : 'conta') : `${n} ${regem ? 'lojas' : 'contas'}`}</b> desta autorização para agora. O histórico de números fica.
+                  </>
+                ) : (
+                  <>
+                    A leitura <b>{oQueParaDeLer(ligadas)}</b> desta autorização para agora. O histórico de números fica.
+                  </>
+                )}
               </>
             ) : (
               'Nenhuma conta está ligada por esta autorização. Revogar tira o acesso do Liame à plataforma.'

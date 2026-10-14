@@ -6,7 +6,8 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
-import { type Autorizador, descricaoDoGoogle, enderecoSeguro, notaDeConectar } from './textos';
+import { NOTA_DA_PERMISSAO_DO_PERFIL } from './perfil-google';
+import { type Autorizador, descricaoDoGoogle, enderecoSeguro, notaDeConectar, tituloDoGoogle } from './textos';
 
 // "Conectar plataforma" (protótipo aprovado): a marca e a plataforma (Meta, ou Google com Ads e Analytics
 // numa autorização só). O navegador vai para a página da plataforma; nenhum token passa por aqui. O Regem
@@ -32,9 +33,25 @@ type Props = {
    * o que o Liame faz com a autorização, em vez de "só lê".
    */
   mudaAnuncios?: readonly string[];
+  /**
+   * O perfil da empresa no Google ligado para a empresa (`business_profile`; A6, P17 parte B): a autorização do Google
+   * pede também a permissão do perfil, e o diálogo diz isso logo abaixo da opção do Google.
+   */
+  comPerfil?: boolean;
 };
 
-export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr, aoRegem = null, vendasAoGoogle, mudaAnuncios = [], irPara = (url) => window.location.assign(url) }: Props) {
+export function DialogoConectar({
+  marcas,
+  marcaInicial,
+  reserva,
+  aoFechar,
+  aoIr,
+  aoRegem = null,
+  vendasAoGoogle,
+  mudaAnuncios = [],
+  comPerfil = false,
+  irPara = (url) => window.location.assign(url),
+}: Props) {
   const campoMarca = useRef<HTMLSelectElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: campoMarca, reserva });
   const ids = useId();
@@ -104,11 +121,26 @@ export function DialogoConectar({ marcas, marcaInicial, reserva, aoFechar, aoIr,
               <b>{indo === 'meta' ? 'Indo para a Meta…' : 'Meta Ads'}</b>
               <span>Facebook e Instagram. Você escolhe as contas de anúncio na tela da Meta.</span>
             </button>
-            <button className="plataforma" type="button" onClick={() => disparar(conectar('google'))} disabled={indo !== null} aria-busy={indo === 'google'}>
+            <button
+              className="plataforma"
+              type="button"
+              onClick={() => disparar(conectar('google'))}
+              disabled={indo !== null}
+              aria-busy={indo === 'google'}
+              aria-describedby={comPerfil ? `${ids}-perfil` : undefined}
+            >
               <span className="plat plat--google">Google</span>
-              <b>{indo === 'google' ? 'Indo para o Google…' : 'Google Ads e Google Analytics'}</b>
-              <span>{descricaoDoGoogle(informaVendas, mudaAnuncios)}</span>
+              <b>{indo === 'google' ? 'Indo para o Google…' : tituloDoGoogle(comPerfil)}</b>
+              <span>{descricaoDoGoogle(informaVendas, mudaAnuncios, comPerfil)}</span>
             </button>
+            {comPerfil && (
+              <p className="dialogo-nota" id={`${ids}-perfil`}>
+                <Icone nome="info" pequeno />
+                <span>
+                  <b>{NOTA_DA_PERMISSAO_DO_PERFIL.destaque}</b> {NOTA_DA_PERMISSAO_DO_PERFIL.texto}
+                </span>
+              </p>
+            )}
             {aoRegem && (
               <button
                 className="plataforma"

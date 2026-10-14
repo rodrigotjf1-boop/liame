@@ -12,6 +12,12 @@ import { z } from 'zod';
 export const ConnectionProvider = z.enum(['meta', 'google', 'regem', 'regemcast']);
 export type ConnectionProvider = z.infer<typeof ConnectionProvider>;
 
+/**
+ * A permissão do Perfil da Empresa no Google (A6, D-A6-17): a autorização do Google que a inclui alcança as lojas do
+ * perfil. O Google não oferece uma só de leitura. Pública: a tela de Contas confere se a autorização a tem.
+ */
+export const GOOGLE_BUSINESS_SCOPE = 'https://www.googleapis.com/auth/business.manage';
+
 /** Plataforma da conta ligada. `google_business`: a loja do Perfil da Empresa no Google (vem na autorização do Google, com a função ligada). */
 export const AccountProvider = z.enum(['meta_ads', 'google_ads', 'ga4', 'regem', 'regemcast', 'google_business']);
 export type AccountProvider = z.infer<typeof AccountProvider>;
