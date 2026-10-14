@@ -7,12 +7,27 @@
 // como linha (ela só entra no total quando a leitura não separa por busca). Por isso a soma das buscas fica abaixo do
 // total do dia, e as duas leituras não se misturam.
 
+import type { ResultadoDaProcura } from '../google-business/perfil-google.js';
 import { MAX_URL_LIDA } from '../tipos.js';
 
+/** A função, por empresa, desligada de fábrica: ligada, o Liame pede a permissão do Search Console e procura os sites (A6, Z3). */
+export const FLAG_SEARCH_CONSOLE = 'search_console';
 /** A permissão de só leitura do Search Console. Só entra na autorização da empresa com a função ligada, como a do Perfil (D-A6-17). */
 export const ESCOPO_SEARCH_CONSOLE = 'https://www.googleapis.com/auth/webmasters.readonly';
 /** O código do site do Search Console entre as contas ligadas (`connected_account.provider`). */
 export const PROVEDOR_SEARCH_CONSOLE = 'search_console';
+/**
+ * O código de uma conta ligada tem até 100 caracteres no banco (`connected_account.external_id`): o site com o endereço
+ * mais comprido que isso não pode ser ligado, e a procura o deixa de fora.
+ */
+export const TAMANHO_DO_SITE_LIGADO = 100;
+
+/**
+ * Como terminou a procura dos sites numa autorização do Google (`oauth_connection.discovery_notes.search_console`), nas
+ * mesmas palavras da procura das lojas do Perfil: `ok` (com quantos sites, que pode ser zero), `limite`, `sem_permissao`
+ * ou `falhou`.
+ */
+export type ProcuraDosSites = { resultado: ResultadoDaProcura; em: string; sites: number };
 
 /** O tamanho máximo do endereço do site (o mesmo das outras URLs lidas). */
 const TAMANHO_DO_SITE = MAX_URL_LIDA;

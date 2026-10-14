@@ -22,6 +22,7 @@ import { VaultService } from '../vault/vault.service.js';
 import { ClienteConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE, procuraGuardada } from '../connectors/google-business/perfil-google.js';
+import { FLAG_SEARCH_CONSOLE } from '../connectors/search-console/search-console.js';
 import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
 import { revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
 import { FLAG_CONVERSOES_GOOGLE } from '../conversoes/conversoes-google.js';
@@ -66,9 +67,12 @@ type LinhaConexao = {
   discovery_notes?: unknown;
 };
 
-/** Conta descoberta, como o worker guarda em `oauth_connection.discovered`. `google_business`: a loja do Perfil da Empresa no Google. */
+/**
+ * Conta descoberta, como o worker guarda em `oauth_connection.discovered`. `google_business`: a loja do Perfil da Empresa
+ * no Google; `search_console`: um site do Search Console.
+ */
 export type DescobertaGuardada = {
-  provider: 'meta_ads' | 'google_ads' | 'ga4' | 'regem' | 'regemcast' | 'google_business';
+  provider: 'meta_ads' | 'google_ads' | 'ga4' | 'regem' | 'regemcast' | 'google_business' | 'search_console';
   external_id: string;
   name: string;
   currency: string | null;
@@ -194,6 +198,10 @@ export class ConnectionsService {
     // alcança as lojas, as avaliações e os números do perfil. A mesma flag que a procura das lojas confere, no worker.
     const perfil =
       provedor === 'google' && (await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id })));
+    // E a empresa com o Search Console ligado autoriza também a leitura dele (A6, Z3): os sites e as buscas no Google
+    // que levaram a eles. A mesma flag que a procura dos sites confere, no worker.
+    const searchConsole =
+      provedor === 'google' && (await this.flags.isEnabled(FLAG_SEARCH_CONSOLE, this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id })));
 
     const id = uuidv7();
     const estado = novoEstado();
@@ -209,7 +217,14 @@ export class ConnectionsService {
       returning expires_at`);
     auditDetail({
       resourceId: id,
-      after: { provider: provedor, brand_id: body.brand_id, ...(meta ? { acesso: meta.acesso } : {}), ...(conversoes ? { informar_vendas: true } : {}), ...(perfil ? { perfil_no_google: true } : {}) },
+      after: {
+        provider: provedor,
+        brand_id: body.brand_id,
+        ...(meta ? { acesso: meta.acesso } : {}),
+        ...(conversoes ? { informar_vendas: true } : {}),
+        ...(perfil ? { perfil_no_google: true } : {}),
+        ...(searchConsole ? { search_console: true } : {}),
+      },
     });
     return {
       id,
@@ -219,7 +234,7 @@ export class ConnectionsService {
         verificador: verificador ?? undefined,
         versaoMeta,
         configMeta: meta?.configId,
-        ...(provedor === 'google' ? { escoposGoogle: escoposDoGoogle(conversoes, perfil) } : {}),
+        ...(provedor === 'google' ? { escoposGoogle: escoposDoGoogle(conversoes, perfil, searchConsole) } : {}),
       }),
       expires_at: iso(r.rows[0]!.expires_at),
     };

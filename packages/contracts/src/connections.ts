@@ -18,8 +18,11 @@ export type ConnectionProvider = z.infer<typeof ConnectionProvider>;
  */
 export const GOOGLE_BUSINESS_SCOPE = 'https://www.googleapis.com/auth/business.manage';
 
-/** Plataforma da conta ligada. `google_business`: a loja do Perfil da Empresa no Google (vem na autorização do Google, com a função ligada). */
-export const AccountProvider = z.enum(['meta_ads', 'google_ads', 'ga4', 'regem', 'regemcast', 'google_business']);
+/**
+ * Plataforma da conta ligada. `google_business`: a loja do Perfil da Empresa no Google; `search_console`: um site do
+ * Search Console (as duas vêm na autorização do Google, cada uma com a função dela ligada).
+ */
+export const AccountProvider = z.enum(['meta_ads', 'google_ads', 'ga4', 'regem', 'regemcast', 'google_business', 'search_console']);
 export type AccountProvider = z.infer<typeof AccountProvider>;
 
 const Slug = z.string().regex(/^[a-z0-9_]+$/);

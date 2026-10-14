@@ -3,6 +3,7 @@ import type { AppConfig } from '../config.js';
 import { enderecoLiberado, ErroConector } from '../connectors/cliente-http.js';
 import { ESCOPO_DATA_MANAGER } from '../connectors/google-ads/data-manager.js';
 import { ESCOPO_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
+import { ESCOPO_SEARCH_CONSOLE } from '../connectors/search-console/search-console.js';
 
 // OAuth das plataformas (A2, G3; base §2.1 e §3.1). Estado aleatório guardado só como hash; PKCE (S256)
 // no Google; na Meta, o Facebook Login for Business com `config_id` devolve o token de usuário do
@@ -39,12 +40,18 @@ export function configuracaoDaMeta(meta: NonNullable<AppConfig['oauth']['meta']>
 /**
  * Os escopos que a autorização do Google pede: a leitura de sempre e, só para a empresa com a função ligada, a permissão
  * a mais de cada uma (D-A6-17). Com as conversões ligadas (flag `conversoes_google`), a de informar vendas pela Data
- * Manager API (A5, Y1); com o Perfil ligado (flag `perfil_google`), a do Perfil da Empresa (A6, Z1). Quem já estava
- * conectado só ganha a permissão nova depois de autorizar de novo: a autorização nova é que alcança as lojas do Perfil,
- * e assume as contas que a pessoa ligar de novo (`ligarContas`).
+ * Manager API (A5, Y1); com o Perfil ligado (flag `perfil_google`), a do Perfil da Empresa (A6, Z1); com o Search
+ * Console ligado (flag `search_console`), a de só leitura dele (A6, Z3). Quem já estava conectado só ganha a permissão
+ * nova depois de autorizar de novo: a autorização nova é que alcança as lojas do Perfil e os sites, e assume as contas
+ * que a pessoa ligar de novo (`ligarContas`).
  */
-export function escoposDoGoogle(conversoesLigadas: boolean, perfilLigado = false): string[] {
-  return [...ESCOPOS_GOOGLE, ...(conversoesLigadas ? [ESCOPO_DATA_MANAGER] : []), ...(perfilLigado ? [ESCOPO_PERFIL_GOOGLE] : [])];
+export function escoposDoGoogle(conversoesLigadas: boolean, perfilLigado = false, searchConsoleLigado = false): string[] {
+  return [
+    ...ESCOPOS_GOOGLE,
+    ...(conversoesLigadas ? [ESCOPO_DATA_MANAGER] : []),
+    ...(perfilLigado ? [ESCOPO_PERFIL_GOOGLE] : []),
+    ...(searchConsoleLigado ? [ESCOPO_SEARCH_CONSOLE] : []),
+  ];
 }
 
 /**

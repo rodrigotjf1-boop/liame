@@ -23142,7 +23142,8 @@
                             "ga4",
                             "regem",
                             "regemcast",
-                            "google_business"
+                            "google_business",
+                            "search_console"
                           ]
                         },
                         "external_id": {
