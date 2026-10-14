@@ -4,7 +4,14 @@ import type { AttentionItem, MediaFreshnessResponse } from '@liame/contracts';
 // pessoa lê (datas no fuso da empresa, dinheiro em reais). Número cru de 10 dígitos ou mais sairia na
 // limpeza de dado pessoal do gateway, e a IA não calcula número final: recebe pronto.
 
-const PLATAFORMA: Record<string, string> = { meta_ads: 'Meta', google_ads: 'Google Ads', ga4: 'GA4', regem: 'Regem', regemcast: 'RegemCast' };
+const PLATAFORMA: Record<string, string> = {
+  meta_ads: 'Meta',
+  google_ads: 'Google Ads',
+  ga4: 'GA4',
+  regem: 'Regem',
+  regemcast: 'RegemCast',
+  google_business: 'Perfil no Google',
+};
 const FRESCOR: Record<string, string> = { fresh: 'em dia', delayed: 'atrasado', stale: 'parado', unknown: 'nunca leu' };
 const GRAVIDADE = ['critica', 'atencao', 'info'];
 

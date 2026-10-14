@@ -136,7 +136,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | Z4 | O aceite da D-A6-2 e as primeiras fotos dos produtos |
 | Z5 | No piloto: o Instagram como conta profissional, ligado à Página do Facebook; autorizar a Meta de novo com as permissões de publicar; autorizar o Threads, se usar |
 | Z8 | Cadastro de desenvolvedor no TikTok e o pedido da auditoria (eu guio) |
-| Telas | ✅ P17 aprovado (09/10/2026). Aprovar o P17, parte B (Contas conectadas com a loja do perfil; publicado em 11/10/2026) e os protótipos P18 a P22 |
+| Telas | ✅ P17 aprovado (09/10/2026). ✅ P17, parte B aprovado (14/10/2026: Contas conectadas com a loja do perfil). Aprovar os protótipos P18 a P22 |
 | Antes de clientes de fora | A revisão do app da Meta e a verificação do app do Google com as permissões novas |
 
 ## 10. Riscos

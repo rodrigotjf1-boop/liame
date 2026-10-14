@@ -6,6 +6,7 @@ import type {
   LinkAccountsRequest,
   LinkAccountsResponse,
   OAuthCallbackQuery,
+  ProfileSearch,
   StartConnectionRequest,
   StartConnectionResponse,
   UnitListResponse,
@@ -20,7 +21,7 @@ import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { ClienteConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
-import { FLAG_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
+import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE, procuraGuardada } from '../connectors/google-business/perfil-google.js';
 import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
 import { revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
 import { FLAG_CONVERSOES_GOOGLE } from '../conversoes/conversoes-google.js';
@@ -61,6 +62,8 @@ type LinhaConexao = {
   discovered: DescobertaGuardada[];
   credential_secret_id: string | null;
   scopes?: string[] | null;
+  /** Como terminou a procura das lojas do Perfil (`oauth_connection.discovery_notes`); só a lista e o detalhe leem. */
+  discovery_notes?: unknown;
 };
 
 /** Conta descoberta, como o worker guarda em `oauth_connection.discovered`. `google_business`: a loja do Perfil da Empresa no Google. */
@@ -100,7 +103,19 @@ const lojaEEscopos = (tabela: SQL) => sql`
                                               then ${tabela}.provider_attributes -> 'escopos' else '[]'::jsonb end)) as escopos`;
 const isoOuNulo = (v: Date | string | null) => (v ? iso(v) : null);
 
-const naoEncontrada = () => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conexão não encontrada nesta empresa.');
+/** A última procura das lojas do Perfil, como a tela lê (A6, P17 parte B); nulo = o Liame não procurou. */
+export function procuraDoPerfil(notas: unknown): ProfileSearch | null {
+  const p = procuraGuardada(notas);
+  return p ? { result: p.resultado, searched_at: iso(p.em), stores: p.lojas } : null;
+}
+
+/** O site que o perfil da loja informa (guardado pela procura em `provider_attributes.site`); nulo sem site. */
+function siteDaLoja(atributos: Record<string, unknown> | undefined): string | null {
+  const s = atributos?.site;
+  return typeof s === 'string' && s.trim() ? s.trim() : null;
+}
+
+const naoEncontrada =() => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conexão não encontrada nesta empresa.');
 
 function conta(l: LinhaConta): ConnectedAccountResponse {
   return {
@@ -250,16 +265,19 @@ export class ConnectionsService {
     const tx = currentTx();
     const conexoes = await tx.execute<LinhaConexao>(sql`
       select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
-             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.discovery_notes
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.status not in ('aguardando_autorizacao', 'expirada') ${brandId ? sql`and c.brand_id = ${brandId}` : sql``}
        order by c.created_at desc limit 200`);
+    const ctx = this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId: brandId ?? null });
     return {
       items: await this.montar(conexoes.rows),
       available: this.disponiveis(),
       // A mesma flag que o Action Service confere ao pedir e ao executar a criação do cupom.
-      regem_write: await this.flags.isEnabled('regem_write', this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId: brandId ?? null })),
+      regem_write: await this.flags.isEnabled('regem_write', ctx),
       ads_write: await this.anunciosComEscrita(auth, brandId ?? null),
+      // A mesma flag que o começo da conexão do Google e a procura das lojas conferem.
+      business_profile: await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, ctx),
     };
   }
 
@@ -279,7 +297,7 @@ export class ConnectionsService {
   async detalhe(id: string): Promise<ConnectionResponse> {
     const r = await currentTx().execute<LinhaConexao>(sql`
       select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
-             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.discovery_notes
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.id = ${id}`);
     if (!r.rows[0]) throw naoEncontrada();
@@ -317,9 +335,11 @@ export class ConnectionsService {
           timezone: d.timezone,
           linked: ligadas.has(`${d.provider}:${d.external_id}`),
           via: typeof d.provider_attributes?.via === 'string' ? d.provider_attributes.via : null,
+          ...(d.provider === PROVEDOR_PERFIL_GOOGLE ? { site: siteDaLoja(d.provider_attributes) } : {}),
         }),
       ),
       accounts: contas.rows.filter((c) => c.connection_id === l.id).map(conta),
+      ...(l.provider === 'google' ? { profile_search: procuraDoPerfil(l.discovery_notes) } : {}),
     }));
   }
 
