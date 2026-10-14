@@ -24,8 +24,10 @@ import { DetalheMensagem, type Feito } from './detalhe-mensagem';
 import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemApresentada } from './mensagem-textos';
 import { DetalhePedido } from './detalhe-pedido';
 import { DetalhePlano } from './detalhe-plano';
+import { DetalheResposta, type Rascunho, RascunhoDaResposta } from './detalhe-resposta';
 import { chaveDaAcao, chaveDoPlano, type ItemDaLista, montarLista, pendentesDe } from './lista';
 import { dinheiroDoPlano, erroDoPlano, etiquetaDoPlano, type MotivoDaRecusa, riscoDoPlano } from './planos-textos';
+import { type AcaoDeResposta, ehPedidoDeResposta, erroDoTexto, estrelasDoPedido, estrelasEscritas, etiquetaDaResposta, respostaApresentada, riscoDaResposta, situacaoDaResposta } from './resposta-textos';
 import { apresentar, avisoDepoisDeAprovar, erroDaDecisao, etiquetaDoDecidido, type Grupo, grupoDe, pedidoDaUrl, prazoDe, riscoDe, ROTULO_GRUPO, ROTULO_RISCO } from './textos';
 
 // "Aprovações" (mockups/prototipo-app.html, vista "aprovacoes"; os planos, mockups/prototipo-resumo.html, P8): à
@@ -41,6 +43,10 @@ type Carga =
   | { tipo: 'ok'; acoes: ActionResponse[]; planos: PlanSummary[]; marcas: BrandResponse[]; planosFalharam: boolean }
   | { tipo: 'erro'; problema: Problema };
 type PlanoAberto = { id: string; estado: 'carregando' } | { id: string; estado: 'ok'; dados: PlanResponse } | { id: string; estado: 'erro'; problema: Problema };
+/** A resposta que a pessoa vai escrever a uma avaliação (a tela Avaliações abre com `?responder=<avaliação>&marca=<marca>`). */
+type PedidoDeRascunho = { avaliacaoId: string; brandId: string; textoInicial: string };
+type CargaDoRascunho = { tipo: 'carregando' } | { tipo: 'ok'; rascunho: Rascunho } | { tipo: 'nao-achou' } | { tipo: 'erro'; problema: Problema };
+const chaveDoRascunho = (avaliacaoId: string) => `r:${avaliacaoId}`;
 
 const GRUPOS: Grupo[] = ['pendente', 'auto', 'feito'];
 /** A fila anda sozinha: outra pessoa pode decidir, o worker executa, o Estrategista manda a versão nova, o prazo vence. */
@@ -52,7 +58,10 @@ export function AprovacoesTela() {
   const parametros = useSearchParams();
   const acaoInicial = pedidoDaUrl(parametros.get('pedido'));
   const planoInicial = pedidoDaUrl(parametros.get('plano'));
-  const inicial = acaoInicial ? chaveDaAcao(acaoInicial) : planoInicial ? chaveDoPlano(planoInicial) : null;
+  const avaliacaoInicial = pedidoDaUrl(parametros.get('responder'));
+  const marcaInicial = pedidoDaUrl(parametros.get('marca'));
+  const rascunhoInicial = avaliacaoInicial && marcaInicial ? { avaliacaoId: avaliacaoInicial, brandId: marcaInicial, textoInicial: '' } : null;
+  const inicial = acaoInicial ? chaveDaAcao(acaoInicial) : planoInicial ? chaveDoPlano(planoInicial) : rascunhoInicial ? chaveDoRascunho(rascunhoInicial.avaliacaoId) : null;
   const avisar = useAvisar();
   const { modo } = useModo();
   const pro = modo === 'pro';
@@ -62,7 +71,10 @@ export function AprovacoesTela() {
   const podeVerPlanos = pode('planos.ver') && pode('vendas.ver') && pode('marcas.ver');
   const podeDecidirPlanos = podeVerPlanos && pode('planos.decidir');
   const podeConferirTexto = pode('dossie.ver');
+  const podeOperar = pode('campanhas.operar');
   const temApp = me.mfa !== 'not_configured';
+  // A resposta a uma avaliação de 1 ou 2 estrelas só o dono decide (A6, D-A6-4): o servidor confere; a tela só não oferece.
+  const souDono = me.organizations.find((o) => o.id === me.active_organization_id)?.role === 'dono';
   const tituloDoDetalhe = useRef<HTMLHeadingElement>(null);
   // O foco no título depois de decidir: pedido pelo estado, para ser atendido com o pedido novo já na tela (por
   // requestAnimationFrame, o quadro podia chegar antes da troca: o título antigo recebia o foco e sumia).
@@ -86,6 +98,13 @@ export function AprovacoesTela() {
   const [verba, setVerba] = useState<BudgetMonthResponse | null>(null);
   /** O pedido de anúncio cuja gaveta "Pedir uma mudança" está aberta (pedir de novo). */
   const [pedindo, setPedindo] = useState<AcaoDeAnuncio | null>(null);
+  /** A resposta que a pessoa escreve a uma avaliação, antes de o pedido existir, e a avaliação lida para ela. */
+  const [pedidoDeRascunho, setPedidoDeRascunho] = useState<PedidoDeRascunho | null>(rascunhoInicial);
+  const [cargaDoRascunho, setCargaDoRascunho] = useState<CargaDoRascunho | null>(null);
+  const [releRascunho, setReleRascunho] = useState(0);
+  /** O nome de quem fez cada avaliação, lido do Google na hora (`/v1/reviews/authors`), uma vez por marca. Pode faltar. */
+  const [nomes, setNomes] = useState<Map<string, string>>(() => new Map());
+  const marcasDosNomes = useRef(new Set<string>());
   const agora = useAgora(60_000, carga);
   const seq = useRef(0);
 
@@ -143,8 +162,46 @@ export function AprovacoesTela() {
     };
   }, [temAnuncio, tentativa]);
   const mes = mesDoPedido(verba);
-  /** O pedido em palavras, para a lista e os avisos: o de anúncio e o de mensagem têm os textos deles. */
-  const emPalavras = (a: ActionResponse) => (ehPedidoDeAnuncio(a) ? anuncioApresentado(a, mes) : ehPedidoDeMensagem(a) ? mensagemApresentada(a) : apresentar(a));
+
+  // O nome de quem fez a avaliação de cada pedido de resposta: lido do Google na hora, uma vez por marca. Sem ele, o
+  // título diz a nota (o nome não vem no pedido, que não o guarda).
+  const lerNomes = useCallback(async (brandId: string) => {
+    if (marcasDosNomes.current.has(brandId)) return;
+    marcasDosNomes.current.add(brandId);
+    const r = await chamar(() => api.GET('/v1/reviews/authors', { params: { query: { brand_id: brandId } } }));
+    if (r.ok && r.data.items.length) setNomes((m) => new Map([...m, ...r.data.items.map((x) => [x.review_id, x.name] as const)]));
+  }, []);
+  const marcasDasRespostas = [...new Set([...acoes, ...(avulso ? [avulso] : [])].flatMap((a) => (ehPedidoDeResposta(a) && a.brand_id ? [a.brand_id] : [])))].sort().join(',');
+  useEffect(() => {
+    for (const b of marcasDasRespostas ? marcasDasRespostas.split(',') : []) disparar(lerNomes(b));
+  }, [marcasDasRespostas, lerNomes]);
+  const nomeDe = (a: ActionResponse) => (ehPedidoDeResposta(a) ? (nomes.get(a.review.id) ?? null) : null);
+
+  // O rascunho: a avaliação é lida do que o Liame guarda (`/v1/reviews` da marca), com a resposta que já espera por ela.
+  useEffect(() => {
+    if (!pedidoDeRascunho) return setCargaDoRascunho(null);
+    let vivo = true;
+    setCargaDoRascunho({ tipo: 'carregando' });
+    disparar(lerNomes(pedidoDeRascunho.brandId));
+    disparar(
+      chamar(() => api.GET('/v1/reviews', { params: { query: { brand_id: pedidoDeRascunho.brandId } } })).then((r) => {
+        if (!vivo) return;
+        if (!r.ok) return setCargaDoRascunho({ tipo: 'erro', problema: r.problema });
+        const avaliacao = r.data.reviews.find((x) => x.id === pedidoDeRascunho.avaliacaoId);
+        if (!avaliacao) return setCargaDoRascunho({ tipo: 'nao-achou' });
+        const pendente = (r.data.pending_replies ?? []).find((p) => p.review_id === avaliacao.id)?.action_id ?? null;
+        const loja = r.data.stores.find((s) => s.id === avaliacao.store_id)?.name ?? null;
+        setCargaDoRascunho({ tipo: 'ok', rascunho: { avaliacao, loja, textoInicial: pedidoDeRascunho.textoInicial, pendente } });
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [pedidoDeRascunho, releRascunho, lerNomes]);
+
+  /** O pedido em palavras, para a lista e os avisos: o de anúncio, o de mensagem e o de resposta têm os textos deles. */
+  const emPalavras = (a: ActionResponse) =>
+    ehPedidoDeAnuncio(a) ? anuncioApresentado(a, mes) : ehPedidoDeMensagem(a) ? mensagemApresentada(a) : ehPedidoDeResposta(a) ? respostaApresentada(a, nomeDe(a)) : apresentar(a);
   const planos = carga.tipo === 'ok' ? carga.planos : [];
   const marcas = carga.tipo === 'ok' ? carga.marcas : [];
   const grupos = montarLista(acoes, planos, agora);
@@ -160,6 +217,8 @@ export function AprovacoesTela() {
   // O plano do endereço que não está na lista é lido antes de aparecer: enquanto isso, a fila não abre outro pedido no lugar dele.
   const planoForaDaLista = carga.tipo === 'ok' && planoInicial && sel === chaveDoPlano(planoInicial) && !ordem.some((i) => i.chave === sel) ? planoInicial : null;
   const aberta = ordem.find((i) => i.chave === sel) ?? foraDaLista ?? (planoForaDaLista ? null : grupos.pendente[0]) ?? null;
+  // O rascunho de uma resposta ocupa o detalhe, e nenhum pedido da lista fica marcado como aberto.
+  const noRascunho = pedidoDeRascunho !== null && sel === chaveDoRascunho(pedidoDeRascunho.avaliacaoId);
 
   // O plano aberto é lido por inteiro; de novo quando a lista mostra outra versão ou outra situação dele.
   const idDoPlano = planoForaDaLista ?? (aberta?.tipo === 'plano' ? aberta.plano.id : null);
@@ -277,6 +336,56 @@ export function AprovacoesTela() {
     return { ok: true };
   }
 
+  // ---- a resposta a uma avaliação do Google (P17): o texto se edita (o plano é outro, e a aprovação vale para ele),
+  // a resposta publicada se apaga (direto, sem código), e a avaliação ganha outra resposta pelo rascunho.
+  async function salvarTextoDaResposta(acao: AcaoDeResposta, texto: string): Promise<Feito> {
+    const r = await chamar(() => api.PATCH('/v1/actions/{id}', { params: { path: { id: acao.id } }, body: { params: { texto } } }));
+    if (!r.ok) return { ok: false, texto: erroDoTexto(r.problema) };
+    avisar('Texto salvo e conferido de novo. A aprovação vale para este texto.');
+    await carregar();
+    focarOTitulo();
+    return { ok: true };
+  }
+
+  async function apagarResposta(acao: AcaoDeResposta): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/actions/{id}/undo', { params: { path: { id: acao.id } } }));
+    if (!r.ok) return { ok: false, texto: mensagemDe(r.problema) };
+    avisar('Pedido feito: o Liame apaga a resposta no Google em instantes.');
+    await carregar();
+    focarOTitulo();
+    return { ok: true };
+  }
+
+  async function criarResposta(rascunho: Rascunho, texto: string): Promise<Feito> {
+    const marca = pedidoDeRascunho?.brandId ?? null;
+    const r = await chamar(() =>
+      api.POST('/v1/actions', {
+        body: { tool: 'avaliacao_responder', brand_id: marca, provider: 'google_business', account_id: rascunho.avaliacao.store_id, resource_id: `avaliacao:${rascunho.avaliacao.id}`, params: { texto } },
+      }),
+    );
+    if (!r.ok) {
+      // Outra pessoa pediu a resposta no meio: o rascunho relê e leva a ela.
+      if (r.problema.code === 'acao-duplicada') setReleRascunho((n) => n + 1);
+      return { ok: false, texto: erroDoTexto(r.problema) };
+    }
+    avisar('Texto salvo e conferido. A aprovação vale para este texto.');
+    setPedidoDeRascunho(null);
+    await carregar();
+    setSel(chaveDaAcao(r.data.id));
+    focarOTitulo();
+    return { ok: true };
+  }
+
+  function escreverOutra(acao: AcaoDeResposta) {
+    if (!acao.brand_id) return;
+    // A recusada pelo Google volta com o texto dela, para a pessoa ajustar; as outras começam em branco.
+    const textoInicial = situacaoDaResposta(acao) === 'recusada-google' ? (acao.review.reply_text ?? '') : '';
+    setPedidoDeRascunho({ avaliacaoId: acao.review.id, brandId: acao.brand_id, textoInicial });
+    setSel(chaveDoRascunho(acao.review.id));
+    setNoDetalhe(true);
+    focarOTitulo();
+  }
+
   // ---- os planos do Estrategista: a resposta de cada decisão já é o plano como ficou.
   function recusaDoPlano(problema: Problema): Decisao {
     const erro = erroDoPlano(problema);
@@ -330,7 +439,7 @@ export function AprovacoesTela() {
   const nomeDaMarca = (id: string) => (marcas.length > 1 ? (marcas.find((m) => m.id === id)?.name ?? null) : null);
 
   const item = (i: ItemDaLista) => {
-    const atual = i.chave === aberta?.chave ? 'true' : undefined;
+    const atual = !noRascunho && i.chave === aberta?.chave ? 'true' : undefined;
     if (i.tipo === 'plano') {
       const risco = riscoDoPlano(i.plano.risk);
       const marca = nomeDaMarca(i.plano.brand_id);
@@ -367,7 +476,11 @@ export function AprovacoesTela() {
     // No pedido de anúncio, o risco segue a direção do dinheiro, e quem pediu pode ser um funcionário de IA.
     const anuncio = ehPedidoDeAnuncio(a) ? a : null;
     const mensagem = ehPedidoDeMensagem(a) ? a : null;
+    const resposta = ehPedidoDeResposta(a) ? a : null;
     const risco = anuncio ? textosDoAnuncio(anuncio, mes).risco : riscoDe(a);
+    // Na resposta a uma avaliação, a nota vem à frente, e a de 1 ou 2 estrelas diz que só o dono aprova (P17).
+    const riscoEscrito = resposta ? riscoDaResposta(resposta) : { classe: risco, rotulo: ROTULO_RISCO[risco] };
+    const estrelas = resposta ? estrelasDoPedido(resposta) : null;
     const quem = quemPediu(a);
     return (
       <li key={i.chave}>
@@ -381,13 +494,14 @@ export function AprovacoesTela() {
               {i.grupo === 'pendente' ? (
                 <>
                   {p.impacto && <span className="dinheiro">{p.impacto}</span>}
-                  <span className={`risco risco--${risco}`}>{ROTULO_RISCO[risco]}</span>
+                  {estrelas && <span>{estrelasEscritas(estrelas)}</span>}
+                  <span className={`risco risco--${riscoEscrito.classe}`}>{riscoEscrito.rotulo}</span>
                   <span>{prazoDe(a, agora)}</span>
                 </>
               ) : (
                 <>
                   <span>{quem.nome}</span>
-                  <span>{anuncio ? etiquetaDoAnuncio(anuncio) : mensagem ? etiquetaDaMensagem(mensagem) : etiquetaDoDecidido(a)}</span>
+                  <span>{anuncio ? etiquetaDoAnuncio(anuncio) : mensagem ? etiquetaDaMensagem(mensagem) : resposta ? etiquetaDaResposta(resposta) : etiquetaDoDecidido(a)}</span>
                 </>
               )}
             </span>
@@ -413,7 +527,92 @@ export function AprovacoesTela() {
   const decide = podeDecidir || podeDecidirPlanos;
 
   let detalhe;
-  if (aberta?.tipo === 'acao' && ehPedidoDeAnuncio(aberta.acao)) {
+  if (noRascunho) {
+    const carregada = cargaDoRascunho?.tipo === 'ok' ? cargaDoRascunho.rascunho : null;
+    if (carregada) {
+      detalhe = (
+        <RascunhoDaResposta
+          key={`${carregada.avaliacao.id}:${carregada.textoInicial}`}
+          rascunho={carregada}
+          nome={nomes.get(carregada.avaliacao.id) ?? null}
+          meuNome={me.user.name}
+          agora={agora}
+          podeOperar={podeOperar}
+          titulo={tituloDoDetalhe}
+          aoVoltar={voltarParaALista}
+          aoSalvar={(texto) => criarResposta(carregada, texto)}
+          aoAbrirPendente={(id) => {
+            setPedidoDeRascunho(null);
+            abrir(chaveDaAcao(id), true);
+          }}
+        />
+      );
+    } else {
+      const falha = cargaDoRascunho?.tipo === 'erro' ? cargaDoRascunho.problema : null;
+      const naoAchou = cargaDoRascunho?.tipo === 'nao-achou';
+      detalhe = (
+        <>
+          {botaoVoltar}
+          <h2 className="det-titulo" id="ap-det-titulo" ref={tituloDoDetalhe} tabIndex={-1}>
+            {naoAchou ? 'Não encontramos esta avaliação' : 'Responder a uma avaliação'}
+          </h2>
+          {naoAchou ? (
+            <p className="nota">
+              <Icone nome="info" />
+              <span>Ela não está no que o Liame guarda desta marca: pode ter mais de 12 meses, ou ter saído do Google. Volte para a lista e abra as Avaliações de novo.</span>
+            </p>
+          ) : falha ? (
+            <div className="plano-espera" role="alert">
+              <p className="nota">
+                <Icone nome="alert-circle" />
+                <span>Não foi possível abrir a avaliação. {mensagemDe(falha)}</span>
+              </p>
+              <div className="vazio-acoes">
+                <button className="btn btn--sm" type="button" onClick={() => setReleRascunho((n) => n + 1)}>
+                  <Icone nome="refresh" pequeno />
+                  Tentar de novo
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="plano-espera" aria-busy="true">
+              <p className="sr-only">Abrindo a avaliação…</p>
+              <span className="esqueleto esqueleto--curto" aria-hidden="true" />
+              <span className="esqueleto" aria-hidden="true" />
+              <span className="esqueleto esqueleto--medio" aria-hidden="true" />
+            </div>
+          )}
+        </>
+      );
+    }
+  } else if (aberta?.tipo === 'acao' && ehPedidoDeResposta(aberta.acao)) {
+    const resposta = aberta.acao;
+    // Quem apagou a resposta: o pedido de volta que a lista traz.
+    const volta = resposta.undone_by ? acoes.find((x) => x.id === resposta.undone_by?.id) : undefined;
+    detalhe = (
+      <DetalheResposta
+        acao={resposta}
+        grupo={grupoDe(resposta, agora)}
+        agora={agora}
+        pro={pro}
+        nome={nomeDe(resposta)}
+        euPedi={resposta.requested_by.id === me.user.id}
+        souDono={souDono}
+        podeDecidir={podeDecidir}
+        podeOperar={podeOperar}
+        temApp={temApp}
+        apagada={volta && volta.status === 'executada' ? { quem: volta.requested_by.name, quando: volta.updated_at } : null}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+        aoSalvarTexto={salvarTextoDaResposta}
+        aoApagar={apagarResposta}
+        aoEscreverOutra={escreverOutra}
+      />
+    );
+  } else if (aberta?.tipo === 'acao' && ehPedidoDeAnuncio(aberta.acao)) {
     const anuncio = aberta.acao;
     detalhe = (
       <DetalheAnuncio

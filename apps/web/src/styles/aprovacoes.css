@@ -161,3 +161,20 @@
   .inbox-det .plano-tabela th[scope="row"], .inbox-det .plano-tabela td { padding: 0; border: 0; }
   .inbox-det .plano-tabela th[scope="row"] { margin-bottom: 2px; font-size: var(--text-xs); color: var(--text-muted); }
 }
+
+/* A resposta a uma avaliação do Google (P17): a avaliação e a resposta lado a lado; no pedido estreito, uma embaixo da
+   outra. O texto da avaliação e o da resposta vêm de fora: quebram em qualquer ponto, e as quebras de linha ficam. */
+.inbox-det .av-dois { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.inbox-det .av-bloco { display: grid; align-content: start; gap: var(--sp-2); min-width: 0; padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); }
+.inbox-det .av-bloco h3 { font-size: var(--text-sm); font-weight: 600; }
+.inbox-det .av-bloco p { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.inbox-det .av-bloco .av-fala { padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--surface-2); color: var(--text); white-space: pre-line; }
+.inbox-det .av-bloco .av-fala--resposta { background: var(--primary-soft); }
+.inbox-det .av-bloco .av-item-txt--vazio { color: var(--text-muted); font-style: italic; }
+.inbox-det .av-editar { display: grid; gap: var(--sp-2); }
+.inbox-det .av-editar textarea { width: 100%; min-height: 132px; padding: var(--sp-3); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: var(--text-sm); resize: vertical; outline: none; }
+.inbox-det .av-editar textarea:focus-visible { border-color: var(--foco); box-shadow: var(--focus-ring); }
+.inbox-det .av-editar-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+@container det (max-width: 560px) {
+  .inbox-det .av-dois { grid-template-columns: minmax(0, 1fr); }
+}
