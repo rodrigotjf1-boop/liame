@@ -123,6 +123,7 @@ export {
   LinkAccountsRequest,
   LinkAccountsResponse,
   OAuthCallbackQuery,
+  ProfileSearch,
   StartConnectionRequest,
   StartConnectionResponse,
   UnitListQuery,

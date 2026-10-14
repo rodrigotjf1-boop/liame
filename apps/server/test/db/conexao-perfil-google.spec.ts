@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { createDatabase, type Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config.js';
+import { procuraDoPerfil } from '../../src/connections/connections.service.js';
 import { ESCOPOS_GOOGLE } from '../../src/connections/oauth.js';
 import { ESCOPO_DATA_MANAGER } from '../../src/connectors/google-ads/data-manager.js';
 import { ESCOPO_PERFIL_GOOGLE, procuraGuardada } from '../../src/connectors/google-business/perfil-google.js';
@@ -208,6 +209,10 @@ describe.skipIf(!hasDb)('conectar o Perfil da Empresa no Google (A6 · Z1)', () 
     expect(chaves(pronta.discovered)).toEqual(DE_ANUNCIO);
     expect(doPerfil()).toEqual([]);
     expect(await auditoria(e, c.id, 'conexao.concluir')).toEqual({ provider: 'google', contas_encontradas: 4 });
+    // P17, parte B: a tela de Contas sabe que a função está desligada, e que o Liame não procurou o Perfil.
+    const lista = await api.call('GET', '/v1/connections', { cookie: e.cookie });
+    expect(lista.body.business_profile).toBe(false);
+    expect(lista.body.items.find((i: { id: string }) => i.id === c.id).profile_search).toBeNull();
   });
 
   it('com a função ligada: a autorização pede o Perfil, as lojas aparecem entre as contas e a loja escolhida vira conta ligada da marca', async () => {
@@ -242,10 +247,15 @@ describe.skipIf(!hasDb)('conectar o Perfil da Empresa no Google (A6 · Z1)', () 
     expect(JSON.stringify(lista.body)).not.toContain('acesso-google');
     expect(JSON.stringify(lista.body)).not.toContain('refresh-google');
     const item = lista.body.items.find((i: { id: string }) => i.id === c.id);
+    // P17, parte B: a loja leva o site do perfil (para distinguir lojas de mesmo nome); as contas de anúncio, não.
     expect(item.discovered.filter((d: Descoberta) => d.provider === 'google_business')).toEqual([
-      { provider: 'google_business', external_id: LOJA, name: 'Mister Burgers — Centro', currency: null, timezone: null, linked: false, via: null },
-      { provider: 'google_business', external_id: OUTRA_LOJA, name: 'Mister Burgers — Praia', currency: null, timezone: null, linked: false, via: null },
+      { provider: 'google_business', external_id: LOJA, name: 'Mister Burgers — Centro', currency: null, timezone: null, linked: false, via: null, site: 'https://misterburgers.exemplo.test' },
+      { provider: 'google_business', external_id: OUTRA_LOJA, name: 'Mister Burgers — Praia', currency: null, timezone: null, linked: false, via: null, site: null },
     ]);
+    for (const d of item.discovered.filter((x: Descoberta) => x.provider !== 'google_business')) expect(d).not.toHaveProperty('site');
+    // E a autorização diz como terminou a procura das lojas, com a função ligada para a empresa.
+    expect(lista.body.business_profile).toBe(true);
+    expect(item.profile_search).toEqual({ result: 'ok', searched_at: new Date(nota!.em).toISOString(), stores: 2 });
 
     // Ligar a loja à marca: uma conta como as outras, com a credencial da autorização.
     const ligar = await api.call('POST', `/v1/connections/${c.id}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'google_business', external_id: LOJA }] } });
@@ -282,6 +292,11 @@ describe.skipIf(!hasDb)('conectar o Perfil da Empresa no Google (A6 · Z1)', () 
     expect(pronta).toMatchObject({ status: 'aguardando_escolha', discovery_notes: {} });
     expect(chaves(pronta.discovered)).toEqual(DE_ANUNCIO);
     expect(doPerfil()).toEqual([]);
+    // A tela de Contas: a função ligada, a autorização sem a permissão e sem procura (o convite de autorizar de novo).
+    const lista = await api.call('GET', '/v1/connections', { cookie: e.cookie });
+    expect(lista.body.business_profile).toBe(true);
+    const item = lista.body.items.find((i: { id: string }) => i.id === c.id);
+    expect([item.scopes.includes(ESCOPO_PERFIL_GOOGLE), item.profile_search]).toEqual([false, null]);
   });
 
   it('a função das conversões e a do Perfil ligadas juntas: a autorização pede as duas permissões', async () => {
@@ -303,6 +318,9 @@ describe.skipIf(!hasDb)('conectar o Perfil da Empresa no Google (A6 · Z1)', () 
     expect(pronta).toMatchObject({ status: 'aguardando_escolha', error_code: null });
     expect(chaves(pronta.discovered)).toEqual(DE_ANUNCIO);
     expect(procuraGuardada(pronta.discovery_notes)).toMatchObject({ resultado, lojas: 0 });
+    // A tela de Contas lê o mesmo resultado (P17, parte B: "esperando o Google", "recusou", "não deu para procurar").
+    const detalhe = await api.call('GET', `/v1/connections/${c.id}`, { cookie: e.cookie });
+    expect(detalhe.body.profile_search).toMatchObject({ result: resultado, stores: 0 });
     // Uma chamada só ao Perfil: no limite e na falha, o Liame não insiste (critério A6-2).
     expect(doPerfil()).toHaveLength(1);
     expect(await auditoria(e, c.id, 'conexao.concluir')).toEqual({ provider: 'google', contas_encontradas: 4, perfil_no_google: resultado });
@@ -346,6 +364,8 @@ describe.skipIf(!hasDb)('conectar o Perfil da Empresa no Google (A6 · Z1)', () 
     expect(chaves(semFuncao.discovered)).toEqual(DE_ANUNCIO);
     expect(semFuncao.discovery_notes).toEqual({});
     expect(doPerfil()).toEqual([]);
+    const lista = await api.call('GET', '/v1/connections', { cookie: e.cookie });
+    expect([lista.body.business_profile, lista.body.items.find((i: { id: string }) => i.id === c.id).profile_search]).toEqual([false, null]);
     const [conta] = await ownerQuery<{ status: string }>(`select status from liame.connected_account where id = $1`, [ligar.body.linked[0].id]);
     expect(conta!.status).toBe('ativa');
   });
@@ -414,5 +434,10 @@ describe.skipIf(!hasDb)('conectar o Perfil da Empresa no Google (A6 · Z1)', () 
     expect(procuraGuardada({ google_business: { resultado: 'talvez', em: '2026-10-11T12:00:00.000Z' } })).toBeNull();
     expect(procuraGuardada({ google_business: { resultado: 'limite', em: 'ontem' } })).toBeNull();
     expect(procuraGuardada({ google_business: { resultado: 'limite', em: '2026-10-11T12:00:00.000Z', lojas: -1 } })).toEqual({ resultado: 'limite', em: '2026-10-11T12:00:00.000Z', lojas: 0 });
+    // Como a tela lê (P17, parte B): o instante em ISO, e o que foge do formato é nulo.
+    expect(procuraDoPerfil({ google_business: { resultado: 'ok', em: '2026-10-11T09:00:00-03:00', lojas: 2 } })).toEqual({ result: 'ok', searched_at: '2026-10-11T12:00:00.000Z', stores: 2 });
+    expect(procuraDoPerfil({})).toBeNull();
+    const detalhe = await api.call('GET', `/v1/connections/${c.id}`, { cookie: e.cookie });
+    expect(detalhe.body.profile_search).toEqual({ result: 'ok', searched_at: '2026-10-11T12:00:00.000Z', stores: 3 });
   });
 });

@@ -53,8 +53,25 @@ export const DiscoveredAccount = z.strictObject({
   linked: z.boolean(),
   /** Alcançada por meio de outra conta (a gerente do Google Ads, em geral a da agência): o nome dela. Nulo = acesso direto. */
   via: z.string().nullable(),
+  /**
+   * Só na loja do Perfil da Empresa no Google (`google_business`): o site que o perfil informa, para distinguir lojas de
+   * mesmo nome; nulo quando o perfil não tem site. Opcional: a resposta de antes de 14/10/2026 não traz.
+   */
+  site: z.string().nullable().optional(),
 });
 export type DiscoveredAccount = z.infer<typeof DiscoveredAccount>;
+
+/**
+ * A última procura das lojas do Perfil da Empresa numa autorização do Google (A6): `ok` (com quantas lojas, que pode ser
+ * zero), `limite` (o Google ainda não liberou o acesso do Liame ao perfil, ou pediu para esperar), `sem_permissao` (o
+ * Google recusou a leitura) ou `falhou`. Nos casos `limite` e `falhou`, o Liame procura de novo uma vez por dia.
+ */
+export const ProfileSearch = z.strictObject({
+  result: Slug,
+  searched_at: z.string(),
+  stores: z.int().min(0),
+});
+export type ProfileSearch = z.infer<typeof ProfileSearch>;
 
 export const ConnectedAccountResponse = z.strictObject({
   id: z.uuid(),
@@ -99,6 +116,12 @@ export const ConnectionResponse = z.strictObject({
   /** Contas que a autorização alcança (só depois da descoberta). */
   discovered: z.array(DiscoveredAccount),
   accounts: z.array(ConnectedAccountResponse),
+  /**
+   * Só nas autorizações do Google: como terminou a última procura das lojas do Perfil da Empresa. Nulo = o Liame não
+   * procurou (a função desligada para a empresa, ou a permissão do perfil não veio nesta autorização). Opcional: a
+   * resposta de antes de 14/10/2026 não traz.
+   */
+  profile_search: ProfileSearch.nullable().optional(),
 });
 export type ConnectionResponse = z.infer<typeof ConnectionResponse>;
 
@@ -118,6 +141,12 @@ export const ConnectionListResponse = z.strictObject({
    * antes de 09/10/2026 não traz.
    */
   ads_write: z.array(z.string()).optional(),
+  /**
+   * O Perfil da Empresa no Google está ligado para a empresa (ou para a marca do filtro): a autorização nova do Google
+   * pede também a permissão do perfil, e o Liame procura e lê as lojas dele (A6). A mesma flag que o começo da conexão e
+   * a procura conferem. Opcional: a resposta de antes de 14/10/2026 não traz.
+   */
+  business_profile: z.boolean().optional(),
 });
 export type ConnectionListResponse = z.infer<typeof ConnectionListResponse>;
 
