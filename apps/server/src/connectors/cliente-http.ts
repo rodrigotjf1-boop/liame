@@ -231,9 +231,31 @@ export function falhaDoGoogleAds(erro: Record<string, unknown>): { codigo: strin
 }
 
 /**
+ * Google, APIs no formato antigo (o Search Console v3, base §3.3): a cota estourada pode voltar como 403, com o motivo
+ * em `error.errors[].reason` (a página "Standard Error Messages"). Quanto esperar por motivo: a cota de carga do Search
+ * Console conta em janelas de 10 minutos, e o Google manda esperar 15; a do dia, uma hora para tentar de novo; a de
+ * frequência, um minuto.
+ */
+const LIMITES_DO_GOOGLE: Record<string, number> = {
+  quotaExceeded: 15 * 60_000,
+  dailyLimitExceeded: UMA_HORA_MS,
+  rateLimitExceeded: 60_000,
+  userRateLimitExceeded: 60_000,
+};
+
+/** O motivo do primeiro erro no formato antigo do Google (`error.errors[0].reason`), quando é um dos de cota. */
+export function limiteDoGoogle(erro: Record<string, unknown>): { motivo: string; esperarMs: number } | null {
+  const primeiro = Array.isArray(erro.errors) ? (erro.errors[0] as { reason?: unknown } | null | undefined) : undefined;
+  const motivo = typeof primeiro?.reason === 'string' ? primeiro.reason : null;
+  if (!motivo || !Object.hasOwn(LIMITES_DO_GOOGLE, motivo)) return null;
+  return { motivo, esperarMs: LIMITES_DO_GOOGLE[motivo]! };
+}
+
+/**
  * Classifica o erro pelo status e pelo corpo de cada plataforma. Meta: `error.code` 4, 17, 32, 613 e
  * 80000–80014 são limite; 190 é token inválido; 10 e 200–299 são permissão (base §2.1). Google:
- * RESOURCE_EXHAUSTED (429) é limite; UNAUTHENTICATED (401); PERMISSION_DENIED (403).
+ * RESOURCE_EXHAUSTED (429) é limite, e no Search Console também o 403 com motivo de cota no formato antigo
+ * (`limiteDoGoogle`); UNAUTHENTICATED (401); PERMISSION_DENIED (403).
  */
 export function classificar(provider: string, status: number, corpo: unknown, h: Headers, uso: UsoDeCota | null): ErroConector {
   const erro = (corpo as { error?: Record<string, unknown> } | null)?.error ?? {};
@@ -254,9 +276,12 @@ export function classificar(provider: string, status: number, corpo: unknown, h:
   const codigoDoErro = codigo ?? statusGoogle ?? tipoProblema;
 
   const ehLimiteMeta = [4, 17, 32, 613].includes(cod) || (cod >= 80000 && cod <= 80014);
-  if (status === 429 || ehLimiteMeta || statusGoogle === 'RESOURCE_EXHAUSTED') {
-    const espera = cod === 613 && subcodigo === META_VERBA_POR_HORA ? Math.max(esperaPedida ?? 0, UMA_HORA_MS) : (esperaPedida ?? 60_000);
-    return new ErroConector('limite', provider, mensagem, status, espera, codigoDoErro, detalhe);
+  // Só no Search Console, a API do Google no formato antigo que o Liame usa; as outras dizem a cota pelo status.
+  const limiteGoogle = provider === 'search_console' ? limiteDoGoogle(erro) : null;
+  if (status === 429 || ehLimiteMeta || statusGoogle === 'RESOURCE_EXHAUSTED' || limiteGoogle) {
+    const espera =
+      cod === 613 && subcodigo === META_VERBA_POR_HORA ? Math.max(esperaPedida ?? 0, UMA_HORA_MS) : (esperaPedida ?? limiteGoogle?.esperarMs ?? 60_000);
+    return new ErroConector('limite', provider, mensagem, status, espera, limiteGoogle?.motivo ?? codigoDoErro, detalhe);
   }
   if (status === 401 || cod === 190 || statusGoogle === 'UNAUTHENTICATED') {
     return new ErroConector('autenticacao', provider, mensagem, status, null, codigoDoErro, detalhe);

@@ -48,6 +48,8 @@ const Env = z.object({
   GOOGLE_BUSINESS_LOCATIONS_URL: z.url().default('https://mybusinessbusinessinformation.googleapis.com'),
   GOOGLE_BUSINESS_REVIEWS_URL: z.url().default('https://mybusiness.googleapis.com'),
   GOOGLE_BUSINESS_PERFORMANCE_URL: z.url().default('https://businessprofileperformance.googleapis.com'),
+  /** Search Console (A6, Z3): os sites e as buscas que levaram a eles (`/webmasters/v3`, no endereço da API). */
+  SEARCH_CONSOLE_URL: z.url().default('https://searchconsole.googleapis.com'),
   /** Segredo do app da Meta (da distribuição): assina as chamadas com appsecret_proof. */
   META_APP_SECRET: z.string().min(16).optional(),
   /** Origem pública da API: monta o endereço de volta do OAuth (registrado no app de cada plataforma). */
@@ -116,6 +118,8 @@ export type AppConfig = {
     dataManagerUrl: string;
     /** As quatro APIs do Perfil da Empresa no Google (A6, Z1). */
     perfilGoogle: { contas: string; lojas: string; avaliacoes: string; numeros: string };
+    /** A API do Search Console (A6, Z3). */
+    searchConsoleUrl: string;
     metaAppSecret: string | null;
   };
   /** Produtos DMS (A2.5): rotas de integração do Regem e do RegemCast (nulo = ainda sem endereço). */
@@ -175,6 +179,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     GOOGLE_BUSINESS_LOCATIONS_URL: 'https://mybusinessbusinessinformation.googleapis.com',
     GOOGLE_BUSINESS_REVIEWS_URL: 'https://mybusiness.googleapis.com',
     GOOGLE_BUSINESS_PERFORMANCE_URL: 'https://businessprofileperformance.googleapis.com',
+    SEARCH_CONSOLE_URL: 'https://searchconsole.googleapis.com',
     META_DIALOG_URL: 'https://www.facebook.com',
     GOOGLE_AUTH_URL: 'https://accounts.google.com',
     GOOGLE_TOKEN_URL: 'https://oauth2.googleapis.com',
@@ -267,6 +272,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
         avaliacoes: env.GOOGLE_BUSINESS_REVIEWS_URL.replace(/\/$/, ''),
         numeros: env.GOOGLE_BUSINESS_PERFORMANCE_URL.replace(/\/$/, ''),
       },
+      searchConsoleUrl: env.SEARCH_CONSOLE_URL.replace(/\/$/, ''),
       metaAppSecret: env.META_APP_SECRET ?? null,
     },
     produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl: env.REGEMCAST_API_URL?.replace(/\/$/, '') ?? null },
