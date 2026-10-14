@@ -454,6 +454,9 @@ describe('a leitura `equipe_trabalho`: o que a LIA recebe de Sua equipe (A3, P7)
     // Ligado e sem ter como propor: o porquê, como a ficha diz.
     expect(doCrm(comCrm({ blocked_by: 'sem_regemcast' })).nao_pode_propor_agora).toBe('o RegemCast não está conectado nesta marca: é ele que envia as mensagens e guarda os contatos');
     expect(doCrm(comCrm({ blocked_by: 'sem_oferta' })).nao_pode_propor_agora).toContain('não inventa oferta nem preço');
+    expect(doCrm(comCrm({ blocked_by: 'sem_desconto' })).nao_pode_propor_agora).toBe(
+      'falta definir o desconto do cupom das mensagens: cada mensagem leva um cupom só dela, e o desconto é definido uma vez pelo Dono ou pelo Administrador, em Mensagens',
+    );
     expect(doCrm(comCrm({ blocked_by: 'motivo_novo' })).nao_pode_propor_agora).toBe('motivo novo');
     expect(doCrm(comCrm())).not.toHaveProperty('nao_pode_propor_agora');
     expect(doCrm(comCrm())).not.toHaveProperty('nao_pode_escrever_agora');

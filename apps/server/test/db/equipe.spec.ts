@@ -13,7 +13,7 @@ import { SombraLoop } from '../../src/worker/sombra-loop.js';
 import { SombraService } from '../../src/worker/sombra.service.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import { ligarCriativo, ligarIa } from '../helpers/ia.js';
-import { contaDoRegemcast, semearMensagemDoCrm, semearPropostaDoCrm } from '../helpers/mensagens-semeadas.js';
+import { contaDoRegemcast, descontoDasMensagens, semearMensagemDoCrm, semearPropostaDoCrm } from '../helpers/mensagens-semeadas.js';
 import { pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
@@ -256,7 +256,30 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     // Ligado, sem o RegemCast conectado nesta marca: não há para quem propor.
     expect(await crm()).toMatchObject({ status: 'ativo', blocked_by: 'sem_regemcast', in_progress: null });
     const conta = await contaDoRegemcast(e);
-    // Com o RegemCast, falta a oferta de Minha marca (ele não inventa oferta nem preço).
+    // Com o RegemCast, falta o desconto do cupom das mensagens: sem ele, nenhuma mensagem sai.
+    expect(await crm()).toMatchObject({ status: 'ativo', blocked_by: 'sem_desconto', in_progress: null });
+    const loja = randomUUID();
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'regem', $4, 'Loja Centro', 'BRL', $5)`, [
+      loja,
+      e.tenantId,
+      e.brandId,
+      `loja-${randomUUID().slice(0, 8)}`,
+      FUSO,
+    ]);
+    // O desconto de outra empresa não conta para esta.
+    const outra = await empresa();
+    const lojaDaOutra = randomUUID();
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'regem', $4, 'Loja Lapa', 'BRL', $5)`, [
+      lojaDaOutra,
+      outra.tenantId,
+      outra.brandId,
+      `loja-${randomUUID().slice(0, 8)}`,
+      FUSO,
+    ]);
+    await descontoDasMensagens(outra, lojaDaOutra);
+    expect((await crm()).blocked_by).toBe('sem_desconto');
+    await descontoDasMensagens(e, loja);
+    // Com o desconto, falta a oferta de Minha marca (ele não inventa oferta nem preço).
     expect(await crm()).toMatchObject({ status: 'ativo', blocked_by: 'sem_oferta' });
     const dossie = {
       identity: { summary: 'Hamburgueria de bairro com smash feito na chapa', audience: 'Quem mora ou trabalha no Centro', differentiator: 'Pão feito na casa todo dia', since: '2019' },
@@ -273,15 +296,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
 
     // Três mensagens propostas por ele no mês: uma enviada (com o cupom já criado no Regem), uma esperando a decisão e
     // uma recusada. E duas chamadas ao modelo para escrever.
-    const loja = randomUUID();
-    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'regem', $4, 'Loja Centro', 'BRL', $5)`, [
-      loja,
-      e.tenantId,
-      e.brandId,
-      `loja-${randomUUID().slice(0, 8)}`,
-      FUSO,
-    ]);
-    const ha = (minutos: number) => new Date(Date.now() - minutos * 60_000).toISOString();
+    const ha =(minutos: number) => new Date(Date.now() - minutos * 60_000).toISOString();
     const alvo = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId, conta };
     await semearMensagemDoCrm(alvo, { situacao: 'executada', nome: 'Sobremesa por nossa conta', pessoas: 176, cupom: { loja, codigo: 'DOCE10', nascido: ha(120) }, aprovadaPor: e.userId, haMinutos: 3 });
     await semearMensagemDoCrm(alvo, { situacao: 'aguardando', nome: 'Sexta em dobro', cupom: { loja, codigo: 'SEXTA10', nascido: null }, haMinutos: 2 });
@@ -345,7 +360,16 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     const crm = async () => doMembro(await ver(e, e.brandId), 'crm');
     const conta = await contaDoRegemcast(e);
     const alvo = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId, conta };
-    // Sem oferta em Minha marca e sem nada na fila: o que falta é a oferta.
+    const loja = randomUUID();
+    await ownerQuery(`insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name, currency, timezone) values ($1, $2, $3, 'regem', $4, 'Loja Centro', 'BRL', $5)`, [
+      loja,
+      e.tenantId,
+      e.brandId,
+      `loja-${randomUUID().slice(0, 8)}`,
+      FUSO,
+    ]);
+    await descontoDasMensagens(e, loja);
+    // Com o desconto, sem oferta em Minha marca e sem nada na fila: o que falta é a oferta.
     expect(await crm()).toMatchObject({ status: 'ativo', working_now: false, in_progress: null, blocked_by: 'sem_oferta' });
     // A proposta de outro funcionário na fila não é dele: nada muda. (Ela sai da fila em seguida: a marca tem uma
     // proposta em andamento por motivo.)

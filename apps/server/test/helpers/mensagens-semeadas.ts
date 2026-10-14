@@ -93,6 +93,18 @@ export async function contaDoRegemcast(alvo: { tenantId: string; brandId: string
 }
 
 /**
+ * O desconto padrão do cupom das mensagens da marca (10%, por 2 dias), na loja do Regem dada, direto no banco. A rota
+ * de definir (`PUT /v1/messaging/discount`), com as conferências da loja e de quem define, está provada em
+ * `desconto-das-mensagens.spec.ts`.
+ */
+export async function descontoDasMensagens(alvo: { tenantId: string; brandId: string; userId: string }, loja: string): Promise<void> {
+  await ownerQuery(
+    `insert into liame.message_discount (id, tenant_id, brand_id, coupon_account_id, kind, percent, valid_days, created_by, updated_by) values ($1, $2, $3, $4, 'percentual', 10, 2, $5, $5)`,
+    [randomUUID(), alvo.tenantId, alvo.brandId, loja, alvo.userId],
+  );
+}
+
+/**
  * Uma mensagem que o funcionário de CRM e mensageria propôs, já na situação dada: o pedido de envio no trilho de ação
  * (em nome do funcionário) e o retrato da mensagem. Gravado direto no banco, porque o caminho de verdade (montar o
  * rascunho no RegemCast, pedir, aprovar com o código do app e disparar) está provado em `mensagem-proposta.spec.ts` e

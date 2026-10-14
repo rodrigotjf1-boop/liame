@@ -339,15 +339,22 @@ export class EquipeService {
 
   /**
    * O que falta ao CRM e mensageria para propor: nenhuma conta do RegemCast conectada nesta marca (é ele que envia e
-   * guarda os contatos), ou Minha marca sem oferta (a promoção parte de uma oferta de lá). Só é lido para quem está
+   * guarda os contatos), o desconto do cupom das mensagens que ninguém definiu (toda mensagem leva um cupom, e a rotina
+   * não propõe sem ele) ou Minha marca sem oferta (a promoção parte de uma oferta de lá). Só é lido para quem está
    * ligado; o que pesa mais, e o que a proposta em andamento muda, é decidido em `agoraDoCrm`.
    */
-  private async oQueFaltaAoCrm(ativo: boolean, brandId: string, fuso: string, agora: Date): Promise<{ semRegemcast: boolean; semOferta: boolean }> {
-    if (!ativo) return { semRegemcast: false, semOferta: false };
+  private async oQueFaltaAoCrm(
+    ativo: boolean,
+    brandId: string,
+    fuso: string,
+    agora: Date,
+  ): Promise<{ semRegemcast: boolean; semDesconto: boolean; semOferta: boolean }> {
+    if (!ativo) return { semRegemcast: false, semDesconto: false, semOferta: false };
     const conta = await currentTx().execute(sql`select 1 from liame.connected_account where brand_id = ${brandId} and provider = 'regemcast' and disconnected_at is null limit 1`);
-    if (!conta.rows[0]) return { semRegemcast: true, semOferta: false };
+    if (!conta.rows[0]) return { semRegemcast: true, semDesconto: false, semOferta: false };
+    const desconto = await currentTx().execute(sql`select 1 from liame.message_discount where brand_id = ${brandId}`);
     const marca = await marcaDoCriativo(brandId, fuso, agora);
-    return { semRegemcast: false, semOferta: !marca || !marca.conteudo.offers.items.length };
+    return { semRegemcast: false, semDesconto: !desconto.rows[0], semOferta: !marca || !marca.conteudo.offers.items.length };
   }
 
   /** "O que fez": os acontecimentos do membro nesta marca nos últimos 90 dias, do mais novo para o mais antigo. */
