@@ -71,7 +71,8 @@ export function acaoDoAviso(kind: string): AcaoDoAviso | null {
   // O que o Liame mudou e gastou mais do que a verba permite (A4, X4) se confere na Verba do mês.
   if (kind === 'gasto_acima_da_verba') return 'abrir-verba';
   // A avaliação de nota baixa sem resposta (A6, Z1) se vê na tela Avaliações; a resposta ainda é dada no Google.
-  if (kind === 'avaliacao_sem_resposta') return 'abrir-avaliacoes';
+  // A resposta que o Google recusou (Z2) também: a tela mostra qual é, com o selo "O Google recusou a resposta".
+  if (kind === 'avaliacao_sem_resposta' || kind === 'resposta_recusada') return 'abrir-avaliacoes';
   return null;
 }
 

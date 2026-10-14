@@ -64,7 +64,7 @@ describe.skipIf(!hasDb)('a procura diária das lojas e os avisos do Perfil na At
   const avisosDoPerfil = async (e: EmpresaAutorizada): Promise<Aviso[]> => {
     const r = await api.call('GET', '/v1/media/attention', { cookie: e.cookie });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
-    return (r.body.items as Aviso[]).filter((i) => ['perfil_lojas_por_ligar', 'avaliacao_sem_resposta', 'conta_desconectada', 'conta_sem_permissao', 'conta_com_erro'].includes(i.kind));
+    return (r.body.items as Aviso[]).filter((i) => ['perfil_lojas_por_ligar', 'avaliacao_sem_resposta', 'resposta_recusada', 'conta_desconectada', 'conta_sem_permissao', 'conta_com_erro'].includes(i.kind));
   };
   const avaliacao = (id: string, estrelas: AvaliacaoNoGoogle['starRating'], feitaHaDias: number, extra: Partial<AvaliacaoNoGoogle> = {}): AvaliacaoNoGoogle => ({
     reviewId: id,
@@ -245,6 +245,54 @@ describe.skipIf(!hasDb)('a procura diária das lojas e os avisos do Perfil na At
     google.lista = google.lista.map((a) => (a.reviewId === 'uma-estrela' ? { ...a, reviewReply: { comment: 'Vamos rever a entrega.', updateTime: mudou2, reviewReplyState: 'APPROVED' } } : a));
     const d2 = new Date(d1.getTime() + (24 * 60 + 1) * MIN_MS);
     expect((await loop.executarLote(10, { tenantIds: [e.tenantId] }, d2)).map((r) => r.status)).toEqual(['ok', 'ok']);
+    expect(await avisosDoPerfil(e)).toEqual([]);
+  });
+
+  it('Z2: a resposta que o Google recusou vira aviso, sem o texto dela nem o código do motivo; a que ele recusa depois chega pela conferência; fora dos 30 dias, sai', async () => {
+    const e = await empresa('Mister Burgers Resposta Recusada');
+    const contaId = await ligarLojaDoPerfil(api, e);
+    const resposta = (situacao: string, haDias: number, extra: Record<string, string> = {}) => ({ comment: 'Resposta que a Atenção não pode mostrar.', updateTime: ha(haDias), reviewReplyState: situacao, ...extra });
+    google.lista = [
+      avaliacao('recusada', 'FOUR', 3, { reviewReply: resposta('REJECTED', 1, { policyViolation: 'CODIGO_DE_EXEMPLO' }) }),
+      avaliacao('em-conferencia', 'FIVE', 4, { reviewReply: resposta('PENDING', 1) }),
+      avaliacao('no-ar', 'FIVE', 5, { reviewReply: resposta('APPROVED', 2) }),
+    ];
+    expect((await loop.executarLote(10, { tenantIds: [e.tenantId] }, AGORA)).map((r) => r.status)).toEqual(['ok', 'ok']);
+    expect(await avisosDoPerfil(e)).toEqual([
+      {
+        kind: 'resposta_recusada',
+        severity: 'atencao',
+        title: 'O Google recusou a resposta a uma avaliação',
+        detail: 'Em Mister Burgers — Centro. A resposta não aparece no perfil.',
+        action: 'Veja em Avaliações qual é, e escreva outra resposta.',
+        connected_account_id: contaId,
+        campaign_id: null,
+        provider: null,
+        brand_id: e.brandId,
+      },
+    ]);
+    const tudo = JSON.stringify((await api.call('GET', '/v1/media/attention', { cookie: e.cookie })).body);
+    for (const proibido of ['Resposta que a Atenção não pode mostrar', 'CODIGO_DE_EXEMPLO', 'Texto que a Atenção não pode mostrar', 'Pessoa Número']) expect(tudo, proibido).not.toContain(proibido);
+
+    // O Google recusa também a que conferia, sem mexer na data da avaliação: a leitura de hora em hora a relê pela
+    // conferência das respostas, e o aviso passa a contar duas.
+    google.lista = google.lista.map((a) => (a.reviewId === 'em-conferencia' ? { ...a, reviewReply: resposta('REJECTED', 1) } : a));
+    expect((await loop.executarLote(10, { tenantIds: [e.tenantId] }, new Date(AGORA.getTime() + 61 * MIN_MS))).map((r) => [r.status, r.respostas])).toEqual([['ok', 1]]);
+    const duas = await avisosDoPerfil(e);
+    expect(duas.map((a) => [a.kind, a.title, a.detail, a.action])).toEqual([
+      ['resposta_recusada', 'O Google recusou 2 respostas a avaliações', 'Em Mister Burgers — Centro. Essas respostas não aparecem no perfil.', 'Veja em Avaliações quais são, e escreva outras respostas.'],
+    ]);
+
+    // Com a função desligada, nada vira aviso.
+    await ligarFlagDaEmpresa(api, 'perfil_google', e.tenantId, false);
+    expect(await avisosDoPerfil(e)).toEqual([]);
+    await ligarFlagDaEmpresa(api, 'perfil_google', e.tenantId, true);
+
+    // Uma ganha outra resposta (o Google confere a nova) e a outra foi recusada há mais de 30 dias: na reconferência
+    // do dia seguinte, o aviso sai.
+    google.lista = google.lista.map((a) => (a.reviewId === 'recusada' ? { ...a, reviewReply: resposta('PENDING', 0) } : a.reviewId === 'em-conferencia' ? { ...a, reviewReply: resposta('REJECTED', 31) } : a));
+    const d1 = new Date(AGORA.getTime() + (24 * 60 + 1) * MIN_MS);
+    expect((await loop.executarLote(10, { tenantIds: [e.tenantId] }, d1)).map((r) => r.status)).toEqual(['ok', 'ok']);
     expect(await avisosDoPerfil(e)).toEqual([]);
   });
 

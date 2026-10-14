@@ -125,8 +125,10 @@ export const AttentionItem = z.strictObject({
    * `vendas_google_recusadas`, com a conta do Google Ads em `connected_account_id`. O Perfil da Empresa no Google (A6,
    * Z1), só para a marca com a função ligada: `perfil_lojas_por_ligar` (a autorização do Google alcança lojas do perfil
    * e a marca não ligou nenhuma) e `avaliacao_sem_resposta` (avaliações de 1 ou 2 estrelas feitas nos últimos 30 dias e
-   * ainda sem resposta, com a loja em `connected_account_id`); a loja do perfil que parou de ser lida usa
-   * `conta_desconectada`, `conta_sem_permissao` e `conta_com_erro`, com `provider` nulo.
+   * ainda sem resposta, com a loja em `connected_account_id`); `resposta_recusada` (Z2: as respostas a avaliações que
+   * o Google recusou nos últimos 30 dias e que por isso não aparecem no perfil, com a loja em `connected_account_id`);
+   * a loja do perfil que parou de ser lida usa `conta_desconectada`, `conta_sem_permissao` e `conta_com_erro`, com
+   * `provider` nulo.
    */
   kind: Slug,
   /** `critica`, `atencao` ou `info`. */
