@@ -137,6 +137,8 @@ Para desligar, `--desligar` no lugar de `--ligar` (a regra da empresa é apagada
 
 **`criativo` (A4, X6):** nasce desligada para todos, e sem ela nada muda. Com ela ligada para a empresa (`--flag criativo`), quem opera campanhas pode pedir peças de anúncio ao Criativo para uma oferta de Minha marca, e as peças aparecem conferidas para decidir. Ela depende da flag `ia` (é o gateway que chama o modelo), da rota de modelo da tarefa `criativo_texto` (publicada na migration 0051, depois do eval com modelo de verdade) e do Criativo ativo na empresa. O pedido de peças que não cabe no que resta do limite de uso de IA da empresa (o teto dela em `ai_budget` ou, sem linha, `AI_DAILY_LIMIT_USD` e `AI_MONTHLY_LIMIT_USD`) é negado na hora, com o que resta. Não escreve em plataforma nenhuma: a campanha nova tem a flag dela (`meta_write`).
 
+**`desempenho_anuncios` (P23):** nasce desligada para todos, e sem ela nada muda: Resultados não mostra o cartão e "Ler agora" responde 409. Com ela ligada para a empresa (`--flag desempenho_anuncios`), aparece em Resultados o cartão "Como os anúncios rodaram" (no Pro, "Desempenho nas plataformas"): impressões, alcance, cliques, gasto e o resultado que a Meta e o Google contam, com a hora de cada leitura e o botão "Ler agora" (uma vez a cada 15 minutos por empresa, para quem vê Resultados). Só lê: não escreve em plataforma nenhuma. O alcance do período aparece depois da primeira leitura diária da Meta com o servidor do P23 (migration 0073).
+
 ## IA (A3, ADR-006)
 
 Os funcionários de IA nascem desligados para todas as empresas (flag `ia`). Sem a chave do fornecedor, a API e o worker sobem normalmente e tudo o que depende de IA cai no caminho sem IA.

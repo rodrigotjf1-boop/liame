@@ -13,11 +13,21 @@ export function TextoRico({ frase }: { frase: Frase }) {
   );
 }
 
-/** "Ver detalhes" do Lite: abre o Pro ali mesmo, no cartão (nada some no Lite). */
-export function BotaoDetalhes({ aberto, controla, aoAlternar }: { aberto: boolean; controla: string; aoAlternar: () => void }) {
+/** "Ver detalhes" do Lite: abre o Pro ali mesmo, no cartão (nada some no Lite). `rotulos` = [fechado, aberto]. */
+export function BotaoDetalhes({
+  aberto,
+  controla,
+  aoAlternar,
+  rotulos = ['Ver detalhes', 'Ocultar detalhes'],
+}: {
+  aberto: boolean;
+  controla: string;
+  aoAlternar: () => void;
+  rotulos?: [string, string];
+}) {
   return (
     <button className="detalhes-bt" type="button" aria-expanded={aberto} aria-controls={controla} onClick={aoAlternar}>
-      <span>{aberto ? 'Ocultar detalhes' : 'Ver detalhes'}</span>
+      <span>{aberto ? rotulos[1] : rotulos[0]}</span>
       <Icone nome="chevron-down" pequeno />
     </button>
   );
