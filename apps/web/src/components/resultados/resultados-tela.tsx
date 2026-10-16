@@ -243,8 +243,16 @@ export function ResultadosTela() {
     dados && tela && !tela.base.semRegem
       ? { brand_id: dados.marca, from: dados.dados.period.from, to: dados.dados.period.to, ...(dados.loja ? { unit_id: dados.loja } : {}) }
       : null;
-  // "Como os anúncios rodaram" (P23): as contas de anúncio são da marca, então a loja não entra.
-  const anuncios: AnunciosDaTela | null = dados ? { consulta: { brand_id: dados.marca, from: dados.dados.period.from, to: dados.dados.period.to }, periodo: dados.periodo } : null;
+  // "Como os anúncios rodaram" (P23): as contas de anúncio são da marca, então a loja não entra. Quando a leitura
+  // pedida pelo "Ler agora" termina, a tela lê de novo os números do caixa: sem isso, "Por campanha" ficava com o gasto
+  // de antes e o cartão com o de agora (ERR-140).
+  const anuncios: AnunciosDaTela | null = dados
+    ? {
+        consulta: { brand_id: dados.marca, from: dados.dados.period.from, to: dados.dados.period.to },
+        periodo: dados.periodo,
+        aoTerminarLeitura: () => setTentativa((t) => t + 1),
+      }
+    : null;
 
   let corpo;
   if (erroMarcas) {

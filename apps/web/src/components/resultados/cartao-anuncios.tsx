@@ -29,8 +29,11 @@ import type { Periodo } from './textos';
 // terminou, por até 3 minutos.
 
 export type ConsultaDosAnuncios = { brand_id: string; from: string; to: string };
-/** O que a tela de Resultados passa ao cartão: a consulta e o período escolhido. */
-export type AnunciosDaTela = { consulta: ConsultaDosAnuncios; periodo: Periodo };
+/**
+ * O que a tela de Resultados passa ao cartão: a consulta, o período escolhido e o que fazer quando a leitura pedida
+ * termina (a tela lê de novo os números do caixa: o gasto de "Por campanha" é o mesmo do cartão, ERR-140).
+ */
+export type AnunciosDaTela = { consulta: ConsultaDosAnuncios; periodo: Periodo; aoTerminarLeitura?: () => void };
 
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; chave: string; dados: AdDeliveryResponse } | { tipo: 'erro'; chave: string; problema: Problema };
 
@@ -40,12 +43,19 @@ type Props = {
   periodo: Periodo;
   fuso: string;
   podeVerContas: boolean;
+  /** Chamado uma vez quando a leitura pedida termina (bem, com falha ou no fim do prazo). */
+  aoTerminarLeitura?: () => void;
 };
 
 const SUB = 'O que a Meta e o Google informam, na contagem deles: quantas vezes os anúncios apareceram, para quantas pessoas, os cliques e o gasto. O que voltou no caixa está em “Por campanha”.';
 
-export function CartaoAnuncios({ consulta, periodo, fuso, podeVerContas }: Props) {
+export function CartaoAnuncios({ consulta, periodo, fuso, podeVerContas, aoTerminarLeitura }: Props) {
   const avisar = useAvisar();
+  // Em ref: a tela pode passar uma função nova a cada desenho, e a espera do "Ler agora" não recomeça por isso.
+  const aoTerminar = useRef(aoTerminarLeitura);
+  useEffect(() => {
+    aoTerminar.current = aoTerminarLeitura;
+  });
   const d = useDetalhes();
   const chave = JSON.stringify(consulta);
   const [carga, setCarga] = useState<Carga>({ tipo: 'carregando' });
@@ -106,6 +116,8 @@ export function CartaoAnuncios({ consulta, periodo, fuso, podeVerContas }: Props
             setLeitura(fim);
             const aviso = avisoDoFim(fim, r.data.accounts, fuso);
             if (aviso) avisar(aviso, { tipo: fim.tipo === 'terminou' && !fim.falharam.length ? 'ok' : 'perigo' });
+            // O resto de Resultados (o gasto de "Por campanha", a hora de cada fonte) lê de novo (ERR-140).
+            aoTerminar.current?.();
             return;
           }
           setLeitura({ ...leitura, vistas: Object.fromEntries(r.data.accounts.map((c) => [c.connected_account_id, c.last_attempt_at])) });

@@ -140,7 +140,14 @@ export function ResultadosConteudo({
         <CartaoCampanhas campanhas={tela.campanhas} lite={graficos.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} pedir={pedir} vendasAoGoogle={vendasAoGoogle} />
         {/* Uma marca, um cartão: trocar de marca recomeça a leitura pedida. */}
         {anuncios && (
-          <CartaoAnuncios key={anuncios.consulta.brand_id} consulta={anuncios.consulta} periodo={anuncios.periodo} fuso={tela.base.fuso} podeVerContas={podeVerContas} />
+          <CartaoAnuncios
+            key={anuncios.consulta.brand_id}
+            consulta={anuncios.consulta}
+            periodo={anuncios.periodo}
+            fuso={tela.base.fuso}
+            podeVerContas={podeVerContas}
+            aoTerminarLeitura={anuncios.aoTerminarLeitura}
+          />
         )}
         {!pro && <CartaoConversas linhas={graficos.conversas} />}
         <CartaoOrigem origem={tela.origem} lite={graficos.origem} podeVerContas={podeVerContas} podeVerMensagens={podeVerMensagens} />
