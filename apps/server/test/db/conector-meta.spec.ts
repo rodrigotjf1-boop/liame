@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 import { createDatabase, type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { METRICAS_DE_PERIODO } from '../../src/connectors/alcance-do-periodo.js';
 import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { enderecosDasPlataformas, PERFIL_GOOGLE_OFICIAL, SEARCH_CONSOLE_OFICIAL } from '../../src/connectors/enderecos.js';
 import { fatias } from '../../src/connectors/janela.js';
@@ -41,6 +42,16 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
     const f = fixture('insights');
     return { ...f, data: f.data.filter((l) => (l.date_start as string) >= faixa.since && (l.date_start as string) <= faixa.until) };
   };
+  /** O alcance do período (P23): um número por faixa pedida em `time_ranges`, na ordem do pedido (o dia, 7 e 30 dias). */
+  const ALCANCE_DA_CAMPANHA: [string, number[]][] = [['120210000000000001', [310, 4120, 9870]], ['120210000000000002', [140, 1980, 4400]]];
+  const ALCANCE_DA_CONTA = [450, 5900, 13800];
+  const alcanceDe = (faixas: { since: string; until: string }[], nivel: string | null) => ({
+    data: faixas.flatMap((f, i): Record<string, string>[] =>
+      nivel === 'account'
+        ? [{ account_id: '1234567890', reach: String(ALCANCE_DA_CONTA[i]), date_start: f.since, date_stop: f.until }]
+        : ALCANCE_DA_CAMPANHA.map(([id, v]) => ({ campaign_id: id, reach: String(v[i]), date_start: f.since, date_stop: f.until })),
+    ),
+  });
 
   function responder(req: IncomingMessage) {
     const url = new URL(req.url ?? '/', base);
@@ -69,6 +80,11 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
         const id = String(proximoRelatorio++);
         relatorios.set(id, { timeRange: JSON.parse(url.searchParams.get('time_range')!), consultas: 0, falha: no === 'act_9990000002' });
         return { status: 200, corpo: { report_run_id: id } };
+      }
+      if (aresta === 'insights' && url.searchParams.has('time_ranges')) {
+        // Conta em que só a consulta do alcance do período falha (a Meta fora do ar nela): os números do dia seguem.
+        if (no === 'act_9990000005') return { status: 503, corpo: { error: { code: 2, type: 'OAuthException', message: 'An unexpected error has occurred. Please retry your request later.' } } };
+        return { status: 200, corpo: alcanceDe(JSON.parse(url.searchParams.get('time_ranges')!), url.searchParams.get('level')) };
       }
       if (aresta === 'insights') return { status: 200, corpo: insightsDe(JSON.parse(url.searchParams.get('time_range')!)) };
       if (['adsets', 'ads', 'adcreatives'].includes(aresta)) return { status: 200, corpo: fixture(aresta) };
@@ -110,6 +126,10 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
   const conta = (externalId = CONTA) => ({ credencial: { accessToken: TOKEN }, externalId, timezone: 'America/Sao_Paulo', currency: 'BRL' });
   const doPonto = (pontos: PontoMetrica[], data: string, nome: string, janela?: string) =>
     pontos.find((p) => p.metricDate === data && p.metricName === nome && (p.attributionWindow ?? '') === (janela ?? ''))?.value;
+  /** Os números de cada dia (sem o alcance do período, que vem na mesma leitura). */
+  const diarios = (pontos: PontoMetrica[]) => pontos.filter((p) => !(METRICAS_DE_PERIODO as readonly string[]).includes(p.metricName));
+  /** As consultas dos números de cada dia (as do alcance do período vão com `time_ranges`). */
+  const doDia = (p: Pedido) => p.caminho.endsWith('/insights') && p.query.has('time_range');
 
   it('versão do Capability Registry; token só no cabeçalho, com appsecret_proof', async () => {
     const c = await criarConectorMeta(database.db, cliente(), plataformas());
@@ -212,13 +232,13 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
   it('métricas da janela curta: insights síncronos por anúncio e dia, com cada janela de atribuição', async () => {
     const antes = pedidos.length;
     const pontos = await conector().lerMetricas(conta(), { inicio: '2026-09-14', fim: '2026-09-20' });
-    const chamada = pedidos.slice(antes).find((p) => p.caminho.endsWith('/insights'))!;
+    const chamada = pedidos.slice(antes).find(doDia)!;
     expect(chamada.metodo).toBe('GET');
     expect(chamada.query.get('level')).toBe('ad');
     expect(chamada.query.get('time_increment')).toBe('1');
     expect(JSON.parse(chamada.query.get('action_attribution_windows')!)).toEqual(['7d_click', '1d_view']);
 
-    expect(pontos).toHaveLength(29);
+    expect(diarios(pontos)).toHaveLength(29);
     expect(doPonto(pontos, '2026-09-19', 'spend')).toBe('48.37');
     expect(doPonto(pontos, '2026-09-19', 'link_clicks')).toBe('97');
     expect(doPonto(pontos, '2026-09-20', 'impressions')).toBe('5388');
@@ -240,12 +260,47 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
     ]);
     const antes = pedidos.length;
     const pontos = await conector().lerMetricas(conta(), { inicio: '2026-09-11', fim: '2026-09-20' });
-    const faixas = pedidos.slice(antes).filter((p) => p.caminho.endsWith('/insights')).map((p) => JSON.parse(p.query.get('time_range')!));
+    const faixas = pedidos.slice(antes).filter(doDia).map((p) => JSON.parse(p.query.get('time_range')!));
     expect(faixas).toEqual([
       { since: '2026-09-11', until: '2026-09-17' },
       { since: '2026-09-18', until: '2026-09-20' },
     ]);
-    expect(pontos).toHaveLength(29);
+    expect(diarios(pontos)).toHaveLength(29);
+  });
+
+  it('alcance do período (P23): uma consulta por nível com as três faixas, sem time_increment; um número por faixa, estimado', async () => {
+    const antes = pedidos.length;
+    const pontos = await conector().lerMetricas(conta(), { inicio: '2026-09-14', fim: '2026-09-20' });
+    const doPeriodo = pedidos.slice(antes).filter((p) => p.caminho === `/v26.0/${CONTA}/insights` && p.query.has('time_ranges'));
+    // As duas consultas (por campanha e pela conta), com o dia da leitura e os 7 e 30 dias completos até a véspera, escritos.
+    expect(doPeriodo.map((p) => p.query.get('level'))).toEqual(['campaign', 'account']);
+    for (const p of doPeriodo) {
+      expect(JSON.parse(p.query.get('time_ranges')!)).toEqual([
+        { since: '2026-09-20', until: '2026-09-20' },
+        { since: '2026-09-13', until: '2026-09-19' },
+        { since: '2026-08-21', until: '2026-09-19' },
+      ]);
+      // Sem `time_increment` (o padrão é um número para a faixa inteira) e sem `date_preset` (não diz se inclui hoje).
+      expect(p.query.has('time_increment')).toBe(false);
+      expect(p.query.has('date_preset')).toBe(false);
+    }
+    const periodo = pontos.filter((p) => (METRICAS_DE_PERIODO as readonly string[]).includes(p.metricName));
+    expect(periodo).toHaveLength(9);
+    expect(periodo.every((p) => p.quality === 'estimado' && (p.attributionWindow ?? '') === '')).toBe(true);
+    const daCampanha = (nome: string, data: string) => periodo.find((p) => p.level === 'campaign' && p.externalEntityId === '120210000000000001' && p.metricName === nome && p.metricDate === data)?.value;
+    expect(daCampanha('reach_dia', '2026-09-20')).toBe('310');
+    expect(daCampanha('reach_7d', '2026-09-19')).toBe('4120');
+    expect(daCampanha('reach_30d', '2026-09-19')).toBe('9870');
+    // A conta: o mesmo id da conta conectada (act_…), não o que a Meta devolve sem o prefixo.
+    expect(periodo.find((p) => p.level === 'account' && p.metricName === 'reach_30d')).toMatchObject({ externalEntityId: CONTA, value: '13800', metricDate: '2026-09-19' });
+    // O alcance de cada dia continua vindo por anúncio, como sempre.
+    expect(diarios(pontos).some((p) => p.metricName === 'reach' && p.level === 'ad')).toBe(true);
+  });
+
+  it('a consulta do alcance do período falha sem ser a autorização: os números do dia ficam, e o alcance do período fica de fora', async () => {
+    const pontos = await conector().lerMetricas(conta('act_9990000005'), { inicio: '2026-09-14', fim: '2026-09-20' });
+    expect(diarios(pontos)).toHaveLength(29);
+    expect(pontos.some((p) => (METRICAS_DE_PERIODO as readonly string[]).includes(p.metricName))).toBe(false);
   });
 
   it('carga inicial (janela longa): relatório assíncrono criado, acompanhado até concluir e lido', async () => {
@@ -259,7 +314,7 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
     ]);
     expect(feitos.every((p) => p.autorizacao === `Bearer ${TOKEN}`)).toBe(true);
     expect(feitos.filter((p) => /^\/v26\.0\/\d+$/.test(p.caminho))).toHaveLength(4);
-    expect(pontos).toHaveLength(29);
+    expect(diarios(pontos)).toHaveLength(29);
     expect(doPonto(pontos, '2026-09-19', 'purchase_value', '7d_click')).toBe('330.00');
   });
 
@@ -305,6 +360,7 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
       observedAt: new Date('2026-09-21T10:00:00Z'),
     };
     const r = await withTenant(database.db, tenantId, (tx) => gravarMetricas(tx, ctx, pontos));
-    expect(r).toEqual({ novas: 29, lidas: 29 });
+    // 29 números do dia e 9 do alcance do período (por campanha e pela conta, nos níveis que o banco aceita).
+    expect(r).toEqual({ novas: 38, lidas: 38 });
   });
 });

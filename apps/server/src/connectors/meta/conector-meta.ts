@@ -4,6 +4,7 @@ import type { Db } from '@liame/database';
 import { Logger } from '@nestjs/common';
 import type { AppConfig } from '../../config.js';
 import type { PontoMetrica } from '../../media/metric-store.js';
+import { faixaDaLinha, faixasDoAlcance, METRICAS_DE_PERIODO } from '../alcance-do-periodo.js';
 import { type ClienteConector, ErroConector } from '../cliente-http.js';
 import { dataValida, diasNaJanela, fatias } from '../janela.js';
 import {
@@ -91,7 +92,7 @@ const DIRETAS = [
 type LinhaInsights = { ad_id: string; date_start: string; actions?: Acao[]; action_values?: Acao[] } & Partial<Record<(typeof DIRETAS)[number][0], string>>;
 
 /** Nomes canônicos que este conector pode gravar (o mapa da distribuição precisa conhecer todos). */
-export const METRICAS_CANONICAS_META = [...DIRETAS.map(([, nome]) => nome), ...Object.keys(CANONICAS), ...Object.keys(VALORES_CANONICOS)];
+export const METRICAS_CANONICAS_META = [...DIRETAS.map(([, nome]) => nome), ...Object.keys(CANONICAS), ...Object.keys(VALORES_CANONICOS), ...METRICAS_DE_PERIODO];
 
 function janelasDe(a: Acao): [string, string][] {
   const out: [string, string][] = [];
@@ -295,6 +296,37 @@ export class ConectorMeta implements ConectorLeitura {
         ? await this.relatorioAssincrono(conta, params)
         : await this.paginas<LinhaInsights>(conta.credencial, conta.externalId, `${conta.externalId}/insights`, { ...params, limit: '500' }, 'insights');
       for (const l of linhas) pontos.push(...pontosDaLinha(l));
+    }
+    pontos.push(...(await this.lerAlcanceDoPeriodo(conta, janela.fim)));
+    return pontos;
+  }
+
+  /**
+   * O alcance do período (P23): pessoas diferentes no dia `fim`, nos 7 e nos 30 dias completos até a véspera, por
+   * campanha e pela conta, uma consulta por nível com as três faixas (`time_ranges`; sem `time_increment`, um número
+   * por faixa). O alcance de cada dia, que já vem na leitura acima, não se soma. Falhou sem ser a autorização: os números
+   * do dia ficam gravados e o alcance do período fica o da última leitura (V42).
+   */
+  private async lerAlcanceDoPeriodo(conta: ContextoConta, fim: string): Promise<PontoMetrica[]> {
+    const faixas = faixasDoAlcance(fim);
+    const intervalos = JSON.stringify(faixas.map(({ since, until }) => ({ since, until })));
+    type Linha = { campaign_id?: string; account_id?: string; reach?: string; date_start?: string; date_stop?: string };
+    const pontos: PontoMetrica[] = [];
+    try {
+      for (const nivel of ['campaign', 'account'] as const) {
+        const campos = nivel === 'campaign' ? 'campaign_id,reach,date_start,date_stop' : 'account_id,reach,date_start,date_stop';
+        const linhas = await this.paginas<Linha>(conta.credencial, conta.externalId, `${conta.externalId}/insights`, { level: nivel, time_ranges: intervalos, fields: campos, limit: '500' }, 'insights');
+        for (const l of linhas) {
+          const faixa = faixaDaLinha(faixas, l.date_start, l.date_stop);
+          const entidade = nivel === 'campaign' ? l.campaign_id : conta.externalId;
+          if (!faixa || !entidade || l.reach === undefined) continue;
+          pontos.push({ level: nivel, externalEntityId: entidade, metricDate: faixa.until, metricName: faixa.metrica, value: l.reach, quality: 'estimado' });
+        }
+      }
+    } catch (err) {
+      if (err instanceof ErroConector && err.tipo === 'autenticacao') throw err;
+      this.logger.warn(`alcance do período não lido (${conta.externalId}): ${err instanceof Error ? err.message : String(err)}`);
+      return [];
     }
     return pontos;
   }
