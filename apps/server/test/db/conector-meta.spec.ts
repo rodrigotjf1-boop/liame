@@ -46,7 +46,7 @@ describe.skipIf(!hasDb)('conector da Meta (leitura, v26.0)', () => {
   const ALCANCE_DA_CAMPANHA: [string, number[]][] = [['120210000000000001', [310, 4120, 9870]], ['120210000000000002', [140, 1980, 4400]]];
   const ALCANCE_DA_CONTA = [450, 5900, 13800];
   const alcanceDe = (faixas: { since: string; until: string }[], nivel: string | null) => ({
-    data: faixas.flatMap((f, i) =>
+    data: faixas.flatMap((f, i): Record<string, string>[] =>
       nivel === 'account'
         ? [{ account_id: '1234567890', reach: String(ALCANCE_DA_CONTA[i]), date_start: f.since, date_stop: f.until }]
         : ALCANCE_DA_CAMPANHA.map(([id, v]) => ({ campaign_id: id, reach: String(v[i]), date_start: f.since, date_stop: f.until })),

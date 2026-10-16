@@ -56,7 +56,7 @@ describe.skipIf(!hasDb)('sincronização das contas conectadas', () => {
       if (aresta === 'insights' && url.searchParams.has('time_ranges')) {
         const faixas = JSON.parse(url.searchParams.get('time_ranges')!) as { since: string; until: string }[];
         const conta = url.searchParams.get('level') === 'account';
-        const data = faixas.flatMap((f, i) =>
+        const data = faixas.flatMap((f, i): Record<string, string>[] =>
           conta
             ? [{ account_id: '1234567890', reach: String(500 + i * 1000), date_start: f.since, date_stop: f.until }]
             : ['120210000000000001', '120210000000000002'].map((id, n) => ({ campaign_id: id, reach: String(300 + i * 1000 + n), date_start: f.since, date_stop: f.until })),
