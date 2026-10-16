@@ -114,6 +114,43 @@ describe('volta da autorização', () => {
     expect(escolhiveis(conexao({ discovered: d }), [{ ...existentes[0]!, connection_id: ID }])).toEqual([]);
   });
 
+  it('escrita da Meta: a conta lida pela autorização de leitura entra na escolha da autorização de escrita (ERR-138)', () => {
+    const d = [descoberta('meta_ads', 'act_1847866112423247', 'CA - Mister Burguer', true)];
+    const conta = { provider: 'meta_ads', external_id: 'act_1847866112423247', status: 'ativa', connection_id: 'leitura', disconnected_at: null } as ConnectionResponse['accounts'][number];
+    // A Meta não devolve os escopos: o que diz se a autorização é de escrita é `requested_access`.
+    const leitura = conexao({ id: 'leitura', provider: 'meta', status: 'ativa', scopes: [], requested_access: null, accounts: [conta] });
+    const existentes = contasExistentes([leitura]);
+    expect(existentes.map((e) => e.escreve)).toEqual([false]);
+    // Na produção, em 15/10/2026: a de escrita esperando a escolha, com a conta "já ligada" e 0 contas.
+    const escrita = conexao({ provider: 'meta', status: 'aguardando_escolha', scopes: [], requested_access: 'escrita', discovered: d });
+    expect(escolhiveis(escrita, existentes)).toEqual([{ conta: d[0], reconectar: true, escrita: true }]);
+    const faixa = faixaDaVolta({ conexao: ID, erro: null }, escrita, 'Mister Burgers', { existentes });
+    expect(faixa).toMatchObject({ tipo: 'escolher', titulo: 'A Meta autorizou o Liame a mudar os anúncios.' });
+    expect(faixa?.texto).toContain('só com a aprovação de uma pessoa');
+    // Uma de leitura nova (ou a antiga sem o campo) não assume a conta: fica travada, como antes.
+    expect(escolhiveis({ ...escrita, requested_access: 'leitura' }, existentes)).toEqual([]);
+    expect(escolhiveis({ ...escrita, requested_access: undefined }, existentes)).toEqual([]);
+    // A conta já lida por outra de escrita não muda; e a resposta de antes do campo não sabe, então não oferece.
+    expect(escolhiveis(escrita, contasExistentes([{ ...leitura, requested_access: 'escrita' }]))).toEqual([]);
+    expect(escolhiveis(escrita, contasExistentes([{ ...leitura, requested_access: undefined }]))).toEqual([]);
+    // O Google não tem a escrita por autorização: o campo da Meta não vale para ele.
+    const google = conexao({ provider: 'google', requested_access: 'escrita', discovered: [descoberta('google_ads', '7984811811', 'Mister', true)] });
+    const doGoogle = contasExistentes([{ ...leitura, provider: 'google', accounts: [{ ...conta, provider: 'google_ads', external_id: '7984811811' }] }]);
+    expect(escolhiveis(google, doGoogle)).toEqual([]);
+    // Conta já desligada não conta.
+    expect(escolhiveis(escrita, existentes.map((e) => ({ ...e, disconnected_at: local(27, 8) })))).toEqual([]);
+  });
+
+  it('RegemCast: o token novo da distribuição para a mesma conta entra na escolha como troca de token (varredura do ERR-138)', () => {
+    const d = [descoberta('regemcast', '3b8e2a1c-9d4f-4e6a-8c2b-1f7d5e9a3c64', 'MISTER BURGERS', true)];
+    const conta = { provider: 'regemcast', external_id: d[0]!.external_id, status: 'ativa', connection_id: 'token-antigo', disconnected_at: null } as ConnectionResponse['accounts'][number];
+    const existentes = contasExistentes([conexao({ id: 'token-antigo', provider: 'regemcast', origin: 'distribuicao', status: 'ativa', accounts: [conta] })]);
+    const nova = conexao({ provider: 'regemcast', origin: 'distribuicao', discovered: d });
+    expect(escolhiveis(nova, existentes)).toEqual([{ conta: d[0], reconectar: true, token: true }]);
+    // A própria autorização do token de hoje não troca nada.
+    expect(escolhiveis({ ...nova, id: 'token-antigo' }, existentes)).toEqual([]);
+  });
+
   it('renovar (Google em fase de teste): a conta lida por uma autorização que vence ANTES desta entra na escolha (ERR-052)', () => {
     const d = [descoberta('google_ads', '7984811811', 'Mister', true), descoberta('ga4', '333444555', 'Site', true)];
     const antiga = conexao({ id: 'antiga', status: 'ativa', refresh_expires_at: local(29, 9), accounts: [] });

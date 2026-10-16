@@ -103,7 +103,7 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 | `AUDIT_ANCHOR_SIGNING_KEY` **S** | ✔ | ✔ | chave ECDSA P-256 numa linha (seção 5) |
 | `REKOR_URL` | ✔ | ✔ | `https://log2025-1.rekor.sigstore.dev` (conferir o shard vigente no SigningConfig da Sigstore) |
 | `TSA_URL` | ✔ | ✔ | `https://timestamp.sigstore.dev/api/v1/timestamp` |
-| `TERMS_VERSION` | ✔ | ✔ | a versão publicada no site: `2026-09-29` (páginas no ar desde 29/09/2026) |
+| `TERMS_VERSION` | ✔ | ✔ | a versão publicada no site: `2026-10-16` (desde 16/10/2026; antes, `2026-09-29`). Trocar só depois de as páginas novas estarem no ar; vale para cadastro e convite novos, ninguém precisa aceitar de novo |
 | `TERMS_URL` · `PRIVACY_URL` | ✔ | ✔ | `https://agencialiame.com/termos/` · `https://agencialiame.com/privacidade/` |
 | `META_APP_ID` · `META_LOGIN_CONFIG_ID` | ✔ | ✔ | `1399495602273174` · `1068233099319648` |
 | `META_LOGIN_CONFIG_ID_ESCRITA` | ✔ | — | o ID da configuração de **escrita** do login da Meta (A4), quando ela existir; sem ela, todas as empresas autorizam pela de leitura |

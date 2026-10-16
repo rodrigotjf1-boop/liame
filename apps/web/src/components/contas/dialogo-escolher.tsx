@@ -11,8 +11,9 @@ import { botaoLigar, type ContaExistente, escolhiveis, gruposDaEscolha, idDaCont
 
 // "Escolher contas" depois da autorização (protótipo aprovado): as contas que ela alcança, agrupadas
 // por plataforma; as que já estão ligadas aparecem marcadas e travadas, menos as que a plataforma
-// recusou antes ("desconectada"), que esta autorização reconecta, e as que são lidas por uma autorização
-// que vence antes desta (Google em fase de teste), que esta renova. Uma chamada liga todas.
+// recusou antes ("desconectada"), que esta autorização reconecta, as que são lidas por uma autorização
+// que vence antes desta (Google em fase de teste), que esta renova, e as da Meta lidas pela autorização de
+// leitura quando esta é a de escrita (ERR-138). Uma chamada liga todas.
 
 type Props = {
   conexao: ConnectionResponse;
@@ -37,6 +38,11 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const renovaveis = new Set(opcoes.filter((o) => o.renovar).map((o) => chave(o.conta.provider, o.conta.external_id)));
   // Lidas hoje por uma autorização sem a permissão de informar vendas ao Google, que esta inclui (A5, Y1): também só troca.
   const comPermissao = new Set(opcoes.filter((o) => o.permissao).map((o) => chave(o.conta.provider, o.conta.external_id)));
+  // Lidas hoje pela autorização de leitura da Meta, e esta é a de escrita (ERR-138): também só troca.
+  const comEscrita = new Set(opcoes.filter((o) => o.escrita).map((o) => chave(o.conta.provider, o.conta.external_id)));
+  // A conta do RegemCast com o token novo da distribuição: também só troca.
+  const tokenNovo = new Set(opcoes.filter((o) => o.token).map((o) => chave(o.conta.provider, o.conta.external_id)));
+  const soTrocaA = (k: string) => renovaveis.has(k) || comPermissao.has(k) || comEscrita.has(k) || tokenNovo.has(k);
   // Reconectar já vem marcado; uma conta nova só, também. Várias novas: a pessoa escolhe (nada ligado sem querer).
   const [marcadas, setMarcadas] = useState<Set<string>>(() => {
     const iniciais = new Set(reconectaveis);
@@ -48,7 +54,7 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const grupos = gruposDaEscolha(conexao.discovered);
   const primeiraLivre = livres[0] ? chave(livres[0].provider, livres[0].external_id) : null;
   // Tudo o que há para ligar já é lido por outra autorização: ligar aqui só troca a autorização, sem primeira leitura.
-  const soTroca = livres.length > 0 && livres.every((d) => renovaveis.has(chave(d.provider, d.external_id)) || comPermissao.has(chave(d.provider, d.external_id)));
+  const soTroca = livres.length > 0 && livres.every((d) => soTrocaA(chave(d.provider, d.external_id)));
   // As lojas do perfil da empresa no Google (P17, parte B) contam à parte no botão, na nota e no aviso.
   const comLoja = livres.some((d) => ehLojaDoPerfil(d.provider));
 
@@ -77,15 +83,18 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
     if (!r.ok) return setErro(mensagemDe(r.problema));
     const ja = r.data.already_linked.length;
     const novas = r.data.linked.length;
-    const soRenovou = novas > 0 && contas.every((d) => renovaveis.has(chave(d.provider, d.external_id)) || comPermissao.has(chave(d.provider, d.external_id)));
+    const soRenovou = novas > 0 && contas.every((d) => soTrocaA(chave(d.provider, d.external_id)));
     const ganhouPermissao = contas.some((d) => comPermissao.has(chave(d.provider, d.external_id)));
+    const ganhouEscrita = contas.some((d) => comEscrita.has(chave(d.provider, d.external_id)));
     const lojasLigadas = r.data.linked.filter((a) => ehLojaDoPerfil(a.provider)).length;
     aoLigar(
       novas && comLoja && !soRenovou
         ? `${avisoDeLigarComLoja(novas - lojasLigadas, lojasLigadas)}${ja ? ` ${ja === 1 ? '1 já estava ligada' : `${ja} já estavam ligadas`} a uma marca.` : ''}`
         : !novas
         ? `Nada novo: ${ja === 1 ? 'a conta já estava ligada' : 'as contas já estavam ligadas'} a uma marca.`
-        : soRenovou && ganhouPermissao
+        : soRenovou && ganhouEscrita
+          ? `${novas === 1 ? 'A conta passou' : 'As contas passaram'} para a autorização nova da Meta: o Liame pode pedir mudanças de verba, pausar e retomar, sempre com a aprovação de uma pessoa. A leitura segue sem parar.`
+          : soRenovou && ganhouPermissao
           ? `${novas === 1 ? 'A conta passou' : 'As contas passaram'} para a autorização nova, que inclui a permissão de informar vendas ao Google. A leitura segue sem parar.`
           : soRenovou
           ? `Autorização renovada: ${novas === 1 ? 'a conta passa' : 'as contas passam'} a ser ${novas === 1 ? 'lida' : 'lidas'} pela autorização nova. A leitura segue sem parar.`
@@ -152,7 +161,9 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
                     </span>
                     {d.via && <span className="lite-chip">via {d.via}</span>}
                     {travada && <span className="lite-chip">já ligada</span>}
-                    {reconectar && !renovaveis.has(k) && !comPermissao.has(k) && <span className="lite-chip lite-chip--perigo">desconectada: ligar de novo</span>}
+                    {reconectar && !soTrocaA(k) && <span className="lite-chip lite-chip--perigo">desconectada: ligar de novo</span>}
+                    {comEscrita.has(k) && <span className="lite-chip">passa a aceitar mudanças aprovadas</span>}
+                    {tokenNovo.has(k) && <span className="lite-chip">passa para o token novo</span>}
                     {renovaveis.has(k) && <span className="lite-chip lite-chip--atraso">a autorização atual vence antes: renovar</span>}
                     {comPermissao.has(k) && !renovaveis.has(k) && (
                       <span className="lite-chip">{d.provider === 'google_ads' ? 'passa a poder informar vendas' : 'passa para esta autorização'}</span>

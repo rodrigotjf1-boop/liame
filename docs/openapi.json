@@ -22062,6 +22062,13 @@
                               "type": "string"
                             }
                           },
+                          "requested_access": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z0-9_]+$"
+                          },
                           "discovered": {
                             "type": "array",
                             "items": {
@@ -22726,6 +22733,13 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "requested_access": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[a-z0-9_]+$"
                     },
                     "discovered": {
                       "type": "array",
@@ -23599,6 +23613,13 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "requested_access": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[a-z0-9_]+$"
                     },
                     "discovered": {
                       "type": "array",

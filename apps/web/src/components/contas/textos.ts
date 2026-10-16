@@ -147,17 +147,38 @@ export type ContaExistente = Pick<ConnectedAccountResponse, 'provider' | 'extern
   vence_em?: string | null;
   /** A autorização que hoje lê esta conta inclui a permissão de informar vendas ao Google; ausente = não se sabe. */
   informa_vendas?: boolean;
+  /** Meta: a autorização que hoje lê esta conta foi pela configuração de escrita (gerenciar anúncios); ausente = não se sabe. */
+  escreve?: boolean;
 };
 
-/** As contas já ligadas, cada uma com o vencimento e a permissão de informar vendas da autorização que a lê hoje. */
-export function contasExistentes(conexoes: (Pick<ConnectionResponse, 'accounts' | 'refresh_expires_at'> & Partial<Pick<ConnectionResponse, 'scopes'>>)[]): ContaExistente[] {
+/** Meta: a autorização foi pela configuração do login que também pede para gerenciar anúncios (`requested_access`). */
+export function autorizaEscrita(c: Partial<Pick<ConnectionResponse, 'provider' | 'requested_access'>>): boolean {
+  return c.provider === 'meta' && c.requested_access === 'escrita';
+}
+
+/**
+ * As contas já ligadas, cada uma com o vencimento, a permissão de informar vendas e, na Meta, a escrita da autorização
+ * que a lê hoje. A resposta de antes de 16/10/2026 não traz `requested_access`: aí a escrita fica sem se saber.
+ */
+export function contasExistentes(
+  conexoes: (Pick<ConnectionResponse, 'accounts' | 'refresh_expires_at'> & Partial<Pick<ConnectionResponse, 'scopes' | 'provider' | 'requested_access'>>)[],
+): ContaExistente[] {
   return conexoes.flatMap((c) =>
-    c.accounts.map((a) => ({ ...a, vence_em: c.refresh_expires_at ?? null, ...(c.scopes ? { informa_vendas: c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS) } : {}) })),
+    c.accounts.map((a) => ({
+      ...a,
+      vence_em: c.refresh_expires_at ?? null,
+      ...(c.scopes ? { informa_vendas: c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS) } : {}),
+      ...(c.provider === 'meta' && c.requested_access !== undefined ? { escreve: autorizaEscrita(c) } : {}),
+    })),
   );
 }
 
-/** `renovar`: a autorização de hoje vence antes; `permissao`: esta inclui informar vendas ao Google e a de hoje não. */
-export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean; renovar?: boolean; permissao?: boolean };
+/**
+ * `renovar`: a autorização de hoje vence antes; `permissao`: esta inclui informar vendas ao Google e a de hoje não;
+ * `escrita`: esta é a de escrita da Meta e a de hoje é a de leitura (ERR-138); `token`: a conta do RegemCast passa para o
+ * token novo que a distribuição registrou.
+ */
+export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean; renovar?: boolean; permissao?: boolean; escrita?: boolean; token?: boolean };
 
 /**
  * O que a pessoa pode ligar com esta autorização: as contas novas e as que estão ligadas por outra
@@ -166,16 +187,25 @@ export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean; renova
  * antes desta (Google em fase de teste): é assim que "conectar de novo antes" renova a leitura sem ela
  * parar (ERR-052). E as contas do Google lidas por outra autorização SEM a permissão de informar vendas, quando esta
  * a inclui: é assim que "autorizar o Google de novo" faz a conta poder informar (A5, Y1; no servidor, a autorização
- * nova assume a conta). As outras já ligadas ficam travadas.
+ * nova assume a conta). Na Meta, o mesmo com a escrita: a conta lida pela autorização de leitura entra na escolha da
+ * autorização de escrita, e é assim que "conectar a Meta de novo" deixa o Liame mudar verba, pausar e retomar
+ * (ERR-138). As outras já ligadas ficam travadas.
  */
 export function escolhiveis(
-  c: Pick<ConnectionResponse, 'id' | 'discovered'> & Partial<Pick<ConnectionResponse, 'refresh_expires_at' | 'scopes'>>,
+  c: Pick<ConnectionResponse, 'id' | 'discovered'> & Partial<Pick<ConnectionResponse, 'refresh_expires_at' | 'scopes' | 'provider' | 'requested_access'>>,
   existentes: ContaExistente[],
 ): Escolhivel[] {
   const ganhamPermissao = new Set(
     c.scopes?.includes(ESCOPO_DE_INFORMAR_VENDAS)
       ? existentes
           .filter((e) => e.disconnected_at === null && e.connection_id !== c.id && (e.provider === 'google_ads' || e.provider === 'ga4') && e.informa_vendas === false)
+          .map((e) => `${e.provider}:${e.external_id}`)
+      : [],
+  );
+  const ganhamEscrita = new Set(
+    autorizaEscrita(c)
+      ? existentes
+          .filter((e) => e.disconnected_at === null && e.connection_id !== c.id && e.provider === 'meta_ads' && e.escreve === false)
           .map((e) => `${e.provider}:${e.external_id}`)
       : [],
   );
@@ -191,15 +221,22 @@ export function escolhiveis(
       .map((e) => `${e.provider}:${e.external_id}`),
   );
   // Loja do Regem ligada por OUTRA autorização: esta troca o token dela (o antigo parou de valer no Regem
-  // quando o novo nasceu), então ela entra de novo na escolha, como reconexão.
+  // quando o novo nasceu), então ela entra de novo na escolha, como reconexão. A conta do RegemCast também: o token
+  // novo vem da distribuição (outras permissões, como as da rotina do CRM), e ligar aqui passa a conta para ele; a
+  // autorização antiga, sem conta, é encerrada e o token dela revogado no RegemCast (`ligarContas`). Achado ao varrer
+  // os casos do ERR-138.
   const trocaDeToken = new Set(
-    existentes.filter((e) => e.disconnected_at === null && e.provider === 'regem' && e.connection_id !== c.id).map((e) => `${e.provider}:${e.external_id}`),
+    existentes
+      .filter((e) => e.disconnected_at === null && (e.provider === 'regem' || e.provider === 'regemcast') && e.connection_id !== c.id)
+      .map((e) => `${e.provider}:${e.external_id}`),
   );
   return c.discovered.flatMap((d): Escolhivel[] => {
     if (!d.linked) return [{ conta: d, reconectar: false }];
     const k = `${d.provider}:${d.external_id}`;
+    if (d.provider === 'regemcast' && trocaDeToken.has(k)) return [{ conta: d, reconectar: true, token: true }];
     if (recusadas.has(k) || trocaDeToken.has(k)) return [{ conta: d, reconectar: true }];
     if (renovaveis.has(k)) return [{ conta: d, reconectar: true, renovar: true, ...(ganhamPermissao.has(k) ? { permissao: true } : {}) }];
+    if (ganhamEscrita.has(k)) return [{ conta: d, reconectar: true, escrita: true }];
     return ganhamPermissao.has(k) ? [{ conta: d, reconectar: true, permissao: true }] : [];
   });
 }
@@ -267,6 +304,16 @@ export function faixaDaVolta(
     };
   }
   if (escolhiveis(conexao, existentes).length && (conexao.status === 'aguardando_escolha' || conexao.status === 'ativa')) {
+    // Só a troca para a autorização de escrita da Meta (ERR-138): a conta já é lida; falta confirmar que ela passa.
+    const opcoes = escolhiveis(conexao, existentes);
+    if (opcoes.every((o) => o.escrita)) {
+      const uma = opcoes.length === 1;
+      return {
+        tipo: 'escolher',
+        titulo: 'A Meta autorizou o Liame a mudar os anúncios.',
+        texto: `Confirme ${uma ? 'a conta' : 'as contas'} para o Liame passar a usar esta autorização. Ele muda a verba diária, pausa e retoma campanhas só com a aprovação de uma pessoa. A leitura segue sem parar.`,
+      };
+    }
     if (a === 'regem') {
       const n = escolhiveis(conexao, existentes).length;
       return {

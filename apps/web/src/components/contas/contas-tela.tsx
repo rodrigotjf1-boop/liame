@@ -638,10 +638,10 @@ export function ContasTela() {
                 perfil={c.provider === 'google' ? perfilNaAutorizacao(c, dados.perfil) : null}
                 procurando={acomp?.origem === 'procurar' && acomp.id === c.id && (!acomp.conexao || emConferencia(acomp.conexao))}
                 aoEscolher={
-                  // Esperando a escolha; ou já valendo, com conta de outra autorização que vence antes (renovar) ou com loja
-                  // do perfil ainda por ligar (P17, parte B).
+                  // Esperando a escolha; ou já valendo, com conta de outra autorização que vence antes (renovar), que não tem
+                  // a permissão nova (informar vendas; na Meta, a escrita, ERR-138) ou com loja do perfil ainda por ligar (P17, parte B).
                   (c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length) ||
-                  (c.status === 'ativa' && escolhiveis(c, existentes).some((o) => o.renovar || o.permissao || (ehLojaDoPerfil(o.conta.provider) && !o.conta.linked)))
+                  (c.status === 'ativa' && escolhiveis(c, existentes).some((o) => o.renovar || o.permissao || o.escrita || o.token || (ehLojaDoPerfil(o.conta.provider) && !o.conta.linked)))
                     ? () => setDialogo({ tipo: 'escolher', conexao: c })
                     : null
                 }
