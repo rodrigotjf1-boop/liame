@@ -158,6 +158,13 @@ export {
   MediaMetricsResponse,
 } from './media.js';
 export {
+  AdDeliveryAccount,
+  AdDeliveryCampaign,
+  AdDeliveryQuery,
+  AdDeliveryRefreshRequest,
+  AdDeliveryRefreshResponse,
+  AdDeliveryResponse,
+  AdDeliveryResult,
   CampaignResult,
   ClosedLoopQuery,
   ClosedLoopAttentionQuery,

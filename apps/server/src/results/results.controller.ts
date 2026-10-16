@@ -1,4 +1,8 @@
 import {
+  AdDeliveryQuery,
+  AdDeliveryRefreshRequest,
+  AdDeliveryRefreshResponse,
+  AdDeliveryResponse,
   ClosedLoopAttentionQuery,
   ClosedLoopAttentionResponse,
   ClosedLoopQuery,
@@ -11,8 +15,10 @@ import {
   WeeklyReviewQuery,
   WeeklyReviewResponse,
 } from '@liame/contracts';
-import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
+  ApiAcceptedResponse,
+  ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -21,12 +27,14 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiTooManyRequestsResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { AtencaoCicloService } from './atencao-ciclo.service.js';
+import { DesempenhoService } from './desempenho.service.js';
 import { ResultsService } from './results.service.js';
 import { RevisaoService } from './revisao.service.js';
 
@@ -39,7 +47,43 @@ export class ResultsController {
     private readonly results: ResultsService,
     private readonly ciclo: AtencaoCicloService,
     private readonly revisao: RevisaoService,
+    private readonly desempenho: DesempenhoService,
   ) {}
+
+  @Get('delivery')
+  @Permissao('vendas.ver')
+  @ApiOperation({
+    summary: 'Como os anúncios rodaram',
+    description:
+      'O que a Meta e o Google informam da entrega dos anúncios da marca no período, na contagem deles, por campanha: impressões, alcance (só a Meta, e só para hoje, 7 e 30 dias, lido como um número só: pessoas diferentes, que não se somam entre campanhas), cliques, gasto (o mesmo de `closed-loop`) e o resultado que a plataforma conta (compras ou conversas na Meta, com 7 dias do clique; conversões no Google, na janela de cada ação). Traz a última leitura de cada conta e quando dá para pedir "Ler agora" de novo. Com a função `desempenho_anuncios` desligada para a empresa, `enabled` vem falso e o resto vazio.',
+  })
+  @ApiOkResponse({ standardSchema: AdDeliveryResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  delivery(@Auth() auth: AuthContext, @Query({ schema: AdDeliveryQuery }) query: AdDeliveryQuery): Promise<AdDeliveryResponse> {
+    return this.desempenho.ler(auth, query);
+  }
+
+  @Post('delivery/refresh')
+  @HttpCode(202)
+  @Permissao('vendas.ver')
+  @Auditar('resultados.ler_agora', { recurso: 'brand' })
+  @ApiOperation({
+    summary: 'Ler agora',
+    description:
+      'Adianta a leitura das contas de anúncio da marca (a Meta e o Google): o worker lê em até meio minuto, com o dia de hoje até agora e os dias recentes de novo. A leitura terminou quando o `last_success_at` de cada conta, em `GET /v1/results/delivery`, passa de `requested_at`. Uma vez a cada janela de 15 minutos por empresa (429 `leitura-recente`, com `retry-after`); a conta que já está sendo lida fica como está. Precisa da função `desempenho_anuncios` ligada (409 `funcao-desligada`).',
+  })
+  @ApiAcceptedResponse({ standardSchema: AdDeliveryRefreshResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  refresh(@Auth() auth: AuthContext, @Body({ schema: AdDeliveryRefreshRequest }) body: AdDeliveryRefreshRequest): Promise<AdDeliveryRefreshResponse> {
+    return this.desempenho.lerAgora(auth, body);
+  }
 
   @Get('attention')
   @Permissao('vendas.ver')

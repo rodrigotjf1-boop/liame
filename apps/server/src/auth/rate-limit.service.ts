@@ -32,4 +32,20 @@ export class RateLimitService {
       );
     }
   }
+
+  /**
+   * Quando a janela de `key` volta a aceitar: o começo da próxima janela, se esta já chegou ao limite; nulo se ainda
+   * aceita. Só lê (para a tela dizer "dá para ler de novo às…" sem gastar a vez).
+   */
+  async proximaVez(key: string, limit: number, windowSeconds: number): Promise<Date | null> {
+    if (!this.database) throw new Error('limite de tentativas sem banco');
+    const r = await withSystem(this.database.db, (tx) =>
+      tx.execute<{ hits: number; fim: Date | string }>(sql`
+        select hits, window_start + make_interval(secs => ${windowSeconds}) as fim
+          from liame.rate_limit
+         where key = ${key} and window_start = to_timestamp(floor(extract(epoch from now()) / ${windowSeconds}) * ${windowSeconds})`),
+    );
+    const linha = r.rows[0];
+    return linha && Number(linha.hits) >= limit ? new Date(linha.fim) : null;
+  }
 }

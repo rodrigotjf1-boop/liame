@@ -1,5 +1,6 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { METRICAS_DE_PERIODO } from '../connectors/alcance-do-periodo.js';
 
 // Gravação das métricas com modelo temporal (data-model §3.1, D-A2-7). Uma instrução por lote
 // (set-based): a observação nova só entra quando o número mudou; o último valor por chave é sempre
@@ -127,7 +128,8 @@ export async function metricasEm(tx: Tx, contaId: string, metricDate: string, as
  * linha quando o número vira zero (conversão reatribuída, por exemplo). Toda chave lida nesta execução
  * ficou com `observed_at` = a hora da leitura; a que ficou para trás, dentro da janela e diferente de
  * zero, passa a valer zero, com observação nova (o "antes" continua consultável). Só depois de a
- * janela inteira ter sido lida sem erro.
+ * janela inteira ter sido lida sem erro. O alcance do período (`reach_7d`…) fica de fora: cada leitura grava a faixa
+ * que termina na véspera dela, e a de uma leitura anterior, com outro último dia, continua certa para aquela faixa.
  */
 export async function zerarAusentes(tx: Tx, ctx: ContextoMetricas & { observedAt: Date }, janela: { inicio: string; fim: string }): Promise<number> {
   const r = await tx.execute<{ level: NivelMetrica; external_entity_id: string; entity_id: string | null; metric_date: string; metric_name: string; attribution_window: string }>(sql`
@@ -136,7 +138,8 @@ export async function zerarAusentes(tx: Tx, ctx: ContextoMetricas & { observedAt
      where connected_account_id = ${ctx.connectedAccountId}
        and metric_date between ${janela.inicio}::date and ${janela.fim}::date
        and observed_at < ${ctx.observedAt.toISOString()}::timestamptz
-       and metric_value <> 0`);
+       and metric_value <> 0
+       and metric_name not in ${[...METRICAS_DE_PERIODO]}`);
   if (!r.rows.length) return 0;
   const zeros: PontoMetrica[] = r.rows.map((l) => ({
     level: l.level,

@@ -189,6 +189,100 @@ export const DailyResultsResponse = z.strictObject({
 });
 export type DailyResultsResponse = z.infer<typeof DailyResultsResponse>;
 
+// ------------------------------------------------------------ Como os anúncios rodaram (P23)
+// O que a Meta e o Google informam da entrega dos anúncios, na contagem deles: impressões, alcance, cliques, gasto e o
+// resultado que a plataforma conta. O caixa continua em `closed-loop`; o gasto é o mesmo nos dois.
+
+/** Contagem inteira, em texto (cabe em numeric sem ponto flutuante). */
+const Contagem = z.string().regex(/^\d+$/);
+
+export const AdDeliveryQuery = z.strictObject({
+  brand_id: z.uuid(),
+  /** Dias no fuso da conta de anúncio (AAAA-MM-DD), inclusive, como em `closed-loop`. */
+  from: z.iso.date(),
+  to: z.iso.date(),
+});
+export type AdDeliveryQuery = z.infer<typeof AdDeliveryQuery>;
+
+/** O que a plataforma conta como resultado da campanha, na janela dela. */
+export const AdDeliveryResult = z.strictObject({
+  /** `purchases` (compras, Meta), `conversations` (conversas iniciadas, Meta) ou `conversions` (Google Ads). */
+  kind: Slug,
+  /** Pode ter casas decimais no Google (o modelo de atribuição divide a conversão). */
+  value: z.string().regex(/^\d+(\.\d{1,2})?$/),
+  /** `7d_click` (Meta, 7 dias depois do clique) ou `padrao` (Google Ads: a janela de cada ação de conversão). */
+  window: Slug,
+});
+export type AdDeliveryResult = z.infer<typeof AdDeliveryResult>;
+
+export const AdDeliveryCampaign = z.strictObject({
+  campaign_id: z.uuid(),
+  provider: Slug,
+  name: z.string(),
+  status: Slug,
+  /** O objetivo como a plataforma o guarda (`OUTCOME_TRAFFIC`, `SEARCH`…); nulo sem ele. */
+  objective: z.string().nullable(),
+  impressions: Contagem,
+  /**
+   * Pessoas diferentes que viram os anúncios da campanha no período: só a Meta informa, e só para hoje, 7 e 30 dias
+   * (o período lido como um número só). Nulo no Google e em outro período. Não se soma entre campanhas.
+   */
+  reach: Contagem.nullable(),
+  /** Todos os cliques no anúncio. */
+  clicks: Contagem,
+  /** Cliques no link (só a Meta); nulo no Google. */
+  link_clicks: Contagem.nullable(),
+  spend_micros: Micros,
+  result: AdDeliveryResult.nullable(),
+});
+export type AdDeliveryCampaign = z.infer<typeof AdDeliveryCampaign>;
+
+export const AdDeliveryAccount = z.strictObject({
+  connected_account_id: z.uuid(),
+  /** `meta_ads` ou `google_ads`. */
+  provider: Slug,
+  name: z.string(),
+  /** `ativa`, `desconectada`, `sem_permissao` ou `erro`. */
+  status: Slug,
+  /** A última leitura que deu certo; nula antes da primeira. */
+  last_success_at: z.string().nullable(),
+  /** A última tentativa (deu certo ou não); nula antes da primeira. */
+  last_attempt_at: z.string().nullable(),
+  /** O erro da última tentativa, quando ela falhou (texto para quem cuida do Liame; a tela usa `status`). */
+  last_error: z.string().nullable(),
+});
+export type AdDeliveryAccount = z.infer<typeof AdDeliveryAccount>;
+
+export const AdDeliveryResponse = z.strictObject({
+  /** A função ligada para a empresa (`desempenho_anuncios`); desligada, o resto vem vazio e a tela não mostra o cartão. */
+  enabled: z.boolean(),
+  period: z.strictObject({ from: z.string(), to: z.string() }),
+  accounts: z.array(AdDeliveryAccount),
+  totals: z.strictObject({
+    impressions: Contagem,
+    clicks: Contagem,
+    spend_micros: Micros,
+    /** Pessoas diferentes na Meta, pela conta, no período (soma das contas da Meta da marca); nulo sem ele. */
+    meta_reach: Contagem.nullable(),
+  }),
+  campaigns: z.array(AdDeliveryCampaign),
+  /** "Ler agora": uma vez a cada 15 minutos por empresa. `next_at` = quando dá para pedir de novo (nulo = já dá). */
+  refresh: z.strictObject({ available: z.boolean(), next_at: z.string().nullable() }),
+});
+export type AdDeliveryResponse = z.infer<typeof AdDeliveryResponse>;
+
+export const AdDeliveryRefreshRequest = z.strictObject({ brand_id: z.uuid() });
+export type AdDeliveryRefreshRequest = z.infer<typeof AdDeliveryRefreshRequest>;
+
+export const AdDeliveryRefreshResponse = z.strictObject({
+  /** A hora do pedido: a leitura terminou quando o `last_success_at` de cada conta passa dela. */
+  requested_at: z.string(),
+  /** Quantas contas de anúncio da marca foram mandadas ler. */
+  accounts: z.number().int().min(0),
+  next_at: z.string(),
+});
+export type AdDeliveryRefreshResponse = z.infer<typeof AdDeliveryRefreshResponse>;
+
 export const OrderOriginQuery = z.strictObject({
   brand_id: z.uuid(),
   unit_id: z.uuid().optional(),

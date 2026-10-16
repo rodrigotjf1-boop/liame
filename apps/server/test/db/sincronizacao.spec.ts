@@ -52,6 +52,17 @@ describe.skipIf(!hasDb)('sincronização das contas conectadas', () => {
         relatorios.set(id, JSON.parse(url.searchParams.get('time_range')!));
         return { status: 200, corpo: { report_run_id: id } };
       }
+      // O alcance do período (P23): por campanha e pela conta, um número por faixa de `time_ranges`.
+      if (aresta === 'insights' && url.searchParams.has('time_ranges')) {
+        const faixas = JSON.parse(url.searchParams.get('time_ranges')!) as { since: string; until: string }[];
+        const conta = url.searchParams.get('level') === 'account';
+        const data = faixas.flatMap((f, i) =>
+          conta
+            ? [{ account_id: '1234567890', reach: String(500 + i * 1000), date_start: f.since, date_stop: f.until }]
+            : ['120210000000000001', '120210000000000002'].map((id, n) => ({ campaign_id: id, reach: String(300 + i * 1000 + n), date_start: f.since, date_stop: f.until })),
+        );
+        return { status: 200, corpo: { data, paging: {} } };
+      }
       if (aresta === 'insights') return { status: 200, corpo: naFaixa(JSON.parse(url.searchParams.get('time_range')!)) };
     }
     if (relatorios.has(no) && !aresta) return { status: 200, corpo: { id: no, async_status: 'Job Completed', async_percent_completion: 100 } };
@@ -124,7 +135,8 @@ describe.skipIf(!hasDb)('sincronização das contas conectadas', () => {
   it('carga inicial: entidades com os pais, métricas pelo relatório assíncrono, execução registrada e frescor', async () => {
     contas.boa = await contaCom('act_1234567890', 'token-sistema-meta');
     const r = await loop.executarLote(3, { tenantIds: [tenantId] }, new Date('2026-09-21T15:00:00Z'));
-    expect(r).toEqual([expect.objectContaining({ status: 'ok', tipo: 'carga_inicial', janela: { inicio: '2026-06-24', fim: '2026-09-21' }, observacoesNovas: 29, zeradas: 0 })]);
+    // 29 números do dia e 9 do alcance do período (2 campanhas e a conta, em 3 faixas).
+    expect(r).toEqual([expect.objectContaining({ status: 'ok', tipo: 'carga_inicial', janela: { inicio: '2026-06-24', fim: '2026-09-21' }, observacoesNovas: 38, zeradas: 0 })]);
     expect(relatorios.size).toBe(3);
 
     const [anuncio] = await ownerQuery<{ grupo: string; campanha: string; criativo: string }>(
@@ -137,6 +149,20 @@ describe.skipIf(!hasDb)('sincronização das contas conectadas', () => {
     expect(anuncio).toEqual({ grupo: '120210000000000101', campanha: '120210000000000001', criativo: '120210000000009001' });
     const [ligadas] = await ownerQuery<{ n: string }>(`select count(*) as n from liame.metric_latest where connected_account_id = $1 and level = 'ad' and entity_id is not null`, [contas.boa]);
     expect(Number(ligadas!.n)).toBe(29);
+    // O alcance do período: a campanha ligada à campanha do Liame; a conta, sem entidade. O último dia é o da faixa.
+    const alcance = await ownerQuery<{ level: string; metric_name: string; metric_date: string; ligada: boolean; n: string }>(
+      `select level, metric_name, metric_date::text as metric_date, bool_and(entity_id is not null) as ligada, count(*) as n
+         from liame.metric_latest where connected_account_id = $1 and metric_name like 'reach\\_%' group by 1, 2, 3 order by level, metric_name collate "C"`,
+      [contas.boa],
+    );
+    expect(alcance).toEqual([
+      { level: 'account', metric_name: 'reach_30d', metric_date: '2026-09-20', ligada: false, n: '1' },
+      { level: 'account', metric_name: 'reach_7d', metric_date: '2026-09-20', ligada: false, n: '1' },
+      { level: 'account', metric_name: 'reach_dia', metric_date: '2026-09-21', ligada: false, n: '1' },
+      { level: 'campaign', metric_name: 'reach_30d', metric_date: '2026-09-20', ligada: true, n: '2' },
+      { level: 'campaign', metric_name: 'reach_7d', metric_date: '2026-09-20', ligada: true, n: '2' },
+      { level: 'campaign', metric_name: 'reach_dia', metric_date: '2026-09-21', ligada: true, n: '2' },
+    ]);
 
     const execucoes = await ownerQuery<{ dataset: string; kind: string; status: string; calls: number; observations_new: number }>(
       `select dataset, kind, status, calls, observations_new from liame.sync_run where connected_account_id = $1 order by started_at`,
@@ -144,7 +170,7 @@ describe.skipIf(!hasDb)('sincronização das contas conectadas', () => {
     );
     expect(execucoes).toEqual([
       { dataset: 'entidades', kind: 'incremental', status: 'ok', calls: 5, observations_new: 0 },
-      { dataset: 'metricas', kind: 'carga_inicial', status: 'ok', calls: 9, observations_new: 29 },
+      { dataset: 'metricas', kind: 'carga_inicial', status: 'ok', calls: 11, observations_new: 38 },
     ]);
     const [estado] = await ownerQuery<{ cursor: Record<string, string>; last_success_at: Date | null }>(
       `select cursor, last_success_at from liame.sync_state where connected_account_id = $1 and dataset = 'metricas'`,
@@ -176,7 +202,14 @@ describe.skipIf(!hasDb)('sincronização das contas conectadas', () => {
     insights = insights.map((l) => (l.date_start === '2026-09-19' ? { ...l, spend: '50.00', actions: (l.actions as { action_type: string }[]).filter((a) => !a.action_type.includes('messaging')) } : l));
     await devidaAgora(contas.boa);
     const [r] = await loop.executarLote(3, { tenantIds: [tenantId] }, new Date('2026-09-22T15:00:00Z'));
-    expect(r).toMatchObject({ status: 'ok', tipo: 'incremental', janela: { inicio: '2026-09-16', fim: '2026-09-22' }, observacoesNovas: 1, zeradas: 6 });
+    // 1 número do dia que mudou e 9 do alcance do período (o último dia agora é outro); as 6 zeradas são só as do
+    // dia: o alcance do período da leitura de ontem, com outro último dia, continua valendo para aquela faixa.
+    expect(r).toMatchObject({ status: 'ok', tipo: 'incremental', janela: { inicio: '2026-09-16', fim: '2026-09-22' }, observacoesNovas: 10, zeradas: 6 });
+    const [deOntem] = await ownerQuery<{ v: string }>(
+      `select metric_value::text as v from liame.metric_latest where connected_account_id = $1 and level = 'account' and metric_name = 'reach_7d' and metric_date = '2026-09-20'`,
+      [contas.boa],
+    );
+    expect(Number(deOntem!.v)).toBe(1500);
 
     await withTenant(database.db, tenantId, async (tx) => {
       const ontem = await metricasEm(tx, contas.boa, '2026-09-19', antes);

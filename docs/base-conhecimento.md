@@ -91,6 +91,11 @@
 ### 2.1 Marketing API
 
 - **Versões** *(reconferido em 26/09/2026 na página oficial de changelog)*: **v26.0 é a mais nova** da Graph API e da Marketing API (29/07/2026, sem data de fim) [O]; v25.0 (18/02/2026) segue valendo [O]; a **v24 da Marketing API expira em 06/10/2026** [O] (a da Graph API vai até 18/02/2028). A divergência de 24/09 (tabela da Marketing API parada na v25) acabou: a tabela já lista a v26. A Marketing API tem vida curta (a v23 expirou em 09/06/2026). Upgrade automático de versão desde 29/07/2026 [S].
+- **Alcance do período** *(developers.facebook.com/documentation/ads-commerce/marketing-api/reference/ad-account/insights, lida em 16/10/2026, para o P23)*:
+  - `reach` é "the number of Accounts Center accounts that saw your ads at least once" e "This metric is estimated" [O]: pessoas diferentes, por isso **não se soma** entre dias nem entre campanhas (o mapa de métricas da migration 0019 já dizia isso);
+  - `time_increment` tem o padrão `all_days`: "one result set for the whole period" [O]; `time_ranges` aceita faixas que se sobrepõem e, com ele, `date_preset`, `time_range` e `time_increment` são ignorados [O];
+  - `level` aceita `ad`, `adset`, `campaign` e `account` [O]; `date_preset` lista `today`, `last_7d`, `last_30d` e outros, mas **a página não diz se `last_7d` inclui o dia de hoje** [NC]: o Liame manda os dias escritos (o dia da leitura e os 7 e 30 dias completos até a véspera);
+  - as datas no fuso da conta de anúncio: a página só diz isso de `today_spend` [NC]; o Liame segue usando o dia no fuso da conta, como na leitura diária.
 - **Advantage+ unificado** (desde 29/05/2025): o status deriva de 3 alavancas (orçamento, público, posicionamento). ASC/AAC legados bloqueados em todas as versões desde 19/05/2026 [S].
 - **v26** [S]:
   - saem `daily_outcomes_curve` e `estimate_dau`;
@@ -809,6 +814,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 16/10/2026 | §2.1: **o alcance do período, para o P23 ("Como os anúncios rodaram").** Lida a referência de insights da conta de anúncio: o alcance é de pessoas diferentes e estimado; sem `time_increment`, um número para a faixa inteira; `time_ranges` com faixas que se sobrepõem; os níveis. Ficam [NC]: se `last_7d` inclui hoje (o Liame manda as datas) e o fuso das datas fora de `today_spend`. |
 | 14/10/2026 | §3.3: **antes da Z3 da A6 (o conector do Search Console).** Relidas nas páginas oficiais a permissão de só leitura (não restrita; se é sensível, só o Cloud Console diz), `sites.list` e os níveis de permissão, o formato e a codificação do site, o pedido e a resposta de `searchAnalytics.query` (datas no fuso do Pacífico, até 25.000 linhas, o dado final por padrão), o atraso de 2 a 3 dias, a busca rara que só entra no total e os erros de cota no formato antigo (403 com motivo). A página de limites segue de 28/08/2025. Ficam [NC]: a marca de sensível, o código exato do 403 de permissão e os 16 meses de histórico em página atual. |
 | 11/10/2026 | §3.3: **Z2 da A6, apagar a resposta.** Relidas a página do recurso e a do `deleteReply`: o texto da resposta é "plain text with markups", até 4.096 bytes; apagar só vale em loja verificada, com o corpo vazio e um objeto vazio na volta. Ficam como [NC]: se o Google devolve o texto como recebeu, se responder ou apagar mexe na data da avaliação, e o que o apagar responde quando não há resposta | as páginas `accounts.locations.reviews` e `deleteReply` da referência REST |
 | 11/10/2026 | §3.3: **antes da Z2 da A6 (responder a uma avaliação).** Conferido o verbo: `PUT` em `…/reply`, com `ReviewReply` no corpo e na volta, criando a resposta se ela não existir; `DELETE` apaga; `GET` lê uma avaliação pelo nome. Ficam como [NC] o formato do `reviewId` e o que a API responde para a avaliação que não existe | as páginas `updateReply`, `deleteReply` e o guia `review-data` da referência REST |
