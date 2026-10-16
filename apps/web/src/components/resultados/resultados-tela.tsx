@@ -15,6 +15,7 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
+import type { AnunciosDaTela } from './cartao-anuncios';
 import type { ConsultaDePedidos } from './cartao-pedidos';
 import { montarGraficos } from './graficos';
 import { type ExplicarResultados, ResultadosConteudo } from './resultados-conteudo';
@@ -242,6 +243,8 @@ export function ResultadosTela() {
     dados && tela && !tela.base.semRegem
       ? { brand_id: dados.marca, from: dados.dados.period.from, to: dados.dados.period.to, ...(dados.loja ? { unit_id: dados.loja } : {}) }
       : null;
+  // "Como os anúncios rodaram" (P23): as contas de anúncio são da marca, então a loja não entra.
+  const anuncios: AnunciosDaTela | null = dados ? { consulta: { brand_id: dados.marca, from: dados.dados.period.from, to: dados.dados.period.to }, periodo: dados.periodo } : null;
 
   let corpo;
   if (erroMarcas) {
@@ -293,6 +296,7 @@ export function ResultadosTela() {
           pedir={pedir}
           vendasAoGoogle={linhaDoGoogle}
           podeVerMensagens={podeVerCampanhas}
+          anuncios={anuncios}
         />
       </div>
     );

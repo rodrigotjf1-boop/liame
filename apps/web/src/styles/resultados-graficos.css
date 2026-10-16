@@ -176,3 +176,40 @@
   .par { column-gap: var(--sp-2); }
   .eixo, .eixo-legenda { margin-right: 5.4rem; }
 }
+
+/* "Como os anúncios rodaram" (P23): o que a Meta e o Google informam. Caixas que quebram a linha; nada rola para o lado. */
+#card-anuncios { container-type: inline-size; }
+.an-leitura { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-4); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.an-leitura p { min-width: 0; font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
+.an-leitura p b { font-weight: 600; color: var(--text); }
+.an-leitura .an-falha, .an-leitura .an-falha b { color: var(--danger); }
+.an-leitura .btn { flex: none; }
+.an-nota { margin-bottom: var(--sp-3); font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
+.an-numeros { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); }
+.an-numeros:has(> li:nth-child(3):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container (max-width: 760px) { .an-numeros, .an-numeros:has(> li:nth-child(3):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } .an-numeros > li:nth-child(3):last-child { grid-column: 1 / -1; } }
+.an-numeros li { display: grid; align-content: start; gap: 2px; min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: var(--text-sm); line-height: 1.35; color: var(--text-muted); }
+.an-numeros b { font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; line-height: 1.1; color: var(--text); white-space: nowrap; }
+/* No estreito, o número cabe inteiro na caixa ("R$ 1.240,00" nunca quebra no meio); no muito estreito, uma coluna. */
+@container (max-width: 420px) { .an-numeros li { padding: var(--sp-3); } .an-numeros b { font-size: var(--text-lg); } }
+@container (max-width: 300px) { .an-numeros, .an-numeros:has(> li:nth-child(3):last-child) { grid-template-columns: minmax(0, 1fr); } }
+.an-numeros small, .an-met small { font-size: var(--text-xs); color: var(--text-muted); }
+.an-camps { display: grid; gap: var(--sp-3); margin-top: var(--sp-4); }
+.an-camp { display: grid; gap: var(--sp-2); min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.an-camp-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); min-width: 0; }
+.an-camp-cab b { min-width: 0; font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.an-camp-cab span { font-size: var(--text-xs); color: var(--text-muted); }
+/* A barra em largura inteira, embaixo do nome: todas começam no mesmo ponto e se comparam (no protótipo, a regra do
+   funil punha o texto numa segunda coluna e cada barra começava depois do nome). */
+.an-camp .funil-trilho { width: 100%; }
+.an-camp .funil-txt { grid-column: auto; font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
+.an-camp .funil-txt b { white-space: nowrap; }
+/* Pro: nove caixas sem nenhuma sozinha na linha: 2 colunas no estreito (a última ocupa a linha) e 3 × 3 do meio para cima. */
+.an-met { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+.an-met li:last-child { grid-column: 1 / -1; }
+@container (min-width: 480px) { .an-met { grid-template-columns: repeat(3, minmax(0, 1fr)); } .an-met li:last-child { grid-column: auto; } }
+.an-met li { display: grid; align-content: start; gap: 2px; min-width: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--surface-2); font-size: var(--text-xs); line-height: 1.35; color: var(--text-muted); }
+.an-met b { font-family: var(--font-mono); font-size: var(--text-md); font-weight: 600; color: var(--text); white-space: nowrap; }
+.an-pro .eixo-nota { margin-top: var(--sp-3); }
+.an-vazio { display: grid; gap: var(--sp-2); justify-items: start; }
+.an-vazio p { font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); }

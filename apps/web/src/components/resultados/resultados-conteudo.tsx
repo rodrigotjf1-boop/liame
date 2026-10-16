@@ -13,6 +13,7 @@ import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { AvisosResultados } from './avisos-resultados';
 import { CartaoConversas } from './campanhas-lite';
+import { type AnunciosDaTela, CartaoAnuncios } from './cartao-anuncios';
 import { CartaoCampanhas } from './cartao-campanhas';
 import { CartaoCiclo } from './cartao-ciclo';
 import { CartaoFontes, FaixaDoTopoDosResultados } from './cartao-fontes';
@@ -56,6 +57,8 @@ type Props = {
   vendasAoGoogle?: LinhaDasVendas | null;
   /** Quem pode abrir a tela Mensagens ganha o atalho na linha das mensagens (protótipo P15, parte C). */
   podeVerMensagens?: boolean;
+  /** A consulta de "Como os anúncios rodaram" (protótipo P23); o cartão só aparece com a função ligada para a empresa. */
+  anuncios?: AnunciosDaTela | null;
 };
 
 /** "Ver por campanha": leva ao cartão das campanhas e, no Lite, abre os detalhes dele (como no protótipo). */
@@ -70,7 +73,20 @@ function verPorCampanha() {
   titulo.focus({ preventScroll: true });
 }
 
-export function ResultadosConteudo({ tela, graficos, modelo, consulta, loja, podeVerContas, reserva, explicar = null, pedir = null, vendasAoGoogle = null, podeVerMensagens = false }: Props) {
+export function ResultadosConteudo({
+  tela,
+  graficos,
+  modelo,
+  consulta,
+  loja,
+  podeVerContas,
+  reserva,
+  explicar = null,
+  pedir = null,
+  vendasAoGoogle = null,
+  podeVerMensagens = false,
+  anuncios = null,
+}: Props) {
   const pro = useModo().modo === 'pro';
   const explicacao = useExplicacao(explicar?.pedido ?? null);
   const botao = useRef<HTMLButtonElement>(null);
@@ -122,6 +138,10 @@ export function ResultadosConteudo({ tela, graficos, modelo, consulta, loja, pod
         {pro && <CartaoFontes fontes={tela.fontes} />}
         <CartaoCiclo ciclo={tela.ciclo} lite={graficos.real} rotuloPeriodo={tela.base.rotuloPeriodo} datas={tela.contexto.datas} />
         <CartaoCampanhas campanhas={tela.campanhas} lite={graficos.campanhas} rotuloPeriodo={tela.base.rotuloPeriodo} pedir={pedir} vendasAoGoogle={vendasAoGoogle} />
+        {/* Uma marca, um cartão: trocar de marca recomeça a leitura pedida. */}
+        {anuncios && (
+          <CartaoAnuncios key={anuncios.consulta.brand_id} consulta={anuncios.consulta} periodo={anuncios.periodo} fuso={tela.base.fuso} podeVerContas={podeVerContas} />
+        )}
         {!pro && <CartaoConversas linhas={graficos.conversas} />}
         <CartaoOrigem origem={tela.origem} lite={graficos.origem} podeVerContas={podeVerContas} podeVerMensagens={podeVerMensagens} />
         <CartaoPedidos consulta={consulta} fuso={tela.base.fuso} loja={loja} modelo={modelo} reserva={reserva} />
