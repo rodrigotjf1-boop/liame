@@ -11,6 +11,7 @@ import {
   type LerAgora,
   marcasDe,
   montarCartaoDosAnuncios,
+  oQueMudou,
   quandoLido,
   resultadoDe,
   taxa,
@@ -413,11 +414,101 @@ describe('o cartão desenhado', () => {
     expect(html).toContain('O alcance não se soma entre campanhas');
   });
 
-  it('o botão da linha da leitura: ler, lendo e Contas conectadas', () => {
-    expect(desenhar(entrada())).toMatch(/<button class="btn btn--sm" type="button">.*Ler agora<\/button>/);
-    expect(desenhar(entrada({ leitura: { tipo: 'pedindo' } }))).toMatch(/<button class="btn btn--sm" type="button" disabled="" aria-busy="true">.*Lendo…<\/button>/);
+  it('o botão da linha da leitura é o principal do cartão (P23, parte B): ler, lendo e Contas conectadas', () => {
+    expect(desenhar(entrada())).toMatch(/<button class="btn btn--primary" type="button">.*Ler agora<\/button>/);
+    expect(desenhar(entrada({ leitura: { tipo: 'pedindo' } }))).toMatch(/<button class="btn btn--primary" type="button" disabled="" aria-busy="true">.*Lendo…<\/button>/);
     const recusada = desenhar(entrada({ resposta: resposta({ accounts: [{ ...META, status: 'desconectada' }, GOOGLE] }) }));
     expect(recusada).toContain('<p id="an-status" tabindex="-1" class="an-falha">');
-    expect(recusada).toMatch(/<a class="btn btn--sm" href="\/contas">.*Abrir Contas conectadas<\/a>/);
+    expect(recusada).toMatch(/<a class="btn btn--primary" href="\/contas">.*Abrir Contas conectadas<\/a>/);
+  });
+
+  it('comparar com a plataforma: a entrada oficial de cada uma, em outra aba; sem números, sem o atalho', () => {
+    const html = desenhar(entrada());
+    expect(html).toContain('<a href="https://adsmanager.facebook.com/" target="_blank" rel="noopener noreferrer">Gerenciador de Anúncios da Meta');
+    expect(html).toContain('<a href="https://ads.google.com/" target="_blank" rel="noopener noreferrer">Google Ads');
+    expect(html).toContain('(abre em outra aba)');
+    expect(desenhar(entrada({ resposta: resposta({ accounts: [META], campaigns: [COMBO] }) }))).not.toContain('ads.google.com');
+    const vazio = resposta({ campaigns: [], totals: { impressions: '0', clicks: '0', spend_micros: '0', meta_reach: null } });
+    expect(desenhar(entrada({ resposta: vazio }))).not.toContain('an-comparar');
+  });
+
+  it('depois de ler: o que mudou, com o antes e o depois, e a etiqueta nas caixas que mudaram', () => {
+    const html = desenhar(entrada({ resposta: depoisDaLeitura(), leitura: terminouCom(antesDaLeitura) }));
+    expect(html).toContain('<b>O que mudou nesta leitura</b> (antes: a leitura de hoje às 06:12 e 06:14)');
+    expect(html).toContain(`<span class="rot">Gastos nas plataformas</span><span class="de">R$${NB}565,50</span><span aria-hidden="true">→</span><b><span class="sr-only">passou para </span>R$${NB}566,78</b>`);
+    expect(html.match(/<em class="an-tag">atualizado agora<\/em>/g)).toHaveLength(4);
+    expect(html.match(/<li class="an-novo">/g)).toHaveLength(4);
+  });
+});
+
+/** A leitura de verdade de 16/10/2026: a Meta revisou o dia anterior (a campanha Combo sexta) e trouxe o alcance. */
+const antesDaLeitura = resposta({ totals: { impressions: '40917', clicks: '1156', spend_micros: '565500000', meta_reach: null }, campaigns: [{ ...COMBO, reach: null }, BUSCA] });
+const depoisDaLeitura = (over: Partial<AdDeliveryResponse> = {}) =>
+  resposta({
+    accounts: [
+      { ...META, last_success_at: '2026-10-16T12:41:20.000Z', last_attempt_at: '2026-10-16T12:41:20.000Z' },
+      { ...GOOGLE, last_success_at: '2026-10-16T12:41:30.000Z', last_attempt_at: '2026-10-16T12:41:30.000Z' },
+    ],
+    totals: { impressions: '41249', clicks: '1157', spend_micros: '566780000', meta_reach: '39860' },
+    campaigns: [{ ...COMBO, impressions: '39279', clicks: '1037', spend_micros: '413780000' }, BUSCA],
+    refresh: { available: false, next_at: '2026-10-16T12:45:00.000Z' },
+    ...over,
+  });
+const terminouCom = (anterior: AdDeliveryResponse): LerAgora => ({ tipo: 'terminou', pedidoEm: PEDIDO, falharam: [], anterior });
+
+describe('o que mudou na leitura pedida (P23, parte B)', () => {
+  it('cada número que mudou, com o antes e o depois, e a campanha com o número que mais pesa', () => {
+    const m = oQueMudou(antesDaLeitura, depoisDaLeitura(), false, FUSO, AGORA);
+    expect(m).toEqual({
+      tipo: 'mudou',
+      antes: 'a leitura de hoje às 06:12 e 06:14',
+      linhas: [
+        { rotulo: 'Vezes que os anúncios apareceram', antes: '40.917', depois: '41.249' },
+        { rotulo: 'Pessoas alcançadas na Meta', antes: '—', depois: '39.860' },
+        { rotulo: 'Cliques nos anúncios', antes: '1.156', depois: '1.157' },
+        { rotulo: 'Gastos nas plataformas', antes: `R$${NB}565,50`, depois: `R$${NB}566,78` },
+        { rotulo: 'Combo sexta · gasto', antes: `R$${NB}412,50`, depois: `R$${NB}413,78` },
+      ],
+      // A campanha mudou mais de um número (o gasto, as vezes e os cliques): "os outros não mudaram" seria falso.
+      nota: 'A Meta revisa os números dos últimos dias. “Por campanha” já está com os números novos.',
+    });
+  });
+
+  it('"os outros números não mudaram" só quando a lista mostra tudo; mais campanhas do que cabe viram uma frase', () => {
+    const soGasto = depoisDaLeitura({ totals: { impressions: '40917', clicks: '1156', spend_micros: '566780000', meta_reach: null }, campaigns: [{ ...COMBO, reach: null, spend_micros: '413780000' }, BUSCA] });
+    const m = oQueMudou(antesDaLeitura, soGasto, false, FUSO, AGORA);
+    expect(m && m.tipo === 'mudou' && m.nota).toBe('A Meta revisa os números dos últimos dias. Os outros números não mudaram. “Por campanha” já está com os números novos.');
+    const muitas = (n: number, gasto: number) =>
+      Array.from({ length: n }, (_, i) => ({ ...BUSCA, campaign_id: `00000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`, name: `Busca ${i + 1}`, spend_micros: String(gasto + i) }));
+    const antes = resposta({ campaigns: muitas(5, 1_000_000) });
+    const depois = resposta({ campaigns: muitas(5, 2_000_000) });
+    const n = oQueMudou(antes, depois, false, FUSO, AGORA);
+    expect(n && n.tipo === 'mudou' && n.linhas.map((l) => l.rotulo)).toEqual(['Busca 1 · gasto', 'Busca 2 · gasto', 'Busca 3 · gasto']);
+    expect(n && n.tipo === 'mudou' && n.nota).toBe('O Google revisa os números dos últimos dias. Mais 2 campanhas mudaram: veja os números de cada campanha. “Por campanha” já está com os números novos.');
+  });
+
+  it('nada mudou: a frase diz isso, sem etiqueta nas caixas', () => {
+    expect(oQueMudou(resposta(), resposta(), false, FUSO, AGORA)).toEqual({ tipo: 'igual', frase: 'A Meta e o Google informam o mesmo que na leitura de hoje às 06:12 e 06:14.' });
+    const c = numeros(entrada({ resposta: lidasAgora(), leitura: terminouCom(lidasAgora()) }));
+    expect(c.mudou).toMatchObject({ tipo: 'igual' });
+    expect(c.caixas!.some((x) => x.novo)).toBe(false);
+  });
+
+  it('"Hoje" lido pela primeira vez: o que entrou; outro período na tela: nada a comparar', () => {
+    const vazioHoje = resposta({ period: { from: '2026-10-16', to: '2026-10-16' }, campaigns: [], totals: { impressions: '0', clicks: '0', spend_micros: '0', meta_reach: null } });
+    const hoje = depoisDaLeitura({ period: { from: '2026-10-16', to: '2026-10-16' }, totals: { impressions: '4860', clicks: '105', spend_micros: '70550000', meta_reach: '3410' } });
+    expect(oQueMudou(vazioHoje, hoje, true, FUSO, AGORA)).toEqual({
+      tipo: 'entrou',
+      frase: `O dia de hoje até 09:41, lido pela primeira vez: 4.860 vezes que os anúncios apareceram, 3.410 pessoas alcançadas na Meta, 105 cliques e R$${NB}70,55 de gasto.`,
+    });
+    expect(oQueMudou(antesDaLeitura, depoisDaLeitura({ period: { from: '2026-09-16', to: '2026-10-15' } }), false, FUSO, AGORA)).toBeNull();
+    expect(numeros(entrada({ resposta: depoisDaLeitura({ period: { from: '2026-09-16', to: '2026-10-15' } }), leitura: terminouCom(antesDaLeitura) })).mudou).toBeNull();
+  });
+
+  it('sem leitura pedida, nada de "o que mudou" nem etiqueta', () => {
+    const c = numeros(entrada());
+    expect(c.mudou).toBeNull();
+    expect(c.caixas!.some((x) => x.novo)).toBe(false);
+    expect(c.comparar).toEqual(['meta_ads', 'google_ads']);
   });
 });

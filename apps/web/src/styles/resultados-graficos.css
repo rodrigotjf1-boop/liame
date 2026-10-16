@@ -213,3 +213,25 @@
 .an-pro .eixo-nota { margin-top: var(--sp-3); }
 .an-vazio { display: grid; gap: var(--sp-2); justify-items: start; }
 .an-vazio p { font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); }
+
+/* P23, parte B (aprovado em 16/10/2026): "Ler agora" em destaque, o que mudou na leitura e comparar com a plataforma. */
+#card-anuncios .an-leitura { border-color: var(--primary); box-shadow: inset 3px 0 0 var(--primary); }
+#card-anuncios .an-leitura .btn--primary { min-height: 40px; padding-inline: var(--sp-4); }
+.an-mudou { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-4); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.an-mudou-tit { font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
+.an-mudou-tit b { font-weight: 600; color: var(--text); }
+.an-mudou-lista { display: grid; gap: var(--sp-1); }
+.an-mudou-lista li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: baseline; gap: var(--sp-1) var(--sp-2); font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); }
+.an-mudou-lista .rot { min-width: 0; overflow-wrap: anywhere; }
+.an-mudou-lista .de { font-family: var(--font-mono); white-space: nowrap; text-decoration: line-through; }
+.an-mudou-lista b { font-family: var(--font-mono); font-weight: 600; color: var(--text); white-space: nowrap; }
+@container (max-width: 480px) {
+  .an-mudou-lista li { grid-template-columns: auto auto minmax(0, 1fr); }
+  .an-mudou-lista .rot { grid-column: 1 / -1; }
+}
+.an-mudou-nota { font-size: var(--text-xs); line-height: 1.45; color: var(--text-muted); }
+/* A caixa cujo número mudou: a borda na cor da ação e a etiqueta escrita (a cor nunca sozinha). */
+.an-numeros li.an-novo { border-color: var(--primary); }
+.an-tag { justify-self: start; margin-top: 4px; padding: 1px var(--sp-2); border-radius: 999px; background: var(--primary-soft); color: var(--text); font-size: var(--text-xs); font-style: normal; font-weight: 600; }
+.an-comparar { margin-top: var(--sp-3); font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
+.an-comparar a { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--link); }

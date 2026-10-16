@@ -2,7 +2,7 @@
 
 import type { AdDeliveryResponse } from '@liame/contracts';
 import Link from 'next/link';
-import { type RefObject, useEffect, useRef, useState } from 'react';
+import { Fragment, type RefObject, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
@@ -13,11 +13,13 @@ import {
   andamentoDaLeitura,
   avisoDoFim,
   type CartaoDosAnuncios,
+  ENDERECO_DA_PLATAFORMA,
   ESPERA_DA_LEITURA_MS,
   falharamNoPrazo,
   type LerAgora,
   marcasDe,
   montarCartaoDosAnuncios,
+  type OQueMudou,
   PASSO_DA_ESPERA_MS,
 } from './anuncios';
 import { BotaoDetalhes, TextoRico } from './pecas';
@@ -106,10 +108,11 @@ export function CartaoAnuncios({ consulta, periodo, fuso, podeVerContas, aoTermi
           setUltima({ chave, dados: r.data });
           const a = andamentoDaLeitura(r.data.accounts, leitura.pedidoEm, leitura.antes, leitura.vistas);
           let fim: LerAgora | null = null;
-          if (a.pendentes === 0) fim = { tipo: 'terminou', pedidoEm: leitura.pedidoEm, falharam: a.falharam };
+          // O "antes" vai junto até o fim: o cartão mostra o que a leitura mudou (P23, parte B).
+          if (a.pendentes === 0) fim = { tipo: 'terminou', pedidoEm: leitura.pedidoEm, falharam: a.falharam, anterior: leitura.anterior };
           else if (venceu) {
             const f = falharamNoPrazo(r.data.accounts, leitura.pedidoEm);
-            fim = f.length ? { tipo: 'terminou', pedidoEm: leitura.pedidoEm, falharam: f } : { tipo: 'demorou', pedidoEm: leitura.pedidoEm };
+            fim = f.length ? { tipo: 'terminou', pedidoEm: leitura.pedidoEm, falharam: f, anterior: leitura.anterior } : { tipo: 'demorou', pedidoEm: leitura.pedidoEm };
           }
           if (fim) {
             focar.current = 'se-ficou';
@@ -158,7 +161,7 @@ export function CartaoAnuncios({ consulta, periodo, fuso, podeVerContas, aoTermi
       avisar('Nenhuma conta de anúncio está pronta para ler agora.', { tipo: 'perigo' });
       return;
     }
-    setLeitura({ tipo: 'lendo', pedidoEm: r.data.requested_at, desde: Date.now(), antes, vistas: {} });
+    setLeitura({ tipo: 'lendo', pedidoEm: r.data.requested_at, desde: Date.now(), antes, vistas: {}, anterior: dados });
   }
 
   const naTela = carga.tipo === 'ok' && carga.chave === chave ? carga.dados : (ultima?.dados ?? null);
@@ -217,6 +220,53 @@ type Vista = {
   recarregando?: boolean;
 };
 
+/**
+ * Logo abaixo da linha da leitura, depois do "Ler agora" (P23, parte B): cada número que mudou, com o antes e o depois,
+ * dizendo de qual leitura é o antes; ou que nada mudou; ou, na primeira leitura do período, o que entrou.
+ */
+function OQueMudouNaTela({ mudou }: { mudou: OQueMudou }) {
+  if (mudou.tipo === 'igual') {
+    return (
+      <div className="an-mudou">
+        <p className="an-mudou-tit">
+          <b>Nenhum número mudou nesta leitura.</b> {mudou.frase}
+        </p>
+      </div>
+    );
+  }
+  if (mudou.tipo === 'entrou') {
+    return (
+      <div className="an-mudou">
+        <p className="an-mudou-tit">
+          <b>O que entrou nesta leitura</b>
+        </p>
+        <p className="an-mudou-tit">{mudou.frase}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="an-mudou">
+      <p className="an-mudou-tit">
+        <b>O que mudou nesta leitura</b> (antes: {mudou.antes})
+      </p>
+      <ul className="an-mudou-lista">
+        {mudou.linhas.map((l, i) => (
+          <li key={i}>
+            <span className="rot">{l.rotulo}</span>
+            <span className="de">{l.antes}</span>
+            <span aria-hidden="true">→</span>
+            <b>
+              <span className="sr-only">passou para </span>
+              {l.depois}
+            </b>
+          </li>
+        ))}
+      </ul>
+      <p className="an-mudou-nota">{mudou.nota}</p>
+    </div>
+  );
+}
+
 /** O cartão desenhado a partir das regras (separado da busca para ser desenhado igual no teste e no navegador). */
 export function VistaDosAnuncios({ cartao, pro, aberto, aoAlternar, aoLer, status, recarregando = false }: Vista) {
   if (cartao.tipo === 'sem-plataforma') {
@@ -245,14 +295,15 @@ export function VistaDosAnuncios({ cartao, pro, aberto, aoAlternar, aoLer, statu
         <p id="an-status" ref={status} tabIndex={-1} className={leitura.falha ? 'an-falha' : undefined}>
           <TextoRico frase={leitura.frase} />
         </p>
+        {/* P23, parte B: "Ler agora" é o botão principal do cartão. */}
         {botao.tipo === 'ler' && (
-          <button className="btn btn--sm" type="button" disabled={botao.desligado} aria-busy={botao.ocupado || undefined} onClick={aoLer}>
+          <button className="btn btn--primary" type="button" disabled={botao.desligado} aria-busy={botao.ocupado || undefined} onClick={aoLer}>
             <Icone nome="refresh" pequeno />
             {botao.rotulo}
           </button>
         )}
         {botao.tipo === 'contas' && (
-          <Link className="btn btn--sm" href="/contas">
+          <Link className="btn btn--primary" href="/contas">
             <Icone nome="plug" pequeno />
             Abrir Contas conectadas
           </Link>
@@ -263,6 +314,7 @@ export function VistaDosAnuncios({ cartao, pro, aberto, aoAlternar, aoLer, statu
           {n}
         </p>
       ))}
+      {cartao.mudou && <OQueMudouNaTela mudou={cartao.mudou} />}
       {cartao.vazio ? (
         <div className="an-vazio">
           <p>{cartao.vazio}</p>
@@ -272,13 +324,29 @@ export function VistaDosAnuncios({ cartao, pro, aberto, aoAlternar, aoLer, statu
           {cartao.caixas && (
             <ul className="an-numeros">
               {cartao.caixas.map((c) => (
-                <li key={c.rotulo}>
+                <li key={c.rotulo} className={c.novo ? 'an-novo' : undefined}>
                   <b>{c.valor}</b>
                   {c.rotulo}
                   {c.nota && <small>{c.nota}</small>}
+                  {c.novo && <em className="an-tag">atualizado agora</em>}
                 </li>
               ))}
             </ul>
+          )}
+          {cartao.comparar.length > 0 && (
+            <p className="an-comparar">
+              Comparar com a plataforma:{' '}
+              {cartao.comparar.map((p, i) => (
+                <Fragment key={p}>
+                  {i > 0 && ' · '}
+                  <a href={ENDERECO_DA_PLATAFORMA[p].url} target="_blank" rel="noopener noreferrer">
+                    {ENDERECO_DA_PLATAFORMA[p].nome}
+                    <Icone nome="external" pequeno />
+                  </a>
+                </Fragment>
+              ))}
+              <span className="sr-only"> (abre em outra aba)</span>
+            </p>
           )}
           {!mostraPro && (
             <ul className="an-camps">
