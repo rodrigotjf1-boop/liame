@@ -63,6 +63,8 @@ type LinhaConexao = {
   discovered: DescobertaGuardada[];
   credential_secret_id: string | null;
   scopes?: string[] | null;
+  /** Meta: `leitura` ou `escrita`, a configuração do login por que a pessoa autorizou; só a lista e o detalhe leem. */
+  requested_access?: string | null;
   /** Como terminou a procura das lojas do Perfil (`oauth_connection.discovery_notes`); só a lista e o detalhe leem. */
   discovery_notes?: unknown;
 };
@@ -280,7 +282,7 @@ export class ConnectionsService {
     const tx = currentTx();
     const conexoes = await tx.execute<LinhaConexao>(sql`
       select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
-             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.discovery_notes
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.requested_access, c.discovery_notes
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.status not in ('aguardando_autorizacao', 'expirada') ${brandId ? sql`and c.brand_id = ${brandId}` : sql``}
        order by c.created_at desc limit 200`);
@@ -312,7 +314,7 @@ export class ConnectionsService {
   async detalhe(id: string): Promise<ConnectionResponse> {
     const r = await currentTx().execute<LinhaConexao>(sql`
       select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
-             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.discovery_notes
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.requested_access, c.discovery_notes
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.id = ${id}`);
     if (!r.rows[0]) throw naoEncontrada();
@@ -341,6 +343,7 @@ export class ConnectionsService {
       completed_at: isoOuNulo(l.completed_at),
       refresh_expires_at: isoOuNulo(l.refresh_expires_at),
       scopes: l.scopes ?? [],
+      requested_access: l.requested_access ?? null,
       discovered: (l.discovered ?? []).map(
         (d): DiscoveredAccount => ({
           provider: d.provider,

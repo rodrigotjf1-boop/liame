@@ -122,6 +122,14 @@ export const ConnectionResponse = z.strictObject({
   refresh_expires_at: z.string().nullable(),
   /** O que a autorização libera (Regem: a união dos escopos das lojas; Meta e Google: os escopos do OAuth). */
   scopes: z.array(z.string()),
+  /**
+   * Só nas autorizações da Meta: por qual configuração do login a pessoa autorizou. `escrita` = a que também pede para
+   * gerenciar anúncios (o Liame só muda campanha de conta lida por uma destas); `leitura` = a de leitura. A Meta não
+   * devolve os escopos, e é por aqui que a tela sabe que a autorização nova assume a conta lida pela de leitura
+   * (ERR-138). Nulo nas outras plataformas e nas autorizações da Meta anteriores a 04/10/2026, que eram de leitura.
+   * Opcional: a resposta de antes de 16/10/2026 não traz.
+   */
+  requested_access: Slug.nullable().optional(),
   /** Contas que a autorização alcança (só depois da descoberta). */
   discovered: z.array(DiscoveredAccount),
   accounts: z.array(ConnectedAccountResponse),

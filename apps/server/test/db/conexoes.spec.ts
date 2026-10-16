@@ -264,11 +264,14 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
       expect(linha?.requested_access).toBe(auditoria?.acesso);
       return linha?.requested_access;
     };
-    const concluir = async (c: { id: string; estado: string }) => {
+    const concluir = async (c: { id: string; estado: string }, antesDeEscolher?: () => Promise<void>) => {
       expect((await voltar(e.cookie, { state: c.estado, code: 'codigo-meta-bom' })).status).toBe(303);
       expect(await processador.processarLote(5, { tenantIds: [e.tenantId] })).toBe(1);
+      await antesDeEscolher?.();
       return api.call('POST', `/v1/connections/${c.id}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'meta_ads', external_id: 'act_2233445566' }] } });
     };
+    type Conexao = { id: string; status: string; scopes: string[]; requested_access?: string | null; discovered: { external_id: string; linked: boolean }[] };
+    const daLista = async (id: string) => ((await api.call('GET', '/v1/connections', { cookie: e.cookie })).body.items as Conexao[]).find((c) => c.id === id);
 
     // A função nasce desligada: a empresa conecta pela configuração de leitura e liga a conta.
     const leitura = await iniciar(e);
@@ -297,7 +300,18 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     expect(await acessoPedido(vizinha.tenantId, daVizinha.id)).toBe('leitura');
 
     // A autorização nova assume a conta (a mesma linha, com a credencial nova) e a antiga, sem conta, é encerrada.
-    const segunda = await concluir(escrita);
+    // Antes da escolha, a lista e o detalhe dizem à tela qual autorização é a de escrita: a Meta não devolve os escopos, e
+    // sem isso a tela travava a conta como "já ligada" e a autorização nova ficava com 0 contas para sempre (ERR-138).
+    const segunda = await concluir(escrita, async () => {
+      expect(await daLista(escrita.id)).toMatchObject({
+        status: 'aguardando_escolha',
+        scopes: [],
+        requested_access: 'escrita',
+        discovered: expect.arrayContaining([expect.objectContaining({ external_id: 'act_2233445566', linked: true })]),
+      });
+      expect(await daLista(leitura.id)).toMatchObject({ status: 'ativa', requested_access: 'leitura' });
+      expect((await api.call('GET', `/v1/connections/${escrita.id}`, { cookie: e.cookie })).body).toMatchObject({ requested_access: 'escrita' });
+    });
     expect(segunda.body.linked).toEqual([expect.objectContaining({ id: primeira.body.linked[0].id, connection_id: escrita.id, status: 'ativa' })]);
     expect((await conexao(leitura.id)).status).toBe('revogada');
     expect((await conexao(escrita.id)).status).toBe('ativa');

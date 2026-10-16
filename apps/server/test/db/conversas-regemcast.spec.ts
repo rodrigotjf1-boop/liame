@@ -29,6 +29,10 @@ const TOKEN_2 = `rct_it_${'D'.repeat(43)}`;
 const TOKEN_REGEM = `rct_it_${'R'.repeat(43)}`;
 const TOKEN_INVALIDO = `rct_it_${'X'.repeat(43)}`;
 const CONTA_2 = '7d1c0b6e-2f4a-4c8e-9b1d-5a3e6f8c2d42';
+/** Uma conta com dois tokens, um depois do outro: a troca de token pela distribuição (varredura do ERR-138). */
+const CONTA_3 = '3b8e2a1c-9d4f-4e6a-8c2b-1f7d5e9a3c64';
+const TOKEN_ANTIGO = `rct_it_${'A'.repeat(43)}`;
+const TOKEN_NOVO = `rct_it_${'N'.repeat(43)}`;
 const T0 = new Date('2026-09-28T12:00:00Z');
 const mais = (min: number) => new Date(T0.getTime() + min * 60_000);
 const ERRO_INTERNO = 'Erro interno ao ler os dados da conta. Tente de novo em instantes.';
@@ -66,6 +70,8 @@ describe.skipIf(!hasDb)('conector do RegemCast: conversas abertas por anúncio (
     [TOKEN, situacao],
     [TOKEN_2, { ...situacao, contaId: CONTA_2, conta: 'Mister Burgers Barra' }],
     [TOKEN_REGEM, { ...situacao, produto: 'regem' }],
+    [TOKEN_ANTIGO, { ...situacao, contaId: CONTA_3, conta: 'Mister Burgers Centro' }],
+    [TOKEN_NOVO, { ...situacao, contaId: CONTA_3, conta: 'Mister Burgers Centro' }],
   ]);
 
   function responder(credencial: string, corpo: { id?: unknown; params?: { name?: string; arguments?: Record<string, unknown> } }): { status: number; corpo: unknown } {
@@ -393,5 +399,26 @@ describe.skipIf(!hasDb)('conector do RegemCast: conversas abertas por anúncio (
     const r = await sincronizador.sincronizar(contaId, tenantId, mais(4000));
     expect(r.status).toBe('falhou');
     expect(await situacaoDaConta()).toEqual({ status: 'desconectada', status_reason: 'O RegemCast recusou a autorização desta conta: conecte de novo.' });
+  });
+
+  it('token novo da distribuição para a mesma conta: ligar de novo passa a conta para ele e revoga o antigo no RegemCast', async () => {
+    const deps = { db: database.db, vault: api.app.get(VaultService), config: loadConfig() };
+    const ligar = (id: string) => api.call('POST', `/v1/connections/${id}/accounts`, { cookie, body: { accounts: [{ provider: 'regemcast', external_id: CONTA_3 }] } });
+    const antiga = await registrarConexaoDaDistribuicao(deps, { tenantId, brandId: marcaId, produto: 'regemcast', tokens: [TOKEN_ANTIGO] });
+    const primeira = await ligar(antiga.connectionId);
+    expect(primeira.body.linked).toEqual([expect.objectContaining({ connection_id: antiga.connectionId, status: 'ativa' })]);
+
+    // A distribuição registra outro token para a mesma conta (outras permissões): a descoberta da nova a mostra como já
+    // ligada, e é a tela que a oferece como troca de token (`escolhiveis`, teste do web).
+    const nova = await registrarConexaoDaDistribuicao(deps, { tenantId, brandId: marcaId, produto: 'regemcast', tokens: [TOKEN_NOVO] });
+    const lista = (await api.call('GET', '/v1/connections', { cookie })).body.items as { id: string; status: string; discovered: { external_id: string; linked: boolean }[] }[];
+    expect(lista.find((c) => c.id === nova.connectionId)).toMatchObject({ status: 'aguardando_escolha', discovered: [expect.objectContaining({ external_id: CONTA_3, linked: true })] });
+
+    // Ligar pela nova: a MESMA conta passa para ela, a antiga fica sem conta e o token dela é revogado no RegemCast.
+    const troca = await ligar(nova.connectionId);
+    expect(troca.body.linked).toEqual([expect.objectContaining({ id: primeira.body.linked[0].id, connection_id: nova.connectionId, status: 'ativa' })]);
+    for (let i = 0; i < 100 && !revogados.has(TOKEN_ANTIGO); i++) await new Promise((ok) => setTimeout(ok, 20));
+    expect(revogados.has(TOKEN_ANTIGO)).toBe(true);
+    expect(revogados.has(TOKEN_NOVO)).toBe(false);
   });
 });
