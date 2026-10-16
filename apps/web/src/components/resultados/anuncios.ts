@@ -31,8 +31,9 @@ export type LerAgora =
   | { tipo: 'parado' }
   | { tipo: 'pedindo' }
   /** `desde` = o relógio do navegador no pedido (o prazo da espera); `pedidoEm` = a hora do servidor (a comparação com as contas). */
-  | { tipo: 'lendo'; pedidoEm: string; desde: number; antes: Record<string, MarcaDaConta>; vistas: Record<string, string | null> }
-  | { tipo: 'terminou'; pedidoEm: string; falharam: Provedor[] }
+  /** `anterior` = os números da tela no pedido (P23, parte B: o que mudou com a leitura). */
+  | { tipo: 'lendo'; pedidoEm: string; desde: number; antes: Record<string, MarcaDaConta>; vistas: Record<string, string | null>; anterior?: AdDeliveryResponse }
+  | { tipo: 'terminou'; pedidoEm: string; falharam: Provedor[]; anterior?: AdDeliveryResponse }
   | { tipo: 'demorou'; pedidoEm: string };
 
 /** Quanto a tela espera a leitura pedida (o worker pega a conta em até meio minuto; a Meta pode levar alguns minutos). */
@@ -206,7 +207,17 @@ export type BotaoDaLeitura =
 
 export type LinhaDaLeitura = { frase: Frase; falha: boolean; botao: BotaoDaLeitura };
 
-export type Caixa = { valor: string; rotulo: string; nota: string | null };
+/** `novo` = o número mudou na leitura pedida agora (P23, parte B: a etiqueta "atualizado agora"). */
+export type Caixa = { valor: string; rotulo: string; nota: string | null; novo?: true };
+
+/** Um número antes e depois da leitura pedida ("Gastos nas plataformas: R$ 691,15 → R$ 692,43"). */
+export type MudancaDoNumero = { rotulo: string; antes: string; depois: string };
+
+/** O que a leitura pedida mudou (P23, parte B), comparando os números da tela no pedido com os de agora. */
+export type OQueMudou =
+  | { tipo: 'mudou'; antes: string; linhas: MudancaDoNumero[]; nota: string }
+  | { tipo: 'igual'; frase: string }
+  | { tipo: 'entrou'; frase: string };
 
 export type CampanhaDoCartao = {
   id: string;
@@ -235,6 +246,10 @@ export type CartaoDosAnuncios =
       vazio: string | null;
       campanhas: CampanhaDoCartao[];
       notaDoPro: string;
+      /** Depois da leitura pedida: o que ela mudou; nulo antes, ou com outro período na tela. */
+      mudou: OQueMudou | null;
+      /** As plataformas com números no cartão, para "Comparar com a plataforma". */
+      comparar: Provedor[];
     };
 
 export type EntradaDoCartao = {
@@ -399,6 +414,93 @@ function notaDoPro(temMeta: boolean, provedores: Provedor[]): string {
   return `O alcance não se soma entre campanhas: a mesma pessoa pode ver mais de uma. O total é o que a Meta informa para a conta no período. ${resultado}`;
 }
 
+// ------------------------------------------------------------------ o que mudou (P23, parte B, aprovado em 16/10/2026)
+
+/** Quantas campanhas entram, no máximo, na lista do que mudou (as outras viram uma frase). */
+export const CAMPANHAS_NO_QUE_MUDOU = 3;
+
+/** "a leitura de hoje às 06:12 e 06:14": a leitura de antes de cada plataforma, sem repetir o dia. */
+function leiturasDeAntes(anterior: AdDeliveryResponse, fuso: string, agora: Date): string | null {
+  const partes: string[] = [];
+  let diaAnterior: string | null = null;
+  for (const p of PROVEDORES) {
+    const em = lidaEm(anterior.accounts.filter((c) => c.provider === p && !precisaDeContas(c)));
+    if (!em || !anterior.accounts.some((c) => c.provider === p)) continue;
+    const dia = dataNoFuso(new Date(em), fuso);
+    const parte = dia === diaAnterior ? horaNoFuso(new Date(em), fuso) : quandoLido(em, fuso, agora);
+    if (!partes.includes(parte)) partes.push(parte);
+    diaAnterior = dia;
+  }
+  return partes.length ? `a leitura de ${juntar(partes)}` : null;
+}
+
+const contagem = (v: string) => inteiro(BigInt(v));
+const alcance = (v: string | null) => (v === null ? '—' : contagem(v));
+
+/**
+ * O que a leitura pedida mudou, comparando os números da tela no pedido (`anterior`) com os de agora. Nulo com outro
+ * período na tela (a pessoa trocou de período no meio da leitura) ou sem número nenhum agora.
+ */
+export function oQueMudou(anterior: AdDeliveryResponse, atual: AdDeliveryResponse, hoje: boolean, fuso: string, agora: Date): OQueMudou | null {
+  if (anterior.period.from !== atual.period.from || anterior.period.to !== atual.period.to || !atual.campaigns.length) return null;
+  const t = atual.totals;
+  const temMeta = atual.campaigns.some((c) => c.provider === 'meta_ads') || atual.accounts.some((c) => c.provider === 'meta_ads');
+  if (!anterior.campaigns.length) {
+    const ultima = ultimaLeitura(atual.accounts.filter((c) => !precisaDeContas(c)));
+    const pessoas = temMeta && t.meta_reach !== null ? `, ${contagem(t.meta_reach)} pessoas alcançadas na Meta` : '';
+    const cliques = `${contagem(t.clicks)} ${t.clicks === '1' ? 'clique' : 'cliques'}`;
+    const inicio = hoje ? `O dia de hoje${ultima ? ` até ${horaNoFuso(new Date(ultima), fuso)}` : ''}, lido pela primeira vez` : 'Os números do período, lidos pela primeira vez';
+    return { tipo: 'entrou', frase: `${inicio}: ${contagem(t.impressions)} vezes que os anúncios apareceram${pessoas}, ${cliques} e ${reaisDeMicros(t.spend_micros)} de gasto.` };
+  }
+
+  const a = anterior.totals;
+  const linhas: MudancaDoNumero[] = [];
+  const mudaram = new Set<Provedor>();
+  if (a.impressions !== t.impressions) linhas.push({ rotulo: 'Vezes que os anúncios apareceram', antes: contagem(a.impressions), depois: contagem(t.impressions) });
+  if (temMeta && a.meta_reach !== t.meta_reach) {
+    linhas.push({ rotulo: 'Pessoas alcançadas na Meta', antes: alcance(a.meta_reach), depois: alcance(t.meta_reach) });
+    mudaram.add('meta_ads');
+  }
+  if (a.clicks !== t.clicks) linhas.push({ rotulo: 'Cliques nos anúncios', antes: contagem(a.clicks), depois: contagem(t.clicks) });
+  if (a.spend_micros !== t.spend_micros) linhas.push({ rotulo: 'Gastos nas plataformas', antes: reaisDeMicros(a.spend_micros), depois: reaisDeMicros(t.spend_micros) });
+
+  // Cada campanha que mudou entra com o número que mais pesa (o gasto, depois as vezes, os cliques e o alcance).
+  const antesPorId = new Map(anterior.campaigns.map((c) => [c.campaign_id, c]));
+  const campanhas: MudancaDoNumero[] = [];
+  let algumaComMaisDeUm = false;
+  for (const c of atual.campaigns) {
+    const x = antesPorId.get(c.campaign_id);
+    const diferentes = x ? [x.spend_micros !== c.spend_micros, x.impressions !== c.impressions, x.clicks !== c.clicks, x.reach !== c.reach].filter(Boolean).length : 1;
+    if (!diferentes) continue;
+    if (ehProvedor(c.provider)) mudaram.add(c.provider);
+    if (diferentes > 1) algumaComMaisDeUm = true;
+    if (!x) campanhas.push({ rotulo: `${c.name} · gasto`, antes: '—', depois: reaisDeMicros(c.spend_micros) });
+    else if (x.spend_micros !== c.spend_micros) campanhas.push({ rotulo: `${c.name} · gasto`, antes: reaisDeMicros(x.spend_micros), depois: reaisDeMicros(c.spend_micros) });
+    else if (x.impressions !== c.impressions) campanhas.push({ rotulo: `${c.name} · vezes que apareceu`, antes: contagem(x.impressions), depois: contagem(c.impressions) });
+    else if (x.clicks !== c.clicks) campanhas.push({ rotulo: `${c.name} · cliques`, antes: contagem(x.clicks), depois: contagem(c.clicks) });
+    else campanhas.push({ rotulo: `${c.name} · pessoas alcançadas`, antes: alcance(x.reach), depois: alcance(c.reach) });
+  }
+
+  const antes = leiturasDeAntes(anterior, fuso, agora) ?? 'a leitura anterior';
+  if (!linhas.length && !campanhas.length) {
+    const conectadas = PROVEDORES.filter((p) => atual.accounts.some((c) => c.provider === p));
+    const informa = conectadas.length > 1 ? 'informam' : 'informa';
+    return { tipo: 'igual', frase: `${quemAbre(conectadas)} ${informa} o mesmo que na ${antes.replace('a leitura', 'leitura')}.` };
+  }
+  const mostradas = campanhas.slice(0, CAMPANHAS_NO_QUE_MUDOU);
+  const sobra = campanhas.length - mostradas.length;
+  const quem = mudaram.size ? quemAbre(PROVEDORES.filter((p) => mudaram.has(p))) : 'As plataformas';
+  const revisa = mudaram.size === 1 ? 'revisa' : 'revisam';
+  // "Os outros números não mudaram" só quando a lista mostra tudo o que mudou.
+  const resto =
+    sobra > 0
+      ? ` Mais ${sobra} ${sobra === 1 ? 'campanha mudou' : 'campanhas mudaram'}: veja os números de cada campanha.`
+      : algumaComMaisDeUm
+        ? ''
+        : ' Os outros números não mudaram.';
+  return { tipo: 'mudou', antes, linhas: [...linhas, ...mostradas], nota: `${quem} ${revisa} os números dos últimos dias.${resto} “Por campanha” já está com os números novos.` };
+}
+
 export function montarCartaoDosAnuncios(e: EntradaDoCartao): CartaoDosAnuncios {
   const { resposta: r, periodo, fuso, agora } = e;
   if (!r.enabled) return { tipo: 'desligado' };
@@ -431,6 +533,8 @@ export function montarCartaoDosAnuncios(e: EntradaDoCartao): CartaoDosAnuncios {
 
   const hoje = periodo === 'hoje';
   const lendo = e.leitura.tipo === 'pedindo' || e.leitura.tipo === 'lendo';
+  const anterior = e.leitura.tipo === 'terminou' ? (e.leitura.anterior ?? null) : null;
+  const mudou = anterior ? oQueMudou(anterior, r, hoje, fuso, agora) : null;
   if (!campanhas.length) {
     // A frase diz por que não há número: lendo, ainda não lido, ou lido e nenhum anúncio apareceu.
     const ativas = r.accounts.filter((c) => !precisaDeContas(c));
@@ -446,7 +550,7 @@ export function montarCartaoDosAnuncios(e: EntradaDoCartao): CartaoDosAnuncios {
         : 'O dia de hoje ainda não foi lido: a leitura de todo dia traz o dia anterior. “Ler agora” traz os números de hoje até agora.';
     } else if (ativas.some((c) => c.last_success_at === null)) vazio = 'Os números aparecem aqui depois da primeira leitura.';
     else vazio = `Nenhum anúncio apareceu ${periodo === '30' ? 'nos últimos 30 dias' : 'nos últimos 7 dias'}.`;
-    return { tipo: 'numeros', leitura, notas, caixas: null, vazio, campanhas: [], notaDoPro: notaDoPro(temMeta, provedoresComNumeros) };
+    return { tipo: 'numeros', leitura, notas, caixas: null, vazio, campanhas: [], notaDoPro: notaDoPro(temMeta, provedoresComNumeros), mudou: null, comparar: [] };
   }
 
   if (hoje) {
@@ -458,17 +562,20 @@ export function montarCartaoDosAnuncios(e: EntradaDoCartao): CartaoDosAnuncios {
   const imp = BigInt(r.totals.impressions);
   const cli = BigInt(r.totals.clicks);
   const gasto = BigInt(r.totals.spend_micros);
-  const caixas: Caixa[] = [{ valor: inteiro(imp), rotulo: 'vezes que os anúncios apareceram', nota: 'impressões' }];
+  // Depois da leitura pedida, a caixa cujo número mudou ganha "atualizado agora" (só quando houve o que comparar).
+  const antes = mudou?.tipo === 'mudou' && anterior ? anterior.totals : null;
+  const novo = (mudouAqui: boolean): { novo?: true } => (antes && mudouAqui ? { novo: true } : {});
+  const caixas: Caixa[] = [{ valor: inteiro(imp), rotulo: 'vezes que os anúncios apareceram', nota: 'impressões', ...novo(antes?.impressions !== r.totals.impressions) }];
   if (temMeta) {
     caixas.push(
       r.totals.meta_reach === null
         ? { valor: '—', rotulo: 'pessoas alcançadas na Meta', nota: 'a Meta ainda não informou o alcance deste período' }
-        : { valor: inteiro(BigInt(r.totals.meta_reach)), rotulo: 'pessoas alcançadas na Meta', nota: 'cada pessoa conta uma vez no período' },
+        : { valor: inteiro(BigInt(r.totals.meta_reach)), rotulo: 'pessoas alcançadas na Meta', nota: 'cada pessoa conta uma vez no período', ...novo(antes?.meta_reach !== r.totals.meta_reach) },
     );
   }
   caixas.push(
-    { valor: inteiro(cli), rotulo: cli === 1n ? 'clique nos anúncios' : 'cliques nos anúncios', nota: imp > 0n ? `${taxa(cli, imp)} de quem viu clicou` : null },
-    { valor: reaisDeMicros(gasto), rotulo: 'gastos nas plataformas', nota: cli > 0n ? `${porCada(gasto, cli)} por clique` : null },
+    { valor: inteiro(cli), rotulo: cli === 1n ? 'clique nos anúncios' : 'cliques nos anúncios', nota: imp > 0n ? `${taxa(cli, imp)} de quem viu clicou` : null, ...novo(antes?.clicks !== r.totals.clicks) },
+    { valor: reaisDeMicros(gasto), rotulo: 'gastos nas plataformas', nota: cli > 0n ? `${porCada(gasto, cli)} por clique` : null, ...novo(antes?.spend_micros !== r.totals.spend_micros) },
   );
   const maior = campanhas.reduce((m, c) => (BigInt(c.impressions) > m ? BigInt(c.impressions) : m), 0n);
   return {
@@ -479,5 +586,13 @@ export function montarCartaoDosAnuncios(e: EntradaDoCartao): CartaoDosAnuncios {
     vazio: null,
     campanhas: campanhas.map((c) => campanhaDoCartao(c, maior)),
     notaDoPro: notaDoPro(temMeta, provedoresComNumeros),
+    mudou,
+    comparar: provedoresComNumeros,
   };
 }
+
+/** A entrada oficial de cada plataforma, para comparar os números (a conta se escolhe lá). */
+export const ENDERECO_DA_PLATAFORMA: Record<Provedor, { nome: string; url: string }> = {
+  meta_ads: { nome: 'Gerenciador de Anúncios da Meta', url: 'https://adsmanager.facebook.com/' },
+  google_ads: { nome: 'Google Ads', url: 'https://ads.google.com/' },
+};

@@ -28,13 +28,45 @@
 
 > **Pendências finais do roadmap** (decisões do dono; entram depois da última fase em curso, antes de dar o roadmap por concluído):
 >
-> 1. **Armazenamento de fotos e mídias** (ADR-021: AWS S3 em São Paulo, aceito em 05/10/2026, com a ordem de não construir agora). **Em 09/10/2026 o dono antecipou a parte das fotos enviadas pela empresa para a A6** (decisão D-A6-2, entrega Z4 do `plano-a6.md`): sem foto guardada não há post no Instagram. O que segue como pendência final é o que vem abaixo. Com ele vêm a imagem do Criativo (A4 · X7) e a campanha nova, criada pausada (A4 · X5), que dependem das fotos guardadas.
+> 1. **Armazenamento de fotos e mídias** (ADR-021: AWS S3 em São Paulo, aceito em 05/10/2026, com a ordem de não construir agora). Em 09/10/2026 o dono tinha antecipado a parte das fotos enviadas pela empresa para a A6 (D-A6-2, entrega Z4 do `plano-a6.md`); **na rodada das pendências de 15 e 16/10/2026 ele mandou as fotos de volta para o fim do roteiro**, e é assim que vale. Com elas vêm a imagem do Criativo (A4 · X7), a campanha nova, criada pausada (A4 · X5), e, na A6, o post no trilho (Z5) e o pacote pronto (Z8), que dependem das fotos guardadas.
 > 2. **Quem paga a IA** (05/10/2026): a distribuição, com teto por empresa, ou cada empresa cliente com a própria conta de IA, ligada pelo front. Decide-se com a conta mensal medida nos testes (`ai-architecture.md` §10).
 > 3. **Anúncio de bebida alcoólica no Criativo** (D-A4-34, aprovada em 07/10/2026): até lá o Criativo não escreve anúncio que cita bebida alcoólica. Quando entrar, entra com a cláusula de advertência posta pelo código, regra própria de texto e a conferência da legislação específica, que a base de conhecimento ainda marca como não conferida (§6.2).
+> 4. **Windsor** (decisão do dono na rodada de 15 e 16/10/2026): o conector fica no modo gratuito até os testes e o fim do roteiro (`decisoes-design.md`, 16/10/2026).
 
 > **Pedido do dono em 07/10/2026, para depois da entrega em curso:** estudar como apresentar os resultados em gráficos, para reduzir o excesso de texto e deixar as análises menos cansativas. É estudo antes de tela: referências de mercado nas três trilhas, a paleta de gráfico já validada e os minigráficos que o modelo de interface previa (`ux-modelo-interface.md`) e um protótipo para o dono aprovar; só depois o port. As telas em vista são as de resultado e análise: Resultados, Revisão da semana, Explicar, Verba do mês e Resumo. **Estudo entregue em 07/10/2026** (`mockups/prototipo-graficos.html`; referências e cores em `base-conhecimento.md` §16.7): a tela de Resultados de hoje ao lado de uma proposta, e três caminhos. **Decisão do dono em 07/10/2026** ("1 b, 2 ok, 3 ok"): o caminho é o B, "uma pergunta, um desenho"; começa por Resultados; e a linha por dia entra no servidor. **Protótipo completo de Resultados entregue em 07/10/2026** (`mockups/prototipo-resultados-graficos.html`), **aprovado pelo dono em 07/10/2026** ("tela resultados aprovada"). O servidor da tela (a série por dia, `GET /v1/results/daily`, e a receita com custo conhecido) e **a tela no app** vieram no mesmo dia. **Protótipo do Resumo em gráficos entregue e aprovado pelo dono em 07/10/2026** (`mockups/prototipo-resumo-graficos.html`), e **a tela está no app desde o mesmo dia** (com dois campos opcionais a mais em `GET /v1/summary`). **Protótipo da Revisão da semana em gráficos entregue e aprovado pelo dono em 07/10/2026** (`mockups/prototipo-revisao-graficos.html`), e **a tela está no app desde o mesmo dia**. **Protótipo da Verba do mês em gráficos entregue e aprovado pelo dono em 07/10/2026** (`mockups/prototipo-verba-graficos.html`), e **a tela está no app desde o mesmo dia** (com o gasto de cada dia em `GET /v1/budget/month`, campo opcional). Com ela, as telas de análise do pedido estão em gráficos: Resultados, o Resumo, a Revisão da semana e a Verba do mês. O Explicar segue em texto: é a explicação escrita de um número.
 
 > **Pedido do dono em 07/10/2026 (conversa com a LIA):** o que já está nos dados que o Liame leu é respondido pelo sistema; a IA só entra quando o sistema não consegue analisar o pedido e devolver um resumo plausível com as informações já lidas. Antes de chamar o modelo, a Conversa tenta reconhecer o pedido e responder por código, com a fonte de cada número, marcando a resposta como resumo do sistema (`decisoes-design.md`, 07/10/2026). **Feito em 07/10/2026**, para três pedidos (o dinheiro da semana, cada campanha e o que pede alguém agora); os outros entram conforme aparecerem no uso.
+
+## 2.1 Onde estamos (atualizado em 16/10/2026)
+
+> Pedido do dono em 16/10/2026: o roadmap tinha só as fases, e o que nascia no caminho (trâmites, pedidos, correções) não aparecia nele. Daqui em diante, **esta seção muda no mesmo PR de cada entrega ou decisão**. A fonte de cada linha é o `andamento.md` e o plano da fase (`plano-a3.md` a `plano-a6.md`); o estado das funções foi lido na produção em 16/10/2026.
+
+| Fase | Situação |
+| --- | --- |
+| A0 · Fundação | Cumpridos A0-1, 2, 3, 4, 8, 9 e 10. Abertos: A0-3b (a conta da âncora), A0-5 (ir ao vivo na Meta e no Google), A0-6 (a revisão do advogado) e A0-7 (o restaurante de testes com o número de WhatsApp na API oficial). |
+| A1 · Núcleo seguro | Código concluído. Abertos: A1-6 (a âncora publicada fora do banco) e A1-14 (o print do trace na conta do dono). |
+| A2 · Dados de mídia | No ar desde 29/09/2026. Abertos: A2-2, A2-4 e A2-9 (`andamento.md`). |
+| A2.5 · Ciclo fechado | No ar. O critério do MVP ainda pede o cupom exclusivo por campanha. |
+| A3 · Inteligência | No ar, com a IA ligada no piloto. Falta: o relatório mensal (precisa de protótipo), a tela "ler uma página" do Pesquisador e a escolha de modelo no Pro. |
+| A4 · Escrita na Meta | No ar: X1 a X4, X6 e X8, com a escrita ligada no piloto. X5 e X7 no fim do roteiro (pendência final 1). O piloto de ações (A4-14) ainda não começou. |
+| A5 · Google e mensageria | No código: Y1 a Y6 e Y8, quase tudo desligado; a leitura da mensageria está ligada no piloto. As vendas informadas ao Google (Y1) ficaram para depois, por decisão do dono. Y7 (vendas informadas à Meta) espera a decisão D-A5-9. |
+| **A6 · Mais canais (em curso)** | Z1 e Z2 prontas e desligadas: esperam o Google liberar a API do Perfil da Empresa. Z3 pela metade: falta a rota, o que o Estrategista lê e as telas P18 e P18, parte B (protótipos aprovados em 15/10/2026). Z4 voltou para o fim (pendência final 1); Z5 a Z8 não começaram. |
+| A7 · A8 | Não começaram. |
+
+**Funções ligadas para a empresa do piloto** (lidas na produção em 16/10/2026): `ia`, `meta_write`, `regem_write`, `mensageria`, `criativo`, `revisor`, `revisao_email`, `sombra` e `desempenho_anuncios`. Desligadas para todos: `modo_aprovacao`, `crm`, `whatsapp_campaign`, `conversoes_google`, `google_write`, `perfil_google`, `perfil_google_write` e `search_console` (esta, só depois das telas P18).
+
+### Fora das fases: trâmites, pedidos do dono e o que nasceu no caminho
+
+| Item | Situação em 16/10/2026 | Próximo passo |
+| --- | --- | --- |
+| **Análise do `ads_read` na Meta** | Recusada em 15/10/2026 pelo vídeo: o uso é permitido, mas o analista pediu os números lidos ao vivo no painel, da mesma conta. | O P23 está no ar ("Como os anúncios rodaram", #264 a #267), e a parte B está aprovada. Depois dela no ar: o roteiro do vídeo com legendas em inglês, a gravação e o reenvio, dizendo nas notas que o login usa o token do usuário do sistema. |
+| **P23, parte B** | Protótipo aprovado em 16/10/2026: "Ler agora" em destaque, o que mudou na leitura e o atalho para comparar com a plataforma. | A tela. |
+| **Verificação da marca do app no Google** | O `agencialiame.com` foi verificado no Search Console em 16/10/2026, pela conta dona do projeto no Google Cloud. | O dono pede a nova verificação 24 horas depois. |
+| **API do Perfil da Empresa (Google)** | Pedido enviado em 15/10/2026; o Google fala em 7 a 10 dias úteis. | O e-mail do Google, ou a cota de 300 QPM no Google Cloud; depois, ativar as APIs no projeto e ligar a Z1. |
+| **Antes do primeiro cliente de fora** (decisão do dono em 16/10/2026) | A análise do `ads_management` na Meta, a verificação completa do app no Google, o nível Básico do Google Ads, a revisão do advogado e o aviso de 30 dias com o novo aceite. | — |
+| **Do dono, quando quiser** | A variável `REGEMCAST_API_URL` no worker (antes da rotina do CRM), o nome de exibição do WhatsApp na Meta, o teto de mensagens no RegemCast, o desconto do cupom das mensagens e as vendas informadas ao Google. | — |
+| **Outros trâmites** | O cadastro e a auditoria do TikTok (D-A6-12) não foram pedidos; a saída do sandbox do e-mail (SES) espera a AWS. | — |
+| **Trilha B** | Foi para o projeto do Hub DMS (a F2 do hub é a ligação do RegemCast com o Liame). | O Liame entra pelo pedido de cada fase do hub. |
 
 ## 3. Critérios objetivos de saída da A0
 
