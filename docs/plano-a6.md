@@ -132,12 +132,12 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | Para | Preciso de |
 | --- | --- |
 | Começar | ✅ Aceite deste plano e das decisões da seção 4 (09/10/2026) |
-| Z1 | Saber se a Mister Burgers tem o Perfil da Empresa no Google verificado há mais de 60 dias, com site. Com isso, o pedido de acesso à API (eu guio, um print por vez); o Google não diz o prazo |
-| Z3 | Saber se o site ou o cardápio está no Search Console; se não, verificar (eu guio) |
+| Z1 | ✅ O perfil da loja do piloto está verificado há mais de 60 dias e tem site (resposta do dono em 15/10/2026). ✅ **Pedido de acesso à API do Perfil enviado em 15/10/2026**, pela conta dona do perfil, com o projeto do Google Cloud do Liame (formulário "Application for Basic API Access"; o número do caso fica fora do repositório). O Google informou de 7 a 10 dias úteis; não abrir outro pedido (atrasa a análise). Aprovado: a cota passa de 0 a 300 por minuto, e falta ativar as APIs do Perfil no projeto |
+| Z3 | ✅ O site da loja do piloto **não estava** no Search Console; foi verificado em 15/10/2026 como propriedade de domínio (registro TXT no DNS, pela conta dona do perfil). A autorização do Google no Liame precisa ser de uma conta com acesso a essa propriedade |
 | Z4 | O aceite da D-A6-2 e as primeiras fotos dos produtos |
-| Z5 | No piloto: o Instagram como conta profissional, ligado à Página do Facebook; autorizar a Meta de novo com as permissões de publicar; autorizar o Threads, se usar |
+| Z5 | No piloto: ✅ o Instagram já é conta profissional, ligado à Página do Facebook (resposta do dono em 15/10/2026); autorizar a Meta de novo com as permissões de publicar (a configuração de escrita de 15/10/2026 tem só as de anúncio e Página: as do Instagram entram aqui); autorizar o Threads, se usar |
 | Z8 | Cadastro de desenvolvedor no TikTok e o pedido da auditoria (eu guio) |
-| Telas | ✅ P17 aprovado (09/10/2026). ✅ P17, parte B aprovado (14/10/2026: Contas conectadas com a loja do perfil). Aprovar o P18 (Como te acham no Google, em Resultados) e o P18, parte B (o site do Search Console em Contas conectadas), os dois publicados em 14/10/2026, e os protótipos P19 a P22 |
+| Telas | ✅ P17 aprovado (09/10/2026). ✅ P17, parte B aprovado (14/10/2026: Contas conectadas com a loja do perfil). ✅ P18 (Como te acham no Google, em Resultados) e ✅ P18, parte B (o site do Search Console em Contas conectadas) aprovados pelo dono em 15/10/2026. Faltam os protótipos P19 a P22 |
 | Antes de clientes de fora | A revisão do app da Meta e a verificação do app do Google com as permissões novas |
 
 ## 10. Riscos
