@@ -115,6 +115,13 @@ export class LifecyclePurgeService {
       true,
     );
     await run(
+      'comparacao_credencial',
+      sql`delete from liame.credential_comparison where id in (
+            select id from liame.credential_comparison e where e.compared_at < now() - interval '90 days' and ${noHold('e')} ${t('e.tenant_id')} limit ${BATCH})
+          returning tenant_id`,
+      true,
+    );
+    await run(
       'conexao_oauth',
       sql`delete from liame.oauth_connection where id in (
             select id from liame.oauth_connection e where e.status in ('expirada', 'erro', 'revogada') and e.updated_at < now() - interval '90 days'

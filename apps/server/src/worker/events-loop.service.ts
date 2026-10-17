@@ -1,5 +1,6 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { ActionExecutor } from './action-executor.js';
+import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
 import { ConversasLoop } from './conversas-loop.js';
@@ -53,6 +54,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly rotinaDoCrm: RotinaDoCrmLoop,
     private readonly perfil: PerfilLoop,
     private readonly searchConsole: SearchConsoleLoop,
+    private readonly comparacao: ComparacaoDmsIdLoop,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -93,6 +95,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('perfil-lojas', 3, 600_000, (n) => this.conexoes.procurarLojasDeNovo(n)),
       // O Search Console: os números por dia e as buscas das semanas fechadas de cada site, uma vez por dia; a fila é olhada de 5 em 5 minutos.
       this.loop('search-console', 3, 300_000, async (n) => (await this.searchConsole.executarLote(n)).length),
+      // Hub DMS (F2, A3): as leituras do RegemCast pelas duas credenciais, comparadas; cada conta uma vez por hora, só
+      // com a função `comparacao_dms_id` ligada e o aplicativo do Liame no DMS ID configurado; a fila é olhada de 5 em 5 minutos.
+      this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),
     );
   }
 

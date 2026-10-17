@@ -61,6 +61,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   raw_payload: { class: 'CONFIDENTIAL', retention: '30 dias (reprocessamento)', purge: { job: 'payload_bruto', days: 30 } },
   sync_run: { class: 'INTERNAL', retention: '90 dias', purge: { job: 'execucao_sync', days: 90 } },
   sync_state: { class: 'INTERNAL', retention: 'com a conta conectada' },
+  // Hub DMS (F2, A3): a comparação das duas credenciais do RegemCast. Da distribuição; só o caminho do que difere.
+  credential_comparison_state: { class: 'INTERNAL', retention: 'com a conta conectada' },
+  credential_comparison: { class: 'INTERNAL', retention: '90 dias', purge: { job: 'comparacao_credencial', days: 90 } },
   // Conectores (A2, G2): estado técnico da distribuição, sem dado de empresa.
   connector_capability: { class: 'PUBLIC', retention: 'do produto' },
   api_deprecation_notice: { class: 'PUBLIC', retention: 'do produto' },

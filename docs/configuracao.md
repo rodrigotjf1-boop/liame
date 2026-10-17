@@ -113,6 +113,7 @@ Contratos em `docs/integracoes/`. O endereço de cada produto é da distribuiç�
 | `REGEM_AUTH_URL` | Onde o presidente da loja autoriza o Liame (C1b); em produção, só o oficial | `https://app.dmsregem.com` |
 | `REGEM_CLIENT_ID` · `REGEM_CLIENT_SECRET` | Credencial do Liame como cliente do Regem, para trocar o código pelo token da loja. Sem elas, "Conectar Regem" responde 503 e só vale o registro pela distribuição. O `REGEM_CLIENT_ID` é `liame`; o segredo (32 caracteres ou mais) é o MESMO valor posto no Regem em `INTEGRACAO_LIAME_CLIENT_SECRET` (ambiente do `regem-api`). Com as duas, `GET /v1/connections` passa a listar `regem` em `available` e a tela oferece "Conectar o Regem". | vazio |
 | `REGEMCAST_API_URL` | API do RegemCast: o conector chama `{valor}/mcp` (MCP 2026-07-28, conversas abertas por anúncio, F7; contrato `integracoes/regemcast.md` v2); em produção, só o oficial e com `https`. Vazio = nenhuma conversa é lida | `https://castapi.dmsregem.com/api/v1` |
+| `DMS_ID_EMISSOR` · `DMS_ID_APLICATIVO` · `DMS_ID_SEGREDO` | O aplicativo do Liame no DMS ID do Hub DMS (F2): o emissor (o `iss` dos tokens; em produção, só o oficial, `https://id.dmstecnologias.com/oidc`), o `client_id` e o segredo do aplicativo. Vão juntos (faltando um, a API e o worker não sobem). **O segredo é da distribuição:** vai só no painel da hospedagem (`liame-api` e `liame-worker`), nunca no git nem no chat. Sem os três, a comparação das credenciais do RegemCast não roda. | vazio |
 
 **Piloto (D-A2.5-4):** a distribuição emite o token da loja no Regem e o grava no cofre do Liame, dentro do contêiner da API. O token entra pela entrada padrão, nunca pela linha de comando:
 
@@ -121,6 +122,17 @@ node dist/scripts/conectar-produto.js --empresa <uuid da empresa> --marca <uuid 
 ```
 
 Depois, a pessoa liga a loja em **Contas conectadas**; a loja do Liame dela é criada ali, com o nome e o fuso da loja do Regem (#71, ERR-047). Revogar lá apaga o token do cofre e o revoga no Regem.
+
+**Comparação das credenciais do RegemCast (Hub DMS, F2, A3):** com as três variáveis do DMS ID e a flag `comparacao_dms_id` ligada para a empresa (pelo `ligar-flag`, como abaixo), a rotina `comparacao-dms-id` do worker lê, uma vez por hora, as 10 ferramentas de leitura de cada conta do RegemCast conectada pela credencial de hoje (`rct_it_`) e pela nova (o token do DMS ID do aplicativo e o segredo da ligação, que o RegemCast entrega em troca do `rct_it_` e o Liame guarda no cofre), e grava em `credential_comparison` se deu igual, só com o caminho do que difere. Do lado do RegemCast, a via precisa estar ligada (`DMS_ID_LIGADO` e as variáveis dele, com o `client_id` deste aplicativo em `DMS_ID_APLICATIVOS`). Para ver como está, uma consulta só de leitura:
+
+```sql
+select tool, outcome, count(*) as vezes, max(compared_at) as ultima
+  from liame.credential_comparison
+ where compared_at > now() - interval '14 days'
+ group by tool, outcome order by tool, outcome;
+```
+
+A via nova só passa a valer com 14 dias seguidos sem `diferente` nem `nova_falhou` e 50 comparações ou mais por ferramenta (decisão F2-7).
 
 **Ligar uma função para uma empresa (ADR-012):** as funções de escrita nascem desligadas (`regem_write`, `meta_write`, `google_write`…). Quem liga é a distribuição, por empresa, com o papel dono do banco (`liame_owner`, o mesmo das migrations): o papel do aplicativo não grava regra de flag. O endereço do banco vem do ambiente, pelo nome da variável, e fica na auditoria da empresa quem decidiu e por quê:
 

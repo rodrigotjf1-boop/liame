@@ -18,6 +18,8 @@ export const connectedAccount = liame.table('connected_account', {
   status: text('status').notNull().default('ativa'),
   statusReason: text('status_reason'),
   credentialSecretId: uuid('credential_secret_id'),
+  /** O segredo da ligação do Hub DMS (só contas do RegemCast; migration 0074). */
+  ligacaoSecretId: uuid('ligacao_secret_id'),
   connectionId: uuid('connection_id'),
   providerAttributes: jsonb('provider_attributes').notNull().default({}),
   connectedBy: uuid('connected_by'),

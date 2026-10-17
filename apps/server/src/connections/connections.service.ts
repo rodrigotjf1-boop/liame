@@ -519,12 +519,14 @@ export class ConnectionsService {
    */
   async desligarConta(id: string): Promise<void> {
     const tx = currentTx();
-    const r = await tx.execute<{ provider: string; external_id: string; credential_secret_id: string | null; connection_id: string | null }>(sql`
+    const r = await tx.execute<{ provider: string; external_id: string; credential_secret_id: string | null; connection_id: string | null; ligacao_secret_id: string | null }>(sql`
       update liame.connected_account set status = 'desconectada', status_reason = 'desligada por pessoa', disconnected_at = now(), updated_at = now()
        where id = ${id} and disconnected_at is null
-       returning provider, external_id, credential_secret_id, connection_id`);
+       returning provider, external_id, credential_secret_id, connection_id, ligacao_secret_id`);
     const conta = r.rows[0];
     if (!conta) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conta conectada não encontrada nesta empresa.');
+    // O segredo da ligação do Hub DMS (RegemCast) sai do cofre junto: no RegemCast, revogar o token revoga a ligação.
+    if (conta.ligacao_secret_id) await this.vault.revokeSecret(tx, conta.ligacao_secret_id);
     let tokenDaLoja: string | null = null;
     if ((conta.provider === 'regem' || conta.provider === 'regemcast') && conta.credential_secret_id) {
       const guardada = await this.vault.readSecret(tx, conta.credential_secret_id);
@@ -592,9 +594,11 @@ export class ConnectionsService {
       if (guardada && c.provider === 'regemcast') tokensRegemcast = (JSON.parse(guardada) as CredencialRegem).lojas.map((l) => ({ loja_id: l.loja_id, token: l.token }));
       await this.vault.revokeSecret(tx, c.credential_secret_id);
     }
-    const contas = await tx.execute<{ id: string }>(sql`
+    const contas = await tx.execute<{ id: string; ligacao_secret_id: string | null }>(sql`
       update liame.connected_account set status = 'desconectada', status_reason = 'autorização revogada', disconnected_at = now(), updated_at = now()
-       where connection_id = ${id} and disconnected_at is null returning id`);
+       where connection_id = ${id} and disconnected_at is null returning id, ligacao_secret_id`);
+    // Os segredos das ligações do Hub DMS das contas da autorização saem do cofre junto.
+    for (const conta of contas.rows) if (conta.ligacao_secret_id) await this.vault.revokeSecret(tx, conta.ligacao_secret_id);
     await tx.execute(sql`
       update liame.oauth_connection set status = 'revogada', revoked_at = now(), code_enc = null, pkce_verifier_enc = null, updated_at = now() where id = ${id}`);
     // Substituída por outra autorização que assumiu as contas: encerra só aqui (ver `ligarContas`).

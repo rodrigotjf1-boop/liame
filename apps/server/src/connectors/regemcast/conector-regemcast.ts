@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { ClienteConector } from '../cliente-http.js';
 import { ErroConector } from '../cliente-http.js';
+import { CABECALHO_LIGACAO } from '../dms/integracao-dms.js';
 import {
   CampanhaDetalhadaRegemcast,
   CampanhasRegemcast,
@@ -8,6 +9,7 @@ import {
   ConversaAnuncio,
   DisparoRegemcast,
   EstimativaRegemcast,
+  LigacaoRegemcast,
   ModelosRegemcast,
   OrcamentoRegemcast,
   PaginaConversas,
@@ -55,10 +57,14 @@ function conferir<T extends z.ZodType>(schema: T, corpo: unknown, ferramenta: st
  *   escopo (o RegemCast nem lista o que o token não pode usar) → `permissao`;
  * - `isError` da ferramenta: "Erro interno…" é passageiro; o resto (cursor que não vale, argumento fora do
  *   esquema) é definitivo.
+ *
+ * Com `ligacao`, a chamada vai pela credencial nova do Hub DMS: `token` é o do DMS ID (o aplicativo) e o segredo da
+ * ligação (a conta) vai no cabeçalho `DMS-Ligacao`. As recusas da via nova vêm em problem+json, com o nome do problema
+ * em `codigoProvider` (`token-invalido`, `ligacao-invalida`, `escopo-insuficiente`, `conta-bloqueada`).
  */
 async function chamarFerramenta<T extends z.ZodType>(
   ctx: Contexto,
-  p: { token: string; contaChave: string; ferramenta: string; argumentos: Record<string, unknown>; schema: T },
+  p: { token: string; contaChave: string; ligacao?: string; ferramenta: string; argumentos: Record<string, unknown>; schema: T },
 ): Promise<z.infer<T>> {
   ultimoId = (ultimoId % 1_000_000_000) + 1;
   const r = await ctx.cliente.requisitar({
@@ -68,6 +74,7 @@ async function chamarFerramenta<T extends z.ZodType>(
     metodo: 'POST',
     cabecalhos: {
       authorization: `Bearer ${p.token}`,
+      ...(p.ligacao ? { [CABECALHO_LIGACAO]: p.ligacao } : {}),
       accept: 'application/json, text/event-stream',
       // A especificação manda o servidor conferir estes contra o corpo (erro -32020 se divergirem).
       'mcp-method': 'tools/call',
@@ -116,8 +123,8 @@ async function chamarFerramenta<T extends z.ZodType>(
 }
 
 /** De quem é o token: a conta (id que não muda, nome, fuso), o produto, a classe e as permissões. */
-export function lerSituacao(ctx: Contexto, token: string, contaChave: string): Promise<SituacaoRegemcast> {
-  return chamarFerramenta(ctx, { token, contaChave, ferramenta: 'integracao_situacao', argumentos: {}, schema: SituacaoRegemcast });
+export function lerSituacao(ctx: Contexto, token: string, contaChave: string, ligacao?: string): Promise<SituacaoRegemcast> {
+  return chamarFerramenta(ctx, { token, contaChave, ligacao, ferramenta: 'integracao_situacao', argumentos: {}, schema: SituacaoRegemcast });
 }
 
 /**
@@ -126,12 +133,12 @@ export function lerSituacao(ctx: Contexto, token: string, contaChave: string): P
  */
 export async function lerConversas(
   ctx: Contexto,
-  p: { token: string; contaChave: string; cursor: string | null; limite?: number; desde?: string | null },
+  p: { token: string; contaChave: string; ligacao?: string; cursor: string | null; limite?: number; desde?: string | null },
 ): Promise<{ itens: ConversaAnuncio[]; proximoCursor: string | null; temMais: boolean }> {
   const argumentos: Record<string, unknown> = { limite: p.limite ?? 200 };
   if (p.cursor) argumentos.cursor = p.cursor;
   if (p.desde) argumentos.desde = p.desde;
-  const pg = await chamarFerramenta(ctx, { token: p.token, contaChave: p.contaChave, ferramenta: 'conversas_anuncio_listar', argumentos, schema: PaginaConversas });
+  const pg = await chamarFerramenta(ctx, { token: p.token, contaChave: p.contaChave, ligacao: p.ligacao, ferramenta: 'conversas_anuncio_listar', argumentos, schema: PaginaConversas });
   return { itens: pg.itens, proximoCursor: pg.proximo_cursor, temMais: pg.tem_mais };
 }
 
@@ -140,7 +147,8 @@ export async function lerConversas(
 // (sem ela, a ferramenta "não existe" e a chamada sai como `permissao`). Nenhuma traz telefone nem nome de contato, e
 // nenhuma muda nada no RegemCast.
 
-type Acesso = { token: string; contaChave: string };
+/** A credencial de uma chamada: o `rct_it_` da conta; ou, com `ligacao`, o token do DMS ID e o segredo da ligação. */
+type Acesso = { token: string; contaChave: string; ligacao?: string };
 
 /** Se a conta pode enviar agora (a saúde do WhatsApp na Meta, com o que resolver), o plano e o uso do ciclo. `conta.ler`. */
 export function lerContaDeMensagens(ctx: Contexto, a: Acesso): Promise<ContaRegemcast> {
@@ -151,12 +159,12 @@ export function lerContaDeMensagens(ctx: Contexto, a: Acesso): Promise<ContaRege
 export function lerCampanhasDeMensagens(ctx: Contexto, a: Acesso & { situacao?: string | null; limite?: number }): Promise<CampanhasRegemcast> {
   const argumentos: Record<string, unknown> = { limite: Math.min(50, Math.max(1, a.limite ?? 20)) };
   if (a.situacao) argumentos.situacao = a.situacao;
-  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanhas_listar', argumentos, schema: CampanhasRegemcast });
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ligacao: a.ligacao, ferramenta: 'campanhas_listar', argumentos, schema: CampanhasRegemcast });
 }
 
 /** Uma campanha: por que está pausada ou esperando, as falhas por motivo e o custo na Meta. Não diz quem recebeu. `campanhas.ler`. */
 export function detalharCampanhaDeMensagens(ctx: Contexto, a: Acesso & { id: string }): Promise<CampanhaDetalhadaRegemcast> {
-  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanha_detalhar', argumentos: { id: a.id }, schema: CampanhaDetalhadaRegemcast });
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ligacao: a.ligacao, ferramenta: 'campanha_detalhar', argumentos: { id: a.id }, schema: CampanhaDetalhadaRegemcast });
 }
 
 /** As listas, os públicos prontos e os perfis da base, com quantas pessoas de cada um podem receber. Só contagens. `publicos.ler`. */
@@ -166,7 +174,7 @@ export function lerPublicos(ctx: Contexto, a: Acesso): Promise<PublicosRegemcast
 
 /** Os modelos de mensagem como a Meta os tem agora (o RegemCast fala com a Meta nesta chamada). `modelos.ler`. */
 export function lerModelos(ctx: Contexto, a: Acesso & { soAprovados?: boolean }): Promise<ModelosRegemcast> {
-  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'modelos_listar', argumentos: a.soAprovados ? { soAprovados: true } : {}, schema: ModelosRegemcast });
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ligacao: a.ligacao, ferramenta: 'modelos_listar', argumentos: a.soAprovados ? { soAprovados: true } : {}, schema: ModelosRegemcast });
 }
 
 /** Os tetos de gasto de mensagens que o dono da conta definiu no RegemCast e quanto já saiu em cada período. `orcamento.ler`. */
@@ -247,7 +255,7 @@ function semVazios<T extends Record<string, unknown>>(o: T): Record<string, unkn
 
 /** Quantas pessoas de um público podem receber, quantas estão em descanso e, com a categoria, o custo estimado (teto). `publicos.ler`. */
 export function estimarPublico(ctx: Contexto, a: Acesso & { publico: PublicoDaCampanha; categoria?: 'marketing' | 'utilidade' }): Promise<EstimativaRegemcast> {
-  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'publico_estimar', argumentos: semVazios({ ...a.publico, categoria: a.categoria }), schema: EstimativaRegemcast });
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ligacao: a.ligacao, ferramenta: 'publico_estimar', argumentos: semVazios({ ...a.publico, categoria: a.categoria }), schema: EstimativaRegemcast });
 }
 
 /** Grava um rascunho de modelo no RegemCast e devolve o que barraria o envio. Não vai para a Meta: quem envia é uma pessoa. `modelos.rascunhar`. */
@@ -273,7 +281,7 @@ export function rascunharCampanha(ctx: Contexto, a: Acesso & { chave: string; ca
 /** O plano do disparo de uma campanha que o Liame montou: pessoas, custo, orçamento, o que impede e a confirmação. Não muda nada. `campanhas.disparar`. */
 export function planejarDisparo(ctx: Contexto, a: Acesso & { id: string }): Promise<PlanoDoDisparoRegemcast> {
   exigir(UUID.test(a.id), 'id da campanha');
-  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanha_disparo_planejar', argumentos: { id: a.id }, schema: PlanoDoDisparoRegemcast });
+  return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ligacao: a.ligacao, ferramenta: 'campanha_disparo_planejar', argumentos: { id: a.id }, schema: PlanoDoDisparoRegemcast });
 }
 
 /**
@@ -298,4 +306,25 @@ export function pausarCampanha(ctx: Contexto, a: Acesso & { chave: string; id: s
 /** Desliga o token no RegemCast (segunda camada: ele já saiu do cofre do Liame). */
 export async function revogarNoRegemcast(ctx: Contexto, token: string, contaChave: string): Promise<void> {
   await chamarFerramenta(ctx, { token, contaChave, ferramenta: 'integracao_revogar', argumentos: { confirmar: true }, schema: RevogacaoRegemcast });
+}
+
+/**
+ * A troca automática do Hub DMS (decisão F2-3; RegemCast #118): com o token do DMS ID do aplicativo do Liame e o
+ * `rct_it_` que ele já usa na conta, o RegemCast devolve o segredo da ligação, que herda a conta, o produto e as
+ * permissões do token. Repetir a troca gira o segredo (o anterior para de valer). Recusas: 401 `token-invalido` (o token
+ * do DMS ID) ou `ligacao-invalida` (o `rct_it_` não vale para o aplicativo); 403 `escopo-insuficiente` ou
+ * `conta-bloqueada`; 404 com a via desligada no RegemCast. O segredo em claro nunca vai para log.
+ */
+export async function trocarPorLigacao(ctx: Contexto, a: { tokenDmsId: string; tokenIntegracao: string; contaChave: string }): Promise<LigacaoRegemcast> {
+  const r = await ctx.cliente.requisitar({
+    provider: 'regemcast',
+    conta: a.contaChave,
+    url: `${ctx.apiUrl}/dms-id/ligacao`,
+    metodo: 'POST',
+    cabecalhos: { authorization: `Bearer ${a.tokenDmsId}` },
+    corpo: { token_integracao: a.tokenIntegracao },
+    endpoint: 'dms-id/ligacao',
+    apiVersion: VERSAO_CONTRATO_REGEMCAST,
+  });
+  return conferir(LigacaoRegemcast, r.corpo, 'dms-id/ligacao');
 }
