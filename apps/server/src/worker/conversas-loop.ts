@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { DATASET_CONVERSAS, INTERVALO_CONVERSAS_MIN, type ResultadoConversas, SincronizadorConversas } from '../attribution/sincronizador-conversas.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { contaConectada } from '../connections/conectada.js';
 import { DATABASE } from '../database/database.module.js';
 import { VaultService } from '../vault/vault.service.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
@@ -30,7 +31,7 @@ export class ConversasLoop {
     if (!this.database) return [];
     const db = this.database.db;
     const referencia = agora ? sql`${agora.toISOString()}::timestamptz` : sql`now()`;
-    const elegivel = sql`a.provider = 'regemcast' and a.disconnected_at is null and a.status in ('ativa', 'erro') and a.credential_secret_id is not null`;
+    const elegivel = sql`a.provider = 'regemcast' and ${contaConectada('a')} and a.credential_secret_id is not null`;
     const reservadas = await withSystem(db, async (tx) => {
       await tx.execute(sql`
         insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, cursor)

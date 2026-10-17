@@ -1,6 +1,7 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { canonicalJson, sha256 } from '../audit/audit.js';
+import { contaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { dispararCampanha, pausarCampanha, planejarDisparo } from '../connectors/regemcast/conector-regemcast.js';
@@ -186,14 +187,16 @@ export class RegemcastMensagemConnector implements Connector {
   private async preparar(tx: Tx, ref: ResourceRef, deps: DependenciasDaEscritaRegemcast): Promise<Preparada | null> {
     const campanha = mensagemDoRecurso(ref.resourceId);
     if (!campanha || !UUID.test(ref.accountId)) return null;
-    const r = await tx.execute<Conta>(sql`
-      select a.id, a.tenant_id, a.external_id, a.credential_secret_id
+    const r = await tx.execute<Conta & { conectada: boolean }>(sql`
+      select a.id, a.tenant_id, a.external_id, a.credential_secret_id, ${contaConectada('a')} as conectada
         from liame.connected_account a
        where a.id = ${ref.accountId} and a.tenant_id = ${ref.tenantId} and a.provider = ${PROVIDER} and a.disconnected_at is null`);
-    const conta = r.rows[0];
-    if (!conta) return null;
+    const linha = r.rows[0];
+    if (!linha) return null;
+    const { conectada, ...conta } = linha;
     if (!deps.apiUrl) throw new ErroConector('transitorio', PROVIDER, 'o endereço do RegemCast não está configurado');
-    const guardada = conta.credential_secret_id ? await deps.lerSegredo(tx, conta.credential_secret_id) : null;
+    // A conta que o RegemCast recusou (401) não é usada: o pedido diz "conecte o RegemCast de novo" (achado A2 do Hub DMS).
+    const guardada = conta.credential_secret_id && conectada ? await deps.lerSegredo(tx, conta.credential_secret_id) : null;
     const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
     const token = credencial?.tipo === 'regemcast' ? credencial.lojas.find((l) => l.loja_id === conta.external_id)?.token : undefined;
     if (!token) throw new ErroConector('autenticacao', PROVIDER, 'autorização revogada ou sem o token desta conta');

@@ -17,6 +17,7 @@ import { motivoSemDadoPessoal } from '../ai/sanitizar.js';
 import { situacaoDoTeto } from '../ai/teto.js';
 import { ultimaCotacao } from '../cambio/cotacao.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { contaConectada } from '../connections/conectada.js';
 import { marcaDoCriativo } from '../criativo/base.js';
 import { CustoDasPecasService } from '../criativo/custo.service.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
@@ -350,7 +351,8 @@ export class EquipeService {
     agora: Date,
   ): Promise<{ semRegemcast: boolean; semDesconto: boolean; semOferta: boolean }> {
     if (!ativo) return { semRegemcast: false, semDesconto: false, semOferta: false };
-    const conta = await currentTx().execute(sql`select 1 from liame.connected_account where brand_id = ${brandId} and provider = 'regemcast' and disconnected_at is null limit 1`);
+    // Sem uma conta do RegemCast conectada (a que o RegemCast recusou não serve; achado A2 do Hub DMS), o CRM não trabalha.
+    const conta = await currentTx().execute(sql`select 1 from liame.connected_account a where a.brand_id = ${brandId} and a.provider = 'regemcast' and ${contaConectada('a')} limit 1`);
     if (!conta.rows[0]) return { semRegemcast: true, semDesconto: false, semOferta: false };
     const desconto = await currentTx().execute(sql`select 1 from liame.message_discount where brand_id = ${brandId}`);
     const marca = await marcaDoCriativo(brandId, fuso, agora);

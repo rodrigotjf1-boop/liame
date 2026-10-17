@@ -256,6 +256,10 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     // Ligado, sem o RegemCast conectado nesta marca: não há para quem propor.
     expect(await crm()).toMatchObject({ status: 'ativo', blocked_by: 'sem_regemcast', in_progress: null });
     const conta = await contaDoRegemcast(e);
+    // O RegemCast que recusou a conexão (401 → desconectada, ainda ligada) não serve para propor (achado A2 do Hub DMS).
+    await ownerQuery(`update liame.connected_account set status = 'desconectada' where id = $1`, [conta]);
+    expect(await crm()).toMatchObject({ status: 'ativo', blocked_by: 'sem_regemcast', in_progress: null });
+    await ownerQuery(`update liame.connected_account set status = 'ativa' where id = $1`, [conta]);
     // Com o RegemCast, falta o desconto do cupom das mensagens: sem ele, nenhuma mensagem sai.
     expect(await crm()).toMatchObject({ status: 'ativo', blocked_by: 'sem_desconto', in_progress: null });
     const loja = randomUUID();

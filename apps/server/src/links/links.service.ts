@@ -16,6 +16,7 @@ import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
 import { MODELO_PADRAO } from '../attribution/motor.js';
+import { contaConectada } from '../connections/conectada.js';
 import type { RastreioLido } from '../connectors/tipos.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
@@ -200,12 +201,13 @@ export class LinksService {
       anuncio = { id: a.id, ad_group_id: a.ad_group_id };
     }
 
-    // O destino é o cardápio da loja, que o Regem informou na conexão (V33: nada fora dele).
+    // O destino é o cardápio da loja, que o Regem informou na conexão (V33: nada fora dele). Só da loja conectada:
+    // a que o Regem recusou (401) não ganha link novo com os dados dela (achado A2 do Hub DMS).
     const cardapios = (
       await tx.execute<{ url: string | null }>(sql`
-        select provider_attributes->>'cardapio_url' as url from liame.connected_account
-         where provider = 'regem' and unit_id = ${loja.id} and brand_id = ${loja.brand_id} and disconnected_at is null
-         order by connected_at desc, id`)
+        select a.provider_attributes->>'cardapio_url' as url from liame.connected_account a
+         where a.provider = 'regem' and a.unit_id = ${loja.id} and a.brand_id = ${loja.brand_id} and ${contaConectada('a')}
+         order by a.connected_at desc, a.id`)
     ).rows
       .map((r) => r.url)
       .filter((u): u is string => cardapioValido(u) !== null);
@@ -266,7 +268,7 @@ export class LinksService {
     const lojas = await tx.execute<{ id: string; name: string; unit_id: string | null; unit_name: string | null; url: string | null }>(sql`
       select a.id, a.name, a.unit_id, u.name as unit_name, a.provider_attributes->>'cardapio_url' as url
         from liame.connected_account a left join liame.unit u on u.id = a.unit_id
-       where a.brand_id = ${brandId} and a.provider = 'regem' and a.disconnected_at is null
+       where a.brand_id = ${brandId} and a.provider = 'regem' and ${contaConectada('a')}
        order by u.name nulls last, a.name, a.id`);
     const destinations: LinkDestination[] = lojas.rows.map((l) => {
       const menu = cardapioValido(l.url);

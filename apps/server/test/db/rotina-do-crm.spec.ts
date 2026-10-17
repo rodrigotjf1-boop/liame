@@ -570,6 +570,14 @@ describe.skipIf(!hasDb)('a rotina do CRM e mensageria olha a marca e abre a prop
     await ownerQuery(`update liame.connected_account set provider_attributes = jsonb_set(provider_attributes, '{escopos}', '["pedidos.ler","cupons.criar"]'::jsonb), disconnected_at = now() where id = $1`, [e.loja]);
     expect(await olhar(e, 'volte_a_pedir')).toEqual({ resultado: 'sem_loja_do_cupom' });
     await ownerQuery(`update liame.connected_account set disconnected_at = null where id = $1`, [e.loja]);
+    // A loja do cupom que o Regem recusou (401 → desconectada, ainda ligada; achado A2 do Hub DMS).
+    await ownerQuery(`update liame.connected_account set status = 'desconectada' where id = $1`, [e.loja]);
+    expect(await olhar(e, 'volte_a_pedir')).toEqual({ resultado: 'sem_loja_do_cupom' });
+    await ownerQuery(`update liame.connected_account set status = 'ativa' where id = $1`, [e.loja]);
+    // O RegemCast que recusou a conexão (401 → desconectada, ainda ligada): conectar de novo, sem chamar com o token recusado.
+    await ownerQuery(`update liame.connected_account set status = 'desconectada' where id = $1`, [e.conta]);
+    expect(await olhar(e, 'volte_a_pedir')).toEqual({ resultado: 'sem_autorizacao' });
+    await ownerQuery(`update liame.connected_account set status = 'ativa' where id = $1`, [e.conta]);
     // O RegemCast desconectado.
     await ownerQuery(`update liame.connected_account set disconnected_at = now() where id = $1`, [e.conta]);
     expect(await olhar(e, 'volte_a_pedir')).toEqual({ resultado: 'sem_regemcast' });

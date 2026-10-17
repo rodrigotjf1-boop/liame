@@ -1,5 +1,6 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { contaConectada } from '../connections/conectada.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { CupomRegem } from '../connectors/regem/contrato-regem.js';
 import { VERSAO_CONTRATO_REGEM } from '../connectors/regem/conector-regem.js';
@@ -83,13 +84,14 @@ export class RegemCupomConnector implements Connector {
     this.deps = deps;
   }
 
+  /** A loja conectada (achado A2 do Hub DMS): a que o Regem recusou volta nula, e quem chama diz "foi desconectada". */
   private async conta(tx: Tx, ref: ResourceRef): Promise<Conta | null> {
     if (!UUID.test(ref.accountId)) return null;
     const r = await tx.execute<Conta>(sql`
       select a.id, a.tenant_id, a.brand_id, a.external_id, a.credential_secret_id,
              coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) as pode_criar
         from liame.connected_account a
-       where a.id = ${ref.accountId} and a.tenant_id = ${ref.tenantId} and a.provider = 'regem' and a.disconnected_at is null`);
+       where a.id = ${ref.accountId} and a.tenant_id = ${ref.tenantId} and a.provider = 'regem' and ${contaConectada('a')}`);
     return r.rows[0] ?? null;
   }
 

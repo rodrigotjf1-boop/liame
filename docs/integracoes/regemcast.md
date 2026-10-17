@@ -56,7 +56,7 @@ Os cabeçalhos `Mcp-Method` e `Mcp-Name` repetem o que está no corpo (a especif
 
 | O que volta | Quando | O Liame faz |
 | --- | --- | --- |
-| HTTP **401** com `WWW-Authenticate: Bearer` | token inexistente, revogado ou fora do formato | conta "desconectada" |
+| HTTP **401** com `WWW-Authenticate: Bearer` | token inexistente, revogado ou fora do formato | conta "desconectada" (segue ligada, para o aviso e a reconexão); desde 16/10/2026, nada mais age com ela até reconectar: nem a leitura, nem a tela Mensagens, nem o pedido de mensagem, nem o CRM (achado A2 do Hub DMS; `connections/conectada.ts`) |
 | HTTP **403** | conta suspensa ou cancelada no RegemCast | espera um dia, conta com erro |
 | HTTP **429** com `Retry-After` | mais de 120 chamadas por minuto no token | espera o que foi pedido |
 | HTTP 5xx | erro do RegemCast | tenta de novo com espera |

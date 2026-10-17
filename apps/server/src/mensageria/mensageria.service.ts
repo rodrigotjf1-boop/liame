@@ -4,6 +4,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { contaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
@@ -216,18 +217,23 @@ export class MensageriaService {
     });
   }
 
-  /** As contas do RegemCast da empresa que passam no filtro, com o token de cada uma lido do cofre. Roda numa transação curta da empresa. */
+  /**
+   * As contas do RegemCast da empresa que passam no filtro, com o token de cada uma lido do cofre. Roda numa transação
+   * curta da empresa. A conta ligada que o RegemCast recusou (401) aparece sem token: a tela diz "sem autorização" e
+   * nada é chamado com a credencial recusada (achado A2 do Hub DMS).
+   */
   private async contas(filtro: ReturnType<typeof sql>): Promise<ContaLida[]> {
     const tx = currentTx();
-    const r = await tx.execute<Omit<ContaLida, 'token'> & { credential_secret_id: string | null }>(sql`
-      select a.id, a.brand_id, a.name, a.external_id, a.credential_secret_id
+    const r = await tx.execute<Omit<ContaLida, 'token'> & { credential_secret_id: string | null; conectada: boolean }>(sql`
+      select a.id, a.brand_id, a.name, a.external_id, a.credential_secret_id, ${contaConectada('a')} as conectada
         from liame.connected_account a
        where a.provider = 'regemcast' and a.disconnected_at is null and ${filtro}
        order by a.name, a.id
        limit ${CONTAS_POR_MARCA}`);
     const segredos = new Map<string, CredencialGuardada | null>();
     const contas: ContaLida[] = [];
-    for (const { credential_secret_id: segredoId, ...conta } of r.rows) {
+    for (const { credential_secret_id: guardado, conectada, ...conta } of r.rows) {
+      const segredoId = conectada ? guardado : null;
       if (segredoId && !segredos.has(segredoId)) {
         const texto = await this.vault.readSecret(tx, segredoId);
         segredos.set(segredoId, texto ? (JSON.parse(texto) as CredencialGuardada) : null);
