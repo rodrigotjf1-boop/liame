@@ -2,6 +2,7 @@ import type { MessageDiscount, MessageDiscountRequest, MessageDiscountResponse, 
 import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { contaConectada } from '../connections/conectada.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -126,10 +127,14 @@ export class DescontoDasMensagensService {
     return this.flags.isEnabled(FLAG_MENSAGERIA, this.flags.context({ tenantId, userId, brandId }));
   }
 
-  /** As lojas do Regem conectadas à marca; a que liberou "criar cupom de campanha" na autorização pode receber o cupom. */
+  /**
+   * As lojas do Regem ligadas à marca; a que está conectada e liberou "criar cupom de campanha" na autorização pode
+   * receber o cupom (a que o Regem recusou aparece, sem poder: achado A2 do Hub DMS).
+   */
   private async lojas(brandId: string): Promise<LinhaDaLoja[]> {
     const r = await currentTx().execute<LinhaDaLoja>(sql`
-      select a.id, a.name, coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) as pode_criar
+      select a.id, a.name,
+             (coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) and ${contaConectada('a')}) as pode_criar
         from liame.connected_account a
        where a.brand_id = ${brandId} and a.provider = 'regem' and a.disconnected_at is null
        order by a.name, a.id`);
@@ -139,7 +144,7 @@ export class DescontoDasMensagensService {
   private async desconto(brandId: string): Promise<MessageDiscount | null> {
     const r = await currentTx().execute<LinhaDoDesconto>(sql`
       select d.kind, d.percent, d.value_cents, d.min_order_cents, d.valid_days, d.coupon_account_id, d.updated_by, d.updated_at,
-             a.name as loja, (a.disconnected_at is null) as loja_conectada,
+             a.name as loja, ${contaConectada('a')} as loja_conectada,
              coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) as loja_pode_criar,
              u.name as quem
         from liame.message_discount d

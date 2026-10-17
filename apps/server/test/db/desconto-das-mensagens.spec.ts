@@ -138,6 +138,23 @@ describe.skipIf(!hasDb)('o desconto padrão do cupom das mensagens (A5 · Y6, pa
     expect(auditoria[2]).toMatchObject({ before: { kind: 'valor', value_cents: 1000 }, after: { kind: 'frete_gratis', percent: null, value_cents: null } });
   });
 
+  it('a loja do desconto que o Regem recusou (401 → desconectada, ainda ligada): aparece sem poder criar e desconectada; reconectada, volta (achado A2 do Hub DMS)', async () => {
+    const e = await empresa();
+    const centro = await loja(e, 'Loja Centro', true);
+    expect((await definir(e, DEZ_POR_CENTO)).status).toBe(200);
+    // O que o sincronizador de vendas grava no 401: o status, sem `disconnected_at`.
+    await ownerQuery(`update liame.connected_account set status = 'desconectada', status_reason = 'O Regem recusou a autorização desta loja: conecte de novo.' where id = $1`, [centro]);
+    const desconectada = await lido(e);
+    expect(desconectada.stores).toEqual([{ connected_account_id: centro, name: 'Loja Centro', can_create: false }]);
+    expect(desconectada.discount?.store).toEqual({ connected_account_id: centro, name: 'Loja Centro', can_create: false, connected: false });
+    // Mudar o desconto também não escolhe a loja que não pode criar.
+    const recusa = await definir(e, { ...DEZ_POR_CENTO, percent: 15 });
+    expect([recusa.status, recusa.body.code]).toEqual([409, 'loja-sem-cupom']);
+
+    await ownerQuery(`update liame.connected_account set status = 'ativa', status_reason = null where id = $1`, [centro]);
+    expect((await lido(e)).discount?.store).toEqual({ connected_account_id: centro, name: 'Loja Centro', can_create: true, connected: true });
+  });
+
   it('o que passa do que o Liame aceita volta com o campo; e nada é gravado', async () => {
     const e = await empresa();
     await loja(e, 'Loja Centro', true);

@@ -322,6 +322,22 @@ describe.skipIf(!hasDb)('links de campanha (A2.5 · F5)', () => {
     expect(await codigo({ extra: 'campo' })).toEqual([400, 'validacao']);
   });
 
+  it('loja que o Regem recusou (401 → desconectada, ainda ligada): sai das opções e não ganha link novo com o cardápio dela; reconectada, volta (achado A2 do Hub DMS)', async () => {
+    // O que o sincronizador de vendas grava no 401: o status, sem `disconnected_at`.
+    await ownerQuery(`update liame.connected_account set status = 'desconectada', status_reason = 'O Regem recusou a autorização desta loja: conecte de novo.' where id = $1`, [contas.regemCentro]);
+    try {
+      const opcoes = await api.call('GET', `/v1/links/options?brand_id=${brandId}`, { cookie });
+      expect(opcoes.status).toBe(200);
+      expect((opcoes.body.destinations as { connected_account_id: string }[]).map((d) => d.connected_account_id)).not.toContain(contas.regemCentro);
+      const r = await criar({ unit_id: unidade.centro, campaign_id: ids.C1, name: 'Loja desconectada' });
+      expect([r.status, r.body.code]).toEqual([422, 'loja-sem-cardapio']);
+    } finally {
+      await ownerQuery(`update liame.connected_account set status = 'ativa', status_reason = null where id = $1`, [contas.regemCentro]);
+    }
+    const depois = await api.call('GET', `/v1/links/options?brand_id=${brandId}`, { cookie });
+    expect((depois.body.destinations as { connected_account_id: string; usable: boolean }[]).find((d) => d.connected_account_id === contas.regemCentro)?.usable).toBe(true);
+  });
+
   it('lista: os links da marca com os pedidos dos últimos 7 dias que chegaram por cada um (cupom exclusivo conta pelo cupom)', async () => {
     const cupom = randomUUID();
     await ownerQuery(

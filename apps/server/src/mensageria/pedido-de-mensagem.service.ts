@@ -5,6 +5,7 @@ import { ActionService } from '../actions/action.service.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { contaConectada, estaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
@@ -173,13 +174,14 @@ export class PedidoDeMensagemService {
     if (!(await this.flags.isEnabled(FLAG_DO_ENVIO, contexto))) {
       throw new AppProblem(409, 'envio-desligado', 'O envio de mensagens não está ligado', 'O envio de mensagens pelo Liame ainda não está ligado para esta empresa. Quem liga é a Liame, a pedido do dono.');
     }
-    const r = await tx.execute<{ id: string; external_id: string; credential_secret_id: string | null }>(sql`
-      select a.id, a.external_id, a.credential_secret_id
+    const r = await tx.execute<{ id: string; external_id: string; credential_secret_id: string | null; status: string; disconnected_at: string | null }>(sql`
+      select a.id, a.external_id, a.credential_secret_id, a.status, a.disconnected_at
         from liame.connected_account a
        where a.id = ${p.conta} and a.tenant_id = ${quem.tenantId} and a.brand_id = ${p.marca} and a.provider = 'regemcast' and a.disconnected_at is null`);
     const conta = r.rows[0];
     if (!conta) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conta do RegemCast não encontrada nesta marca.');
-    const guardada = conta.credential_secret_id ? await this.vault.readSecret(tx, conta.credential_secret_id) : null;
+    // A conta que o RegemCast recusou (401) não tem token para o Liame usar: cai no "conecte de novo" (achado A2 do Hub DMS).
+    const guardada = conta.credential_secret_id && estaConectada(conta) ? await this.vault.readSecret(tx, conta.credential_secret_id) : null;
     const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
     const token = credencial?.tipo === 'regemcast' ? credencial.lojas.find((l) => l.loja_id === conta.external_id)?.token : undefined;
     if (!token) throw new AppProblem(409, 'regemcast-sem-autorizacao', 'Conecte o RegemCast de novo', 'O RegemCast não tem mais a conexão desta conta. Conecte o RegemCast de novo em Contas conectadas.');
@@ -195,7 +197,7 @@ export class PedidoDeMensagemService {
     const r = await tx.execute<{ pode_criar: boolean }>(sql`
       select coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) as pode_criar
         from liame.connected_account a
-       where a.id = ${lojaId} and a.tenant_id = ${tenantId} and a.brand_id = ${brandId} and a.provider = 'regem' and a.disconnected_at is null`);
+       where a.id = ${lojaId} and a.tenant_id = ${tenantId} and a.brand_id = ${brandId} and a.provider = 'regem' and ${contaConectada('a')}`);
     const loja = r.rows[0];
     if (!loja) throw recusada('A loja do cupom não é uma loja do Regem conectada a esta marca.');
     if (!loja.pode_criar) throw recusada('A loja não liberou "criar cupom de campanha" no Regem. Autorize de novo em Contas conectadas e ligue essa chave lá.');

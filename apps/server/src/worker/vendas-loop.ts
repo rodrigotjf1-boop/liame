@@ -2,6 +2,7 @@ import { type Database, type Tx, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { contaConectada } from '../connections/conectada.js';
 import { DATABASE } from '../database/database.module.js';
 import { apagarClientesDaOrigem } from '../orders/order-store.js';
 import { type ApagarAnonimizados, INTERVALO_VENDAS_MIN, type ResultadoVendas, SincronizadorVendas } from '../orders/sincronizador-vendas.js';
@@ -31,7 +32,7 @@ export class VendasLoop {
     if (!this.database) return [];
     const db = this.database.db;
     const referencia = agora ? sql`${agora.toISOString()}::timestamptz` : sql`now()`;
-    const elegivel = sql`a.provider = 'regem' and a.disconnected_at is null and a.status in ('ativa', 'erro') and a.credential_secret_id is not null`;
+    const elegivel = sql`a.provider = 'regem' and ${contaConectada('a')} and a.credential_secret_id is not null`;
     const reservadas = await withSystem(db, async (tx) => {
       await tx.execute(sql`
         insert into liame.sync_state (connected_account_id, dataset, tenant_id, expected_every_minutes, cursor)

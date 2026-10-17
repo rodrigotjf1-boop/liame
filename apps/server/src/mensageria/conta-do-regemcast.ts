@@ -1,5 +1,6 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { contaConectada } from '../connections/conectada.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import type { VaultService } from '../vault/vault.service.js';
 import { ESCOPOS_DE_ESCRITA_NO_REGEMCAST } from './rotina-do-crm.js';
@@ -18,15 +19,17 @@ export type ContaDoRegemcast = {
 };
 
 /**
- * A conta do RegemCast da marca que está conectada. Com `contaId`, só essa (a da proposta); sem ele, a primeira pelo
- * nome: uma marca tem, na prática, uma conta. Nula quando a marca não tem conta conectada.
+ * A conta do RegemCast ligada à marca. Com `contaId`, só essa (a da proposta); sem ele, a primeira pelo nome: uma marca
+ * tem, na prática, uma conta. Nula quando a marca não tem conta ligada; sem token quando o RegemCast recusou a conexão
+ * (401) ou o cofre não a tem mais, e quem chama diz "conecte de novo" (achado A2 do Hub DMS).
  */
 export async function lerContaDoRegemcast(tx: Tx, vault: VaultService, alvo: { tenantId: string; brandId: string; contaId?: string }): Promise<ContaDoRegemcast | null> {
   const daProposta = alvo.contaId ? sql`and a.id = ${alvo.contaId}` : sql``;
   const linha = (
-    await tx.execute<{ id: string; external_id: string; credential_secret_id: string | null; escreve: boolean }>(sql`
+    await tx.execute<{ id: string; external_id: string; credential_secret_id: string | null; escreve: boolean; conectada: boolean }>(sql`
       select a.id, a.external_id, a.credential_secret_id,
-             coalesce(a.provider_attributes -> 'escopos' @> ${JSON.stringify(ESCOPOS_DE_ESCRITA_NO_REGEMCAST)}::jsonb, false) as escreve
+             coalesce(a.provider_attributes -> 'escopos' @> ${JSON.stringify(ESCOPOS_DE_ESCRITA_NO_REGEMCAST)}::jsonb, false) as escreve,
+             ${contaConectada('a')} as conectada
         from liame.connected_account a
        where a.tenant_id = ${alvo.tenantId} and a.brand_id = ${alvo.brandId} and a.provider = 'regemcast' and a.disconnected_at is null
              ${daProposta}
@@ -34,7 +37,7 @@ export async function lerContaDoRegemcast(tx: Tx, vault: VaultService, alvo: { t
        limit 1`)
   ).rows[0];
   if (!linha) return null;
-  const guardada = linha.credential_secret_id ? await vault.readSecret(tx, linha.credential_secret_id) : null;
+  const guardada = linha.credential_secret_id && linha.conectada ? await vault.readSecret(tx, linha.credential_secret_id) : null;
   const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
   const doCofre = credencial?.tipo === 'regemcast' ? credencial.lojas.find((l) => l.loja_id === linha.external_id)?.token : undefined;
   return { id: linha.id, external_id: linha.external_id, token: doCofre ?? null, escreve: linha.escreve };

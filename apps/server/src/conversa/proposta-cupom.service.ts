@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { type ProporCupomInput, reaisParaMicros } from '../ai/conversa/cupom.defs.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
+import { contaConectada } from '../connections/conectada.js';
 import { type AuthContext, currentTx, requestStore } from '../context/request-context.js';
 import { actorLabel } from '../context/unit-of-work.interceptor.js';
 import { CouponsService } from '../coupons/coupons.service.js';
@@ -80,12 +81,12 @@ export class PropostaDeCupomService {
     }
   }
 
-  /** A loja da marca com o Regem conectado, pelo nome da loja (ou da conta do Regem). */
+  /** A loja da marca com o Regem conectado (achado A2 do Hub DMS: a recusada pelo Regem não conta), pelo nome da loja (ou da conta do Regem). */
   private async loja(brandId: string, nome: string): Promise<{ id: string; name: string }> {
     const r = await currentTx().execute<{ id: string; name: string; store: string }>(sql`
       select u.id, u.name, a.name as store
         from liame.unit u
-        join liame.connected_account a on a.unit_id = u.id and a.brand_id = u.brand_id and a.provider = 'regem' and a.disconnected_at is null
+        join liame.connected_account a on a.unit_id = u.id and a.brand_id = u.brand_id and a.provider = 'regem' and ${contaConectada('a')}
        where u.brand_id = ${brandId}
        order by u.name, u.id`);
     const lojas = [...new Map(r.rows.map((l) => [l.id, l])).values()];

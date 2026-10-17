@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BudgetService } from '../../src/actions/budget.service.js';
+import { regemCupomConnector } from '../../src/actions/regem-cupom.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { loadConfig } from '../../src/config.js';
 import { registrarConexaoDaDistribuicao } from '../../src/connections/distribuicao.js';
@@ -595,5 +596,32 @@ describe.skipIf(!hasDb)('criar cupom no Regem com aprovação (A2.5 · F6 parte 
     expect((await listar(outra.cookie)).status).toBe(404);
     expect((await acao(id)).status).toBe('aguardando_aprovacao');
     expect((await cancelar(id)).status).toBe(204);
+  });
+
+  it('loja que o Regem recusou (401 → desconectada, ainda ligada): a lista a mostra sem poder criar, o pedido novo volta 422 sem chamar o Regem, e o conector a trata como desconectada (achado A2 do Hub DMS)', async () => {
+    await ligarFlag(true);
+    // O que o sincronizador de vendas grava no 401: o status e o motivo, sem `disconnected_at` (a conta segue ligada).
+    await ownerQuery(`update liame.connected_account set status = 'desconectada', status_reason = 'O Regem recusou a autorização desta loja: conecte de novo.' where id = $1`, [e.contaCentro]);
+    try {
+      const lista = await listar();
+      expect((lista.body.stores as { unit: { name: string }; can_create: boolean }[]).map((l) => [l.unit.name, l.can_create])).toEqual([
+        ['Loja Centro', false],
+        ['Loja Praia', false],
+      ]);
+      const contar = async () => (await ownerQuery<{ n: string }>(`select count(*)::text as n from liame.action_request where tenant_id = $1`, [e.tenantId]))[0]!.n;
+      const antes = await contar();
+      const r = await pedir({ code: 'DESCON10' });
+      expect([r.status, r.body.code]).toEqual([422, 'loja-sem-regem']);
+      expect(await contar()).toBe(antes);
+      expect(chamadasDe('DESCON10')).toEqual([]);
+      // O cupom de uma mensagem também não nasce nela: o conector diz que a loja foi desconectada, sem chamar o Regem.
+      const motivo = await withTenant(database.db, e.tenantId, (tx) => regemCupomConnector.conferirCupomDaMensagem(tx, { tenantId: e.tenantId, lojaId: e.contaCentro }));
+      expect(motivo).toBe('A loja do cupom foi desconectada do Regem.');
+    } finally {
+      await ownerQuery(`update liame.connected_account set status = 'ativa', status_reason = null where id = $1`, [e.contaCentro]);
+    }
+    // Reconectada (o status volta a `ativa`), a loja volta a poder criar.
+    const depois = await listar();
+    expect((depois.body.stores as { unit: { name: string }; can_create: boolean }[]).find((l) => l.unit.name === 'Loja Centro')?.can_create).toBe(true);
   });
 });

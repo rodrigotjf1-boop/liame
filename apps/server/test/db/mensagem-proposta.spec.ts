@@ -715,4 +715,45 @@ describe.skipIf(!hasDb)('montar o pedido de mensagem a partir da proposta e envi
     expect(r, r[2]).toEqual([409, 'regemcast-sem-permissao', 'A conexão com o RegemCast não inclui montar campanhas de mensagens. Quem dá a permissão é o dono da conta, no RegemCast.']);
     expect(await linhas(semRascunho)).toBe(0);
   });
+
+  it('a conta do RegemCast e a loja do cupom que a plataforma recusou (401 → desconectada, ainda ligadas): a proposta não vira pedido e nada é chamado com a credencial recusada (achado A2 do Hub DMS)', async () => {
+    const antes = await linhas(e);
+    const chamadasAntes = doToken(e).length;
+    // O que o sincronizador das conversas grava no 401: o status, sem `disconnected_at`.
+    await ownerQuery(`update liame.connected_account set status = 'desconectada' where id = $1`, [e.conta]);
+    try {
+      expect(await recusa(e, proposta(e))).toEqual([409, 'regemcast-sem-autorizacao', 'O RegemCast não tem mais a conexão desta conta. Conecte o RegemCast de novo em Contas conectadas.']);
+    } finally {
+      await ownerQuery(`update liame.connected_account set status = 'ativa' where id = $1`, [e.conta]);
+    }
+    expect(doToken(e).length).toBe(chamadasAntes);
+    // A loja do cupom que o Regem recusou não recebe o cupom da mensagem.
+    await ownerQuery(`update liame.connected_account set status = 'desconectada' where id = $1`, [e.loja]);
+    try {
+      expect((await recusa(e, comCupom(e, 'RECUSADA10')))[2]).toBe('A loja do cupom não é uma loja do Regem conectada a esta marca.');
+    } finally {
+      await ownerQuery(`update liame.connected_account set status = 'ativa' where id = $1`, [e.loja]);
+    }
+    expect(await linhas(e)).toBe(antes);
+
+    // A mensagem aprovada com a conta conectada, e o RegemCast recusa a conexão antes do envio: o envio falha com
+    // "conecte de novo", sem chamar o RegemCast com a credencial recusada, e nada sai.
+    const aprovada = await servico.propor(quem(e), proposta(e, { nome: `RECUSOU ANTES ${randomUUID().slice(0, 6)}` }));
+    await aprovar(e, aprovada.action_id);
+    const disparosAntes = ordem.filter((o) => o.startsWith('disparo:')).length;
+    const chamadasAntesDoEnvio = doToken(e).length;
+    await ownerQuery(`update liame.connected_account set status = 'desconectada' where id = $1`, [e.conta]);
+    try {
+      await ciclo(e);
+      expect(await ver(e, aprovada.action_id)).toMatchObject({
+        status: 'falhou',
+        status_reason: 'O RegemCast recusou o acesso desta conta (a conexão foi desligada lá, ou não vale mais). Conecte o RegemCast de novo em Contas conectadas.',
+      });
+    } finally {
+      await ownerQuery(`update liame.connected_account set status = 'ativa' where id = $1`, [e.conta]);
+    }
+    expect(doToken(e).length).toBe(chamadasAntesDoEnvio);
+    expect(ordem.filter((o) => o.startsWith('disparo:')).length).toBe(disparosAntes);
+    expect(campanhas.get(aprovada.campaign_id)!.situacao).toBe('rascunho');
+  });
 });

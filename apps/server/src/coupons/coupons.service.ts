@@ -16,6 +16,7 @@ import { uuidv7 } from '@liame/database';
 import { Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
 import { ActionService, PREFIXO_RECUSA } from '../actions/action.service.js';
+import { contaConectada } from '../connections/conectada.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem, type FieldError, ValidationProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -246,7 +247,8 @@ export class CouponsService {
    */
   async createInRegem(auth: AuthContext, body: CreateRegemCouponRequest, agora = new Date()): Promise<CouponRequestResponse> {
     const tx = currentTx();
-    const loja = await this.lojaDaUnidade(body.unit_id);
+    // Criar no Regem é agir na loja: só com ela conectada (achado A2 do Hub DMS).
+    const loja = await this.lojaDaUnidade(body.unit_id, { conectada: true });
     const [conta] = await this.lojas(sql`a.id = ${loja.contaId}`);
 
     const erros: FieldError[] = [];
@@ -400,12 +402,17 @@ export class CouponsService {
     if (!r.rows[0]) throw naoEncontrado('Marca não encontrada nesta empresa.');
   }
 
-  /** A loja do Liame e a conexão do Regem dela (a mais recente). */
-  private async lojaDaUnidade(unitId: string): Promise<{ brandId: string; contaId: string }> {
+  /**
+   * A loja do Liame e a conexão do Regem dela (a mais recente). `conectada`: para agir no Regem, só a conexão que o
+   * Regem não recusou; o cupom de outra plataforma e a plataforma de pedidos são registros do Liame, e servem com a
+   * conexão ligada.
+   */
+  private async lojaDaUnidade(unitId: string, opcoes: { conectada?: boolean } = {}): Promise<{ brandId: string; contaId: string }> {
+    const situacao = opcoes.conectada ? contaConectada('a') : sql`a.disconnected_at is null`;
     const r = await currentTx().execute<{ brand_id: string; conta_id: string | null }>(sql`
       select u.brand_id,
              (select a.id from liame.connected_account a
-               where a.provider = 'regem' and a.unit_id = u.id and a.brand_id = u.brand_id and a.disconnected_at is null
+               where a.provider = 'regem' and a.unit_id = u.id and a.brand_id = u.brand_id and ${situacao}
                order by a.connected_at desc, a.id limit 1) as conta_id
         from liame.unit u join liame.brand b on b.id = u.brand_id and b.archived_at is null
        where u.id = ${unitId}`);
@@ -446,7 +453,7 @@ export class CouponsService {
              u.order_platform, u.order_platform_url, u.order_platform_set_at,
              a.provider_attributes->>'cardapio_url' as cardapio,
              s.last_success_at, s.expected_every_minutes, s.last_error,
-             coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) as pode_criar
+             (coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) and ${contaConectada('a')}) as pode_criar
         from liame.connected_account a
         left join liame.unit u on u.id = a.unit_id
         left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'cupons'

@@ -2,6 +2,7 @@ import { type Database, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { contaConectada } from '../connections/conectada.js';
 import { DATABASE } from '../database/database.module.js';
 import { INTERVALO_MIN, type ResultadoSincronizacao, Sincronizador } from '../media/sincronizador.js';
 import { VaultService } from '../vault/vault.service.js';
@@ -31,8 +32,7 @@ export class SincronizacaoLoop {
     // Relógio da reserva: o do banco, ou o informado (testes e reprocessamento) — o mesmo do sincronizador.
     const referencia = agora ? sql`${agora.toISOString()}::timestamptz` : sql`now()`;
     // Só as plataformas de anúncio: as lojas do Regem e as contas do RegemCast têm a leitura de vendas (A2.5).
-    const elegivel = sql`a.disconnected_at is null and a.status in ('ativa', 'erro', 'sem_permissao') and a.credential_secret_id is not null
-                         and a.provider in ('meta_ads', 'google_ads', 'ga4')`;
+    const elegivel = sql`${contaConectada('a')} and a.credential_secret_id is not null and a.provider in ('meta_ads', 'google_ads', 'ga4')`;
     const reservadas = await withSystem(db, async (tx) => {
       // Conta nova ganha a linha de estado (devida desde sempre) antes da reserva.
       await tx.execute(sql`

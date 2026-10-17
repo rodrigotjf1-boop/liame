@@ -9,6 +9,7 @@ import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { pessoaPode } from '../auth/pessoa-pode.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { contaConectada } from '../connections/conectada.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { lerOrcamentoDeMensagens, lerPublicos } from '../connectors/regemcast/conector-regemcast.js';
@@ -205,7 +206,8 @@ export class RotinaDoCrmService {
     const ultima = jaFeito?.ultima ? new Date(jaFeito.ultima) : null;
     if (ultima && !passouOIntervalo(motivo, ultima, agora)) return { resultado: 'intervalo', ate: fimDoIntervalo(motivo, ultima) };
 
-    // O desconto padrão do cupom e a loja do Regem onde o cupom nasce.
+    // O desconto padrão do cupom e a loja do Regem onde o cupom nasce: a loja conectada (a que o Regem recusou não
+    // recebe cupom; achado A2 do Hub DMS).
     const d = (
       await tx.execute<LinhaDoDesconto>(sql`
         select d.kind, d.percent, d.value_cents, d.min_order_cents, d.valid_days, d.coupon_account_id, d.updated_by,
@@ -214,7 +216,7 @@ export class RotinaDoCrmService {
                a.provider_attributes ->> 'cardapio_url' as cardapio
           from liame.message_discount d
           left join liame.connected_account a
-                 on a.id = d.coupon_account_id and a.tenant_id = d.tenant_id and a.brand_id = d.brand_id and a.provider = 'regem' and a.disconnected_at is null
+                 on a.id = d.coupon_account_id and a.tenant_id = d.tenant_id and a.brand_id = d.brand_id and a.provider = 'regem' and ${contaConectada('a')}
          where d.tenant_id = ${tenantId} and d.brand_id = ${brandId}`)
     ).rows[0];
     if (!d) return { resultado: 'sem_desconto' };

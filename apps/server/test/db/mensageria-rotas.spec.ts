@@ -352,6 +352,19 @@ describe.skipIf(!hasDb)('mensageria pelas rotas: o que a tela Mensagens lê do R
     expect(d.body.type).toContain('regemcast-sem-autorizacao');
   });
 
+  it('a conta que o RegemCast já recusou (desconectada no Liame, ainda ligada): pede para conectar de novo e nada é chamado com a credencial recusada (achado A2 do Hub DMS)', async () => {
+    const e = await empresa();
+    // O que o sincronizador das conversas grava no 401: o status, sem `disconnected_at`.
+    await ownerQuery(`update liame.connected_account set status = 'desconectada', status_reason = 'O RegemCast recusou a autorização desta conta: conecte de novo.' where id = $1`, [e.conta]);
+    const [a] = (await lida(e)).accounts;
+    expect(a!.status).toBe('sem_autorizacao');
+    expect(a!.campaigns).toEqual({ status: 'indisponivel', total: null, items: [] });
+    const d = await detalhar(e);
+    expect(d.status).toBe(409);
+    expect(d.body.type).toContain('regemcast-sem-autorizacao');
+    expect(ferramentasChamadas(e)).toEqual([]);
+  });
+
   it('a conta com restrição na Meta e o teto atingido chegam como o RegemCast escreve', async () => {
     const e = await empresa();
     trocas.set(`${e.contaId}:conta_situacao`, {

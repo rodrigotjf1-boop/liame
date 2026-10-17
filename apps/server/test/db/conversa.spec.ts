@@ -683,6 +683,17 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
     expect(r2.cards).toEqual([]);
     expect(enviado(recusada, 1)).toContain('não está liberada');
     expect(await ownerQuery(`select id from liame.action_request where tenant_id = $1`, [sem.tenantId])).toEqual([]);
+
+    // A loja que o Regem recusou (401 → desconectada, ainda ligada) não recebe a proposta: a LIA ouve que não há loja
+    // com o Regem conectado (achado A2 do Hub DMS).
+    const recusou = await dono();
+    await comLojaQueCriaCupom(recusou);
+    await ownerQuery(`update liame.connected_account set status = 'desconectada' where tenant_id = $1 and provider = 'regem'`, [recusou.tenantId]);
+    const semLoja = responder(roteiro(pede('propor_cupom', proposta), responde(['paragrafo', 'Nenhuma loja tem o Regem conectado agora.'])));
+    const r3 = mensagemFinal((await conversar(recusou.cookie, { brand_id: recusou.brandId, text: 'Proponha um cupom' })).eventos);
+    expect(r3.cards).toEqual([]);
+    expect(enviado(semLoja, 1)).toContain('Nenhuma loja desta marca tem o Regem conectado');
+    expect(await ownerQuery(`select id from liame.action_request where tenant_id = $1`, [recusou.tenantId])).toEqual([]);
   });
 
   it('I10b: decisão grande vira a reunião de decisão (vozes, recomendação e risco, com os números conferidos)', async () => {

@@ -11,6 +11,7 @@ import {
   SincronizadorDoPerfil,
 } from '../avaliacoes/sincronizador-do-perfil.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import { contaConectada } from '../connections/conectada.js';
 import { PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
 import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -44,7 +45,7 @@ export class PerfilLoop {
     // O relógio de quem chama vale para a fila inteira: a reserva e o que a leitura grava (V34).
     const referencia = sql`${agora.toISOString()}::timestamptz`;
     const conjuntos = [...DATASETS_DO_PERFIL];
-    const elegivel = sql`a.provider = ${PROVEDOR_PERFIL_GOOGLE} and a.disconnected_at is null and a.status in ('ativa', 'erro', 'sem_permissao') and a.credential_secret_id is not null`;
+    const elegivel = sql`a.provider = ${PROVEDOR_PERFIL_GOOGLE} and ${contaConectada('a')} and a.credential_secret_id is not null`;
     const reservadas = await withSystem(db, async (tx) => {
       // A loja ligada ganha a linha de cada conjunto, devida desde já.
       await tx.execute(sql`
