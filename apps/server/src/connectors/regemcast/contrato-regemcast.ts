@@ -250,6 +250,20 @@ export type PausaRegemcast = z.infer<typeof PausaRegemcast>;
 export const RevogacaoRegemcast = z.object({ revogado: z.boolean(), revogadoEm: Instante });
 
 /**
+ * `POST /dms-id/ligacao` (Hub DMS, F2; RegemCast #118): a troca do `rct_it_` pelo segredo da ligação. O segredo em
+ * claro só vem nesta resposta e vai direto para o cofre; o resto é para conferir que a ligação é da mesma conta.
+ */
+export const LigacaoRegemcast = z.object({
+  ligacao: z.string().regex(/^dms_lg_regemcast_[A-Za-z0-9_-]{43}_[A-Za-z0-9_-]{6}$/),
+  prefixo: z.string().max(60),
+  conta_id: Id,
+  conta: z.string().min(1).max(300),
+  permissoes: z.array(z.string().min(1).max(100)).max(50),
+  segredo_em: Instante,
+});
+export type LigacaoRegemcast = z.infer<typeof LigacaoRegemcast>;
+
+/**
  * O envelope JSON-RPC de uma resposta do MCP (2026-07-28, sem estado). Só o que o conector usa: o resultado
  * da ferramenta (`structuredContent`, ou o texto quando `isError`) ou o erro do protocolo.
  */

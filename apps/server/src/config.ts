@@ -74,6 +74,13 @@ const Env = z.object({
   REGEM_CLIENT_SECRET: z.string().min(16).optional(),
   /** RegemCast: definido na C2b (docs/integracoes/regemcast.md); sem ele, conversas de anúncio não são lidas. */
   REGEMCAST_API_URL: z.url().optional(),
+  /**
+   * DMS ID (Hub DMS, F2): o aplicativo do Liame no DMS ID, para comparar as duas credenciais do RegemCast (a de hoje e
+   * a do DMS ID com a ligação). Os três vão juntos; sem eles, a comparação não roda. O segredo é da distribuição.
+   */
+  DMS_ID_EMISSOR: z.url().optional(),
+  DMS_ID_APLICATIVO: z.string().trim().min(3).max(200).optional(),
+  DMS_ID_SEGREDO: z.string().min(16).optional(),
   /** Chave de API da Anthropic (da distribuição). Sem ela, os funcionários de IA ficam indisponíveis e o resto segue. */
   ANTHROPIC_API_KEY: z.string().trim().min(20).optional(),
   /** Onde o modelo roda: `us` fixa nos Estados Unidos (10% a mais); `global` é o padrão do fornecedor (D-A3-13). */
@@ -124,6 +131,8 @@ export type AppConfig = {
   };
   /** Produtos DMS (A2.5): rotas de integração do Regem e do RegemCast (nulo = ainda sem endereço). */
   produtos: { regemApiUrl: string; regemcastApiUrl: string | null };
+  /** O aplicativo do Liame no DMS ID (Hub DMS, F2); nulo = a comparação das credenciais do RegemCast não roda. */
+  dmsId: { emissor: string; aplicativo: string; segredo: string } | null;
   /** Origem pública da API (volta do OAuth). */
   apiUrl: string;
   /** Apps OAuth da distribuição; nulo = a plataforma ainda não pode ser conectada. */
@@ -209,6 +218,17 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   if (env.NODE_ENV === 'production' && env.REGEMCAST_API_URL && !env.REGEMCAST_API_URL.startsWith('https://')) {
     throw new Error('config: em produção, REGEMCAST_API_URL só com https');
   }
+  const partesDoDmsId = [env.DMS_ID_EMISSOR, env.DMS_ID_APLICATIVO, env.DMS_ID_SEGREDO].filter((v) => v !== undefined).length;
+  if (partesDoDmsId !== 0 && partesDoDmsId !== 3) {
+    throw new Error('config: DMS_ID_EMISSOR, DMS_ID_APLICATIVO e DMS_ID_SEGREDO vão juntos (o aplicativo do Liame no DMS ID)');
+  }
+  // O token sai do DMS ID com o segredo do aplicativo: em produção, só para o emissor oficial (V33).
+  if (env.NODE_ENV === 'production' && env.DMS_ID_EMISSOR && env.DMS_ID_EMISSOR.replace(/\/+$/, '') !== DMS_ID_OFICIAL) {
+    throw new Error(`config: em produção, DMS_ID_EMISSOR é o emissor oficial do DMS ID (${DMS_ID_OFICIAL})`);
+  }
+  const dmsId = env.DMS_ID_EMISSOR && env.DMS_ID_APLICATIVO && env.DMS_ID_SEGREDO
+    ? { emissor: env.DMS_ID_EMISSOR.replace(/\/+$/, ''), aplicativo: env.DMS_ID_APLICATIVO, segredo: env.DMS_ID_SEGREDO }
+    : null;
   const apiUrl = new URL(env.API_URL).origin;
   // A volta do OAuth leva o código da plataforma: em produção, só por HTTPS e com a origem declarada.
   if (env.NODE_ENV === 'production' && (meta || google || regem) && (!source.API_URL || !apiUrl.startsWith('https://'))) {
@@ -276,6 +296,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       metaAppSecret: env.META_APP_SECRET ?? null,
     },
     produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl: env.REGEMCAST_API_URL?.replace(/\/$/, '') ?? null },
+    dmsId,
     apiUrl,
     oauth: { meta, google, regem },
     ai: {
@@ -298,5 +319,8 @@ export function enderecoDoRemetente(from: string): string | null {
 
 /** Versão dos termos fora de produção (rascunho v0.1 de docs/juridico, ainda não publicado). */
 export const TERMS_VERSION_DEV = 'rascunho-2026-09-25';
+
+/** O emissor oficial do DMS ID (o `iss` dos tokens; base §13.1). */
+export const DMS_ID_OFICIAL = 'https://id.dmstecnologias.com/oidc';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');

@@ -155,4 +155,17 @@ describe('fail-fast da configuração em produção', () => {
     });
     expect(() => loadConfig({ ...prod, REGEMCAST_API_URL: 'http://regemcast.local' })).toThrow('REGEMCAST_API_URL');
   });
+
+  it('DMS ID (Hub DMS, F2): o aplicativo do Liame só existe com as três peças; em produção, só com o emissor oficial', () => {
+    const valorDoAplicativo = 'valor-do-aplicativo-no-dms-id-0123';
+    const dmsId = { DMS_ID_EMISSOR: 'https://id.dmstecnologias.com/oidc/', DMS_ID_APLICATIVO: 'aplicativo-do-liame', DMS_ID_SEGREDO: valorDoAplicativo };
+    expect(loadConfig(prod).dmsId).toBeNull();
+    expect(loadConfig({ ...prod, ...dmsId }).dmsId).toEqual({ emissor: 'https://id.dmstecnologias.com/oidc', aplicativo: 'aplicativo-do-liame', segredo: valorDoAplicativo });
+    expect(() => loadConfig({ ...prod, DMS_ID_EMISSOR: dmsId.DMS_ID_EMISSOR, DMS_ID_APLICATIVO: dmsId.DMS_ID_APLICATIVO })).toThrow('vão juntos');
+    expect(() => loadConfig({ ...prod, DMS_ID_SEGREDO: valorDoAplicativo })).toThrow('vão juntos');
+    expect(() => loadConfig({ ...prod, ...dmsId, DMS_ID_EMISSOR: 'https://id.dmstecnologias.com.outro.site/oidc' })).toThrow('emissor oficial');
+    expect(() => loadConfig({ ...prod, ...dmsId, DMS_ID_EMISSOR: 'http://127.0.0.1:4000/oidc' })).toThrow('emissor oficial');
+    // Fora de produção, o emissor de mentira dos testes serve.
+    expect(loadConfig({ NODE_ENV: 'test', ...dmsId, DMS_ID_EMISSOR: 'http://127.0.0.1:4000/oidc' } as NodeJS.ProcessEnv).dmsId?.emissor).toBe('http://127.0.0.1:4000/oidc');
+  });
 });
