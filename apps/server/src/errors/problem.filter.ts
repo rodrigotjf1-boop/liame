@@ -1,16 +1,21 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, Logger } from '@nestjs/common';
 import type { HttpAdapterHost } from '@nestjs/core';
+import { erroDaRequisicao, type HubDms } from '../connectors/dms/hub.js';
 import { AppProblem, currentTraceId, reasonOf, toProblem } from './problems.js';
 
 /**
  * Toda resposta de erro sai em RFC 9457 (`application/problem+json`) com `trace_id` (arquitetura §14).
- * 5xx: log com a causa real e a stack (LIC-003). 4xx: log do motivo, em nível informativo.
+ * 5xx: log com a causa real e a stack (LIC-003), e o erro vai ao hub da DMS (desligado por padrão, `HUB_LIGADO`).
+ * 4xx: log do motivo, em nível informativo.
  */
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
   private readonly logger = new Logger('http');
 
-  constructor(private readonly adapterHost: HttpAdapterHost) {}
+  constructor(
+    private readonly adapterHost: HttpAdapterHost,
+    private readonly hub?: HubDms,
+  ) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const { httpAdapter } = this.adapterHost;
@@ -27,6 +32,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         `${method} ${path} → ${problem.status} [trace ${traceId}]: ${reasonOf(exception)}`,
         exception instanceof Error ? exception.stack : undefined,
       );
+      this.hub?.erro(erroDaRequisicao(exception, problem, method, path, traceId));
     } else {
       this.logger.log(`${method} ${path} → ${problem.status} ${problem.code} [trace ${traceId}]: ${reasonOf(exception)}`);
     }

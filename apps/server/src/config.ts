@@ -81,6 +81,14 @@ const Env = z.object({
   DMS_ID_EMISSOR: z.url().optional(),
   DMS_ID_APLICATIVO: z.string().trim().min(3).max(200).optional(),
   DMS_ID_SEGREDO: z.string().min(16).optional(),
+  /**
+   * Hub DMS (F2, A4, etapa 3): os erros inesperados e a batida vão ao hub da DMS, com o token do aplicativo do Liame no
+   * DMS ID (as três de cima). Desligado por padrão; ligado, o endereço e o recurso do hub vão juntos e, em produção, só
+   * os oficiais.
+   */
+  HUB_LIGADO: z.enum(['true', 'false']).default('false'),
+  HUB_URL: z.url().optional(),
+  HUB_RECURSO: z.url().optional(),
   /** Chave de API da Anthropic (da distribuição). Sem ela, os funcionários de IA ficam indisponíveis e o resto segue. */
   ANTHROPIC_API_KEY: z.string().trim().min(20).optional(),
   /** Onde o modelo roda: `us` fixa nos Estados Unidos (10% a mais); `global` é o padrão do fornecedor (D-A3-13). */
@@ -133,6 +141,8 @@ export type AppConfig = {
   produtos: { regemApiUrl: string; regemcastApiUrl: string | null };
   /** O aplicativo do Liame no DMS ID (Hub DMS, F2); nulo = a comparação das credenciais do RegemCast não roda. */
   dmsId: { emissor: string; aplicativo: string; segredo: string } | null;
+  /** O hub da DMS (Hub DMS, F2, A4, etapa 3); nulo = desligado (`HUB_LIGADO`): nada vai ao hub. */
+  hub: { url: string; recurso: string } | null;
   /** Origem pública da API (volta do OAuth). */
   apiUrl: string;
   /** Apps OAuth da distribuição; nulo = a plataforma ainda não pode ser conectada. */
@@ -229,6 +239,16 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   const dmsId = env.DMS_ID_EMISSOR && env.DMS_ID_APLICATIVO && env.DMS_ID_SEGREDO
     ? { emissor: env.DMS_ID_EMISSOR.replace(/\/+$/, ''), aplicativo: env.DMS_ID_APLICATIVO, segredo: env.DMS_ID_SEGREDO }
     : null;
+  // O hub recebe o token do aplicativo do Liame: ligado, precisa dele e, em produção, só o hub oficial (V33).
+  let hub: AppConfig['hub'] = null;
+  if (env.HUB_LIGADO === 'true') {
+    if (!env.HUB_URL || !env.HUB_RECURSO) throw new Error('config: HUB_LIGADO=true pede HUB_URL e HUB_RECURSO (o hub da DMS)');
+    if (!dmsId) throw new Error('config: HUB_LIGADO=true pede o aplicativo do Liame no DMS ID (DMS_ID_EMISSOR, DMS_ID_APLICATIVO e DMS_ID_SEGREDO)');
+    hub = { url: new URL(env.HUB_URL).origin, recurso: env.HUB_RECURSO.replace(/\/+$/, '') };
+    if (env.NODE_ENV === 'production' && (hub.url !== HUB_OFICIAL || hub.recurso !== `${HUB_OFICIAL}/api/v1`)) {
+      throw new Error(`config: em produção, HUB_URL e HUB_RECURSO são os do hub oficial (${HUB_OFICIAL} e ${HUB_OFICIAL}/api/v1)`);
+    }
+  }
   const apiUrl = new URL(env.API_URL).origin;
   // A volta do OAuth leva o código da plataforma: em produção, só por HTTPS e com a origem declarada.
   if (env.NODE_ENV === 'production' && (meta || google || regem) && (!source.API_URL || !apiUrl.startsWith('https://'))) {
@@ -297,6 +317,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     },
     produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl: env.REGEMCAST_API_URL?.replace(/\/$/, '') ?? null },
     dmsId,
+    hub,
     apiUrl,
     oauth: { meta, google, regem },
     ai: {
@@ -322,5 +343,8 @@ export const TERMS_VERSION_DEV = 'rascunho-2026-09-25';
 
 /** O emissor oficial do DMS ID (o `iss` dos tokens; base §13.1). */
 export const DMS_ID_OFICIAL = 'https://id.dmstecnologias.com/oidc';
+
+/** O hub oficial da DMS (o serviço do Hub DMS; o recurso dele no DMS ID é `<hub>/api/v1`). */
+export const HUB_OFICIAL = 'https://hub.dmstecnologias.com';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');

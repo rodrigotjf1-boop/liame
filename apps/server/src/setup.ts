@@ -2,6 +2,7 @@ import { StandardSchemaValidationPipe, type INestApplication } from '@nestjs/com
 import { HttpAdapterHost } from '@nestjs/core';
 import { assertAccessDeclarations, assertAuditDeclarations } from './auth/routes.js';
 import { APP_CONFIG, type AppConfig } from './config.js';
+import { HubDms } from './connectors/dms/hub.js';
 import { ProblemDetailsFilter } from './errors/problem.filter.js';
 import { issuesToErrors, ValidationProblem } from './errors/problems.js';
 import { applyHttpSecurity } from './http-security.js';
@@ -18,7 +19,8 @@ export function configureApp(app: INestApplication): void {
   app.useGlobalPipes(
     new StandardSchemaValidationPipe({ exceptionFactory: (issues) => new ValidationProblem(issuesToErrors(issues)) }),
   );
-  app.useGlobalFilters(new ProblemDetailsFilter(app.get(HttpAdapterHost)));
+  // O 5xx vai também ao hub da DMS (desligado por padrão, `HUB_LIGADO`).
+  app.useGlobalFilters(new ProblemDetailsFilter(app.get(HttpAdapterHost), app.get(HubDms, { strict: false })));
   // Rota sem declaração de acesso não sobe (guard global que nega por padrão, ADR-003).
   assertAccessDeclarations(app);
   // Rota que muda dado sem declaração de auditoria também não sobe (A1-6).

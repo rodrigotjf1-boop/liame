@@ -168,4 +168,19 @@ describe('fail-fast da configuração em produção', () => {
     // Fora de produção, o emissor de mentira dos testes serve.
     expect(loadConfig({ NODE_ENV: 'test', ...dmsId, DMS_ID_EMISSOR: 'http://127.0.0.1:4000/oidc' } as NodeJS.ProcessEnv).dmsId?.emissor).toBe('http://127.0.0.1:4000/oidc');
   });
+
+  it('hub da DMS (Hub DMS, A4, etapa 3): nasce desligado; ligado, pede o endereço, o recurso e o aplicativo do DMS ID; em produção, só o hub oficial', () => {
+    const valorDoAplicativo = 'valor-do-aplicativo-no-dms-id-0123';
+    const dmsId = { DMS_ID_EMISSOR: 'https://id.dmstecnologias.com/oidc', DMS_ID_APLICATIVO: 'aplicativo-do-liame', DMS_ID_SEGREDO: valorDoAplicativo };
+    const oficial = { HUB_LIGADO: 'true', HUB_URL: 'https://hub.dmstecnologias.com/', HUB_RECURSO: 'https://hub.dmstecnologias.com/api/v1/' };
+    expect(loadConfig({ ...prod, ...dmsId }).hub).toBeNull();
+    expect(loadConfig({ ...prod, ...dmsId, HUB_URL: oficial.HUB_URL, HUB_RECURSO: oficial.HUB_RECURSO }).hub).toBeNull();
+    expect(loadConfig({ ...prod, ...dmsId, ...oficial }).hub).toEqual({ url: 'https://hub.dmstecnologias.com', recurso: 'https://hub.dmstecnologias.com/api/v1' });
+    expect(() => loadConfig({ ...prod, ...dmsId, HUB_LIGADO: 'true', HUB_URL: oficial.HUB_URL })).toThrow('HUB_URL e HUB_RECURSO');
+    expect(() => loadConfig({ ...prod, ...oficial })).toThrow('aplicativo do Liame no DMS ID');
+    expect(() => loadConfig({ ...prod, ...dmsId, ...oficial, HUB_URL: 'https://hub.dmstecnologias.com.outro.site' })).toThrow('hub oficial');
+    expect(() => loadConfig({ ...prod, ...dmsId, ...oficial, HUB_RECURSO: 'https://hub.dmstecnologias.com/api/v2' })).toThrow('hub oficial');
+    // Fora de produção, o hub de mentira dos testes serve.
+    expect(loadConfig({ NODE_ENV: 'test', ...dmsId, HUB_LIGADO: 'true', HUB_URL: 'http://127.0.0.1:4001', HUB_RECURSO: 'http://127.0.0.1:4001/api/v1' } as NodeJS.ProcessEnv).hub?.url).toBe('http://127.0.0.1:4001');
+  });
 });

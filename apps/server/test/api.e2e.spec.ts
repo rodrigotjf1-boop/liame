@@ -1,7 +1,8 @@
 import type { INestApplication, LoggerService } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../src/app.module.js';
+import { HubDms } from '../src/connectors/dms/hub.js';
 import { configureApp } from '../src/setup.js';
 import { ProbeController } from './helpers/probe.controller.js';
 
@@ -114,5 +115,20 @@ describe('API: validação e política de erros (RFC 9457)', () => {
     const linha = logger.lines.find((l) => l.startsWith('error') && l.includes(body.trace_id));
     expect(linha).toContain('falha proposital');
     expect(linha).toContain('probe.controller');
+  });
+
+  it('o 5xx vai também ao hub da DMS, com o trace_id como código; o 4xx não vai', async () => {
+    const erro = vi.spyOn(app.get(HubDms, { strict: false }), 'erro');
+    try {
+      const res = await fetch(`${base}/v1/teste/falha`);
+      const body = (await res.json()) as { trace_id: string };
+      expect(erro).toHaveBeenCalledTimes(1);
+      expect(erro.mock.calls[0]?.[0]).toMatchObject({ origem: 'backend', tipo: 'Error', lugar: 'GET /v1/teste/falha', codigo: body.trace_id });
+      expect(erro.mock.calls[0]?.[0].mensagem).toContain('falha proposital');
+      await fetch(`${base}/v1/nao-existe`);
+      expect(erro).toHaveBeenCalledTimes(1);
+    } finally {
+      erro.mockRestore();
+    }
   });
 });

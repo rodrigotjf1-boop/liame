@@ -7,10 +7,10 @@
 // Sem dependência: só o Node (22 ou mais). Escrito para compilar como CommonJS (NestJS 10) e como ESM (Liame), e para
 // rodar direto no Node sem compilar: nada de enum, namespace nem propriedade declarada no construtor.
 
-import { createHash, createHmac, createPublicKey, randomBytes, timingSafeEqual, verify as conferirAssinatura, type JsonWebKey, type KeyObject } from 'node:crypto';
+import { createHash, createHmac, createPublicKey, randomBytes, randomUUID, timingSafeEqual, verify as conferirAssinatura, type JsonWebKey, type KeyObject } from 'node:crypto';
 import { isIP } from 'node:net';
 
-export const VERSAO_PACOTE = '0.2.1';
+export const VERSAO_PACOTE = '0.3.0';
 
 const DIA_MS = 86_400_000;
 
@@ -185,7 +185,7 @@ export function podeCriarChave(ativasNaEmpresaEProduto: number): boolean {
 export const BASE_ERROS = 'https://dev.dmstecnologias.com/erros/';
 export const TIPO_CONTEUDO_PROBLEMA = 'application/problem+json';
 
-/** Nome do problema → [status padrão, título]. Os 16 primeiros vêm do Regem; os 5 últimos são novos. */
+/** Nome do problema → [status padrão, título]. Os 16 primeiros vêm do Regem; os 6 últimos são novos (o da parada, na 0.3.0). */
 export const PROBLEMAS = {
   'token-invalido': [401, 'Token inválido'],
   'escopo-insuficiente': [403, 'Escopo insuficiente'],
@@ -208,6 +208,7 @@ export const PROBLEMAS = {
   'chave-vencida': [401, 'Chave vencida'],
   'chave-suspensa': [403, 'Chave suspensa'],
   'fonte-inativa': [409, 'Fonte inativa'],
+  'integracao-parada': [503, 'Integração parada'],
 } as const satisfies Record<string, readonly [number, string]>;
 
 export type TipoProblema = keyof typeof PROBLEMAS;
@@ -898,5 +899,417 @@ export class ClienteDmsId {
     const segundos = typeof corpo.expires_in === 'number' && corpo.expires_in > 0 ? corpo.expires_in : 300;
     this.guardados.set(chave, { token: corpo.access_token, venceEm: this.relogio() + segundos * 1000 });
     return corpo.access_token;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// 9. O cliente do hub: registro central, erros, lista de parada e batida (Padrão §10 e §11; A4 da F2, 17/10/2026)
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** As permissões que o aplicativo de cada produto tem no recurso do hub (contrato em docs/console-hub.md do hub). */
+export const PERMISSOES_HUB: readonly string[] = ['registro.enviar', 'parada.ler'];
+
+export type ResultadoChamada = 'aceita' | 'recusada' | 'erro';
+export type CredencialChamada = 'dms_id' | 'token_integracao' | 'acesso_proprio';
+
+/** Uma chamada recebida por uma porta do produto: quem chamou, o quê, quando, o resultado e a duração. Nunca o conteúdo. */
+export type ChamadaRegistrada = {
+  /** O código do pedido no produto (o `request_id`, 6 a 100 caracteres): o mesmo código de novo não duplica no hub. */
+  codigo: string;
+  /** Instante ISO 8601 com fuso. */
+  ocorrido_em: string;
+  aplicativo?: string;
+  credencial: CredencialChamada;
+  /** O prefixo visível da ligação ou da chave (`prefixoVisivel`), nunca o segredo. */
+  ligacao_prefixo?: string;
+  conta?: string;
+  /** O nome comercial da empresa ou da loja, nunca o de uma pessoa. */
+  conta_nome?: string;
+  ferramenta: string;
+  resultado: ResultadoChamada;
+  /** O nome do problema do Padrão, quando recusada. */
+  problema?: string;
+  status_http?: number;
+  duracao_ms?: number;
+};
+
+export type OrigemErro = 'backend' | 'rotina' | 'tela' | 'servidor_loja' | 'app';
+/** Um erro do produto. A mensagem passa por `limparMensagem` antes de sair; o mesmo erro junto vira uma quantidade. */
+export type ErroDoProduto = { origem: OrigemErro; tipo: string; mensagem: string; lugar: string; codigo?: string; quando?: Date };
+
+export type NivelParada = 'geral' | 'aplicativo' | 'ligacao' | 'ferramenta';
+export type ItemDeParada = { nivel: NivelParada; produto: string | null; alvo: string | null };
+export type ListaDeParada = { versao: number; itens: ItemDeParada[] };
+/** O que o produto confere antes de atender: quem chama, por qual ligação e qual ferramenta. */
+export type ChamadaAtendida = { aplicativo?: string | null; ligacaoPrefixo?: string | null; ferramenta?: string | null };
+
+/**
+ * A parada que vale para uma chamada (a primeira da lista que bate), ou nula. A geral e a de aplicativo valem em todo
+ * produto; a de ligação e a de ferramenta, só no produto delas.
+ */
+export function paradaQueVale(lista: ListaDeParada | null, produto: Produto, c: ChamadaAtendida): ItemDeParada | null {
+  if (!lista) return null;
+  for (const i of lista.itens) {
+    if (i.nivel === 'geral') return i;
+    if (i.nivel === 'aplicativo' && c.aplicativo && i.alvo === c.aplicativo) return i;
+    if (i.produto !== produto) continue;
+    if (i.nivel === 'ligacao' && c.ligacaoPrefixo && i.alvo === c.ligacaoPrefixo) return i;
+    if (i.nivel === 'ferramenta' && c.ferramenta && i.alvo === c.ferramenta) return i;
+  }
+  return null;
+}
+
+/** A chamada recusada pela parada (a lista do hub ou a chave própria "aceitar integrações: não" do produto). */
+export function problemaDaParada(): ErroProblema {
+  return new ErroProblema('integracao-parada', 'Esta integração está parada pela DMS no momento. Tente de novo mais tarde.', { retryAfterSeg: 60 });
+}
+
+/**
+ * O que sai da mensagem de erro antes de ir ao hub (Padrão §11): segredo e token, e-mail, endereço com parâmetros,
+ * identificador, documento, telefone e número longo. Toda expressão é linear (sem repetição aninhada) e o texto é
+ * cortado antes, então o custo é limitado.
+ */
+const LIMPEZAS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer <token>'],
+  [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g, '<token>'],
+  [/\b(?:rct_it|dms_lg|dms_ap|whsec)_[A-Za-z0-9_-]+/g, '<segredo>'],
+  [/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g, '<e-mail>'],
+  [/(\bhttps?:\/\/[^\s?#]+)[?#]\S*/gi, '$1?…'],
+  [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<id>'],
+  [/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, '<documento>'],
+  [/\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g, '<documento>'],
+  // telefone com o DDD separado ("(21) 3456-7890", "+55 21 9…"), celular sem separador (DDD + 9 + 8 dígitos) e número
+  // local com hífen; sequência de dígitos sem forma de telefone vira "número" na linha seguinte
+  [/(?<!\d)(?:\+?55[\s-]?)?(?:\(\d{2}\)[\s-]?|\d{2}[\s-])9?\d{4}[\s-]?\d{4}(?!\d)/g, '<telefone>'],
+  [/(?<!\d)(?:\+?55)?\d{2}9\d{8}(?!\d)/g, '<telefone>'],
+  [/(?<!\d)9?\d{4}-\d{4}(?!\d)/g, '<telefone>'],
+  [/\d{6,}/g, '<número>'],
+];
+
+export function limparMensagem(texto: unknown, maximo = 300): string {
+  let t = String(texto ?? '').slice(0, 2000);
+  for (const [expressao, troca] of LIMPEZAS) t = t.replace(expressao, troca);
+  t = t.replace(/\s+/g, ' ').trim();
+  if (!t) return '(sem mensagem)';
+  return t.length > maximo ? `${t.slice(0, maximo - 1)}…` : t;
+}
+
+type EventoErroHub = {
+  evento_id: string;
+  ocorrido_em: string;
+  origem: OrigemErro;
+  tipo: string;
+  mensagem: string;
+  lugar: string;
+  versao: string;
+  codigo?: string;
+  quantidade: number;
+};
+
+export type OpcoesClienteHub = {
+  /** O endereço do hub (`https://hub.dmstecnologias.com`). */
+  url: string;
+  /** O identificador do recurso do hub no DMS ID: o destino do token. */
+  recurso: string;
+  /** O cliente do DMS ID do produto (o aplicativo dele, com o segredo na configuração do servidor). */
+  dmsId: ClienteDmsId;
+  produto: Produto;
+  /** A versão no ar (o commit), na batida e em cada erro. */
+  versao: string;
+  iniciadoEm?: Date;
+  /** A chave própria "aceitar integrações" do produto: vai na batida. */
+  aceitaIntegracoes?: () => boolean;
+  /** A última lista de parada que o produto guardou: vale até o hub responder. */
+  listaInicial?: ListaDeParada | null;
+  /** Quando a lista muda (para o produto guardar a cópia). */
+  aoMudarLista?: (lista: ListaDeParada) => void;
+  /** Cada falha de envio ou de leitura, com o motivo (sem dado). */
+  aoFalhar?: (motivo: string) => void;
+  buscar?: typeof fetch;
+  relogio?: () => number;
+  tempoLimiteMs?: number;
+  /** Quantas chamadas e quantos erros diferentes esperam no máximo; acima disso, sai o mais velho (e conta). */
+  tetoDaFila?: number;
+  intervalos?: { paradaMs?: number; envioMs?: number; batidaMs?: number };
+};
+
+const LOTE_REGISTRO = 500;
+const LOTE_ERROS = 200;
+
+const motivoDe = (erro: unknown) => (erro instanceof ErroDmsId ? erro.message : erro instanceof Error ? `${erro.name}: ${erro.message}`.slice(0, 200) : String(erro).slice(0, 200));
+
+function listaValida(v: unknown): v is ListaDeParada {
+  if (!v || typeof v !== 'object') return false;
+  const l = v as { versao?: unknown; itens?: unknown };
+  if (typeof l.versao !== 'number' || !Array.isArray(l.itens)) return false;
+  return l.itens.every((i: unknown) => {
+    const x = i as { nivel?: unknown; produto?: unknown; alvo?: unknown } | null;
+    return !!x && ['geral', 'aplicativo', 'ligacao', 'ferramenta'].includes(String(x.nivel)) && (x.produto === null || typeof x.produto === 'string') && (x.alvo === null || typeof x.alvo === 'string');
+  });
+}
+
+/**
+ * O cliente do hub, um por processo do produto. `registrar` e `erro` só anotam (nunca esperam o hub nem falham a
+ * chamada do produto); o envio sai em lote a cada 5 s. `parado` decide pela última lista recebida (lida a cada 15 s,
+ * só quando muda): se o hub cair, vale a cópia. `iniciar` liga os relógios; `parar` os desliga e manda o que falta.
+ */
+export class ClienteHub {
+  private readonly url: string;
+  private readonly recurso: string;
+  private readonly dmsId: ClienteDmsId;
+  private readonly produto: Produto;
+  private readonly versao: string;
+  private readonly iniciadoEm: Date;
+  private readonly aceitaIntegracoes: (() => boolean) | undefined;
+  private readonly aoMudarLista: ((lista: ListaDeParada) => void) | undefined;
+  private readonly aoFalhar: ((motivo: string) => void) | undefined;
+  private readonly buscar: typeof fetch;
+  private readonly relogio: () => number;
+  private readonly tempoLimiteMs: number;
+  private readonly teto: number;
+  private readonly intervalos: { paradaMs: number; envioMs: number; batidaMs: number };
+  private chamadas: ChamadaRegistrada[] = [];
+  private readonly errosNovos = new Map<string, EventoErroHub>();
+  private errosEmEspera: EventoErroHub[] = [];
+  private lista: ListaDeParada | null;
+  private listaLidaEm: number | null = null;
+  private descartadas = 0;
+  private esperarAte = 0;
+  private ultimaFalha: string | null = null;
+  private emEnvio: Promise<{ chamadas: number; erros: number }> | null = null;
+  private readonly relogios: Array<ReturnType<typeof setInterval>> = [];
+
+  constructor(o: OpcoesClienteHub) {
+    this.url = o.url.replace(/\/+$/, '');
+    this.recurso = o.recurso;
+    this.dmsId = o.dmsId;
+    this.produto = o.produto;
+    this.versao = o.versao;
+    this.iniciadoEm = o.iniciadoEm ?? new Date();
+    this.aceitaIntegracoes = o.aceitaIntegracoes;
+    this.aoMudarLista = o.aoMudarLista;
+    this.aoFalhar = o.aoFalhar;
+    this.buscar = o.buscar ?? fetch;
+    this.relogio = o.relogio ?? Date.now;
+    this.tempoLimiteMs = o.tempoLimiteMs ?? 5_000;
+    this.teto = o.tetoDaFila ?? 5_000;
+    this.intervalos = { paradaMs: o.intervalos?.paradaMs ?? 15_000, envioMs: o.intervalos?.envioMs ?? 5_000, batidaMs: o.intervalos?.batidaMs ?? 60_000 };
+    this.lista = o.listaInicial ?? null;
+  }
+
+  /** Anota uma chamada para o registro central. */
+  registrar(c: ChamadaRegistrada): void {
+    this.chamadas.push(c);
+    if (this.chamadas.length > this.teto) {
+      const sobra = this.chamadas.length - this.teto;
+      this.chamadas.splice(0, sobra);
+      this.descartadas += sobra;
+    }
+  }
+
+  /** Anota um erro. A mensagem, o tipo e o lugar saem limpos; o mesmo erro antes do envio só soma a quantidade. */
+  erro(e: ErroDoProduto): void {
+    const tipo = limparMensagem(e.tipo, 80);
+    const mensagem = limparMensagem(e.mensagem, 300);
+    const lugar = limparMensagem(e.lugar, 200);
+    const chave = `${e.origem}\n${tipo}\n${lugar}\n${mensagem}`;
+    const ja = this.errosNovos.get(chave);
+    if (ja) {
+      ja.quantidade += 1;
+      return;
+    }
+    if (this.errosNovos.size >= this.teto) {
+      this.descartadas += 1;
+      return;
+    }
+    const codigo = e.codigo && /^[A-Za-z0-9_.:-]{6,100}$/.test(e.codigo) ? e.codigo : undefined;
+    this.errosNovos.set(chave, {
+      evento_id: randomUUID(),
+      ocorrido_em: new Date(e.quando ? e.quando.getTime() : this.relogio()).toISOString(),
+      origem: e.origem,
+      tipo,
+      mensagem,
+      lugar,
+      versao: this.versao.slice(0, 80),
+      ...(codigo ? { codigo } : {}),
+      quantidade: 1,
+    });
+  }
+
+  /** A parada que vale para esta chamada, pela última lista recebida (nula: pode atender). */
+  parado(c: ChamadaAtendida): ItemDeParada | null {
+    return paradaQueVale(this.lista, this.produto, c);
+  }
+
+  get estado(): { fila: number; erros: number; descartadas: number; paradaVersao: number | null; paradaLidaEm: number | null; ultimaFalha: string | null } {
+    return {
+      fila: this.chamadas.length,
+      erros: this.errosNovos.size + this.errosEmEspera.length,
+      descartadas: this.descartadas,
+      paradaVersao: this.lista ? this.lista.versao : null,
+      paradaLidaEm: this.listaLidaEm,
+      ultimaFalha: this.ultimaFalha,
+    };
+  }
+
+  private falhou(motivo: string): void {
+    this.ultimaFalha = motivo;
+    if (this.aoFalhar) this.aoFalhar(motivo);
+  }
+
+  /** Um pedido ao hub com o token do DMS ID; o 401 joga o token fora e tenta uma vez de novo. */
+  private async pedir(metodo: string, caminho: string, corpo?: unknown, cabecalhos: Record<string, string> = {}): Promise<Response> {
+    let ultima: Response | null = null;
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+      const token = await this.dmsId.token(this.recurso, PERMISSOES_HUB);
+      ultima = await this.buscar(`${this.url}${caminho}`, {
+        method: metodo,
+        headers: { authorization: `Bearer ${token}`, ...(corpo === undefined ? {} : { 'content-type': 'application/json' }), ...cabecalhos },
+        body: corpo === undefined ? undefined : JSON.stringify(corpo),
+        signal: AbortSignal.timeout(this.tempoLimiteMs),
+      });
+      if (ultima.status !== 401 || tentativa === 1) return ultima;
+      await ultima.arrayBuffer().catch(() => null);
+      this.dmsId.esquecer(this.recurso, PERMISSOES_HUB);
+    }
+    return ultima as Response;
+  }
+
+  /** Manda um lote. 'ok' tira da fila; 'descartar' (o hub recusou o formato) também tira, contando; o resto fica. */
+  private async mandar(caminho: string, corpo: unknown): Promise<'ok' | 'descartar' | 'depois'> {
+    let r: Response;
+    try {
+      r = await this.pedir('POST', caminho, corpo);
+    } catch (erro) {
+      this.falhou(`sem resposta do hub em ${caminho} (${motivoDe(erro)})`);
+      return 'depois';
+    }
+    if (r.ok) {
+      await r.arrayBuffer().catch(() => null);
+      return 'ok';
+    }
+    const j = (await r.json().catch(() => null)) as { detail?: unknown } | null;
+    const detalhe = j && typeof j.detail === 'string' ? `: ${j.detail.slice(0, 160)}` : '';
+    this.falhou(`o hub respondeu ${r.status} em ${caminho}${detalhe}`);
+    if (r.status === 429) {
+      const seg = Number(r.headers.get('retry-after'));
+      this.esperarAte = this.relogio() + (Number.isFinite(seg) && seg > 0 ? seg : 60) * 1000;
+    }
+    return r.status === 400 || r.status === 413 ? 'descartar' : 'depois';
+  }
+
+  /** Manda o que está na fila (registro e erros, em lotes). Dois envios ao mesmo tempo viram um. */
+  enviar(): Promise<{ chamadas: number; erros: number }> {
+    if (this.emEnvio) return this.emEnvio;
+    this.emEnvio = this.enviarAgora().finally(() => {
+      this.emEnvio = null;
+    });
+    return this.emEnvio;
+  }
+
+  private async enviarAgora(): Promise<{ chamadas: number; erros: number }> {
+    const feito = { chamadas: 0, erros: 0 };
+    if (this.relogio() < this.esperarAte) return feito;
+    while (this.chamadas.length) {
+      const lote = this.chamadas.slice(0, LOTE_REGISTRO);
+      const r = await this.mandar('/api/v1/registro', { chamadas: lote });
+      if (r === 'depois') break;
+      // tira pelo próprio item: o que chegou durante o envio (ou saiu pelo teto) não se confunde com o lote
+      const enviadas = new Set(lote);
+      this.chamadas = this.chamadas.filter((c) => !enviadas.has(c));
+      if (r === 'ok') feito.chamadas += lote.length;
+      else this.descartadas += lote.length;
+    }
+    // o erro que sai num lote não soma mais: a repetição do envio leva o mesmo evento_id (o hub não conta duas vezes)
+    if (this.errosNovos.size) {
+      this.errosEmEspera.push(...this.errosNovos.values());
+      this.errosNovos.clear();
+    }
+    while (this.errosEmEspera.length && this.relogio() >= this.esperarAte) {
+      const lote = this.errosEmEspera.slice(0, LOTE_ERROS);
+      const r = await this.mandar('/api/v1/erros', { erros: lote });
+      if (r === 'depois') break;
+      const enviados = new Set(lote);
+      this.errosEmEspera = this.errosEmEspera.filter((e) => !enviados.has(e));
+      if (r === 'ok') feito.erros += lote.length;
+      else this.descartadas += lote.length;
+    }
+    return feito;
+  }
+
+  /** Lê a lista de parada (só quando muda: ETag). Falhou: fica a última. */
+  async lerParada(): Promise<ListaDeParada | null> {
+    let r: Response;
+    try {
+      r = await this.pedir('GET', '/api/v1/parada', undefined, this.lista ? { 'if-none-match': `"v${this.lista.versao}"` } : {});
+    } catch (erro) {
+      this.falhou(`sem resposta do hub na lista de parada (${motivoDe(erro)})`);
+      return this.lista;
+    }
+    if (r.status === 304) {
+      await r.arrayBuffer().catch(() => null);
+      this.listaLidaEm = this.relogio();
+      return this.lista;
+    }
+    if (!r.ok) {
+      await r.arrayBuffer().catch(() => null);
+      this.falhou(`o hub respondeu ${r.status} na lista de parada`);
+      return this.lista;
+    }
+    const j: unknown = await r.json().catch(() => null);
+    if (!listaValida(j)) {
+      this.falhou('a lista de parada veio fora do formato');
+      return this.lista;
+    }
+    const mudou = !this.lista || this.lista.versao !== j.versao;
+    this.lista = { versao: j.versao, itens: j.itens.map((i) => ({ nivel: i.nivel, produto: i.produto, alvo: i.alvo })) };
+    this.listaLidaEm = this.relogio();
+    if (mudou && this.aoMudarLista) this.aoMudarLista(this.lista);
+    return this.lista;
+  }
+
+  /** A batida: a versão, desde quando, a chave própria e a lista lida. A lista mais nova no hub faz ler na hora. */
+  async bater(): Promise<boolean> {
+    const corpo: Record<string, unknown> = { versao: this.versao.slice(0, 80), iniciado_em: this.iniciadoEm.toISOString() };
+    if (this.aceitaIntegracoes) corpo.aceita_integracoes = this.aceitaIntegracoes();
+    if (this.lista) corpo.parada_versao_lida = this.lista.versao;
+    let r: Response;
+    try {
+      r = await this.pedir('POST', '/api/v1/batida', corpo);
+    } catch (erro) {
+      this.falhou(`sem resposta do hub na batida (${motivoDe(erro)})`);
+      return false;
+    }
+    if (!r.ok) {
+      await r.arrayBuffer().catch(() => null);
+      this.falhou(`o hub respondeu ${r.status} na batida`);
+      return false;
+    }
+    const j = (await r.json().catch(() => null)) as { parada_versao?: unknown } | null;
+    if (j && typeof j.parada_versao === 'number' && (!this.lista || j.parada_versao > this.lista.versao)) await this.lerParada();
+    return true;
+  }
+
+  /** Liga os relógios (lista, envio e batida) e lê a lista e bate na hora. Nada aqui segura o processo aberto. */
+  iniciar(): void {
+    if (this.relogios.length) return;
+    const cada = (ms: number, fn: () => Promise<unknown>) => {
+      const t = setInterval(() => {
+        fn().catch((erro: unknown) => this.falhou(motivoDe(erro)));
+      }, ms);
+      t.unref();
+      this.relogios.push(t);
+    };
+    cada(this.intervalos.paradaMs, () => this.lerParada());
+    cada(this.intervalos.envioMs, () => this.enviar());
+    cada(this.intervalos.batidaMs, () => this.bater());
+    this.bater().catch((erro: unknown) => this.falhou(motivoDe(erro)));
+  }
+
+  /** Desliga os relógios e manda o que falta (uma vez). */
+  async parar(): Promise<void> {
+    for (const t of this.relogios) clearInterval(t);
+    this.relogios.length = 0;
+    await this.enviar().catch((erro: unknown) => this.falhou(motivoDe(erro)));
   }
 }

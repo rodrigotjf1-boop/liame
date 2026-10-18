@@ -1,4 +1,5 @@
-import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, Logger, Optional, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { erroDoLaco, HubDms } from '../connectors/dms/hub.js';
 import { ActionExecutor } from './action-executor.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { ConexaoProcessor } from './conexao-processor.js';
@@ -55,6 +56,8 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly perfil: PerfilLoop,
     private readonly searchConsole: SearchConsoleLoop,
     private readonly comparacao: ComparacaoDmsIdLoop,
+    /** O hub da DMS: a falha de um laço vai também à lista de erros dele (desligado por padrão, `HUB_LIGADO`). */
+    @Optional() private readonly hub?: HubDms,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -114,6 +117,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
         done = await run(batch);
       } catch (err) {
         this.logger.error(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+        this.hub?.erro(erroDoLaco(name, err));
       }
       if (done < batch) await this.sleep(idleMs);
     }
