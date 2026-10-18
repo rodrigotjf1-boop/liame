@@ -81,6 +81,22 @@ describe('API: validação e política de erros (RFC 9457)', () => {
     expect(JSON.parse(texto)).toMatchObject({ code: 'requisicao-invalida', status: 400 });
   });
 
+  // O leitor do corpo do Express recusa antes da rota com um erro que não é HttpException (http-errors, com `status`
+  // e `expose`): sem tratar, virava 500 com log de erro para um pedido torto do cliente.
+  it.each([
+    ['corpo acima do limite', { 'content-type': 'application/json' }, JSON.stringify({ message: 'x'.repeat(200_000) }), 413, 'grande-demais'],
+    ['conjunto de caracteres que o leitor não lê', { 'content-type': 'application/json; charset=latin1' }, '{"message":"oi"}', 415, 'formato-nao-suportado'],
+    ['compressão desconhecida', { 'content-type': 'application/json', 'content-encoding': 'xyz' }, '{"message":"oi"}', 415, 'formato-nao-suportado'],
+  ])('%s: o 4xx do leitor em problem+json, não 500, e o log não é de erro', async (_, cabecalhos, corpo, status, code) => {
+    const res = await fetch(`${base}/v1/teste/eco`, { method: 'POST', headers: cabecalhos, body: corpo });
+    expect(res.status, await res.clone().text()).toBe(status);
+    expect(res.headers.get('content-type')).toMatch(/^application\/problem\+json/);
+    const body = (await res.json()) as { code: string; status: number; trace_id: string };
+    expect(body).toMatchObject({ code, status });
+    expect(logger.lines.some((l) => l.startsWith('error') && l.includes(body.trace_id))).toBe(false);
+    expect(logger.lines.some((l) => l.startsWith('log') && l.includes(body.trace_id))).toBe(true);
+  });
+
   it('rota inexistente: 404 "não encontramos", sem revelar a rota interna', async () => {
     const res = await fetch(`${base}/v1/nao-existe?x=1`);
     expect(res.status).toBe(404);
