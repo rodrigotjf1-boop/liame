@@ -181,6 +181,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | --- | --- |
 | Registros de acesso à aplicação | 6 meses (Marco Civil da Internet, art. 15) |
 | Registros técnicos (logs) | 30 dias |
+| Erros inesperados do Liame enviados ao hub da DMS, o sistema da própria DMS que acompanha o funcionamento dos produtos (o tipo, onde aconteceu e a mensagem técnica, com os dados pessoais retirados antes de sair; **nenhum conteúdo de clientes**), quando ligado | 90 dias; o agrupamento de cada erro some 90 dias depois da última vez que ele aparece |
 | Conteúdo das conversas com modelos de IA (quando ligados) | 30 dias; depois, só metadados |
 | Avaliações que você faz das explicações da IA (quando ligadas) | enquanto durar o contrato; se a sua conta for excluída, a avaliação fica sem autor |
 | Conversas com a LIA no Liame, sem os dados pessoais retirados antes (quando ligada) | 30 dias depois da última mensagem |
