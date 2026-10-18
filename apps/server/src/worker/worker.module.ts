@@ -12,6 +12,7 @@ import { RateLimitService } from '../auth/rate-limit.service.js';
 import { CouponsService } from '../coupons/coupons.service.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { APP_CONFIG, type AppConfig, loadConfig } from '../config.js';
+import { HubDms, MODO_DO_HUB, type ModoDoHub } from '../connectors/dms/hub.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { EquipeService } from '../equipe/equipe.service.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -74,6 +75,9 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     { provide: Mailer, inject: [APP_CONFIG], useFactory: (config: AppConfig) => createMailer(config) },
     // Processadores por provedor: o Regem (A2.5) antecipa a leitura das lojas da conexão; os demais só guardam.
     { provide: INBOX_HANDLERS, useValue: new Map<string, InboxHandler>([['regem', eventoDoRegem]]) },
+    // O hub da DMS (Hub DMS, A4, etapa 3; desligado por padrão): o worker bate, lê a lista de parada e manda os erros dos laços.
+    { provide: MODO_DO_HUB, useValue: 'worker' satisfies ModoDoHub },
+    HubDms,
     OutboxPublisher,
     AuditAnchorService,
     FlagService,

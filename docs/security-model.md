@@ -85,7 +85,7 @@ Ver ADR-003: RLS forçada, role sem `BYPASSRLS`, contexto por transação, `serv
 - `key_version` em cada segredo; rotação da KEK com recifragem em lote; revogação.
 - Tokens OAuth nunca aparecem em: logs, frontend, respostas de API, prompts, auditoria visível ao cliente.
 - Segredos da aplicação (chaves de API de IA, apps Meta/Google) ficam no cofre/gerenciador escolhido, não em `.env` versionado.
-- **Hub DMS (F2):** o segredo do aplicativo do Liame no DMS ID (`DMS_ID_SEGREDO`) é da aplicação e fica só no painel da hospedagem; ele vai só para o `/token` do emissor configurado (em produção, o oficial), sem seguir redirecionamento. O token do DMS ID fica só na memória do processo, até perto de vencer. O segredo da ligação de cada conta do RegemCast vai para o cofre (envelope, como os tokens de hoje), com o resumo do `rct_it_` de onde veio; na auditoria e nos registros vai só o prefixo.
+- **Hub DMS (F2):** o segredo do aplicativo do Liame no DMS ID (`DMS_ID_SEGREDO`) é da aplicação e fica só no painel da hospedagem; ele vai só para o `/token` do emissor configurado (em produção, o oficial), sem seguir redirecionamento. O token do DMS ID fica só na memória do processo, até perto de vencer. O segredo da ligação de cada conta do RegemCast vai para o cofre (envelope, como os tokens de hoje), com o resumo do `rct_it_` de onde veio; na auditoria e nos registros vai só o prefixo. Para o serviço do hub (A4, etapa 3), o mesmo aplicativo pede um token do recurso do hub, que vai só às rotas `/api/v1/` do hub configurado (em produção, o oficial), sem seguir redirecionamento; a mensagem de erro que vai ao hub sai limpa de dado pessoal pelo pacote comum (e-mail, telefone, documento, token, identificadores e números longos).
 
 ## 6. Dados pessoais e LGPD
 
