@@ -70,9 +70,20 @@ export function currentTraceId(): string {
   return id && !/^0+$/.test(id) ? id : randomBytes(16).toString('hex');
 }
 
+/**
+ * O status de um erro do leitor do corpo do Express (http-errors: corpo acima do limite, conjunto de caracteres ou
+ * compressão que ele não lê). Ele chega ao filtro sem ser `HttpException` — o Nest só converte o JSON malformado —, e
+ * sem isto virava 500. Só o 4xx que o próprio erro marca como do cliente (`expose`); o resto segue 500.
+ */
+function statusDoLeitor(exception: unknown): number | null {
+  if (typeof exception !== 'object' || exception === null) return null;
+  const { expose, status } = exception as { expose?: unknown; status?: unknown };
+  return expose === true && typeof status === 'number' && Number.isInteger(status) && status >= 400 && status < 500 ? status : null;
+}
+
 /** Monta a resposta RFC 9457. Só `AppProblem` e validação levam texto específico; o resto usa o catálogo. */
 export function toProblem(exception: unknown, traceId: string, instance: string): ProblemDetails {
-  const status = exception instanceof HttpException ? exception.getStatus() : 500;
+  const status = exception instanceof HttpException ? exception.getStatus() : (statusDoLeitor(exception) ?? 500);
   const base = CATALOG[status] ?? CATALOG[status >= 500 ? 500 : 400]!;
   const problem: ProblemDetails = {
     type: `${PROBLEM_TYPE_BASE}${base.code}`,

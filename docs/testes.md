@@ -81,7 +81,8 @@ O `.env.local` da raiz (fora do git) guarda as URLs dos papéis `liame_*`. Sem `
 
 | Suíte | Prova |
 | --- | --- |
-| `test/api.e2e.spec.ts` | validação por Standard Schema (Zod) e política de erros RFC 9457: 400 com os campos, JSON malformado sem ecoar o corpo, 404 sem revelar a rota, 500 sem dado interno e com a causa no log (LIC-003) |
+| `test/api.e2e.spec.ts` | validação por Standard Schema (Zod) e política de erros RFC 9457: 400 com os campos, JSON malformado sem ecoar o corpo, 404 sem revelar a rota, 500 sem dado interno e com a causa no log (LIC-003); o leitor do corpo recusando antes da rota (corpo acima do limite, `charset` e compressão que ele não lê) sai 413 e 415 em problem+json, com log informativo, nunca 500 (ERR-144) |
+| `test/problems-leitor.spec.ts` | o erro do leitor do corpo do Express no `toProblem`, sem HTTP (ERR-144): 413 e 415 marcados como do cliente (`expose`) dão o problema do catálogo; sem `expose`, `expose` que não é verdadeiro, status de servidor, em texto ou quebrado, e o que nem é objeto seguem 500; a `HttpException` segue com o status dela |
 | `test/db/health.spec.ts` | `/health/ready` toca banco e fila e diz a versão e a última migration (LIC-008): 503 sem fila, 200 com fila, 503 sem banco |
 | `packages/database/test/migrate.spec.ts` | executor de migrations: ordem, não reaplica, erro desfaz o arquivo inteiro, arquivo alterado é recusado, execuções simultâneas aplicam uma vez só, numeração sem pular nem repetir |
 | `packages/database/test/reset-test.spec.ts` | a trava do comando que zera o banco de teste local (`pnpm db:reset:test`): aceita só host local e banco terminado em `_test`; recusa o banco de desenvolvimento, o `postgres`, o host da nuvem e o que não é URL; o comando para na trava, sem conectar em lugar nenhum |
