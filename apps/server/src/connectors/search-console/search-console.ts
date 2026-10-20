@@ -7,13 +7,14 @@
 // como linha (ela só entra no total quando a leitura não separa por busca). Por isso a soma das buscas fica abaixo do
 // total do dia, e as duas leituras não se misturam.
 
-import type { ResultadoDaProcura } from '../google-business/perfil-google.js';
+import { SEARCH_CONSOLE_SCOPE } from '@liame/contracts';
+import { RESULTADOS_DA_PROCURA, type ResultadoDaProcura } from '../google-business/perfil-google.js';
 import { MAX_URL_LIDA } from '../tipos.js';
 
 /** A função, por empresa, desligada de fábrica: ligada, o Liame pede a permissão do Search Console e procura os sites (A6, Z3). */
 export const FLAG_SEARCH_CONSOLE = 'search_console';
 /** A permissão de só leitura do Search Console. Só entra na autorização da empresa com a função ligada, como a do Perfil (D-A6-17). */
-export const ESCOPO_SEARCH_CONSOLE = 'https://www.googleapis.com/auth/webmasters.readonly';
+export const ESCOPO_SEARCH_CONSOLE = SEARCH_CONSOLE_SCOPE;
 /** O código do site do Search Console entre as contas ligadas (`connected_account.provider`). */
 export const PROVEDOR_SEARCH_CONSOLE = 'search_console';
 /**
@@ -28,6 +29,16 @@ export const TAMANHO_DO_SITE_LIGADO = 100;
  * ou `falhou`.
  */
 export type ProcuraDosSites = { resultado: ResultadoDaProcura; em: string; sites: number };
+
+/** A procura dos sites guardada na autorização, como o worker a anotou; nula se não há ou se a anotação não confere. */
+export function procuraDosSitesGuardada(notas: unknown): ProcuraDosSites | null {
+  const n = notas && typeof notas === 'object' ? (notas as Record<string, unknown>)[PROVEDOR_SEARCH_CONSOLE] : null;
+  if (!n || typeof n !== 'object') return null;
+  const { resultado, em, sites } = n as Record<string, unknown>;
+  if (typeof resultado !== 'string' || !(RESULTADOS_DA_PROCURA as readonly string[]).includes(resultado)) return null;
+  if (typeof em !== 'string' || Number.isNaN(new Date(em).getTime())) return null;
+  return { resultado: resultado as ResultadoDaProcura, em, sites: typeof sites === 'number' && Number.isInteger(sites) && sites >= 0 ? sites : 0 };
+}
 
 /** O tamanho máximo do endereço do site (o mesmo das outras URLs lidas). */
 const TAMANHO_DO_SITE = MAX_URL_LIDA;

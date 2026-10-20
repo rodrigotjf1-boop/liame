@@ -22174,6 +22174,13 @@
                                     "string",
                                     "null"
                                   ]
+                                },
+                                "site_access": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "pattern": "^[a-z0-9_]+$"
                                 }
                               },
                               "required": [
@@ -22318,6 +22325,32 @@
                               "stores"
                             ],
                             "additionalProperties": false
+                          },
+                          "site_search": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "result": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "searched_at": {
+                                "type": "string"
+                              },
+                              "sites": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "result",
+                              "searched_at",
+                              "sites"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -22360,6 +22393,9 @@
                       }
                     },
                     "business_profile": {
+                      "type": "boolean"
+                    },
+                    "search_console": {
                       "type": "boolean"
                     }
                   },
@@ -22855,6 +22891,13 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "site_access": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z0-9_]+$"
                           }
                         },
                         "required": [
@@ -22997,6 +23040,32 @@
                         "result",
                         "searched_at",
                         "stores"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "site_search": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "result": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "searched_at": {
+                          "type": "string"
+                        },
+                        "sites": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "result",
+                        "searched_at",
+                        "sites"
                       ],
                       "additionalProperties": false
                     }
@@ -23735,6 +23804,13 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "site_access": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z0-9_]+$"
                           }
                         },
                         "required": [
@@ -23877,6 +23953,32 @@
                         "result",
                         "searched_at",
                         "stores"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "site_search": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "result": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "searched_at": {
+                          "type": "string"
+                        },
+                        "sites": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "result",
+                        "searched_at",
+                        "sites"
                       ],
                       "additionalProperties": false
                     }
