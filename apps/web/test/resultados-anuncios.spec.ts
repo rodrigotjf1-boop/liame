@@ -8,6 +8,7 @@ import {
   type CartaoDosAnuncios,
   type EntradaDoCartao,
   falharamNoPrazo,
+  fimDaEspera,
   type LerAgora,
   marcasDe,
   montarCartaoDosAnuncios,
@@ -334,6 +335,35 @@ describe('o período "Hoje"', () => {
     expect(numeros(entrada({ resposta: vazio })).vazio).toBe('Nenhum anúncio apareceu nos últimos 7 dias.');
     expect(numeros(entrada({ resposta: vazio, periodo: '30' })).vazio).toBe('Nenhum anúncio apareceu nos últimos 30 dias.');
     expect(numeros(entrada({ resposta: { ...vazio, accounts: [{ ...META, last_success_at: null }] } })).vazio).toBe('Os números aparecem aqui depois da primeira leitura.');
+  });
+});
+
+describe('o fim da espera do "Ler agora" (ERR-146)', () => {
+  // Em 20/10/2026, 06:50 UTC: a primeira leitura da conta nova recebeu "Job Failed" da Meta às 06:50:42, o worker
+  // tentou de novo às 06:51:18 e leu certo às 06:52:00. A tela tinha anunciado "A Meta não respondeu" às 06:50:42.
+  const lendo = (): Extract<LerAgora, { tipo: 'lendo' }> => ({ tipo: 'lendo', pedidoEm: PEDIDO, desde: 0, antes: marcasDe([META, GOOGLE]), vistas: {} });
+  const googleLido = { ...GOOGLE, last_success_at: '2026-10-16T12:41:30.000Z', last_attempt_at: '2026-10-16T12:41:30.000Z' };
+  const metaFalhou = { ...META, last_attempt_at: '2026-10-16T12:41:42.000Z', last_error: 'transitorio: relatório assíncrono terminou em "Job Failed"' };
+  const metaLida = { ...META, last_success_at: '2026-10-16T12:43:00.000Z', last_attempt_at: '2026-10-16T12:43:00.000Z', last_error: null };
+
+  it('a falha de uma tentativa antes do prazo não encerra a espera; a nova tentativa que dá certo vale', () => {
+    const l = lendo();
+    // Primeira consulta depois da falha: a função manda seguir esperando (antes desta correção, encerrava com a falha).
+    expect(fimDaEspera([metaFalhou, googleLido], l, false)).toBeNull();
+    // A mesma espera, na consulta seguinte: a Meta foi lida pelo worker; termina bem, sem falha, com o "antes" junto.
+    const anterior = resposta();
+    const fim = fimDaEspera([metaLida, googleLido], { ...l, anterior, vistas: { [META.connected_account_id]: metaFalhou.last_attempt_at } }, false);
+    expect(fim).toEqual({ tipo: 'terminou', pedidoEm: PEDIDO, falharam: [], anterior });
+  });
+
+  it('no fim do prazo, a falha que ficou é anunciada; sem tentativa nenhuma, "ainda não terminou"', () => {
+    expect(fimDaEspera([metaFalhou, googleLido], lendo(), true)).toEqual({ tipo: 'terminou', pedidoEm: PEDIDO, falharam: ['meta_ads'], anterior: undefined });
+    expect(fimDaEspera([META, GOOGLE], lendo(), true)).toEqual({ tipo: 'demorou', pedidoEm: PEDIDO });
+  });
+
+  it('tudo lido depois do pedido termina na hora; ainda lendo e dentro do prazo, segue esperando', () => {
+    expect(fimDaEspera([metaLida, googleLido], lendo(), false)).toMatchObject({ tipo: 'terminou', falharam: [] });
+    expect(fimDaEspera([META, googleLido], lendo(), false)).toBeNull();
   });
 });
 

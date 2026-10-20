@@ -85,6 +85,24 @@ export function falharamNoPrazo(contas: AdDeliveryAccount[], pedidoEm: string): 
   return PROVEDORES.filter((p) => f.has(p));
 }
 
+/**
+ * O fim da espera do "Ler agora", a cada consulta (nulo = seguir esperando). A falha de uma tentativa NÃO encerra a
+ * espera antes do prazo: o worker tenta de novo sozinho, e a leitura que dá certo dentro do prazo vale (ERR-146: em
+ * 20/10/2026 a Meta devolveu "Job Failed" no relatório da primeira leitura da conta nova, o worker leu certo 80
+ * segundos depois, e a tela já tinha dito que a Meta não respondeu). No fim do prazo, a falha que ficou é anunciada.
+ */
+export function fimDaEspera(
+  contas: AdDeliveryAccount[],
+  leitura: Extract<LerAgora, { tipo: 'lendo' }>,
+  venceu: boolean,
+): Extract<LerAgora, { tipo: 'terminou' | 'demorou' }> | null {
+  const a = andamentoDaLeitura(contas, leitura.pedidoEm, leitura.antes, leitura.vistas);
+  if (a.pendentes === 0 && !a.falharam.length) return { tipo: 'terminou', pedidoEm: leitura.pedidoEm, falharam: [], anterior: leitura.anterior };
+  if (!venceu) return null;
+  const f = falharamNoPrazo(contas, leitura.pedidoEm);
+  return f.length ? { tipo: 'terminou', pedidoEm: leitura.pedidoEm, falharam: f, anterior: leitura.anterior } : { tipo: 'demorou', pedidoEm: leitura.pedidoEm };
+}
+
 /** O aviso (toast) do fim do "Ler agora". */
 export function avisoDoFim(leitura: LerAgora, contas: AdDeliveryAccount[], fuso: string): string | null {
   const provedores = PROVEDORES.filter((p) => contas.some((c) => c.provider === p));
