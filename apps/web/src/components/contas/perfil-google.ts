@@ -1,6 +1,7 @@
 import { type AccountFreshness, type ConnectionResponse, type DiscoveredAccount, GOOGLE_BUSINESS_SCOPE } from '@liame/contracts';
 import { dia, diasAte, horaDe } from '@/lib/formato';
-import type { SituacaoConta } from './textos';
+import { avisoDeLigar, ehSiteDoSearchConsole, notaDaPrimeiraLeitura } from './search-console';
+import { listaEmPalavras, type SituacaoConta } from './textos';
 
 // A loja do Perfil da Empresa no Google em "Contas conectadas" (mockups/prototipo-contas-perfil.html, P17 parte B,
 // aprovado pelo dono em 14/10/2026). A loja é mais uma conta da lista e vem pela autorização do Google que já existe:
@@ -68,19 +69,23 @@ export function situacaoDaLojaDoPerfil(c: AccountFreshness, funcaoLigada: boolea
 /** A autorização do Google inclui a permissão do perfil. */
 export const incluiOPerfil = (c: Pick<ConnectionResponse, 'scopes'>): boolean => c.scopes.includes(GOOGLE_BUSINESS_SCOPE);
 
-/** Contas de anúncio e lojas do perfil ligadas por esta autorização (as desligadas não contam). */
-export function ligadasDaAutorizacao(c: Pick<ConnectionResponse, 'accounts'>): { contas: number; lojas: number } {
+/** Contas de anúncio, lojas do perfil e sites do Search Console ligados por esta autorização (os desligados não contam). */
+export function ligadasDaAutorizacao(c: Pick<ConnectionResponse, 'accounts'>): { contas: number; lojas: number; sites: number } {
   const ativas = c.accounts.filter((a) => a.disconnected_at === null);
   const lojas = ativas.filter((a) => ehLojaDoPerfil(a.provider)).length;
-  return { contas: ativas.length - lojas, lojas };
+  const sites = ativas.filter((a) => ehSiteDoSearchConsole(a.provider)).length;
+  return { contas: ativas.length - lojas - sites, lojas, sites };
 }
 
-/** "3 contas", "3 contas e 1 loja", "1 loja" (o cabeçalho do cartão). */
-export function contasELojas({ contas, lojas }: { contas: number; lojas: number }): string {
+/** "3 contas", "3 contas e 1 loja", "1 loja", "3 contas e 1 site", "3 contas, 1 loja e 1 site" (o cabeçalho do cartão). */
+export function contasELojas({ contas, lojas, sites = 0 }: { contas: number; lojas: number; sites?: number }): string {
   const c = contas === 1 ? '1 conta' : `${contas} contas`;
-  if (!lojas) return c;
-  const l = lojas === 1 ? '1 loja' : `${lojas} lojas`;
-  return contas ? `${c} e ${l}` : l;
+  const partes = [
+    contas || (!lojas && !sites) ? c : '',
+    lojas ? (lojas === 1 ? '1 loja' : `${lojas} lojas`) : '',
+    sites ? (sites === 1 ? '1 site' : `${sites} sites`) : '',
+  ].filter(Boolean);
+  return listaEmPalavras(partes);
 }
 
 /** As lojas que esta autorização alcança e que ainda não estão ligadas a nenhuma marca da empresa. */
@@ -198,22 +203,23 @@ export function siteDaLoja(site: string | null | undefined): string {
 
 /** A nota do diálogo de escolher quando há loja do perfil para ligar (sem loja, fica a de sempre). */
 export function notaDaEscolhaComLoja(temContas: boolean): string {
-  return temContas
-    ? 'Das contas de anúncio, a primeira leitura traz os últimos 90 dias. Da loja do perfil, as avaliações dos últimos 12 meses e os números do perfil; o Liame não guarda o nome nem a foto de quem avaliou. Leva alguns minutos.'
-    : 'A primeira leitura da loja do perfil traz as avaliações dos últimos 12 meses e os números do perfil; o Liame não guarda o nome nem a foto de quem avaliou. Leva alguns minutos.';
+  return notaDaPrimeiraLeitura({ contas: temContas, lojas: true, sites: false });
 }
 
 /** O aviso depois de ligar, quando havia loja do perfil para ligar. `contas`/`lojas`: quantas desta vez. */
 export function avisoDeLigarComLoja(contas: number, lojas: number): string {
-  if (!lojas) return `${contas === 1 ? 'Conta ligada' : 'Contas ligadas'}. As lojas do perfil seguem sem ligar.`;
-  const ligadas = !contas ? (lojas === 1 ? 'Loja ligada' : 'Lojas ligadas') : `${contas === 1 ? 'Conta' : 'Contas'} e ${lojas === 1 ? 'loja ligadas' : 'lojas ligadas'}`;
-  return `${ligadas}. A primeira leitura começou e leva alguns minutos.`;
+  return avisoDeLigar({ contas, lojas, sites: 0 }, { lojas: true, sites: false });
 }
 
-/** "da conta", "das 3 contas", "da loja do perfil", "das 3 contas e da loja do perfil" (o diálogo de revogar). */
-export function oQueParaDeLer({ contas, lojas }: { contas: number; lojas: number }): string {
-  const c = contas === 1 ? 'da conta' : `das ${contas} contas`;
-  const l = lojas === 1 ? 'da loja do perfil' : `das ${lojas} lojas do perfil`;
-  if (contas && lojas) return `${c} e ${l}`;
-  return lojas ? l : c;
+/**
+ * "da conta", "das 3 contas", "da loja do perfil", "das 3 contas e da loja do perfil", "das 3 contas e do site"
+ * (o diálogo de revogar).
+ */
+export function oQueParaDeLer({ contas, lojas, sites = 0 }: { contas: number; lojas: number; sites?: number }): string {
+  const partes = [
+    contas || (!lojas && !sites) ? (contas === 1 ? 'da conta' : `das ${contas} contas`) : '',
+    lojas ? (lojas === 1 ? 'da loja do perfil' : `das ${lojas} lojas do perfil`) : '',
+    sites ? (sites === 1 ? 'do site' : `dos ${sites} sites`) : '',
+  ].filter(Boolean);
+  return listaEmPalavras(partes);
 }

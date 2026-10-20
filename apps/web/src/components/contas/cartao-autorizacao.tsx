@@ -4,12 +4,13 @@ import type { ConnectionResponse } from '@liame/contracts';
 import { Icone } from '@/components/ui/icone';
 import { dataCompleta } from '@/lib/formato';
 import { contasELojas, ligadasDaAutorizacao, type perfilNaAutorizacao } from './perfil-google';
+import type { searchConsoleNaAutorizacao } from './search-console';
 import { autorizadorDa, daPlataforma, emConferencia, erroDaConexao, naPlataforma, plataforma, quemAutorizou, vencimentoDaAutorizacao } from './textos';
 
 // Uma autorização (o "sim" que alguém deu na Meta, no Google ou no RegemCast): quando, quantas contas, se vence
 // (Google em modo de teste) e as ações: conectar de novo, procurar contas de novo e revogar. Com o perfil da empresa no
-// Google ligado para a empresa (P17, parte B), a do Google diz o que traz do perfil e o que falta quando falta. O
-// RegemCast se conecta de novo pela autorização por clique (Hub DMS, B1), quando a empresa tem; sem ela, quem liga de
+// Google ligado para a empresa (P17, parte B), a do Google diz o que traz do perfil e o que falta quando falta; com o
+// Search Console ligado (P18, parte B), o mesmo do site. O RegemCast se conecta de novo pela autorização por clique (Hub DMS, B1), quando a empresa tem; sem ela, quem liga de
 // novo é a DMS, e o cartão diz isso em vez de oferecer um botão que não leva a lugar nenhum.
 
 type Props = {
@@ -21,6 +22,8 @@ type Props = {
   informaVendas?: boolean;
   /** O que a autorização do Google diz do perfil da empresa (`perfilNaAutorizacao`); nulo ou ausente sem a função. */
   perfil?: ReturnType<typeof perfilNaAutorizacao>;
+  /** O que a autorização do Google diz do Search Console (`searchConsoleNaAutorizacao`); nulo ou ausente sem a função. */
+  site?: ReturnType<typeof searchConsoleNaAutorizacao>;
   /** Autorização que ainda espera a escolha (a pessoa fechou com "Agora não"): reabre a escolha. */
   aoEscolher: (() => void) | null;
   /** "Conectar de novo"; nulo = não dá para conectar de novo daqui (o RegemCast sem a autorização por clique). */
@@ -33,7 +36,20 @@ type Props = {
 
 const ICONE_DA_NOTA = { lock: 'lock', info: 'info', clock: 'clock', alert: 'alert' } as const;
 
-export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando, informaVendas = false, perfil = null, aoEscolher, aoReconectar, aoAutorizar, aoProcurar, aoRevogar }: Props) {
+export function CartaoAutorizacao({
+  conexao: c,
+  agora,
+  podeConectar,
+  procurando,
+  informaVendas = false,
+  perfil = null,
+  site = null,
+  aoEscolher,
+  aoReconectar,
+  aoAutorizar,
+  aoProcurar,
+  aoRevogar,
+}: Props) {
   const a = autorizadorDa(c.provider);
   const plat = plataforma(c.provider);
   const vence = vencimentoDaAutorizacao(c, agora);
@@ -42,7 +58,7 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
   const reconectar = Boolean(falhou || vence);
   const quando = dataCompleta(c.completed_at ?? c.created_at);
   const quem = quemAutorizou(c);
-  // "3 contas e 1 loja": a loja do perfil conta à parte.
+  // "3 contas e 1 loja", "3 contas e 1 site": a loja do perfil e o site do Search Console contam à parte.
   const contas = contasELojas(ligadasDaAutorizacao(c));
   const qual = `${daPlataforma(a)} de ${quando}`;
   const sobre =
@@ -53,8 +69,9 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
           ? 'Ligada pela DMS, com o token da conta, sem prazo de validade.'
           : 'Autorizada pelo dono da conta no RegemCast, sem prazo de validade.'
         : 'Autorização da empresa, sem prazo de validade.';
-  const nota = !falhou ? (perfil?.nota ?? null) : null;
-  const autorizar = !reconectar && perfil?.acao === 'autorizar' && aoAutorizar;
+  // O que falta do perfil e do site, um aviso para cada (com as duas funções ligadas, os dois podem aparecer).
+  const notas = !falhou ? [perfil?.nota ?? null, site?.nota ?? null].filter((n): n is NonNullable<typeof n> => n !== null) : [];
+  const autorizar = !reconectar && (perfil?.acao === 'autorizar' || site?.acao === 'autorizar') && aoAutorizar;
 
   return (
     <li className="card autorizacao">
@@ -91,16 +108,17 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
           {sobre}
           {a === 'google' && informaVendas && ' Inclui a permissão de informar vendas.'}
           {a === 'google' && perfil?.inclui && ' Inclui a permissão do perfil da empresa.'}
+          {a === 'google' && site?.inclui && ' Inclui a permissão do Search Console, só de leitura.'}
         </p>
       )}
-      {nota && (
-        <p className="aut-txt aut-txt--atencao">
+      {notas.map((nota) => (
+        <p className="aut-txt aut-txt--atencao" key={`${nota.destaque ?? ''}${nota.texto}`}>
           <Icone nome={ICONE_DA_NOTA[nota.icone]} pequeno />
           <span>
             {nota.destaque && <b>{nota.destaque}</b>} {nota.texto}
           </span>
         </p>
-      )}
+      ))}
       {conferindo && (
         <p className="aut-txt" role="status">
           Procurando as contas {naPlataforma(a)}…

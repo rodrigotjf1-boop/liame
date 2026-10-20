@@ -34,6 +34,16 @@ import {
   SUB_DA_LOJA,
 } from './perfil-google';
 import {
+  AVISO_SITE_DESLIGADO,
+  CONFIRMA_DESLIGAR_SITE,
+  CONVITE_DO_SEARCH_CONSOLE,
+  conviteDoSearchConsole,
+  ehSiteDoSearchConsole,
+  searchConsoleNaAutorizacao,
+  situacaoDoSite,
+  subDoSite,
+} from './search-console';
+import {
   artigo,
   autorizacoesVisiveis,
   autorizadorDa,
@@ -47,6 +57,7 @@ import {
   faixaDaVolta,
   faixaDoRegem,
   lerVolta,
+  listaEmPalavras,
   naPlataforma,
   semCusto,
   situacaoDaConta,
@@ -65,6 +76,8 @@ import { type ContaDasVendas, ESCOPO_DE_INFORMAR_VENDAS, esperaPorExtenso, junta
 // A6 · P17, parte B (mockups/prototipo-contas-perfil.html): com o perfil da empresa no Google ligado para a empresa
 // (`business_profile`), a loja do perfil é mais uma linha da lista, a autorização do Google diz o que traz do perfil e o
 // topo convida quem ainda não deu a permissão. Sem a função, a tela é a de sempre.
+// A6 · P18, parte B (mockups/prototipo-contas-search-console.html): o mesmo para o site do Search Console, com a função
+// `search_console` ligada para a empresa.
 // Nenhum token passa pelo navegador; quem pode ver e conectar é o servidor que decide.
 
 type Dados = {
@@ -81,6 +94,8 @@ type Dados = {
   vendasDesatualizadas: boolean;
   /** O perfil da empresa no Google ligado para a empresa (`business_profile`; ausente na resposta antiga = desligado). */
   perfil: boolean;
+  /** O Search Console ligado para a empresa (`search_console`; ausente na resposta antiga = desligado). */
+  searchConsole: boolean;
 };
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: Dados } | { tipo: 'erro'; problema: Problema };
 type Dialogo =
@@ -156,6 +171,7 @@ export function ContasTela() {
         vendas,
         vendasDesatualizadas,
         perfil: c.data.business_profile === true,
+        searchConsole: c.data.search_console === true,
       },
     });
   }, []);
@@ -243,6 +259,10 @@ export function ContasTela() {
       if (ehLojaDoPerfil(c.provider)) {
         return { ...base, sub: SUB_DA_LOJA, confirmacao: CONFIRMA_DESLIGAR_LOJA, situacao: situacaoDaLojaDoPerfil(c, dados.perfil, agora) };
       }
+      // O site do Search Console (P18, parte B): a leitura dos números por dia, sem o código do Google.
+      if (ehSiteDoSearchConsole(c.provider)) {
+        return { ...base, sub: subDoSite(ligada?.external_id ?? null), confirmacao: CONFIRMA_DESLIGAR_SITE, situacao: situacaoDoSite(c, dados.searchConsole, agora) };
+      }
       return { ...base, situacao: situacaoDaConta(c) };
     });
   }, [dados, agora, podeRegem]);
@@ -258,8 +278,16 @@ export function ContasTela() {
     [linhas],
   );
   const autorizacoes = useMemo(() => (dados ? autorizacoesVisiveis(dados.conexoes) : []), [dados]);
-  // O perfil da empresa no Google ligado, o Google conectado e nenhuma autorização com a permissão do perfil: o convite.
-  const convite = useMemo(() => (dados ? conviteDoPerfil(autorizacoes, dados.perfil) : null), [dados, autorizacoes]);
+  // O perfil da empresa no Google (ou o Search Console) ligado, o Google conectado e nenhuma autorização com a permissão
+  // dele: o convite. Os dois pedem a mesma coisa (autorizar o Google de novo, e a autorização nova pede as duas
+  // permissões): um convite só, o do perfil primeiro.
+  const convite = useMemo(() => {
+    if (!dados) return null;
+    const doPerfil = conviteDoPerfil(autorizacoes, dados.perfil);
+    if (doPerfil) return { ...doPerfil, textos: CONVITE_DO_PERFIL };
+    const doSite = conviteDoSearchConsole(autorizacoes, dados.searchConsole);
+    return doSite ? { ...doSite, textos: CONVITE_DO_SEARCH_CONSOLE } : null;
+  }, [dados, autorizacoes]);
   // Vendas informadas ao Google: as marcas com a função ligada e o cartão de cada conta, depois da autorização que a lê.
   const vendas = useMemo(() => juntarVendas(dados?.vendas ?? []), [dados]);
   const vendasDaAutorizacao = useMemo(() => vendasPorAutorizacao(vendas.contas, dados?.conexoes ?? [], autorizacoes), [vendas, dados, autorizacoes]);
@@ -307,23 +335,32 @@ export function ContasTela() {
     if (acomp.origem === 'procurar') {
       const novas = f?.tipo === 'escolher' ? escolhiveis(acomp.conexao, existentes) : [];
       const lojas = novas.filter((o) => ehLojaDoPerfil(o.conta.provider)).length;
-      const n = novas.length - lojas;
+      const sites = novas.filter((o) => ehSiteDoSearchConsole(o.conta.provider)).length;
+      const n = novas.length - lojas - sites;
       const onde = naPlataforma(autorizadorDa(acomp.conexao.provider));
       const contas = `${n} ${n === 1 ? 'conta' : 'contas'}`;
       const doPerfil = `${lojas} ${lojas === 1 ? 'loja do perfil' : 'lojas do perfil'}`;
+      const doSite = `${sites} ${sites === 1 ? 'site' : 'sites'} do Search Console`;
       faixa =
         f?.tipo !== 'escolher'
           ? null
-          : !lojas
+          : !lojas && !sites
             ? { ...f, titulo: `Encontramos ${n} ${n === 1 ? 'conta para ligar' : 'contas para ligar'} ${onde}.` }
-            : !n
+            : !n && !sites
               ? // Só lojas do perfil (P17, parte B): o texto diz de onde elas vêm.
                 {
                   ...f,
                   titulo: `Encontramos ${doPerfil} para ligar ${onde}.`,
                   texto: `São as lojas do perfil da empresa que esta autorização alcança. Escolha quais ligar à marca ${marcaDaVolta}.`,
                 }
-              : { ...f, titulo: `Encontramos ${contas} e ${doPerfil} para ligar ${onde}.` };
+              : !n && !lojas
+                ? // Só sites do Search Console (P18, parte B).
+                  {
+                    ...f,
+                    titulo: `Encontramos ${doSite} para ligar.`,
+                    texto: `São os sites que esta autorização alcança e que a empresa pode ler. Escolha quais ligar à marca ${marcaDaVolta}.`,
+                  }
+                : { ...f, titulo: `Encontramos ${listaEmPalavras([n ? contas : '', lojas ? doPerfil : '', sites ? doSite : ''].filter(Boolean))} para ligar ${onde}.` };
     } else faixa = f;
   }
 
@@ -343,7 +380,9 @@ export function ContasTela() {
         ? 'Loja desligada. O token foi revogado no Regem e no Liame; o que já foi lido segue o prazo de guarda.'
         : ehLojaDoPerfil(l.provider)
           ? AVISO_LOJA_DESLIGADA
-          : 'Conta desligada. O histórico de números fica.',
+          : ehSiteDoSearchConsole(l.provider)
+            ? AVISO_SITE_DESLIGADO
+            : 'Conta desligada. O histórico de números fica.',
     );
     recarregarAvisos();
     await carregar();
@@ -502,12 +541,12 @@ export function ContasTela() {
         <FaixaDeAviso
           tipo="acao"
           icone={<Icone nome="plug" />}
-          titulo={CONVITE_DO_PERFIL.titulo}
-          texto={CONVITE_DO_PERFIL.texto}
+          titulo={convite.textos.titulo}
+          texto={convite.textos.texto}
           acao={
             podeConectar ? (
               <button className="btn btn--primary" type="button" onClick={() => disparar(autorizarGoogle(convite.brandId))}>
-                {CONVITE_DO_PERFIL.botao}
+                {convite.textos.botao}
               </button>
             ) : undefined
           }
@@ -643,12 +682,17 @@ export function ContasTela() {
                 podeConectar={podeConectar}
                 informaVendas={vendas.marcas.has(c.brand_id) && c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS)}
                 perfil={c.provider === 'google' ? perfilNaAutorizacao(c, dados.perfil) : null}
+                site={c.provider === 'google' ? searchConsoleNaAutorizacao(c, dados.searchConsole) : null}
                 procurando={acomp?.origem === 'procurar' && acomp.id === c.id && (!acomp.conexao || emConferencia(acomp.conexao))}
                 aoEscolher={
                   // Esperando a escolha; ou já valendo, com conta de outra autorização que vence antes (renovar), que não tem
-                  // a permissão nova (informar vendas; na Meta, a escrita, ERR-138) ou com loja do perfil ainda por ligar (P17, parte B).
+                  // a permissão nova (informar vendas; na Meta, a escrita, ERR-138) ou com loja do perfil (P17, parte B) ou site do
+                  // Search Console (P18, parte B) ainda por ligar.
                   (c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length) ||
-                  (c.status === 'ativa' && escolhiveis(c, existentes).some((o) => o.renovar || o.permissao || o.escrita || o.token || (ehLojaDoPerfil(o.conta.provider) && !o.conta.linked)))
+                  (c.status === 'ativa' &&
+                    escolhiveis(c, existentes).some(
+                      (o) => o.renovar || o.permissao || o.escrita || o.token || ((ehLojaDoPerfil(o.conta.provider) || ehSiteDoSearchConsole(o.conta.provider)) && !o.conta.linked),
+                    ))
                     ? () => setDialogo({ tipo: 'escolher', conexao: c })
                     : null
                 }
@@ -686,6 +730,7 @@ export function ContasTela() {
           vendasAoGoogle={vendas.marcas}
           mudaAnuncios={dados?.escritaAnuncios ?? []}
           comPerfil={Boolean(dados?.perfil)}
+          comSearchConsole={Boolean(dados?.searchConsole)}
         />
       )}
       {dialogo?.tipo === 'regem' && (

@@ -183,7 +183,7 @@ describe('a autorização do Google com o perfil', () => {
 
   it('contas e lojas contam à parte: no cabeçalho do cartão e no diálogo de revogar', () => {
     const c = conexao({ accounts: [conta('google_ads', '1'), conta('google_ads', '2'), conta('ga4', '3'), conta('google_business', 'locations/1'), conta('google_ads', '9', { disconnected_at: local(12, 9) })] });
-    expect(ligadasDaAutorizacao(c)).toEqual({ contas: 3, lojas: 1 });
+    expect(ligadasDaAutorizacao(c)).toEqual({ contas: 3, lojas: 1, sites: 0 });
     expect(contasELojas({ contas: 3, lojas: 1 })).toBe('3 contas e 1 loja');
     expect(contasELojas({ contas: 1, lojas: 2 })).toBe('1 conta e 2 lojas');
     expect(contasELojas({ contas: 0, lojas: 1 })).toBe('1 loja');

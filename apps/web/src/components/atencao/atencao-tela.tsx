@@ -32,6 +32,7 @@ import {
   type RecomendacaoDoAviso,
   recomendacaoDoAviso,
   rotuloDoFiltro,
+  temContaQueConta,
 } from './textos';
 
 // "Atenção de mídia" (mockups/prototipo-contas.html): o que precisa de alguém agora nas contas de anúncio
@@ -84,11 +85,12 @@ export function AtencaoTela() {
     }
     definir(contadorDoMenu(r.data.items));
     // Sem avisos: "tudo em dia" só vale se há conta ligada; sem nenhuma, o convite é conectar. A loja do perfil da
-    // empresa no Google (P17, parte B) não é conta de anúncio: ligada sozinha, o convite continua.
+    // empresa no Google (P17, parte B) e o site do Search Console (P18, parte B) não são contas de anúncio: ligados
+    // sozinhos, o convite continua.
     let semContas = false;
     if (!r.data.items.length && podeVerContas) {
       const f = await chamar(() => api.GET('/v1/media/freshness'));
-      semContas = f.ok && !f.data.items.some((c) => c.provider !== 'google_business');
+      semContas = f.ok && !temContaQueConta(f.data.items);
     }
     setEstado({ tipo: 'ok', dados: r.data, semContas });
     return true;

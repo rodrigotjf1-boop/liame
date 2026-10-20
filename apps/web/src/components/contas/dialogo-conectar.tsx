@@ -7,6 +7,7 @@ import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { NOTA_DA_PERMISSAO_DO_PERFIL } from './perfil-google';
+import { NOTA_DA_PERMISSAO_DO_SEARCH_CONSOLE } from './search-console';
 import { type Autorizador, descricaoDoGoogle, enderecoSeguro, notaDeConectar, tituloDoGoogle } from './textos';
 
 // "Conectar plataforma" (protótipo aprovado): a marca e a plataforma (Meta, ou Google com Ads e Analytics
@@ -42,6 +43,11 @@ type Props = {
    * pede também a permissão do perfil, e o diálogo diz isso logo abaixo da opção do Google.
    */
   comPerfil?: boolean;
+  /**
+   * O Search Console ligado para a empresa (`search_console`; A6, P18 parte B): a autorização do Google pede também a
+   * permissão dele, só de leitura, e o diálogo diz isso logo abaixo da opção do Google.
+   */
+  comSearchConsole?: boolean;
 };
 
 export function DialogoConectar({
@@ -55,6 +61,7 @@ export function DialogoConectar({
   vendasAoGoogle,
   mudaAnuncios = [],
   comPerfil = false,
+  comSearchConsole = false,
   irPara = (url) => window.location.assign(url),
 }: Props) {
   const campoMarca = useRef<HTMLSelectElement>(null);
@@ -132,17 +139,25 @@ export function DialogoConectar({
               onClick={() => disparar(conectar('google'))}
               disabled={indo !== null}
               aria-busy={indo === 'google'}
-              aria-describedby={comPerfil ? `${ids}-perfil` : undefined}
+              aria-describedby={[comPerfil ? `${ids}-perfil` : '', comSearchConsole ? `${ids}-sc` : ''].filter(Boolean).join(' ') || undefined}
             >
               <span className="plat plat--google">Google</span>
-              <b>{indo === 'google' ? 'Indo para o Google…' : tituloDoGoogle(comPerfil)}</b>
-              <span>{descricaoDoGoogle(informaVendas, mudaAnuncios, comPerfil)}</span>
+              <b>{indo === 'google' ? 'Indo para o Google…' : tituloDoGoogle(comPerfil, comSearchConsole)}</b>
+              <span>{descricaoDoGoogle(informaVendas, mudaAnuncios, comPerfil, comSearchConsole)}</span>
             </button>
             {comPerfil && (
               <p className="dialogo-nota" id={`${ids}-perfil`}>
                 <Icone nome="info" pequeno />
                 <span>
                   <b>{NOTA_DA_PERMISSAO_DO_PERFIL.destaque}</b> {NOTA_DA_PERMISSAO_DO_PERFIL.texto}
+                </span>
+              </p>
+            )}
+            {comSearchConsole && (
+              <p className="dialogo-nota" id={`${ids}-sc`}>
+                <Icone nome="info" pequeno />
+                <span>
+                  <b>{NOTA_DA_PERMISSAO_DO_SEARCH_CONSOLE.destaque}</b> {NOTA_DA_PERMISSAO_DO_SEARCH_CONSOLE.texto}
                 </span>
               </p>
             )}
