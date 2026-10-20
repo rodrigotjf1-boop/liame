@@ -430,7 +430,7 @@ describe.skipIf(!hasDb)('conectar o Regem (A2.5 · F3)', () => {
     expect(auditoriaDaTroca?.after).toMatchObject({ autorizacoes_encerradas: [primeira] });
   });
 
-  it('RegemCast ainda sem autorização própria: 503, sem criar conexão', async () => {
+  it('RegemCast sem a autorização por clique (sem a flag nem a configuração dela): 503, sem criar conexão', async () => {
     const e = await empresa('Mister Burgers RegemCast');
     const r = await api.call('POST', '/v1/connections', { cookie: e.cookie, body: { provider: 'regemcast', brand_id: e.brandId } });
     expect(r.status).toBe(503);

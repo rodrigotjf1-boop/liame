@@ -15,6 +15,7 @@ import {
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query, Redirect } from '@nestjs/common';
 import {
   ApiAcceptedResponse,
+  ApiBadGatewayResponse,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCookieAuth,
@@ -32,7 +33,8 @@ import {
 import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
-import { ConnectionsService } from './connections.service.js';
+import { SemTransacao } from '../context/sem-transacao.js';
+import { ACAO_INICIAR, ConnectionsService } from './connections.service.js';
 
 // Contas conectadas (A2, G3): autorizar a plataforma, escolher as contas de cada marca, desligar e revogar.
 @ApiTags('connections')
@@ -42,18 +44,22 @@ export class ConnectionsController {
   constructor(private readonly connections: ConnectionsService) {}
 
   @Post('connections')
-  @Auditar('conexao.iniciar', { recurso: 'oauth_connection' })
+  @SemTransacao(
+    'o RegemCast pede o pedido empurrado (RFC 9126) ao servidor de lá antes de a pessoa ir: o banco numa transação curta, o pedido depois, sem transação aberta, e a conexão com o evento de auditoria noutra transação curta',
+  )
+  @Auditar(ACAO_INICIAR, { recurso: 'oauth_connection', manual: true })
   @Permissao('contas.conectar')
   @HttpCode(201)
   @ApiOperation({
     summary: 'Começar a conectar uma plataforma',
     description:
-      'Devolve a página da plataforma onde a pessoa autoriza (Meta ou Google, que cobre Google Ads e GA4). A autorização precisa voltar em 10 minutos. Nenhum token passa pelo navegador.',
+      'Devolve a página da plataforma onde a pessoa autoriza (Meta; Google, que cobre Google Ads e GA4; Regem; ou RegemCast, pela autorização por clique, quando `available` o traz). A autorização precisa voltar em 10 minutos. Nenhum token passa pelo navegador. No RegemCast, o Liame registra o pedido lá antes (pedido empurrado, RFC 9126) e a página leva só o número dele; o RegemCast fora do ar responde 502 `plataforma-indisponivel`.',
   })
   @ApiCreatedResponse({ standardSchema: StartConnectionResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiBadGatewayResponse({ standardSchema: ProblemDetails })
   @ApiServiceUnavailableResponse({ standardSchema: ProblemDetails })
   start(@Auth() auth: AuthContext, @Body({ schema: StartConnectionRequest }) body: StartConnectionRequest): Promise<StartConnectionResponse> {
     return this.connections.iniciar(auth, body);
@@ -66,7 +72,7 @@ export class ConnectionsController {
   @ApiOperation({
     summary: 'Volta da autorização',
     description:
-      'Endereço registrado nos apps da Meta e do Google. Confere o estado (só a pessoa que começou, uma vez, dentro do prazo), guarda o código cifrado e leva de volta para a tela de contas; a troca pelo token e a descoberta das contas acontecem em segundo plano.',
+      'Endereço registrado nos apps da Meta e do Google, no cliente do Regem e no catálogo da autorização por clique do RegemCast. Confere o estado (só a pessoa que começou, uma vez, dentro do prazo) e, no RegemCast, o `iss` (RFC 9207: a volta tem de vir do RegemCast); guarda o código cifrado e leva de volta para a tela de contas; a troca pelo token e a descoberta das contas acontecem em segundo plano.',
   })
   @ApiResponse({ status: 303, description: 'Volta para a tela de contas conectadas' })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })

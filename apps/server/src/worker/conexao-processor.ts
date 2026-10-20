@@ -4,9 +4,21 @@ import { sql } from 'drizzle-orm';
 import { writeAudit } from '../audit/audit.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import type { DescobertaGuardada } from '../connections/connections.service.js';
-import { acessoGoogle, type CredencialGuardada, type CredencialRegem, ESCOPOS_GOOGLE, type ProvedorOAuth, trocarCodigo } from '../connections/oauth.js';
+import { contaPelaLigacao, contasPelosTokens } from '../connections/descoberta-regemcast.js';
+import {
+  acessoGoogle,
+  type CredencialGuardada,
+  type CredencialLigacaoRegemcast,
+  type CredencialRegem,
+  ESCOPOS_GOOGLE,
+  type ProvedorOAuth,
+  trocarCodigo,
+} from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
+import { clienteDoDmsId, comTokenDoDmsId, recursoDoRegemcast } from '../connectors/dms/dms-id.js';
+import type { ClienteDmsId } from '../connectors/dms/integracao-dms.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
+import { PERMISSOES_DO_CLIQUE, trocarCodigoDoClique } from '../connectors/regemcast/conector-regemcast.js';
 import { criarConectorGa4 } from '../connectors/ga4/conector-ga4.js';
 import { criarConectorGoogleAds } from '../connectors/google-ads/conector-google-ads.js';
 import { BALDE_DO_PERFIL_GOOGLE, criarConectorPerfilGoogle, type LojaDoPerfil } from '../connectors/google-business/conector-perfil-google.js';
@@ -49,6 +61,7 @@ type Reclamada = { id: string; tenant_id: string; attempts: number };
 @Injectable()
 export class ConexaoProcessor {
   private readonly logger = new Logger('conexoes');
+  private clienteDmsId: ClienteDmsId | null = null;
 
   constructor(
     @Inject(DATABASE) private readonly database: Database | null,
@@ -128,6 +141,24 @@ export class ConexaoProcessor {
           credencial.tipo === 'meta' ? credencial.access_token : credencial.tipo === 'google' ? await this.acessoGoogle(credencial.refresh_token) : '';
       } catch (err) {
         await this.falhar(id, tenantId, err, tentativa, false);
+        return;
+      }
+    } else if (dados.codigo && provedor === 'regemcast') {
+      // Autorização por clique (Hub DMS, B1): o código vira o segredo da ligação da conta, direto para o cofre.
+      try {
+        const ligacao = await this.trocarRegemcast(dados.codigo, dados.verificador, dados.redirectUri);
+        credencial = ligacao;
+        accessToken = '';
+        await withTenant(this.db, tenantId, async (tx) => {
+          const secretId = await this.vault.putSecret(tx, { tenantId, purpose: 'oauth_regemcast', plaintext: JSON.stringify(ligacao) });
+          await tx.execute(sql`
+            update liame.oauth_connection
+               set credential_secret_id = ${secretId}, code_enc = null, pkce_verifier_enc = null,
+                   scopes = array(select jsonb_array_elements_text(${JSON.stringify([...ligacao.permissoes].sort())}::jsonb)), updated_at = now()
+             where id = ${id}`);
+        });
+      } catch (err) {
+        await this.falhar(id, tenantId, err, tentativa, true);
         return;
       }
     } else if (dados.codigo && provedor === 'regem') {
@@ -346,6 +377,42 @@ export class ConexaoProcessor {
     return acessoGoogle(this.config, this.config.oauth.google?.tokenUrl ?? '', refreshToken);
   }
 
+  /** O cliente do DMS ID, um por processo: guarda o token e junta os pedidos ao mesmo tempo num só. */
+  private dmsId(): ClienteDmsId {
+    if (!this.config.dmsId) throw new ErroConector('definitivo', 'regemcast', 'sem o aplicativo do Liame no DMS ID');
+    this.clienteDmsId ??= clienteDoDmsId(this.config.dmsId);
+    return this.clienteDmsId;
+  }
+
+  /** O endereço da API do RegemCast; sem ele, nada do RegemCast é lido nem trocado. */
+  private apiDoRegemcast(): string {
+    const apiUrl = this.config.produtos.regemcastApiUrl;
+    if (!apiUrl) throw new ErroConector('definitivo', 'regemcast', 'REGEMCAST_API_URL não definida');
+    return apiUrl;
+  }
+
+  /**
+   * Chama o RegemCast com o token do DMS ID do aplicativo do Liame, com as permissões da autorização por clique; o
+   * token recusado é pedido de novo, uma vez (o RegemCast confere o token antes do corpo: o código da troca não é gasto
+   * nessa recusa). O DMS ID fora do ar é passageiro e volta para a fila.
+   */
+  private comTokenDoDmsId<T>(chamar: (token: string) => Promise<T>): Promise<T> {
+    return comTokenDoDmsId(this.dmsId(), recursoDoRegemcast(this.apiDoRegemcast()), PERMISSOES_DO_CLIQUE, chamar);
+  }
+
+  /** Código + PKCE → o segredo da ligação da conta do RegemCast, entre servidores. Uma tentativa só: o código vale uma vez. */
+  private async trocarRegemcast(codigo: string, verificador: string | null, redirectUri: string): Promise<CredencialLigacaoRegemcast> {
+    if (!this.config.oauth.regemcast || !this.config.dmsId) throw new ErroConector('definitivo', 'regemcast', 'autorização por clique do RegemCast não configurada');
+    if (!verificador) throw new ErroConector('definitivo', 'regemcast', 'autorização do RegemCast sem PKCE');
+    const clientId = this.config.dmsId.aplicativo;
+    const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 1 });
+    const ctx = { cliente, apiUrl: this.apiDoRegemcast() };
+    const r = await this.comTokenDoDmsId((tokenDmsId) =>
+      trocarCodigoDoClique(ctx, { tokenDmsId, contaChave: 'autorizacao-por-clique', clientId, codigo, verificador, redirectUri }),
+    );
+    return { tipo: 'regemcast_ligacao', ligacao: r.ligacao, prefixo: r.prefixo, conta_id: r.conta_id, conta: r.conta, permissoes: r.permissoes, obtido_em: r.segredo_em };
+  }
+
   /**
    * Meta: contas de anúncio. Google: clientes do Google Ads e propriedades do GA4 (cada uma se o escopo veio) e, para a
    * empresa com cada função ligada, as lojas do Perfil da Empresa e os sites do Search Console. `perfil` e `sites`: como
@@ -358,8 +425,17 @@ export class ConexaoProcessor {
     alvo: { tenantId: string; brandId: string },
   ): Promise<{ descobertas: DescobertaGuardada[]; perfil: ProcuraDoPerfil | null; sites: ProcuraDosSites | null }> {
     const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos) });
-    if (credencial.tipo === 'regem' || credencial.tipo === 'regemcast') {
+    if (credencial.tipo === 'regem') {
       return { descobertas: await descobrirLojas(cliente, this.config.produtos.regemApiUrl, credencial), perfil: null, sites: null };
+    }
+    // O token do RegemCast só vai para o RegemCast: o "Procurar as contas de novo" de uma conexão da distribuição lia a
+    // loja do Regem com ele, o Regem recusava e a conexão virava erro.
+    if (credencial.tipo === 'regemcast') {
+      return { descobertas: await contasPelosTokens(cliente, this.apiDoRegemcast(), credencial), perfil: null, sites: null };
+    }
+    if (credencial.tipo === 'regemcast_ligacao') {
+      const apiUrl = this.apiDoRegemcast();
+      return { descobertas: [await this.comTokenDoDmsId((tokenDmsId) => contaPelaLigacao(cliente, apiUrl, tokenDmsId, credencial))], perfil: null, sites: null };
     }
     const credencialLeitura = { accessToken };
     const guardar = (provider: DescobertaGuardada['provider'], contas: ContaDescoberta[]) =>

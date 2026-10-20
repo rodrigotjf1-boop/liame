@@ -250,8 +250,19 @@ export type PausaRegemcast = z.infer<typeof PausaRegemcast>;
 export const RevogacaoRegemcast = z.object({ revogado: z.boolean(), revogadoEm: Instante });
 
 /**
+ * `POST /integracao/autorizacao/pedido` (Hub DMS, F2, B1; RegemCast #123): a resposta do pedido empurrado (RFC 9126),
+ * com o número do pedido, que vale 10 minutos e uma vez só, e a validade em segundos.
+ */
+export const PedidoDeAutorizacaoRegemcast = z.object({
+  request_uri: z.string().regex(/^urn:ietf:params:oauth:request_uri:rct_[A-Za-z0-9_-]{43}$/),
+  expires_in: z.number().int().min(1).max(3600),
+});
+export type PedidoDeAutorizacaoRegemcast = z.infer<typeof PedidoDeAutorizacaoRegemcast>;
+
+/**
  * `POST /dms-id/ligacao` (Hub DMS, F2; RegemCast #118): a troca do `rct_it_` pelo segredo da ligação. O segredo em
- * claro só vem nesta resposta e vai direto para o cofre; o resto é para conferir que a ligação é da mesma conta.
+ * claro só vem nesta resposta e vai direto para o cofre; o resto é para conferir que a ligação é da mesma conta. A
+ * troca do código da autorização por clique (`POST /integracao/autorizacao/token`, RegemCast #123) devolve o mesmo.
  */
 export const LigacaoRegemcast = z.object({
   ligacao: z.string().regex(/^dms_lg_regemcast_[A-Za-z0-9_-]{43}_[A-Za-z0-9_-]{6}$/),

@@ -2,11 +2,13 @@ import type { AccountFreshness, ConnectedAccountResponse, ConnectionResponse, Di
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { CartaoAutorizacao } from '@/components/contas/cartao-autorizacao';
 import { CartaoAutorizacaoRegem } from '@/components/contas/cartao-autorizacao-regem';
 import { DialogoConectar } from '@/components/contas/dialogo-conectar';
 import { DialogoConectarRegem } from '@/components/contas/dialogo-conectar-regem';
 import {
   autorizacoesVisiveis,
+  autorizadorDa,
   artigo,
   botaoLigar,
   chipsDoRegem,
@@ -428,6 +430,49 @@ describe('conectar o Regem e ligar as lojas', () => {
     expect(erroDaConexao('sem_permissao', 'meta').titulo).toBe('Faltou permissão na Meta.');
     expect(enderecoSeguro('https://app.dmsregem.com/integracoes/autorizar?cliente=liame')).toBe('https://app.dmsregem.com/integracoes/autorizar?cliente=liame');
     expect(enderecoSeguro('javascript:alert(1)')).toBeNull();
+  });
+
+  // Hub DMS, B1: a autorização do RegemCast usava o cartão da Meta e do Google, que dizia "da Meta" e "na Meta", e o
+  // "Conectar de novo" abria o diálogo da Meta e do Google, que não conecta o RegemCast (beco sem saída).
+  it('o RegemCast entra nos textos: autorizador, artigo, "no RegemCast", "do RegemCast" e a volta de outro emissor', () => {
+    expect(autorizadorDa('regemcast')).toBe('regemcast');
+    expect(artigo('regemcast')).toBe('O RegemCast');
+    expect(naPlataforma('regemcast')).toBe('no RegemCast');
+    expect(daPlataforma('regemcast')).toBe('do RegemCast');
+    expect(erroDaConexao('emissor_invalido', 'regemcast')).toEqual({
+      titulo: 'A volta não veio do RegemCast.',
+      texto: 'Por segurança, a autorização foi descartada antes de valer. Nada foi ligado: conecte de novo.',
+    });
+  });
+
+  it('o cartão da autorização do RegemCast fala do RegemCast, nunca da Meta; "Conectar de novo" só quando leva à autorização por clique', () => {
+    const base = { agora: new Date(local(28, 10, 0)), podeConectar: true, procurando: false, aoEscolher: null, aoProcurar: () => {}, aoRevogar: () => {} };
+    const porClique = conexao({ provider: 'regemcast', origin: 'oauth', status: 'ativa', completed_at: local(27, 9, 5) });
+    const ativa = renderToStaticMarkup(createElement(CartaoAutorizacao, { ...base, conexao: porClique, aoReconectar: null }));
+    expect(ativa).toContain('Autorizada pelo dono da conta no RegemCast, sem prazo de validade.');
+    expect(ativa).toContain('autorização do RegemCast de');
+    expect(ativa).not.toContain('Meta');
+    const daDistribuicao = renderToStaticMarkup(createElement(CartaoAutorizacao, { ...base, conexao: { ...porClique, origin: 'distribuicao' }, aoReconectar: null }));
+    expect(daDistribuicao).toContain('Ligada pela DMS, com o token da conta, sem prazo de validade.');
+
+    const falhou = { ...porClique, status: 'erro', error_code: 'credencial_recusada' };
+    const semClique = renderToStaticMarkup(createElement(CartaoAutorizacao, { ...base, conexao: falhou, aoReconectar: null }));
+    expect(semClique).not.toContain('Conectar de novo');
+    expect(semClique).toContain('A conexão com o RegemCast é feita pela DMS: fale com o suporte para ligar de novo.');
+    const comClique = renderToStaticMarkup(createElement(CartaoAutorizacao, { ...base, conexao: falhou, aoReconectar: () => {} }));
+    expect(comClique).toContain('Conectar de novo');
+    expect(comClique).not.toContain('fale com o suporte');
+    const procurando = renderToStaticMarkup(createElement(CartaoAutorizacao, { ...base, conexao: porClique, procurando: true, aoReconectar: null }));
+    expect(procurando).toContain('Procurando as contas no RegemCast…');
+  });
+
+  it('diálogo de conectar: a opção do RegemCast só aparece quando a API diz que dá (autorização por clique)', () => {
+    const marcas = [{ id: ID, name: 'Mister Burgers', archived_at: null, purge_after: null }];
+    const base = { marcas, marcaInicial: null, reserva: semElemento, aoFechar: () => {}, aoIr: () => {} };
+    expect(renderToStaticMarkup(createElement(DialogoConectar, base))).not.toContain('RegemCast');
+    const com = renderToStaticMarkup(createElement(DialogoConectar, { ...base, comRegemcast: true }));
+    expect(com).toContain('<b>RegemCast · mensagens no WhatsApp</b>');
+    expect(com).toContain('O dono da conta confirma com a senha no RegemCast.');
   });
 
   it('a volta do Regem: conferindo fala em lojas; depois, "O Regem autorizou N lojas" com o botão "Ligar lojas"', () => {

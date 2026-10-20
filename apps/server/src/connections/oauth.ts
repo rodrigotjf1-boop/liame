@@ -12,6 +12,13 @@ import { ESCOPO_SEARCH_CONSOLE } from '../connectors/search-console/search-conso
 
 export type ProvedorOAuth = 'meta' | 'google' | 'regem' | 'regemcast';
 
+/**
+ * Conectar o RegemCast por clique (Hub DMS, F2, B1), por empresa: desligada para todos; quem liga é a distribuição,
+ * depois da comparação das duas credenciais (decisão B1-8). Sem ela, o RegemCast só se conecta pelo token emitido
+ * pela distribuição.
+ */
+export const FLAG_REGEMCAST_POR_CLIQUE = 'regemcast_por_clique';
+
 /** Escopos do Google: Ads e GA4 só leitura na mesma autorização (plano-a2 §1). */
 export const ESCOPOS_GOOGLE = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/analytics.readonly'];
 
@@ -60,8 +67,8 @@ export function escoposDoGoogle(conversoesLigadas: boolean, perfilLigado = false
  */
 export function urlDeAutorizacao(
   provedor: ProvedorOAuth,
-  config: Pick<AppConfig, 'oauth'>,
-  p: { estado: string; redirectUri: string; verificador?: string; versaoMeta: string; configMeta?: string; escoposGoogle?: string[] },
+  config: Pick<AppConfig, 'oauth' | 'dmsId'>,
+  p: { estado: string; redirectUri: string; verificador?: string; versaoMeta: string; configMeta?: string; escoposGoogle?: string[]; pedidoRegemcast?: string },
 ): string {
   if (provedor === 'meta') {
     const meta = config.oauth.meta!;
@@ -87,7 +94,14 @@ export function urlDeAutorizacao(
     });
     return `${regem.authUrl}/integracoes/autorizar?${q.toString()}`;
   }
-  if (provedor === 'regemcast') throw new ErroConector('definitivo', 'regemcast', 'autorização do RegemCast ainda não existe (C2b)');
+  if (provedor === 'regemcast') {
+    // Autorização por clique (Hub DMS, B1): a página leva só o aplicativo e o número do pedido empurrado; o endereço de
+    // volta, o `state`, o desafio e as permissões já estão no RegemCast desde o pedido (RFC 9126).
+    const regemcast = config.oauth.regemcast;
+    if (!regemcast || !config.dmsId || !p.pedidoRegemcast) throw new ErroConector('definitivo', 'regemcast', 'autorização por clique do RegemCast sem o pedido');
+    const q = new URLSearchParams({ client_id: config.dmsId.aplicativo, request_uri: p.pedidoRegemcast });
+    return `${regemcast.authUrl}/integracoes/autorizar?${q.toString()}`;
+  }
   const google = config.oauth.google!;
   const q = new URLSearchParams({
     client_id: google.clientId,
@@ -110,7 +124,20 @@ export type CredencialGoogle = { tipo: 'google'; refresh_token: string; escopos:
 /** Produtos DMS: um token por loja (Regem) ou por conta (RegemCast), com os escopos concedidos. */
 type TokensDeLoja = { lojas: { loja_id: string; token: string; escopos: string[] }[]; obtido_em: string };
 export type CredencialRegem = (TokensDeLoja & { tipo: 'regem' }) | (TokensDeLoja & { tipo: 'regemcast' });
-export type CredencialGuardada = CredencialMeta | CredencialGoogle | CredencialRegem;
+/**
+ * RegemCast pela autorização por clique (Hub DMS, B1): o segredo da ligação de UMA conta, que vale junto com o token do
+ * DMS ID do aplicativo do Liame (cabeçalho `DMS-Ligacao`), com as permissões que o dono liberou na página.
+ */
+export type CredencialLigacaoRegemcast = {
+  tipo: 'regemcast_ligacao';
+  ligacao: string;
+  prefixo: string;
+  conta_id: string;
+  conta: string;
+  permissoes: string[];
+  obtido_em: string;
+};
+export type CredencialGuardada = CredencialMeta | CredencialGoogle | CredencialRegem | CredencialLigacaoRegemcast;
 
 export type ResultadoTroca = {
   credencial: CredencialGuardada;

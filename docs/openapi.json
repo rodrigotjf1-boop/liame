@@ -21646,7 +21646,7 @@
     },
     "/v1/connections": {
       "post": {
-        "description": "Devolve a página da plataforma onde a pessoa autoriza (Meta ou Google, que cobre Google Ads e GA4). A autorização precisa voltar em 10 minutos. Nenhum token passa pelo navegador.",
+        "description": "Devolve a página da plataforma onde a pessoa autoriza (Meta; Google, que cobre Google Ads e GA4; Regem; ou RegemCast, pela autorização por clique, quando `available` o traz). A autorização precisa voltar em 10 minutos. Nenhum token passa pelo navegador. No RegemCast, o Liame registra o pedido lá antes (pedido empurrado, RFC 9126) e a página leva só o número dele; o RegemCast fora do ar responde 502 `plataforma-indisponivel`.",
         "operationId": "ConnectionsController_start",
         "parameters": [],
         "requestBody": {
@@ -21840,6 +21840,70 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "502": {
             "description": "",
             "content": {
               "application/json": {
@@ -22387,7 +22451,7 @@
     },
     "/v1/oauth/callback": {
       "get": {
-        "description": "Endereço registrado nos apps da Meta e do Google. Confere o estado (só a pessoa que começou, uma vez, dentro do prazo), guarda o código cifrado e leva de volta para a tela de contas; a troca pelo token e a descoberta das contas acontecem em segundo plano.",
+        "description": "Endereço registrado nos apps da Meta e do Google, no cliente do Regem e no catálogo da autorização por clique do RegemCast. Confere o estado (só a pessoa que começou, uma vez, dentro do prazo) e, no RegemCast, o `iss` (RFC 9207: a volta tem de vir do RegemCast); guarda o código cifrado e leva de volta para a tela de contas; a troca pelo token e a descoberta das contas acontecem em segundo plano.",
         "operationId": "ConnectionsController_callback",
         "parameters": [
           {
@@ -22435,6 +22499,15 @@
             "schema": {
               "type": "string",
               "maxLength": 1000
+            }
+          },
+          {
+            "name": "iss",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 500
             }
           }
         ],

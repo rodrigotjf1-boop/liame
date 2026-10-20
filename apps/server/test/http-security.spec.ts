@@ -130,7 +130,7 @@ describe('fail-fast da configuração em produção', () => {
 
   it('apps OAuth: só ligam com todas as peças; em produção, a volta só por https e o diálogo e o token nos endereços oficiais', () => {
     const meta = { META_APP_ID: '1234567890123', META_APP_SECRET: 'segredo-do-app-meta-teste', META_LOGIN_CONFIG_ID: '99887766554433' };
-    expect(loadConfig(prod).oauth).toEqual({ meta: null, google: null, regem: null });
+    expect(loadConfig(prod).oauth).toEqual({ meta: null, google: null, regem: null, regemcast: null });
     expect(loadConfig({ ...prod, META_APP_ID: meta.META_APP_ID, META_APP_SECRET: meta.META_APP_SECRET }).oauth.meta).toBeNull();
     expect(() => loadConfig({ ...prod, ...meta })).toThrow('API_URL');
     expect(() => loadConfig({ ...prod, ...meta, API_URL: 'http://api.agencialiame.com' })).toThrow('API_URL');
@@ -154,6 +154,24 @@ describe('fail-fast da configuração em produção', () => {
       authUrl: 'https://app.dmsregem.com',
     });
     expect(() => loadConfig({ ...prod, REGEMCAST_API_URL: 'http://regemcast.local' })).toThrow('REGEMCAST_API_URL');
+    // A autorização por clique do RegemCast (Hub DMS, B1): só com a página, a API e o aplicativo do Liame no DMS ID; a
+    // pessoa vai à página com a sessão de lá, então só por https; o `iss` esperado na volta é a origem da API.
+    const clique = {
+      REGEMCAST_API_URL: 'https://castapi.dmsregem.com/api/v1',
+      REGEMCAST_AUTH_URL: 'https://cast.dmsregem.com/',
+      DMS_ID_EMISSOR: 'https://id.dmstecnologias.com/oidc',
+      DMS_ID_APLICATIVO: 'aplicativo-do-liame',
+      DMS_ID_SEGREDO: 'valor-do-aplicativo-no-dms-id-0123',
+    };
+    expect(loadConfig({ ...prod, REGEMCAST_AUTH_URL: clique.REGEMCAST_AUTH_URL }).oauth.regemcast).toBeNull();
+    expect(loadConfig({ ...prod, REGEMCAST_API_URL: clique.REGEMCAST_API_URL, REGEMCAST_AUTH_URL: clique.REGEMCAST_AUTH_URL }).oauth.regemcast).toBeNull();
+    expect(() => loadConfig({ ...prod, ...clique })).toThrow('API_URL');
+    expect(loadConfig({ ...prod, ...clique, API_URL: 'https://api.agencialiame.com' }).oauth.regemcast).toEqual({
+      authUrl: 'https://cast.dmsregem.com',
+      apiUrl: 'https://castapi.dmsregem.com/api/v1',
+      emissor: 'https://castapi.dmsregem.com',
+    });
+    expect(() => loadConfig({ ...prod, REGEMCAST_AUTH_URL: 'http://cast.local' })).toThrow('REGEMCAST_AUTH_URL');
   });
 
   it('DMS ID (Hub DMS, F2): o aplicativo do Liame só existe com as três peças; em produção, só com o emissor oficial', () => {

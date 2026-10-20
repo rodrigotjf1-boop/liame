@@ -14,6 +14,7 @@ import {
   OrcamentoRegemcast,
   PaginaConversas,
   PausaRegemcast,
+  PedidoDeAutorizacaoRegemcast,
   PlanoDoDisparoRegemcast,
   PublicosRegemcast,
   RascunhoDeCampanhaRegemcast,
@@ -306,6 +307,80 @@ export function pausarCampanha(ctx: Contexto, a: Acesso & { chave: string; id: s
 /** Desliga o token no RegemCast (segunda camada: ele já saiu do cofre do Liame). */
 export async function revogarNoRegemcast(ctx: Contexto, token: string, contaChave: string): Promise<void> {
   await chamarFerramenta(ctx, { token, contaChave, ferramenta: 'integracao_revogar', argumentos: { confirmar: true }, schema: RevogacaoRegemcast });
+}
+
+// ---------------------------------------------------------------- a autorização por clique (Hub DMS, F2, B1)
+// O dono da conta do RegemCast liga o Liame numa página de lá, confirmando com a senha (RegemCast #123). O servidor do
+// Liame registra o pedido antes (pedido empurrado, RFC 9126) e, depois da volta, troca o código pelo segredo da
+// ligação; as duas chamadas vão com o token do DMS ID do aplicativo do Liame, de servidor para servidor. As recusas vêm
+// em problem+json (`token-invalido`, `cliente-invalido`, `parametro-invalido`, `autorizacao-invalida`,
+// `conta-bloqueada`, `integracao-parada`); 404 = a autorização por clique desligada no RegemCast.
+
+/** O que a autorização do Liame pede: as leituras de sempre (necessárias) e as conversas (opcional, decisão B1-2). */
+export const NECESSARIAS_DO_CLIQUE = ['conta.ler', 'campanhas.ler', 'publicos.ler', 'modelos.ler', 'orcamento.ler'] as const;
+export const OPCIONAIS_DO_CLIQUE = ['conversas.anuncio.ler'] as const;
+/** As permissões do token do DMS ID nas chamadas da autorização por clique: as mesmas do pedido, nenhuma de gravar. */
+export const PERMISSOES_DO_CLIQUE = [...NECESSARIAS_DO_CLIQUE, ...OPCIONAIS_DO_CLIQUE] as const;
+
+/** A conta que pede, no Liame: o que a página do RegemCast mostra ao dono antes de ele decidir. */
+export type ContaQuePede = { nome: string; cnpj: string | null; email: string; marca: string | null };
+
+/**
+ * O pedido empurrado (RFC 9126): o RegemCast guarda o endereço de volta, as permissões, o `state`, o desafio PKCE e a
+ * conta que pede, e devolve o número do pedido. O navegador leva só o aplicativo e esse número, então o que a página
+ * mostra não se troca no caminho. Uma tentativa só: pedido repetido é outro pedido.
+ */
+export function pedirAutorizacao(
+  ctx: Contexto,
+  a: { tokenDmsId: string; contaChave: string; clientId: string; redirectUri: string; estado: string; desafio: string; conta: ContaQuePede },
+): Promise<PedidoDeAutorizacaoRegemcast> {
+  return ctx.cliente
+    .requisitar({
+      provider: 'regemcast',
+      conta: a.contaChave,
+      url: `${ctx.apiUrl}/integracao/autorizacao/pedido`,
+      metodo: 'POST',
+      cabecalhos: { authorization: `Bearer ${a.tokenDmsId}` },
+      corpo: semVazios({
+        response_type: 'code',
+        client_id: a.clientId,
+        redirect_uri: a.redirectUri,
+        scope: PERMISSOES_DO_CLIQUE.join(' '),
+        state: a.estado,
+        code_challenge: a.desafio,
+        code_challenge_method: 'S256',
+        conta_nome: a.conta.nome,
+        conta_cnpj: a.conta.cnpj,
+        conta_email: a.conta.email,
+        conta_marca: a.conta.marca,
+      }),
+      endpoint: 'integracao/autorizacao/pedido',
+      apiVersion: VERSAO_CONTRATO_REGEMCAST,
+    })
+    .then((r) => conferir(PedidoDeAutorizacaoRegemcast, r.corpo, 'integracao/autorizacao/pedido'));
+}
+
+/**
+ * Troca o código da volta pelo segredo da ligação (o mesmo formato da troca automática). O código vale uma vez, 10
+ * minutos, e o RegemCast o gasta antes de conferir o verificador e o endereço: uma tentativa só. O segredo em claro
+ * nunca vai para log.
+ */
+export function trocarCodigoDoClique(
+  ctx: Contexto,
+  a: { tokenDmsId: string; contaChave: string; clientId: string; codigo: string; verificador: string; redirectUri: string },
+): Promise<LigacaoRegemcast> {
+  return ctx.cliente
+    .requisitar({
+      provider: 'regemcast',
+      conta: a.contaChave,
+      url: `${ctx.apiUrl}/integracao/autorizacao/token`,
+      metodo: 'POST',
+      cabecalhos: { authorization: `Bearer ${a.tokenDmsId}` },
+      corpo: { grant_type: 'authorization_code', code: a.codigo, code_verifier: a.verificador, redirect_uri: a.redirectUri, client_id: a.clientId },
+      endpoint: 'integracao/autorizacao/token',
+      apiVersion: VERSAO_CONTRATO_REGEMCAST,
+    })
+    .then((r) => conferir(LigacaoRegemcast, r.corpo, 'integracao/autorizacao/token'));
 }
 
 /**

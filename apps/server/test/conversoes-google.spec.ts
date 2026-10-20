@@ -98,7 +98,10 @@ describe('conversões para o Google: a permissão pedida e a situação da conta
     escoposDoGoogle(false).push('x');
     expect(ESCOPOS_GOOGLE).toEqual(LEITURA);
 
-    const config = { oauth: { meta: null, regem: null, google: { clientId: 'cliente-de-teste.apps.googleusercontent.com', clientSecret: 'segredo-do-cliente-de-teste', authUrl: 'https://accounts.example', tokenUrl: 'https://oauth2.example' } } };
+    const config = {
+      dmsId: null,
+      oauth: { meta: null, regem: null, regemcast: null, google: { clientId: 'cliente-de-teste.apps.googleusercontent.com', clientSecret: 'segredo-do-cliente-de-teste', authUrl: 'https://accounts.example', tokenUrl: 'https://oauth2.example' } },
+    };
     const p = { estado: 'estado-de-teste', redirectUri: 'https://api.example/v1/oauth/callback', verificador: 'verificador-de-teste', versaoMeta: 'v26.0' };
     const pedido = (url: string) => new URL(url).searchParams.get('scope');
     // Sem dizer nada, é a de sempre.

@@ -112,7 +112,9 @@ export class Sincronizador {
     try {
       if (!lida.segredo) throw new ErroConector('autenticacao', conta.provider, 'autorização revogada ou ausente');
       const credencial = JSON.parse(lida.segredo) as CredencialGuardada;
-      if (credencial.tipo === 'regem' || credencial.tipo === 'regemcast') throw new ErroConector('definitivo', conta.provider, 'conta de produto DMS fora da sincronização de mídia');
+      if (credencial.tipo === 'regem' || credencial.tipo === 'regemcast' || credencial.tipo === 'regemcast_ligacao') {
+        throw new ErroConector('definitivo', conta.provider, 'conta de produto DMS fora da sincronização de mídia');
+      }
       const accessToken =
         credencial.tipo === 'meta' ? credencial.access_token : await acessoGoogle(this.config, this.config.oauth.google?.tokenUrl ?? '', credencial.refresh_token);
       const conector = await this.conector(conta.provider, cliente);

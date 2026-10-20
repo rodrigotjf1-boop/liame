@@ -85,6 +85,10 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
   - **O que fica guardado:** só o resultado da comparação, por 90 dias: se deu igual, o nome do campo que diferiu (**nunca o valor**) e, quando a leitura falha, o motivo.
   - **Telefone:** o de uma conversa aparece na leitura, é usado só nessa comparação e **não é guardado**.
   - **DMS ID:** não recebe dado de cliente. O Liame só se identifica a ele.
+- **Conectar o RegemCast pela autorização do dono**, quando essa forma de conectar for ligada para a empresa. Em vez de a distribuição emitir o acesso, quem conecta vai a uma página do RegemCast, e o Dono da conta do RegemCast confere quem pede e o que vai, e confirma com a senha dele lá:
+  - **O que o Liame envia ao RegemCast antes de a pessoa ir:** o nome da empresa cliente, o CNPJ dela (quando cadastrado no Liame), o **e-mail de quem está conectando** e o nome da marca, para a página mostrar ao Dono quem está pedindo; e as permissões pedidas (só leitura). Esse pedido vale 10 minutos e uma vez só.
+  - **O que o Liame guarda:** a credencial de acesso que o RegemCast devolve, **cifrada no cofre**, como as outras; nenhum dado novo de cliente.
+  - **Revogação:** a qualquer momento, em **Contas conectadas** no Liame ou em "Aplicativos conectados" no RegemCast.
 - Pedidos de marketplaces (iFood, 99Food e outros) chegam **sem nenhuma identificação do comprador**.
 - **Para que serve:** medir quais campanhas trouxeram vendas e, na tela Mensagens, mostrar o que foi enviado e o que custou.
 - **O que o Liame envia ao Regem:** só quando a criação de cupom de campanha está ligada para a empresa e o Dono da loja liberou essa permissão. Vai a regra do cupom (código, nome, desconto, pedido mínimo, validade e limites de uso), depois da aprovação de uma pessoa da empresa. **Nenhum dado pessoal é enviado.**

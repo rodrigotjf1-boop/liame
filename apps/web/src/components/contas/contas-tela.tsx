@@ -39,6 +39,7 @@ import {
   autorizadorDa,
   type ContaExistente,
   contasExistentes,
+  daPlataforma,
   emConferencia,
   enderecoSeguro,
   escolhiveis,
@@ -213,8 +214,10 @@ export function ContasTela() {
     [dados, empresa],
   );
 
-  // O Regem só é oferecido (conectar, conectar de novo, autorizar de novo) quando a API diz que dá para começar.
+  // O Regem só é oferecido (conectar, conectar de novo, autorizar de novo) quando a API diz que dá para começar. O
+  // RegemCast por clique também (Hub DMS, B1: a flag da empresa e a configuração da distribuição).
   const podeRegem = Boolean(dados?.disponiveis.includes('regem'));
+  const podeRegemcast = Boolean(dados?.disponiveis.includes('regemcast'));
   const linhas = useMemo<(ContaDaTabela & { loja?: { scopes: string[]; origem: string } })[]>(() => {
     if (!dados) return [];
     const ligadas = new Map(dados.conexoes.flatMap((c) => c.accounts).map((a) => [a.id, a]));
@@ -390,9 +393,12 @@ export function ContasTela() {
     return true;
   }
 
-  /** "Autorizar o Google de novo": direto para a página do Google, com a marca da conta. Verdadeiro = está indo. */
-  async function autorizarGoogle(brandId: string): Promise<boolean> {
-    const r = await chamar(() => api.POST('/v1/connections', { body: { provider: 'google', brand_id: brandId } }));
+  /**
+   * Direto para a página da plataforma, com a marca da conta: "Autorizar o Google de novo" e o "Conectar de novo" do
+   * RegemCast por clique. Verdadeiro = está indo.
+   */
+  async function irAutorizar(provider: 'google' | 'regemcast', brandId: string): Promise<boolean> {
+    const r = await chamar(() => api.POST('/v1/connections', { body: { provider, brand_id: brandId } }));
     if (!r.ok) {
       avisar(mensagemDe(r.problema), { tipo: 'perigo' });
       return false;
@@ -402,10 +408,11 @@ export function ContasTela() {
       avisar('A plataforma devolveu um endereço inválido. Tente de novo; se continuar, fale com o suporte.', { tipo: 'perigo' });
       return false;
     }
-    avisar('Indo para a página do Google para você autorizar…');
+    avisar(`Indo para a página ${daPlataforma(provider)} para você autorizar…`);
     window.location.assign(destino);
     return true;
   }
+  const autorizarGoogle = (brandId: string) => irAutorizar('google', brandId);
 
   /** A conversão foi escolhida no diálogo: a situação nova entra na tela e o foco vai para o cartão da conta. */
   function conversaoEscolhida(v: ContaDasVendas, resposta: GoogleConversionsResponse) {
@@ -607,7 +614,7 @@ export function ContasTela() {
       {dados && (autorizacoes.length > 0 || vendas.contas.length > 0) && (
         <div className="anima" style={{ ['--i' as string]: 2 }}>
           <h2 className="sub-titulo">Autorizações</h2>
-          <p className="sub-desc">Cada autorização é o &ldquo;sim&rdquo; que alguém deu na Meta, no Google ou no Regem. Revogar para a leitura de todas as contas dela.</p>
+          <p className="sub-desc">Cada autorização é o &ldquo;sim&rdquo; que alguém deu na Meta, no Google, no Regem ou no RegemCast. Revogar para a leitura de todas as contas dela.</p>
           {dados.vendasDesatualizadas && (
             <p className="aut-txt aut-txt--atencao conv-desatualizado" role="status">
               <Icone nome="alert" pequeno />
@@ -645,7 +652,15 @@ export function ContasTela() {
                     ? () => setDialogo({ tipo: 'escolher', conexao: c })
                     : null
                 }
-                aoReconectar={() => setDialogo({ tipo: 'conectar', marca: c.brand_id })}
+                aoReconectar={
+                  // O RegemCast se conecta de novo pela autorização por clique, direto para a página de lá; sem ela, o
+                  // diálogo da Meta e do Google não teria como (era o beco sem saída): o cartão diz que é com a DMS.
+                  c.provider === 'regemcast'
+                    ? podeRegemcast
+                      ? () => disparar(irAutorizar('regemcast', c.brand_id))
+                      : null
+                    : () => setDialogo({ tipo: 'conectar', marca: c.brand_id })
+                }
                 aoAutorizar={() => disparar(autorizarGoogle(c.brand_id))}
                 aoProcurar={() => disparar(procurar(c))}
                 aoRevogar={() => setDialogo({ tipo: 'revogar', conexao: c })}
@@ -665,8 +680,9 @@ export function ContasTela() {
           marcaInicial={dialogo.marca}
           reserva={titulo}
           aoFechar={() => setDialogo((d) => (d?.tipo === 'conectar' ? null : d))}
-          aoIr={(a) => avisar(`Indo para a página ${a === 'meta' ? 'da Meta' : 'do Google'} para você autorizar…`)}
+          aoIr={(a) => avisar(`Indo para a página ${daPlataforma(a)} para você autorizar…`)}
           aoRegem={podeRegem ? (marca) => setDialogo({ tipo: 'regem', marca }) : null}
+          comRegemcast={podeRegemcast}
           vendasAoGoogle={vendas.marcas}
           mudaAnuncios={dados?.escritaAnuncios ?? []}
           comPerfil={Boolean(dados?.perfil)}

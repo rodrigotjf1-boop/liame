@@ -14,25 +14,32 @@ import type {
 import { type Database, uuidv7 } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
+import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
+import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { type AuthContext, afterCommit, auditDetail, currentTx } from '../context/request-context.js';
+import { actorLabel } from '../context/unit-of-work.interceptor.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
-import { ClienteConector } from '../connectors/cliente-http.js';
+import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
+import { clienteDoDmsId, comTokenDoDmsId, recursoDoRegemcast } from '../connectors/dms/dms-id.js';
+import type { ClienteDmsId } from '../connectors/dms/integracao-dms.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE, procuraGuardada } from '../connectors/google-business/perfil-google.js';
 import { FLAG_SEARCH_CONSOLE } from '../connectors/search-console/search-console.js';
 import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
-import { revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
+import { type ContaQuePede, PERMISSOES_DO_CLIQUE, pedirAutorizacao, revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
 import { FLAG_CONVERSOES_GOOGLE } from '../conversoes/conversoes-google.js';
 import { DATABASE } from '../database/database.module.js';
 import {
   configuracaoDaMeta,
   type CredencialGuardada,
   type CredencialRegem,
+  desafioPkce,
   enderecoDeVolta,
   escoposDoGoogle,
+  FLAG_REGEMCAST_POR_CLIQUE,
   hashEstado,
   novoEstado,
   novoVerificador,
@@ -41,11 +48,36 @@ import {
   urlDeAutorizacao,
 } from './oauth.js';
 
-// Conectar contas (A2, G3), lado da API: tudo na transação curta da requisição. A troca do código e a
-// descoberta das contas (chamadas externas) ficam com o worker (ConexaoProcessor), nunca aqui.
+// Conectar contas (A2, G3), lado da API: transações curtas. A troca do código e a descoberta das contas (chamadas
+// externas) ficam com o worker (ConexaoProcessor), nunca aqui. A exceção é o pedido empurrado do RegemCast (Hub DMS,
+// B1), que precisa existir antes de a pessoa ir: ele sai entre duas transações curtas, nunca com uma aberta.
 
 /** A volta da plataforma precisa chegar em até 10 minutos. */
 const VALIDADE_MIN = 10;
+
+/** O evento de auditoria do começo da conexão (a rota declara `@Auditar` com ele, gravado à mão pelo serviço). */
+export const ACAO_INICIAR = 'conexao.iniciar';
+
+/** O que o começo da conexão leu do banco e gerou, antes de gravar (e, no RegemCast, antes do pedido empurrado). */
+type Inicio = {
+  id: string;
+  provedor: ProvedorOAuth;
+  brandId: string;
+  estado: string;
+  verificador: string | null;
+  versaoMeta: string;
+  redirectUri: string;
+  meta: ReturnType<typeof configuracaoDaMeta> | null;
+  conversoes: boolean;
+  perfil: boolean;
+  searchConsole: boolean;
+  contaQuePede: ContaQuePede | null;
+};
+
+function quemPede(auth: AuthContext): { tenantId: string; userId: string } {
+  if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
+  return { tenantId: auth.tenantId, userId: auth.userId };
+}
 
 type LinhaConexao = {
   id: string;
@@ -146,6 +178,7 @@ function conta(l: LinhaConta): ConnectedAccountResponse {
 @Injectable()
 export class ConnectionsService {
   private readonly logger = new Logger('conexoes');
+  private clienteDmsId: ClienteDmsId | null = null;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -155,11 +188,28 @@ export class ConnectionsService {
   ) {}
 
   /**
-   * Autorizações que dá para começar agora. RegemCast ainda sem autorização própria (C2b); o Regem, só
-   * quando o cliente dele está configurado (`REGEM_CLIENT_ID` e `REGEM_CLIENT_SECRET`, da distribuição).
+   * Autorizações que dá para começar agora. A Meta, o Google e o Regem quando o app ou o cliente da distribuição está
+   * configurado (o Regem: `REGEM_CLIENT_ID` e `REGEM_CLIENT_SECRET`); o RegemCast por clique (Hub DMS, B1) quando a
+   * página, a API e o aplicativo do Liame no DMS ID estão configurados E a flag `regemcast_por_clique` está ligada
+   * para a empresa (ou a marca).
    */
-  private disponiveis(): ProvedorOAuth[] {
-    return (['meta', 'google', 'regem'] as const).filter((p) => Boolean(this.config.oauth[p]));
+  private async disponiveis(auth: Pick<AuthContext, 'tenantId' | 'userId'>, brandId: string | null): Promise<ProvedorOAuth[]> {
+    const lista: ProvedorOAuth[] = (['meta', 'google', 'regem'] as const).filter((p) => Boolean(this.config.oauth[p]));
+    const ctx = this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId });
+    if (this.config.oauth.regemcast && (await this.flags.isEnabled(FLAG_REGEMCAST_POR_CLIQUE, ctx))) lista.push('regemcast');
+    return lista;
+  }
+
+  private banco(): Database {
+    if (!this.database) throw new Error('conexões: sem banco');
+    return this.database;
+  }
+
+  /** O cliente do DMS ID da API, um por processo (o worker tem o dele): guarda o token e junta os pedidos ao mesmo tempo. */
+  private dmsId(): ClienteDmsId {
+    if (!this.config.dmsId) throw new ErroConector('definitivo', 'regemcast', 'sem o aplicativo do Liame no DMS ID');
+    this.clienteDmsId ??= clienteDoDmsId(this.config.dmsId);
+    return this.clienteDmsId;
   }
 
   /** Lojas do Liame da marca, por nome: a escolha de "Loja no Liame" ao ligar as lojas do Regem. */
@@ -169,17 +219,32 @@ export class ConnectionsService {
     return { items: r.rows.map((u) => ({ id: u.id, brand_id: u.brand_id, name: u.name })) };
   }
 
-  /** Cria o estado do OAuth e devolve para onde mandar a pessoa autorizar. */
+  /**
+   * Cria o estado do OAuth e devolve para onde mandar a pessoa autorizar. Fora da transação da requisição (a rota é
+   * `@SemTransacao`): o RegemCast pede o pedido empurrado (RFC 9126) ao servidor de lá ANTES de a pessoa ir, e chamada
+   * externa não acontece com transação aberta. O banco lê numa transação curta, o pedido sai depois, e a conexão entra
+   * junto com o evento de auditoria noutra transação curta. Nas outras plataformas, nada sai entre as duas.
+   */
   async iniciar(auth: AuthContext, body: StartConnectionRequest): Promise<StartConnectionResponse> {
+    const quem = quemPede(auth);
+    const database = this.banco();
+    const inicio = await naTransacaoDaEmpresa(database, quem, () => this.prepararInicio(auth, body));
+    const pedido = inicio.provedor === 'regemcast' ? await this.pedirAoRegemcast(quem.tenantId, inicio) : null;
+    return naTransacaoDaEmpresa(database, quem, () => this.gravarInicio(auth, inicio, pedido));
+  }
+
+  /** O que o começo precisa do banco: se dá para conectar, a marca, o que cada plataforma pede e o estado novo. */
+  private async prepararInicio(auth: AuthContext, body: StartConnectionRequest): Promise<Inicio> {
     const tenantId = auth.tenantId!;
     const provedor: ProvedorOAuth = body.provider;
-    if (!this.disponiveis().includes(provedor)) {
+    if (!(await this.disponiveis(auth, body.brand_id)).includes(provedor)) {
       const nome = { meta: 'a Meta', google: 'o Google', regem: 'o Regem', regemcast: 'o RegemCast' }[provedor];
       throw new AppProblem(503, 'integracao-indisponivel', 'Conexão ainda indisponível', `A conexão com ${nome} ainda não está disponível. Tente de novo mais tarde.`);
     }
     const tx = currentTx();
-    const marca = await tx.execute<{ id: string }>(sql`select id from liame.brand where id = ${body.brand_id} and archived_at is null`);
-    if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+    const marca = await tx.execute<{ id: string; name: string }>(sql`select id, name from liame.brand where id = ${body.brand_id} and archived_at is null`);
+    const daMarca = marca.rows[0];
+    if (!daMarca) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
 
     // Meta: a empresa com a escrita ligada (a mesma flag que o Action Service confere) autoriza pela configuração que
     // também pede para gerenciar anúncios; as outras seguem na de leitura. Quem já estava conectado só passa a
@@ -204,39 +269,115 @@ export class ConnectionsService {
     // que levaram a eles. A mesma flag que a procura dos sites confere, no worker.
     const searchConsole =
       provedor === 'google' && (await this.flags.isEnabled(FLAG_SEARCH_CONSOLE, this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id })));
+    // RegemCast: a conta que pede, no Liame, que a página de lá mostra ao dono antes de ele decidir (decisão B1-6: outra
+    // empresa pode, com a confirmação explícita dele). O CNPJ da empresa é guardado só com os 14 dígitos (check da
+    // 0002); sem ele, o RegemCast trata como outra empresa e pede a confirmação.
+    let contaQuePede: ContaQuePede | null = null;
+    if (provedor === 'regemcast') {
+      const org = await tx.execute<{ name: string; cnpj: string | null }>(sql`select name, cnpj from liame.organization where id = ${tenantId}`);
+      contaQuePede = { nome: org.rows[0]?.name ?? daMarca.name, cnpj: org.rows[0]?.cnpj ?? null, email: auth.email, marca: daMarca.name };
+    }
+    return {
+      id: uuidv7(),
+      provedor,
+      brandId: daMarca.id,
+      estado: novoEstado(),
+      verificador: provedor === 'google' || provedor === 'regem' || provedor === 'regemcast' ? novoVerificador() : null,
+      versaoMeta: await this.versaoMeta(),
+      redirectUri: enderecoDeVolta(this.config),
+      meta,
+      conversoes,
+      perfil,
+      searchConsole,
+      contaQuePede,
+    };
+  }
 
-    const id = uuidv7();
-    const estado = novoEstado();
-    const verificador = provedor === 'google' || provedor === 'regem' ? novoVerificador() : null;
-    const versaoMeta = await this.versaoMeta();
-    const redirectUri = enderecoDeVolta(this.config);
-    const verificadorCifrado = verificador ? await this.vault.encryptForTenant(tx, tenantId, `oauth_pkce:${id}`, verificador) : null;
+  /**
+   * O pedido empurrado do RegemCast (RFC 9126), sem transação aberta: o endereço de volta, as permissões, o `state`, o
+   * desafio e a conta que pede ficam lá, e a página recebe só o número do pedido. O token do DMS ID recusado (vencido,
+   * trocado) é pedido de novo, uma vez. A recusa vira um problema que a tela explica, e o motivo vai para o log.
+   */
+  private async pedirAoRegemcast(tenantId: string, inicio: Inicio): Promise<string> {
+    const regemcast = this.config.oauth.regemcast!;
+    const clientId = this.config.dmsId!.aplicativo;
+    const cliente = new ClienteConector(this.banco().db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 1, tempoLimiteMs: 10_000 });
+    const ctx = { cliente, apiUrl: regemcast.apiUrl };
+    try {
+      const r = await comTokenDoDmsId(this.dmsId(), recursoDoRegemcast(regemcast.apiUrl), PERMISSOES_DO_CLIQUE, (tokenDmsId) =>
+        pedirAutorizacao(ctx, {
+          tokenDmsId,
+          contaChave: `autorizacao:${tenantId}`,
+          clientId,
+          redirectUri: inicio.redirectUri,
+          estado: inicio.estado,
+          desafio: desafioPkce(inicio.verificador!),
+          conta: inicio.contaQuePede!,
+        }),
+      );
+      return r.request_uri;
+    } catch (err) {
+      const e = err instanceof ErroConector ? err : null;
+      const motivo = e ? `${e.tipo}${e.codigoProvider ? `:${e.codigoProvider}` : ''}: ${e.message}` : err instanceof Error ? err.message : String(err);
+      this.logger.warn(`pedido de autorização ao RegemCast recusado (empresa ${tenantId}): ${motivo}`);
+      if (e && ['transitorio', 'limite', 'circuito_aberto'].includes(e.tipo)) {
+        throw new AppProblem(502, 'plataforma-indisponivel', 'O RegemCast não respondeu', 'O RegemCast não respondeu agora. Tente de novo em alguns minutos.');
+      }
+      if (e?.codigoProvider === 'integracao-parada') {
+        throw new AppProblem(503, 'integracao-indisponivel', 'Conexão pausada no RegemCast', 'A conexão do Liame com o RegemCast está pausada agora. Tente de novo mais tarde.');
+      }
+      throw new AppProblem(
+        503,
+        'integracao-indisponivel',
+        'Conexão ainda indisponível',
+        'Não deu para começar a conexão com o RegemCast agora. Tente de novo mais tarde; se continuar, fale com o suporte.',
+      );
+    }
+  }
+
+  /** A conexão nasce junto com o evento de auditoria, numa transação curta (a rota audita à mão: fora da transação dela). */
+  private async gravarInicio(auth: AuthContext, inicio: Inicio, pedidoRegemcast: string | null): Promise<StartConnectionResponse> {
+    const tenantId = auth.tenantId!;
+    const tx = currentTx();
+    const verificadorCifrado = inicio.verificador ? await this.vault.encryptForTenant(tx, tenantId, `oauth_pkce:${inicio.id}`, inicio.verificador) : null;
     const r = await tx.execute<{ expires_at: Date | string }>(sql`
       insert into liame.oauth_connection (id, tenant_id, brand_id, provider, requested_by, state_hash, redirect_uri, pkce_verifier_enc, expires_at,
                                           requested_access)
-      values (${id}, ${tenantId}, ${body.brand_id}, ${provedor}, ${auth.userId}, ${hashEstado(estado)}, ${redirectUri}, ${verificadorCifrado},
-              now() + make_interval(mins => ${VALIDADE_MIN}), ${meta?.acesso ?? null})
+      values (${inicio.id}, ${tenantId}, ${inicio.brandId}, ${inicio.provedor}, ${auth.userId}, ${hashEstado(inicio.estado)}, ${inicio.redirectUri}, ${verificadorCifrado},
+              now() + make_interval(mins => ${VALIDADE_MIN}), ${inicio.meta?.acesso ?? null})
       returning expires_at`);
-    auditDetail({
-      resourceId: id,
+    await writeAudit(tx, {
+      tenantId,
+      actorType: 'human',
+      actorId: auth.userId,
+      actorLabel: actorLabel(auth),
+      actorRole: auth.roleKey,
+      action: ACAO_INICIAR,
+      resourceType: 'oauth_connection',
+      resourceId: inicio.id,
+      before: null,
       after: {
-        provider: provedor,
-        brand_id: body.brand_id,
-        ...(meta ? { acesso: meta.acesso } : {}),
-        ...(conversoes ? { informar_vendas: true } : {}),
-        ...(perfil ? { perfil_no_google: true } : {}),
-        ...(searchConsole ? { search_console: true } : {}),
+        provider: inicio.provedor,
+        brand_id: inicio.brandId,
+        ...(inicio.meta ? { acesso: inicio.meta.acesso } : {}),
+        ...(inicio.conversoes ? { informar_vendas: true } : {}),
+        ...(inicio.perfil ? { perfil_no_google: true } : {}),
+        ...(inicio.searchConsole ? { search_console: true } : {}),
+        ...(inicio.provedor === 'regemcast' ? { permissoes: [...PERMISSOES_DO_CLIQUE] } : {}),
       },
+      traceId: activeTraceId(),
+      origin: 'api',
     });
     return {
-      id,
-      authorize_url: urlDeAutorizacao(provedor, this.config, {
-        estado,
-        redirectUri,
-        verificador: verificador ?? undefined,
-        versaoMeta,
-        configMeta: meta?.configId,
-        ...(provedor === 'google' ? { escoposGoogle: escoposDoGoogle(conversoes, perfil, searchConsole) } : {}),
+      id: inicio.id,
+      authorize_url: urlDeAutorizacao(inicio.provedor, this.config, {
+        estado: inicio.estado,
+        redirectUri: inicio.redirectUri,
+        verificador: inicio.verificador ?? undefined,
+        versaoMeta: inicio.versaoMeta,
+        configMeta: inicio.meta?.configId,
+        ...(inicio.provedor === 'google' ? { escoposGoogle: escoposDoGoogle(inicio.conversoes, inicio.perfil, inicio.searchConsole) } : {}),
+        ...(pedidoRegemcast ? { pedidoRegemcast } : {}),
       }),
       expires_at: iso(r.rows[0]!.expires_at),
     };
@@ -250,8 +391,8 @@ export class ConnectionsService {
   async receber(auth: AuthContext, q: OAuthCallbackQuery): Promise<string> {
     const tx = currentTx();
     const tela = (params: Record<string, string>) => `${this.config.appUrl}/contas?${new URLSearchParams(params).toString()}`;
-    const r = await tx.execute<{ id: string; tenant_id: string; requested_by: string | null; status: string; vencido: boolean }>(sql`
-      select id, tenant_id, requested_by, status, expires_at < now() as vencido
+    const r = await tx.execute<{ id: string; tenant_id: string; provider: string; requested_by: string | null; status: string; vencido: boolean }>(sql`
+      select id, tenant_id, provider, requested_by, status, expires_at < now() as vencido
         from liame.oauth_connection where state_hash = ${hashEstado(q.state)}
        for update`);
     const linha = r.rows[0];
@@ -264,6 +405,15 @@ export class ConnectionsService {
       await tx.execute(sql`update liame.oauth_connection set status = 'expirada', pkce_verifier_enc = null, updated_at = now() where id = ${linha.id}`);
       auditDetail({ reason: 'autorização voltou depois do prazo' });
       return tela({ conexao: linha.id, erro: 'autorizacao_expirada' });
+    }
+    // RFC 9207: a volta da autorização por clique traz o `iss`, e ele tem de ser o do RegemCast. Uma volta com o
+    // `state` desta conexão vinda de outro servidor de autorização (mistura de servidores) para aqui, antes da troca.
+    if (linha.provider === 'regemcast' && q.iss !== this.config.oauth.regemcast?.emissor) {
+      await tx.execute(sql`
+        update liame.oauth_connection set status = 'erro', error_code = 'emissor_invalido', pkce_verifier_enc = null, updated_at = now()
+         where id = ${linha.id}`);
+      auditDetail({ reason: 'a volta do RegemCast não trouxe o emissor esperado (iss)' });
+      return tela({ conexao: linha.id, erro: 'autorizacao_invalida' });
     }
     if (q.error || !q.code) {
       await tx.execute(sql`
@@ -289,7 +439,7 @@ export class ConnectionsService {
     const ctx = this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId: brandId ?? null });
     return {
       items: await this.montar(conexoes.rows),
-      available: this.disponiveis(),
+      available: await this.disponiveis(auth, brandId ?? null),
       // A mesma flag que o Action Service confere ao pedir e ao executar a criação do cupom.
       regem_write: await this.flags.isEnabled('regem_write', ctx),
       ads_write: await this.anunciosComEscrita(auth, brandId ?? null),
@@ -590,8 +740,9 @@ export class ConnectionsService {
     if (c.credential_secret_id) {
       const guardada = await this.vault.readSecret(tx, c.credential_secret_id);
       if (guardada && c.provider === 'google') refreshGoogle = (JSON.parse(guardada) as CredencialGuardada & { tipo: 'google' }).refresh_token;
-      if (guardada && c.provider === 'regem') tokensRegem = (JSON.parse(guardada) as CredencialRegem).lojas.map((l) => ({ loja_id: l.loja_id, token: l.token }));
-      if (guardada && c.provider === 'regemcast') tokensRegemcast = (JSON.parse(guardada) as CredencialRegem).lojas.map((l) => ({ loja_id: l.loja_id, token: l.token }));
+      // A credencial da autorização por clique (o segredo da ligação, Hub DMS B1) não tem lojas: a lista vazia, nunca o erro.
+      if (guardada && c.provider === 'regem') tokensRegem = ((JSON.parse(guardada) as CredencialRegem).lojas ?? []).map((l) => ({ loja_id: l.loja_id, token: l.token }));
+      if (guardada && c.provider === 'regemcast') tokensRegemcast = ((JSON.parse(guardada) as Partial<CredencialRegem>).lojas ?? []).map((l) => ({ loja_id: l.loja_id, token: l.token }));
       await this.vault.revokeSecret(tx, c.credential_secret_id);
     }
     const contas = await tx.execute<{ id: string; ligacao_secret_id: string | null }>(sql`
