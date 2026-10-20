@@ -17,6 +17,7 @@ import { type AnunciosDaTela, CartaoAnuncios } from './cartao-anuncios';
 import { CartaoCampanhas } from './cartao-campanhas';
 import { CartaoCiclo } from './cartao-ciclo';
 import { CartaoFontes, FaixaDoTopoDosResultados } from './cartao-fontes';
+import { CartaoGoogle, type GoogleDaTela } from './cartao-google';
 import { CartaoOrigem } from './cartao-origem';
 import { type ConsultaDePedidos, CartaoPedidos } from './cartao-pedidos';
 import { CartaoRoas } from './cartao-roas';
@@ -59,6 +60,11 @@ type Props = {
   podeVerMensagens?: boolean;
   /** A consulta de "Como os anúncios rodaram" (protótipo P23); o cartão só aparece com a função ligada para a empresa. */
   anuncios?: AnunciosDaTela | null;
+  /**
+   * A consulta de "Como te acham no Google" (protótipo P18); o cartão só aparece com a função do perfil ou a do Search
+   * Console ligada para a empresa.
+   */
+  google?: GoogleDaTela | null;
 };
 
 /** "Ver por campanha": leva ao cartão das campanhas e, no Lite, abre os detalhes dele (como no protótipo). */
@@ -86,6 +92,7 @@ export function ResultadosConteudo({
   vendasAoGoogle = null,
   podeVerMensagens = false,
   anuncios = null,
+  google = null,
 }: Props) {
   const pro = useModo().modo === 'pro';
   const explicacao = useExplicacao(explicar?.pedido ?? null);
@@ -151,6 +158,8 @@ export function ResultadosConteudo({
         )}
         {!pro && <CartaoConversas linhas={graficos.conversas} />}
         <CartaoOrigem origem={tela.origem} lite={graficos.origem} podeVerContas={podeVerContas} podeVerMensagens={podeVerMensagens} />
+        {/* P18: depois de "De onde vieram os pedidos". Uma marca, um cartão. */}
+        {google && <CartaoGoogle key={google.consulta.brand_id} consulta={google.consulta} periodo={google.periodo} podeVerContas={podeVerContas} />}
         <CartaoPedidos consulta={consulta} fuso={tela.base.fuso} loja={loja} modelo={modelo} reserva={reserva} />
       </div>
       <DicaDosDesenhos />

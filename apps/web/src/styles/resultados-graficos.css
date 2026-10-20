@@ -237,3 +237,35 @@
 .an-tag { justify-self: start; margin-top: 4px; padding: 1px var(--sp-2); border-radius: 999px; background: var(--primary-soft); color: var(--text); font-size: var(--text-xs); font-style: normal; font-weight: 600; }
 .an-comparar { margin-top: var(--sp-3); font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
 .an-comparar a { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; color: var(--link); }
+
+/* "Como te acham no Google" (P18, mockups/prototipo-como-te-acham.html): o perfil e o site lado a lado (um embaixo do
+   outro no estreito) e as buscas da semana em barras. A régua dos dias do minigráfico é a `.faisca-dias` (ERR-145). */
+#card-google { container-type: inline-size; }
+.gl-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.gl-grade--uma { grid-template-columns: minmax(0, 1fr); }
+@container (max-width: 720px) { .gl-grade { grid-template-columns: minmax(0, 1fr); } }
+.gl-parte { display: grid; align-content: start; gap: var(--sp-3); min-width: 0; padding: var(--sp-4) var(--sp-5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.gl-parte h3, .gl-buscas h3 { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-md); }
+.gl-parte h3 .ic, .gl-buscas h3 .ic { flex: none; color: var(--text-muted); }
+.gl-num { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.gl-num b { font-family: var(--font-mono); font-size: var(--text-2xl); font-weight: 600; line-height: 1; color: var(--text); }
+.gl-sub { font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
+.gl-sub b { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+.gl-acoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); gap: var(--sp-2); }
+.gl-acoes li { display: grid; gap: 2px; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm, 6px); background: var(--surface-2, var(--bg)); font-size: var(--text-xs); line-height: 1.35; color: var(--text-muted); }
+.gl-acoes b { font-family: var(--font-mono); font-size: var(--text-lg); font-weight: 600; color: var(--text); }
+.gl-buscas { display: grid; gap: var(--sp-3); min-width: 0; margin-top: var(--sp-4); }
+.gl-funil .gl-busca { min-width: 0; font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.gl-funil .funil-txt { overflow-wrap: anywhere; }
+@container (max-width: 560px) {
+  .gl-funil { grid-template-columns: minmax(0, 1fr); }
+  .gl-funil .funil-txt { grid-column: 1; }
+}
+/* As datas do minigráfico dos cliques: no estreito, só a primeira, a do meio e a última. Cada data tem 30 px, a régua
+   tem o minigráfico menos 16 px, a primeira data começa em 0 e a segunda fica centrada em 1/6 da régua: as sete cabem,
+   com 4 px entre elas, de 9 × 30 + 24 = 294 px de régua para cima (no celular de 375 px, a régua tem 243 px e as das
+   pontas se cruzavam; o protótipo tinha o mesmo desenho). */
+#card-google .mini { container-type: inline-size; }
+@container (width < 310px) { #card-google .faisca-dias .faisca-dia-extra { display: none; } }
+.gl-vazio { display: grid; gap: var(--sp-2); justify-items: start; }
+.gl-vazio p { font-size: var(--text-sm); line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
