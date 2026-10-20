@@ -19,6 +19,12 @@ export type ConnectionProvider = z.infer<typeof ConnectionProvider>;
 export const GOOGLE_BUSINESS_SCOPE = 'https://www.googleapis.com/auth/business.manage';
 
 /**
+ * A permissão do Search Console (A6, Z3), a de só leitura: a autorização do Google que a inclui alcança os sites que a
+ * conta do Google pode ler. Pública: a tela de Contas confere se a autorização a tem.
+ */
+export const SEARCH_CONSOLE_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+
+/**
  * Plataforma da conta ligada. `google_business`: a loja do Perfil da Empresa no Google; `search_console`: um site do
  * Search Console (as duas vêm na autorização do Google, cada uma com a função dela ligada).
  */
@@ -69,6 +75,12 @@ export const DiscoveredAccount = z.strictObject({
    * mesmo nome; nulo quando o perfil não tem site. Opcional: a resposta de antes de 14/10/2026 não traz.
    */
   site: z.string().nullable().optional(),
+  /**
+   * Só no site do Search Console (`search_console`): o acesso da conta do Google ao site, como o Search Console diz:
+   * `dono`, `completo` ou `restrito` (texto, a lista pode crescer); nulo quando não veio. O site sem verificação não chega
+   * aqui. Opcional: a resposta de antes de 20/10/2026 não traz.
+   */
+  site_access: Slug.nullable().optional(),
 });
 export type DiscoveredAccount = z.infer<typeof DiscoveredAccount>;
 
@@ -83,6 +95,18 @@ export const ProfileSearch = z.strictObject({
   stores: z.int().min(0),
 });
 export type ProfileSearch = z.infer<typeof ProfileSearch>;
+
+/**
+ * A última procura dos sites do Search Console numa autorização do Google (A6, Z3), nas mesmas palavras da procura das
+ * lojas: `ok` (com quantos sites, que pode ser zero), `limite`, `sem_permissao` ou `falhou`. A procura que não deu certo
+ * não se repete sozinha: a tela oferece procurar de novo.
+ */
+export const SiteSearch = z.strictObject({
+  result: Slug,
+  searched_at: z.string(),
+  sites: z.int().min(0),
+});
+export type SiteSearch = z.infer<typeof SiteSearch>;
 
 export const ConnectedAccountResponse = z.strictObject({
   id: z.uuid(),
@@ -141,6 +165,12 @@ export const ConnectionResponse = z.strictObject({
    * resposta de antes de 14/10/2026 não traz.
    */
   profile_search: ProfileSearch.nullable().optional(),
+  /**
+   * Só nas autorizações do Google: como terminou a última procura dos sites do Search Console. Nulo = o Liame não
+   * procurou (a função desligada para a empresa, ou a permissão do Search Console não veio nesta autorização).
+   * Opcional: a resposta de antes de 20/10/2026 não traz.
+   */
+  site_search: SiteSearch.nullable().optional(),
 });
 export type ConnectionResponse = z.infer<typeof ConnectionResponse>;
 
@@ -169,6 +199,12 @@ export const ConnectionListResponse = z.strictObject({
    * a procura conferem. Opcional: a resposta de antes de 14/10/2026 não traz.
    */
   business_profile: z.boolean().optional(),
+  /**
+   * O Search Console está ligado para a empresa (ou para a marca do filtro): a autorização nova do Google pede também a
+   * permissão dele, só de leitura, e o Liame procura e lê os sites (A6, Z3). A mesma flag que o começo da conexão e a
+   * procura conferem. Opcional: a resposta de antes de 20/10/2026 não traz.
+   */
+  search_console: z.boolean().optional(),
 });
 export type ConnectionListResponse = z.infer<typeof ConnectionListResponse>;
 

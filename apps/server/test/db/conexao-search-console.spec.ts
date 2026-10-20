@@ -3,9 +3,11 @@ import { readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
+import { ConnectionListResponse } from '@liame/contracts';
 import { createDatabase, type Database } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config.js';
+import { procuraDosSites } from '../../src/connections/connections.service.js';
 import { ESCOPOS_GOOGLE } from '../../src/connections/oauth.js';
 import { ESCOPO_PERFIL_GOOGLE } from '../../src/connectors/google-business/perfil-google.js';
 import { ESCOPO_SEARCH_CONSOLE } from '../../src/connectors/search-console/search-console.js';
@@ -188,6 +190,12 @@ describe.skipIf(!hasDb)('conectar o Search Console (A6 · Z3)', () => {
       [id],
     ))[0]!;
   const chaves = (d: Descoberta[]) => d.map((x) => `${x.provider}:${x.external_id}`);
+  /** A lista da tela de Contas, conferida pelo contrato. */
+  async function listar(e: Empresa): Promise<ConnectionListResponse> {
+    const r = await api.call('GET', '/v1/connections', { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    return ConnectionListResponse.parse(r.body);
+  }
   const doSearchConsole = () => vistos.filter((v) => v.caminho.startsWith('/sc/'));
   const auditoria = async (e: Empresa, id: string, acao: string) =>
     (await ownerQuery<{ after: Record<string, unknown> }>(`select after from liame.audit_event where tenant_id = $1 and resource_id = $2 and action = $3 order by occurred_at desc limit 1`, [e.tenantId, id, acao]))[0]?.after;
@@ -216,6 +224,10 @@ describe.skipIf(!hasDb)('conectar o Search Console (A6 · Z3)', () => {
     expect(chaves(pronta.discovered)).toEqual(DE_ANUNCIO);
     expect(doSearchConsole()).toEqual([]);
     expect(await auditoria(e, c.id, 'conexao.concluir')).toEqual({ provider: 'google', contas_encontradas: 4 });
+    // A tela de Contas: a função desligada e nenhuma procura dos sites na autorização.
+    const lista = await listar(e);
+    expect(lista.search_console).toBe(false);
+    expect(lista.items.find((i) => i.id === c.id)?.site_search).toBeNull();
   });
 
   it('com a função ligada: a autorização pede o Search Console, os sites aparecem entre as contas e o site escolhido vira conta ligada da marca', async () => {
@@ -248,6 +260,17 @@ describe.skipIf(!hasDb)('conectar o Search Console (A6 · Z3)', () => {
       [DOMINIO, 'misterburgers.exemplo.test'],
       [CARDAPIO, 'cardapio.misterburgers.exemplo.test'],
     ]);
+    // E sabe que a função está ligada e como terminou a procura dos sites (P18, parte B).
+    const comoATelaLe = ConnectionListResponse.parse(lista.body);
+    expect(comoATelaLe.search_console).toBe(true);
+    expect(comoATelaLe.items.find((i) => i.id === c.id)?.site_search).toEqual({ result: 'ok', searched_at: pronta.discovery_notes.search_console!.em, sites: 2 });
+    // O acesso da conta do Google a cada site, para o diálogo de escolher; as contas de anúncio não trazem o campo.
+    const descobertas = comoATelaLe.items.find((i) => i.id === c.id)!.discovered;
+    expect(descobertas.filter((d) => d.provider === 'search_console').map((d) => [d.external_id, d.site_access])).toEqual([
+      [DOMINIO, 'dono'],
+      [CARDAPIO, 'restrito'],
+    ]);
+    expect(descobertas.filter((d) => d.provider !== 'search_console').every((d) => !('site_access' in d))).toBe(true);
 
     // Ligar o site à marca: uma conta como as outras, da autorização.
     const ligar = await api.call('POST', `/v1/connections/${c.id}/accounts`, { cookie: e.cookie, body: { accounts: [{ provider: 'search_console', external_id: DOMINIO }] } });
@@ -299,6 +322,10 @@ describe.skipIf(!hasDb)('conectar o Search Console (A6 · Z3)', () => {
       expect(chaves(pronta.discovered), resposta).toEqual([...DE_ANUNCIO, `google_business:${LOJA}`, `search_console:${DOMINIO}`, `search_console:${CARDAPIO}`]);
       expect(doSearchConsole(), resposta).toHaveLength(1);
       expect(await auditoria(e, c.id, 'conexao.concluir')).toMatchObject({ search_console: resultado });
+      // A tela lê o mesmo resultado, com a procura do Perfil ao lado.
+      const item = (await listar(e)).items.find((i) => i.id === c.id);
+      expect([resposta, item?.site_search?.result, item?.site_search?.sites]).toEqual([resposta, resultado, 0]);
+      expect(item?.profile_search?.result).toBe('ok');
     }
 
     // De volta, a lista do Google manda: o site que saiu do Search Console sai da lista.
@@ -318,5 +345,18 @@ describe.skipIf(!hasDb)('conectar o Search Console (A6 · Z3)', () => {
     expect(pronta.discovery_notes).not.toHaveProperty('search_console');
     expect(chaves(pronta.discovered)).toEqual([...DE_ANUNCIO, `google_business:${LOJA}`]);
     expect(doSearchConsole()).toEqual([]);
+    const depois = await listar(e);
+    expect(depois.search_console).toBe(false);
+    expect(depois.items.find((i) => i.id === c.id)?.site_search).toBeNull();
+  });
+
+  it('a procura guardada que não confere não chega à tela', () => {
+    expect(procuraDosSites({})).toBeNull();
+    expect(procuraDosSites(null)).toBeNull();
+    expect(procuraDosSites({ search_console: { resultado: 'talvez', em: '2026-10-20T10:00:00Z', sites: 1 } })).toBeNull();
+    expect(procuraDosSites({ search_console: { resultado: 'ok', em: 'ontem', sites: 1 } })).toBeNull();
+    expect(procuraDosSites({ search_console: { resultado: 'ok', em: '2026-10-20T10:00:00Z', sites: -3 } })).toEqual({ result: 'ok', searched_at: '2026-10-20T10:00:00.000Z', sites: 0 });
+    // A anotação do Perfil não vira a dos sites.
+    expect(procuraDosSites({ google_business: { resultado: 'ok', em: '2026-10-20T10:00:00Z', lojas: 1 } })).toBeNull();
   });
 });

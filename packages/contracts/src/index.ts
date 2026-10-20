@@ -125,6 +125,8 @@ export {
   LinkAccountsResponse,
   OAuthCallbackQuery,
   ProfileSearch,
+  SEARCH_CONSOLE_SCOPE,
+  SiteSearch,
   StartConnectionRequest,
   StartConnectionResponse,
   UnitListQuery,

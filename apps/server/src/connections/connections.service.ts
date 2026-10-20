@@ -7,6 +7,7 @@ import type {
   LinkAccountsResponse,
   OAuthCallbackQuery,
   ProfileSearch,
+  SiteSearch,
   StartConnectionRequest,
   StartConnectionResponse,
   UnitListResponse,
@@ -27,7 +28,7 @@ import { clienteDoDmsId, comTokenDoDmsId, recursoDoRegemcast } from '../connecto
 import type { ClienteDmsId } from '../connectors/dms/integracao-dms.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE, procuraGuardada } from '../connectors/google-business/perfil-google.js';
-import { FLAG_SEARCH_CONSOLE } from '../connectors/search-console/search-console.js';
+import { FLAG_SEARCH_CONSOLE, PROVEDOR_SEARCH_CONSOLE, procuraDosSitesGuardada } from '../connectors/search-console/search-console.js';
 import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
 import { type ContaQuePede, PERMISSOES_DO_CLIQUE, pedirAutorizacao, revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
 import { FLAG_CONVERSOES_GOOGLE } from '../conversoes/conversoes-google.js';
@@ -145,6 +146,18 @@ const isoOuNulo = (v: Date | string | null) => (v ? iso(v) : null);
 export function procuraDoPerfil(notas: unknown): ProfileSearch | null {
   const p = procuraGuardada(notas);
   return p ? { result: p.resultado, searched_at: iso(p.em), stores: p.lojas } : null;
+}
+
+/** A última procura dos sites do Search Console, como a tela lê (A6, P18 parte B); nulo = o Liame não procurou. */
+export function procuraDosSites(notas: unknown): SiteSearch | null {
+  const p = procuraDosSitesGuardada(notas);
+  return p ? { result: p.resultado, searched_at: iso(p.em), sites: p.sites } : null;
+}
+
+/** O acesso da conta do Google ao site do Search Console (guardado pela procura em `provider_attributes.permissao`); nulo sem ele. */
+function acessoAoSite(atributos: Record<string, unknown> | undefined): string | null {
+  const p = atributos?.permissao;
+  return typeof p === 'string' && /^[a-z_]{1,40}$/.test(p) ? p : null;
 }
 
 /** O site que o perfil da loja informa (guardado pela procura em `provider_attributes.site`); nulo sem site. */
@@ -445,6 +458,8 @@ export class ConnectionsService {
       ads_write: await this.anunciosComEscrita(auth, brandId ?? null),
       // A mesma flag que o começo da conexão do Google e a procura das lojas conferem.
       business_profile: await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, ctx),
+      // A mesma flag que o começo da conexão do Google e a procura dos sites conferem.
+      search_console: await this.flags.isEnabled(FLAG_SEARCH_CONSOLE, ctx),
     };
   }
 
@@ -504,10 +519,11 @@ export class ConnectionsService {
           linked: ligadas.has(`${d.provider}:${d.external_id}`),
           via: typeof d.provider_attributes?.via === 'string' ? d.provider_attributes.via : null,
           ...(d.provider === PROVEDOR_PERFIL_GOOGLE ? { site: siteDaLoja(d.provider_attributes) } : {}),
+          ...(d.provider === PROVEDOR_SEARCH_CONSOLE ? { site_access: acessoAoSite(d.provider_attributes) } : {}),
         }),
       ),
       accounts: contas.rows.filter((c) => c.connection_id === l.id).map(conta),
-      ...(l.provider === 'google' ? { profile_search: procuraDoPerfil(l.discovery_notes) } : {}),
+      ...(l.provider === 'google' ? { profile_search: procuraDoPerfil(l.discovery_notes), site_search: procuraDosSites(l.discovery_notes) } : {}),
     }));
   }
 
