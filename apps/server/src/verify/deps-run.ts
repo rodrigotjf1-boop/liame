@@ -122,7 +122,7 @@ export async function run(): Promise<number> {
     return { detail: 'generateText com modelo simulado' };
   });
 
-  await check('SDK MCP 2.1 (ferramenta com Zod, HTTP sem estado)', async () => {
+  await check('SDK MCP 2.3 (ferramenta com Zod, HTTP sem estado)', async () => {
     const handler = createMcpHandler(() => {
       const server = new McpServer({ name: 'liame-verificacao', version: '0.0.0' });
       server.registerTool(

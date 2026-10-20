@@ -27,7 +27,7 @@ O plano mestre herdou Next 14 e Nest 10. O projeto ainda não começou, então a
 | Monorepo | **pnpm** + **Turborepo** | 12.6.0 + 2.11.3 | Defaults de segurança do pnpm 12 (`minimumReleaseAge`, `blockExoticSubdeps`, `strictDepBuilds`) | `turbo prune` com o lockfile do pnpm 12 não validado oficialmente: **pnpm 11 como reserva**; listar `allowBuilds` (swc, esbuild, sharp, oxide) |
 | Observabilidade | **OpenTelemetry JS** (`sdk-node`, api 1.9.x, auto-instrumentations) | 0.222.0 | Traces e métricas estáveis | Logs ainda em desenvolvimento; **a instrumentação do Nest 12 não foi publicada** (spans manuais ou interceptor); ESM exige loader hook |
 | IA | **Vercel AI SDK** por baixo do AI Gateway (ADR-006) | `ai` 7.0.113 | Standard Schema, tools, streaming, MCP client, OTel `gen_ai.*` | Só ESM; um major a cada ~6 meses |
-| MCP (trilha B) | `@modelcontextprotocol/server` | 2.1.0 | SDK v2, spec 2026-07-28 | Exige `"types": ["node"]` no TS 6 |
+| MCP (trilha B) | `@modelcontextprotocol/server` | 2.3.1 (era 2.1.0 até 20/10/2026: aviso GHSA-rvq5-wwqv-78pq) | SDK v2, spec 2026-07-28 | Exige `"types": ["node"]` no TS 6 |
 | Pacotes internos | `contracts`, `database`, `telemetry`, `config`, `testing` **compilados** (tsc); `ui` sem build ("just-in-time", só o Next consome) | — | A doc do Turborepo: pacote sem build só serve a consumidor com bundler (o Nest não é) | — |
 
 ### ESM × CommonJS no `apps/server`: decidido pelo spike → **ESM**
