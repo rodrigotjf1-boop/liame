@@ -115,7 +115,7 @@ export function GraficoDosDias({ dias }: { dias: Dias }) {
           />
         ))}
       </div>
-      <div className="dias" aria-hidden="true">
+      <div className="faisca-dias" aria-hidden="true">
         {dias.marcas.map((m) => (
           <span key={m.x} style={{ left: `${m.x}%` }}>
             {m.texto}
