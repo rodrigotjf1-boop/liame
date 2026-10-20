@@ -9,6 +9,7 @@ import { lerLoja } from '../connectors/regem/conector-regem.js';
 import { lerSituacao } from '../connectors/regemcast/conector-regemcast.js';
 import type { VaultService } from '../vault/vault.service.js';
 import type { DescobertaGuardada } from './connections.service.js';
+import { contaDoRegemcast } from './descoberta-regemcast.js';
 import { type CredencialRegem, hashEstado } from './oauth.js';
 
 // Piloto (D-A2.5-4): a distribuição emite o token da loja no produto DMS e o grava direto no cofre do
@@ -116,16 +117,8 @@ async function contasDoRegemcast(cliente: ClienteConector, config: AppConfig, to
     }
     if (s.produto !== 'liame') throw new Error(`um dos tokens foi emitido para o produto "${s.produto}", não para o Liame`);
     if (credencial.lojas.some((l) => l.loja_id === s.contaId)) continue;
-    const escopos = s.permissoes.map((x) => x.id);
-    credencial.lojas.push({ loja_id: s.contaId, token, escopos });
-    lojas.push({
-      provider: 'regemcast',
-      external_id: s.contaId,
-      name: s.conta,
-      currency: null,
-      timezone: s.fuso,
-      provider_attributes: { escopos, classe: s.classe, token_nome: s.token },
-    });
+    credencial.lojas.push({ loja_id: s.contaId, token, escopos: s.permissoes.map((x) => x.id) });
+    lojas.push(contaDoRegemcast(s));
   }
   return { credencial, lojas };
 }

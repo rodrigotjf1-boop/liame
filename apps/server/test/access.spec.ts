@@ -46,7 +46,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     }
   });
 
-  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10), a que lê o objeto na plataforma de anúncio (A4, X8) e as duas que leem as conversões da conta no Google (A5, Y1)', () => {
+  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10), a que lê o objeto na plataforma de anúncio (A4, X8), as duas que leem as conversões da conta no Google (A5, Y1) e o começo de uma conexão (o pedido empurrado do RegemCast, Hub DMS B1)', () => {
     const semTransacao = listRoutes(api.app)
       .filter((r) => r.semTransacao)
       .map((r) => `${r.method} ${r.path}`)
@@ -57,6 +57,9 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // As duas da mensageria só leem do RegemCast, na hora, e não gravam nada.
     // `GET /v1/reviews/authors` (A6, Z1) lê do Google o nome de quem avaliou, só para a tela: o banco numa transação
     // curta, o Google depois, e nada gravado (nem o nome, nem auditoria).
+    // `POST /v1/connections` (Hub DMS, B1): no RegemCast, o pedido empurrado (RFC 9126) sai antes de a pessoa ir; o
+    // banco lê numa transação curta, o pedido vem depois, sem transação aberta, e a conexão entra com o evento de
+    // auditoria (manual) noutra transação curta. Nas outras plataformas, nada sai entre as duas.
     expect(semTransacao).toEqual([
       'GET /v1/actions/options',
       'GET /v1/conversions/google/actions',
@@ -65,6 +68,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       'GET /v1/reviews/authors',
       'POST /v1/ai/explain/attention',
       'POST /v1/ai/explain/results',
+      'POST /v1/connections',
       'POST /v1/conversations/messages',
       'PUT /v1/conversions/google/destination',
     ]);

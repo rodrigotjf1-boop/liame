@@ -75,6 +75,12 @@ const Env = z.object({
   /** RegemCast: definido na C2b (docs/integracoes/regemcast.md); sem ele, conversas de anúncio não são lidas. */
   REGEMCAST_API_URL: z.url().optional(),
   /**
+   * O site do RegemCast, onde fica a página da autorização por clique (Hub DMS, F2, B1): o Liame leva a pessoa para
+   * `<site>/integracoes/autorizar`. Com o endereço da API e o aplicativo do Liame no DMS ID, conectar o RegemCast por
+   * clique fica possível (para a empresa com a flag `regemcast_por_clique`).
+   */
+  REGEMCAST_AUTH_URL: z.url().optional(),
+  /**
    * DMS ID (Hub DMS, F2): o aplicativo do Liame no DMS ID, para comparar as duas credenciais do RegemCast (a de hoje e
    * a do DMS ID com a ligação). Os três vão juntos; sem eles, a comparação não roda. O segredo é da distribuição.
    */
@@ -152,6 +158,12 @@ export type AppConfig = {
     google: { clientId: string; clientSecret: string; authUrl: string; tokenUrl: string } | null;
     /** Autorização da loja no Regem (código + PKCE, C1b); nulo = só pelo token emitido pela distribuição. */
     regem: { clientId: string; clientSecret: string; authUrl: string } | null;
+    /**
+     * Autorização por clique do RegemCast (Hub DMS, F2, B1): a página (`authUrl`), a API que recebe o pedido e a troca
+     * (`apiUrl`) e o `iss` que a volta tem de trazer (`emissor`, a origem da API: RFC 9207). Nulo = sem o site, sem a API
+     * ou sem o aplicativo do Liame no DMS ID; aí o RegemCast só se conecta pelo token emitido pela distribuição.
+     */
+    regemcast: { authUrl: string; apiUrl: string; emissor: string } | null;
   };
   /** IA (A3): credencial do fornecedor, onde o modelo roda e os limites padrão de custo (em micros de dólar). */
   ai: {
@@ -228,6 +240,10 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   if (env.NODE_ENV === 'production' && env.REGEMCAST_API_URL && !env.REGEMCAST_API_URL.startsWith('https://')) {
     throw new Error('config: em produção, REGEMCAST_API_URL só com https');
   }
+  // A pessoa é levada para esta página com a sessão do RegemCast: em produção, só por HTTPS.
+  if (env.NODE_ENV === 'production' && env.REGEMCAST_AUTH_URL && !env.REGEMCAST_AUTH_URL.startsWith('https://')) {
+    throw new Error('config: em produção, REGEMCAST_AUTH_URL só com https');
+  }
   const partesDoDmsId = [env.DMS_ID_EMISSOR, env.DMS_ID_APLICATIVO, env.DMS_ID_SEGREDO].filter((v) => v !== undefined).length;
   if (partesDoDmsId !== 0 && partesDoDmsId !== 3) {
     throw new Error('config: DMS_ID_EMISSOR, DMS_ID_APLICATIVO e DMS_ID_SEGREDO vão juntos (o aplicativo do Liame no DMS ID)');
@@ -249,9 +265,13 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       throw new Error(`config: em produção, HUB_URL e HUB_RECURSO são os do hub oficial (${HUB_OFICIAL} e ${HUB_OFICIAL}/api/v1)`);
     }
   }
+  const regemcastApiUrl = env.REGEMCAST_API_URL?.replace(/\/$/, '') ?? null;
+  const regemcast = env.REGEMCAST_AUTH_URL && regemcastApiUrl && dmsId
+    ? { authUrl: env.REGEMCAST_AUTH_URL.replace(/\/+$/, ''), apiUrl: regemcastApiUrl, emissor: new URL(regemcastApiUrl).origin }
+    : null;
   const apiUrl = new URL(env.API_URL).origin;
   // A volta do OAuth leva o código da plataforma: em produção, só por HTTPS e com a origem declarada.
-  if (env.NODE_ENV === 'production' && (meta || google || regem) && (!source.API_URL || !apiUrl.startsWith('https://'))) {
+  if (env.NODE_ENV === 'production' && (meta || google || regem || regemcast) && (!source.API_URL || !apiUrl.startsWith('https://'))) {
     throw new Error('config: em produção, com app OAuth configurado, defina API_URL com https');
   }
   // Ninguém cria conta em produção aceitando termos que não foram publicados (A0-6).
@@ -315,11 +335,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       searchConsoleUrl: env.SEARCH_CONSOLE_URL.replace(/\/$/, ''),
       metaAppSecret: env.META_APP_SECRET ?? null,
     },
-    produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl: env.REGEMCAST_API_URL?.replace(/\/$/, '') ?? null },
+    produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl },
     dmsId,
     hub,
     apiUrl,
-    oauth: { meta, google, regem },
+    oauth: { meta, google, regem, regemcast },
     ai: {
       anthropicApiKey: env.ANTHROPIC_API_KEY ?? null,
       inferenceGeo: env.AI_INFERENCE_GEO,

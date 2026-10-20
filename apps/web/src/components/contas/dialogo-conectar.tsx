@@ -11,7 +11,9 @@ import { type Autorizador, descricaoDoGoogle, enderecoSeguro, notaDeConectar, ti
 
 // "Conectar plataforma" (protótipo aprovado): a marca e a plataforma (Meta, ou Google com Ads e Analytics
 // numa autorização só). O navegador vai para a página da plataforma; nenhum token passa por aqui. O Regem
-// (protótipo P2) aparece quando a API diz que dá para conectar, e abre o diálogo dele, que explica antes de ir.
+// (protótipo P2) aparece quando a API diz que dá para conectar, e abre o diálogo dele, que explica antes de ir. O
+// RegemCast (autorização por clique, Hub DMS B1) também só aparece quando a API diz que dá, e vai direto para a
+// página de lá, onde o dono da conta confere tudo e confirma com a senha.
 
 type Props = {
   marcas: BrandResponse[];
@@ -23,6 +25,8 @@ type Props = {
   aoIr: (a: Autorizador) => void;
   /** A API diz que dá para conectar o Regem: a opção aparece e leva ao diálogo dele, com a marca escolhida. */
   aoRegem?: ((marca: string) => void) | null;
+  /** A API diz que dá para conectar o RegemCast por clique (`available`): a opção aparece e vai para a página de lá. */
+  comRegemcast?: boolean;
   /**
    * As marcas com "vendas informadas ao Google" ligado (A5, Y1): a autorização do Google delas pede também a permissão
    * de informar vendas, e o diálogo diz isso antes de a pessoa ir.
@@ -47,6 +51,7 @@ export function DialogoConectar({
   aoFechar,
   aoIr,
   aoRegem = null,
+  comRegemcast = false,
   vendasAoGoogle,
   mudaAnuncios = [],
   comPerfil = false,
@@ -154,6 +159,13 @@ export function DialogoConectar({
                 <span className="plat plat--regem">Regem</span>
                 <b>Regem · vendas da loja</b>
                 <span>Pedidos, custos e cupons confirmados no caixa. Você escolhe as lojas no Regem.</span>
+              </button>
+            )}
+            {comRegemcast && (
+              <button className="plataforma" type="button" onClick={() => disparar(conectar('regemcast'))} disabled={indo !== null} aria-busy={indo === 'regemcast'}>
+                <span className="plat plat--regemcast">RegemCast</span>
+                <b>{indo === 'regemcast' ? 'Indo para o RegemCast…' : 'RegemCast · mensagens no WhatsApp'}</b>
+                <span>Conversas abertas pelos anúncios, campanhas de mensagem e orçamento, só leitura. O dono da conta confirma com a senha no RegemCast.</span>
               </button>
             )}
           </div>

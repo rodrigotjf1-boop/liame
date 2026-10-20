@@ -5,7 +5,7 @@ import { ESCOPO_DE_INFORMAR_VENDAS } from './vendas-google';
 // Regras e frases de "Contas conectadas" (mockups/prototipo-contas.html). Funções puras: o "agora" entra
 // como parâmetro (LIC-006). A API manda listas que crescem como texto (V23): valor desconhecido tem saída.
 
-export type Autorizador = 'meta' | 'google' | 'regem';
+export type Autorizador = 'meta' | 'google' | 'regem' | 'regemcast';
 
 const PLATAFORMAS: Record<string, { nome: string; classe: string }> = {
   meta_ads: { nome: 'Meta Ads', classe: 'meta' },
@@ -25,28 +25,32 @@ export function plataforma(provider: string | null): { nome: string; classe: str
   return (provider && PLATAFORMAS[provider]) || { nome: provider ?? 'Plataforma', classe: '' };
 }
 
-/** Quem autoriza a conta: a Meta (Meta Ads) ou o Google (Google Ads, GA4 e a loja do perfil numa autorização só). */
+/**
+ * Quem autoriza a conta: a Meta (Meta Ads), o Google (Google Ads, GA4 e a loja do perfil numa autorização só), o Regem
+ * (as lojas) ou o RegemCast (a conta de mensagens).
+ */
 export function autorizadorDa(provider: string | null): Autorizador | null {
   if (provider === 'meta_ads' || provider === 'meta') return 'meta';
   if (provider === 'google_ads' || provider === 'ga4' || provider === 'google' || provider === 'google_business') return 'google';
   if (provider === 'regem') return 'regem';
+  if (provider === 'regemcast') return 'regemcast';
   return null;
 }
 
 /** "A Meta" / "O Google" (ou em minúscula, no meio da frase). */
 export function artigo(a: Autorizador | null, maiuscula = true): string {
-  const t = a === 'meta' ? 'a Meta' : a === 'google' ? 'o Google' : a === 'regem' ? 'o Regem' : 'a plataforma';
+  const t = a === 'meta' ? 'a Meta' : a === 'google' ? 'o Google' : a === 'regem' ? 'o Regem' : a === 'regemcast' ? 'o RegemCast' : 'a plataforma';
   return maiuscula ? t[0]!.toUpperCase() + t.slice(1) : t;
 }
 
-/** "na Meta" / "no Google" / "no Regem". */
+/** "na Meta" / "no Google" / "no Regem" / "no RegemCast". */
 export function naPlataforma(a: Autorizador | null): string {
-  return a === 'meta' ? 'na Meta' : a === 'google' ? 'no Google' : a === 'regem' ? 'no Regem' : 'na plataforma';
+  return a === 'meta' ? 'na Meta' : a === 'google' ? 'no Google' : a === 'regem' ? 'no Regem' : a === 'regemcast' ? 'no RegemCast' : 'na plataforma';
 }
 
-/** "da Meta" / "do Google" / "do Regem". */
+/** "da Meta" / "do Google" / "do Regem" / "do RegemCast". */
 export function daPlataforma(a: Autorizador | null): string {
-  return a === 'meta' ? 'da Meta' : a === 'google' ? 'do Google' : a === 'regem' ? 'do Regem' : 'da plataforma';
+  return a === 'meta' ? 'da Meta' : a === 'google' ? 'do Google' : a === 'regem' ? 'do Regem' : a === 'regemcast' ? 'do RegemCast' : 'da plataforma';
 }
 
 /** Só endereço http(s) absoluto: a URL vem da nossa API, mas nada de `javascript:` por engano. */
@@ -266,6 +270,9 @@ export function erroDaConexao(codigo: string | null, a: Autorizador | null): { t
       };
     case 'plataforma_indisponivel':
       return { titulo: `${artigo(a)} não respondeu.`, texto: 'Tentamos algumas vezes e a plataforma não respondeu. Tente de novo em instantes.' };
+    case 'emissor_invalido':
+      // A volta da autorização por clique trouxe outro emissor (RFC 9207): descartada antes da troca.
+      return { titulo: `A volta não veio ${daPlataforma(a)}.`, texto: 'Por segurança, a autorização foi descartada antes de valer. Nada foi ligado: conecte de novo.' };
     default:
       return { titulo: 'Não deu para concluir a conexão.', texto: 'Algo falhou ao buscar as contas. Tente de novo; se continuar, fale com o suporte.' };
   }

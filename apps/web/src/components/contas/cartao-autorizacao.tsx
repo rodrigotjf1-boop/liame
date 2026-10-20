@@ -4,11 +4,13 @@ import type { ConnectionResponse } from '@liame/contracts';
 import { Icone } from '@/components/ui/icone';
 import { dataCompleta } from '@/lib/formato';
 import { contasELojas, ligadasDaAutorizacao, type perfilNaAutorizacao } from './perfil-google';
-import { autorizadorDa, emConferencia, erroDaConexao, plataforma, quemAutorizou, vencimentoDaAutorizacao } from './textos';
+import { autorizadorDa, daPlataforma, emConferencia, erroDaConexao, naPlataforma, plataforma, quemAutorizou, vencimentoDaAutorizacao } from './textos';
 
-// Uma autorização (o "sim" que alguém deu na Meta ou no Google): quando, quantas contas, se vence
+// Uma autorização (o "sim" que alguém deu na Meta, no Google ou no RegemCast): quando, quantas contas, se vence
 // (Google em modo de teste) e as ações: conectar de novo, procurar contas de novo e revogar. Com o perfil da empresa no
-// Google ligado para a empresa (P17, parte B), a do Google diz o que traz do perfil e o que falta quando falta.
+// Google ligado para a empresa (P17, parte B), a do Google diz o que traz do perfil e o que falta quando falta. O
+// RegemCast se conecta de novo pela autorização por clique (Hub DMS, B1), quando a empresa tem; sem ela, quem liga de
+// novo é a DMS, e o cartão diz isso em vez de oferecer um botão que não leva a lugar nenhum.
 
 type Props = {
   conexao: ConnectionResponse;
@@ -21,7 +23,8 @@ type Props = {
   perfil?: ReturnType<typeof perfilNaAutorizacao>;
   /** Autorização que ainda espera a escolha (a pessoa fechou com "Agora não"): reabre a escolha. */
   aoEscolher: (() => void) | null;
-  aoReconectar: () => void;
+  /** "Conectar de novo"; nulo = não dá para conectar de novo daqui (o RegemCast sem a autorização por clique). */
+  aoReconectar: (() => void) | null;
   /** "Autorizar o Google de novo", direto para a página do Google (o perfil recusado ou numa conta sem perfil). */
   aoAutorizar?: () => void;
   aoProcurar: () => void;
@@ -41,7 +44,15 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
   const quem = quemAutorizou(c);
   // "3 contas e 1 loja": a loja do perfil conta à parte.
   const contas = contasELojas(ligadasDaAutorizacao(c));
-  const qual = `${a === 'google' ? 'do Google' : 'da Meta'} de ${quando}`;
+  const qual = `${daPlataforma(a)} de ${quando}`;
+  const sobre =
+    a === 'google'
+      ? 'Google Ads e Google Analytics numa autorização só, sem prazo de validade.'
+      : a === 'regemcast'
+        ? c.origin === 'distribuicao'
+          ? 'Ligada pela DMS, com o token da conta, sem prazo de validade.'
+          : 'Autorizada pelo dono da conta no RegemCast, sem prazo de validade.'
+        : 'Autorização da empresa, sem prazo de validade.';
   const nota = !falhou ? (perfil?.nota ?? null) : null;
   const autorizar = !reconectar && perfil?.acao === 'autorizar' && aoAutorizar;
 
@@ -77,7 +88,7 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
         </p>
       ) : (
         <p className="aut-txt">
-          {a === 'google' ? 'Google Ads e Google Analytics numa autorização só, sem prazo de validade.' : 'Autorização da empresa, sem prazo de validade.'}
+          {sobre}
           {a === 'google' && informaVendas && ' Inclui a permissão de informar vendas.'}
           {a === 'google' && perfil?.inclui && ' Inclui a permissão do perfil da empresa.'}
         </p>
@@ -92,8 +103,11 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
       )}
       {conferindo && (
         <p className="aut-txt" role="status">
-          Procurando as contas {a === 'google' ? 'no Google' : 'na Meta'}…
+          Procurando as contas {naPlataforma(a)}…
         </p>
+      )}
+      {reconectar && !aoReconectar && a === 'regemcast' && (
+        <p className="aut-txt">A conexão com o RegemCast é feita pela DMS: fale com o suporte para ligar de novo.</p>
       )}
       {podeConectar && (
         <div className="seg-acoes">
@@ -102,7 +116,7 @@ export function CartaoAutorizacao({ conexao: c, agora, podeConectar, procurando,
               Escolher contas
             </button>
           )}
-          {reconectar && (
+          {reconectar && aoReconectar && (
             <button className="btn btn--sm btn--primary" type="button" onClick={aoReconectar} aria-label={`Conectar de novo: autorização ${qual}`}>
               Conectar de novo
             </button>

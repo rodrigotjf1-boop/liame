@@ -49,6 +49,8 @@ export const OAuthCallbackQuery = z.object({
   error: z.string().max(200).optional(),
   error_reason: z.string().max(200).optional(),
   error_description: z.string().max(1000).optional(),
+  /** Quem emitiu a volta (RFC 9207). Na autorização por clique do RegemCast, obrigatório e conferido. */
+  iss: z.string().max(500).optional(),
 });
 export type OAuthCallbackQuery = z.infer<typeof OAuthCallbackQuery>;
 
@@ -147,7 +149,10 @@ export type ConnectionListQuery = z.infer<typeof ConnectionListQuery>;
 
 export const ConnectionListResponse = z.strictObject({
   items: z.array(ConnectionResponse),
-  /** Autorizações que dá para começar agora (a do Regem depende de a distribuição ter configurado o cliente). */
+  /**
+   * Autorizações que dá para começar agora (a do Regem depende de a distribuição ter configurado o cliente; a do
+   * RegemCast, a autorização por clique, também da flag `regemcast_por_clique` ligada para a empresa).
+   */
   available: z.array(ConnectionProvider),
   /** Criar cupom no Regem pelo Liame (com aprovação) está ligado para a empresa: a permissão que a loja liberou no Regem passa a valer. */
   regem_write: z.boolean(),

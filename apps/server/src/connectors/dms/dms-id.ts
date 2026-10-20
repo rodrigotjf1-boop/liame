@@ -1,5 +1,6 @@
 import type { AppConfig } from '../../config.js';
-import { ClienteDmsId } from './integracao-dms.js';
+import { ErroConector } from '../cliente-http.js';
+import { ClienteDmsId, ErroDmsId } from './integracao-dms.js';
 
 // O DMS ID do Hub DMS, do lado do Liame (F2): o cliente que pede o token do aplicativo do Liame (client credentials),
 // guarda até perto de vencer e renova sozinho. O pacote comum (`integracao-dms.ts`, cópia igual à do hub) faz o
@@ -20,4 +21,33 @@ export function clienteDoDmsId(dmsId: NonNullable<AppConfig['dmsId']>): ClienteD
     return fetch(url, { ...init, redirect: 'error' });
   };
   return new ClienteDmsId({ emissor: dmsId.emissor, aplicativo: dmsId.aplicativo, segredo: dmsId.segredo, buscar });
+}
+
+/**
+ * O token do DMS ID, com a falha do DMS ID como erro de conector (a tela e o worker já sabem tratar): o DMS ID que
+ * recusa o aplicativo do Liame é recusa; o resto (fora do ar, sem resposta) é passageiro.
+ */
+export async function tokenDoDmsId(cliente: ClienteDmsId, recurso: string, permissoes: readonly string[]): Promise<string> {
+  try {
+    return await cliente.token(recurso, permissoes);
+  } catch (err) {
+    if (err instanceof ErroDmsId && (err.status === 400 || err.status === 401)) {
+      throw new ErroConector('autenticacao', 'regemcast', `o DMS ID recusou o aplicativo do Liame (${err.codigo ?? err.status})`);
+    }
+    throw new ErroConector('transitorio', 'regemcast', `o DMS ID não respondeu: ${err instanceof Error ? err.name : 'erro'}`);
+  }
+}
+
+/**
+ * Chama o produto com o token do DMS ID; o token recusado (`token-invalido`: vencido, trocado no DMS ID) é esquecido e
+ * pedido de novo, uma vez. O produto confere o token antes de olhar o corpo: nada do pedido é gasto nessa recusa.
+ */
+export async function comTokenDoDmsId<T>(cliente: ClienteDmsId, recurso: string, permissoes: readonly string[], chamar: (token: string) => Promise<T>): Promise<T> {
+  try {
+    return await chamar(await tokenDoDmsId(cliente, recurso, permissoes));
+  } catch (err) {
+    if (!(err instanceof ErroConector && err.tipo === 'autenticacao' && err.codigoProvider === 'token-invalido')) throw err;
+    cliente.esquecer(recurso, permissoes);
+    return chamar(await tokenDoDmsId(cliente, recurso, permissoes));
+  }
 }
