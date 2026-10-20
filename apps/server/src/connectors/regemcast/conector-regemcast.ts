@@ -304,9 +304,12 @@ export function pausarCampanha(ctx: Contexto, a: Acesso & { chave: string; id: s
   return chamarFerramenta(ctx, { token: a.token, contaChave: a.contaChave, ferramenta: 'campanha_pausar', argumentos: { chaveIdempotencia: a.chave, id: a.id }, schema: PausaRegemcast });
 }
 
-/** Desliga o token no RegemCast (segunda camada: ele já saiu do cofre do Liame). */
-export async function revogarNoRegemcast(ctx: Contexto, token: string, contaChave: string): Promise<void> {
-  await chamarFerramenta(ctx, { token, contaChave, ferramenta: 'integracao_revogar', argumentos: { confirmar: true }, schema: RevogacaoRegemcast });
+/**
+ * Desliga a credencial no RegemCast (segunda camada: ela já saiu do cofre do Liame). Com `ligacao`, é a ligação da
+ * autorização por clique que cai (o `token` é o do DMS ID): `integracao_revogar` desliga a credencial que chamou.
+ */
+export async function revogarNoRegemcast(ctx: Contexto, token: string, contaChave: string, ligacao?: string): Promise<void> {
+  await chamarFerramenta(ctx, { token, contaChave, ligacao, ferramenta: 'integracao_revogar', argumentos: { confirmar: true }, schema: RevogacaoRegemcast });
 }
 
 // ---------------------------------------------------------------- a autorização por clique (Hub DMS, F2, B1)

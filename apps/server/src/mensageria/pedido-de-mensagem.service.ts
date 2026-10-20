@@ -10,6 +10,7 @@ import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { estimarPublico, lerModelos, lerPublicos, rascunharCampanha } from '../connectors/regemcast/conector-regemcast.js';
+import { credencialDaConta, podeGravar, SO_LEITURA_PELA_AUTORIZACAO } from '../connectors/regemcast/credencial-da-conta.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
@@ -180,11 +181,14 @@ export class PedidoDeMensagemService {
        where a.id = ${p.conta} and a.tenant_id = ${quem.tenantId} and a.brand_id = ${p.marca} and a.provider = 'regemcast' and a.disconnected_at is null`);
     const conta = r.rows[0];
     if (!conta) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conta do RegemCast não encontrada nesta marca.');
-    // A conta que o RegemCast recusou (401) não tem token para o Liame usar: cai no "conecte de novo" (achado A2 do Hub DMS).
+    // A conta que o RegemCast recusou (401) não tem credencial para o Liame usar: cai no "conecte de novo" (achado A2 do Hub DMS).
     const guardada = conta.credential_secret_id && estaConectada(conta) ? await this.vault.readSecret(tx, conta.credential_secret_id) : null;
-    const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
-    const token = credencial?.tipo === 'regemcast' ? credencial.lojas.find((l) => l.loja_id === conta.external_id)?.token : undefined;
-    if (!token) throw new AppProblem(409, 'regemcast-sem-autorizacao', 'Conecte o RegemCast de novo', 'O RegemCast não tem mais a conexão desta conta. Conecte o RegemCast de novo em Contas conectadas.');
+    const credencial = credencialDaConta(guardada ? (JSON.parse(guardada) as CredencialGuardada) : null, conta.external_id);
+    if (!credencial) throw new AppProblem(409, 'regemcast-sem-autorizacao', 'Conecte o RegemCast de novo', 'O RegemCast não tem mais a conexão desta conta. Conecte o RegemCast de novo em Contas conectadas.');
+    // A conta ligada pela autorização do dono (Hub DMS, B1) libera só leitura até a F5: montar a campanha e pedir o
+    // disparo gravam no RegemCast.
+    if (!podeGravar(credencial)) throw new AppProblem(409, 'regemcast-so-leitura', 'A conexão só deixa ler', SO_LEITURA_PELA_AUTORIZACAO);
+    const token = credencial.token;
     const apiUrl = this.config.produtos.regemcastApiUrl;
     if (!apiUrl) throw new AppProblem(502, 'plataforma-indisponivel', 'O RegemCast não está disponível', 'O envio de mensagens pelo RegemCast não está disponível neste ambiente.');
     if (p.cupom) await this.conferirALojaDoCupom(quem.tenantId, p.marca, p.cupom.loja, p.cupom.codigo);

@@ -10,6 +10,7 @@ import { APP_CONFIG, type AppConfig } from '../config.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { lerModelos, rascunharModelo } from '../connectors/regemcast/conector-regemcast.js';
+import { podeGravar } from '../connectors/regemcast/credencial-da-conta.js';
 import { currentTx } from '../context/request-context.js';
 import { marcaDoCriativo } from '../criativo/base.js';
 import { DATABASE } from '../database/database.module.js';
@@ -265,12 +266,15 @@ export class ModeloDoCrmService {
     if (!conta) return this.encerrar(tx, alvo, 'descartada', 'sem_regemcast');
     const apiUrl = this.config.produtos.regemcastApiUrl;
     // Sem a autorização no cofre, ou sem o endereço do RegemCast: conta como tentativa, como o RegemCast fora do ar.
-    if (!conta.token || !apiUrl) {
+    if (!conta.credencial || !apiUrl) {
       if (p.attempts + 1 >= TENTATIVAS_DO_RASCUNHO) return this.encerrar(tx, alvo, 'falhou', 'regemcast_fora_do_ar', { attempts: p.attempts + 1 }, true);
       if (!(await adiarProposta(tx, alvo, new Date(agora.getTime() + minutosAteATentativa(p.attempts) * MINUTO_MS)))) return { status: 'fora' };
       return { status: 'falhou', motivo: 'regemcast_fora_do_ar', deVez: false };
     }
-    return { p, conta, token: conta.token, apiUrl, corpo: p.body, codigoDoCupom: p.coupon.codigo };
+    // A conta passou a ser lida pela autorização do dono (Hub DMS, B1), que só libera leitura até a F5: o rascunho e o
+    // pedido não têm por onde ser gravados, e a proposta para aqui (o mesmo motivo da rotina quando a conta não grava).
+    if (!podeGravar(conta.credencial)) return this.encerrar(tx, alvo, 'descartada', 'sem_permissao');
+    return { p, conta, token: conta.credencial.token, apiUrl, corpo: p.body, codigoDoCupom: p.coupon.codigo };
   }
 
   private async lerParaAcompanhar(tx: Tx, alvo: DonoDaProposta, agora: Date): Promise<ParaAcompanhar | Acompanhamento> {
@@ -283,8 +287,10 @@ export class ModeloDoCrmService {
     const desligado = await this.desligado(tx, alvo, p);
     if (desligado) return this.semLeitura(tx, alvo, p, desligado, agora);
     const apiUrl = this.config.produtos.regemcastApiUrl;
-    if (!conta.token || !apiUrl) return this.semLeitura(tx, alvo, p, conta.token ? 'regemcast_fora_do_ar' : 'sem_autorizacao', agora);
-    return { p, conta, token: conta.token, apiUrl, nome: p.template_name, idioma: p.template_language ?? IDIOMA_DO_MODELO };
+    if (!conta.credencial || !apiUrl) return this.semLeitura(tx, alvo, p, conta.credencial ? 'regemcast_fora_do_ar' : 'sem_autorizacao', agora);
+    // Lida pela autorização do dono, a conta não deixa montar o pedido de envio no fim: a proposta para aqui.
+    if (!podeGravar(conta.credencial)) return this.descartar(tx, alvo, 'sem_permissao');
+    return { p, conta, token: conta.credencial.token, apiUrl, nome: p.template_name, idioma: p.template_language ?? IDIOMA_DO_MODELO };
   }
 
   /** Não deu para ler o modelo agora: passado o prazo, a proposta é descartada; senão, olha de novo no próximo intervalo. */

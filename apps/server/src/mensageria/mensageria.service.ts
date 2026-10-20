@@ -17,6 +17,7 @@ import {
   lerPublicos,
 } from '../connectors/regemcast/conector-regemcast.js';
 import type { CampanhaRegemcast } from '../connectors/regemcast/contrato-regemcast.js';
+import { type AcessoAoRegemcast, comAcessoDaConta, type CredencialDaConta, credencialDaConta, recusaDaConta } from '../connectors/regemcast/credencial-da-conta.js';
 import { type AuthContext, currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
@@ -41,7 +42,8 @@ const CONTAS_POR_MARCA = 5;
 const CAMPANHAS_NA_LISTA = 20;
 
 type Quem = { tenantId: string; userId: string };
-type ContaLida = { id: string; brand_id: string; name: string; external_id: string; token: string | null };
+/** A conta com a credencial dela no cofre: o `rct_it_` ou a ligação da autorização por clique (Hub DMS, B1). */
+type ContaLida = { id: string; brand_id: string; name: string; external_id: string; credencial: CredencialDaConta | null };
 type Parte<T> = { status: 'ok'; dado: T } | { status: 'sem_permissao' | 'indisponivel' | 'sem_autorizacao'; dado: null };
 
 const iso = (v: string | null) => (v === null ? null : new Date(v).toISOString());
@@ -137,11 +139,14 @@ export class MensageriaService {
       if (!(await this.ligada(quem, c.brand_id))) throw desligada();
       return c;
     });
-    if (!conta.token) throw semAutorizacao();
+    const credencial = conta.credencial;
+    if (!credencial) throw semAutorizacao();
     const apiUrl = this.config.produtos.regemcastApiUrl;
     if (!apiUrl) throw indisponivel();
     try {
-      const d = await detalharCampanhaDeMensagens({ cliente: this.cliente(), apiUrl }, { token: conta.token, contaChave: chaveDaTela(conta), id: campanhaId });
+      const d = await comAcessoDaConta(credencial, this.config, chaveDaTela(conta), (acesso) =>
+        detalharCampanhaDeMensagens({ cliente: this.cliente(), apiUrl }, { ...acesso, id: campanhaId }),
+      );
       const cupons = await naTransacaoDaEmpresa(this.banco(), quem, () => this.cuponsDasCampanhas([{ conta: conta.id, campanha: d.campanha.id }], veVendas(auth)));
       return {
         connected_account_id: conta.id,
@@ -163,7 +168,8 @@ export class MensageriaService {
     } catch (err) {
       if (!(err instanceof ErroConector)) throw err;
       this.logger.warn(`campanha não lida no RegemCast (conta ${conta.id}): ${err.tipo}: ${err.message}`);
-      if (err.tipo === 'autenticacao') throw semAutorizacao();
+      // A recusa do DMS ID é do aplicativo do Liame, não da conta: indisponível, não "conecte de novo".
+      if (err.tipo === 'autenticacao') throw recusaDaConta(credencial, err) ? semAutorizacao() : indisponivel();
       if (err.tipo === 'permissao') {
         throw new AppProblem(409, 'regemcast-sem-permissao', 'A conexão não deixa ler as campanhas', 'A conexão com o RegemCast não inclui a leitura das campanhas de mensagens. Quem dá a permissão é o dono da conta, no RegemCast.');
       }
@@ -218,13 +224,13 @@ export class MensageriaService {
   }
 
   /**
-   * As contas do RegemCast da empresa que passam no filtro, com o token de cada uma lido do cofre. Roda numa transação
-   * curta da empresa. A conta ligada que o RegemCast recusou (401) aparece sem token: a tela diz "sem autorização" e
-   * nada é chamado com a credencial recusada (achado A2 do Hub DMS).
+   * As contas do RegemCast da empresa que passam no filtro, com a credencial de cada uma lida do cofre (o `rct_it_` ou a
+   * ligação da autorização por clique). Roda numa transação curta da empresa. A conta ligada que o RegemCast recusou
+   * (401) aparece sem credencial: a tela diz "sem autorização" e nada é chamado com ela (achado A2 do Hub DMS).
    */
   private async contas(filtro: ReturnType<typeof sql>): Promise<ContaLida[]> {
     const tx = currentTx();
-    const r = await tx.execute<Omit<ContaLida, 'token'> & { credential_secret_id: string | null; conectada: boolean }>(sql`
+    const r = await tx.execute<Omit<ContaLida, 'credencial'> & { credential_secret_id: string | null; conectada: boolean }>(sql`
       select a.id, a.brand_id, a.name, a.external_id, a.credential_secret_id, ${contaConectada('a')} as conectada
         from liame.connected_account a
        where a.provider = 'regemcast' and a.disconnected_at is null and ${filtro}
@@ -238,9 +244,7 @@ export class MensageriaService {
         const texto = await this.vault.readSecret(tx, segredoId);
         segredos.set(segredoId, texto ? (JSON.parse(texto) as CredencialGuardada) : null);
       }
-      const credencial = segredoId ? segredos.get(segredoId) : null;
-      const entrada = credencial?.tipo === 'regemcast' ? credencial.lojas.find((l) => l.loja_id === conta.external_id) : undefined;
-      contas.push({ ...conta, token: entrada?.token ?? null });
+      contas.push({ ...conta, credencial: credencialDaConta(segredoId ? segredos.get(segredoId) : null, conta.external_id) });
     }
     return contas;
   }
@@ -248,29 +252,30 @@ export class MensageriaService {
   /** As cinco leituras de uma conta, ao mesmo tempo, sem transação aberta. */
   private async lerConta(c: ContaLida): Promise<MessagingAccount> {
     const apiUrl = this.config.produtos.regemcastApiUrl;
-    // Sem o token desta conta no cofre, ou sem o endereço do RegemCast na configuração, nada é lido.
+    // Sem a credencial desta conta no cofre, ou sem o endereço do RegemCast na configuração, nada é lido.
     const nada = <T>(): Parte<T> => ({ status: 'indisponivel', dado: null });
-    if (!c.token || !apiUrl) return this.montar(c, c.token ? 'indisponivel' : 'sem_autorizacao', nada(), nada(), nada(), nada(), nada());
+    const credencial = c.credencial;
+    if (!credencial || !apiUrl) return this.montar(c, credencial ? 'indisponivel' : 'sem_autorizacao', nada(), nada(), nada(), nada(), nada());
     const ctx = { cliente: this.cliente(), apiUrl };
-    const acesso = { token: c.token, contaChave: chaveDaTela(c) };
-    const ler = async <T>(oque: string, fn: () => Promise<T>): Promise<Parte<T>> => {
+    const ler = async <T>(oque: string, fn: (acesso: AcessoAoRegemcast) => Promise<T>): Promise<Parte<T>> => {
       try {
-        return { status: 'ok', dado: await fn() };
+        return { status: 'ok', dado: await comAcessoDaConta(credencial, this.config, chaveDaTela(c), fn) };
       } catch (err) {
         if (!(err instanceof ErroConector)) throw err;
         // O motivo fica no log (sem token e sem dado pessoal: a mensagem do conector traz só a ferramenta e o campo).
         this.logger.warn(`${oque} não lido no RegemCast (conta ${c.id}): ${err.tipo}: ${err.message}`);
-        if (err.tipo === 'autenticacao') return { status: 'sem_autorizacao', dado: null };
+        // A recusa do DMS ID é do aplicativo do Liame, não da conta: a parte fica indisponível.
+        if (err.tipo === 'autenticacao') return { status: recusaDaConta(credencial, err) ? 'sem_autorizacao' : 'indisponivel', dado: null };
         if (err.tipo === 'permissao') return { status: 'sem_permissao', dado: null };
         return { status: 'indisponivel', dado: null };
       }
     };
     const [conta, orcamento, campanhas, publicos, modelos] = await Promise.all([
-      ler('a situação da conta', () => lerContaDeMensagens(ctx, acesso)),
-      ler('o orçamento', () => lerOrcamentoDeMensagens(ctx, acesso)),
-      ler('as campanhas', () => lerCampanhasDeMensagens(ctx, { ...acesso, limite: CAMPANHAS_NA_LISTA })),
-      ler('os públicos', () => lerPublicos(ctx, acesso)),
-      ler('os modelos', () => lerModelos(ctx, acesso)),
+      ler('a situação da conta', (acesso) => lerContaDeMensagens(ctx, acesso)),
+      ler('o orçamento', (acesso) => lerOrcamentoDeMensagens(ctx, acesso)),
+      ler('as campanhas', (acesso) => lerCampanhasDeMensagens(ctx, { ...acesso, limite: CAMPANHAS_NA_LISTA })),
+      ler('os públicos', (acesso) => lerPublicos(ctx, acesso)),
+      ler('os modelos', (acesso) => lerModelos(ctx, acesso)),
     ]);
     const recusada = [conta, orcamento, campanhas, publicos, modelos].some((p) => p.status === 'sem_autorizacao');
     return this.montar(c, recusada ? 'sem_autorizacao' : 'ok', conta, orcamento, campanhas, publicos, modelos);
