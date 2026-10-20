@@ -31,6 +31,7 @@ import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE, procuraGuardada } from '../
 import { FLAG_SEARCH_CONSOLE, PROVEDOR_SEARCH_CONSOLE, procuraDosSitesGuardada } from '../connectors/search-console/search-console.js';
 import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
 import { type ContaQuePede, PERMISSOES_DO_CLIQUE, pedirAutorizacao, revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
+import { comAcessoDaConta, type CredencialDaConta, credenciaisDaConexao, credencialDaConta } from '../connectors/regemcast/credencial-da-conta.js';
 import { FLAG_CONVERSOES_GOOGLE } from '../conversoes/conversoes-google.js';
 import { DATABASE } from '../database/database.module.js';
 import {
@@ -694,28 +695,34 @@ export class ConnectionsService {
     // O segredo da ligação do Hub DMS (RegemCast) sai do cofre junto: no RegemCast, revogar o token revoga a ligação.
     if (conta.ligacao_secret_id) await this.vault.revokeSecret(tx, conta.ligacao_secret_id);
     let tokenDaLoja: string | null = null;
+    // No RegemCast, o `rct_it_` da conta ou a ligação da autorização por clique (Hub DMS, B1): as duas são desligadas lá.
+    let doRegemcast: CredencialDaConta | null = null;
     if ((conta.provider === 'regem' || conta.provider === 'regemcast') && conta.credential_secret_id) {
       const guardada = await this.vault.readSecret(tx, conta.credential_secret_id);
-      const lojas = guardada ? ((JSON.parse(guardada) as CredencialRegem).lojas ?? []) : [];
-      tokenDaLoja = lojas.find((l) => l.loja_id === conta.external_id)?.token ?? null;
+      const lida = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
+      if (conta.provider === 'regemcast') doRegemcast = credencialDaConta(lida, conta.external_id);
+      else tokenDaLoja = ((lida as CredencialRegem | null)?.lojas ?? []).find((l) => l.loja_id === conta.external_id)?.token ?? null;
     }
     const revogada = conta.provider === 'regemcast' ? { revogada_no_regemcast: true } : { revogada_no_regem: true };
     auditDetail({
       resourceId: id,
       before: { status: 'ativa' },
-      after: { status: 'desconectada', provider: conta.provider, external_id: conta.external_id, ...(tokenDaLoja ? revogada : {}) },
+      after: { status: 'desconectada', provider: conta.provider, external_id: conta.external_id, ...(tokenDaLoja || doRegemcast ? revogada : {}) },
     });
-    if (tokenDaLoja && this.database) {
-      const token = tokenDaLoja;
+    if ((tokenDaLoja || doRegemcast) && this.database) {
       const cliente = new ClienteConector(this.database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 2 });
       const produto = conta.provider === 'regemcast' ? 'RegemCast' : 'Regem';
       const apiUrlRegemcast = this.config.produtos.regemcastApiUrl;
+      const token = tokenDaLoja;
+      const credencial = doRegemcast;
       afterCommit(async () => {
         try {
-          if (conta.provider === 'regemcast') {
-            // Sem o endereço, o token já saiu do cofre e só não é desligado lá (o dono revoga em "Aplicativos conectados").
-            if (apiUrlRegemcast) await revogarNoRegemcast({ cliente, apiUrl: apiUrlRegemcast }, token, conta.external_id);
-          } else {
+          if (credencial) {
+            // Sem o endereço, a credencial já saiu do cofre e só não é desligada lá (o dono desliga em "Aplicativos conectados").
+            if (apiUrlRegemcast) {
+              await comAcessoDaConta(credencial, this.config, conta.external_id, (a) => revogarNoRegemcast({ cliente, apiUrl: apiUrlRegemcast }, a.token, a.contaChave, a.ligacao));
+            }
+          } else if (token) {
             await revogarNoRegem({ cliente, apiUrl: this.config.produtos.regemApiUrl }, token, conta.external_id);
           }
         } catch (err) {
@@ -752,13 +759,13 @@ export class ConnectionsService {
     if (c.inbox_secret_id) await this.vault.revokeSecret(tx, c.inbox_secret_id);
     let refreshGoogle: string | null = null;
     let tokensRegem: { loja_id: string; token: string }[] = [];
-    let tokensRegemcast: { loja_id: string; token: string }[] = [];
+    // No RegemCast: os `rct_it_` das contas (distribuição) ou a ligação da autorização por clique (Hub DMS, B1).
+    let doRegemcast: { contaId: string; credencial: CredencialDaConta }[] = [];
     if (c.credential_secret_id) {
       const guardada = await this.vault.readSecret(tx, c.credential_secret_id);
       if (guardada && c.provider === 'google') refreshGoogle = (JSON.parse(guardada) as CredencialGuardada & { tipo: 'google' }).refresh_token;
-      // A credencial da autorização por clique (o segredo da ligação, Hub DMS B1) não tem lojas: a lista vazia, nunca o erro.
       if (guardada && c.provider === 'regem') tokensRegem = ((JSON.parse(guardada) as CredencialRegem).lojas ?? []).map((l) => ({ loja_id: l.loja_id, token: l.token }));
-      if (guardada && c.provider === 'regemcast') tokensRegemcast = ((JSON.parse(guardada) as Partial<CredencialRegem>).lojas ?? []).map((l) => ({ loja_id: l.loja_id, token: l.token }));
+      if (guardada && c.provider === 'regemcast') doRegemcast = credenciaisDaConexao(JSON.parse(guardada) as CredencialGuardada);
       await this.vault.revokeSecret(tx, c.credential_secret_id);
     }
     const contas = await tx.execute<{ id: string; ligacao_secret_id: string | null }>(sql`
@@ -785,16 +792,17 @@ export class ConnectionsService {
       });
     }
     const apiUrlRegemcast = this.config.produtos.regemcastApiUrl;
-    if (tokensRegemcast.length && this.database && apiUrlRegemcast) {
-      // O RegemCast desliga o token pela própria porta (`integracao_revogar`), depois do commit.
+    if (doRegemcast.length && this.database && apiUrlRegemcast) {
+      // O RegemCast desliga a credencial pela própria porta (`integracao_revogar`), depois do commit: o token da conta, ou
+      // a ligação (com o token do DMS ID do aplicativo do Liame).
       const cliente = new ClienteConector(this.database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 2 });
       const ctx = { cliente, apiUrl: apiUrlRegemcast };
       afterCommit(async () => {
-        for (const t of tokensRegemcast) {
+        for (const t of doRegemcast) {
           try {
-            await revogarNoRegemcast(ctx, t.token, t.loja_id);
+            await comAcessoDaConta(t.credencial, this.config, t.contaId, (a) => revogarNoRegemcast(ctx, a.token, a.contaChave, a.ligacao));
           } catch (err) {
-            this.logger.warn(`revogação no RegemCast falhou (conexão ${id}, conta ${t.loja_id}): ${err instanceof Error ? err.message : String(err)}`);
+            this.logger.warn(`revogação no RegemCast falhou (conexão ${id}, conta ${t.contaId}): ${err instanceof Error ? err.message : String(err)}`);
           }
         }
       });

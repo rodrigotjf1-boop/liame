@@ -7,6 +7,7 @@ import { ClienteConector, ErroConector, type TipoErroConector } from '../connect
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { lerConversas, VERSAO_CONTRATO_REGEMCAST } from '../connectors/regemcast/conector-regemcast.js';
 import type { ConversaAnuncio } from '../connectors/regemcast/contrato-regemcast.js';
+import { comAcessoDaConta, credencialDaConta, recusaDaConta } from '../connectors/regemcast/credencial-da-conta.js';
 import { normalizarTelefone } from '../orders/telefone.js';
 import type { VaultService } from '../vault/vault.service.js';
 import { atribuirPedidos, pedidosDosToques } from './motor.js';
@@ -116,9 +117,9 @@ export class SincronizadorConversas {
     const { conta } = lida;
     const cursor: CursorConversas = lida.cursor;
 
-    const credencial = lida.segredo ? (JSON.parse(lida.segredo) as CredencialGuardada) : null;
-    const entrada = credencial?.tipo === 'regemcast' ? credencial.lojas.find((l) => l.loja_id === conta.external_id) : undefined;
-    if (!entrada) return this.desconectar(conta, cursor, new ErroConector('autenticacao', 'regemcast', 'autorização revogada ou sem o token desta conta'), agora);
+    // O `rct_it_` da conta ou a ligação da autorização por clique (Hub DMS, B1): a leitura é a mesma pelas duas.
+    const entrada = credencialDaConta(lida.segredo ? (JSON.parse(lida.segredo) as CredencialGuardada) : null, conta.external_id);
+    if (!entrada) return this.desconectar(conta, cursor, new ErroConector('autenticacao', 'regemcast', 'autorização revogada ou sem a credencial desta conta'), agora);
 
     const apiUrl = this.config.produtos.regemcastApiUrl;
     if (!apiUrl) {
@@ -149,7 +150,7 @@ export class SincronizadorConversas {
       let posicao = inicial.cursor ?? null;
       const desde = cargaInicial ? new Date(agora.getTime() - CARGA_INICIAL_CONVERSAS_DIAS * DIA_MS).toISOString() : null;
       for (let pagina = 0; pagina < PAGINAS_POR_EXECUCAO; pagina++) {
-        const pg = await lerConversas(ctx, { token: entrada.token, contaChave: conta.external_id, cursor: posicao, desde });
+        const pg = await comAcessoDaConta(entrada, this.config, conta.external_id, (acesso) => lerConversas(ctx, { ...acesso, cursor: posicao, desde }));
         const g = await this.gravarPagina(conta, pg.itens);
         resultado.conversas! += pg.itens.length;
         resultado.toques! += g.toques;
@@ -168,8 +169,9 @@ export class SincronizadorConversas {
       }
     } catch (err) {
       const e = err instanceof ErroConector ? err : null;
-      // Token recusado: a conta para até conectar de novo.
-      if (e?.tipo === 'autenticacao') {
+      // Token (ou ligação) recusado: a conta para até conectar de novo. A recusa do DMS ID é do aplicativo do Liame, não
+      // da conta: segue como falha passageira, com a espera de sempre.
+      if (e && recusaDaConta(entrada, e)) {
         await this.fecharExecucao(conta, runId, 'falhou', cliente.chamadas, resultado, `${e.tipo}: ${e.message}`);
         return this.desconectar(conta, estado, e, agora);
       }

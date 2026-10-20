@@ -6,6 +6,7 @@ import type { CredencialGuardada } from '../connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { dispararCampanha, pausarCampanha, planejarDisparo } from '../connectors/regemcast/conector-regemcast.js';
 import type { CampanhaRegemcast, PlanoDoDisparoRegemcast } from '../connectors/regemcast/contrato-regemcast.js';
+import { credencialDaConta, podeGravar, SO_LEITURA_PELA_AUTORIZACAO } from '../connectors/regemcast/credencial-da-conta.js';
 import type { ApplyOptions, ApplyResult, Connector, PreparedRead, ReadResult, ResourceRef } from './connectors.js';
 import { type EstadoDaMensagem, faseDaMensagem } from './mensagem-plano.js';
 import type { RegraDoCupom } from './regem-cupom.js';
@@ -150,6 +151,8 @@ const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recus
 
 const SEM_ACESSO = 'O RegemCast recusou o acesso desta conta (a conexão foi desligada lá, ou não vale mais). Conecte o RegemCast de novo em Contas conectadas.';
 const SEM_PERMISSAO = 'A conexão com o RegemCast não inclui enviar mensagens. Quem dá essa permissão é o dono da conta, no RegemCast.';
+/** O código da recusa da conta ligada pela autorização do dono (só leitura, Hub DMS B1): ela tem frase própria. */
+const SO_LEITURA = 'so-leitura';
 const SUMIU = 'Esta mensagem não está mais disponível nesta conta do RegemCast (a conta foi desconectada). Nada foi enviado.';
 const FORA_DO_AMBIENTE = 'O envio de mensagens pelo RegemCast não está disponível neste ambiente.';
 const LOJA_SUMIU = 'A loja do cupom foi desconectada do Regem.';
@@ -164,7 +167,7 @@ type CupomPorCriar = { pedidoId: string; lojaId: string | null; codigo: string; 
 export function recusaDoRegemcast(err: unknown, passo: 'leitura' | 'disparo' | 'pausa'): string | null {
   if (!(err instanceof ErroConector)) return null;
   if (err.tipo === 'autenticacao') return SEM_ACESSO;
-  if (err.tipo === 'permissao') return SEM_PERMISSAO;
+  if (err.tipo === 'permissao') return err.codigoProvider === SO_LEITURA ? SO_LEITURA_PELA_AUTORIZACAO : SEM_PERMISSAO;
   if (err.tipo !== 'definitivo') return null;
   const frase = err.message.replace(/^[a-z_]+:\s*/, '').replace(/[.!?]\s*$/, '');
   if (passo === 'leitura') return `O RegemCast não deixou ler o plano do envio: ${frase}. Nada foi enviado.`;
@@ -197,10 +200,12 @@ export class RegemcastMensagemConnector implements Connector {
     if (!deps.apiUrl) throw new ErroConector('transitorio', PROVIDER, 'o endereço do RegemCast não está configurado');
     // A conta que o RegemCast recusou (401) não é usada: o pedido diz "conecte o RegemCast de novo" (achado A2 do Hub DMS).
     const guardada = conta.credential_secret_id && conectada ? await deps.lerSegredo(tx, conta.credential_secret_id) : null;
-    const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
-    const token = credencial?.tipo === 'regemcast' ? credencial.lojas.find((l) => l.loja_id === conta.external_id)?.token : undefined;
-    if (!token) throw new ErroConector('autenticacao', PROVIDER, 'autorização revogada ou sem o token desta conta');
-    return { conector: PROVIDER, conta, token, campanha, apiUrl: deps.apiUrl, deps };
+    const credencial = credencialDaConta(guardada ? (JSON.parse(guardada) as CredencialGuardada) : null, conta.external_id);
+    if (!credencial) throw new ErroConector('autenticacao', PROVIDER, 'autorização revogada ou sem a credencial desta conta');
+    // A conta ligada pela autorização do dono (Hub DMS, B1) libera só leitura até a F5: o plano, o disparo e a pausa
+    // passam pelas ferramentas de envio, que essa autorização não tem.
+    if (!podeGravar(credencial)) throw new ErroConector('permissao', PROVIDER, 'a conta foi ligada pela autorização do dono, que só libera leitura', null, null, SO_LEITURA);
+    return { conector: PROVIDER, conta, token: credencial.token, campanha, apiUrl: deps.apiUrl, deps };
   }
 
   /** A chave da cota e do disjuntor: à parte da leitura das conversas e da tela Mensagens da mesma conta. */

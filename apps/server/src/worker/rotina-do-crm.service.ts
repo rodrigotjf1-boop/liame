@@ -228,14 +228,14 @@ export class RotinaDoCrmService {
     // nunca pode mais do que quem o deixou propor (ADR-017).
     if (!d.updated_by || !(await pessoaPode(tx, { tenantId, userId: d.updated_by, permissao: PODE_RESPONDER }))) return { resultado: 'sem_responsavel' };
 
-    // A conta do RegemCast da marca, com o token do cofre. Uma marca tem, na prática, uma conta.
+    // A conta do RegemCast da marca, com a credencial do cofre. Uma marca tem, na prática, uma conta.
     const conta = await lerContaDoRegemcast(tx, this.vault, { tenantId, brandId });
     if (!conta) return { resultado: 'sem_regemcast' };
-    if (!conta.token) return { resultado: 'sem_autorizacao' };
+    if (!conta.credencial) return { resultado: 'sem_autorizacao' };
     // Sem poder gravar o rascunho do modelo, montar a campanha e pedir o disparo, a proposta pararia no meio (e a IA
-    // já teria sido gasta no texto).
-    if (!conta.escreve) return { resultado: 'sem_permissao' };
-    const token = conta.token;
+    // já teria sido gasta no texto). A conta ligada pela autorização do dono (Hub DMS, B1) só lê: cai aqui também.
+    if (!conta.escreve || conta.credencial.via !== 'token') return { resultado: 'sem_permissao' };
+    const token = conta.credencial.token;
     const apiUrl = this.config.produtos.regemcastApiUrl;
     if (!apiUrl) return { resultado: 'regemcast_fora' };
 
