@@ -16,6 +16,7 @@ import { disparar } from '@/lib/disparar';
 import { useModo } from '@/lib/modo';
 import { useSessao } from '@/lib/sessao';
 import type { AnunciosDaTela } from './cartao-anuncios';
+import type { GoogleDaTela } from './cartao-google';
 import type { ConsultaDePedidos } from './cartao-pedidos';
 import { montarGraficos } from './graficos';
 import { type ExplicarResultados, ResultadosConteudo } from './resultados-conteudo';
@@ -253,6 +254,9 @@ export function ResultadosTela() {
         aoTerminarLeitura: () => setTentativa((t) => t + 1),
       }
     : null;
+  // "Como te acham no Google" (P18): o perfil e o site são da marca (a loja não entra). O Google entrega com 2 a 3 dias
+  // de atraso: o cartão conta os dias até o último que ele informou; em "Hoje", os 7 dias fechados.
+  const google: GoogleDaTela | null = dados ? { consulta: { brand_id: dados.marca, days: dados.periodo === '30' ? '30' : '7' }, periodo: dados.periodo } : null;
 
   let corpo;
   if (erroMarcas) {
@@ -305,6 +309,7 @@ export function ResultadosTela() {
           vendasAoGoogle={linhaDoGoogle}
           podeVerMensagens={podeVerCampanhas}
           anuncios={anuncios}
+          google={google}
         />
       </div>
     );
