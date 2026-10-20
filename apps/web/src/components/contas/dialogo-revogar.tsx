@@ -28,7 +28,8 @@ export function DialogoRevogar({ conexao, reserva, aoRevogar, aoFechar }: Props)
   const n = contasDaAutorizacao(conexao);
   const meta = autorizadorDa(conexao.provider) === 'meta';
   const regem = conexao.provider === 'regem';
-  // A loja do perfil da empresa no Google (P17, parte B) conta à parte: "das 3 contas e da loja do perfil".
+  // A loja do perfil da empresa no Google (P17, parte B) e o site do Search Console (P18, parte B) contam à parte: "das
+  // 3 contas e da loja do perfil", "das 3 contas e do site".
   const ligadas = ligadasDaAutorizacao(conexao);
 
   async function revogar() {
@@ -71,7 +72,7 @@ export function DialogoRevogar({ conexao, reserva, aoRevogar, aoFechar }: Props)
           <p>
             {n ? (
               <>
-                {regem || !ligadas.lojas ? (
+                {regem || (!ligadas.lojas && !ligadas.sites) ? (
                   <>
                     A leitura {n === 1 ? 'da' : 'das'} <b>{n === 1 ? (regem ? 'loja' : 'conta') : `${n} ${regem ? 'lojas' : 'contas'}`}</b> desta autorização para agora. O histórico de números fica.
                   </>

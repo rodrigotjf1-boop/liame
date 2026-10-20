@@ -18,6 +18,8 @@ const PLATAFORMAS: Record<string, { nome: string; classe: string }> = {
   regemcast: { nome: 'RegemCast', classe: 'regemcast' },
   // A6 · P17, parte B: a loja do Perfil da Empresa no Google (vem pela autorização do Google).
   google_business: { nome: 'Perfil no Google', classe: 'perfil' },
+  // A6 · P18, parte B: o site do Search Console (também vem pela autorização do Google).
+  search_console: { nome: 'Search Console', classe: 'sc' },
 };
 
 /** Nome e cor da plataforma (conta ou autorização). */
@@ -26,12 +28,12 @@ export function plataforma(provider: string | null): { nome: string; classe: str
 }
 
 /**
- * Quem autoriza a conta: a Meta (Meta Ads), o Google (Google Ads, GA4 e a loja do perfil numa autorização só), o Regem
- * (as lojas) ou o RegemCast (a conta de mensagens).
+ * Quem autoriza a conta: a Meta (Meta Ads), o Google (Google Ads, GA4, a loja do perfil e o site do Search Console numa
+ * autorização só), o Regem (as lojas) ou o RegemCast (a conta de mensagens).
  */
 export function autorizadorDa(provider: string | null): Autorizador | null {
   if (provider === 'meta_ads' || provider === 'meta') return 'meta';
-  if (provider === 'google_ads' || provider === 'ga4' || provider === 'google' || provider === 'google_business') return 'google';
+  if (provider === 'google_ads' || provider === 'ga4' || provider === 'google' || provider === 'google_business' || provider === 'search_console') return 'google';
   if (provider === 'regem') return 'regem';
   if (provider === 'regemcast') return 'regemcast';
   return null;
@@ -70,18 +72,22 @@ const MUDA_COM_APROVACAO = 'só com a aprovação de uma pessoa, muda a verba di
  * A linha do botão do Google no diálogo de conectar: o que a autorização (uma só, para o Google Ads e o Analytics)
  * deixa o Liame fazer. `mudaAnuncios`: as plataformas com a escrita ligada (`ads_write` da lista de conexões).
  * `comPerfil`: o perfil da empresa no Google ligado para a empresa (P17, parte B): a mesma autorização vale para os três.
+ * `comSearchConsole`: o Search Console ligado (P18, parte B): mais um na mesma autorização.
  */
-export function descricaoDoGoogle(informaVendas: boolean, mudaAnuncios: readonly string[] = [], comPerfil = false): string {
+export function descricaoDoGoogle(informaVendas: boolean, mudaAnuncios: readonly string[] = [], comPerfil = false, comSearchConsole = false): string {
   const muda = mudaAnuncios.includes('google_ads');
-  const comeco = comPerfil ? 'Uma autorização só para os três.' : 'Uma autorização só para os dois.';
+  const quantos = 2 + (comPerfil ? 1 : 0) + (comSearchConsole ? 1 : 0);
+  const comeco = `Uma autorização só para os ${quantos === 4 ? 'quatro' : quantos === 3 ? 'três' : 'dois'}.`;
   if (muda && informaVendas) return `${comeco} Leitura, a permissão de informar as vendas confirmadas e, no Google Ads, as mudanças que você aprovar.`;
   if (muda) return `${comeco} Leitura e, no Google Ads, as mudanças que você aprovar.`;
   if (informaVendas) return `${comeco} Leitura, e a permissão de informar as vendas confirmadas.`;
-  return comPerfil ? `${comeco} O Liame só lê.` : `${comeco} Somente leitura.`;
+  return quantos > 2 ? `${comeco} O Liame só lê.` : `${comeco} Somente leitura.`;
 }
 
 /** O título do botão do Google no diálogo de conectar. */
-export function tituloDoGoogle(comPerfil: boolean): string {
+export function tituloDoGoogle(comPerfil: boolean, comSearchConsole = false): string {
+  if (comPerfil && comSearchConsole) return 'Google Ads, Google Analytics, Perfil da empresa e Search Console';
+  if (comSearchConsole) return 'Google Ads, Google Analytics e Search Console';
   return comPerfil ? 'Google Ads, Google Analytics e Perfil da empresa' : 'Google Ads e Google Analytics';
 }
 
@@ -330,14 +336,19 @@ export function faixaDaVolta(
         botao: 'Ligar lojas',
       };
     }
-    // A loja do perfil (P17, parte B) conta à parte: "Encontramos 4 contas e 2 lojas do perfil."
+    // A loja do perfil (P17, parte B) e o site do Search Console (P18, parte B) contam à parte: "Encontramos 4 contas e
+    // 2 lojas do perfil", "Encontramos 4 contas e 2 sites no Search Console".
     const lojas = conexao.discovered.filter((d) => d.provider === 'google_business').length;
-    const total = conexao.discovered.length - lojas;
-    const contas = `${total} ${total === 1 ? 'conta' : 'contas'}`;
-    const doPerfil = `${lojas} ${lojas === 1 ? 'loja do perfil' : 'lojas do perfil'}`;
+    const sites = conexao.discovered.filter((d) => d.provider === 'search_console').length;
+    const total = conexao.discovered.length - lojas - sites;
+    const partes = [
+      total || (!lojas && !sites) ? `${total} ${total === 1 ? 'conta' : 'contas'}` : '',
+      lojas ? `${lojas} ${lojas === 1 ? 'loja do perfil' : 'lojas do perfil'}` : '',
+      sites ? `${sites} ${sites === 1 ? 'site' : 'sites'} no Search Console` : '',
+    ].filter(Boolean);
     return {
       tipo: 'escolher',
-      titulo: `${artigo(a)} autorizou. Encontramos ${!lojas ? contas : !total ? doPerfil : `${contas} e ${doPerfil}`}.`,
+      titulo: `${artigo(a)} autorizou. Encontramos ${listaEmPalavras(partes)}.`,
       texto: `${resumoDaDescoberta(conexao.discovered)}. Escolha quais ligar à marca ${marca}.`,
     };
   }
@@ -352,14 +363,21 @@ export function resumoDaDescoberta(d: DiscoveredAccount[]): string {
   const ads = n('google_ads');
   const ga4 = n('ga4');
   const lojas = n('google_business');
+  const sites = n('search_console');
   if (meta) partes.push(`${meta} ${meta === 1 ? 'conta de anúncio' : 'contas de anúncio'} da Meta`);
   if (ads) partes.push(`${ads} do Google Ads`);
   if (ga4) partes.push(`${ga4} ${ga4 === 1 ? 'propriedade' : 'propriedades'} do GA4`);
   if (lojas) partes.push(`${lojas} ${lojas === 1 ? 'loja' : 'lojas'} do perfil da empresa`);
-  const outras = d.length - meta - ads - ga4 - lojas;
+  if (sites) partes.push(`${sites} ${sites === 1 ? 'site' : 'sites'} do Search Console`);
+  const outras = d.length - meta - ads - ga4 - lojas - sites;
   if (outras) partes.push(`${outras} de outra plataforma`);
   if (!partes.length) return 'Nenhuma conta';
-  return partes.length === 1 ? partes[0]! : `${partes.slice(0, -1).join(', ')} e ${partes.at(-1)}`;
+  return listaEmPalavras(partes);
+}
+
+/** "a", "a e b", "a, b e c". */
+export function listaEmPalavras(partes: string[]): string {
+  return partes.length <= 1 ? (partes[0] ?? '') : `${partes.slice(0, -1).join(', ')} e ${partes.at(-1)}`;
 }
 
 const TITULO_DO_GRUPO: Record<string, string> = {
@@ -369,11 +387,12 @@ const TITULO_DO_GRUPO: Record<string, string> = {
   regem: 'Lojas do Regem',
   regemcast: 'RegemCast',
   google_business: 'Perfil da empresa no Google',
+  search_console: 'Sites no Search Console',
 };
 
-/** As descobertas agrupadas por plataforma, na ordem Meta, Google Ads, GA4 e as lojas do perfil (as ligadas primeiro não). */
+/** As descobertas agrupadas por plataforma, na ordem Meta, Google Ads, GA4, as lojas do perfil e os sites do Search Console. */
 export function gruposDaEscolha(d: DiscoveredAccount[]): { provider: string; titulo: string; contas: DiscoveredAccount[] }[] {
-  const ordem = ['meta_ads', 'google_ads', 'ga4', 'google_business'];
+  const ordem = ['meta_ads', 'google_ads', 'ga4', 'google_business', 'search_console'];
   const provedores = [...new Set(d.map((x) => x.provider))].sort((x, y) => {
     const ix = ordem.indexOf(x);
     const iy = ordem.indexOf(y);
@@ -388,13 +407,18 @@ export function gruposDaEscolha(d: DiscoveredAccount[]): { provider: string; tit
 
 /**
  * Rótulo do botão da escolha: "Ligar 2 contas" ou, sem nenhuma marcada, "Escolha ao menos uma". `lojas`: das marcadas,
- * quantas são lojas do perfil ("Ligar 2 contas e 1 loja", P17 parte B).
+ * quantas são lojas do perfil ("Ligar 2 contas e 1 loja", P17 parte B); `sites`, quantas são sites do Search Console
+ * ("Ligar 2 contas e 1 site", "Ligar 2 contas, 1 loja e 1 site", P18 parte B).
  */
-export function botaoLigar(n: number, lojas = 0): string {
+export function botaoLigar(n: number, lojas = 0, sites = 0): string {
   if (!n) return 'Escolha ao menos uma';
-  const contas = n - lojas;
-  const partes = [contas ? `${contas} ${contas === 1 ? 'conta' : 'contas'}` : '', lojas ? `${lojas} ${lojas === 1 ? 'loja' : 'lojas'}` : ''].filter(Boolean);
-  return `Ligar ${partes.join(' e ')}`;
+  const contas = n - lojas - sites;
+  const partes = [
+    contas ? `${contas} ${contas === 1 ? 'conta' : 'contas'}` : '',
+    lojas ? `${lojas} ${lojas === 1 ? 'loja' : 'lojas'}` : '',
+    sites ? `${sites} ${sites === 1 ? 'site' : 'sites'}` : '',
+  ].filter(Boolean);
+  return `Ligar ${listaEmPalavras(partes)}`;
 }
 
 // ------------------------------------------------------------------ contas ligadas

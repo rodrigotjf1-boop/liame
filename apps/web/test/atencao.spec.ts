@@ -17,6 +17,7 @@ import {
   oQueFazer,
   recomendacaoDoAviso,
   rotuloDoFiltro,
+  temContaQueConta,
 } from '@/components/atencao/textos';
 import { itemAtual, rotaPessoal, tituloDa } from '@/components/shell/navegacao';
 import { quandoComHora } from '@/lib/formato';
@@ -255,6 +256,17 @@ describe('a recomendação do Gestor de tráfego na Atenção (A4 · X8, protót
     expect(erroAoDispensar({ code: 'recomendacao-encerrada', title: 'x' })).toEqual({ texto: 'Esta recomendação não está mais em aberto.', recarregar: true });
     expect(erroAoDispensar({ code: 'nao-encontrado', title: 'x' }).recarregar).toBe(true);
     expect(erroAoDispensar({ code: 'interno', title: 'Algo deu errado', detail: 'Tente de novo em instantes.' })).toEqual({ texto: 'Tente de novo em instantes.', recarregar: false });
+  });
+});
+
+describe('a Atenção sem avisos', () => {
+  it('o convite para conectar continua com só a loja do perfil ou só o site do Search Console ligados (V136)', () => {
+    expect(temContaQueConta([])).toBe(false);
+    expect(temContaQueConta([{ provider: 'google_business' }])).toBe(false);
+    expect(temContaQueConta([{ provider: 'search_console' }])).toBe(false);
+    expect(temContaQueConta([{ provider: 'google_business' }, { provider: 'search_console' }])).toBe(false);
+    expect(temContaQueConta([{ provider: 'search_console' }, { provider: 'meta_ads' }])).toBe(true);
+    expect(temContaQueConta([{ provider: 'regem' }])).toBe(true);
   });
 });
 
