@@ -65,6 +65,7 @@ import { PlanosController } from './planos/planos.controller.js';
 import { PlanosService } from './planos/planos.service.js';
 import { PolicyController } from './policy/policy.controller.js';
 import { AtencaoCicloService } from './results/atencao-ciclo.service.js';
+import { ComoTeAchamService } from './results/como-te-acham.service.js';
 import { DesempenhoService } from './results/desempenho.service.js';
 import { ResultsController } from './results/results.controller.js';
 import { ResultsService } from './results/results.service.js';
@@ -83,6 +84,6 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
   imports: [DiscoveryModule, DatabaseModule, VaultModule, AuthModule],
   controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController, PesquisaController, AutonomiaController, EquipeController, ResumoController, PecasController, ConversoesController, MensageriaController, AvaliacoesController],
   // HubDms: o hub da DMS (Hub DMS, A4, etapa 3; desligado por padrão): a API só manda os erros 5xx; quem bate é o worker.
-  providers: [TelemetryLifecycle, HubDms, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, EscritaMeta, EscritaGoogle, EscritaRegemcast, EscritaPerfil, BudgetService, OpcoesDoPedidoService, LifecycleService, ConnectionsService, MediaService, ResultsService, DesempenhoService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, RevisorService, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService, EquipeService, ResumoService, PecasService, DecisoesDePecaService, CustoDasPecasService, ConversoesService, MensageriaService, DescontoDasMensagensService, PedidoDeMensagemService, AvaliacoesService],
+  providers: [TelemetryLifecycle, HubDms, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, EscritaMeta, EscritaGoogle, EscritaRegemcast, EscritaPerfil, BudgetService, OpcoesDoPedidoService, LifecycleService, ConnectionsService, MediaService, ResultsService, DesempenhoService, ComoTeAchamService, LinksService, CouponsService, AtencaoCicloService, RevisaoService, ModelosIa, AiGateway, RevisorService, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService, EquipeService, ResumoService, PecasService, DecisoesDePecaService, CustoDasPecasService, ConversoesService, MensageriaService, DescontoDasMensagensService, PedidoDeMensagemService, AvaliacoesService],
 })
 export class AppModule {}

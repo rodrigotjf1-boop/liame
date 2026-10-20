@@ -8,6 +8,8 @@ import {
   ClosedLoopQuery,
   ClosedLoopResponse,
   DailyResultsResponse,
+  GoogleVisibilityQuery,
+  GoogleVisibilityResponse,
   OrderOriginQuery,
   OrderOriginResponse,
   ProblemDetails,
@@ -34,6 +36,7 @@ import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { AtencaoCicloService } from './atencao-ciclo.service.js';
+import { ComoTeAchamService } from './como-te-acham.service.js';
 import { DesempenhoService } from './desempenho.service.js';
 import { ResultsService } from './results.service.js';
 import { RevisaoService } from './revisao.service.js';
@@ -48,7 +51,23 @@ export class ResultsController {
     private readonly ciclo: AtencaoCicloService,
     private readonly revisao: RevisaoService,
     private readonly desempenho: DesempenhoService,
+    private readonly comoTeAcham: ComoTeAchamService,
   ) {}
+
+  @Get('google-visibility')
+  @Permissao('vendas.ver')
+  @ApiOperation({
+    summary: 'Como te acham no Google',
+    description:
+      'O que o Liame leu do Google para a marca, em duas partes que não se somam: o perfil da empresa (as vezes em que ele apareceu na busca e no Maps, e o que as pessoas fizeram: rotas, ligações, cliques no site e no cardápio) e o site no Search Console (os cliques vindos das buscas, as vezes, a posição média e os cliques de cada dia), cada parte nos `days` dias até o último que o Google já informou (ele entrega com 2 a 3 dias de atraso), com o total dos dias anteriores do mesmo tamanho. Traz também as buscas da última semana fechada que mais trouxeram cliques (até 10). Cada parte vem com `enabled` falso e vazia com a função dela desligada para a empresa (`perfil_google`, `search_console`); `waiting_google` diz que o Google ainda não liberou o acesso do Liame ao perfil.',
+  })
+  @ApiOkResponse({ standardSchema: GoogleVisibilityResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  googleVisibility(@Auth() auth: AuthContext, @Query({ schema: GoogleVisibilityQuery }) query: GoogleVisibilityQuery): Promise<GoogleVisibilityResponse> {
+    return this.comoTeAcham.ler(auth, query);
+  }
 
   @Get('delivery')
   @Permissao('vendas.ver')
