@@ -81,10 +81,12 @@
 .faisca .alvo--ini:hover::after { left: 0; }
 .faisca .alvo--fim { left: auto; right: 0; transform: none; }
 .faisca .alvo--fim:hover::after { left: 100%; }
-.dias { position: relative; height: 14px; margin-inline: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--text-subtle); }
-.dias span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
-.dias span:first-child { transform: none; }
-.dias span:last-child { transform: translateX(-100%); }
+/* A régua dos dias embaixo do gráfico. Nome próprio (ERR-145): esta folha vale para o app inteiro, e "dias" é também a
+   lista "Dia a dia" da pauta em Aprovações, que esta regra desmontava (cada texto em posição absoluta, numa linha só). */
+.faisca-dias { position: relative; height: 14px; margin-inline: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--text-subtle); }
+.faisca-dias span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.faisca-dias span:first-child { transform: none; }
+.faisca-dias span:last-child { transform: translateX(-100%); }
 
 /* barra dividida: para onde foi cada real, e de onde vieram os pedidos */
 .pilha-caixa { position: relative; }
