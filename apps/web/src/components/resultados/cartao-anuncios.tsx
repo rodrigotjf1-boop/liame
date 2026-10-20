@@ -10,12 +10,11 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useDetalhes } from '@/lib/modo';
 import {
-  andamentoDaLeitura,
   avisoDoFim,
   type CartaoDosAnuncios,
   ENDERECO_DA_PLATAFORMA,
   ESPERA_DA_LEITURA_MS,
-  falharamNoPrazo,
+  fimDaEspera,
   type LerAgora,
   marcasDe,
   montarCartaoDosAnuncios,
@@ -106,14 +105,9 @@ export function CartaoAnuncios({ consulta, periodo, fuso, podeVerContas, aoTermi
           }
           setCarga({ tipo: 'ok', chave, dados: r.data });
           setUltima({ chave, dados: r.data });
-          const a = andamentoDaLeitura(r.data.accounts, leitura.pedidoEm, leitura.antes, leitura.vistas);
-          let fim: LerAgora | null = null;
-          // O "antes" vai junto até o fim: o cartão mostra o que a leitura mudou (P23, parte B).
-          if (a.pendentes === 0) fim = { tipo: 'terminou', pedidoEm: leitura.pedidoEm, falharam: a.falharam, anterior: leitura.anterior };
-          else if (venceu) {
-            const f = falharamNoPrazo(r.data.accounts, leitura.pedidoEm);
-            fim = f.length ? { tipo: 'terminou', pedidoEm: leitura.pedidoEm, falharam: f, anterior: leitura.anterior } : { tipo: 'demorou', pedidoEm: leitura.pedidoEm };
-          }
+          // A falha de uma tentativa não encerra a espera antes do prazo: o worker tenta de novo (ERR-146). O "antes"
+          // vai junto até o fim: o cartão mostra o que a leitura mudou (P23, parte B).
+          const fim = fimDaEspera(r.data.accounts, leitura, venceu);
           if (fim) {
             focar.current = 'se-ficou';
             setLeitura(fim);
