@@ -283,6 +283,100 @@ export const AdDeliveryRefreshResponse = z.strictObject({
 });
 export type AdDeliveryRefreshResponse = z.infer<typeof AdDeliveryRefreshResponse>;
 
+// ------------------------------------------------------------ Como te acham no Google (P18)
+// O que o Google informa do perfil da empresa (A6 · Z1) e do site no Search Console (A6 · Z3), na contagem dele. As duas
+// partes não se somam: a vez em que o perfil apareceu não é a vez em que o site apareceu numa busca. Nenhum dado de
+// pessoa: contagens, e o texto das buscas como o Google mostra (sem quem buscou).
+
+export const GoogleVisibilityQuery = z.strictObject({
+  brand_id: z.uuid(),
+  /** Quantos dias contar, até o último que o Google já informa (ele entrega com 2 a 3 dias de atraso). */
+  days: z.enum(['7', '30']).default('7'),
+});
+export type GoogleVisibilityQuery = z.infer<typeof GoogleVisibilityQuery>;
+
+/** A posição média nas buscas, com até duas casas ("6.8"); 1 é o primeiro lugar. */
+const Posicao = z.string().regex(/^\d+(\.\d{1,2})?$/);
+
+export const GoogleVisibilityPeriod = z.strictObject({ from: z.string(), to: z.string() });
+export type GoogleVisibilityPeriod = z.infer<typeof GoogleVisibilityPeriod>;
+
+export const GoogleVisibilityAccount = z.strictObject({
+  connected_account_id: z.uuid(),
+  name: z.string(),
+  /** `ativa`, `sem_permissao` ou `erro` (a desligada não vem). */
+  status: Slug,
+  /** A última leitura que deu certo, de qualquer conjunto da conta; nula antes da primeira. */
+  last_success_at: z.string().nullable(),
+});
+export type GoogleVisibilityAccount = z.infer<typeof GoogleVisibilityAccount>;
+
+export const GoogleVisibilityProfile = z.strictObject({
+  /** A função `perfil_google` ligada para a empresa; desligada, o resto vem vazio. */
+  enabled: z.boolean(),
+  /**
+   * O Google ainda não liberou o acesso do Liame ao perfil (a última procura das lojas deu `limite`) e nenhuma loja está
+   * ligada: a tela diz isso em palavras.
+   */
+  waiting_google: z.boolean(),
+  /** As lojas do Perfil ligadas à marca. */
+  accounts: z.array(GoogleVisibilityAccount),
+  /** Os dias contados, até o último que o Google informou; nulo antes de qualquer número lido. */
+  period: GoogleVisibilityPeriod.nullable(),
+  /** As vezes em que o perfil apareceu na busca do Google e no Maps (o Google conta uma por pessoa por dia). */
+  views_search: Contagem,
+  views_maps: Contagem,
+  /** As vezes (busca e Maps) nos dias anteriores, do mesmo tamanho; nulo sem nenhum número lido nesses dias. */
+  previous_views: Contagem.nullable(),
+  direction_requests: Contagem,
+  call_clicks: Contagem,
+  website_clicks: Contagem,
+  menu_clicks: Contagem,
+});
+export type GoogleVisibilityProfile = z.infer<typeof GoogleVisibilityProfile>;
+
+export const GoogleVisibilityQueryRow = z.strictObject({
+  /** O que as pessoas digitaram no Google, como ele mostra. */
+  query: z.string(),
+  clicks: Contagem,
+  impressions: Contagem,
+  position: Posicao.nullable(),
+});
+export type GoogleVisibilityQueryRow = z.infer<typeof GoogleVisibilityQueryRow>;
+
+export const GoogleVisibilitySite = z.strictObject({
+  /** A função `search_console` ligada para a empresa; desligada, o resto vem vazio. */
+  enabled: z.boolean(),
+  /** Os sites do Search Console ligados à marca. */
+  accounts: z.array(GoogleVisibilityAccount),
+  /** Os dias contados (no fuso do Search Console, o do Pacífico), até o último que o Google informou; nulo antes. */
+  period: GoogleVisibilityPeriod.nullable(),
+  /** Os cliques vindos das buscas do Google e as vezes em que o site apareceu nelas (com as buscas raras). */
+  clicks: Contagem,
+  impressions: Contagem,
+  /** A posição média, pesada pelas vezes; nula sem nenhuma vez. */
+  position: Posicao.nullable(),
+  /** Os cliques nos dias anteriores, do mesmo tamanho; nulo sem nenhum número lido nesses dias. */
+  previous_clicks: Contagem.nullable(),
+  /** Cada dia do período, em ordem, com zero no dia em que o Google não informou clique. */
+  daily: z.array(z.strictObject({ day: z.string(), clicks: Contagem })),
+  /**
+   * As buscas da última semana fechada (de segunda a domingo) que mais trouxeram cliques, até 10, mais cliques
+   * primeiro. A busca feita por poucas pessoas o Google não mostra: a soma fica abaixo do total. Nulo sem semana lida.
+   */
+  queries: z.strictObject({ week: GoogleVisibilityPeriod, items: z.array(GoogleVisibilityQueryRow) }).nullable(),
+});
+export type GoogleVisibilitySite = z.infer<typeof GoogleVisibilitySite>;
+
+export const GoogleVisibilityResponse = z.strictObject({
+  /** Uma das duas funções ligada; nenhuma, e a tela não mostra o cartão. */
+  enabled: z.boolean(),
+  days: z.int().min(1).max(30),
+  profile: GoogleVisibilityProfile,
+  site: GoogleVisibilitySite,
+});
+export type GoogleVisibilityResponse = z.infer<typeof GoogleVisibilityResponse>;
+
 export const OrderOriginQuery = z.strictObject({
   brand_id: z.uuid(),
   unit_id: z.uuid().optional(),

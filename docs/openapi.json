@@ -24969,6 +24969,551 @@
         ]
       }
     },
+    "/v1/results/google-visibility": {
+      "get": {
+        "description": "O que o Liame leu do Google para a marca, em duas partes que não se somam: o perfil da empresa (as vezes em que ele apareceu na busca e no Maps, e o que as pessoas fizeram: rotas, ligações, cliques no site e no cardápio) e o site no Search Console (os cliques vindos das buscas, as vezes, a posição média e os cliques de cada dia), cada parte nos `days` dias até o último que o Google já informou (ele entrega com 2 a 3 dias de atraso), com o total dos dias anteriores do mesmo tamanho. Traz também as buscas da última semana fechada que mais trouxeram cliques (até 10). Cada parte vem com `enabled` falso e vazia com a função dela desligada para a empresa (`perfil_google`, `search_console`); `waiting_google` diz que o Google ainda não liberou o acesso do Liame ao perfil.",
+        "operationId": "ResultsController_googleVisibility",
+        "parameters": [
+          {
+            "name": "brand_id",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "7",
+              "type": "string",
+              "enum": [
+                "7",
+                "30"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "days": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 30
+                    },
+                    "profile": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "waiting_google": {
+                          "type": "boolean"
+                        },
+                        "accounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "connected_account_id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "last_success_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "connected_account_id",
+                              "name",
+                              "status",
+                              "last_success_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "period": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "views_search": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "views_maps": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "previous_views": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^\\d+$"
+                        },
+                        "direction_requests": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "call_clicks": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "website_clicks": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "menu_clicks": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "waiting_google",
+                        "accounts",
+                        "period",
+                        "views_search",
+                        "views_maps",
+                        "previous_views",
+                        "direction_requests",
+                        "call_clicks",
+                        "website_clicks",
+                        "menu_clicks"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "site": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "accounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "connected_account_id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "last_success_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "connected_account_id",
+                              "name",
+                              "status",
+                              "last_success_at"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "period": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "string"
+                            },
+                            "to": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "clicks": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "impressions": {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        "position": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^\\d+(\\.\\d{1,2})?$"
+                        },
+                        "previous_clicks": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^\\d+$"
+                        },
+                        "daily": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "day": {
+                                "type": "string"
+                              },
+                              "clicks": {
+                                "type": "string",
+                                "pattern": "^\\d+$"
+                              }
+                            },
+                            "required": [
+                              "day",
+                              "clicks"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "queries": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "week": {
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "type": "string"
+                                },
+                                "to": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "from",
+                                "to"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "query": {
+                                    "type": "string"
+                                  },
+                                  "clicks": {
+                                    "type": "string",
+                                    "pattern": "^\\d+$"
+                                  },
+                                  "impressions": {
+                                    "type": "string",
+                                    "pattern": "^\\d+$"
+                                  },
+                                  "position": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "pattern": "^\\d+(\\.\\d{1,2})?$"
+                                  }
+                                },
+                                "required": [
+                                  "query",
+                                  "clicks",
+                                  "impressions",
+                                  "position"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "week",
+                            "items"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "accounts",
+                        "period",
+                        "clicks",
+                        "impressions",
+                        "position",
+                        "previous_clicks",
+                        "daily",
+                        "queries"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "days",
+                    "profile",
+                    "site"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Como te acham no Google",
+        "tags": [
+          "results"
+        ]
+      }
+    },
     "/v1/results/delivery": {
       "get": {
         "description": "O que a Meta e o Google informam da entrega dos anúncios da marca no período, na contagem deles, por campanha: impressões, alcance (só a Meta, e só para hoje, 7 e 30 dias, lido como um número só: pessoas diferentes, que não se somam entre campanhas), cliques, gasto (o mesmo de `closed-loop`) e o resultado que a plataforma conta (compras ou conversas na Meta, com 7 dias do clique; conversões no Google, na janela de cada ação). Traz a última leitura de cada conta e quando dá para pedir \"Ler agora\" de novo. Com a função `desempenho_anuncios` desligada para a empresa, `enabled` vem falso e o resto vazio.",

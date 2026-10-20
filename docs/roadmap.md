@@ -50,7 +50,7 @@
 | A3 · Inteligência | No ar, com a IA ligada no piloto. Falta: o relatório mensal (precisa de protótipo), a tela "ler uma página" do Pesquisador e a escolha de modelo no Pro. |
 | A4 · Escrita na Meta | No ar: X1 a X4, X6 e X8, com a escrita ligada no piloto. X5 e X7 no fim do roteiro (pendência final 1). O piloto de ações (A4-14) ainda não começou. |
 | A5 · Google e mensageria | No código: Y1 a Y6 e Y8, quase tudo desligado; a leitura da mensageria está ligada no piloto. As vendas informadas ao Google (Y1) ficaram para depois, por decisão do dono. Y7 (vendas informadas à Meta) espera a decisão D-A5-9. |
-| **A6 · Mais canais (em curso)** | Z1 e Z2 prontas e desligadas: esperam o Google liberar a API do Perfil da Empresa. Z3 pela metade: falta a rota, o que o Estrategista lê e as telas P18 e P18, parte B (protótipos aprovados em 15/10/2026). Z4 voltou para o fim (pendência final 1); Z5 a Z8 não começaram. |
+| **A6 · Mais canais (em curso)** | Z1 e Z2 prontas e desligadas: esperam o Google liberar a API do Perfil da Empresa. Z3 quase no fim: a rota do cartão entrou em 20/10/2026; faltam o que o Estrategista lê e as telas P18 e P18, parte B (protótipos aprovados em 15/10/2026). Z4 voltou para o fim (pendência final 1); Z5 a Z8 não começaram. |
 | A7 · A8 | Não começaram. |
 
 **Funções ligadas para a empresa do piloto** (lidas na produção em 16/10/2026): `ia`, `meta_write`, `regem_write`, `mensageria`, `criativo`, `revisor`, `revisao_email`, `sombra` e `desempenho_anuncios`. Desligadas para todos: `modo_aprovacao`, `crm`, `whatsapp_campaign`, `conversoes_google`, `google_write`, `perfil_google`, `perfil_google_write` e `search_console` (esta, só depois das telas P18).
