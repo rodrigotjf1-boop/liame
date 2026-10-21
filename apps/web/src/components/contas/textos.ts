@@ -1,4 +1,4 @@
-import type { AccountFreshness, ConnectedAccountResponse, ConnectionResponse, DiscoveredAccount } from '@liame/contracts';
+import { type AccountFreshness, type ConnectedAccountResponse, type ConnectionResponse, type DiscoveredAccount, GOOGLE_ADS_SCOPE, GOOGLE_ANALYTICS_SCOPE } from '@liame/contracts';
 import { dataCompleta, dia, diasAte, quandoComHora } from '@/lib/formato';
 import { ESCOPO_DE_INFORMAR_VENDAS } from './vendas-google';
 
@@ -82,6 +82,20 @@ export function descricaoDoGoogle(informaVendas: boolean, mudaAnuncios: readonly
   if (muda) return `${comeco} Leitura e, no Google Ads, as mudanças que você aprovar.`;
   if (informaVendas) return `${comeco} Leitura, e a permissão de informar as vendas confirmadas.`;
   return quantos > 2 ? `${comeco} O Liame só lê.` : `${comeco} Somente leitura.`;
+}
+
+/**
+ * O que o cartão de uma autorização do Google diz das duas permissões de sempre, pelo que o Google CONCEDEU (`scopes`).
+ * Na tela de permissões do Google a pessoa desmarca o que não quer: a autorização só do perfil ou só do Search Console
+ * não tem o Google Ads nem o Analytics (ERR-158). Sem nenhuma permissão guardada (autorização antiga), a frase de sempre.
+ */
+export function sobreAAutorizacaoDoGoogle(scopes: readonly string[]): string {
+  const ads = scopes.includes(GOOGLE_ADS_SCOPE);
+  const analytics = scopes.includes(GOOGLE_ANALYTICS_SCOPE);
+  if (!scopes.length || (ads && analytics)) return 'Google Ads e Google Analytics numa autorização só, sem prazo de validade.';
+  if (ads) return 'Google Ads, sem prazo de validade. Não inclui o Google Analytics.';
+  if (analytics) return 'Google Analytics, sem prazo de validade. Não inclui o Google Ads.';
+  return 'Sem prazo de validade. Não inclui o Google Ads nem o Google Analytics.';
 }
 
 /** O título do botão do Google no diálogo de conectar. */

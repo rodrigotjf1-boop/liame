@@ -13,6 +13,14 @@ export const ConnectionProvider = z.enum(['meta', 'google', 'regem', 'regemcast'
 export type ConnectionProvider = z.infer<typeof ConnectionProvider>;
 
 /**
+ * As duas permissões de sempre da autorização do Google (A2): a do Google Ads e a de só leitura do Google Analytics.
+ * Públicas: na tela de permissões do Google a pessoa pode desmarcar qualquer uma, e o cartão da autorização diz o que
+ * ela concedeu de fato (ERR-158).
+ */
+export const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
+export const GOOGLE_ANALYTICS_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
+
+/**
  * A permissão do Perfil da Empresa no Google (A6, D-A6-17): a autorização do Google que a inclui alcança as lojas do
  * perfil. O Google não oferece uma só de leitura. Pública: a tela de Contas confere se a autorização a tem.
  */

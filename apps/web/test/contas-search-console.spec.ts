@@ -1,4 +1,12 @@
-import { type AccountFreshness, type ConnectedAccountResponse, type ConnectionResponse, type DiscoveredAccount, GOOGLE_BUSINESS_SCOPE, SEARCH_CONSOLE_SCOPE } from '@liame/contracts';
+import {
+  type AccountFreshness,
+  type ConnectedAccountResponse,
+  type ConnectionResponse,
+  type DiscoveredAccount,
+  GOOGLE_ANALYTICS_SCOPE,
+  GOOGLE_BUSINESS_SCOPE,
+  SEARCH_CONSOLE_SCOPE,
+} from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -71,7 +79,7 @@ const conexao = (extra: Partial<ConnectionResponse> = {}): ConnectionResponse =>
   created_at: local(14, 9),
   completed_at: local(14, 9, 1),
   refresh_expires_at: null,
-  scopes: [LEITURA, SEARCH_CONSOLE_SCOPE],
+  scopes: [LEITURA, GOOGLE_ANALYTICS_SCOPE, SEARCH_CONSOLE_SCOPE],
   discovered: [],
   accounts: [],
   site_search: { result: 'ok', searched_at: local(14, 9, 1), sites: 1 },

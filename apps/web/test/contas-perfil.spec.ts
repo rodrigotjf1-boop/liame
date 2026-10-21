@@ -1,4 +1,12 @@
-import { type AccountFreshness, type ConnectedAccountResponse, type ConnectionResponse, type DiscoveredAccount, GOOGLE_BUSINESS_SCOPE } from '@liame/contracts';
+import {
+  type AccountFreshness,
+  type ConnectedAccountResponse,
+  type ConnectionResponse,
+  type DiscoveredAccount,
+  GOOGLE_ANALYTICS_SCOPE,
+  GOOGLE_BUSINESS_SCOPE,
+  SEARCH_CONSOLE_SCOPE,
+} from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -26,6 +34,7 @@ import {
   gruposDaEscolha,
   plataforma,
   resumoDaDescoberta,
+  sobreAAutorizacaoDoGoogle,
   tituloDoGoogle,
 } from '@/components/contas/textos';
 
@@ -78,7 +87,7 @@ const conexao = (extra: Partial<ConnectionResponse> = {}): ConnectionResponse =>
   created_at: local(11, 9),
   completed_at: local(11, 9, 1),
   refresh_expires_at: null,
-  scopes: [LEITURA, GOOGLE_BUSINESS_SCOPE],
+  scopes: [LEITURA, GOOGLE_ANALYTICS_SCOPE, GOOGLE_BUSINESS_SCOPE],
   discovered: [],
   accounts: [],
   profile_search: { result: 'ok', searched_at: local(11, 9, 1), stores: 1 },
@@ -213,6 +222,20 @@ describe('a autorização do Google com o perfil', () => {
     const semFuncao = renderToStaticMarkup(createElement(CartaoAutorizacao, { ...base, conexao: conexao({ accounts: [conta('google_ads', '1')] }), perfil: null }));
     expect(semFuncao).toContain('1 conta');
     expect(semFuncao).not.toContain('perfil');
+  });
+
+  it('ERR-158: o cartão diz o que o Google CONCEDEU, não o que o Liame pediu (a pessoa desmarca na tela do Google)', () => {
+    expect(sobreAAutorizacaoDoGoogle([LEITURA, GOOGLE_ANALYTICS_SCOPE])).toBe('Google Ads e Google Analytics numa autorização só, sem prazo de validade.');
+    expect(sobreAAutorizacaoDoGoogle([LEITURA, GOOGLE_BUSINESS_SCOPE])).toBe('Google Ads, sem prazo de validade. Não inclui o Google Analytics.');
+    expect(sobreAAutorizacaoDoGoogle([GOOGLE_ANALYTICS_SCOPE])).toBe('Google Analytics, sem prazo de validade. Não inclui o Google Ads.');
+    // A autorização antiga, sem as permissões guardadas: a frase de sempre.
+    expect(sobreAAutorizacaoDoGoogle([])).toBe('Google Ads e Google Analytics numa autorização só, sem prazo de validade.');
+    // O caso do piloto (21/10/2026): a autorização só do perfil, que já tinha o Search Console da mesma conta.
+    const base = { agora, podeConectar: true, procurando: false, aoEscolher: null, aoReconectar: () => {}, aoAutorizar: () => {}, aoProcurar: () => {}, aoRevogar: () => {} };
+    const soDoPerfil = conexao({ scopes: [GOOGLE_BUSINESS_SCOPE, SEARCH_CONSOLE_SCOPE], discovered: [{ ...LOJA, linked: true }], accounts: [conta('google_business', 'locations/1')] });
+    const html = renderToStaticMarkup(createElement(CartaoAutorizacao, { ...base, conexao: soDoPerfil, perfil: perfilNaAutorizacao(soDoPerfil, true) }));
+    expect(html).toContain('Sem prazo de validade. Não inclui o Google Ads nem o Google Analytics. Inclui a permissão do perfil da empresa.');
+    expect(html).not.toContain('Google Ads e Google Analytics numa autorização só');
   });
 
   it('o diálogo de revogar diz que para a leitura das contas e da loja', () => {
