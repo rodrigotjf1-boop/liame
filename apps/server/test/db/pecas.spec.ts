@@ -406,4 +406,19 @@ describe.skipIf(!hasDb)('Peças do Criativo: pedido, fila, conferência e leitur
     expect(await pecas(outra)).toEqual([]);
     expect((await api.call('GET', '/v1/ad-pieces/nao-e-um-id', { cookie: d.cookie })).status).toBe(400);
   });
+
+  it('V106: o pedido da marca arquivada fica parado na fila (não volta à vez a cada reserva) e é escrito quando ela é reativada', async () => {
+    const d = await dono();
+    const p = AdPieceRequestResponse.parse((await pedir(d)).body);
+    expect((await api.call('POST', `/v1/brands/${d.brandId}/archive`, { cookie: d.cookie })).status).toBe(200);
+    // Arquivada: a vez não chega, nem depois do prazo da reserva (dez minutos).
+    expect(await rodarFila(d)).toEqual([]);
+    expect(await rodarFila(d, new Date(Date.now() + 11 * 60_000))).toEqual([]);
+    const [linha] = await ownerQuery<{ status: string; attempts: number }>(`select status, attempts from liame.ad_piece_request where id = $1`, [p.id]);
+    expect(linha).toEqual({ status: 'pendente', attempts: 0 });
+    // Reativada: o pedido é escrito.
+    expect((await api.call('POST', `/v1/brands/${d.brandId}/reactivate`, { cookie: d.cookie })).status).toBe(200);
+    responder({ recusa: null, pecas: [BOA] });
+    expect(await rodarFila(d)).toEqual([{ id: p.id, tenantId: d.tenantId, status: 'concluido' }]);
+  });
 });

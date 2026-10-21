@@ -58,6 +58,9 @@ export class PesquisaLoop {
              where r.attempts < ${TENTATIVAS_DA_LEITURA}
                and ((r.status = 'pendente' and (r.next_attempt_at is null or r.next_attempt_at <= ${ref}))
                  or (r.status = 'lendo' and r.next_attempt_at <= ${ref}))
+               -- A marca arquivada fica fora da vez (V106): o pedido espera parado e volta quando ela for reativada. Sem
+               -- isto, a leitura o descartava e ele voltava à vez a cada reserva, para sempre.
+               and exists (select 1 from liame.brand b where b.id = r.brand_id and b.archived_at is null)
                ${tenantFilter(scope, sql`r.tenant_id`)}
              order by coalesce(r.next_attempt_at, r.created_at), r.id
              limit ${limite}
