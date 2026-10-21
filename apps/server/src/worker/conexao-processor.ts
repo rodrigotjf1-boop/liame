@@ -8,6 +8,7 @@ import { contaPelaLigacao, contasPelosTokens } from '../connections/descoberta-r
 import {
   acessoGoogle,
   type CredencialGuardada,
+  type CredencialLigacaoRegem,
   type CredencialLigacaoRegemcast,
   type CredencialRegem,
   ESCOPOS_GOOGLE,
@@ -33,7 +34,7 @@ import {
   type SiteDoSearchConsole,
   TAMANHO_DO_SITE_LIGADO,
 } from '../connectors/search-console/search-console.js';
-import { peloToken, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
+import { comAcessoDaLoja, type CredencialDaLoja, PERMISSOES_DA_ESCRITA, peloToken, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
 import { lerLoja, trocarCodigoRegem } from '../connectors/regem/conector-regem.js';
 import type { ContaDescoberta, Credencial } from '../connectors/tipos.js';
 import { versaoRegistrada } from '../connectors/tipos.js';
@@ -429,6 +430,9 @@ export class ConexaoProcessor {
     if (credencial.tipo === 'regem') {
       return { descobertas: await descobrirLojas(cliente, this.config.produtos.regemApiUrl, credencial), perfil: null, sites: null };
     }
+    if (credencial.tipo === 'regem_ligacao') {
+      return { descobertas: await descobrirLojasPelaLigacao(cliente, this.config, credencial), perfil: null, sites: null };
+    }
     // O token do RegemCast só vai para o RegemCast: o "Procurar as contas de novo" de uma conexão da distribuição lia a
     // loja do Regem com ele, o Regem recusava e a conexão virava erro.
     if (credencial.tipo === 'regemcast') {
@@ -635,5 +639,43 @@ export async function descobrirLojas(cliente: ClienteConector, apiUrl: string, c
     }
   }
   if (!descobertas.length && recusados) throw new ErroConector('autenticacao', credencial.tipo, 'todos os tokens das lojas foram recusados');
+  return descobertas;
+}
+
+/**
+ * Lojas da autorização por clique do Regem (F3, parte C): cada ligação diz a loja dela (`GET /loja`), com o token do DMS
+ * ID do aplicativo do Liame. A `/loja` pela ligação devolve as permissões que valem na chamada (as da loja E as do token):
+ * o token pede as do aplicativo inteiro (a escrita inclui a leitura), para elas serem as que o presidente liberou. A
+ * ligação recusada (`ligacao-invalida`) fica de fora; se todas forem recusadas, a conexão precisa ser refeita. A recusa
+ * do token do DMS ID é do aplicativo e sobe (ERR-149).
+ */
+export async function descobrirLojasPelaLigacao(
+  cliente: ClienteConector,
+  config: Pick<AppConfig, 'dmsId' | 'produtos'>,
+  credencial: CredencialLigacaoRegem,
+): Promise<DescobertaGuardada[]> {
+  const descobertas: DescobertaGuardada[] = [];
+  let recusadas = 0;
+  for (const l of credencial.lojas) {
+    const daLoja: CredencialDaLoja = { via: 'ligacao', ligacao: l.ligacao, escopos: l.escopos, reserva: null };
+    try {
+      const loja = await comAcessoDaLoja(daLoja, config, l.loja_id, PERMISSOES_DA_ESCRITA, (a) => lerLoja({ cliente, apiUrl: config.produtos.regemApiUrl }, a));
+      descobertas.push({
+        provider: 'regem',
+        external_id: loja.loja_id,
+        name: loja.loja_nome,
+        currency: loja.moeda,
+        timezone: loja.fuso,
+        provider_attributes: { escopos: loja.escopos, empresa: loja.empresa_nome ?? null, cardapio_url: loja.cardapio_url ?? null },
+      });
+    } catch (err) {
+      if (err instanceof ErroConector && recusaDaLoja(daLoja, err)) {
+        recusadas++;
+        continue;
+      }
+      throw err;
+    }
+  }
+  if (!descobertas.length && recusadas) throw new ErroConector('autenticacao', 'regem', 'todas as ligações das lojas foram recusadas');
   return descobertas;
 }

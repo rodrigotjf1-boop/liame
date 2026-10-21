@@ -101,7 +101,10 @@ export async function registrarAvisoNoRegem(ctx: Contexto, a: AcessoAoRegem, p: 
   return conferir(AvisoRegem, r.corpo, 'webhook');
 }
 
-/** Revoga o acesso da loja no Regem (segunda camada: a credencial já saiu do cofre do Liame); revogar o token revoga a ligação. */
+/**
+ * Revoga o acesso da loja no Regem (segunda camada: a credencial já saiu do cofre do Liame). Revogar o token revoga a
+ * ligação; pela ligação (a da autorização por clique), o Regem revoga a linha dela, que é a do acesso da loja.
+ */
 export async function revogarNoRegem(ctx: Contexto, a: AcessoAoRegem): Promise<void> {
   try {
     await ctx.cliente.requisitar({
@@ -115,8 +118,10 @@ export async function revogarNoRegem(ctx: Contexto, a: AcessoAoRegem): Promise<v
       apiVersion: VERSAO_CONTRATO_REGEM,
     });
   } catch (err) {
-    // Já revogado lá (401): o objetivo foi atingido.
-    if (err instanceof ErroConector && err.tipo === 'autenticacao') return;
+    // Já revogado lá: o objetivo foi atingido. Pelo `rgm_it_`, todo 401 é dele. Pela ligação, só `ligacao-invalida`: o
+    // `token-invalido` é o token do DMS ID do aplicativo recusado, e a ligação segue valendo lá (sobe, e quem pede o
+    // token pede outro uma vez; ERR-149).
+    if (err instanceof ErroConector && err.tipo === 'autenticacao' && (!a.ligacao || err.codigoProvider === 'ligacao-invalida')) return;
     throw err;
   }
 }

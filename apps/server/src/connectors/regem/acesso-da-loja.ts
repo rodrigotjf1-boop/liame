@@ -16,6 +16,9 @@ import { clienteDoDmsIdDoProcesso, comTokenDoDmsId } from '../dms/dms-id.js';
 // decisão F3-6) e quando a ligação guardada veio do `rgm_it_` de agora. O `rgm_it_` segue aceito até a F6 e fica de
 // reserva: pela ligação, a recusa do acesso ou da permissão é repetida pelo token, e quem diz se a loja foi desconectada é
 // a recusa do `rgm_it_`. Sem reserva, pela ligação só `ligacao-invalida` é da loja (ERR-149: nunca "todo 401").
+//
+// A loja da autorização por clique (F3, parte C; credencial `regem_ligacao`) só tem a ligação: ela é a credencial da
+// loja, vale sem `REGEM_PELA_LIGACAO` (não há `rgm_it_` de onde trocar nem para onde voltar) e vai sem reserva.
 
 /** O acesso de uma chamada ao conector do Regem: o token (o `rgm_it_`, ou o do DMS ID) e, pela ligação, o segredo dela. */
 export type AcessoAoRegem = { token: string; lojaChave: string; ligacao?: string };
@@ -70,10 +73,17 @@ export function ligacaoDoToken(lida: string | null | undefined, token: string): 
 /** Pelo `rgm_it_`. */
 export const peloToken = (token: string, escopos: string[]): CredencialDaLoja => ({ via: 'token', token, escopos });
 
+/** A ligação da loja na credencial da autorização por clique (`regem_ligacao`): sem reserva, porque não há `rgm_it_`. */
+export function ligacaoDoClique(guardada: CredencialGuardada | null | undefined, externalId: string): CredencialDaLoja | null {
+  if (guardada?.tipo !== 'regem_ligacao') return null;
+  const da = guardada.lojas.find((l) => l.loja_id === externalId);
+  return da ? { via: 'ligacao', ligacao: da.ligacao, escopos: da.escopos, reserva: null } : null;
+}
+
 /**
- * A credencial de uma chamada da leitura de verdade: pela ligação só com `REGEM_PELA_LIGACAO` (`pelaLigacao`) e a ligação
- * do cofre (`ligacaoLida`, o texto guardado) saída do `rgm_it_` de agora, que fica de reserva; senão, pelo `rgm_it_`.
- * Nula = o cofre não tem o token desta loja.
+ * A credencial de uma chamada da leitura de verdade: a loja da autorização por clique, pela ligação dela (sempre);
+ * senão, pela ligação só com `REGEM_PELA_LIGACAO` (`pelaLigacao`) e a ligação do cofre (`ligacaoLida`, o texto guardado)
+ * saída do `rgm_it_` de agora, que fica de reserva; senão, pelo `rgm_it_`. Nula = o cofre não tem a credencial desta loja.
  */
 export function credencialDaLoja(
   guardada: CredencialGuardada | null | undefined,
@@ -81,10 +91,23 @@ export function credencialDaLoja(
   ligacaoLida: string | null | undefined,
   pelaLigacao: boolean,
 ): CredencialDaLoja | null {
+  if (guardada?.tipo === 'regem_ligacao') return ligacaoDoClique(guardada, externalId);
   const t = tokenDaLoja(guardada, externalId);
   if (!t) return null;
   const ligacao = pelaLigacao ? ligacaoDoToken(ligacaoLida, t.token) : null;
   return ligacao ? { via: 'ligacao', ligacao: ligacao.ligacao, escopos: t.escopos, reserva: t.token } : peloToken(t.token, t.escopos);
+}
+
+/**
+ * As lojas de uma credencial do Regem com o acesso de cada uma, para desligar lá: as do `rgm_it_` (a autorização de
+ * 01/10, a distribuição) pelo token; as da autorização por clique pela ligação. Outra credencial: nenhuma.
+ */
+export function credenciaisDaConexaoRegem(guardada: CredencialGuardada | null | undefined): { lojaId: string; credencial: CredencialDaLoja }[] {
+  if (guardada?.tipo === 'regem') return guardada.lojas.map((l) => ({ lojaId: l.loja_id, credencial: peloToken(l.token, l.escopos) }));
+  if (guardada?.tipo === 'regem_ligacao') {
+    return guardada.lojas.map((l) => ({ lojaId: l.loja_id, credencial: { via: 'ligacao', ligacao: l.ligacao, escopos: l.escopos, reserva: null } }));
+  }
+  return [];
 }
 
 /**
