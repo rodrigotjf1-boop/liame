@@ -8,6 +8,7 @@ import type { AppConfig } from '../config.js';
 import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector, type TipoErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
+import { AcessoDaExecucao, credencialDaLoja, PERMISSOES_DA_LEITURA, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
 import { lerLoja, lerPagina, registrarAvisoNoRegem, VERSAO_CONTRATO_REGEM } from '../connectors/regem/conector-regem.js';
 import { ClienteAnonimizado, CupomRegem, type LojaRegem, PedidoRegem } from '../connectors/regem/contrato-regem.js';
 import { newWebhookSecret } from '../events/standard-webhooks.js';
@@ -25,6 +26,10 @@ import { normalizarTelefone } from './telefone.js';
 // Os conjuntos (cupons, pedidos, clientes anonimizados) são independentes. Token recusado vale para a loja
 // inteira e para tudo; qualquer outro erro fica no estado do conjunto dele, com o motivo e a espera própria,
 // e a execução segue para os outros. A loja volta para a fila na próxima leitura mais cedo entre eles.
+//
+// O acesso de cada chamada sai de `acesso-da-loja.ts` (Hub DMS, F3, parte B): pelo `rgm_it_` ou, com
+// `REGEM_PELA_LIGACAO` e a ligação guardada, pelo DMS ID com a ligação. Pela ligação, a recusa do acesso ou da
+// permissão é repetida pelo `rgm_it_` e a execução segue por ele; só a recusa do `rgm_it_` desconecta a loja (ERR-149).
 
 /** Uma leitura a cada 15 minutos (o webhook do Regem, quando existir, antecipa). */
 export const INTERVALO_VENDAS_MIN = 15;
@@ -68,8 +73,11 @@ type CursorVendas = {
   espera_ate?: string;
   /** O tipo da falha que o conjunto espera passar (a situação da conta sai daqui). */
   falha?: TipoFalha;
-  /** Pedidos: a última vez que o aviso (webhook) desta loja foi registrado no Regem, e se deu certo. */
-  aviso?: { em: string; ok: boolean };
+  /**
+   * Pedidos: a última vez que o aviso (webhook) desta loja foi registrado no Regem, se deu certo e por qual credencial
+   * (sem `via` = pelo token, o de antes da F3). Trocou a credencial, o registro é repetido na hora pela nova.
+   */
+  aviso?: { em: string; ok: boolean; via?: 'token' | 'ligacao' };
   /** Pedidos: quando chegou o último aviso do Regem (gravado por quem recebe; a execução nunca o sobrescreve). */
   evento_em?: string;
 };
@@ -89,6 +97,7 @@ type LinhaConta = {
   status_reason: string | null;
   credential_secret_id: string | null;
   connection_id: string | null;
+  ligacao_secret_id: string | null;
 };
 
 export type ResultadoVendas = {
@@ -157,21 +166,24 @@ export class SincronizadorVendas {
       // `inicio`: o relógio do BANCO no começo da leitura (o mesmo que carimba o aviso recebido).
       const r = await tx.execute<LinhaConta & { cursores: Record<string, CursorVendas> | null; inicio: string }>(sql`
         select a.id, a.tenant_id, a.brand_id, a.unit_id, a.external_id, a.status, a.status_reason, a.credential_secret_id, a.connection_id,
-               now()::text as inicio,
+               a.ligacao_secret_id, now()::text as inicio,
                (select jsonb_object_agg(s.dataset, s.cursor) from liame.sync_state s where s.connected_account_id = a.id) as cursores
           from liame.connected_account a
          where a.id = ${contaId} and a.provider = 'regem' and a.disconnected_at is null`);
       const conta = r.rows[0];
       if (!conta) return null;
       const segredo = conta.credential_secret_id ? await this.vault.readSecret(tx, conta.credential_secret_id) : null;
-      return { conta, segredo, cursores: conta.cursores ?? {} };
+      // A ligação do Hub DMS só sai do cofre com a leitura pela ligação ligada.
+      const ligacao = this.config.produtos.regemPelaLigacao && conta.ligacao_secret_id ? await this.vault.readSecret(tx, conta.ligacao_secret_id) : null;
+      return { conta, segredo, ligacao, cursores: conta.cursores ?? {} };
     });
     if (!lida) return { status: 'ignorada' };
     const { conta, cursores } = lida;
 
-    const credencial = lida.segredo ? (JSON.parse(lida.segredo) as CredencialGuardada) : null;
-    const loja = credencial?.tipo === 'regem' ? credencial.lojas.find((l) => l.loja_id === conta.external_id) : undefined;
-    if (!loja) return this.falhou(conta, 'pedidos', cursores.pedidos ?? {}, new ErroConector('autenticacao', 'regem', 'autorização revogada ou sem o token desta loja'), agora);
+    const guardada = lida.segredo ? (JSON.parse(lida.segredo) as CredencialGuardada) : null;
+    const credencial = credencialDaLoja(guardada, conta.external_id, lida.ligacao, this.config.produtos.regemPelaLigacao);
+    if (!credencial) return this.falhou(conta, 'pedidos', cursores.pedidos ?? {}, new ErroConector('autenticacao', 'regem', 'autorização revogada ou sem o token desta loja'), agora);
+    const acesso = new AcessoDaExecucao(credencial, this.config, conta.external_id, PERMISSOES_DA_LEITURA, (err) => this.ligacaoRecusada(conta, err));
 
     const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos) });
     const ctx: Contexto = { cliente, apiUrl: this.config.produtos.regemApiUrl };
@@ -185,7 +197,7 @@ export class SincronizadorVendas {
 
     for (const dataset of ORDEM) {
       const estado: EstadoConjunto = { cursor: cursores[dataset] ?? {} };
-      if (!loja.escopos.includes(ESCOPO[dataset])) {
+      if (!credencial.escopos.includes(ESCOPO[dataset])) {
         resultado.semPermissao!.push(dataset);
         await this.marcarEstado(conta, dataset, 'sem_permissao: a loja não liberou este escopo', { ...estado.cursor, proxima: this.depois(agora, 24 * 60) });
         continue;
@@ -199,11 +211,11 @@ export class SincronizadorVendas {
         continue;
       }
       try {
-        proximas.push(await this.lerConjunto(dataset, ctx, conta, loja.token, estado, agora, resultado));
+        proximas.push(await this.lerConjunto(dataset, ctx, conta, acesso, estado, agora, resultado));
         lidos++;
       } catch (err) {
-        // Token recusado vale para a loja inteira: para tudo e pede para conectar de novo.
-        if (err instanceof ErroConector && err.tipo === 'autenticacao') {
+        // A loja recusada (o `rgm_it_`) vale para a loja inteira: para tudo e pede para conectar de novo.
+        if (err instanceof ErroConector && recusaDaLoja(acesso.credencial, err)) {
           await this.fecharExecucao(conta, runId, 'falhou', cliente.chamadas, resultado, `${dataset}: ${err.tipo}: ${err.message}`);
           return this.falhou(conta, dataset, estado.cursor, err, agora);
         }
@@ -221,7 +233,7 @@ export class SincronizadorVendas {
     resultado.status = status;
     if (falharam.length) resultado.erro = falharam.map((d) => `${d}: ${resultado.falhas![d]}`).join('; ').slice(0, 500);
     await this.fecharExecucao(conta, runId, status, cliente.chamadas, resultado, resultado.erro ?? null);
-    await this.conferirAviso(ctx, conta, loja.token, cursores.pedidos ?? {}, agora);
+    await this.conferirAviso(ctx, conta, acesso, cursores.pedidos ?? {}, agora);
     // Sem nenhum conjunto liberado pelo token, a loja é vista de novo no dia seguinte.
     await this.agendarLoja(conta, proximas.length ? Math.min(...proximas) : agora.getTime() + DIA_MS, conta.inicio);
     await this.atualizarSituacao(conta, comErro);
@@ -233,31 +245,31 @@ export class SincronizadorVendas {
     dataset: DatasetVendas,
     ctx: Contexto,
     conta: LinhaConta,
-    token: string,
+    acesso: AcessoDaExecucao,
     estado: EstadoConjunto,
     agora: Date,
     resultado: ResultadoVendas,
   ): Promise<number> {
     if (dataset === 'cupons') {
-      const r = await this.lerCupons(ctx, conta, token, estado, agora);
+      const r = await this.lerCupons(ctx, conta, acesso, estado, agora);
       resultado.cupons = r.alterados;
       resultado.cuponsIgnorados = r.ignorados;
       resultado.atribuidos = (resultado.atribuidos ?? 0) + r.atribuidos;
       return r.proxima;
     }
     if (dataset === 'pedidos') {
-      const r = await this.lerPedidos(ctx, conta, token, estado, agora);
+      const r = await this.lerPedidos(ctx, conta, acesso, estado, agora);
       resultado.pedidos = r.pedidos;
       resultado.atribuidos = (resultado.atribuidos ?? 0) + r.atribuidos;
       return r.proxima;
     }
-    const r = await this.lerAnonimizados(ctx, conta, token, estado, agora);
+    const r = await this.lerAnonimizados(ctx, conta, acesso, estado, agora);
     resultado.anonimizados = r.apagados;
     return r.proxima;
   }
 
   /** Pedidos: cada página vira pedidos, cliques e a atribuição dos que mudaram, numa transação só. */
-  private async lerPedidos(ctx: Contexto, conta: LinhaConta, token: string, estado: EstadoConjunto, agora: Date) {
+  private async lerPedidos(ctx: Contexto, conta: LinhaConta, acesso: AcessoDaExecucao, estado: EstadoConjunto, agora: Date) {
     const inicial = semFalha(estado.cursor);
     const total = { novos: 0, atualizados: 0, ignorados: 0 };
     let atribuidos = 0;
@@ -267,7 +279,8 @@ export class SincronizadorVendas {
     let proxima = agora.getTime() + INTERVALO_VENDAS_MIN * 60_000;
     for (let pagina = 0; pagina < PAGINAS_POR_EXECUCAO; pagina++) {
       const extra: Record<string, string> = cargaInicial && !posicao ? { confirmados_desde: new Date(agora.getTime() - CARGA_INICIAL_VENDAS_DIAS * DIA_MS).toISOString() } : {};
-      const pg = await lerPagina(ctx, { token, lojaChave: conta.external_id, rota: 'pedidos', item: PedidoRegem, cursor: posicao, extra });
+      const cursor = posicao;
+      const pg = await acesso.chamar((a) => lerPagina(ctx, { ...a, rota: 'pedidos', item: PedidoRegem, cursor, extra }));
       const r = await this.gravarPaginaPedidos(conta, pg.itens);
       total.novos += r.novos;
       total.atualizados += r.atualizados;
@@ -293,14 +306,10 @@ export class SincronizadorVendas {
       let pos: string | null = null;
       const desde = new Date(agora.getTime() - RECONCILIACAO_DIAS * DIA_MS).toISOString();
       for (let pagina = 0; pagina < PAGINAS_POR_EXECUCAO; pagina++) {
-        const pg: { itens: PedidoRegem[]; proximoCursor: string | null; temMais: boolean } = await lerPagina(ctx, {
-          token,
-          lojaChave: conta.external_id,
-          rota: 'pedidos',
-          item: PedidoRegem,
-          cursor: pos,
-          extra: pos ? {} : { confirmados_desde: desde },
-        });
+        const cursorDaReconciliacao = pos;
+        const pg: { itens: PedidoRegem[]; proximoCursor: string | null; temMais: boolean } = await acesso.chamar((a) =>
+          lerPagina(ctx, { ...a, rota: 'pedidos', item: PedidoRegem, cursor: cursorDaReconciliacao, extra: cursorDaReconciliacao ? {} : { confirmados_desde: desde } }),
+        );
         const r = await this.gravarPaginaPedidos(conta, pg.itens);
         total.atualizados += r.atualizados;
         total.novos += r.novos;
@@ -308,7 +317,7 @@ export class SincronizadorVendas {
         pos = pg.proximoCursor;
         if (!pg.temMais || !pos) break;
       }
-      await this.conferirCardapio(ctx, conta, token);
+      await this.conferirCardapio(ctx, conta, acesso);
       estado.cursor = { ...estado.cursor, reconciliacao_em: agora.toISOString() };
       await this.marcarEstado(conta, 'pedidos', null, estado.cursor);
     }
@@ -342,7 +351,7 @@ export class SincronizadorVendas {
    * cupom novo ou alterado refaz a atribuição por cupom dos pedidos que o citam — inclusive os que chegaram antes
    * dele (leitura dos cupons que falhou, código trocado na origem).
    */
-  private async lerCupons(ctx: Contexto, conta: LinhaConta, token: string, estado: EstadoConjunto, agora: Date) {
+  private async lerCupons(ctx: Contexto, conta: LinhaConta, acesso: AcessoDaExecucao, estado: EstadoConjunto, agora: Date) {
     const inicial = semFalha(estado.cursor);
     let posicao = inicial.cursor ?? null;
     let alterados = 0;
@@ -350,7 +359,8 @@ export class SincronizadorVendas {
     let atribuidos = 0;
     let proxima = agora.getTime() + INTERVALO_VENDAS_MIN * 60_000;
     for (let pagina = 0; pagina < PAGINAS_POR_EXECUCAO; pagina++) {
-      const pg = await lerPagina(ctx, { token, lojaChave: conta.external_id, rota: 'cupons', item: CupomRegem, cursor: posicao });
+      const cursor = posicao;
+      const pg = await acesso.chamar((a) => lerPagina(ctx, { ...a, rota: 'cupons', item: CupomRegem, cursor }));
       const g = await withTenant(this.db, conta.tenant_id, async (tx) => {
         const gravados = await gravarCupons(tx, { tenantId: conta.tenant_id, brandId: conta.brand_id, connectedAccountId: conta.id }, pg.itens);
         const pedidos = await pedidosDosCupons(tx, conta.tenant_id, gravados.ids);
@@ -375,13 +385,14 @@ export class SincronizadorVendas {
   }
 
   /** Cliente anonimizado no Regem: o cliente pseudonimizado some do Liame (A2.5-7). Apagar é do escopo de sistema. */
-  private async lerAnonimizados(ctx: Contexto, conta: LinhaConta, token: string, estado: EstadoConjunto, agora: Date) {
+  private async lerAnonimizados(ctx: Contexto, conta: LinhaConta, acesso: AcessoDaExecucao, estado: EstadoConjunto, agora: Date) {
     const inicial = semFalha(estado.cursor);
     let posicao = inicial.cursor ?? null;
     let apagados = 0;
     let proxima = agora.getTime() + INTERVALO_VENDAS_MIN * 60_000;
     for (let pagina = 0; pagina < PAGINAS_POR_EXECUCAO; pagina++) {
-      const pg = await lerPagina(ctx, { token, lojaChave: conta.external_id, rota: 'clientes/anonimizados', item: ClienteAnonimizado, cursor: posicao });
+      const cursor = posicao;
+      const pg = await acesso.chamar((a) => lerPagina(ctx, { ...a, rota: 'clientes/anonimizados', item: ClienteAnonimizado, cursor }));
       if (pg.itens.length) {
         apagados += await this.apagarAnonimizados({ tenantId: conta.tenant_id, connectedAccountId: conta.id, externalCustomerIds: pg.itens.map((c) => c.id) });
       }
@@ -398,12 +409,12 @@ export class SincronizadorVendas {
    * O endereço do cardápio (destino dos links, F5) muda no Regem sem reconectar: relido uma vez por dia, na
    * reconciliação. Falha aqui não segura os pedidos (tenta de novo no dia seguinte); token recusado para tudo.
    */
-  private async conferirCardapio(ctx: Contexto, conta: LinhaConta, token: string): Promise<void> {
+  private async conferirCardapio(ctx: Contexto, conta: LinhaConta, acesso: AcessoDaExecucao): Promise<void> {
     let loja: LojaRegem;
     try {
-      loja = await lerLoja(ctx, token, conta.external_id);
+      loja = await acesso.chamar((a) => lerLoja(ctx, a));
     } catch (err) {
-      if (err instanceof ErroConector && err.tipo === 'autenticacao') throw err;
+      if (err instanceof ErroConector && recusaDaLoja(acesso.credencial, err)) throw err;
       this.logger.warn(`loja ${conta.id}: cardápio não conferido hoje (${err instanceof ErroConector ? `${err.tipo}: ${err.message}` : 'erro interno'})`);
       return;
     }
@@ -445,32 +456,59 @@ export class SincronizadorVendas {
    * O aviso do Regem (contrato §3): o Liame diz ao Regem para onde avisar quando algo muda nesta loja — o
    * inbox da conexão dela, com o segredo da conexão. É só um atalho: sem ele, a leitura de 15 em 15 minutos
    * segue igual, por isso nada aqui falha a execução. Depois da carga inicial (a primeira leitura já é
-   * pesada), uma vez por dia (repetir religa o que o Regem tiver pausado); se falhou, de hora em hora.
+   * pesada), uma vez por dia (repetir religa o que o Regem tiver pausado); se falhou, de hora em hora. Na passagem
+   * para a ligação (ou de volta para o token), o registro é repetido na hora pela credencial nova (Hub DMS, F3).
    */
-  private async conferirAviso(ctx: Contexto, conta: LinhaConta, token: string, cursor: CursorVendas, agora: Date): Promise<void> {
+  private async conferirAviso(ctx: Contexto, conta: LinhaConta, acesso: AcessoDaExecucao, cursor: CursorVendas, agora: Date): Promise<void> {
     if (!conta.connection_id || !cursor.carga_inicial_em) return;
     const ultimo = cursor.aviso?.em ? Date.parse(cursor.aviso.em) : Number.NaN;
-    if (agora.getTime() - ultimo < (cursor.aviso?.ok ? DIA_MS : HORA_MS)) return;
+    const trocouDeCredencial = (cursor.aviso?.via ?? 'token') !== acesso.credencial.via;
+    if (!trocouDeCredencial && agora.getTime() - ultimo < (cursor.aviso?.ok ? DIA_MS : HORA_MS)) return;
     let ok = false;
     try {
       const segredo = await this.segredoDoAviso(conta);
       // Conexão revogada no meio do caminho: não há para onde avisar.
       if (!segredo) return;
-      await registrarAvisoNoRegem(ctx, token, conta.external_id, { url: `${this.config.apiUrl}/v1/inbox/regem/${conta.connection_id}`, segredo });
+      await acesso.chamar((a) => registrarAvisoNoRegem(ctx, a, { url: `${this.config.apiUrl}/v1/inbox/regem/${conta.connection_id}`, segredo }));
       ok = true;
     } catch (err) {
       // Só o tipo e o texto do erro do conector (o segredo e o token nunca entram na mensagem).
       this.logger.warn(`loja ${conta.id}: aviso do Regem não registrado (${err instanceof ErroConector ? `${err.tipo}: ${err.message}` : 'erro interno'}); nova tentativa em uma hora`);
     }
+    // A credencial que valeu no fim (pela ligação recusada, a repetição pelo token).
+    const via = acesso.credencial.via;
     try {
       await withTenant(this.db, conta.tenant_id, (tx) =>
         tx.execute(sql`
           update liame.sync_state
-             set cursor = cursor || jsonb_build_object('aviso', jsonb_build_object('em', ${agora.toISOString()}::text, 'ok', ${ok}::boolean)), updated_at = now()
+             set cursor = cursor || jsonb_build_object('aviso', jsonb_build_object('em', ${agora.toISOString()}::text, 'ok', ${ok}::boolean, 'via', ${via}::text)), updated_at = now()
            where connected_account_id = ${conta.id} and dataset = 'pedidos'`),
       );
     } catch (err) {
       this.logger.warn(`loja ${conta.id}: situação do aviso não gravada (${err instanceof Error ? err.name : 'erro'}); o registro é repetido na próxima leitura`);
+    }
+  }
+
+  /**
+   * Pela ligação, o Regem recusou o acesso ou a permissão e a chamada foi repetida pelo `rgm_it_` (a execução segue por
+   * ele). A ligação recusada (`ligacao-invalida`: girada por outra troca, revogada) sai do cofre, se ainda for a mesma que
+   * esta leitura usou: a rotina da comparação troca de novo. O token do DMS ID recusado e a falta de permissão são do
+   * aplicativo e não mexem na ligação. Não rejeita (V5): falha aqui não segura a leitura.
+   */
+  private async ligacaoRecusada(conta: LinhaConta, err: ErroConector): Promise<void> {
+    this.logger.warn(`loja ${conta.id}: o Regem recusou a ligação do Hub DMS (${err.tipo}${err.codigoProvider ? `:${err.codigoProvider}` : ''}); a leitura segue pelo token`);
+    const usada = conta.ligacao_secret_id;
+    if (err.codigoProvider !== 'ligacao-invalida' || !usada) return;
+    try {
+      await withTenant(this.db, conta.tenant_id, async (tx) => {
+        const r = await tx.execute(sql`
+          update liame.connected_account set ligacao_secret_id = null, updated_at = now()
+           where id = ${conta.id} and ligacao_secret_id = ${usada}
+          returning id`);
+        if (r.rows.length) await this.vault.revokeSecret(tx, usada);
+      });
+    } catch (e) {
+      this.logger.warn(`loja ${conta.id}: a ligação recusada não saiu do cofre (${e instanceof Error ? e.name : 'erro'}); sai na próxima recusa`);
     }
   }
 

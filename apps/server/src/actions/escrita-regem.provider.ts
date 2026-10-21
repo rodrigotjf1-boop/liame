@@ -28,7 +28,7 @@ export class EscritaRegem implements OnModuleInit {
       lerSegredo: (tx, secretId) => this.vault.readSecret(tx, secretId),
       // Uma tentativa por chamada: a repetição é do worker, com a mesma chave de idempotência.
       cliente: () => new ClienteConector(database.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 1 }),
-      apiUrl: this.config.produtos.regemApiUrl,
+      config: this.config,
       sha256,
     });
   }

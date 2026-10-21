@@ -5,6 +5,7 @@ import { writeAudit } from '../audit/audit.js';
 import type { AppConfig } from '../config.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
+import { peloToken, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
 import { lerLoja } from '../connectors/regem/conector-regem.js';
 import { lerSituacao } from '../connectors/regemcast/conector-regemcast.js';
 import type { VaultService } from '../vault/vault.service.js';
@@ -77,9 +78,10 @@ async function lojasDoRegem(cliente: ClienteConector, config: AppConfig, tokens:
   for (const token of tokens) {
     let loja;
     try {
-      loja = await lerLoja({ cliente, apiUrl: config.produtos.regemApiUrl }, token, `distribuicao:${hashEstado(token).slice(0, 12)}`);
+      loja = await lerLoja({ cliente, apiUrl: config.produtos.regemApiUrl }, { token, lojaChave: `distribuicao:${hashEstado(token).slice(0, 12)}` });
     } catch (err) {
-      if (err instanceof ErroConector && err.tipo === 'autenticacao') throw new Error('o Regem recusou um dos tokens (revogado ou inválido)');
+      // Pelo acesso do token (`acesso-da-loja.ts`): o token recusado é da loja.
+      if (err instanceof ErroConector && recusaDaLoja(peloToken(token, []), err)) throw new Error('o Regem recusou um dos tokens (revogado ou inválido)');
       throw err;
     }
     if (credencial.lojas.some((l) => l.loja_id === loja.loja_id)) continue;

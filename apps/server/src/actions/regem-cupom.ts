@@ -1,9 +1,13 @@
 import type { Tx } from '@liame/database';
+import { Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import type { AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
+import type { CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
-import { CupomRegem } from '../connectors/regem/contrato-regem.js';
-import { VERSAO_CONTRATO_REGEM } from '../connectors/regem/conector-regem.js';
+import { AcessoDaExecucao, credencialDaLoja, PERMISSOES_DA_ESCRITA, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
+import { criarCupomNoRegem, cupomCriado } from '../connectors/regem/conector-regem.js';
+import type { CupomRegem } from '../connectors/regem/contrato-regem.js';
 import { campanhaDoVinculo, ligarCupom, travarCupom } from '../coupons/vinculo.js';
 import { AppProblem } from '../errors/problems.js';
 import { gravarCupons } from '../orders/regem-leitura.js';
@@ -16,7 +20,9 @@ import type { ResourceState } from './tools.js';
 //
 // O Regem nunca atualiza cupom existente pelo código (409) e exige `Idempotency-Key`: a chave sai do
 // pedido (loja + código + regra), então repetir a execução devolve o mesmo cupom, sem criar outro.
-// O token da loja sai do cofre só na hora de chamar e nunca vai para log, estado ou auditoria.
+// O token da loja sai do cofre só na hora de chamar e nunca vai para log, estado ou auditoria. O acesso sai de
+// `acesso-da-loja.ts` (Hub DMS, F3, parte B): pelo `rgm_it_` ou, com `REGEM_PELA_LIGACAO`, pela ligação da loja
+// (criar cupom pela ligação pode, decisão F3-5), com o `rgm_it_` de reserva.
 
 const PREFIXO = 'cupom:';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,7 +31,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type DependenciasDaEscritaRegem = {
   lerSegredo: (tx: Tx, secretId: string) => Promise<string | null>;
   cliente: () => ClienteConector;
-  apiUrl: string;
+  /** O endereço do Regem, a leitura pela ligação e o aplicativo do Liame no DMS ID. */
+  config: Pick<AppConfig, 'dmsId' | 'produtos'>;
   sha256: (texto: string) => string;
 };
 
@@ -44,7 +51,15 @@ export type RegraDoCupom = {
   condicoes?: { max_por_cliente?: number };
 };
 
-type Conta = { id: string; tenant_id: string; brand_id: string; external_id: string; credential_secret_id: string | null; pode_criar: boolean };
+type Conta = {
+  id: string;
+  tenant_id: string;
+  brand_id: string;
+  external_id: string;
+  credential_secret_id: string | null;
+  ligacao_secret_id: string | null;
+  pode_criar: boolean;
+};
 
 export function codigoDoRecurso(resourceId: string): string | null {
   if (!resourceId.startsWith(PREFIXO)) return null;
@@ -78,6 +93,7 @@ export class RegemCupomConnector implements Connector {
   readonly writeFlag = 'regem_write';
   // O cupom não mexe em verba de mídia: o desconto sai do caixa da loja.
   readonly requiresSpendLimits = false;
+  private readonly logger = new Logger('regem-cupom');
   private deps: DependenciasDaEscritaRegem | null = null;
 
   ligar(deps: DependenciasDaEscritaRegem): void {
@@ -88,7 +104,7 @@ export class RegemCupomConnector implements Connector {
   private async conta(tx: Tx, ref: ResourceRef): Promise<Conta | null> {
     if (!UUID.test(ref.accountId)) return null;
     const r = await tx.execute<Conta>(sql`
-      select a.id, a.tenant_id, a.brand_id, a.external_id, a.credential_secret_id,
+      select a.id, a.tenant_id, a.brand_id, a.external_id, a.credential_secret_id, a.ligacao_secret_id,
              coalesce(a.provider_attributes -> 'escopos' @> '["cupons.criar"]'::jsonb, false) as pode_criar
         from liame.connected_account a
        where a.id = ${ref.accountId} and a.tenant_id = ${ref.tenantId} and a.provider = 'regem' and ${contaConectada('a')}`);
@@ -162,34 +178,30 @@ export class RegemCupomConnector implements Connector {
   private async criarNoRegem(tx: Tx, conta: Conta, regra: RegraDoCupom): Promise<{ ok: true; criado: CupomRegem; cupomId: string | null } | { ok: false; mensagem: string }> {
     const deps = this.deps;
     if (!deps) return { ok: false, mensagem: SEM_ESCRITA };
+    const pelaLigacao = deps.config.produtos.regemPelaLigacao;
     const guardada = conta.credential_secret_id ? await deps.lerSegredo(tx, conta.credential_secret_id) : null;
-    const lojas = guardada ? ((JSON.parse(guardada) as { lojas?: { loja_id: string; token: string }[] }).lojas ?? []) : [];
-    const token = lojas.find((l) => l.loja_id === conta.external_id)?.token;
-    if (!token) return { ok: false, mensagem: MENSAGEM['token-invalido']! };
+    // A ligação do Hub DMS só sai do cofre com a leitura pela ligação ligada.
+    const ligacao = pelaLigacao && conta.ligacao_secret_id ? await deps.lerSegredo(tx, conta.ligacao_secret_id) : null;
+    const credencial = credencialDaLoja(guardada ? (JSON.parse(guardada) as CredencialGuardada) : null, conta.external_id, ligacao, pelaLigacao);
+    if (!credencial) return { ok: false, mensagem: MENSAGEM['token-invalido']! };
+    // A ligação recusada fica no cofre: quem a tira é a leitura das vendas, fora desta transação, ou a comparação.
+    const acesso = new AcessoDaExecucao(credencial, deps.config, conta.external_id, PERMISSOES_DA_ESCRITA, async (err) => {
+      this.logger.warn(`loja ${conta.id}: o Regem recusou a ligação do Hub DMS na criação do cupom (${err.tipo}${err.codigoProvider ? `:${err.codigoProvider}` : ''}); repetida pelo token`);
+    });
+    // Loja + regra: a mesma criação repetida (worker que caiu no meio, ou a repetição pelo token) devolve o mesmo cupom.
+    const chaveDeIdempotencia = `liame-${deps.sha256(JSON.stringify([conta.id, regra])).slice(0, 48)}`;
 
     let criado: CupomRegem;
     try {
-      const r = await deps.cliente().requisitar({
-        provider: 'regem',
-        conta: conta.external_id,
-        url: `${deps.apiUrl}/cupons`,
-        metodo: 'POST',
-        corpo: regra,
-        cabecalhos: {
-          authorization: `Bearer ${token}`,
-          // Loja + regra: a mesma criação repetida (worker que caiu no meio) devolve o mesmo cupom.
-          'idempotency-key': `liame-${deps.sha256(JSON.stringify([conta.id, regra])).slice(0, 48)}`,
-        },
-        endpoint: 'cupons.criar',
-        apiVersion: VERSAO_CONTRATO_REGEM,
-      });
-      const lido = CupomRegem.safeParse(r.corpo);
-      if (!lido.success) return { ok: false, mensagem: 'O Regem criou o cupom, mas a resposta veio fora do contrato. Confira o cupom no Regem.' };
-      criado = lido.data;
+      const corpo = await acesso.chamar((a) => criarCupomNoRegem({ cliente: deps.cliente(), apiUrl: deps.config.produtos.regemApiUrl }, a, { regra, chaveDeIdempotencia }));
+      const lido = cupomCriado(corpo);
+      if (!lido) return { ok: false, mensagem: 'O Regem criou o cupom, mas a resposta veio fora do contrato. Confira o cupom no Regem.' };
+      criado = lido;
     } catch (err) {
-      // Recusa definitiva do Regem (código em uso, regra inválida, sem permissão): não adianta repetir.
-      // O que é passageiro (rede, 5xx, limite) sobe: a ação volta para a fila e repete com a mesma chave.
-      if (err instanceof ErroConector && (err.tipo === 'definitivo' || err.tipo === 'autenticacao' || err.tipo === 'permissao')) {
+      // Recusa definitiva do Regem (código em uso, regra inválida, sem permissão, a loja recusada): não adianta repetir.
+      // O que é passageiro (rede, 5xx, limite, o aplicativo recusado pelo DMS ID) sobe: a ação volta para a fila e
+      // repete com a mesma chave.
+      if (err instanceof ErroConector && (err.tipo === 'definitivo' || err.tipo === 'permissao' || recusaDaLoja(acesso.credencial, err))) {
         return { ok: false, mensagem: recusaDoRegem(err) };
       }
       throw err;

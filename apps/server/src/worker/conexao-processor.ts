@@ -33,6 +33,7 @@ import {
   type SiteDoSearchConsole,
   TAMANHO_DO_SITE_LIGADO,
 } from '../connectors/search-console/search-console.js';
+import { peloToken, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
 import { lerLoja, trocarCodigoRegem } from '../connectors/regem/conector-regem.js';
 import type { ContaDescoberta, Credencial } from '../connectors/tipos.js';
 import { versaoRegistrada } from '../connectors/tipos.js';
@@ -606,15 +607,17 @@ export function siteDescoberto(s: SiteDoSearchConsole): DescobertaGuardada | nul
 }
 
 /**
- * Lojas que os tokens alcançam (produtos DMS): cada token diz a loja dele (`GET /loja`). Token recusado
- * fica de fora; se todos forem recusados, a conexão precisa ser refeita.
+ * Lojas que os tokens alcançam (produtos DMS): cada token diz a loja dele (`GET /loja`), pelo acesso do token
+ * (`acesso-da-loja.ts`: na conexão, a loja ainda não tem ligação). Token recusado fica de fora; se todos forem
+ * recusados, a conexão precisa ser refeita.
  */
 export async function descobrirLojas(cliente: ClienteConector, apiUrl: string, credencial: CredencialRegem): Promise<DescobertaGuardada[]> {
   const descobertas: DescobertaGuardada[] = [];
   let recusados = 0;
   for (const l of credencial.lojas) {
+    const daLoja = peloToken(l.token, l.escopos);
     try {
-      const loja = await lerLoja({ cliente, apiUrl }, l.token, l.loja_id);
+      const loja = await lerLoja({ cliente, apiUrl }, { token: l.token, lojaChave: l.loja_id });
       descobertas.push({
         provider: credencial.tipo,
         external_id: loja.loja_id,
@@ -624,7 +627,7 @@ export async function descobrirLojas(cliente: ClienteConector, apiUrl: string, c
         provider_attributes: { escopos: loja.escopos, empresa: loja.empresa_nome ?? null, cardapio_url: loja.cardapio_url ?? null },
       });
     } catch (err) {
-      if (err instanceof ErroConector && err.tipo === 'autenticacao') {
+      if (err instanceof ErroConector && recusaDaLoja(daLoja, err)) {
         recusados++;
         continue;
       }

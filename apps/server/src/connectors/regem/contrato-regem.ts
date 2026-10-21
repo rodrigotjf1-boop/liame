@@ -40,6 +40,20 @@ export const AvisoRegem = z.object({
 });
 export type AvisoRegem = z.infer<typeof AvisoRegem>;
 
+/**
+ * `POST {base}/dms-id/ligacao` (Hub DMS, F3, parte A; Regem #690): a troca do `rgm_it_` da loja pelo segredo da ligação.
+ * O segredo em claro só vem nesta resposta e vai direto para o cofre; o resto é para conferir que a ligação é da mesma
+ * loja (`loja_id` nulo = token da empresa inteira, que o Liame não usa). Repetir a troca gira o segredo.
+ */
+export const LigacaoRegem = z.object({
+  ligacao: z.string().regex(/^dms_lg_regem_[A-Za-z0-9_-]{43}_[A-Za-z0-9_-]{6}$/),
+  prefixo: z.string().max(60),
+  loja_id: Id.nullable(),
+  permissoes: z.array(z.string().regex(/^[a-z0-9_.]+$/).max(100)).max(50),
+  segredo_em: Instante,
+});
+export type LigacaoRegem = z.infer<typeof LigacaoRegem>;
+
 /** Troca do código pelo token (C1b): um token por loja autorizada. */
 export const TokensRegem = z.object({
   lojas: z

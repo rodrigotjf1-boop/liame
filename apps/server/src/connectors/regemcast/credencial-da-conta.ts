@@ -1,8 +1,7 @@
-import { createHash } from 'node:crypto';
 import type { AppConfig } from '../../config.js';
 import type { CredencialGuardada } from '../../connections/oauth.js';
 import { ErroConector } from '../cliente-http.js';
-import { clienteDoDmsId, comTokenDoDmsId, recursoDoRegemcast } from '../dms/dms-id.js';
+import { clienteDoDmsIdDoProcesso, comTokenDoDmsId, recursoDoRegemcast } from '../dms/dms-id.js';
 import type { ClienteDmsId } from '../dms/integracao-dms.js';
 import { PERMISSOES_DO_CLIQUE } from './conector-regemcast.js';
 
@@ -41,20 +40,12 @@ export const podeGravar = (c: CredencialDaConta): c is CredencialDaConta & { via
 export const SO_LEITURA_PELA_AUTORIZACAO =
   'Esta conta do RegemCast foi ligada pela autorização do dono, que por enquanto libera só leitura: criar e enviar mensagens pelo Liame ainda não está disponível para ela. Para enviar agora, fale com o suporte.';
 
-const clientes = new Map<string, ClienteDmsId>();
-
 /**
- * O cliente do DMS ID dos leitores do RegemCast, um por processo e por aplicativo: o token fica guardado até perto de
- * vencer e serve a todas as contas (ele é do aplicativo do Liame, não de uma empresa).
+ * O cliente do DMS ID dos leitores do RegemCast: o do processo (`clienteDoDmsIdDoProcesso`), o mesmo dos leitores do
+ * Regem. O token fica guardado até perto de vencer e serve a todas as contas (ele é do aplicativo do Liame).
  */
 export function dmsIdDosLeitores(dmsId: NonNullable<AppConfig['dmsId']>): ClienteDmsId {
-  const chave = `${dmsId.emissor}\n${dmsId.aplicativo}\n${createHash('sha256').update(dmsId.segredo).digest('hex')}`;
-  let cliente = clientes.get(chave);
-  if (!cliente) {
-    cliente = clienteDoDmsId(dmsId);
-    clientes.set(chave, cliente);
-  }
-  return cliente;
+  return clienteDoDmsIdDoProcesso(dmsId);
 }
 
 /**
