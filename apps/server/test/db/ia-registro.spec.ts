@@ -170,9 +170,17 @@ describe.skipIf(!hasDb)('registros da IA no banco, ativação por empresa e ferr
     expect(de(a, 'cupons.criar').map((f) => f.name)).toEqual([]);
     expect(de(a, 'contas.ver').map((f) => f.name)).toEqual(['fontes_frescor']);
     expect(de(a, 'campanhas.ver').map((f) => f.name)).toEqual(['atencao_avisos', 'midia_entrega']);
-    expect(de(a, 'vendas.ver').map((f) => f.name)).toEqual(['resultados_ciclo_fechado', 'cupons_campanha', 'links_rastreio']);
+    expect(de(a, 'vendas.ver').map((f) => f.name)).toEqual(['resultados_ciclo_fechado', 'cupons_campanha', 'links_rastreio', 'como_te_acham']);
     // A leitura de Sua equipe pede as DUAS permissões da rota dela, e uma pessoa: com uma só, ou na rotina do sistema, não é oferecida.
-    expect(de(a, 'campanhas.ver', 'vendas.ver').map((f) => f.name)).toEqual(['atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'equipe_trabalho']);
+    expect(de(a, 'campanhas.ver', 'vendas.ver').map((f) => f.name)).toEqual([
+      'atencao_avisos',
+      'resultados_ciclo_fechado',
+      'midia_entrega',
+      'cupons_campanha',
+      'links_rastreio',
+      'como_te_acham',
+      'equipe_trabalho',
+    ]);
     expect(leituras.paraPedido({ tenantId: a.tenantId, userId: null, permissions: 'sistema' }).map((f) => f.name)).toEqual([
       'fontes_frescor',
       'atencao_avisos',
@@ -180,6 +188,7 @@ describe.skipIf(!hasDb)('registros da IA no banco, ativação por empresa e ferr
       'midia_entrega',
       'cupons_campanha',
       'links_rastreio',
+      'como_te_acham',
     ]);
     expect(leituras.paraPedido({ tenantId: a.tenantId, userId: null, permissions: 'sistema' }, ['atencao_avisos']).map((f) => f.name)).toEqual(['atencao_avisos']);
 

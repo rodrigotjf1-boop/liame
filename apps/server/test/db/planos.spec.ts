@@ -209,7 +209,7 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
     expect(instrucoes).toContain('Meta R$ 860,00; Google R$ 0,00');
     expect(instrucoes).toContain('Quero uma promoção de combo para sexta à noite.');
     expect((mock.doGenerateCalls[0]!.tools ?? []).map((t) => t.name).sort()).toEqual(
-      ['atencao_avisos', 'cupons_campanha', 'fontes_frescor', 'links_rastreio', 'midia_entrega', 'resultados_ciclo_fechado'].sort(),
+      ['atencao_avisos', 'como_te_acham', 'cupons_campanha', 'fontes_frescor', 'links_rastreio', 'midia_entrega', 'resultados_ciclo_fechado'].sort(),
     );
 
     expect((await demandaNoBanco(id)).status).toBe('entregue');
@@ -238,8 +238,8 @@ describe.skipIf(!hasDb)('Planos do Estrategista: fila, conferência, decisão, v
 
     // Custo de quem pediu; o agente na auditoria.
     expect(await usos(d.tenantId)).toEqual([
-      { workflow: 'estrategista.plano', user_id: d.userId, prompt_version: 'estrategista.plano@2' },
-      { workflow: 'estrategista.plano', user_id: d.userId, prompt_version: 'estrategista.plano@2' },
+      { workflow: 'estrategista.plano', user_id: d.userId, prompt_version: 'estrategista.plano@3' },
+      { workflow: 'estrategista.plano', user_id: d.userId, prompt_version: 'estrategista.plano@3' },
     ]);
     const auditoria = await ownerQuery<{ actor_type: string; actor_label: string; agent: string; origin: string; after: Record<string, unknown> }>(
       `select actor_type, actor_label, agent, origin, after from liame.audit_event where tenant_id = $1 and action = 'plano.propor' and resource_id = $2`,

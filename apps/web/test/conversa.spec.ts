@@ -200,6 +200,10 @@ describe('Conversa: o que a tela escreve em volta da resposta', () => {
     // A leitura de Sua equipe leva à tela, para quem tem as duas permissões dela.
     expect(caminhosDa(['Sua equipe'], tudoPode)).toEqual([{ href: '/equipe', rotulo: 'Ver em Sua equipe' }]);
     expect(caminhosDa(['Sua equipe'], (p) => p !== 'vendas.ver')).toEqual([]);
+    // Como te acham no Google (A6 · Z3) é um cartão de Resultados: o mesmo caminho, uma vez só, e só com `vendas.ver`.
+    expect(caminhosDa(['Como te acham no Google'], tudoPode)).toEqual([{ href: '/resultados', rotulo: 'Ver em Resultados' }]);
+    expect(caminhosDa(['Resultados de 13/10 a 19/10', 'Como te acham no Google'], tudoPode)).toEqual([{ href: '/resultados', rotulo: 'Ver em Resultados' }]);
+    expect(caminhosDa(['Como te acham no Google'], (p) => p !== 'vendas.ver')).toEqual([]);
   });
 });
 

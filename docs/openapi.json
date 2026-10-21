@@ -25220,13 +25220,18 @@
                                   "string",
                                   "null"
                                 ]
+                              },
+                              "freshness": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9_]+$"
                               }
                             },
                             "required": [
                               "connected_account_id",
                               "name",
                               "status",
-                              "last_success_at"
+                              "last_success_at",
+                              "freshness"
                             ],
                             "additionalProperties": false
                           }
@@ -25325,13 +25330,18 @@
                                   "string",
                                   "null"
                                 ]
+                              },
+                              "freshness": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9_]+$"
                               }
                             },
                             "required": [
                               "connected_account_id",
                               "name",
                               "status",
-                              "last_success_at"
+                              "last_success_at",
+                              "freshness"
                             ],
                             "additionalProperties": false
                           }

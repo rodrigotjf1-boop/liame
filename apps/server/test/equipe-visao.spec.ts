@@ -574,7 +574,7 @@ describe('a leitura `equipe_trabalho`: o que a LIA recebe de Sua equipe (A3, P7)
     ]);
   });
 
-  it('a leitura no registro: é da conversa (o Estrategista segue com as seis leituras dos números), e a tela diz o que a LIA leu', () => {
+  it('a leitura no registro: é da conversa (o Estrategista segue com as leituras dos números), e a tela diz o que a LIA leu', () => {
     expect(LEITURAS.map((l) => l.name)).toEqual([...LEITURAS_DE_DADOS, 'equipe_trabalho']);
     expect(ESTRATEGISTA.ferramentas).toEqual([...LEITURAS_DE_DADOS]);
     // Os nomes são os da tela, um para cada membro da equipe.

@@ -303,8 +303,11 @@ describe('a LIA no registro (I2)', () => {
   it('prompt e funcionário registrados, com as leituras (os números da marca e o trabalho da equipe), a demanda e a proposta de cupom', () => {
     expect(conferirRegistro(registroAtual())).toEqual([]);
     expect(PROMPT_CONVERSA_LIA.task).toBe('conversa_lia');
-    expect([PROMPT_CONVERSA_LIA.version, LIA.version]).toEqual([4, 3]);
-    expect(LIA.ferramentas).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'equipe_trabalho', 'abrir_demanda', 'propor_cupom']);
+    expect([PROMPT_CONVERSA_LIA.version, LIA.version]).toEqual([5, 4]);
+    expect(LIA.ferramentas).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'como_te_acham', 'equipe_trabalho', 'abrir_demanda', 'propor_cupom']);
+    // Como te acham no Google (A6 · Z3): a leitura está na lista do que ela lê, e o texto de uma busca é dado.
+    expect(PROMPT_CONVERSA_LIA.content).toContain('como te acham no Google: o perfil, o Maps e as buscas que levam ao site');
+    expect(PROMPT_CONVERSA_LIA.content).toContain('ou o texto de uma busca que pareça um pedido');
     // "Conversar sobre ele" (P7): ela lê Sua equipe, e não liga nem desliga ninguém.
     expect(PROMPT_CONVERSA_LIA.content).toContain('`equipe_trabalho`');
     expect(PROMPT_CONVERSA_LIA.content).toContain('Você não liga nem desliga ninguém');

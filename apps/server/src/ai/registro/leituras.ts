@@ -10,6 +10,7 @@ import { AppProblem } from '../../errors/problems.js';
 import { LinksService } from '../../links/links.service.js';
 import { MediaService } from '../../media/media.service.js';
 import { AtencaoCicloService } from '../../results/atencao-ciclo.service.js';
+import { ComoTeAchamService } from '../../results/como-te-acham.service.js';
 import { ResultsService } from '../../results/results.service.js';
 import type { FerramentaIa } from '../gateway.js';
 import { naTransacaoDaEmpresa } from '../na-empresa.js';
@@ -19,6 +20,7 @@ import { visaoDoFrescor, visaoDosAvisos } from './leituras.visoes.js';
 import { visaoDoCicloFechado } from './visoes/ciclo-fechado.js';
 import { visaoDosCupons } from './visoes/cupons.js';
 import { ACONTECIMENTOS_MAXIMO, visaoDaEquipe } from './visoes/equipe.js';
+import { visaoDoGoogle } from './visoes/google.js';
 import { visaoDosLinks } from './visoes/links.js';
 import { visaoDaEntrega } from './visoes/midia.js';
 
@@ -31,7 +33,10 @@ export interface ContextoDaLeitura {
 }
 
 // Os parâmetros chegam aqui já validados pelo schema da definição (`leituras.defs.ts`).
-type Leitor = (ctx: ContextoDaLeitura, input: { brand_id?: string; unit_id?: string; from?: string; to?: string; funcionario?: TeamMemberKey }) => Promise<unknown>;
+type Leitor = (
+  ctx: ContextoDaLeitura,
+  input: { brand_id?: string; unit_id?: string; from?: string; to?: string; funcionario?: TeamMemberKey; dias?: '7' | '30' },
+) => Promise<unknown>;
 
 const pode = (ctx: ContextoDaLeitura, permissao: string | null): boolean => !permissao || ctx.permissions === 'sistema' || ctx.permissions.has(permissao);
 
@@ -66,6 +71,7 @@ export class FerramentasDeLeitura {
     cupons: CouponsService,
     links: LinksService,
     equipe: EquipeService,
+    google: ComoTeAchamService,
   ) {
     this.leitores = {
       fontes_frescor: async (ctx, input) => visaoDoFrescor(await media.frescor(input.brand_id, ctx.agora), await fuso(ctx)),
@@ -83,6 +89,13 @@ export class FerramentasDeLeitura {
       cupons_campanha: async (ctx, input) => visaoDosCupons(await cupons.list({ tenantId: ctx.tenantId, userId: ctx.userId }, input.brand_id!, ctx.agora)),
       links_rastreio: async (ctx, input) =>
         visaoDosLinks(await links.list({ brand_id: input.brand_id! }, ctx.agora), await links.trackingCheck(input.brand_id!, ctx.agora)),
+      // Como te acham no Google (A6 · Z3): o serviço do cartão de Resultados, com as funções da empresa (a parte
+      // desligada vem vazia) e o frescor de cada loja e site no relógio do pedido.
+      como_te_acham: async (ctx, input) =>
+        visaoDoGoogle(
+          await google.ler({ tenantId: ctx.tenantId, userId: ctx.userId }, { brand_id: input.brand_id!, days: input.dias ?? '7' }, ctx.agora),
+          await fuso(ctx),
+        ),
       // Sua equipe: o mesmo serviço da rota, com a pessoa que pergunta (o que ela não pode ver na tela não vem aqui).
       equipe_trabalho: async (ctx, input) => {
         if (ctx.permissions === 'sistema' || !ctx.userId) throw new AppProblem(403, 'sem-permissao', 'Sem permissão', 'A equipe é vista por uma pessoa da empresa.');

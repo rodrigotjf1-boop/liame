@@ -32,6 +32,7 @@ import { RevisorService } from '../ai/revisor/revisor.service.js';
 import { LinksService } from '../links/links.service.js';
 import { MediaService } from '../media/media.service.js';
 import { AtencaoCicloService } from '../results/atencao-ciclo.service.js';
+import { ComoTeAchamService } from '../results/como-te-acham.service.js';
 import { ResultsService } from '../results/results.service.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { RevisaoSemanalService } from './revisao-semanal.service.js';
@@ -144,6 +145,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // Ela lê o custo das peças para dizer por que o Criativo não pode escrever (A4, P12).
     CustoDasPecasService,
     EquipeService,
+    // E a de "Como te acham no Google" (A6 · Z3), que o Estrategista lê para a pauta: o mesmo serviço da rota do cartão.
+    ComoTeAchamService,
     FerramentasDeLeitura,
     EstrategistaService,
     EstrategistaLoop,

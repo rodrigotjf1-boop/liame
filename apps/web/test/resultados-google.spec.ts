@@ -24,7 +24,7 @@ const BUSCAS: Array<[string, number, number, string | null]> = [
   ['hamburgueria artesanal rio de janeiro zona central entrega rápida', 2, 190, '14.5'],
   ['onion rings', 1, 75, null],
 ];
-const conta = (id: string, name: string) => ({ connected_account_id: id, name, status: 'ativa', last_success_at: '2026-09-29T10:00:00.000Z' });
+const conta = (id: string, name: string) => ({ connected_account_id: id, name, status: 'ativa', last_success_at: '2026-09-29T10:00:00.000Z', freshness: 'fresh' });
 
 function resposta(over: { profile?: Partial<GoogleVisibilityResponse['profile']>; site?: Partial<GoogleVisibilityResponse['site']>; days?: number } = {}): GoogleVisibilityResponse {
   const days = over.days ?? 7;

@@ -1,4 +1,5 @@
 import { visaoDosAvisos } from '../registro/leituras.visoes.js';
+import { GOOGLE_INDISPONIVEL } from '../registro/visoes/google.js';
 
 // A leitura que um caso de eval não gravou (A3, evals com modelo de verdade). O modelo de verdade lê mais do que a
 // resposta gravada no caso: confere o frescor antes de comentar número (a descrição da ferramenta manda), olha os
@@ -6,7 +7,8 @@ import { visaoDosAvisos } from '../registro/leituras.visoes.js';
 // ler agora."), e a falha virava assunto da resposta. Aqui cada uma devolve uma visão NEUTRA e coerente com o caso:
 // as fontes como a leitura dos resultados do caso as mostra, nenhum aviso, nenhum cupom, nenhum link para arrumar.
 // O caso que quer outra coisa (um aviso, um cupom, uma fonte parada sem resultado) grava a própria leitura.
-// A entrega dos anúncios (`midia_entrega`) e a equipe (`equipe_trabalho`) não têm visão neutra: só gravadas.
+// A entrega dos anúncios (`midia_entrega`) e a equipe (`equipe_trabalho`) não têm visão neutra: só gravadas. O Google
+// (`como_te_acham`) devolve o que recebe a empresa sem as funções do Google, a mais comum: nada disponível.
 
 const FUSO = 'America/Sao_Paulo';
 const EM_DIA = 'em dia';
@@ -94,6 +96,9 @@ export function leituraPadrao(caso: CasoComLeituras, nome: string): unknown {
         links: [],
       };
     }
+    case 'como_te_acham':
+      // O formato de `visaoDoGoogle` com as duas funções desligadas.
+      return { situacao: GOOGLE_INDISPONIVEL };
     default:
       return undefined;
   }
