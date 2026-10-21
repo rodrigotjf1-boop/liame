@@ -1,4 +1,12 @@
-import { type AttentionItem, type ConnectionResponse, type DiscoveredAccount, GOOGLE_SALES_SCOPE, type GoogleConversionAccount, type GoogleConversionsResponse } from '@liame/contracts';
+import {
+  type AttentionItem,
+  type ConnectionResponse,
+  type DiscoveredAccount,
+  GOOGLE_ANALYTICS_SCOPE,
+  GOOGLE_SALES_SCOPE,
+  type GoogleConversionAccount,
+  type GoogleConversionsResponse,
+} from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -581,7 +589,8 @@ describe('autorizar o Google de novo: a autorização nova, com a permissão de 
   });
 
   it('o cartão da autorização do Google diz que inclui a permissão; o diálogo de conectar não promete "somente leitura" à marca com a função ligada', () => {
-    const base = { conexao: conexao({ status: 'ativa', completed_at: local(7, 9), scopes: [LEITURA, ESCOPO_DE_INFORMAR_VENDAS] }), agora, podeConectar: true, procurando: false, aoEscolher: null, aoReconectar: () => {}, aoProcurar: () => {}, aoRevogar: () => {} };
+    // A autorização de verdade traz as duas permissões de sempre (o cartão diz o que ela concedeu: ERR-158).
+    const base = { conexao: conexao({ status: 'ativa', completed_at: local(7, 9), scopes: [LEITURA, GOOGLE_ANALYTICS_SCOPE, ESCOPO_DE_INFORMAR_VENDAS] }), agora, podeConectar: true, procurando: false, aoEscolher: null, aoReconectar: () => {}, aoProcurar: () => {}, aoRevogar: () => {} };
     expect(renderToStaticMarkup(createElement(CartaoAutorizacao, { ...base, informaVendas: true }))).toContain('sem prazo de validade. Inclui a permissão de informar vendas.');
     expect(renderToStaticMarkup(createElement(CartaoAutorizacao, base))).not.toContain('Inclui a permissão de informar vendas.');
     // A Meta nunca ganha a frase.
