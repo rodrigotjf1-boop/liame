@@ -335,7 +335,7 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
 
   const conexaoDaLoja = async () => (await ownerQuery<{ connection_id: string }>(`select connection_id from liame.connected_account where id = $1`, [contaId]))[0]!.connection_id;
   const avisoGravado = async () =>
-    (await ownerQuery<{ aviso: { em: string; ok: boolean } | null }>(`select cursor->'aviso' as aviso from liame.sync_state where connected_account_id = $1 and dataset = 'pedidos'`, [contaId]))[0]!.aviso;
+    (await ownerQuery<{ aviso: { em: string; ok: boolean; via?: string } | null }>(`select cursor->'aviso' as aviso from liame.sync_state where connected_account_id = $1 and dataset = 'pedidos'`, [contaId]))[0]!.aviso;
   /** Em quantos segundos a loja volta para a fila (negativo ou zero = já está na vez), pelo relógio do banco. */
   const esperaDaLoja = async () =>
     Number(
@@ -363,7 +363,8 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     expect(avisos).toHaveLength(1);
     expect(avisos[0]!.url).toBe(`${loadConfig().apiUrl}/v1/inbox/regem/${conexaoId}`);
     expect(avisos[0]!.segredo).toMatch(/^whsec_[A-Za-z0-9+/]{43}=$/);
-    expect(await avisoGravado()).toEqual({ em: mais(20).toISOString(), ok: true });
+    // Registrado pelo token da loja (a via de antes do Hub DMS; a ligação, em `regem-pela-ligacao.spec.ts`).
+    expect(await avisoGravado()).toEqual({ em: mais(20).toISOString(), ok: true, via: 'token' });
 
     // O segredo fica no cofre (cifrado), ligado à conexão; a criação fica na auditoria, sem o segredo.
     const [c] = await ownerQuery<{ inbox_secret_id: string | null }>(`select inbox_secret_id from liame.oauth_connection where id = $1`, [conexaoId]);
@@ -413,7 +414,8 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     } finally {
       aviso.mockRestore();
     }
-    expect(await avisoGravado()).toEqual({ em: mais(45).toISOString(), ok: false });
+    // O registro antigo (sem `via`, de antes da F3) conta como do token: nada a repetir por isso.
+    expect(await avisoGravado()).toEqual({ em: mais(45).toISOString(), ok: false, via: 'token' });
 
     // Cinco minutos depois, ainda não; passada uma hora da falha, de novo — e o segredo é o mesmo (um por conexão).
     estado.aviso = 'ok';
@@ -424,7 +426,7 @@ describe.skipIf(!hasDb)('conector do Regem: vendas da loja (A2.5 · F4)', () => 
     expect(avisos).toHaveLength(3);
     expect(new Set(avisos.map((a) => a.segredo)).size).toBe(1);
     expect(new Set(avisos.map((a) => a.url)).size).toBe(1);
-    expect(await avisoGravado()).toEqual({ em: mais(55).toISOString(), ok: true });
+    expect(await avisoGravado()).toEqual({ em: mais(55).toISOString(), ok: true, via: 'token' });
   });
 
   it('webhook do Regem antecipa a leitura só da loja do aviso; o laço lê só as lojas do Regem', async () => {

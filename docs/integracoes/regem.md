@@ -39,6 +39,15 @@
   - `POST {base}/autorizacao/revogar` (com o próprio token) revoga no Regem — o Liame chama ao revogar a autorização inteira e, desde a P2 parte 2, ao revogar **uma loja** na tela de Contas (só o token dela);
   - token revogado no Regem devolve **401**, e o Liame marca a conta como `desconectada`.
 
+### 1.1 A credencial do Hub DMS (F3, parte B; 21/10/2026)
+
+O Regem aceita, ao lado do `rgm_it_` e com a mesma loja, os mesmos escopos e as mesmas rotas, o **token do DMS ID** do aplicativo do Liame (`Authorization: Bearer <token>`, recurso `https://api.dmsregem.com/api/v1/integracao`) com o **segredo da ligação** da loja no cabeçalho `DMS-Ligacao` (Regem #690, desligada até a distribuição ligar `DMS_ID_LIGADO`). Valem as permissões que a loja deu E o token tem.
+
+- **A troca automática:** `POST {base}/dms-id/ligacao` com o token do DMS ID e `{ "token_integracao": "rgm_it_…" }` → `{ ligacao, prefixo, loja_id, permissoes, segredo_em }`. A ligação tem o **mesmo id** do token: limite, idempotência e aviso seguem o mesmo id, e revogar o token (por qualquer caminho) derruba a ligação. Repetir a troca **gira o segredo** (o anterior para de valer): no Liame, só a rotina da comparação troca, e guarda no cofre (`connected_account.ligacao_secret_id`) com o resumo do `rgm_it_` de onde veio. Com a via desligada no Regem, a troca responde 404.
+- **As recusas** vêm em `application/problem+json`, com o tipo no fim do `type` (`https://api.dmsregem.com/problemas/<tipo>`) e `WWW-Authenticate` em todo 401: `token-invalido` (o `rgm_it_` que não vale, **ou**, pela via nova, o token do DMS ID), `ligacao-invalida` (a mesma para todo motivo: ausente, revogada, girada, de outro aplicativo, do token revogado, do aplicativo fora da lista da distribuição), `escopo-insuficiente` (403; o token sem nenhuma permissão do Regem recebe as 15 de uma vez), `integracao-parada` (503, com `Retry-After`).
+- **Quem recusa, no Liame** (`connectors/regem/acesso-da-loja.ts`, ERR-149): pelo `rgm_it_`, todo 401 é da loja (`desconectada`). Pela ligação, o `rgm_it_` fica de reserva: a recusa do acesso ou da permissão repete a chamada pelo token, e é a recusa dele que decide; a ligação recusada (`ligacao-invalida`) sai do cofre, se ainda for a que a chamada usou. Sem reserva (a autorização por clique da parte C), só `ligacao-invalida` seria da loja; o `token-invalido` e o DMS ID que recusa o aplicativo são do aplicativo.
+- **Quando o Liame lê por ela:** só com `REGEM_PELA_LIGACAO` (desligada; liga depois do critério da comparação, decisão F3-6: 7 dias seguidos sem diferença e 30 leituras ou mais de cada rota) e com a ligação do `rgm_it_` de agora no cofre. A descoberta das lojas, o registro pela distribuição e a revogação seguem pelo `rgm_it_`. O cupom de campanha também vai pela ligação (decisão F3-5), com o token que pede `cupons.criar`.
+
 ## 2. Rotas (C1c)
 
 Endereço base: `https://api.dmsregem.com/api/v1/integracao`. Rotas **só da nuvem** (`@CloudOnly()`).
@@ -159,6 +168,8 @@ Quem registra é o Liame, com o token da loja (o usuário não configura nada):
 - Token revogado: o Regem para de avisar e apaga o registro.
 
 No Liame, o segredo é **um por conexão** (cofre, `oauth_connection.inbox_secret_id`), criado no primeiro registro; cada loja da conexão registra o mesmo endereço e o mesmo segredo com o token dela. O registro acontece na leitura das vendas, depois da carga inicial, e é repetido uma vez por dia; se falhar, de hora em hora. Falha no registro nunca falha a leitura. Revogar a conexão tira o segredo do cofre.
+
+Pela credencial do Hub DMS (§1.1), o registro vai pela ligação; como ela tem o id do token, é o mesmo registro. Na passagem de uma credencial para a outra, a leitura registra de novo na hora, pela nova (o cursor dos pedidos guarda por qual foi: `aviso.via`; sem ela, o registro é de antes da F3, pelo token).
 
 ### 3.2 O aviso
 

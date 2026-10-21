@@ -10,6 +10,26 @@ import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { clienteDoDmsId, recursoDoRegemcast } from '../connectors/dms/dms-id.js';
 import { type ClienteDmsId, ErroDmsId } from '../connectors/dms/integracao-dms.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
+import {
+  type AcessoAoRegem,
+  type LigacaoGuardadaRegem,
+  ligacaoDoToken,
+  PERMISSOES_DA_LEITURA,
+  PROPOSITO_DA_LIGACAO_REGEM,
+  recursoDoRegem,
+  resumoDoToken,
+  tokenDaLoja,
+} from '../connectors/regem/acesso-da-loja.js';
+import {
+  DIAS_DOS_PEDIDOS_COMPARADOS,
+  ESCOPO_DA_LEITURA_DO_REGEM,
+  LEITURAS_DO_REGEM,
+  LIMITE_DA_PAGINA_COMPARADA,
+  type LeituraDoRegem,
+  normalizarDoRegem,
+} from '../connectors/regem/comparacao.js';
+import { lerLoja, lerPagina, trocarPorLigacaoRegem } from '../connectors/regem/conector-regem.js';
+import { ClienteAnonimizado, CupomRegem, type LigacaoRegem, PedidoRegem } from '../connectors/regem/contrato-regem.js';
 import { type DesfechoDaComparacao, diferencas, FERRAMENTAS_COMPARADAS, type FerramentaComparada, normalizar, PERMISSOES_DA_COMPARACAO } from '../connectors/regemcast/comparacao.js';
 import {
   detalharCampanhaDeMensagens,
@@ -41,6 +61,11 @@ import { type JobScope, tenantFilter } from './outbox-publisher.js';
 // o disjuntor ficam à parte da produção (`comparacao:` e `comparacao-dms:`), e o limite do RegemCast é dividido com ela
 // (a ligação herda o id do token): por isso uma vez por hora, uma conta por vez. Fica no worker porque reserva em escopo
 // de sistema (V53); o resto roda na empresa.
+//
+// O Regem (Hub DMS, F3, parte B): a mesma rotina e a mesma flag compara as 4 leituras de cada loja do Regem conectada
+// (`compararLojaDoRegem`), pelo `rgm_it_` e pela ligação, com o critério da decisão F3-6 (7 dias seguidos sem diferença e
+// 30 leituras por rota). É ela a única que troca o `rgm_it_` pela ligação: repetir a troca gira o segredo, e a leitura
+// de verdade (com `REGEM_PELA_LIGACAO`) usa a que ficou no cofre.
 
 /** A flag, por empresa (desligada para todos; quem liga é a distribuição). */
 export const FLAG_COMPARACAO = 'comparacao_dms_id';
@@ -58,6 +83,7 @@ type ContaDaComparacao = {
   tenant_id: string;
   brand_id: string;
   external_id: string;
+  provider: 'regemcast' | 'regem';
   conectada: boolean;
   ligacao_secret_id: string | null;
 };
@@ -65,7 +91,8 @@ type ContaDaComparacao = {
 /** O segredo da ligação no cofre, com o resumo do `rct_it_` de onde ela veio. */
 type LigacaoGuardada = { tipo: 'ligacao_regemcast'; ligacao: string; origem: string; obtida_em: string };
 
-type Linha = { tool: FerramentaComparada; outcome: DesfechoDaComparacao; differences: string[]; retried: boolean; failure: string | null; duration_ms: number | null };
+/** Uma comparação: a ferramenta do RegemCast ou a leitura do Regem (`regem_…`). */
+type Linha = { tool: FerramentaComparada | LeituraDoRegem; outcome: DesfechoDaComparacao; differences: string[]; retried: boolean; failure: string | null; duration_ms: number | null };
 
 export type ResultadoDaComparacao =
   | { status: 'comparada'; iguais: number; diferentes: number; outros: number }
@@ -98,6 +125,22 @@ const LEITORES: Record<FerramentaComparada, (ctx: Contexto, a: Acesso, base: Bas
   publico_estimar: (ctx, a) => estimarPublico(ctx, { ...a, publico: { origem: 'base' }, categoria: 'marketing' }),
   campanha_disparo_planejar: (ctx, a, b) => planejarDisparo(ctx, { ...a, id: b.rascunhoId ?? '' }),
 };
+
+/** Como cada leitura do Regem é chamada (`desde`: o começo da janela dos pedidos, o mesmo pelas duas vias). */
+const LEITORES_DO_REGEM: Record<LeituraDoRegem, (ctx: Contexto, a: AcessoAoRegem, desde: string) => Promise<unknown>> = {
+  regem_loja: (ctx, a) => lerLoja(ctx, a),
+  regem_pedidos: (ctx, a, desde) =>
+    lerPagina(ctx, { ...a, rota: 'pedidos', item: PedidoRegem, cursor: null, limite: LIMITE_DA_PAGINA_COMPARADA, extra: { confirmados_desde: desde } }),
+  regem_cupons: (ctx, a) => lerPagina(ctx, { ...a, rota: 'cupons', item: CupomRegem, cursor: null, limite: LIMITE_DA_PAGINA_COMPARADA }),
+  regem_clientes_anonimizados: (ctx, a) => lerPagina(ctx, { ...a, rota: 'clientes/anonimizados', item: ClienteAnonimizado, cursor: null, limite: LIMITE_DA_PAGINA_COMPARADA }),
+};
+
+/**
+ * O Regem ou o DMS ID ainda não estão prontos para a via nova (não muda de hora em hora): a via desligada no Regem (404)
+ * ou o token do DMS ID sem permissão do Regem (403); e, no pedido do token, o DMS ID que recusa o recurso do Regem.
+ */
+const viaNaoPronta = (err: unknown): boolean =>
+  (err instanceof ErroConector && (err.status === 404 || err.tipo === 'permissao')) || (err instanceof ErroDmsId && (err.status === 400 || err.status === 401));
 
 /** O token do DMS ID foi recusado pelo RegemCast (vencido, trocado): pedir outro uma vez resolve. */
 const tokenRecusado = (erro: unknown): boolean => erro instanceof ErroConector && erro.tipo === 'autenticacao' && erro.codigoProvider === 'token-invalido';
@@ -141,11 +184,12 @@ export class ComparacaoDmsIdLoop {
   }
 
   async executarLote(limite = 2, scope: JobScope = {}, agora: Date = new Date()): Promise<ResultadoDaComparacao[]> {
-    // Sem o aplicativo do Liame no DMS ID ou sem o endereço do RegemCast, não há o que comparar.
-    if (!this.database || !this.config.dmsId || !this.config.produtos.regemcastApiUrl) return [];
+    // Sem o aplicativo do Liame no DMS ID, não há o que comparar; sem o endereço do RegemCast, só as lojas do Regem.
+    if (!this.database || !this.config.dmsId) return [];
     const db = this.database.db;
     const referencia = sql`${agora.toISOString()}::timestamptz`;
-    const elegivel = sql`a.provider = 'regemcast' and ${contaConectada('a')} and a.credential_secret_id is not null`;
+    const comRegemcast = this.config.produtos.regemcastApiUrl !== null;
+    const elegivel = sql`(a.provider = 'regem' or (a.provider = 'regemcast' and ${comRegemcast}::boolean)) and ${contaConectada('a')} and a.credential_secret_id is not null`;
     const reservadas = await withSystem(db, async (tx) => {
       // A conta conectada ganha a linha dela, devida desde já.
       await tx.execute(sql`
@@ -189,9 +233,9 @@ export class ComparacaoDmsIdLoop {
   async compararConta(db: Db, contaId: string, tenantId: string, agora: Date): Promise<ResultadoDaComparacao> {
     const lida = await withTenant(db, tenantId, async (tx) => {
       const r = await tx.execute<ContaDaComparacao & { credential_secret_id: string | null }>(sql`
-        select a.id, a.tenant_id, a.brand_id, a.external_id, a.credential_secret_id, a.ligacao_secret_id, ${contaConectada('a')} as conectada
+        select a.id, a.tenant_id, a.brand_id, a.external_id, a.provider, a.credential_secret_id, a.ligacao_secret_id, ${contaConectada('a')} as conectada
           from liame.connected_account a
-         where a.id = ${contaId} and a.provider = 'regemcast'`);
+         where a.id = ${contaId} and a.provider in ('regemcast', 'regem')`);
       const conta = r.rows[0];
       if (!conta) return null;
       // Desligada ou recusada pela plataforma depois da reserva: o critério é um só (F2-5), e o cofre não é lido.
@@ -210,13 +254,19 @@ export class ComparacaoDmsIdLoop {
       return { status: 'desligada' };
     }
     const guardada = lida.credencial ? (JSON.parse(lida.credencial) as CredencialGuardada) : null;
+    if (conta.provider === 'regem') return this.compararLojaDoRegem(db, conta, guardada, lida.ligacao, agora);
+    const apiUrl = this.config.produtos.regemcastApiUrl;
+    // A conta reservada quando o endereço do RegemCast existia (a variável saiu depois): sem ele, não há o que comparar.
+    if (!apiUrl) {
+      await this.marcar(db, conta, agora, DEPOIS_DE_UM_DIA_MIN, 'sem o endereço do RegemCast (REGEMCAST_API_URL)');
+      return { status: 'ignorada' };
+    }
     const rctIt = guardada?.tipo === 'regemcast' ? guardada.lojas.find((l) => l.loja_id === conta.external_id)?.token : undefined;
     if (!rctIt) {
       await this.marcar(db, conta, agora, DEPOIS_DE_UM_DIA_MIN, 'sem o token de integração da conta no cofre');
       return { status: 'ignorada' };
     }
 
-    const apiUrl = this.config.produtos.regemcastApiUrl!;
     const ctx: Contexto = {
       cliente: new ClienteConector(db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 2, tempoLimiteMs: 20_000 }),
       apiUrl,
@@ -283,18 +333,25 @@ export class ComparacaoDmsIdLoop {
         ({ t: b } = await pelaNova(ferramenta));
         repetiu = true;
       }
-      linhas.push(this.desfecho(ferramenta, a, b, repetiu));
+      linhas.push(this.desfecho(ferramenta, a, b, repetiu, (d) => normalizar(ferramenta, d)));
       if (!b.ok && b.erro instanceof ErroConector && b.erro.codigoProvider === 'ligacao-invalida') ligacaoRecusada = true;
     }
 
-    await withTenant(db, tenantId, async (tx) => {
+    return this.gravar(db, conta, linhas, agora, ligacaoRecusada, 'RegemCast');
+  }
+
+  /**
+   * Guarda como terminou cada comparação e a próxima vez da conta. A ligação que o produto recusou sai do cofre: a
+   * próxima vez troca de novo.
+   */
+  private async gravar(db: Db, conta: ContaDaComparacao, linhas: Linha[], agora: Date, ligacaoRecusada: boolean, produto: 'RegemCast' | 'Regem'): Promise<ResultadoDaComparacao> {
+    await withTenant(db, conta.tenant_id, async (tx) => {
       const registros = linhas.map((l) => ({ id: uuidv7(), ...l, differences: l.differences }));
       await tx.execute(sql`
         insert into liame.credential_comparison (id, tenant_id, connected_account_id, tool, outcome, differences, retried, failure, duration_ms, compared_at)
-        select x.id, ${tenantId}, ${conta.id}, x.tool, x.outcome, x.differences, x.retried, x.failure, x.duration_ms, ${agora.toISOString()}::timestamptz
+        select x.id, ${conta.tenant_id}, ${conta.id}, x.tool, x.outcome, x.differences, x.retried, x.failure, x.duration_ms, ${agora.toISOString()}::timestamptz
           from jsonb_to_recordset(${JSON.stringify(registros)}::jsonb)
                as x (id uuid, tool text, outcome text, differences jsonb, retried boolean, failure text, duration_ms integer)`);
-      // A ligação que o RegemCast recusou sai do cofre: a próxima vez troca de novo.
       if (ligacaoRecusada && conta.ligacao_secret_id) {
         await this.vault.revokeSecret(tx, conta.ligacao_secret_id);
       }
@@ -305,15 +362,135 @@ export class ComparacaoDmsIdLoop {
       const quais = linhas.filter((l) => l.outcome === 'diferente' || l.outcome === 'nova_falhou').map((l) => `${l.tool} (${l.outcome}${l.failure ? `: ${l.failure}` : ''})`);
       this.logger.warn(`conta ${conta.id}: ${diferentes} de ${linhas.length} leituras diferentes pela credencial nova: ${quais.join(', ')}`);
     }
-    await this.marcar(db, conta, agora, INTERVALO_COMPARACAO_MIN, ligacaoRecusada ? 'a ligação foi recusada pelo RegemCast: troca de novo na próxima vez' : null);
+    await this.marcar(db, conta, agora, INTERVALO_COMPARACAO_MIN, ligacaoRecusada ? `a ligação foi recusada pelo ${produto}: troca de novo na próxima vez` : null);
     return { status: 'comparada', iguais, diferentes, outros: linhas.length - iguais - diferentes };
   }
 
-  /** Como terminou a comparação de uma ferramenta. */
-  private desfecho(tool: FerramentaComparada, a: Tentativa, b: Tentativa, retried: boolean): Linha {
+  /**
+   * Hub DMS (F3, parte B): as 4 leituras de uma loja do Regem pelas duas credenciais (decisão F3-6). A ligação é a do
+   * cofre, se veio deste mesmo `rgm_it_`; senão, a troca. Enquanto o Regem ou o DMS ID não estão prontos para a via nova
+   * (a via desligada no Regem, o recurso ou a permissão que faltam no DMS ID), a loja volta no dia seguinte.
+   */
+  private async compararLojaDoRegem(
+    db: Db,
+    conta: ContaDaComparacao,
+    guardada: CredencialGuardada | null,
+    ligacaoLida: string | null,
+    agora: Date,
+  ): Promise<ResultadoDaComparacao> {
+    const daLoja = tokenDaLoja(guardada, conta.external_id);
+    if (!daLoja) {
+      await this.marcar(db, conta, agora, DEPOIS_DE_UM_DIA_MIN, 'sem o token de integração da loja no cofre');
+      return { status: 'ignorada' };
+    }
+    const apiUrl = this.config.produtos.regemApiUrl;
+    const ctx: Contexto = {
+      cliente: new ClienteConector(db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 2, tempoLimiteMs: 20_000 }),
+      apiUrl,
+    };
+    const recurso = recursoDoRegem(apiUrl);
+    const contaChaveNova = `comparacao-dms:${conta.external_id}`;
+
+    let tokenDmsId: string;
+    try {
+      tokenDmsId = await this.dmsId().token(recurso, PERMISSOES_DA_LEITURA);
+    } catch (err) {
+      await this.marcar(db, conta, agora, viaNaoPronta(err) ? DEPOIS_DE_UM_DIA_MIN : INTERVALO_COMPARACAO_MIN, motivo(err));
+      return { status: 'falhou', erro: motivo(err) };
+    }
+
+    let ligacao = ligacaoDoToken(ligacaoLida, daLoja.token)?.ligacao ?? null;
+    if (!ligacao) {
+      try {
+        ligacao = await this.trocarNoRegem(db, ctx, conta, daLoja.token, contaChaveNova, recurso, tokenDmsId);
+      } catch (err) {
+        await this.marcar(db, conta, agora, viaNaoPronta(err) ? DEPOIS_DE_UM_DIA_MIN : INTERVALO_COMPARACAO_MIN, `troca: ${motivo(err)}`);
+        return { status: 'falhou', erro: `troca: ${motivo(err)}` };
+      }
+    }
+
+    const atual: AcessoAoRegem = { token: daLoja.token, lojaChave: `comparacao:${conta.external_id}` };
+    let nova: AcessoAoRegem = { token: tokenDmsId, lojaChave: contaChaveNova, ligacao };
+    const desde = new Date(agora.getTime() - DIAS_DOS_PEDIDOS_COMPARADOS * 86_400_000).toISOString();
+    let ligacaoRecusada = false;
+    const linhas: Linha[] = [];
+
+    /** A leitura pela via nova; com o token do DMS ID recusado, pede outro e tenta uma vez mais. */
+    const pelaNova = async (leitura: LeituraDoRegem): Promise<{ t: Tentativa; repetiu: boolean }> => {
+      const t = await tentar(() => LEITORES_DO_REGEM[leitura](ctx, nova, desde));
+      if (t.ok || !tokenRecusado(t.erro)) return { t, repetiu: false };
+      this.dmsId().esquecer(recurso, PERMISSOES_DA_LEITURA);
+      const outro = await tentar(() => this.dmsId().token(recurso, PERMISSOES_DA_LEITURA));
+      if (!outro.ok) return { t: outro, repetiu: true };
+      nova = { ...nova, token: outro.dado as string };
+      return { t: await tentar(() => LEITORES_DO_REGEM[leitura](ctx, nova, desde)), repetiu: true };
+    };
+
+    for (const leitura of LEITURAS_DO_REGEM) {
+      const escopo = ESCOPO_DA_LEITURA_DO_REGEM[leitura];
+      // A loja não liberou esta leitura: não há o que comparar (as duas vias recusariam igual).
+      if (escopo && !daLoja.escopos.includes(escopo)) {
+        linhas.push({ tool: leitura, outcome: 'sem_dado', differences: [], retried: false, failure: null, duration_ms: null });
+        continue;
+      }
+      const norma = (d: unknown) => normalizarDoRegem(leitura, d);
+      let a = await tentar(() => LEITORES_DO_REGEM[leitura](ctx, atual, desde));
+      let { t: b, repetiu } = await pelaNova(leitura);
+      // As duas leram e deram diferente: lê as duas de novo, uma vez (o dado pode ter mudado entre as duas leituras).
+      if (a.ok && b.ok && diferencas(norma(a.dado), norma(b.dado)).length) {
+        a = await tentar(() => LEITORES_DO_REGEM[leitura](ctx, atual, desde));
+        ({ t: b } = await pelaNova(leitura));
+        repetiu = true;
+      }
+      linhas.push(this.desfecho(leitura, a, b, repetiu, norma));
+      if (!b.ok && b.erro instanceof ErroConector && b.erro.codigoProvider === 'ligacao-invalida') ligacaoRecusada = true;
+    }
+    return this.gravar(db, conta, linhas, agora, ligacaoRecusada, 'Regem');
+  }
+
+  /**
+   * A troca automática do Regem (F3, parte A; Regem #690): o Regem devolve o segredo da ligação desta loja em troca do
+   * `rgm_it_` dela. O segredo vai direto para o cofre, com o resumo do `rgm_it_` de onde veio; o anterior é revogado.
+   */
+  private async trocarNoRegem(db: Db, ctx: Contexto, conta: ContaDaComparacao, rgmIt: string, lojaChave: string, recurso: string, tokenDmsId: string): Promise<string> {
+    let resposta: LigacaoRegem;
+    try {
+      resposta = await trocarPorLigacaoRegem(ctx, { tokenDmsId, tokenIntegracao: rgmIt, lojaChave });
+    } catch (err) {
+      if (!tokenRecusado(err)) throw err;
+      this.dmsId().esquecer(recurso, PERMISSOES_DA_LEITURA);
+      const outro = await this.dmsId().token(recurso, PERMISSOES_DA_LEITURA);
+      resposta = await trocarPorLigacaoRegem(ctx, { tokenDmsId: outro, tokenIntegracao: rgmIt, lojaChave });
+    }
+    // A ligação é da loja que o `rgm_it_` abre: outra loja aqui é defeito de alguém, e o segredo não é guardado.
+    if (resposta.loja_id !== conta.external_id) throw new ErroConector('definitivo', 'regem', 'a ligação veio de outra loja');
+    const guardar: LigacaoGuardadaRegem = { tipo: 'ligacao_regem', ligacao: resposta.ligacao, prefixo: resposta.prefixo, origem: resumoDoToken(rgmIt), obtida_em: resposta.segredo_em };
+    await withTenant(db, conta.tenant_id, async (tx) => {
+      const id = await this.vault.putSecret(tx, { tenantId: conta.tenant_id, purpose: PROPOSITO_DA_LIGACAO_REGEM, plaintext: JSON.stringify(guardar) });
+      if (conta.ligacao_secret_id) await this.vault.revokeSecret(tx, conta.ligacao_secret_id);
+      await tx.execute(sql`update liame.connected_account set ligacao_secret_id = ${id}, updated_at = now() where id = ${conta.id}`);
+      await writeAudit(tx, {
+        tenantId: conta.tenant_id,
+        actorType: 'system',
+        actorId: null,
+        actorLabel: 'Liame (Hub DMS: comparação das credenciais do Regem)',
+        action: 'conexao.ligacao_dms_id',
+        resourceType: 'connected_account',
+        resourceId: conta.id,
+        before: null,
+        after: { ligacao: resposta.prefixo, permissoes: resposta.permissoes, segredo_em: resposta.segredo_em },
+        origin: 'worker',
+      });
+      conta.ligacao_secret_id = id;
+    });
+    return resposta.ligacao;
+  }
+
+  /** Como terminou a comparação de uma ferramenta (`norma`: o que sai antes de comparar, por depender da credencial). */
+  private desfecho(tool: Linha['tool'], a: Tentativa, b: Tentativa, retried: boolean, norma: (dado: unknown) => unknown): Linha {
     const duration_ms = b.ms;
     if (a.ok && b.ok) {
-      const caminhos = diferencas(normalizar(tool, a.dado), normalizar(tool, b.dado));
+      const caminhos = diferencas(norma(a.dado), norma(b.dado));
       return { tool, outcome: caminhos.length ? 'diferente' : 'igual', differences: caminhos, retried, failure: null, duration_ms };
     }
     if (a.ok) return { tool, outcome: 'nova_falhou', differences: [], retried, failure: motivo(!b.ok ? b.erro : null), duration_ms };

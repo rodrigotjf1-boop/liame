@@ -459,6 +459,22 @@ describe.skipIf(!hasDb)('comparação das duas credenciais do RegemCast (Hub DMS
     }
   });
 
+  it('sem o endereço do RegemCast nas variáveis, a conta do RegemCast fica fora da rotina; a reservada antes volta no dia seguinte, sem chamada', async () => {
+    const semRegemcast = new ComparacaoDmsIdLoop(database, { ...loadConfig(), produtos: { ...loadConfig().produtos, regemcastApiUrl: null } }, api.app.get(VaultService), api.app.get(FlagService));
+    chamadas.length = 0;
+    const tokensAntes = pedidosDeToken.length;
+    expect(await semRegemcast.executarLote(5, { tenantIds: [e.tenantId] }, mais(10 * 24 * 60))).toEqual([]);
+    const agora = mais(10 * 24 * 60 + 1);
+    expect(await semRegemcast.compararConta(database.db, contaRegemcast, e.tenantId, agora)).toEqual({ status: 'ignorada' });
+    expect(chamadas).toEqual([]);
+    expect(pedidosDeToken.length).toBe(tokensAntes);
+    const [estado] = await ownerQuery<{ last_error: string | null; dia_seguinte: boolean }>(
+      `select last_error, next_at = $2::timestamptz + make_interval(mins => 1440) as dia_seguinte from liame.credential_comparison_state where connected_account_id = $1`,
+      [contaRegemcast, agora.toISOString()],
+    );
+    expect(estado).toEqual({ last_error: 'sem o endereço do RegemCast (REGEMCAST_API_URL)', dia_seguinte: true });
+  });
+
   it('as restrições das tabelas novas (V119): o que passa e o que não passa, pelo nome da restrição', async () => {
     const inserir = (over: Record<string, unknown>) =>
       ownerQuery(

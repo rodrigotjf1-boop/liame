@@ -72,6 +72,12 @@ const Env = z.object({
   /** Credencial do Liame como cliente do Regem (da distribuição), para trocar o código pelo token da loja. */
   REGEM_CLIENT_ID: z.string().min(3).max(100).optional(),
   REGEM_CLIENT_SECRET: z.string().min(16).optional(),
+  /**
+   * Hub DMS (F3, parte B): a leitura do Regem passa a ir pelo token do DMS ID do aplicativo do Liame com a ligação da
+   * loja (a que a comparação trocou), com o `rgm_it_` de reserva. Desligada por padrão: liga depois do critério da
+   * comparação (decisão F3-6). Ligada, pede o aplicativo do Liame no DMS ID.
+   */
+  REGEM_PELA_LIGACAO: z.enum(['true', 'false']).default('false'),
   /** RegemCast: definido na C2b (docs/integracoes/regemcast.md); sem ele, conversas de anúncio não são lidas. */
   REGEMCAST_API_URL: z.url().optional(),
   /**
@@ -143,8 +149,11 @@ export type AppConfig = {
     searchConsoleUrl: string;
     metaAppSecret: string | null;
   };
-  /** Produtos DMS (A2.5): rotas de integração do Regem e do RegemCast (nulo = ainda sem endereço). */
-  produtos: { regemApiUrl: string; regemcastApiUrl: string | null };
+  /**
+   * Produtos DMS (A2.5): rotas de integração do Regem e do RegemCast (nulo = ainda sem endereço). `regemPelaLigacao`: a
+   * leitura do Regem vai pela ligação do Hub DMS quando a loja tem uma (F3, parte B; `REGEM_PELA_LIGACAO`).
+   */
+  produtos: { regemApiUrl: string; regemcastApiUrl: string | null; regemPelaLigacao: boolean };
   /** O aplicativo do Liame no DMS ID (Hub DMS, F2); nulo = a comparação das credenciais do RegemCast não roda. */
   dmsId: { emissor: string; aplicativo: string; segredo: string } | null;
   /** O hub da DMS (Hub DMS, F2, A4, etapa 3); nulo = desligado (`HUB_LIGADO`): nada vai ao hub. */
@@ -255,6 +264,10 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   const dmsId = env.DMS_ID_EMISSOR && env.DMS_ID_APLICATIVO && env.DMS_ID_SEGREDO
     ? { emissor: env.DMS_ID_EMISSOR.replace(/\/+$/, ''), aplicativo: env.DMS_ID_APLICATIVO, segredo: env.DMS_ID_SEGREDO }
     : null;
+  // A ligação só vale com o token do DMS ID do aplicativo do Liame: sem ele, a leitura pela ligação não teria como chamar.
+  if (env.REGEM_PELA_LIGACAO === 'true' && !dmsId) {
+    throw new Error('config: REGEM_PELA_LIGACAO=true pede o aplicativo do Liame no DMS ID (DMS_ID_EMISSOR, DMS_ID_APLICATIVO e DMS_ID_SEGREDO)');
+  }
   // O hub recebe o token do aplicativo do Liame: ligado, precisa dele e, em produção, só o hub oficial (V33).
   let hub: AppConfig['hub'] = null;
   if (env.HUB_LIGADO === 'true') {
@@ -335,7 +348,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       searchConsoleUrl: env.SEARCH_CONSOLE_URL.replace(/\/$/, ''),
       metaAppSecret: env.META_APP_SECRET ?? null,
     },
-    produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl },
+    produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl, regemPelaLigacao: env.REGEM_PELA_LIGACAO === 'true' },
     dmsId,
     hub,
     apiUrl,

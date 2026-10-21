@@ -692,7 +692,7 @@ export class ConnectionsService {
        returning provider, external_id, credential_secret_id, connection_id, ligacao_secret_id`);
     const conta = r.rows[0];
     if (!conta) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Conta conectada não encontrada nesta empresa.');
-    // O segredo da ligação do Hub DMS (RegemCast) sai do cofre junto: no RegemCast, revogar o token revoga a ligação.
+    // O segredo da ligação do Hub DMS (RegemCast e Regem) sai do cofre junto: nos dois, revogar o token revoga a ligação.
     if (conta.ligacao_secret_id) await this.vault.revokeSecret(tx, conta.ligacao_secret_id);
     let tokenDaLoja: string | null = null;
     // No RegemCast, o `rct_it_` da conta ou a ligação da autorização por clique (Hub DMS, B1): as duas são desligadas lá.
@@ -723,7 +723,8 @@ export class ConnectionsService {
               await comAcessoDaConta(credencial, this.config, conta.external_id, (a) => revogarNoRegemcast({ cliente, apiUrl: apiUrlRegemcast }, a.token, a.contaChave, a.ligacao));
             }
           } else if (token) {
-            await revogarNoRegem({ cliente, apiUrl: this.config.produtos.regemApiUrl }, token, conta.external_id);
+            // Pelo `rgm_it_` (`acesso-da-loja.ts`): no Regem, revogar o token revoga também a ligação do Hub DMS.
+            await revogarNoRegem({ cliente, apiUrl: this.config.produtos.regemApiUrl }, { token, lojaChave: conta.external_id });
           }
         } catch (err) {
           this.logger.warn(`revogação no ${produto} falhou (conta ${id}, ${conta.external_id}): ${err instanceof Error ? err.message : String(err)}`);
@@ -784,7 +785,7 @@ export class ConnectionsService {
       afterCommit(async () => {
         for (const t of tokensRegem) {
           try {
-            await revogarNoRegem(ctx, t.token, t.loja_id);
+            await revogarNoRegem(ctx, { token: t.token, lojaChave: t.loja_id });
           } catch (err) {
             this.logger.warn(`revogação no Regem falhou (conexão ${id}, loja ${t.loja_id}): ${err instanceof Error ? err.message : String(err)}`);
           }
