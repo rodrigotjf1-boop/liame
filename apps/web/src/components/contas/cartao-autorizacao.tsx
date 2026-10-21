@@ -5,7 +5,7 @@ import { Icone } from '@/components/ui/icone';
 import { dataCompleta } from '@/lib/formato';
 import { contasELojas, ligadasDaAutorizacao, type perfilNaAutorizacao } from './perfil-google';
 import type { searchConsoleNaAutorizacao } from './search-console';
-import { autorizadorDa, daPlataforma, emConferencia, erroDaConexao, naPlataforma, plataforma, quemAutorizou, vencimentoDaAutorizacao } from './textos';
+import { autorizadorDa, daPlataforma, emConferencia, erroDaConexao, naPlataforma, plataforma, quemAutorizou, sobreAAutorizacaoDoGoogle, vencimentoDaAutorizacao } from './textos';
 
 // Uma autorização (o "sim" que alguém deu na Meta, no Google ou no RegemCast): quando, quantas contas, se vence
 // (Google em modo de teste) e as ações: conectar de novo, procurar contas de novo e revogar. Com o perfil da empresa no
@@ -63,7 +63,7 @@ export function CartaoAutorizacao({
   const qual = `${daPlataforma(a)} de ${quando}`;
   const sobre =
     a === 'google'
-      ? 'Google Ads e Google Analytics numa autorização só, sem prazo de validade.'
+      ? sobreAAutorizacaoDoGoogle(c.scopes)
       : a === 'regemcast'
         ? c.origin === 'distribuicao'
           ? 'Ligada pela DMS, com o token da conta, sem prazo de validade.'

@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { GOOGLE_ADS_SCOPE, GOOGLE_ANALYTICS_SCOPE } from '@liame/contracts';
 import type { AppConfig } from '../config.js';
 import { enderecoLiberado, ErroConector } from '../connectors/cliente-http.js';
 import { ESCOPO_DATA_MANAGER } from '../connectors/google-ads/data-manager.js';
@@ -20,7 +21,7 @@ export type ProvedorOAuth = 'meta' | 'google' | 'regem' | 'regemcast';
 export const FLAG_REGEMCAST_POR_CLIQUE = 'regemcast_por_clique';
 
 /** Escopos do Google: Ads e GA4 só leitura na mesma autorização (plano-a2 §1). */
-export const ESCOPOS_GOOGLE = ['https://www.googleapis.com/auth/adwords', 'https://www.googleapis.com/auth/analytics.readonly'];
+export const ESCOPOS_GOOGLE = [GOOGLE_ADS_SCOPE, GOOGLE_ANALYTICS_SCOPE];
 
 const TEMPO_LIMITE_MS = 15_000;
 

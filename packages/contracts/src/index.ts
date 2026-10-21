@@ -120,6 +120,8 @@ export {
   ConnectionProvider,
   ConnectionResponse,
   DiscoveredAccount,
+  GOOGLE_ADS_SCOPE,
+  GOOGLE_ANALYTICS_SCOPE,
   GOOGLE_BUSINESS_SCOPE,
   LinkAccountsRequest,
   LinkAccountsResponse,
