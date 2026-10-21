@@ -188,4 +188,8 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // algo pessoal. Por isso PERSONAL, com a mesma guarda do texto das avaliações (12 meses, D-A6-5).
   search_console_daily: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },
   search_console_query_week: { class: 'PERSONAL', retention: '12 meses contados do começo da semana', purge: { job: 'busca', days: 365 } },
+  // Fotos dos produtos (A6, Z4; ADR-021): o registro de cada foto que a empresa envia; o arquivo fica no armazenamento
+  // de imagens. É conteúdo da empresa (a tela pede foto sem pessoas que dê para reconhecer). Fica enquanto a marca
+  // existir, ou até alguém apagar; a rotina `fotos` do worker e o expurgo tiram o arquivo antes da linha.
+  brand_photo: { class: 'CONFIDENTIAL', retention: 'enquanto a marca existir, ou até alguém apagar (o arquivo sai antes da linha)' },
 };

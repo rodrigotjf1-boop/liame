@@ -403,3 +403,11 @@ export {
   RejectAdPieceRequest,
   UpdateAdPieceRequest,
 } from './pecas.js';
+export {
+  BRAND_PHOTO_LIMITS,
+  BrandPhoto,
+  BrandPhotosQuery,
+  BrandPhotosResponse,
+  BrandPhotoUploadQuery,
+  UpdateBrandPhotoRequest,
+} from './fotos.js';

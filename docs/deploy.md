@@ -97,6 +97,7 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 | `AWS_REGION` | ✔ | ✔ | `sa-east-1` |
 | `AWS_KMS_KEKS` | ✔ | ✔ | `1:alias/liame-kek-v1` |
 | `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` **S** | ✔ | ✔ | chave de acesso do `liame-sistema` (uma para os dois serviços; criada na hora, direto no painel) |
+| `IMAGENS_BUCKET` | ✔ | ✔ | o bucket privado das imagens (`liame-imagens-<conta>-sa-east-1-an`; o nome leva o número da conta, então fica só no painel); sem ele, a função `fotos` fica indisponível (ADR-021) |
 | `MAIL_TRANSPORT` | ✔ | ✔ | `ses` |
 | `MAIL_FROM` | ✔ | ✔ | `Liame <nao-responda@agencialiame.com>` |
 | `AUDIT_ANCHOR_SALT` **S** | ✔ | ✔ | gerado uma vez (seção 5); **não muda depois de ancorar** |

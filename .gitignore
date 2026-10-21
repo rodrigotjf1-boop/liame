@@ -32,6 +32,9 @@ packages/sdk/src/schema.ts
 # chaves locais das empresas (cofre em desenvolvimento)
 .liame-chaves-locais.json
 
+# imagens locais (as fotos dos produtos no desenvolvimento, ADR-021)
+.liame-imagens-locais/
+
 # Montado no build a partir de lia-agente-3d/ e do three.js (scripts/copiar-lia.mjs)
 apps/web/public/lia/
 

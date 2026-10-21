@@ -38,6 +38,14 @@ catalog:
   '@aws-sdk/client-kms': 3.1140.0
   # E-mail do serviço (SES v2, São Paulo): mesma versão do client-kms, para dividir o núcleo do SDK.
   '@aws-sdk/client-sesv2': 3.1140.0
+  # As fotos dos produtos (A6, Z4; ADR-021): o bucket privado em São Paulo e o endereço assinado de leitura; mesma versão
+  # do client-kms, para dividir o núcleo do SDK.
+  '@aws-sdk/client-s3': 3.1140.0
+  '@aws-sdk/s3-request-presigner': 3.1140.0
+  # Regravar a foto enviada (A6, Z4; ADR-021, item 3): JPEG, sem os metadados, com o lado maior em até 2.048 px. O
+  # binário vem pronto por plataforma (`@img/sharp-*`, glibc no contêiner), sem script de instalação; a LGPL do libvips
+  # já é aceita no CI. A mesma versão que o Next já traz no web.
+  sharp: 0.35.5
   '@openfeature/server-sdk': 1.23.0
   '@openfeature/core': 1.12.0
 

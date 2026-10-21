@@ -18,7 +18,9 @@
   "dependencies": {
     "@ai-sdk/anthropic": "catalog:",
     "@aws-sdk/client-kms": "catalog:",
+    "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-sesv2": "catalog:",
+    "@aws-sdk/s3-request-presigner": "catalog:",
     "@liame/contracts": "workspace:*",
     "@liame/database": "workspace:*",
     "@liame/telemetry": "workspace:*",
@@ -35,6 +37,7 @@
     "pg-boss": "catalog:",
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
+    "sharp": "catalog:",
     "uqr": "catalog:",
     "zod": "catalog:"
   },

@@ -1,8 +1,10 @@
 import { type Database, type Tx, uuidv7, withSystem } from '@liame/database';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
 import { canonicalJson, sha256, writeAudit } from '../audit/audit.js';
 import { DATABASE } from '../database/database.module.js';
+import { prefixoDaEmpresa, prefixoDaMarca } from '../fotos/conferencia.js';
+import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens, ArmazemFechado } from '../imagens/armazem.js';
 import { Mailer, type MailMessage } from '../mail/mailer.js';
 import { VaultService } from '../vault/vault.service.js';
 
@@ -39,11 +41,17 @@ function inList(column: SQL, ids: string[] | undefined): SQL {
 export class LifecyclePurgeService {
   private readonly logger = new Logger('expurgo');
 
+  /** As imagens das marcas e empresas expurgadas (ADR-021); sem ele, a marca ou a empresa com fotos não sai. */
+  private readonly armazem: ArmazemDeImagens;
+
   constructor(
     @Inject(DATABASE) private readonly database: Database | null,
     private readonly vault: VaultService,
     private readonly mailer: Mailer,
-  ) {}
+    @Optional() @Inject(ARMAZEM_DE_IMAGENS) armazem?: ArmazemDeImagens,
+  ) {
+    this.armazem = armazem ?? new ArmazemFechado();
+  }
 
   private get db() {
     if (!this.database) throw new Error('expurgo: sem banco');
@@ -223,12 +231,31 @@ export class LifecyclePurgeService {
     return totals;
   }
 
-  /** Marca arquivada há mais de 12 meses (ADR-014). */
+  /**
+   * Marca arquivada há mais de 12 meses (ADR-014). As fotos dela saem do armazenamento antes (ADR-021, item 6): a marca
+   * cujas fotos o armazenamento não apagou fica para o dia seguinte, com as linhas, e as outras seguem.
+   */
   async purgeArchivedBrands(scope: PurgeScope = {}): Promise<number> {
+    const comFotos = await withSystem(this.db, (tx) =>
+      tx.execute<{ id: string; tenant_id: string }>(sql`
+        select b.id, b.tenant_id from liame.brand b
+         where archived_at is not null and purge_after <= now() and ${noHold('b')} ${inList(sql`b.tenant_id`, scope.tenantIds)}
+           and exists (select 1 from liame.brand_photo p where p.brand_id = b.id)`),
+    );
+    const presas: string[] = [];
+    for (const m of comFotos.rows) {
+      try {
+        await this.armazem.apagarPrefixo(prefixoDaMarca(m.tenant_id, m.id));
+      } catch (err) {
+        presas.push(m.id);
+        this.logger.warn(`expurgo da marca ${m.id}: o armazenamento não apagou as fotos; fica para amanhã (${err instanceof Error ? err.message : String(err)})`);
+      }
+    }
     return withSystem(this.db, async (tx) => {
       const r = await tx.execute<{ tenant_id: string }>(sql`
         delete from liame.brand b
          where archived_at is not null and purge_after <= now() and ${noHold('b')} ${inList(sql`b.tenant_id`, scope.tenantIds)}
+           ${presas.length ? sql`and b.id not in ${presas}` : sql``}
          returning tenant_id`);
       const counts = new Map<string, number>();
       for (const row of r.rows) counts.set(row.tenant_id, (counts.get(row.tenant_id) ?? 0) + 1);
@@ -278,6 +305,11 @@ export class LifecyclePurgeService {
       }
       return { org: o, owners: owners.rows.map((x) => x.email), summary };
     });
+
+    // Antes de tudo, as imagens da empresa (ADR-021, item 6): elas não são cifradas pela chave dela. Se o armazenamento
+    // falhar, nada mais acontece hoje, e o expurgo tenta de novo amanhã.
+    const temFotos = await withSystem(this.db, (tx) => tx.execute(sql`select 1 from liame.brand_photo where tenant_id = ${tenantId} limit 1`));
+    if (temFotos.rows[0]) await this.armazem.apagarPrefixo(prefixoDaEmpresa(tenantId));
 
     // Primeiro a chave: se algo falhar depois, o dado pessoal já está ilegível (crypto-shredding).
     await this.vault.destroyTenantKey(tenantId);

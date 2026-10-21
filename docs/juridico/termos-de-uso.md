@@ -101,6 +101,8 @@ O Liame aplica regras automáticas (e, quando ligado, o funcionário de Complian
 
 9.3. Você pode usar livremente, no seu negócio, os textos e as peças que os funcionários criam para você. Como são gerados por IA, não garantimos que sejam exclusivos nem que não se pareçam com conteúdos de terceiros. Confira marcas, imagens e alegações antes de publicar.
 
+9.4. **Fotos que você envia.** Ao enviar uma foto ao Liame (a dos seus produtos, para os posts), você declara que tem o direito de usá-la e que ela não mostra pessoas que dê para reconhecer sem a autorização delas, e responde por isso. O Liame guarda uma cópia sem os dados do aparelho (como a localização), usa a foto só para prestar o serviço, não gera imagem nova a partir dela e a apaga quando alguém da sua empresa apagar ou quando a marca for apagada.
+
 ## 10. Planos, pagamento e reajuste
 
 10.1. A assinatura é **mensal, por marca**, paga por PIX ou cartão, conforme o plano escolhido. Não há fidelidade nem percentual sobre o investimento em mídia.

@@ -43,6 +43,9 @@ export const PERMISSIONS = [
   // Planos do Estrategista (A3, I11, migration 0035).
   'planos.ver',
   'planos.decidir',
+  // Fotos dos produtos (A6, Z4, migration 0076): ver, e enviar, mudar o produto e apagar (D-A6-19).
+  'fotos.ver',
+  'fotos.enviar',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
