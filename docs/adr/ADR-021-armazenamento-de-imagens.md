@@ -1,6 +1,6 @@
 # ADR-021 — Onde ficam as fotos dos produtos e as imagens das peças
 
-- **Status:** Aceito pelo dono em 05/10/2026 ("vamos de AWS") · **a construção fica para o fim do roadmap**, como pendência final, por decisão dele no mesmo dia · **antecipada em 09/10/2026 para a A6 (entrega Z4), só para a foto enviada pela empresa** (decisão D-A6-2 do `plano-a6.md`); a imagem gerada por IA e a campanha nova continuam no fim
+- **Status:** Aceito pelo dono em 05/10/2026 ("vamos de AWS") · **a construção fica para o fim do roadmap**, como pendência final, por decisão dele no mesmo dia · **antecipada em 09/10/2026 para a A6 (entrega Z4), só para a foto enviada pela empresa** (decisão D-A6-2 do `plano-a6.md`); a imagem gerada por IA e a campanha nova continuam no fim · **os limites da foto aprovados pelo dono em 21/10/2026** (item 3: o lado maior até 10.000 pixels e a cópia guardada em JPEG)
 - **Decide:** onde o Liame guarda arquivos de imagem (a foto do produto que a empresa envia e a imagem que o Criativo gera), como eles entram, quem os lê e quando saem
 - **Base:** base de conhecimento §17.6 · ADR-011 (a conta AWS já em uso) · ADR-014 (ciclo de vida) · ADR-016 (imagem por finalidade) · `plano-a4.md` X5 e X7, D-A4-9 e D-A4-28
 
@@ -51,9 +51,11 @@ O preço do S3 é o custo de quem escolhe: o dono cria o bucket e amplia a permi
    - **Enviar:** o arquivo vai para a API do Liame, que confere e só então grava. Não há envio direto do navegador para o bucket: o que não foi conferido não é guardado.
    - **Ver:** a API confere a permissão e a empresa e devolve uma URL assinada de leitura que vale 5 minutos. A URL assinada é uma chave ao portador: por isso o prazo curto e o teto de 10 minutos no bucket.
 3. **Nada entra sem conferência.**
-   - O tipo é lido do conteúdo, nunca da extensão nem do cabeçalho: JPEG, PNG ou WebP. SVG e GIF não entram.
-   - Até 10 MB por arquivo; lado menor de pelo menos 600 pixels (o mínimo que o guia da Meta pede no Feed); lado maior de até 8.000 pixels.
-   - A imagem é **regravada pelo servidor** (decodificada e codificada de novo). Isso tira os metadados (a foto do celular traz a localização) e qualquer coisa que não seja imagem.
+   - O tipo é lido do conteúdo, nunca da extensão nem do cabeçalho: JPEG, PNG ou WebP. SVG e GIF não entram. HEIC (a foto do iPhone) também não, com o motivo na tela: o campo de arquivo pede JPEG, PNG ou WebP, e o iPhone costuma converter ao enviar (a conferir no aparelho).
+   - Até 10 MB por arquivo e até 20 arquivos por envio; lado menor de pelo menos 600 pixels (o mínimo que o guia da Meta pede no Feed); lado maior de até 10.000 pixels (os 8.000 da proposta recusariam a foto de 48 megapixels dos celulares novos). A mesma foto (o mesmo hash) não entra duas vezes na marca.
+   - Com menos de 1.080 pixels de **largura** (na cópia guardada), a foto entra com o aviso de que no Instagram pode sair sem nitidez: o Instagram mostra a foto com 1.080 de largura. A conta é pela largura, não pelo lado menor: a foto horizontal baixa sai nítida.
+   - A imagem é **regravada pelo servidor** (decodificada e codificada de novo), **em JPEG, com o lado maior em até 2.048 pixels**, depois de aplicar a orientação que a câmera gravou. Isso tira os metadados (a foto do celular traz a localização) e qualquer coisa que não seja imagem. O JPEG é o que o Instagram publica, e a cópia fica abaixo dos 4 MB da Página do Facebook: serve aos quatro canais da A6 (Instagram, Threads, Página do Facebook e Perfil no Google; páginas oficiais lidas em 21/10/2026).
+   - Na tela, só os avisos mínimos (pedido do dono em 21/10/2026): antes de enviar, os formatos, o tamanho, a dica de preferir foto quadrada ou na horizontal e o direito de uso; depois, o motivo de cada foto que não entrou.
 4. **O banco guarda o registro; o S3, os bytes.** Uma tabela nova, com RLS como as outras: empresa, marca, tipo (`foto_produto` ou `imagem_de_peca`), chave do objeto, hash, tamanho, largura, altura, formato, origem (`envio` ou `ia`), quem enviou e quando. O nome original do arquivo não é guardado.
 5. **A chave do objeto começa pela empresa e pela marca** (`t/{empresa}/b/{marca}/{tipo}/{id}`): apagar uma empresa é apagar um prefixo.
 6. **Expurgo (ADR-014).** O objeto sai primeiro, a linha depois, com nova tentativa se o S3 falhar.
@@ -76,6 +78,6 @@ O preço do S3 é o custo de quem escolhe: o dono cria o bucket e amplia a permi
 ## O que o dono decide
 
 1. ✅ **O S3 em São Paulo, aprovado em 05/10/2026** ("vamos de AWS"), depois de comparar o custo com o do Backblaze. As alternativas eram o Supabase Storage (a chave dele abre todos os buckets) e o Backblaze (os arquivos saem do país).
-2. **Os limites:** 10 MB por foto e 30 dias para a imagem de peça recusada. Seguem como propostos e são confirmados com ele quando a construção começar.
+2. ✅ **Os limites da foto, aprovados em 21/10/2026** ("ok tamanhos definidos", com o pedido de pôr na tela só os avisos mínimos): os formatos, os 10 MB, os 600 e os 10.000 pixels e a cópia em JPEG com 2.048 pixels no lado maior, do item 3. Aprovados com o protótipo P20, no mesmo dia: os 20 arquivos por envio, a foto repetida pelo hash e um ajuste do aviso de nitidez, que passou a ser pela largura (a proposta dizia "lado menor"), porque é a largura que o Instagram usa. Os 30 dias da imagem de peça recusada são confirmados com ele na X7.
 
-**Quando construir:** no fim do roadmap, como pendência final (decisão do dono em 05/10/2026: "não construir agora"). Até lá não existe bucket, permissão nova nem código de envio de arquivo, e a imagem do Criativo (X7) e a campanha nova (X5), que dependem das fotos guardadas, esperam junto. Na hora, os passos dele são dois, no console da AWS, guiados um print por vez: criar o bucket e ampliar a permissão do usuário `liame-sistema`. Os preços e as páginas oficiais citados aqui são conferidos de novo antes do código.
+**Quando construir:** a parte das fotos enviadas pela empresa, na A6 (entrega Z4; antecipada em 09/10/2026 pela D-A6-2 e trazida de volta em 20/10/2026), depois do protótipo P20 aprovado. A imagem do Criativo (X7) e a campanha nova (X5) seguem no fim do roadmap. Os passos do dono são dois, no console da AWS, guiados um print por vez: criar o bucket e ampliar a permissão do usuário `liame-sistema`. Os preços e as páginas oficiais citados aqui são conferidos de novo antes do código.
