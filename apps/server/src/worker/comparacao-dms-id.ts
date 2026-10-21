@@ -378,6 +378,12 @@ export class ComparacaoDmsIdLoop {
     ligacaoLida: string | null,
     agora: Date,
   ): Promise<ResultadoDaComparacao> {
+    // A loja da autorização por clique (F3, parte C) só tem a ligação: não há `rgm_it_` para comparar, e ela já lê pela
+    // via nova. Fica fora, como a conta do RegemCast ligada pelo clique, e é vista de novo no dia seguinte.
+    if (guardada?.tipo === 'regem_ligacao') {
+      await this.marcar(db, conta, agora, DEPOIS_DE_UM_DIA_MIN, 'loja ligada pela autorização por clique: só tem a ligação, nada a comparar');
+      return { status: 'ignorada' };
+    }
     const daLoja = tokenDaLoja(guardada, conta.external_id);
     if (!daLoja) {
       await this.marcar(db, conta, agora, DEPOIS_DE_UM_DIA_MIN, 'sem o token de integração da loja no cofre');

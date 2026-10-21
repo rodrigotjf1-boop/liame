@@ -18,7 +18,10 @@ export const connectedAccount = liame.table('connected_account', {
   status: text('status').notNull().default('ativa'),
   statusReason: text('status_reason'),
   credentialSecretId: uuid('credential_secret_id'),
-  /** O segredo da ligação do Hub DMS (só contas do RegemCast; migration 0074). */
+  /**
+   * O segredo da ligação do Hub DMS que veio da troca automática do token (contas do RegemCast e, desde a F3, lojas do
+   * Regem; migration 0074). A ligação da autorização por clique é a credencial principal (`credential_secret_id`).
+   */
   ligacaoSecretId: uuid('ligacao_secret_id'),
   connectionId: uuid('connection_id'),
   providerAttributes: jsonb('provider_attributes').notNull().default({}),

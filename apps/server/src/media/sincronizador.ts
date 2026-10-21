@@ -112,7 +112,7 @@ export class Sincronizador {
     try {
       if (!lida.segredo) throw new ErroConector('autenticacao', conta.provider, 'autorização revogada ou ausente');
       const credencial = JSON.parse(lida.segredo) as CredencialGuardada;
-      if (credencial.tipo === 'regem' || credencial.tipo === 'regemcast' || credencial.tipo === 'regemcast_ligacao') {
+      if (credencial.tipo === 'regem' || credencial.tipo === 'regem_ligacao' || credencial.tipo === 'regemcast' || credencial.tipo === 'regemcast_ligacao') {
         throw new ErroConector('definitivo', conta.provider, 'conta de produto DMS fora da sincronização de mídia');
       }
       const accessToken =

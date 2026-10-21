@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
 import type { CredencialGuardada } from '../src/connections/oauth.js';
-import { ErroConector } from '../src/connectors/cliente-http.js';
+import { type ClienteConector, ErroConector } from '../src/connectors/cliente-http.js';
 import {
   AcessoDaExecucao,
   type CredencialDaLoja,
+  credenciaisDaConexaoRegem,
   credencialDaLoja,
+  ligacaoDoClique,
   ligacaoDoToken,
   PERMISSOES_DA_ESCRITA,
   PERMISSOES_DA_LEITURA,
@@ -17,6 +19,7 @@ import {
   tokenDaLoja,
 } from '../src/connectors/regem/acesso-da-loja.js';
 import { normalizarDoRegem } from '../src/connectors/regem/comparacao.js';
+import { revogarNoRegem } from '../src/connectors/regem/conector-regem.js';
 
 // Hub DMS (F3, parte B): o acesso de cada chamada do Liame ao Regem, sem rede. Quem decide a via (o `rgm_it_` ou a
 // ligação) e quem decide se a recusa é da loja (ERR-149: pela ligação, nunca "todo 401"). O caminho inteiro, com o DMS
@@ -129,5 +132,63 @@ describe('o acesso do Liame ao Regem (Hub DMS, F3, parte B)', () => {
     expect(() => loadConfig({ NODE_ENV: 'test', REGEM_PELA_LIGACAO: 'true' } as NodeJS.ProcessEnv)).toThrow('aplicativo do Liame no DMS ID');
     expect(() => loadConfig({ NODE_ENV: 'test', ...dmsId, REGEM_PELA_LIGACAO: 'sim' } as NodeJS.ProcessEnv)).toThrow();
     expect(loadConfig({ NODE_ENV: 'test', ...dmsId, REGEM_PELA_LIGACAO: 'true' } as NodeJS.ProcessEnv).produtos.regemPelaLigacao).toBe(true);
+  });
+});
+
+// Hub DMS (F3, parte C): a loja do Regem ligada pela autorização por clique só tem a ligação (credencial `regem_ligacao`;
+// o Regem descarta o segredo do token na troca). O caminho inteiro está em `test/db/regem-loja-so-ligacao.spec.ts`.
+describe('a loja do Regem só com a ligação (Hub DMS, F3, parte C)', () => {
+  const OUTRA_LIGACAO = `dms_lg_regem_${'B'.repeat(43)}_abcdef`;
+  const doClique: CredencialGuardada = {
+    tipo: 'regem_ligacao',
+    lojas: [
+      { loja_id: 'loja-centro', ligacao: LIGACAO, prefixo: 'dms_lg_regem_AAAAA', escopos: ['pedidos.ler', 'cupons.criar'] },
+      { loja_id: 'loja-barra', ligacao: OUTRA_LIGACAO, prefixo: 'dms_lg_regem_BBBBB', escopos: ['pedidos.ler'] },
+    ],
+    obtido_em: '2026-10-21T12:00:00.000Z',
+  };
+  const doCentro: CredencialDaLoja = { via: 'ligacao', ligacao: LIGACAO, escopos: ['pedidos.ler', 'cupons.criar'], reserva: null };
+
+  it('vai pela ligação dela com a chave REGEM_PELA_LIGACAO ligada ou desligada, sem reserva; a ligação do cofre não conta', () => {
+    expect(credencialDaLoja(doClique, 'loja-centro', null, false)).toEqual(doCentro);
+    expect(credencialDaLoja(doClique, 'loja-centro', null, true)).toEqual(doCentro);
+    // Uma ligação da troca automática no cofre (de um `rgm_it_` de antes do clique) não muda nada.
+    expect(credencialDaLoja(doClique, 'loja-centro', ligacaoDe(TOKEN), true)).toEqual(doCentro);
+    expect(credencialDaLoja(doClique, 'loja-sumida', null, true)).toBeNull();
+    expect(ligacaoDoClique(doClique, 'loja-barra')).toEqual({ via: 'ligacao', ligacao: OUTRA_LIGACAO, escopos: ['pedidos.ler'], reserva: null });
+    // A credencial do `rgm_it_` não tem ligação do clique, e a do clique não tem `rgm_it_` (V136).
+    expect(ligacaoDoClique(guardada, 'loja-centro')).toBeNull();
+    expect(tokenDaLoja(doClique, 'loja-centro')).toBeNull();
+  });
+
+  it('sem reserva, a execução não volta para token nenhum: só ligacao-invalida é da loja, e o token do DMS ID recusado é do aplicativo', () => {
+    expect(repetirPeloToken(doCentro, erro('autenticacao', 'ligacao-invalida'))).toBe(false);
+    expect(recusaDaLoja(doCentro, erro('autenticacao', 'ligacao-invalida'))).toBe(true);
+    expect(recusaDaLoja(doCentro, erro('autenticacao', 'token-invalido'))).toBe(false);
+  });
+
+  it('as lojas de cada credencial para revogar lá: as do rgm_it_ pelo token, as do clique pela ligação; outra credencial, nenhuma', () => {
+    expect(credenciaisDaConexaoRegem(guardada)).toEqual([
+      { lojaId: 'loja-centro', credencial: peloToken(TOKEN, ['pedidos.ler', 'cupons.ler']) },
+      { lojaId: 'loja-barra', credencial: peloToken(OUTRO_TOKEN, ['pedidos.ler']) },
+    ]);
+    expect(credenciaisDaConexaoRegem(doClique)).toEqual([
+      { lojaId: 'loja-centro', credencial: doCentro },
+      { lojaId: 'loja-barra', credencial: { via: 'ligacao', ligacao: OUTRA_LIGACAO, escopos: ['pedidos.ler'], reserva: null } },
+    ]);
+    expect(credenciaisDaConexaoRegem({ ...guardada, tipo: 'regemcast' })).toEqual([]);
+    expect(credenciaisDaConexaoRegem(null)).toEqual([]);
+  });
+
+  it('revogar no Regem: pelo rgm_it_, todo 401 é "já revogado"; pela ligação, só ligacao-invalida (o token do DMS ID recusado sobe)', async () => {
+    const recusando = (e: ErroConector) => ({ cliente: { requisitar: () => Promise.reject(e) } as unknown as ClienteConector, apiUrl: 'http://127.0.0.1:9/regem' });
+    const peloRgmIt = { token: TOKEN, lojaChave: 'loja-centro' };
+    const pelaLigacao = { token: 'tok-do-dms-id', lojaChave: 'loja-centro', ligacao: LIGACAO };
+    await expect(revogarNoRegem(recusando(erro('autenticacao', 'token-invalido')), peloRgmIt)).resolves.toBeUndefined();
+    await expect(revogarNoRegem(recusando(erro('autenticacao')), peloRgmIt)).resolves.toBeUndefined();
+    await expect(revogarNoRegem(recusando(erro('autenticacao', 'ligacao-invalida')), pelaLigacao)).resolves.toBeUndefined();
+    await expect(revogarNoRegem(recusando(erro('autenticacao', 'token-invalido')), pelaLigacao)).rejects.toMatchObject({ codigoProvider: 'token-invalido' });
+    await expect(revogarNoRegem(recusando(erro('autenticacao')), pelaLigacao)).rejects.toMatchObject({ tipo: 'autenticacao' });
+    await expect(revogarNoRegem(recusando(erro('transitorio')), peloRgmIt)).rejects.toMatchObject({ tipo: 'transitorio' });
   });
 });

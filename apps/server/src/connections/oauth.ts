@@ -138,7 +138,18 @@ export type CredencialLigacaoRegemcast = {
   permissoes: string[];
   obtido_em: string;
 };
-export type CredencialGuardada = CredencialMeta | CredencialGoogle | CredencialRegem | CredencialLigacaoRegemcast;
+/**
+ * Regem pela autorização por clique (Hub DMS, F3, parte C; Regem #706): o segredo da ligação de CADA loja que o
+ * presidente marcou na página, com as permissões que ele liberou para ela. Não tem `rgm_it_`: na troca, o Regem descarta
+ * o segredo do token da loja, e a ligação vale junto com o token do DMS ID do aplicativo do Liame (cabeçalho
+ * `DMS-Ligacao`). Quem cria é a conexão por clique do Regem (o PR seguinte); até lá, nenhuma credencial desse tipo existe.
+ */
+export type CredencialLigacaoRegem = {
+  tipo: 'regem_ligacao';
+  lojas: { loja_id: string; ligacao: string; prefixo: string; escopos: string[] }[];
+  obtido_em: string;
+};
+export type CredencialGuardada = CredencialMeta | CredencialGoogle | CredencialRegem | CredencialLigacaoRegemcast | CredencialLigacaoRegem;
 
 export type ResultadoTroca = {
   credencial: CredencialGuardada;
