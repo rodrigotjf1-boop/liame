@@ -37,6 +37,8 @@ export function rotuloDoPasso(ferramenta: string, input: unknown): string {
       return 'Lendo os cupons da marca';
     case 'links_rastreio':
       return 'Lendo os links e a conferência do rastreio';
+    case 'como_te_acham':
+      return 'Lendo como te acham no Google';
     case 'equipe_trabalho': {
       const funcionario = (input && typeof input === 'object' ? (input as { funcionario?: unknown }).funcionario : null) as string | null | undefined;
       const deQuem = typeof funcionario === 'string' ? DO_MEMBRO[funcionario] : undefined;
@@ -66,6 +68,8 @@ export function rotuloDaLeitura(ferramenta: string, input: unknown): string | nu
       return 'Cupons';
     case 'links_rastreio':
       return 'Links e rastreio';
+    case 'como_te_acham':
+      return 'Como te acham no Google';
     case 'equipe_trabalho':
       return 'Sua equipe';
     default:
@@ -77,13 +81,27 @@ const EM_DIA = 'em dia';
 const texto = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 const lista = (v: unknown): Array<Record<string, unknown>> => (Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : []);
 
+/** No Google, a parte, a plataforma como a tela a chama e o campo do nome em cada conta (`visoes/google.ts`). */
+const PARTES_DO_GOOGLE = [
+  { parte: 'perfil_no_google', lista: 'lojas', nome: 'loja', plataforma: 'Perfil no Google' },
+  { parte: 'site_no_search_console', lista: 'sites', nome: 'site', plataforma: 'Search Console' },
+] as const;
+
 /**
  * As fontes fora do dia de uma leitura, pelo que a própria leitura diz: as fontes dos resultados (contas de
- * anúncio e o caixa do Regem) e a leitura dos cupons de cada loja. As outras leituras não trazem frescor; o
- * aviso de conta atrasada já está nos avisos da Atenção.
+ * anúncio e o caixa do Regem), a leitura dos cupons de cada loja e, no Google, cada loja do perfil e cada site. As
+ * outras leituras não trazem frescor; o aviso de conta atrasada já está nos avisos da Atenção.
  */
 export function foraDoDia(ferramenta: string, valor: unknown): ConversationStaleSource[] {
   const v = (valor && typeof valor === 'object' ? valor : {}) as Record<string, unknown>;
+  if (ferramenta === 'como_te_acham') {
+    return PARTES_DO_GOOGLE.flatMap((p) => {
+      const parte = (v[p.parte] && typeof v[p.parte] === 'object' ? v[p.parte] : {}) as Record<string, unknown>;
+      return lista(parte[p.lista])
+        .filter((c) => texto(c.frescor) !== null && c.frescor !== EM_DIA)
+        .map((c) => ({ platform: p.plataforma, name: texto(c[p.nome]) ?? '', freshness: texto(c.frescor)!, last_read: texto(c.ultima_leitura) }));
+    });
+  }
   if (ferramenta === 'resultados_ciclo_fechado') {
     return lista(v.fontes)
       .filter((f) => texto(f.frescor) !== null && f.frescor !== EM_DIA)
@@ -99,8 +117,8 @@ export function foraDoDia(ferramenta: string, valor: unknown): ConversationStale
 
 /** Campos que guardam um nome vindo dos dados da empresa (não texto do sistema). */
 // Na leitura da equipe, o nome do que um funcionário tratou: a conversa, a demanda, o plano e o site (`assunto`, no
-// acontecimento que a visão ainda não conhece).
-const CAMPOS_DE_NOME = new Set(['campanha', 'conta', 'loja', 'nome', 'codigo', 'conversa', 'demanda', 'plano', 'site', 'assunto']);
+// acontecimento que a visão ainda não conhece). No Google, a busca: o que as pessoas digitaram ("pizza 2 por 1").
+const CAMPOS_DE_NOME = new Set(['campanha', 'conta', 'loja', 'nome', 'codigo', 'conversa', 'demanda', 'plano', 'site', 'assunto', 'busca']);
 
 /** Os nomes da empresa numa leitura (campanha, conta, loja, cupom), para o Compliance e para não marcar número de nome. */
 export function nomesDaLeitura(valor: unknown): string[] {

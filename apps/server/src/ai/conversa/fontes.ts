@@ -100,6 +100,16 @@ const PALAVRAS: Record<string, string> = {
   decisoes_comparaveis: 'decisões comparáveis',
   recomendacao: 'recomendação',
   acao: 'ação',
+  // Como te acham no Google (`como_te_acham`).
+  perfil_no_google: 'perfil no Google',
+  site_no_search_console: 'site no Search Console',
+  buscas_da_ultima_semana: 'buscas da última semana',
+  na_busca_do_google: 'na busca do Google',
+  no_google_maps: 'no Google Maps',
+  diferenca_para_os_dias_anteriores: 'diferença para os dias anteriores',
+  ligacoes: 'ligações',
+  cliques_no_cardapio: 'cliques no cardápio',
+  posicao_media: 'posição média',
 };
 const palavra = (chave: string): string => PALAVRAS[chave] ?? chave.replace(/_/g, ' ');
 
@@ -131,6 +141,12 @@ function nomeDoItem(item: unknown): { rotulo: string; nome: string | null } | nu
   const oQue = s(o.o_que);
   const quando = s(o.quando);
   if (oQue && quando) return { rotulo: `${quando}, ${oQue}`, nome: null };
+  // No Google (`como_te_acham`): o site da empresa e a busca que as pessoas digitaram. Depois do acontecimento da equipe,
+  // que também tem `site` (a página que o Pesquisador leu) e segue com o rótulo dele.
+  const site = s(o.site);
+  if (site) return { rotulo: `site ${site}`, nome: site };
+  const busca = s(o.busca);
+  if (busca) return { rotulo: `busca "${busca}"`, nome: busca };
   return null;
 }
 

@@ -3,6 +3,7 @@ import { foraDoDia } from '../src/ai/conversa/leituras.js';
 import { leituraPadrao } from '../src/ai/evals/leituras-padrao.js';
 import { visaoDoFrescor, visaoDosAvisos } from '../src/ai/registro/leituras.visoes.js';
 import { visaoDosCupons } from '../src/ai/registro/visoes/cupons.js';
+import { visaoDoGoogle } from '../src/ai/registro/visoes/google.js';
 import { visaoDosLinks } from '../src/ai/registro/visoes/links.js';
 
 // A leitura que um caso de eval não gravou: a visão neutra, no formato da visão de produção e coerente com o caso.
@@ -76,6 +77,21 @@ describe('leituras neutras dos evals (A3, evals com modelo de verdade)', () => {
     // Um anúncio ativo por campanha dos resultados do caso, todos com rastreio.
     expect(leituraPadrao(caso({ resultados_ciclo_fechado: resultados([]) }), 'links_rastreio')).toEqual(links);
     expect(leituraPadrao(caso(), 'links_rastreio')).toMatchObject({ rastreio_dos_anuncios: { anuncios_ativos: '0', com_rastreio: '0' } });
+  });
+
+  it('o Google neutro é o da empresa sem as funções do Google: a mesma visão da produção, nada disponível e nada fora do dia', () => {
+    const desligado = { enabled: false, waiting_google: false, accounts: [], period: null };
+    const producao = visaoDoGoogle(
+      {
+        enabled: false,
+        days: 7,
+        profile: { ...desligado, views_search: '0', views_maps: '0', previous_views: null, direction_requests: '0', call_clicks: '0', website_clicks: '0', menu_clicks: '0' },
+        site: { enabled: false, accounts: [], period: null, clicks: '0', impressions: '0', position: null, previous_clicks: null, daily: [], queries: null },
+      },
+      FUSO,
+    );
+    expect(leituraPadrao(caso(), 'como_te_acham')).toEqual(producao);
+    expect(foraDoDia('como_te_acham', leituraPadrao(caso(), 'como_te_acham'))).toEqual([]);
   });
 
   it('a entrega dos anúncios, a equipe e o que não é leitura não têm visão neutra: seguem falhando sem gravação', () => {

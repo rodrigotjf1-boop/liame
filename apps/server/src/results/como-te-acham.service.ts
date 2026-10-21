@@ -11,10 +11,11 @@ import type { AuthContext } from '../context/request-context.js';
 import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
+import { frescor } from '../media/frescor.js';
 
 // Como te acham no Google (P18, aprovado pelo dono em 15/10/2026): o que o Liame guardou do perfil da empresa no Google
-// (A6 · Z1) e do site no Search Console (A6 · Z3), para o cartão de Resultados. Só leitura, do banco do Liame, na
-// transação da requisição, sob a RLS da empresa.
+// (A6 · Z1) e do site no Search Console (A6 · Z3), para o cartão de Resultados e para a leitura da IA (`como_te_acham`,
+// a LIA e o Estrategista). Só leitura, do banco do Liame, na transação da requisição, sob a RLS da empresa.
 //
 // O período acaba no último dia que o Google já informou (ele entrega os números com 2 a 3 dias de atraso), em cada
 // parte: o perfil e o site podem acabar em dias diferentes, e a tela escreve a data de cada um. As duas partes não se
@@ -23,8 +24,13 @@ import { FlagService } from '../flags/flag.service.js';
 /** As buscas da semana que a tela recebe: 5 no modo simples ("Ver as 10 buscas"), 10 no Pro. */
 export const BUSCAS_NA_TELA = 10;
 
-type LinhaConta = { id: string; name: string; status: string; last_success_at: Date | string | null };
+type LinhaConta = { id: string; name: string; status: string; last_success_at: Date | string | null; expected_every_minutes: number | null };
 type LinhaPeriodo = { ultimo: string | null };
+/**
+ * Quem pede: a rota passa a sessão; a leitura da IA (`como_te_acham`), a empresa e a pessoa do pedido (nula na rotina do
+ * Estrategista, que lê como o sistema).
+ */
+export type QuemLeOGoogle = Pick<AuthContext, 'tenantId'> & { userId: string | null };
 
 const isoOuNulo = (v: Date | string | null) => (v == null ? null : new Date(v).toISOString());
 /** A posição média com até duas casas ("6.8"); nula sem nenhuma vez. */
@@ -38,8 +44,15 @@ export function periodos(ultimo: string, dias: number): { atual: GoogleVisibilit
   const from = somarDias(ultimo, -(dias - 1));
   return { atual: { from, to: ultimo }, antes: { from: somarDias(from, -dias), to: somarDias(from, -1) } };
 }
-const contas = (linhas: LinhaConta[]): GoogleVisibilityAccount[] =>
-  linhas.map((c) => ({ connected_account_id: c.id, name: c.name, status: c.status, last_success_at: isoOuNulo(c.last_success_at) }));
+const contas = (linhas: LinhaConta[], agora: Date): GoogleVisibilityAccount[] =>
+  linhas.map((c) => ({
+    connected_account_id: c.id,
+    name: c.name,
+    status: c.status,
+    last_success_at: isoOuNulo(c.last_success_at),
+    // Como nos resultados: sem o intervalo esperado (a conta que ainda não tem estado de leitura), não se sabe.
+    freshness: c.expected_every_minutes ? frescor({ lastSuccessAt: c.last_success_at, expectedEveryMinutes: c.expected_every_minutes }, agora) : 'unknown',
+  }));
 
 const PERFIL_VAZIO: GoogleVisibilityProfile = {
   enabled: false,
@@ -70,23 +83,24 @@ const SITE_VAZIO: GoogleVisibilitySite = {
 export class ComoTeAchamService {
   constructor(private readonly flags: FlagService) {}
 
-  async ler(auth: AuthContext, q: GoogleVisibilityQuery): Promise<GoogleVisibilityResponse> {
+  /** `agora`: o relógio do frescor das contas (o do pedido; nos testes, fixo). */
+  async ler(quem: QuemLeOGoogle, q: GoogleVisibilityQuery, agora: Date = new Date()): Promise<GoogleVisibilityResponse> {
     const tx = currentTx();
     const marca = await tx.execute<{ id: string }>(sql`select id from liame.brand where id = ${q.brand_id} and archived_at is null`);
     if (!marca.rows[0]) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
     const dias = Number(q.days);
-    const ctx = this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId: q.brand_id });
+    const ctx = this.flags.context({ tenantId: quem.tenantId, userId: quem.userId, brandId: q.brand_id });
     const comPerfil = await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, ctx);
     const comSite = await this.flags.isEnabled(FLAG_SEARCH_CONSOLE, ctx);
-    const profile = comPerfil ? await this.perfil(q.brand_id, dias) : PERFIL_VAZIO;
-    const site = comSite ? await this.site(q.brand_id, dias) : SITE_VAZIO;
+    const profile = comPerfil ? await this.perfil(q.brand_id, dias, agora) : PERFIL_VAZIO;
+    const site = comSite ? await this.site(q.brand_id, dias, agora) : SITE_VAZIO;
     return { enabled: comPerfil || comSite, days: dias, profile, site };
   }
 
   /** As contas ligadas à marca de um provedor, com a última leitura boa do conjunto que traz os números. */
   private async contasDaMarca(brandId: string, provedor: string, dataset: string): Promise<LinhaConta[]> {
     const r = await currentTx().execute<LinhaConta>(sql`
-      select a.id, a.name, a.status, s.last_success_at
+      select a.id, a.name, a.status, s.last_success_at, s.expected_every_minutes
         from liame.connected_account a
         left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = ${dataset}
        where a.brand_id = ${brandId} and a.provider = ${provedor} and ${contaConectada('a')}
@@ -94,7 +108,7 @@ export class ComoTeAchamService {
     return r.rows;
   }
 
-  private async perfil(brandId: string, dias: number): Promise<GoogleVisibilityProfile> {
+  private async perfil(brandId: string, dias: number, agora: Date): Promise<GoogleVisibilityProfile> {
     const tx = currentTx();
     const lojas = await this.contasDaMarca(brandId, PROVEDOR_PERFIL_GOOGLE, DATASET_NUMEROS);
     if (!lojas.length) {
@@ -108,7 +122,7 @@ export class ComoTeAchamService {
     }
     const ids = lojas.map((l) => l.id);
     const [ultimo] = (await tx.execute<LinhaPeriodo>(sql`select max(day)::text as ultimo from liame.profile_metric_daily where connected_account_id in ${ids}`)).rows;
-    if (!ultimo?.ultimo) return { ...PERFIL_VAZIO, enabled: true, accounts: contas(lojas) };
+    if (!ultimo?.ultimo) return { ...PERFIL_VAZIO, enabled: true, accounts: contas(lojas, agora) };
     const { atual, antes } = periodos(ultimo.ultimo, dias);
     const [n] = (
       await tx.execute<{
@@ -133,7 +147,7 @@ export class ComoTeAchamService {
     return {
       enabled: true,
       waiting_google: false,
-      accounts: contas(lojas),
+      accounts: contas(lojas, agora),
       period: atual,
       views_search: n?.busca ?? '0',
       views_maps: n?.maps ?? '0',
@@ -145,12 +159,12 @@ export class ComoTeAchamService {
     };
   }
 
-  private async site(brandId: string, dias: number): Promise<GoogleVisibilitySite> {
+  private async site(brandId: string, dias: number, agora: Date): Promise<GoogleVisibilitySite> {
     const tx = currentTx();
     const sites = await this.contasDaMarca(brandId, PROVEDOR_SEARCH_CONSOLE, DATASET_DIAS);
     if (!sites.length) return { ...SITE_VAZIO, enabled: true };
     const ids = sites.map((s) => s.id);
-    const base = { ...SITE_VAZIO, enabled: true, accounts: contas(sites) };
+    const base = { ...SITE_VAZIO, enabled: true, accounts: contas(sites, agora) };
     const [ultimo] = (await tx.execute<LinhaPeriodo>(sql`select max(day)::text as ultimo from liame.search_console_daily where connected_account_id in ${ids}`)).rows;
     const queries = await this.buscasDaSemana(ids);
     if (!ultimo?.ultimo) return { ...base, queries };

@@ -11,6 +11,7 @@ const PLATAFORMA: Record<string, string> = {
   regem: 'Regem',
   regemcast: 'RegemCast',
   google_business: 'Perfil no Google',
+  search_console: 'Search Console',
 };
 const FRESCOR: Record<string, string> = { fresh: 'em dia', delayed: 'atrasado', stale: 'parado', unknown: 'nunca leu' };
 const GRAVIDADE = ['critica', 'atencao', 'info'];

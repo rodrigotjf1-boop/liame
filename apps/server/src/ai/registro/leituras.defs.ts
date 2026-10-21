@@ -79,6 +79,16 @@ export const LEITURAS: FerramentaDef[] = [
     input: SoDaMarca,
   },
   {
+    name: 'como_te_acham',
+    version: 1,
+    description:
+      'Como as pessoas acham a marca no Google, como o cartão "Como te acham no Google" de Resultados mostra: o perfil da empresa no Google (as vezes em que ele apareceu na busca do Google e no Google Maps, e o que as pessoas fizeram: pedidos de rota, ligações, cliques no site e no cardápio) e o site no Search Console (os cliques vindos das buscas, as vezes em que o site apareceu, a posição média e os cliques de cada dia), nos últimos 7 ou 30 dias que o Google já informou (ele entrega com dois a três dias de atraso), com os dias anteriores do mesmo tamanho; e as buscas que mais trouxeram cliques ao site na última semana fechada. Cada parte só vem quando está disponível para a empresa, e cada loja e cada site trazem o frescor da leitura. Use quando a pergunta for sobre o Google fora dos anúncios: o perfil, o Maps, as buscas, o site.',
+    risk: 'R0',
+    permission: 'vendas.ver',
+    owner: 'vendas',
+    input: z.strictObject({ brand_id: z.uuid(), dias: z.enum(['7', '30']).optional() }),
+  },
+  {
     name: 'equipe_trabalho',
     // v2 (09/10/2026): o Criativo entrou na equipe (A4, P12): `funcionario` aceita `criativo`, e os números trazem as peças.
     // v3 (09/10/2026): o CRM e mensageria entrou na equipe (A5, P16): `funcionario` aceita `crm`, e os números trazem as mensagens.
@@ -94,7 +104,7 @@ export const LEITURAS: FerramentaDef[] = [
 ];
 
 /**
- * As leituras dos números da marca (frescor, avisos, resultados, entrega, cupons e links): as que o Estrategista usa
- * para montar um plano. A leitura da equipe é só da conversa.
+ * As leituras dos números da marca (frescor, avisos, resultados, entrega, cupons, links e o Google): as que o
+ * Estrategista usa para montar um plano. A leitura da equipe é só da conversa.
  */
-export const LEITURAS_DE_DADOS = ['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio'] as const;
+export const LEITURAS_DE_DADOS = ['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'como_te_acham'] as const;

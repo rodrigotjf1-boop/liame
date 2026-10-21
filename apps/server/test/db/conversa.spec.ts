@@ -214,13 +214,13 @@ describe.skipIf(!hasDb)('Conversa com a LIA: fluxo, conferência, regras, demand
 
     // O modelo recebeu o prompt registrado, o contexto do pedido e só as ferramentas da pessoa (o dono tem todas).
     expect(mock.doGenerateCalls).toHaveLength(2);
-    expect(mock.doGenerateCalls[0]!.tools?.map((t) => t.name)).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'equipe_trabalho', 'abrir_demanda', 'propor_cupom']);
+    expect(mock.doGenerateCalls[0]!.tools?.map((t) => t.name)).toEqual(['fontes_frescor', 'atencao_avisos', 'resultados_ciclo_fechado', 'midia_entrega', 'cupons_campanha', 'links_rastreio', 'como_te_acham', 'equipe_trabalho', 'abrir_demanda', 'propor_cupom']);
     expect(enviado(mock, 0)).toContain('Você é a LIA, a assistente de inteligência artificial da Liame');
     expect(enviado(mock, 0)).toContain(`brand_id ${d.brandId}`);
     expect(enviado(mock, 1)).toContain('R$ 200,00');
     expect(await usosDaConversa(d.tenantId)).toEqual([
-      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@4', outcome: 'ok' },
-      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@4', outcome: 'ok' },
+      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@5', outcome: 'ok' },
+      { workflow: 'conversa.lia', task: 'conversa_lia', prompt_version: 'conversa.lia@5', outcome: 'ok' },
     ]);
     // O retorno da pessoa ("Fez sentido") vale para a resposta da conversa, como para o Explicar.
     const retorno = await api.call('POST', '/v1/ai/feedback', { cookie: d.cookie, body: { usage_id: m.usage_id, verdict: 'fez_sentido' } });

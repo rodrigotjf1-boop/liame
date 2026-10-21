@@ -100,7 +100,8 @@ export function textoDaResposta(m: Pick<ConversationMessage, 'blocks'>): string 
 /** Para onde a resposta pode levar, pelo que a LIA leu (no máximo dois caminhos, só para quem pode ver a tela). */
 export function caminhosDa(lido: string[], pode: (permissao: string) => boolean): Array<{ href: string; rotulo: string }> {
   const caminhos: Array<{ href: string; rotulo: string }> = [];
-  if (lido.some((l) => l.startsWith('Resultados')) && pode('vendas.ver')) caminhos.push({ href: '/resultados', rotulo: 'Ver em Resultados' });
+  // "Como te acham no Google" é um cartão de Resultados (P18).
+  if (lido.some((l) => l.startsWith('Resultados') || l === 'Como te acham no Google') && pode('vendas.ver')) caminhos.push({ href: '/resultados', rotulo: 'Ver em Resultados' });
   if (lido.some((l) => l.startsWith('Avisos')) && pode('campanhas.ver')) caminhos.push({ href: '/atencao', rotulo: 'Ver os avisos' });
   if (lido.some((l) => l.startsWith('Cupons') || l.startsWith('Links')) && pode('vendas.ver')) caminhos.push({ href: '/links', rotulo: 'Ver links e cupons' });
   // A leitura de Sua equipe pede as duas permissões da tela.

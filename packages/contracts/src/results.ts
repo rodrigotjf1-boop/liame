@@ -306,8 +306,13 @@ export const GoogleVisibilityAccount = z.strictObject({
   name: z.string(),
   /** `ativa`, `sem_permissao` ou `erro` (a desligada não vem). */
   status: Slug,
-  /** A última leitura que deu certo, de qualquer conjunto da conta; nula antes da primeira. */
+  /** A última leitura que deu certo do conjunto que traz os números (os do perfil, os dias do site); nula antes da primeira. */
   last_success_at: z.string().nullable(),
+  /**
+   * O frescor dessa leitura, como em toda fonte (data-model §3.1): `fresh` (em dia), `delayed` (atrasada), `stale`
+   * (parada) ou `unknown` (nunca leu). É o da leitura do Liame, não o atraso de 2 a 3 dias com que o Google entrega.
+   */
+  freshness: Slug,
 });
 export type GoogleVisibilityAccount = z.infer<typeof GoogleVisibilityAccount>;
 
