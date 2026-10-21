@@ -11,7 +11,7 @@ import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens, ArmazemIndisponivel } from '../imagens/armazem.js';
 import { chaveDaFoto, chaveDaMiniatura, estreitaParaOInstagram, orientacao, RECUSAS, recorteDoInstagram } from './conferencia.js';
-import { type FotoProcessada, processarFoto, RecusaDaFoto } from './processar.js';
+import { type FotoProcessada, processarFoto, RecusaDaFoto, SemSharp } from './processar.js';
 
 // Fotos dos produtos (A6, Z4; ADR-021; protótipo P20, aprovado em 21/10/2026; D-A6-19). A empresa envia as fotos de
 // verdade dos produtos, para os posts. O Liame guarda uma cópia regravada (JPEG, o lado maior em até 2.048 px, sem os
@@ -181,6 +181,11 @@ export class FotosService {
       if (err instanceof RecusaDaFoto) {
         const r = RECUSAS[err.motivo];
         throw new AppProblem(422, r.code, r.title, r.detail);
+      }
+      if (err instanceof SemSharp) {
+        // Só o envio de fotos para: o binário da biblioteca de imagem não abriu neste processo (V6: a causa no log).
+        this.logger.error(err.message);
+        throw new AppProblem(503, 'fotos-indisponiveis', 'Fotos indisponíveis', 'Não dá para conferir fotos agora. Tente mais tarde.');
       }
       throw err;
     }

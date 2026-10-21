@@ -54,6 +54,8 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true },
       { href: '/equipe', rotulo: 'Sua equipe', icone: 'users', permissao: 'campanhas.ver', modos: true },
       { href: '/marca', rotulo: 'Minha marca', icone: 'palette', permissao: 'dossie.ver' },
+      // Fotos (P20): logo abaixo de Minha marca, uma tela só nos dois modos (como Minha marca).
+      { href: '/fotos', rotulo: 'Fotos', icone: 'camera', permissao: 'fotos.ver' },
       { href: '/contas', rotulo: 'Contas conectadas', icone: 'plug', permissao: 'contas.ver' },
       { href: '/pessoas', rotulo: 'Pessoas e acessos', icone: 'user-plus', permissao: 'pessoas.ver' },
     ],

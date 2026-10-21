@@ -1,0 +1,68 @@
+/* ===== A6 · Z4 · Fotos (protótipo P20, aprovado em 21/10/2026): as fotos dos produtos que a empresa envia ===== */
+.ft-tela { position: relative; }
+.ft-tela .view-cab .ft-info { margin-top: var(--sp-2); font-size: var(--text-sm); overflow-wrap: anywhere; }
+/* Arrastando arquivos para a tela: a tela inteira recebe, e o aviso cobre a tela sem pegar o arraste. */
+.ft-arraste { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; justify-items: center; gap: var(--sp-2); padding: var(--sp-6) var(--sp-4); border: 2px dashed var(--foco); border-radius: var(--radius-xl); background: color-mix(in srgb, var(--bg) 90%, transparent); text-align: center; pointer-events: none; }
+.ft-arraste b { font-size: var(--text-lg); }
+.ft-arraste span { font-size: var(--text-sm); color: var(--text-muted); }
+.ft-arraste .ft-arraste-ic { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 16px; background: var(--primary-soft); color: var(--link); }
+.ft-arraste-ic .ic { width: 26px; height: 26px; }
+/* A lista do envio: cada foto com a barra e o que aconteceu com ela. */
+.ft-fila { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-5); }
+.ft-fila-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.ft-fila-cab h2 { font-size: var(--text-md); outline: none; }
+.ft-fila-lista { display: grid; gap: var(--sp-2); }
+.ft-fila-item { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.ft-fila-mini { width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--bg-subtle); color: var(--text-subtle); overflow: hidden; }
+.ft-fila-mini img { width: 100%; height: 100%; object-fit: cover; }
+.ft-fila-txt { min-width: 0; display: grid; gap: 4px; }
+.ft-fila-nome { font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.ft-fila-st { display: flex; align-items: flex-start; gap: 6px; font-size: var(--text-xs); line-height: 1.45; color: var(--text-muted); overflow-wrap: anywhere; }
+.ft-fila-st .ic { width: 14px; height: 14px; flex: none; margin-top: 2px; }
+.ft-fila-st > span { min-width: 0; }
+.ft-fila-st--perigo { color: var(--danger); }
+.ft-fila-st--aviso { color: var(--warning); }
+.ft-fila-st--ok { color: var(--success); }
+.ft-barra { height: 4px; border-radius: 2px; background: var(--bg-subtle); overflow: hidden; }
+.ft-barra > span { display: block; height: 100%; border-radius: 2px; background: var(--primary); transition: width var(--dur) var(--ease); }
+/* A grade: a foto em quadrado (o recorte é só da vista; a foto guardada é inteira), o produto e o dia. */
+.ft-tela .filtros .chip { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+.ft-grade, .ft-esq { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 168px), 1fr)); gap: var(--sp-3); }
+.ft-card { display: grid; align-content: start; gap: var(--sp-2); width: 100%; height: 100%; min-width: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: inherit; font: inherit; text-align: left; overflow: hidden; cursor: pointer; transition: border-color var(--dur-fast) var(--ease); }
+.ft-card:hover { border-color: var(--border-strong); }
+.ft-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ft-img { display: block; aspect-ratio: 1 / 1; max-width: 100%; background: var(--bg-subtle); }
+.ft-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ft-leg { display: grid; gap: 2px; min-width: 0; padding: 0 var(--sp-3) var(--sp-3); }
+.ft-leg b { font-size: var(--text-sm); line-height: 1.35; overflow-wrap: anywhere; }
+.ft-leg span { font-size: var(--text-xs); line-height: 1.4; color: var(--text-muted); overflow-wrap: anywhere; }
+.ft-leg .ft-av { display: inline-flex; align-items: center; gap: 4px; color: var(--warning); }
+.ft-leg .ft-av .ic { width: 14px; height: 14px; flex: none; }
+.ft-esq .esqueleto { height: auto; aspect-ratio: 1 / 1; border-radius: var(--radius-lg); }
+@container pagina (max-width: 479px) {
+  .ft-grade, .ft-esq { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+  .ft-fila-item { grid-template-columns: 40px minmax(0, 1fr); }
+  .ft-fila-mini { width: 40px; height: 40px; }
+  .ft-fila-item > .btn { grid-column: 2; justify-self: start; }
+}
+/* A gaveta da foto: a foto inteira, o produto, o que aparece nela e de onde veio. */
+.ft-ver { display: block; width: 100%; max-height: 46vh; object-fit: contain; border-radius: var(--radius); background: var(--bg-subtle); }
+.ft-nota { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-sm); color: var(--text); }
+.ft-nota .ic { flex: none; margin-top: 2px; color: var(--link); }
+.ft-nota--aviso { background: var(--warning-soft); }
+.ft-nota--aviso .ic { color: var(--warning); }
+.ft-contador { justify-self: end; font-size: var(--text-xs); color: var(--text-subtle); }
+.ft-fatos { display: grid; gap: 6px; font-size: var(--text-sm); color: var(--text-muted); }
+.ft-fatos div { display: flex; flex-wrap: wrap; gap: 2px var(--sp-2); min-width: 0; }
+.ft-fatos dt { font-weight: 600; color: var(--text); }
+.ft-fatos dd { min-width: 0; overflow-wrap: anywhere; }
+.ft-gaveta textarea.input { min-height: 72px; padding: var(--sp-2) var(--sp-3); resize: vertical; }
+.ft-gaveta select.input { max-width: 100%; }
+.ft-gaveta .dialogo-acoes .spacer { flex: 1; }
+/* Antes da primeira foto. */
+.ft-vazio { display: grid; justify-items: center; gap: var(--sp-3); padding: var(--sp-8) var(--sp-4); border: 1.5px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); text-align: center; }
+.ft-vazio h2 { font-size: var(--text-lg); }
+.ft-vazio p { max-width: 46ch; color: var(--text-muted); overflow-wrap: anywhere; }
+.ft-vazio .ft-info { font-size: var(--text-sm); }
+.ft-vazio-ic { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 16px; background: var(--primary-soft); color: var(--link); }
+.ft-vazio-ic .ic { width: 26px; height: 26px; }

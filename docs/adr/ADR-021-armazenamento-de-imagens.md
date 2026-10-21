@@ -75,7 +75,7 @@ O preço do S3 é o custo de quem escolhe: o dono cria o bucket e amplia a permi
 - **O Backblaze, que o dono perguntou em 05/10/2026:** é opção técnica (fala o mesmo protocolo) e é mais barato, mas a diferença só passa de US$ 3 por mês perto de 100 GB, e ele guarda fora do Brasil. Como o código fala o protocolo S3, trocar depois é configuração: vale rever se o volume chegar a centenas de gigabytes.
 - **Rever** quando o volume passar de centenas de gigabytes (classe de armazenamento mais barata para o que é antigo) ou quando houver vídeo, que é outra ordem de tamanho.
 
-## Como ficou no código (A6 · Z4, parte a, 21/10/2026)
+## Como ficou no código (A6 · Z4, partes a e b, 21/10/2026)
 
 - **O bucket** foi criado com o dono em 21/10/2026, no namespace regional da conta (`liame-imagens-<conta>-sa-east-1-an`), com o versionamento desativado de propósito (com versões, a foto apagada continuaria guardada). A política do bucket recusa o pedido sem TLS e a assinatura com mais de 10 minutos; o usuário `liame-sistema` ganhou a política `liame-sistema-s3-imagens` (gravar, ler e apagar só em `t/*`, e listar só esse prefixo, para o expurgo). Os passos e o texto das políticas estão em `configuracao.md`.
 - **O armazenamento** é uma interface com quatro formas (`apps/server/src/imagens/armazem.ts`): S3 em produção (com `IMAGENS_BUCKET`), disco no desenvolvimento (o endereço de leitura é a própria imagem, sem rota nova), memória nos testes e "fechado" em produção sem o bucket (a função responde 503 e o resto não muda). A chave e o prefixo são conferidos parte por parte antes de qualquer gravação ou apagamento.
@@ -83,6 +83,8 @@ O preço do S3 é o custo de quem escolhe: o dono cria o bucket e amplia a permi
 - **Apagar** marca a linha (`removed_at`): a foto some da lista na hora. A rotina `fotos` do worker tira o arquivo e a miniatura do S3 e só então a linha; se o S3 falhar, a linha vai para o fim da fila (pela data da última mudança) e não segura as outras. A mesma rotina limpa o envio que não terminou em 15 minutos.
 - **O expurgo** da marca arquivada e da empresa encerrada apaga o prefixo no S3 antes das linhas (e, na empresa, antes de destruir a chave). A marca cujas fotos o S3 não apagou fica para o dia seguinte; a empresa também.
 - **O HEIC** (a foto do iPhone) é recusado com o motivo: a biblioteca não o lê no binário pronto. O campo de arquivo da tela pede JPEG, PNG ou WebP, e o iPhone costuma converter ao enviar (a conferir no aparelho, com a tela).
+- **A leitura no navegador (parte b, 21/10/2026):** a tela Fotos mostra a miniatura na grade e a foto inteira na gaveta pelos endereços assinados, que saem do host do bucket na região (`https://<bucket>.s3.<região>.amazonaws.com`, conferido por teste com o SDK de verdade). A CSP do web libera essa origem só no `img-src` das telas do app, lida de `IMAGENS_BUCKET` na subida do servidor do web, e a imagem vai sem a página de onde veio (`referrerpolicy`). Quando os 5 minutos vencem, a tela pede a lista de novo (no máximo uma vez a cada 20 segundos).
+- **A biblioteca de imagem** (sharp, binário nativo) carrega na primeira foto, não na subida da API: se o binário não abrir, só o envio responde 503, com a causa no log, e o resto da API segue no ar.
 
 ## O que o dono decide
 

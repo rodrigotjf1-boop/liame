@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import config from '../next.config';
-import { cspComNonce, cspPublica, ehRotaPublica, hashDeScript, ROTAS_PUBLICAS } from '../src/lib/csp';
+import { cspComNonce, cspPublica, ehRotaPublica, hashDeScript, origemDasImagens, ROTAS_PUBLICAS } from '../src/lib/csp';
 import { SCRIPT_TEMA } from '../src/lib/tema';
 
 // Blindagem do web: duas CSPs (telas de entrada pré-renderizadas × resto com nonce). Afrouxar qualquer uma
@@ -79,6 +79,26 @@ describe('CSP do web', () => {
     const { createHash } = await import('node:crypto');
     const esperado = `'sha256-${createHash('sha256').update(SCRIPT_TEMA).digest('base64')}'`;
     expect(await hashDeScript(SCRIPT_TEMA)).toBe(esperado);
+  });
+
+  it('as fotos (ADR-021): a origem do bucket entra só no img-src, só com o bucket no ambiente e no formato do S3', async () => {
+    const BUCKET = 'liame-imagens-123456789012-sa-east-1-an';
+    const origem = origemDasImagens({ IMAGENS_BUCKET: BUCKET });
+    expect(origem).toBe(`https://${BUCKET}.s3.sa-east-1.amazonaws.com`);
+    expect(origemDasImagens({ IMAGENS_BUCKET: ` ${BUCKET}\n`, AWS_REGION: 'us-east-1' })).toBe(`https://${BUCKET}.s3.us-east-1.amazonaws.com`);
+    // Sem o bucket, ou com o que não é nome de bucket (outra origem escondida no valor), nada entra.
+    for (const ruim of [undefined, '', 'Liame-Imagens', 'a', 'bucket.com evil.example', 'x;script-src *', `${BUCKET}.evil`]) {
+      expect(origemDasImagens({ IMAGENS_BUCKET: ruim })).toBeNull();
+    }
+    expect(origemDasImagens({ IMAGENS_BUCKET: BUCKET, AWS_REGION: 'sa-east-1; img-src *' })).toBeNull();
+    const hashTema = await hashDeScript(SCRIPT_TEMA);
+    const d = diretivas(cspComNonce({ ...base, imagens: origem, nonce: 'n', hashTema }));
+    essencial(d);
+    expect(d['img-src']).toEqual(["'self'", 'blob:', 'data:', origem]);
+    // Nenhuma outra diretiva ganha a origem do bucket; e sem ela, o img-src fica como era.
+    expect(Object.entries(d).filter(([nome, valores]) => nome !== 'img-src' && valores.includes(origem ?? ''))).toEqual([]);
+    expect(diretivas(cspComNonce({ ...base, nonce: 'n', hashTema }))['img-src']).toEqual(["'self'", 'blob:', 'data:']);
+    expect(diretivas(cspPublica(base))['img-src']).toEqual(["'self'", 'blob:', 'data:']);
   });
 
   it('rota pública: exata, com ou sem barra no fim; o resto cai na regra com nonce', () => {

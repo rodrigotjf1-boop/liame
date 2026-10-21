@@ -1,14 +1,17 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { cspComNonce, ehRotaPublica, hashDeScript } from './lib/csp';
+import { cspComNonce, ehRotaPublica, hashDeScript, origemDasImagens } from './lib/csp';
 import { SCRIPT_TEMA } from './lib/tema';
 
 // CSP com nonce (decisão do dono em 27/09/2026): toda rota que não é tela de entrada recebe um nonce
 // novo por requisição. O Next lê o nonce do cabeçalho Content-Security-Policy da requisição e o aplica
 // aos próprios scripts; a página precisa ser renderizada a cada acesso (layout do app: `instant = false`
 // e `connection()`). Rota nova fica, por padrão, com a regra rígida.
+// As fotos dos produtos vêm do bucket do S3 (ADR-021): a origem dele é lida do ambiente do servidor na subida (o
+// objeto `process.env` inteiro, que o build não troca por valor fixo), e entra só no `img-src`.
 
 const isDev = process.env.NODE_ENV !== 'production';
 const api = new URL(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').origin;
+const imagens = origemDasImagens(process.env);
 let hashTema: Promise<string> | undefined;
 
 export async function proxy(request: NextRequest) {
@@ -16,7 +19,7 @@ export async function proxy(request: NextRequest) {
 
   const nonce = btoa(crypto.randomUUID());
   hashTema ??= hashDeScript(SCRIPT_TEMA);
-  const csp = cspComNonce({ isDev, api, nonce, hashTema: await hashTema });
+  const csp = cspComNonce({ isDev, api, imagens, nonce, hashTema: await hashTema });
 
   const cabecalhos = new Headers(request.headers);
   cabecalhos.set('x-nonce', nonce);
