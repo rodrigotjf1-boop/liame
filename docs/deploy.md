@@ -77,7 +77,9 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 1. **+ Serviço → App** → `liame-web`. **Construção → Dockerfile** → `apps/web/Dockerfile`.
 2. **Ambiente**: `NEXT_PUBLIC_API_URL=https://api.agencialiame.com`. O EasyPanel passa as variáveis do
    serviço ao build (documentação oficial): o endereço da API fica fixado no código do navegador e na CSP.
-   Trocar o endereço = implantar de novo.
+   Trocar o endereço = implantar de novo. E `IMAGENS_BUCKET` (o mesmo valor da API e do worker; A6 · Z4): esta
+   é lida na subida do servidor do web, não no build, e põe a origem do bucket no `img-src` da CSP das telas do
+   app (as fotos dos produtos vêm do S3 por endereço assinado). Sem ela, a tela Fotos mostra a grade sem as imagens.
 3. **Domínios** → `https://app.agencialiame.com/` → porta **80** (mesma razão da API).
 4. **Implantar**. Conferir: `https://app.agencialiame.com/entrar` abre, e o console do navegador não mostra
    bloqueio de CSP nem chamada a `localhost`.
@@ -97,7 +99,7 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 | `AWS_REGION` | ✔ | ✔ | `sa-east-1` |
 | `AWS_KMS_KEKS` | ✔ | ✔ | `1:alias/liame-kek-v1` |
 | `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` **S** | ✔ | ✔ | chave de acesso do `liame-sistema` (uma para os dois serviços; criada na hora, direto no painel) |
-| `IMAGENS_BUCKET` | ✔ | ✔ | o bucket privado das imagens (`liame-imagens-<conta>-sa-east-1-an`; o nome leva o número da conta, então fica só no painel); sem ele, a função `fotos` fica indisponível (ADR-021) |
+| `IMAGENS_BUCKET` | ✔ | ✔ | o bucket privado das imagens (`liame-imagens-<conta>-sa-east-1-an`; o nome leva o número da conta, então fica só no painel); sem ele, a função `fotos` fica indisponível (ADR-021). Vai também no `liame-web` (seção 3.3), com o mesmo valor |
 | `MAIL_TRANSPORT` | ✔ | ✔ | `ses` |
 | `MAIL_FROM` | ✔ | ✔ | `Liame <nao-responda@agencialiame.com>` |
 | `AUDIT_ANCHOR_SALT` **S** | ✔ | ✔ | gerado uma vez (seção 5); **não muda depois de ancorar** |

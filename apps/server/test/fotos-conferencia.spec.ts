@@ -1,6 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -15,7 +16,7 @@ import {
   recorteDoInstagram,
   tipoPeloConteudo,
 } from '../src/fotos/conferencia.js';
-import { LADO_DA_MINIATURA, processarFoto, RecusaDaFoto } from '../src/fotos/processar.js';
+import { carregadorDoSharp, LADO_DA_MINIATURA, processarFoto, RecusaDaFoto, SemSharp } from '../src/fotos/processar.js';
 import {
   ArmazemFechado,
   ArmazemIndisponivel,
@@ -136,6 +137,39 @@ describe('a regravação da foto (sharp de verdade)', () => {
     // Começa como JPEG e não é.
     expect(await motivo(Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]))).toBe('nao_abre');
   });
+
+  it('sem o binário do sharp, só a foto para (SemSharp, com a causa); a foto seguinte tenta carregar de novo', async () => {
+    let vezes = 0;
+    const carregar = carregadorDoSharp(async () => {
+      vezes += 1;
+      if (vezes === 1) throw new Error('libvips-cpp.so.8.17.3: cannot open shared object file');
+      return import('sharp');
+    });
+    const jpeg = await imagem(800, 800).jpeg().toBuffer();
+    const erro = await processarFoto(jpeg, carregar).catch((e: unknown) => e);
+    expect(erro).toBeInstanceOf(SemSharp);
+    expect((erro as Error).message).toContain('libvips-cpp.so');
+    expect((await processarFoto(jpeg, carregar)).copia.largura).toBe(800);
+    expect(vezes).toBe(2);
+    // O HEIC e o arquivo de outro tipo são recusados antes, sem o sharp.
+    const semSharp = carregadorDoSharp(() => Promise.reject(new Error('sem binário')));
+    const heic = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypheic', 'latin1'), Buffer.alloc(40)]);
+    const recusa = await processarFoto(heic, semSharp).catch((e: unknown) => e);
+    expect(recusa instanceof RecusaDaFoto ? recusa.motivo : recusa).toBe('heic');
+  });
+
+  it('o servidor sobe sem abrir o sharp: nenhum arquivo do servidor importa o pacote na carga (só os tipos)', async () => {
+    const raiz = fileURLToPath(new URL('../src/', import.meta.url));
+    const arquivos = (await readdir(raiz, { recursive: true })).filter((a) => a.endsWith('.ts'));
+    const linhas: string[] = [];
+    for (const a of arquivos) {
+      for (const linha of (await readFile(join(raiz, a), 'utf8')).split('\n')) {
+        if (linha.includes("from 'sharp'") || linha.includes("require('sharp')")) linhas.push(`${a}: ${linha.trim()}`);
+      }
+    }
+    expect(linhas.length).toBeGreaterThan(0);
+    expect(linhas.filter((l) => !l.includes(': import type '))).toEqual([]);
+  });
 });
 
 describe('o armazenamento de imagens', () => {
@@ -211,6 +245,23 @@ describe('o armazenamento de imagens', () => {
     enviados.length = 0;
     await a.apagar(muitas);
     expect(enviados.map((e) => ((e.input.Delete as { Objects: unknown[] }).Objects).length)).toEqual([1000, 500]);
+  });
+
+  it('no S3 de verdade (o SDK e a assinatura, sem rede): o endereço sai do host do bucket na região, o que a CSP do web libera', async () => {
+    const s3 = await import('@aws-sdk/client-s3');
+    const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+    // O bucket no formato do de produção (o namespace regional da conta), com um número de conta de exemplo.
+    const BUCKET = 'liame-imagens-123456789012-sa-east-1-an';
+    const ID_DE_TESTE = 'teste-id';
+    const VALOR_DE_TESTE = 'teste-valor';
+    const cliente = new s3.S3Client({ region: 'sa-east-1', credentials: { accessKeyId: ID_DE_TESTE, secretAccessKey: VALOR_DE_TESTE } });
+    const a = new ArmazemS3(s3 as unknown as SdkDoS3, cliente, (c, cmd, segundos) => getSignedUrl(c as never, cmd as never, { expiresIn: segundos }), BUCKET);
+    const url = new URL(await a.enderecoDeLeitura(chave, 300));
+    // A mesma origem que `origemDasImagens` monta no web (apps/web/src/lib/csp.ts): se o SDK mudar o formato, a CSP
+    // barraria as fotos, e este teste avisa antes.
+    expect(url.origin).toBe(`https://${BUCKET}.s3.sa-east-1.amazonaws.com`);
+    expect(url.pathname).toBe(`/${chave}`);
+    expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
   });
 
   it('no S3: a recusa do S3 vira FalhaDoArmazem, só com o nome do erro (sem endereço nem credencial)', async () => {

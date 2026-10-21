@@ -23,15 +23,32 @@ export function ehRotaPublica(caminho: string): boolean {
   return (ROTAS_PUBLICAS as readonly string[]).includes(limpo);
 }
 
-type Base = { isDev: boolean; api: string };
+/** `imagens`: a origem das fotos dos produtos (o bucket do S3; ADR-021), só nas telas do app. */
+type Base = { isDev: boolean; api: string; imagens?: string | null };
 
-function diretivas({ isDev, api }: Base, scriptSrc: string): string {
+const NOME_DO_BUCKET = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+const REGIAO = /^[a-z]{2}-[a-z]+-\d$/;
+
+/**
+ * A origem das fotos dos produtos (A6 · Z4; ADR-021): o bucket privado do S3, que a tela lê por endereço assinado de 5
+ * minutos. O nome do bucket tem o número da conta: vem do ambiente quando o servidor do web sobe (`IMAGENS_BUCKET`, o
+ * mesmo da API), nunca do repositório. Sem o bucket, ou com o nome fora do formato, nenhuma origem a mais. A região é a
+ * da API (São Paulo, se não vier).
+ */
+export function origemDasImagens(ambiente: Readonly<Record<string, string | undefined>>): string | null {
+  const bucket = (ambiente['IMAGENS_BUCKET'] ?? '').trim();
+  const regiao = (ambiente['AWS_REGION'] ?? '').trim() || 'sa-east-1';
+  if (!NOME_DO_BUCKET.test(bucket) || !REGIAO.test(regiao)) return null;
+  return `https://${bucket}.s3.${regiao}.amazonaws.com`;
+}
+
+function diretivas({ isDev, api, imagens }: Base, scriptSrc: string): string {
   return [
     "default-src 'self'",
     scriptSrc,
     // Atributos style do React: não executam código.
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' blob: data:",
+    `img-src 'self' blob: data:${imagens ? ` ${imagens}` : ''}`,
     "font-src 'self'",
     `connect-src 'self' ${api}${isDev ? ' ws:' : ''}`,
     "worker-src 'self' blob:",
