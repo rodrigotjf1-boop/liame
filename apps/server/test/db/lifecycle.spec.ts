@@ -99,6 +99,48 @@ describe.skipIf(!hasDb)('ciclo de vida: arquivar, reter, encerrar e expurgar (AD
     expect(audit).toEqual({ after: { outbox: 1, idempotencia: 1 }, actor_label: 'Liame (expurgo)' });
   });
 
+  it('a leitura que ficou "rodando" (o processo parou no meio) vira "falhou" depois de 6 horas, e o prazo de 90 dias passa a valer para ela', async () => {
+    const dono = await owner('Pizzaria da Leitura Interrompida');
+    const AGORA = new Date();
+    const horasAntes = (h: number) => new Date(AGORA.getTime() - h * 3_600_000).toISOString();
+    const [conta] = await ownerQuery<{ id: string }>(
+      `insert into liame.connected_account (id, tenant_id, brand_id, provider, external_id, name) values (gen_random_uuid(), $1, $2, 'regem', 'loja-interrompida', 'Loja') returning id`,
+      [dono.tenantId, dono.brandId],
+    );
+    const execucao = async (status: string, inicio: string, erro: string | null = null) => {
+      const [e] = await ownerQuery<{ id: string }>(
+        `insert into liame.sync_run (id, tenant_id, connected_account_id, dataset, kind, status, error, started_at) values (gen_random_uuid(), $1, $2, 'vendas', 'incremental', $3, $4, $5) returning id`,
+        [dono.tenantId, conta!.id, status, erro, inicio],
+      );
+      return e!.id;
+    };
+    const parada = await execucao('rodando', horasAntes(7));
+    const comErro = await execucao('rodando', horasAntes(30), 'timeout no meio');
+    const andando = await execucao('rodando', horasAntes(5));
+    const terminada = await execucao('ok', horasAntes(8));
+
+    expect(await purge.fecharExecucoesInterrompidas({ tenantIds: [dono.tenantId] }, AGORA)).toBe(2);
+    const linhas = await ownerQuery<{ id: string; status: string; error: string | null; finished_at: Date | null }>(
+      `select id, status, error, finished_at from liame.sync_run where connected_account_id = $1`,
+      [conta!.id],
+    );
+    const de = (id: string) => linhas.find((l) => l.id === id)!;
+    expect(de(parada)).toMatchObject({ status: 'falhou', error: 'interrompida: o processo parou antes do fim da leitura' });
+    expect(new Date(de(parada).finished_at!).toISOString()).toBe(AGORA.toISOString());
+    // O motivo que a leitura já tinha fica.
+    expect(de(comErro)).toMatchObject({ status: 'falhou', error: 'timeout no meio' });
+    expect(de(andando)).toMatchObject({ status: 'rodando', finished_at: null });
+    expect(de(terminada)).toMatchObject({ status: 'ok' });
+    // De novo, nada mais a fechar.
+    expect(await purge.fecharExecucoesInterrompidas({ tenantIds: [dono.tenantId] }, AGORA)).toBe(0);
+
+    // Fechada, entra no prazo de 90 dias das execuções (a "rodando" nunca entrava).
+    await ownerQuery(`update liame.sync_run set started_at = now() - interval '91 days', finished_at = now() - interval '91 days' where id = $1`, [parada]);
+    const counts = await purge.purgeRetention({ tenantIds: [dono.tenantId], userIds: [dono.userId] });
+    expect(counts.execucao_sync).toBe(1);
+    expect(await ownerQuery(`select 1 from liame.sync_run where id = $1`, [parada])).toEqual([]);
+  });
+
   it('só o expurgo apaga: a transação da empresa não apaga a própria organização nem os eventos', async () => {
     const dono = await owner();
     const r = await withContext(database.db, { tenantId: dono.tenantId, userId: dono.userId }, async (tx) => ({
