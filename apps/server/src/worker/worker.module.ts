@@ -16,6 +16,7 @@ import { HubDms, MODO_DO_HUB, type ModoDoHub } from '../connectors/dms/hub.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { EquipeService } from '../equipe/equipe.service.js';
 import { FlagService } from '../flags/flag.service.js';
+import { ArmazemModule } from '../imagens/armazem.module.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { createMailer, Mailer } from '../mail/mailer.js';
 import { TelemetryLifecycle } from '../telemetry.lifecycle.js';
@@ -24,6 +25,7 @@ import { ActionExecutor } from './action-executor.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
+import { FotosLoop } from './fotos-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
 import { AiGateway } from '../ai/gateway.js';
@@ -70,7 +72,7 @@ import { RegistroIaService } from './registro-ia.service.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 @Module({
-  imports: [DatabaseModule, VaultModule],
+  imports: [DatabaseModule, VaultModule, ArmazemModule],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
     { provide: Mailer, inject: [APP_CONFIG], useFactory: (config: AppConfig) => createMailer(config) },
@@ -112,6 +114,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     SearchConsoleLoop,
     // Hub DMS (F2, A3): compara as leituras do RegemCast pelas duas credenciais; só com a função `comparacao_dms_id` ligada.
     ComparacaoDmsIdLoop,
+    // Fotos dos produtos (A6, Z4): tira do armazenamento o arquivo da foto apagada (e do envio que não terminou), e depois a linha.
+    FotosLoop,
     // Conversões para o Google (A5, Y1): a venda confirmada que veio de um anúncio do Google volta para ele; nasce desligada.
     ConversoesLoop,
     // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.

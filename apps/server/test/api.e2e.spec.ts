@@ -98,6 +98,19 @@ describe('API: validação e política de erros (RFC 9457)', () => {
     expect(logger.lines.some((l) => l.startsWith('log') && l.includes(body.trace_id))).toBe(true);
   });
 
+  // O leitor da foto (A6, Z4: o arquivo cru, até 10 MB) recusa do mesmo jeito, antes da rota e antes da sessão.
+  it.each([
+    ['foto acima de 10 MB', { 'content-type': 'image/jpeg' }, new Uint8Array(10 * 1024 * 1024 + 1), 413, 'grande-demais'],
+    ['foto comprimida', { 'content-type': 'image/jpeg', 'content-encoding': 'gzip' }, new Uint8Array([1, 2, 3]), 415, 'formato-nao-suportado'],
+  ])('%s: o leitor da foto responde em problem+json, e o log não é de erro', async (_, cabecalhos, corpo, status, code) => {
+    const res = await fetch(`${base}/v1/brand-photos?brand_id=0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a`, { method: 'POST', headers: cabecalhos, body: corpo });
+    expect(res.status, await res.clone().text()).toBe(status);
+    expect(res.headers.get('content-type')).toMatch(/^application\/problem\+json/);
+    const body = (await res.json()) as { code: string; status: number; trace_id: string };
+    expect(body).toMatchObject({ code, status });
+    expect(logger.lines.some((l) => l.startsWith('error') && l.includes(body.trace_id))).toBe(false);
+  });
+
   it('rota inexistente: 404 "não encontramos", sem revelar a rota interna', async () => {
     const res = await fetch(`${base}/v1/nao-existe?x=1`);
     expect(res.status).toBe(404);

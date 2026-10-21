@@ -32,14 +32,20 @@ export async function startApi(options: { controllers?: Array<new (...args: neve
   const base = (await app.getUrl()).replace('[::1]', '127.0.0.1');
   const mailer = app.get(Mailer) as MemoryMailer;
 
-  async function call(method: string, path: string, opts: { body?: unknown; cookie?: string | null; headers?: Record<string, string> } = {}): Promise<ApiResponse> {
+  async function call(
+    method: string,
+    path: string,
+    // `raw`: o corpo cru com o tipo dele (a foto enviada, A6 · Z4), no lugar do JSON.
+    opts: { body?: unknown; raw?: { data: Uint8Array; type: string }; cookie?: string | null; headers?: Record<string, string> } = {},
+  ): Promise<ApiResponse> {
     const headers: Record<string, string> = { 'x-forwarded-for': ip, ...opts.headers };
     if (opts.body !== undefined) headers['content-type'] = 'application/json';
+    if (opts.raw) headers['content-type'] = opts.raw.type;
     if (opts.cookie) headers.cookie = opts.cookie;
     const res = await fetch(`${base}${path}`, {
       method,
       headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      body: opts.raw ? opts.raw.data : opts.body === undefined ? undefined : JSON.stringify(opts.body),
     });
     const text = await res.text();
     const setCookie = res.headers.get('set-cookie');

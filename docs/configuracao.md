@@ -156,6 +156,41 @@ Para desligar, `--desligar` no lugar de `--ligar` (a regra da empresa é apagada
 
 **`desempenho_anuncios` (P23):** nasce desligada para todos, e sem ela nada muda: Resultados não mostra o cartão e "Ler agora" responde 409. Com ela ligada para a empresa (`--flag desempenho_anuncios`), aparece em Resultados o cartão "Como os anúncios rodaram" (no Pro, "Desempenho nas plataformas"): impressões, alcance, cliques, gasto e o resultado que a Meta e o Google contam, com a hora de cada leitura e o botão "Ler agora" (uma vez a cada 15 minutos por empresa, para quem vê Resultados). Só lê: não escreve em plataforma nenhuma. O alcance do período aparece depois da primeira leitura diária da Meta com o servidor do P23 (migration 0073).
 
+**`fotos` (A6, Z4; P20):** nasce desligada para todos, e sem ela nada muda: a lista das fotos vem vazia, e enviar ou mudar uma foto responde 409. Com ela ligada para a empresa (`--flag fotos`), o Dono, o Administrador e o Gestor enviam as fotos dos produtos, mudam o produto e apagam (D-A6-19); quem tem acesso à empresa vê. Ligar só com `IMAGENS_BUCKET` no ar (seção "Imagens"): sem o bucket, a lista e o envio respondem 503. Não publica em nenhuma rede.
+
+## Imagens (ADR-021)
+
+| Variável | Para quê | Padrão |
+| --- | --- | --- |
+| `IMAGENS_ARMAZEM` | `s3` em produção (outro valor recusa subir), `disco` no desenvolvimento, `memoria` nos testes | pelo `NODE_ENV` |
+| `IMAGENS_BUCKET` **P** | O bucket privado em `sa-east-1` (o nome leva o número da conta: fica só no ambiente, nunca no repositório). Sem ele, em produção, a função de imagem fica indisponível e o resto não muda | — |
+| `IMAGENS_PASTA_LOCAL` | Só desenvolvimento: a pasta das imagens (fora do git) | `.liame-imagens-locais` |
+
+A credencial é a do usuário `liame-sistema` (`AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY`, seção "Cofre") e a região, `AWS_REGION`. A API grava e assina a leitura (5 minutos); o worker apaga (a rotina `fotos` e o expurgo).
+
+**Situação na AWS (21/10/2026):** o bucket `liame-imagens-<conta>-sa-east-1-an`, criado com o dono no console, no namespace regional da conta (nenhuma outra conta cria um bucket com esse nome), de propósito geral, com as ACLs desabilitadas, todo o acesso público bloqueado, a criptografia padrão (SSE-S3) e **o versionamento desativado** (com versões, a foto apagada continuaria guardada, e o expurgo precisa apagar de verdade). A política do bucket só recusa: o pedido sem conexão segura (`aws:SecureTransport`) e a assinatura com mais de 10 minutos (`s3:signatureAge` acima de 600000). No usuário `liame-sistema`, a política `liame-sistema-s3-imagens`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ImagensDoLiame",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::liame-imagens-<conta>-sa-east-1-an/t/*"
+    },
+    {
+      "Sid": "ListarSoAsImagensDoLiame",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::liame-imagens-<conta>-sa-east-1-an",
+      "Condition": { "StringLike": { "s3:prefix": "t/*" } }
+    }
+  ]
+}
+```
+
 ## IA (A3, ADR-006)
 
 Os funcionários de IA nascem desligados para todas as empresas (flag `ia`). Sem a chave do fornecedor, a API e o worker sobem normalmente e tudo o que depende de IA cai no caminho sem IA.

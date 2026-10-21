@@ -33,6 +33,7 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 | **Cadastro:** nome, e-mail, telefone, cargo; dados da empresa (razão social, CNPJ, endereço) | Você |
 | **Acesso e segurança:** senha (guardada só como resumo criptográfico), segundo fator, sessões, endereço IP, data e hora de acesso, aparelho e navegador | Gerados pelo uso |
 | **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê; e, na empresa com a IA ligada, as avaliações que você fizer das explicações dela, os pedidos que a LIA registrar para a equipe a seu pedido, as suas decisões sobre os planos do Estrategista e os endereços de página que você pedir para o Pesquisador ler; e, quando a sombra do Gestor de tráfego for ligada, as suas decisões sobre a autonomia dele | Gerados pelo uso |
+| **Fotos dos produtos** (quando a função for ligada para a empresa): as fotos que a empresa envia para os posts, com o produto, o que aparece nelas, quem enviou e quando. O Liame guarda uma cópia regravada, **sem os dados do aparelho** (como a localização) e **sem o nome do arquivo**. A foto não deve mostrar pessoas que dê para reconhecer (Termos, item 9.4) | Você e as pessoas da sua empresa |
 | **Pessoas convidadas:** nome, e-mail e nível de acesso de quem o Dono convidou | O Dono da conta |
 | **Cobrança:** plano, valores, notas fiscais e status de pagamento. Os dados do cartão são tratados pelo processador de pagamento; o Liame não os guarda | Você e o processador de pagamento |
 | **Atendimento:** mensagens trocadas com a LIA e com o suporte, inclusive pelo WhatsApp | Você |
@@ -145,7 +146,7 @@ Compartilhamos dados apenas com fornecedores que nos ajudam a prestar o serviço
 | Supabase | Banco de dados | Brasil (São Paulo) |
 | Hostinger | Servidores da aplicação | Brasil |
 | Cloudflare | Rede, proteção contra ataques e entrega do site | Rede global |
-| Amazon Web Services | Chaves de criptografia e envio dos e-mails do serviço | Brasil (São Paulo) |
+| Amazon Web Services | Chaves de criptografia, envio dos e-mails do serviço e, quando a função for ligada, as fotos dos produtos que a empresa envia (armazenamento privado: a foto só se abre por um endereço que vale poucos minutos) | Brasil (São Paulo) |
 | Anthropic | Modelos de inteligência artificial, só para a empresa com a IA ligada (seção 7) | Estados Unidos |
 
 **Previstos** (entram junto com as funções que dependem deles; avisamos antes de ligar cada um):
@@ -208,6 +209,7 @@ A lista atualizada de fornecedores fica nesta seção, em [agencialiame.com/priv
 | Buscas no Google que mais levaram ao site da empresa em cada semana, quando o site for ligado (o texto da busca como o Google mostra, sem identificação de quem buscou) | 12 meses contados do começo da semana |
 | Resultado da conferência da credencial nova do RegemCast e do Regem, quando essa função for ligada para a empresa (se deu igual, o nome do campo que diferiu e o motivo da falha; **nenhum valor e nenhum telefone**) | 90 dias |
 | Identificador pseudonimizado do cliente, quando o Regem ou o RegemCast forem conectados (um código calculado a partir do telefone com a chave da empresa cliente; **o telefone não é guardado**) | enquanto a empresa cliente tiver finalidade; apagado quando a loja anonimiza o cliente no Regem |
+| Fotos dos produtos que a empresa envia, quando a função for ligada (a cópia regravada, sem os dados do aparelho e sem o nome do arquivo, com o produto, o que aparece nela e quem enviou) | enquanto a marca existir, ou até alguém da empresa apagar; apagada, a foto sai da lista na hora e o arquivo sai do armazenamento logo depois |
 | Auditoria de ações | 5 anos, com proteção contra alteração |
 | Registro de incidentes de segurança | no mínimo 5 anos (Resolução CD/ANPD nº 15/2024, art. 10) |
 | Cópias de segurança | até 35 dias; os dados pessoais nelas ficam cifrados com uma chave por empresa cliente |
