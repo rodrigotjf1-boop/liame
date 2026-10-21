@@ -348,4 +348,19 @@ describe.skipIf(!hasDb)('Pesquisador: pedido, robots.txt, leitura, quarentena e 
     const ligar = await ownerQuery<{ after: Record<string, unknown> }>(`select after from liame.audit_event where tenant_id = $1 and action = 'equipe.ligar_funcionario'`, [d.tenantId]);
     expect(ligar.map((a) => a.after)).toEqual([{ agent_key: 'pesquisador', brand_id: d.brandId, leituras_de_volta: 1 }]);
   });
+
+  it('V106: o pedido da marca arquivada fica parado na fila (não volta à vez a cada dez minutos) e é lido quando ela é reativada', async () => {
+    const d = await dono();
+    const p = ResearchResponse.parse((await pedir(d, 'cardapio', '/cardapio')).body);
+    expect((await api.call('POST', `/v1/brands/${d.brandId}/archive`, { cookie: d.cookie })).status).toBe(200);
+    // Arquivada: a vez não chega, nem depois do prazo da reserva (dez minutos).
+    expect(await lerFila(d)).toEqual([]);
+    expect(await loop.executarLote(10, { tenantIds: [d.tenantId] }, new Date(Date.now() + 11 * 60_000))).toEqual([]);
+    const [linha] = await ownerQuery<{ status: string; attempts: number }>(`select status, attempts from liame.research_request where id = $1`, [p.id]);
+    expect(linha).toEqual({ status: 'pendente', attempts: 0 });
+    // Reativada: o pedido é lido.
+    expect((await api.call('POST', `/v1/brands/${d.brandId}/reactivate`, { cookie: d.cookie })).status).toBe(200);
+    responder({ negocio: 'Mister Burgers', produtos: [{ nome: 'Smash Clássico', preco: 'R$ 29,90' }], ofertas: [], diferenciais: [], instrucao_na_pagina: false });
+    expect(await lerFila(d)).toEqual([{ id: p.id, tenantId: d.tenantId, status: 'concluida' }]);
+  });
 });
