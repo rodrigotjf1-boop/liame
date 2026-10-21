@@ -11,6 +11,13 @@ import { VaultService } from '../vault/vault.service.js';
 /** Lote de apagamento: transações curtas, sem travar as tabelas quentes. */
 const BATCH = 5_000;
 
+/**
+ * A execução de sincronização "rodando" há mais que isto parou no meio (o processo caiu ou foi implantado de novo):
+ * nenhuma leitura dura tanto, e a mais longa (a carga inicial das vendas) leva minutos.
+ */
+export const EXECUCAO_INTERROMPIDA_HORAS = 6;
+export const MOTIVO_EXECUCAO_INTERROMPIDA = 'interrompida: o processo parou antes do fim da leitura';
+
 /** Escopo explícito para testes num banco compartilhado (LIC-083). */
 export interface PurgeScope {
   tenantIds?: string[];
@@ -58,12 +65,30 @@ export class LifecyclePurgeService {
     return this.database.db;
   }
 
-  async runDaily(scope: PurgeScope = {}): Promise<{ retention: Record<string, number>; brands: number; tenants: PurgeCertificate[] }> {
+  async runDaily(scope: PurgeScope = {}): Promise<{ retention: Record<string, number>; brands: number; tenants: PurgeCertificate[]; interrompidas: number }> {
+    const interrompidas = await this.fecharExecucoesInterrompidas(scope);
     const retention = await this.purgeRetention(scope);
     const brands = await this.purgeArchivedBrands(scope);
     const tenants = await this.purgeTenants(scope);
-    this.logger.log(`expurgo: ${JSON.stringify(retention)}; ${brands} marca(s); ${tenants.length} empresa(s)`);
-    return { retention, brands, tenants };
+    this.logger.log(`expurgo: ${JSON.stringify(retention)}; ${brands} marca(s); ${tenants.length} empresa(s); ${interrompidas} leitura(s) interrompida(s) fechada(s)`);
+    return { retention, brands, tenants, interrompidas };
+  }
+
+  /**
+   * A execução de sincronização que ficou "rodando" (o processo parou no meio) vira "falhou", com o motivo e a hora em
+   * que foi fechada. Sem isso ela nunca sairia: o prazo de 90 dias das execuções deixa as "rodando" de fora. O relógio
+   * vem de quem chama (V34): o limite e a hora gravada saem do mesmo instante.
+   */
+  async fecharExecucoesInterrompidas(scope: PurgeScope = {}, agora = new Date()): Promise<number> {
+    const limite = new Date(agora.getTime() - EXECUCAO_INTERROMPIDA_HORAS * 3_600_000);
+    const r = await withSystem(this.db, (tx) =>
+      tx.execute<{ id: string }>(sql`
+        update liame.sync_run
+           set status = 'falhou', finished_at = ${agora.toISOString()}::timestamptz, error = coalesce(error, ${MOTIVO_EXECUCAO_INTERROMPIDA})
+         where status = 'rodando' and started_at < ${limite.toISOString()}::timestamptz ${inList(sql`tenant_id`, scope.tenantIds)}
+         returning id`),
+    );
+    return r.rows.length;
   }
 
   /** Prazos automáticos por classe (lifecycle/data-classes.ts). */
