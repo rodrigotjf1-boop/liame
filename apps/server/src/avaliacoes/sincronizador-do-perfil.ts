@@ -297,7 +297,8 @@ export class SincronizadorDoPerfil {
 
   /**
    * A conferência do Google das respostas (Z2): relê, uma a uma, as avaliações cuja resposta o Liame guarda como
-   * "pendente", fora as que a leitura desta volta já trouxe, e grava cada uma como o Google a tem agora. É um extra da
+   * "pendente" ou "desconhecida" (a que o Google gravou sem dizer a situação), fora as que a leitura desta volta já
+   * trouxe, e grava cada uma como o Google a tem agora. É um extra da
    * leitura: o que o Google não responder agora fica para a próxima volta, e a leitura das avaliações não falha por
    * isso. `dePerto`: ainda há resposta dada há pouco em conferência, e a loja deve voltar logo para a fila.
    *
@@ -314,8 +315,10 @@ export class SincronizadorDoPerfil {
     agora: Date,
   ): Promise<{ relidas: number; dePerto: boolean }> {
     const instante = sql`${agora.toISOString()}::timestamptz`;
-    // A data da resposta é a do Google; sem ela, vale a da avaliação.
-    const pendente = sql`r.connected_account_id = ${conta.id} and r.reply_state = 'pendente'`;
+    // A data da resposta é a do Google; sem ela, vale a da avaliação. Em conferência também é a "desconhecida": a volta
+    // do `PUT` da primeira resposta do piloto veio sem `reviewReplyState` (21/10/2026; ERR-160), e só a releitura da
+    // avaliação traz a situação que o Google dá a ela.
+    const pendente = sql`r.connected_account_id = ${conta.id} and r.reply_state in ('pendente', 'desconhecida')`;
     const dadaEm = sql`coalesce(r.reply_changed_at, r.changed_at)`;
     const pendentes = await withTenant(this.db, conta.tenant_id, async (tx) => {
       const r = await tx.execute<{ external_id: string }>(sql`

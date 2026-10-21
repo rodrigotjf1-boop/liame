@@ -81,6 +81,11 @@ export class GoogleComPerfil {
   resposta: RespostaDoPerfil = 'ok';
   /** A situação com que o Google devolve a resposta gravada: ele confere antes de mostrar (`PENDING`). */
   conferencia: 'PENDING' | 'APPROVED' | 'REJECTED' = 'PENDING';
+  /**
+   * A volta do `PUT` sem a situação (`reviewReplyState`), como veio na primeira resposta do piloto (21/10/2026; ERR-160):
+   * a referência diz que a volta é um `ReviewReply`, e a situação só aparece na leitura da avaliação depois.
+   */
+  voltaSemSituacao = false;
   /** O Google grava a resposta e a conexão cai antes de ele responder (503): a resposta ficou lá. */
   respostaCaiDepoisDeGravar = false;
   /**
@@ -180,6 +185,7 @@ export class GoogleComPerfil {
     this.umaAvaliacao = 'ok';
     this.resposta = 'ok';
     this.conferencia = 'PENDING';
+    this.voltaSemSituacao = false;
     this.respostaCaiDepoisDeGravar = false;
     this.responderMexeNaData = false;
     this.acertaOsEspacos = false;
@@ -293,6 +299,7 @@ export class GoogleComPerfil {
         item.reviewReply = { comment: guardado, updateTime: new Date().toISOString(), reviewReplyState: this.conferencia };
         if (this.responderMexeNaData) item.updateTime = item.reviewReply.updateTime!;
         if (this.respostaCaiDepoisDeGravar) return foraDoAr;
+        if (this.voltaSemSituacao) return { status: 200, corpo: { comment: item.reviewReply.comment, updateTime: item.reviewReply.updateTime } };
         return { status: 200, corpo: item.reviewReply };
       }
       if (sufixo === 'reply' && req.method === 'DELETE') {
