@@ -1,6 +1,6 @@
 # Liame — Plano da fase A7 · Escala comercial
 
-> **Proposta para a aprovação do dono (21/10/2026).** Nada desta fase começa sem o aceite deste plano e das decisões da seção 4, uma por uma ou "como recomendadas". A A7 é a "escala comercial" do roadmap (§2): o Liame passa a ser **vendido fora do piloto** — quem quer contratar assina e paga sozinho, a agência trabalha para várias empresas com o próprio time e o vínculo aceito pelo dono, e o acesso fica mais forte. A regra das fases anteriores continua: **nada que gaste dinheiro ou fale em nome da empresa sem a aprovação de uma pessoa com o código do app**; a única exceção possível é a do bloco 4 (seção 3), que tem decisão própria e só entra depois do piloto de ações.
+> **Aprovado pelo dono em 21/10/2026** ("4 aprovados", no mesmo dia da proposta), com as decisões D-A7-1 a D-A7-12 como recomendadas (seção 4); **o valor dos planos (D-A7-4) segue com o dono**, e o meio de pagamento sai da comparação da D-A7-2, que vem antes do código. A A7 é a "escala comercial" do roadmap (§2): o Liame passa a ser **vendido fora do piloto** — quem quer contratar assina e paga sozinho, a agência trabalha para várias empresas com o próprio time e o vínculo aceito pelo dono, e o acesso fica mais forte. A regra das fases anteriores continua: **nada que gaste dinheiro ou fale em nome da empresa sem a aprovação de uma pessoa com o código do app**; a única exceção possível é a do bloco 4 (seção 3), que tem decisão própria e só entra depois do piloto de ações.
 >
 > A A7 depende da A6 no roadmap, e a A6 ainda espera o dono (os protótipos P19, P21 e P22 e a autorização da Meta para publicar). Os três primeiros blocos desta fase **não dependem** da A6: a cobrança, os parceiros e a conta do dono. Por isso o plano pode correr junto com o fim da A6, sem atrasá-la.
 
@@ -50,7 +50,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | **W12** | **Autonomia dentro do envelope** | `LIMITED_AUTO` de verdade, só nas ações da D-A7-11, por conta e por ação, promovido pela prontidão (I13) e aprovado por uma pessoa; cada execução automática na auditoria, com a volta e o aviso; a flag `autopilot` ligada por empresa | A7-10 | O piloto de ações (A4-14); D-A7-11 |
 | **W13** | **Telas** | Pelos protótipos da seção 5 | A7-9 | Aprovação dos protótipos |
 
-## 4. Decisões (propostas; esperam o dono)
+## 4. Decisões (aprovadas pelo dono em 21/10/2026, como recomendadas)
 
 | # | Decisão | Recomendação | Por quê |
 | --- | --- | --- | --- |
@@ -119,7 +119,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 
 | Para | Preciso de |
 | --- | --- |
-| Começar | O aceite deste plano e das decisões da seção 4 |
+| Começar | ✅ Aceite deste plano e das decisões da seção 4 (21/10/2026) |
 | W1 | O preço e os planos (D-A7-4); a franquia de IA de cada plano depois de um mês de uso de verdade (D-A7-5) |
 | W2 | A conta no meio de pagamento escolhido (eu guio, um print por vez; a chave vai direto para o EasyPanel, nunca para a conversa) |
 | W4 | O contador: o código de serviço, a alíquota, as retenções e a cidade da nota |
