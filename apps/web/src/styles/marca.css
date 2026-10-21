@@ -173,3 +173,34 @@
   .mk-add, .mk-add--dupla { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) { .mk-barra span { transition: none; } }
+
+/* Páginas lidas e "Ler uma página" (A3 · P25, aprovado em 21/10/2026; mockups/prototipo-pesquisador.html): o cartão
+   abaixo das partes e a gaveta de pedir a leitura. As classes são as do protótipo. */
+.pq-lista { display: grid; margin: 0; padding: 0; list-style: none; }
+.pq-item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: start; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.pq-item:last-child { border-bottom: 0; }
+.pq-item--novo { animation: pq-novo 1.6s var(--ease) 1; }
+@keyframes pq-novo { from { background: var(--primary-soft); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .pq-item--novo { animation: none; } }
+.pq-ic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--bg-subtle); color: var(--text-muted); }
+.pq-ic svg { width: 18px; height: 18px; }
+.pq-corpo { display: grid; gap: 4px; min-width: 0; }
+.pq-tit { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-2); font-size: var(--text-sm); }
+.pq-tit b { font-weight: 600; overflow-wrap: anywhere; }
+.pq-tipo { font-size: var(--text-xs); color: var(--text-muted); }
+.pq-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-subtle); }
+.pq-sit { display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--sp-2); font-size: var(--text-sm); line-height: 1.45; }
+.pq-sit > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.pq-quem { font-size: var(--text-xs); color: var(--text-muted); }
+.pq-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); }
+.pq-rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.pq-faixa { margin-bottom: var(--sp-3); }
+.pq-faixa .faixa-txt { overflow-wrap: anywhere; }
+.pq-gaveta .opcoes { margin-top: var(--sp-1); }
+.pq-o-que { display: grid; gap: var(--sp-2); margin: 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-sm); }
+.pq-o-que ul { display: grid; gap: 6px; margin: 0; padding-left: 18px; list-style: disc; }
+.pq-conta { font-size: var(--text-xs); color: var(--text-muted); }
+@container pagina (max-width: 599px) {
+  .pq-item { grid-template-columns: 36px minmax(0, 1fr); }
+  .pq-acoes { grid-column: 2; justify-content: flex-start; }
+}

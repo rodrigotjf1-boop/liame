@@ -52263,7 +52263,7 @@
         ]
       },
       "get": {
-        "description": "Os pedidos de leitura, os mais novos primeiro (até 50): a situação, o porquê de cada recusa e as partes do dossiê que ganharam sugestão.",
+        "description": "Os pedidos de leitura, os mais novos primeiro (até 50): a situação, o porquê de cada recusa e as partes do dossiê que ganharam sugestão. Junto, se dá para pedir uma leitura agora (`availability`, a mesma conferência do pedido) e o limite do dia desta marca (`daily`: as leituras já pedidas, nunca acima do limite, e quando a conta recomeça).",
         "operationId": "PesquisaController_lista",
         "parameters": [
           {
@@ -52378,10 +52378,50 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "availability": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "maxLength": 60,
+                          "pattern": "^[a-z0-9_]+$"
+                        }
+                      },
+                      "required": [
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "daily": {
+                      "type": "object",
+                      "properties": {
+                        "used": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "limit": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "resets_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "used",
+                        "limit",
+                        "resets_at"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
-                    "items"
+                    "items",
+                    "availability",
+                    "daily"
                   ],
                   "additionalProperties": false
                 }

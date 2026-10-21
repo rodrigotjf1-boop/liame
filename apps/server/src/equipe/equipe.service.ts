@@ -24,6 +24,7 @@ import { type AuthContext, auditDetail, currentTx } from '../context/request-con
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
+import { acordarLeiturasDaMarca } from '../marca/leituras-na-fila.js';
 import { REGRAS_VERSAO } from '../sombra/regras.js';
 import { atividadeDoMembro, DIAS_DA_ATIVIDADE } from './atividade.js';
 import { PREFIXO_RECUSA } from '../actions/action.service.js';
@@ -491,7 +492,9 @@ export class EquipeService {
        returning id`);
     const id = r.rows[0]?.id;
     if (!id) throw new AppProblem(409, 'ja-ligado', 'Já está ligado', 'Este funcionário não está desligado nesta marca.');
-    auditDetail({ resourceId: id, after: { agent_key: membro, brand_id: body.brand_id } });
+    // O Pesquisador ligado de novo: as leituras que esperavam por ele voltam para a fila na hora (P25).
+    const leituras = membro === 'pesquisador' ? await acordarLeiturasDaMarca(currentTx(), body.brand_id) : 0;
+    auditDetail({ resourceId: id, after: { agent_key: membro, brand_id: body.brand_id, ...(leituras ? { leituras_de_volta: leituras } : {}) } });
     return this.ver(auth, body.brand_id);
   }
 

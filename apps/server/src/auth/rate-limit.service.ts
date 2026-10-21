@@ -48,4 +48,20 @@ export class RateLimitService {
     const linha = r.rows[0];
     return linha && Number(linha.hits) >= limit ? new Date(linha.fim) : null;
   }
+
+  /**
+   * Quantas tentativas a janela atual de `key` já contou (as recusadas também: a conta passa do limite) e quando ela
+   * termina. Só lê (para a tela mostrar quanto do limite do dia já foi usado).
+   */
+  async uso(key: string, windowSeconds: number): Promise<{ hits: number; fim: Date }> {
+    if (!this.database) throw new Error('limite de tentativas sem banco');
+    const r = await withSystem(this.database.db, (tx) =>
+      tx.execute<{ hits: number | null; fim: Date | string }>(sql`
+        select (select hits from liame.rate_limit where key = ${key} and window_start = j.inicio) as hits,
+               j.inicio + make_interval(secs => ${windowSeconds}) as fim
+          from (select to_timestamp(floor(extract(epoch from now()) / ${windowSeconds}) * ${windowSeconds}) as inicio) j`),
+    );
+    const linha = r.rows[0]!;
+    return { hits: Number(linha.hits ?? 0), fim: new Date(linha.fim) };
+  }
 }

@@ -18,8 +18,8 @@ import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { PesquisaService } from './pesquisa.service.js';
 
-// O Pesquisador (A3, I12; protótipo P6, aguardando aprovação; sem tela ainda): a pessoa informa uma página, o Liame lê
-// na fila do worker, e o que serve vira sugestão no dossiê. A página não fica guardada.
+// O Pesquisador (A3, I12; a tela é o cartão "Páginas lidas" de Minha marca, P25 aprovado em 21/10/2026): a pessoa
+// informa uma página, o Liame lê na fila do worker, e o que serve vira sugestão no dossiê. A página não fica guardada.
 
 @ApiTags('marca')
 @ApiCookieAuth('liame_sessao')
@@ -51,7 +51,8 @@ export class PesquisaController {
   @Permissao('dossie.ver')
   @ApiOperation({
     summary: 'As leituras de páginas da marca',
-    description: 'Os pedidos de leitura, os mais novos primeiro (até 50): a situação, o porquê de cada recusa e as partes do dossiê que ganharam sugestão.',
+    description:
+      'Os pedidos de leitura, os mais novos primeiro (até 50): a situação, o porquê de cada recusa e as partes do dossiê que ganharam sugestão. Junto, se dá para pedir uma leitura agora (`availability`, a mesma conferência do pedido) e o limite do dia desta marca (`daily`: as leituras já pedidas, nunca acima do limite, e quando a conta recomeça).',
   })
   @ApiOkResponse({ standardSchema: ResearchListResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
