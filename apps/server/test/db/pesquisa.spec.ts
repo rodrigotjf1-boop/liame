@@ -12,6 +12,7 @@ import { ModelosIa } from '../../src/ai/modelos.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
+import { LEITURAS_POR_DIA } from '../../src/marca/pesquisa.service.js';
 import { ResultsService } from '../../src/results/results.service.js';
 import { PesquisaLoop, TENTATIVAS_DA_LEITURA } from '../../src/worker/pesquisa-loop.js';
 import { PesquisadorService } from '../../src/worker/pesquisa.service.js';
@@ -277,5 +278,74 @@ describe.skipIf(!hasDb)('Pesquisador: pedido, robots.txt, leitura, quarentena e 
     const outra = await dono();
     expect((await api.call('GET', `/v1/brand-dossier/research?brand_id=${d.brandId}`, { cookie: outra.cookie })).status).toBe(404);
     expect((await ownerQuery(`select 1 from liame.research_request where id = $1 and tenant_id = $2`, [p.id, d.tenantId])).length).toBe(1);
+  });
+
+  it('P25: a lista diz se dá para pedir agora (a IA, o plano e Sua equipe) e quanto do limite do dia a marca já usou', async () => {
+    const lista = async (d: Dono) => ResearchListResponse.parse((await api.call('GET', `/v1/brand-dossier/research?brand_id=${d.brandId}`, { cookie: d.cookie })).body);
+    // Sem a IA da empresa: não dá para pedir, e a tela diz por quê.
+    const semIa = await dono({ ia: false });
+    expect((await lista(semIa)).availability).toEqual({ status: 'ia_desligada' });
+    // Com a IA e o Pesquisador ativo: dá; a conta do dia sobe com o pedido, e a janela termina à meia-noite em UTC.
+    const d = await dono();
+    const antes = await lista(d);
+    expect(antes.availability).toEqual({ status: 'disponivel' });
+    expect(antes.daily).toMatchObject({ used: 0, limit: LEITURAS_POR_DIA });
+    expect(ResearchResponse.parse((await pedir(d, 'cardapio', '/cardapio')).body).status).toBe('pendente');
+    const depois = await lista(d);
+    // A suíte pode cruzar a meia-noite em UTC entre as duas leituras: aí a conta recomeça (ERR-073).
+    expect(depois.daily.used === 1 || depois.daily.resets_at !== antes.daily.resets_at).toBe(true);
+    const fim = new Date(depois.daily.resets_at);
+    expect([fim.getUTCHours(), fim.getUTCMinutes(), fim.getUTCSeconds(), fim.getUTCMilliseconds()]).toEqual([0, 0, 0, 0]);
+    expect(fim.getTime() - Date.now()).toBeGreaterThan(0);
+    expect(fim.getTime() - Date.now()).toBeLessThanOrEqual(86_400_000);
+    // A janela conta também os pedidos recusados pelo limite (passa de 20 no banco): a tela nunca recebe mais que o limite.
+    await ownerQuery(
+      `insert into liame.rate_limit (key, window_start, hits) values ($1, to_timestamp(floor(extract(epoch from now()) / 86400) * 86400), $2)
+       on conflict (key, window_start) do update set hits = excluded.hits`,
+      [`pesquisa:${d.brandId}`, LEITURAS_POR_DIA + 5],
+    );
+    const cheio = await pedir(d, 'concorrente', '/concorrente');
+    expect({ status: cheio.status, code: cheio.body.code }).toEqual({ status: 429, code: 'muitas-tentativas' });
+    expect((await lista(d)).daily.used).toBe(LEITURAS_POR_DIA);
+    // Com o Pesquisador desligado nesta marca, em Sua equipe: não dá para pedir.
+    expect((await api.call('POST', '/v1/team/members/pesquisador/pause', { cookie: d.cookie, body: { brand_id: d.brandId, reason: 'Sem leitura por enquanto' } })).status).toBe(200);
+    expect((await lista(d)).availability).toEqual({ status: 'pesquisador_desligado' });
+    expect((await pedir(d, 'site', '/cardapio')).body.code).toBe('pesquisador-desligado');
+    // Fora do plano desta marca (a chave da distribuição): também não, e a tela diz que foi a Liame.
+    const plano = await dono();
+    await ownerQuery(
+      `insert into liame.agent_activation (id, tenant_id, brand_id, agent_key, enabled, set_by, reason) values (gen_random_uuid(), $1, $2, 'pesquisador', false, 'testes', 'fora do plano')`,
+      [plano.tenantId, plano.brandId],
+    );
+    expect((await lista(plano)).availability).toEqual({ status: 'desligado_pela_liame' });
+    expect((await pedir(plano, 'site', '/cardapio')).body.code).toBe('pesquisador-desligado');
+  });
+
+  it('P25: desligado em Sua equipe, o pedido na fila espera sem contar tentativa; ligado de novo, volta para a fila na hora', async () => {
+    const d = await dono();
+    const p = ResearchResponse.parse((await pedir(d, 'cardapio', '/cardapio')).body);
+    const equipe = (acao: 'pause' | 'resume') => api.call('POST', `/v1/team/members/pesquisador/${acao}`, { cookie: d.cookie, body: { brand_id: d.brandId } });
+    const espera = async () =>
+      (
+        await ownerQuery<{ reason: string | null; attempts: number; horas: number }>(
+          `select reason, attempts, round(extract(epoch from (next_attempt_at - now())) / 3600)::int as horas from liame.research_request where id = $1`,
+          [p.id],
+        )
+      )[0]!;
+    expect((await equipe('pause')).status).toBe(200);
+    expect(await lerFila(d)).toEqual([{ id: p.id, tenantId: d.tenantId, status: 'sem_ia', motivo: 'funcionario_desligado' }]);
+    expect(await espera()).toEqual({ reason: 'funcionario_desligado', attempts: 0, horas: 6 });
+    // A volta está marcada para daqui a seis horas: a fila de agora não tem nada.
+    expect(await lerFila(d)).toEqual([]);
+    expect((await equipe('resume')).status).toBe(200);
+    const voltou = await espera();
+    expect({ reason: voltou.reason, attempts: voltou.attempts }).toEqual({ reason: null, attempts: 0 });
+    expect(voltou.horas).toBeLessThanOrEqual(0);
+    expect(await pedido(d, p.id)).toMatchObject({ status: 'pendente', reason: null });
+    responder({ negocio: 'Mister Burgers', produtos: [{ nome: 'Smash Clássico', preco: 'R$ 29,90' }], ofertas: [], diferenciais: [], instrucao_na_pagina: false });
+    expect(await lerFila(d)).toEqual([{ id: p.id, tenantId: d.tenantId, status: 'concluida' }]);
+    // A auditoria do "ligar" diz quantas leituras voltaram para a fila.
+    const ligar = await ownerQuery<{ after: Record<string, unknown> }>(`select after from liame.audit_event where tenant_id = $1 and action = 'equipe.ligar_funcionario'`, [d.tenantId]);
+    expect(ligar.map((a) => a.after)).toEqual([{ agent_key: 'pesquisador', brand_id: d.brandId, leituras_de_volta: 1 }]);
   });
 });

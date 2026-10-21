@@ -1,6 +1,6 @@
 'use client';
 
-import type { BrandDossierContent, BrandDossierResponse, BrandDossierSuggestion, BrandResponse, DossierSection } from '@liame/contracts';
+import type { BrandDossierContent, BrandDossierResponse, BrandDossierSuggestion, BrandResponse, DossierSection, ResearchListResponse, ResearchResponse } from '@liame/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
@@ -11,16 +11,21 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
 import { useSessao } from '@/lib/sessao';
+import { CartaoPaginas } from './cartao-paginas';
 import { CartaoSecao } from './cartao-secao';
+import { GavetaPagina } from './gaveta-pagina';
 import { GavetaSecao } from './gaveta-secao';
 import { GavetaSugestao } from './gaveta-sugestao';
 import { GavetaVersoes } from './gaveta-versoes';
 import { Guia } from './guia';
+import { emAndamento, limiteDoDia, quandoRecomeca, type TipoDePagina } from './pesquisador';
 import { andamentoDo, aplicarSugestao, juntar, linhaDoAndamento, quemConfirmou, SECOES } from './textos';
 
 // "Minha marca" (mockups/prototipo-marca.html, P6 aprovado em 03/10/2026): o dossiê que os funcionários de IA leem
 // antes de escrever. Nove partes, cada mudança confirmada vira uma versão do dossiê inteiro, e sugestão só vale
 // depois que alguém confere. Quem vê é quem tem `dossie.ver`; quem muda, o Dono e o Administrador (`dossie.editar`).
+// Abaixo das partes, as páginas que o Pesquisador leu e o pedido de leitura (mockups/prototipo-pesquisador.html, P25
+// aprovado em 21/10/2026).
 
 type Carga =
   | { tipo: 'carregando' }
@@ -31,7 +36,22 @@ type Gaveta =
   | { tipo: 'secao'; secao: DossierSection; rascunho?: BrandDossierContent }
   | { tipo: 'sugestao'; id: string }
   | { tipo: 'versoes' }
+  | { tipo: 'pagina'; rascunho: { kind: TipoDePagina; url: string } | null; vez: number }
   | null;
+
+/** As páginas lidas da marca: a resposta vale só para a marca de que veio (V64). */
+type Paginas = { marca: string; lista: ResearchListResponse };
+
+/**
+ * Enquanto um pedido anda sozinho (na fila sem motivo, ou sendo lido), a lista é lida de novo a cada 15 segundos, até
+ * 3 minutos depois da última mudança. O worker lê a fila a cada 30 segundos; a falha passageira volta para a fila com o
+ * motivo e só é tentada de novo depois de 15 minutos ou mais (`worker/pesquisa-loop.ts`): ela não segura a espera.
+ */
+const INTERVALO_DA_LISTA_MS = 15_000;
+const ESPERA_MAXIMA_MS = 3 * 60_000;
+
+/** O que muda na linha de um pedido com o andar da fila (para saber se a lista mudou). */
+const assinatura = (l: ResearchListResponse) => l.items.map((x) => `${x.id}:${x.status}:${x.reason ?? ''}`).join('|');
 
 export function MarcaTela() {
   const { pode } = useSessao();
@@ -54,6 +74,47 @@ export function MarcaTela() {
   const focar = useRef<DossierSection | 'titulo' | 'fim' | null>(null);
   const seq = useRef(0);
   const agora = useAgora(60_000, carga);
+  // As páginas lidas (P25). Ligar o Pesquisador de novo é de quem gerencia a equipe, na tela da equipe (as permissões
+  // da rota de ligar).
+  const podeLigar = pode('agentes.gerenciar') && pode('campanhas.ver') && pode('vendas.ver');
+  const tituloPaginas = useRef<HTMLHeadingElement>(null);
+  const [paginas, setPaginas] = useState<Paginas | null>(null);
+  const [erroPaginas, setErroPaginas] = useState<{ marca: string; problema: Problema } | null>(null);
+  const [destaque, setDestaque] = useState<string | null>(null);
+  const [relendo, setRelendo] = useState<string | null>(null);
+  const [rodada, setRodada] = useState(0);
+  const seqPaginas = useRef(0);
+  const ultimaLista = useRef<Paginas | null>(null);
+  const mudouEm = useRef(0);
+  const focarPaginas = useRef<'sempre' | 'se-perdido' | null>(null);
+  const vezDaGaveta = useRef(0);
+  const lerAoFechar = useRef(false);
+
+  /**
+   * As páginas lidas da marca, à parte do dossiê: sem a lista, a página abre do mesmo jeito. Quando uma leitura
+   * termina com sugestão, as sugestões são lidas de novo (a parte e a linha ganham o "Conferir a sugestão").
+   */
+  const carregarPaginas = useCallback(async (brandId: string, deFundo = false) => {
+    const id = ++seqPaginas.current;
+    const r = await chamar(() => api.GET('/v1/brand-dossier/research', { params: { query: { brand_id: brandId } } }));
+    if (id !== seqPaginas.current) return;
+    if (!r.ok) {
+      // Na releitura de fundo, a falha deixa a lista como estava; a próxima volta tenta de novo.
+      if (!deFundo || ultimaLista.current?.marca !== brandId) setErroPaginas({ marca: brandId, problema: r.problema });
+      return;
+    }
+    const antes = ultimaLista.current?.marca === brandId ? ultimaLista.current.lista : null;
+    if (!antes || assinatura(antes) !== assinatura(r.data)) mudouEm.current = Date.now();
+    const terminouComSugestao =
+      antes !== null && r.data.items.some((x) => x.status === 'concluida' && x.sections.length > 0 && antes.items.find((y) => y.id === x.id)?.status !== 'concluida');
+    ultimaLista.current = { marca: brandId, lista: r.data };
+    setErroPaginas(null);
+    setPaginas(ultimaLista.current);
+    if (terminouComSugestao) {
+      const s = await chamar(() => api.GET('/v1/brand-dossier/suggestions', { params: { query: { brand_id: brandId } } }));
+      if (s.ok) setCarga((c) => (c.tipo === 'ok' && c.dossie.brand_id === brandId ? { ...c, sugestoes: s.data.items } : c));
+    }
+  }, []);
 
   const carregarMarcas = useCallback(async () => {
     setErroMarcas(null);
@@ -77,6 +138,12 @@ export function MarcaTela() {
     setSozinho(false);
     setFim(false);
     setRestaurada(null);
+    setPaginas(null);
+    setErroPaginas(null);
+    setDestaque(null);
+    ultimaLista.current = null;
+    mudouEm.current = Date.now();
+    setRodada((n) => n + 1);
     const query = { brand_id: marca };
     disparar(
       Promise.all([chamar(() => api.GET('/v1/brand-dossier', { params: { query } })), chamar(() => api.GET('/v1/brand-dossier/suggestions', { params: { query } }))]).then(([d, s]) => {
@@ -85,7 +152,33 @@ export function MarcaTela() {
         setCarga(d.ok ? { tipo: 'ok', dossie: d.data, sugestoes: s.ok ? s.data.items : [] } : { tipo: 'erro', problema: d.problema });
       }),
     );
-  }, [marca, tentativa]);
+    disparar(carregarPaginas(marca));
+  }, [marca, tentativa, carregarPaginas]);
+
+  // Enquanto um pedido anda sozinho, a lista é lida de novo de tempos em tempos (INTERVALO_DA_LISTA_MS), até
+  // ESPERA_MAXIMA_MS depois da última mudança; um pedido novo recomeça a conta (`rodada`).
+  const andando = paginas !== null && paginas.marca === marca && emAndamento(paginas.lista.items);
+  useEffect(() => {
+    if (!andando || !marca) return;
+    const t = setInterval(() => {
+      if (Date.now() - mudouEm.current > ESPERA_MAXIMA_MS) {
+        clearInterval(t);
+        return;
+      }
+      disparar(carregarPaginas(marca, true));
+    }, INTERVALO_DA_LISTA_MS);
+    return () => clearInterval(t);
+  }, [andando, marca, rodada, carregarPaginas]);
+
+  // Depois de pedir uma leitura (ou do "Tentar de novo" do cartão), o botão de onde a pessoa veio pode sumir (o vazio
+  // vira lista): o foco vai para o título do cartão, nunca para o corpo da página (V83).
+  useEffect(() => {
+    const modo = focarPaginas.current;
+    if (!modo || !paginas) return;
+    focarPaginas.current = null;
+    const ativo = document.activeElement;
+    if (modo === 'sempre' || !ativo || ativo === document.body || !ativo.isConnected) tituloPaginas.current?.focus({ preventScroll: true });
+  }, [paginas]);
 
   // O foco depois de uma ação (salvar uma parte, voltar a uma versão, terminar o passo a passo) vai para o que mudou.
   useEffect(() => {
@@ -126,6 +219,47 @@ export function MarcaTela() {
       avisar(`Versão ${n} confirmada. Os funcionários de IA já usam esta versão.`);
       setAnuncio(`Versão ${n} confirmada.`);
     } else avisar('Nada mudou: a versão continua a mesma.');
+  }
+
+  const listaDaMarca = dossie && paginas?.marca === dossie.brand_id ? paginas.lista : null;
+  const podePedirLeitura = podeEditar && listaDaMarca?.availability.status === 'disponivel';
+
+  function abrirPagina(rascunho: { kind: TipoDePagina; url: string } | null) {
+    vezDaGaveta.current += 1;
+    setGaveta({ tipo: 'pagina', rascunho, vez: vezDaGaveta.current });
+  }
+
+  /** O pedido entrou (ou o mesmo endereço já estava na fila): o aviso diz qual, e a lista é lida de novo. */
+  function pedidoFeito(p: ResearchResponse) {
+    const jaEstava = paginas?.marca === p.brand_id && paginas.lista.items.some((x) => x.id === p.id);
+    avisar(jaEstava ? 'Essa página já está na fila: o pedido que está lá continua.' : 'Pedido feito: o Pesquisador lê em alguns minutos. O que servir vira sugestão aqui.');
+    setDestaque(p.id);
+    mudouEm.current = Date.now();
+    setRodada((n) => n + 1);
+    focarPaginas.current = 'se-perdido';
+    disparar(carregarPaginas(p.brand_id));
+  }
+
+  /** O Pesquisador foi desligado enquanto a pessoa pedia: o aviso diz por quê, e a lista traz o aviso do cartão. */
+  function pesquisadorDesligado(brandId: string, mensagem: string) {
+    avisar(mensagem, { tipo: 'perigo' });
+    // O botão de pedir some com a lista nova: o foco que estava nele vai para o título do cartão.
+    focarPaginas.current = 'se-perdido';
+    disparar(carregarPaginas(brandId));
+  }
+
+  /** "Ler de novo" a página que o Liame desistiu de ler: o mesmo tipo e o mesmo endereço. */
+  async function lerDeNovo(x: ResearchResponse) {
+    if (relendo) return;
+    setRelendo(x.id);
+    const r = await chamar(() => api.POST('/v1/brand-dossier/research', { body: { brand_id: x.brand_id, kind: x.kind as TipoDePagina, url: x.url } }));
+    setRelendo(null);
+    if (r.ok) return pedidoFeito(r.data);
+    if (r.problema.code === 'pesquisador-desligado') return pesquisadorDesligado(x.brand_id, mensagemDe(r.problema));
+    const daily = listaDaMarca?.daily;
+    avisar(r.problema.status === 429 && daily ? `${limiteDoDia(daily)}. A conta recomeça ${quandoRecomeca(daily.resets_at, agora)}.` : mensagemDe(r.problema), { tipo: 'perigo' });
+    // A conta da tela estava velha (outra pessoa pediu): a lista nova traz a conta certa.
+    if (r.problema.status === 429) disparar(carregarPaginas(x.brand_id));
   }
 
   let corpo;
@@ -346,6 +480,26 @@ export function MarcaTela() {
             );
           })}
         </div>
+        <CartaoPaginas
+          lista={listaDaMarca}
+          erro={erroPaginas?.marca === dossie.brand_id ? mensagemDe(erroPaginas.problema) : null}
+          sugestoes={dados.sugestoes}
+          podeEditar={podeEditar}
+          podeLigar={podeLigar}
+          agora={agora}
+          destaque={destaque}
+          relendo={relendo}
+          tituloRef={tituloPaginas}
+          aoPedir={() => abrirPagina(null)}
+          aoConferir={(s) => setGaveta({ tipo: 'sugestao', id: s.id })}
+          aoLerDeNovo={(x) => disparar(lerDeNovo(x))}
+          aoOutroEndereco={(x) => abrirPagina({ kind: x.kind as TipoDePagina, url: x.url })}
+          aoPreencher={(secao) => setGaveta({ tipo: 'secao', secao })}
+          aoRecarregar={() => {
+            focarPaginas.current = 'sempre';
+            disparar(carregarPaginas(dossie.brand_id));
+          }}
+        />
         {versao && (
           <details className="mk-como">
             <summary>
@@ -388,6 +542,12 @@ export function MarcaTela() {
           )}
           {dossie && !guiado && !fim && (versao || sozinho || !podeEditar) && (
             <>
+              {podePedirLeitura && (
+                <button className="btn btn--sm" type="button" onClick={() => abrirPagina(null)} aria-haspopup="dialog">
+                  <Icone nome="search" pequeno />
+                  Ler uma página
+                </button>
+              )}
               <span className="lite-chip">{versao ? `Versão ${versao.version} · ${quandoComHora(versao.created_at, agora)}` : 'Sem versão ainda'}</span>
               {versao && (
                 <button className="btn btn--sm" type="button" onClick={() => setGaveta({ tipo: 'versoes' })} aria-haspopup="dialog">
@@ -439,6 +599,28 @@ export function MarcaTela() {
           }}
           aoEditarAntes={(marcados) => setGaveta({ tipo: 'secao', secao: sugestaoAberta.section, rascunho: aplicarSugestao(dossie.content, sugestaoAberta, marcados) })}
           aoFechar={() => setGaveta((g) => (g?.tipo === 'sugestao' ? null : g))}
+        />
+      )}
+      {dossie && listaDaMarca && gaveta?.tipo === 'pagina' && (
+        <GavetaPagina
+          key={`pagina-${gaveta.vez}`}
+          marcaId={dossie.brand_id}
+          rascunho={gaveta.rascunho}
+          daily={listaDaMarca.daily}
+          agora={agora}
+          reserva={tituloPaginas}
+          aoPedido={pedidoFeito}
+          aoDesligado={(mensagem) => pesquisadorDesligado(dossie.brand_id, mensagem)}
+          aoLimite={() => {
+            lerAoFechar.current = true;
+          }}
+          aoFechar={() => {
+            setGaveta((g) => (g?.tipo === 'pagina' ? null : g));
+            if (lerAoFechar.current) {
+              lerAoFechar.current = false;
+              disparar(carregarPaginas(dossie.brand_id));
+            }
+          }}
         />
       )}
       {dossie && versao && gaveta?.tipo === 'versoes' && (

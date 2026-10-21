@@ -1,22 +1,28 @@
 import type { CreateResearchRequest, ResearchListResponse, ResearchResponse } from '@liame/contracts';
-import { uuidv7 } from '@liame/database';
+import { type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { AiGateway } from '../ai/gateway.js';
 import { PESQUISADOR } from '../ai/pesquisador/prompt.js';
-import { funcionarioAtivo } from '../ai/registro/ativacao.js';
+import { ativoPeloPlano, desligadoPelaEmpresa } from '../ai/registro/ativacao.js';
 import { RateLimitService } from '../auth/rate-limit.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { assertSafeUrl, UnsafeUrlError } from '../events/safe-http.js';
 
-// O pedido de leitura de uma página pelo Pesquisador (A3, I12; protótipo P6, aguardando aprovação; sem tela ainda). A
-// rota só confere e enfileira: a leitura (robots.txt, página, leitor em quarentena, sugestões) é do worker
-// (`worker/pesquisa.service.ts`). Pedir: quem edita o dossiê; ver os pedidos: quem vê o dossiê.
+// O pedido de leitura de uma página pelo Pesquisador (A3, I12). A tela é o cartão "Páginas lidas" de Minha marca
+// (mockups/prototipo-pesquisador.html, P25 aprovado em 21/10/2026). A rota só confere e enfileira: a leitura
+// (robots.txt, página, leitor em quarentena, sugestões) é do worker (`worker/pesquisa.service.ts`). Pedir: quem edita o
+// dossiê; ver os pedidos: quem vê o dossiê.
 
 /** Leituras por marca por dia (cada uma vai a um site de fora e chama a IA). */
 export const LEITURAS_POR_DIA = 20;
+/** A janela do limite: o dia em UTC (a conta recomeça à meia-noite em UTC). */
+const JANELA_DO_LIMITE_S = 86_400;
+
+/** Se dá para pedir uma leitura agora e, se não, por quê (a lista do contrato, `ResearchListResponse.availability`). */
+export type DisponibilidadeDoPesquisador = 'disponivel' | 'ia_desligada' | 'desligado_pela_liame' | 'pesquisador_desligado';
 
 type LinhaPedido = {
   id: string;
@@ -84,12 +90,10 @@ export class PesquisaService {
     }
     // O pedaço depois do "#" não vai ao site: fica fora do pedido.
     url.hash = '';
-    const ligada = await this.gateway.ligada({ tenantId, userId: auth.userId, brandId: body.brand_id });
-    const ativo = ligada && (await funcionarioAtivo(tx, { tenantId, brandId: body.brand_id, agentKey: PESQUISADOR.key, ativoPorPadrao: PESQUISADOR.ativoPorPadrao }));
-    if (!ativo) {
+    if ((await this.disponibilidade(tx, auth, tenantId, body.brand_id)) !== 'disponivel') {
       throw new AppProblem(409, 'pesquisador-desligado', 'O Pesquisador não está ligado', 'A leitura de páginas depende da IA ligada para a empresa e do Pesquisador ativo.');
     }
-    await this.limite.consume(`pesquisa:${body.brand_id}`, LEITURAS_POR_DIA, 86_400);
+    await this.limite.consume(`pesquisa:${body.brand_id}`, LEITURAS_POR_DIA, JANELA_DO_LIMITE_S);
     const endereco = url.toString();
     const id = uuidv7();
     const novo = await tx.execute<{ id: string }>(sql`
@@ -105,16 +109,36 @@ export class PesquisaService {
     return this.porId(alvo);
   }
 
-  /** Os pedidos de leitura da marca, os mais novos primeiro (até 50). */
+  /**
+   * Os pedidos de leitura da marca, os mais novos primeiro (até 50), se dá para pedir agora e o limite do dia. A conta
+   * do dia inclui os pedidos recusados pelo limite (a janela segue contando): a tela nunca recebe mais que o limite.
+   */
   async lista(auth: AuthContext, brandId: string): Promise<ResearchListResponse> {
-    this.empresa(auth);
+    const tenantId = this.empresa(auth);
     await this.exigirMarca(brandId);
-    const r = await currentTx().execute<LinhaPedido>(sql`
+    const tx = currentTx();
+    const r = await tx.execute<LinhaPedido>(sql`
       select ${COLUNAS} from liame.research_request r left join liame.app_user u on u.id = r.requested_by
        where r.brand_id = ${brandId}
        order by r.created_at desc, r.id desc
        limit 50`);
-    return { items: r.rows.map(respostaDoPedido) };
+    const uso = await this.limite.uso(`pesquisa:${brandId}`, JANELA_DO_LIMITE_S);
+    return {
+      items: r.rows.map(respostaDoPedido),
+      availability: { status: await this.disponibilidade(tx, auth, tenantId, brandId) },
+      daily: { used: Math.min(uso.hits, LEITURAS_POR_DIA), limit: LEITURAS_POR_DIA, resets_at: uso.fim.toISOString() },
+    };
+  }
+
+  /**
+   * A regra única de "dá para pedir": a IA ligada para a empresa (a flag `ia`), o Pesquisador no plano desta marca (a
+   * chave da distribuição) e não desligado pela empresa (Sua equipe). É a mesma ordem do worker, que olha a IA primeiro.
+   */
+  private async disponibilidade(tx: Tx, auth: AuthContext, tenantId: string, brandId: string): Promise<DisponibilidadeDoPesquisador> {
+    if (!(await this.gateway.ligada({ tenantId, userId: auth.userId, brandId }))) return 'ia_desligada';
+    if (!(await ativoPeloPlano(tx, { tenantId, brandId, agentKey: PESQUISADOR.key, ativoPorPadrao: PESQUISADOR.ativoPorPadrao }))) return 'desligado_pela_liame';
+    if (await desligadoPelaEmpresa(tx, { tenantId, brandId, agentKey: PESQUISADOR.key })) return 'pesquisador_desligado';
+    return 'disponivel';
   }
 
   private async porId(id: string): Promise<ResearchResponse> {

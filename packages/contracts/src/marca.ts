@@ -209,7 +209,7 @@ export type UseBrandDossierSuggestionRequest = z.infer<typeof UseBrandDossierSug
 
 // O Pesquisador (A3, I12): a pessoa informa uma página (o site ou o cardápio da marca, a página de um concorrente), o
 // Liame lê e o que serve vira sugestão no dossiê. A página não fica guardada: só o pedido, a situação e os rótulos
-// conferidos. Sem tela ainda (o P6 espera a aprovação).
+// conferidos. A tela é o cartão "Páginas lidas" de Minha marca (P25, aprovado em 21/10/2026).
 
 export const RESEARCH_KINDS = ['site', 'cardapio', 'concorrente'] as const;
 export const ResearchKind = z.enum(RESEARCH_KINDS);
@@ -245,5 +245,15 @@ export const ResearchResponse = z.strictObject({
 });
 export type ResearchResponse = z.infer<typeof ResearchResponse>;
 
-export const ResearchListResponse = z.strictObject({ items: z.array(ResearchResponse) });
+export const ResearchListResponse = z.strictObject({
+  items: z.array(ResearchResponse),
+  /**
+   * Se dá para pedir uma leitura agora (a mesma conferência do pedido): `disponivel`; `ia_desligada` (a IA desta
+   * empresa); `desligado_pela_liame` (o Pesquisador fora do plano desta marca); `pesquisador_desligado` (a empresa o
+   * desligou nesta marca, em Sua equipe).
+   */
+  availability: z.strictObject({ status: Slug }),
+  /** O limite do dia desta marca: as leituras já pedidas (nunca acima do limite), o limite e quando a conta recomeça (a janela é o dia em UTC). */
+  daily: z.strictObject({ used: z.number().int().min(0), limit: z.number().int().min(1), resets_at: z.string() }),
+});
 export type ResearchListResponse = z.infer<typeof ResearchListResponse>;
