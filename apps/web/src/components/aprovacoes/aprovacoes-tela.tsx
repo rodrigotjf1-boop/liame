@@ -102,6 +102,29 @@ export function AprovacoesTela() {
   const [pedidoDeRascunho, setPedidoDeRascunho] = useState<PedidoDeRascunho | null>(rascunhoInicial);
   const [cargaDoRascunho, setCargaDoRascunho] = useState<CargaDoRascunho | null>(null);
   const [releRascunho, setReleRascunho] = useState(0);
+  // O pedido do endereço vale cada vez que a pessoa chega por ele, e não só na primeira montagem (ERR-159): com Cache
+  // Components, o Next guarda a tela visitada, escondida e com o estado dela, e a chave desse estado não leva os
+  // parâmetros da busca (`?responder=A` e `?responder=B` são a mesma tela para ele). O endereço que mudou se aplica
+  // ainda no desenho, sem mostrar o pedido de antes; a volta pelo mesmo endereço, no efeito, que o React recria a cada
+  // vez que a tela escondida volta a aparecer.
+  const pedidoDoEndereco = inicial ? `${inicial}|${marcaInicial ?? ''}` : null;
+  const [enderecoAplicado, setEnderecoAplicado] = useState(pedidoDoEndereco);
+  if (pedidoDoEndereco !== enderecoAplicado) {
+    setEnderecoAplicado(pedidoDoEndereco);
+    if (inicial) {
+      setSel(inicial);
+      setNoDetalhe(true);
+      if (rascunhoInicial) setPedidoDeRascunho(rascunhoInicial);
+    }
+  }
+  useEffect(() => {
+    if (!inicial) return;
+    setSel(inicial);
+    setNoDetalhe(true);
+    if (avaliacaoInicial && marcaInicial) {
+      setPedidoDeRascunho((p) => (p?.avaliacaoId === avaliacaoInicial && p.brandId === marcaInicial ? p : { avaliacaoId: avaliacaoInicial, brandId: marcaInicial, textoInicial: '' }));
+    }
+  }, [inicial, avaliacaoInicial, marcaInicial]);
   /** O nome de quem fez cada avaliação, lido do Google na hora (`/v1/reviews/authors`), uma vez por marca. Pode faltar. */
   const [nomes, setNomes] = useState<Map<string, string>>(() => new Map());
   const marcasDosNomes = useRef(new Set<string>());

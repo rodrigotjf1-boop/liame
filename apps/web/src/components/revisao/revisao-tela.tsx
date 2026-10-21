@@ -44,9 +44,17 @@ export function RevisaoTela() {
     if (!r.ok) return setErroMarcas(r.problema);
     const ativas = r.data.items.filter((b) => !b.archived_at);
     setMarcas(ativas);
-    // A marca do link, se é desta empresa; senão, a primeira (como na tela Resultados).
-    setMarca((m) => (m && ativas.some((b) => b.id === m) ? m : (ativas.find((b) => b.id === marcaPedida)?.id ?? ativas[0]?.id ?? null)));
+    // A marca do link, se é desta empresa, vale cada vez que a pessoa chega por ele (ERR-159: o Next guarda a tela
+    // visitada com a marca de antes, e a chave desse estado não leva os parâmetros da busca); sem link, a que já estava
+    // aberta; senão, a primeira (como na tela Resultados).
+    setMarca((m) => ativas.find((b) => b.id === marcaPedida)?.id ?? (m && ativas.some((b) => b.id === m) ? m : (ativas[0]?.id ?? null)));
   }, [marcaPedida]);
+  // O link de outra marca se aplica ainda no desenho, sem mostrar a revisão da marca de antes enquanto as marcas são lidas.
+  const [marcaDoEndereco, setMarcaDoEndereco] = useState(marcaPedida);
+  if (marcaPedida !== marcaDoEndereco) {
+    setMarcaDoEndereco(marcaPedida);
+    if (marcaPedida && marcas?.some((b) => b.id === marcaPedida)) setMarca(marcaPedida);
+  }
 
   useEffect(() => {
     if (podeVer) disparar(carregarMarcas());
