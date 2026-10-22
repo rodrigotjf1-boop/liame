@@ -173,6 +173,13 @@ export type AppConfig = {
      * ou sem o aplicativo do Liame no DMS ID; aí o RegemCast só se conecta pelo token emitido pela distribuição.
      */
     regemcast: { authUrl: string; apiUrl: string; emissor: string } | null;
+    /**
+     * Autorização por clique do Regem (Hub DMS, F3, parte C; Regem #706): a página (`authUrl`, a mesma da C1b), a API
+     * que recebe o pedido e a troca (`apiUrl`, as rotas de integração) e o `iss` que a volta tem de trazer (`emissor`, a
+     * origem da API: RFC 9207). Nulo = sem o aplicativo do Liame no DMS ID. Quem usa é a empresa com a flag
+     * `regem_por_clique`; as outras seguem pela C1b (`regem`).
+     */
+    regemClique: { authUrl: string; apiUrl: string; emissor: string } | null;
   };
   /** IA (A3): credencial do fornecedor, onde o modelo roda e os limites padrão de custo (em micros de dólar). */
   ai: {
@@ -282,8 +289,13 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   const regemcast = env.REGEMCAST_AUTH_URL && regemcastApiUrl && dmsId
     ? { authUrl: env.REGEMCAST_AUTH_URL.replace(/\/+$/, ''), apiUrl: regemcastApiUrl, emissor: new URL(regemcastApiUrl).origin }
     : null;
+  // A autorização por clique do Regem: a página e a API são as da C1b (em produção, os endereços oficiais, conferidos acima).
+  const regemApiUrl = env.REGEM_API_URL.replace(/\/$/, '');
+  const regemClique = dmsId ? { authUrl: env.REGEM_AUTH_URL.replace(/\/+$/, ''), apiUrl: regemApiUrl, emissor: new URL(regemApiUrl).origin } : null;
   const apiUrl = new URL(env.API_URL).origin;
-  // A volta do OAuth leva o código da plataforma: em produção, só por HTTPS e com a origem declarada.
+  // A volta do OAuth leva o código da plataforma: em produção, só por HTTPS e com a origem declarada. A autorização por
+  // clique do Regem fica fora desta conta: ela existe em todo processo com o DMS ID (o worker da comparação também), e o
+  // pedido empurrado sai da API, que declara a origem pelos outros apps; uma volta fora da lista do Regem é recusada lá.
   if (env.NODE_ENV === 'production' && (meta || google || regem || regemcast) && (!source.API_URL || !apiUrl.startsWith('https://'))) {
     throw new Error('config: em produção, com app OAuth configurado, defina API_URL com https');
   }
@@ -348,11 +360,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       searchConsoleUrl: env.SEARCH_CONSOLE_URL.replace(/\/$/, ''),
       metaAppSecret: env.META_APP_SECRET ?? null,
     },
-    produtos: { regemApiUrl: env.REGEM_API_URL.replace(/\/$/, ''), regemcastApiUrl, regemPelaLigacao: env.REGEM_PELA_LIGACAO === 'true' },
+    produtos: { regemApiUrl, regemcastApiUrl, regemPelaLigacao: env.REGEM_PELA_LIGACAO === 'true' },
     dmsId,
     hub,
     apiUrl,
-    oauth: { meta, google, regem, regemcast },
+    oauth: { meta, google, regem, regemcast, regemClique },
     ai: {
       anthropicApiKey: env.ANTHROPIC_API_KEY ?? null,
       inferenceGeo: env.AI_INFERENCE_GEO,

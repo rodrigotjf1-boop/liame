@@ -21,6 +21,8 @@ export const oauthConnection = liame.table('oauth_connection', {
   scopes: text('scopes').array().notNull().default([]),
   /** O que a autorização pediu à plataforma: `leitura` ou `escrita` (Meta; migration 0054). Nulo = de antes, ou sem essa diferença. */
   requestedAccess: text('requested_access'),
+  /** `clique` na conexão do Regem que começou pela autorização por clique (Hub DMS, F3, parte C; migration 0077); nula nas outras. */
+  authorizationFlow: text('authorization_flow'),
   discovered: jsonb('discovered').notNull().default([]),
   /** Como terminou a procura dos tipos de conta que podem falhar sem derrubar a conexão (as lojas do Perfil no Google; migration 0067). */
   discoveryNotes: jsonb('discovery_notes').notNull().default({}),

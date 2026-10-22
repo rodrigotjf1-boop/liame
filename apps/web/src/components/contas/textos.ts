@@ -540,11 +540,23 @@ export function semCusto(scopes: string[]): boolean {
   return !scopes.includes('custos.ler');
 }
 
-/** Por que o custo não veio: quem autorizou não tinha permissão financeira, ou o token da distribuição saiu sem ele. */
+/**
+ * A origem de uma autorização do Regem para os textos da tela: `clique` = a autorização por clique (Hub DMS, F3, parte
+ * C), em que cada loja tem a própria ligação e o custo é uma opção que nasce desligada; senão, a origem da conexão
+ * (`oauth`, a autorização de 01/10; `distribuicao`, o token emitido pela distribuição).
+ */
+export function origemDoRegem(c: Pick<ConnectionResponse, 'origin' | 'authorization_flow'>): string {
+  return c.authorization_flow === 'clique' ? 'clique' : c.origin;
+}
+
+/**
+ * Por que o custo não veio: o token da distribuição saiu sem ele; quem autorizou não tinha permissão financeira; ou, na
+ * autorização por clique, ele não foi ligado (nasce desligado, e só quem vê valores em R$ no Regem pode ligar).
+ */
 export function motivoSemCusto(origem: string): string {
-  return origem === 'distribuicao'
-    ? 'O token desta loja foi emitido sem o custo dos itens.'
-    : 'Quem autorizou não tem permissão financeira no Regem. Para liberar, um presidente autoriza de novo.';
+  if (origem === 'distribuicao') return 'O token desta loja foi emitido sem o custo dos itens.';
+  if (origem === 'clique') return 'O custo dos itens não foi liberado nesta autorização. Para liberar, um presidente que vê valores em R$ no Regem autoriza de novo.';
+  return 'Quem autorizou não tem permissão financeira no Regem. Para liberar, um presidente autoriza de novo.';
 }
 
 /** "O que o Liame recebe": cada escopo do protótipo com a situação dele, mais os liberados fora da lista. */
@@ -590,15 +602,21 @@ export function situacaoDaLoja(c: AccountFreshness, loja: { scopes: string[]; or
     const motivo =
       loja.origem === 'distribuicao'
         ? 'O token desta loja foi emitido sem o custo dos itens: a margem desta loja fica desconhecida.'
-        : 'Quem autorizou não tem permissão financeira no Regem: a margem desta loja fica desconhecida.';
+        : loja.origem === 'clique'
+          ? 'O custo dos itens não foi liberado nesta autorização: a margem desta loja fica desconhecida.'
+          : 'Quem autorizou não tem permissão financeira no Regem: a margem desta loja fica desconhecida.';
     return { rotulo: 'Sem custos', tom: 'atencao', motivo, precisaDeVoce: true, reconectar: false, ultimaLeituraEm };
   }
   return { rotulo: 'Pedidos em dia', tom: 'ok', motivo: null, precisaDeVoce: false, reconectar: false, ultimaLeituraEm };
 }
 
-/** "Loja no Liame: Centro · token próprio da loja" (a linha de baixo do nome, na tabela). */
-export function subDaLoja(unitName: string | null): string {
-  return unitName ? `Loja no Liame: ${unitName} · token próprio da loja` : 'Sem loja no Liame · token próprio da loja';
+/**
+ * "Loja no Liame: Centro · token próprio da loja" (a linha de baixo do nome, na tabela). Na autorização por clique
+ * (`origem` = `clique`), cada loja tem a própria ligação, não um token.
+ */
+export function subDaLoja(unitName: string | null, origem = 'oauth'): string {
+  const credencial = origem === 'clique' ? 'ligação própria da loja' : 'token próprio da loja';
+  return unitName ? `Loja no Liame: ${unitName} · ${credencial}` : `Sem loja no Liame · ${credencial}`;
 }
 
 /** `botao`: o que a faixa oferece quando dá para conectar o Regem ("Conectar o Regem de novo", "Autorizar de novo"). */
@@ -617,8 +635,14 @@ export function faixaDoRegem(lojas: { nome: string; desconectada: boolean; semCu
   }
   const sem = lojas.find((l) => l.semCusto);
   if (!sem) return null;
-  const porque = sem.origem === 'distribuicao' ? 'O token da loja foi emitido sem o custo dos itens.' : 'Quem autorizou não tem permissão financeira no Regem.';
-  const comoLiberar = sem.origem === 'distribuicao' ? '' : ' Para liberar, um presidente autoriza de novo.';
+  const porque =
+    sem.origem === 'distribuicao'
+      ? 'O token da loja foi emitido sem o custo dos itens.'
+      : sem.origem === 'clique'
+        ? 'O custo dos itens não foi liberado nesta autorização.'
+        : 'Quem autorizou não tem permissão financeira no Regem.';
+  const comoLiberar =
+    sem.origem === 'distribuicao' ? '' : sem.origem === 'clique' ? ' Para liberar, um presidente que vê valores em R$ no Regem autoriza de novo.' : ' Para liberar, um presidente autoriza de novo.';
   return {
     tipo: 'atencao',
     titulo: 'O Regem liberou os pedidos, mas não o custo dos itens',
@@ -637,16 +661,20 @@ export function regemRevogado(c: ConnectionResponse): boolean {
 
 /**
  * "O que o Liame pede" no diálogo de conectar: o que vai sempre e o que o presidente decide na página do
- * Regem (o custo, que exige permissão financeira lá, e o cupom de campanha).
+ * Regem (o custo, que exige permissão financeira lá, e o cupom de campanha). Na autorização por clique (Hub DMS, F3,
+ * parte C), o Liame pede também o telefone do cliente no pedido: um dado pessoal, que o presidente liga ou não.
  */
-export function pedidosAoRegem(): { cod: string; rotulo: string; texto: string; opcional: boolean; nota: string | null }[] {
-  return ESCOPOS_REGEM.map((e) => ({
+export function pedidosAoRegem(porClique = false): { cod: string; rotulo: string; texto: string; opcional: boolean; nota: string | null }[] {
+  const pedidos = ESCOPOS_REGEM.map((e) => ({
     cod: e.cod,
     rotulo: e.rotulo,
     texto: e.texto,
     opcional: Boolean(e.financeiro || e.escrita),
     nota: e.financeiro ? 'só com permissão financeira' : e.escrita ? 'com aprovação' : null,
   }));
+  if (!porClique) return pedidos;
+  const telefone = ESCOPOS_EXTRAS['clientes.telefone.ler']!;
+  return [...pedidos, { cod: 'clientes.telefone.ler', rotulo: telefone.rotulo, texto: telefone.texto, opcional: true, nota: 'dado pessoal' }];
 }
 
 /** O que a autorização pelo Regem nunca entrega (a página de lá diz o mesmo). */
@@ -663,6 +691,16 @@ export function chipsDoRegem(scopes: string[], origem: string, escritaLigada = f
     texto: e.estado === 'nao_liberado' ? `${e.rotulo}: não liberado` : e.estado === 'desligado' ? `${e.rotulo} · desligado no Liame` : e.rotulo,
     classe: e.estado === 'nao_liberado' ? 'st--aguardando' : e.estado === 'desligado' ? 'st--espera' : 'st--concluido',
   }));
+}
+
+/**
+ * A loja do Regem já ligada ao Liame por outra autorização, no diálogo de ligar as lojas: ela só troca de credencial
+ * (pela autorização por clique, passa para a ligação dela) e continua na loja do Liame em que estava.
+ */
+export function lojaJaLigada(origem: string): string {
+  return origem === 'clique'
+    ? 'Já ligada ao Liame: passa para a ligação desta autorização e continua na loja em que está.'
+    : 'Já ligada ao Liame: só troca o token e continua na loja em que está.';
 }
 
 /** A loja do Liame que já vem escolhida para uma loja do Regem: a de mesmo nome; sem ela, "Criar loja no Liame" (vazio). */

@@ -6,6 +6,8 @@ import { CartaoAutorizacao } from '@/components/contas/cartao-autorizacao';
 import { CartaoAutorizacaoRegem } from '@/components/contas/cartao-autorizacao-regem';
 import { DialogoConectar } from '@/components/contas/dialogo-conectar';
 import { DialogoConectarRegem } from '@/components/contas/dialogo-conectar-regem';
+import { DialogoLojasRegem } from '@/components/contas/dialogo-lojas-regem';
+import { DialogoRevogar } from '@/components/contas/dialogo-revogar';
 import {
   autorizacoesVisiveis,
   autorizadorDa,
@@ -23,6 +25,8 @@ import {
   lojaSugerida,
   lojasRepetidas,
   naPlataforma,
+  lojaJaLigada,
+  origemDoRegem,
   pedidosAoRegem,
   gruposDaEscolha,
   idDaConta,
@@ -568,5 +572,82 @@ describe('conectar o Regem e ligar as lojas', () => {
     expect(render(() => {}, false)).not.toContain('Conectar de novo');
     const ativa = conexao({ provider: 'regem', status: 'ativa', scopes: ['pedidos.ler', 'custos.ler'], accounts: [] });
     expect(renderToStaticMarkup(createElement(CartaoAutorizacaoRegem, { conexao: ativa, podeConectar: true, aoEscolher: null, aoConectar: () => {}, aoRevogar: () => {} }))).not.toContain('Conectar de novo');
+  });
+});
+
+// Hub DMS (F3, parte C, PR 4): a autorização por clique do Regem. Cada loja tem a própria ligação (não um token), o
+// presidente confirma com a senha do Regem, e o custo é uma opção que nasce desligada: os textos dizem isso, e a
+// autorização de 01/10 e a da distribuição seguem com os textos de sempre.
+describe('a autorização por clique do Regem', () => {
+  const SEM_CUSTO = ['pedidos.ler', 'clientes.anonimizacao.ler', 'cupons.ler', 'cupons.uso.ler'];
+  const semElemento = { current: null };
+  const porClique = (extra: Partial<ConnectionResponse> = {}) =>
+    conexao({ provider: 'regem', origin: 'oauth', authorization_flow: 'clique', status: 'ativa', authorized_by: 'Rodrigo Silva', completed_at: local(27, 9), scopes: SEM_CUSTO, ...extra });
+
+  it('a origem dos textos: `clique` só na autorização por clique; a de 01/10 e a da distribuição seguem como estão', () => {
+    expect(origemDoRegem(porClique())).toBe('clique');
+    expect(origemDoRegem(conexao({ provider: 'regem', authorization_flow: null }))).toBe('oauth');
+    expect(origemDoRegem(conexao({ provider: 'regem', origin: 'distribuicao' }))).toBe('distribuicao');
+  });
+
+  it('a linha de baixo, a situação sem custo, o porquê do custo e a faixa falam da ligação e da opção desligada', () => {
+    expect(subDaLoja('Centro', 'clique')).toBe('Loja no Liame: Centro · ligação própria da loja');
+    expect(subDaLoja(null, 'clique')).toBe('Sem loja no Liame · ligação própria da loja');
+    expect(subDaLoja('Centro', 'oauth')).toBe('Loja no Liame: Centro · token próprio da loja');
+    const loja: AccountFreshness = {
+      connected_account_id: ID,
+      brand_id: ID,
+      provider: 'regem',
+      name: 'Loja Centro',
+      status: 'ativa',
+      status_reason: null,
+      datasets: [{ dataset: 'pedidos', freshness: 'fresh', last_success_at: local(27, 9, 20), last_attempt_at: local(27, 9, 20), last_error: null, next_at: null }],
+    };
+    expect(situacaoDaLoja(loja, { scopes: SEM_CUSTO, origem: 'clique' }, agora).motivo).toBe('O custo dos itens não foi liberado nesta autorização: a margem desta loja fica desconhecida.');
+    expect(escoposDoRegem(SEM_CUSTO, 'clique')[1]).toMatchObject({
+      cod: 'custos.ler',
+      estado: 'nao_liberado',
+      texto: 'O custo dos itens não foi liberado nesta autorização. Para liberar, um presidente que vê valores em R$ no Regem autoriza de novo.',
+    });
+    expect(faixaDoRegem([{ nome: 'Loja Centro', desconectada: false, semCusto: true, origem: 'clique' }])!.texto).toBe(
+      'O custo dos itens não foi liberado nesta autorização. Sem o custo, a margem fica desconhecida e os Resultados não dizem se deu lucro. Para liberar, um presidente que vê valores em R$ no Regem autoriza de novo.',
+    );
+  });
+
+  it('o cartão: uma ligação por loja, autorizada com a senha de um presidente, e o porquê do custo', () => {
+    const html = renderToStaticMarkup(createElement(CartaoAutorizacaoRegem, { conexao: porClique({ accounts: [] }), podeConectar: true, aoEscolher: null, aoConectar: null, aoRevogar: () => {} }));
+    expect(html).toContain('Uma ligação para cada loja, autorizada com a senha de um presidente no Regem, guardada cifrada no Liame e só em hash no Regem.');
+    expect(html).not.toContain('Um token para cada loja');
+    expect(html).toContain('Sem o custo dos itens: ele não foi liberado nesta autorização (nasce desligado no Regem).');
+    expect(html).toContain('O custo dos itens não foi liberado nesta autorização.');
+  });
+
+  it('o diálogo de conectar pelo clique: confirmar com a senha, o telefone como dado pessoal e a ligação na nota; sem o clique, como sempre', () => {
+    const marcas = [{ id: ID, name: 'Mister Burgers', archived_at: null, purge_after: null }];
+    const base = { marcas, marcaInicial: null, reserva: semElemento, aoFechar: () => {}, aoIr: () => {} };
+    const clique = renderToStaticMarkup(createElement(DialogoConectarRegem, { ...base, porClique: true }));
+    expect(clique).toContain('<b>Escolha as lojas</b>, decida o que é opcional e confirme com a sua senha do Regem.');
+    expect(clique).toContain('<code>clientes.telefone.ler</code><span class="st st--espera">dado pessoal</span>');
+    expect(clique).toContain('A sua senha fica no Regem: o Regem entrega o acesso direto ao Liame, com uma ligação para cada loja.');
+    expect(clique).not.toContain('com um token para cada loja');
+    const sempre = renderToStaticMarkup(createElement(DialogoConectarRegem, base));
+    expect(sempre).toContain('<b>Escolha as lojas</b> e confira o que cada uma libera.');
+    expect(sempre).not.toContain('clientes.telefone.ler');
+    expect(sempre).toContain('Nenhuma senha ou token passa por você: o Regem entrega o acesso direto ao Liame, com um token para cada loja.');
+    expect(pedidosAoRegem(true).at(-1)).toMatchObject({ cod: 'clientes.telefone.ler', opcional: true, nota: 'dado pessoal' });
+    expect(pedidosAoRegem().map((p) => p.cod)).not.toContain('clientes.telefone.ler');
+  });
+
+  it('revogar a autorização e ligar a loja já ligada falam da ligação, não do token', () => {
+    const revogar = (c: ConnectionResponse) => renderToStaticMarkup(createElement(DialogoRevogar, { conexao: c, reserva: semElemento, aoFechar: () => {}, aoRevogar: () => {} }));
+    expect(revogar(porClique())).toContain('No Regem, a ligação de cada loja é revogada na hora, dos dois lados.');
+    expect(revogar(conexao({ provider: 'regem', status: 'ativa' }))).toContain('No Regem, o token de cada loja é revogado na hora, dos dois lados.');
+    expect(lojaJaLigada('clique')).toBe('Já ligada ao Liame: passa para a ligação desta autorização e continua na loja em que está.');
+    expect(lojaJaLigada('oauth')).toBe('Já ligada ao Liame: só troca o token e continua na loja em que está.');
+    // As etiquetas do que a loja libera, no diálogo de ligar as lojas, com o porquê do custo da autorização por clique.
+    const nova = porClique({ id: 'nova', status: 'aguardando_escolha', discovered: [descoberta('regem', 'loja-1', 'Loja Centro')] });
+    const ligar = renderToStaticMarkup(createElement(DialogoLojasRegem, { conexao: nova, existentes: [], reserva: semElemento, aoFechar: () => {}, aoLigar: () => {} }));
+    expect(ligar).toContain('Ligar as lojas do Regem');
+    expect(chipsDoRegem(SEM_CUSTO, origemDoRegem(nova)).find((c) => c.cod === 'custos.ler')?.texto).toBe('Custo dos itens: não liberado');
   });
 });

@@ -34,8 +34,8 @@ import {
   type SiteDoSearchConsole,
   TAMANHO_DO_SITE_LIGADO,
 } from '../connectors/search-console/search-console.js';
-import { comAcessoDaLoja, type CredencialDaLoja, PERMISSOES_DA_ESCRITA, peloToken, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
-import { lerLoja, trocarCodigoRegem } from '../connectors/regem/conector-regem.js';
+import { comAcessoDaLoja, type CredencialDaLoja, PERMISSOES_DA_ESCRITA, peloToken, recursoDoRegem, recusaDaLoja } from '../connectors/regem/acesso-da-loja.js';
+import { lerLoja, trocarCodigoDoCliqueRegem, trocarCodigoRegem } from '../connectors/regem/conector-regem.js';
 import type { ContaDescoberta, Credencial } from '../connectors/tipos.js';
 import { versaoRegistrada } from '../connectors/tipos.js';
 import { DATABASE } from '../database/database.module.js';
@@ -115,16 +115,25 @@ export class ConexaoProcessor {
   }
 
   private async concluir(id: string, tenantId: string, tentativa: number): Promise<void> {
-    type Linha = { provider: ProvedorOAuth; brand_id: string; redirect_uri: string; code_enc: string | null; pkce_verifier_enc: string | null; credential_secret_id: string | null };
+    type Linha = {
+      provider: ProvedorOAuth;
+      brand_id: string;
+      redirect_uri: string;
+      code_enc: string | null;
+      pkce_verifier_enc: string | null;
+      credential_secret_id: string | null;
+      authorization_flow: string | null;
+    };
     const dados = await withTenant(this.db, tenantId, async (tx) => {
       const r = await tx.execute<Linha>(sql`
-        select provider, brand_id, redirect_uri, code_enc, pkce_verifier_enc, credential_secret_id from liame.oauth_connection where id = ${id}`);
+        select provider, brand_id, redirect_uri, code_enc, pkce_verifier_enc, credential_secret_id, authorization_flow from liame.oauth_connection where id = ${id}`);
       const l = r.rows[0];
       if (!l) return null;
       return {
         provider: l.provider,
         brandId: l.brand_id,
         redirectUri: l.redirect_uri,
+        porClique: l.authorization_flow === 'clique',
         codigo: l.code_enc ? await this.vault.decryptForTenant(tx, tenantId, `oauth_code:${id}`, l.code_enc) : null,
         verificador: l.pkce_verifier_enc ? await this.vault.decryptForTenant(tx, tenantId, `oauth_pkce:${id}`, l.pkce_verifier_enc) : null,
         credencial: l.credential_secret_id ? await this.vault.readSecret(tx, l.credential_secret_id) : null,
@@ -157,6 +166,25 @@ export class ConexaoProcessor {
             update liame.oauth_connection
                set credential_secret_id = ${secretId}, code_enc = null, pkce_verifier_enc = null,
                    scopes = array(select jsonb_array_elements_text(${JSON.stringify([...ligacao.permissoes].sort())}::jsonb)), updated_at = now()
+             where id = ${id}`);
+        });
+      } catch (err) {
+        await this.falhar(id, tenantId, err, tentativa, true);
+        return;
+      }
+    } else if (dados.codigo && provedor === 'regem' && dados.porClique) {
+      // Autorização por clique do Regem (Hub DMS, F3, parte C): o código vira uma ligação por loja, direto para o cofre.
+      try {
+        const ligacoes = await this.trocarRegemPeloClique(dados.codigo, dados.verificador, dados.redirectUri);
+        credencial = ligacoes;
+        accessToken = '';
+        await withTenant(this.db, tenantId, async (tx) => {
+          const secretId = await this.vault.putSecret(tx, { tenantId, purpose: 'oauth_regem', plaintext: JSON.stringify(ligacoes) });
+          const escopos = [...new Set(ligacoes.lojas.flatMap((l) => l.escopos))].sort();
+          await tx.execute(sql`
+            update liame.oauth_connection
+               set credential_secret_id = ${secretId}, code_enc = null, pkce_verifier_enc = null,
+                   scopes = array(select jsonb_array_elements_text(${JSON.stringify(escopos)}::jsonb)), updated_at = now()
              where id = ${id}`);
         });
       } catch (err) {
@@ -371,6 +399,32 @@ export class ConexaoProcessor {
     return {
       tipo: 'regem',
       lojas: tokens.lojas.map((l) => ({ loja_id: l.loja_id, token: l.token, escopos: l.escopos })),
+      obtido_em: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Código + PKCE → uma ligação por loja do Regem (Hub DMS, F3, parte C), entre servidores, com o token do DMS ID do
+   * aplicativo do Liame (pedido de novo uma vez se o Regem o recusar: ele confere o token antes do corpo, e o código não
+   * é gasto nessa recusa). Uma tentativa só da troca: o código vale uma vez.
+   */
+  private async trocarRegemPeloClique(codigo: string, verificador: string | null, redirectUri: string): Promise<CredencialLigacaoRegem> {
+    const regemClique = this.config.oauth.regemClique;
+    if (!regemClique || !this.config.dmsId) throw new ErroConector('definitivo', 'regem', 'autorização por clique do Regem não configurada');
+    if (!verificador) throw new ErroConector('definitivo', 'regem', 'autorização do Regem sem PKCE');
+    const clientId = this.config.dmsId.aplicativo;
+    const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 1 });
+    const ctx = { cliente, apiUrl: regemClique.apiUrl };
+    const r = await comTokenDoDmsId(
+      this.dmsId(),
+      recursoDoRegem(regemClique.apiUrl),
+      PERMISSOES_DA_ESCRITA,
+      (tokenDmsId) => trocarCodigoDoCliqueRegem(ctx, { tokenDmsId, contaChave: 'autorizacao-por-clique', clientId, codigo, verificador, redirectUri }),
+      'regem',
+    );
+    return {
+      tipo: 'regem_ligacao',
+      lojas: r.lojas.map((l) => ({ loja_id: l.loja_id, ligacao: l.ligacao, prefixo: l.prefixo, escopos: l.permissoes })),
       obtido_em: new Date().toISOString(),
     };
   }

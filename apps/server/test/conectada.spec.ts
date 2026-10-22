@@ -54,7 +54,9 @@ const LISTA: Record<string, { usos: number; porque: string }> = {
     porque: `${MOSTRA}; "pode criar" usa \`contaConectada\`; o cupom de outra plataforma e a plataforma de pedidos são registros do Liame (criar no Regem exige conectada)`,
   },
   'links/links.service.ts': { usos: 4, porque: `${MOSTRA}: as campanhas da tela, a conferência dos anúncios que já existem e quando cada conta foi lida (o link novo exige conectada)` },
-  'connections/connections.service.ts': { usos: 7, porque: GERENCIA },
+  // O oitavo (Hub DMS, F3, parte C): ligar as lojas acha a loja do Regem ligada por outra autorização, para tirar do cofre
+  // a ligação da troca automática do `rgm_it_` de antes.
+  'connections/connections.service.ts': { usos: 8, porque: GERENCIA },
   'worker/conexao-processor.ts': { usos: 1, porque: GERENCIA },
   'worker/vendas-loop.ts': { usos: 1, porque: 'o aviso que chega do Regem acha a loja ligada; a leitura que ele dispara passa pelo laço, que confere "conectada"' },
   'worker/rotina-do-crm-loop.ts': { usos: 1, porque: 'inscreve a marca na fila uma vez; cada olhada confere a conta conectada (`lerContaDoRegemcast`)' },

@@ -7,7 +7,7 @@ import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { dataCompleta } from '@/lib/formato';
 import { disparar } from '@/lib/disparar';
-import { type ContaExistente, chipsDoRegem, escolhiveis, lojaSugerida, lojasRepetidas } from './textos';
+import { type ContaExistente, chipsDoRegem, escolhiveis, lojaJaLigada, lojaSugerida, lojasRepetidas, origemDoRegem } from './textos';
 
 // "Ligar as lojas do Regem" (protótipo P2, aprovado em 29/09/2026): depois da volta do Regem, cada loja
 // autorizada vai para uma loja do Liame (a de mesmo nome já vem escolhida; "Criar loja no Liame" deixa o
@@ -37,7 +37,8 @@ export function DialogoLojasRegem({ conexao, existentes, reserva, escritaLigada 
   const [repetidas, setRepetidas] = useState<Set<string>>(new Set());
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
-  const chips = chipsDoRegem(conexao.scopes, conexao.origin, escritaLigada);
+  const origem = origemDoRegem(conexao);
+  const chips = chipsDoRegem(conexao.scopes, origem, escritaLigada);
   const n = opcoes.length;
 
   useEffect(() => {
@@ -150,7 +151,7 @@ export function DialogoLojasRegem({ conexao, existentes, reserva, escritaLigada 
                     {o.conta.name} <span className="plat plat--regem">Regem</span>
                   </legend>
                   {o.reconectar ? (
-                    <p className="aut-meta">Já ligada ao Liame: só troca o token e continua na loja em que está.</p>
+                    <p className="aut-meta">{lojaJaLigada(origem)}</p>
                   ) : (
                     <div className="campo">
                       <label htmlFor={campo}>Loja no Liame</label>

@@ -130,7 +130,7 @@ describe('fail-fast da configuração em produção', () => {
 
   it('apps OAuth: só ligam com todas as peças; em produção, a volta só por https e o diálogo e o token nos endereços oficiais', () => {
     const meta = { META_APP_ID: '1234567890123', META_APP_SECRET: 'segredo-do-app-meta-teste', META_LOGIN_CONFIG_ID: '99887766554433' };
-    expect(loadConfig(prod).oauth).toEqual({ meta: null, google: null, regem: null, regemcast: null });
+    expect(loadConfig(prod).oauth).toEqual({ meta: null, google: null, regem: null, regemcast: null, regemClique: null });
     expect(loadConfig({ ...prod, META_APP_ID: meta.META_APP_ID, META_APP_SECRET: meta.META_APP_SECRET }).oauth.meta).toBeNull();
     expect(() => loadConfig({ ...prod, ...meta })).toThrow('API_URL');
     expect(() => loadConfig({ ...prod, ...meta, API_URL: 'http://api.agencialiame.com' })).toThrow('API_URL');
@@ -185,6 +185,19 @@ describe('fail-fast da configuração em produção', () => {
     expect(() => loadConfig({ ...prod, ...dmsId, DMS_ID_EMISSOR: 'http://127.0.0.1:4000/oidc' })).toThrow('emissor oficial');
     // Fora de produção, o emissor de mentira dos testes serve.
     expect(loadConfig({ NODE_ENV: 'test', ...dmsId, DMS_ID_EMISSOR: 'http://127.0.0.1:4000/oidc' } as NodeJS.ProcessEnv).dmsId?.emissor).toBe('http://127.0.0.1:4000/oidc');
+  });
+
+  it('autorização por clique do Regem (Hub DMS, F3, parte C): existe com o aplicativo do Liame no DMS ID (a página e a API oficiais do Regem, o iss = a origem da API)', () => {
+    const dmsId = { DMS_ID_EMISSOR: 'https://id.dmstecnologias.com/oidc', DMS_ID_APLICATIVO: 'aplicativo-do-liame', DMS_ID_SEGREDO: 'valor-do-aplicativo-no-dms-id-0123' };
+    expect(loadConfig(prod).oauth.regemClique).toBeNull();
+    // O processo só com o DMS ID (o worker da comparação) não passa a precisar da API_URL.
+    expect(loadConfig({ ...prod, ...dmsId }).oauth.regemClique).toEqual({
+      authUrl: 'https://app.dmsregem.com',
+      apiUrl: 'https://api.dmsregem.com/api/v1/integracao',
+      emissor: 'https://api.dmsregem.com',
+    });
+    // Em produção, os endereços do Regem são os oficiais: a página do clique e a troca não vão a outro lugar.
+    expect(() => loadConfig({ ...prod, ...dmsId, REGEM_AUTH_URL: 'https://app.regem.outro' })).toThrow('REGEM_AUTH_URL é o endereço oficial');
   });
 
   it('hub da DMS (Hub DMS, A4, etapa 3): nasce desligado; ligado, pede o endereço, o recurso e o aplicativo do DMS ID; em produção, só o hub oficial', () => {
