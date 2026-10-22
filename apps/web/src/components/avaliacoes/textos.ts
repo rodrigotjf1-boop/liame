@@ -1,6 +1,7 @@
 import type { ReviewAuthorsResponse, ReviewItem, ReviewsResponse, ReviewStore } from '@liame/contracts';
 import type { NomeIcone } from '@/components/ui/icone';
 import { dia, diasAte, inteiro, quandoComHora } from '@/lib/formato';
+import { type FaixaDasSugestoes, faixaDasSugestoes, type QuemAprova, seloDasSugestoes, situacaoDaVez } from './sugestoes-textos';
 
 // Textos e contas da tela "Avaliações" (mockups/prototipo-avaliacoes.html, P17 aprovado em 09/10/2026; Z1 da A6).
 // A lista e o resumo vêm de `GET /v1/reviews` (o que o Liame guardou); o nome de quem avaliou vem de
@@ -79,8 +80,13 @@ export interface ItemDaLista {
   /** Nulo quando a pessoa só deu a nota. */
   texto: string | null;
   selo: Selo;
-  /** "Responder" (abre o rascunho em Aprovações) ou "Ver a resposta" (a que espera a aprovação); nulo sem ação. */
-  acao: { tipo: 'responder' | 'ver'; href: string } | null;
+  /** O porquê da sugestão do Social media que ainda não chegou (escrevendo, no limite de IA, barrada); nulo sem ela (P31). */
+  motivo: string | null;
+  /**
+   * "Responder" (abre o rascunho em Aprovações), "Ver a resposta" (a que espera a aprovação) ou "Ver as sugestões" (o
+   * pedido do Social media, com quantas sugestões); nulo sem ação.
+   */
+  acao: { tipo: 'responder' | 'ver'; href: string } | { tipo: 'sugestoes'; href: string; quantas: number } | null;
 }
 
 /** A faixa das respostas que esperam a aprovação: o que diz e para onde leva. */
@@ -102,7 +108,18 @@ export type TelaDasAvaliacoes =
   | { tipo: 'primeira_leitura'; avisos: Aviso[] }
   /** O Google não tem avaliação nenhuma da empresa. */
   | { tipo: 'vazia'; lido: string | null; avisos: Aviso[] }
-  | { tipo: 'lista'; lido: string | null; avisos: Aviso[]; caixas: Caixa[]; tudoRespondido: boolean; esperando: Esperando | null; itens: ItemDaLista[]; notas: string[] };
+  | {
+      tipo: 'lista';
+      lido: string | null;
+      avisos: Aviso[];
+      caixas: Caixa[];
+      tudoRespondido: boolean;
+      esperando: Esperando | null;
+      /** A faixa das sugestões do Social media (P31): desligado, não ligadas, o limite de IA ou as que esperam. */
+      sugestoes: FaixaDasSugestoes | null;
+      itens: ItemDaLista[];
+      notas: string[];
+    };
 
 /** Os nomes lidos do Google: a resposta da rota, `falhou` (a rota não respondeu) ou nulo (ainda não chegou). */
 export type Autores = ReviewAuthorsResponse | 'falhou' | null;
@@ -148,7 +165,7 @@ export function telaDasAvaliacoes(
   r: ReviewsResponse,
   agora: Date,
   autores: Autores = null,
-  opcoes: { podePedir?: boolean; podeAprovar?: boolean; souDono?: boolean } = {},
+  opcoes: { podePedir?: boolean; podeAprovar?: boolean; souDono?: boolean; podeLigarOSocial?: boolean; podeVerEquipe?: boolean } = {},
 ): TelaDasAvaliacoes {
   if (r.state === 'desligada' || r.state === 'sem_perfil' || r.state === 'sem_permissao' || r.state === 'esperando_google') return { tipo: r.state };
   if (r.state !== 'pronta' || !r.summary) return { tipo: 'outra' };
@@ -188,9 +205,12 @@ export function telaDasAvaliacoes(
   const esperandoDe = new Map(pendentes.map((p) => [p.review_id, p] as const));
   const responde = Boolean(r.can_reply) && Boolean(opcoes.podePedir);
   // A de 1 ou 2 estrelas só o dono aprova (D-A6-4); a tela não diz "a sua aprovação" a quem não aprova.
-  const quemAprova = (p: { owner_only: boolean }) => (opcoes.podeAprovar && (!p.owner_only || opcoes.souDono) ? 'voce' : p.owner_only ? 'dono' : 'outra_pessoa');
+  const quemAprova = (p: { owner_only: boolean }): QuemAprova => (opcoes.podeAprovar && (!p.owner_only || opcoes.souDono) ? 'voce' : p.owner_only ? 'dono' : 'outra_pessoa');
+  // A vez da sugestão do Social media de cada avaliação sem resposta (P31): escrevendo, no limite de IA, barrada.
+  const vezDe = new Map((r.suggestions?.turns ?? []).map((t) => [t.review_id, t] as const));
   const acaoDe = (a: ReviewsResponse['reviews'][number]): ItemDaLista['acao'] => {
     const pedido = esperandoDe.get(a.id);
+    if (pedido?.suggestions) return { tipo: 'sugestoes', href: `/aprovacoes?pedido=${pedido.action_id}`, quantas: pedido.suggestions };
     if (pedido) return { tipo: 'ver', href: `/aprovacoes?pedido=${pedido.action_id}` };
     // A recusada pelo Google não aparece no perfil: ela pode ganhar outra resposta.
     if (responde && (!a.reply || a.reply.state === 'recusada')) return { tipo: 'responder', href: `/aprovacoes?responder=${a.id}&marca=${r.brand_id}` };
@@ -198,18 +218,26 @@ export function telaDasAvaliacoes(
   };
   const itens: ItemDaLista[] = r.reviews.map((a) => {
     const pedido = esperandoDe.get(a.id);
+    const texto = a.text && a.text.trim() ? a.text : null;
+    const vez = !pedido && !a.reply ? vezDe.get(a.id) : undefined;
+    const naVez = vez ? situacaoDaVez(vez, { soANota: texto === null, podeResponder: responde, agora }) : null;
     return {
       id: a.id,
       estrelas: a.stars,
       sob: [nomes.get(a.id), haQuanto(a.reviewed_at, agora), variasLojas ? lojas.get(a.store_id) : undefined].filter(Boolean).join(' · '),
-      texto: a.text && a.text.trim() ? a.text : null,
-      selo: pedido ? seloDaRespostaQueEspera(quemAprova(pedido)) : situacaoDaResposta(a.reply),
+      texto,
+      selo: pedido?.suggestions ? seloDasSugestoes(pedido.suggestions, quemAprova(pedido)) : pedido ? seloDaRespostaQueEspera(quemAprova(pedido)) : (naVez?.selo ?? situacaoDaResposta(a.reply)),
+      motivo: naVez?.motivo ?? null,
       acao: acaoDe(a),
     };
   });
+  const sugestoes = faixaDasSugestoes(r, { quemAprova, podeResponder: responde, podeLigarOSocial: Boolean(opcoes.podeLigarOSocial), podeVerEquipe: Boolean(opcoes.podeVerEquipe) });
+  // A faixa das respostas que esperam (P17) fica com as que uma pessoa escreveu; as do Social media têm a faixa dele.
+  // Uma faixa de ação só: com sugestões esperando, as respostas de uma pessoa aparecem em cada avaliação.
+  const daPessoa = sugestoes?.tipo === 'acao' ? [] : pendentes.filter((p) => !p.suggestions);
   let esperando: Esperando | null = null;
-  if (pendentes.length === 1) {
-    const p = pendentes[0]!;
+  if (daPessoa.length === 1) {
+    const p = daPessoa[0]!;
     const avaliacao = r.reviews.find((a) => a.id === p.review_id);
     const nome = nomes.get(p.review_id);
     const quem = avaliacao ? (nome ? `${nome} deu ${plural(avaliacao.stars, 'estrela', 'estrelas')}` : `Uma avaliação de ${plural(avaliacao.stars, 'estrela', 'estrelas')}`) : null;
@@ -221,18 +249,21 @@ export function telaDasAvaliacoes(
           ? ['1 resposta espera a aprovação do dono', 'só o dono da empresa aprova a resposta.']
           : ['1 resposta espera aprovação', 'a resposta está pronta para ler.'];
     esperando = { titulo, texto: quem ? `${quem}; ${depois}` : `${depois.charAt(0).toUpperCase()}${depois.slice(1)}`, botao: 'Ver a resposta', href: `/aprovacoes?pedido=${p.action_id}` };
-  } else if (pendentes.length > 1) {
-    const todasSuas = pendentes.every((p) => quemAprova(p) === 'voce');
+  } else if (daPessoa.length > 1) {
+    const todasSuas = daPessoa.every((p) => quemAprova(p) === 'voce');
     esperando = {
-      titulo: `${inteiro(pendentes.length)} respostas esperam ${todasSuas ? 'a sua aprovação' : 'aprovação'}`,
+      titulo: `${inteiro(daPessoa.length)} respostas esperam ${todasSuas ? 'a sua aprovação' : 'aprovação'}`,
       texto: 'Estão em Aprovações, cada uma com a avaliação ao lado.',
       botao: 'Abrir Aprovações',
       href: '/aprovacoes',
     };
   }
 
+  // Com as sugestões do Social media (P31), a nota diz de quem são e que ele não recebe o nome de quem avaliou.
+  const doSocial = r.suggestions ? 'As sugestões são do Social media, da sua equipe: nenhuma sai sem a aprovação de uma pessoa com o código do app. ' : '';
+  const nomesNaNota = r.suggestions ? notaDosNomes(autores).replace('o Liame não guarda o nome nem a foto', 'o Liame não guarda o nome nem a foto, e o Social media não recebe') : notaDosNomes(autores);
   const notas = [
-    `${notaDosNomes(autores)} O Liame não apaga avaliação; para denunciar uma avaliação indevida, o caminho é o próprio Google.`,
+    `${doSocial}${nomesNaNota} O Liame não apaga avaliação; para denunciar uma avaliação indevida, o caminho é o próprio Google.`,
     'A lista e a contagem das sem resposta olham as avaliações feitas ou alteradas nos últimos 12 meses; a nota e o total são os do Google, de sempre. A resposta dada direto no perfil da empresa no Google aparece aqui em até um dia; se a avaliação tem mais de 45 dias, em até uma semana.',
   ];
   if (r.has_more) notas.push(`A lista mostra as ${inteiro(r.reviews.length)} primeiras nesta ordem. As outras continuam no perfil da empresa no Google.`);
@@ -240,5 +271,5 @@ export function telaDasAvaliacoes(
     if (l.waiting_until) notas.push(`O Google pediu para o Liame esperar: a próxima leitura de ${l.name} fica para depois de ${quandoComHora(l.waiting_until, agora)}.`);
   }
 
-  return { tipo: 'lista', lido, avisos, caixas, tudoRespondido: s.unanswered === 0 && itens.length > 0 && !esperando, esperando, itens, notas };
+  return { tipo: 'lista', lido, avisos, caixas, tudoRespondido: s.unanswered === 0 && itens.length > 0 && !esperando && sugestoes?.tipo !== 'acao', esperando, sugestoes, itens, notas };
 }

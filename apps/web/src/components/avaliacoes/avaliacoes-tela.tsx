@@ -27,6 +27,9 @@ export function AvaliacoesTela() {
   // A resposta que espera: "a sua aprovação" só para quem aprova; a de 1 ou 2 estrelas, só o dono (D-A6-4).
   const podeAprovar = pode('acoes.aprovar');
   const souDono = me.organizations.find((o) => o.id === me.active_organization_id)?.role === 'dono';
+  // O Social media desligado nesta marca (P31): quem vê Sua equipe ganha o botão; quem liga e desliga, "é você".
+  const podeVerEquipe = pode('campanhas.ver') && pode('vendas.ver');
+  const podeLigarOSocial = podeVerEquipe && pode('agentes.gerenciar');
   const titulo = useRef<HTMLHeadingElement>(null);
   const [marcas, setMarcas] = useState<BrandResponse[] | null>(null);
   const [erroMarcas, setErroMarcas] = useState<Problema | null>(null);
@@ -77,8 +80,8 @@ export function AvaliacoesTela() {
   }, [carga]);
 
   const tela = useMemo(
-    () => (carga.tipo === 'ok' ? telaDasAvaliacoes(carga.dados, agora, autores, { podePedir, podeAprovar, souDono }) : null),
-    [carga, agora, autores, podePedir, podeAprovar, souDono],
+    () => (carga.tipo === 'ok' ? telaDasAvaliacoes(carga.dados, agora, autores, { podePedir, podeAprovar, souDono, podeLigarOSocial, podeVerEquipe }) : null),
+    [carga, agora, autores, podePedir, podeAprovar, souDono, podeLigarOSocial, podeVerEquipe],
   );
 
   if (!podeVer) {

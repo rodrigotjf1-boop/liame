@@ -69,9 +69,15 @@ function Item({ item }: { item: ItemDaLista }) {
           <span>{item.sob}</span>
         </div>
         <p className={item.texto ? 'av-item-txt' : 'av-item-txt av-item-txt--vazio'}>{item.texto ?? 'Só a nota, sem texto.'}</p>
+        {item.motivo && <p className="av-item-motivo">{item.motivo}</p>}
       </div>
       <div className="av-item-acao">
         <SeloDaResposta selo={item.selo} />
+        {item.acao?.tipo === 'sugestoes' && (
+          <Link className="btn btn--sm btn--primary" href={item.acao.href}>
+            {item.acao.quantas === 1 ? 'Ver a sugestão' : 'Ver as sugestões'}
+          </Link>
+        )}
         {item.acao?.tipo === 'ver' && (
           <Link className="btn btn--sm btn--primary" href={item.acao.href}>
             Ver a resposta
@@ -159,9 +165,25 @@ export function AvaliacoesConteudo({ tela, podeVerContas }: Props) {
     );
   }
 
+  const sug = tela.sugestoes;
   return (
     <div className="av">
       <Avisos avisos={tela.avisos} podeVerContas={podeVerContas} />
+      {sug && (
+        <Faixa
+          tipo={sug.tipo === 'acao' ? 'acao' : undefined}
+          icone={<Icone nome={sug.icone} />}
+          titulo={sug.titulo}
+          texto={sug.texto}
+          acao={
+            sug.botao ? (
+              <Link className={sug.botao.primario ? 'btn btn--primary' : 'btn'} href={sug.botao.href}>
+                {sug.botao.rotulo}
+              </Link>
+            ) : undefined
+          }
+        />
+      )}
       {tela.esperando && (
         <Faixa
           tipo="acao"
