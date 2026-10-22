@@ -410,8 +410,8 @@ describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como sa
     // Um por marca e mês.
     expect(await inserir()).toBe('monthly_report_um_por_mes');
 
-    const [{ id }] = await ownerQuery<{ id: string }>(`select id from liame.monthly_report where brand_id = $1 and month_from = '2026-08-01'`, [e.brandId]);
-    const [{ id: dono }] = await ownerQuery<{ id: string }>(`select id from liame.app_user where email = $1`, [e.dono]);
+    const id = (await ownerQuery<{ id: string }>(`select id from liame.monthly_report where brand_id = $1 and month_from = '2026-08-01'`, [e.brandId]))[0]!.id;
+    const dono = (await ownerQuery<{ id: string }>(`select id from liame.app_user where email = $1`, [e.dono]))[0]!.id;
     const entregar = (status: string, enviadoEm: string | null) =>
       ownerQuery(`insert into liame.monthly_report_delivery (id, tenant_id, report_id, user_id, role_key, status, sent_at) values (gen_random_uuid(), $1, $2, $3, 'dono', $4, $5::timestamptz)`, [
         e.tenantId,

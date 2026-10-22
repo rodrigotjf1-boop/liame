@@ -72,6 +72,7 @@ const LISTA: Record<string, { usos: number; porque: string }> = {
   'avaliacoes/avaliacoes.service.ts': { usos: 2, porque: `${MOSTRA} (responder exige o status ativa, que é mais que conectada)` },
   'avaliacoes/avisos-do-perfil.ts': { usos: 2, porque: MOSTRA },
   'worker/revisao-semanal-loop.ts': { usos: 1, porque: `${MOSTRA}: a revisão da semana por e-mail` },
+  'worker/relatorio-mensal-loop.ts': { usos: 1, porque: `${MOSTRA}: o relatório do mês, lido do que já está guardado, na tela e por e-mail` },
   'actions/budget.service.ts': { usos: 3, porque: PENDENTE },
   'actions/google-anuncios.ts': { usos: 1, porque: PENDENTE },
   'actions/meta-anuncios.ts': { usos: 1, porque: PENDENTE },

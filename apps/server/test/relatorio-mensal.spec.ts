@@ -65,7 +65,8 @@ function resultado(extra: { from?: string; to?: string; campanhas?: Campanha[]; 
       { connected_account_id: U(8), provider: 'meta_ads', name: 'CA - Mister', dataset: 'metricas', freshness: 'fresh', last_success_at: '2026-10-01T08:10:00.000Z', status: 'ativa', timezone: 'America/Sao_Paulo' },
       { connected_account_id: U(9), provider: 'regem', name: 'Loja Centro', dataset: 'pedidos', freshness: 'fresh', last_success_at: '2026-10-01T08:05:00.000Z', status: 'ativa', timezone: 'America/Sao_Paulo' },
     ],
-  } as ClosedLoopResponse;
+    generated_at: '2026-10-01T08:15:00.000Z',
+  };
 }
 
 describe('relatório do mês: o mês fechado, quando ele sai e o prazo', () => {
