@@ -12,10 +12,15 @@ const movimento = (v: string | null) => (sobe(v) ? `subiu ${v!.slice(1)}` : cai(
 
 /**
  * `semana`: a explicação é a leitura da revisão da semana (I7), e o texto diz "a semana" e "à semana
- * anterior"; sem ela, "o período" e "ao período anterior", como na tela Resultados.
+ * anterior"; `mes`: a leitura do relatório do mês (P24), com "o mês" e o nome do mês anterior ("a agosto"); sem
+ * nenhum dos dois, "o período" e "ao período anterior", como na tela Resultados.
  */
-export function explicacaoSemIa(c: ContextoDaExplicacao, opcoes: { semana?: boolean } = {}): Explicacao {
-  const [oPeriodo, anterior] = opcoes.semana ? ['a semana', 'à semana anterior'] : ['o período', 'ao período anterior'];
+export function explicacaoSemIa(c: ContextoDaExplicacao, opcoes: { semana?: boolean; mes?: { anterior: string } } = {}): Explicacao {
+  const [oPeriodo, anterior, neste] = opcoes.mes
+    ? ['o mês', `a ${opcoes.mes.anterior}`, 'neste mês']
+    : opcoes.semana
+      ? ['a semana', 'à semana anterior', 'nesta semana']
+      : ['o período', 'ao período anterior', 'neste período'];
   const t = c.resultado.totais;
   const origem = t.com_origem_provada;
   const periodo = `De ${c.resultado.periodo.de} a ${c.resultado.periodo.ate}`;
@@ -49,7 +54,7 @@ export function explicacaoSemIa(c: ContextoDaExplicacao, opcoes: { semana?: bool
   if (t.sem_origem.pedidos && t.sem_origem.pedidos !== '0') {
     motivos.push(`${t.sem_origem.pedidos} pedido(s) dos canais com clique ficaram sem origem provada${t.sem_origem.parte_dos_pedidos_com_clique ? ` (${t.sem_origem.parte_dos_pedidos_com_clique})` : ''}: não dá para dizer de que campanha vieram.`);
   }
-  if (!motivos.length) motivos.push(`Ainda não há campanha com investimento e pedido confirmado ${opcoes.semana ? 'nesta semana' : 'neste período'} para comparar.`);
+  if (!motivos.length) motivos.push(`Ainda não há campanha com investimento e pedido confirmado ${neste} para comparar.`);
 
   // O risco e o porquê dele, pela regra do sistema (a mesma do veredito da tela Resultados).
   const piorou = sobe(cmp?.investimento.variacao ?? null) && cai(cmp?.receita_com_origem.variacao ?? null);

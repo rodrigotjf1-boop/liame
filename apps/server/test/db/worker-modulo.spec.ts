@@ -8,6 +8,8 @@ import { EstrategistaService } from '../../src/worker/estrategista.service.js';
 import { PesquisaLoop } from '../../src/worker/pesquisa-loop.js';
 import { PesquisadorService } from '../../src/worker/pesquisa.service.js';
 import { QueueService } from '../../src/worker/queue.service.js';
+import { RelatorioMensalLoop } from '../../src/worker/relatorio-mensal-loop.js';
+import { RelatorioMensalService } from '../../src/worker/relatorio-mensal.service.js';
 import { RevisaoSemanalLoop } from '../../src/worker/revisao-semanal-loop.js';
 import { RevisaoSemanalService } from '../../src/worker/revisao-semanal.service.js';
 import { SombraLoop } from '../../src/worker/sombra-loop.js';
@@ -19,11 +21,13 @@ import { hasDb } from './env.js';
 // `onApplicationBootstrap` não é chamado.
 
 describe.skipIf(!hasDb)('módulo do worker: todas as dependências se resolvem', () => {
-  it('monta os provedores, com a revisão da semana, a fila do Estrategista e o que elas usam (resultados, avisos, leituras da IA e o gateway)', async () => {
+  it('monta os provedores, com a revisão da semana, o relatório do mês, a fila do Estrategista e o que elas usam (resultados, avisos, leituras da IA e o gateway)', async () => {
     const modulo = await Test.createTestingModule({ imports: [WorkerModule] }).compile();
     try {
       expect(modulo.get(RevisaoSemanalLoop)).toBeInstanceOf(RevisaoSemanalLoop);
       expect(modulo.get(RevisaoSemanalService)).toBeInstanceOf(RevisaoSemanalService);
+      expect(modulo.get(RelatorioMensalLoop)).toBeInstanceOf(RelatorioMensalLoop);
+      expect(modulo.get(RelatorioMensalService)).toBeInstanceOf(RelatorioMensalService);
       expect(modulo.get(ExplicarService)).toBeInstanceOf(ExplicarService);
       expect(modulo.get(SombraLoop)).toBeInstanceOf(SombraLoop);
       expect(modulo.get(EstrategistaLoop)).toBeInstanceOf(EstrategistaLoop);

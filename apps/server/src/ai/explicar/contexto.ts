@@ -1,4 +1,5 @@
 import type { ClosedLoopResponse } from '@liame/contracts';
+import type { SemanaNoContexto } from '../../results/relatorio-mensal.js';
 import { dia, dinheiro, inteiro, razao } from '../registro/formatos.js';
 import { visaoDoCicloFechado } from '../registro/visoes/ciclo-fechado.js';
 
@@ -47,6 +48,11 @@ export interface ContextoDaExplicacao {
   } | null;
   /** Fontes que não estão em dia (com a última leitura, quando houve): com alguma aqui, a explicação é a do código, não a da IA. */
   fontes_fora_do_dia: Array<{ plataforma: string | null; conta: string; frescor: string; ultima_leitura: string | null }>;
+  /**
+   * Só na leitura do relatório do mês (D-A3-21): cada semana do mês, cortada no mês, com o nome pronto ("a semana de
+   * 01/09 a 06/09") e os números já escritos. A IA cita a semana pelo nome; não numera semana nenhuma (ERR-074).
+   */
+  semanas?: SemanaNoContexto[];
 }
 
 /**

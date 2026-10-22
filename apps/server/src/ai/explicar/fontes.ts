@@ -92,7 +92,7 @@ export function valoresDe(texto: string): Valor[] {
 }
 
 /** A ordem das fontes de um mesmo número: da mais específica para a mais geral. */
-const ORDEM = { aviso: 0, campanha: 1, plataforma: 2, total: 3, comparacao: 4, geral: 5 } as const;
+const ORDEM = { aviso: 0, campanha: 1, semana: 2, plataforma: 3, total: 4, comparacao: 5, geral: 6 } as const;
 
 /** Um lugar do contexto em que o número está. */
 interface Lugar {
@@ -203,6 +203,17 @@ function lugaresDoContexto(c: ContextoComAviso): Map<string, Lugar[]> {
     confirmado(k.caixa_confirma, `da campanha "${k.campanha}"`, ORDEM.campanha, k.campanha);
   }
   por(r.campanhas_fora_da_lista, doLiame('campanhas com investimento que ficaram fora desta lista'), ORDEM.geral);
+
+  // As semanas do mês (a leitura do relatório do mês, D-A3-21): o nome pronto da semana e os números dela.
+  for (const s of c.semanas ?? []) {
+    // "a semana de 01/09 a 06/09" → "semana de 01/09 a 06/09".
+    const semana = s.semana.slice(2);
+    por(s.semana, `Liame · ${semana}, cortada no mês`, ORDEM.geral);
+    por(s.investimento, `${asPlataformas} · investimento na ${semana}`, ORDEM.semana);
+    por(s.pedidos_com_origem, `Regem · pedidos confirmados com origem provada na ${semana}`, ORDEM.semana);
+    por(s.receita_com_origem, `Regem · receita confirmada com origem provada na ${semana}`, ORDEM.semana);
+    por(s.roas_confirmado, doLiame(`ROAS confirmado no caixa na ${semana} (receita confirmada ÷ investimento)`), ORDEM.semana);
+  }
 
   // Leitura de cada fonte.
   for (const f of r.fontes) por(f.ultima_leitura, `${f.plataforma ?? 'Fonte'} · última leitura da conta "${f.conta ?? ''}"`, ORDEM.geral);

@@ -102,3 +102,87 @@ export const WeeklyReviewResponse = z.strictObject({
   timezone: z.string(),
 });
 export type WeeklyReviewResponse = z.infer<typeof WeeklyReviewResponse>;
+
+// ---------------------------------------------------------------- o relatório do mês
+//
+// Relatório do mês (A3, I7; protótipo P24, decisões D-A3-18 a D-A3-22): a revisão da semana com o mês fechado da
+// loja (do dia 1º ao último, no fuso dela), mais o que só o mês tem: cada semana cortada no mês. É gerado no dia
+// 1º de manhã e guardado como foi gerado. As partes são as da revisão, no mesmo formato. O relatório guardado é
+// lido por este mesmo contrato: campo novo aqui nasce OPCIONAL ou com valor padrão.
+
+export const MonthlyReportQuery = z.strictObject({
+  brand_id: z.uuid(),
+  /** O mês pedido (AAAA-MM); sem ele, o relatório mais recente da marca. */
+  month: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .optional(),
+});
+export type MonthlyReportQuery = z.infer<typeof MonthlyReportQuery>;
+
+/** Uma semana do mês, de segunda a domingo, cortada no mês: o que foi investido e o que voltou no caixa. */
+export const MonthlyReportWeek = z.strictObject({
+  /** Os dias da semana que estão dentro do mês (as semanas das pontas ficam cortadas). */
+  from: Dia,
+  to: Dia,
+  days: z.number().int().min(1).max(7),
+  /** A semana inteira, de segunda a domingo: é a da revisão da semana. */
+  week: z.strictObject({ from: Dia, to: Dia }),
+  /** A revisão da semana inteira existe: a tela leva a ela. */
+  has_review: z.boolean(),
+  spend_micros: Micros,
+  /** Pedidos e receita confirmados no caixa com origem provada em campanha, nos dias da semana dentro do mês. */
+  orders: z.number().int().min(0),
+  revenue_micros: Micros,
+  roas: Razao,
+  /** `lucro`, `empata` ou `prejuizo`; nulo com margem incompleta ou sem investimento. */
+  verdict: Slug.nullable(),
+});
+export type MonthlyReportWeek = z.infer<typeof MonthlyReportWeek>;
+
+export const MonthlyReport = z.strictObject({
+  id: z.uuid(),
+  brand_id: z.uuid(),
+  /** O mês do relatório e o anterior, usado na comparação (dias no fuso da loja, inclusive). */
+  month: z.strictObject({ from: Dia, to: Dia }),
+  previous_month: z.strictObject({ from: Dia, to: Dia }),
+  timezone: z.string(),
+  currency: z.string(),
+  generated_at: z.string(),
+  /** Os quatro números do topo, cada um ao lado do do mês anterior (o formato da revisão da semana). */
+  totals: z.array(WeeklyReviewChange),
+  /** O resultado do mês pela regra do sistema (`lucro`, `empata`, `prejuizo`); nulo com margem incompleta. */
+  verdict: Slug.nullable(),
+  /** Cada semana do mês, da primeira à última. */
+  weeks: z.array(MonthlyReportWeek),
+  /** As campanhas com investimento ou pedido no mês, a de maior investimento primeiro. */
+  campaigns: z.array(WeeklyReviewCampaign),
+  /** Pedidos provados só na plataforma (sem a campanha): contam no total, fora das campanhas. */
+  platform_only: z.array(z.strictObject({ provider: Slug, orders: z.number().int().min(0), revenue_micros: Micros.nullable() })),
+  improved: z.array(WeeklyReviewChange),
+  worsened: z.array(WeeklyReviewChange),
+  /**
+   * "Para o mês que vem", no formato dos avisos da Atenção: a campanha que deu prejuízo no mês (`prejuizo_no_mes`)
+   * e os avisos críticos e de atenção que estavam ativos na geração.
+   */
+  decisions: z.array(AttentionItem),
+  /** A leitura do mês: da LIA ou, sem ela, do sistema, com o motivo. O mesmo formato do Explicar. */
+  reading: ExplanationResponse,
+  email: z.strictObject({
+    /** `enviado`, `pendente`, `desligado` (o envio não está ligado para a empresa), `sem_destinatario`, `falhou` ou `expirado`. */
+    status: Slug,
+    sent_at: z.string().nullable(),
+    /** Para quantas pessoas o relatório foi enviado. */
+    recipients: z.number().int().min(0),
+  }),
+});
+export type MonthlyReport = z.infer<typeof MonthlyReport>;
+
+export const MonthlyReportResponse = z.strictObject({
+  /** Nulo quando a marca ainda não tem relatório (o primeiro sai em `next_report_on`). */
+  report: MonthlyReport.nullable(),
+  /** O dia 1º em que sai o próximo relatório, no fuso da loja. */
+  next_report_on: Dia,
+  timezone: z.string(),
+});
+export type MonthlyReportResponse = z.infer<typeof MonthlyReportResponse>;
