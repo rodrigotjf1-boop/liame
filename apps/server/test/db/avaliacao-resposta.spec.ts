@@ -530,4 +530,30 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
     expect(await ver(e, q.body.id)).toMatchObject({ status: 'executada' });
     expect(await proxima()).toBe(esperando);
   });
+
+  it('ERR-160: o Google grava a resposta sem dizer a situação (como no piloto em 21/10/2026): a leitura seguinte a relê pela conferência, e a loja volta em 15 minutos', async () => {
+    const { e, ids } = await empresa('Mister Burgers Resposta Sem Situação', [avaliacao('rev-5', 'FIVE', 2)]);
+    const MIN = 60_000;
+    const proxima = async () =>
+      new Date((await ownerQuery<{ proxima: string }>(`select cursor ->> 'proxima' as proxima from liame.sync_state where connected_account_id = $1 and dataset = 'avaliacoes_perfil'`, [e.contaId]))[0]!.proxima).getTime();
+    google.voltaSemSituacao = true;
+    const p = await pedir(dono(e), e, ids.get('rev-5')!, TEXTO);
+    expect((await aprovar(dono(e), p.body)).body.status).toBe('aprovada');
+    await ciclo(e);
+    // Publicada, e a volta do Google sem a situação: o Liame guarda "desconhecida", com o texto.
+    expect(await ver(e, p.body.id)).toMatchObject({ status: 'executada' });
+    expect(await guardada(ids.get('rev-5')!)).toEqual({ reply_text: TEXTO, reply_state: 'desconhecida' });
+
+    // A leitura adiantada pela publicação relê a avaliação pela conferência das respostas, como a que está em
+    // conferência, e grava a situação que o Google dá a ela agora; o pedido mostra a mesma.
+    const depois = new Date(Date.now() + 11 * MIN);
+    const lote = await loop.executarLote(10, { tenantIds: [e.tenantId] }, depois);
+    expect(lote.map((r) => [r.status, r.avaliacoes, r.respostas])).toEqual([['ok', 0, 1]]);
+    expect(await guardada(ids.get('rev-5')!)).toEqual({ reply_text: TEXTO, reply_state: 'pendente' });
+    expect((await ver(e, p.body.id)).review.current.reply).toMatchObject({ text: TEXTO, state: 'pendente' });
+    // Ainda em conferência e dada há pouco: a loja volta em 15 minutos, e não na hora cheia.
+    const volta = await proxima();
+    expect(volta).toBeLessThanOrEqual(depois.getTime() + 15 * MIN);
+    expect(volta).toBeGreaterThan(depois.getTime() + 14 * MIN);
+  });
 });
