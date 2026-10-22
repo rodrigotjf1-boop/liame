@@ -139,6 +139,11 @@ export function citaONome(texto: string, quem: string | null | undefined): boole
 /** Compensação prometida em público: desconto, brinde, reembolso ou cortesia (P17; D-A6-4). Alternativas literais, sobre o texto normalizado. */
 const COMPENSACAO = /(?<![a-z0-9])(descontos?|brindes?|reembols(?:o|os|ar|amos|aremos|ado|ada)|cortesias?)(?![a-z0-9])/g;
 
+/** As palavras de compensação que o texto traz, sem repetir, como aparecem no texto normalizado; vazio quando não há. */
+export function compensacaoPrometida(texto: string): string[] {
+  return [...new Set([...normalizar(texto).matchAll(COMPENSACAO)].map((m) => m[1]!))];
+}
+
 const REGRA_EM_PALAVRAS: Record<string, string> = {
   politico_eleitoral: 'conteúdo político ou eleitoral (regra da Liame)',
   promessa_de_resultado: 'promessa de resultado (regra da Liame)',
@@ -154,8 +159,7 @@ const REGRA_EM_PALAVRAS: Record<string, string> = {
  */
 export function problemasDaResposta(texto: string, contexto?: ContextoDaAvaliacao | null): string[] {
   const problemas = conferirTexto(texto).map((x) => REGRA_EM_PALAVRAS[x.regra] ?? x.regra);
-  const normal = normalizar(texto);
-  const prometido = [...new Set([...normal.matchAll(COMPENSACAO)].map((m) => m[1]!))];
+  const prometido = compensacaoPrometida(texto);
   if (prometido.length) problemas.push(`promessa de compensação em público (${prometido.join(', ')}): desconto, brinde e reembolso se combinam em particular`);
   if (citaONome(texto, contexto?.quem)) problemas.push('o nome de quem avaliou: o Liame não guarda esse nome, e a resposta fica guardada no pedido');
   return problemas;

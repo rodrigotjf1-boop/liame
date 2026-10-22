@@ -13,9 +13,11 @@ import { responderMensagem } from './responder-crm.js';
 import { responderLeitura } from './responder-pagina.js';
 import { responderPlano } from './responder-plano.js';
 import { responderParecer } from './responder-revisor.js';
+import { responderSugestoes } from './responder-social.js';
 import { avaliarParecer, type CasoDoRevisor, carregarCasosDoRevisor } from './revisor.js';
+import { avaliarSugestoes, type CasoDoSocial, carregarCasosDoSocial } from './social.js';
 
-// As tarefas com eval (A3, I3, I9, I10c, I11c e I12b; A4, X6; A5, Y6): como ler os casos, qual é a saída gravada (a boa ou a primeira ruim), como
+// As tarefas com eval (A3, I3, I9, I10c, I11c e I12b; A4, X6; A5, Y6; A6, Z6): como ler os casos, qual é a saída gravada (a boa ou a primeira ruim), como
 // avaliar e como chamar um modelo de verdade. Os arquivos do promptfoo (`evals/apoio`) escolhem pelo nome da tarefa.
 
 export interface TarefaDeEval<C extends { id: string; grupo: string }> {
@@ -81,6 +83,13 @@ const crm: TarefaDeEval<CasoDoCrm> = {
   responder: responderMensagem,
 };
 
+const social: TarefaDeEval<CasoDoSocial> = {
+  carregar: carregarCasosDoSocial,
+  gravada: (caso, qual) => (qual === 'ruim' ? (caso.gravadas.ruins[0]?.resposta ?? caso.gravadas.boa) : caso.gravadas.boa),
+  avaliar: avaliarSugestoes,
+  responder: responderSugestoes,
+};
+
 export const TAREFAS: Record<string, TarefaDeEval<{ id: string; grupo: string }>> = {
   explicar_resultados: explicar as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   conversa_lia: conversa as unknown as TarefaDeEval<{ id: string; grupo: string }>,
@@ -89,4 +98,5 @@ export const TAREFAS: Record<string, TarefaDeEval<{ id: string; grupo: string }>
   compliance_revisao: revisor as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   criativo_texto: criativo as unknown as TarefaDeEval<{ id: string; grupo: string }>,
   crm_mensagem: crm as unknown as TarefaDeEval<{ id: string; grupo: string }>,
+  social_resposta: social as unknown as TarefaDeEval<{ id: string; grupo: string }>,
 };

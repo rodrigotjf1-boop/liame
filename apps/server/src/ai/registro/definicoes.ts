@@ -11,6 +11,7 @@ import { ESTRATEGISTA, PROMPT_ESTRATEGISTA } from '../estrategista/prompt.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
 import { PESQUISADOR, PROMPT_PESQUISADOR } from '../pesquisador/prompt.js';
 import { PROMPT_REVISOR } from '../revisor/prompt.js';
+import { PROMPT_SOCIAL_RESPOSTA, SOCIAL } from '../social/prompt.js';
 import { LEITURAS } from './leituras.defs.js';
 
 // Registros da IA (arquitetura §3, `ai-architecture.md` §1 e §8): ferramenta, prompt e funcionário são
@@ -60,10 +61,12 @@ export interface FuncionarioDef {
  * trabalha para a empresa com as flags `ia` e `criativo`; a rota de modelo dele entrou na migration 0051. O funcionário
  * de CRM e mensageria (A5, Y6) só trabalha para a empresa com as flags `ia`, `crm`, `mensageria` e `whatsapp_campaign`;
  * a rota de modelo dele entrou na migration 0061, depois da rodada do eval, e quem o chama é a rotina do worker
- * (`worker/escrita-do-crm.service.ts`).
+ * (`worker/escrita-do-crm.service.ts`). O Social media (A6, Z6) entrou com o eval das sugestões de resposta às
+ * avaliações, antes da rotina que o chama: o texto que vai ao eval fica preso à versão na trava; a rota dele só entra
+ * depois da rodada do eval com modelo de verdade, e até lá nenhuma chamada sai.
  */
-export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA, PROMPT_PESQUISADOR, PROMPT_REVISOR, PROMPT_CRIATIVO_TEXTO, PROMPT_CRM_MENSAGEM];
-export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR, CRIATIVO, CRM];
+export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA, PROMPT_PESQUISADOR, PROMPT_REVISOR, PROMPT_CRIATIVO_TEXTO, PROMPT_CRM_MENSAGEM, PROMPT_SOCIAL_RESPOSTA];
+export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR, CRIATIVO, CRM, SOCIAL];
 
 /**
  * Todas as ferramentas: as de escrita em plataforma (Action Service), as de leitura dos funcionários de IA e as

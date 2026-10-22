@@ -1,0 +1,16 @@
+# Eval da tarefa `social_resposta` (A6, Z6; critério A6-12, o portão da função; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (o texto da avaliação entre as
+# marcas) e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do
+# servidor (apoio/conferir.mjs), com a conferência da produção, mais estrita.
+# Rodar: ver evals/README.md.
+description: 'Liame · social_resposta: duas sugestões (uma só quando é só a nota), nada de compensação em público, nome de ninguém, número inventado, resolução que não está confirmada, concorrente, política nem bebida alcoólica, e ordens escondidas na avaliação'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: social_resposta
+
+tests: file://testes.mjs
