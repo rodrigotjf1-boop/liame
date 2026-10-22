@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { PREFIXO_RETIRADA, retiradaDe } from '../src/actions/action.service.js';
+import { resumoDoTexto } from '../src/actions/avaliacao-plano.js';
 import { baseDoPedidoDoSocial } from '../src/ai/social/contexto.js';
 import { sugestoesDaResposta } from '../src/ai/social/resposta.js';
 import {
   achadosQueBarraram,
   avaliacaoAntiga,
+  avaliacaoMudou,
   codigoDoMotivo,
   DIAS_DAS_SUGESTOES,
   ehCodigo,
@@ -13,6 +16,8 @@ import {
   minutosAteATentativa,
   PEDIDO_QUE_CONTA,
   paramsDaResposta,
+  RETIRADA_PORQUE_MUDOU,
+  RETIRADA_PORQUE_RESPONDIDA,
   SITUACOES_DA_SUGESTAO,
   TENTATIVAS_DAS_SUGESTOES,
 } from '../src/avaliacoes/sugestoes.js';
@@ -91,5 +96,26 @@ describe('sugestões de resposta: as regras da rotina (A6 · Z6)', () => {
     const conferida = { enfoque: 'Curta', texto: 'Obrigado!', conferencia: { situacao: 'passou' } };
     expect(paramsDaResposta([conferida], 1).sugestoes).toEqual([{ enfoque: 'Curta', texto: 'Obrigado!', rodada: 1 }]);
     expect(() => paramsDaResposta([], 1)).toThrow('pelo menos uma sugestão');
+  });
+
+  it('a retirada (P31): a avaliação mudou quando a nota ou o texto não são os do pedido; o porquê volta em código pela API', () => {
+    const texto = 'Melhor smash da região!';
+    const antes = { estrelas: 5, texto_resumo: resumoDoTexto(texto) };
+    expect(avaliacaoMudou(antes, { stars: 5, comment: texto })).toBe(false);
+    // O texto como o Liame o guarda (os espaços das pontas não contam), a nota e o texto que mudaram, e o que sumiu.
+    expect(avaliacaoMudou(antes, { stars: 5, comment: `  ${texto}  ` })).toBe(false);
+    expect(avaliacaoMudou(antes, { stars: 4, comment: texto })).toBe(true);
+    expect(avaliacaoMudou(antes, { stars: 5, comment: 'Mudei de ideia.' })).toBe(true);
+    expect(avaliacaoMudou(antes, { stars: 5, comment: null })).toBe(true);
+    expect(avaliacaoMudou({ estrelas: 4, texto_resumo: null }, { stars: 4, comment: null })).toBe(false);
+    expect([RETIRADA_PORQUE_MUDOU, RETIRADA_PORQUE_RESPONDIDA]).toEqual(['avaliacao_mudou', 'respondida_no_google']);
+    for (const c of [RETIRADA_PORQUE_MUDOU, RETIRADA_PORQUE_RESPONDIDA]) expect(ehCodigo(c)).toBe(true);
+    // O pedido cancelado pelo funcionário traz o código; o recusado por uma pessoa, o cancelado e o que espera, não.
+    expect(retiradaDe({ status: 'cancelada', status_reason: `${PREFIXO_RETIRADA}avaliacao_mudou` })).toBe('avaliacao_mudou');
+    expect(retiradaDe({ status: 'cancelada', status_reason: 'recusada por Rodrigo: Nenhuma serve' })).toBeNull();
+    expect(retiradaDe({ status: 'cancelada', status_reason: 'cancelada por quem opera' })).toBeNull();
+    expect(retiradaDe({ status: 'aguardando_aprovacao', status_reason: `${PREFIXO_RETIRADA}avaliacao_mudou` })).toBeNull();
+    expect(retiradaDe({ status: 'cancelada', status_reason: `${PREFIXO_RETIRADA}Não É Código` })).toBeNull();
+    expect(retiradaDe({ status: 'cancelada', status_reason: null })).toBeNull();
   });
 });

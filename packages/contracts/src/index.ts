@@ -90,6 +90,7 @@ export {
   ActionRecommendation,
   ActionResponse,
   ActionReview,
+  ActionReviewSuggestion,
   ActionStatus,
   ActionTarget,
   ActionTargetsQuery,

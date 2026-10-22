@@ -182,6 +182,17 @@ export const ActionMessage = z.strictObject({
 export type ActionMessage = z.infer<typeof ActionMessage>;
 
 /**
+ * Uma sugestão de resposta do Social media num pedido (A6, Z6; protótipo P31): o enfoque (um rótulo curto), o texto e a
+ * rodada em que ela veio (1: a da avaliação nova; 2: a do "Pedir outras").
+ */
+export const ActionReviewSuggestion = z.strictObject({
+  focus: z.string(),
+  text: z.string(),
+  round: z.int().min(1).max(2),
+});
+export type ActionReviewSuggestion = z.infer<typeof ActionReviewSuggestion>;
+
+/**
  * A avaliação do Google de um pedido de resposta, ou de apagar a resposta (A6, Z2; protótipo P17). O pedido não guarda
  * o texto da avaliação nem nada de quem avaliou: o texto vem do que o Liame tem guardado dela agora (`current`), e o
  * nome de quem avaliou, só para a tela, de `GET /v1/reviews/authors`, pelo `id`.
@@ -202,6 +213,22 @@ export const ActionReview = z.strictObject({
    * espera aprovação, a resposta foi escrita para a avaliação de antes: aprovada assim, ela não é publicada.
    */
   changed: z.boolean(),
+  /**
+   * As sugestões do Social media, no pedido que ele fez (A6, Z6; P31): a pessoa escolhe uma (o texto do pedido,
+   * `reply_text`, é o escolhido, ou a versão que ela ajustou), e as da segunda rodada vêm antes das da primeira. Nulo
+   * no pedido de uma pessoa e no de apagar a resposta.
+   */
+  suggestions: z.array(ActionReviewSuggestion).nullable().optional(),
+  /**
+   * Por que o Social media tirou este pedido de Aprovações, quando tirou (A6, Z6; P31), em código: `avaliacao_mudou` (a
+   * avaliação foi editada depois das sugestões; as novas vêm num pedido novo) ou `respondida_no_google` (a avaliação
+   * ganhou resposta direto no Google). Nulo quando ele não tirou. A lista pode crescer.
+   */
+  withdrawn: z
+    .string()
+    .regex(/^[a-z_]{2,40}$/)
+    .nullable()
+    .optional(),
 });
 export type ActionReview = z.infer<typeof ActionReview>;
 

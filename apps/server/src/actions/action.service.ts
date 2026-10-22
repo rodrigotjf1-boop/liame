@@ -36,7 +36,7 @@ import { currentTraceparent, inSpan } from '../observability/trace.js';
 import { alvoDaRecomendacao, direcaoDaRecomendacao, type FalhaDaLigacao } from '../sombra/pedido.js';
 import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
-import { EstadoDaAvaliacao, resumoDoTexto } from './avaliacao-plano.js';
+import { EstadoDaAvaliacao, ParametrosDaResposta, resumoDoTexto } from './avaliacao-plano.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
 import { problemaDaLeitura, recursoNaoEncontrado } from './leitura-na-plataforma.js';
@@ -207,6 +207,12 @@ export type ConferenciaDoSistema =
 
 /** Como a recusa fica gravada no motivo do pedido (a aba Cupons e a tela Aprovações reconhecem por aqui). */
 export const PREFIXO_RECUSA = 'recusada por ';
+/**
+ * Como a retirada pelo funcionário de IA fica gravada no motivo do pedido, seguida do código dela (A6, Z6: o Social
+ * media tira o pedido quando a avaliação muda ou é respondida direto no Google). A resposta da API o devolve em
+ * `review.withdrawn`.
+ */
+export const PREFIXO_RETIRADA = 'retirada pelo funcionário: ';
 const ehUuid = (v: unknown): v is string => z.uuid().safeParse(v).success;
 
 type ApprovalRow = {
@@ -295,6 +301,42 @@ export class ActionService {
       throw new AppProblem(400, 'ferramenta-nao-e-de-resposta', 'Não é uma resposta a avaliação', 'Por aqui o funcionário só pede a resposta a uma avaliação do Google.');
     }
     return this.pedirEmNomeDoFuncionario(alvo, input, {});
+  }
+
+  /**
+   * O funcionário de IA tira de Aprovações um pedido que ele mesmo fez e que ainda espera a decisão (A6, Z6; P31: a
+   * avaliação mudou depois das sugestões, ou foi respondida direto no Google). Quem chama é a rotina, na transação da
+   * empresa. O pedido é cancelado, a reserva volta ao envelope, nada é executado, e o porquê fica em código no motivo do
+   * pedido (`PREFIXO_RETIRADA`). Devolve falso, sem mudar nada, quando o pedido não é dele ou já não espera (alguém
+   * decidiu antes).
+   */
+  async retirarPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string }, id: string, motivo: string): Promise<boolean> {
+    if (!/^[a-z_]{2,40}$/.test(motivo)) throw new Error('retirada: o motivo é um código');
+    const tx = currentTx();
+    const r = await tx.execute<ActionRow>(sql`select * from liame.action_request where id = ${id} and tenant_id = ${alvo.tenantId} for update`);
+    const row = r.rows[0];
+    if (!row || row.status !== 'aguardando_aprovacao' || row.actor_type !== 'agent' || row.agent_key !== alvo.agentKey) return false;
+    await tx.execute(sql`
+      update liame.action_request set status = 'cancelada', status_reason = ${`${PREFIXO_RETIRADA}${motivo}`}, updated_at = now()
+       where id = ${id} and tenant_id = ${alvo.tenantId}`);
+    const released = await this.budget.release(tx, alvo.tenantId, id);
+    await advance(tx, { tenantId: alvo.tenantId, kind: 'acao', subjectId: id, steps: [{ name: 'execucao', status: 'pulado', output: { motivo: 'retirada' } }], run: 'cancelado' });
+    await emitEvent(tx, { tenantId: alvo.tenantId, type: 'liame.action.cancelled', subject: id, data: { action_id: id, withdrawn: true } });
+    await writeAudit(tx, {
+      tenantId: alvo.tenantId,
+      actorType: 'agent',
+      actorId: null,
+      actorLabel: alvo.agentLabel,
+      action: 'acao.retirar',
+      resourceType: 'action_request',
+      resourceId: id,
+      before: { status: row.status, plan_hash: row.plan_hash },
+      after: { status: 'cancelada', reason: motivo, released_micros: released, agent_key: alvo.agentKey },
+      tool: row.tool,
+      traceId: activeTraceId(),
+      origin: 'worker',
+    });
+    return true;
   }
 
   /** O pedido do funcionário de IA pelo trilho, com a auditoria em nome dele. `extra` vai para a auditoria. */
@@ -1406,6 +1448,9 @@ function avaliacaoDaResposta(row: ActionRow, ap: Apresentacao): ActionReview | n
   const atual = ap.avaliacoes.get(id) ?? null;
   const pedida = depois.success ? depois.data.resposta : null;
   const deAntes = antes.success ? antes.data.resposta : null;
+  // As sugestões do Social media (A6, Z6): as do pedido que ele fez, como estão nos parâmetros.
+  const pedido = ParametrosDaResposta.safeParse(row.params);
+  const sugestoes = pedido.success && pedido.data.sugestoes ? pedido.data.sugestoes.map((s) => ({ focus: s.enfoque, text: s.texto, round: s.rodada })) : null;
   return {
     id,
     stars: antes.success ? antes.data.estrelas : null,
@@ -1413,7 +1458,16 @@ function avaliacaoDaResposta(row: ActionRow, ap: Apresentacao): ActionReview | n
     reply_text: pedida?.texto ?? deAntes?.texto ?? null,
     current: atual,
     changed: antes.success && atual !== null && (atual.stars !== antes.data.estrelas || resumoDoTexto(atual.text) !== antes.data.texto_resumo),
+    suggestions: sugestoes,
+    withdrawn: retiradaDe(row),
   };
+}
+
+/** O código da retirada pelo funcionário de IA, quando o pedido foi tirado de Aprovações por ele; nulo nos outros. */
+export function retiradaDe(row: Pick<ActionRow, 'status' | 'status_reason'>): string | null {
+  if (row.status !== 'cancelada' || !row.status_reason?.startsWith(PREFIXO_RETIRADA)) return null;
+  const codigo = row.status_reason.slice(PREFIXO_RETIRADA.length);
+  return /^[a-z_]{2,40}$/.test(codigo) ? codigo : null;
 }
 
 function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionResponse['workflow'], ap: Apresentacao): ActionResponse {

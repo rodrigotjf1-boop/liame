@@ -117,6 +117,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // As sugestões de resposta do Social media (A6, Z6): a avaliação nova entra na fila na leitura do Perfil que a
       // trouxe; a fila é olhada a cada minuto, e quem espera a vez (a IA desligada, o limite) volta em uma hora.
       this.loop('sugestoes-de-resposta', 3, 60_000, async (n) => (await this.sugestoes.executarLote(n)).length),
+      // O pedido do Social media cuja avaliação mudou ou foi respondida direto no Google sai de Aprovações (P31); a
+      // avaliação chega pela leitura do Perfil, de hora em hora: a fila é olhada de 5 em 5 minutos.
+      this.loop('sugestoes-retirada', 20, 300_000, async (n) => (await this.sugestoes.retirarLote(n)).length),
     );
   }
 
