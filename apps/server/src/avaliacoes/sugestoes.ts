@@ -1,6 +1,6 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
-import type { SugestaoDoPedido } from '../actions/avaliacao-plano.js';
+import { type EstadoDaAvaliacao, resumoDoTexto, type SugestaoDoPedido } from '../actions/avaliacao-plano.js';
 import { recursoDaAvaliacao } from '../actions/perfil-avaliacao.js';
 import { funcionarioAtivo } from '../ai/registro/ativacao.js';
 import type { SugestaoConferida } from '../ai/social/resposta.js';
@@ -207,6 +207,58 @@ export async function barrarSugestao(tx: Tx, alvo: DonoDaSugestao, oQueBarrou: r
        set status = 'barrada', reason = 'conferencia', barred_by = ${`{${itens.join(',')}}`}::text[], usage_id = ${usageId},
            next_attempt_at = null, finished_at = ${quando}, updated_at = ${quando}
      where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'esperando'
+    returning id`);
+  return r.rows.length === 1;
+}
+
+// ---------------------------------------------------------------- a retirada (P31: a avaliação mudou ou foi respondida)
+
+/** Os porquês da retirada do pedido, como o pedido e a vez os guardam (`review.withdrawn` na resposta da API). */
+export const RETIRADA_PORQUE_MUDOU = 'avaliacao_mudou';
+export const RETIRADA_PORQUE_RESPONDIDA = 'respondida_no_google';
+
+/**
+ * A avaliação não é mais a que o pedido leu na hora em que nasceu: a nota ou o texto mudaram (quem avaliou editou). A
+ * mesma regra do `review.changed` da resposta da API: o estado do pedido guarda a nota e o resumo do texto.
+ */
+export function avaliacaoMudou(antes: Pick<EstadoDaAvaliacao, 'estrelas' | 'texto_resumo'>, atual: { stars: number; comment: string | null }): boolean {
+  return atual.stars !== antes.estrelas || resumoDoTexto(atual.comment) !== antes.texto_resumo;
+}
+
+/** A avaliação ganhou resposta direto no Google: o pedido saiu de Aprovações, e a vez acaba retirada. */
+export async function retirarSugestao(tx: Tx, alvo: DonoDaSugestao, motivo: string, agora: Date): Promise<boolean> {
+  exigirCodigo(motivo, 'o motivo');
+  const quando = sql`${agora.toISOString()}::timestamptz`;
+  const r = await tx.execute(sql`
+    update liame.review_suggestion
+       set status = 'retirada', reason = ${motivo}, finished_at = ${quando}, updated_at = ${quando}
+     where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'pronta'
+    returning id`);
+  return r.rows.length === 1;
+}
+
+/**
+ * A avaliação mudou depois das sugestões: o pedido saiu de Aprovações, e a vez volta a esperar o Social media, para as
+ * sugestões novas, da avaliação como ela está agora, chegarem num pedido novo (P31). A vez recomeça do zero: sem pedido,
+ * sem contagem e sem tentativa.
+ */
+export async function reabrirSugestao(tx: Tx, alvo: DonoDaSugestao, motivo: string, agora: Date): Promise<boolean> {
+  exigirCodigo(motivo, 'o motivo');
+  const quando = sql`${agora.toISOString()}::timestamptz`;
+  const r = await tx.execute(sql`
+    update liame.review_suggestion
+       set status = 'esperando', reason = ${motivo}, action_id = null, suggestions = null, usage_id = null, barred_by = null, attempts = 0,
+           next_attempt_at = ${quando}, finished_at = null, updated_at = ${quando}
+     where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'pronta'
+    returning id`);
+  return r.rows.length === 1;
+}
+
+/** A avaliação foi olhada e nada mudou: a vez só volta a ser olhada depois da próxima leitura do Google. */
+export async function marcarOlhada(tx: Tx, alvo: DonoDaSugestao, agora: Date): Promise<boolean> {
+  const r = await tx.execute(sql`
+    update liame.review_suggestion set updated_at = ${agora.toISOString()}::timestamptz
+     where id = ${alvo.id} and tenant_id = ${alvo.tenantId} and status = 'pronta'
     returning id`);
   return r.rows.length === 1;
 }

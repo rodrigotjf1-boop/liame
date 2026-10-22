@@ -425,13 +425,121 @@ describe.skipIf(!hasDb)('as sugestões de resposta do Social media (A6 · Z6, pa
     const { e, agora } = await empresa('Mister Burgers Concorrência', lista);
     expect(await vezes(e)).toHaveLength(6);
     const [a, b] = await Promise.all([loop.executarLote(4, { tenantIds: [e.tenantId] }, agora), loop.executarLote(4, { tenantIds: [e.tenantId] }, agora)]);
+    // As duas voltas juntas reservaram as seis vezes, cada uma uma vez só (SKIP LOCKED na linha que a reserva altera).
     const tratadas = [...a!, ...b!].map((v) => v.id);
-    expect(new Set(tratadas).size).toBe(tratadas.length);
-    // O que sobrou volta na próxima: no fim, uma vez por avaliação e um pedido por avaliação.
-    await rodar(e, agora);
-    expect((await vezes(e)).map((v) => v.status)).toEqual(Array(6).fill('pronta'));
+    expect(tratadas).toHaveLength(6);
+    expect(new Set(tratadas).size).toBe(6);
+    // A leitura do Google na hora do pedido pode responder "tente de novo": a cota do Perfil é uma só para o app, e os
+    // outros arquivos de teste dividem o mesmo balde no banco (V76, ERR-168). A vez conta a tentativa e volta mais tarde,
+    // como na produção: o relógio anda e a rotina passa de novo, até três vezes.
+    const voltas = [...a!, ...b!];
+    let quando = agora;
+    for (let i = 0; i < 3 && (await vezes(e)).some((v) => v.status === 'esperando'); i++) {
+      quando = new Date(quando.getTime() + 61 * MIN_MS);
+      voltas.push(...(await rodar(e, quando)));
+    }
+    const fim = await vezes(e);
+    const desfecho = JSON.stringify({ voltas: voltas.map((v) => v.feito), fim: fim.map((v) => [v.status, v.reason, v.attempts]) });
+    expect(fim.map((v) => v.status), desfecho).toEqual(Array(6).fill('pronta'));
+    // O que não foi "pronta" de primeira foi só a falha passageira do Google, nunca outra coisa.
+    for (const v of voltas) if (v.feito.status !== 'pronta') expect(v.feito, desfecho).toMatchObject({ status: 'falhou', motivo: 'plataforma_indisponivel', deVez: false });
     const recursos = (await pedidos(e)).map((p) => p.resource_id);
     expect(new Set(recursos).size).toBe(6);
+  });
+
+  // ---------------------------------------------------------------- a retirada (parte 3a; P31)
+  const retirar = (e: EmpresaComLoja, agora: Date) => loop.retirarLote(20, { tenantIds: [e.tenantId] }, agora);
+  const ler = (e: EmpresaComLoja, agora: Date) => perfil.executarLote(10, { tenantIds: [e.tenantId] }, agora);
+  const naApi = async (e: EmpresaComLoja, id: string) => (await api.call('GET', `/v1/actions/${id}`, { cookie: e.cookie })).body;
+
+  it('P31: a avaliação editada depois das sugestões: o pedido sai de Aprovações, a vez volta a esperar, e as sugestões novas chegam num pedido novo', async () => {
+    const { e, ids, agora } = await empresa('Mister Burgers Mudou', [avaliacao('rev-5', 'FIVE', 2, ELOGIO)]);
+    await rodar(e, agora);
+    const [primeiro] = await pedidos(e);
+    // A API mostra as sugestões do pedido, e ainda nenhuma retirada.
+    expect((await naApi(e, primeiro!.id)).review).toMatchObject({ suggestions: BOAS.map((s) => ({ focus: s.enfoque, text: s.texto, round: 1 })), withdrawn: null });
+
+    // Quem avaliou editou: outra nota e outro texto, e o Google mudou a data da avaliação; a leitura seguinte traz.
+    const depois = new Date(agora.getTime() + 61 * MIN_MS);
+    google.lista = [avaliacao('rev-5', 'FOUR', 2, 'O combo veio caprichado, mas a batata chegou morna.', { updateTime: depois.toISOString() })];
+    await ler(e, depois);
+    expect((await retirar(e, new Date(depois.getTime() + MIN_MS))).map((v) => v.feito)).toEqual([{ status: 'de_novo', motivo: 'avaliacao_mudou', pedido: primeiro!.id }]);
+    // O pedido saiu em nome do Social media, com o porquê em código; nada foi publicado.
+    expect((await pedidos(e))[0]).toMatchObject({ id: primeiro!.id, status: 'cancelada', status_reason: 'retirada pelo funcionário: avaliacao_mudou' });
+    expect((await naApi(e, primeiro!.id)).review).toMatchObject({ withdrawn: 'avaliacao_mudou', changed: true });
+    const [retirada] = await trilha(e, 'acao.retirar');
+    expect(retirada).toMatchObject({ resource_id: primeiro!.id, after: { status: 'cancelada', reason: 'avaliacao_mudou', agent_key: 'social' } });
+    expect(await vezDa(e, ids.get('rev-5')!)).toMatchObject({ status: 'esperando', reason: 'avaliacao_mudou', action_id: null, suggestions: null, attempts: 0, finished_at: null });
+
+    // Na vez seguinte, ele escreve para a avaliação como ela está agora, num pedido novo.
+    expect((await rodar(e, new Date(depois.getTime() + 2 * MIN_MS))).map((v) => v.feito.status)).toEqual(['pronta']);
+    const lista = await pedidos(e);
+    expect(lista.map((p) => p.status)).toEqual(['cancelada', 'aguardando_aprovacao']);
+    expect(lista[1]!.id).not.toBe(primeiro!.id);
+    expect(JSON.stringify(simulado.doGenerateCalls.at(-1)!.prompt)).toContain('a batata chegou morna');
+    expect(await vezDa(e, ids.get('rev-5')!)).toMatchObject({ status: 'pronta', action_id: lista[1]!.id });
+    expect(google.respostasGravadas()).toEqual([]);
+  });
+
+  it('P31: a avaliação respondida direto no Google: o pedido sai de Aprovações, a vez acaba retirada, e duas voltas ao mesmo tempo retiram uma vez', async () => {
+    const { e, ids, agora } = await empresa('Mister Burgers Respondida Fora', [avaliacao('rev-5', 'FIVE', 2, ELOGIO)]);
+    await rodar(e, agora);
+    const [p] = await pedidos(e);
+    const depois = new Date(agora.getTime() + 61 * MIN_MS);
+    google.lista = [avaliacao('rev-5', 'FIVE', 2, ELOGIO, { updateTime: depois.toISOString(), reviewReply: { comment: 'Valeu demais!', updateTime: depois.toISOString(), reviewReplyState: 'APPROVED' } })];
+    await ler(e, depois);
+    const naHora = new Date(depois.getTime() + MIN_MS);
+    const [a, b] = await Promise.all([retirar(e, naHora), retirar(e, naHora)]);
+    const feitos = [...a!, ...b!].map((v) => v.feito);
+    expect(feitos.filter((f) => f.status === 'retirada')).toEqual([{ status: 'retirada', motivo: 'respondida_no_google', pedido: p!.id }]);
+    expect(feitos.every((f) => f.status === 'retirada' || f.status === 'fora')).toBe(true);
+    expect(await trilha(e, 'acao.retirar')).toHaveLength(1);
+    expect((await pedidos(e))[0]).toMatchObject({ status: 'cancelada', status_reason: 'retirada pelo funcionário: respondida_no_google' });
+    expect((await naApi(e, p!.id)).review.withdrawn).toBe('respondida_no_google');
+    expect(await vezDa(e, ids.get('rev-5')!)).toMatchObject({ status: 'retirada', reason: 'respondida_no_google' });
+    // A vez acabou: nada mais a olhar, e o Social media não escreve outra.
+    expect(await retirar(e, new Date(naHora.getTime() + MIN_MS))).toEqual([]);
+    expect(await rodar(e, new Date(naHora.getTime() + MIN_MS))).toEqual([]);
+  });
+
+  it('P31: nada mudou na leitura seguinte: o pedido fica, e a vez só volta a ser olhada depois de outra leitura', async () => {
+    // A avaliação mudou há pouco no Google: a leitura seguinte a traz de novo, igual.
+    const { e, agora } = await empresa('Mister Burgers Igual', [avaliacao('rev-5', 'FIVE', 2, ELOGIO, { updateTime: new Date(Date.now() - 10 * MIN_MS).toISOString() })]);
+    await rodar(e, agora);
+    const depois = new Date(agora.getTime() + 61 * MIN_MS);
+    await ler(e, depois);
+    expect((await retirar(e, new Date(depois.getTime() + MIN_MS))).map((v) => v.feito)).toEqual([{ status: 'igual' }]);
+    expect(await retirar(e, new Date(depois.getTime() + 2 * MIN_MS))).toEqual([]);
+    expect((await pedidos(e)).map((p) => p.status)).toEqual(['aguardando_aprovacao']);
+    expect(await trilha(e, 'acao.retirar')).toEqual([]);
+  });
+
+  it('P31: o pedido já decidido e o de uma pessoa não são retirados, mesmo com a avaliação mudando', async () => {
+    const { e, ids, agora } = await empresa('Mister Burgers Decidido', [avaliacao('rev-a', 'FIVE', 2, ELOGIO), avaliacao('rev-b', 'FOUR', 3, 'Bom atendimento no salão.')]);
+    // A de rev-b fica com uma pessoa antes da vez; a de rev-a, o Social media sugere e a pessoa recusa.
+    const daPessoa = await api.call('POST', '/v1/actions', {
+      cookie: e.cookie,
+      body: { tool: 'avaliacao_responder', provider: 'google_business', account_id: e.contaId, resource_id: `avaliacao:${ids.get('rev-b')}`, params: { texto: 'Obrigado pela visita!' } },
+    });
+    expect(daPessoa.status, JSON.stringify(daPessoa.body)).toBe(201);
+    await rodar(e, agora);
+    const doSocial = (await pedidos(e)).find((p) => p.agent_key === 'social')!;
+    const recusa = await api.call('POST', `/v1/actions/${doSocial.id}/reject`, { cookie: e.cookie, body: { plan_hash: doSocial.plan_hash, reason: 'Nenhuma serve' } });
+    expect(recusa.status, JSON.stringify(recusa.body)).toBe(200);
+    // As duas avaliações mudam no Google.
+    const depois = new Date(agora.getTime() + 61 * MIN_MS);
+    google.lista = [
+      avaliacao('rev-a', 'THREE', 2, 'Mudei de ideia: o lanche estava frio.', { updateTime: depois.toISOString() }),
+      avaliacao('rev-b', 'TWO', 3, 'Mudei de ideia: demorou.', { updateTime: depois.toISOString() }),
+    ];
+    await ler(e, depois);
+    expect(await retirar(e, new Date(depois.getTime() + MIN_MS))).toEqual([]);
+    const lista = await pedidos(e);
+    expect(lista.find((p) => p.id === doSocial.id)).toMatchObject({ status: 'cancelada', status_reason: expect.stringMatching(/^recusada por /) });
+    expect(lista.find((p) => p.id === daPessoa.body.id)).toMatchObject({ status: 'aguardando_aprovacao', agent_key: null });
+    expect((await naApi(e, doSocial.id)).review.withdrawn).toBeNull();
+    expect((await naApi(e, daPessoa.body.id)).review).toMatchObject({ suggestions: null, withdrawn: null });
+    expect(await trilha(e, 'acao.retirar')).toEqual([]);
   });
 
   it('V119: as regras da tabela', async () => {

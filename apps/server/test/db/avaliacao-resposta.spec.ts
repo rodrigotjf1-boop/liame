@@ -339,6 +339,9 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
       reply_text: TEXTO,
       current: { id: id5, store_id: e.contaId, stars: 5, text: 'Comentário da avaliação rev-5', reviewed_at: expect.any(String), changed_at: expect.any(String), reply: null },
       changed: false,
+      // O pedido de uma pessoa não traz sugestões do Social media, e ninguém o retirou (A6, Z6, parte 3a).
+      suggestions: null,
+      withdrawn: null,
     });
     const baixa = await pedir(dono(e), e, id1, PEDIR_DESCULPAS);
     expect(baixa.body.review).toMatchObject({ id: id1, stars: 1, owner_only: true, reply_text: PEDIR_DESCULPAS, changed: false });

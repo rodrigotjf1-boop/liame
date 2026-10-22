@@ -2,6 +2,7 @@ import type { Database, Tx } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
+import { EstadoDaAvaliacao } from '../actions/avaliacao-plano.js';
 import { recursoDaAvaliacao } from '../actions/perfil-avaliacao.js';
 import { PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
 import { AiError, AiGateway } from '../ai/gateway.js';
@@ -15,6 +16,7 @@ import {
   achadosQueBarraram,
   adiarSugestao,
   avaliacaoAntiga,
+  avaliacaoMudou,
   barrarSugestao,
   codigoDoMotivo,
   type DonoDaSugestao,
@@ -23,11 +25,16 @@ import {
   itensQueBarraram,
   lerSugestao,
   MINUTOS_DE_ESPERA,
+  marcarOlhada,
   marcarPronta,
   minutosAteATentativa,
   oQueDesligaAsSugestoes,
   PEDIDO_QUE_CONTA,
   paramsDaResposta,
+  reabrirSugestao,
+  RETIRADA_PORQUE_MUDOU,
+  RETIRADA_PORQUE_RESPONDIDA,
+  retirarSugestao,
   TENTATIVAS_DAS_SUGESTOES,
 } from '../avaliacoes/sugestoes.js';
 import { contaConectada } from '../connections/conectada.js';
@@ -68,6 +75,17 @@ export type VezDaSugestao =
   | { status: 'descartada'; motivo: string }
   | { status: 'falhou'; motivo: string; deVez: boolean }
   | { status: 'esperando'; motivo: string }
+  | { status: 'fora' };
+
+/**
+ * O que a retirada fez com o pedido de uma vez pronta. `retirada`: a avaliação foi respondida direto no Google, e o
+ * pedido saiu de Aprovações. `de_novo`: a avaliação mudou, o pedido saiu, e a vez volta a esperar as sugestões novas.
+ * `igual`: nada mudou. `fora`: a vez ou o pedido não estão mais nesse ponto (alguém decidiu antes).
+ */
+export type VezDaRetirada =
+  | { status: 'retirada'; motivo: string; pedido: string }
+  | { status: 'de_novo'; motivo: string; pedido: string }
+  | { status: 'igual' }
   | { status: 'fora' };
 
 type LinhaDaAvaliacao = {
@@ -231,6 +249,51 @@ export class SugestoesDeRespostaService {
       const ate = new Date(agora.getTime() + minutosAteATentativa(s.attempts) * MINUTO_MS);
       if (!(await adiarSugestao(tx, alvo, codigo, ate, agora))) return { status: 'fora' };
       return { status: 'falhou', motivo: codigo, deVez: false };
+    });
+  }
+
+  /**
+   * A retirada (P31): a avaliação do pedido que espera a decisão mudou (quem avaliou editou) ou ganhou resposta direto
+   * no Google depois das sugestões. O pedido sai de Aprovações pelo Action Service, em nome do Social media; na que
+   * mudou, a vez volta a esperar, e as sugestões novas, para a avaliação como está agora, chegam num pedido novo; na
+   * respondida, a vez acaba retirada. Nada mudou: a vez fica marcada como olhada, até a próxima leitura do Google. Tudo
+   * numa transação da empresa, com a vez travada: duas voltas ao mesmo tempo não retiram em dobro.
+   */
+  async retirarSeMudou(alvo: DonoDaSugestao, agora = new Date()): Promise<VezDaRetirada> {
+    return naTransacaoDaEmpresa<VezDaRetirada>(this.banco(), { tenantId: alvo.tenantId, userId: null }, async () => {
+      const tx = currentTx();
+      const s = (
+        await tx.execute<{ status: string; round: number; action_id: string | null; review_id: string }>(sql`
+          select status, round, action_id, review_id from liame.review_suggestion where id = ${alvo.id} and tenant_id = ${alvo.tenantId} for update`)
+      ).rows[0];
+      if (!s || s.status !== 'pronta' || s.round !== 1 || !s.action_id) return { status: 'fora' };
+      const pedido = (
+        await tx.execute<{ status: string; agent_key: string | null; before_state: unknown }>(sql`
+          select status, agent_key, before_state from liame.action_request where id = ${s.action_id} and tenant_id = ${alvo.tenantId}`)
+      ).rows[0];
+      if (!pedido || pedido.status !== 'aguardando_aprovacao' || pedido.agent_key !== SOCIAL.key) return { status: 'fora' };
+      const atual = (
+        await tx.execute<{ stars: number; comment: string | null; reply_text: string | null }>(sql`
+          select stars, comment, reply_text from liame.profile_review where id = ${s.review_id} and tenant_id = ${alvo.tenantId}`)
+      ).rows[0];
+      const antes = EstadoDaAvaliacao.safeParse(pedido.before_state);
+      if (!atual || !antes.success) return { status: 'fora' };
+      const quem = { tenantId: alvo.tenantId, agentKey: SOCIAL.key, agentLabel: SOCIAL.name };
+
+      if (atual.reply_text !== null) {
+        if (!(await this.acoes.retirarPeloFuncionario(quem, s.action_id, RETIRADA_PORQUE_RESPONDIDA))) return { status: 'fora' };
+        if (!(await retirarSugestao(tx, alvo, RETIRADA_PORQUE_RESPONDIDA, agora))) throw new ForaDaFila();
+        await this.auditar(tx, alvo, 'avaliacao.retirar_sugestoes', { reason: RETIRADA_PORQUE_RESPONDIDA, action_id: s.action_id });
+        return { status: 'retirada', motivo: RETIRADA_PORQUE_RESPONDIDA, pedido: s.action_id };
+      }
+      if (avaliacaoMudou(antes.data, atual)) {
+        if (!(await this.acoes.retirarPeloFuncionario(quem, s.action_id, RETIRADA_PORQUE_MUDOU))) return { status: 'fora' };
+        if (!(await reabrirSugestao(tx, alvo, RETIRADA_PORQUE_MUDOU, agora))) throw new ForaDaFila();
+        await this.auditar(tx, alvo, 'avaliacao.retirar_sugestoes', { reason: RETIRADA_PORQUE_MUDOU, action_id: s.action_id });
+        return { status: 'de_novo', motivo: RETIRADA_PORQUE_MUDOU, pedido: s.action_id };
+      }
+      await marcarOlhada(tx, alvo, agora);
+      return { status: 'igual' };
     });
   }
 

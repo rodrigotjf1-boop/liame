@@ -7674,6 +7674,41 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -9155,6 +9190,41 @@
                               },
                               "changed": {
                                 "type": "boolean"
+                              },
+                              "suggestions": {
+                                "type": [
+                                  "array",
+                                  "null"
+                                ],
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "focus": {
+                                      "type": "string"
+                                    },
+                                    "text": {
+                                      "type": "string"
+                                    },
+                                    "round": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 2
+                                    }
+                                  },
+                                  "required": [
+                                    "focus",
+                                    "text",
+                                    "round"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "withdrawn": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,40}$"
                               }
                             },
                             "required": [
@@ -11288,6 +11358,41 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -12584,6 +12689,41 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -13862,6 +14002,41 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -15229,6 +15404,41 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -16597,6 +16807,41 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -18003,6 +18248,41 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
@@ -19281,6 +19561,41 @@
                         },
                         "changed": {
                           "type": "boolean"
+                        },
+                        "suggestions": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "focus": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "round": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 2
+                              }
+                            },
+                            "required": [
+                              "focus",
+                              "text",
+                              "round"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "withdrawn": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,40}$"
                         }
                       },
                       "required": [
