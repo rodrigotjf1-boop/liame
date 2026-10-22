@@ -59,6 +59,7 @@ import {
   lerVolta,
   listaEmPalavras,
   naPlataforma,
+  origemDoRegem,
   semCusto,
   situacaoDaConta,
   situacaoDaLoja,
@@ -96,6 +97,8 @@ type Dados = {
   perfil: boolean;
   /** O Search Console ligado para a empresa (`search_console`; ausente na resposta antiga = desligado). */
   searchConsole: boolean;
+  /** Conectar o Regem vai pela autorização por clique (`regem_by_click`; ausente na resposta antiga = pela de 01/10). */
+  regemPorClique: boolean;
 };
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: Dados } | { tipo: 'erro'; problema: Problema };
 type Dialogo =
@@ -172,6 +175,7 @@ export function ContasTela() {
         vendasDesatualizadas,
         perfil: c.data.business_profile === true,
         searchConsole: c.data.search_console === true,
+        regemPorClique: c.data.regem_by_click === true,
       },
     });
   }, []);
@@ -238,7 +242,8 @@ export function ContasTela() {
     if (!dados) return [];
     const ligadas = new Map(dados.conexoes.flatMap((c) => c.accounts).map((a) => [a.id, a]));
     const variasMarcas = new Set(dados.contas.map((c) => c.brand_id)).size > 1;
-    const origemDa = new Map(dados.conexoes.map((c) => [c.id, c.origin]));
+    // A origem para os textos: a autorização por clique do Regem vira `clique` (uma ligação por loja, não um token).
+    const origemDa = new Map(dados.conexoes.map((c) => [c.id, origemDoRegem(c)]));
     return dados.contas.map((c) => {
       const ligada = ligadas.get(c.connected_account_id);
       const base = {
@@ -253,7 +258,7 @@ export function ContasTela() {
       if (c.provider === 'regem') {
         const loja = { scopes: ligada?.scopes ?? [], origem: (ligada?.connection_id && origemDa.get(ligada.connection_id)) || 'oauth' };
         const situacao = situacaoDaLoja(c, loja, agora);
-        return { ...base, sub: subDaLoja(ligada?.unit_name ?? null), revogar: true, situacao: { ...situacao, reconectar: situacao.reconectar && podeRegem }, loja };
+        return { ...base, sub: subDaLoja(ligada?.unit_name ?? null, loja.origem), revogar: true, situacao: { ...situacao, reconectar: situacao.reconectar && podeRegem }, loja };
       }
       // A loja do perfil da empresa no Google (P17, parte B): a leitura das avaliações, sem o código do Google.
       if (ehLojaDoPerfil(c.provider)) {
@@ -369,7 +374,7 @@ export function ContasTela() {
     if (params.has('conexao') || params.has('erro')) router.replace('/contas', { scroll: false });
   }
 
-  async function desligar(l: ContaDaTabela): Promise<boolean> {
+  async function desligar(l: ContaDaTabela & { loja?: { origem: string } }): Promise<boolean> {
     const r = await chamar(() => api.DELETE('/v1/connected-accounts/{id}', { params: { path: { id: l.id } } }));
     if (!r.ok) {
       avisar(mensagemDe(r.problema), { tipo: 'perigo' });
@@ -377,7 +382,7 @@ export function ContasTela() {
     }
     avisar(
       l.revogar
-        ? 'Loja desligada. O token foi revogado no Regem e no Liame; o que já foi lido segue o prazo de guarda.'
+        ? `Loja desligada. ${l.loja?.origem === 'clique' ? 'A ligação foi revogada' : 'O token foi revogado'} no Regem e no Liame; o que já foi lido segue o prazo de guarda.`
         : ehLojaDoPerfil(l.provider)
           ? AVISO_LOJA_DESLIGADA
           : ehSiteDoSearchConsole(l.provider)
@@ -740,6 +745,7 @@ export function ContasTela() {
           reserva={titulo}
           aoFechar={() => setDialogo((d) => (d?.tipo === 'regem' ? null : d))}
           aoIr={() => avisar('Indo para o Regem para o presidente autorizar…')}
+          porClique={Boolean(dados?.regemPorClique)}
         />
       )}
       {dialogo?.tipo === 'escolher' && dialogo.conexao.provider === 'regem' && (

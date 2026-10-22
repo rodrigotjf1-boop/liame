@@ -20,6 +20,13 @@ export type ProvedorOAuth = 'meta' | 'google' | 'regem' | 'regemcast';
  */
 export const FLAG_REGEMCAST_POR_CLIQUE = 'regemcast_por_clique';
 
+/**
+ * Conectar o Regem por clique (Hub DMS, F3, parte C), por empresa: desligada para todos; quem liga é a distribuição,
+ * depois da comparação das duas credenciais (decisão C-4). Ligada, "Conectar Regem" vai pela autorização por clique
+ * (o pedido empurrado, a senha do presidente, uma ligação por loja); sem ela, pela autorização de 01/10 (C1b).
+ */
+export const FLAG_REGEM_POR_CLIQUE = 'regem_por_clique';
+
 /** Escopos do Google: Ads e GA4 só leitura na mesma autorização (plano-a2 §1). */
 export const ESCOPOS_GOOGLE = [GOOGLE_ADS_SCOPE, GOOGLE_ANALYTICS_SCOPE];
 
@@ -69,7 +76,17 @@ export function escoposDoGoogle(conversoesLigadas: boolean, perfilLigado = false
 export function urlDeAutorizacao(
   provedor: ProvedorOAuth,
   config: Pick<AppConfig, 'oauth' | 'dmsId'>,
-  p: { estado: string; redirectUri: string; verificador?: string; versaoMeta: string; configMeta?: string; escoposGoogle?: string[]; pedidoRegemcast?: string },
+  p: {
+    estado: string;
+    redirectUri: string;
+    verificador?: string;
+    versaoMeta: string;
+    configMeta?: string;
+    escoposGoogle?: string[];
+    pedidoRegemcast?: string;
+    /** O número do pedido empurrado ao Regem: com ele, a página é a da autorização por clique (Hub DMS, F3, parte C). */
+    pedidoRegem?: string;
+  },
 ): string {
   if (provedor === 'meta') {
     const meta = config.oauth.meta!;
@@ -82,6 +99,14 @@ export function urlDeAutorizacao(
       override_default_response_type: 'true',
     });
     return `${meta.dialogUrl}/${p.versaoMeta}/dialog/oauth?${q.toString()}`;
+  }
+  if (provedor === 'regem' && p.pedidoRegem) {
+    // Autorização por clique (Hub DMS, F3, parte C): a página leva só o aplicativo e o número do pedido empurrado; o
+    // endereço de volta, o `state`, o desafio, as permissões e a conta que pede já estão no Regem desde o pedido.
+    const regemClique = config.oauth.regemClique;
+    if (!regemClique || !config.dmsId) throw new ErroConector('definitivo', 'regem', 'autorização por clique do Regem sem o aplicativo do Liame no DMS ID');
+    const q = new URLSearchParams({ client_id: config.dmsId.aplicativo, request_uri: p.pedidoRegem });
+    return `${regemClique.authUrl}/integracoes/autorizar?${q.toString()}`;
   }
   if (provedor === 'regem') {
     // Página "Autorizar o Liame" do Regem (C1b): o presidente escolhe as lojas e vê os escopos.

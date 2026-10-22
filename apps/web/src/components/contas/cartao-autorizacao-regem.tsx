@@ -4,11 +4,12 @@ import type { ConnectionResponse } from '@liame/contracts';
 import { useId, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
 import { dataCompleta } from '@/lib/formato';
-import { contasDaAutorizacao, escoposDoRegem, quemAutorizou, regemRevogado, semCusto } from './textos';
+import { contasDaAutorizacao, escoposDoRegem, origemDoRegem, quemAutorizou, regemRevogado, semCusto } from './textos';
 
 // A autorização do Regem (protótipo P2, aprovado em 29/09/2026): quem autorizou, quantas lojas, o que o
 // Liame recebe de cada escopo ("Liberado", "Não liberado", "Liberado · desligado no Liame"), o aviso de
-// "sem o custo dos itens" e o de "revogada no Regem". Um token por loja; revogar aqui revoga lá também.
+// "sem o custo dos itens" e o de "revogada no Regem". Um token por loja (na autorização por clique do Hub DMS, uma
+// ligação por loja); revogar aqui revoga lá também.
 
 type Props = {
   conexao: ConnectionResponse;
@@ -34,6 +35,7 @@ export function CartaoAutorizacaoRegem({ conexao: c, podeConectar, aoEscolher, a
   const quando = dataCompleta(c.completed_at ?? c.created_at);
   const quem = quemAutorizou(c);
   const daDistribuicao = c.origin === 'distribuicao';
+  const origem = origemDoRegem(c);
   const revogada = regemRevogado(c);
   const qual = `do Regem de ${quando}`;
 
@@ -61,17 +63,27 @@ export function CartaoAutorizacaoRegem({ conexao: c, podeConectar, aoEscolher, a
           <span>Revogada no Regem. A leitura dos pedidos parou; conecte de novo para voltar.</span>
         </p>
       ) : (
-        <p className="aut-txt">Um token para cada loja, guardado cifrado no Liame e só em hash no Regem. Revogar aqui revoga lá também.</p>
+        <p className="aut-txt">
+          {origem === 'clique'
+            ? 'Uma ligação para cada loja, autorizada com a senha de um presidente no Regem, guardada cifrada no Liame e só em hash no Regem. Revogar aqui revoga lá também.'
+            : 'Um token para cada loja, guardado cifrado no Liame e só em hash no Regem. Revogar aqui revoga lá também.'}
+        </p>
       )}
       {!revogada && semCusto(c.scopes) && (
         <p className="aut-txt aut-txt--atencao">
           <Icone nome="alert" pequeno />
-          <span>{daDistribuicao ? 'Sem o custo dos itens: o token desta loja foi emitido sem ele.' : 'Sem o custo dos itens: quem autorizou não tem permissão financeira no Regem.'}</span>
+          <span>
+            {daDistribuicao
+              ? 'Sem o custo dos itens: o token desta loja foi emitido sem ele.'
+              : origem === 'clique'
+                ? 'Sem o custo dos itens: ele não foi liberado nesta autorização (nasce desligado no Regem).'
+                : 'Sem o custo dos itens: quem autorizou não tem permissão financeira no Regem.'}
+          </span>
         </p>
       )}
       <div className="aut-escopos" id={id} hidden={!aberto}>
         <ul className="escopos">
-          {escoposDoRegem(c.scopes, c.origin, escritaLigada).map((e) => (
+          {escoposDoRegem(c.scopes, origem, escritaLigada).map((e) => (
             <li key={e.cod} className={`escopo escopo--${e.estado}`}>
               <Icone nome={ICONE[e.estado]} pequeno />
               <div>

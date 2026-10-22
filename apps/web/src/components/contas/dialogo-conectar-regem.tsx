@@ -11,6 +11,8 @@ import { enderecoSeguro, NUNCA_VEM_DO_REGEM, pedidosAoRegem } from './textos';
 // "Conectar o Regem" (protótipo P2, aprovado em 29/09/2026): o que vai acontecer, antes de ir. A pessoa
 // vai ao Regem, o presidente escolhe as lojas e o que libera, e volta para ligar cada loja do Regem a uma
 // loja do Liame. Nenhum token passa pelo navegador: o Regem entrega o acesso direto ao servidor do Liame.
+// Pela autorização por clique (Hub DMS, F3, parte C; a flag `regem_por_clique` da empresa), o presidente confirma com
+// a senha do Regem, o Liame pede também o telefone do cliente (opcional, dado pessoal) e cada loja ganha uma ligação.
 
 type Props = {
   marcas: BrandResponse[];
@@ -20,9 +22,11 @@ type Props = {
   /** Leva o navegador para o Regem (injetável para a tela; padrão: window.location.assign). */
   irPara?: (url: string) => void;
   aoIr: () => void;
+  /** A conexão vai pela autorização por clique (a lista diz, `regem_by_click`). */
+  porClique?: boolean;
 };
 
-export function DialogoConectarRegem({ marcas, marcaInicial, reserva, aoFechar, aoIr, irPara = (url) => window.location.assign(url) }: Props) {
+export function DialogoConectarRegem({ marcas, marcaInicial, reserva, aoFechar, aoIr, irPara = (url) => window.location.assign(url), porClique = false }: Props) {
   const ir = useRef<HTMLButtonElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: ir, reserva });
   const ids = useId();
@@ -97,7 +101,15 @@ export function DialogoConectarRegem({ marcas, marcaInicial, reserva, aoFechar, 
             </li>
             <li>
               <span>
-                <b>Escolha as lojas</b> e confira o que cada uma libera.
+                {porClique ? (
+                  <>
+                    <b>Escolha as lojas</b>, decida o que é opcional e confirme com a sua senha do Regem.
+                  </>
+                ) : (
+                  <>
+                    <b>Escolha as lojas</b> e confira o que cada uma libera.
+                  </>
+                )}
               </span>
             </li>
             <li>
@@ -111,7 +123,7 @@ export function DialogoConectarRegem({ marcas, marcaInicial, reserva, aoFechar, 
               O que o Liame pede
             </h3>
             <ul className="escopos">
-              {pedidosAoRegem().map((e) => (
+              {pedidosAoRegem(porClique).map((e) => (
                 <li key={e.cod} className={`escopo${e.opcional ? ' escopo--desligado' : ''}`}>
                   <Icone nome={e.opcional ? 'lock' : 'check'} pequeno />
                   <div>
@@ -142,8 +154,9 @@ export function DialogoConectarRegem({ marcas, marcaInicial, reserva, aoFechar, 
           <p className="dialogo-nota">
             <Icone nome="shield" pequeno />
             <span>
-              Nenhuma senha ou token passa por você: o Regem entrega o acesso direto ao Liame, com um token para cada loja. Você revoga quando quiser, aqui ou no
-              Regem.
+              {porClique
+                ? 'A sua senha fica no Regem: o Regem entrega o acesso direto ao Liame, com uma ligação para cada loja. Você revoga quando quiser, aqui ou no Regem.'
+                : 'Nenhuma senha ou token passa por você: o Regem entrega o acesso direto ao Liame, com um token para cada loja. Você revoga quando quiser, aqui ou no Regem.'}
             </span>
           </p>
         </div>

@@ -164,6 +164,12 @@ export const ConnectionResponse = z.strictObject({
    * Opcional: a resposta de antes de 16/10/2026 não traz.
    */
   requested_access: Slug.nullable().optional(),
+  /**
+   * Só nas autorizações do Regem: `clique` = a autorização por clique (Hub DMS, F3, parte C), em que cada loja tem a
+   * própria ligação e não um token (é por aqui que a tela fala de ligação, não de token). Nulo = a autorização de 01/10
+   * ou o token da distribuição, e as outras plataformas. Opcional: a resposta de antes de 21/10/2026 não traz.
+   */
+  authorization_flow: Slug.nullable().optional(),
   /** Contas que a autorização alcança (só depois da descoberta). */
   discovered: z.array(DiscoveredAccount),
   accounts: z.array(ConnectedAccountResponse),
@@ -213,6 +219,12 @@ export const ConnectionListResponse = z.strictObject({
    * procura conferem. Opcional: a resposta de antes de 20/10/2026 não traz.
    */
   search_console: z.boolean().optional(),
+  /**
+   * Conectar o Regem vai pela autorização por clique para a empresa (ou para a marca do filtro): o presidente confirma
+   * com a senha numa página do Regem, e cada loja ganha a própria ligação (Hub DMS, F3, parte C). A mesma flag
+   * (`regem_por_clique`) que o começo da conexão confere. Opcional: a resposta de antes de 21/10/2026 não traz.
+   */
+  regem_by_click: z.boolean().optional(),
 });
 export type ConnectionListResponse = z.infer<typeof ConnectionListResponse>;
 

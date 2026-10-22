@@ -3,7 +3,7 @@ import type { ClienteConector } from '../cliente-http.js';
 import { ErroConector } from '../cliente-http.js';
 import { CABECALHO_LIGACAO } from '../dms/integracao-dms.js';
 import type { AcessoAoRegem } from './acesso-da-loja.js';
-import { AvisoRegem, CupomRegem, LigacaoRegem, LojaRegem, pagina, TokensRegem } from './contrato-regem.js';
+import { AvisoRegem, CupomRegem, LigacaoRegem, LigacoesDoClique, LojaRegem, PedidoDeAutorizacaoRegem, pagina, TokensRegem } from './contrato-regem.js';
 
 // Chamadas ao Regem pelo contrato v1 (docs/integracoes/regem.md; ADR-019). A credencial vai só no cabeçalho e nunca em
 // log; o endereço é o da distribuição, liberado no cliente HTTP (V33). Cota e disjuntor por loja, como nas plataformas
@@ -79,6 +79,72 @@ export async function trocarCodigoRegem(
     apiVersion: VERSAO_CONTRATO_REGEM,
   });
   return conferir(TokensRegem, r.corpo, 'autorizacao/token');
+}
+
+// ---------------------------------------------------------------- a autorização por clique (Hub DMS, F3, parte C)
+// O presidente da empresa no Regem liga o Liame numa página de lá, confirmando com a senha do Regem (Regem #706). O
+// servidor do Liame registra o pedido antes (pedido empurrado, RFC 9126) e, depois da volta, troca o código por uma
+// ligação por loja; as duas chamadas vão com o token do DMS ID do aplicativo do Liame, de servidor para servidor. O
+// contrato é o da B1 do RegemCast. As recusas vêm em problem+json (`token-invalido`, `cliente-invalido`,
+// `parametro-invalido`, `autorizacao-invalida`, `integracao-parada`); 404 = a autorização por clique desligada no Regem.
+
+/** A conta que pede, no Liame: o que a página do Regem mostra ao presidente antes de ele decidir. */
+export type ContaQuePedeAoRegem = { nome: string; cnpj: string | null; email: string; marca: string | null };
+
+/**
+ * O pedido empurrado (RFC 9126): o Regem guarda o endereço de volta, as permissões, o `state`, o desafio PKCE e a conta
+ * que pede, e devolve o número do pedido. O navegador leva só o aplicativo e esse número, então o que a página mostra
+ * não se troca no caminho. Uma tentativa só: pedido repetido é outro pedido.
+ */
+export async function pedirAutorizacaoAoRegem(
+  ctx: Contexto,
+  a: { tokenDmsId: string; contaChave: string; clientId: string; redirectUri: string; estado: string; desafio: string; permissoes: readonly string[]; conta: ContaQuePedeAoRegem },
+): Promise<PedidoDeAutorizacaoRegem> {
+  const corpo: Record<string, string> = {
+    response_type: 'code',
+    client_id: a.clientId,
+    redirect_uri: a.redirectUri,
+    scope: a.permissoes.join(' '),
+    state: a.estado,
+    code_challenge: a.desafio,
+    code_challenge_method: 'S256',
+    conta_nome: a.conta.nome,
+    conta_email: a.conta.email,
+    ...(a.conta.cnpj ? { conta_cnpj: a.conta.cnpj } : {}),
+    ...(a.conta.marca ? { conta_marca: a.conta.marca } : {}),
+  };
+  const r = await ctx.cliente.requisitar({
+    provider: 'regem',
+    conta: a.contaChave,
+    url: `${ctx.apiUrl}/autorizacao/pedido`,
+    metodo: 'POST',
+    cabecalhos: { authorization: `Bearer ${a.tokenDmsId}` },
+    corpo,
+    endpoint: 'autorizacao/pedido',
+    apiVersion: VERSAO_CONTRATO_REGEM,
+  });
+  return conferir(PedidoDeAutorizacaoRegem, r.corpo, 'autorizacao/pedido');
+}
+
+/**
+ * Troca o código da volta por uma ligação por loja. O código vale uma vez, 10 minutos, e o Regem o gasta antes de
+ * conferir o verificador e o endereço: uma tentativa só. Os segredos em claro nunca vão para log.
+ */
+export async function trocarCodigoDoCliqueRegem(
+  ctx: Contexto,
+  a: { tokenDmsId: string; contaChave: string; clientId: string; codigo: string; verificador: string; redirectUri: string },
+): Promise<LigacoesDoClique> {
+  const r = await ctx.cliente.requisitar({
+    provider: 'regem',
+    conta: a.contaChave,
+    url: `${ctx.apiUrl}/autorizacao/token`,
+    metodo: 'POST',
+    cabecalhos: { authorization: `Bearer ${a.tokenDmsId}` },
+    corpo: { grant_type: 'authorization_code', code: a.codigo, code_verifier: a.verificador, redirect_uri: a.redirectUri, client_id: a.clientId },
+    endpoint: 'autorizacao/token',
+    apiVersion: VERSAO_CONTRATO_REGEM,
+  });
+  return conferir(LigacoesDoClique, r.corpo, 'autorizacao/token');
 }
 
 /**

@@ -67,6 +67,36 @@ export const TokensRegem = z.object({
 });
 export type TokensRegem = z.infer<typeof TokensRegem>;
 
+/**
+ * `POST {base}/autorizacao/pedido` (Hub DMS, F3, parte C; Regem #706): a resposta do pedido empurrado (RFC 9126), com o
+ * número do pedido, que vale 10 minutos e uma vez só, e a validade em segundos.
+ */
+export const PedidoDeAutorizacaoRegem = z.object({
+  request_uri: z.string().regex(/^urn:ietf:params:oauth:request_uri:rgm_[A-Za-z0-9_-]{43}$/),
+  expires_in: z.number().int().min(1).max(3600),
+});
+export type PedidoDeAutorizacaoRegem = z.infer<typeof PedidoDeAutorizacaoRegem>;
+
+/**
+ * A troca do código da autorização por clique (`POST {base}/autorizacao/token` com o token do DMS ID; Regem #706): uma
+ * ligação por loja que o presidente marcou, com os dados da loja (os da `/loja`) e as permissões que ele liberou para
+ * ela. Nenhum `rgm_it_`: o segredo de cada ligação só vem nesta resposta e vai direto para o cofre.
+ */
+export const LigacoesDoClique = z.object({
+  lojas: z
+    .array(
+      LojaRegem.extend({
+        ligacao: LigacaoRegem.shape.ligacao,
+        prefixo: LigacaoRegem.shape.prefixo,
+        permissoes: LigacaoRegem.shape.permissoes,
+        segredo_em: Instante,
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+export type LigacoesDoClique = z.infer<typeof LigacoesDoClique>;
+
 const GrupoCanal = z.enum(['cardapio', 'whatsapp', 'presencial', 'marketplace', 'outro']);
 
 const ItemPedido = z.object({

@@ -7,7 +7,7 @@ import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { ligadasDaAutorizacao, oQueParaDeLer } from './perfil-google';
-import { autorizadorDa, contasDaAutorizacao } from './textos';
+import { autorizadorDa, contasDaAutorizacao, origemDoRegem } from './textos';
 
 // "Revogar a autorização?" (protótipo aprovado): a leitura das contas dela para na hora; o histórico
 // fica. Na Meta, o passo que falta é na própria Meta (base de conhecimento §2.1, verificado em 26/09/2026).
@@ -89,7 +89,11 @@ export function DialogoRevogar({ conexao, reserva, aoRevogar, aoFechar }: Props)
           {regem ? (
             <p className="dialogo-nota">
               <Icone nome="shield" pequeno />
-              <span>No Regem, o token de cada loja é revogado na hora, dos dois lados. O que já foi lido segue o prazo de guarda.</span>
+              <span>
+                {origemDoRegem(conexao) === 'clique'
+                  ? 'No Regem, a ligação de cada loja é revogada na hora, dos dois lados. O que já foi lido segue o prazo de guarda.'
+                  : 'No Regem, o token de cada loja é revogado na hora, dos dois lados. O que já foi lido segue o prazo de guarda.'}
+              </span>
             </p>
           ) : meta ? (
             <p className="dialogo-nota">

@@ -29,8 +29,16 @@ import type { ClienteDmsId } from '../connectors/dms/integracao-dms.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE, procuraGuardada } from '../connectors/google-business/perfil-google.js';
 import { FLAG_SEARCH_CONSOLE, PROVEDOR_SEARCH_CONSOLE, procuraDosSitesGuardada } from '../connectors/search-console/search-console.js';
-import { comAcessoDaLoja, type CredencialDaLoja, credenciaisDaConexaoRegem, credencialDaLoja, PERMISSOES_DA_LEITURA } from '../connectors/regem/acesso-da-loja.js';
-import { revogarNoRegem } from '../connectors/regem/conector-regem.js';
+import {
+  comAcessoDaLoja,
+  type CredencialDaLoja,
+  credenciaisDaConexaoRegem,
+  credencialDaLoja,
+  PERMISSOES_DA_ESCRITA,
+  PERMISSOES_DA_LEITURA,
+  recursoDoRegem,
+} from '../connectors/regem/acesso-da-loja.js';
+import { pedirAutorizacaoAoRegem, revogarNoRegem } from '../connectors/regem/conector-regem.js';
 import { type ContaQuePede, PERMISSOES_DO_CLIQUE, pedirAutorizacao, revogarNoRegemcast } from '../connectors/regemcast/conector-regemcast.js';
 import { comAcessoDaConta, type CredencialDaConta, credenciaisDaConexao, credencialDaConta } from '../connectors/regemcast/credencial-da-conta.js';
 import { FLAG_CONVERSOES_GOOGLE } from '../conversoes/conversoes-google.js';
@@ -41,6 +49,7 @@ import {
   desafioPkce,
   enderecoDeVolta,
   escoposDoGoogle,
+  FLAG_REGEM_POR_CLIQUE,
   FLAG_REGEMCAST_POR_CLIQUE,
   hashEstado,
   novoEstado,
@@ -52,7 +61,8 @@ import {
 
 // Conectar contas (A2, G3), lado da API: transações curtas. A troca do código e a descoberta das contas (chamadas
 // externas) ficam com o worker (ConexaoProcessor), nunca aqui. A exceção é o pedido empurrado do RegemCast (Hub DMS,
-// B1), que precisa existir antes de a pessoa ir: ele sai entre duas transações curtas, nunca com uma aberta.
+// B1) e o do Regem (F3, parte C), que precisam existir antes de a pessoa ir: eles saem entre duas transações curtas,
+// nunca com uma aberta.
 
 /** A volta da plataforma precisa chegar em até 10 minutos. */
 const VALIDADE_MIN = 10;
@@ -74,7 +84,22 @@ type Inicio = {
   perfil: boolean;
   searchConsole: boolean;
   contaQuePede: ContaQuePede | null;
+  /** Regem pela autorização por clique (a flag `regem_por_clique` da empresa); falso = pela de 01/10 (C1b). */
+  porClique: boolean;
 };
+
+/**
+ * As autorizações que dá para começar agora, pela configuração da distribuição e pelo que as flags da empresa dizem (as
+ * flags já conferidas por quem chama, `disponiveis`): a Meta e o Google com o app configurado; o Regem pela C1b (o
+ * cliente da distribuição) ou pela autorização por clique (o aplicativo do Liame no DMS ID e a flag); o RegemCast por
+ * clique com a flag.
+ */
+export function provedoresDisponiveis(oauth: AppConfig['oauth'], flags: { regemPorClique: boolean; regemcastPorClique: boolean }): ProvedorOAuth[] {
+  const lista: ProvedorOAuth[] = (['meta', 'google'] as const).filter((p) => Boolean(oauth[p]));
+  if (oauth.regem || (oauth.regemClique && flags.regemPorClique)) lista.push('regem');
+  if (oauth.regemcast && flags.regemcastPorClique) lista.push('regemcast');
+  return lista;
+}
 
 function quemPede(auth: AuthContext): { tenantId: string; userId: string } {
   if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
@@ -99,6 +124,8 @@ type LinhaConexao = {
   scopes?: string[] | null;
   /** Meta: `leitura` ou `escrita`, a configuração do login por que a pessoa autorizou; só a lista e o detalhe leem. */
   requested_access?: string | null;
+  /** Regem: `clique` = a autorização por clique (Hub DMS, F3, parte C); só a lista e o detalhe leem. */
+  authorization_flow?: string | null;
   /** Como terminou a procura das lojas do Perfil (`oauth_connection.discovery_notes`); só a lista e o detalhe leem. */
   discovery_notes?: unknown;
 };
@@ -202,16 +229,24 @@ export class ConnectionsService {
   ) {}
 
   /**
-   * Autorizações que dá para começar agora. A Meta, o Google e o Regem quando o app ou o cliente da distribuição está
-   * configurado (o Regem: `REGEM_CLIENT_ID` e `REGEM_CLIENT_SECRET`); o RegemCast por clique (Hub DMS, B1) quando a
-   * página, a API e o aplicativo do Liame no DMS ID estão configurados E a flag `regemcast_por_clique` está ligada
-   * para a empresa (ou a marca).
+   * Autorizações que dá para começar agora. A Meta e o Google quando o app da distribuição está configurado; o Regem
+   * pela autorização de 01/10 (C1b, com `REGEM_CLIENT_ID` e `REGEM_CLIENT_SECRET`) ou pela autorização por clique (Hub
+   * DMS, F3, parte C: o aplicativo do Liame no DMS ID E a flag `regem_por_clique` ligada para a empresa ou a marca); o
+   * RegemCast por clique (Hub DMS, B1) quando a página, a API e o aplicativo do Liame no DMS ID estão configurados E a
+   * flag `regemcast_por_clique` está ligada.
    */
   private async disponiveis(auth: Pick<AuthContext, 'tenantId' | 'userId'>, brandId: string | null): Promise<ProvedorOAuth[]> {
-    const lista: ProvedorOAuth[] = (['meta', 'google', 'regem'] as const).filter((p) => Boolean(this.config.oauth[p]));
     const ctx = this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId });
-    if (this.config.oauth.regemcast && (await this.flags.isEnabled(FLAG_REGEMCAST_POR_CLIQUE, ctx))) lista.push('regemcast');
-    return lista;
+    return provedoresDisponiveis(this.config.oauth, {
+      regemPorClique: await this.regemPorClique(auth, brandId),
+      regemcastPorClique: Boolean(this.config.oauth.regemcast) && (await this.flags.isEnabled(FLAG_REGEMCAST_POR_CLIQUE, ctx)),
+    });
+  }
+
+  /** O Regem desta empresa (ou marca) se conecta pela autorização por clique: a configuração existe e a flag está ligada. */
+  private async regemPorClique(auth: Pick<AuthContext, 'tenantId' | 'userId'>, brandId: string | null): Promise<boolean> {
+    if (!this.config.oauth.regemClique) return false;
+    return this.flags.isEnabled(FLAG_REGEM_POR_CLIQUE, this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId }));
   }
 
   private banco(): Database {
@@ -243,7 +278,8 @@ export class ConnectionsService {
     const quem = quemPede(auth);
     const database = this.banco();
     const inicio = await naTransacaoDaEmpresa(database, quem, () => this.prepararInicio(auth, body));
-    const pedido = inicio.provedor === 'regemcast' ? await this.pedirAoRegemcast(quem.tenantId, inicio) : null;
+    const pedido =
+      inicio.provedor === 'regemcast' ? await this.pedirAoRegemcast(quem.tenantId, inicio) : inicio.porClique ? await this.pedirAoRegem(quem.tenantId, inicio) : null;
     return naTransacaoDaEmpresa(database, quem, () => this.gravarInicio(auth, inicio, pedido));
   }
 
@@ -283,11 +319,13 @@ export class ConnectionsService {
     // que levaram a eles. A mesma flag que a procura dos sites confere, no worker.
     const searchConsole =
       provedor === 'google' && (await this.flags.isEnabled(FLAG_SEARCH_CONSOLE, this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id })));
-    // RegemCast: a conta que pede, no Liame, que a página de lá mostra ao dono antes de ele decidir (decisão B1-6: outra
-    // empresa pode, com a confirmação explícita dele). O CNPJ da empresa é guardado só com os 14 dígitos (check da
-    // 0002); sem ele, o RegemCast trata como outra empresa e pede a confirmação.
+    // Regem: pela autorização por clique só a empresa com a flag (decisão C-4); as outras seguem pela de 01/10.
+    const porClique = provedor === 'regem' && (await this.regemPorClique(auth, body.brand_id));
+    // RegemCast e Regem por clique: a conta que pede, no Liame, que a página de lá mostra antes de a pessoa decidir
+    // (decisões B1-6 e C-3: outra empresa pode, com a confirmação explícita). O CNPJ da empresa é guardado só com os 14
+    // dígitos (check da 0002); sem ele, o produto trata como outra empresa e pede a confirmação.
     let contaQuePede: ContaQuePede | null = null;
-    if (provedor === 'regemcast') {
+    if (provedor === 'regemcast' || porClique) {
       const org = await tx.execute<{ name: string; cnpj: string | null }>(sql`select name, cnpj from liame.organization where id = ${tenantId}`);
       contaQuePede = { nome: org.rows[0]?.name ?? daMarca.name, cnpj: org.rows[0]?.cnpj ?? null, email: auth.email, marca: daMarca.name };
     }
@@ -304,6 +342,7 @@ export class ConnectionsService {
       perfil,
       searchConsole,
       contaQuePede,
+      porClique,
     };
   }
 
@@ -349,16 +388,65 @@ export class ConnectionsService {
     }
   }
 
+  /**
+   * O pedido empurrado do Regem (RFC 9126; Hub DMS, F3, parte C), sem transação aberta: o endereço de volta, as
+   * permissões do aplicativo inteiro (o presidente decide cada opcional na página), o `state`, o desafio e a conta que
+   * pede ficam lá, e a página recebe só o número do pedido. O token do DMS ID recusado (vencido, trocado) é pedido de
+   * novo, uma vez. A recusa vira um problema que a tela explica, e o motivo vai para o log.
+   */
+  private async pedirAoRegem(tenantId: string, inicio: Inicio): Promise<string> {
+    const regemClique = this.config.oauth.regemClique!;
+    const clientId = this.config.dmsId!.aplicativo;
+    const cliente = new ClienteConector(this.banco().db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos), tentativas: 1, tempoLimiteMs: 10_000 });
+    const ctx = { cliente, apiUrl: regemClique.apiUrl };
+    try {
+      const r = await comTokenDoDmsId(
+        this.dmsId(),
+        recursoDoRegem(regemClique.apiUrl),
+        PERMISSOES_DA_ESCRITA,
+        (tokenDmsId) =>
+          pedirAutorizacaoAoRegem(ctx, {
+            tokenDmsId,
+            contaChave: `autorizacao:${tenantId}`,
+            clientId,
+            redirectUri: inicio.redirectUri,
+            estado: inicio.estado,
+            desafio: desafioPkce(inicio.verificador!),
+            permissoes: PERMISSOES_DA_ESCRITA,
+            conta: inicio.contaQuePede!,
+          }),
+        'regem',
+      );
+      return r.request_uri;
+    } catch (err) {
+      const e = err instanceof ErroConector ? err : null;
+      const motivo = e ? `${e.tipo}${e.codigoProvider ? `:${e.codigoProvider}` : ''}: ${e.message}` : err instanceof Error ? err.message : String(err);
+      this.logger.warn(`pedido de autorização ao Regem recusado (empresa ${tenantId}): ${motivo}`);
+      if (e && ['transitorio', 'limite', 'circuito_aberto'].includes(e.tipo)) {
+        throw new AppProblem(502, 'plataforma-indisponivel', 'O Regem não respondeu', 'O Regem não respondeu agora. Tente de novo em alguns minutos.');
+      }
+      if (e?.codigoProvider === 'integracao-parada') {
+        throw new AppProblem(503, 'integracao-indisponivel', 'Conexão pausada no Regem', 'A conexão do Liame com o Regem está pausada agora. Tente de novo mais tarde.');
+      }
+      throw new AppProblem(
+        503,
+        'integracao-indisponivel',
+        'Conexão ainda indisponível',
+        'Não deu para começar a conexão com o Regem agora. Tente de novo mais tarde; se continuar, fale com o suporte.',
+      );
+    }
+  }
+
   /** A conexão nasce junto com o evento de auditoria, numa transação curta (a rota audita à mão: fora da transação dela). */
-  private async gravarInicio(auth: AuthContext, inicio: Inicio, pedidoRegemcast: string | null): Promise<StartConnectionResponse> {
+  private async gravarInicio(auth: AuthContext, inicio: Inicio, pedido: string | null): Promise<StartConnectionResponse> {
     const tenantId = auth.tenantId!;
     const tx = currentTx();
     const verificadorCifrado = inicio.verificador ? await this.vault.encryptForTenant(tx, tenantId, `oauth_pkce:${inicio.id}`, inicio.verificador) : null;
     const r = await tx.execute<{ expires_at: Date | string }>(sql`
       insert into liame.oauth_connection (id, tenant_id, brand_id, provider, requested_by, state_hash, redirect_uri, pkce_verifier_enc, expires_at,
-                                          requested_access)
+                                          requested_access, authorization_flow)
       values (${inicio.id}, ${tenantId}, ${inicio.brandId}, ${inicio.provedor}, ${auth.userId}, ${hashEstado(inicio.estado)}, ${inicio.redirectUri}, ${verificadorCifrado},
-              now() + make_interval(mins => ${VALIDADE_MIN}), ${inicio.meta?.acesso ?? null})
+              now() + make_interval(mins => ${VALIDADE_MIN}), ${inicio.meta?.acesso ?? null}, ${inicio.porClique ? 'clique' : null})
       returning expires_at`);
     await writeAudit(tx, {
       tenantId,
@@ -378,6 +466,7 @@ export class ConnectionsService {
         ...(inicio.perfil ? { perfil_no_google: true } : {}),
         ...(inicio.searchConsole ? { search_console: true } : {}),
         ...(inicio.provedor === 'regemcast' ? { permissoes: [...PERMISSOES_DO_CLIQUE] } : {}),
+        ...(inicio.porClique ? { por_clique: true, permissoes: [...PERMISSOES_DA_ESCRITA] } : {}),
       },
       traceId: activeTraceId(),
       origin: 'api',
@@ -391,7 +480,8 @@ export class ConnectionsService {
         versaoMeta: inicio.versaoMeta,
         configMeta: inicio.meta?.configId,
         ...(inicio.provedor === 'google' ? { escoposGoogle: escoposDoGoogle(inicio.conversoes, inicio.perfil, inicio.searchConsole) } : {}),
-        ...(pedidoRegemcast ? { pedidoRegemcast } : {}),
+        ...(pedido && inicio.provedor === 'regemcast' ? { pedidoRegemcast: pedido } : {}),
+        ...(pedido && inicio.porClique ? { pedidoRegem: pedido } : {}),
       }),
       expires_at: iso(r.rows[0]!.expires_at),
     };
@@ -405,8 +495,16 @@ export class ConnectionsService {
   async receber(auth: AuthContext, q: OAuthCallbackQuery): Promise<string> {
     const tx = currentTx();
     const tela = (params: Record<string, string>) => `${this.config.appUrl}/contas?${new URLSearchParams(params).toString()}`;
-    const r = await tx.execute<{ id: string; tenant_id: string; provider: string; requested_by: string | null; status: string; vencido: boolean }>(sql`
-      select id, tenant_id, provider, requested_by, status, expires_at < now() as vencido
+    const r = await tx.execute<{
+      id: string;
+      tenant_id: string;
+      provider: string;
+      requested_by: string | null;
+      status: string;
+      vencido: boolean;
+      authorization_flow: string | null;
+    }>(sql`
+      select id, tenant_id, provider, requested_by, status, expires_at < now() as vencido, authorization_flow
         from liame.oauth_connection where state_hash = ${hashEstado(q.state)}
        for update`);
     const linha = r.rows[0];
@@ -429,6 +527,15 @@ export class ConnectionsService {
       auditDetail({ reason: 'a volta do RegemCast não trouxe o emissor esperado (iss)' });
       return tela({ conexao: linha.id, erro: 'autorizacao_invalida' });
     }
+    // O mesmo na autorização por clique do Regem (Hub DMS, F3, parte C): o `iss` tem de ser a origem da API do Regem. A
+    // volta da autorização de 01/10 (C1b) não traz `iss` e segue como sempre.
+    if (linha.provider === 'regem' && linha.authorization_flow === 'clique' && q.iss !== this.config.oauth.regemClique?.emissor) {
+      await tx.execute(sql`
+        update liame.oauth_connection set status = 'erro', error_code = 'emissor_invalido', pkce_verifier_enc = null, updated_at = now()
+         where id = ${linha.id}`);
+      auditDetail({ reason: 'a volta do Regem não trouxe o emissor esperado (iss)' });
+      return tela({ conexao: linha.id, erro: 'autorizacao_invalida' });
+    }
     if (q.error || !q.code) {
       await tx.execute(sql`
         update liame.oauth_connection set status = 'erro', error_code = 'recusada_na_plataforma', pkce_verifier_enc = null, updated_at = now()
@@ -446,7 +553,7 @@ export class ConnectionsService {
     const tx = currentTx();
     const conexoes = await tx.execute<LinhaConexao>(sql`
       select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
-             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.requested_access, c.discovery_notes
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.requested_access, c.authorization_flow, c.discovery_notes
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.status not in ('aguardando_autorizacao', 'expirada') ${brandId ? sql`and c.brand_id = ${brandId}` : sql``}
        order by c.created_at desc limit 200`);
@@ -461,6 +568,8 @@ export class ConnectionsService {
       business_profile: await this.flags.isEnabled(FLAG_PERFIL_GOOGLE, ctx),
       // A mesma flag que o começo da conexão do Google e a procura dos sites conferem.
       search_console: await this.flags.isEnabled(FLAG_SEARCH_CONSOLE, ctx),
+      // A mesma conferência do começo da conexão do Regem (a configuração e a flag `regem_por_clique`).
+      regem_by_click: await this.regemPorClique(auth, brandId ?? null),
     };
   }
 
@@ -480,7 +589,7 @@ export class ConnectionsService {
   async detalhe(id: string): Promise<ConnectionResponse> {
     const r = await currentTx().execute<LinhaConexao>(sql`
       select c.id, c.brand_id, c.provider, c.origin, c.status, c.requested_by, u.name as requested_by_name, c.error_code, c.created_at, c.completed_at,
-             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.requested_access, c.discovery_notes
+             c.refresh_expires_at, c.expires_at, c.discovered, c.credential_secret_id, c.scopes, c.requested_access, c.authorization_flow, c.discovery_notes
         from liame.oauth_connection c left join liame.app_user u on u.id = c.requested_by
        where c.id = ${id}`);
     if (!r.rows[0]) throw naoEncontrada();
@@ -510,6 +619,7 @@ export class ConnectionsService {
       refresh_expires_at: isoOuNulo(l.refresh_expires_at),
       scopes: l.scopes ?? [],
       requested_access: l.requested_access ?? null,
+      authorization_flow: l.authorization_flow ?? null,
       discovered: (l.discovered ?? []).map(
         (d): DiscoveredAccount => ({
           provider: d.provider,
@@ -607,6 +717,18 @@ export class ConnectionsService {
                and a.connection_id is not null and a.connection_id <> ${c.id}`)
         ).rows
       : [];
+    // Loja do Regem que passa a esta autorização: a ligação da troca automática do `rgm_it_` de antes (a da comparação,
+    // `ligacao_secret_id`) já não vale no Regem — a autorização nova trocou o acesso da loja lá — e sai do cofre junto.
+    const lojasDoRegem = escolhidas.filter((d) => d.provider === 'regem').map((d) => d.external_id);
+    const ligacoesAntigas = lojasDoRegem.length
+      ? (
+          await tx.execute<{ id: string; ligacao_secret_id: string }>(sql`
+            select a.id, a.ligacao_secret_id from liame.connected_account a
+             where a.brand_id = ${c.brand_id} and a.provider = 'regem' and a.disconnected_at is null and a.ligacao_secret_id is not null
+               and a.connection_id is distinct from ${c.id} and a.external_id in ${lojasDoRegem}
+             for update`)
+        ).rows
+      : [];
     const linhas = escolhidas.map((d) => ({
       id: uuidv7(),
       unit_id: lojaDe.get(`${d.provider}:${d.external_id}`) ?? null,
@@ -637,6 +759,11 @@ export class ConnectionsService {
     const novas = new Set(inseridas.rows.map((l) => `${l.provider}:${l.external_id}`));
     if (inseridas.rows.length) {
       await tx.execute(sql`update liame.oauth_connection set status = 'ativa', completed_at = coalesce(completed_at, now()), updated_at = now() where id = ${c.id}`);
+    }
+    const assumidas = new Set(inseridas.rows.map((l) => l.id));
+    for (const antiga of ligacoesAntigas.filter((l) => assumidas.has(l.id))) {
+      await tx.execute(sql`update liame.connected_account set ligacao_secret_id = null, updated_at = now() where id = ${antiga.id} and ligacao_secret_id = ${antiga.ligacao_secret_id}`);
+      await this.vault.revokeSecret(tx, antiga.ligacao_secret_id);
     }
     // A autorização antiga que perdeu todas as contas para esta: a credencial sai do cofre e ela deixa de aparecer
     // como se ainda valesse (ficava na tela com "0 contas"). No Regem, o token dela já não vale lá. Nas outras

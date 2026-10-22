@@ -22133,6 +22133,13 @@
                             ],
                             "pattern": "^[a-z0-9_]+$"
                           },
+                          "authorization_flow": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z0-9_]+$"
+                          },
                           "discovered": {
                             "type": "array",
                             "items": {
@@ -22396,6 +22403,9 @@
                       "type": "boolean"
                     },
                     "search_console": {
+                      "type": "boolean"
+                    },
+                    "regem_by_click": {
                       "type": "boolean"
                     }
                   },
@@ -22844,6 +22854,13 @@
                       }
                     },
                     "requested_access": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "authorization_flow": {
                       "type": [
                         "string",
                         "null"
@@ -23757,6 +23774,13 @@
                       }
                     },
                     "requested_access": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "authorization_flow": {
                       "type": [
                         "string",
                         "null"

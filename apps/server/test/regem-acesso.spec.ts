@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from '../src/config.js';
-import type { CredencialGuardada } from '../src/connections/oauth.js';
+import { type AppConfig, loadConfig } from '../src/config.js';
+import { provedoresDisponiveis } from '../src/connections/connections.service.js';
+import { type CredencialGuardada, urlDeAutorizacao } from '../src/connections/oauth.js';
 import { type ClienteConector, ErroConector } from '../src/connectors/cliente-http.js';
 import {
   AcessoDaExecucao,
@@ -190,5 +191,36 @@ describe('a loja do Regem só com a ligação (Hub DMS, F3, parte C)', () => {
     await expect(revogarNoRegem(recusando(erro('autenticacao', 'token-invalido')), pelaLigacao)).rejects.toMatchObject({ codigoProvider: 'token-invalido' });
     await expect(revogarNoRegem(recusando(erro('autenticacao')), pelaLigacao)).rejects.toMatchObject({ tipo: 'autenticacao' });
     await expect(revogarNoRegem(recusando(erro('transitorio')), peloRgmIt)).rejects.toMatchObject({ tipo: 'transitorio' });
+  });
+});
+
+// Hub DMS (F3, parte C, PR 4): conectar o Regem por clique, sem rede. O caminho inteiro, com o Regem e o DMS ID de
+// mentira, está em `test/db/conexao-regem-clique.spec.ts`.
+describe('conectar o Regem por clique (Hub DMS, F3, parte C)', () => {
+  /** Valores de mentira com nome neutro (V123). */
+  const VALOR_DO_CLIENTE = 'valor-do-cliente-de-teste-0000000000';
+  const regemClique = { authUrl: 'https://app.dmsregem.com', apiUrl: 'https://api.dmsregem.com/api/v1/integracao', emissor: 'https://api.dmsregem.com' };
+  const c1b = { clientId: 'liame', clientSecret: VALOR_DO_CLIENTE, authUrl: 'https://app.dmsregem.com' };
+  const oauth = (o: Partial<AppConfig['oauth']>): AppConfig['oauth'] => ({ meta: null, google: null, regem: null, regemcast: null, regemClique: null, ...o });
+  const sem = { regemPorClique: false, regemcastPorClique: false };
+
+  it('o Regem dá para conectar pela C1b ou pelo clique (a configuração E a flag da empresa); só uma das duas não basta', () => {
+    expect(provedoresDisponiveis(oauth({}), { ...sem, regemPorClique: true })).toEqual([]);
+    expect(provedoresDisponiveis(oauth({ regemClique }), sem)).toEqual([]);
+    expect(provedoresDisponiveis(oauth({ regemClique }), { ...sem, regemPorClique: true })).toEqual(['regem']);
+    expect(provedoresDisponiveis(oauth({ regem: c1b }), sem)).toEqual(['regem']);
+    expect(provedoresDisponiveis(oauth({ regem: c1b, regemClique }), { ...sem, regemPorClique: true })).toEqual(['regem']);
+  });
+
+  it('a página do clique leva só o aplicativo e o número do pedido; sem o pedido, a da C1b; sem o aplicativo no DMS ID, nenhuma', () => {
+    const config = { dmsId: { emissor: 'http://127.0.0.1:4000/oidc', aplicativo: 'aplicativo-do-liame', segredo: VALOR_DO_CLIENTE }, oauth: oauth({ regem: c1b, regemClique }) };
+    const pedidoRegem = `urn:ietf:params:oauth:request_uri:rgm_${'a'.repeat(43)}`;
+    const base = { estado: 'e'.repeat(43), redirectUri: 'https://api.agencialiame.com/v1/oauth/callback', verificador: 'v'.repeat(64), versaoMeta: 'v26.0' };
+    const clique = new URL(urlDeAutorizacao('regem', config, { ...base, pedidoRegem }));
+    expect(`${clique.origin}${clique.pathname}`).toBe('https://app.dmsregem.com/integracoes/autorizar');
+    expect(Object.fromEntries(clique.searchParams)).toEqual({ client_id: 'aplicativo-do-liame', request_uri: pedidoRegem });
+    const deAntes = new URL(urlDeAutorizacao('regem', config, base));
+    expect([deAntes.searchParams.get('cliente'), deAntes.searchParams.get('code_challenge_method'), deAntes.searchParams.get('request_uri')]).toEqual(['liame', 'S256', null]);
+    expect(() => urlDeAutorizacao('regem', { ...config, dmsId: null }, { ...base, pedidoRegem })).toThrow(ErroConector);
   });
 });

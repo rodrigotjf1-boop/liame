@@ -15,7 +15,7 @@ describe('login da Meta: configuração de leitura ou de escrita', () => {
   });
 
   it('a página de autorização leva a configuração escolhida; sem escolha, a de leitura', () => {
-    const config = { dmsId: null, oauth: { meta, google: null, regem: null, regemcast: null } };
+    const config = { dmsId: null, oauth: { meta, google: null, regem: null, regemcast: null, regemClique: null } };
     const p = { estado: 'estado-de-teste', redirectUri: 'https://api.agencialiame.com/v1/oauth/callback', versaoMeta: 'v26.0' };
     const pedida = (url: string) => new URL(url).searchParams.get('config_id');
     expect(pedida(urlDeAutorizacao('meta', config, p))).toBe('99887766554433');
@@ -23,7 +23,7 @@ describe('login da Meta: configuração de leitura ou de escrita', () => {
     // A configuração é da Meta: nas outras plataformas ela não entra na página.
     const google = {
       dmsId: null,
-      oauth: { meta, google: { clientId: 'cliente-google-teste.apps.googleusercontent.com', clientSecret: 'segredo-cliente-google-teste', authUrl: 'https://accounts.google.com', tokenUrl: 'https://oauth2.googleapis.com' }, regem: null, regemcast: null },
+      oauth: { meta, google: { clientId: 'cliente-google-teste.apps.googleusercontent.com', clientSecret: 'segredo-cliente-google-teste', authUrl: 'https://accounts.google.com', tokenUrl: 'https://oauth2.googleapis.com' }, regem: null, regemcast: null, regemClique: null },
     };
     expect(pedida(urlDeAutorizacao('google', google, { ...p, verificador: 'verificador-de-teste', configMeta: '11223344556677' }))).toBeNull();
   });
