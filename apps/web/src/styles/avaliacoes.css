@@ -18,6 +18,8 @@
 .av-item-cab > span:not(.estrelas) { min-width: 0; overflow-wrap: anywhere; }
 .av-item-txt { margin-top: var(--sp-1); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .av-item-txt--vazio { color: var(--text-muted); font-style: italic; }
+/* O porquê da sugestão do Social media que ainda não chegou (P31): escrevendo, no limite de IA, barrada. */
+.av-item-motivo { margin-top: var(--sp-1); font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
 .av-item-acao { display: grid; gap: var(--sp-2); justify-items: end; }
 /* O selo tem altura fixa: o texto dele é curto e fixo, e não quebra. */
 .av-item-acao .st { white-space: nowrap; }
