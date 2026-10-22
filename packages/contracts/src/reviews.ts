@@ -67,6 +67,38 @@ export const ReviewsSummary = z.strictObject({
 });
 export type ReviewsSummary = z.infer<typeof ReviewsSummary>;
 
+/**
+ * Onde está a sugestão de resposta do Social media de uma avaliação sem resposta (A6, Z6, parte 4a; protótipo P31), para
+ * a tela Avaliações, em código: `escrevendo` (a vez espera a rotina do Social media), `limite_dia` ou `limite_mes` (o
+ * teto de gasto de IA da empresa, do dia ou do mês, foi atingido, e a vez espera) ou `barrada` (a conferência barrou as
+ * sugestões, e nenhuma aparece). A sugestão que passou é o pedido em `pending_replies`. A lista pode crescer.
+ */
+export const ReviewSuggestionTurn = z.strictObject({
+  review_id: z.uuid(),
+  state: Slug,
+  /** Quando a rotina olha esta avaliação de novo; nulo na barrada. */
+  next_at: z.iso.datetime().nullable(),
+  /**
+   * Na barrada, as regras da conferência que barraram, em código (`regras_da_resposta`, `regras_da_liame`,
+   * `regras_da_marca`, `numeros`, `politica_da_empresa`); nulo nas outras. A lista pode crescer.
+   */
+  barred_by: z.array(Slug).nullable(),
+});
+export type ReviewSuggestionTurn = z.infer<typeof ReviewSuggestionTurn>;
+
+/** As sugestões de resposta do Social media nesta marca (A6, Z6, parte 4a; P31). */
+export const ReviewSuggestions = z.strictObject({
+  /**
+   * `ligadas`; ou, em código, por que não estão: `funcao_desligada` (as sugestões não estão ligadas para a empresa),
+   * `ia_desligada` (a IA da empresa) ou `funcionario_desligado` (o Social media está desligado nesta marca, em Sua
+   * equipe). A lista pode crescer.
+   */
+  state: Slug,
+  /** As avaliações sem resposta cuja sugestão ainda espera ou não saiu; vazia com as sugestões desligadas. */
+  turns: z.array(ReviewSuggestionTurn),
+});
+export type ReviewSuggestions = z.infer<typeof ReviewSuggestions>;
+
 export const ReviewsResponse = z.strictObject({
   brand_id: z.uuid(),
   /**
@@ -87,12 +119,28 @@ export const ReviewsResponse = z.strictObject({
    * As respostas que esperam a aprovação de uma pessoa (A6, Z2): a avaliação, o pedido em Aprovações
    * (`/aprovacoes?pedido={action_id}`) e se só o dono decide. Vazia com a função de responder desligada.
    */
-  pending_replies: z.array(z.strictObject({ review_id: z.uuid(), action_id: z.uuid(), owner_only: z.boolean() })).optional(),
+  pending_replies: z
+    .array(
+      z.strictObject({
+        review_id: z.uuid(),
+        action_id: z.uuid(),
+        owner_only: z.boolean(),
+        /** Quantas sugestões do Social media o pedido traz, as da rodada mais nova (A6, Z6; P31); nulo no pedido de uma pessoa. */
+        suggestions: z.int().min(1).max(2).nullable().optional(),
+      }),
+    )
+    .optional(),
   /**
    * Responder pelo Liame está ligado para a marca (a função `perfil_google_write`, A6 · Z2): a tela oferece
    * "Responder" a quem pode pedir ações. Desligado, a resposta é dada no próprio Google.
    */
   can_reply: z.boolean().optional(),
+  /**
+   * As sugestões de resposta do Social media (A6, Z6, parte 4a; P31): se estão ligadas nesta marca, ou por que não, e a
+   * vez de cada avaliação sem resposta. Nulo quando responder pelo Liame está desligado (`can_reply` falso): aí a
+   * resposta é dada no Google, e nada é sugerido.
+   */
+  suggestions: ReviewSuggestions.nullable().optional(),
   generated_at: z.iso.datetime(),
 });
 export type ReviewsResponse = z.infer<typeof ReviewsResponse>;

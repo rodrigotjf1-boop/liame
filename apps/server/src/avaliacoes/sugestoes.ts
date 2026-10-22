@@ -59,6 +59,21 @@ const exigirCodigo = (c: string, oQue: string): void => {
 /** O motivo como a coluna guarda (`sem-rota` vira `sem_rota`). */
 export const codigoDoMotivo = (motivo: string): string => motivo.toLowerCase().replace(/[^a-z_]/g, '_').slice(0, 40);
 
+/**
+ * O porquê da espera da vez quando a IA não atendeu por um motivo que passa sozinho (desligada, parada, sem rota, no
+ * limite): `ia_<código>`. No teto de gasto da empresa, qual deles (`ia_teto_dia` ou `ia_teto_mes`): a tela Avaliações
+ * diz "hoje" e "amanhã" só no do dia (A6, Z6, parte 4a; P31).
+ */
+export function esperaDaIa(codigo: string, teto?: 'dia' | 'mes'): string {
+  return codigo === 'teto' && teto ? `ia_teto_${teto}` : `ia_${codigoDoMotivo(codigo)}`;
+}
+
+/** As esperas pelo teto de gasto de IA da empresa, como a vez as guarda, e o que a tela Avaliações mostra de cada uma. */
+export const ESPERA_PELO_TETO: ReadonlyMap<string, 'limite_dia' | 'limite_mes'> = new Map([
+  ['ia_teto_dia', 'limite_dia'],
+  ['ia_teto_mes', 'limite_mes'],
+]);
+
 /** Os nomes dos itens da conferência que barraram alguma sugestão, sem repetir: é o que `barred_by` guarda. */
 export function itensQueBarraram(sugestoes: readonly SugestaoConferida[]): string[] {
   return [...new Set(sugestoes.flatMap((s) => s.conferencia.itens.filter((i) => i.situacao === 'barrou').map((i) => i.item)))];

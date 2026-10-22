@@ -725,6 +725,85 @@ describe.skipIf(!hasDb)('as sugestões de resposta do Social media (A6 · Z6, pa
     expect((await vezes(e)).filter((v) => v.status === 'esperando')).toEqual([]);
   });
 
+  // ---------------------------------------------------------------- a lista das avaliações (parte 4a; P31)
+  const naLista = async (e: EmpresaComLoja) => {
+    const r = await api.call('GET', `/v1/reviews?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    return r.body;
+  };
+
+  it('P31 (parte 4a): a lista das avaliações diz em que pé está a sugestão de cada uma: esperando você (com quantas), escrevendo e barrada', async () => {
+    const { e, ids, agora } = await empresa('Mister Burgers Lista', [avaliacao('rev-boa', 'FIVE', 2, ELOGIO), avaliacao('rev-cupom', 'TWO', 3, RECLAMACAO)]);
+    // Na de 2 estrelas, o modelo promete compensação, e a conferência barra as duas.
+    responder = (pedido) => (pedido.includes(RECLAMACAO) ? { sugestoes: COM_CUPOM } : padrao(pedido));
+    expect((await rodar(e, agora)).map((v) => v.feito.status).sort()).toEqual(['barrada', 'pronta']);
+    // Uma avaliação nova chega na leitura seguinte: a vez dela espera a rotina.
+    const depois = new Date(agora.getTime() + 61 * MIN_MS);
+    google.lista = [...google.lista, avaliacao('rev-nova', 'FOUR', 0, 'Bom atendimento no salão.')];
+    await ler(e, depois);
+    const [nova] = await ownerQuery<{ id: string }>(`select id from liame.profile_review where connected_account_id = $1 and external_id = 'rev-nova'`, [e.contaId]);
+
+    const lista = await naLista(e);
+    const [pedido] = (await pedidos(e)).filter((p) => p.agent_key === 'social');
+    expect(lista.can_reply).toBe(true);
+    expect(lista.pending_replies).toEqual([{ review_id: ids.get('rev-boa'), action_id: pedido!.id, owner_only: false, suggestions: 2 }]);
+    expect(lista.suggestions.state).toBe('ligadas');
+    const porAvaliacao = new Map((lista.suggestions.turns as Array<{ review_id: string }>).map((t) => [t.review_id, t]));
+    expect(porAvaliacao.size).toBe(2);
+    expect(porAvaliacao.get(ids.get('rev-cupom')!)).toEqual({ review_id: ids.get('rev-cupom'), state: 'barrada', next_at: null, barred_by: ['regras_da_resposta'] });
+    expect(porAvaliacao.get(nova!.id)).toEqual({ review_id: nova!.id, state: 'escrevendo', next_at: depois.toISOString(), barred_by: null });
+    // A de uma pessoa não tem sugestões; e a que ela respondeu sai da lista da vez.
+    const daPessoa = await api.call('POST', '/v1/actions', {
+      cookie: e.cookie,
+      body: { tool: 'avaliacao_responder', provider: 'google_business', account_id: e.contaId, resource_id: `avaliacao:${ids.get('rev-cupom')}`, params: { texto: 'Pedimos desculpas pela demora. Fale com a gente pelos contatos do perfil.' } },
+    });
+    expect(daPessoa.status, JSON.stringify(daPessoa.body)).toBe(201);
+    const depoisDaPessoa = await naLista(e);
+    // (2 estrelas: a resposta, mesmo a de uma pessoa, é só do dono.)
+    expect(depoisDaPessoa.pending_replies).toContainEqual({ review_id: ids.get('rev-cupom'), action_id: daPessoa.body.id, owner_only: true, suggestions: null });
+    expect((depoisDaPessoa.suggestions.turns as Array<{ review_id: string }>).map((t) => t.review_id)).toEqual([nova!.id]);
+  });
+
+  it('P31 (parte 4a): no teto de gasto de IA da empresa, a vez espera sem chamar o modelo, e a lista diz qual teto: o do dia ou o do mês', async () => {
+    const { e, ids, agora } = await empresa('Mister Burgers Teto', [avaliacao('rev-5', 'FIVE', 2, ELOGIO)]);
+    // O teto da empresa: US$ 0,10 no dia e US$ 1,00 no mês, e o gasto de hoje já chegou no do dia.
+    await ownerQuery(`insert into liame.ai_budget (tenant_id, daily_usd_micros, monthly_usd_micros, set_by, reason) values ($1, 100000, 1000000, 'testes', 'teste do teto das sugestões')`, [e.tenantId]);
+    await ownerQuery(
+      `insert into liame.ai_usage (id, tenant_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome)
+       values (gen_random_uuid(), $1, 'teste.semente', 'teste_semente', 'teste', 'semente', 'principal', 100000, 'ok')`,
+      [e.tenantId],
+    );
+    expect((await rodar(e, agora)).map((v) => v.feito)).toEqual([{ status: 'esperando', motivo: 'ia_teto_dia' }]);
+    expect(simulado.doGenerateCalls).toHaveLength(0);
+    expect((await vezes(e))[0]).toMatchObject({ status: 'esperando', reason: 'ia_teto_dia', attempts: 0 });
+    expect((await naLista(e)).suggestions.turns).toEqual([{ review_id: ids.get('rev-5'), state: 'limite_dia', next_at: new Date(agora.getTime() + 60 * MIN_MS).toISOString(), barred_by: null }]);
+    // Com o do mês também cheio, é ele que a lista diz: a IA volta no mês que vem, e não amanhã.
+    await ownerQuery(`update liame.ai_budget set monthly_usd_micros = 100000 where tenant_id = $1`, [e.tenantId]);
+    expect((await rodar(e, new Date(agora.getTime() + 61 * MIN_MS))).map((v) => v.feito)).toEqual([{ status: 'esperando', motivo: 'ia_teto_mes' }]);
+    expect((await naLista(e)).suggestions.turns.map((t: { state: string }) => t.state)).toEqual(['limite_mes']);
+    expect(simulado.doGenerateCalls).toHaveLength(0);
+  });
+
+  it('P31 (parte 4a): com as sugestões desligadas, a lista diz por quê e não mostra a vez de nenhuma; sem responder pelo Liame, nada é sugerido', async () => {
+    const { e, ids } = await empresa('Mister Burgers Desligadas', [avaliacao('rev-5', 'FIVE', 2, ELOGIO)]);
+    expect((await naLista(e)).suggestions).toEqual({ state: 'ligadas', turns: [{ review_id: ids.get('rev-5'), state: 'escrevendo', next_at: expect.any(String), barred_by: null }] });
+    await ligarFlag(e.tenantId, 'respostas_sugeridas', false);
+    expect((await naLista(e)).suggestions).toEqual({ state: 'funcao_desligada', turns: [] });
+    await ligarFlag(e.tenantId, 'respostas_sugeridas', true);
+    // O Social media desligado nesta marca (a pausa de Sua equipe).
+    await ownerQuery(`insert into liame.agent_pause (id, tenant_id, brand_id, agent_key, paused_by, reason) values (gen_random_uuid(), $1, $2, 'social', $3, 'teste da pausa na lista')`, [e.tenantId, e.brandId, e.userId]);
+    expect((await naLista(e)).suggestions).toEqual({ state: 'funcionario_desligado', turns: [] });
+    await ownerQuery(`update liame.agent_pause set resumed_at = now(), resumed_by = $2 where tenant_id = $1 and agent_key = 'social' and resumed_at is null`, [e.tenantId, e.userId]);
+    // A IA da empresa desligada.
+    await ligarFlag(e.tenantId, 'ia', false);
+    expect((await naLista(e)).suggestions).toEqual({ state: 'ia_desligada', turns: [] });
+    await ligarFlag(e.tenantId, 'ia', true);
+    // Sem responder pelo Liame, a resposta é dada no Google: nada é sugerido.
+    await ligarFlag(e.tenantId, 'perfil_google_write', false);
+    const semResposta = await naLista(e);
+    expect([semResposta.can_reply, semResposta.suggestions]).toEqual([false, null]);
+  });
+
   it('V119: as regras da tabela', async () => {
     const { e, ids } = await empresa('Mister Burgers Regras', [avaliacao('rev-a', 'FIVE', 2, ELOGIO), avaliacao('rev-b', 'FOUR', 3, null)], []);
     const review = ids.get('rev-a')!;

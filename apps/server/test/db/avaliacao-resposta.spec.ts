@@ -347,10 +347,11 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
     });
     const baixa = await pedir(dono(e), e, id1, PEDIR_DESCULPAS);
     expect(baixa.body.review).toMatchObject({ id: id1, stars: 1, owner_only: true, reply_text: PEDIR_DESCULPAS, changed: false });
-    // A tela Avaliações: as duas respostas que esperam, na ordem em que foram pedidas, com o pedido de cada uma.
+    // A tela Avaliações: as duas respostas que esperam, na ordem em que foram pedidas, com o pedido de cada uma (o de uma
+    // pessoa não traz sugestões do Social media, A6 · Z6).
     expect((await telaDasAvaliacoes()).pending_replies).toEqual([
-      { review_id: id5, action_id: p.body.id, owner_only: false },
-      { review_id: id1, action_id: baixa.body.id, owner_only: true },
+      { review_id: id5, action_id: p.body.id, owner_only: false, suggestions: null },
+      { review_id: id1, action_id: baixa.body.id, owner_only: true, suggestions: null },
     ]);
     // Na lista de pedidos, o mesmo objeto; e o pedido de outra coisa não tem avaliação.
     const lista = (await api.call('GET', '/v1/actions', { cookie: e.cookie })).body.items as Array<{ id: string; review: { id: string } | null }>;
