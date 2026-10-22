@@ -721,7 +721,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 | Node.js | **24.21.0 (LTS "Krypton")** | 26.x ainda Current; 22.x em manutenção |
 | NestJS | 12.1.0 | Node ≥ 20; `@nestjs/cli` 12.0.6 depende de **`typescript ~6.0.2`** |
 | TypeScript | **6.0.3** | A 7.0.2 existe, mas o Nest CLI ainda não usa |
-| Next.js | 16.3.8 | Node ≥ 20.9 |
+| Next.js | 16.4.1 | Node ≥ 20.9; desde 22/10/2026, sem os avisos GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr e GHSA-p3m5-59mp-jv5r da 16.3.8 |
 | React | 19.3.0 | — |
 | Tailwind CSS | 4.3.3 | configuração CSS-first |
 | Drizzle ORM | 0.45.3 (estável) | 1.0 em **RC.5**: não usar em produção ainda |
@@ -838,6 +838,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 22/10/2026 | §9: **Next.js 16.4.1.** A 16.3.8 ficou com dois avisos críticos (GHSA-2464-fhr4-w9xw e GHSA-673q-mjm6-r5xr, CVSS 9,5) e um alto (GHSA-p3m5-59mp-jv5r, 8,2), corrigidos na 16.4.1 (publicada em 14/10/2026): o osv-scanner e o Grype ficaram vermelhos em todo PR. A OSV não tem aviso para a 16.4.1 (consultada em 22/10/2026). |
 | 21/10/2026 | §3.3: **a volta do `PUT` da resposta sem a situação.** Na primeira resposta publicada no piloto, a volta veio sem uma situação que o Liame conhece, e a resposta ficou "desconhecida"; a lista trouxe a das antigas. A conferência das respostas passa a reler também a "desconhecida" (ERR-160), e o Google de mentira dos testes ganha a volta sem a situação. |
 | 21/10/2026 | §11: **Hub DMS, F3, parte C (a autorização por clique do Regem).** Entra o fato da autorização por clique do Regem, conferido no código dos PRs #706 e #708 de lá e no ar (o pedido responde 404 com a chave desligada): o contrato da B1 do RegemCast, a senha do presidente, a raiz do CNPJ, e a troca que entrega uma ligação por loja **sem `rgm_it_`**, revogando o acesso que a loja tinha com o aplicativo. Sai o [NC] do DMS ID: no ar, o recurso que ele não conhece é recusado com 400 `invalid_target`. Usado no PR 3 da parte C do Liame (a loja do Regem só com a ligação). |
 | 21/10/2026 | §3.3: **o Perfil da Empresa liberado e ligado no piloto.** A cota de 300 consultas por minuto no projeto; a Google My Business API visível só para a conta que pediu o acesso, ativada por ela com os papéis Service Usage Admin e Browser no projeto; a tela de permissões do Google com uma caixa por permissão e a autorização incremental (ERR-158); o que a API permite editar (o horário, o endereço e o cardápio), com **[NC]** o que o Google faz com a mudança de endereço. |
