@@ -15,5 +15,7 @@ export { responderMensagem } from './responder-crm.js';
 export { responderLeitura } from './responder-pagina.js';
 export { responderPlano } from './responder-plano.js';
 export { responderParecer } from './responder-revisor.js';
+export { responderSugestoes } from './responder-social.js';
 export { avaliarParecer, type CasoDoRevisor, carregarCasosDoRevisor, GRUPOS_DO_REVISOR } from './revisor.js';
+export { avaliarSugestoes, type CasoDoSocial, carregarCasosDoSocial, GRUPOS_DO_SOCIAL } from './social.js';
 export { TAREFAS, type TarefaDeEval } from './tarefas.js';
