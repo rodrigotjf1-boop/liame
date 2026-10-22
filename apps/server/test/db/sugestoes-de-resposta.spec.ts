@@ -555,12 +555,15 @@ describe.skipIf(!hasDb)('as sugestões de resposta do Social media (A6 · Z6, pa
     const { e, agora } = await empresa('Mister Burgers Outras', [avaliacao('rev-5', 'FIVE', 2, ELOGIO)]);
     await rodar(e, agora);
     const [p] = await pedidos(e);
-    expect((await naApi(e, p!.id)).review.more_suggestions).toBe('pode_pedir');
+    expect((await naApi(e, p!.id)).review).toMatchObject({ more_suggestions: 'pode_pedir', more_suggestions_asked_at: null });
     responder = comOutras(OUTRAS);
 
     const pedido = await pedirOutras(e, p!.id);
     expect(pedido.status, JSON.stringify(pedido.body)).toBe(200);
     expect(pedido.body.review.more_suggestions).toBe('escrevendo');
+    // Quando foi pedido: é por ele que a tela mede quanto o Social media já está escrevendo.
+    const [segunda] = await ownerQuery<{ created_at: Date }>(`select created_at from liame.review_suggestion where tenant_id = $1 and round = 2`, [e.tenantId]);
+    expect(pedido.body.review.more_suggestions_asked_at).toBe(segunda!.created_at.toISOString());
     // Uma vez por avaliação: a segunda vez é recusada, com o caminho que resolve.
     const deNovo = await pedirOutras(e, p!.id);
     expect([deNovo.status, deNovo.body.code]).toEqual([409, 'outras-ja-pedidas']);
@@ -579,6 +582,7 @@ describe.skipIf(!hasDb)('as sugestões de resposta do Social media (A6 · Z6, pa
     expect(trocado!.plan_hash).not.toBe(p!.plan_hash);
     const review = (await naApi(e, p!.id)).review;
     expect([review.more_suggestions, review.suggestions.map((s: { round: number }) => s.round)]).toEqual(['feitas', [2, 2, 1, 1]]);
+    expect(review.more_suggestions_asked_at).toBe(segunda!.created_at.toISOString());
     expect((await vezes(e)).map((v) => [v.round, v.status, v.action_id, v.suggestions])).toEqual([
       [1, 'pronta', p!.id, 2],
       [2, 'pronta', null, 2],
@@ -679,6 +683,46 @@ describe.skipIf(!hasDb)('as sugestões de resposta do Social media (A6 · Z6, pa
     const [trocado] = await pedidos(e);
     expect(trocado!.params.sugestoes).toEqual([{ ...OUTRAS[1]!, rodada: 2 }, ...BOAS.map((s) => ({ ...s, rodada: 1 }))]);
     expect(trocado!.params.texto).toBe(OUTRAS[1]!.texto);
+  });
+
+  it('P31 (parte 3c): o "Pedir outras" passa na frente da fila: a segunda rodada vem antes das primeiras que esperam desde antes, e o lote é tratado nessa ordem (V127)', async () => {
+    const { e, agora } = await empresa('Mister Burgers Fila', [
+      avaliacao('rev-a', 'FIVE', 2, ELOGIO),
+      avaliacao('rev-b', 'FOUR', 3, 'Bom atendimento no salão.'),
+      avaliacao('rev-c', 'FIVE', 4, 'O pão da casa é o melhor do Centro.'),
+    ]);
+    // Um lote de um: só uma avaliação ganha o pedido agora; as outras duas esperam, desde a leitura.
+    const [primeira] = await loop.executarLote(1, { tenantIds: [e.tenantId] }, agora);
+    expect(primeira!.feito.status).toBe('pronta');
+    const [p] = await pedidos(e);
+    responder = comOutras(OUTRAS);
+    expect((await pedirOutras(e, p!.id)).status).toBe(200);
+
+    // A segunda rodada nasceu depois das primeiras que esperam, e mesmo assim vem antes: o lote de um a pega.
+    const depois = new Date(Date.now() + MIN_MS);
+    const [daSegunda] = await loop.executarLote(1, { tenantIds: [e.tenantId] }, depois);
+    expect(daSegunda!.feito).toEqual({ status: 'pronta', pedido: p!.id, sugestoes: 2 });
+    expect((await vezes(e)).map((v) => [v.round, v.status]).sort()).toEqual([
+      [1, 'esperando'],
+      [1, 'esperando'],
+      [1, 'pronta'],
+      [2, 'pronta'],
+    ]);
+
+    // Com a segunda rodada da outra avaliação pedida, o lote de dois trata primeiro ela e depois a primeira rodada que espera.
+    const [q] = (await pedidos(e)).filter((x) => x.id !== p!.id);
+    expect(q).toBeUndefined();
+    const [segundo] = await loop.executarLote(1, { tenantIds: [e.tenantId] }, new Date(depois.getTime() + MIN_MS));
+    expect(segundo!.feito.status).toBe('pronta');
+    const novo = (await pedidos(e)).find((x) => x.id !== p!.id)!;
+    expect((await pedirOutras(e, novo.id)).status).toBe(200);
+    const lote = await loop.executarLote(2, { tenantIds: [e.tenantId] }, new Date(depois.getTime() + 2 * MIN_MS));
+    expect(lote.map((v) => v.feito)).toEqual([
+      { status: 'pronta', pedido: novo.id, sugestoes: 2 },
+      { status: 'pronta', pedido: expect.any(String), sugestoes: 2 },
+    ]);
+    expect((lote[1]!.feito as { pedido: string }).pedido).not.toBe(novo.id);
+    expect((await vezes(e)).filter((v) => v.status === 'esperando')).toEqual([]);
   });
 
   it('V119: as regras da tabela', async () => {

@@ -25,9 +25,11 @@ import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemAp
 import { DetalhePedido } from './detalhe-pedido';
 import { DetalhePlano } from './detalhe-plano';
 import { DetalheResposta, type Rascunho, RascunhoDaResposta } from './detalhe-resposta';
+import { DetalheSugestoes } from './detalhe-sugestoes';
 import { chaveDaAcao, chaveDoPlano, type ItemDaLista, montarLista, pendentesDe } from './lista';
 import { dinheiroDoPlano, erroDoPlano, etiquetaDoPlano, type MotivoDaRecusa, riscoDoPlano } from './planos-textos';
 import { type AcaoDeResposta, ehPedidoDeResposta, erroDoTexto, estrelasDoPedido, estrelasEscritas, etiquetaDaResposta, respostaApresentada, riscoDaResposta, situacaoDaResposta } from './resposta-textos';
+import { ehDoSocialMedia, ESPERA_DAS_OUTRAS_MS, escolhaDoPedido, outrasNaTela, resultadoDasSugestoes } from './sugestoes-textos';
 import { apresentar, avisoDepoisDeAprovar, erroDaDecisao, etiquetaDoDecidido, type Grupo, grupoDe, pedidoDaUrl, prazoDe, riscoDe, ROTULO_GRUPO, ROTULO_RISCO } from './textos';
 
 // "Aprovações" (mockups/prototipo-app.html, vista "aprovacoes"; os planos, mockups/prototipo-resumo.html, P8): à
@@ -51,6 +53,8 @@ const chaveDoRascunho = (avaliacaoId: string) => `r:${avaliacaoId}`;
 const GRUPOS: Grupo[] = ['pendente', 'auto', 'feito'];
 /** A fila anda sozinha: outra pessoa pode decidir, o worker executa, o Estrategista manda a versão nova, o prazo vence. */
 const ATUALIZAR_MS = 30_000;
+/** Enquanto o Social media escreve as outras sugestões (P31), o pedido aberto é relido neste intervalo. */
+const RELER_OUTRAS_MS = 5_000;
 
 export function AprovacoesTela() {
   const { me, pode } = useSessao();
@@ -260,6 +264,37 @@ export function AprovacoesTela() {
     };
   }, [idDoPlano, marcaDoPlano, relerPlano]);
 
+  // O "Pedir outras" (P31): enquanto o Social media escreve, a tela relê só o pedido aberto, de 5 em 5 segundos. A
+  // rotina olha a fila de 15 em 15 segundos, com o "Pedir outras" primeiro; se a tentativa falha, a próxima vem em 15
+  // minutos, e no limite de IA, em uma hora. Por isso a releitura curta vai até a espera da tela (dois minutos desde o
+  // pedido): quando a situação muda, ou a espera acaba, a lista é lida de novo (e a tela passa a "demorando", com as
+  // primeiras sugestões para decidir); depois, a leitura de sempre, de 30 em 30 segundos, traz as outras quando vierem.
+  const escrevendo = aberta?.tipo === 'acao' && ehPedidoDeResposta(aberta.acao) && outrasNaTela(aberta.acao, agora) === 'escrevendo' ? aberta.acao : null;
+  const idEscrevendo = escrevendo?.id ?? null;
+  const pedidaEm = escrevendo?.review.more_suggestions_asked_at ?? null;
+  useEffect(() => {
+    if (!idEscrevendo) return;
+    let vivo = true;
+    const desde = pedidaEm ? new Date(pedidaEm).getTime() : Number.NaN;
+    const ate = (Number.isNaN(desde) ? Date.now() : desde) + ESPERA_DAS_OUTRAS_MS;
+    const t = setInterval(() => {
+      if (Date.now() >= ate) {
+        clearInterval(t);
+        disparar(carregar());
+        return;
+      }
+      disparar(
+        chamar(() => api.GET('/v1/actions/{id}', { params: { path: { id: idEscrevendo } } })).then((r) => {
+          if (vivo && r.ok && r.data.review?.more_suggestions !== 'escrevendo') disparar(carregar());
+        }),
+      );
+    }, RELER_OUTRAS_MS);
+    return () => {
+      vivo = false;
+      clearInterval(t);
+    };
+  }, [idEscrevendo, pedidaEm, carregar]);
+
   const abrir = useCallback((chave: string, focar: boolean) => {
     setSel(chave);
     setNoDetalhe(true);
@@ -365,6 +400,34 @@ export function AprovacoesTela() {
     const r = await chamar(() => api.PATCH('/v1/actions/{id}', { params: { path: { id: acao.id } }, body: { params: { texto } } }));
     if (!r.ok) return { ok: false, texto: erroDoTexto(r.problema) };
     avisar('Texto salvo e conferido de novo. A aprovação vale para este texto.');
+    await carregar();
+    focarOTitulo();
+    return { ok: true };
+  }
+
+  // ---- as sugestões do Social media (P31): escolher outra sugestão e salvar a versão ajustada alteram o texto do pedido
+  // (o plano é outro, e a aprovação vale para ele); o foco fica com o detalhe, que o leva à lista das opções.
+  async function alterarTextoDaSugestao(acao: AcaoDeResposta, texto: string, aviso: string): Promise<Feito> {
+    const r = await chamar(() => api.PATCH('/v1/actions/{id}', { params: { path: { id: acao.id } }, body: { params: { texto } } }));
+    if (!r.ok) {
+      if (r.problema.code === 'acao-nao-aguarda') setTentativa((n) => n + 1);
+      // A falha do servidor leva o código de rastreio (V60); a recusa do texto, as palavras do P17.
+      return { ok: false, texto: r.problema.status >= 500 ? mensagemDe(r.problema) : erroDoTexto(r.problema) };
+    }
+    avisar(aviso);
+    await carregar();
+    return { ok: true };
+  }
+
+  // "Pedir outras" (uma vez por avaliação, D-A6-27): o Social media escreve na rotina, e a tela relê o pedido enquanto isso.
+  async function pedirOutrasSugestoes(acao: AcaoDeResposta): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/actions/{id}/more-suggestions', { params: { path: { id: acao.id } } }));
+    if (!r.ok) {
+      // Outra pessoa pediu ou decidiu no meio: a leitura nova mostra como o pedido está.
+      if (r.problema.code === 'outras-ja-pedidas' || r.problema.code === 'acao-nao-aguarda') setTentativa((n) => n + 1);
+      return { ok: false, texto: mensagemDe(r.problema) };
+    }
+    avisar('O Social media está escrevendo outras sugestões.');
     await carregar();
     focarOTitulo();
     return { ok: true };
@@ -504,12 +567,14 @@ export function AprovacoesTela() {
     // Na resposta a uma avaliação, a nota vem à frente, e a de 1 ou 2 estrelas diz que só o dono aprova (P17).
     const riscoEscrito = resposta ? riscoDaResposta(resposta) : { classe: risco, rotulo: ROTULO_RISCO[risco] };
     const estrelas = resposta ? estrelasDoPedido(resposta) : null;
+    // O pedido do Social media diz quantas sugestões traz (P31): as da rodada mais nova.
+    const sugestoes = resposta && ehDoSocialMedia(resposta) ? escolhaDoPedido(resposta).novas.length : 0;
     const quem = quemPediu(a);
     return (
       <li key={i.chave}>
         <button className="ap-item" type="button" aria-current={atual} onClick={() => abrir(i.chave, true)}>
           <span className={quem.funcionario ? 'ap-av ap-av--func' : 'ap-av'} aria-hidden="true">
-            {quem.funcionario ? <Icone nome="megaphone" /> : iniciais(a.requested_by.name)}
+            {quem.funcionario ? <Icone nome={a.agent_key === 'social' ? 'message' : 'megaphone'} /> : iniciais(a.requested_by.name)}
           </span>
           <span>
             <span className="ap-titulo">{p.titulo}</span>
@@ -518,6 +583,7 @@ export function AprovacoesTela() {
                 <>
                   {p.impacto && <span className="dinheiro">{p.impacto}</span>}
                   {estrelas && <span>{estrelasEscritas(estrelas)}</span>}
+                  {sugestoes > 0 && <span>{sugestoes === 1 ? '1 sugestão' : `${sugestoes} sugestões`}</span>}
                   <span className={`risco risco--${riscoEscrito.classe}`}>{riscoEscrito.rotulo}</span>
                   <span>{prazoDe(a, agora)}</span>
                 </>
@@ -608,6 +674,32 @@ export function AprovacoesTela() {
         </>
       );
     }
+  } else if (aberta?.tipo === 'acao' && ehPedidoDeResposta(aberta.acao) && ehDoSocialMedia(aberta.acao) && (grupoDe(aberta.acao, agora) === 'pendente' || resultadoDasSugestoes(aberta.acao, agora))) {
+    // O pedido do Social media (P31): esperando a decisão, ou decidido sem publicar. Os outros decididos dele (aprovado,
+    // publicado, expirado) seguem no detalhe da resposta, como o de uma pessoa.
+    const sugestoes = aberta.acao;
+    detalhe = (
+      <DetalheSugestoes
+        acao={sugestoes}
+        grupo={grupoDe(sugestoes, agora)}
+        agora={agora}
+        pro={pro}
+        nome={nomeDe(sugestoes)}
+        souDono={souDono}
+        podeDecidir={podeDecidir}
+        podeOperar={podeOperar}
+        temApp={temApp}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+        aoAlterarTexto={alterarTextoDaSugestao}
+        aoPedirOutras={pedirOutrasSugestoes}
+        aoEscreverOutra={escreverOutra}
+        aoAvisar={avisar}
+      />
+    );
   } else if (aberta?.tipo === 'acao' && ehPedidoDeResposta(aberta.acao)) {
     const resposta = aberta.acao;
     // Quem apagou a resposta: o pedido de volta que a lista traz.

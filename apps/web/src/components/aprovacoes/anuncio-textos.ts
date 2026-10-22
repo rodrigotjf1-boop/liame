@@ -35,10 +35,17 @@ function naFrase(provider: string): { a: string; A: string; na: string; com: str
   return { a: nome, A: nome, na: `em ${nome}`, com: `com ${nome}`, ao: `a ${nome}`, ela: 'ela' };
 }
 
+/** O nome de cada funcionário de IA que pede ações (o Social media sugere as respostas às avaliações, P31). */
+const NOME_DO_FUNCIONARIO = new Map([
+  ['trafego', 'Gestor de tráfego'],
+  ['crm', 'CRM e mensageria'],
+  ['social', 'Social media'],
+]);
+
 /** Quem pediu: a pessoa, ou o funcionário de IA (no modo Aprovação). */
 export function quemPediu(a: Pick<Acao, 'agent_key' | 'requested_by'>): { nome: string; funcionario: boolean } {
   if (!a.agent_key) return { nome: a.requested_by.name, funcionario: false };
-  return { nome: a.agent_key === 'trafego' ? 'Gestor de tráfego' : a.agent_key === 'crm' ? 'CRM e mensageria' : 'Funcionário de IA', funcionario: true };
+  return { nome: NOME_DO_FUNCIONARIO.get(a.agent_key) ?? 'Funcionário de IA', funcionario: true };
 }
 
 export function tipoDoAnuncio(a: AcaoDeAnuncio): TipoDoAnuncio {

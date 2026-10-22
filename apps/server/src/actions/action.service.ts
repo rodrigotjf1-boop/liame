@@ -116,7 +116,7 @@ type Apresentacao = {
   /** A avaliação do Google de cada pedido de resposta (A6, Z2), como o Liame a guarda agora, pelo id dela. */
   avaliacoes: Map<string, NonNullable<ActionReview['current']>>;
   /** A segunda rodada das sugestões do Social media (o "Pedir outras", A6, Z6), pelo id da avaliação. */
-  segundasRodadas: Map<string, { status: SituacaoDaSugestao; reason: string | null }>;
+  segundasRodadas: Map<string, { status: SituacaoDaSugestao; reason: string | null; pedidaEm: string }>;
 };
 
 /** O retrato da mensagem, como a resposta o mostra (sem o plano do disparo, que é de cada pedido). */
@@ -1286,10 +1286,10 @@ export class ActionService {
         });
       }
       // O "Pedir outras" do Social media (A6, Z6, parte 3b): a segunda rodada de cada avaliação, quando há.
-      const r2 = await tx.execute<{ review_id: string; status: SituacaoDaSugestao; reason: string | null }>(sql`
-        select review_id, status, reason from liame.review_suggestion
+      const r2 = await tx.execute<{ review_id: string; status: SituacaoDaSugestao; reason: string | null; created_at: string | Date }>(sql`
+        select review_id, status, reason, created_at from liame.review_suggestion
          where tenant_id = ${rows[0]!.tenant_id} and round = 2 and review_id in ${deAvaliacao}`);
-      for (const l of r2.rows) ap.segundasRodadas.set(l.review_id, { status: l.status, reason: l.reason });
+      for (const l of r2.rows) ap.segundasRodadas.set(l.review_id, { status: l.status, reason: l.reason, pedidaEm: new Date(l.created_at).toISOString() });
     }
     // O retrato da mensagem (A5, Y5): o envio e a pausa são da mesma campanha em rascunho que o Liame montou.
     const deMensagem = rows.filter((r) => r.provider === 'regemcast' && mensagemDoRecurso(r.resource_id) !== null);
@@ -1558,6 +1558,8 @@ function avaliacaoDaResposta(row: ActionRow, ap: Apresentacao): ActionReview | n
   // As sugestões do Social media (A6, Z6): as do pedido que ele fez, como estão nos parâmetros.
   const pedido = ParametrosDaResposta.safeParse(row.params);
   const sugestoes = pedido.success && pedido.data.sugestoes ? pedido.data.sugestoes.map((s) => ({ focus: s.enfoque, text: s.texto, round: s.rodada })) : null;
+  const segunda = ap.segundasRodadas.get(id) ?? null;
+  const mais = row.agent_key === SOCIAL.key && sugestoes ? maisSugestoes(segunda, row.status === 'aguardando_aprovacao') : null;
   return {
     id,
     stars: antes.success ? antes.data.estrelas : null,
@@ -1568,7 +1570,8 @@ function avaliacaoDaResposta(row: ActionRow, ap: Apresentacao): ActionReview | n
     suggestions: sugestoes,
     withdrawn: retiradaDe(row),
     // Só no pedido do Social media, que nasceu das sugestões; no de uma pessoa, não há "Pedir outras".
-    more_suggestions: row.agent_key === SOCIAL.key && sugestoes ? maisSugestoes(ap.segundasRodadas.get(id) ?? null, row.status === 'aguardando_aprovacao') : null,
+    more_suggestions: mais,
+    more_suggestions_asked_at: mais !== null && segunda ? segunda.pedidaEm : null,
   };
 }
 

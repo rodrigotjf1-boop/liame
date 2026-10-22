@@ -240,6 +240,11 @@ export const ActionReview = z.strictObject({
     .regex(/^[a-z_]{2,40}$/)
     .nullable()
     .optional(),
+  /**
+   * Quando as outras sugestões foram pedidas (a segunda rodada nasceu), em ISO. A tela mede por ele quanto o Social
+   * media já está escrevendo. Nulo enquanto ninguém pediu, e nos mesmos casos de `more_suggestions`.
+   */
+  more_suggestions_asked_at: z.iso.datetime().nullable().optional(),
 });
 export type ActionReview = z.infer<typeof ActionReview>;
 

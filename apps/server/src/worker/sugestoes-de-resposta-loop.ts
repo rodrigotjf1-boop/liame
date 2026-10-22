@@ -16,12 +16,20 @@ export type VezDaAvaliacao = { id: string; tenantId: string; feito: VezDaSugesta
 type Reservada = { id: string; tenant_id: string; vez: string };
 
 /**
+ * A posição na fila das sugestões, como texto que se ordena: a segunda rodada (o "Pedir outras", com alguém esperando
+ * na tela de Aprovações) vem antes de qualquer primeira rodada, e dentro de cada rodada, a mais atrasada primeiro. É a
+ * mesma ordem do `order by` da reserva, para o lote ser tratado nela (V127).
+ */
+const vezDaSugestao = sql`(case when s.round = 2 then '0' else '1' end) || ${vezNaFila(sql`coalesce(s.next_attempt_at, s.created_at)`)}`;
+
+/**
  * A fila das sugestões de resposta do Social media (A6, Z6; migration 0079): as avaliações que esperam e cuja vez
- * chegou, a mais atrasada primeiro, de qualquer empresa. Quem abre a vez é a leitura do Google que trouxe a avaliação,
- * com a função ligada para a loja. Reserva com SKIP LOCKED na mesma linha que a reserva altera (V35), empurrando
- * `next_attempt_at` (se o worker cair no meio, a vez volta sozinha), e pede ao serviço que trate cada uma, na ordem da
- * fila (V127). Toda vez deixa rastro na linha: o pedido em Aprovações, o fim dela, a tentativa contada ou a espera
- * (V106). As duas rodadas passam por aqui: a da avaliação nova e a do "Pedir outras", que entra no pedido que já espera.
+ * chegou, de qualquer empresa: primeiro as do "Pedir outras", depois a mais atrasada. Quem abre a vez é a leitura do
+ * Google que trouxe a avaliação, com a função ligada para a loja, ou o "Pedir outras" no pedido que espera. Reserva com
+ * SKIP LOCKED na mesma linha que a reserva altera (V35), empurrando `next_attempt_at` (se o worker cair no meio, a vez
+ * volta sozinha), e pede ao serviço que trate cada uma, na ordem da fila (V127). Toda vez deixa rastro na linha: o
+ * pedido em Aprovações, o fim dela, a tentativa contada ou a espera (V106). As duas rodadas passam por aqui: a da
+ * avaliação nova e a do "Pedir outras", que entra no pedido que já espera.
  */
 @Injectable()
 export class SugestoesDeRespostaLoop {
@@ -40,12 +48,12 @@ export class SugestoesDeRespostaLoop {
       (
         await tx.execute<Reservada>(sql`
           with devidas as materialized (
-            select s.id, ${vezNaFila(sql`coalesce(s.next_attempt_at, s.created_at)`)} as vez
+            select s.id, ${vezDaSugestao} as vez
               from liame.review_suggestion s
              where s.status = 'esperando'
                and (s.next_attempt_at is null or s.next_attempt_at <= ${ref})
                ${tenantFilter(scope, sql`s.tenant_id`)}
-             order by coalesce(s.next_attempt_at, s.created_at), s.id
+             order by s.round desc, coalesce(s.next_attempt_at, s.created_at), s.id
              limit ${limite}
              for update of s skip locked
           )
