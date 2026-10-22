@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ExplanationResponse } from './ai.js';
+import { TeamStat } from './equipe.js';
 import { AttentionItem } from './media.js';
 
 // Revisão da semana (A3, I7; protótipo P4): o que vendeu, o que cada campanha trouxe no caixa, o que mudou e
@@ -140,6 +141,60 @@ export const MonthlyReportWeek = z.strictObject({
 });
 export type MonthlyReportWeek = z.infer<typeof MonthlyReportWeek>;
 
+/** Quem pediu ou aprovou uma mudança: o nome é lido na hora ("Pessoa removida" quando ela não existe mais). */
+const PessoaDoRelatorio = z.strictObject({ id: z.uuid(), name: z.string() });
+/** Como a plataforma tinha o objeto antes e como ficou: a situação e a verba diária (nula quando a verba não mora nele). */
+const EstadoDoObjeto = z.strictObject({ status: z.string(), daily_micros: Micros.nullable() });
+
+/** Uma mudança que o Liame executou numa plataforma de anúncio no mês (a lista da Verba do mês, D-A4-24). */
+export const MonthlyReportBudgetChange = z.strictObject({
+  action_id: z.uuid(),
+  /** O dia da execução, no fuso da empresa. */
+  executed_on: Dia,
+  /** `orcamento.aumentar`, `orcamento.reduzir`, `campanha.pausar`… */
+  action: z.string(),
+  provider: Slug,
+  /** O objeto (`campanha`, `conjunto` ou `anuncio`), com o nome lido na hora do pedido e a campanha de que faz parte. */
+  target: z.strictObject({ kind: z.string(), name: z.string(), campaign_name: z.string().nullable() }),
+  from: EstadoDoObjeto,
+  to: EstadoDoObjeto,
+  requested_by: PessoaDoRelatorio,
+  /** Quem aprovou com o código do app; nulo quando não há aprovação registrada. */
+  approved_by: PessoaDoRelatorio.nullable(),
+  /** O funcionário de IA que fez o pedido (modo Aprovação); nulo no pedido de uma pessoa. */
+  agent_key: Slug.nullable(),
+  /** A conferência mais recente na plataforma (`confere`, `mudou` ou `acima`); nula antes da primeira. */
+  check: Slug.nullable(),
+});
+export type MonthlyReportBudgetChange = z.infer<typeof MonthlyReportBudgetChange>;
+
+/**
+ * A verba do mês (D-A3-22): o que a Verba do mês mostrava no fim do mês. É da empresa inteira (todas as marcas), como a
+ * tela de origem: o gasto das contas de anúncio conectadas no mês, o teto do mês e o que o Liame mudou nas campanhas.
+ */
+export const MonthlyReportBudget = z.strictObject({
+  currency: z.string(),
+  spend_micros: Micros,
+  /** O teto do mês da empresa quando o relatório saiu; nulo quando ela não tinha teto. */
+  limit_micros: Micros.nullable(),
+  /** As plataformas com alguma conta que a leitura não cobria até o último dia do mês: o gasto delas vale até onde foi lido. */
+  missing: z.array(Slug),
+  /** As mudanças executadas no mês, da mais nova para a mais antiga. */
+  changes: z.array(MonthlyReportBudgetChange),
+});
+export type MonthlyReportBudget = z.infer<typeof MonthlyReportBudget>;
+
+/** O que a equipe fez no mês (D-A3-22): os números de Sua equipe no fim do mês, só os do mês (sem os de agora). */
+export const MonthlyReportTeam = z.strictObject({
+  /** Quem trabalhou no mês (algum número acima de zero), na ordem de Sua equipe. */
+  members: z.array(z.strictObject({ key: Slug, stats: z.array(TeamStat) })),
+  /** A IA da empresa no mês (todas as marcas): o gasto e o teto do mês, em micros de dólar, como em Sua equipe. */
+  ai: z.strictObject({ spent_usd_micros: Micros, ceiling_usd_micros: Micros }),
+  /** A cotação de referência para mostrar o custo em reais (D-A3-14), a de quando o relatório saiu; nula sem leitura. */
+  usd_brl: z.strictObject({ rate: z.string().regex(/^\d{1,4}\.\d{1,6}$/), date: Dia, source: Slug }).nullable(),
+});
+export type MonthlyReportTeam = z.infer<typeof MonthlyReportTeam>;
+
 export const MonthlyReport = z.strictObject({
   id: z.uuid(),
   brand_id: z.uuid(),
@@ -166,6 +221,13 @@ export const MonthlyReport = z.strictObject({
    * e os avisos críticos e de atenção que estavam ativos na geração.
    */
   decisions: z.array(AttentionItem),
+  /**
+   * A verba do mês, só para quem vê a Verba do mês (`campanhas.ver`). Falta também no relatório gerado antes de ela
+   * entrar (a parte 2, 22/10/2026). A leitura do mês não fala dela.
+   */
+  budget: MonthlyReportBudget.optional(),
+  /** O que a equipe fez no mês, só para quem vê Sua equipe (`campanhas.ver` e `vendas.ver`). Como a verba, pode faltar. */
+  team: MonthlyReportTeam.optional(),
   /** A leitura do mês: da LIA ou, sem ela, do sistema, com o motivo. O mesmo formato do Explicar. */
   reading: ExplanationResponse,
   email: z.strictObject({

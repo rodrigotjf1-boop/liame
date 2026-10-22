@@ -1,4 +1,4 @@
-import type { AttentionItem, ClosedLoopResponse, MonthlyReport, MonthlyReportWeek, SourceFreshness } from '@liame/contracts';
+import type { AttentionItem, ClosedLoopResponse, MonthlyReport, MonthlyReportBudget, MonthlyReportBudgetChange, MonthlyReportWeek, SourceFreshness } from '@liame/contracts';
 import { dia, dinheiro, inteiro, razao } from '../ai/registro/formatos.js';
 import { diaNoFuso, menosDias } from './fora-do-normal.js';
 import { campanhasDaSemana, diaIso, maisDias } from './revisao-semanal.js';
@@ -8,10 +8,44 @@ import { campanhasDaSemana, diaIso, maisDias } from './revisao-semanal.js';
 // Resultados (`closedLoop`) no mês, no mês anterior e em cada semana; a comparação é a da revisão da semana
 // (`revisao-semanal.ts`), e a leitura em texto é do Explicar, pela mesma tarefa.
 
-/** Versão do conteúdo guardado em `monthly_report.content` (contrato `MonthlyReport`). */
-export const RELATORIO_VERSAO = 1;
-/** O conteúdo guardado em `monthly_report.content`: o relatório sem o id e sem a situação do e-mail (essas moram nas colunas). */
-export type ConteudoDoRelatorio = Omit<MonthlyReport, 'id' | 'email'>;
+/** Versão do conteúdo guardado em `monthly_report.content` (contrato `MonthlyReport`). A 2 traz a verba e a equipe do mês. */
+export const RELATORIO_VERSAO = 2;
+/** As versões que a leitura abre: a de agora e as de antes (o que entrou depois é opcional no contrato). */
+export const VERSOES_DO_RELATORIO: ReadonlySet<number> = new Set([1, 2]);
+/** Uma mudança da verba como fica guardada: quem pediu e quem aprovou pelo id, e o nome é lido quando a tela abre. */
+export type MudancaGuardada = Omit<MonthlyReportBudgetChange, 'requested_by' | 'approved_by'> & { requested_by: string; approved_by: string | null };
+/** A verba do mês como fica guardada no relatório (D-A3-22). */
+export type VerbaDoMesGuardada = Omit<MonthlyReportBudget, 'changes'> & { changes: MudancaGuardada[] };
+/**
+ * O conteúdo guardado em `monthly_report.content`: o relatório sem o id e sem a situação do e-mail (essas moram nas
+ * colunas), com a verba guardada como acima.
+ */
+export type ConteudoDoRelatorio = Omit<MonthlyReport, 'id' | 'email' | 'budget'> & { budget?: VerbaDoMesGuardada };
+
+/** Quem a tela mostra pelo nome na verba guardada: quem pediu e quem aprovou cada mudança, sem repetir. */
+export function pessoasDaVerba(conteudo: ConteudoDoRelatorio): string[] {
+  const ids = (conteudo.budget?.changes ?? []).flatMap((m) => (m.approved_by ? [m.requested_by, m.approved_by] : [m.requested_by]));
+  return [...new Set(ids)].sort();
+}
+
+/**
+ * O relatório como a pessoa pode ver (D-A3-22): a verba só para quem vê a Verba do mês (`campanhas.ver`) e a equipe
+ * só para quem vê Sua equipe (`campanhas.ver` e `vendas.ver`); o relatório não abre o que a tela de origem fecha. Os
+ * nomes vêm de `nomes`, lidos na hora; quem não existe mais aparece como "Pessoa removida", como na Verba do mês.
+ */
+export function paraQuemVe(conteudo: ConteudoDoRelatorio, permissoes: ReadonlySet<string>, nomes: ReadonlyMap<string, string>): Omit<MonthlyReport, 'id' | 'email'> {
+  const { budget, team, ...resto } = conteudo;
+  const pessoa = (id: string) => ({ id, name: nomes.get(id) ?? 'Pessoa removida' });
+  const veVerba = permissoes.has('campanhas.ver');
+  const veEquipe = veVerba && permissoes.has('vendas.ver');
+  return {
+    ...resto,
+    ...(budget && veVerba
+      ? { budget: { ...budget, changes: budget.changes.map((m) => ({ ...m, requested_by: pessoa(m.requested_by), approved_by: m.approved_by ? pessoa(m.approved_by) : null })) } }
+      : {}),
+    ...(team && veEquipe ? { team } : {}),
+  };
+}
 /** O relatório sai no dia 1º, a partir desta hora, no fuso da loja (D-A3-19). */
 export const HORA_DE_GERAR = 5;
 /** Com a leitura que traz o último dia ainda sem chegar, o relatório espera até esta hora; depois, sai com o que há. */

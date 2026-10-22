@@ -194,8 +194,11 @@ export {
 } from './results.js';
 export {
   MonthlyReport,
+  MonthlyReportBudget,
+  MonthlyReportBudgetChange,
   MonthlyReportQuery,
   MonthlyReportResponse,
+  MonthlyReportTeam,
   MonthlyReportWeek,
   WeeklyReview,
   WeeklyReviewCampaign,

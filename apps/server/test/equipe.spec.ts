@@ -6,7 +6,7 @@ import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DO_RELATORIO, WORKFLOW
 import { WORKFLOW_DO_REVISOR } from '../src/ai/revisor/prompt.js';
 import { WORKFLOW as WORKFLOW_DA_CONVERSA } from '../src/conversa/conversa.service.js';
 import { EQUIPE, MEMBROS } from '../src/equipe/membros.js';
-import { agoraDoCrm, type ContagensDoMes, type FatosDoMembro, numerosDoMembro, type PropostaEmAndamento, situacaoDoMembro } from '../src/equipe/numeros.js';
+import { agoraDoCrm, type ContagensDoMes, type FatosDoMembro, NUMEROS_DE_AGORA, numerosDoMembro, type PropostaEmAndamento, situacaoDoMembro } from '../src/equipe/numeros.js';
 import { WORKFLOW as WORKFLOW_DO_ESTRATEGISTA } from '../src/worker/estrategista.service.js';
 import { WORKFLOW as WORKFLOW_DO_PESQUISADOR } from '../src/worker/pesquisa.service.js';
 
@@ -231,5 +231,13 @@ describe('Sua equipe (A3, I13b)', () => {
     // Desligado, não ligado ou parado: nada disso se diz.
     expect(agora({ ativo: false, semRegemcast: true, semDesconto: true, semOferta: true, emAndamento: [preparando, rascunho] })).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
     expect(agora({ ativo: false, semDesconto: true })).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
+  });
+
+  it('os números de agora, que o relatório do mês fechado tira (D-A3-22), são números que Sua equipe mostra de verdade', () => {
+    // Um número renomeado ficaria no relatório do mês sem aviso: cada chave da lista tem de sair de algum funcionário.
+    const chaves = new Set(MEMBROS.flatMap((key) => numerosDoMembro(EQUIPE[key], vazio).map((s) => s.key)));
+    expect([...NUMEROS_DE_AGORA].filter((k) => !chaves.has(k))).toEqual([]);
+    // E o que é do mês fica: as respostas da LIA, as revisões e as peças escritas não estão na lista.
+    for (const doMes of ['respostas', 'revisoes', 'pecas_escritas', 'mensagens_propostas', 'planos_aprovados']) expect(NUMEROS_DE_AGORA.has(doMes), doMes).toBe(false);
   });
 });

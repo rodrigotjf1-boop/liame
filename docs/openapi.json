@@ -30139,7 +30139,7 @@
     },
     "/v1/results/monthly-report": {
       "get": {
-        "description": "O relatório de um mês fechado da loja (do dia 1º ao último, no fuso dela), como foi gerado no dia 1º de manhã: os quatro números do topo ao lado dos do mês anterior, cada semana do mês (cortada no mês, com a semana inteira da revisão), o que cada campanha trouxe no caixa, o que melhorou, o que piorou, o que fica para o mês seguinte e a leitura do mês (da LIA ou, sem ela, do sistema, com o motivo), no formato do Explicar. Sem `month`, o mais recente; `month` é o mês pedido (`AAAA-MM`). Sem relatório ainda, `report` vem nulo e `next_report_on` diz quando sai o primeiro. O relatório não é recalculado: a tela e o e-mail mostram os mesmos números.",
+        "description": "O relatório de um mês fechado da loja (do dia 1º ao último, no fuso dela), como foi gerado no dia 1º de manhã: os quatro números do topo ao lado dos do mês anterior, cada semana do mês (cortada no mês, com a semana inteira da revisão), o que cada campanha trouxe no caixa, o que melhorou, o que piorou, o que fica para o mês seguinte e a leitura do mês (da LIA ou, sem ela, do sistema, com o motivo), no formato do Explicar. A verba do mês (`budget`: o gasto das contas de anúncio da empresa no mês, o teto e as mudanças nas campanhas) só vem para quem tem `campanhas.ver`, e o que a equipe fez (`team`) para quem tem também `vendas.ver`, como nas telas de onde eles vêm; os dois faltam no relatório gerado antes de entrarem. Sem `month`, o mais recente; `month` é o mês pedido (`AAAA-MM`). Sem relatório ainda, `report` vem nulo e `next_report_on` diz quando sai o primeiro. O relatório não é recalculado: a tela e o e-mail mostram os mesmos números.",
         "operationId": "ResultsController_monthlyReport",
         "parameters": [
           {
@@ -30821,6 +30821,296 @@
                             ],
                             "additionalProperties": false
                           }
+                        },
+                        "budget": {
+                          "type": "object",
+                          "properties": {
+                            "currency": {
+                              "type": "string"
+                            },
+                            "spend_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "limit_micros": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "pattern": "^-?\\d+$"
+                            },
+                            "missing": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9_]+$"
+                              }
+                            },
+                            "changes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "action_id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "executed_on": {
+                                    "type": "string",
+                                    "format": "date",
+                                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                  },
+                                  "action": {
+                                    "type": "string"
+                                  },
+                                  "provider": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "target": {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "campaign_name": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name",
+                                      "campaign_name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "from": {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string"
+                                      },
+                                      "daily_micros": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "pattern": "^-?\\d+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "status",
+                                      "daily_micros"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "to": {
+                                    "type": "object",
+                                    "properties": {
+                                      "status": {
+                                        "type": "string"
+                                      },
+                                      "daily_micros": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "pattern": "^-?\\d+$"
+                                      }
+                                    },
+                                    "required": [
+                                      "status",
+                                      "daily_micros"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "requested_by": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "approved_by": {
+                                    "type": [
+                                      "object",
+                                      "null"
+                                    ],
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  "agent_key": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "check": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "pattern": "^[a-z0-9_]+$"
+                                  }
+                                },
+                                "required": [
+                                  "action_id",
+                                  "executed_on",
+                                  "action",
+                                  "provider",
+                                  "target",
+                                  "from",
+                                  "to",
+                                  "requested_by",
+                                  "approved_by",
+                                  "agent_key",
+                                  "check"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "currency",
+                            "spend_micros",
+                            "limit_micros",
+                            "missing",
+                            "changes"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "team": {
+                          "type": "object",
+                          "properties": {
+                            "members": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9_]+$"
+                                  },
+                                  "stats": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": {
+                                          "type": "string",
+                                          "maxLength": 60,
+                                          "pattern": "^[a-z0-9_]+$"
+                                        },
+                                        "value": {
+                                          "type": "string",
+                                          "pattern": "^-?\\d+$"
+                                        },
+                                        "unit": {
+                                          "type": "string",
+                                          "maxLength": 60,
+                                          "pattern": "^[a-z0-9_]+$"
+                                        }
+                                      },
+                                      "required": [
+                                        "key",
+                                        "value",
+                                        "unit"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "stats"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "ai": {
+                              "type": "object",
+                              "properties": {
+                                "spent_usd_micros": {
+                                  "type": "string",
+                                  "pattern": "^-?\\d+$"
+                                },
+                                "ceiling_usd_micros": {
+                                  "type": "string",
+                                  "pattern": "^-?\\d+$"
+                                }
+                              },
+                              "required": [
+                                "spent_usd_micros",
+                                "ceiling_usd_micros"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "usd_brl": {
+                              "type": [
+                                "object",
+                                "null"
+                              ],
+                              "properties": {
+                                "rate": {
+                                  "type": "string",
+                                  "pattern": "^\\d{1,4}\\.\\d{1,6}$"
+                                },
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                                },
+                                "source": {
+                                  "type": "string",
+                                  "pattern": "^[a-z0-9_]+$"
+                                }
+                              },
+                              "required": [
+                                "rate",
+                                "date",
+                                "source"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "required": [
+                            "members",
+                            "ai",
+                            "usd_brl"
+                          ],
+                          "additionalProperties": false
                         },
                         "reading": {
                           "type": "object",

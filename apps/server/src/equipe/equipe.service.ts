@@ -1,4 +1,5 @@
 import type {
+  MonthlyReportTeam,
   PauseTeamMemberRequest,
   ResumeTeamMemberRequest,
   TeamActivityQuery,
@@ -9,7 +10,7 @@ import type {
   TeamShadowQuery,
   TeamShadowResponse,
 } from '@liame/contracts';
-import { uuidv7 } from '@liame/database';
+import { type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ativoPeloPlano } from '../ai/registro/ativacao.js';
@@ -29,7 +30,7 @@ import { REGRAS_VERSAO } from '../sombra/regras.js';
 import { atividadeDoMembro, DIAS_DA_ATIVIDADE } from './atividade.js';
 import { PREFIXO_RECUSA } from '../actions/action.service.js';
 import { CRIATIVO_DA_EQUIPE, CRM_DA_EQUIPE, EQUIPE, ehMembro, type Membro, MEMBROS } from './membros.js';
-import { agoraDoCrm, type ContagensDoMes, numerosDoMembro, type PropostaEmAndamento, situacaoDoMembro } from './numeros.js';
+import { agoraDoCrm, type ContagensDoMes, NUMEROS_DE_AGORA, numerosDoMembro, type PropostaEmAndamento, situacaoDoMembro } from './numeros.js';
 
 // Sua equipe (A3, I13b; protótipo P7, aprovado em 03/10/2026). Na requisição, sob a RLS da empresa: quem
 // trabalha para a marca, a situação de cada um, o custo de IA e o que fez no mês. A empresa desliga e liga um membro
@@ -74,84 +75,16 @@ export class EquipeService {
     ).rows[0];
     if (!org) throw new Error('equipe: empresa não encontrada no contexto');
     const inicio = iso(org.inicio);
-    const gasto = (
-      await tx.execute<{ dia: string; mes: string }>(sql`
-        select coalesce(sum(cost_usd_micros) filter (where occurred_at >= ${iso(org.inicio_do_dia)}::timestamptz), 0)::text as dia,
-               coalesce(sum(cost_usd_micros), 0)::text as mes
-          from liame.ai_usage where tenant_id = ${tenantId} and occurred_at >= ${inicio}::timestamptz`)
-    ).rows[0]!;
-
-    // O uso de IA da marca no mês, por fluxo, e o retorno das pessoas. Uma resposta com leituras faz várias chamadas
-    // ao modelo: o custo e as chamadas contam todas; a resposta é a chamada que a entregou (`answered`), e a que a
-    // conferência recusou não chegou à pessoa.
-    const usos = new Map(
-      (
-        await tx.execute<{ workflow: string; custo: string; chamadas: number; respostas: number; entregues: number }>(sql`
-          select u.workflow, coalesce(sum(u.cost_usd_micros), 0)::text as custo,
-                 (count(*) filter (where u.model is not null))::int as chamadas,
-                 (count(*) filter (where u.answered))::int as respostas,
-                 (count(*) filter (where u.answered and not exists (select 1 from liame.ai_refusal r where r.usage_id = u.id)))::int as entregues
-            from liame.ai_usage u
-           where u.tenant_id = ${tenantId} and u.brand_id = ${brandId} and u.occurred_at >= ${inicio}::timestamptz
-           group by u.workflow`)
-      ).rows.map((u) => [u.workflow, u]),
-    );
-    const retornos = (
-      await tx.execute<{ workflow: string; fez_sentido: number; discordo: number }>(sql`
-        select u.workflow, (count(*) filter (where f.verdict = 'fez_sentido'))::int as fez_sentido, (count(*) filter (where f.verdict = 'discordo'))::int as discordo
-          from liame.ai_feedback f join liame.ai_usage u on u.id = f.usage_id
-         where u.tenant_id = ${tenantId} and u.brand_id = ${brandId} and u.occurred_at >= ${inicio}::timestamptz
-         group by u.workflow`)
-    ).rows;
-
-    // O que a conferência recusou no mês, por funcionário que escreveu (D-A3-15): sem o texto, só a contagem.
-    const recusas = (
-      await tx.execute<{ member: string; do_compliance: number; outras: number }>(sql`
-        select member,
-               coalesce(sum(items) filter (where kind in ('compliance', 'revisor')), 0)::int as do_compliance,
-               coalesce(sum(items) filter (where kind not in ('compliance', 'revisor')), 0)::int as outras
-          from liame.ai_refusal
-         where tenant_id = ${tenantId} and brand_id = ${brandId} and created_at >= ${inicio}::timestamptz
-         group by member`)
-    ).rows;
-
-    // O que cada um fez no mês (e o que está em andamento agora).
-    const n = (
-      await tx.execute<Record<string, number | string>>(sql`
-        select
-          (select count(*) from liame.demand where brand_id = ${brandId} and opened_by_agent = 'lia' and created_at >= ${inicio}::timestamptz)::int as demandas_da_lia,
-          (select count(*) from liame.weekly_review where brand_id = ${brandId} and generated_at >= ${inicio}::timestamptz)::int as revisoes,
-          (select count(*) from liame.weekly_review where brand_id = ${brandId} and generated_at >= ${inicio}::timestamptz and reading_source = 'lia')::int as revisoes_com_ia,
-          (select count(*) from liame.plan where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and status = 'aprovado')::int as planos_aprovados,
-          (select count(*) from liame.plan where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and status = 'recusado')::int as planos_recusados,
-          (select count(*) from liame.plan where brand_id = ${brandId} and status = 'pendente' and expires_at > ${instante}::timestamptz)::int as planos_esperando,
-          (select count(*) from liame.demand where brand_id = ${brandId} and assignee_agent = 'estrategista' and status in ('aberta', 'em_andamento'))::int as em_preparo,
-          (select count(*) from liame.demand where brand_id = ${brandId} and assignee_agent = 'estrategista' and status = 'em_andamento')::int as preparando_agora,
-          (select count(*) from liame.research_request where brand_id = ${brandId} and status = 'concluida' and finished_at >= ${inicio}::timestamptz)::int as paginas_lidas,
-          (select count(*) from liame.research_request where brand_id = ${brandId} and status = 'recusada' and finished_at >= ${inicio}::timestamptz)::int as paginas_recusadas,
-          (select count(*) from liame.research_request where brand_id = ${brandId} and status = 'lendo')::int as lendo_agora,
-          (select count(*) from liame.brand_dossier_suggestion where brand_id = ${brandId} and source = 'pesquisador' and created_at >= ${inicio}::timestamptz)::int as sugestoes,
-          (select count(*) from liame.shadow_decision where brand_id = ${brandId} and decided_on >= ${org.de}::date)::int as recomendacoes,
-          (select count(*) from liame.shadow_decision where brand_id = ${brandId} and decided_on >= ${org.de}::date and status = 'avaliada' and regret_label <> 'sem_dado')::int as comparaveis,
-          (select count(*) from liame.shadow_decision where brand_id = ${brandId} and decided_on >= ${org.de}::date and status = 'avaliada' and regret_label <> 'sem_dado'
-              and agreement in ('igual', 'mesma_direcao'))::int as mesma_direcao,
-          (select coalesce(sum(action_regret_micros), 0) from liame.shadow_decision
-            where brand_id = ${brandId} and decided_on >= ${org.de}::date and status = 'avaliada' and regret_label <> 'sem_dado')::text as arrependimento`)
-    ).rows[0]!;
-    // O trabalho do Criativo (A4, X6): os pedidos e as peças do mês, as de hoje, o que espera a pessoa agora e o pedido
-    // que está na fila ou sendo escrito (um lote por marca de cada vez; a outra versão de uma peça também conta).
-    const pecas = (
-      await tx.execute<Record<string, number>>(sql`
-        select
-          (select count(*) from liame.ad_piece_request where brand_id = ${brandId} and piece_id is null and status = 'concluido' and finished_at >= ${inicio}::timestamptz)::int as pedidos,
-          (select count(*) from liame.ad_piece_request where brand_id = ${brandId} and piece_id is not null and status = 'concluido' and finished_at >= ${inicio}::timestamptz)::int as refeitas,
-          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz)::int as escritas,
-          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and status = 'aprovada')::int as aprovadas,
-          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and status = 'recusada')::int as recusadas,
-          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${iso(org.inicio_do_dia)}::timestamptz)::int as hoje,
-          (select count(*) from liame.ad_piece where brand_id = ${brandId} and status = 'decidir' and review_status <> 'barrou')::int as esperando,
-          (select count(*) from liame.ad_piece where brand_id = ${brandId} and status = 'decidir' and review_status = 'barrou')::int as barradas`)
-    ).rows[0]!;
+    const { gasto, usos, n, propostas, contagens } = await this.contagensDoMes(tx, {
+      tenantId,
+      brandId,
+      inicio,
+      fim: null,
+      de: org.de,
+      ate: org.ate,
+      instante,
+      inicioDoDia: iso(org.inicio_do_dia),
+    });
     const escrevendo = (
       await tx.execute<{ offer: string; variations: number; piece_id: string | null; requested_by: string | null; name: string | null; created_at: Date | string }>(sql`
         select r.offer, r.variations, r.piece_id, r.requested_by, u.name, r.created_at
@@ -160,83 +93,6 @@ export class EquipeService {
          order by (r.piece_id is null) desc, r.created_at
          limit 1`)
     ).rows[0];
-    // O trabalho do CRM e mensageria (A5, Y6): os pedidos de envio que ele montou no mês, o que as pessoas decidiram
-    // deles, os que esperam agora e o que os cupons das mensagens do mês trouxeram no caixa (a mesma conta da tela
-    // Mensagens: pedidos confirmados da loja do cupom, com o código dele, desde a hora em que o cupom nasceu).
-    const doCrm = sql`from liame.message_request m join liame.action_request r on r.id = m.action_request_id where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE}`;
-    const mensagens = (
-      await tx.execute<Record<string, number | string>>(sql`
-        select
-          (select count(*) ${doCrm} and m.created_at >= ${inicio}::timestamptz)::int as propostas,
-          (select count(*) ${doCrm} and m.created_at >= ${inicio}::timestamptz and r.status = 'executada')::int as enviadas,
-          (select count(*) ${doCrm} and m.created_at >= ${inicio}::timestamptz and r.status = 'cancelada' and r.status_reason like ${`${PREFIXO_RECUSA}%`})::int as recusadas,
-          (select count(*) ${doCrm} and r.status = 'aguardando_aprovacao' and r.expires_at > ${instante}::timestamptz)::int as esperando,
-          (select count(o.id) from liame.message_request m
-             join liame.order_fact o on o.tenant_id = m.tenant_id and o.connected_account_id = m.coupon_account_id and o.coupon_code = m.coupon_code
-                                    and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at
-            where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE} and m.created_at >= ${inicio}::timestamptz and m.coupon_created_at is not null)::int as pedidos_com_cupom,
-          (select coalesce(sum(o.revenue_micros - o.refunded_micros), 0) from liame.message_request m
-             join liame.order_fact o on o.tenant_id = m.tenant_id and o.connected_account_id = m.coupon_account_id and o.coupon_code = m.coupon_code
-                                    and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at
-            where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE} and m.created_at >= ${inicio}::timestamptz and m.coupon_created_at is not null)::text as caixa_com_cupom`)
-    ).rows[0]!;
-    // As propostas dele que ainda estão no caminho (a fila `message_proposal`, migration 0062): a que ele prepara e o
-    // rascunho que espera o modelo. Uma por motivo de cada vez; a que está em preparo vem primeiro.
-    const propostas: PropostaEmAndamento[] = (
-      await tx.execute<{ status: 'preparando' | 'rascunho'; motive: string; offer: string | null; name: string | null; people: number; template_status: string | null; created_at: Date | string; drafted_at: Date | string | null }>(sql`
-        select status, motive, offer, name, people, template_status, created_at, drafted_at
-          from liame.message_proposal
-         where brand_id = ${brandId} and agent_key = ${CRM_DA_EQUIPE} and status in ('preparando', 'rascunho')
-         order by (status = 'preparando') desc, created_at, id`)
-    ).rows.map((p) => ({
-      situacao: p.status,
-      motivo: p.motive,
-      oferta: p.offer,
-      nome: p.name,
-      pessoas: Number(p.people),
-      situacaoDoModelo: p.template_status,
-      abertaEm: iso(p.created_at),
-      rascunhoEm: p.drafted_at ? iso(p.drafted_at) : null,
-    }));
-    const contagens: ContagensDoMes = {
-      respostasPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.respostas)])),
-      entreguesPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.entregues)])),
-      retornoPorFluxo: new Map(retornos.map((r) => [r.workflow, { fezSentido: Number(r.fez_sentido), discordo: Number(r.discordo) }])),
-      demandasDaLia: Number(n.demandas_da_lia),
-      revisoes: Number(n.revisoes),
-      revisoesComLeituraDaIa: Number(n.revisoes_com_ia),
-      planosAprovados: Number(n.planos_aprovados),
-      planosRecusados: Number(n.planos_recusados),
-      planosEsperando: Number(n.planos_esperando),
-      emPreparo: Number(n.em_preparo),
-      paginasLidas: Number(n.paginas_lidas),
-      paginasRecusadas: Number(n.paginas_recusadas),
-      sugestoesDoPesquisador: Number(n.sugestoes),
-      recomendacoes: Number(n.recomendacoes),
-      comparaveis: Number(n.comparaveis),
-      mesmaDirecao: Number(n.mesma_direcao),
-      arrependimentoMicros: BigInt(n.arrependimento as string),
-      recusasPorMembro: new Map(recusas.map((r) => [r.member, { doCompliance: Number(r.do_compliance), outras: Number(r.outras) }])),
-      pecas: {
-        pedidos: Number(pecas.pedidos),
-        escritas: Number(pecas.escritas),
-        aprovadas: Number(pecas.aprovadas),
-        recusadas: Number(pecas.recusadas),
-        refeitas: Number(pecas.refeitas),
-        hoje: Number(pecas.hoje),
-        esperando: Number(pecas.esperando),
-        barradas: Number(pecas.barradas),
-      },
-      mensagens: {
-        propostas: Number(mensagens.propostas),
-        enviadas: Number(mensagens.enviadas),
-        recusadas: Number(mensagens.recusadas),
-        esperando: Number(mensagens.esperando),
-        rascunhos: propostas.filter((p) => p.situacao === 'rascunho').length,
-        pedidosComCupom: Number(mensagens.pedidos_com_cupom),
-        caixaComCupomMicros: BigInt(mensagens.caixa_com_cupom as string),
-      },
-    };
 
     // As chaves: a da empresa (pausas), a da distribuição (plano e flags) e a parada.
     const pausas = new Map(
@@ -325,6 +181,200 @@ export class EquipeService {
       can_stop: auth.permissions.has('parada.acionar'),
       generated_at: agora.toISOString(),
     };
+  }
+
+  /**
+   * O que a equipe fez num mês fechado, para o relatório do mês (D-A3-22): os números do mês de cada funcionário que
+   * trabalhou (sem os de agora) e a IA da empresa no mês contra o teto do mês, como Sua equipe mostrava no fim dele. O mês
+   * corre no fuso da empresa, como na tela. Roda na transação da empresa: a rotina do relatório lê como ela.
+   */
+  async doMesFechado(tenantId: string, brandId: string, mes: { from: string; to: string }): Promise<MonthlyReportTeam> {
+    const tx = currentTx();
+    const org = (
+      await tx.execute<{ inicio: Date | string; fim: Date | string; teto_mes: string }>(sql`
+        select (${mes.from}::date::timestamp at time zone o.timezone) as inicio,
+               ((${mes.to}::date + 1)::timestamp at time zone o.timezone) as fim,
+               coalesce(b.monthly_usd_micros, ${this.config.ai.monthlyLimitUsdMicros})::text as teto_mes
+          from liame.organization o left join liame.ai_budget b on b.tenant_id = o.id
+         where o.id = ${tenantId}`)
+    ).rows[0];
+    if (!org) throw new Error('equipe: empresa não encontrada no contexto');
+    const fim = iso(org.fim);
+    // O que é de agora fica de fora; o instante e o começo do dia vão no fim do mês só para as consultas seguirem válidas.
+    const { gasto, contagens } = await this.contagensDoMes(tx, { tenantId, brandId, inicio: iso(org.inicio), fim, de: mes.from, ate: mes.to, instante: fim, inicioDoDia: fim });
+    const members = MEMBROS.flatMap((key) => {
+      const stats = numerosDoMembro(EQUIPE[key], contagens).filter((st) => !NUMEROS_DE_AGORA.has(st.key));
+      return stats.some((st) => st.value !== '0') ? [{ key, stats }] : [];
+    });
+    return { members, ai: { spent_usd_micros: gasto.mes, ceiling_usd_micros: org.teto_mes }, usd_brl: await ultimaCotacao(tx) };
+  }
+
+  /**
+   * As contagens do mês da marca, do começo do mês até `fim` (exclusivo; nulo, sem fim: a tela, no mês que corre): o uso
+   * de IA e o retorno das pessoas, o que a conferência recusou e o que cada funcionário fez. As de agora (o que espera a
+   * decisão, o de hoje) também vêm; o mês fechado as tira (`NUMEROS_DE_AGORA`).
+   */
+  private async contagensDoMes(
+    tx: Tx,
+    e: { tenantId: string; brandId: string; inicio: string; fim: string | null; de: string; ate: string; instante: string; inicioDoDia: string },
+  ) {
+    const { tenantId, brandId, inicio, fim, de, ate, instante, inicioDoDia } = e;
+    const gasto = (
+      await tx.execute<{ dia: string; mes: string }>(sql`
+        select coalesce(sum(cost_usd_micros) filter (where occurred_at >= ${inicioDoDia}::timestamptz), 0)::text as dia,
+               coalesce(sum(cost_usd_micros), 0)::text as mes
+          from liame.ai_usage where tenant_id = ${tenantId} and occurred_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or occurred_at < ${fim}::timestamptz)`)
+    ).rows[0]!;
+
+    // O uso de IA da marca no mês, por fluxo, e o retorno das pessoas. Uma resposta com leituras faz várias chamadas
+    // ao modelo: o custo e as chamadas contam todas; a resposta é a chamada que a entregou (`answered`), e a que a
+    // conferência recusou não chegou à pessoa.
+    const usos = new Map(
+      (
+        await tx.execute<{ workflow: string; custo: string; chamadas: number; respostas: number; entregues: number }>(sql`
+          select u.workflow, coalesce(sum(u.cost_usd_micros), 0)::text as custo,
+                 (count(*) filter (where u.model is not null))::int as chamadas,
+                 (count(*) filter (where u.answered))::int as respostas,
+                 (count(*) filter (where u.answered and not exists (select 1 from liame.ai_refusal r where r.usage_id = u.id)))::int as entregues
+            from liame.ai_usage u
+           where u.tenant_id = ${tenantId} and u.brand_id = ${brandId} and u.occurred_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or u.occurred_at < ${fim}::timestamptz)
+           group by u.workflow`)
+      ).rows.map((u) => [u.workflow, u]),
+    );
+    const retornos = (
+      await tx.execute<{ workflow: string; fez_sentido: number; discordo: number }>(sql`
+        select u.workflow, (count(*) filter (where f.verdict = 'fez_sentido'))::int as fez_sentido, (count(*) filter (where f.verdict = 'discordo'))::int as discordo
+          from liame.ai_feedback f join liame.ai_usage u on u.id = f.usage_id
+         where u.tenant_id = ${tenantId} and u.brand_id = ${brandId} and u.occurred_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or u.occurred_at < ${fim}::timestamptz)
+         group by u.workflow`)
+    ).rows;
+
+    // O que a conferência recusou no mês, por funcionário que escreveu (D-A3-15): sem o texto, só a contagem.
+    const recusas = (
+      await tx.execute<{ member: string; do_compliance: number; outras: number }>(sql`
+        select member,
+               coalesce(sum(items) filter (where kind in ('compliance', 'revisor')), 0)::int as do_compliance,
+               coalesce(sum(items) filter (where kind not in ('compliance', 'revisor')), 0)::int as outras
+          from liame.ai_refusal
+         where tenant_id = ${tenantId} and brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or created_at < ${fim}::timestamptz)
+         group by member`)
+    ).rows;
+
+    // O que cada um fez no mês (e o que está em andamento agora).
+    const n = (
+      await tx.execute<Record<string, number | string>>(sql`
+        select
+          (select count(*) from liame.demand where brand_id = ${brandId} and opened_by_agent = 'lia' and created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or created_at < ${fim}::timestamptz))::int as demandas_da_lia,
+          (select count(*) from liame.weekly_review where brand_id = ${brandId} and generated_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or generated_at < ${fim}::timestamptz))::int as revisoes,
+          (select count(*) from liame.weekly_review where brand_id = ${brandId} and generated_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or generated_at < ${fim}::timestamptz) and reading_source = 'lia')::int as revisoes_com_ia,
+          (select count(*) from liame.plan where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or created_at < ${fim}::timestamptz) and status = 'aprovado')::int as planos_aprovados,
+          (select count(*) from liame.plan where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or created_at < ${fim}::timestamptz) and status = 'recusado')::int as planos_recusados,
+          (select count(*) from liame.plan where brand_id = ${brandId} and status = 'pendente' and expires_at > ${instante}::timestamptz)::int as planos_esperando,
+          (select count(*) from liame.demand where brand_id = ${brandId} and assignee_agent = 'estrategista' and status in ('aberta', 'em_andamento'))::int as em_preparo,
+          (select count(*) from liame.demand where brand_id = ${brandId} and assignee_agent = 'estrategista' and status = 'em_andamento')::int as preparando_agora,
+          (select count(*) from liame.research_request where brand_id = ${brandId} and status = 'concluida' and finished_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or finished_at < ${fim}::timestamptz))::int as paginas_lidas,
+          (select count(*) from liame.research_request where brand_id = ${brandId} and status = 'recusada' and finished_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or finished_at < ${fim}::timestamptz))::int as paginas_recusadas,
+          (select count(*) from liame.research_request where brand_id = ${brandId} and status = 'lendo')::int as lendo_agora,
+          (select count(*) from liame.brand_dossier_suggestion where brand_id = ${brandId} and source = 'pesquisador' and created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or created_at < ${fim}::timestamptz))::int as sugestoes,
+          (select count(*) from liame.shadow_decision where brand_id = ${brandId} and decided_on between ${de}::date and ${ate}::date)::int as recomendacoes,
+          (select count(*) from liame.shadow_decision where brand_id = ${brandId} and decided_on between ${de}::date and ${ate}::date and status = 'avaliada' and regret_label <> 'sem_dado')::int as comparaveis,
+          (select count(*) from liame.shadow_decision where brand_id = ${brandId} and decided_on between ${de}::date and ${ate}::date and status = 'avaliada' and regret_label <> 'sem_dado'
+              and agreement in ('igual', 'mesma_direcao'))::int as mesma_direcao,
+          (select coalesce(sum(action_regret_micros), 0) from liame.shadow_decision
+            where brand_id = ${brandId} and decided_on between ${de}::date and ${ate}::date and status = 'avaliada' and regret_label <> 'sem_dado')::text as arrependimento`)
+    ).rows[0]!;
+    // O trabalho do Criativo (A4, X6): os pedidos e as peças do mês, as de hoje, o que espera a pessoa agora e o pedido
+    // que está na fila ou sendo escrito (um lote por marca de cada vez; a outra versão de uma peça também conta).
+    const pecas = (
+      await tx.execute<Record<string, number>>(sql`
+        select
+          (select count(*) from liame.ad_piece_request where brand_id = ${brandId} and piece_id is null and status = 'concluido' and finished_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or finished_at < ${fim}::timestamptz))::int as pedidos,
+          (select count(*) from liame.ad_piece_request where brand_id = ${brandId} and piece_id is not null and status = 'concluido' and finished_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or finished_at < ${fim}::timestamptz))::int as refeitas,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or created_at < ${fim}::timestamptz))::int as escritas,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or created_at < ${fim}::timestamptz) and status = 'aprovada')::int as aprovadas,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or created_at < ${fim}::timestamptz) and status = 'recusada')::int as recusadas,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and created_at >= ${inicioDoDia}::timestamptz)::int as hoje,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and status = 'decidir' and review_status <> 'barrou')::int as esperando,
+          (select count(*) from liame.ad_piece where brand_id = ${brandId} and status = 'decidir' and review_status = 'barrou')::int as barradas`)
+    ).rows[0]!;
+    // O trabalho do CRM e mensageria (A5, Y6): os pedidos de envio que ele montou no mês, o que as pessoas decidiram
+    // deles, os que esperam agora e o que os cupons das mensagens do mês trouxeram no caixa (a mesma conta da tela
+    // Mensagens: pedidos confirmados da loja do cupom, com o código dele, desde a hora em que o cupom nasceu).
+    const doCrm = sql`from liame.message_request m join liame.action_request r on r.id = m.action_request_id where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE}`;
+    const mensagens = (
+      await tx.execute<Record<string, number | string>>(sql`
+        select
+          (select count(*) ${doCrm} and m.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or m.created_at < ${fim}::timestamptz))::int as propostas,
+          (select count(*) ${doCrm} and m.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or m.created_at < ${fim}::timestamptz) and r.status = 'executada')::int as enviadas,
+          (select count(*) ${doCrm} and m.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or m.created_at < ${fim}::timestamptz) and r.status = 'cancelada' and r.status_reason like ${`${PREFIXO_RECUSA}%`})::int as recusadas,
+          (select count(*) ${doCrm} and r.status = 'aguardando_aprovacao' and r.expires_at > ${instante}::timestamptz)::int as esperando,
+          (select count(o.id) from liame.message_request m
+             join liame.order_fact o on o.tenant_id = m.tenant_id and o.connected_account_id = m.coupon_account_id and o.coupon_code = m.coupon_code
+                                    and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at and (${fim}::timestamptz is null or o.confirmed_at < ${fim}::timestamptz)
+            where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE} and m.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or m.created_at < ${fim}::timestamptz) and m.coupon_created_at is not null)::int as pedidos_com_cupom,
+          (select coalesce(sum(o.revenue_micros - o.refunded_micros), 0) from liame.message_request m
+             join liame.order_fact o on o.tenant_id = m.tenant_id and o.connected_account_id = m.coupon_account_id and o.coupon_code = m.coupon_code
+                                    and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at and (${fim}::timestamptz is null or o.confirmed_at < ${fim}::timestamptz)
+            where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE} and m.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or m.created_at < ${fim}::timestamptz) and m.coupon_created_at is not null)::text as caixa_com_cupom`)
+    ).rows[0]!;
+    // As propostas dele que ainda estão no caminho (a fila `message_proposal`, migration 0062): a que ele prepara e o
+    // rascunho que espera o modelo. Uma por motivo de cada vez; a que está em preparo vem primeiro.
+    const propostas: PropostaEmAndamento[] = (
+      await tx.execute<{ status: 'preparando' | 'rascunho'; motive: string; offer: string | null; name: string | null; people: number; template_status: string | null; created_at: Date | string; drafted_at: Date | string | null }>(sql`
+        select status, motive, offer, name, people, template_status, created_at, drafted_at
+          from liame.message_proposal
+         where brand_id = ${brandId} and agent_key = ${CRM_DA_EQUIPE} and status in ('preparando', 'rascunho')
+         order by (status = 'preparando') desc, created_at, id`)
+    ).rows.map((p) => ({
+      situacao: p.status,
+      motivo: p.motive,
+      oferta: p.offer,
+      nome: p.name,
+      pessoas: Number(p.people),
+      situacaoDoModelo: p.template_status,
+      abertaEm: iso(p.created_at),
+      rascunhoEm: p.drafted_at ? iso(p.drafted_at) : null,
+    }));
+    const contagens: ContagensDoMes = {
+      respostasPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.respostas)])),
+      entreguesPorFluxo: new Map([...usos.values()].map((u) => [u.workflow, Number(u.entregues)])),
+      retornoPorFluxo: new Map(retornos.map((r) => [r.workflow, { fezSentido: Number(r.fez_sentido), discordo: Number(r.discordo) }])),
+      demandasDaLia: Number(n.demandas_da_lia),
+      revisoes: Number(n.revisoes),
+      revisoesComLeituraDaIa: Number(n.revisoes_com_ia),
+      planosAprovados: Number(n.planos_aprovados),
+      planosRecusados: Number(n.planos_recusados),
+      planosEsperando: Number(n.planos_esperando),
+      emPreparo: Number(n.em_preparo),
+      paginasLidas: Number(n.paginas_lidas),
+      paginasRecusadas: Number(n.paginas_recusadas),
+      sugestoesDoPesquisador: Number(n.sugestoes),
+      recomendacoes: Number(n.recomendacoes),
+      comparaveis: Number(n.comparaveis),
+      mesmaDirecao: Number(n.mesma_direcao),
+      arrependimentoMicros: BigInt(n.arrependimento as string),
+      recusasPorMembro: new Map(recusas.map((r) => [r.member, { doCompliance: Number(r.do_compliance), outras: Number(r.outras) }])),
+      pecas: {
+        pedidos: Number(pecas.pedidos),
+        escritas: Number(pecas.escritas),
+        aprovadas: Number(pecas.aprovadas),
+        recusadas: Number(pecas.recusadas),
+        refeitas: Number(pecas.refeitas),
+        hoje: Number(pecas.hoje),
+        esperando: Number(pecas.esperando),
+        barradas: Number(pecas.barradas),
+      },
+      mensagens: {
+        propostas: Number(mensagens.propostas),
+        enviadas: Number(mensagens.enviadas),
+        recusadas: Number(mensagens.recusadas),
+        esperando: Number(mensagens.esperando),
+        rascunhos: propostas.filter((p) => p.situacao === 'rascunho').length,
+        pedidosComCupom: Number(mensagens.pedidos_com_cupom),
+        caixaComCupomMicros: BigInt(mensagens.caixa_com_cupom as string),
+      },
+    };
+    return { gasto, usos, n, propostas, contagens };
   }
 
   /**
