@@ -263,8 +263,79 @@ export async function marcarOlhada(tx: Tx, alvo: DonoDaSugestao, agora: Date): P
   return r.rows.length === 1;
 }
 
-/** O pedido com as sugestões que passaram está em Aprovações: a vez acaba, ligada a ele. */
-export async function marcarPronta(tx: Tx, alvo: DonoDaSugestao, feito: { pedido: string; sugestoes: number; usageId: string | null }, agora: Date): Promise<boolean> {
+// ---------------------------------------------------------------- o "Pedir outras" (parte 3b; P31; D-A6-27)
+
+/** O estado do "Pedir outras" que a resposta da API mostra (`review.more_suggestions`), pela segunda rodada da avaliação. */
+export type MaisSugestoes = 'pode_pedir' | 'escrevendo' | 'feitas' | 'nao_deu';
+
+/** O porquê da segunda rodada encerrada junto com o pedido que saiu de Aprovações (a retirada). */
+export const SEGUNDA_RODADA_DO_PEDIDO_RETIRADO = 'pedido_retirado';
+
+/**
+ * O "Pedir outras" de um pedido do Social media: sem segunda rodada, dá para pedir enquanto o pedido espera a decisão;
+ * com ela, a situação dela (esperando é "escrevendo"; pronta, "feitas"; o resto acabou sem sugestão nova). Nulo quando
+ * não há o que mostrar: o pedido decidido sem segunda rodada, e a segunda rodada que era de um pedido retirado (a
+ * avaliação mudou; ela vale uma vez por avaliação, D-A6-27, e o pedido novo não a mostra).
+ */
+export function maisSugestoes(segunda: { status: SituacaoDaSugestao; reason: string | null } | null, pedidoEspera: boolean): MaisSugestoes | null {
+  if (segunda === null) return pedidoEspera ? 'pode_pedir' : null;
+  if (segunda.status === 'esperando') return 'escrevendo';
+  if (segunda.status === 'pronta') return 'feitas';
+  if (segunda.reason === SEGUNDA_RODADA_DO_PEDIDO_RETIRADO) return null;
+  return 'nao_deu';
+}
+
+/**
+ * Abre a segunda rodada (o "Pedir outras", uma vez por avaliação): a vez nova da mesma avaliação, esperando o Social
+ * media, com quem pediu. Só parte da primeira rodada que está pronta e ligada a este pedido. Devolve `aberta`,
+ * `ja_pedida` (a segunda rodada já existe) ou `sem_primeira` (o pedido não nasceu das sugestões).
+ */
+export async function abrirSegundaRodada(
+  tx: Tx,
+  alvo: { tenantId: string; reviewId: string; pedido: string; quem: string },
+  agora: Date,
+): Promise<'aberta' | 'ja_pedida' | 'sem_primeira'> {
+  const instante = sql`${agora.toISOString()}::timestamptz`;
+  const r = await tx.execute(sql`
+    insert into liame.review_suggestion (id, tenant_id, brand_id, review_id, round, status, requested_by, next_attempt_at, created_at, updated_at)
+    select gen_random_uuid(), s.tenant_id, s.brand_id, s.review_id, 2, 'esperando', ${alvo.quem}, ${instante}, ${instante}, ${instante}
+      from liame.review_suggestion s
+     where s.tenant_id = ${alvo.tenantId} and s.review_id = ${alvo.reviewId} and s.round = 1 and s.status = 'pronta' and s.action_id = ${alvo.pedido}
+    on conflict (review_id, round) do nothing
+    returning id`);
+  if (r.rows.length === 1) return 'aberta';
+  const ja = await tx.execute(sql`select 1 from liame.review_suggestion where tenant_id = ${alvo.tenantId} and review_id = ${alvo.reviewId} and round = 2`);
+  return ja.rows.length ? 'ja_pedida' : 'sem_primeira';
+}
+
+/**
+ * A primeira rodada pronta da avaliação, com o pedido que saiu dela: é o pedido que a segunda rodada atualiza. Nula
+ * quando não há.
+ */
+export async function primeiraRodada(tx: Tx, alvo: { tenantId: string; reviewId: string }): Promise<{ id: string; action_id: string } | null> {
+  const r = await tx.execute<{ id: string; action_id: string }>(sql`
+    select id, action_id from liame.review_suggestion
+     where tenant_id = ${alvo.tenantId} and review_id = ${alvo.reviewId} and round = 1 and status = 'pronta' and action_id is not null`);
+  return r.rows[0] ?? null;
+}
+
+/** O pedido saiu de Aprovações (a retirada): a segunda rodada que esperava acaba descartada, com o porquê. */
+export async function encerrarSegundaRodada(tx: Tx, alvo: { tenantId: string; reviewId: string }, motivo: string, agora: Date): Promise<boolean> {
+  exigirCodigo(motivo, 'o motivo');
+  const quando = sql`${agora.toISOString()}::timestamptz`;
+  const r = await tx.execute(sql`
+    update liame.review_suggestion
+       set status = 'descartada', reason = ${motivo}, next_attempt_at = null, finished_at = ${quando}, updated_at = ${quando}
+     where tenant_id = ${alvo.tenantId} and review_id = ${alvo.reviewId} and round = 2 and status = 'esperando'
+    returning id`);
+  return r.rows.length === 1;
+}
+
+/**
+ * O pedido com as sugestões que passaram está em Aprovações: a vez acaba, ligada a ele. Na segunda rodada, o pedido é o
+ * mesmo da primeira, e a ligação fica só nela (`pedido` nulo): um pedido é de uma vez só.
+ */
+export async function marcarPronta(tx: Tx, alvo: DonoDaSugestao, feito: { pedido: string | null; sugestoes: number; usageId: string | null }, agora: Date): Promise<boolean> {
   if (feito.sugestoes < 1 || feito.sugestoes > 2) throw new Error('sugestões de resposta: o pedido leva uma ou duas sugestões');
   const quando = sql`${agora.toISOString()}::timestamptz`;
   const r = await tx.execute(sql`

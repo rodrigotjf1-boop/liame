@@ -32,8 +32,9 @@ describe('casos de eval do Social media nas respostas (A6, Z6)', () => {
       const vai = `${contextoDoSocial(p)}\n${mensagemDoSocial(p)}`;
       expect({ id: c.id, removidos: limparTexto(vai).removidos }).toEqual({ id: c.id, removidos: 0 });
       expect({ id: c.id, removidos: limparJson(c.gravadas.boa).removidos }).toEqual({ id: c.id, removidos: 0 });
-      // O pedido não tem lugar para o nome de quem avaliou (D-A6-29): só a nota, o dia, o texto, o canal e o dossiê.
-      expect(Object.keys(p).sort()).toEqual(['canal', 'dossie', 'estrelas', 'feitaEm', 'marca', 'texto']);
+      // O pedido não tem lugar para o nome de quem avaliou (D-A6-29): só a nota, o dia, o texto, o canal, o dossiê e,
+      // no "Pedir outras", as sugestões que a pessoa já viu (o texto do próprio Social media).
+      expect(Object.keys(p).sort()).toEqual(['anteriores', 'canal', 'dossie', 'estrelas', 'feitaEm', 'marca', 'texto']);
     }
   });
 

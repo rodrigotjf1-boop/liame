@@ -36,6 +36,8 @@ import { currentTraceparent, inSpan } from '../observability/trace.js';
 import { alvoDaRecomendacao, direcaoDaRecomendacao, type FalhaDaLigacao } from '../sombra/pedido.js';
 import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
+import { SOCIAL } from '../ai/social/prompt.js';
+import { abrirSegundaRodada, maisSugestoes, oQueDesligaAsSugestoes, paramsDaResposta, type SituacaoDaSugestao } from '../avaliacoes/sugestoes.js';
 import { EstadoDaAvaliacao, ParametrosDaResposta, resumoDoTexto } from './avaliacao-plano.js';
 import { BudgetService, estadoNaResposta } from './budget.service.js';
 import { CONNECTORS, type Connector, type ReadResult, type ResourceRef } from './connectors.js';
@@ -113,6 +115,8 @@ type Apresentacao = {
   cuponsSemData: Map<string, { de: string; ate: string }>;
   /** A avaliação do Google de cada pedido de resposta (A6, Z2), como o Liame a guarda agora, pelo id dela. */
   avaliacoes: Map<string, NonNullable<ActionReview['current']>>;
+  /** A segunda rodada das sugestões do Social media (o "Pedir outras", A6, Z6), pelo id da avaliação. */
+  segundasRodadas: Map<string, { status: SituacaoDaSugestao; reason: string | null }>;
 };
 
 /** O retrato da mensagem, como a resposta o mostra (sem o plano do disparo, que é de cada pedido). */
@@ -332,6 +336,97 @@ export class ActionService {
       resourceId: id,
       before: { status: row.status, plan_hash: row.plan_hash },
       after: { status: 'cancelada', reason: motivo, released_micros: released, agent_key: alvo.agentKey },
+      tool: row.tool,
+      traceId: activeTraceId(),
+      origin: 'worker',
+    });
+    return true;
+  }
+
+  /**
+   * O "Pedir outras" (A6, Z6; P31; D-A6-27): no pedido de resposta que o Social media fez e que espera a decisão, a
+   * pessoa pede outras sugestões, uma vez por avaliação. Abre a segunda rodada, que a rotina do worker trata: as novas
+   * chegam no mesmo pedido, antes das que já estavam, e o texto escolhido passa a ser o da primeira nova, a menos que a
+   * pessoa já o tenha ajustado. A de 1 ou 2 estrelas, só o dono pede. Com as sugestões desligadas para a loja, 409.
+   */
+  async pedirOutrasSugestoes(auth: AuthContext, id: string): Promise<ActionResponse> {
+    const tx = currentTx();
+    const tenantId = tenantOf(auth);
+    const row = await this.lock(tx, tenantId, id);
+    const reviewId = row.provider === PROVEDOR_DO_PERFIL ? avaliacaoDoRecurso(row.resource_id) : null;
+    const semSugestoes = () => new AppProblem(409, 'sem-sugestoes', 'Este pedido não tem sugestões', 'Só o pedido de resposta que o Social media fez tem outras sugestões para pedir.');
+    if (row.tool !== 'avaliacao_responder' || row.agent_key !== SOCIAL.key || !reviewId || !row.brand_id) throw semSugestoes();
+    if (row.status !== 'aguardando_aprovacao') throw new AppProblem(409, 'acao-nao-aguarda', 'Não espera aprovação', 'Este pedido não está esperando aprovação.');
+    await this.exigirODono(tx, tenantId, auth, row, 'pedir outras sugestões para');
+    if (await oQueDesligaAsSugestoes(tx, this.flags, { tenantId, brandId: row.brand_id, connectedAccountId: row.account_id })) {
+      throw new AppProblem(409, 'sugestoes-desligadas', 'Sugestões desligadas', 'As sugestões de resposta do Social media não estão ligadas para esta loja agora. Ajuste o texto ou escreva do zero.');
+    }
+    const aberta = await abrirSegundaRodada(tx, { tenantId, reviewId, pedido: id, quem: auth.userId }, new Date());
+    if (aberta === 'ja_pedida') {
+      throw new AppProblem(
+        409,
+        'outras-ja-pedidas',
+        'Outras sugestões já foram pedidas',
+        'Para esta avaliação, as outras sugestões já foram pedidas (uma vez por avaliação). Para outro texto, ajuste uma das sugestões ou escreva do zero.',
+      );
+    }
+    if (aberta === 'sem_primeira') throw semSugestoes();
+    auditDetail({ after: { round: 2, review_id: reviewId } });
+    return this.get(auth, id);
+  }
+
+  /**
+   * A segunda rodada do Social media chega ao pedido (A6, Z6; P31): as sugestões novas vêm antes das da primeira, e o
+   * texto escolhido passa a ser o da primeira nova, a menos que a pessoa já o tenha ajustado (o texto não é nenhuma das
+   * sugestões: o dela fica). O plano é montado de novo, como numa alteração (a avaliação lida no Google agora, a política
+   * para o funcionário), com o hash novo: a aprovação dada ao plano anterior deixa de valer. Só no pedido dele que ainda
+   * espera; devolve falso, sem mudar nada, nos outros. Quem chama é a rotina, na transação da empresa.
+   */
+  async trocarSugestoesPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string }, id: string, novas: readonly { enfoque: string; texto: string }[]): Promise<boolean> {
+    const tx = currentTx();
+    const r = await tx.execute<ActionRow>(sql`select * from liame.action_request where id = ${id} and tenant_id = ${alvo.tenantId} for update`);
+    const row = r.rows[0];
+    if (!row || row.status !== 'aguardando_aprovacao' || row.actor_type !== 'agent' || row.agent_key !== alvo.agentKey) return false;
+    const antes = ParametrosDaResposta.safeParse(row.params);
+    if (!antes.success || !antes.data.sugestoes) return false;
+    const { tool, connector } = this.resolve(row.tool, row.provider);
+    const daPrimeira = antes.data.sugestoes.filter((s) => s.rodada === 1);
+    const ajustado = !antes.data.sugestoes.some((s) => s.texto === antes.data.texto);
+    const novos = paramsDaResposta(novas, 2, daPrimeira);
+    const params = this.parseParams(tool, { ...novos, texto: ajustado ? antes.data.texto : novos.texto });
+    const read = await this.lerNoProvedor(connector, tx, { tenantId: alvo.tenantId, accountId: row.account_id, resourceId: row.resource_id });
+    const plan = this.planejar(tool, read.state, params, read.transient);
+    const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params };
+    const decision = await this.decide(tx, alvo.tenantId, row.brand_id, tool, connector, request, plan, false, 'agent');
+    // A mesma regra do pedido do funcionário: o modo Aprovação, ou o ESCALATE do pedido que só o dono decide.
+    if (decision.mode !== 'APPROVAL' && !(decision.mode === 'ESCALATE' && tool.ownerOnly?.(read.state) === true)) {
+      throw new AppProblem(409, 'modo-nao-e-aprovacao', 'O modo não é Aprovação', `Nesta conta, esta ação está em ${decision.mode} para o funcionário de IA: ele não faz o pedido.`);
+    }
+    const { mode, status, reason } = await this.statusFor(decision.mode, { tenantId: alvo.tenantId, userId: row.requested_by, ator: 'agent' }, row.brand_id, tool);
+    const planHash = planHashOf(request, plan, read.version);
+    await this.budget.release(tx, alvo.tenantId, id);
+    await tx.execute(sql`
+      update liame.action_request
+         set params = ${JSON.stringify(params)}::jsonb, action = ${plan.action}, budget_impact = ${plan.budgetImpact},
+             value_micros = ${plan.valueMicros}, current_value_micros = ${plan.currentValueMicros},
+             reserved_micros = ${status === 'sombra' ? 0 : plan.reserveMicros}, before_state = ${JSON.stringify(read.state)}::jsonb,
+             before_version = ${read.version}, desired_state = ${JSON.stringify(plan.desiredState)}::jsonb, plan_hash = ${planHash},
+             mode = ${mode}, policy_decision = ${JSON.stringify(decision)}::jsonb, status = ${status}, status_reason = ${reason}, updated_at = now()
+       where id = ${id} and tenant_id = ${alvo.tenantId}`);
+    if (status !== 'sombra') {
+      await this.budget.reserve(tx, { tenantId: alvo.tenantId, brandId: row.brand_id, actionId: id, amountMicros: plan.reserveMicros, sobeOGasto: sobeOGasto(connector, plan) });
+    }
+    await advance(tx, { tenantId: alvo.tenantId, kind: 'acao', subjectId: id, ...flowAfterRequest(status, mode, decision, plan.reserveMicros) });
+    await writeAudit(tx, {
+      tenantId: alvo.tenantId,
+      actorType: 'agent',
+      actorId: null,
+      actorLabel: alvo.agentLabel,
+      action: 'acao.trocar_sugestoes',
+      resourceType: 'action_request',
+      resourceId: id,
+      before: { plan_hash: row.plan_hash },
+      after: { plan_hash: planHash, round: 2, suggestions: novas.length, kept_text: ajustado, agent_key: alvo.agentKey },
       tool: row.tool,
       traceId: activeTraceId(),
       origin: 'worker',
@@ -1092,7 +1187,13 @@ export class ActionService {
    * desfaz. O papel é lido do banco agora, e não da sessão. A política põe a mesma ação em ESCALATE (a aprovação de
    * outro papel nunca bastaria); isto barra a tentativa antes, com a frase certa.
    */
-  private async exigirODono(tx: Tx, tenantId: string, auth: AuthContext, row: ActionRow, verbo: 'aprovar' | 'recusar' | 'alterar' | 'desfazer'): Promise<void> {
+  private async exigirODono(
+    tx: Tx,
+    tenantId: string,
+    auth: AuthContext,
+    row: ActionRow,
+    verbo: 'aprovar' | 'recusar' | 'alterar' | 'desfazer' | 'pedir outras sugestões para',
+  ): Promise<void> {
     if (!row.before_state || !TOOLS[row.tool]?.ownerOnly?.(row.before_state)) return;
     const m = await tx.execute<{ role_key: string }>(sql`
       select role_key from liame.membership where tenant_id = ${tenantId} and user_id = ${auth.userId} and revoked_at is null`);
@@ -1148,6 +1249,7 @@ export class ActionService {
       mensagens: new Map(),
       cuponsSemData: new Map(),
       avaliacoes: new Map(),
+      segundasRodadas: new Map(),
     };
     if (!rows.length) return ap;
     // A avaliação do pedido de resposta (A6, Z2), do que o Liame guarda dela: o pedido não leva o texto.
@@ -1183,6 +1285,11 @@ export class ActionService {
               : { text: l.reply_text, state: l.reply_state ?? 'desconhecida', changed_at: l.reply_changed_at ? new Date(l.reply_changed_at).toISOString() : null, violation: l.reply_violation },
         });
       }
+      // O "Pedir outras" do Social media (A6, Z6, parte 3b): a segunda rodada de cada avaliação, quando há.
+      const r2 = await tx.execute<{ review_id: string; status: SituacaoDaSugestao; reason: string | null }>(sql`
+        select review_id, status, reason from liame.review_suggestion
+         where tenant_id = ${rows[0]!.tenant_id} and round = 2 and review_id in ${deAvaliacao}`);
+      for (const l of r2.rows) ap.segundasRodadas.set(l.review_id, { status: l.status, reason: l.reason });
     }
     // O retrato da mensagem (A5, Y5): o envio e a pausa são da mesma campanha em rascunho que o Liame montou.
     const deMensagem = rows.filter((r) => r.provider === 'regemcast' && mensagemDoRecurso(r.resource_id) !== null);
@@ -1460,6 +1567,8 @@ function avaliacaoDaResposta(row: ActionRow, ap: Apresentacao): ActionReview | n
     changed: antes.success && atual !== null && (atual.stars !== antes.data.estrelas || resumoDoTexto(atual.text) !== antes.data.texto_resumo),
     suggestions: sugestoes,
     withdrawn: retiradaDe(row),
+    // Só no pedido do Social media, que nasceu das sugestões; no de uma pessoa, não há "Pedir outras".
+    more_suggestions: row.agent_key === SOCIAL.key && sugestoes ? maisSugestoes(ap.segundasRodadas.get(id) ?? null, row.status === 'aguardando_aprovacao') : null,
   };
 }
 

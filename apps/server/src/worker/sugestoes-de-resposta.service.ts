@@ -2,7 +2,7 @@ import type { Database, Tx } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ActionService } from '../actions/action.service.js';
-import { EstadoDaAvaliacao } from '../actions/avaliacao-plano.js';
+import { EstadoDaAvaliacao, ParametrosDaResposta } from '../actions/avaliacao-plano.js';
 import { recursoDaAvaliacao } from '../actions/perfil-avaliacao.js';
 import { PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
 import { AiError, AiGateway } from '../ai/gateway.js';
@@ -31,7 +31,10 @@ import {
   oQueDesligaAsSugestoes,
   PEDIDO_QUE_CONTA,
   paramsDaResposta,
+  primeiraRodada,
+  encerrarSegundaRodada,
   reabrirSugestao,
+  SEGUNDA_RODADA_DO_PEDIDO_RETIRADO,
   RETIRADA_PORQUE_MUDOU,
   RETIRADA_PORQUE_RESPONDIDA,
   retirarSugestao,
@@ -104,7 +107,11 @@ type Lido = {
   brandId: string;
   contaId: string;
   reviewId: string;
-  dono: string;
+  /** 1: a avaliação nova; 2: o "Pedir outras", que atualiza o pedido que já espera (`pedidoAtual`). */
+  rodada: 1 | 2;
+  pedidoAtual: string | null;
+  /** O dono da empresa, em nome de quem o pedido nasce (só na primeira rodada). */
+  dono: string | null;
   pedido: PedidoDoSocial;
   base: BaseDaSugestao;
   pedidas: 1 | 2;
@@ -163,7 +170,8 @@ export class SugestoesDeRespostaService {
     const resposta = RespostaDoSocial.safeParse(r.object);
     if (!resposta.success) return this.falhou(alvo, 'formato', agora);
 
-    const { sugestoes, descartes } = sugestoesDaResposta(resposta.data, lido.base, lido.pedidas, lido.conhecido);
+    // Na segunda rodada, a sugestão que repete uma das que a pessoa já viu também é descartada.
+    const { sugestoes, descartes } = sugestoesDaResposta(resposta.data, lido.base, lido.pedidas, lido.conhecido, lido.pedido.anteriores ?? []);
     const passaram = sugestoes.filter((s) => s.conferencia.situacao !== 'barrou');
     const barradas = sugestoes.filter((s) => s.conferencia.situacao === 'barrou');
     if (descartes.length) this.logger.warn(`sugestão ${alvo.id}: o código descartou ${descartes.join(', ')} antes da conferência; uso ${r.usageId}`);
@@ -197,34 +205,43 @@ export class SugestoesDeRespostaService {
       return this.falhou(alvo, motivo, agora);
     }
 
-    // ---- 3. O pedido em Aprovações e a vez que acaba, juntos: se um falhar, nenhum fica.
+    // ---- 3. O pedido em Aprovações e a vez que acaba, juntos: se um falhar, nenhum fica. Na primeira rodada, o pedido
+    // nasce; na segunda (o "Pedir outras"), as sugestões novas entram no pedido que já espera a decisão.
+    const funcionario = { tenantId: alvo.tenantId, agentKey: SOCIAL.key, agentLabel: SOCIAL.name };
     try {
-      const pedido = await naTransacaoDaEmpresa(database, quem, async () => {
+      return await naTransacaoDaEmpresa<VezDaSugestao>(database, quem, async () => {
         const tx = currentTx();
-        const id = await this.acoes.pedirRespostaPeloFuncionario(
-          { tenantId: alvo.tenantId, agentKey: SOCIAL.key, agentLabel: SOCIAL.name, emNomeDe: lido.dono },
-          {
-            tool: 'avaliacao_responder',
-            brand_id: lido.brandId,
-            provider: PROVEDOR_PERFIL_GOOGLE,
-            account_id: lido.contaId,
-            resource_id: recursoDaAvaliacao(lido.reviewId),
-            params: paramsDaResposta(passaram, 1),
-          },
-        );
-        if (!(await marcarPronta(tx, alvo, { pedido: id, sugestoes: passaram.length, usageId: r.usageId }, agora))) throw new ForaDaFila();
+        let pedido: string;
+        if (lido.rodada === 2) {
+          pedido = lido.pedidoAtual!;
+          // O pedido foi decidido enquanto ele escrevia: as sugestões novas não têm mais onde entrar.
+          if (!(await this.acoes.trocarSugestoesPeloFuncionario(funcionario, pedido, passaram))) return this.descartar(tx, alvo, 'pedido_decidido', agora, r.usageId);
+        } else {
+          pedido = await this.acoes.pedirRespostaPeloFuncionario(
+            { ...funcionario, emNomeDe: lido.dono! },
+            {
+              tool: 'avaliacao_responder',
+              brand_id: lido.brandId,
+              provider: PROVEDOR_PERFIL_GOOGLE,
+              account_id: lido.contaId,
+              resource_id: recursoDaAvaliacao(lido.reviewId),
+              params: paramsDaResposta(passaram, 1),
+            },
+          );
+        }
+        // A ligação com o pedido fica só na primeira rodada: um pedido é de uma vez só.
+        if (!(await marcarPronta(tx, alvo, { pedido: lido.rodada === 2 ? null : pedido, sugestoes: passaram.length, usageId: r.usageId }, agora))) throw new ForaDaFila();
         // Só números e códigos: o texto das sugestões fica no pedido, não na trilha.
         await this.auditar(tx, alvo, 'avaliacao.sugerir', {
-          round: 1,
+          round: lido.rodada,
           suggestions: passaram.length,
           barred: barradas.length,
           ...(barradas.length ? { barred_by: itensQueBarraram(barradas) } : {}),
-          action_id: id,
+          action_id: pedido,
           usage_id: r.usageId,
         });
-        return id;
+        return { status: 'pronta', pedido, sugestoes: passaram.length };
       });
-      return { status: 'pronta', pedido, sugestoes: passaram.length };
     } catch (err) {
       if (err instanceof ForaDaFila) return { status: 'fora' };
       if (!(err instanceof AppProblem)) throw err;
@@ -280,15 +297,19 @@ export class SugestoesDeRespostaService {
       if (!atual || !antes.success) return { status: 'fora' };
       const quem = { tenantId: alvo.tenantId, agentKey: SOCIAL.key, agentLabel: SOCIAL.name };
 
+      // O "Pedir outras" que ainda esperava não tem mais pedido onde entrar.
+      const daAvaliacao = { tenantId: alvo.tenantId, reviewId: s.review_id };
       if (atual.reply_text !== null) {
         if (!(await this.acoes.retirarPeloFuncionario(quem, s.action_id, RETIRADA_PORQUE_RESPONDIDA))) return { status: 'fora' };
         if (!(await retirarSugestao(tx, alvo, RETIRADA_PORQUE_RESPONDIDA, agora))) throw new ForaDaFila();
+        await encerrarSegundaRodada(tx, daAvaliacao, SEGUNDA_RODADA_DO_PEDIDO_RETIRADO, agora);
         await this.auditar(tx, alvo, 'avaliacao.retirar_sugestoes', { reason: RETIRADA_PORQUE_RESPONDIDA, action_id: s.action_id });
         return { status: 'retirada', motivo: RETIRADA_PORQUE_RESPONDIDA, pedido: s.action_id };
       }
       if (avaliacaoMudou(antes.data, atual)) {
         if (!(await this.acoes.retirarPeloFuncionario(quem, s.action_id, RETIRADA_PORQUE_MUDOU))) return { status: 'fora' };
         if (!(await reabrirSugestao(tx, alvo, RETIRADA_PORQUE_MUDOU, agora))) throw new ForaDaFila();
+        await encerrarSegundaRodada(tx, daAvaliacao, SEGUNDA_RODADA_DO_PEDIDO_RETIRADO, agora);
         await this.auditar(tx, alvo, 'avaliacao.retirar_sugestoes', { reason: RETIRADA_PORQUE_MUDOU, action_id: s.action_id });
         return { status: 'de_novo', motivo: RETIRADA_PORQUE_MUDOU, pedido: s.action_id };
       }
@@ -324,22 +345,39 @@ export class SugestoesDeRespostaService {
     const desligado = await oQueDesligaAsSugestoes(tx, this.flags, { tenantId: alvo.tenantId, brandId: a.brand_id, connectedAccountId: a.connected_account_id });
     if (desligado) return this.esperar(tx, alvo, desligado, new Date(agora.getTime() + MINUTOS_DE_ESPERA * MINUTO_MS), agora);
 
-    // Uma pessoa já pediu a resposta (ou ela já saiu pelo Liame): o Social media não escreve por cima.
-    const comPedido = (
-      await tx.execute<{ tem: boolean }>(sql`
-        select exists (
-          select 1 from liame.action_request
-           where tenant_id = ${alvo.tenantId} and tool = 'avaliacao_responder' and resource_id = ${recursoDaAvaliacao(a.id)}
-             and status in ${[...PEDIDO_QUE_CONTA]}) as tem`)
-    ).rows[0];
-    if (comPedido?.tem) return this.descartar(tx, alvo, 'ja_tem_pedido', agora);
-
-    // Quem responde pelo que o funcionário propõe em público é o dono da empresa (uma por empresa: `uq_membership_dono`).
-    const dono = (
-      await tx.execute<{ user_id: string }>(sql`
-        select user_id from liame.membership where tenant_id = ${alvo.tenantId} and role_key = 'dono' and revoked_at is null`)
-    ).rows[0];
-    if (!dono) return this.descartar(tx, alvo, 'sem_dono', agora);
+    let dono: string | null = null;
+    let pedidoAtual: string | null = null;
+    let anteriores: string[] = [];
+    if (s.round === 2) {
+      // O "Pedir outras": as sugestões novas entram no pedido da primeira rodada, que tem de seguir esperando a decisão.
+      const primeira = await primeiraRodada(tx, { tenantId: alvo.tenantId, reviewId: a.id });
+      if (!primeira) return this.descartar(tx, alvo, 'sem_primeira', agora);
+      const atual = (
+        await tx.execute<{ status: string; params: unknown }>(sql`
+          select status, params from liame.action_request where id = ${primeira.action_id} and tenant_id = ${alvo.tenantId}`)
+      ).rows[0];
+      const params = ParametrosDaResposta.safeParse(atual?.params);
+      if (!atual || atual.status !== 'aguardando_aprovacao' || !params.success || !params.data.sugestoes) return this.descartar(tx, alvo, 'pedido_decidido', agora);
+      pedidoAtual = primeira.action_id;
+      anteriores = params.data.sugestoes.map((x) => x.texto);
+    } else {
+      // Uma pessoa já pediu a resposta (ou ela já saiu pelo Liame): o Social media não escreve por cima.
+      const comPedido = (
+        await tx.execute<{ tem: boolean }>(sql`
+          select exists (
+            select 1 from liame.action_request
+             where tenant_id = ${alvo.tenantId} and tool = 'avaliacao_responder' and resource_id = ${recursoDaAvaliacao(a.id)}
+               and status in ${[...PEDIDO_QUE_CONTA]}) as tem`)
+      ).rows[0];
+      if (comPedido?.tem) return this.descartar(tx, alvo, 'ja_tem_pedido', agora);
+      // Quem responde pelo que o funcionário propõe em público é o dono da empresa (uma por empresa: `uq_membership_dono`).
+      const linha = (
+        await tx.execute<{ user_id: string }>(sql`
+          select user_id from liame.membership where tenant_id = ${alvo.tenantId} and role_key = 'dono' and revoked_at is null`)
+      ).rows[0];
+      if (!linha) return this.descartar(tx, alvo, 'sem_dono', agora);
+      dono = linha.user_id;
+    }
 
     // Minha marca: o nome, o dossiê (o tom de voz, o que pode provar, o que nunca diz) e os fatos para a conferência.
     const fuso = await this.resultados.fusoDaMarca(a.brand_id);
@@ -347,12 +385,14 @@ export class SugestoesDeRespostaService {
     if (!marca) return this.descartar(tx, alvo, 'sem_dossie', agora);
     const feitaEm = new Date(a.reviewed_at).toLocaleDateString('pt-BR', { timeZone: fuso, day: '2-digit', month: '2-digit', year: 'numeric' });
     // O canal de contato vem de Minha marca quando o campo existir (D-A6-31, proposta): até lá, nulo.
-    const pedido: PedidoDoSocial = { marca: marca.nome, dossie: marca.dossie, estrelas: a.stars, feitaEm, texto: a.comment, canal: null };
+    const pedido: PedidoDoSocial = { marca: marca.nome, dossie: marca.dossie, estrelas: a.stars, feitaEm, texto: a.comment, canal: null, anteriores };
     return {
       brandId: a.brand_id,
       contaId: a.connected_account_id,
       reviewId: a.id,
-      dono: dono.user_id,
+      rodada: s.round,
+      pedidoAtual,
+      dono,
       pedido,
       base: baseDoPedidoDoSocial(pedido, marca),
       pedidas: sugestoesPedidas(pedido),

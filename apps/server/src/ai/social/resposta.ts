@@ -201,13 +201,20 @@ const arrumar = (t: string): string => t.replace(/\s+/g, ' ').trim();
 /**
  * O que o código faz com a resposta do modelo. Cada sugestão tem os espaços arrumados e só segue se tem enfoque e
  * texto, cabe no teto do Liame, não traz dado pessoal (cru, ou já trocado pela marca da limpeza do gateway) e não
- * repete o texto de outra. Seguem no máximo as `pedidas` (uma ou duas, D-A6-26); as que sobram são descartadas. As
- * que seguem saem conferidas: a barrada fica com o motivo e não aparece.
+ * repete o texto de outra, nem o de uma que a pessoa já viu (`anteriores`, no "Pedir outras"). Seguem no máximo as
+ * `pedidas` (uma ou duas, D-A6-26); as que sobram são descartadas. As que seguem saem conferidas: a barrada fica com o
+ * motivo e não aparece.
  */
-export function sugestoesDaResposta(r: RespostaDoSocial, base: BaseDaSugestao, pedidas: 1 | 2, conhecido = ''): { sugestoes: SugestaoConferida[]; descartes: DescarteDaSugestao[] } {
+export function sugestoesDaResposta(
+  r: RespostaDoSocial,
+  base: BaseDaSugestao,
+  pedidas: 1 | 2,
+  conhecido = '',
+  anteriores: readonly string[] = [],
+): { sugestoes: SugestaoConferida[]; descartes: DescarteDaSugestao[] } {
   const sugestoes: SugestaoConferida[] = [];
   const descartes: DescarteDaSugestao[] = [];
-  const vistas = new Set<string>();
+  const vistas = new Set<string>(anteriores.map((t) => normalizar(arrumar(t))));
   for (const bruta of r.sugestoes) {
     const s: SugestaoDeResposta = { enfoque: arrumar(bruta.enfoque), texto: arrumar(bruta.texto) };
     if (!s.enfoque || !s.texto) descartes.push('vazia');
