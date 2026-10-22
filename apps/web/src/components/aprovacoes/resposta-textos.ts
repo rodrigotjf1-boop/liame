@@ -1,6 +1,6 @@
 import type { ActionResponse } from '@liame/contracts';
 import type { NomeIcone } from '@/components/ui/icone';
-import { horaDe } from '@/lib/formato';
+import { horaDe, quandoComHora } from '@/lib/formato';
 import { quemPediu } from './anuncio-textos';
 import { type PedidoApresentado, recusaDe, type Risco, riscoDe } from './textos';
 
@@ -59,6 +59,8 @@ export type SituacaoDaResposta =
   | 'mudou'
   | 'recusada'
   | 'cancelada'
+  | 'retirada-mudou'
+  | 'retirada-respondida'
   | 'expirada'
   | 'falhou';
 
@@ -67,6 +69,9 @@ const VOLTA_EM_CURSO = ['aguardando_aprovacao', 'aprovada', 'executando'];
 export function situacaoDaResposta(a: AcaoDeResposta): SituacaoDaResposta {
   if (a.status === 'aguardando_aprovacao') return 'pendente';
   if (recusaDe(a)) return 'recusada';
+  // O Social media tirou o pedido de Aprovações (P31): a avaliação mudou, ou ganhou resposta direto no Google.
+  if (a.status === 'cancelada' && a.review.withdrawn === 'avaliacao_mudou') return 'retirada-mudou';
+  if (a.status === 'cancelada' && a.review.withdrawn === 'respondida_no_google') return 'retirada-respondida';
   if (a.status === 'cancelada') return 'cancelada';
   if (a.status === 'expirada') return 'expirada';
   if (a.status === 'falhou') return a.execution?.status === 'estado_mudou' ? 'mudou' : 'falhou';
@@ -101,6 +106,8 @@ export function etiquetaDaResposta(a: AcaoDeResposta): string {
     mudou: 'A avaliação mudou',
     recusada: 'Recusada',
     cancelada: 'Cancelada',
+    'retirada-mudou': 'A avaliação mudou',
+    'retirada-respondida': 'Respondida no Google',
     expirada: 'Expirou',
     falhou: 'Não publicada',
   };
@@ -170,7 +177,7 @@ function aprovadaPor(a: Acao): string {
 }
 
 /** O que aconteceu com o pedido decidido, no detalhe. `pro`: o código do motivo do Google aparece. */
-export function resultadoDaResposta(a: AcaoDeResposta, apagada: Apagada, pro: boolean): ResultadoDaResposta {
+export function resultadoDaResposta(a: AcaoDeResposta, apagada: Apagada, pro: boolean, agora = new Date()): ResultadoDaResposta {
   const s = situacaoDaResposta(a);
   const recusa = recusaDe(a);
   if (ehApagar(a)) {
@@ -221,6 +228,27 @@ export function resultadoDaResposta(a: AcaoDeResposta, apagada: Apagada, pro: bo
       };
     case 'mudou':
       return { tom: 'falha', icone: 'alert', forte: 'A avaliação mudou depois deste pedido.', texto: ' Ela foi editada, apagada ou respondida por outro caminho. A resposta era para a avaliação de antes: não foi publicada.' };
+    case 'retirada-mudou': {
+      // A nota de agora só entra quando mudou: o texto de antes o pedido não guarda.
+      const antes = a.review.stars;
+      const agoraSao = a.review.current?.stars ?? null;
+      const nota = antes !== null && agoraSao !== null && agoraSao !== antes ? `, e agora ${agoraSao === 1 ? 'é' : 'são'} ${estrelasEscritas(agoraSao)}` : '';
+      return {
+        tom: 'falha',
+        icone: 'alert',
+        forte: 'A avaliação mudou depois das sugestões.',
+        texto: ` A pessoa editou a avaliação${nota}. As sugestões eram para a avaliação de antes e saíram daqui: nada foi publicado. O Social media escreve outras para a avaliação como está agora, e elas chegam num pedido novo.`,
+      };
+    }
+    case 'retirada-respondida': {
+      const quando = a.review.current?.reply?.changed_at ?? null;
+      return {
+        tom: 'neutro',
+        icone: 'check',
+        forte: `Esta avaliação já tem resposta, dada direto no Google${quando ? ` (${quandoComHora(quando, agora)})` : ''}.`,
+        texto: ' As sugestões saíram daqui e nada foi publicado pelo Liame. A resposta de lá aparece na tela Avaliações.',
+      };
+    }
     default:
       return { tom: 'falha', icone: 'alert', forte: null, texto: `${aprovadaPor(a)} Mas a resposta não foi publicada: ${a.status_reason ?? 'a execução falhou'}.`.replace('..', '.') };
   }

@@ -29,6 +29,7 @@ import {
   textoDaRespostaValido,
   tituloDaResposta,
 } from './resposta-textos';
+import { contaDeCaracteres } from './sugestoes-textos';
 import { type Grupo, identidadeDoPlano, prazoDe } from './textos';
 
 // A resposta a uma avaliação do Google aberta em Aprovações (mockups/prototipo-avaliacoes.html, P17 aprovado em
@@ -41,12 +42,12 @@ import { type Grupo, identidadeDoPlano, prazoDe } from './textos';
 const MOTIVOS = MOTIVOS_DA_RESPOSTA.map((m) => ({ valor: m, rotulo: m }));
 const DICA_DO_TEXTO = 'A resposta é pública. Sem desconto, brinde ou reembolso prometido aqui, e sem o nome de quem avaliou: o Compliance confere de novo quando você salvar.';
 
-function Frase({ pedacos }: { pedacos: Pedaco[] }) {
+export function Frase({ pedacos }: { pedacos: Pedaco[] }) {
   return <>{pedacos.map((p, i) => (p.b ? <b key={i}>{p.t}</b> : <span key={i}>{p.t}</span>))}</>;
 }
 
 /** "A avaliação, como está no Google": as estrelas, quem avaliou (quando o Google informou agora), há quanto tempo e o texto. */
-function BlocoDaAvaliacao({ ids, avaliacao, estrelas, nome, agora }: { ids: string; avaliacao: ReviewItem | null; estrelas: number | null; nome: string | null; agora: Date }) {
+export function BlocoDaAvaliacao({ ids, avaliacao, estrelas, nome, agora }: { ids: string; avaliacao: ReviewItem | null; estrelas: number | null; nome: string | null; agora: Date }) {
   return (
     <section className="av-bloco" aria-labelledby={`${ids}-av`}>
       <h3 id={`${ids}-av`}>A avaliação, como está no Google</h3>
@@ -73,17 +74,22 @@ function BlocoDaAvaliacao({ ids, avaliacao, estrelas, nome, agora }: { ids: stri
   );
 }
 
-/** O texto da resposta sendo escrito ou editado. Abre com o foco no campo; salvar manda para o servidor conferir. */
-function FormularioDoTexto({
+/**
+ * O texto da resposta sendo escrito ou editado. Abre com o foco no campo; salvar manda para o servidor conferir.
+ * `comConta`: a contagem de caracteres embaixo do campo, como no P31 (as sugestões do Social media).
+ */
+export function FormularioDoTexto({
   ids,
   inicial,
   podeCancelar,
+  comConta = false,
   aoSalvar,
   aoCancelar,
 }: {
   ids: string;
   inicial: string;
   podeCancelar: boolean;
+  comConta?: boolean;
   aoSalvar: (texto: string) => Promise<Feito>;
   aoCancelar: () => void;
 }) {
@@ -122,12 +128,17 @@ function FormularioDoTexto({
         value={texto}
         disabled={ocupado}
         aria-invalid={erro ? true : undefined}
-        aria-describedby={erro ? `${ids}-texto-erro` : `${ids}-texto-dica`}
+        aria-describedby={[comConta ? `${ids}-texto-conta` : '', erro ? `${ids}-texto-erro` : `${ids}-texto-dica`].filter(Boolean).join(' ')}
         onChange={(e) => {
           setTexto(e.target.value);
           setErro(null);
         }}
       />
+      {comConta && (
+        <p className="av-sug-conta" id={`${ids}-texto-conta`} aria-live="polite">
+          {contaDeCaracteres(texto)}
+        </p>
+      )}
       {erro ? (
         <p className="campo-erro" id={`${ids}-texto-erro`} role="alert">
           {erro}
@@ -151,7 +162,7 @@ function FormularioDoTexto({
   );
 }
 
-function Voltar({ aoVoltar }: { aoVoltar: () => void }) {
+export function Voltar({ aoVoltar }: { aoVoltar: () => void }) {
   return (
     <button className="btn btn--ghost btn--sm voltar" type="button" onClick={aoVoltar}>
       <Icone nome="chevron-left" />
@@ -160,7 +171,7 @@ function Voltar({ aoVoltar }: { aoVoltar: () => void }) {
   );
 }
 
-function Resultado({ id, tom, icone, forte, texto }: ReturnType<typeof resultadoDaResposta> & { id: string }) {
+export function Resultado({ id, tom, icone, forte, texto }: ReturnType<typeof resultadoDaResposta> & { id: string }) {
   return (
     <div className={tom === 'neutro' ? 'resultado' : `resultado resultado--${tom}`} role={tom === 'falha' ? 'alert' : tom === 'espera' ? 'status' : undefined} id={id}>
       <Icone nome={icone} />

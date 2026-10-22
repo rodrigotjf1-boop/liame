@@ -178,3 +178,29 @@
 @container det (max-width: 560px) {
   .inbox-det .av-dois { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* As sugestões do Social media (P31): cada uma é um cartão de escolha (o botão de opção e o texto); a escolhida fica
+   marcada pelo fio da marca. Quem não escolhe lê os cartões sem o botão, com a escolhida marcada. Enquanto ele escreve
+   as outras, um aviso tracejado ocupa o lugar delas. Mais forte que `.av-bloco p`, para os textos pequenos. */
+.inbox-det .av-bloco .av-sugs { display: grid; gap: var(--sp-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.inbox-det .av-bloco .av-sug-legenda { padding: 0; margin: 0 0 var(--sp-1); font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.inbox-det .av-bloco .av-sug-sub { margin: var(--sp-2) 0 0; font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); }
+.inbox-det .av-bloco .av-sug { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.inbox-det .av-bloco .av-sug:hover { background: var(--surface-hover); }
+.inbox-det .av-bloco .av-sug:has(input:checked), .inbox-det .av-bloco .av-sug--escolhida { border-color: var(--fio); background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--fio); }
+.inbox-det .av-bloco .av-sug:has(input:focus-visible) { outline: 2px solid var(--foco); outline-offset: 2px; }
+.inbox-det .av-bloco .av-sug input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--fio); }
+.inbox-det .av-bloco .av-sug--leitura { grid-template-columns: minmax(0, 1fr); cursor: default; }
+.inbox-det .av-bloco .av-sug--leitura:hover { background: var(--surface); }
+.inbox-det .av-bloco .av-sug--leitura.av-sug--escolhida:hover { background: var(--primary-soft); }
+.inbox-det .av-bloco .av-sug-txt { display: grid; gap: var(--sp-1); min-width: 0; }
+.inbox-det .av-bloco .av-sug-rot { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); overflow-wrap: anywhere; }
+.inbox-det .av-bloco .av-sug-fala { font-size: var(--text-sm); color: var(--text); overflow-wrap: anywhere; }
+.inbox-det .av-bloco .av-sug-conta { font-size: var(--text-xs); color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.inbox-det .av-bloco .av-sug-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.inbox-det .av-bloco .av-sug-escrevendo { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-sm); color: var(--text-muted); }
+.inbox-det .av-bloco .av-sug-giro { flex: none; width: 16px; height: 16px; border: 2px solid var(--border-strong); border-top-color: var(--fio); border-radius: 50%; animation: av-sug-giro 0.9s linear infinite; }
+@keyframes av-sug-giro { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .inbox-det .av-bloco .av-sug-giro { animation: none; }
+}

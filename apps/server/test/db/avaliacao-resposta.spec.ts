@@ -343,6 +343,7 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
       suggestions: null,
       withdrawn: null,
       more_suggestions: null,
+      more_suggestions_asked_at: null,
     });
     const baixa = await pedir(dono(e), e, id1, PEDIR_DESCULPAS);
     expect(baixa.body.review).toMatchObject({ id: id1, stars: 1, owner_only: true, reply_text: PEDIR_DESCULPAS, changed: false });
