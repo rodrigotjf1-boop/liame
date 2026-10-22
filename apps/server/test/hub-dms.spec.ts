@@ -4,7 +4,7 @@ import { HttpException, Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppModule } from '../src/app.module.js';
 import type { AppConfig } from '../src/config.js';
-import { buscarSoNoHub, erroDaRequisicao, erroDoLaco, HubDms, MODO_DO_HUB } from '../src/connectors/dms/hub.js';
+import { buscarSoNoHub, erroDaRequisicao, erroDoLaco, FalhasDoLaco, falhaPassageiraDoBanco, HubDms, MODO_DO_HUB } from '../src/connectors/dms/hub.js';
 import { APP_VERSION } from '../src/version.js';
 import { EventsLoopService } from '../src/worker/events-loop.service.js';
 import { WorkerModule } from '../src/worker/worker.module.js';
@@ -195,6 +195,59 @@ describe('o erro na forma do hub', () => {
       return Promise.reject(new Error('o banco caiu'));
     });
     expect(hub.erro).toHaveBeenCalledWith({ origem: 'rotina', tipo: 'Error', mensagem: 'o banco caiu', lugar: 'laço vendas' });
+    vi.restoreAllMocks();
+  });
+
+  it('a queda passageira do banco: o código do Node ou do Postgres, ou a frase do pg; o resto não é', () => {
+    const comCodigo = (codigo: string) => Object.assign(new Error('falhou'), { code: codigo });
+    expect(falhaPassageiraDoBanco(new Error('Connection terminated due to connection timeout'))).toBe(true);
+    expect(falhaPassageiraDoBanco(new Error('Connection terminated unexpectedly'))).toBe(true);
+    expect(falhaPassageiraDoBanco(new Error('timeout exceeded when trying to connect'))).toBe(true);
+    for (const codigo of ['ECONNRESET', 'ETIMEDOUT', '57P01', '08006', '53300']) expect(falhaPassageiraDoBanco(comCodigo(codigo)), codigo).toBe(true);
+    // A unicidade e a falta de permissão são regra, não queda; texto solto não é erro do pg.
+    expect(falhaPassageiraDoBanco(comCodigo('23505'))).toBe(false);
+    expect(falhaPassageiraDoBanco(comCodigo('42501'))).toBe(false);
+    expect(falhaPassageiraDoBanco(new Error('o banco caiu'))).toBe(false);
+    expect(falhaPassageiraDoBanco('Connection terminated')).toBe(false);
+  });
+
+  it('a conta das quedas é por laço, e uma falha de outro tipo também zera a do laço', () => {
+    const falhas = new FalhasDoLaco();
+    const queda = new Error('Connection terminated unexpectedly');
+    expect(falhas.falhou('criativo', queda)).toEqual({ nivel: 'aviso', seguidas: 1 });
+    expect(falhas.falhou('vendas', queda)).toEqual({ nivel: 'aviso', seguidas: 1 });
+    expect(falhas.falhou('criativo', queda)).toEqual({ nivel: 'aviso', seguidas: 2 });
+    expect(falhas.falhou('criativo', new Error('regra quebrada'))).toEqual({ nivel: 'erro', seguidas: 0 });
+    expect(falhas.falhou('criativo', queda)).toEqual({ nivel: 'aviso', seguidas: 1 });
+    expect(falhas.passou('vendas')).toBe(1);
+    expect(falhas.passou('vendas')).toBe(0);
+    expect(falhas.falhou('vendas', queda)).toEqual({ nivel: 'aviso', seguidas: 1 });
+  });
+
+  it('o laço com queda passageira do banco: aviso nas duas primeiras seguidas, a terceira vai ao hub, e uma volta boa zera', async () => {
+    const aviso = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const erro = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const info = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    const hub = { erro: vi.fn() };
+    const laco = Reflect.construct(EventsLoopService, [...Array.from({ length: EventsLoopService.length - 1 }, () => ({})), hub]) as unknown as {
+      stopped: boolean;
+      loop(nome: string, lote: number, esperaMs: number, rodar: () => Promise<number>): Promise<void>;
+    };
+    const queda = () => Promise.reject(new Error('Connection terminated due to connection timeout'));
+    // Queda, queda, volta boa (zera), queda, queda, queda: só a última é a terceira seguida.
+    const roteiro: Array<() => Promise<number>> = [queda, queda, () => Promise.resolve(0), queda, queda, queda];
+    let i = 0;
+    await laco.loop('criativo', 1, 1, () => {
+      const passo = roteiro[i] ?? queda;
+      i += 1;
+      if (i === roteiro.length) laco.stopped = true;
+      return passo();
+    });
+    expect(aviso).toHaveBeenCalledTimes(4);
+    expect(erro).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith('criativo: o banco voltou, depois de 2 queda(s) seguida(s)');
+    expect(hub.erro).toHaveBeenCalledTimes(1);
+    expect(hub.erro).toHaveBeenCalledWith({ origem: 'rotina', tipo: 'Error', mensagem: 'Connection terminated due to connection timeout', lugar: 'laço criativo' });
     vi.restoreAllMocks();
   });
 

@@ -36,6 +36,53 @@ export function erroDoLaco(nome: string, err: unknown): ErroDoProduto {
   return { origem: 'rotina', tipo: err instanceof Error ? err.name : 'Erro', mensagem: err instanceof Error ? err.message : String(err), lugar: `laço ${nome}` };
 }
 
+/** Quantas quedas passageiras seguidas do mesmo laço até virar erro (e ir ao hub): uma queda sozinha é aviso. */
+export const PASSAGEIRAS_ATE_ERRO = 3;
+
+// Os códigos de uma queda do caminho até o banco: os do Node (conexão recusada, derrubada, sem resposta, nome que não
+// resolveu agora) e os do Postgres (a classe 08, a 57P de servidor parando ou subindo e a 53300 de conexões esgotadas).
+const CODIGOS_PASSAGEIROS = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'EAI_AGAIN', '08000', '08001', '08003', '08004', '08006', '57P01', '57P02', '57P03', '53300']);
+// As frases do `pg` quando ele não põe código: a conexão que não abriu a tempo, a que caiu, e a do cliente que já falhou.
+const FRASES_PASSAGEIRAS = ['Connection terminated', 'timeout exceeded when trying to connect', 'Client has encountered a connection error'];
+
+/**
+ * A falha é do caminho até o banco (a conexão não abriu a tempo, caiu ou foi derrubada pelo servidor), não da regra do
+ * laço: passa sozinha numa volta seguinte. Foi o E-0002 do hub (21/10/2026): uma conexão que demorou no laço do
+ * Criativo virou "erro novo depois da versão", alerta crítico, sem defeito nenhum.
+ */
+export function falhaPassageiraDoBanco(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const codigo = (err as { code?: unknown }).code;
+  if (typeof codigo === 'string' && CODIGOS_PASSAGEIROS.has(codigo)) return true;
+  return FRASES_PASSAGEIRAS.some((frase) => err.message.startsWith(frase));
+}
+
+/**
+ * As quedas passageiras seguidas de cada laço do worker: até a segunda, é aviso no log; da terceira seguida em diante, é
+ * erro e vai ao hub (o banco fora de verdade aparece em segundos nos laços de 5 s). Qualquer outra falha é erro na hora;
+ * qualquer volta sem falha zera a conta do laço, e o log diz que o banco voltou (LIC-364: o "voltou" fecha a história). Cada laço roda em sequência, então a conta de um não disputa com outra.
+ */
+export class FalhasDoLaco {
+  private readonly seguidas = new Map<string, number>();
+
+  falhou(laco: string, err: unknown): { nivel: 'aviso' | 'erro'; seguidas: number } {
+    if (!falhaPassageiraDoBanco(err)) {
+      this.seguidas.delete(laco);
+      return { nivel: 'erro', seguidas: 0 };
+    }
+    const n = (this.seguidas.get(laco) ?? 0) + 1;
+    this.seguidas.set(laco, n);
+    return { nivel: n >= PASSAGEIRAS_ATE_ERRO ? 'erro' : 'aviso', seguidas: n };
+  }
+
+  /** A volta terminou sem falha: zera e devolve quantas quedas seguidas havia (para o log dizer que o banco voltou). */
+  passou(laco: string): number {
+    const tinha = this.seguidas.get(laco) ?? 0;
+    this.seguidas.delete(laco);
+    return tinha;
+  }
+}
+
 /** O `fetch` do cliente do hub, preso às rotas do hub e sem seguir redirecionamento: o token não vai a outro lugar (V33). */
 export function buscarSoNoHub(base: string): typeof fetch {
   const origem = new URL(base).origin;

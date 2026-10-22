@@ -1,5 +1,5 @@
 import { Injectable, Logger, Optional, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { erroDoLaco, HubDms } from '../connectors/dms/hub.js';
+import { erroDoLaco, FalhasDoLaco, HubDms, PASSAGEIRAS_ATE_ERRO } from '../connectors/dms/hub.js';
 import { ActionExecutor } from './action-executor.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { ConexaoProcessor } from './conexao-processor.js';
@@ -35,6 +35,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
   private stopped = false;
   private readonly loops: Promise<void>[] = [];
   private readonly wakeups = new Set<() => void>();
+
+  /** As quedas passageiras do banco: aviso no log; da terceira seguida do mesmo laço, erro e o hub (E-0002 do hub). */
+  private readonly falhas = new FalhasDoLaco();
 
   constructor(
     private readonly publisher: OutboxPublisher,
@@ -123,9 +126,17 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       let done = 0;
       try {
         done = await run(batch);
+        const quedas = this.falhas.passou(name);
+        if (quedas) this.logger.log(`${name}: o banco voltou, depois de ${quedas} queda(s) seguida(s)`);
       } catch (err) {
-        this.logger.error(`${name}: ${err instanceof Error ? err.message : String(err)}`);
-        this.hub?.erro(erroDoLaco(name, err));
+        const mensagem = err instanceof Error ? err.message : String(err);
+        const { nivel, seguidas } = this.falhas.falhou(name, err);
+        if (nivel === 'aviso') {
+          this.logger.warn(`${name}: queda passageira do banco (${seguidas}ª seguida; vira erro na ${PASSAGEIRAS_ATE_ERRO}ª): ${mensagem}`);
+        } else {
+          this.logger.error(seguidas ? `${name}: o banco falhou ${seguidas} vezes seguidas: ${mensagem}` : `${name}: ${mensagem}`);
+          this.hub?.erro(erroDoLaco(name, err));
+        }
       }
       if (done < batch) await this.sleep(idleMs);
     }
