@@ -10,6 +10,7 @@ import { type AvaliacaoLida, FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE } from '
 import type { FlagService } from '../flags/flag.service.js';
 import type { VaultService } from '../vault/vault.service.js';
 import { type AvaliacaoNova, type ContaDoPerfil, gravarAvaliacoes, gravarNumeros, gravarResumo } from './perfil-store.js';
+import { abrirVezDasSugestoes, oQueDesligaAsSugestoes } from './sugestoes.js';
 
 // Leitura de uma loja do Perfil da Empresa no Google (A6, Z1; base de conhecimento §3.3). Dois conjuntos, cada um com
 // o frescor e a fila dele em `sync_state`:
@@ -108,6 +109,8 @@ export type ResultadoDoPerfil = {
   novas?: AvaliacaoNova[];
   /** Respostas em conferência no Google que foram relidas uma a uma nesta leitura. */
   respostas?: number;
+  /** Avaliações que entraram na fila das sugestões de resposta do Social media nesta leitura (Z6). */
+  sugestoes?: number;
   /** Números do perfil gravados (um por dia e métrica). */
   pontos?: number;
   erro?: string;
@@ -255,6 +258,8 @@ export class SincronizadorDoPerfil {
         // As respostas que o Google ainda confere (Z2): relidas uma a uma, fora as que esta leitura já trouxe.
         const conferencia = await this.conferirRespostas(conector, accessToken, conta, contaDoPerfil, alvo, new Set(lidas.avaliacoes.map((a) => a.id)), agora);
         resultado.respostas = conferencia.relidas;
+        // As sugestões de resposta do Social media (Z6): a leitura que trouxe a avaliação abre a vez dela na fila.
+        resultado.sugestoes = await this.abrirVezDasSugestoes(alvo, agora);
         // O teto só corta as mais antigas: a leitura seguinte parte de agora do mesmo jeito, e o corte fica anotado.
         // As marcas da reconferência e da releitura só andam aqui, na leitura boa: a falha não gasta a vez.
         const quando = agora.toISOString();
@@ -357,6 +362,22 @@ export class SincronizadorDoPerfil {
       return r.rows[0]?.tem === true;
     });
     return { relidas: relidas.length, dePerto };
+  }
+
+  /**
+   * A vez das sugestões de resposta (A6, Z6; D-A6-26): cada avaliação sem resposta dos últimos 30 dias que ainda não
+   * teve a vez entra na fila do Social media, se as sugestões estão ligadas para a loja (a função, a IA, a resposta pelo
+   * Liame e ele na marca; D-A6-30). Desligadas, nada entra, e a próxima leitura confere de novo: a avaliação que chegou
+   * antes de ligar entra na primeira leitura depois. É um extra da leitura: a falha aqui fica no log, e a leitura das
+   * avaliações não falha por ela. Devolve quantas entraram.
+   */
+  private async abrirVezDasSugestoes(alvo: ContaDoPerfil, agora: Date): Promise<number> {
+    try {
+      return await withTenant(this.db, alvo.tenantId, async (tx) => ((await oQueDesligaAsSugestoes(tx, this.flags, alvo)) ? 0 : abrirVezDasSugestoes(tx, alvo, agora)));
+    } catch (err) {
+      this.logger.error(`conta ${alvo.connectedAccountId}: a vez das sugestões de resposta não foi aberta: ${err instanceof Error ? err.message : String(err)}`);
+      return 0;
+    }
   }
 
   /**

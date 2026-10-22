@@ -183,6 +183,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // O nome e a foto de quem avaliou não são guardados (critério A6-1), mas o texto é de terceiro e pode trazer dado
   // pessoal de quem escreveu: por isso PERSONAL, com guarda de 12 meses (D-A6-5).
   profile_review: { class: 'PERSONAL', retention: '12 meses depois da última mudança da avaliação no Google', purge: { job: 'avaliacao', days: 365 } },
+  // As sugestões de resposta do Social media (A6, Z6, migration 0079): só a situação, o porquê, o que a conferência barrou
+  // (os nomes das regras) e o pedido que saiu; nenhum texto (o das sugestões fica no pedido) e nada de quem avaliou.
+  review_suggestion: { class: 'INTERNAL', retention: 'com a avaliação (sai com ela, na guarda de 12 meses dela)' },
   // A nota média e o total de avaliações da loja, e os números do perfil por dia (vistas, rotas, ligações, cliques).
   // Contagens da própria empresa; nenhum dado de pessoa.
   profile_summary: { class: 'CONFIDENTIAL', retention: 'com a conta conectada' },

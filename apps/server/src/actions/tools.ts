@@ -88,6 +88,12 @@ export interface ToolDefinition {
    * (`POST /v1/actions`), nem por um funcionário de IA: o Liame não apaga o que não publicou.
    */
   onlyAsUndo?: boolean;
+  /**
+   * Os parâmetros que só o funcionário de IA preenche (A6, Z6: as sugestões de resposta do Social media). O pedido de
+   * uma pessoa não os traz (400, como parâmetro inválido), e alterar o pedido os mantém como o funcionário deixou: a
+   * pessoa troca o texto escolhido, e o que aparece como escrito pelo funcionário é o que ele escreveu.
+   */
+  agentParams?: readonly string[];
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -367,18 +373,21 @@ export const TOOLS: Record<string, ToolDefinition> = {
   // A resposta da empresa a uma avaliação do perfil no Google (A6, Z2; P17). O estado do recurso é a avaliação, lida
   // do Google na hora, sem o texto dela e sem nada de quem avaliou (`avaliacao-plano.ts`). O texto da resposta é o
   // parâmetro: entra no hash do plano, e a aprovação vale só para ele. Sem a flag de escrita `perfil_google_write`,
-  // nenhum pedido chega a esta ferramenta.
+  // nenhum pedido chega a esta ferramenta. v2 (A6, Z6; P31): o pedido do Social media traz também as sugestões que
+  // ele escreveu, para a pessoa escolher uma; o que vai ao Google continua sendo só o texto escolhido.
   avaliacao_responder: {
     name: 'avaliacao_responder',
-    version: 1,
+    version: 2,
     owner: 'social',
-    description: 'Publica a resposta da empresa a uma avaliação do perfil no Google, com o texto que a pessoa aprova. A resposta é pública; quem avaliou é avisado pelo Google.',
+    description:
+      'Publica a resposta da empresa a uma avaliação do perfil no Google, com o texto que a pessoa aprova. A resposta é pública; quem avaliou é avisado pelo Google. No pedido do Social media, vêm as sugestões dele, para a pessoa escolher uma e ajustar.',
     // Fala em público em nome da empresa, e o aviso a quem avaliou não se desfaz: sempre com a aprovação de uma pessoa (D-A6-3).
     risk: 'R2',
     providers: ['google_business'],
     compensation: 'apagar_a_resposta',
     alwaysApproval: true,
     params: ParametrosDaResposta,
+    agentParams: ['sugestoes'],
     // 1 ou 2 estrelas: só o dono decide (D-A6-4).
     ownerOnly(before) {
       const lido = EstadoDaAvaliacao.safeParse(before);

@@ -12,8 +12,30 @@ import { conferirTexto, normalizar } from '../policy/texto.js';
 // quem avaliou é lido na hora e passa pelo plano só para ser conferido contra o texto da resposta: não entra no estado,
 // no pedido nem na auditoria.
 
-/** O texto que a empresa publica, como parâmetro da ferramenta. O limite fino (caracteres e bytes) é o do plano. */
-export const ParametrosDaResposta = z.strictObject({ texto: z.string().min(1).max(TAMANHO_DA_RESPOSTA * 4) });
+/** Quantas sugestões cabem num pedido: duas por rodada, e duas rodadas por avaliação (D-A6-26 e D-A6-27). */
+export const SUGESTOES_NO_PEDIDO = 4;
+
+/**
+ * Uma sugestão do Social media (A6, Z6), como o pedido a guarda: o enfoque, o texto e a rodada em que ela veio (a 2 é
+ * a do "Pedir outras"). Os limites são os da conferência do funcionário (`ai/social/resposta.ts`, `TAMANHO_MAXIMO`).
+ */
+const SugestaoDoPedido = z.strictObject({
+  enfoque: z.string().min(1).max(60),
+  texto: z.string().min(1).max(600),
+  rodada: z.union([z.literal(1), z.literal(2)]),
+});
+export type SugestaoDoPedido = z.infer<typeof SugestaoDoPedido>;
+
+/**
+ * O texto que a empresa publica, como parâmetro da ferramenta. O limite fino (caracteres e bytes) é o do plano. No
+ * pedido do Social media, vêm também as sugestões que ele escreveu (A6, Z6; D-A6-27): servem para a pessoa escolher
+ * uma, e o que vai para o Google é só o `texto` (a escolhida, ou a versão que a pessoa ajustou). Só o funcionário
+ * preenche as sugestões (`agentParams` da ferramenta): o pedido de uma pessoa não as traz, e alterar o pedido as mantém.
+ */
+export const ParametrosDaResposta = z.strictObject({
+  texto: z.string().min(1).max(TAMANHO_DA_RESPOSTA * 4),
+  sugestoes: z.array(SugestaoDoPedido).min(1).max(SUGESTOES_NO_PEDIDO).optional(),
+});
 
 const Instante = z.iso.datetime();
 

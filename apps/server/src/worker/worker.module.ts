@@ -60,6 +60,8 @@ import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SearchConsoleLoop } from './search-console-loop.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { RotinaDoCrmService } from './rotina-do-crm.service.js';
+import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
+import { SugestoesDeRespostaService } from './sugestoes-de-resposta.service.js';
 import { VigiaService } from './vigia.service.js';
 import { CambioService } from './cambio.service.js';
 import { EscritaDoCrmService } from './escrita-do-crm.service.js';
@@ -177,6 +179,11 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     PedidoDeMensagemService,
     ModeloDoCrmService,
     RotinaDoCrmLoop,
+    // As sugestões de resposta às avaliações do Google (A6, Z6): a leitura do Perfil abre a vez da avaliação nova, o
+    // Social media escreve, o código confere, e as que passam vão num pedido em Aprovações, pelo Action Service. Só com
+    // as flags `respostas_sugeridas`, `ia` e `perfil_google_write` ligadas e ele ativo na marca; nada é publicado daqui.
+    SugestoesDeRespostaService,
+    SugestoesDeRespostaLoop,
     VigiaService,
     // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, para mostrar o custo de IA em reais.
     CambioService,
