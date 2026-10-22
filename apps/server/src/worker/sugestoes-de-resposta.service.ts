@@ -21,6 +21,7 @@ import {
   codigoDoMotivo,
   type DonoDaSugestao,
   encerrarSugestao,
+  esperaDaIa,
   esperarSugestao,
   itensQueBarraram,
   lerSugestao,
@@ -165,7 +166,7 @@ export class SugestoesDeRespostaService {
       if (err.code === 'indisponivel') return this.falhou(alvo, 'ia_fora_do_ar', agora);
       // A IA desligada, parada, sem rota ou no limite: não é falha da avaliação. Ela espera, sem contar tentativa.
       const ate = err.detalhe.voltaEm ?? new Date(agora.getTime() + MINUTOS_DE_ESPERA * MINUTO_MS);
-      return this.naEmpresa(alvo, (tx) => this.esperar(tx, alvo, `ia_${codigoDoMotivo(err.code)}`, ate, agora));
+      return this.naEmpresa(alvo, (tx) => this.esperar(tx, alvo, esperaDaIa(err.code, err.detalhe.teto), ate, agora));
     }
     const resposta = RespostaDoSocial.safeParse(r.object);
     if (!resposta.success) return this.falhou(alvo, 'formato', agora);

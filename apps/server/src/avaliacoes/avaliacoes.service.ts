@@ -1,10 +1,12 @@
-import type { ReviewAuthorsResponse, ReviewItem, ReviewsResponse, ReviewStore } from '@liame/contracts';
-import type { Database } from '@liame/database';
+import type { ReviewAuthorsResponse, ReviewItem, ReviewsResponse, ReviewStore, ReviewSuggestions, ReviewSuggestionTurn } from '@liame/contracts';
+import type { Database, Tx } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { ParametrosDaResposta } from '../actions/avaliacao-plano.js';
 import { avaliacaoDoRecurso } from '../actions/perfil-avaliacao.js';
 import { TOOLS } from '../actions/tools.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
+import { SOCIAL } from '../ai/social/prompt.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { acessoGoogle, type CredencialGuardada } from '../connections/oauth.js';
 import { ClienteConector, ErroConector } from '../connectors/cliente-http.js';
@@ -17,6 +19,7 @@ import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { DATASET_AVALIACOES } from './sincronizador-do-perfil.js';
+import { ESPERA_PELO_TETO, oQueDesligaAsSugestoes } from './sugestoes.js';
 
 // A tela Avaliações (A6, Z1; protótipo P17, aprovado em 09/10/2026): o que o Liame guardou das lojas do perfil da
 // empresa no Google ligadas à marca, e em que pé está a ligação. Só leitura: responder uma avaliação é um pedido de
@@ -69,6 +72,36 @@ const isoOuNulo = (v: Date | string | null) => (v ? iso(v) : null);
 const umaCasa = (n: number) => Math.round(n * 10) / 10;
 
 const marcaNaoEncontrada = () => new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Marca não encontrada nesta empresa.');
+
+function tenantOf(auth: AuthContext): string {
+  if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
+  return auth.tenantId;
+}
+
+/** A vez de uma avaliação na fila das sugestões, como a tela precisa dela (a primeira rodada; a do "Pedir outras" fica no pedido). */
+export type LinhaDaVez = { review_id: string; status: string; reason: string | null; barred_by: string[] | null; next_attempt_at: Date | string | null };
+
+/**
+ * A vez de cada avaliação como a tela Avaliações mostra (A6, Z6, parte 4a; P31): a barrada, com as regras que
+ * barraram; a que espera o teto de gasto de IA da empresa, do dia ou do mês; e a que espera a rotina do Social media
+ * ("escrevendo"), com a hora em que ela olha de novo. A pronta é o pedido em `pending_replies`; a descartada, a que
+ * falhou e a retirada não têm o que mostrar (a avaliação fica com o "Responder" de sempre).
+ */
+export function vezNaTela(l: LinhaDaVez): ReviewSuggestionTurn | null {
+  if (l.status === 'barrada') return { review_id: l.review_id, state: 'barrada', next_at: null, barred_by: l.barred_by ?? [] };
+  if (l.status !== 'esperando') return null;
+  return { review_id: l.review_id, state: (l.reason && ESPERA_PELO_TETO.get(l.reason)) || 'escrevendo', next_at: isoOuNulo(l.next_attempt_at), barred_by: null };
+}
+
+/** Quantas sugestões o pedido do Social media traz, as da rodada mais nova (P31); nulo no pedido de uma pessoa. */
+export function sugestoesDoPedido(q: { agent_key: string | null; params: unknown }): number | null {
+  if (q.agent_key !== SOCIAL.key) return null;
+  const p = ParametrosDaResposta.safeParse(q.params);
+  const sugestoes = p.success ? (p.data.sugestoes ?? []) : [];
+  if (!sugestoes.length) return null;
+  const rodada = sugestoes.some((s) => s.rodada === 2) ? 2 : 1;
+  return sugestoes.filter((s) => s.rodada === rodada).length;
+}
 
 /** A nota da empresa: a da loja ou, com mais de uma, a média das lojas pesada pelo total de avaliações de cada uma. */
 export function notaDaEmpresa(lojas: Array<{ rating: number | null; review_count: number | null }>): { rating: number | null; review_count: number | null } {
@@ -183,16 +216,20 @@ export class AvaliacoesService {
       reply: r.reply_text === null ? null : { text: r.reply_text, state: r.reply_state ?? 'desconhecida', changed_at: isoOuNulo(r.reply_changed_at), violation: r.reply_violation },
     }));
     // As respostas que esperam a aprovação de uma pessoa (A6, Z2): a tela leva ao pedido, em Aprovações.
-    const pendentes = await tx.execute<{ id: string; resource_id: string; before_state: Record<string, unknown> | null }>(sql`
-      select q.id, q.resource_id, q.before_state
+    const pendentes = await tx.execute<{ id: string; resource_id: string; before_state: Record<string, unknown> | null; agent_key: string | null; params: unknown }>(sql`
+      select q.id, q.resource_id, q.before_state, q.agent_key, q.params
         from liame.action_request q
        where q.provider = ${PROVEDOR_PERFIL_GOOGLE} and q.tool = ${FERRAMENTA_DA_RESPOSTA} and q.status = 'aguardando_aprovacao' and q.account_id in ${ids}
        order by q.created_at, q.id`);
     const soODono = TOOLS[FERRAMENTA_DA_RESPOSTA]?.ownerOnly;
     const pending_replies = pendentes.rows.flatMap((q) => {
       const avaliacao = avaliacaoDoRecurso(q.resource_id);
-      return avaliacao ? [{ review_id: avaliacao, action_id: q.id, owner_only: Boolean(q.before_state && soODono?.(q.before_state)) }] : [];
+      return avaliacao ? [{ review_id: avaliacao, action_id: q.id, owner_only: Boolean(q.before_state && soODono?.(q.before_state)), suggestions: sugestoesDoPedido(q) }] : [];
     });
+    // Responder pelo Liame é outra função, ligada à parte (a escrita no Perfil): sem ela, a resposta é dada no Google, e
+    // nada é sugerido.
+    const podeResponder = await this.flags.isEnabled(FLAG_PERFIL_GOOGLE_ESCRITA, this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId }));
+    const suggestions = podeResponder ? await this.sugestoesDaMarca(tx, tenantOf(auth), brandId, ids, reviews, pending_replies) : null;
     return {
       ...base,
       state: 'pronta',
@@ -206,9 +243,35 @@ export class AvaliacoesService {
       reviews,
       has_more: avaliacoes.rows.length > AVALIACOES_NA_TELA,
       pending_replies,
-      // Responder pelo Liame é outra função, ligada à parte (a escrita no Perfil): sem ela, a resposta é dada no Google.
-      can_reply: await this.flags.isEnabled(FLAG_PERFIL_GOOGLE_ESCRITA, this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId })),
+      can_reply: podeResponder,
+      suggestions,
     };
+  }
+
+  /**
+   * As sugestões do Social media na marca (A6, Z6, parte 4a; P31): ligadas, ou o porquê de não, pelas mesmas chaves da
+   * rotina (`oQueDesligaAsSugestoes`), loja por loja; e a vez de cada avaliação sem resposta da lista, nas lojas em que
+   * estão ligadas. A avaliação que já tem um pedido esperando fica de fora: a tela leva ao pedido.
+   */
+  private async sugestoesDaMarca(tx: Tx, tenantId: string, brandId: string, lojas: string[], avaliacoes: ReviewItem[], pendentes: Array<{ review_id: string }>): Promise<ReviewSuggestions> {
+    const ligadas: string[] = [];
+    let motivo: string | null = null;
+    for (const id of lojas) {
+      const desligou = await oQueDesligaAsSugestoes(tx, this.flags, { tenantId, brandId, connectedAccountId: id });
+      if (desligou === null) ligadas.push(id);
+      else motivo ??= desligou;
+    }
+    const comPedido = new Set(pendentes.map((p) => p.review_id));
+    const semResposta = avaliacoes.filter((a) => a.reply === null && !comPedido.has(a.id)).map((a) => a.id);
+    if (!ligadas.length || !semResposta.length) return { state: motivo ?? 'ligadas', turns: [] };
+    const vezes = await tx.execute<LinhaDaVez>(sql`
+      select s.review_id, s.status, s.reason, s.barred_by, s.next_attempt_at
+        from liame.review_suggestion s
+        join liame.profile_review r on r.id = s.review_id
+       where s.tenant_id = ${tenantId} and s.round = 1 and s.status in ('esperando', 'barrada')
+         and s.review_id in ${semResposta} and r.connected_account_id in ${ligadas}
+       order by s.review_id`);
+    return { state: motivo ?? 'ligadas', turns: vezes.rows.flatMap((l) => vezNaTela(l) ?? []) };
   }
 
   /**
