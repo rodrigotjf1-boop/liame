@@ -55,7 +55,20 @@ export function CriativosTela() {
   const seq = useRef(0);
   /** O que estava em andamento na leitura anterior: é assim que a tela percebe que ficou pronto. */
   const andando = useRef<{ pedido: string | null; refazendo: Map<string, number> }>({ pedido: null, refazendo: new Map() });
-  const pecaDoEndereco = useRef(parametros.get('peca'));
+  // A peça do endereço (`?peca=`), para abrir assim que a lista chegar. Vale cada vez que a pessoa chega por ele, e
+  // não só na primeira montagem (ERR-159): o Next guarda a tela visitada com o estado dela, e a chave desse estado não
+  // leva os parâmetros da busca. O endereço que mudou se aplica no desenho; a volta pelo mesmo endereço, no efeito, que o
+  // React recria a cada vez que a tela escondida volta a aparecer.
+  const pecaPedida = parametros.get('peca');
+  const [pecaDoEndereco, setPecaDoEndereco] = useState(pecaPedida);
+  const [pecaAplicada, setPecaAplicada] = useState(pecaPedida);
+  if (pecaPedida !== pecaAplicada) {
+    setPecaAplicada(pecaPedida);
+    setPecaDoEndereco(pecaPedida);
+  }
+  useEffect(() => {
+    if (pecaPedida) setPecaDoEndereco(pecaPedida);
+  }, [pecaPedida]);
   const agora = useAgora(60_000, carga);
 
   const carregarMarcas = useCallback(async () => {
@@ -116,11 +129,10 @@ export function CriativosTela() {
 
   // A peça do endereço (`/criativos?peca=…`) abre assim que a lista chega.
   useEffect(() => {
-    if (carga.tipo !== 'ok' || !pecaDoEndereco.current) return;
-    const id = pecaDoEndereco.current;
-    pecaDoEndereco.current = null;
-    disparar(abrirPeca(id));
-  }, [carga.tipo, abrirPeca]);
+    if (carga.tipo !== 'ok' || !pecaDoEndereco) return;
+    setPecaDoEndereco(null);
+    disparar(abrirPeca(pecaDoEndereco));
+  }, [carga.tipo, abrirPeca, pecaDoEndereco]);
 
   // Enquanto o Criativo escreve (um pedido novo ou uma versão nova), a tela lê de novo de tempos em tempos e avisa
   // quando fica pronto. A pessoa pode estar com a peça aberta: ela é lida de novo só se foi a que mudou.
