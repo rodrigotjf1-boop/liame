@@ -1,6 +1,6 @@
 import type { MonthlyReportWeek } from '@liame/contracts';
 import { type Database, uuidv7, withSystem } from '@liame/database';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { BudgetService } from '../actions/budget.service.js';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
@@ -8,15 +8,18 @@ import { respostaDaExplicacao } from '../ai/explicar/saida.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { desligadoPelaEmpresa } from '../ai/registro/ativacao.js';
 import type { ContextoDaLeitura } from '../ai/registro/leituras.js';
+import { APP_CONFIG, type AppConfig } from '../config.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { EquipeService } from '../equipe/equipe.service.js';
 import { RELATORIOS } from '../equipe/membros.js';
 import { FlagService } from '../flags/flag.service.js';
+import { Mailer, maskEmail } from '../mail/mailer.js';
 import { proibidasDaMarca } from '../marca/marca.service.js';
 import { MediaService } from '../media/media.service.js';
 import { AtencaoCicloService } from '../results/atencao-ciclo.service.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
+import { emailDoRelatorio } from '../results/relatorio-email.js';
 import {
   comAtrasoMarcadoNoMes,
   type ConteudoDoRelatorio,
@@ -35,6 +38,7 @@ import {
   semanaNoContexto,
   semanasDoMes,
 } from '../results/relatorio-mensal.js';
+import { NIVEIS_QUE_RECEBEM } from '../results/revisao-email.js';
 import { campanhasDaSemana, horaNoFuso, oQueMudou, soNaPlataforma, temAsFontes, temMovimento, totaisDaSemana } from '../results/revisao-semanal.js';
 import { ResultsService } from '../results/results.service.js';
 
@@ -47,7 +51,16 @@ import { ResultsService } from '../results/results.service.js';
 //   2. pede a leitura do mês ao Explicar, sem transação aberta: a LIA, quando está ligada e os dados estão em dia;
 //      senão, o resumo do sistema, com o motivo;
 //   3. guarda o relatório como foi gerado, um por marca e mês.
-// O envio por e-mail é outra rotina, que nasce desligada (`relatorio_email`). Nada é executado em plataforma nenhuma.
+// O envio por e-mail (`enviar`) é um segundo laço, sobre os relatórios que esperam o envio: só com a `relatorio_email`
+// ligada para a empresa e até o dia 7 do mês seguinte. Nada é executado em plataforma nenhuma.
+
+/** Cada pessoa tem até tantas tentativas de envio; entre uma volta e outra do envio, esta espera. */
+const TENTATIVAS_POR_PESSOA = 3;
+const NOVA_TENTATIVA = '30 minutes';
+
+export type ResultadoDoEnvio = { status: 'enviado' | 'pendente' | 'desligado' | 'sem_destinatario' | 'falhou' | 'expirado'; enviados: number };
+type LinhaDoRelatorio = { tenant_id: string; brand_id: string; timezone: string; content: ConteudoDoRelatorio; marca: string; empresa: string };
+type Destinatario = { id: string; email: string; role_key: string; attempts: number };
 
 export type ResultadoDoRelatorio = {
   status: 'gerado' | 'ja_tem' | 'fora_do_prazo' | 'cedo' | 'aguardando_leitura' | 'sem_fontes' | 'sem_movimento' | 'desligado_pela_empresa';
@@ -61,6 +74,8 @@ export type ResultadoDoRelatorio = {
 
 @Injectable()
 export class RelatorioMensalService {
+  private readonly logger = new Logger('relatorio-mensal');
+
   constructor(
     @Inject(DATABASE) private readonly database: Database | null,
     private readonly results: ResultsService,
@@ -70,6 +85,8 @@ export class RelatorioMensalService {
     private readonly flags: FlagService,
     private readonly verba: BudgetService,
     private readonly equipe: EquipeService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly mailer: Mailer,
   ) {}
 
   /**
@@ -176,5 +193,98 @@ export class RelatorioMensalService {
     // Outro worker gravou o mesmo mês no meio do caminho: vale o dele.
     if (!gravado.rows.length) return { status: 'ja_tem', fuso, mes: mes.from };
     return { status: 'gerado', fuso, mes: mes.from, id, leitura: conteudo.reading.source === 'lia' ? 'lia' : 'sistema' };
+  }
+
+  /**
+   * Envia o relatório por e-mail a quem ainda não recebeu: o dono, os administradores e quem só recebe relatórios, com
+   * o e-mail confirmado (D-A3-20, os mesmos da revisão). Cada entrega fica gravada (enviada ou falhou, com o tipo do
+   * erro e sem o endereço), e a mesma pessoa não recebe duas vezes. Passado o dia 7 do mês seguinte, o relatório já não
+   * é notícia (`expirado`); com a `relatorio_email` desligada, o envio para (`desligado`).
+   */
+  async enviar(reportId: string, agora = new Date()): Promise<ResultadoDoEnvio> {
+    if (!this.database) throw new Error('relatório do mês: sem banco');
+    const db = this.database.db;
+    const lido = await withSystem(db, async (tx) => {
+      const r = await tx.execute<LinhaDoRelatorio>(sql`
+        select m.tenant_id, m.brand_id, m.timezone, m.content, b.name as marca, o.name as empresa
+          from liame.monthly_report m
+          join liame.brand b on b.id = m.brand_id
+          join liame.organization o on o.id = m.tenant_id
+         where m.id = ${reportId} and m.email_status = 'pendente'`);
+      const relatorio = r.rows[0];
+      if (!relatorio) return null;
+      const pessoas = await tx.execute<Destinatario>(sql`
+        select u.id, u.email, mb.role_key, coalesce(d.attempts, 0)::int as attempts
+          from liame.membership mb
+          join liame.app_user u on u.id = mb.user_id
+          left join liame.monthly_report_delivery d on d.report_id = ${reportId} and d.user_id = u.id
+         where mb.tenant_id = ${relatorio.tenant_id} and mb.revoked_at is null and (mb.expires_at is null or mb.expires_at > ${agora.toISOString()}::timestamptz)
+           and mb.role_key in (${sql.join(NIVEIS_QUE_RECEBEM.map((n) => sql`${n}`), sql`, `)})
+           and u.disabled_at is null and u.email_verified_at is not null
+           and (d.id is null or (d.status = 'falhou' and d.attempts < ${TENTATIVAS_POR_PESSOA}))
+         order by u.id`);
+      return { relatorio, pessoas: pessoas.rows };
+    });
+    // O relatório já não espera o envio (outro worker fechou, ou ele não existe): nada a fazer.
+    if (!lido) return { status: 'enviado', enviados: 0 };
+    const { relatorio, pessoas } = lido;
+    const conteudo = relatorio.content;
+
+    if (!noPrazo(diaNoFuso(agora, relatorio.timezone), conteudo.month)) return this.fecharEnvio(reportId, 'expirado', agora);
+    if (!(await this.flags.isEnabled('relatorio_email', this.flags.context({ tenantId: relatorio.tenant_id, brandId: relatorio.brand_id })))) {
+      return this.fecharEnvio(reportId, 'desligado', agora);
+    }
+
+    const link = `${this.config.appUrl}/resultados/relatorio?marca=${relatorio.brand_id}&mes=${conteudo.month.from.slice(0, 7)}`;
+    // As duas imagens do e-mail (a marca e o rosto da LIA) moram no webapp do Liame, sem código de rastreio.
+    const imagens = { logo: `${this.config.appUrl}/email/liame-logo.png`, lia: `${this.config.appUrl}/email/lia.png` };
+    for (const p of pessoas) {
+      const email = emailDoRelatorio(conteudo, { marca: relatorio.marca, empresa: relatorio.empresa, nivel: p.role_key, link, imagens });
+      let falha: string | null = null;
+      try {
+        await this.mailer.send({ to: p.email, subject: email.subject, text: email.text, html: email.html });
+      } catch (err) {
+        // O motivo vai para o log com o endereço mascarado; na linha da entrega fica só o tipo do erro.
+        falha = (err instanceof Error ? err.name : 'Erro').slice(0, 100) || 'Erro';
+        this.logger.warn(`relatório ${reportId}: envio para ${maskEmail(p.email)} falhou (${err instanceof Error ? err.message : String(err)})`);
+      }
+      await withSystem(db, (tx) =>
+        tx.execute(sql`
+          insert into liame.monthly_report_delivery (id, tenant_id, report_id, user_id, role_key, status, attempts, error, sent_at)
+          values (${uuidv7()}, ${relatorio.tenant_id}, ${reportId}, ${p.id}, ${p.role_key}, ${falha ? 'falhou' : 'enviado'}, 1, ${falha}, ${falha ? null : agora.toISOString()}::timestamptz)
+          on conflict (report_id, user_id) do update
+             set status = excluded.status, attempts = liame.monthly_report_delivery.attempts + 1, error = excluded.error, sent_at = excluded.sent_at,
+                 role_key = excluded.role_key, updated_at = now()`),
+      );
+    }
+    return this.fecharEnvio(reportId, null, agora);
+  }
+
+  /**
+   * Fecha o envio pela situação das entregas: com alguma ainda por tentar, o relatório volta para a fila; senão,
+   * `enviado` (chegou a alguém), `falhou` (a ninguém) ou `sem_destinatario` (não havia para quem). `encerrar` para de
+   * tentar (o prazo acabou, ou a empresa desligou o envio): se já chegou a alguém, fica `enviado`; senão, o motivo.
+   */
+  private async fecharEnvio(reportId: string, encerrar: 'expirado' | 'desligado' | null, agora: Date): Promise<ResultadoDoEnvio> {
+    const instante = agora.toISOString();
+    return withSystem(this.database!.db, async (tx) => {
+      const c = await tx.execute<{ enviados: number; por_tentar: number; falhas: number }>(sql`
+        select count(*) filter (where status = 'enviado')::int as enviados,
+               count(*) filter (where status = 'falhou' and attempts < ${TENTATIVAS_POR_PESSOA})::int as por_tentar,
+               count(*) filter (where status = 'falhou')::int as falhas
+          from liame.monthly_report_delivery where report_id = ${reportId}`);
+      const { enviados, por_tentar, falhas } = c.rows[0]!;
+      const status: ResultadoDoEnvio['status'] =
+        por_tentar > 0 && !encerrar ? 'pendente' : enviados > 0 ? 'enviado' : (encerrar ?? (falhas > 0 ? 'falhou' : 'sem_destinatario'));
+      await tx.execute(sql`
+        update liame.monthly_report
+           set email_status = ${status},
+               email_next_at = ${status === 'pendente' ? sql`${instante}::timestamptz + ${NOVA_TENTATIVA}::interval` : sql`null`},
+               email_sent_at = ${enviados > 0 ? sql`coalesce(email_sent_at, ${instante}::timestamptz)` : sql`email_sent_at`},
+               email_recipients = ${enviados},
+               updated_at = now()
+         where id = ${reportId}`);
+      return { status, enviados };
+    });
   }
 }

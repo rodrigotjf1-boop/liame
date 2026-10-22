@@ -78,6 +78,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('revisao-semanal', 3, 60_000, async (n) => (await this.revisao.executarLote(n)).length),
       this.loop('revisao-email', 3, 60_000, async (n) => (await this.revisao.enviarLote(n)).length),
       this.loop('relatorio-mensal', 3, 60_000, async (n) => (await this.relatorio.executarLote(n)).length),
+      this.loop('relatorio-email', 3, 60_000, async (n) => (await this.relatorio.enviarLote(n)).length),
       this.loop('estrategista', 3, 60_000, async (n) => (await this.estrategista.executarLote(n)).length),
       // A rotina de segunda passa por todas as marcas devidas numa volta; repete em 10 minutos.
       this.loop('estrategista-agenda', MARCAS_POR_VOLTA, 600_000, async () => (await this.agenda.agendarLote()).length),
