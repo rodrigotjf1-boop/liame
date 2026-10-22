@@ -1,0 +1,48 @@
+/* ===== Relatório do mês (A3 · I7; mockups/prototipo-relatorio-mes.html, P24 aprovado em 21/10/2026) =====
+   O mesmo desenho da revisão da semana, com o mês: os números do topo, a leitura, as campanhas e o que mudou usam as
+   classes de lá (`revisao.css`). Aqui, só o que o mês tem: semana a semana (a mesma lista das campanhas), a verba do mês
+   contra o teto e o que a equipe fez. As peças do protótipo se chamavam `mes-…`; no app esse nome já é da Verba do mês
+   (`verba.css`), e por isso aqui elas são `rm-…` (V134). */
+
+/* semana a semana: a lista é a mesma das campanhas (`camp-rev`), com a semana no lugar do nome */
+.rm-sem-nome { gap: 2px; }
+.rm-sem-nome .link-bt { justify-self: start; font-size: var(--text-xs); }
+.rm-nota-corte { margin-top: var(--sp-2); }
+
+/* a verba do mês: uma barra (o gasto) com a marca do teto, na mesma régua (que começa no zero) */
+.rm-verba { display: grid; gap: var(--sp-4); }
+.rm-verba-topo { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-1) var(--sp-4); }
+.rm-verba-valor { margin: 0; font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; overflow-wrap: anywhere; }
+.rm-verba-valor small { font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 500; color: var(--text-muted); }
+.rm-teto { --fundo: var(--surface); position: relative; height: 14px; margin: 0 3px; border-radius: 0 4px 4px 0; background: var(--bg-subtle); }
+.rm-teto-b { position: absolute; top: 0; bottom: 0; left: 0; min-width: 3px; border-radius: 0 4px 4px 0; background: var(--chart-cinza-2); }
+.rm-teto-b--acima { background: var(--danger); }
+.rm-teto-marca { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text); box-shadow: 0 0 0 2px var(--fundo); }
+.rm-teto-leg { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+.rm-teto-leg span { display: inline-flex; align-items: center; gap: 6px; }
+.rm-teto-leg i { flex: none; }
+.rm-teto-leg .ch-gasto { width: 18px; height: 8px; border-radius: 0 3px 3px 0; background: var(--chart-cinza-2); }
+.rm-teto-leg .ch-teto { width: 2px; height: 12px; border-radius: 1px; background: var(--text); }
+.rm-verba-mud { display: grid; gap: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.rm-verba-mud h3 { margin: 0; }
+.rm-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.rm-mudancas { display: grid; gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.rm-mudancas li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: var(--sp-2); font-size: var(--text-sm); line-height: 1.45; }
+.rm-mudancas li .ic { width: 16px; height: 16px; margin-top: 2px; color: var(--text-muted); }
+.rm-mudancas li > div { display: grid; gap: 2px; min-width: 0; }
+.rm-mudancas b { font-weight: 600; overflow-wrap: anywhere; }
+.rm-mudancas span { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+
+/* o que a equipe fez: um funcionário por linha, com os números principais do mês */
+.rm-equipe { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: var(--sp-3); margin: 0; padding: 0; list-style: none; }
+.rm-equipe li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: var(--sp-3); align-items: start; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.rm-equipe .av-func, .rm-equipe .av-lia { width: 32px; height: 32px; border-radius: 10px; }
+.rm-equipe .av-func .ic { width: 18px; height: 18px; }
+.rm-equipe li > div { display: grid; gap: 2px; min-width: 0; }
+.rm-equipe b { font-weight: 600; }
+.rm-equipe small { font-size: var(--text-xs); color: var(--text-muted); }
+.rm-feito { margin: 0; font-size: var(--text-sm); }
+.rm-feito .num { font-family: var(--font-mono); font-weight: 600; }
+.rm-custo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-4); margin: 0; padding-top: var(--sp-3); border-top: 1px solid var(--border-strong); font-size: var(--text-sm); color: var(--text-muted); }
+.rm-custo b { color: var(--text); font-weight: 600; }
+.rm-custo .num { font-family: var(--font-mono); font-weight: 600; color: var(--text); }

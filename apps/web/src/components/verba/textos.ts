@@ -434,15 +434,15 @@ const artigoDo = (tipo: string): string => (tipo === 'campanha' ? 'a' : 'o');
 const comGenero = (palavra: string, tipo: string): string => (palavra.endsWith('o') ? palavra.slice(0, -1) + artigoDo(tipo) : palavra);
 
 /** O objeto numa linha: a campanha pelo nome; o conjunto e o anúncio com o tipo e o nome entre aspas. */
-function alvoDaMudanca(m: BudgetMonthChange): string {
+function alvoDaMudanca(m: Pick<BudgetMonthChange, 'target'>): string {
   if (m.target.kind === 'campanha') return m.target.name;
   return `${m.target.kind === 'anuncio' ? 'Anúncio' : 'Conjunto'} “${m.target.name}”`;
 }
 
-const mudouAVerba = (m: BudgetMonthChange): boolean => m.to.daily_micros !== null && m.from.daily_micros !== m.to.daily_micros;
+const mudouAVerba = (m: Pick<BudgetMonthChange, 'from' | 'to'>): boolean => m.to.daily_micros !== null && m.from.daily_micros !== m.to.daily_micros;
 
-/** Uma mudança numa linha: a verba de um valor para outro, ou o objeto pausado ou retomado. */
-export function oQueMudou(m: BudgetMonthChange): string {
+/** Uma mudança numa linha: a verba de um valor para outro, ou o objeto pausado ou retomado (também no relatório do mês). */
+export function oQueMudou(m: Pick<BudgetMonthChange, 'target' | 'from' | 'to'>): string {
   const alvo = alvoDaMudanca(m);
   if (mudouAVerba(m)) return m.from.daily_micros === null ? `${alvo}: verba de ${reais(m.to.daily_micros!)}` : `${alvo}: verba de ${reais(m.from.daily_micros)} para ${reais(m.to.daily_micros!)}`;
   return `${alvo} ${comGenero(m.to.status === 'pausado' ? 'pausado' : 'retomado', m.target.kind)}`;

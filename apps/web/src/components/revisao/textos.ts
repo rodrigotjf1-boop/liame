@@ -60,9 +60,12 @@ export function vereditoDaSemana(verdict: string | null, pedidos: number, gastoM
   return null;
 }
 
-/** Para onde leva o botão de um item de "Precisa de decisão": a tela onde se resolve (só navegação). */
+/**
+ * Para onde leva o botão de um item de "Precisa de decisão" (e de "Para o mês que vem", no relatório do mês): a tela
+ * onde se resolve (só navegação).
+ */
 export function destinoDaDecisao(d: Pick<AttentionItem, 'kind'>, pode: (permissao: string) => boolean): { href: string; rotulo: string } | null {
-  if (d.kind === 'prejuizo_seguido') return { href: '/resultados', rotulo: 'Ver em Resultados' };
+  if (d.kind === 'prejuizo_seguido' || d.kind === 'prejuizo_no_mes') return { href: '/resultados', rotulo: 'Ver em Resultados' };
   if (acaoDoAviso(d.kind) === 'abrir-links') return { href: '/links', rotulo: 'Abrir Links e cupons' };
   // Os outros são avisos da Atenção: lá estão o motivo, a explicação e o botão de cada um.
   return pode('campanhas.ver') ? { href: '/atencao', rotulo: 'Ver na Atenção' } : null;
@@ -103,17 +106,21 @@ export function introDaRevisao(email: WeeklyReview['email'] | null): string {
   return `O que vendeu, o que cada campanha trouxe no caixa, o que mudou e o que precisa de decisão. Sai toda segunda-feira de manhã${comEmail ? ', na tela e por e-mail' : ''}.`;
 }
 
+/** Os títulos do aviso de "sem a leitura da LIA": os da revisão; o relatório do mês manda os dele. */
+export type TitulosSemLeitura = { atrasada: string; semIa: string };
+const TITULOS_DA_REVISAO: TitulosSemLeitura = { atrasada: 'A revisão saiu sem a leitura da LIA', semIa: 'A revisão desta semana saiu sem a leitura da LIA' };
+
 /**
  * Por que a leitura da semana é a do sistema, como no protótipo: com fonte atrasada na geração, diz qual e
  * desde quando; nos outros casos, que a revisão saiu sem a leitura da LIA e que o resto está completo.
  * Nulo quando a leitura é da LIA.
  */
-export function avisoDaLeitura(reading: WeeklyReview['reading']): AvisoSemIa | null {
+export function avisoDaLeitura(reading: WeeklyReview['reading'], titulos: TitulosSemLeitura = TITULOS_DA_REVISAO): AvisoSemIa | null {
   if (reading.source === 'lia') return null;
   if (reading.reason === 'dado_velho') {
     const fontes = reading.stale_sources.map((f) => `${f.platform ? `${f.platform} · ` : ''}${f.name}${f.last_read ? `, última leitura em ${f.last_read}` : ', ainda não lida'}`);
     const quais = fontes.length ? `uma fonte estava atrasada (${fontes.join('; ')})` : 'uma fonte estava atrasada';
-    return { tom: 'atencao', icone: 'clock', titulo: 'A revisão saiu sem a leitura da LIA', texto: `Na hora de gerar, ${quais}. Os números abaixo valem até essa hora.`, acao: 'ver-conexao' };
+    return { tom: 'atencao', icone: 'clock', titulo: titulos.atrasada, texto: `Na hora de gerar, ${quais}. Os números abaixo valem até essa hora.`, acao: 'ver-conexao' };
   }
-  return { tom: 'neutro', icone: 'info', titulo: 'A revisão desta semana saiu sem a leitura da LIA', texto: 'Os números, as listas e o resumo abaixo são do sistema e estão completos.', acao: null };
+  return { tom: 'neutro', icone: 'info', titulo: titulos.semIa, texto: 'Os números, as listas e o resumo abaixo são do sistema e estão completos.', acao: null };
 }
