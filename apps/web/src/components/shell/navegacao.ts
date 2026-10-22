@@ -81,10 +81,11 @@ export function itemAtual(caminho: string, href: string): boolean {
 
 /**
  * Telas abaixo de um item do menu, com título próprio na trilha. `modos`: a subtela tem as visões Lite e
- * Pro? (A revisão da semana é uma só; o seletor some nela.)
+ * Pro? (A revisão da semana e o relatório do mês são um só; o seletor some neles.)
  */
 const SUBTELAS: Record<string, { titulo: string; modos: boolean }> = {
   '/resultados/revisao': { titulo: 'Resultados · Revisão da semana', modos: false },
+  '/resultados/relatorio': { titulo: 'Resultados · Relatório do mês', modos: false },
 };
 
 export function tituloDa(caminho: string): string {

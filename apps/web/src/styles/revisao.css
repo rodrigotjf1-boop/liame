@@ -11,7 +11,8 @@
 .rev-decisoes { display: grid; margin: 0; padding: 0; list-style: none; }
 .rev-decisoes li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); padding: var(--sp-3) 0; border-top: 1px solid var(--border); }
 .rev-decisoes li:first-child { border-top: 0; padding-top: 0; }
-.rev-decisoes li > div { flex: 1; min-width: min(100%, 240px); display: grid; gap: 2px; }
+/* O título e o detalhe levam nome de campanha: palavra comprida quebra dentro da linha (V107). */
+.rev-decisoes li > div { flex: 1; min-width: min(100%, 240px); display: grid; gap: 2px; overflow-wrap: anywhere; }
 .rev-decisoes li > div span { font-size: var(--text-sm); color: var(--text-muted); }
 .rev-lista { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
 .rev-lista li { display: flex; gap: var(--sp-2); line-height: 1.55; }

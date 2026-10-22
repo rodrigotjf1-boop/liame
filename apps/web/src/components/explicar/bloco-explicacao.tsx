@@ -24,7 +24,7 @@ type Props = {
   /** A LIA responde para esta empresa? Decide o texto enquanto carrega. */
   lia: boolean;
   /** O que está sendo explicado: os números da tela, os de um aviso ou os da revisão da semana. */
-  sobre: 'tela' | 'aviso' | 'revisao';
+  sobre: 'tela' | 'aviso' | 'revisao' | 'relatorio';
   /** Nível do título do bloco (2 em Resultados; 3 dentro de um aviso, cujo título é o 2). */
   nivel?: 2 | 3;
   /** Dentro de um aviso o bloco não é um cartão: sem moldura dupla. */
@@ -49,8 +49,8 @@ type Props = {
 /** O código que a API manda quando o aviso explicado não está mais ativo. */
 const AVISO_SUMIU = 'aviso-nao-encontrado';
 
-const SOBRE = { tela: 'com os números desta tela', aviso: 'com os números deste aviso', revisao: 'com os números desta revisão' } as const;
-const DESTE = { tela: 'desta tela', aviso: 'deste aviso', revisao: 'desta revisão' } as const;
+const SOBRE = { tela: 'com os números desta tela', aviso: 'com os números deste aviso', revisao: 'com os números desta revisão', relatorio: 'com os números deste relatório' } as const;
+const DESTE = { tela: 'desta tela', aviso: 'deste aviso', revisao: 'desta revisão', relatorio: 'deste relatório' } as const;
 
 function semMovimento(): boolean {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;

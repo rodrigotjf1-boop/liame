@@ -13,7 +13,7 @@ import { mudancaDe, razao, valorDe, variacao, vereditoDaSemana } from './textos'
 // inteiros. Funções puras.
 
 /** A dica do desenho ("título|complemento"): reforça o valor, que também fica escrito ao lado. */
-const dica = (titulo: string, sub = ''): string => (sub ? `${titulo}|${sub}` : titulo);
+export const dica = (titulo: string, sub = ''): string => (sub ? `${titulo}|${sub}` : titulo);
 
 /** O valor de um número da revisão como inteiro, para o tamanho da barra: micros, contagem ou centésimos da razão. */
 function grandeza(m: WeeklyReviewChange, qual: 'before' | 'now'): bigint | null {
@@ -29,8 +29,29 @@ function corDe(kind: string): BalaDoNumero['cor'] {
   return 'foco';
 }
 
-/** A barra desta semana com a marca da semana anterior; nula quando o número desta semana não existe. */
-function balaDaMudanca(m: WeeklyReviewChange, nome: string, semanas: { agora: string; antes: string }): BalaDoNumero | null {
+/**
+ * O período dos desenhos: os dias dele e os do anterior, e como a tela fala de cada um. A revisão é "esta semana" contra
+ * a "semana anterior"; o relatório do mês (P24), "setembro" contra "agosto".
+ */
+export type PeriodoDoDesenho = {
+  agora: string;
+  antes: string;
+  /** "nesta semana" / "em setembro", na frase lida pelo leitor de tela. */
+  noAgora: string;
+  /** "na semana anterior" / "em agosto". */
+  noAntes: string;
+  /** "esta semana" / "setembro", na dica do desenho. */
+  dicaAgora: string;
+  /** "semana anterior" / "agosto". */
+  dicaAntes: string;
+  /** "igual à semana anterior" / "igual ao mês anterior". */
+  igual: string;
+  /** "na semana" / "no mês": "sem pedido na semana", "investido no mês". */
+  noPeriodo: string;
+};
+
+/** A barra deste período com a marca do anterior; nula quando o número deste período não existe. */
+function balaDaMudanca(m: WeeklyReviewChange, nome: string, p: PeriodoDoDesenho): BalaDoNumero | null {
   const agora = grandeza(m, 'now');
   if (agora === null) return null;
   const antes = grandeza(m, 'before');
@@ -38,9 +59,9 @@ function balaDaMudanca(m: WeeklyReviewChange, nome: string, semanas: { agora: st
   return {
     ...balaDe(agora, antes),
     cor: corDe(m.kind),
-    rotulo: antes === null ? `${nome}: ${para} nesta semana.` : `${nome}: ${para} nesta semana; ${de} na semana anterior.`,
-    dicaAgora: dica(para, `esta semana · ${semanas.agora}`),
-    dicaAntes: antes === null ? null : dica(de, `semana anterior · ${semanas.antes}`),
+    rotulo: antes === null ? `${nome}: ${para} ${p.noAgora}.` : `${nome}: ${para} ${p.noAgora}; ${de} ${p.noAntes}.`,
+    dicaAgora: dica(para, `${p.dicaAgora} · ${p.agora}`),
+    dicaAntes: antes === null ? null : dica(de, `${p.dicaAntes} · ${p.antes}`),
   };
 }
 
@@ -64,11 +85,11 @@ const ROTULO_DO_TOPO: Record<string, string> = {
   roas_confirmado: 'ROAS confirmado no caixa',
 };
 
-/** Quanto o número mudou sobre a semana anterior. Gastar mais não é bom nem ruim: a seta fica, a cor é neutra. */
-function mudouDe(m: WeeklyReviewChange): NumeroDaRevisao['mudou'] {
+/** Quanto o número mudou sobre o período anterior. Gastar mais não é bom nem ruim: a seta fica, a cor é neutra. */
+function mudouDe(m: WeeklyReviewChange, p: PeriodoDoDesenho): NumeroDaRevisao['mudou'] {
   const [antes, agora] = [grandeza(m, 'before'), grandeza(m, 'now')];
   if (antes === null || agora === null) return null;
-  if (antes === agora) return { texto: 'igual à semana anterior', tom: 'neutro', seta: null };
+  if (antes === agora) return { texto: p.igual, tom: 'neutro', seta: null };
   const sobe = agora > antes;
   const tom = m.kind === 'investimento' ? 'neutro' : sobe ? 'bom' : 'ruim';
   // No ROAS a revisão não manda a porcentagem (o protótipo mostra só os dois valores): diz se subiu ou caiu.
@@ -77,16 +98,28 @@ function mudouDe(m: WeeklyReviewChange): NumeroDaRevisao['mudou'] {
   return { texto, tom, seta: sobe ? 'sobe' : 'desce' };
 }
 
-const semanasDe = (r: Pick<WeeklyReview, 'week' | 'previous_week'>) => ({ agora: `${diaMes(r.week.from)} a ${diaMes(r.week.to)}`, antes: `${diaMes(r.previous_week.from)} a ${diaMes(r.previous_week.to)}` });
+/** O período da revisão: esta semana contra a semana anterior. */
+export const periodoDaSemana = (r: Pick<WeeklyReview, 'week' | 'previous_week'>): PeriodoDoDesenho => ({
+  agora: `${diaMes(r.week.from)} a ${diaMes(r.week.to)}`,
+  antes: `${diaMes(r.previous_week.from)} a ${diaMes(r.previous_week.to)}`,
+  noAgora: 'nesta semana',
+  noAntes: 'na semana anterior',
+  dicaAgora: 'esta semana',
+  dicaAntes: 'semana anterior',
+  igual: 'igual à semana anterior',
+  noPeriodo: 'na semana',
+});
 
-/** Os números do topo, na ordem em que a API manda (investimento, pedidos, receita e ROAS), cada um contra a semana anterior. */
-export function numerosDaRevisao(r: Pick<WeeklyReview, 'totals' | 'week' | 'previous_week'>): NumeroDaRevisao[] {
-  const semanas = semanasDe(r);
-  return r.totals.map((m) => {
+/** Os números do topo, na ordem em que a API manda (investimento, pedidos, receita e ROAS), cada um contra o período anterior. */
+export function numerosDoPeriodo(totals: WeeklyReviewChange[], p: PeriodoDoDesenho): NumeroDaRevisao[] {
+  return totals.map((m) => {
     const rotulo = ROTULO_DO_TOPO[m.kind] ?? m.kind.replaceAll('_', ' ');
-    return { id: m.kind, rotulo, valor: valorDe(m, 'now'), bala: balaDaMudanca(m, rotulo, semanas), mudou: mudouDe(m), anterior: m.before === null ? null : valorDe(m, 'before') };
+    return { id: m.kind, rotulo, valor: valorDe(m, 'now'), bala: balaDaMudanca(m, rotulo, p), mudou: mudouDe(m, p), anterior: m.before === null ? null : valorDe(m, 'before') };
   });
 }
+
+/** Os números do topo da revisão, cada um contra a semana anterior. */
+export const numerosDaRevisao = (r: Pick<WeeklyReview, 'totals' | 'week' | 'previous_week'>): NumeroDaRevisao[] => numerosDoPeriodo(r.totals, periodoDaSemana(r));
 
 // ------------------------------------------------------------------ o que cada campanha trouxe no caixa
 
@@ -108,17 +141,18 @@ export type CampanhasDaRevisao = {
   notas: string[];
 };
 
-const largura = (v: bigint, maior: bigint): number => (maior <= 0n ? 0 : Number((v * 10_000n) / maior) / 100);
-const pedidosEscritos = (n: number) => `${inteiro(n)} ${n === 1 ? 'pedido' : 'pedidos'}`;
+/** A largura de uma barra na régua do maior valor, de 0 a 100, com duas casas. */
+export const largura = (v: bigint, maior: bigint): number => (maior <= 0n ? 0 : Number((v * 10_000n) / maior) / 100);
+export const pedidosEscritos = (n: number) => `${inteiro(n)} ${n === 1 ? 'pedido' : 'pedidos'}`;
 
-/** O selo de uma campanha: o veredito da semana; sem pedido, "Sem pedido" (o que o protótipo mostra no lugar do veredito). */
-function seloDaCampanha(c: WeeklyReviewCampaign): SeloDoPeriodo | null {
+/** O selo de uma campanha (ou de uma semana do mês): o veredito; sem pedido, "Sem pedido" (o que o protótipo mostra no lugar do veredito). */
+export function seloDaCampanha(c: Pick<WeeklyReviewCampaign, 'orders' | 'verdict' | 'spend_micros'>): SeloDoPeriodo | null {
   if (c.orders === 0) return { rotulo: 'Sem pedido', classe: 'neutro' };
   return vereditoDaSemana(c.verdict, c.orders, c.spend_micros);
 }
 
 /** Cada campanha com o que foi investido e o que voltou no caixa, na mesma régua para todas (a do e-mail da revisão). */
-export function campanhasDaRevisao(r: Pick<WeeklyReview, 'campaigns' | 'platform_only'>): CampanhasDaRevisao {
+export function campanhasDaRevisao(r: Pick<WeeklyReview, 'campaigns' | 'platform_only'>, noPeriodo = 'na semana'): CampanhasDaRevisao {
   const maior = r.campaigns.reduce((m, c) => [BigInt(c.spend_micros), BigInt(c.revenue_micros)].reduce((a, v) => (v > a ? v : a), m), 0n);
   const linhas = r.campaigns.map((c): CampanhaDaRevisao => {
     const [gasto, receita] = [BigInt(c.spend_micros), BigInt(c.revenue_micros)];
@@ -126,8 +160,8 @@ export function campanhasDaRevisao(r: Pick<WeeklyReview, 'campaigns' | 'platform
     return {
       id: c.campaign_id,
       nome: c.name,
-      sub: `${plataforma(c.provider).nome} · ${c.orders === 0 ? 'sem pedido na semana' : pedidosEscritos(c.orders)}`,
-      investido: { valor: investido, largura: largura(gasto, maior), dica: dica(investido, 'investido na semana') },
+      sub: `${plataforma(c.provider).nome} · ${c.orders === 0 ? `sem pedido ${noPeriodo}` : pedidosEscritos(c.orders)}`,
+      investido: { valor: investido, largura: largura(gasto, maior), dica: dica(investido, `investido ${noPeriodo}`) },
       caixa: { valor: noCaixa, largura: largura(receita, maior), dica: dica(noCaixa, c.roas === null ? 'confirmado no caixa' : `confirmado no caixa · ROAS ${razao(c.roas)}`) },
       selo: seloDaCampanha(c),
       rotulo: c.orders === 0 ? `${c.name}: ${investido} investidos e nenhum pedido confirmado no caixa.` : `${c.name}: ${investido} investidos e ${noCaixa} no caixa, em ${pedidosEscritos(c.orders)}.`,
@@ -157,8 +191,11 @@ export type MudancaDesenhada = {
 };
 
 /** Uma linha de "O que melhorou" ou "O que piorou": o nome, de quanto para quanto e a barra com a marca de antes. */
-export function mudancaDesenhada(m: WeeklyReviewChange, r: Pick<WeeklyReview, 'week' | 'previous_week'>): MudancaDesenhada {
+export function mudancaNoPeriodo(m: WeeklyReviewChange, p: PeriodoDoDesenho): MudancaDesenhada {
   const base = mudancaDe(m);
   const nome = base.nome.replace(/:$/, '');
-  return { chave: base.chave, nome, de: base.de, para: base.para, variacao: base.variacao, bala: balaDaMudanca(m, nome, semanasDe(r)) };
+  return { chave: base.chave, nome, de: base.de, para: base.para, variacao: base.variacao, bala: balaDaMudanca(m, nome, p) };
 }
+
+/** A mudança da revisão, contra a semana anterior. */
+export const mudancaDesenhada = (m: WeeklyReviewChange, r: Pick<WeeklyReview, 'week' | 'previous_week'>): MudancaDesenhada => mudancaNoPeriodo(m, periodoDaSemana(r));
