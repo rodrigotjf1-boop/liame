@@ -192,7 +192,17 @@ export {
   PlatformResult,
   SourceFreshness,
 } from './results.js';
-export { WeeklyReview, WeeklyReviewCampaign, WeeklyReviewChange, WeeklyReviewQuery, WeeklyReviewResponse } from './reports.js';
+export {
+  MonthlyReport,
+  MonthlyReportQuery,
+  MonthlyReportResponse,
+  MonthlyReportWeek,
+  WeeklyReview,
+  WeeklyReviewCampaign,
+  WeeklyReviewChange,
+  WeeklyReviewQuery,
+  WeeklyReviewResponse,
+} from './reports.js';
 export {
   BrandDossierContent,
   BrandDossierQuery,

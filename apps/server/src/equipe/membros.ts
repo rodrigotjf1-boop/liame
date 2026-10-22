@@ -52,7 +52,7 @@ export interface DefinicaoDoMembro {
 export const EQUIPE: Record<Membro, DefinicaoDoMembro> = {
   lia: { key: 'lia', kind: 'ia', funcionario: LIA, fluxos: ['conversa.lia'], desligavel: true },
   analista: { key: 'analista', kind: 'ia', funcionario: ANALISTA, fluxos: ['resultados.explicar', 'atencao.explicar'], desligavel: true },
-  relatorios: { key: RELATORIOS, kind: 'regra', funcionario: null, fluxos: ['revisao.semanal'], desligavel: true },
+  relatorios: { key: RELATORIOS, kind: 'regra', funcionario: null, fluxos: ['revisao.semanal', 'relatorio.mensal'], desligavel: true },
   compliance: { key: COMPLIANCE, kind: 'regra', funcionario: null, fluxos: [WORKFLOW_DO_REVISOR], desligavel: false },
   estrategista: { key: 'estrategista', kind: 'ia', funcionario: ESTRATEGISTA, fluxos: ['estrategista.plano'], desligavel: true },
   pesquisador: { key: 'pesquisador', kind: 'ia', funcionario: PESQUISADOR, fluxos: ['pesquisador.pagina'], desligavel: true },

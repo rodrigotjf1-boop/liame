@@ -9,6 +9,7 @@ import { proibidasDaMarca } from '../../marca/marca.service.js';
 import { MediaService } from '../../media/media.service.js';
 import { nomesPoliticos, REGRAS_DE_TEXTO_VERSAO } from '../../policy/texto.js';
 import { AtencaoCicloService } from '../../results/atencao-ciclo.service.js';
+import type { SemanaNoContexto } from '../../results/relatorio-mensal.js';
 import { diaNoFuso, menosDias } from '../../results/fora-do-normal.js';
 import { ResultsService } from '../../results/results.service.js';
 import { AiError, type AiErrorCode, type AiErrorDetail, AiGateway } from '../gateway.js';
@@ -27,6 +28,8 @@ import { explicacaoSemIa } from './sem-ia.js';
 
 /** O nome, em `ai_usage.workflow`, da leitura da revisão da semana: a chamada é do sistema, sem pessoa. */
 export const WORKFLOW_DA_REVISAO = 'revisao.semanal';
+/** O nome, em `ai_usage.workflow`, da leitura do relatório do mês (P24): também do sistema, sem pessoa. */
+export const WORKFLOW_DO_RELATORIO = 'relatorio.mensal';
 /** Os nomes, em `ai_usage.workflow`, do Explicar dos resultados e do Explicar de um aviso da Atenção. */
 export const WORKFLOW_DOS_RESULTADOS = 'resultados.explicar';
 export const WORKFLOW_DO_AVISO = 'atencao.explicar';
@@ -114,6 +117,22 @@ export class ExplicarService {
     this.exigirVendas(ctx);
     const contexto = contextoDosResultados(lido.atual, lido.anterior);
     return this.explicar(ctx, brandId, contexto, WORKFLOW_DA_REVISAO, lido, () => explicacaoSemIa(contexto, { semana: true }));
+  }
+
+  /**
+   * A leitura de um mês fechado, para o relatório do mês (A3, I7; P24, D-A3-21): a mesma tarefa, o mesmo prompt e a
+   * mesma conferência do Explicar, pedida pelo sistema, com os números do mês, a comparação com o mês anterior e
+   * cada semana com o nome pronto. Quem chama é a rotina do worker, que já leu os números; aqui não há transação
+   * aberta. Sem a LIA, a leitura é a do sistema, com o motivo.
+   */
+  async doMes(
+    ctx: ContextoDaLeitura,
+    brandId: string,
+    lido: { atual: ClosedLoopResponse; anterior: ClosedLoopResponse | null; semanas: SemanaNoContexto[]; mesAnterior: string; ativo: boolean; daMarca?: string[] },
+  ): Promise<ExplicacaoPronta> {
+    this.exigirVendas(ctx);
+    const contexto: ContextoDaExplicacao = { ...contextoDosResultados(lido.atual, lido.anterior), semanas: lido.semanas };
+    return this.explicar(ctx, brandId, contexto, WORKFLOW_DO_RELATORIO, lido, () => explicacaoSemIa(contexto, { mes: { anterior: lido.mesAnterior } }));
   }
 
   /** O Analista está ativo para esta marca? Roda na transação de quem chama. */
@@ -209,8 +228,9 @@ export class ExplicarService {
     // apareceria de qualquer jeito, então a IA que escreve nem é chamada (nenhum custo jogado fora).
     const revisor = await this.revisor.situacao({ tenantId: ctx.tenantId, brandId, userId: ctx.userId });
     if (revisor === 'sem_rota') return semIa('sem-rota');
-    // A leitura da revisão da semana é do Relatórios; o resto, do Analista (é quem aparece em Sua equipe).
-    const membro = workflow === WORKFLOW_DA_REVISAO ? 'relatorios' : ANALISTA.key;
+    // A leitura da revisão da semana e a do relatório do mês são do Relatórios; o resto, do Analista (é quem aparece em
+    // Sua equipe).
+    const membro = workflow === WORKFLOW_DA_REVISAO || workflow === WORKFLOW_DO_RELATORIO ? 'relatorios' : ANALISTA.key;
 
     try {
       const r = await this.gateway.structured({

@@ -10,6 +10,8 @@ import {
   DailyResultsResponse,
   GoogleVisibilityQuery,
   GoogleVisibilityResponse,
+  MonthlyReportQuery,
+  MonthlyReportResponse,
   OrderOriginQuery,
   OrderOriginResponse,
   ProblemDetails,
@@ -38,6 +40,7 @@ import type { AuthContext } from '../context/request-context.js';
 import { AtencaoCicloService } from './atencao-ciclo.service.js';
 import { ComoTeAchamService } from './como-te-acham.service.js';
 import { DesempenhoService } from './desempenho.service.js';
+import { RelatorioService } from './relatorio.service.js';
 import { ResultsService } from './results.service.js';
 import { RevisaoService } from './revisao.service.js';
 
@@ -50,6 +53,7 @@ export class ResultsController {
     private readonly results: ResultsService,
     private readonly ciclo: AtencaoCicloService,
     private readonly revisao: RevisaoService,
+    private readonly relatorio: RelatorioService,
     private readonly desempenho: DesempenhoService,
     private readonly comoTeAcham: ComoTeAchamService,
   ) {}
@@ -198,5 +202,20 @@ export class ResultsController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   weeklyReview(@Query({ schema: WeeklyReviewQuery }) query: WeeklyReviewQuery): Promise<WeeklyReviewResponse> {
     return this.revisao.daMarca(query);
+  }
+
+  @Get('monthly-report')
+  @Permissao('vendas.ver')
+  @ApiOperation({
+    summary: 'Relatório do mês',
+    description:
+      'O relatório de um mês fechado da loja (do dia 1º ao último, no fuso dela), como foi gerado no dia 1º de manhã: os quatro números do topo ao lado dos do mês anterior, cada semana do mês (cortada no mês, com a semana inteira da revisão), o que cada campanha trouxe no caixa, o que melhorou, o que piorou, o que fica para o mês seguinte e a leitura do mês (da LIA ou, sem ela, do sistema, com o motivo), no formato do Explicar. Sem `month`, o mais recente; `month` é o mês pedido (`AAAA-MM`). Sem relatório ainda, `report` vem nulo e `next_report_on` diz quando sai o primeiro. O relatório não é recalculado: a tela e o e-mail mostram os mesmos números.',
+  })
+  @ApiOkResponse({ standardSchema: MonthlyReportResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  monthlyReport(@Query({ schema: MonthlyReportQuery }) query: MonthlyReportQuery): Promise<MonthlyReportResponse> {
+    return this.relatorio.daMarca(query);
   }
 }

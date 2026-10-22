@@ -2,7 +2,7 @@ import { TEAM_MEMBERS } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
 import { WORKFLOW_DO_CRIATIVO } from '../src/ai/criativo/prompt.js';
 import { WORKFLOW_DO_CRM } from '../src/ai/crm/prompt.js';
-import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DOS_RESULTADOS } from '../src/ai/explicar/explicar.service.js';
+import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DO_RELATORIO, WORKFLOW_DOS_RESULTADOS } from '../src/ai/explicar/explicar.service.js';
 import { WORKFLOW_DO_REVISOR } from '../src/ai/revisor/prompt.js';
 import { WORKFLOW as WORKFLOW_DA_CONVERSA } from '../src/conversa/conversa.service.js';
 import { EQUIPE, MEMBROS } from '../src/equipe/membros.js';
@@ -44,7 +44,7 @@ describe('Sua equipe (A3, I13b)', () => {
     expect([...MEMBROS]).toEqual([...TEAM_MEMBERS]);
     expect(EQUIPE.lia.fluxos).toEqual([WORKFLOW_DA_CONVERSA]);
     expect(EQUIPE.analista.fluxos).toEqual([WORKFLOW_DOS_RESULTADOS, WORKFLOW_DO_AVISO]);
-    expect(EQUIPE.relatorios.fluxos).toEqual([WORKFLOW_DA_REVISAO]);
+    expect(EQUIPE.relatorios.fluxos).toEqual([WORKFLOW_DA_REVISAO, WORKFLOW_DO_RELATORIO]);
     expect(EQUIPE.estrategista.fluxos).toEqual([WORKFLOW_DO_ESTRATEGISTA]);
     expect(EQUIPE.pesquisador.fluxos).toEqual([WORKFLOW_DO_PESQUISADOR]);
     // O Compliance segue por regra e não desliga; o fluxo dele é o do revisor de IA (o custo, quando a empresa o tem).

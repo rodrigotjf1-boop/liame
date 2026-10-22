@@ -133,6 +133,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   weekly_review: { class: 'CONFIDENTIAL', retention: 'com a marca' },
   weekly_review_delivery: { class: 'PERSONAL', retention: 'com a revisão e com a pessoa (some com qualquer uma das duas)' },
   weekly_review_state: { class: 'INTERNAL', retention: 'com a marca' },
+  // Relatório do mês (A3, I7; P24): como a revisão da semana, para o mês fechado da loja.
+  monthly_report: { class: 'CONFIDENTIAL', retention: 'com a marca' },
+  monthly_report_delivery: { class: 'PERSONAL', retention: 'com o relatório e com a pessoa (some com qualquer um dos dois)' },
+  monthly_report_state: { class: 'INTERNAL', retention: 'com a marca' },
   // Minha marca (A3, I8): o dossiê é dado da empresa, sem dado pessoal de cliente (recusado ao salvar); as
   // versões não se apagam enquanto a marca existir. A base da agência é do produto.
   brand_dossier_version: { class: 'CONFIDENTIAL', retention: 'com a marca (as versões não se apagam enquanto ela existir)' },
