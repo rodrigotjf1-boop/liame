@@ -110,8 +110,8 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 
 ## 8. Base de conhecimento: reconferir antes do código (`CLAUDE.md` §1)
 
-- **Meios de pagamento** (para a D-A7-2): assinatura no cartão, Pix Automático (as regras do Banco Central e quais meios já oferecem), o aviso por webhook e a assinatura dele, o custo por cobrança, a emissão de nota e onde ficam os dados. **Não conferido ainda** — a comparação vem com as páginas oficiais, antes do código.
-- **NFS-e** (para a D-A7-3): o padrão nacional e a cidade da empresa; o código de serviço do software como serviço. **Com o contador.**
+- **Meios de pagamento** (para a D-A7-2): assinatura no cartão, Pix Automático (as regras do Banco Central e quais meios já oferecem), o aviso por webhook e a assinatura dele, o custo por cobrança, a emissão de nota e onde ficam os dados. **Conferido em 22/10/2026** (`base-conhecimento.md` §18.1 e §18.2): oito meios nas páginas oficiais. O Pix Automático só pode ser contratado com o CNPJ ativo há seis meses, ou seja, a partir de 30/12/2026. A recomendação (§18.4) espera o dono.
+- **NFS-e** (para a D-A7-3): o padrão nacional e a cidade da empresa; o código de serviço do software como serviço. **O padrão nacional e a cidade foram conferidos em 22/10/2026** (§18.3: o Rio emite só no padrão nacional desde 01/01/2026). O código de serviço, a alíquota e as retenções seguem **com o contador**.
 - **Passkeys** (para a W9): a especificação WebAuthn e o suporte dos navegadores e celulares que o cliente usa; a biblioteca para o servidor (com a regra de dependência nova, V12).
 - **Meta e Google, para clientes de fora:** o que a análise do `ads_management` e a verificação completa do app do Google pedem, e o nível Básico do Google Ads (já listados no roadmap §2.1).
 

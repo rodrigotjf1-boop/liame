@@ -25,6 +25,7 @@
 15. [Validação da stack (detalhes)](#15-validação-da-stack-detalhes)
 16. [Interface: padrões de mercado e plataforma web](#16-interface-padrões-de-mercado-e-plataforma-web)
 17. [Acesso, ciclo de vida, versões de API e modelos de mídia](#17-acesso-ciclo-de-vida-versões-de-api-e-modelos-de-mídia)
+18. [Cobrança do Liame: meios de pagamento, Pix Automático e nota de serviço](#18-cobrança-do-liame-meios-de-pagamento-pix-automático-e-nota-de-serviço)
 
 ---
 
@@ -838,6 +839,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 22/10/2026 | §18 (nova): **a cobrança do Liame** (D-A7-2 e D-A7-3, antes do código da A7). As regras do Banco Central para o Pix Automático (guia 1.3 e Resolução BCB nº 482): só recebe a empresa com CNPJ ativo há pelo menos seis meses (o da empresa chega lá em 30/12/2026); oferecer é facultativo para quem recebe; não há tarifa para quem paga; a instrução sai de 2 a 10 dias antes; até três novas tentativas em sete dias; o cancelamento pelo pagador é imediato. Oito meios de pagamento comparados nas páginas oficiais (Pix Automático, cartão, preço, nota, aviso, contrato e dados): Mercado Pago, PagBank, Stripe e Pagar.me sem o Pix Automático pela API para quem recebe; Asaas, Efí, iugu e Vindi com ele; só o Asaas emite a NFS-e. A NFS-e do Rio no padrão nacional desde 01/01/2026, e a API nacional. A escolha fica com o dono. |
 | 22/10/2026 | §9: **Next.js 16.4.1.** A 16.3.8 ficou com dois avisos críticos (GHSA-2464-fhr4-w9xw e GHSA-673q-mjm6-r5xr, CVSS 9,5) e um alto (GHSA-p3m5-59mp-jv5r, 8,2), corrigidos na 16.4.1 (publicada em 14/10/2026): o osv-scanner e o Grype ficaram vermelhos em todo PR. A OSV não tem aviso para a 16.4.1 (consultada em 22/10/2026). |
 | 21/10/2026 | §3.3: **a volta do `PUT` da resposta sem a situação.** Na primeira resposta publicada no piloto, a volta veio sem uma situação que o Liame conhece, e a resposta ficou "desconhecida"; a lista trouxe a das antigas. A conferência das respostas passa a reler também a "desconhecida" (ERR-160), e o Google de mentira dos testes ganha a volta sem a situação. |
 | 21/10/2026 | §11: **Hub DMS, F3, parte C (a autorização por clique do Regem).** Entra o fato da autorização por clique do Regem, conferido no código dos PRs #706 e #708 de lá e no ar (o pedido responde 404 com a chave desligada): o contrato da B1 do RegemCast, a senha do presidente, a raiz do CNPJ, e a troca que entrega uma ligação por loja **sem `rgm_it_`**, revogando o acesso que a loja tinha com o aplicativo. Sai o [NC] do DMS ID: no ar, o recurso que ele não conhece é recusado com 400 `invalid_target`. Usado no PR 3 da parte C do Liame (a loja do Regem só com a ligação). |
@@ -999,6 +1001,19 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - blackfriday.com.br (data da Black Friday de 2026, secundária)
   - facebook.com/business/ads/meta-advantage-plus/creative · support.google.com/google-ads/answer/16456563 (Asset Studio) · …/17140115 (rótulo de IA) · experienceleague.adobe.com/en/docs/genstudio-for-performance-marketing/user-guide/guidelines/brand-validation · blog.google/innovation-and-ai/models-and-research/google-labs/pomelli (P10)
   - help.shopify.com/en/manual/reports-and-analytics/shopify-reports/overview-dashboard · shopify.dev/docs/api/shopifyql/latest/web-components/metric-card · plausible.io/docs/guided-tour · support.google.com/analytics/answer/9443595 · nngroup.com/articles/dashboards-preattentive (07/10/2026); support.stripe.com/questions/dashboard-home-page-charts-for-business-insights · kb.triplewhale.com/en/articles/5725275 · en.wikipedia.org/wiki/Bullet_graph · macworld.com/article/233093 (secundárias, pela busca)
+- **Cobrança do Liame (§18, 22/10/2026):**
+  - bcb.gov.br/content/estabilidadefinanceira/pix/automatico/guia_pix_automatico.pdf (versão 1.3) · Resolução BCB nº 482, de 05/06/2025 (bcb.gov.br/estabilidadefinanceira/exibenormativo) · normativos.bcb.gov.br/Votos/BCB/202568/Voto_do_BC_68_2025.pdf · bcb.gov.br/content/estabilidadefinanceira/pix/relatorio_de_gestao_pix/relatorio_gestao_pix_2026.pdf
+  - brasilapi.com.br/api/cnpj/v1 (dados abertos da Receita; secundária)
+  - gov.br/nfse/pt-br/biblioteca/documentacao-tecnica (documentação atual e manual dos contribuintes das APIs) · carioca.rio/servicos/iss-emissao-de-nota-fiscal-eletronica-nota-carioca · convergenciadigital.com.br e portalspedbrasil.com.br (o decreto e a portaria do Rio; secundárias)
+  - mercadopago.com.br/developers/pt/docs/llms.txt · …/docs/subscriptions (visão geral, pagamentos autorizados, PCI, webhooks) · mercadopago.com.br/ajuda/33399 · mercadopago.com.br/ajuda/termos-e-condicoes_300 · mercadopago.com.br/blog (pix-automatico-reduzir-inadimplencia, pix-automatico-inadimplencia-manutencao-reparos, como-receber-pagamentos-recorrentes)
+  - developer.pagbank.com.br (pagamentos-recorrentes, criar-assinatura, criptografia-e-chave-publica, retentativas-assinaturas, confirmar-autenticidade-da-notificacao, validacao-de-autenticidade) · pagbank.com.br/para-seu-negocio/online-integracao/pagamento-recorrente · pagbank.com.br/para-seu-negocio/online/checkout · pagbank.com.br/sobre/contrato-de-servicos
+  - docs.asaas.com (pix-automatico, faq-2, automatic-pix, pci-dss-1, notas-fiscais, sobre-os-webhooks) · asaas.com/precos-e-taxas · asaas.com/nota-fiscal · central.ajuda.asaas.com (termos, privacidade e acordo de tratamento de dados)
+  - dev.efipay.com.br/docs/api-pix/pix-automatico · …/api-pix/webhooks · …/api-cobrancas (assinatura, cartão, notificações) · sejaefi.com.br/tarifas · sejaefi.com.br/termos-e-contratos
+  - dev.iugu.com (Pix Automático, assinaturas, gatilhos) · iugu.com/planos · iugu.com/juridico/contrato · iugu.com/juridico/comunicado
+  - vindi.com.br/precos · blog.vindi.com.br/pix-automatico · app.vindi.com.br/api/v1/docs · atendimento.vindi.com.br (webhooks, NFe.io) · vindi.com.br/nossos-contratos-e-politicas · lwsa.tech/politicas
+  - docs.pagar.me (assinaturas, nfeio, webhooks) · pagar.me/ofertas · docs.stone.com.br/aviso-de-privacidade
+  - docs.stripe.com/payments/pix · stripe.com/br/pricing · docs.stripe.com/webhooks · stripe.com/br/legal/dpa · support.stripe.com (nota fiscal)
+  - tempo de mercado e porte: asaas.com/sobre-nos · sejaefi.com.br/sobre-o-efi-bank · iugu.com/sobre-a-iugu · vindi.com.br/sobre · ri.lwsa.com.br (release do 2º trimestre de 2026) · pagar.me · docs.stone.com.br (balanço da Stone Instituição de Pagamento de 2025) · resultados do 2º trimestre de 2026 da StoneCo e do PagBank · investors.pagbank.com · sec.gov (MercadoLibre: 10-K de 2012 e carta do 2º trimestre de 2026) · stripe.com/br/newsroom/news/stripe-2025-update · bloomberglinea.com.br, startups.com.br e baguete.com.br (secundárias)
 
 ---
 
@@ -1480,4 +1495,117 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - **URL assinada** [O] (…/using-presigned-url.html): com usuário IAM, "Valid up to 7 days"; ela é "bearer token"; a política do bucket recusa a assinatura velha com `s3:signatureAge` (`NumericGreaterThan`, em milissegundos: 600000 são 10 minutos);
   - **preço em São Paulo** [O], pela lista pública publicada em 15/10/2026 (versão `20261015173540`): US$ 0,0405 por GB por mês até 50 TB, US$ 0,007 por mil pedidos de gravação ou de lista e US$ 0,0056 por dez mil de leitura, os mesmos de 05/10/2026;
   - **sharp 0.35.5** [O] (sharp.pixelplumbing.com/install), a biblioteca que regrava a foto: binário pronto para Linux x64 com glibc 2.28 ou mais (a imagem do contêiner, Debian bookworm, tem a 2.36) e Node 20.9 ou mais, sem script de instalação (os binários vêm em pacotes por plataforma, `@img/sharp-*`); lê "JPEG, PNG, Ultra HDR, WebP, AVIF, TIFF, GIF and SVG (input)". **O HEIC (a foto do iPhone) não está na lista:** o Liame recusa a foto em HEIC com o motivo, e o campo de arquivo da tela pede JPEG, PNG ou WebP.
+
+---
+
+## 18. Cobrança do Liame: meios de pagamento, Pix Automático e nota de serviço
+
+*Páginas oficiais lidas em 22/10/2026, para a D-A7-2 (por onde se paga) e a D-A7-3 (a nota fiscal) do plano da A7 (`plano-a7.md` §8). A escolha do meio de pagamento é do dono: a comparação, com a recomendação, vai a ele antes do código.*
+
+### 18.1 Pix Automático (as regras do Banco Central)
+
+*Guia de implementação do Pix Automático, versão 1.3, de 19/08/2026 [O] (bcb.gov.br/content/estabilidadefinanceira/pix/automatico/guia_pix_automatico.pdf), e Resolução BCB nº 482, de 05/06/2025 [O] (o texto oficial, pela API de normativos do Banco Central), que mudou o art. 11-T do Regulamento do Pix (anexo à Resolução BCB nº 1, de 12/08/2020).*
+
+- **Quem pode receber:**
+  - "Recebimentos por meio do Pix Automático devem ser disponibilizados exclusivamente para usuários recebedores detentores de CNPJ" (guia);
+  - desde 16/06/2025, o Pix Automático "pode ser ofertado apenas para usuário recebedor pessoa jurídica que: I - esteja com número de inscrição no CNPJ ativo há pelo menos seis meses; e II - não possua indícios de cometimento de fraude, de acordo com critérios estabelecidos pelo próprio participante do usuário recebedor" (Resolução BCB nº 482, art. 11-T, §1º); o banco ou meio de pagamento confere a idoneidade antes de contratar e durante o contrato (§7º);
+  - **para o Liame:** o CNPJ da SISTER TECNOLOGIA LTDA começou em 30/06/2026 e está ativo (dados abertos da Receita, lidos pela BrasilAPI em 22/10/2026 [S]; conferir no cartão CNPJ). **O Pix Automático só pode ser contratado a partir de 30/12/2026**, em qualquer meio de pagamento. Até lá, o PIX da assinatura é a cobrança comum (QR Code ou copia e cola a cada mês).
+- **Oferecer é escolha de cada instituição:** "A implementação do Pix Automático pelos participantes do Pix é facultativa na ponta recebedora"; quem oferece dá ao recebedor a "API Pix ou arquivo padronizado". Por isso a §18.2 confere quem oferece.
+- **Tarifa:** "O PSP recebedor poderá cobrar tarifa do usuário recebedor"; "É vedada cobrança de tarifa do usuário pagador".
+- **Periodicidade:** "semanal, mensal, trimestral, semestral ou anual" (a assinatura do Liame é mensal, Termos 10).
+- **Autorização:** quatro jornadas: (1) sem QR Code, com a confirmação no app do banco do pagador; (2) QR Code só com a recorrência; (3) QR Code com o primeiro pagamento na hora e a recorrência; (4) a recorrência oferecida depois de pagar uma cobrança por QR Code. O pedido de autorização espera a resposta pelo "prazo máximo de 30 dias" (o recebedor pode dar menos) e expira; o pagador pode recusar dizendo o motivo; mandar de novo a mesma proposta a quem não autorizou há menos de trinta dias é envio "excessivo".
+- **Cada cobrança:** o recebedor manda a instrução de pagamento "entre dois dias e dez dias corridos antes da data prevista para a liquidação"; o débito sai na janela de 0h a 8h; sem saldo ou limite, o banco do pagador avisa às 8h e tenta de novo no mesmo dia, com a última tentativa "obrigatoriamente, entre 18h e 21h"; "Após as 21h não devem mais ser realizadas tentativas".
+- **Novas tentativas depois do vencimento:** só quando a recorrência permite (a política é "definida exclusivamente pelo usuário recebedor", no campo `politicaRetentativa`): no "prazo máximo de sete dias corridos", "no máximo, em três datas diferentes", com o mesmo valor, pedidas pelo recebedor (`POST /cobr/{txid}/retentativa/{data}`) até as 23h59 do dia anterior.
+- **Cancelamento:**
+  - o do pagador "é imediato" e cancela todos os agendamentos daquela autorização, inclusive as novas tentativas, menos os do próprio dia; o banco do pagador avisa o do recebedor (motivo `CCLD`);
+  - o recebedor também pode cancelar a recorrência, por iniciativa própria ou a pedido do cliente, e a autorização perde efeito.
+- **Começo:** o Pix Automático funciona desde 16/06/2025 (Relatório de Gestão do Pix 2023–2025 do Banco Central [O]; a data de efeito também está na Resolução BCB nº 482).
+
+### 18.2 Meios de pagamento (assinatura no cartão e no PIX)
+
+*Páginas oficiais de cada um, lidas em 22/10/2026 (a data de atualização da página vai entre parênteses quando ela mostra). Preço é o da tabela pública, que todos dizem poder mudar por contrato; o que não achei vira [NC]. Cada um traz também o tempo de mercado e o porte. Os dois que o Regem já usa no PIX das lojas vêm primeiro.*
+
+- **Mercado Pago** [O]:
+  - **Pix Automático:** não aparece na documentação técnica para quem recebe: nenhuma página nem endpoint no índice completo dos guias (developers/pt/docs/llms.txt, 3.904 linhas) e da referência; a API de Assinaturas (`POST /preapproval`) só recebe `card_token_id`; os blogs se contradizem (os de 03/06 e 12/06/2026 dizem que as Assinaturas aceitam o Pix Automático; o de 03/10/2026 diz que o PIX "exige que o cliente autorize cada cobrança manualmente"); os termos (15/09/2026) já citam o produto entre as formas de iniciar um PIX. Para a API: [NC];
+  - **cartão:** assinaturas com ou sem plano (pausar, cancelar, reativar; atualização do cartão pelas bandeiras); o CardForm do MercadoPago.js põe os campos num iframe, para "garantir que os dados inseridos pelos titulares do cartão não cheguem aos seus servidores"; a cobrança recusada tem até 4 tentativas em 10 dias, e "Após 3 parcelas com pagamentos recusados a assinatura será automaticamente cancelada";
+  - **preço** (mercadopago.com.br/ajuda/33399): sem mensalidade; cartão 4,98% na hora (depois de análise), 4,49% em 14 dias ou 3,98% em 30 dias (a página comercial de Assinaturas diz 4,49% na hora e 3,99% em 30); PIX 0,99%; boleto R$ 3,49;
+  - **nota:** não pela API [NC]; o Sistema de Gestão (R$ 79 por mês) emite NF-e e NFC-e, e os blogs se contradizem sobre a NFS-e;
+  - **aviso:** assinado com HMAC SHA-256 no cabeçalho `x-signature` (chave secreta do painel); reenvio a cada 15 minutos; a página diz que a configuração pelo painel "não está disponível para integrações com QR Code e nem Assinaturas", mas lista os tópicos de assinatura, e o `POST /preapproval` não tem `notification_url` (como o aviso da assinatura chega assinado: [NC]); `X-Idempotency-Key`;
+  - **contrato e dados:** CPF ou CNPJ; qualquer parte termina o contrato "a qualquer momento", sem causa (6.14), e o Mercado Pago pode mudar os termos "a qualquer momento, sem aviso prévio" (6.13); a infraestrutura pode ficar em outro país; acordo de tratamento de dados [NC];
+  - **desde e porte:** no Brasil desde janeiro de 2004 (relatório 10-K de 2012 do Mercado Livre na SEC); 88 milhões de usuários por mês nos serviços financeiros da América Latina e US$ 101 bilhões de volume no 2º trimestre de 2026 (carta do trimestre), sem número só do Brasil; Mercado Pago Instituição de Pagamento Ltda., do Mercado Livre (Nasdaq).
+- **PagBank** (PagSeguro) [O]:
+  - **Pix Automático:** não para quem recebe pela API: "Atualmente, o Pagamento Recorrente aceita cartão de crédito e boleto bancário (apenas na API)"; a assinatura só aceita `CREDIT_CARD` e `BOLETO`; no Checkout Recorrente, "Novas formas de pagamento estarão disponíveis em breve". Do lado de quem paga, o app aceita propostas de Pix Automático, e o blog fala em tarifa de até 1,89% para quem recebe;
+  - **cartão:** API de pagamentos recorrentes só para empresa aprovada no cadastro, com a produção liberada pelo time de Integrações e homologação de até 4 dias úteis; o cartão é cifrado no navegador (`PagSeguro.encryptCard()`), mas em campos da página do lojista (sem iframe do PagBank), ou vai pelo Checkout Recorrente, hospedado; até 3 novas tentativas automáticas, a cada 1, 3, 5 ou 7 dias;
+  - **preço:** a API recorrente não publica tarifa [NC]; a tabela do Checkout: PIX 1,89%, crédito 4,99% + R$ 0,40 em 14 dias ou 3,99% + R$ 0,40 em 30; o link recorrente passa a 4,20% depois da promoção; recebimento inicial em 5 dias;
+  - **nota:** não emite [NC] (o PagVendas emite NF-e e NFC-e);
+  - **aviso:** nos pedidos, o cabeçalho `x-authenticity-token` traz o SHA-256 de `{token}-{payload}`, com o token da conta (não é HMAC); há uma API de notificação nova, com ECDSA, que a própria página ainda manda confirmar antes de usar; a autenticação dos avisos de assinatura: [NC]; `x-idempotency-key` por 48 horas;
+  - **contrato e dados:** prazo indeterminado, rescisão "a qualquer momento" (18.4), mudança que restrinja condições com 30 dias de aviso; dados em servidores "no Brasil ou no exterior" (normas do Grupo UOL, 21/07/2021); acordo de tratamento de dados [NC];
+  - **desde e porte:** desde 2006 (investors.pagbank.com); 34,1 milhões de clientes, R$ 133,4 bilhões de volume e 6,2 milhões de lojistas ativos no 2º trimestre de 2026 (resultado do trimestre); instituição de pagamento emissora de moeda eletrônica, emissora de pós-pago e adquirente, com o BancoSeguro como banco; PagSeguro Digital Ltd. (NYSE), do Grupo UOL.
+- **Asaas** [O]:
+  - **Pix Automático:** pela API, só na Jornada 3 (o primeiro QR Code cobra a primeira mensalidade e colhe a autorização), com as cobranças criadas por nós ou por uma assinatura (docs.asaas.com/docs/pix-automatico, 25/09/2026); quem pode: conta de empresa e "CNPJ ativo há pelo menos seis meses" (docs.asaas.com/docs/faq-2); a página em inglês ainda diz "Feature with controlled access" (pedir ao time de integrações, 13/10/2026); "não há nenhum custo adicional por utilizar a funcionalidade. Aplicam-se apenas as taxas padrões de recebimento via Pix" (central de ajuda, 02/10/2026); novas tentativas `ALLOW_THREE_IN_SEVEN_DAYS`, escolhidas só ao criar;
+  - **cartão:** assinatura pela API (`POST /v3/subscriptions`); para o número não passar pelo nosso servidor, o Asaas Checkout, página hospedada que cria a assinatura no fim ("Os dados são inseridos em uma página controlada pelo Asaas"; pela API ou pela tokenização no servidor, "Sua infraestrutura permanece no escopo" do PCI, docs.asaas.com/docs/pci-dss-1); sem biblioteca para o navegador [NC]; a régua de novas tentativas só aparece no blog (três no dia do vencimento e mais duas, uma a cada 24 horas);
+  - **preço** (asaas.com/precos-e-taxas): sem mensalidade nem adesão; PIX recebido R$ 1,99 (R$ 0,99 nos três primeiros meses); cartão R$ 0,49 + 2,99% (o FAQ da mesma página diz 1,99% na assinatura: só a conta confirma); cartão recebido em 32 dias, PIX em segundos;
+  - **nota:** o próprio Asaas emite a NFS-e pela API, a R$ 0,49 por nota (a mesma página também a lista entre os serviços grátis), "integradas ao Portal Nacional de NFS-e", e emite sozinho a cada cobrança da assinatura (asaas.com/nota-fiscal; docs.asaas.com/docs/notas-fiscais, 31/08/2026); pede empresa, e a homologação na prefeitura não vale para quem emite pelo Portal Nacional;
+  - **aviso:** um token fixo no cabeçalho `asaas-access-token` (32 a 255 caracteres), IPs publicados; sem assinatura HMAC nem mTLS [NC]; entrega "at least once" (guardar o `id` e não repetir), envio em sequência opcional (mantém a ordem), até 15 tentativas;
+  - **contrato e dados:** prazo indeterminado, "Qualquer parte pode rescindir o contrato a qualquer momento"; pode reter valores por até 120 dias; exige CNPJ; os dados "poderão ser transferidos e tratados fora do Brasil"; publica o acordo de tratamento de dados (operador; a cláusula 2.1 diz "co-Controlador");
+  - **desde e porte:** S/A desde 2013, em Joinville (SC) (asaas.com/sobre-nos); "Ultrapassamos a marca dos 200 mil clientes" (2025); instituição de pagamento desde 2021 e sociedade de crédito (SCFI) desde 2026; capital fechado.
+- **Efí** (ex-Gerencianet) [O]:
+  - **Pix Automático:** pela API Pix do Banco Central (`/v2/rec`, `/v2/solicrec`, `/v2/cobr` e a retentativa), nas quatro jornadas, com conta Efí Empresas (dev.efipay.com.br/docs/api-pix/pix-automatico, 14/10/2026); CNPJ ativo e regular há pelo menos seis meses; **R$ 3,50 por Pix Automático liquidado** (sejaefi.com.br/tarifas);
+  - **cartão:** planos e assinaturas (boleto e cartão); o cartão é cifrado no navegador por uma biblioteca da Efí, que devolve o `payment_token` (a geração no servidor foi descontinuada, 29/07/2026); nova tentativa só pedida por nós (`POST /v1/charge/:id/retry`);
+  - **preço:** PIX 1,19%; cartão à vista 3,49%, recebido em até 31 dias; "Pagamento recorrente GRÁTIS"; conta grátis, com tarifa de R$ 39,90 se ficar 120 dias sem movimento;
+  - **nota:** não emite [NC];
+  - **aviso:** o do PIX exige mTLS ("Por norma do Banco Central, será necessário a inserção de uma chave pública da Efí em seu servidor"), com até 9 novas tentativas; o das cobranças traz só um token, e os dados vêm da consulta ("Por segurança, as informações da transação serão enviadas somente quando seu sistema consultá-las");
+  - **contrato e dados:** o usuário cancela "A qualquer tempo"; guarda de 5 anos; dados no Brasil ou no exterior; acordo de tratamento de dados [NC];
+  - **desde e porte:** desde 2007, como Gerencianet, em Ouro Preto (MG) (sejaefi.com.br/sobre-o-efi-bank; a página dá 2022 e 2023 para a troca de nome); "mais de 770 mil clientes"; instituição de pagamento desde 2019 (código 364) e SCFI desde 2021; capital fechado.
+- **iugu** [O]:
+  - **Pix Automático:** em produção, sem ambiente de testes; nas assinaturas desde 16/07/2026, com as jornadas 2, 3 e 4; até 3 novas tentativas por fatura; tarifa [NC];
+  - **cartão:** assinaturas, iugu.js no navegador (a tokenização pela API é só para quem é PCI), checkout hospedado, régua de cobrança de até 30 ações;
+  - **preço:** não publicado; planos com mensalidade negociada (iugu.com/planos);
+  - **nota:** não emite [NC] (só uma extensão do Chrome da eNotas, de 2023);
+  - **aviso:** Basic Authentication com chave fixa; sem HMAC, mTLS nem regra de idempotência [NC];
+  - **contrato e dados:** saída com 30 dias de aviso; retenção de até 365 dias; nuvem fora do Brasil; **incidente de segurança em 11/07/2026**: "Em uma parcela restrita da base houve acesso à credenciais e saldo" (iugu.com/juridico/comunicado). O Regem tirou a iugu dos gateways em agosto de 2026;
+  - **desde e porte:** desde 2012 (iugu.com/sobre-a-iugu); "150 mil contas atendidas" e "R$ 81 bilhões de transações por ano", sem o período; instituição de pagamento desde 2020; capital fechado.
+- **Vindi** (LWSA) [O]:
+  - **Pix Automático:** sim, "integrado à gestão de cobranças recorrentes" (blog.vindi.com.br/pix-automatico, 03/06/2026), com o link de autorização na assinatura (`pix_automatic_consent_url`); a tarifa é a do banco que recebe ("Os valores variam conforme o PSP");
+  - **cartão:** assinaturas; o cartão vai do navegador para a Vindi (`POST /v1/public/payment_profiles`); novas tentativas automáticas configuráveis;
+  - **preço** (vindi.com.br/precos): mensalidade de R$ 299 (Essential), **R$ 499 no Pro, o primeiro com "Integração via API"**, ou R$ 1.119 (Premium); cartão a partir de 2,75%, recebido em 30 dias; PIX 0,95% (mínimo de R$ 1,60); mais R$ 0,39 por transação aprovada e R$ 0,40 de antifraude;
+  - **nota:** não emite; parceiro NFe.io, contratado e pago à parte;
+  - **aviso:** usuário e senha na URL ou parâmetro secreto; sem HMAC [NC]; até 8 tentativas em cerca de 48 horas (outro artigo diz 10);
+  - **contrato e dados:** termos 01/2026: cancelamento "desde que cumpra o aviso prévio de 60 (sessenta) dias" (a página de preços diz "Cancele quando quiser"), renovação mensal automática, a mensalidade cobrada "independentemente do êxito na cobrança", reajuste anual pelo IPCA; os dados podem ser tratados fora do Brasil, "notadamente nos Estados Unidos";
+  - **desde e porte:** desde 2013, da LWSA (B3) desde 2021 (vindi.com.br/sobre); sem número próprio: a operação de pagamentos da LWSA movimentou R$ 2,3 bilhões no 2º trimestre de 2026 (release do trimestre); a LWSA pediu ao Banco Central a licença de instituição de pagamento para a Vindi em 2024 [S], e se ela saiu: [NC].
+- **Pagar.me** (Stone) [O]:
+  - **Pix Automático:** não: "⚠️ Pix não disponível para recorrência" (docs.pagar.me, 24/07/2026); a assinatura aceita cartão, boleto e débito;
+  - **cartão:** planos e assinaturas; o cartão vira token no navegador, pela chave pública; checkout hospedado; atualização automática do cartão vencido;
+  - **preço** (pagar.me/ofertas): sem mensalidade; PIX 0,99%; crédito à vista 4,19%; recebe na conta da Stone no dia seguinte, mas o pagamento de vendedor novo "pode ser retido por até 30 dias por questões de análise";
+  - **nota:** não emite; aplicativo da NFe.io, com conta própria;
+  - **aviso:** reenvio configurável e manual; a forma de autenticar o aviso não aparece [NC];
+  - **contrato e dados:** exige CNPJ; os dados podem ir aos Estados Unidos, à Inglaterra e a Portugal; os termos são um PDF só de imagem [NC];
+  - **desde e porte:** fundada em 2013 e comprada pela Stone em 2016 [S]; o site diz "Pagar.me agora é Stone"; sem número próprio (a Stone teve 4,8 milhões de clientes ativos no 2º trimestre de 2026); é subadquirente, sob a licença da Stone Instituição de Pagamento (balanço de 2025).
+- **Stripe** (conta brasileira) [O]:
+  - **Pix Automático:** não: "O Pix Automático não está disponível para empresas domiciliadas no Brasil" (docs.stripe.com/payments/pix); o PIX avulso de conta brasileira é "apenas para convidados" (stripe.com/br/pricing/local-payment-methods);
+  - **cartão:** Billing, com novas tentativas automáticas (o padrão recomendado é de oito em duas semanas); o cartão vai direto para a Stripe;
+  - **preço** (stripe.com/br/pricing): 3,99% + R$ 0,39 por cartão nacional (a página do Billing diz + R$ 0,50) e mais 0,7% do volume no Billing; sem mensalidade; cartão recebido em 30 dias;
+  - **nota:** não emite ("We also do not generate invoices for the services or products you sell"); há um aplicativo da NFE.io [S];
+  - **aviso:** assinado (HMAC SHA-256 no cabeçalho `Stripe-Signature`, com tolerância de cinco minutos); `Idempotency-Key` em todo `POST`;
+  - **contrato e dados:** rescisão a qualquer momento; o acordo de tratamento de dados transfere os dados para a Stripe, LLC, nos Estados Unidos;
+  - **desde e porte:** no Brasil em teste desde fevereiro de 2021 [S]; no mundo, US$ 1,9 trilhão de volume em 2025 e mais de 5 milhões de empresas (stripe.com/br/newsroom); sem número do Brasil; instituição de pagamento credenciadora (rodapé do contrato).
+- **Custo de uma cobrança de exemplo de R$ 200** (só para comparar; o preço dos planos é do dono, D-A7-4), pelas tabelas acima: no cartão, Asaas R$ 6,47 (mais R$ 0,49 da nota), Efí R$ 6,98, Mercado Pago R$ 7,96 (em 30 dias), PagBank R$ 8,38 (tabela do Checkout), Pagar.me R$ 8,38, Stripe R$ 9,77 e Vindi R$ 6,29 mais a mensalidade de R$ 499; no PIX, Asaas R$ 1,99 (comum ou automático), Efí R$ 2,38 (comum) ou R$ 3,50 (automático), Mercado Pago e Pagar.me R$ 1,98 (comum), Vindi R$ 2,29 (comum) e PagBank R$ 3,78 (comum).
+
+### 18.3 Nota fiscal de serviço (NFS-e)
+
+- **Rio de Janeiro** [O] (carioca.rio, página "ISS – Emissão de nota fiscal eletrônica – Nota Carioca", atualizada em 01/12/2025): a partir de 1º de janeiro de 2026, os contribuintes do ISS do município "deverão emitir a NFS-e de padrão nacional, através do emissor nacional". A empresa é do Rio (cartão CNPJ e dados abertos da Receita). Pela imprensa [S]: o Decreto Rio nº 56.921, de 03/10/2025, e a Portaria F/REC-RIO/CIS nº 324, de 27/01/2026, que declarou "indisponibilidade temporária" do município no tratamento da NFS-e nacional; se isso já se resolveu: [NC].
+- **A API do Sistema Nacional NFS-e** [O] (gov.br/nfse, "Manual dos Contribuintes – Guia para utilização das API's do Emissor Público Nacional", arquivo v1.2 de outubro de 2025; a página da documentação foi atualizada em 15/08/2026):
+  - `POST /nfse` recebe a DPS (o XML da declaração do serviço, assinado) e gera a NFS-e na hora ("Geração síncrona"), ou devolve o motivo da rejeição; a DPS que traz a chave de uma nota já emitida a substitui, e a original é cancelada por um evento;
+  - `GET /nfse/{chaveAcesso}` consulta a nota; `GET /dps/{id}` devolve a chave só a quem está na nota, reconhecido pelo "certificado digital da conexão";
+  - o cancelamento e os outros eventos vão por `POST /nfse/{chaveAcesso}/eventos` (mensagem em JSON, com o XML assinado pelo emissor);
+  - `GET /parametros_municipais/...` traz as alíquotas, as retenções e os benefícios do município; há um ambiente de produção restrita para testes.
+- **Para o Liame (D-A7-3):** a nota de uma empresa do Rio sai no padrão nacional: pelo meio de pagamento (o Asaas emite pelo Portal Nacional), por um emissor à parte (NFe.io, eNotas) ou pela API nacional, com o certificado digital da empresa. O código de serviço, a alíquota e as retenções seguem com o contador.
+
+### 18.4 O que a comparação decide (D-A7-2)
+
+- **Cartão e Pix Automático pela API, hoje:** Asaas, Efí e iugu; a Vindi também, com mensalidade de R$ 499 para ter a API. Os dois que o Regem já usa (Mercado Pago e PagBank) não oferecem o Pix Automático a quem recebe pela API, nem a Stripe e a Pagar.me.
+- **Nota:** só o Asaas emite a NFS-e (no padrão nacional, a R$ 0,49); nos outros, ela sai por um emissor à parte ou pela API nacional.
+- **Aviso:** assinado na Stripe e no Mercado Pago (HMAC) e com mTLS no PIX da Efí; no Asaas, na Vindi e na iugu, um token fixo ou senha. Para a A7-2 (o aviso só vale com a assinatura certa), o aviso sem assinatura só serve de sinal: o Liame lê a cobrança na API do meio de pagamento antes de mudar a assinatura.
+- **Recomendação levada ao dono em 22/10/2026:** o Asaas como base (cartão pela página hospedada, PIX e Pix Automático, nota no padrão nacional, sem mensalidade, rescisão a qualquer momento, acordo de tratamento de dados publicado), com a integração escrita por trás de uma interface de meio de pagamento, para somar outro meio se o primeiro falhar ou ficar caro (a Efí no Pix Automático, o Mercado Pago no cartão) e a API nacional como reserva da nota. A escolha é do dono; quando ele decidir, ela vira "Regra do Liame" aqui.
+- **Para o código (W2), viram teste (V99):** o Pix Automático só a partir de 30/12/2026 (o CNPJ de seis meses); o aviso sem assinatura nunca muda a assinatura sem a leitura da cobrança na API; nenhum número de cartão no Liame (página hospedada ou campo do meio de pagamento); a instrução do Pix Automático sai de 2 a 10 dias antes do vencimento, e as novas tentativas acabam até o 7º dia depois dele, antes da parada do 10º dia (Termos 10.4, D-A7-6).
 
