@@ -525,6 +525,17 @@ Plano **aprovado pelo dono em 03/10/2026**, com as decisões como recomendadas: 
 
 **A comparação dos meios de pagamento (D-A7-2), 22/10/2026, só documento:** a seção nova da base de conhecimento (§18) traz as regras do Banco Central para o Pix Automático, oito meios de pagamento lidos nas páginas oficiais (Mercado Pago, PagBank, Asaas, Efí, iugu, Vindi, Pagar.me e Stripe) e a NFS-e do Rio. Três achados mudam o plano. **O Pix Automático só pode ser contratado com o CNPJ ativo há seis meses** (Resolução BCB nº 482): o da empresa chega lá em 30/12/2026, e até lá o PIX da assinatura é a cobrança comum. **Os dois que o Regem já usa não oferecem o Pix Automático pela API** a quem recebe (o Mercado Pago não tem nada na documentação técnica; a recorrência do PagBank aceita só cartão e boleto). **Só o Asaas emite a NFS-e**, e o Rio emite só no padrão nacional desde 01/01/2026. A recomendação levada ao dono é o Asaas como base, com uma interface que permite somar outro meio, e a escolha é dele.
 
+**O protótipo P26, Plano e cobrança (22/10/2026, aguarda o dono):** `mockups/prototipo-cobranca.html`, a primeira tela da A7. Ele mostra:
+- a situação da assinatura, com a ação do momento e as datas reais de cada degrau do atraso;
+- o plano e a troca de plano;
+- a forma de pagamento: PIX a cada mês, o Pix Automático a partir de 30/12/2026 ou o cartão, digitado na página do meio de pagamento;
+- as faturas, as notas e as fases do atraso;
+- cancelar no fim do período e desistir em 7 dias, com o código do app;
+- o aviso de atraso nas outras telas;
+- as telas de quem não vê a cobrança e da conta suspensa.
+
+Vêm junto as decisões D-A7-13 a D-A7-19, e a pesquisa de mercado está no cabeçalho do arquivo. Conferido no Chrome sem janela: 93 cenários, em 1440, 1024, 768 e 375 px, nos temas claro e escuro, sem problema.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
