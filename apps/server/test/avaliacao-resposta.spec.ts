@@ -56,13 +56,43 @@ const recusa = (fn: () => unknown): string => {
 
 describe('avaliacao_responder: o registro e o conector (A6 · Z2)', () => {
   it('a ferramenta: só no perfil do Google, sempre com uma pessoa, sem parâmetro que ela não conhece, e a volta é apagar a resposta', () => {
-    expect(tool).toMatchObject({ name: 'avaliacao_responder', version: 1, owner: 'social', risk: 'R2', providers: ['google_business'], compensation: 'apagar_a_resposta', alwaysApproval: true });
+    expect(tool).toMatchObject({ name: 'avaliacao_responder', version: 2, owner: 'social', risk: 'R2', providers: ['google_business'], compensation: 'apagar_a_resposta', alwaysApproval: true });
     expect(tool.undo!(estado())).toEqual({ tool: 'avaliacao_apagar_resposta', params: {} });
     expect(tool.onlyAsUndo).toBeUndefined();
     expect(tool.directByPerson).toBeUndefined();
     expect(tool.revalidateOnApproval).toBeUndefined();
     expect(tool.params.safeParse({ texto: TEXTO }).success).toBe(true);
     for (const ruim of [{}, { texto: '' }, { texto: TEXTO, outro: 1 }, { texto: 42 }, { texto: 'x'.repeat(6001) }]) expect(tool.params.safeParse(ruim).success, JSON.stringify(ruim).slice(0, 40)).toBe(false);
+  });
+
+  it('v2 (A6 · Z6): as sugestões do Social media vão nos parâmetros, só ele as preenche, e o que vai ao Google é só o texto', () => {
+    // Só o funcionário de IA preenche as sugestões; nenhuma outra ferramenta tem parâmetro assim.
+    expect(tool.agentParams).toEqual(['sugestoes']);
+    expect(Object.values(TOOLS).filter((t) => t.agentParams?.length).map((t) => t.name)).toEqual(['avaliacao_responder']);
+    const sugestoes = [
+      { enfoque: 'Curta', texto: TEXTO, rodada: 1 },
+      { enfoque: 'Mais calorosa', texto: 'Ficamos muito felizes com a sua visita! Esperamos você de novo.', rodada: 1 },
+    ];
+    expect(tool.params.safeParse({ texto: TEXTO, sugestoes }).success).toBe(true);
+    // Até quatro (duas por rodada, duas rodadas), cada uma com enfoque, texto e rodada 1 ou 2, e nada além.
+    expect(tool.params.safeParse({ texto: TEXTO, sugestoes: [...sugestoes, ...sugestoes.map((s) => ({ ...s, rodada: 2 }))] }).success).toBe(true);
+    for (const ruins of [
+      [],
+      [...sugestoes, ...sugestoes, sugestoes[0]],
+      [{ ...sugestoes[0], rodada: 3 }],
+      [{ ...sugestoes[0], enfoque: '' }],
+      [{ ...sugestoes[0], enfoque: 'x'.repeat(61) }],
+      [{ ...sugestoes[0], texto: 'x'.repeat(601) }],
+      [{ ...sugestoes[0], autor: 'social' }],
+      [{ enfoque: 'Curta', texto: TEXTO }],
+    ]) {
+      expect(tool.params.safeParse({ texto: TEXTO, sugestoes: ruins }).success, JSON.stringify(ruins).slice(0, 60)).toBe(false);
+    }
+    // O plano publica o texto escolhido; as sugestões não mudam o que sai.
+    const plano = tool.plan(estado(), { texto: sugestoes[1]!.texto, sugestoes });
+    expect(plano.text).toBe(sugestoes[1]!.texto);
+    expect((plano.desiredState as EstadoDaAvaliacao).resposta).toEqual({ situacao: 'pendente', texto: sugestoes[1]!.texto, violacao: null });
+    expect(plano).toEqual(tool.plan(estado(), { texto: sugestoes[1]!.texto }));
   });
 
   it('o conector de ação: a flag de escrita própria, sem verba de mídia, e o recurso é a avaliação guardada no Liame', () => {

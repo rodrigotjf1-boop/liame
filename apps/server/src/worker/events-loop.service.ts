@@ -19,13 +19,14 @@ import { SearchConsoleLoop } from './search-console-loop.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
+import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
 import { VendasLoop } from './vendas-loop.js';
 import { InboxProcessor } from './inbox-processor.js';
 import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, gerar o relatório do mês, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador, conferir o gasto de cada mudança feita numa conta de anúncio, conferir de novo os pedidos que esperam aprovação com um impedimento, olhar as marcas pela rotina do CRM e mensageria e ler as lojas do Perfil da Empresa no Google. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, gerar o relatório do mês, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador, conferir o gasto de cada mudança feita numa conta de anúncio, conferir de novo os pedidos que esperam aprovação com um impedimento, olhar as marcas pela rotina do CRM e mensageria, ler as lojas do Perfil da Empresa no Google e pedir ao Social media as sugestões de resposta às avaliações novas. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -63,6 +64,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly searchConsole: SearchConsoleLoop,
     private readonly comparacao: ComparacaoDmsIdLoop,
     private readonly fotos: FotosLoop,
+    private readonly sugestoes: SugestoesDeRespostaLoop,
     /** O hub da DMS: a falha de um laço vai também à lista de erros dele (desligado por padrão, `HUB_LIGADO`). */
     @Optional() private readonly hub?: HubDms,
   ) {}
@@ -112,6 +114,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),
       // As fotos apagadas e os envios que não terminaram (A6, Z4): o arquivo sai do armazenamento e depois a linha; a fila é olhada a cada minuto.
       this.loop('fotos', 20, 60_000, async (n) => (await this.fotos.executarLote(n)).length),
+      // As sugestões de resposta do Social media (A6, Z6): a avaliação nova entra na fila na leitura do Perfil que a
+      // trouxe; a fila é olhada a cada minuto, e quem espera a vez (a IA desligada, o limite) volta em uma hora.
+      this.loop('sugestoes-de-resposta', 3, 60_000, async (n) => (await this.sugestoes.executarLote(n)).length),
     );
   }
 

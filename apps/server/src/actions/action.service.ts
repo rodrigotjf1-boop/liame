@@ -283,6 +283,20 @@ export class ActionService {
     return this.pedirEmNomeDoFuncionario(alvo, input, {});
   }
 
+  /**
+   * O pedido de resposta a uma avaliação do Google que o Social media propõe (A6, Z6; D-A6-26 e D-A6-27), com as
+   * sugestões que ele escreveu nos parâmetros. Quem chama é a rotina das sugestões, na transação da empresa. Passa pelo
+   * mesmo trilho do pedido de uma pessoa (trava, flag de escrita, política, a avaliação lida no Google, o plano) e
+   * sempre espera a aprovação de uma pessoa com o código do app (a trava `alwaysApproval`); a de 1 ou 2 estrelas, só a
+   * do dono (D-A6-4). `emNomeDe` é o dono da empresa: é ele quem responde pelo que o funcionário propõe em público.
+   */
+  async pedirRespostaPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
+    if (input.tool !== 'avaliacao_responder') {
+      throw new AppProblem(400, 'ferramenta-nao-e-de-resposta', 'Não é uma resposta a avaliação', 'Por aqui o funcionário só pede a resposta a uma avaliação do Google.');
+    }
+    return this.pedirEmNomeDoFuncionario(alvo, input, {});
+  }
+
   /** O pedido do funcionário de IA pelo trilho, com a auditoria em nome dele. `extra` vai para a auditoria. */
   private async pedirEmNomeDoFuncionario(
     alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string },
@@ -378,6 +392,8 @@ export class ActionService {
     await this.assertWriteEnabled(quem, connector, brandId, input.account_id);
 
     const params = this.parseParams(tool, input.params);
+    // O que só o funcionário de IA preenche (A6, Z6: as sugestões de resposta) não vem no pedido de uma pessoa.
+    if (quem.ator === 'human') this.semParamsDoFuncionario(tool, params);
     // O pedido que nasce de uma recomendação (X3): o alvo é conferido antes de gastar a leitura na plataforma.
     const recomendacao = input.recommendation_id ? await this.recomendacaoDoPedido(tx, tenantId, input.recommendation_id, input) : null;
     const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: input.account_id, resourceId: input.resource_id });
@@ -393,7 +409,10 @@ export class ActionService {
     );
     // O funcionário de IA só pede no modo Aprovação (D-A4-26): em Sombra ou em Sugerir quem pede é a pessoa, e os modos
     // automáticos não existem nesta fase. A regra é conferida aqui, com a política de agora, e não só por quem chama.
-    if (quem.ator === 'agent' && decision.mode !== 'APPROVAL') {
+    // A exceção é o pedido que só o dono decide (A6, D-A6-4 e D-A6-27: a resposta a uma avaliação de 1 ou 2 estrelas,
+    // que a política põe em ESCALATE): ele pede, e só a aprovação do dono, com o código do app, faz o pedido andar.
+    const soDoDono = decision.mode === 'ESCALATE' && tool.ownerOnly?.(read.state) === true;
+    if (quem.ator === 'agent' && decision.mode !== 'APPROVAL' && !soDoDono) {
       throw new AppProblem(409, 'modo-nao-e-aprovacao', 'O modo não é Aprovação', `Nesta conta, esta ação está em ${decision.mode} para o funcionário de IA: ele não faz o pedido.`);
     }
 
@@ -507,7 +526,7 @@ export class ActionService {
     if (row.compensates_action_id) throw new AppProblem(409, 'acao-nao-altera', 'Não dá para alterar', 'O pedido de volta não se altera: cancele e peça outra ação.');
     await this.exigirODono(tx, tenantId, auth, row, 'alterar');
     const { tool, connector } = this.resolve(row.tool, row.provider);
-    const params = this.parseParams(tool, input.params);
+    const params = this.manterParamsDoFuncionario(tool, row, this.parseParams(tool, input.params));
     const read = await this.lerNoProvedor(connector, tx, { tenantId, accountId: row.account_id, resourceId: row.resource_id });
     const plan = this.planejar(tool, read.state, params, read.transient);
     const request = { brand_id: row.brand_id, provider: row.provider, account_id: row.account_id, resource_id: row.resource_id, tool: row.tool, params };
@@ -845,6 +864,34 @@ export class ActionService {
       throw new ValidationProblem(issuesToErrors(parsed.error.issues).map((e) => ({ ...e, path: `params.${e.path}` })));
     }
     return parsed.data;
+  }
+
+  /** O pedido de uma pessoa não traz o que só o funcionário de IA preenche (`agentParams`; A6, Z6: as sugestões). */
+  private semParamsDoFuncionario(tool: ToolDefinition, params: Record<string, unknown>): void {
+    const doFuncionario = (tool.agentParams ?? []).filter((k) => params[k] !== undefined);
+    if (doFuncionario.length) throw new ValidationProblem(doFuncionario.map((k) => ({ path: `params.${k}`, message: 'Só o funcionário de IA preenche este campo.' })));
+  }
+
+  /**
+   * Alterar um pedido mantém o que só o funcionário de IA preenche (`agentParams`): vale o que está no pedido. A pessoa
+   * pode mandar de volta o mesmo valor; outro é recusado, como no pedido novo. A comparação é pelo JSON canônico (a
+   * coluna `jsonb` devolve as chaves em outra ordem).
+   */
+  private manterParamsDoFuncionario(tool: ToolDefinition, row: Pick<ActionRow, 'params'>, params: Record<string, unknown>): Record<string, unknown> {
+    const chaves = tool.agentParams ?? [];
+    if (!chaves.length) return params;
+    const mantidos: Record<string, unknown> = { ...params };
+    const recusados: string[] = [];
+    for (const k of chaves) {
+      const doPedido = row.params[k];
+      if (params[k] !== undefined && (doPedido === undefined || canonicalJson(params[k]) !== canonicalJson(doPedido))) recusados.push(k);
+      if (doPedido === undefined) delete mantidos[k];
+      else mantidos[k] = doPedido;
+    }
+    if (recusados.length) {
+      throw new ValidationProblem(recusados.map((k) => ({ path: `params.${k}`, message: 'Só o funcionário de IA preenche este campo: ao alterar o pedido, ele fica como estava.' })));
+    }
+    return this.parseParams(tool, mantidos);
   }
 
   private async assertNotStopped(tx: Tx, target: Parameters<KillSwitchService['check']>[1]): Promise<void> {
