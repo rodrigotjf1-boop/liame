@@ -4,7 +4,7 @@ import { type SQL, sql } from 'drizzle-orm';
 import { DATABASE } from '../database/database.module.js';
 import { HORA_DE_GERAR } from '../results/relatorio-mensal.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
-import { RelatorioMensalService, type ResultadoDoRelatorio } from './relatorio-mensal.service.js';
+import { RelatorioMensalService, type ResultadoDoEnvio, type ResultadoDoRelatorio } from './relatorio-mensal.service.js';
 
 /** Reserva da marca: se o worker cair no meio, ela volta para a fila depois disto. */
 const RESERVA = '30 minutes';
@@ -14,11 +14,13 @@ const ESPERA_DA_LEITURA = '20 minutes';
 const SEM_O_QUE_RELATAR = '6 hours';
 
 export type VezDoRelatorio = { brandId: string; tenantId: string; status: ResultadoDoRelatorio['status'] | 'falhou' };
+export type VezDoEnvio = { reportId: string; status: ResultadoDoEnvio['status'] | 'falhou'; enviados: number };
 
 /**
  * O relatório do mês (A3, I7; P24), marca por marca: reserva as marcas com as vendas conectadas cuja vez chegou,
  * com SKIP LOCKED na mesma linha que a reserva altera (`monthly_report_state`, V35), a mais atrasada primeiro. A
- * rotina em si está em `RelatorioMensalService`. Como a revisão da semana (`revisao-semanal-loop.ts`).
+ * rotina em si está em `RelatorioMensalService`. Como a revisão da semana (`revisao-semanal-loop.ts`), o envio por
+ * e-mail é um segundo laço, sobre os relatórios que esperam o envio.
  */
 @Injectable()
 export class RelatorioMensalLoop {
@@ -72,6 +74,43 @@ export class RelatorioMensalLoop {
         // Falha fora do previsto: a reserva vence e a marca volta para a fila (LIC-001).
         this.logger.error(`marca ${m.brand_id}: ${err instanceof Error ? err.message : String(err)}`);
         vezes.push({ ...alvo, status: 'falhou' });
+      }
+    }
+    return vezes;
+  }
+
+  /** Os relatórios que esperam o envio por e-mail e cuja hora chegou, com SKIP LOCKED na própria linha do relatório. */
+  async enviarLote(limite = 3, scope: JobScope = {}, agora?: Date): Promise<VezDoEnvio[]> {
+    if (!this.database) return [];
+    const referencia = agora ? sql`${agora.toISOString()}::timestamptz` : sql`now()`;
+    const reservados = await withSystem(this.database.db, async (tx) => {
+      const r = await tx.execute<{ id: string }>(sql`
+        with devidos as materialized (
+          select m.id
+            from liame.monthly_report m
+           where m.email_status = 'pendente' and m.email_next_at <= ${referencia} ${tenantFilter(scope, sql`m.tenant_id`)}
+           order by m.email_next_at
+           limit ${limite}
+           for update of m skip locked
+        )
+        update liame.monthly_report m
+           set email_next_at = ${referencia} + ${RESERVA}::interval, updated_at = now()
+          from devidos d
+         where m.id = d.id
+        returning m.id`);
+      return r.rows;
+    });
+
+    const vezes: VezDoEnvio[] = [];
+    for (const { id } of reservados) {
+      try {
+        const r = await this.relatorio.enviar(id, agora);
+        if (r.enviados) this.logger.log(`relatório ${id}: enviado a ${r.enviados} pessoa(s) (${r.status})`);
+        vezes.push({ reportId: id, ...r });
+      } catch (err) {
+        // Falha fora do previsto: a reserva vence e o envio volta para a fila (LIC-001).
+        this.logger.error(`relatório ${id}: ${err instanceof Error ? err.message : String(err)}`);
+        vezes.push({ reportId: id, status: 'falhou', enviados: 0 });
       }
     }
     return vezes;

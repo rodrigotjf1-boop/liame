@@ -60,7 +60,7 @@ export function linhaDaMudanca(m: WeeklyReviewChange, moeda: string): string {
 }
 
 /** A frase da fonte atrasada na hora de gerar; nula quando a leitura não saiu com dado velho. */
-export function fonteAtrasada(r: ConteudoDaRevisao): string | null {
+export function fonteAtrasada(r: Pick<ConteudoDaRevisao, 'reading'>): string | null {
   if (r.reading.reason !== 'dado_velho' || !r.reading.stale_sources.length) return null;
   const fontes = r.reading.stale_sources.map((f) => `${f.platform ? `${f.platform} · ` : ''}${f.name}${f.last_read ? `, última leitura em ${f.last_read}` : ', ainda não lida'}`);
   return `Na hora de gerar, uma fonte estava atrasada (${fontes.join('; ')}). Os números valem até essa hora.`;

@@ -31,6 +31,28 @@ export interface ImagensDoEmail {
   lia: string;
 }
 
+/**
+ * O que o e-mail da revisão da semana e o do relatório do mês (A3, I7; P24) têm em comum: os números do topo, as
+ * campanhas, a leitura, o que melhorou e piorou e o que precisa de decisão, no mesmo formato.
+ */
+export type ConteudoDoEmail = Pick<ConteudoDaRevisao, 'currency' | 'totals' | 'campaigns' | 'platform_only' | 'reading' | 'improved' | 'worsened' | 'decisions'>;
+
+/** O que muda de um e-mail para o outro: o selo do topo, o nome da leitura, o período, o botão e as partes a mais. */
+export interface PecaDoEmail {
+  /** As duas linhas do selo do topo ("Revisão", "da semana"). */
+  selo: [string, string];
+  /** "Leitura da semana" ou "Leitura do mês". */
+  leitura: string;
+  /** O período, já em HTML, logo abaixo do nome da marca. */
+  periodoHtml: string;
+  /** O texto do botão que leva à tela. */
+  botao: string;
+  /** Linhas de tabela a mais, depois do que precisa de decisão (o relatório do mês: a verba e a equipe). */
+  extra?: string;
+  /** A leitura vem antes das campanhas (o e-mail do mês, P24); na revisão, ela vem depois. */
+  leituraAntes?: boolean;
+}
+
 /** A marca do topo como é mostrada (o arquivo tem o dobro, 368 × 150, para tela de alta densidade). */
 const LOGO = { largura: 184, altura: 75 };
 
@@ -67,6 +89,9 @@ const paragrafo = (html: string, cor = TINTA, extra = '') => `<p style="margin:0
 const nota = (t: string) => paragrafo(e(t), SUAVE, 'font-size:12.5px;line-height:19px;');
 const secao = (titulo: string, miolo: string, topo = 28) =>
   `<tr><td style="padding:${topo}px 28px 0 28px;"><h2 style="margin:0 0 12px 0;font-family:${FONTE};font-size:17px;line-height:24px;font-weight:700;color:${TINTA};">${e(titulo)}</h2>${miolo}</td></tr>`;
+
+/** Uma parte do e-mail com o título e parágrafos de texto simples (escapados aqui): a verba e a equipe do mês. */
+export const secaoDeParagrafos = (titulo: string, paragrafos: string[], topo = 18) => secao(titulo, paragrafos.map((p) => paragrafo(e(p))).join(''), topo);
 
 function lista(itens: string[], marca = '•', cor = SUAVE): string {
   const linhas = itens
@@ -145,7 +170,7 @@ function campanha(c: WeeklyReviewCampaign, maior: bigint, ultima: boolean, moeda
   );
 }
 
-function blocoDasCampanhas(r: ConteudoDaRevisao): string {
+function blocoDasCampanhas(r: ConteudoDoEmail): string {
   if (!r.campaigns.length && !r.platform_only.length) return '';
   const moeda = r.currency;
   const maior = r.campaigns.reduce((m, c) => [BigInt(c.spend_micros), BigInt(c.revenue_micros)].reduce((a, v) => (v > a ? v : a), m), 0n);
@@ -161,15 +186,15 @@ function blocoDasCampanhas(r: ConteudoDaRevisao): string {
   return secao('O que cada campanha trouxe no caixa', legenda + campanhas + soNaPlataforma);
 }
 
-function blocoDaLeitura(r: ConteudoDaRevisao, imagens: ImagensDoEmail): string {
+function blocoDaLeitura(r: ConteudoDoEmail, imagens: ImagensDoEmail, leitura: string): string {
   const daLia = r.reading.source === 'lia';
   const x = r.reading.explanation;
   const titulo = (t: string, margem: string) => `<h2 style="margin:${margem};font-family:${FONTE};font-size:17px;line-height:22px;font-weight:700;color:${TINTA};">${t}</h2>`;
   const cabecalho = daLia
     ? `<table ${TABELA} style="margin:0 0 12px 0;"><tr>` +
       `<td width="44" valign="middle"><img src="${e(imagens.lia)}" width="36" height="36" alt="LIA" style="display:block;border:0;border-radius:9px;"></td>` +
-      `<td valign="middle">${titulo('Leitura da semana, pela LIA', '0')}${rotulo('Feito com IA · números do sistema', '#4A35C8')}</td></tr></table>`
-    : `${titulo('Leitura da semana', '0 0 4px 0')}<div style="margin:0 0 12px 0;">${rotulo('Pelo sistema · sem IA')}</div>`;
+      `<td valign="middle">${titulo(`${leitura}, pela LIA`, '0')}${rotulo('Feito com IA · números do sistema', '#4A35C8')}</td></tr></table>`
+    : `${titulo(leitura, '0 0 4px 0')}<div style="margin:0 0 12px 0;">${rotulo('Pelo sistema · sem IA')}</div>`;
   const atrasada = fonteAtrasada(r);
   const [fundo, tinta] = COR_DO_RISCO[x.risk] ?? COR_DO_RISCO.medio!;
   const risco =
@@ -188,7 +213,7 @@ function blocoDaLeitura(r: ConteudoDaRevisao, imagens: ImagensDoEmail): string {
   );
 }
 
-function blocoDasDecisoes(r: ConteudoDaRevisao): string {
+function blocoDasDecisoes(r: ConteudoDoEmail): string {
   if (!r.decisions.length) return '';
   const cartoes = r.decisions
     .map(
@@ -201,8 +226,8 @@ function blocoDasDecisoes(r: ConteudoDaRevisao): string {
   return secao('Precisa de decisão', `<table ${TABELA} width="100%">${cartoes}</table>${nota(AVISO_DA_DECISAO)}`, 18);
 }
 
-/** O texto que o programa de e-mail mostra ao lado do assunto: os números da semana numa linha. */
-function resumoAoLadoDoAssunto(r: ConteudoDaRevisao): string {
+/** O texto que o programa de e-mail mostra ao lado do assunto: os números do período numa linha. */
+function resumoAoLadoDoAssunto(r: ConteudoDoEmail): string {
   const partes: string[] = [];
   for (const m of r.totals) {
     if (m.now === null) continue;
@@ -215,13 +240,21 @@ function resumoAoLadoDoAssunto(r: ConteudoDaRevisao): string {
   return partes.join(' · ');
 }
 
-/** O e-mail em HTML: o mesmo conteúdo da versão em texto. `assunto` vira o título do documento. */
+/** O e-mail da revisão em HTML: o mesmo conteúdo da versão em texto. `assunto` vira o título do documento. */
 export function htmlDaRevisao(r: ConteudoDaRevisao, quem: QuemRecebe, imagens: ImagensDoEmail, assunto: string): string {
-  const moeda = r.currency;
   const comparada = r.totals.some((m) => m.before !== null);
-  const periodo =
+  const periodoHtml =
     `Semana de <b style="color:${TINTA};">${e(`${dia(r.week.from)} a ${dia(r.week.to)}`)}</b>` +
     (comparada ? `, comparada com ${e(`${dia(r.previous_week.from)} a ${dia(r.previous_week.to)}`)}.` : '.');
+  return htmlDoEmail(r, quem, imagens, assunto, { selo: ['Revisão', 'da semana'], leitura: 'Leitura da semana', periodoHtml, botao: 'Abrir a revisão no Liame' });
+}
+
+/**
+ * O e-mail em HTML, da revisão da semana ou do relatório do mês (o que muda vem em `peca`). Os números são os do
+ * conteúdo guardado; nada é calculado aqui.
+ */
+export function htmlDoEmail(r: ConteudoDoEmail, quem: QuemRecebe, imagens: ImagensDoEmail, assunto: string, peca: PecaDoEmail): string {
+  const moeda = r.currency;
   const corpo =
     `<div lang="pt-BR" style="background:${PAPEL};padding:24px 12px;">` +
     `<div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:${PAPEL};">${e(resumoAoLadoDoAssunto(r))}</div>` +
@@ -229,24 +262,24 @@ export function htmlDaRevisao(r: ConteudoDaRevisao, quem: QuemRecebe, imagens: I
     // o topo com a marca
     `<tr><td style="background:${NOITE};padding:20px 28px;"><table ${TABELA} width="100%"><tr>` +
     `<td valign="middle"><img src="${e(imagens.logo)}" width="${LOGO.largura}" height="${LOGO.altura}" alt="Liame" style="display:block;border:0;font-family:${FONTE};font-size:20px;font-weight:700;color:#FFFFFF;"></td>` +
-    `<td valign="middle" align="right" style="font-family:${MONO};font-size:11px;line-height:16px;letter-spacing:1.2px;text-transform:uppercase;color:${LAVANDA};">Revisão<br>da semana</td>` +
+    `<td valign="middle" align="right" style="font-family:${MONO};font-size:11px;line-height:16px;letter-spacing:1.2px;text-transform:uppercase;color:${LAVANDA};">${e(peca.selo[0])}<br>${e(peca.selo[1])}</td>` +
     '</tr></table></td></tr>' +
     `<tr><td height="4" style="height:4px;font-size:0;line-height:0;background:${CIANO};">&nbsp;</td></tr>` +
     // a marca da empresa e a semana
     '<tr><td style="padding:26px 28px 0 28px;">' +
     `<h1 style="margin:0 0 6px 0;font-family:${FONTE};font-size:24px;line-height:30px;font-weight:700;color:${TINTA};">${e(quem.marca)}</h1>` +
-    `<p style="margin:0;font-family:${FONTE};font-size:14px;line-height:22px;color:${SUAVE};">${periodo}</p>` +
+    `<p style="margin:0;font-family:${FONTE};font-size:14px;line-height:22px;color:${SUAVE};">${peca.periodoHtml}</p>` +
     '</td></tr>' +
     // os números da semana
     `<tr><td style="padding:16px 22px 0 22px;">${cartoesDosTotais(r.totals, moeda)}</td></tr>` +
-    blocoDasCampanhas(r) +
-    blocoDaLeitura(r, imagens) +
+    (peca.leituraAntes ? blocoDaLeitura(r, imagens, peca.leitura) + blocoDasCampanhas(r) : blocoDasCampanhas(r) + blocoDaLeitura(r, imagens, peca.leitura)) +
     (r.improved.length ? secao('O que melhorou', lista(r.improved.map((m) => linhaDaMudanca(m, moeda)), '▲', BOM), 18) : '') +
     (r.worsened.length ? secao('O que piorou', lista(r.worsened.map((m) => linhaDaMudanca(m, moeda)), '▼', RUIM), 14) : '') +
     blocoDasDecisoes(r) +
+    (peca.extra ?? '') +
     // o botão
     `<tr><td align="center" style="padding:22px 28px 6px 28px;"><table ${TABELA}><tr>` +
-    `<td bgcolor="${CIANO}" style="background:${CIANO};border-radius:10px;"><a href="${e(quem.link)}" style="display:inline-block;padding:13px 26px;font-family:${FONTE};font-size:15px;line-height:20px;font-weight:600;color:${NOITE};text-decoration:none;">Abrir a revisão no Liame</a></td>` +
+    `<td bgcolor="${CIANO}" style="background:${CIANO};border-radius:10px;"><a href="${e(quem.link)}" style="display:inline-block;padding:13px 26px;font-family:${FONTE};font-size:15px;line-height:20px;font-weight:600;color:${NOITE};text-decoration:none;">${e(peca.botao)}</a></td>` +
     '</tr></table></td></tr>' +
     // o rodapé
     `<tr><td style="padding:22px 28px 26px 28px;"><table ${TABELA} width="100%" style="border-top:1px solid ${LINHA};"><tr><td style="padding-top:16px;font-family:${FONTE};font-size:12px;line-height:19px;color:${SUAVE};">` +

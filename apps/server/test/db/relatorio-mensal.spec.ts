@@ -2,13 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { MonthlyReportResponse } from '@liame/contracts';
 import { createDatabase, type Database, runMigrations, withTenant } from '@liame/database';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { BudgetService } from '../../src/actions/budget.service.js';
 import { ExplicarService } from '../../src/ai/explicar/explicar.service.js';
 import { atribuirPedidos } from '../../src/attribution/motor.js';
 import { gravarToques } from '../../src/attribution/toque-store.js';
+import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { EquipeService } from '../../src/equipe/equipe.service.js';
 import { FlagService } from '../../src/flags/flag.service.js';
+import { type MailMessage, Mailer } from '../../src/mail/mailer.js';
 import { MediaService } from '../../src/media/media.service.js';
 import { gravarMetricas } from '../../src/media/metric-store.js';
 import { centavosParaMicros, gravarPedidos, type PedidoLido } from '../../src/orders/order-store.js';
@@ -34,12 +36,24 @@ const primeiro = (hora: number, minuto = 0) => new Date(Date.UTC(2026, 9, 1, hor
 const NOVEMBRO_AS_5 = new Date(Date.UTC(2026, 10, 1, 8)).toISOString();
 const ID_NA_META = { noite: '3201', combo: '3202' } as const;
 
+/** Um carteiro que guarda o que mandaram e falha para um endereço enquanto mandarem falhar. */
+class CarteiroDeTeste extends Mailer {
+  readonly enviados: MailMessage[] = [];
+  falharPara = new Set<string>();
+  async send(message: MailMessage): Promise<void> {
+    if (this.falharPara.has(message.to)) throw Object.assign(new Error(`recusado: ${message.to}`), { name: 'MessageRejected' });
+    this.enviados.push(message);
+  }
+}
+
 describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como saiu e lido pela tela (A3, I7; P24)', () => {
   let api: TestApi;
   let database: Database;
   let flags: FlagService;
   let relatorio: RelatorioMensalService;
   let loop: RelatorioMensalLoop;
+  let carteiro: CarteiroDeTeste;
+  let config: AppConfig;
 
   type Empresa = { cookie: string; tenantId: string; brandId: string; unitId: string; meta: string; loja: string; noite: string; combo: string; dono: string };
 
@@ -157,6 +171,20 @@ describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como sa
     );
   }
 
+  /** Uma pessoa com acesso à empresa no nível dado (e o e-mail confirmado, salvo pedido em contrário). */
+  async function pessoa(e: Empresa, nivel: string, opcoes: { verificado?: boolean } = {}): Promise<string> {
+    const [id, email] = [randomUUID(), uniqueEmail(`mes-${nivel.replaceAll('_', '-')}`)];
+    await ownerQuery(`insert into liame.app_user (id, email, name, password_hash, email_verified_at) values ($1, $2, 'Pessoa', 'x', $3)`, [id, email, opcoes.verificado === false ? null : new Date().toISOString()]);
+    await ownerQuery(`insert into liame.membership (id, tenant_id, user_id, role_key) values ($1, $2, $3, $4)`, [randomUUID(), e.tenantId, id, nivel]);
+    return email;
+  }
+  const envio = (e: Empresa, agora: Date) => loop.enviarLote(10, { tenantIds: [e.tenantId] }, agora);
+  const entregas = (e: Empresa) =>
+    ownerQuery<{ role_key: string; status: string; attempts: number; error: string | null }>(
+      `select role_key, status, attempts, error from liame.monthly_report_delivery where tenant_id = $1 order by role_key`,
+      [e.tenantId],
+    );
+
   async function ligarEmail(e: Empresa, ligado = true): Promise<void> {
     await ownerQuery(
       `insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), 'relatorio_email', 'tenant', $1, $2::jsonb, 'testes')
@@ -250,6 +278,8 @@ describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como sa
     await resetIpRateLimits();
     database = createDatabase({ connectionString: APP_URL, max: 3, applicationName: 'liame-test' });
     flags = api.app.get(FlagService);
+    carteiro = new CarteiroDeTeste();
+    config = api.app.get<AppConfig>(APP_CONFIG);
     relatorio = new RelatorioMensalService(
       database,
       api.app.get(ResultsService),
@@ -259,9 +289,15 @@ describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como sa
       flags,
       api.app.get(BudgetService),
       api.app.get(EquipeService),
+      config,
+      carteiro,
     );
     loop = new RelatorioMensalLoop(database, relatorio);
   }, 120_000);
+  beforeEach(() => {
+    carteiro.enviados.length = 0;
+    carteiro.falharPara.clear();
+  });
   afterAll(async () => {
     await database?.close();
     await api?.close();
@@ -519,6 +555,122 @@ describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como sa
     expect(await relatorios(e)).toHaveLength(1);
     expect((await relatorios(e))[0]).toMatchObject({ email_status: 'pendente', email_next_at: primeiro(7).toISOString(), email_recipients: 0 });
     expect((await naTela(e)).body.report.email).toEqual({ status: 'pendente', sent_at: null, recipients: 0 });
+  });
+
+  it('com o envio ligado, o e-mail do mês sai a partir das 7h do dia 1º para o dono, os administradores e quem só recebe relatórios, uma vez só para cada pessoa, com o texto aprovado (P24)', async () => {
+    const e = await empresa();
+    await doisMeses(e);
+    await teto(e, 500);
+    await mudancaDeVerba(e, '2026-09-11T15:00:00Z', 55, 60);
+    await ligarEmail(e);
+    const admin = await pessoa(e, 'administrador');
+    const soRelatorios = await pessoa(e, 'so_relatorios');
+    // Não recebem: o gestor (nível que não é de relatório) e quem não confirmou o e-mail.
+    await pessoa(e, 'gestor');
+    await pessoa(e, 'so_relatorios', { verificado: false });
+
+    await lidas(e, primeiro(5, 10));
+    await vez(e, primeiro(5, 10));
+    expect((await relatorios(e))[0]).toMatchObject({ email_status: 'pendente', email_next_at: primeiro(7).toISOString(), email_recipients: 0 });
+    // Antes das 7h, nada sai.
+    expect(await envio(e, primeiro(6, 30))).toEqual([]);
+    expect(carteiro.enviados).toEqual([]);
+
+    const [vezDoEnvio] = await envio(e, primeiro(7, 5));
+    expect(vezDoEnvio).toMatchObject({ status: 'enviado', enviados: 3 });
+    expect(carteiro.enviados.map((m) => m.to).sort()).toEqual([admin, e.dono, soRelatorios].sort());
+    const doRelatorio = carteiro.enviados.find((m) => m.to === soRelatorios)!;
+    expect(doRelatorio.subject).toBe('Relatório de setembro da Mister Burgers Mês: 12 pedidos e R$ 1.120,00 no caixa');
+    const link = `${config.appUrl}/resultados/relatorio?marca=${e.brandId}&mes=2026-09`;
+    const linhas = doRelatorio.text.split('\n');
+    for (const linha of [
+      'Relatório de setembro da Mister Burgers Mês',
+      'De 01/09/2026 a 30/09/2026, comparado com agosto. Gerado na quinta-feira, 01/10, às 05:10.',
+      'Pedidos de anúncios: 12 (+9,1%; eram 11)',
+      'Receita confirmada no caixa: R$ 1.120,00 (+17,9%; era R$ 950,00)',
+      'LEITURA DO MÊS, PELO SISTEMA (SEM IA)',
+      '- Combo sexta (Meta): R$ 200,00 investidos, 10 pedido(s), R$ 1.000,00 de receita, ROAS 5,00 · dá lucro',
+      'A VERBA E A EQUIPE',
+      `Abrir o relatório no Liame: ${link}`,
+      'Você recebe este e-mail porque tem acesso à Mister Burgers Mês no Liame como Só relatórios por e-mail. Para deixar de receber, escreva para suporte@agencialiame.com.',
+    ]) {
+      expect(linhas, linha).toContain(linha);
+    }
+    // A verba e a equipe numa linha: o gasto contra o teto, a mudança aprovada e o custo de IA do mês.
+    expect(linhas.find((l) => l.startsWith('R$ 350,00 gastos de R$ 500,00 do teto do mês. 1 mudança aprovada nas campanhas. Custo de IA no mês: '))).toBeDefined();
+    // A leitura vem antes das campanhas, como no e-mail do protótipo; o que melhorou e piorou fica na tela.
+    expect(linhas.indexOf('LEITURA DO MÊS, PELO SISTEMA (SEM IA)')).toBeLessThan(linhas.indexOf('O QUE CADA CAMPANHA TROUXE NO CAIXA'));
+    expect(linhas).not.toContain('O QUE MELHOROU');
+    expect(carteiro.enviados.find((m) => m.to === e.dono)!.text).toContain('no Liame como Dono.');
+    // A versão em HTML vai junto: os mesmos números, a marca servida pelo webapp, o botão para o relatório e o porquê de cada pessoa.
+    expect(doRelatorio.html).toContain(`<img src="${config.appUrl}/email/liame-logo.png"`);
+    expect(doRelatorio.html).toContain('Relatório<br>do mês');
+    expect(doRelatorio.html).toContain('R$ 1.120,00');
+    expect(doRelatorio.html).toContain('A verba e a equipe');
+    expect(doRelatorio.html).toContain(`<a href="${config.appUrl}/resultados/relatorio?marca=${e.brandId}&amp;mes=2026-09"`);
+    expect(doRelatorio.html).toContain('Abrir o relatório no Liame');
+    expect(doRelatorio.html).toContain('no Liame como Só relatórios por e-mail.');
+    expect((await entregas(e)).map((d) => [d.role_key, d.status, d.attempts, d.error])).toEqual([
+      ['administrador', 'enviado', 1, null],
+      ['dono', 'enviado', 1, null],
+      ['so_relatorios', 'enviado', 1, null],
+    ]);
+    expect((await relatorios(e))[0]).toMatchObject({ email_status: 'enviado', email_next_at: null, email_recipients: 3 });
+    // A tela mostra para quantas pessoas foi.
+    expect((await naTela(e)).body.report.email).toEqual({ status: 'enviado', sent_at: primeiro(7, 5).toISOString(), recipients: 3 });
+    // Depois de enviado, nada volta para a fila.
+    expect(await envio(e, primeiro(8))).toEqual([]);
+    expect(carteiro.enviados).toHaveLength(3);
+  });
+
+  it('a entrega que falha é tentada de novo, só para quem faltou; o envio para quando a empresa desliga, depois do dia 7 e sem para quem enviar', async () => {
+    const e = await empresa();
+    await doisMeses(e);
+    await ligarEmail(e);
+    const admin = await pessoa(e, 'administrador');
+    await lidas(e, primeiro(5, 10));
+    await vez(e, primeiro(5, 10));
+    carteiro.falharPara.add(admin);
+    expect((await envio(e, primeiro(7, 5)))[0]).toMatchObject({ status: 'pendente', enviados: 1 });
+    // Na entrega fica só o tipo do erro, nunca o endereço.
+    expect((await entregas(e)).map((d) => [d.role_key, d.status, d.attempts, d.error])).toEqual([
+      ['administrador', 'falhou', 1, 'MessageRejected'],
+      ['dono', 'enviado', 1, null],
+    ]);
+    expect((await relatorios(e))[0]).toMatchObject({ email_status: 'pendente', email_next_at: primeiro(7, 35).toISOString(), email_recipients: 1 });
+    // Antes da hora da nova tentativa nada acontece; na hora, só quem faltou recebe.
+    expect(await envio(e, primeiro(7, 20))).toEqual([]);
+    carteiro.falharPara.clear();
+    expect((await envio(e, primeiro(7, 40)))[0]).toMatchObject({ status: 'enviado', enviados: 2 });
+    expect(carteiro.enviados.map((m) => m.to)).toEqual([e.dono, admin]);
+
+    // Desligado entre a geração e a hora do envio.
+    const d = await empresa();
+    await doisMeses(d);
+    await ligarEmail(d);
+    await lidas(d, primeiro(5, 10));
+    await vez(d, primeiro(5, 10));
+    await ligarEmail(d, false);
+    expect((await envio(d, primeiro(7, 5)))[0]).toMatchObject({ status: 'desligado', enviados: 0 });
+    expect((await relatorios(d))[0]).toMatchObject({ email_status: 'desligado', email_next_at: null, email_recipients: 0 });
+
+    // O dia 7 passou sem dar para enviar (08/10): o relatório já não é notícia.
+    const v = await empresa();
+    await doisMeses(v);
+    await ligarEmail(v);
+    await lidas(v, primeiro(5, 10));
+    await vez(v, primeiro(5, 10));
+    expect((await envio(v, new Date(Date.UTC(2026, 9, 8, 12))))[0]).toMatchObject({ status: 'expirado', enviados: 0 });
+
+    // Ninguém com nível para receber e e-mail confirmado.
+    const s = await empresa();
+    await doisMeses(s);
+    await ligarEmail(s);
+    await ownerQuery(`update liame.app_user set email_verified_at = null where email = $1`, [s.dono]);
+    await lidas(s, primeiro(5, 10));
+    await vez(s, primeiro(5, 10));
+    expect((await envio(s, primeiro(7, 5)))[0]).toMatchObject({ status: 'sem_destinatario', enviados: 0 });
+    expect(carteiro.enviados.map((m) => m.to)).toEqual([e.dono, admin]);
   });
 
   it('as restrições das tabelas novas (V119): o que passa e o que não passa, pelo nome da restrição', async () => {
