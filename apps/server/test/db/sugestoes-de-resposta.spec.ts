@@ -17,7 +17,7 @@ import { ConexaoProcessor } from '../../src/worker/conexao-processor.js';
 import { PerfilLoop } from '../../src/worker/perfil-loop.js';
 import { SugestoesDeRespostaLoop } from '../../src/worker/sugestoes-de-resposta-loop.js';
 import { SugestoesDeRespostaService } from '../../src/worker/sugestoes-de-resposta.service.js';
-import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
+import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import * as ia from '../helpers/ia.js';
 import { type AvaliacaoNoGoogle, type EmpresaComLoja, empresaComLojaDoPerfil, GoogleComPerfil, nomeDeQuemAvaliou } from '../helpers/perfil-google-de-mentira.js';
 import { APP_URL, hasDb } from './env.js';
@@ -540,6 +540,145 @@ describe.skipIf(!hasDb)('as sugestões de resposta do Social media (A6 · Z6, pa
     expect((await naApi(e, doSocial.id)).review.withdrawn).toBeNull();
     expect((await naApi(e, daPessoa.body.id)).review).toMatchObject({ suggestions: null, withdrawn: null });
     expect(await trilha(e, 'acao.retirar')).toEqual([]);
+  });
+
+  // ---------------------------------------------------------------- o "Pedir outras" (parte 3b; P31; D-A6-27)
+  const OUTRAS = [
+    { enfoque: 'Destaca a entrega', texto: 'Obrigado pela avaliação! Entregar rápido e caprichado é o que a gente mais quer. Até a próxima.' },
+    { enfoque: 'Bem curta', texto: 'Obrigado pelo carinho com o nosso smash! Até a próxima.' },
+  ];
+  /** Na segunda rodada (o contexto traz as que a pessoa já viu), o modelo escreve `outras`; na primeira, o de sempre. */
+  const comOutras = (outras: unknown) => (pedido: string) => (pedido.includes('já viu') ? { sugestoes: outras } : padrao(pedido));
+  const pedirOutras = (e: EmpresaComLoja, id: string, cookie = e.cookie) => api.call('POST', `/v1/actions/${id}/more-suggestions`, { cookie });
+
+  it('P31: o "Pedir outras": ele escreve outras sem repetir as que a pessoa viu, no mesmo pedido e antes das primeiras; uma vez por avaliação', async () => {
+    const { e, agora } = await empresa('Mister Burgers Outras', [avaliacao('rev-5', 'FIVE', 2, ELOGIO)]);
+    await rodar(e, agora);
+    const [p] = await pedidos(e);
+    expect((await naApi(e, p!.id)).review.more_suggestions).toBe('pode_pedir');
+    responder = comOutras(OUTRAS);
+
+    const pedido = await pedirOutras(e, p!.id);
+    expect(pedido.status, JSON.stringify(pedido.body)).toBe(200);
+    expect(pedido.body.review.more_suggestions).toBe('escrevendo');
+    // Uma vez por avaliação: a segunda vez é recusada, com o caminho que resolve.
+    const deNovo = await pedirOutras(e, p!.id);
+    expect([deNovo.status, deNovo.body.code]).toEqual([409, 'outras-ja-pedidas']);
+
+    // A rotina escreve as outras, com as que a pessoa já viu no contexto.
+    const depois = new Date(Date.now() + MIN_MS);
+    expect((await rodar(e, depois)).map((v) => v.feito)).toEqual([{ status: 'pronta', pedido: p!.id, sugestoes: 2 }]);
+    const enviado = JSON.stringify(simulado.doGenerateCalls.at(-1)!.prompt);
+    expect(enviado).toContain('já viu');
+    expect(enviado).toContain(BOAS[0]!.texto);
+    // O pedido é o mesmo: as novas antes das primeiras, cada uma com a rodada; o texto passa a ser o da primeira nova, e o
+    // plano é outro (a aprovação do anterior não vale mais).
+    const [trocado] = await pedidos(e);
+    expect(trocado).toMatchObject({ id: p!.id, status: 'aguardando_aprovacao', actor_type: 'agent', agent_key: 'social' });
+    expect(trocado!.params).toEqual({ texto: OUTRAS[0]!.texto, sugestoes: [...OUTRAS.map((s) => ({ ...s, rodada: 2 })), ...BOAS.map((s) => ({ ...s, rodada: 1 }))] });
+    expect(trocado!.plan_hash).not.toBe(p!.plan_hash);
+    const review = (await naApi(e, p!.id)).review;
+    expect([review.more_suggestions, review.suggestions.map((s: { round: number }) => s.round)]).toEqual(['feitas', [2, 2, 1, 1]]);
+    expect((await vezes(e)).map((v) => [v.round, v.status, v.action_id, v.suggestions])).toEqual([
+      [1, 'pronta', p!.id, 2],
+      [2, 'pronta', null, 2],
+    ]);
+    const [troca] = await trilha(e, 'acao.trocar_sugestoes');
+    expect(troca!.after).toMatchObject({ round: 2, suggestions: 2, kept_text: false, agent_key: 'social' });
+    expect(JSON.stringify(troca)).not.toContain(OUTRAS[0]!.texto);
+    expect(google.respostasGravadas()).toEqual([]);
+  });
+
+  it('P31: a versão que a pessoa ajustou continua escolhida quando as outras chegam', async () => {
+    const { e, agora } = await empresa('Mister Burgers Ajustada', [avaliacao('rev-5', 'FIVE', 2, ELOGIO)]);
+    await rodar(e, agora);
+    const [p] = await pedidos(e);
+    const minha = 'Obrigado pela visita! O combo família é o nosso xodó. Até a próxima.';
+    expect((await api.call('PATCH', `/v1/actions/${p!.id}`, { cookie: e.cookie, body: { params: { texto: minha } } })).status).toBe(200);
+    responder = comOutras(OUTRAS);
+    expect((await pedirOutras(e, p!.id)).status).toBe(200);
+    await rodar(e, new Date(Date.now() + MIN_MS));
+    const [trocado] = await pedidos(e);
+    expect(trocado!.params.texto).toBe(minha);
+    expect(trocado!.params.sugestoes?.map((s) => s.rodada)).toEqual([2, 2, 1, 1]);
+    expect((await trilha(e, 'acao.trocar_sugestoes'))[0]!.after).toMatchObject({ kept_text: true });
+  });
+
+  it('P31: só pede outras quem pode, no pedido do Social media que espera, com as sugestões ligadas; a de 1 estrela, só o dono', async () => {
+    const { e, ids, agora } = await empresa('Mister Burgers Quem Pede', [avaliacao('rev-ruim', 'ONE', 1, RECLAMACAO), avaliacao('rev-b', 'FOUR', 3, 'Bom atendimento no salão.')]);
+    // A de rev-b fica com uma pessoa antes da vez: o pedido dela não tem sugestões.
+    const daPessoa = await api.call('POST', '/v1/actions', {
+      cookie: e.cookie,
+      body: { tool: 'avaliacao_responder', provider: 'google_business', account_id: e.contaId, resource_id: `avaliacao:${ids.get('rev-b')}`, params: { texto: 'Obrigado pela visita!' } },
+    });
+    expect(daPessoa.status, JSON.stringify(daPessoa.body)).toBe(201);
+    await rodar(e, agora);
+    const doSocial = (await pedidos(e)).find((p) => p.agent_key === 'social')!;
+    expect((await naApi(e, daPessoa.body.id)).review.more_suggestions).toBeNull();
+    const semSugestoes = await pedirOutras(e, daPessoa.body.id);
+    expect([semSugestoes.status, semSugestoes.body.code]).toEqual([409, 'sem-sugestoes']);
+
+    // Na de 1 estrela, quem não é o dono lê e não pede.
+    const email = uniqueEmail('administrador');
+    const convite = await api.call('POST', '/v1/invitations', { cookie: e.cookie, body: { email, role: 'administrador', approve_limit_micros: null } });
+    expect(convite.status, JSON.stringify(convite.body)).toBe(201);
+    const outro = await api.call('POST', '/v1/invitations/signup', { body: { token: tokenFrom(api.mailer, email), name: 'Pessoa Administradora', password: PASSWORD, terms_version: TERMOS } });
+    await enableMfa(api, outro.cookie!);
+    const naoDono = await pedirOutras(e, doSocial.id, outro.cookie!);
+    expect([naoDono.status, naoDono.body.code]).toEqual([403, 'so-o-dono']);
+
+    // Com as sugestões desligadas para a loja, não pede (e nada entra na fila).
+    await ligarFlag(e.tenantId, 'respostas_sugeridas', false);
+    const desligada = await pedirOutras(e, doSocial.id);
+    expect([desligada.status, desligada.body.code]).toEqual([409, 'sugestoes-desligadas']);
+    await ligarFlag(e.tenantId, 'respostas_sugeridas', true);
+
+    // O pedido decidido não pede mais.
+    const recusa = await api.call('POST', `/v1/actions/${doSocial.id}/reject`, { cookie: e.cookie, body: { plan_hash: doSocial.plan_hash, reason: 'Nenhuma serve' } });
+    expect(recusa.status, JSON.stringify(recusa.body)).toBe(200);
+    const decidido = await pedirOutras(e, doSocial.id);
+    expect([decidido.status, decidido.body.code]).toEqual([409, 'acao-nao-aguarda']);
+    expect((await naApi(e, doSocial.id)).review.more_suggestions).toBeNull();
+    expect((await vezes(e)).filter((v) => v.round === 2)).toEqual([]);
+  });
+
+  it('P31: a segunda rodada que esperava acaba com o pedido retirado; o pedido novo não a mostra', async () => {
+    const { e, ids, agora } = await empresa('Mister Burgers Outras Retiradas', [avaliacao('rev-5', 'FIVE', 2, ELOGIO)]);
+    await rodar(e, agora);
+    const [p] = await pedidos(e);
+    expect((await pedirOutras(e, p!.id)).status).toBe(200);
+    // Antes da vez da segunda rodada, quem avaliou edita a avaliação.
+    const depois = new Date(agora.getTime() + 61 * MIN_MS);
+    google.lista = [avaliacao('rev-5', 'FOUR', 2, 'O combo veio caprichado, mas a batata chegou morna.', { updateTime: depois.toISOString() })];
+    await ler(e, depois);
+    expect((await retirar(e, new Date(depois.getTime() + MIN_MS))).map((v) => v.feito.status)).toEqual(['de_novo']);
+    expect((await vezes(e)).find((v) => v.round === 2)).toMatchObject({ status: 'descartada', reason: 'pedido_retirado' });
+    // Na vez seguinte, só a primeira rodada (a da avaliação como está agora) é escrita, num pedido novo.
+    expect((await rodar(e, new Date(depois.getTime() + 2 * MIN_MS))).map((v) => v.feito.status)).toEqual(['pronta']);
+    const novo = (await pedidos(e)).find((x) => x.status === 'aguardando_aprovacao')!;
+    expect(novo.id).not.toBe(p!.id);
+    expect((await naApi(e, novo.id)).review.more_suggestions).toBeNull();
+    expect((await naApi(e, p!.id)).review).toMatchObject({ withdrawn: 'avaliacao_mudou', more_suggestions: null });
+    expect(await vezDa(e, ids.get('rev-5')!)).toMatchObject({ round: 1, status: 'pronta', action_id: novo.id });
+  });
+
+  it('P31: a sugestão nova que repete uma das que a pessoa já viu não entra; se as duas repetem, a vez tenta de novo', async () => {
+    const { e, agora } = await empresa('Mister Burgers Repetidas', [avaliacao('rev-5', 'FIVE', 2, ELOGIO)]);
+    await rodar(e, agora);
+    const [p] = await pedidos(e);
+    expect((await pedirOutras(e, p!.id)).status).toBe(200);
+    // Ele repete as duas: nada entra no pedido, a recusa conta em Sua equipe, e a vez tenta de novo mais tarde.
+    responder = comOutras(BOAS);
+    const depois = new Date(Date.now() + MIN_MS);
+    expect((await rodar(e, depois)).map((v) => v.feito)).toEqual([{ status: 'falhou', motivo: 'repetida', deVez: false }]);
+    expect((await pedidos(e))[0]!.plan_hash).toBe(p!.plan_hash);
+    expect((await naApi(e, p!.id)).review.more_suggestions).toBe('escrevendo');
+    // Na tentativa seguinte, repete uma e escreve uma nova: só a nova entra.
+    responder = comOutras([BOAS[0], OUTRAS[1]]);
+    expect((await rodar(e, new Date(depois.getTime() + 16 * MIN_MS))).map((v) => v.feito)).toEqual([{ status: 'pronta', pedido: p!.id, sugestoes: 1 }]);
+    const [trocado] = await pedidos(e);
+    expect(trocado!.params.sugestoes).toEqual([{ ...OUTRAS[1]!, rodada: 2 }, ...BOAS.map((s) => ({ ...s, rodada: 1 }))]);
+    expect(trocado!.params.texto).toBe(OUTRAS[1]!.texto);
   });
 
   it('V119: as regras da tabela', async () => {

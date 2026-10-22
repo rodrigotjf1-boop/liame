@@ -16,8 +16,10 @@ import {
   minutosAteATentativa,
   PEDIDO_QUE_CONTA,
   paramsDaResposta,
+  maisSugestoes,
   RETIRADA_PORQUE_MUDOU,
   RETIRADA_PORQUE_RESPONDIDA,
+  SEGUNDA_RODADA_DO_PEDIDO_RETIRADO,
   SITUACOES_DA_SUGESTAO,
   TENTATIVAS_DAS_SUGESTOES,
 } from '../src/avaliacoes/sugestoes.js';
@@ -117,5 +119,16 @@ describe('sugestões de resposta: as regras da rotina (A6 · Z6)', () => {
     expect(retiradaDe({ status: 'aguardando_aprovacao', status_reason: `${PREFIXO_RETIRADA}avaliacao_mudou` })).toBeNull();
     expect(retiradaDe({ status: 'cancelada', status_reason: `${PREFIXO_RETIRADA}Não É Código` })).toBeNull();
     expect(retiradaDe({ status: 'cancelada', status_reason: null })).toBeNull();
+  });
+
+  it('o "Pedir outras" (parte 3b): dá para pedir enquanto o pedido espera; depois, escrevendo, feitas ou não deu', () => {
+    expect(maisSugestoes(null, true)).toBe('pode_pedir');
+    expect(maisSugestoes(null, false)).toBeNull();
+    expect(maisSugestoes({ status: 'esperando', reason: null }, true)).toBe('escrevendo');
+    expect(maisSugestoes({ status: 'pronta', reason: null }, false)).toBe('feitas');
+    for (const status of ['barrada', 'descartada', 'falhou'] as const) expect(maisSugestoes({ status, reason: 'pedido_decidido' }, true)).toBe('nao_deu');
+    // A segunda rodada que era de um pedido retirado (a avaliação mudou) não aparece no pedido novo: ela vale uma vez por avaliação.
+    expect(maisSugestoes({ status: 'descartada', reason: SEGUNDA_RODADA_DO_PEDIDO_RETIRADO }, true)).toBeNull();
+    expect(ehCodigo(SEGUNDA_RODADA_DO_PEDIDO_RETIRADO)).toBe(true);
   });
 });

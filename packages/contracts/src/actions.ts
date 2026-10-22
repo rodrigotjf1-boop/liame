@@ -229,6 +229,17 @@ export const ActionReview = z.strictObject({
     .regex(/^[a-z_]{2,40}$/)
     .nullable()
     .optional(),
+  /**
+   * O "Pedir outras", no pedido do Social media (A6, Z6; P31; uma vez por avaliação, D-A6-27), em código: `pode_pedir`
+   * (o pedido espera a decisão e a segunda rodada ainda não foi pedida), `escrevendo` (ele está escrevendo as outras),
+   * `feitas` (as outras já vieram e estão em `suggestions`, com `round` 2) ou `nao_deu` (a segunda rodada acabou sem
+   * sugestão nova). Nulo no pedido de uma pessoa e no pedido decidido sem segunda rodada. A lista pode crescer.
+   */
+  more_suggestions: z
+    .string()
+    .regex(/^[a-z_]{2,40}$/)
+    .nullable()
+    .optional(),
 });
 export type ActionReview = z.infer<typeof ActionReview>;
 

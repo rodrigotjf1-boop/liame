@@ -179,6 +179,23 @@ export class ActionsController {
     return this.actions.reject(auth, id, body);
   }
 
+  @Post('actions/:id/more-suggestions')
+  @Permissao('campanhas.operar')
+  @Auditar('acao.pedir_outras_sugestoes', { recurso: 'action_request' })
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Pedir outras sugestões',
+    description:
+      'No pedido de resposta que o Social media fez e que espera a decisão (A6, Z6), pede outras sugestões, uma vez por avaliação: as novas chegam no mesmo pedido, antes das que já estavam (`review.suggestions` com `round` 2), e `review.more_suggestions` diz se ele ainda está escrevendo. A de 1 ou 2 estrelas, só o dono pede. Já pedidas, desligadas para a loja ou pedido sem sugestões: 409.',
+  })
+  @ApiOkResponse({ standardSchema: ActionResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  maisSugestoes(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<ActionResponse> {
+    return this.actions.pedirOutrasSugestoes(auth, id);
+  }
+
   @Post('actions/:id/cancel')
   @Permissao('campanhas.operar')
   @Auditar('acao.cancelar', { recurso: 'action_request' })

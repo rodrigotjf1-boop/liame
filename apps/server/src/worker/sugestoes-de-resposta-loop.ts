@@ -21,7 +21,7 @@ type Reservada = { id: string; tenant_id: string; vez: string };
  * com a função ligada para a loja. Reserva com SKIP LOCKED na mesma linha que a reserva altera (V35), empurrando
  * `next_attempt_at` (se o worker cair no meio, a vez volta sozinha), e pede ao serviço que trate cada uma, na ordem da
  * fila (V127). Toda vez deixa rastro na linha: o pedido em Aprovações, o fim dela, a tentativa contada ou a espera
- * (V106). Por enquanto, só a primeira rodada: a segunda (o "Pedir outras") chega com a tela de Aprovações.
+ * (V106). As duas rodadas passam por aqui: a da avaliação nova e a do "Pedir outras", que entra no pedido que já espera.
  */
 @Injectable()
 export class SugestoesDeRespostaLoop {
@@ -42,7 +42,7 @@ export class SugestoesDeRespostaLoop {
           with devidas as materialized (
             select s.id, ${vezNaFila(sql`coalesce(s.next_attempt_at, s.created_at)`)} as vez
               from liame.review_suggestion s
-             where s.status = 'esperando' and s.round = 1
+             where s.status = 'esperando'
                and (s.next_attempt_at is null or s.next_attempt_at <= ${ref})
                ${tenantFilter(scope, sql`s.tenant_id`)}
              order by coalesce(s.next_attempt_at, s.created_at), s.id
