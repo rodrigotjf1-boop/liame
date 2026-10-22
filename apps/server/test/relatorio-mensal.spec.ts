@@ -6,6 +6,7 @@ import { conferirExplicacao, type Explicacao } from '../src/ai/explicar/resposta
 import { explicacaoSemIa } from '../src/ai/explicar/sem-ia.js';
 import {
   comAtrasoMarcadoNoMes,
+  type ConteudoDoRelatorio,
   DECISOES_MAXIMO,
   diaDoRelatorio,
   mesAnterior,
@@ -18,6 +19,8 @@ import {
   nomeDoMes,
   noPrazo,
   paraOMesQueVem,
+  paraQuemVe,
+  pessoasDaVerba,
   proximoRelatorio,
   semanaComNumeros,
   semanaNoContexto,
@@ -235,5 +238,61 @@ describe('relatório do mês: a leitura', () => {
     expect(conferirExplicacao(e, contexto)).toBeNull();
     // O dia e o mês sem o ano são números soltos: a semana de 21/09 a 27/09 escrita assim não passa na conferência.
     expect(conferirExplicacao({ ...e, o_que_aconteceu: 'Na semana de 21/09 a 27/09 vieram 44 pedidos.' }, contexto)).toMatchObject({ recusa: 'numero_fora' });
+  });
+});
+
+describe('relatório do mês: a verba e a equipe para quem vê as telas de origem (D-A3-22)', () => {
+  const estado = (verba: string | null) => ({ status: 'ativa', daily_micros: verba });
+  const mudanca = (id: number, quem: string, aprovou: string | null) => ({
+    action_id: U(id),
+    executed_on: '2026-09-11',
+    action: 'orcamento.aumentar',
+    provider: 'meta_ads',
+    target: { kind: 'campanha', name: 'Combo sexta', campaign_name: null },
+    from: estado('55000000'),
+    to: estado('60000000'),
+    requested_by: quem,
+    approved_by: aprovou,
+    agent_key: null,
+    check: 'confere',
+  });
+  const equipe = { members: [{ key: 'analista', stats: [{ key: 'explicacoes', value: '3', unit: 'qtd' }] }], ai: { spent_usd_micros: '1000', ceiling_usd_micros: '20000000' }, usd_brl: null };
+  // Só as partes que a função olha: o resto do relatório passa como está.
+  const conteudo = (comAsDuas = true) =>
+    ({
+      brand_id: U(3),
+      month: SETEMBRO,
+      ...(comAsDuas
+        ? { budget: { currency: 'BRL', spend_micros: '350000000', limit_micros: null, missing: [], changes: [mudanca(70, U(91), U(92)), mudanca(71, U(91), null)] }, team: equipe }
+        : {}),
+    }) as unknown as ConteudoDoRelatorio;
+
+  it('a verba vai para quem tem campanhas.ver; a equipe, para quem tem campanhas.ver e vendas.ver; os nomes são os de agora', () => {
+    expect(pessoasDaVerba(conteudo())).toEqual([U(91), U(92)]);
+    expect(pessoasDaVerba(conteudo(false))).toEqual([]);
+    const nomes = new Map([[U(91), 'Rodrigo']]);
+
+    const tudo = paraQuemVe(conteudo(), new Set(['vendas.ver', 'campanhas.ver']), nomes);
+    // Quem pediu é lido pelo nome; quem aprovou e não existe mais aparece como "Pessoa removida", como na Verba do mês.
+    expect(tudo.budget!.changes.map((m) => [m.requested_by, m.approved_by])).toEqual([
+      [{ id: U(91), name: 'Rodrigo' }, { id: U(92), name: 'Pessoa removida' }],
+      [{ id: U(91), name: 'Rodrigo' }, null],
+    ]);
+    expect(tudo.budget).toMatchObject({ spend_micros: '350000000', limit_micros: null });
+    expect(tudo.team).toEqual(equipe);
+
+    // Só as vendas (a rota pede `vendas.ver`): nem a verba nem a equipe. Só as campanhas: a verba, sem a equipe.
+    const soVendas = paraQuemVe(conteudo(), new Set(['vendas.ver']), nomes);
+    expect(soVendas).not.toHaveProperty('budget');
+    expect(soVendas).not.toHaveProperty('team');
+    expect(soVendas).toMatchObject({ brand_id: U(3), month: SETEMBRO });
+    const soCampanhas = paraQuemVe(conteudo(), new Set(['campanhas.ver']), nomes);
+    expect(soCampanhas.budget).toBeDefined();
+    expect(soCampanhas).not.toHaveProperty('team');
+
+    // O relatório gerado antes da parte 2 não tem as duas e passa como está.
+    const antigo = paraQuemVe(conteudo(false), new Set(['vendas.ver', 'campanhas.ver']), nomes);
+    expect(antigo).not.toHaveProperty('budget');
+    expect(antigo).not.toHaveProperty('team');
   });
 });

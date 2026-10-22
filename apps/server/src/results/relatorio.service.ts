@@ -1,9 +1,9 @@
 import type { MonthlyReportQuery, MonthlyReportResponse } from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { currentTx } from '../context/request-context.js';
+import { type AuthContext, currentTx } from '../context/request-context.js';
 import { diaNoFuso } from './fora-do-normal.js';
-import { type ConteudoDoRelatorio, mesPedido, proximoRelatorio, RELATORIO_VERSAO } from './relatorio-mensal.js';
+import { type ConteudoDoRelatorio, mesPedido, paraQuemVe, pessoasDaVerba, proximoRelatorio, VERSOES_DO_RELATORIO } from './relatorio-mensal.js';
 import { ResultsService } from './results.service.js';
 
 type Linha = {
@@ -24,8 +24,11 @@ type Linha = {
 export class RelatorioService {
   constructor(private readonly results: ResultsService) {}
 
-  /** O relatório de um mês da marca (`2026-09`) ou, sem o mês, o mais recente. */
-  async daMarca(q: MonthlyReportQuery, agora = new Date()): Promise<MonthlyReportResponse> {
+  /**
+   * O relatório de um mês da marca (`2026-09`) ou, sem o mês, o mais recente. A verba e a equipe só vão para quem vê as
+   * telas de onde elas vêm (`paraQuemVe`), e o nome de quem pediu e aprovou cada mudança é lido agora.
+   */
+  async daMarca(auth: Pick<AuthContext, 'permissions'>, q: MonthlyReportQuery, agora = new Date()): Promise<MonthlyReportResponse> {
     // 404 se a marca não é desta empresa.
     const fuso = await this.results.fusoDaMarca(q.brand_id);
     const tx = currentTx();
@@ -39,11 +42,15 @@ export class RelatorioService {
     const ultimo = await tx.execute<{ month_from: string | null }>(sql`select max(month_from)::text as month_from from liame.monthly_report where brand_id = ${q.brand_id}`);
     const linha = r.rows[0];
     // Conteúdo de versão que este código não conhece não vai para a tela como se fosse o de agora.
-    if (linha && linha.content_version !== RELATORIO_VERSAO) throw new Error(`relatório do mês ${linha.id}: conteúdo na versão ${linha.content_version}, o código lê a ${RELATORIO_VERSAO}`);
+    if (linha && !VERSOES_DO_RELATORIO.has(linha.content_version)) throw new Error(`relatório do mês ${linha.id}: conteúdo na versão ${linha.content_version}, que o código não lê`);
+    const ids = linha ? pessoasDaVerba(linha.content) : [];
+    const nomes = ids.length
+      ? new Map((await tx.execute<{ id: string; name: string }>(sql`select id, name from liame.app_user where id in ${ids}`)).rows.map((p) => [p.id, p.name]))
+      : new Map<string, string>();
     return {
       report: linha
         ? {
-            ...linha.content,
+            ...paraQuemVe(linha.content, auth.permissions, nomes),
             id: linha.id,
             email: { status: linha.email_status, sent_at: linha.email_sent_at ? new Date(linha.email_sent_at).toISOString() : null, recipients: linha.email_recipients },
           }

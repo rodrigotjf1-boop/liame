@@ -2,6 +2,7 @@ import type { MonthlyReportWeek } from '@liame/contracts';
 import { type Database, uuidv7, withSystem } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { BudgetService } from '../actions/budget.service.js';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
 import { respostaDaExplicacao } from '../ai/explicar/saida.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
@@ -9,6 +10,7 @@ import { desligadoPelaEmpresa } from '../ai/registro/ativacao.js';
 import type { ContextoDaLeitura } from '../ai/registro/leituras.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
+import { EquipeService } from '../equipe/equipe.service.js';
 import { RELATORIOS } from '../equipe/membros.js';
 import { FlagService } from '../flags/flag.service.js';
 import { proibidasDaMarca } from '../marca/marca.service.js';
@@ -40,7 +42,8 @@ import { ResultsService } from '../results/results.service.js';
 // porque grava em escopo de sistema, e só os jobs do worker podem (regra `liame-escopo-sistema`). No dia 1º de
 // manhã, no fuso da loja:
 //   1. lê, como a empresa, os resultados do mês que fechou na véspera, os do mês anterior e os de cada semana do
-//      mês (cortada no mês), com os mesmos números da tela Resultados, e os avisos ativos;
+//      mês (cortada no mês), com os mesmos números da tela Resultados, e os avisos ativos; e a verba e a equipe do
+//      mês, como a Verba do mês e Sua equipe mostravam no fim dele (D-A3-22);
 //   2. pede a leitura do mês ao Explicar, sem transação aberta: a LIA, quando está ligada e os dados estão em dia;
 //      senão, o resumo do sistema, com o motivo;
 //   3. guarda o relatório como foi gerado, um por marca e mês.
@@ -65,6 +68,8 @@ export class RelatorioMensalService {
     private readonly ciclo: AtencaoCicloService,
     private readonly explicar: ExplicarService,
     private readonly flags: FlagService,
+    private readonly verba: BudgetService,
+    private readonly equipe: EquipeService,
   ) {}
 
   /**
@@ -112,7 +117,11 @@ export class RelatorioMensalService {
       const ativo = await this.explicar.analistaLigado(ctx, brandId);
       // O que a marca nunca diz (dossiê, I8): a leitura da LIA passa pela mesma conferência do Explicar.
       const daMarca = await proibidasDaMarca(brandId);
-      return { ...base, situacao: 'gerar' as const, atual, anterior, emDia, semanas, avisos, ativo, daMarca };
+      // A verba (da empresa inteira, como a tela de origem) e o que a equipe fez no mês: guardadas com o relatório, e a
+      // leitura da LIA não fala delas (D-A3-22).
+      const verba = await this.verba.doMesFechado(tenantId, mes);
+      const equipe = await this.equipe.doMesFechado(tenantId, brandId, mes);
+      return { ...base, situacao: 'gerar' as const, atual, anterior, emDia, semanas, avisos, ativo, daMarca, verba, equipe };
     });
     if (lido.situacao !== 'gerar') return { status: lido.situacao, fuso: lido.fuso, mes: lido.mes.from };
     const { fuso, mes, atual, anterior, semanas } = lido;
@@ -144,6 +153,8 @@ export class RelatorioMensalService {
       improved,
       worsened,
       decisions: paraOMesQueVem(atual, lido.avisos, brandId, mes),
+      budget: lido.verba,
+      team: lido.equipe,
       reading: respostaDaExplicacao(leitura),
     };
 

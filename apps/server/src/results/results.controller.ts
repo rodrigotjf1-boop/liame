@@ -209,13 +209,13 @@ export class ResultsController {
   @ApiOperation({
     summary: 'Relatório do mês',
     description:
-      'O relatório de um mês fechado da loja (do dia 1º ao último, no fuso dela), como foi gerado no dia 1º de manhã: os quatro números do topo ao lado dos do mês anterior, cada semana do mês (cortada no mês, com a semana inteira da revisão), o que cada campanha trouxe no caixa, o que melhorou, o que piorou, o que fica para o mês seguinte e a leitura do mês (da LIA ou, sem ela, do sistema, com o motivo), no formato do Explicar. Sem `month`, o mais recente; `month` é o mês pedido (`AAAA-MM`). Sem relatório ainda, `report` vem nulo e `next_report_on` diz quando sai o primeiro. O relatório não é recalculado: a tela e o e-mail mostram os mesmos números.',
+      'O relatório de um mês fechado da loja (do dia 1º ao último, no fuso dela), como foi gerado no dia 1º de manhã: os quatro números do topo ao lado dos do mês anterior, cada semana do mês (cortada no mês, com a semana inteira da revisão), o que cada campanha trouxe no caixa, o que melhorou, o que piorou, o que fica para o mês seguinte e a leitura do mês (da LIA ou, sem ela, do sistema, com o motivo), no formato do Explicar. A verba do mês (`budget`: o gasto das contas de anúncio da empresa no mês, o teto e as mudanças nas campanhas) só vem para quem tem `campanhas.ver`, e o que a equipe fez (`team`) para quem tem também `vendas.ver`, como nas telas de onde eles vêm; os dois faltam no relatório gerado antes de entrarem. Sem `month`, o mais recente; `month` é o mês pedido (`AAAA-MM`). Sem relatório ainda, `report` vem nulo e `next_report_on` diz quando sai o primeiro. O relatório não é recalculado: a tela e o e-mail mostram os mesmos números.',
   })
   @ApiOkResponse({ standardSchema: MonthlyReportResponse })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
-  monthlyReport(@Query({ schema: MonthlyReportQuery }) query: MonthlyReportQuery): Promise<MonthlyReportResponse> {
-    return this.relatorio.daMarca(query);
+  monthlyReport(@Auth() auth: AuthContext, @Query({ schema: MonthlyReportQuery }) query: MonthlyReportQuery): Promise<MonthlyReportResponse> {
+    return this.relatorio.daMarca(auth, query);
   }
 }

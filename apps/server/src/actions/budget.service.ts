@@ -9,6 +9,7 @@ import { PLATFORM_POLICY } from '../policy/engine.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { regrasDaVerba, tetoDaVerba } from '../policy/teto-da-verba.js';
 import { diaNoFuso, menosDias } from '../results/fora-do-normal.js';
+import type { VerbaDoMesGuardada } from '../results/relatorio-mensal.js';
 import { DIAS_CONFERINDO, nomeDaPlataforma, textoDoGastoAcima } from './conferencia-do-gasto.js';
 import { CONNECTORS } from './connectors.js';
 import { cabeNoMes, type ContaDeAnuncio, type ContaDoMes, contaDoMes, fraseDeNaoCaber, mesDe, PLATAFORMAS_DE_ANUNCIO } from './verba-do-mes.js';
@@ -292,10 +293,16 @@ export class BudgetService {
    * resultado e o pedido que mudou o mesmo objeto depois, se houve. A ação que achou o objeto já como queria não
    * mudou nada, e fica de fora.
    */
-  private async mudancasDoMes(tx: Tx, e: { tenantId: string; fuso: string; inicio: string; hoje: string }): Promise<BudgetMonthChange[]> {
+  private async mudancasDoMes(tx: Tx, e: { tenantId: string; fuso: string; inicio: string; hoje: string; fim?: string }): Promise<BudgetMonthChange[]> {
     if (!PROVEDORES_QUE_GASTAM.length) return [];
     const escreveu = (pedido: SQL) => sql`exists (select 1 from liame.action_execution x
       where x.action_request_id = ${pedido} and x.status = 'executada' and coalesce((x.result_state->>'sem_escrita')::boolean, false) = false)`;
+    // As do mês e, de antes dele, as que continuam valendo e sendo conferidas (enquanto a rotina as confere). No mês
+    // fechado do relatório (`fim`, o dia seguinte ao último), só as executadas dentro dele.
+    const periodo = e.fim
+      ? sql`(r.updated_at >= (${e.inicio}::date)::timestamp at time zone ${e.fuso} and r.updated_at < (${e.fim}::date)::timestamp at time zone ${e.fuso})`
+      : sql`(r.updated_at >= (${e.inicio}::date)::timestamp at time zone ${e.fuso}
+              or (s.id is null and (r.updated_at at time zone ${e.fuso})::date >= ${e.hoje}::date - ${DIAS_CONFERINDO}::int))`;
     const r = await tx.execute<LinhaDaMudanca>(sql`
       select r.id, r.tool, r.action, r.provider, r.account_id, r.resource_id, r.before_state, r.desired_state, r.updated_at,
              (r.updated_at at time zone ${e.fuso})::date::text as dia, r.requested_by, u.name as quem, r.agent_key, r.compensates_action_id,
@@ -318,9 +325,7 @@ export class BudgetService {
            order by s.updated_at, s.id limit 1
         ) s on true
        where r.tenant_id = ${e.tenantId} and r.provider in ${PROVEDORES_QUE_GASTAM} and r.status = 'executada' and ${escreveu(sql`r.id`)}
-         -- As do mês e, de antes dele, as que continuam valendo e sendo conferidas (enquanto a rotina as confere).
-         and (r.updated_at >= (${e.inicio}::date)::timestamp at time zone ${e.fuso}
-              or (s.id is null and (r.updated_at at time zone ${e.fuso})::date >= ${e.hoje}::date - ${DIAS_CONFERINDO}::int))
+         and ${periodo}
        order by r.updated_at desc, r.id desc
        limit ${MUDANCAS_NA_TELA}`);
     const campanhaDe = await this.campanhasDosObjetos(tx, r.rows);
@@ -440,6 +445,20 @@ export class BudgetService {
   private async contaDoMes(tx: Tx, e: { tenantId: string; brandId: string | null; fuso: string; agora: Date; teto: bigint | null; exceto: string | null }): Promise<ContaDoMes> {
     const hoje = diaNoFuso(e.agora, e.fuso);
     const mes = mesDe(hoje);
+    const contas = await this.contasDeAnuncio(tx, e);
+    if (contas.length) {
+      // Do começo do mês, ou dos 7 dias antes do último dia lido da conta mais atrasada, o que vier primeiro.
+      const maisAtrasada = contas.map((c) => c.lidoAte ?? mes.ontem).sort()[0]!;
+      const piso = menosDias(hoje, DIAS_DE_GASTO);
+      const desde = [mes.inicio, menosDias(maisAtrasada, 6)].sort()[0]!;
+      const porId = new Map(contas.map((c) => [c.id, c]));
+      for (const g of await this.gastoDosDias(tx, contas.map((c) => c.id), desde < piso ? piso : desde, hoje)) porId.get(g.conta)?.gastoPorDia.set(g.dia, BigInt(g.micros));
+    }
+    return contaDoMes({ hoje, contas: contas satisfies ContaDeAnuncio[], pesamPorDia: await this.pesamHoje(tx, { ...e, hoje }), teto: e.teto });
+  }
+
+  /** As contas de anúncio conectadas da empresa (ou de uma marca) e até que dia a leitura de cada uma vai. */
+  private async contasDeAnuncio(tx: Tx, e: { tenantId: string; brandId: string | null; fuso: string }): Promise<Array<Omit<ContaDeAnuncio, 'gastoPorDia'> & { gastoPorDia: Map<string, bigint> }>> {
     const daMarca = e.brandId ? sql`and a.brand_id = ${e.brandId}` : sql``;
     const lidas = await tx.execute<{ id: string; provider: string; timezone: string | null; last_success_at: Date | string | null }>(sql`
       select a.id, a.provider, a.timezone, s.last_success_at
@@ -447,27 +466,75 @@ export class BudgetService {
         left join liame.sync_state s on s.connected_account_id = a.id and s.dataset = 'metricas'
        where a.tenant_id = ${e.tenantId} and a.disconnected_at is null and a.provider in ${[...PLATAFORMAS_DE_ANUNCIO]} ${daMarca}
        order by a.provider, a.id`);
-    const contas = lidas.rows.map((c) => {
+    return lidas.rows.map((c) => {
       const lidoEm = c.last_success_at ? new Date(c.last_success_at) : null;
       // A leitura feita num dia traz a véspera inteira (no fuso da conta): é até lá que o gasto vale.
       return { id: c.id, provider: c.provider, lidoEm, lidoAte: lidoEm ? menosDias(diaNoFuso(lidoEm, c.timezone ?? e.fuso), 1) : null, gastoPorDia: new Map<string, bigint>() };
     });
-    if (contas.length) {
-      // Do começo do mês, ou dos 7 dias antes do último dia lido da conta mais atrasada, o que vier primeiro.
-      const maisAtrasada = contas.map((c) => c.lidoAte ?? mes.ontem).sort()[0]!;
-      const piso = menosDias(hoje, DIAS_DE_GASTO);
-      const desde = [mes.inicio, menosDias(maisAtrasada, 6)].sort()[0]!;
-      const gastos = await tx.execute<{ conta: string; dia: string; micros: string }>(sql`
-        select l.connected_account_id as conta, l.metric_date::text as dia, round(sum(l.metric_value) * 1000000)::bigint::text as micros
-          from liame.metric_latest l join liame.connected_account a on a.id = l.connected_account_id
-         where l.connected_account_id in ${contas.map((c) => c.id)} and l.metric_name = 'spend' and l.attribution_window = ''
-           and l.metric_date >= ${desde < piso ? piso : desde}::date and l.metric_date < ${hoje}::date
-           and ((a.provider = 'google_ads' and l.level = 'campaign') or (a.provider = 'meta_ads' and l.level = 'ad'))
-         group by 1, 2`);
-      const porId = new Map(contas.map((c) => [c.id, c]));
-      for (const g of gastos.rows) porId.get(g.conta)?.gastoPorDia.set(g.dia, BigInt(g.micros));
-    }
-    return contaDoMes({ hoje, contas: contas satisfies ContaDeAnuncio[], pesamPorDia: await this.pesamHoje(tx, { ...e, hoje }), teto: e.teto });
+  }
+
+  /** O gasto de cada conta em cada dia, de `desde` até antes de `antes`: a campanha no Google e o anúncio na Meta. */
+  private async gastoDosDias(tx: Tx, contas: string[], desde: string, antes: string): Promise<Array<{ conta: string; dia: string; micros: string }>> {
+    if (!contas.length) return [];
+    const gastos = await tx.execute<{ conta: string; dia: string; micros: string }>(sql`
+      select l.connected_account_id as conta, l.metric_date::text as dia, round(sum(l.metric_value) * 1000000)::bigint::text as micros
+        from liame.metric_latest l join liame.connected_account a on a.id = l.connected_account_id
+       where l.connected_account_id in ${contas} and l.metric_name = 'spend' and l.attribution_window = ''
+         and l.metric_date >= ${desde}::date and l.metric_date < ${antes}::date
+         and ((a.provider = 'google_ads' and l.level = 'campaign') or (a.provider = 'meta_ads' and l.level = 'ad'))
+       group by 1, 2`);
+    return gastos.rows;
+  }
+
+  /**
+   * A verba de um mês fechado, para o relatório do mês (D-A3-22): o que a Verba do mês mostrava no fim dele. O gasto
+   * das contas de anúncio conectadas da empresa nos dias do mês, o teto do mês (o de quando o relatório sai: a tela não
+   * guarda o histórico do teto) e as mudanças executadas no mês, com quem aprovou. Quem pediu e quem aprovou vão pelo id:
+   * o nome é lido quando a tela abre. Roda na transação da empresa: a rotina do relatório lê como ela.
+   */
+  async doMesFechado(tenantId: string, mes: { from: string; to: string }): Promise<VerbaDoMesGuardada> {
+    const tx = currentTx();
+    const fuso = await fusoDaEmpresa(tx, tenantId);
+    const seguinte = menosDias(mes.to, -1);
+    const contas = await this.contasDeAnuncio(tx, { tenantId, brandId: null, fuso });
+    const gasto = (await this.gastoDosDias(tx, contas.map((c) => c.id), mes.from, seguinte)).reduce((s, g) => s + BigInt(g.micros), 0n);
+    // A conta que não foi lida até o último dia do mês deixa o gasto dela incompleto: a tela diz qual plataforma.
+    const atrasadas = [...new Set(contas.filter((c) => c.lidoAte === null || c.lidoAte < mes.to).map((c) => c.provider))].sort();
+    const env = await tx.execute<{ limit_micros: string }>(sql`
+      select limit_micros::text as limit_micros from liame.budget_policy where tenant_id = ${tenantId} and brand_id is null`);
+    const mudancas = await this.mudancasDoMes(tx, { tenantId, fuso, inicio: mes.from, hoje: seguinte, fim: seguinte });
+    const aprovou = await this.quemAprovou(tx, mudancas.map((m) => m.action_id));
+    const estado = (x: { status: string; daily_micros: number | null }) => ({ status: x.status, daily_micros: x.daily_micros === null ? null : String(x.daily_micros) });
+    return {
+      currency: 'BRL',
+      spend_micros: gasto.toString(),
+      limit_micros: env.rows[0]?.limit_micros ?? null,
+      missing: atrasadas,
+      changes: mudancas.map((m) => ({
+        action_id: m.action_id,
+        executed_on: m.executed_on,
+        action: m.action,
+        provider: m.provider,
+        target: m.target,
+        from: estado(m.from),
+        to: estado(m.to),
+        requested_by: m.requested_by.id,
+        approved_by: aprovou.get(m.action_id) ?? null,
+        agent_key: m.agent_key,
+        check: m.check?.status ?? null,
+      })),
+    };
+  }
+
+  /** Quem aprovou cada pedido com o código do app: a aprovação que bastou e, entre elas, a mais recente. */
+  private async quemAprovou(tx: Tx, pedidos: string[]): Promise<Map<string, string>> {
+    if (!pedidos.length) return new Map();
+    const r = await tx.execute<{ pedido: string; quem: string }>(sql`
+      select distinct on (a.action_request_id) a.action_request_id as pedido, a.approved_by as quem
+        from liame.approval a
+       where a.action_request_id in ${pedidos}
+       order by a.action_request_id, a.sufficient desc, a.created_at desc`);
+    return new Map(r.rows.map((l) => [l.pedido, l.quem]));
   }
 
   /**

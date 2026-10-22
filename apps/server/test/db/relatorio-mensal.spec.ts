@@ -3,9 +3,11 @@ import { resolve } from 'node:path';
 import { MonthlyReportResponse } from '@liame/contracts';
 import { createDatabase, type Database, runMigrations, withTenant } from '@liame/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { BudgetService } from '../../src/actions/budget.service.js';
 import { ExplicarService } from '../../src/ai/explicar/explicar.service.js';
 import { atribuirPedidos } from '../../src/attribution/motor.js';
 import { gravarToques } from '../../src/attribution/toque-store.js';
+import { EquipeService } from '../../src/equipe/equipe.service.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { MediaService } from '../../src/media/media.service.js';
 import { gravarMetricas } from '../../src/media/metric-store.js';
@@ -164,6 +166,55 @@ describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como sa
     flags.invalidate();
   }
 
+  const pessoaDona = async (e: Empresa) => (await ownerQuery<{ id: string; name: string }>(`select id, name from liame.app_user where email = $1`, [e.dono]))[0]!;
+
+  /** O teto do mês da empresa, em reais (definido pelo dono). */
+  async function teto(e: Empresa, reais: number): Promise<void> {
+    await ownerQuery(`insert into liame.budget_policy (id, tenant_id, brand_id, limit_micros, created_by) values (gen_random_uuid(), $1, null, $2, $3)`, [e.tenantId, reais * 1_000_000, (await pessoaDona(e)).id]);
+  }
+
+  /**
+   * Uma mudança da verba diária da "Combo sexta" que o Liame executou na Meta, como o trilho de ação deixa gravado: o
+   * pedido do dono, a execução que escreveu na plataforma e a aprovação dele com o código do app.
+   */
+  async function mudancaDeVerba(e: Empresa, quando: string, de: number, para: number): Promise<string> {
+    const dono = (await pessoaDona(e)).id;
+    const [id, plano] = [randomUUID(), randomUUID()];
+    await ownerQuery(
+      `insert into liame.action_request (id, tenant_id, brand_id, tool, action, provider, account_id, resource_id, params, risk_level, budget_impact,
+                                         before_state, desired_state, plan_hash, action_fingerprint, mode, policy_decision, status, requested_by, expires_at, created_at, updated_at)
+       values ($1, $2, $3, 'orcamento_ajustar', 'orcamento.aumentar', 'meta_ads', $4, $5, '{}'::jsonb, 'R2', 'increase',
+               $6::jsonb, $7::jsonb, $8, $8, 'APPROVAL', '{}'::jsonb, 'executada', $9, $10::timestamptz + interval '3 days', $10::timestamptz, $10::timestamptz)`,
+      [
+        id,
+        e.tenantId,
+        e.brandId,
+        e.meta,
+        `campanha:${ID_NA_META.combo}`,
+        JSON.stringify({ tipo: 'campanha', nome: 'Combo sexta', status: 'ativa', daily_budget_micros: de * 1_000_000 }),
+        JSON.stringify({ tipo: 'campanha', status: 'ativa', daily_budget_micros: para * 1_000_000 }),
+        plano,
+        dono,
+        quando,
+      ],
+    );
+    await ownerQuery(
+      `insert into liame.action_execution (id, tenant_id, action_request_id, plan_hash, desired_state, result_state, status, started_at) values (gen_random_uuid(), $1, $2, $3, '{}'::jsonb, '{}'::jsonb, 'executada', $4::timestamptz)`,
+      [e.tenantId, id, plano, quando],
+    );
+    await ownerQuery(`insert into liame.approval (id, tenant_id, action_request_id, plan_hash, approved_by, approver_role, sufficient, method) values (gen_random_uuid(), $1, $2, $3, $4, 'dono', true, 'totp')`, [e.tenantId, id, plano, dono]);
+    return id;
+  }
+
+  /** Uma chamada ao modelo que entregou a resposta, como o AI Gateway grava (US$ 0,001). */
+  async function usoDeIa(e: Empresa, fluxo: string, quando: string): Promise<void> {
+    await ownerQuery(
+      `insert into liame.ai_usage (id, tenant_id, brand_id, user_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome, occurred_at, tool_calls, answered)
+       values (gen_random_uuid(), $1, $2, null, $3, 'teste', 'teste', 'modelo', 'principal', 1000, 'ok', $4::timestamptz, 0, true)`,
+      [e.tenantId, e.brandId, fluxo, quando],
+    );
+  }
+
   type Linha = {
     id: string;
     month_from: string;
@@ -199,7 +250,16 @@ describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como sa
     await resetIpRateLimits();
     database = createDatabase({ connectionString: APP_URL, max: 3, applicationName: 'liame-test' });
     flags = api.app.get(FlagService);
-    relatorio = new RelatorioMensalService(database, api.app.get(ResultsService), api.app.get(MediaService), api.app.get(AtencaoCicloService), api.app.get(ExplicarService), flags);
+    relatorio = new RelatorioMensalService(
+      database,
+      api.app.get(ResultsService),
+      api.app.get(MediaService),
+      api.app.get(AtencaoCicloService),
+      api.app.get(ExplicarService),
+      flags,
+      api.app.get(BudgetService),
+      api.app.get(EquipeService),
+    );
     loop = new RelatorioMensalLoop(database, relatorio);
   }, 120_000);
   afterAll(async () => {
@@ -234,7 +294,7 @@ describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como sa
       reading_source: 'sistema',
       reading_reason: 'desligada',
       usage_id: null,
-      content_version: 1,
+      content_version: 2,
       // O envio por e-mail não está ligado.
       email_status: 'desligado',
       email_next_at: null,
@@ -322,6 +382,83 @@ describe.skipIf(!hasDb)('relatório do mês: gerado no dia 1º, guardado como sa
     expect((await api.call('GET', `/v1/results/monthly-report?brand_id=${e.brandId}`, { cookie: outra.cookie })).status).toBe(404);
     await ownerQuery(`insert into liame.role_permission (tenant_id, role_key, permission) select $1, 'dono', p from unnest(array['empresa.ver', 'marcas.ver']) as p`, [e.tenantId]);
     expect((await naTela(e)).status).toBe(403);
+  });
+
+  it('a verba e a equipe do mês (D-A3-22): a empresa no mês inteiro, com quem aprovou pelo nome; o que a equipe fez no mês, sem o que veio depois; cada parte só para quem vê a tela de onde ela vem', async () => {
+    const e = await empresa();
+    await doisMeses(e);
+    await teto(e, 500);
+    const deSetembro = await mudancaDeVerba(e, '2026-09-11T15:00:00Z', 55, 60);
+    // 01/10 às 02:00 em Brasília: já é outubro, e não entra no relatório de setembro.
+    await mudancaDeVerba(e, '2026-10-01T05:00:00Z', 60, 65);
+    await usoDeIa(e, 'resultados.explicar', '2026-09-15T15:00:00Z');
+    await usoDeIa(e, 'resultados.explicar', '2026-10-01T05:00:00Z');
+    await ownerQuery(
+      `insert into liame.weekly_review (id, tenant_id, brand_id, week_from, week_to, timezone, generated_at, reading_source, reading_reason, content, content_version, email_status)
+       values ($1, $2, $3, '2026-09-07', '2026-09-13', $4, '2026-09-14T08:10:00Z', 'sistema', 'desligada', '{}'::jsonb, 1, 'desligado')`,
+      [randomUUID(), e.tenantId, e.brandId, FUSO],
+    );
+    await lidas(e, primeiro(5, 10));
+    expect(await vez(e, primeiro(5, 10))).toEqual([{ brandId: e.brandId, tenantId: e.tenantId, status: 'gerado' }]);
+    const [r] = await relatorios(e);
+    const dono = await pessoaDona(e);
+    expect(r!.content_version).toBe(2);
+    // A verba: o gasto das contas de anúncio da empresa em setembro (os mesmos R$ 350 dos Resultados), o teto e só a
+    // mudança de setembro, com quem pediu e quem aprovou pelo id (o nome é lido quando a tela abre).
+    expect(r!.content.budget).toEqual({
+      currency: 'BRL',
+      spend_micros: '350000000',
+      limit_micros: '500000000',
+      missing: [],
+      changes: [
+        {
+          action_id: deSetembro,
+          executed_on: '2026-09-11',
+          action: 'orcamento.aumentar',
+          provider: 'meta_ads',
+          target: { kind: 'campanha', name: 'Combo sexta', campaign_name: null },
+          from: { status: 'ativa', daily_micros: '55000000' },
+          to: { status: 'ativa', daily_micros: '60000000' },
+          requested_by: dono.id,
+          approved_by: dono.id,
+          agent_key: null,
+          check: null,
+        },
+      ],
+    });
+    // A equipe: quem trabalhou em setembro, com os números do mês; a chamada de 01/10 não conta, nem no custo.
+    expect(r!.content.team.members).toEqual([
+      { key: 'analista', stats: [{ key: 'explicacoes', value: '1', unit: 'qtd' }, { key: 'fez_sentido', value: '0', unit: 'qtd' }, { key: 'discordo', value: '0', unit: 'qtd' }, { key: 'retiradas_na_conferencia', value: '0', unit: 'qtd' }] },
+      { key: 'relatorios', stats: [{ key: 'revisoes', value: '1', unit: 'qtd' }, { key: 'com_leitura_da_ia', value: '0', unit: 'qtd' }, { key: 'so_do_sistema', value: '1', unit: 'qtd' }] },
+      { key: 'compliance', stats: [{ key: 'textos_conferidos', value: '1', unit: 'qtd' }, { key: 'textos_barrados', value: '0', unit: 'qtd' }] },
+    ]);
+    expect(r!.content.team.ai.spent_usd_micros).toBe('1000');
+    expect(r!.content.team.ai.ceiling_usd_micros).toMatch(/^[1-9]\d*$/);
+    // A leitura da LIA não recebe a verba nem a equipe (D-A3-22): a leitura do sistema fala só do mês.
+    expect(JSON.stringify(r!.content.reading)).not.toContain('500,00');
+
+    // Na tela, o dono vê as duas partes, com o nome dele em quem pediu e em quem aprovou.
+    const tela = MonthlyReportResponse.parse((await naTela(e)).body);
+    expect(tela.report!.budget!.changes.map((m) => [m.requested_by, m.approved_by])).toEqual([[dono, dono]]);
+    expect(tela.report!.team!.members.map((m) => m.key)).toEqual(['analista', 'relatorios', 'compliance']);
+
+    // O relatório guardado antes da parte 2 (versão 1, sem as duas) continua abrindo pelo contrato.
+    const { budget: _verba, team: _equipe, ...semAsDuas } = r!.content;
+    await ownerQuery(
+      `insert into liame.monthly_report (id, tenant_id, brand_id, month_from, month_to, timezone, generated_at, reading_source, reading_reason, content, content_version, email_status)
+       values ($1, $2, $3, '2026-08-01', '2026-08-31', $4, '2026-09-01T08:10:00Z', 'sistema', 'desligada', $5::jsonb, 1, 'desligado')`,
+      [randomUUID(), e.tenantId, e.brandId, FUSO, JSON.stringify({ ...semAsDuas, month: { from: '2026-08-01', to: '2026-08-31' } })],
+    );
+    const antigo = await naTela(e, '&month=2026-08');
+    expect(antigo.status, JSON.stringify(antigo.body)).toBe(200);
+    expect(MonthlyReportResponse.parse(antigo.body).report).not.toHaveProperty('budget');
+
+    // Sem `campanhas.ver` (só as vendas), nem a verba nem a equipe: o relatório não abre o que a tela de origem fecha.
+    await ownerQuery(`insert into liame.role_permission (tenant_id, role_key, permission) select $1, 'dono', p from unnest(array['empresa.ver', 'marcas.ver', 'vendas.ver']) as p`, [e.tenantId]);
+    const soVendas = MonthlyReportResponse.parse((await naTela(e)).body);
+    expect(soVendas.report).not.toHaveProperty('budget');
+    expect(soVendas.report).not.toHaveProperty('team');
+    expect(soVendas.report!.totals).toHaveLength(4);
   });
 
   it('sem a leitura da conta de anúncio depois do fim do mês, o relatório espera até as 9h; depois sai com o que há, e diz qual fonte estava atrasada', async () => {

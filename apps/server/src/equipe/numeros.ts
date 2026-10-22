@@ -178,6 +178,20 @@ export interface PecasDoCriativo {
 
 const qtd = (key: string, n: number): TeamStat => ({ key, value: String(n), unit: 'qtd' });
 
+/**
+ * Os números de Sua equipe que são de agora, e não do mês: o que espera a decisão, o que está em preparo, o de hoje. O
+ * relatório do mês fechado não os guarda (D-A3-22): no dia 1º eles diriam o que está acontecendo, e não o que o mês fez.
+ */
+export const NUMEROS_DE_AGORA: ReadonlySet<string> = new Set([
+  'planos_esperando',
+  'em_preparo',
+  'pecas_hoje',
+  'pecas_esperando',
+  'pecas_barradas',
+  'mensagens_esperando',
+  'rascunhos_esperando_o_modelo',
+]);
+
 /** O que o membro fez no mês, como a tela mostra (as chaves estão no contrato `TeamStat`). */
 export function numerosDoMembro(def: DefinicaoDoMembro, c: ContagensDoMes): TeamStat[] {
   const soma = (mapa: Map<string, number>) => def.fluxos.reduce((n, f) => n + (mapa.get(f) ?? 0), 0);
