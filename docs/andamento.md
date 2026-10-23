@@ -553,9 +553,11 @@ O contador (D-A7-3) segue pendente. Próximo: a **W1**, o servidor dos planos e 
 
 O pagamento (W2) é o que faz a assinatura começar de verdade: até lá, nada é cobrado. A W1, parte 1, entrou como o PR #324, no ar desde 23/10/2026, 01h32 (horário de Brasília), com a 0080 conferida na produção. Na mesma madrugada, o dono criou a **conta de testes do Asaas** (no Sandbox, no nome da empresa, com o e-mail confirmado); a chave de API fica para quando o código da W2 estiver pronto.
 
-**W1, parte 2: a franquia de IA dos planos como o teto da empresa (23/10/2026; sem migration; D-A7-26):** o teto de IA passa a ser o da distribuição (`ai_budget`), senão a soma das franquias dos planos das marcas com assinatura paga e viva, senão o padrão do servidor, por um pedaço de SQL só (`cobranca/franquia.ts`) nos quatro leitores do teto, com uma lista fechada em teste. Os dois planos nascem sem franquia (D-A7-5): nada muda no teto até o valor ser fixado.
+**W1, parte 2: a franquia de IA dos planos como o teto da empresa (23/10/2026; sem migration; D-A7-26):** o teto de IA passa a ser o da distribuição (`ai_budget`), senão a soma das franquias dos planos das marcas com assinatura paga e viva, senão o padrão do servidor, por um pedaço de SQL só (`cobranca/franquia.ts`) nos quatro leitores do teto, com uma lista fechada em teste. Os dois planos nascem sem franquia (D-A7-5): nada muda no teto até o valor ser fixado. Entrou como o PR #325, no ar desde 23/10/2026, 02h26 (horário de Brasília); na produção, o teto segue US$ 2 por dia e US$ 20 por mês.
 
-Falta a W2 (o Asaas, a partir da conta de testes) e a tela (W5).
+**W2: a API do Asaas conferida e o desenho do pagamento (23/10/2026, só documentos):** a `base-conhecimento.md` §18.5 traz a API nas páginas oficiais (a autenticação, os limites, o cliente, a cobrança e o QR Code do PIX, o mínimo de R$ 5, o cartão pela página hospedada, os avisos e a fila que para com 15 falhas seguidas, a devolução, o Sandbox e a nota). O `plano-a7.md` ganhou as decisões D-A7-27 a D-A7-33: a W2 em duas partes (a W2a com o PIX, o aviso, a releitura, a conferência diária e a devolução do PIX; a W2b com o cartão, depois do Sandbox), o aviso que só serve de sinal, o que é "pago", uma cobrança do Asaas por fatura do Liame, a empresa como cliente no Asaas, nada abaixo de R$ 5 e a chave e o webhook com a distribuição.
+
+Falta o código da W2a (a chave da conta de testes vai para o EasyPanel quando ele estiver pronto), a W2b e a tela (W5).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

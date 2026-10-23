@@ -839,6 +839,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 
 | Data | Atualização |
 | --- | --- |
+| 23/10/2026 | §18.5 (nova): **a API do Asaas, para a W2**, nas páginas oficiais: a autenticação e o `User-Agent` obrigatório para conta nova; os limites (25.000 requisições em 12 horas, sem chave de idempotência); o cliente com as notificações do Asaas desligadas; a cobrança, o QR Code do PIX e o mínimo de R$ 5; o cartão pela fatura hospedada ou pelo Checkout, e a troca de valor no cartão presa à tokenização; os avisos (o token no cabeçalho, o `id` que não muda nas reentregas, a fila que para com 15 falhas seguidas); a devolução; o Sandbox; e a nota pela API. O desenho que sai daí está no `plano-a7.md` (D-A7-27 a D-A7-33). |
 | 22/10/2026 | §18.1 e §18.4: **o dono escolheu o Asaas** (D-A7-2), com o Pix Automático pronto e desligado no início, e confirmou pelo cartão CNPJ a abertura da empresa em 30/06/2026 (a data do Pix Automático segue em 30/12/2026). A recomendação da §18.4 vira "Regra do Liame". |
 | 22/10/2026 | §18 (nova): **a cobrança do Liame** (D-A7-2 e D-A7-3, antes do código da A7). As regras do Banco Central para o Pix Automático (guia 1.3 e Resolução BCB nº 482): só recebe a empresa com CNPJ ativo há pelo menos seis meses (o da empresa chega lá em 30/12/2026); oferecer é facultativo para quem recebe; não há tarifa para quem paga; a instrução sai de 2 a 10 dias antes; até três novas tentativas em sete dias; o cancelamento pelo pagador é imediato. Oito meios de pagamento comparados nas páginas oficiais (Pix Automático, cartão, preço, nota, aviso, contrato e dados): Mercado Pago, PagBank, Stripe e Pagar.me sem o Pix Automático pela API para quem recebe; Asaas, Efí, iugu e Vindi com ele; só o Asaas emite a NFS-e. A NFS-e do Rio no padrão nacional desde 01/01/2026, e a API nacional. A escolha fica com o dono. |
 | 22/10/2026 | §9: **Next.js 16.4.1.** A 16.3.8 ficou com dois avisos críticos (GHSA-2464-fhr4-w9xw e GHSA-673q-mjm6-r5xr, CVSS 9,5) e um alto (GHSA-p3m5-59mp-jv5r, 8,2), corrigidos na 16.4.1 (publicada em 14/10/2026): o osv-scanner e o Grype ficaram vermelhos em todo PR. A OSV não tem aviso para a 16.4.1 (consultada em 22/10/2026). |
@@ -1014,6 +1015,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - vindi.com.br/precos · blog.vindi.com.br/pix-automatico · app.vindi.com.br/api/v1/docs · atendimento.vindi.com.br (webhooks, NFe.io) · vindi.com.br/nossos-contratos-e-politicas · lwsa.tech/politicas
   - docs.pagar.me (assinaturas, nfeio, webhooks) · pagar.me/ofertas · docs.stone.com.br/aviso-de-privacidade
   - docs.stripe.com/payments/pix · stripe.com/br/pricing · docs.stripe.com/webhooks · stripe.com/br/legal/dpa · support.stripe.com (nota fiscal)
+  - a API do Asaas (§18.5, 23/10/2026): docs.asaas.com (autenticação, chaves de API, rate e quota limit, cobrança duplicada após retry, criar cliente, notificações, criar cobrança, QR Code do PIX, excluir cobrança, cobranças via cartão, redirecionamento após o pagamento, criar checkout, checkout com assinatura recorrente, PCI-DSS, criar assinatura, FAQ de assinaturas, atualizar assinatura, eventos de cobrança, criar webhook pela API, tipos de envio, penalização de filas, FAQ de webhooks, IPs oficiais, estornar cobrança, estornos, confirmar pagamento, cartão de teste, aprovar conta, agendar nota fiscal, webhook de notas) · central.ajuda.asaas.com (artigos 31972480144795, 54672181332379, 54672193044251, 52780781880731, 54592434104091 e 53177331159835)
   - tempo de mercado e porte: asaas.com/sobre-nos · sejaefi.com.br/sobre-o-efi-bank · iugu.com/sobre-a-iugu · vindi.com.br/sobre · ri.lwsa.com.br (release do 2º trimestre de 2026) · pagar.me · docs.stone.com.br (balanço da Stone Instituição de Pagamento de 2025) · resultados do 2º trimestre de 2026 da StoneCo e do PagBank · investors.pagbank.com · sec.gov (MercadoLibre: 10-K de 2012 e carta do 2º trimestre de 2026) · stripe.com/br/newsroom/news/stripe-2025-update · bloomberglinea.com.br, startups.com.br e baguete.com.br (secundárias)
 
 ---
@@ -1610,4 +1612,49 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Recomendação levada ao dono em 22/10/2026:** o Asaas como base (cartão pela página hospedada, PIX e Pix Automático, nota no padrão nacional, sem mensalidade, rescisão a qualquer momento, acordo de tratamento de dados publicado), com a integração escrita por trás de uma interface de meio de pagamento, para somar outro meio se o primeiro falhar ou ficar caro (a Efí no Pix Automático, o Mercado Pago no cartão) e a API nacional como reserva da nota.
 - **Regra do Liame (D-A7-2, escolhida pelo dono em 22/10/2026):** o **Asaas**, com a integração por trás de uma interface de meio de pagamento. O **Pix Automático fica pronto e desligado no início**, por decisão do dono ("não é prioridade, pode deixar pronto porém não usar de início"): no começo, a assinatura se paga com o PIX a cada mês ou com o cartão. Os planos são dois, o Essencial a R$ 249,00 e o Completo a R$ 449,00 por mês (D-A7-4).
 - **Para o código (W2), viram teste (V99):** o Pix Automático só a partir de 30/12/2026 (o CNPJ de seis meses); o aviso sem assinatura nunca muda a assinatura sem a leitura da cobrança na API; nenhum número de cartão no Liame (página hospedada ou campo do meio de pagamento); a instrução do Pix Automático sai de 2 a 10 dias antes do vencimento, e as novas tentativas acabam até o 7º dia depois dele, antes da parada do 10º dia (Termos 10.4, D-A7-6).
+
+### 18.5 A API do Asaas, para a integração (W2)
+
+*Páginas oficiais lidas em 23/10/2026: a documentação (docs.asaas.com, com a data de atualização de cada página entre parênteses) e a Central de Ajuda do próprio Asaas (com a data de edição do artigo). O que a documentação não diz vira [NC].*
+
+- **Autenticação e ambientes** [O] (autenticação, 13/10/2026; chaves de API, 13/10/2026):
+  - a chave vai no cabeçalho `access_token`; a de outro ambiente, a ausente ou a inválida dão 401;
+  - Sandbox em `https://api-sandbox.asaas.com/v3` (chave `$aact_hmlg_`) e produção em `https://api.asaas.com/v3` (chave `$aact_prod_`);
+  - "O header `User-Agent` é obrigatório para novas contas raiz criadas a partir de 13/06/2024" (a do Liame é nova);
+  - a chave aparece uma vez só e não se recupera; sem uso, é desabilitada em 3 meses e expira em 6;
+  - GET com corpo responde 403.
+- **Limites** [O] (rate e quota limit, 13/10/2026):
+  - 25.000 requisições a cada 12 horas por conta, e até 50 GET ao mesmo tempo; alguns endpoints têm limite próprio [NC: quais];
+  - acima do limite, 429 com os cabeçalhos `RateLimit-*`, sem `Retry-After` (ele só vem no 403 do bloqueio temporário);
+  - não há chave de idempotência: o `externalReference`, com o controle de repetição do lado de quem chama (cobrança duplicada após retry, 01/09/2026).
+- **Cliente** [O] (criar cliente, 08/09/2026; notificações, 27/08/2026):
+  - `POST /v3/customers`, com `name` e `cpfCnpj` obrigatórios e o `externalReference`;
+  - a API aceita cliente duplicado: procurar por `cpfCnpj` ou `externalReference` antes de criar;
+  - as notificações do Asaas ao cliente nascem ligadas e têm taxa: `notificationDisabled: true` já na criação.
+- **Cobrança** [O] (criar cobrança, 08/09/2026; QR Code do PIX, 08/09/2026; excluir cobrança, 08/09/2026):
+  - `POST /v3/payments` com `customer`, `billingType` (`PIX`, `CREDIT_CARD`, `BOLETO` ou `UNDEFINED`, em que o pagador escolhe na fatura), `value`, `dueDate`, `description` (até 500 letras) e `externalReference`; o estado se acompanha pelos avisos, não por consultas repetidas;
+  - o QR Code do PIX (`GET /v3/payments/{id}/pixQrCode`) é dinâmico e pago uma vez só; com chave Pix cadastrada, vale até 12 meses depois do vencimento; sem chave, até as 23:59 do dia;
+  - remover (`DELETE /v3/payments/{id}`) não devolve dinheiro e pode ser desfeito (`restore`).
+- **Valor mínimo e teto** [O] (Central, editado em 19/08/2026): de R$ 5 a R$ 500.000 por cobrança para pessoa jurídica; até 100 cobranças por dia com a conta em análise e 2.000 com ela aprovada. Mínimo diferente para PIX e cartão: [NC].
+- **Cartão sem o número no Liame** [O] (cartão, 22/10/2026; PCI-DSS, 22/10/2026; redirecionamento, 04/08/2026):
+  - a fatura hospedada (`invoiceUrl`) e o Asaas Checkout "podem reduzir o escopo" do PCI; a tokenização no servidor deixa a infraestrutura de quem integra no escopo e, em produção, "depende de habilitação e está sujeita à análise";
+  - a volta à página do Liame (`callback.successUrl`) tem de ser do domínio cadastrado nos dados comerciais da conta.
+- **Assinatura no cartão** [O] (FAQ de assinaturas, 26/08/2026; criar assinatura, 08/09/2026; Central, editados em 28/08, 21/09 e 01/10/2026):
+  - `POST /v3/subscriptions`, com ciclo `MONTHLY`, `nextDueDate` e `externalReference`; cada cobrança nasce 40 dias antes do vencimento (a conta pode mudar para 14 ou 7 dias);
+  - pela fatura, o cartão informado na primeira cobrança é cobrado sozinho nas seguintes; recusado até 2 dias depois do vencimento, ele sai da assinatura;
+  - **mudar o valor de uma assinatura no cartão exige a tokenização habilitada**; a Central manda criar outra assinatura quando a do cartão já está confirmada, e o esquema do `PUT` não lista `value` [NC: testar no Sandbox];
+  - remover a assinatura apaga as cobranças pendentes e as vencidas.
+- **Avisos (webhooks)** [O] (eventos de cobrança, 13/10/2026; criar webhook pela API, 13/10/2026; penalização de filas, 13/10/2026; FAQ de webhooks, 28/08/2026; IPs oficiais, 28/08/2026):
+  - o token (`authToken`, de 32 a 255 letras, sem espaços, nunca uma chave de API) vai em todo aviso, no cabeçalho `asaas-access-token`; até 10 webhooks por conta; o envio em sequência (`SEQUENTIALLY`) mantém a ordem, e um evento com falha atrasa os seguintes;
+  - o `id` do evento é o mesmo nas reentregas (a entrega é "at least once"); são 15 tentativas, de 30 segundos a 3 horas, e **com 15 falhas seguidas a fila daquele webhook para**; os eventos ficam guardados por 14 dias;
+  - o Asaas espera a resposta por 10 segundos e não segue redirecionamento; uma página diz que só o 200 é sucesso, e outra aceita qualquer 2xx: responder 200;
+  - no PIX, `PAYMENT_CREATED` e depois `PAYMENT_RECEIVED`; no cartão, `PAYMENT_CONFIRMED` e, 32 dias depois, `PAYMENT_RECEIVED`; e os eventos de estorno, de assinatura e de checkout;
+  - na produção, os avisos saem de quatro IPs publicados (o Sandbox pode ter outros), com o `User-Agent` `Asaas_Prod/3.0` ou `Asaas_Sandbox/3.0`.
+- **Devolução** [O] (estornar cobrança, 08/09/2026; estornos, 04/08/2026; Central, editados em 18 e 19/08/2026):
+  - `POST /v3/payments/{id}/refund`; sem valor, a devolução é integral;
+  - no cartão, confirmado ou recebido há até 365 dias (até 10 dias úteis para aparecer na fatura; a Central diz até 5); no PIX, recebido há até 90 dias e com saldo na conta (logo depois do recebimento pode faltar saldo: 400), e as taxas não voltam;
+  - a devolução só está feita com o `status` `DONE`.
+- **Sandbox** [O] (confirmar pagamento, 08/09/2026; cartão de teste, 02/09/2026; aprovar conta, 08/09/2026): confirmar um pagamento por `POST /v3/sandbox/payment/{id}/confirm` (e vencer por `/overdue`); cartões de recusa publicados; aprovar a conta por `POST /v3/sandbox/myAccount/approve`; e-mail e SMS podem sair no Sandbox.
+- **Nota fiscal (W4)** [O] (agendar nota, 25/09/2026; webhook de notas, 27/08/2026): `POST /v3/invoices`, ligada à cobrança; a nota está emitida com o aviso `INVOICE_AUTHORIZED` e falhou com `INVOICE_ERROR`; a assinatura pode emitir sozinha na confirmação do pagamento.
+- **O que isso decide no desenho da W2:** `plano-a7.md` §4, D-A7-27 a D-A7-33.
 
