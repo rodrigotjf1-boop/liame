@@ -545,6 +545,14 @@ Vêm junto as decisões D-A7-13 a D-A7-19, e a pesquisa de mercado está no cabe
 
 O contador (D-A7-3) segue pendente. Próximo: a **W1**, o servidor dos planos e da assinatura, com a função `cobranca` desligada.
 
+**W1, parte 1: os planos e a assinatura no servidor (23/10/2026; migration 0080; sem tela; a função `cobranca`, desligada):**
+- os dois planos do P26, com versão (D-A7-20), e a franquia de IA vazia até a D-A7-5;
+- a assinatura de cada marca e as faturas: ela espera o primeiro pagamento por 7 dias, e uma rotina do worker leva cada uma pelos dias da cobrança, uma vez por dia no fuso da empresa (a fatura seguinte 5 dias antes do vencimento, o 1º, o 10º e o 30º dia de atraso, o fim do período);
+- assinar, trocar de plano, cancelar, manter e desistir em 7 dias, com o código do app onde a D-A7-14 pede, e o Administrador com a cobrança liberada vendo a cobrança (D-A7-13);
+- as decisões técnicas D-A7-20 a D-A7-26 (`plano-a7.md` §4).
+
+O pagamento (W2) é o que faz a assinatura começar de verdade: até lá, nada é cobrado. Falta a parte 2 (a franquia de IA como o teto da empresa, D-A7-26), a W2 (o Asaas, a partir da conta de testes do dono) e a tela (W5).
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

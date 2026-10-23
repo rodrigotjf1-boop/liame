@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { erroDoLaco, FalhasDoLaco, HubDms, PASSAGEIRAS_ATE_ERRO } from '../connectors/dms/hub.js';
 import { ActionExecutor } from './action-executor.js';
+import { AssinaturasLoop } from './assinaturas-loop.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
@@ -26,7 +27,7 @@ import { OutboxPublisher } from './outbox-publisher.js';
 import { WebhookDeliverer } from './webhook-deliverer.js';
 
 /**
- * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, gerar o relatório do mês, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador, conferir o gasto de cada mudança feita numa conta de anúncio, conferir de novo os pedidos que esperam aprovação com um impedimento, olhar as marcas pela rotina do CRM e mensageria, ler as lojas do Perfil da Empresa no Google e pedir ao Social media as sugestões de resposta às avaliações novas. Cada laço
+ * Laços do worker: publicar a outbox, entregar webhooks, processar a inbox, executar as ações aprovadas, concluir as conexões OAuth, sincronizar as contas conectadas, ler as vendas das lojas do Regem, ler as conversas abertas por anúncio das contas do RegemCast, rodar a sombra de cada marca, gerar e enviar a revisão da semana, gerar o relatório do mês, montar os planos do Estrategista, ler as páginas pedidas ao Pesquisador, conferir o gasto de cada mudança feita numa conta de anúncio, conferir de novo os pedidos que esperam aprovação com um impedimento, olhar as marcas pela rotina do CRM e mensageria, ler as lojas do Perfil da Empresa no Google, pedir ao Social media as sugestões de resposta às avaliações novas e levar cada assinatura pelos dias da cobrança. Cada laço
  * repete na hora se o lote veio cheio e espera um pouco se veio vazio. Erro num lote é registrado e
  * o laço segue (LIC-001).
  */
@@ -65,6 +66,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly comparacao: ComparacaoDmsIdLoop,
     private readonly fotos: FotosLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
+    private readonly assinaturas: AssinaturasLoop,
     /** O hub da DMS: a falha de um laço vai também à lista de erros dele (desligado por padrão, `HUB_LIGADO`). */
     @Optional() private readonly hub?: HubDms,
   ) {}
@@ -122,6 +124,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // O pedido do Social media cuja avaliação mudou ou foi respondida direto no Google sai de Aprovações (P31); a
       // avaliação chega pela leitura do Perfil, de hora em hora: a fila é olhada de 5 em 5 minutos.
       this.loop('sugestoes-retirada', 20, 300_000, async (n) => (await this.sugestoes.retirarLote(n)).length),
+      // Plano e cobrança (A7, W1): cada assinatura passa uma vez por dia, no começo do dia da empresa; a fila é olhada
+      // de 5 em 5 minutos. Com a função `cobranca` desligada, a assinatura espera parada.
+      this.loop('assinaturas', 20, 300_000, async (n) => (await this.assinaturas.executarLote(n)).length),
     );
   }
 

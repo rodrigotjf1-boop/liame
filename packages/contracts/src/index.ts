@@ -427,3 +427,18 @@ export {
   BrandPhotoUploadQuery,
   UpdateBrandPhotoRequest,
 } from './fotos.js';
+export {
+  BILLING_METHODS,
+  BillingInvoice,
+  BillingMethod,
+  BillingPlan,
+  BillingPlansResponse,
+  BillingQuery,
+  BillingResponse,
+  BrandSubscription,
+  CancelSubscriptionRequest,
+  ChangePlanRequest,
+  KeepSubscriptionRequest,
+  SubscribeRequest,
+  WithdrawSubscriptionRequest,
+} from './cobranca.js';
