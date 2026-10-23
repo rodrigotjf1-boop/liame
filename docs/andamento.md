@@ -536,6 +536,15 @@ Plano **aprovado pelo dono em 03/10/2026**, com as decisões como recomendadas: 
 
 Vêm junto as decisões D-A7-13 a D-A7-19, e a pesquisa de mercado está no cabeçalho do arquivo. Conferido no Chrome sem janela: 93 cenários, em 1440, 1024, 768 e 375 px, nos temas claro e escuro, sem problema.
 
+**Decisões do dono (22/10/2026, à noite):**
+- o meio de pagamento é o **Asaas** (D-A7-2);
+- o **P26 foi aprovado**, com as decisões D-A7-13 a D-A7-19;
+- dois planos, o **Essencial a R$ 249,00** e o **Completo a R$ 449,00** por mês (D-A7-4), já nos valores do protótipo;
+- o **Pix Automático fica pronto e desligado no início** (a D-A7-17 revista): no começo, PIX a cada mês e cartão;
+- a abertura do CNPJ foi confirmada em 30/06/2026.
+
+O contador (D-A7-3) segue pendente. Próximo: a **W1**, o servidor dos planos e da assinatura, com a função `cobranca` desligada.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
