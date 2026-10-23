@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Plano e cobrança · Liame</title>
 <!--
-@prototipo Liame · A7 · P26 · Plano e cobrança (AGUARDA O DONO)
+@prototipo Liame · A7 · P26 · Plano e cobrança (APROVADO PELO DONO EM 22/10/2026)
 base: prototipo-contas-perfil.html (P17, parte B, aprovado em 14/10/2026): o shell (menu, barra do topo, gaveta do
       celular, modos Lite e Pro, diálogos, avisos e tema) fica como está; a tela de Contas sai deste arquivo (ela está
       no app e nos protótipos dela).
@@ -38,7 +38,7 @@ o que tem: (1) "Plano e cobrança" em Agência, depois de Pessoas e acessos: a s
            de plano (com o valor de hoje), cancelar no fim do período e desistir em 7 dias (com o código do app); (3) o
            aviso de atraso em outra tela (o Resumo), para quem paga e, a partir do 10º dia, para a equipe; (4) a tela de
            quem não pode ver a cobrança e a da conta suspensa para quem não é o Dono.
-decisões propostas junto (esperam o dono):
+decisões aprovadas junto (pelo dono em 22/10/2026, como recomendadas; a D-A7-17 revista por ele):
   D-A7-13 quem faz o quê: o Dono faz tudo; o Administrador com a cobrança liberada vê a tela, paga, troca a forma de
           pagamento e baixa as faturas e as notas; trocar de plano, cancelar e desistir ficam com o Dono, como na tabela
           aprovada de Pessoas e acessos; os outros níveis não veem o item no menu, e quem chega à tela por um link vê
@@ -51,9 +51,10 @@ decisões propostas junto (esperam o dono):
           dia;
   D-A7-16 trocar de plano: subir vale na hora, e hoje se paga só a diferença dos dias que faltam no período; descer
           vale no período seguinte, e até lá o plano atual continua;
-  D-A7-17 o PIX até o Pix Automático: até 30/12/2026, quem escolhe PIX recebe a cobrança do mês por e-mail 5 dias antes
-          do vencimento, com o QR Code, e também paga pela tela; a partir dessa data, a tela oferece autorizar o Pix
-          Automático uma vez, no app do banco; quem paga no cartão continua no cartão;
+  D-A7-17 o PIX e o Pix Automático: quem escolhe PIX recebe a cobrança do mês por e-mail 5 dias antes do vencimento,
+          com o QR Code, e também paga pela tela; quem paga no cartão continua no cartão. Revista pelo dono em 22/10/2026
+          ("não é prioridade, pode deixar pronto porém não usar de início"): o Pix Automático fica pronto e DESLIGADO no
+          início; só com a função ligada a tela oferece autorizá-lo, e nunca antes de 30/12/2026;
   D-A7-18 a nota de cada cobrança: a NFS-e sai depois do pagamento, em PDF e XML, na lista e no e-mail que o Dono
           escolhe para as notas; enquanto não sai, a linha diz "em emissão";
   D-A7-19 a desistência em 7 dias: pela própria tela, como foi a contratação; devolução de 100% (no cartão, o estorno;
@@ -65,11 +66,15 @@ fora deste desenho: pausar em vez de cancelar (precisa de decisão de produto e 
       aprovar à parte); a página do meio de pagamento (é dele, e o meio sai da D-A7-2); o cadastro dos planos e dos
       preços (é da distribuição); exportar os dados (a tela de exportação é outra).
 estados: os seletores "Situação", "Forma de pagamento" e "Quem está vendo" na faixa do topo; o Resumo, no menu, mostra o
-         aviso de atraso como ele aparece no alto das outras telas.
-regras: valores de exemplo (o preço e o que entra em cada plano são do dono, D-A7-4); datas de exemplo, todas tiradas
+         aviso de atraso como ele aparece no alto das outras telas. O Pix Automático (a forma no seletor, a oferta no
+         cartão do PIX, a prévia e a opção do diálogo de assinar) mostra como fica com a função ligada; no começo ela
+         fica desligada (D-A7-17 revista), e essas partes não aparecem.
+regras: os preços decididos pelo dono em 22/10/2026 (o Essencial a R$ 249,00 e o Completo a R$ 449,00 por mês, D-A7-4;
+        os funcionários de cada plano como aqui); datas de exemplo, todas tiradas
         do vencimento por uma conta só (hoje 22/10/2026, vencimento no dia 21; no Pix Automático, como fica em 2027);
-        a diferença da troca de plano sai de uma conta só (o cenário p26-conta confere); o meio de pagamento sem nome
-        (a escolha é da D-A7-2): "a página segura do meio de pagamento"; nenhum número de cartão na tela, só a bandeira
+        a diferença da troca de plano sai de uma conta só (o cenário p26-conta confere); o meio de pagamento, o Asaas
+        (escolhido pelo dono em 22/10/2026, D-A7-2), aparece como "a página segura do meio de pagamento" (no app, o
+        nome vem do meio configurado); nenhum número de cartão na tela, só a bandeira
         e o final; estado com palavra e com cor; dados fictícios (Mister Burgers, o Dono Rodrigo, a Administradora Ana
         Lima, o Gestor Carlos Souza e o e-mail das notas em exemplo.com.br).
 conferência: os cenários `p26-*` em window.uiuxCenarios (1440, 1024, 768 e 375 px, claro e escuro).
@@ -755,7 +760,7 @@ label.plano-op:has(input:checked) { border-color: var(--foco); background: var(-
 <p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
 
 <div class="revisao" role="region" aria-label="Controles do protótipo">
-  <p class="revisao-marca"><b>Protótipo · A7 · P26 · aguarda o dono</b><span>Plano e cobrança · dados, datas e valores de exemplo</span></p>
+  <p class="revisao-marca"><b>Protótipo aprovado em 22/10/2026 · A7 · P26</b><span>Plano e cobrança · dados e datas de exemplo</span></p>
   <label>Situação <select id="rev-situacao"></select></label>
   <label>Forma de pagamento <select id="rev-forma"></select></label>
   <label>Quem está vendo <select id="rev-quem"></select></label>
@@ -897,7 +902,7 @@ label.plano-op:has(input:checked) { border-color: var(--foco); background: var(-
         <input class="input" id="planos-cod" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-describedby="planos-cod-dica planos-cod-erro">
         <span class="campo-erro" id="planos-cod-erro" hidden></span>
       </div>
-      <p class="exemplo">Valores de exemplo: o preço e o que entra em cada plano são definidos por você (D-A7-4).</p>
+      <p class="exemplo">Valores decididos em 22/10/2026 (D-A7-4).</p>
     </div>
     <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Voltar</button><button class="btn btn--primary" type="submit" id="bt-planos-ok">Trocar de plano</button></div>
   </form>
@@ -1104,7 +1109,7 @@ window.uiuxCenarios = {};
 definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true });
 
 /* ===================== A7 · P26 · Plano e cobrança ===================== */
-/* Dados, datas e valores de exemplo: o preço e o que entra em cada plano são do dono (D-A7-4). Todas as datas saem do
+/* Dados e datas de exemplo; os preços são os decididos pelo dono em 22/10/2026 (D-A7-4). Todas as datas saem do
    vencimento por uma conta só (datasDo), e a diferença da troca de plano sai de diferencaDoPlano (V66). O meio de
    pagamento não tem nome: a escolha é da D-A7-2. */
 (() => {
@@ -1140,8 +1145,8 @@ definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true })
   window.p26Contas = { datasDo, diferencaDoPlano, dataTxt, dt };
 
   const PLANOS = {
-    essencial: { id: 'essencial', nome: 'Essencial', preco: 197, ia: 'IA incluída para o dia a dia', funcs: ['LIA (Atendimento)', 'Gestor de tráfego', 'Analista de dados', 'Relatórios', 'Compliance'] },
-    completo: { id: 'completo', nome: 'Completo', preco: 397, ia: 'Mais IA incluída', mais: 'Tudo do Essencial', funcs: ['Estrategista', 'Pesquisador', 'Criativo', 'Social media', 'CRM e mensageria'] },
+    essencial: { id: 'essencial', nome: 'Essencial', preco: 249, ia: 'IA incluída para o dia a dia', funcs: ['LIA (Atendimento)', 'Gestor de tráfego', 'Analista de dados', 'Relatórios', 'Compliance'] },
+    completo: { id: 'completo', nome: 'Completo', preco: 449, ia: 'Mais IA incluída', mais: 'Tudo do Essencial', funcs: ['Estrategista', 'Pesquisador', 'Criativo', 'Social media', 'CRM e mensageria'] },
   };
   const PESSOAS = {
     dono: { nome: 'Rodrigo', papel: 'Dono', inicial: 'R', paga: true, contrato: true },
@@ -1158,7 +1163,7 @@ definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true })
     sem: 'Sem assinatura (empresa nova)',
     pendente: 'Pix Automático pago, sem a confirmação do banco',
   };
-  const FORMAS = { cartao: 'Cartão', pix: 'PIX a cada mês (até 30/12/2026)', auto: 'Pix Automático (a partir de 30/12/2026)' };
+  const FORMAS = { cartao: 'Cartão', pix: 'PIX a cada mês (até 30/12/2026)', auto: 'Pix Automático (com a função ligada; no início, desligada)' };
   const QUEM = { dono: 'Rodrigo, Dono', adm: 'Ana Lima, Administrador com a cobrança liberada', gestor: 'Carlos Souza, Gestor' };
   const QUEM_CUIDA = 'Rodrigo (Dono) ou Ana Lima (Administrador, com a cobrança liberada)';
   const EMAIL_NOTAS = 'financeiro@exemplo.com.br';
@@ -1248,7 +1253,7 @@ definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true })
     return `<dl class="degraus">${lista.map(([quando, oque, tipo]) => `<div class="degrau${tipo ? ' degrau--' + tipo : ''}"><dt>${dataTxt(quando)}</dt><dd>${esc(oque)}</dd></div>`).join('')}</dl>`;
   }
   function planosNaTela(c) {
-    return `<div class="planos planos--tela">${Object.values(PLANOS).map((p) => `<div class="plano-op"><div class="plano-op-cab"><b>${esc(p.nome)}</b><span class="plano-preco">${esc(moeda(p.preco))}<small> por mês</small></span></div>${funcs(p)}<span class="fat-det">${esc(p.ia)}</span>${c.pessoa.contrato ? bt(`data-acao="assinar" data-plano="${p.id}" aria-haspopup="dialog"`, `Assinar o ${p.nome}`, { cls: p.id === 'essencial' ? 'btn btn--primary' : 'btn' }) : ''}</div>`).join('')}</div>${c.pessoa.contrato ? '' : '<p class="sit-nota">Assinar é com o Dono.</p>'}<p class="exemplo">Valores de exemplo: o preço e o que entra em cada plano são definidos por você (D-A7-4).</p>`;
+    return `<div class="planos planos--tela">${Object.values(PLANOS).map((p) => `<div class="plano-op"><div class="plano-op-cab"><b>${esc(p.nome)}</b><span class="plano-preco">${esc(moeda(p.preco))}<small> por mês</small></span></div>${funcs(p)}<span class="fat-det">${esc(p.ia)}</span>${c.pessoa.contrato ? bt(`data-acao="assinar" data-plano="${p.id}" aria-haspopup="dialog"`, `Assinar o ${p.nome}`, { cls: p.id === 'essencial' ? 'btn btn--primary' : 'btn' }) : ''}</div>`).join('')}</div>${c.pessoa.contrato ? '' : '<p class="sit-nota">Assinar é com o Dono.</p>'}<p class="exemplo">Valores decididos em 22/10/2026 (D-A7-4).</p>`;
   }
   const funcs = (p) => `<ul class="funcs" aria-label="Funcionários do plano ${esc(p.nome)}">${p.mais ? `<li class="func func--mais">${esc(p.mais)}</li>` : ''}${p.funcs.map((f) => `<li class="func">${esc(f)}</li>`).join('')}</ul>`;
 
@@ -1261,7 +1266,7 @@ definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true })
     else if (pessoa.contrato) acao = bt('data-acao="planos" aria-haspopup="dialog"', 'Trocar de plano');
     else acao = '<p class="sit-nota">Trocar de plano, cancelar e desistir ficam com o Dono, Rodrigo.</p>';
     const depois = est.planoDepois ? `<p class="sit-nota">A partir de <b>${dataTxt(d.prox)}</b>, o plano passa a ser o ${esc(PLANOS[est.planoDepois].nome)}, por ${esc(moeda(PLANOS[est.planoDepois].preco))} por mês.</p>` : '';
-    return `<article class="card" aria-labelledby="cob-plano-t"><div class="plano-cab"><div><p class="rotulo-marca">Plano</p><h2 class="plano-nome" id="cob-plano-t">${esc(plano.nome)}</h2></div><span class="plano-preco">${esc(moeda(plano.preco))}<small> por mês</small></span></div>${funcs(plano)}<span class="fat-det">${esc(plano.ia)}</span>${depois}${acao}<p class="exemplo">Valores de exemplo (D-A7-4).</p></article>`;
+    return `<article class="card" aria-labelledby="cob-plano-t"><div class="plano-cab"><div><p class="rotulo-marca">Plano</p><h2 class="plano-nome" id="cob-plano-t">${esc(plano.nome)}</h2></div><span class="plano-preco">${esc(moeda(plano.preco))}<small> por mês</small></span></div>${funcs(plano)}<span class="fat-det">${esc(plano.ia)}</span>${depois}${acao}<p class="exemplo">Valores decididos em 22/10/2026 (D-A7-4).</p></article>`;
   }
   function cartaoForma(c) {
     const { pessoa, d } = c;
@@ -1422,7 +1427,7 @@ definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true })
     }
     return `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" role="img" aria-label="QR Code de exemplo do PIX">${quad.join('')}</svg>`;
   }
-  const CODIGO_PIX = '00020126580014br.gov.bcb.pix0136exemplo-do-prototipo-sem-valor-nenhum5204000053039865406197.005802BR5912LIAME EXEMPLO6014RIO DE JANEIRO62070503***6304ABCD';
+  const CODIGO_PIX = '00020126580014br.gov.bcb.pix0136exemplo-do-prototipo-sem-valor-nenhum5204000053039865406249.005802BR5912LIAME EXEMPLO6014RIO DE JANEIRO62070503***6304ABCD';
 
   /* ---------- pagar com PIX ---------- */
   const dlgPix = $('#dlg-pix');
@@ -1529,7 +1534,7 @@ definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true })
         <label class="opcao"><input type="radio" name="assinar-forma" value="auto" disabled><span class="opcao-txt"><b>Pix Automático · a partir de 30/12/2026</b><span>Autorize uma vez no app do banco, e o PIX de todo mês sai sozinho.</span></span></label>
       </div></fieldset>
       <p class="dialogo-nota">${ic('i-info')}<span>Na primeira contratação, você pode desistir em até 7 dias do pagamento e receber tudo de volta. Para cancelar depois, não há multa.</span></p>
-      <p class="exemplo">Valores de exemplo (D-A7-4).</p>`;
+      <p class="exemplo">Valores decididos em 22/10/2026 (D-A7-4).</p>`;
     abrirDialogo(dlgAssinar, origem);
   }
   $('#form-assinar').addEventListener('submit', (e) => {
@@ -1693,7 +1698,7 @@ definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true })
   }
   const cen = (id, larguras, fn) => { window.uiuxCenarios['p26-' + id] = { larguras, executar: async () => { await fn(); await esperar(200); } }; };
 
-  cen('em-dia', todas, async () => { await preparar('em-dia'); exige(texto('#cob-corpo').includes('A próxima cobrança é de R$ 197,00 em 21/11/2026'), 'em dia sem a próxima cobrança'); exige(!texto('#cob-corpo').includes('NaN'), 'NaN'); });
+  cen('em-dia', todas, async () => { await preparar('em-dia'); exige(texto('#cob-corpo').includes('A próxima cobrança é de R$ 249,00 em 21/11/2026'), 'em dia sem a próxima cobrança'); exige(!texto('#cob-corpo').includes('NaN'), 'NaN'); });
   cen('em-dia-pix', pontas, async () => { await preparar('em-dia', 'pix'); exige(texto('#cob-corpo').includes('o QR Code chega por e-mail em 16/11/2026'), 'PIX sem a data do e-mail'); exige(texto('#cob-corpo').includes('disponível a partir de 30/12/2026'), 'sem a oferta do Pix Automático'); });
   cen('pix-automatico', pontas, async () => { await preparar('em-dia', 'auto'); exige(texto('#cob-corpo').includes('21/02/2027'), 'o Pix Automático sem as datas de 2027'); });
   cen('pendente', pontas, async () => { await preparar('pendente', 'auto'); exige(texto('#cob-sit-t') === 'O Pix Automático ainda não foi confirmado', 'título do pendente'); });
@@ -1714,7 +1719,7 @@ definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true })
   cen('resumo-dono-30', pontas, async () => { await preparar('atraso-30', 'pix', 'dono', 'resumo'); exige(texto('#resumo-faixa').includes('suspensa desde 20/11/2026'), 'o aviso do 30º dia'); });
   cen('resumo-equipe-1', pontas, async () => { await preparar('atraso-1', 'pix', 'gestor', 'resumo'); exige(texto('#resumo-faixa') === '', 'a equipe não vê o aviso no 1º dia'); });
   cen('resumo-equipe-10', pontas, async () => { await preparar('atraso-10', 'pix', 'gestor', 'resumo'); exige(texto('#resumo-faixa').includes('Quem resolve: Rodrigo (Dono)'), 'quem resolve, para a equipe'); exige(!$('#resumo-faixa [data-acao="pagar-pix"]'), 'a equipe não tem o botão de pagar'); });
-  cen('dlg-pix', pontas, async () => { await preparar('atraso-1', 'pix'); $('[data-acao="pagar-pix"]').click(); await esperar(300); exige(dlgPix.open, 'o diálogo do PIX não abriu'); exige(texto('#dlg-pix-t') === 'Pagar R$ 197,00 com PIX', 'título do PIX'); });
+  cen('dlg-pix', pontas, async () => { await preparar('atraso-1', 'pix'); $('[data-acao="pagar-pix"]').click(); await esperar(300); exige(dlgPix.open, 'o diálogo do PIX não abriu'); exige(texto('#dlg-pix-t') === 'Pagar R$ 249,00 com PIX', 'título do PIX'); });
   cen('dlg-pix-pago', pontas, async () => { await preparar('atraso-10', 'pix'); $('[data-acao="pagar-pix"]').click(); await esperar(300); $('#bt-pix-simular').click(); await esperar(200); exige(texto('#pix-pago').includes('Tudo voltou a funcionar'), 'o pagamento não foi recebido'); });
   cen('dlg-auto', pontas, async () => { await preparar('pendente', 'auto'); $('[data-acao="auto-pendente"]').click(); await esperar(300); exige(dlgAuto.open && texto('#auto-corpo').includes('CNPJ 67.748.508/0001-43'), 'o resumo do banco'); });
   cen('dlg-auto-previa', pontas, async () => { await preparar('em-dia', 'pix'); $('[data-acao="auto-previa"]').click(); await esperar(300); exige(dlgAuto.open && texto('#auto-corpo').includes('a partir de 30/12/2026') && !$('#bt-auto-confirmou'), 'a prévia do Pix Automático'); });
@@ -1745,12 +1750,12 @@ definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true })
     exige(!$('#cancelar-cod-erro').hidden && document.activeElement === $('#cancelar-cod'), 'o erro e o foco no campo');
   });
   cen('conta', [1440], async () => {
-    exige(diferencaDoPlano(197, 397, 30, 31) === 193.55, 'a conta da diferença');
-    exige(diferencaDoPlano(397, 197, 30, 31) === 0, 'descer não cobra hoje');
+    exige(diferencaDoPlano(249, 449, 30, 31) === 193.55, 'a conta da diferença');
+    exige(diferencaDoPlano(449, 249, 30, 31) === 0, 'descer não cobra hoje');
     const d = datasDo(dt('21/10/2026'), { primeiro: dt('21/10/2026') });
     exige(dataTxt(d.para) === '31/10/2026' && dataTxt(d.suspende) === '20/11/2026' && dataTxt(d.apaga) === '20/12/2026' && dataTxt(d.desistirAte) === '28/10/2026' && dataTxt(d.emailPix) === '16/11/2026', 'as datas do atraso');
     await preparar('em-dia'); $('[data-acao="planos"]').click(); await esperar(350); $('input[name="plano-novo"][value="completo"]').click(); await esperar(150);
-    exige(texto('#planos-conta').includes(moeda(diferencaDoPlano(197, 397, 30, 31)).replace(/\s/g, ' ')), 'a tela e a conta não batem');
+    exige(texto('#planos-conta').includes(moeda(diferencaDoPlano(249, 449, 30, 31)).replace(/\s/g, ' ')), 'a tela e a conta não batem');
   });
   cen('fluxo-pagar', [1440], async () => {
     await preparar('atraso-10', 'pix'); $('[data-acao="pagar-pix"]').click(); await esperar(300); $('#bt-pix-simular').click(); await esperar(200); dlgPix.close('ok'); await esperar(300);
