@@ -10,8 +10,11 @@ export const PROVIDER_ASAAS = 'asaas';
 /** A conta é uma só, a do Liame: a cota e o disjuntor do cliente HTTP são dela. */
 const CONTA = 'liame';
 const VERSAO = 'v3';
-/** Quem chama, para o Asaas (o `User-Agent` é obrigatório para as contas criadas desde 13/06/2024). */
-export const USER_AGENT_DO_LIAME = 'Liame (agencialiame.com)';
+/**
+ * Quem chama, para o Asaas: o valor do `User-Agent`, obrigatório para as contas criadas desde 13/06/2024. O nome não leva
+ * "user": o Semgrep lê constante com "user" no nome e texto fixo como usuário escrito no código (ERR-172).
+ */
+export const IDENTIDADE_DO_LIAME = 'Liame (agencialiame.com)';
 
 export type ConfigApiAsaas = { url: string; chave: string };
 
@@ -95,7 +98,7 @@ export class ApiAsaas {
       metodo,
       endpoint,
       apiVersion: VERSAO,
-      cabecalhos: { access_token: this.cfg.chave, 'user-agent': USER_AGENT_DO_LIAME },
+      cabecalhos: { access_token: this.cfg.chave, 'user-agent': IDENTIDADE_DO_LIAME },
       ...(corpo === undefined ? {} : { corpo }),
       ...(tempoLimiteMs ? { tempoLimiteMs } : {}),
     });

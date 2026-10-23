@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -45,6 +46,12 @@ const erro = (status: number, code: string, description: string, cabecalhos?: Re
   ...(cabecalhos ? { cabecalhos } : {}),
 });
 
+/**
+ * Um id novo do Asaas (`cus_…`, `pay_…`), único entre as execuções, como os de verdade: o banco de teste não é zerado
+ * entre uma execução e outra, e um id em sequência repetiria o da anterior no índice único da cobrança (ERR-173).
+ */
+const novoId = (prefixo: 'cus' | 'pay'): string => `${prefixo}_${randomBytes(6).toString('hex')}`;
+
 /** O dia de hoje no Brasil (o Asaas é daqui). */
 const hojeNoBrasil = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
@@ -70,7 +77,6 @@ export class AsaasDeMentira {
   situacaoNova = 'PENDING';
   private servidor: Server | null = null;
   private readonly anterior: Record<string, string | undefined> = {};
-  private seq = 0;
 
   async subir(): Promise<void> {
     this.servidor = createServer((req, res) => {
@@ -140,7 +146,7 @@ export class AsaasDeMentira {
       if (!name) return erro(400, 'invalid_name', 'O nome do cliente é obrigatório');
       if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) return erro(400, 'invalid_cpfCnpj', 'O CPF/CNPJ informado é inválido');
       const cliente: ClienteNoAsaas = {
-        id: `cus_${String(++this.seq).padStart(6, '0')}`,
+        id: novoId('cus'),
         name,
         cpfCnpj,
         externalReference: typeof corpo?.externalReference === 'string' ? corpo.externalReference : null,
@@ -173,7 +179,7 @@ export class AsaasDeMentira {
       const dueDate = typeof corpo?.dueDate === 'string' ? corpo.dueDate : '';
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || dueDate < hojeNoBrasil()) return erro(400, 'invalid_dueDate', 'A data de vencimento não pode ser anterior à data atual');
       if (this.segurarCriacao) await this.segurarCriacao;
-      const id = `pay_${String(++this.seq).padStart(6, '0')}`;
+      const id = novoId('pay');
       const cobranca: CobrancaNoAsaas = {
         id,
         customer,
