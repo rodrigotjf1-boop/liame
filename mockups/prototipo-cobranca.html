@@ -1,0 +1,1787 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plano e cobrança · Liame</title>
+<!--
+@prototipo Liame · A7 · P26 · Plano e cobrança (AGUARDA O DONO)
+base: prototipo-contas-perfil.html (P17, parte B, aprovado em 14/10/2026): o shell (menu, barra do topo, gaveta do
+      celular, modos Lite e Pro, diálogos, avisos e tema) fica como está; a tela de Contas sai deste arquivo (ela está
+      no app e nos protótipos dela).
+pedido: plano-a7.md §5 (P26), para a W5 (as telas da cobrança) e o que a W1 a W4 mostram na tela: os planos para
+      escolher; assinar com PIX ou cartão; a assinatura em dia, em atraso (1º, 10º e 30º dia) e cancelada no fim do
+      período; trocar de plano; as faturas e as notas; a desistência em 7 dias; o aviso de atraso nas outras telas; quem
+      não pode ver a cobrança. Regras de onde vem: Termos 10 e 11; D-A7-2 a D-A7-6; a tabela aprovada dos níveis em
+      Pessoas e acessos (a cobrança do Administrador só "Se você liberar"; "só o dono transfere a propriedade, muda a
+      cobrança ou exclui a conta"); base-conhecimento.md §18 (o Pix Automático só a partir de 30/12/2026, quando o CNPJ
+      da empresa faz seis meses; o cartão digitado na página do meio de pagamento).
+mercado (páginas lidas em 22/10/2026; as três trilhas, com o tempo de mercado e o porte de cada referência):
+  tradicional: Microsoft 365 (desde 2011; mais de 450 milhões de assentos comerciais pagos): a tabela do que acontece em
+      cada fase e o cancelamento que só desliga a renovação; Bling (desde 2009; mais de 300 mil negócios): as datas reais
+      em cada degrau do atraso e "nenhum dado da sua conta será perdido"; Nuvemshop (desde 2011; mais de 180 mil marcas
+      ativas): o prazo de confirmação ao lado de cada forma de pagamento e a nota que ainda vai sair;
+  moderno: Stripe Customer Portal (desde 2010; mais de 5 milhões de empresas): a nossa tela é a principal, e cada botão
+      abre a página do meio de pagamento só para aquela ação; Notion (desde 2013; 100 milhões de usuários): subir de
+      plano vale na hora, descer vale no fim do período, e o reembolso é integral; Vercel (desde 2016): o que para e o
+      que continua durante o atraso, e o e-mail que recebe as faturas;
+  inovador: o Pix Automático no app do banco (Requisitos Mínimos de Experiência do Usuário do Pix, Banco Central, v7.3):
+      mostrar antes do QR Code o mesmo resumo que o banco vai mostrar; Shopify (desde 2004) e Chargebee (desde 2011):
+      pausar em vez de cancelar, que fica de fora (abaixo).
+  escolhido: o moderno, com as datas reais do Bling e as fases da Microsoft: a situação no alto, com UMA ação principal
+      que muda com o momento (pagar, confirmar, manter), e o plano, a forma, as faturas e as fases abaixo.
+o que tem: (1) "Plano e cobrança" em Agência, depois de Pessoas e acessos: a situação da assinatura, com a ação do
+           momento e as datas de cada degrau do atraso; o plano, com "Trocar de plano"; a forma de pagamento (PIX a cada
+           mês, Pix Automático ou cartão); as faturas e as notas; o que acontece em cada fase do atraso; e, só para o
+           Dono, cancelar e desistir; (2) os diálogos: pagar com PIX (o QR Code e o código para copiar), autorizar o Pix
+           Automático (o que o banco vai mostrar), ir à página segura do meio de pagamento para o cartão, assinar, trocar
+           de plano (com o valor de hoje), cancelar no fim do período e desistir em 7 dias (com o código do app); (3) o
+           aviso de atraso em outra tela (o Resumo), para quem paga e, a partir do 10º dia, para a equipe; (4) a tela de
+           quem não pode ver a cobrança e a da conta suspensa para quem não é o Dono.
+decisões propostas junto (esperam o dono):
+  D-A7-13 quem faz o quê: o Dono faz tudo; o Administrador com a cobrança liberada vê a tela, paga, troca a forma de
+          pagamento e baixa as faturas e as notas; trocar de plano, cancelar e desistir ficam com o Dono, como na tabela
+          aprovada de Pessoas e acessos; os outros níveis não veem o item no menu, e quem chega à tela por um link vê
+          quem cuida da cobrança;
+  D-A7-14 o código do app: trocar de plano, cancelar e desistir pedem o código do app autenticador, como aprovar; pagar
+          e trocar a forma de pagamento, não (o meio de pagamento confere o cartão e o PIX);
+  D-A7-15 o aviso de atraso: para quem paga (o Dono e o Administrador com a cobrança), uma faixa no alto de todas as
+          telas desde o 1º dia, com a data do próximo passo e o botão de pagar; para o resto da equipe, só a partir do
+          10º dia, quando as ações param, dizendo quem resolve; por e-mail, a quem paga, no 1º, no 7º, no 10º e no 30º
+          dia;
+  D-A7-16 trocar de plano: subir vale na hora, e hoje se paga só a diferença dos dias que faltam no período; descer
+          vale no período seguinte, e até lá o plano atual continua;
+  D-A7-17 o PIX até o Pix Automático: até 30/12/2026, quem escolhe PIX recebe a cobrança do mês por e-mail 5 dias antes
+          do vencimento, com o QR Code, e também paga pela tela; a partir dessa data, a tela oferece autorizar o Pix
+          Automático uma vez, no app do banco; quem paga no cartão continua no cartão;
+  D-A7-18 a nota de cada cobrança: a NFS-e sai depois do pagamento, em PDF e XML, na lista e no e-mail que o Dono
+          escolhe para as notas; enquanto não sai, a linha diz "em emissão";
+  D-A7-19 a desistência em 7 dias: pela própria tela, como foi a contratação; devolução de 100% (no cartão, o estorno;
+          no PIX, para a conta que pagou), com protocolo e e-mail na hora; a assinatura termina no pedido, e os dados
+          seguem os 30 dias da seção 11.2 dos Termos.
+fora deste desenho: pausar em vez de cancelar (precisa de decisão de produto e de texto nos Termos); o boleto (os Termos
+      dizem PIX ou cartão); a fatura do parceiro que paga pelas empresas dele (W10); mais de uma marca (cada marca tem a
+      sua assinatura, e a tela é a da marca em uso, como as outras); o texto dos e-mails da cobrança (vem com a W3, para
+      aprovar à parte); a página do meio de pagamento (é dele, e o meio sai da D-A7-2); o cadastro dos planos e dos
+      preços (é da distribuição); exportar os dados (a tela de exportação é outra).
+estados: os seletores "Situação", "Forma de pagamento" e "Quem está vendo" na faixa do topo; o Resumo, no menu, mostra o
+         aviso de atraso como ele aparece no alto das outras telas.
+regras: valores de exemplo (o preço e o que entra em cada plano são do dono, D-A7-4); datas de exemplo, todas tiradas
+        do vencimento por uma conta só (hoje 22/10/2026, vencimento no dia 21; no Pix Automático, como fica em 2027);
+        a diferença da troca de plano sai de uma conta só (o cenário p26-conta confere); o meio de pagamento sem nome
+        (a escolha é da D-A7-2): "a página segura do meio de pagamento"; nenhum número de cartão na tela, só a bandeira
+        e o final; estado com palavra e com cor; dados fictícios (Mister Burgers, o Dono Rodrigo, a Administradora Ana
+        Lima, o Gestor Carlos Souza e o e-mail das notas em exemplo.com.br).
+conferência: os cenários `p26-*` em window.uiuxCenarios (1440, 1024, 768 e 375 px, claro e escuro).
+fontes: plano-a7.md (§3 W1 a W5, §4 D-A7-2 a D-A7-6, §5 P26), termos-de-uso.md (10 e 11), base-conhecimento.md §18,
+        prototipo-app.html (a tabela dos níveis em Pessoas e acessos).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== 1. TOKENS: marca Liame (manual v1.0) nos papéis semânticos, iguais aos protótipos aprovados ===== */
+:root {
+  color-scheme: light dark;
+
+  /* superfícies */
+  --bg: light-dark(#F4F2EC, #0B0D17);
+  --bg-subtle: light-dark(#ECE9E1, #10131F);
+  --surface: light-dark(#FFFFFF, #151A2E);
+  --surface-2: light-dark(#FAF8F3, #1A2038);
+  --surface-hover: light-dark(#F2EFE8, #1F2645);
+  --elevated: light-dark(#FFFFFF, #1B2140);
+  --overlay: light-dark(rgb(11 13 23 / .34), rgb(3 4 10 / .66));
+  --border: light-dark(#E5E1D7, #262C49);
+  --border-strong: light-dark(#D0CBBF, #3A4166);
+
+  /* texto */
+  --text: light-dark(#0B0D17, #F4F2EC);
+  --text-muted: light-dark(#4A5068, #9AA0B4);
+  --text-subtle: light-dark(#646A80, #878EAB);
+
+  /* ação = Ciano Link (botão ciano com tinta Noite nos dois temas) */
+  --primary: #2DD4DE;
+  --primary-hover: light-dark(#26C4CE, #62E1E8);
+  --primary-fg: #0B0D17;
+  --primary-soft: light-dark(#DCF6F8, #0E2B33);
+  --link: light-dark(#0A6C75, #2DD4DE);
+
+  /* foco e fio: o ciano some no fundo claro (1,6:1); no claro entra o petróleo escuro */
+  --foco: light-dark(#008796, #2DD4DE);
+  --fio: light-dark(#009AAA, #2DD4DE);
+
+  /* Violeta IA: aqui só no fundo das notas de diálogo, como no protótipo aprovado de Contas */
+  --ai: light-dark(#5A43D8, #A08FFF);
+  --ai-fill: #7B61FF;
+  --ai-soft: light-dark(#EEEAFF, #211C45);
+
+  /* status (nunca é cor de ação); texto sobre o fundo suave passa de 4,5:1 nos dois temas */
+  --success: light-dark(#0C6F5B, #46BC9F);
+  --success-soft: light-dark(#E2F3EE, #0F2C26);
+  --warning: light-dark(#8A5F00, #FFC24B);
+  --warning-soft: light-dark(#FFF1D1, #2E2610);
+  --danger: light-dark(#B42F2F, #FF6B6B);
+  --danger-soft: light-dark(#FFE3E3, #361A1F);
+
+  /* gráficos (paleta validada com a skill dataviz; ênfase = caixa, contexto = plataforma) */
+  --chart-foco: light-dark(#009AAA, #16A0AF);
+  --chart-contexto: light-dark(#7E8499, #7C83A3);
+  --chart-grade: light-dark(#ECE9E1, #252B48);
+
+  /* QR: módulo escuro sobre fundo claro nos dois temas (leitor de QR precisa disso) */
+  --qr-fundo: #FFFFFF;
+  --qr-tinta: #0B0D17;
+
+  /* marca (logo) */
+  --logo-ink: light-dark(#0B0D17, #F4F2EC);
+  --logo-pin: light-dark(#7B61FF, #FFFFFF);
+  --marca-violeta: #7B61FF;
+  --marca-ciano: #2DD4DE;
+  --marca-lavanda: #A08FFF;
+  --marca-lavanda-clara: #CFC6FF;
+  --marca-petroleo: #1BA8B8;
+  --marca-ambar: #FFC24B;
+  --marca-coral: #FF6B6B;
+
+  /* forma */
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px light-dark(rgb(11 13 23 / .06), rgb(0 0 0 / .35));
+  --shadow: 0 1px 2px light-dark(rgb(11 13 23 / .05), rgb(0 0 0 / .4)), 0 10px 28px -14px light-dark(rgb(11 13 23 / .2), rgb(0 0 0 / .7));
+  --shadow-lg: 0 28px 56px -20px light-dark(rgb(11 13 23 / .32), rgb(0 0 0 / .75)), 0 2px 8px light-dark(rgb(11 13 23 / .08), rgb(0 0 0 / .4));
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--foco);
+
+  /* tipografia (kit: Poppins 700/500/400; 600 só em título de cartão e número) */
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Code", Consolas, monospace;
+  --text-xs: .75rem;
+  --text-sm: .8125rem;
+  --text-base: .875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-hero: clamp(2.6rem, 4.2vw, 3.25rem);
+
+  /* espaço (base 4 px) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* layout */
+  --sidebar-w: 256px;
+  --rail-w: 76px;
+  --topbar-h: 60px;
+  --content-max: 1320px;
+
+  /* movimento */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: 140ms;
+  --dur: 220ms;
+  --dur-slow: 360ms;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ===== 2. BASE ===== */
+:root { --font-poppins: "Poppins"; --font-jetbrains: "JetBrains Mono"; }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+p, ul, ol, dl, dd, h1, h2, h3, figure, fieldset { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+html { height: 100%; -webkit-text-size-adjust: 100%; }
+body {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { line-height: 1.2; letter-spacing: -.015em; font-weight: 600; text-wrap: balance; }
+h1 { font-weight: 700; }
+a { color: var(--link); }
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, h3[tabindex="-1"]:focus { outline: none; }
+code { font-family: var(--font-mono); font-size: .92em; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.rotulo-marca { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text-subtle); }
+.spacer { flex: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip-link { position: absolute; left: var(--sp-3); top: -60px; z-index: 100; padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); background: var(--primary); color: var(--primary-fg); font-weight: 600; text-decoration: none; }
+.skip-link:focus { top: var(--sp-3); }
+
+/* ===== Movimento ===== */
+@keyframes surgir { from { opacity: 0; transform: translateY(10px); } }
+@keyframes surgir-fundo { from { opacity: 0; } }
+@keyframes entrar { from { opacity: 0; transform: translateY(8px); } }
+@keyframes pisca { 50% { opacity: .35; } }
+@keyframes varre { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes gira { to { transform: rotate(360deg); } }
+.anima { animation: surgir .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== 3. FAIXA DO PROTÓTIPO (só do protótipo; não vai para o app) ===== */
+.revisao { position: relative; z-index: 50; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 16px; border-bottom: 1px dashed var(--border-strong); background: var(--bg-subtle); font-size: var(--text-xs); }
+.revisao-marca { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.revisao-marca b { font-family: var(--font-mono); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.revisao-marca span { color: var(--text-muted); }
+.revisao label { flex: 1 1 280px; display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 520px; }
+.revisao select { flex: 1; min-width: 0; min-height: 30px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 0 8px; }
+.revisao .btn { min-height: 30px; }
+
+/* ===== 4. SHELL: menu lateral, trilho no tablet, gaveta no celular (igual ao aprovado) ===== */
+.app { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); overflow: hidden; background: var(--bg); }
+
+.sidebar { position: relative; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-5) var(--sp-3) var(--sp-3); border-right: 1px solid var(--border); background: var(--bg); scrollbar-width: thin; }
+.sidebar > * { flex-shrink: 0; }
+.sidebar > nav { width: 100%; }
+.sb-logo { display: flex; align-items: center; gap: var(--sp-2); height: 44px; padding: 0 var(--sp-2); margin-bottom: var(--sp-4); }
+.logo-completo { display: block; width: 116px; height: auto; }
+.logo-simbolo { display: none; width: 40px; height: 40px; }
+.sidebar .sb-fechar { display: none; margin-left: auto; }
+
+.ctx { width: 100%; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); text-align: left; cursor: default; }
+.ctx-av { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--bg-subtle); font-weight: 600; font-size: var(--text-xs); }
+.ctx-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; }
+.ctx-txt b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-txt span { font-size: var(--text-xs); color: var(--text-muted); }
+
+.nav-grupo { margin-top: var(--sp-5); }
+.nav-grupo-rot { padding: 0 var(--sp-3); margin-bottom: var(--sp-2); }
+.nav-lista { display: grid; gap: 2px; }
+.nav-item { position: relative; width: 100%; display: flex; align-items: center; gap: var(--sp-3); height: 40px; padding: 0 var(--sp-3); border: 0; border-radius: var(--radius); background: transparent; color: var(--text-muted); font-weight: 500; text-align: left; text-decoration: none; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.nav-item:hover { background: var(--surface-hover); color: var(--text); }
+.nav-item[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.nav-item .ic { width: 18px; height: 18px; }
+.nav-item .rot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-no { position: absolute; left: 4px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--fio); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fio) 22%, transparent); }
+.nav-cont { min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: var(--radius-full); background: var(--danger-soft); color: var(--danger); font-size: 11px; font-weight: 600; }
+.nav-mais { margin-top: var(--sp-4); }
+.nav-mais .ic { transition: transform var(--dur) var(--ease); }
+.nav-mais[aria-expanded="true"] .ic { transform: rotate(180deg); }
+.nav-mais-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-full); display: inline-grid; place-items: center; background: var(--bg-subtle); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+
+.sb-rodape { margin-top: auto; padding-top: var(--sp-5); display: grid; gap: var(--sp-3); }
+.usuario { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-1) 0 var(--sp-2); }
+.av-user { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); font-size: var(--text-xs); font-weight: 600; }
+.usuario-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; margin-right: var(--sp-1); }
+.usuario-txt b { font-weight: 600; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usuario-txt span { font-size: var(--text-xs); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* seletor Lite/Pro (protótipo geral aprovado): no topo; na gaveta do celular, no rodapé do menu */
+.modo { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); }
+.modo button { height: 30px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.modo button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.modo button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.modo-top { display: inline-grid; grid-template-columns: auto auto; }
+.modo-top button { min-width: 48px; padding: 0 12px; }
+.sb-rodape .modo { display: none; }
+
+.principal { container: principal / inline-size; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { flex: none; position: relative; z-index: 5; display: flex; align-items: center; gap: var(--sp-2); height: var(--topbar-h); padding: 0 var(--sp-6); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); }
+.topbar .tb-menu { display: none; }
+.trilha { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.trilha-pai { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trilha-sep { color: var(--text-subtle); }
+.trilha strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conteudo { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.pagina { container: pagina / inline-size; max-width: var(--content-max); margin: 0 auto; padding: var(--sp-6) var(--sp-8) var(--sp-16); }
+
+.veu { position: fixed; inset: 0; z-index: 55; background: var(--overlay); animation: surgir-fundo var(--dur) var(--ease); }
+.toast-region { position: fixed; right: var(--sp-4); bottom: var(--sp-4); z-index: 90; display: grid; gap: var(--sp-2); width: min(380px, calc(100vw - 2 * var(--sp-4))); }
+
+@container principal (max-width: 820px) {
+  .trilha-pai, .trilha-sep { display: none; }
+  .topbar { padding: 0 var(--sp-4); }
+}
+
+/* tablet: trilho só com ícones */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .app { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+  .sidebar { align-items: center; padding: var(--sp-4) var(--sp-2) var(--sp-3); }
+  .sb-logo { padding: 0; justify-content: center; }
+  .sidebar .logo-completo { display: none; }
+  .sidebar .logo-simbolo { display: block; }
+  .ctx { width: 44px; padding: 5px; justify-content: center; }
+  .ctx-txt { display: none; }
+  .nav-grupo { width: 100%; margin-top: var(--sp-3); }
+  .nav-grupo-rot { height: 1px; margin: 0 var(--sp-3) var(--sp-3); padding: 0; overflow: hidden; color: transparent; background: var(--border); }
+  .nav-item { justify-content: center; padding: 0; height: 44px; }
+  .nav-item .rot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav-item .nav-cont, .nav-item .nav-mais-n { position: absolute; top: 4px; right: 8px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
+  .usuario { flex-direction: column; padding: 0; }
+  .usuario-txt { display: none; }
+}
+
+/* celular: o menu vira gaveta */
+@media (max-width: 768px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 70; width: min(300px, 86vw); padding-top: calc(var(--sp-5) + env(safe-area-inset-top, 0px)); padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: var(--shadow-lg); transform: translateX(-102%); visibility: hidden; transition: transform var(--dur-slow) var(--ease), visibility 0s linear var(--dur-slow); }
+  /* Ao abrir, a visibilidade muda na hora (sem o atraso de quem fecha): o foco já pode entrar no menu. */
+  .app.gaveta .sidebar { transform: none; visibility: visible; transition: transform var(--dur-slow) var(--ease), visibility 0s linear 0s; }
+  .sidebar .sb-fechar { display: inline-flex; }
+  .sb-rodape .modo { display: grid; }
+  .topbar .modo-top { display: none; }
+  .topbar { padding: 0 var(--sp-3); }
+  .topbar .tb-menu { display: inline-flex; }
+  .trilha-pai, .trilha-sep { display: none; }
+  .pagina { padding: var(--sp-5) var(--sp-4) calc(var(--sp-12) + env(safe-area-inset-bottom)); }
+}
+
+/* Com movimento reduzido, a regra global troca 0s por 0.01ms e criaria uma transição de visibilidade:
+   até o próximo quadro o menu contaria como oculto e o foco não entraria nele. Abre sem transição (V27). */
+@media (prefers-reduced-motion: reduce) {
+  .app.gaveta .sidebar { transition: none !important; }
+}
+
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  .topbar { backdrop-filter: none; background: var(--elevated); }
+}
+
+/* ===== 5. MODOS DE EXIBIÇÃO (protótipo geral aprovado): Lite e Pro ===== */
+.modo-lite .so-pro:not(.aberto .so-pro) { display: none; }
+.modo-pro .so-lite { display: none; }
+
+/* ===== 6. COMPONENTES ===== */
+.ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.ic-sm { width: 15px; height: 15px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 38px; padding: 0 var(--sp-4); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.btn:hover { background: var(--surface-hover); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+.btn--primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); font-weight: 600; }
+.btn--primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn--ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn--ghost:hover { background: var(--surface-hover); color: var(--text); }
+.btn--perigo { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.btn--perigo:hover { background: var(--danger-soft); }
+.btn--perigo-cheio, .btn--perigo-cheio:hover { background: var(--danger); border-color: var(--danger); color: var(--surface); font-weight: 600; }
+.btn--icon { width: 38px; padding: 0; }
+.btn--sm { min-height: 32px; padding: 0 var(--sp-3); font-size: var(--text-sm); }
+.btn--sm.btn--icon { width: 32px; }
+.link-bt { padding: 0; border: 0; background: none; color: var(--link); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-bt:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; border-radius: 2px; }
+
+.input { min-height: 40px; width: 100%; padding: 0 var(--sp-3); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); outline: none; }
+.input::placeholder { color: var(--text-subtle); }
+.input:focus-visible { border-color: var(--foco); box-shadow: var(--focus-ring); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.input[readonly] { color: var(--text-muted); }
+select.input { padding-right: var(--sp-2); }
+
+.card { position: relative; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-5); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.card-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.card-cab h2 { font-size: var(--text-md); }
+.card-sub { margin-top: 2px; font-size: var(--text-sm); color: var(--text-muted); }
+.card-titulo { font-size: var(--text-md); }
+
+.view-cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-6); }
+.view-cab h1 { font-size: var(--text-2xl); }
+.view-cab p { margin-top: var(--sp-1); max-width: 64ch; color: var(--text-muted); }
+
+.st { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.st .dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+.st--aguardando { background: var(--warning-soft); color: var(--warning); }
+.st--concluido { background: var(--success-soft); color: var(--success); }
+.st--espera { background: var(--bg-subtle); color: var(--text-muted); }
+.st--perigo { background: var(--danger-soft); color: var(--danger); }
+.st--info { background: var(--primary-soft); color: var(--link); }
+.lite-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
+.lite-frase { max-width: 70ch; font-size: var(--text-sm); line-height: 1.55; color: var(--text-muted); }
+.lite-frase b { color: var(--text); font-weight: 600; }
+.lite-frase--grande { font-size: var(--text-md); color: var(--text); }
+.eixo-nota { font-size: var(--text-xs); color: var(--text-subtle); }
+
+/* "Ver detalhes" do Lite: abre o Pro ali mesmo (nada some no Lite) */
+.detalhes-bt { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-2); margin-left: calc(-1 * var(--sp-2)); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--link); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.detalhes-bt:hover { background: var(--surface-hover); }
+.detalhes-bt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.detalhes-bt .ic { width: 15px; height: 15px; transition: transform var(--dur) var(--ease); }
+.detalhes-bt[aria-expanded="true"] .ic { transform: rotate(180deg); }
+
+/* tabela */
+.table-wrap { position: relative; width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.tabela { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.tabela th { padding: 10px var(--sp-4); border-bottom: 1px solid var(--border); background: var(--surface-2); text-align: left; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.tabela td, .tabela tbody th, .tabela tfoot th { padding: 12px var(--sp-4); border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+.tabela tbody th, .tabela tfoot th { font-family: var(--font-sans); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; color: var(--text); background: transparent; font-weight: 600; }
+.tabela tbody tr:last-child td, .tabela tbody tr:last-child th { border-bottom: 0; }
+.tabela tfoot td, .tabela tfoot th { border-top: 1px solid var(--border-strong); border-bottom: 0; background: var(--surface-2); font-weight: 600; }
+.tabela .n { text-align: right; }
+.tabela td.acoes { text-align: right; }
+.tabela .sub { display: block; margin-top: 2px; font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--text-subtle); white-space: nowrap; }
+.tabela .forte { font-weight: 600; }
+
+/* campos */
+.campo { display: grid; gap: var(--sp-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.campo > label, .campo > legend { padding: 0; font-size: var(--text-sm); font-weight: 600; }
+.campo-dica { font-size: var(--text-xs); font-weight: 400; color: var(--text-muted); }
+.campo-erro { font-size: var(--text-sm); font-weight: 500; color: var(--danger); }
+.campo-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); font-size: var(--text-sm); }
+.check { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--text-sm); cursor: pointer; }
+.check input { width: 16px; height: 16px; margin: 3px 0 0; flex: none; accent-color: var(--link); }
+.opcoes { display: grid; gap: var(--sp-2); }
+.opcao { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.opcao:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.opcao input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--link); }
+.opcao-txt { display: grid; gap: 2px; font-size: var(--text-sm); }
+.opcao-txt b { font-weight: 600; }
+.opcao-txt span { color: var(--text-muted); }
+.datas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.datas label { display: grid; gap: 4px; font-size: var(--text-sm); font-weight: 500; }
+@media (max-width: 420px) { .datas { grid-template-columns: minmax(0, 1fr); } }
+
+/* diálogo (nativo, com @starting-style) */
+.dialogo { width: min(560px, calc(100vw - 32px)); max-height: min(760px, 92vh); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--elevated); color: var(--text); box-shadow: var(--shadow-lg);
+  opacity: 1; transform: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), overlay var(--dur) allow-discrete, display var(--dur) allow-discrete; }
+.dialogo:not([open]) { opacity: 0; transform: translateY(8px) scale(.98); }
+@starting-style { .dialogo[open] { opacity: 0; transform: translateY(8px) scale(.98); } }
+.dialogo::backdrop { background: var(--overlay); backdrop-filter: blur(3px); }
+.dialogo[open] { display: flex; }
+.dialogo--largo { width: min(720px, calc(100vw - 32px)); }
+.dialogo-form { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.dialogo-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5); border-bottom: 1px solid var(--border); flex: none; }
+.dialogo-cab h2 { font-size: var(--text-lg); min-width: 0; overflow-wrap: anywhere; }
+.dialogo-corpo { position: relative; flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--sp-5); padding: var(--sp-5); }
+.dialogo-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5); border-top: 1px solid var(--border); background: var(--surface-2); flex: none; }
+.dialogo-nota { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--ai-soft); font-size: var(--text-sm); }
+.dialogo-nota .ic { flex: none; margin-top: 2px; color: var(--ai); }
+.dialogo-erro { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--danger-soft); color: var(--danger); font-size: var(--text-sm); font-weight: 500; }
+
+/* gaveta à direita (detalhe), também um <dialog> nativo: foco preso, Esc fecha */
+.dialogo--lado { width: min(520px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0 0 0 auto; border-width: 0 0 0 1px; border-radius: var(--radius-xl) 0 0 var(--radius-xl); }
+.dialogo--lado:not([open]) { opacity: 0; transform: translateX(28px); }
+@starting-style { .dialogo--lado[open] { opacity: 0; transform: translateX(28px); } }
+
+/* toast */
+.toast { display: flex; align-items: center; gap: var(--sp-3); padding: 11px var(--sp-3) 11px var(--sp-4); border-radius: var(--radius-lg); background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); font-size: var(--text-sm); animation: entrar var(--dur) var(--ease); }
+.toast span { flex: 1; }
+.toast--perigo { background: var(--danger); color: var(--surface); }
+.toast.saindo { opacity: 0; transform: translateY(6px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+
+/* estados: vazio, erro e carregando */
+.vazio { display: grid; justify-items: center; gap: var(--sp-3); padding: var(--sp-12) var(--sp-6); text-align: center; }
+.vazio h2, .vazio h3 { font-size: var(--text-lg); outline: none; }
+.vazio p { max-width: 48ch; color: var(--text-muted); }
+.vazio-ic { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--bg-subtle); color: var(--text-muted); }
+.vazio-ic--perigo { background: var(--danger-soft); color: var(--danger); }
+.vazio-ic--ok { background: var(--success-soft); color: var(--success); }
+.vazio-acoes { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.vazio--compacto { padding: var(--sp-8) var(--sp-4); }
+.esqueleto { display: block; height: 14px; border-radius: var(--radius-sm); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface-hover) 80%, transparent), transparent) var(--bg-subtle); background-size: 200% 100%; animation: varre 1.4s linear infinite; }
+.esqueleto--curto { width: 38%; }
+.esqueleto--medio { width: 62%; }
+.esqueleto--alto { height: 44px; width: 30%; }
+.esqueleto--bloco { height: 120px; }
+.girando { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--fio); animation: gira .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .girando { animation: none; border-top-color: var(--border-strong); } }
+
+/* faixa de aviso (Contas aprovada) + variações de atenção e informação */
+.faixa { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-5); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.faixa--acao { border-color: color-mix(in srgb, var(--fio) 45%, var(--border)); background: var(--primary-soft); }
+.faixa--perigo { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: var(--danger-soft); }
+.faixa--atencao { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); background: var(--warning-soft); }
+.faixa-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--surface); }
+.faixa--perigo .faixa-ic { color: var(--danger); }
+.faixa--atencao .faixa-ic { color: var(--warning); }
+.faixa--acao .faixa-ic { color: var(--link); }
+.faixa-txt { flex: 1; min-width: min(100%, 260px); display: grid; gap: 2px; }
+.faixa-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+.faixa--atencao .faixa-txt span, .faixa--perigo .faixa-txt span { color: var(--text); }
+.faixa .btn { flex: none; }
+
+/* filtros e chips (Contas aprovada) */
+.filtros { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface); color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--text); background: var(--text); color: var(--bg); }
+.chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.chip .num { font-size: 11px; opacity: .8; }
+
+/* plataforma (ponto de cor + nome) */
+.plat { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; background: var(--bg-subtle); color: var(--text); }
+.plat::before { content: ""; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--plat-cor, var(--text-subtle)); }
+.plat--meta { --plat-cor: var(--marca-violeta); }
+.plat--google { --plat-cor: var(--marca-petroleo); }
+.plat--ga4 { --plat-cor: var(--marca-ambar); }
+.plat--regem { --plat-cor: var(--marca-coral); }
+.plat--regemcast { --plat-cor: var(--marca-lavanda); }
+
+/* segmentado (período) */
+.seg { display: inline-flex; flex-wrap: wrap; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.seg button { min-height: 32px; padding: 0 12px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.seg button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* frescor */
+.ponto { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--success); }
+.ponto--atraso { background: var(--warning); }
+.ponto--off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-subtle); }
+
+/* confirmação na própria linha (Contas aprovada) */
+.seg-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.confirma-linha { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2); }
+.confirma-txt { flex-basis: 100%; font-size: var(--text-xs); font-weight: 500; color: var(--danger); text-align: right; white-space: normal; }
+
+@media (max-width: 768px) {
+  .toast-region { bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 480px) {
+  .dialogo, .dialogo--largo { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+  .dialogo--lado { border-radius: 0; }
+}
+
+/* ===== A7 · P26 · Plano e cobrança ===== */
+/* Uma coluna no estreito; duas a partir de 980 px de conteúdo: a situação, o plano e a forma à esquerda; as faturas e
+   as fases à direita. Tudo pelos tokens da base. */
+.cob-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+@container pagina (min-width: 980px) { .cob-grade { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+.cob-col { display: grid; gap: var(--sp-5); min-width: 0; }
+/* sem assinatura: a situação, com os planos lado a lado, ocupa a largura toda */
+.cob-col--toda { grid-column: 1 / -1; }
+/* o cartão é uma coluna flex: o botão solto nele fica do tamanho do texto */
+.cob-grade .card > .btn { align-self: flex-start; }
+
+/* a situação: o que está acontecendo e a ação do momento */
+.sit { gap: var(--sp-4); }
+.sit--atencao { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.sit--perigo { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.sit-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.sit-titulo { font-size: var(--text-lg); outline: none; }
+.sit-frase { max-width: 62ch; font-size: var(--text-md); line-height: 1.5; }
+.sit-frase b { font-weight: 600; }
+.sit-nota { max-width: 64ch; font-size: var(--text-sm); color: var(--text-muted); }
+.sit-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.sit-continua { display: grid; gap: 6px; font-size: var(--text-sm); }
+.sit-continua li { display: flex; gap: var(--sp-2); }
+.sit-continua .ic { margin-top: 2px; }
+.sit-continua .sim { color: var(--success); }
+.sit-continua .nao { color: var(--danger); }
+
+/* os degraus do atraso, com as datas reais */
+.degraus { display: grid; gap: var(--sp-2); }
+.degrau { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: var(--sp-3); align-items: baseline; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.degrau dt { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.degrau dd { margin: 0; min-width: 0; color: var(--text-muted); }
+.degrau--agora { background: var(--warning-soft); }
+.degrau--agora dd { color: var(--text); }
+.degrau--perigo { background: var(--danger-soft); }
+.degrau--perigo dd { color: var(--text); }
+
+/* o plano */
+.plano-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.plano-nome { font-size: var(--text-lg); }
+.plano-preco { font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plano-preco small { font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 400; color: var(--text-muted); }
+.funcs { display: flex; flex-wrap: wrap; gap: 6px; }
+.func { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: var(--radius-full); background: var(--bg-subtle); font-size: var(--text-xs); font-weight: 500; }
+.func--mais { background: var(--primary-soft); color: var(--link); }
+.exemplo { font-size: var(--text-xs); color: var(--text-subtle); }
+
+/* a forma de pagamento */
+.forma { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
+.forma-ic { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--primary-soft); color: var(--link); }
+.forma-txt { display: grid; gap: 4px; min-width: 0; }
+.forma-txt b { font-weight: 600; }
+.forma-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+.oferta { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-sm); }
+.oferta b { font-weight: 600; }
+.oferta span { color: var(--text-muted); }
+
+/* as faturas e as notas */
+.faturas { display: grid; }
+.fatura { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.fatura:first-child { padding-top: 0; }
+.fatura:last-child { border-bottom: 0; padding-bottom: 0; }
+.fat-mes { font-weight: 600; }
+.fat-det { font-size: var(--text-sm); color: var(--text-muted); }
+.fat-lado { display: grid; justify-items: end; align-content: start; gap: 4px; }
+.fat-valor { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fat-docs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: 4px; }
+.fat-emissao { font-size: var(--text-xs); color: var(--text-muted); }
+.email-notas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-muted); }
+.email-notas b { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+
+/* o que acontece em cada fase do atraso */
+.fases { display: grid; }
+.fase { display: grid; grid-template-columns: 8em minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.fase:first-child { padding-top: 0; }
+.fase:last-child { border-bottom: 0; padding-bottom: 0; }
+.fase-quando { font-weight: 600; }
+.fase-quando .num { display: block; font-size: var(--text-xs); font-weight: 500; color: var(--text-muted); }
+.fase-oque { min-width: 0; color: var(--text-muted); }
+.fase--agora .fase-quando { color: var(--warning); }
+.fase--agora .fase-oque { color: var(--text); }
+.fase-volta { font-size: var(--text-sm); font-weight: 600; }
+
+/* cancelar e desistir: no fim da tela, só para o Dono */
+.cob-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-6); padding-top: var(--sp-5); border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-muted); }
+.cob-rodape p { flex: 1 1 260px; max-width: 64ch; }
+
+/* os planos: na tela (assinar) e na gaveta (trocar) */
+.planos { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+@container pagina (min-width: 720px) { .planos--tela { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plano-op { display: grid; gap: var(--sp-3); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+label.plano-op { cursor: pointer; }
+label.plano-op:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.plano-op-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.plano-op-cab input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--link); }
+/* o nome não encolhe abaixo de 8em: sem espaço, o preço desce para a linha de baixo */
+.plano-op-cab b { flex: 1 1 8em; min-width: 0; font-size: var(--text-md); font-weight: 600; overflow-wrap: anywhere; }
+.plano-op-cab .plano-preco { flex: none; }
+.plano-op .plano-preco { font-size: var(--text-lg); }
+.plano-op .btn { justify-self: start; }
+/* bloco comum (não grade): o texto e o negrito correm na mesma linha */
+.conta-hoje { display: block; padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); line-height: 1.6; }
+.conta-hoje b { font-weight: 600; }
+
+/* PIX e Pix Automático */
+.qr-caixa { display: grid; justify-items: center; gap: var(--sp-3); }
+.qr { width: 188px; height: 188px; padding: 12px; border-radius: var(--radius); background: var(--qr-fundo); box-shadow: inset 0 0 0 1px var(--border); }
+.qr svg { display: block; width: 100%; height: 100%; }
+.qr rect { fill: var(--qr-tinta); }
+.pix-codigo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); width: 100%; }
+.pix-codigo code { flex: 1 1 220px; min-width: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--surface-2); font-size: 11px; overflow-wrap: anywhere; word-break: break-all; }
+.pix-espera { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.pix-pago { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--success-soft); font-size: var(--text-sm); font-weight: 500; }
+.pix-pago .ic { flex: none; margin-top: 2px; color: var(--success); }
+.pix-pendente { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--warning-soft); font-size: var(--text-sm); }
+.pix-pendente .ic { flex: none; margin-top: 2px; color: var(--warning); }
+.resumo-banco { display: grid; gap: 6px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); font-size: var(--text-sm); }
+.resumo-banco > b { font-weight: 600; }
+.resumo-banco div { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: var(--sp-2); }
+.resumo-banco dt { color: var(--text-muted); }
+.resumo-banco dd { margin: 0; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.so-prototipo { justify-self: start; }
+
+.dlg-lead { font-size: var(--text-md); font-weight: 600; }
+
+/* o código do app nas ações que mudam o contrato (D-A7-14) */
+.codigo-app .input { max-width: 11em; font-family: var(--font-mono); letter-spacing: .18em; }
+.lista-dlg { display: grid; gap: 6px; font-size: var(--text-sm); color: var(--text-muted); }
+.lista-dlg li { display: flex; gap: var(--sp-2); }
+.lista-dlg .ic { flex: none; margin-top: 3px; color: var(--text-subtle); }
+.lista-dlg b { color: var(--text); font-weight: 600; }
+.protocolo { display: grid; gap: var(--sp-2); padding: var(--sp-4); border-radius: var(--radius-lg); background: var(--success-soft); font-size: var(--text-sm); }
+.protocolo b { font-weight: 600; }
+
+/* quem não vê a cobrança e a conta suspensa */
+.quem-cuida { display: grid; gap: var(--sp-2); justify-items: center; font-size: var(--text-sm); }
+.quem-cuida li { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.quem-cuida .av-user { width: 28px; height: 28px; }
+
+/* o Resumo (outra tela), só para o aviso */
+.resumo-stub { color: var(--text-muted); }
+
+@media (max-width: 480px) {
+  .resumo-banco div, .degrau, .fase { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
+</style>
+</head>
+<body data-pagina="cobranca">
+<script>document.documentElement.classList.add('modo-lite');</script>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-atencao" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 17v2M13 11v2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-alert-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3M21 21v.01M12 7v3a2 2 0 0 1-2 2H7M3 12h.01M12 3h.01M12 16v.01M16 12h1M21 12v.01M12 21v-1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2V2l-3 2-3-2-3 2-3-2-3 2Z"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20M6 15h4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect width="4" height="16" x="6" y="4" rx="1"/><rect width="4" height="16" x="14" y="4" rx="1"/></symbol>
+  <symbol id="liame-simbolo" viewBox="0 0 512 512">
+    <g transform="translate(122.16 61.31)">
+      <path d="M31.1 0V293.76H184.32" fill="none" stroke-width="62.2" style="stroke:var(--logo-ink)"/>
+      <circle cx="235.33" cy="293.76" r="32.35" style="fill:var(--marca-ciano)"/>
+      <rect x="0" y="366.34" width="267.68" height="20.74" rx="10.37" style="fill:var(--marca-ciano)"/>
+    </g>
+  </symbol>
+</svg>
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+<p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
+
+<div class="revisao" role="region" aria-label="Controles do protótipo">
+  <p class="revisao-marca"><b>Protótipo · A7 · P26 · aguarda o dono</b><span>Plano e cobrança · dados, datas e valores de exemplo</span></p>
+  <label>Situação <select id="rev-situacao"></select></label>
+  <label>Forma de pagamento <select id="rev-forma"></select></label>
+  <label>Quem está vendo <select id="rev-quem"></select></label>
+  <button class="btn btn--sm btn--ghost" type="button" id="rev-tema" aria-pressed="false">Tema escuro</button>
+</div>
+
+<div class="app">
+  <aside class="sidebar" id="menu-lateral" aria-label="Menu">
+    <div class="sb-logo"><svg class="logo-completo" viewBox="0 0 758.18 309" role="img" aria-label="Liame">
+        <g transform="translate(24 24)">
+          <path d="M17.5 84V211.5H84" fill="none" stroke-width="27" style="stroke:var(--logo-ink)"/>
+          <circle cx="106.14" cy="211.5" r="14.04" style="fill:var(--marca-ciano)"/>
+          <path d="M233 702V0H62V702Z" transform="translate(140.88 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <path d="M163.18 12H201.58Q212.38 12 212.38 22.8V49.2Q212.38 60 201.58 60H177.58L164.38 76.8V60H163.18Q152.38 60 152.38 49.2V22.8Q152.38 12 163.18 12Z" style="fill:var(--marca-ciano)"/>
+          <path d="M499 124H237L195 0H16L270 702H468L722 0H541ZM455 256 368 513 282 256Z" transform="translate(203.48 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <clipPath id="liame-mc"><rect x="207.98" y="-57" width="480" height="282"/></clipPath>
+          <g clip-path="url(#liame-mc)" fill="none" stroke-width="31.86" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M512.05 99.93V256.86" style="stroke:var(--marca-petroleo)"/>
+            <path d="M447.98 182.7L512.05 99.93" style="stroke:var(--marca-ciano)"/>
+            <path d="M383.91 99.93L447.98 182.7" style="stroke:var(--marca-lavanda-clara)"/>
+            <path d="M383.91 256.86V99.93" style="stroke:var(--marca-lavanda)"/>
+          </g>
+          <polygon points="531.8,46.4 536.3,57.1 547.9,58 539,65.6 541.7,77 531.8,70.9 521.8,77 524.5,65.6 515.7,58 527.3,57.1" stroke-width="3.05" stroke-linejoin="round" style="fill:var(--marca-ambar);stroke:var(--marca-ambar)"/>
+          <g transform="translate(447.98 202.44) scale(1.128)"><path d="M0 15C-20 2-20-13-9-13C-4-13-1-9 0-7C1-9 4-13 9-13C20-13 20 2 0 15Z" style="fill:var(--marca-coral)"/></g>
+          <g transform="translate(386.73 80.19) scale(1.128)"><path fill-rule="evenodd" d="M0 24C-12 10-17 2-17-7A17 17 0 1 1 17-7C17 2 12 10 0 24ZM0-13.5A6.5 6.5 0 1 0 0-.5A6.5 6.5 0 1 0 0-13.5Z" style="fill:var(--logo-pin)"/></g>
+          <path d="M233 565V423H462V291H233V137H492V0H62V702H492V565Z" transform="translate(539.68 225) scale(0.2 -0.2)" style="fill:var(--logo-ink)"/>
+          <rect x="654.18" y="143.5" width="52" height="22" style="fill:var(--marca-ciano)"/>
+          <rect x="4" y="245" width="702.18" height="8" rx="4" style="fill:var(--marca-ciano)"/>
+        </g>
+      </svg><svg class="logo-simbolo" role="img" aria-label="Liame"><use href="#liame-simbolo"/></svg><button class="btn btn--icon btn--ghost sb-fechar" type="button" id="bt-fechar-menu" aria-label="Fechar menu"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <button class="ctx" type="button" disabled><span class="ctx-av" aria-hidden="true">MB</span><span class="ctx-txt"><b>Mister Burgers</b><span>Dono</span></span></button>
+    <nav aria-label="Principal">
+      <div class="nav-grupo">
+        <p class="nav-grupo-rot rotulo-marca" id="g-ag">Agência</p>
+        <ul class="nav-lista" aria-labelledby="g-ag">
+          <li><a class="nav-item" href="#resumo" data-ir="resumo" title="Resumo"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg><span class="rot">Resumo</span></a></li>
+          <li><a class="nav-item" href="#" title="Contas conectadas" data-fora="Fora deste protótipo: Contas conectadas já está no app."><svg class="ic" aria-hidden="true"><use href="#i-plug"/></svg><span class="rot">Contas conectadas</span></a></li>
+          <li><a class="nav-item" href="#" title="Pessoas e acessos" data-fora="Fora deste protótipo: Pessoas e acessos já está no app."><svg class="ic" aria-hidden="true"><use href="#i-user-plus"/></svg><span class="rot">Pessoas e acessos</span></a></li>
+          <li id="nav-cobranca"><a class="nav-item" href="#cobranca" data-ir="cobranca" title="Plano e cobrança" aria-current="page"><span class="nav-no" aria-hidden="true"></span><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg><span class="rot">Plano e cobrança</span></a></li>
+        </ul>
+      </div>
+      <button class="nav-item nav-mais so-lite" type="button" id="bt-ferramentas" aria-expanded="false" aria-controls="g-ferramentas" title="Mais ferramentas"><svg class="ic" aria-hidden="true"><use href="#i-chevron-down"/></svg><span class="rot">Mais ferramentas</span><span class="nav-mais-n" aria-hidden="true">1</span><span class="sr-only">, 1 ferramenta</span></button>
+      <div id="g-ferramentas" hidden>
+        <div class="nav-grupo">
+          <p class="nav-grupo-rot rotulo-marca" id="g-oper">Operação</p>
+          <ul class="nav-lista" aria-labelledby="g-oper">
+            <li><a class="nav-item" href="#" title="Links e cupons" data-fora="Fora deste protótipo: Links e cupons já está no app."><svg class="ic" aria-hidden="true"><use href="#i-link"/></svg><span class="rot">Links e cupons</span></a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="nav-grupo">
+        <p class="nav-grupo-rot rotulo-marca" id="g-conta">Sua conta</p>
+        <ul class="nav-lista" aria-labelledby="g-conta">
+          <li><a class="nav-item" href="#" title="Segurança da conta" data-fora="Fora deste protótipo: Segurança da conta já está no app."><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span class="rot">Segurança da conta</span></a></li>
+        </ul>
+      </div>
+    </nav>
+    <div class="sb-rodape">
+      <div class="modo" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false">Pro</button></div>
+      <div class="usuario"><span class="av-user" aria-hidden="true">R</span><span class="usuario-txt"><b>Rodrigo</b><span>Dono · Mister Burgers</span></span></div>
+    </div>
+  </aside>
+
+  <div class="principal">
+    <header class="topbar"><button class="btn btn--icon btn--ghost tb-menu" type="button" id="bt-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu-lateral"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button><div class="trilha"><span class="trilha-pai">Mister Burgers</span><span class="trilha-sep" aria-hidden="true">/</span><strong id="trilha-tela">Plano e cobrança</strong></div><span class="spacer"></span><div class="modo modo-top" id="modo-top" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true" title="Lite: o essencial; o resto em Ver detalhes">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false" title="Pro: todos os números e tabelas">Pro</button></div></header>
+    <main id="conteudo" class="conteudo" tabindex="-1">
+      <div class="pagina">
+<section id="tela-cobranca" aria-labelledby="h-cobranca">
+  <div class="view-cab">
+    <div><h1 id="h-cobranca" tabindex="-1">Plano e cobrança</h1><p id="cob-sub">A assinatura da Mister Burgers: o plano, a forma de pagamento, as faturas e as notas fiscais.</p></div>
+  </div>
+  <div id="cob-corpo"></div>
+</section>
+
+<section id="tela-resumo" aria-labelledby="h-resumo" hidden>
+  <div id="resumo-faixa"></div>
+  <div class="view-cab">
+    <div><h1 id="h-resumo" tabindex="-1">Resumo</h1><p>Como foi a semana da Mister Burgers.</p></div>
+  </div>
+  <div class="card resumo-stub" id="resumo-corpo">
+    <p class="lite-frase">Fora deste protótipo: o Resumo fica como está no app. Esta tela mostra só o aviso de atraso, como ele aparece no alto de todas as telas.</p>
+  </div>
+</section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- pagar com PIX: o resumo, o QR Code e o código para copiar -->
+<dialog class="dialogo" id="dlg-pix" aria-labelledby="dlg-pix-t">
+  <div class="dialogo-form">
+    <div class="dialogo-cab"><h2 id="dlg-pix-t">Pagar com PIX</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo" id="pix-corpo"></div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar id="bt-pix-fechar">Fechar</button></div>
+  </div>
+</dialog>
+
+<!-- autorizar o Pix Automático: o que o banco vai mostrar, antes do QR Code -->
+<dialog class="dialogo" id="dlg-auto" aria-labelledby="dlg-auto-t">
+  <div class="dialogo-form">
+    <div class="dialogo-cab"><h2 id="dlg-auto-t">Autorizar o Pix Automático</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo" id="auto-corpo"></div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Fechar</button></div>
+  </div>
+</dialog>
+
+<!-- cartão: a pessoa vai à página segura do meio de pagamento, que devolve só a bandeira e o final -->
+<dialog class="dialogo" id="dlg-cartao" aria-labelledby="dlg-cartao-t">
+  <div class="dialogo-form">
+    <div class="dialogo-cab"><h2 id="dlg-cartao-t">Trocar o cartão</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo" id="cartao-corpo"></div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Voltar</button><button class="btn btn--primary" type="button" id="bt-cartao-ir"><svg class="ic" aria-hidden="true"><use href="#i-external"/></svg>Ir para a página segura</button></div>
+  </div>
+</dialog>
+
+<!-- assinar (empresa sem assinatura): a forma de pagamento da primeira mensalidade -->
+<dialog class="dialogo" id="dlg-assinar" aria-labelledby="dlg-assinar-t">
+  <form class="dialogo-form" id="form-assinar">
+    <div class="dialogo-cab"><h2 id="dlg-assinar-t">Assinar</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo" id="assinar-corpo"></div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Voltar</button><button class="btn btn--primary" type="submit" id="bt-assinar-ok">Continuar</button></div>
+  </form>
+</dialog>
+
+<!-- trocar de plano (gaveta à direita): o valor de hoje antes de confirmar, com o código do app -->
+<dialog class="dialogo dialogo--lado" id="dlg-planos" aria-labelledby="dlg-planos-t">
+  <form class="dialogo-form" id="form-planos" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-planos-t">Trocar de plano</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <fieldset class="campo">
+        <legend>Escolha o plano</legend>
+        <div class="planos" id="planos-ops"></div>
+      </fieldset>
+      <div class="conta-hoje" id="planos-conta" aria-live="polite"></div>
+      <div class="campo codigo-app" id="planos-codigo">
+        <label for="planos-cod">Código do app autenticador</label>
+        <span class="campo-dica" id="planos-cod-dica">Trocar de plano muda o contrato: confirme com os 6 números do app.</span>
+        <input class="input" id="planos-cod" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-describedby="planos-cod-dica planos-cod-erro">
+        <span class="campo-erro" id="planos-cod-erro" hidden></span>
+      </div>
+      <p class="exemplo">Valores de exemplo: o preço e o que entra em cada plano são definidos por você (D-A7-4).</p>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Voltar</button><button class="btn btn--primary" type="submit" id="bt-planos-ok">Trocar de plano</button></div>
+  </form>
+</dialog>
+
+<!-- cancelar: vale no fim do período pago, com o código do app -->
+<dialog class="dialogo" id="dlg-cancelar" aria-labelledby="dlg-cancelar-t">
+  <form class="dialogo-form" id="form-cancelar" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-cancelar-t">Cancelar a assinatura</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo">
+      <p class="dlg-lead" id="cancelar-lead"></p>
+      <ul class="lista-dlg" id="cancelar-lista"></ul>
+      <div class="campo">
+        <label for="cancelar-motivo">Por que você está saindo? <span class="campo-dica">Opcional</span></label>
+        <select class="input" id="cancelar-motivo">
+          <option value="">Prefiro não dizer</option>
+          <option>Ficou caro</option>
+          <option>Não vi resultado</option>
+          <option>Vou cuidar do marketing de outro jeito</option>
+          <option>A loja vai fechar</option>
+          <option>Outro motivo</option>
+        </select>
+      </div>
+      <div class="campo codigo-app">
+        <label for="cancelar-cod">Código do app autenticador</label>
+        <span class="campo-dica" id="cancelar-cod-dica">Cancelar muda o contrato: confirme com os 6 números do app.</span>
+        <input class="input" id="cancelar-cod" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-describedby="cancelar-cod-dica cancelar-cod-erro">
+        <span class="campo-erro" id="cancelar-cod-erro" hidden></span>
+      </div>
+    </div>
+    <div class="dialogo-acoes"><button class="btn" type="button" data-fechar>Manter a assinatura</button><button class="btn btn--perigo-cheio" type="submit" id="bt-cancelar-ok">Cancelar</button></div>
+  </form>
+</dialog>
+
+<!-- desistir em 7 dias (primeira contratação): devolução de 100%, com o código do app e o protocolo -->
+<dialog class="dialogo" id="dlg-desistir" aria-labelledby="dlg-desistir-t">
+  <form class="dialogo-form" id="form-desistir" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-desistir-t">Desistir e receber de volta</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo" id="desistir-corpo"></div>
+    <div class="dialogo-acoes" id="desistir-acoes"><button class="btn" type="button" data-fechar>Voltar</button><button class="btn btn--perigo-cheio" type="submit" id="bt-desistir-ok">Desistir</button></div>
+  </form>
+</dialog>
+
+<div class="veu" id="veu" hidden></div>
+<div class="toast-region" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ---------- utilidades ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const raiz = document.documentElement;
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const reduzido = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const moeda = (v, casas = 2) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: casas, maximumFractionDigits: casas });
+const numero = (v, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+const vezes = (v) => numero(v, 1) + '×';
+const pct = (v) => numero(Math.round(v * 100)) + '%';
+const ic = (nome, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#${nome}"/></svg>`;
+const params = new URLSearchParams(location.search);
+
+function anunciar(t) { const a = $('#anuncio'); if (!a) return; a.textContent = ''; setTimeout(() => { a.textContent = t; }, 30); }
+function toast(texto, { tipo = 'ok' } = {}) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (tipo === 'perigo' ? ' toast--perigo' : '');
+  const s = document.createElement('span'); s.textContent = texto; t.append(s);
+  $('.toast-region').append(t);
+  setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 260); }, 4200);
+}
+async function copiar(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; } catch { /* sem permissão: tenta o jeito antigo */ }
+  const ta = document.createElement('textarea');
+  ta.value = texto; ta.setAttribute('readonly', ''); ta.className = 'sr-only';
+  (document.querySelector('dialog[open]') || document.body).append(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+/* ---------- tema (faixa do protótipo) ---------- */
+const btTema = $('#rev-tema');
+const temaAtual = () => raiz.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+function sincTema() { btTema.setAttribute('aria-pressed', String(temaAtual() === 'dark')); }
+btTema.addEventListener('click', () => { raiz.dataset.theme = temaAtual() === 'dark' ? 'light' : 'dark'; sincTema(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', sincTema);
+sincTema();
+
+/* ---------- gaveta do menu (celular), como na tela aprovada ---------- */
+const app = $('.app'), btMenu = $('#bt-menu'), veu = $('#veu');
+function menu(abrir) {
+  app.classList.toggle('gaveta', abrir);
+  veu.hidden = !abrir;
+  btMenu.setAttribute('aria-expanded', String(abrir));
+  $('.principal').inert = abrir;
+  $('.revisao').inert = abrir;
+  // Foco depois do commit, sem requestAnimationFrame, com uma nova tentativa (V27).
+  const alvo = abrir ? $('#bt-fechar-menu') : btMenu;
+  setTimeout(() => { alvo.focus(); if (document.activeElement !== alvo) setTimeout(() => alvo.focus(), 400); }, 0);
+}
+btMenu.addEventListener('click', () => menu(true));
+$('#bt-fechar-menu').addEventListener('click', () => menu(false));
+veu.addEventListener('click', () => menu(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && app.classList.contains('gaveta') && !document.querySelector('dialog[open]')) menu(false); });
+matchMedia('(max-width: 768px)').addEventListener('change', (e) => {
+  if (!e.matches && app.classList.contains('gaveta')) { app.classList.remove('gaveta'); veu.hidden = true; btMenu.setAttribute('aria-expanded', 'false'); $('.principal').inert = false; $('.revisao').inert = false; }
+});
+$$('[data-fora]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); if (app.classList.contains('gaveta')) menu(false); toast(a.dataset.fora); }));
+
+/* ---------- modos Lite e Pro (protótipo geral aprovado) ---------- */
+const shell = { modo: 'lite', ferramentas: document.body.dataset.ferramentas === 'abertas' };
+function sincFerramentas() {
+  $('#g-ferramentas').hidden = !(shell.modo === 'pro' || shell.ferramentas);
+  $('#bt-ferramentas').setAttribute('aria-expanded', String(shell.ferramentas));
+}
+$('#bt-ferramentas').addEventListener('click', () => { shell.ferramentas = !shell.ferramentas; sincFerramentas(); });
+function comModo(destino) {
+  const [base, q = ''] = destino.split('?');
+  const p = new URLSearchParams(q); p.set('modo', shell.modo);
+  return `${base}?${p}`;
+}
+function sincLinks() { $$('a[data-destino]').forEach((a) => a.setAttribute('href', comModo(a.dataset.destino))); }
+function sincDetalhesBt(bt, aberto) {
+  bt.setAttribute('aria-expanded', String(aberto));
+  const r = bt.querySelector('.rot'); if (r) r.textContent = aberto ? 'Ocultar detalhes' : 'Ver detalhes';
+}
+function definirModo(modo, { silencioso = false } = {}) {
+  if (modo !== 'lite' && modo !== 'pro') return;
+  shell.modo = modo;
+  raiz.classList.toggle('modo-lite', modo === 'lite');
+  raiz.classList.toggle('modo-pro', modo === 'pro');
+  $$('[data-modo-bt]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.modoBt === modo)));
+  $$('.aberto').forEach((e) => e.classList.remove('aberto'));
+  $$('[data-detalhes]').forEach((b) => sincDetalhesBt(b, false));
+  sincFerramentas();
+  sincLinks();
+  if (typeof window.aoMudarModo === 'function') window.aoMudarModo(modo);
+  if (!silencioso) {
+    anunciar(modo === 'pro' ? 'Modo Pro' : 'Modo Lite');
+    toast(modo === 'pro' ? 'Modo Pro: todos os números, tabelas e ferramentas.' : 'Modo Lite: o essencial; o resto fica em "Ver detalhes".');
+  }
+}
+document.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target : null; if (!alvo) return;
+  const m = alvo.closest('[data-modo-bt]'); if (m) { definirModo(m.dataset.modoBt); return; }
+  const d = alvo.closest('[data-detalhes]');
+  if (d) {
+    const bloco = $(d.dataset.detalhes); if (!bloco) return;
+    const aberto = !bloco.classList.contains('aberto');
+    bloco.classList.toggle('aberto', aberto);
+    $$(`[data-detalhes="${d.dataset.detalhes}"]`).forEach((b) => sincDetalhesBt(b, aberto));
+  }
+});
+
+/* ---------- diálogos nativos: foco volta a quem abriu; clique no fundo e "Fechar" fecham ---------- */
+const origemDlg = new WeakMap();
+function abrirDialogo(dlg, origem = document.activeElement) {
+  if (dlg.open) return;
+  const o = origem instanceof HTMLElement && origem !== document.body ? origem : null;
+  origemDlg.set(dlg, o);
+  if (o && o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'true');
+  dlg.returnValue = ''; // Esc fecha sem valor; sem isto, a escolha anterior voltaria
+  dlg.showModal();
+}
+$$('dialog').forEach((dlg) => {
+  dlg.addEventListener('close', () => {
+    const o = origemDlg.get(dlg);
+    if (o) { if (o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'false'); if (o.isConnected) o.focus({ preventScroll: true }); }
+    origemDlg.delete(dlg);
+  });
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg || (e.target instanceof Element && e.target.closest('[data-fechar]'))) dlg.close('cancelar');
+  });
+});
+
+/* ---------- confirmação na própria linha (como na tela aprovada) ---------- */
+function confirmarNaLinha(bt, { texto = '', rotulo, voltar = 'Cancelar', aoConfirmar }) {
+  const caixa = document.createElement('div');
+  caixa.className = 'confirma-linha';
+  caixa.innerHTML = `${texto ? `<span class="confirma-txt">${esc(texto)}</span>` : ''}<button class="btn btn--sm btn--perigo-cheio" type="button">${esc(rotulo)}</button><button class="btn btn--sm" type="button">${esc(voltar)}</button>`;
+  const [conf, canc] = caixa.querySelectorAll('button');
+  bt.replaceWith(caixa);
+  conf.focus();
+  conf.addEventListener('click', aoConfirmar);
+  canc.addEventListener('click', () => { caixa.replaceWith(bt); bt.focus(); });
+}
+
+/* ---------- cenário (faixa do protótipo) ---------- */
+const selCenario = $('#rev-cenario');
+function marcarCenario(id) { if (selCenario.value !== id) selCenario.value = id; }
+/* grupos: [{ grupo: 'Rótulo' ou null, itens: { id: 'texto' } }] */
+function preencherCenarios(grupos) {
+  selCenario.replaceChildren(...grupos.flatMap(({ grupo, itens }) => {
+    const ops = Object.entries(itens).map(([id, rot]) => new Option(rot, id));
+    if (!grupo) return ops;
+    const g = document.createElement('optgroup'); g.label = grupo; g.append(...ops); return [g];
+  }));
+}
+window.uiuxCenarios = {};
+
+/* ---------- início do shell ---------- */
+definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true });
+
+/* ===================== A7 · P26 · Plano e cobrança ===================== */
+/* Dados, datas e valores de exemplo: o preço e o que entra em cada plano são do dono (D-A7-4). Todas as datas saem do
+   vencimento por uma conta só (datasDo), e a diferença da troca de plano sai de diferencaDoPlano (V66). O meio de
+   pagamento não tem nome: a escolha é da D-A7-2. */
+(() => {
+  const DIA = 86400000;
+  const dt = (s) => { const [d, m, a] = s.split('/').map(Number); return Date.UTC(a, m - 1, d); };
+  const dataTxt = (t) => { const x = new Date(t); return `${String(x.getUTCDate()).padStart(2, '0')}/${String(x.getUTCMonth() + 1).padStart(2, '0')}/${x.getUTCFullYear()}`; };
+  const mais = (t, dias) => t + dias * DIA;
+  const maisMes = (t, n = 1) => { const x = new Date(t); return Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + n, x.getUTCDate()); };
+  const mesDe = (t) => new Date(t).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const diasEntre = (de, ate) => Math.round((ate - de) / DIA);
+
+  /** As datas da assinatura, todas a partir do vencimento do período (Termos 10.4 e 11; D-A7-6, D-A7-17 e D-A7-19). */
+  function datasDo(venc, { primeiro = null } = {}) {
+    const prox = maisMes(venc);
+    return {
+      venc, prox,
+      pagueAte: mais(venc, 9),        // o último dia antes de as ações pararem
+      para: mais(venc, 10),           // 10º dia: as ações dos funcionários param
+      suspende: mais(venc, 30),       // 30º dia: a conta é suspensa
+      apaga: mais(venc, 60),          // 30 dias depois da suspensão, os dados são apagados (11.2)
+      exportaCancelada: mais(prox, 30),
+      emailPix: mais(prox, -5),       // o e-mail com o QR Code da próxima cobrança (D-A7-17)
+      tentativasAte: mais(venc, 7),   // as novas tentativas do Pix Automático, até 7 dias depois (base §18.1)
+      desistirAte: primeiro === null ? null : mais(primeiro, 7),
+    };
+  }
+
+  /** A diferença de hoje ao subir de plano: o que falta do período, na proporção dos dias (D-A7-16). */
+  function diferencaDoPlano(precoAtual, precoNovo, diasQueFaltam, diasDoPeriodo) {
+    if (precoNovo <= precoAtual) return 0;
+    return Math.round(((precoNovo - precoAtual) * diasQueFaltam / diasDoPeriodo) * 100) / 100;
+  }
+  window.p26Contas = { datasDo, diferencaDoPlano, dataTxt, dt };
+
+  const PLANOS = {
+    essencial: { id: 'essencial', nome: 'Essencial', preco: 197, ia: 'IA incluída para o dia a dia', funcs: ['LIA (Atendimento)', 'Gestor de tráfego', 'Analista de dados', 'Relatórios', 'Compliance'] },
+    completo: { id: 'completo', nome: 'Completo', preco: 397, ia: 'Mais IA incluída', mais: 'Tudo do Essencial', funcs: ['Estrategista', 'Pesquisador', 'Criativo', 'Social media', 'CRM e mensageria'] },
+  };
+  const PESSOAS = {
+    dono: { nome: 'Rodrigo', papel: 'Dono', inicial: 'R', paga: true, contrato: true },
+    adm: { nome: 'Ana Lima', papel: 'Administrador', inicial: 'A', paga: true, contrato: false },
+    gestor: { nome: 'Carlos Souza', papel: 'Gestor', inicial: 'C', paga: false, contrato: false },
+  };
+  const SITUACOES = {
+    'em-dia': 'Em dia',
+    primeira: 'Primeira contratação (pode desistir em 7 dias)',
+    'atraso-1': 'Em atraso: 1º dia',
+    'atraso-10': 'Em atraso: 10º dia (ações paradas)',
+    'atraso-30': 'Em atraso: 30º dia (conta suspensa)',
+    cancelada: 'Cancelada (termina no fim do período)',
+    sem: 'Sem assinatura (empresa nova)',
+    pendente: 'Pix Automático pago, sem a confirmação do banco',
+  };
+  const FORMAS = { cartao: 'Cartão', pix: 'PIX a cada mês (até 30/12/2026)', auto: 'Pix Automático (a partir de 30/12/2026)' };
+  const QUEM = { dono: 'Rodrigo, Dono', adm: 'Ana Lima, Administrador com a cobrança liberada', gestor: 'Carlos Souza, Gestor' };
+  const QUEM_CUIDA = 'Rodrigo (Dono) ou Ana Lima (Administrador, com a cobrança liberada)';
+  const EMAIL_NOTAS = 'financeiro@exemplo.com.br';
+  const CARTAO_PADRAO = { bandeira: 'Visa', final: '4242', vence: '08/2029' };
+
+  const est = {};
+  function zerar() {
+    Object.assign(est, { plano: 'essencial', planoDepois: null, cartao: { ...CARTAO_PADRAO }, pagoAgora: false, devolvida: false, vencDaAssinatura: null, hojeFixo: null, extras: [], canceladoPeloDono: true });
+  }
+
+  const selSit = $('#rev-situacao'), selForma = $('#rev-forma'), selQuem = $('#rev-quem');
+  for (const [sel, ops] of [[selSit, SITUACOES], [selForma, FORMAS], [selQuem, QUEM]]) sel.replaceChildren(...Object.entries(ops).map(([id, rot]) => new Option(rot, id)));
+
+  /** O momento de exemplo: o vencimento do período e o "hoje" de cada situação. */
+  function contexto() {
+    const auto = est.forma === 'auto' || est.situacao === 'pendente';
+    const venc = est.vencDaAssinatura ?? dt(auto ? '21/01/2027' : '21/10/2026');
+    const n = { 'atraso-1': 1, 'atraso-10': 10, 'atraso-30': 30 }[est.situacao] ?? 1;
+    const hoje = est.hojeFixo ?? mais(venc, n);
+    const primeiro = est.situacao === 'primeira' ? venc : null;
+    return { auto, hoje, d: datasDo(venc, { primeiro }), plano: PLANOS[est.plano], pessoa: PESSOAS[est.quem] };
+  }
+  const emAtraso = () => est.situacao.startsWith('atraso');
+  const formaDaProxima = (c) => ({
+    pix: `por PIX: o QR Code chega por e-mail em ${dataTxt(c.d.emailPix)}`,
+    auto: 'pelo Pix Automático, que sai sozinho',
+    cartao: `no cartão ${est.cartao.bandeira} final ${est.cartao.final}`,
+  }[est.forma]);
+  const formaDoPago = () => ({ pix: 'por PIX', auto: 'pelo Pix Automático', cartao: `no cartão ${est.cartao.bandeira} final ${est.cartao.final}` }[est.forma]);
+
+  const bt = (attrs, rotulo, { cls = 'btn', icone = '' } = {}) => `<button class="${cls}" type="button" ${attrs}>${icone ? ic(icone) : ''}${esc(rotulo)}</button>`;
+  const chip = (cls, txt) => `<span class="st ${cls}"><span class="dot" aria-hidden="true"></span>${esc(txt)}</span>`;
+
+  /* ---------- a situação: o que está acontecendo e a ação do momento ---------- */
+  function situacao(c) {
+    const { d, plano, pessoa } = c;
+    const valor = esc(moeda(plano.preco));
+    const mes = esc(mesDe(d.venc));
+    const pagar = pessoa.paga ? [bt('data-acao="pagar-pix" aria-haspopup="dialog"', `Pagar ${moeda(plano.preco)} com PIX`, { cls: 'btn btn--primary', icone: 'i-qr' }),
+      est.forma === 'cartao' ? bt('data-acao="cartao-pagar" aria-haspopup="dialog"', 'Trocar o cartão', { icone: 'i-card' }) : bt('data-acao="cartao-pagar" aria-haspopup="dialog"', 'Pagar com cartão', { icone: 'i-card' })] : [];
+    const volta = '<p class="sit-nota"><b>Pagou, tudo volta na hora.</b> Nenhum dado se perde.</p>';
+    switch (est.situacao) {
+      case 'em-dia': return {
+        tom: '', chips: chip('st--concluido', 'Em dia'), titulo: 'A assinatura está em dia',
+        corpo: `<p class="sit-frase">A próxima cobrança é de <b>${valor}</b> em <b>${dataTxt(d.prox)}</b>, ${esc(formaDaProxima(c))}.</p><p class="sit-nota">Plano ${esc(plano.nome)} · a mensalidade de ${mes} foi paga ${est.pagoAgora ? 'hoje' : 'em ' + dataTxt(d.venc)}, ${esc(formaDoPago())}.</p>`,
+        acoes: [] };
+      case 'primeira': return {
+        tom: '', chips: chip('st--concluido', 'Em dia') + chip('st--info', 'Primeira contratação'), titulo: 'A assinatura começou',
+        corpo: `<p class="sit-frase">A primeira mensalidade, de <b>${valor}</b>, foi paga em <b>${dataTxt(d.venc)}</b>, ${esc(formaDoPago())}. A próxima é em <b>${dataTxt(d.prox)}</b>, ${esc(formaDaProxima(c))}.</p>
+          <p class="sit-nota">${pessoa.contrato ? `Até <b>${dataTxt(d.desistirAte)}</b>, você pode desistir e receber de volta os ${valor}, sem multa.` : `Até ${dataTxt(d.desistirAte)}, o Dono pode desistir e receber de volta os ${valor}.`}</p>`,
+        acoes: pessoa.contrato ? [bt('data-acao="desistir" aria-haspopup="dialog"', `Desistir e receber ${moeda(plano.preco)}`, { cls: 'btn btn--perigo' })] : [] };
+      case 'atraso-1': {
+        const frase = {
+          pix: `Ela venceu em <b>${dataTxt(d.venc)}</b> (${valor}). Pague até <b>${dataTxt(d.pagueAte)}</b> para os funcionários de IA continuarem trabalhando.`,
+          cartao: `O cartão ${esc(est.cartao.bandeira)} final ${esc(est.cartao.final)} foi recusado em <b>${dataTxt(d.venc)}</b> (${valor}). Pague até <b>${dataTxt(d.pagueAte)}</b>, com PIX ou outro cartão, para os funcionários de IA continuarem trabalhando.`,
+          auto: `O débito de <b>${dataTxt(d.venc)}</b> (${valor}) não saiu: o seu banco não encontrou saldo ou limite. O banco tenta de novo até <b>${dataTxt(d.tentativasAte)}</b>; você também pode pagar agora pelo QR Code. Pague até <b>${dataTxt(d.pagueAte)}</b> para os funcionários continuarem trabalhando.`,
+        }[est.forma];
+        return { tom: 'atencao', chips: chip('st--aguardando', 'Em atraso há 1 dia'), titulo: `A mensalidade de ${mes} não foi paga`,
+          corpo: `<p class="sit-frase">${frase}</p>${degraus([[d.para, 'os funcionários de IA param', 'agora'], [d.suspende, 'a conta é suspensa: só o Dono entra']])}${volta}`, acoes: pagar };
+      }
+      case 'atraso-10': return {
+        tom: 'perigo', chips: chip('st--perigo', 'Ações paradas'), titulo: 'Os funcionários de IA estão parados',
+        corpo: `<p class="sit-frase">Desde <b>${dataTxt(d.para)}</b>, por causa da mensalidade de ${mes} (${valor}), que venceu em ${dataTxt(d.venc)}.</p>
+          <ul class="sit-continua"><li>${ic('i-check', 'ic sim')}<span>Você e a equipe continuam entrando e vendo tudo.</span></li><li>${ic('i-check', 'ic sim')}<span>Os anúncios seguem como estão: o Liame não pausa nenhum.</span></li><li>${ic('i-x', 'ic nao')}<span>Os funcionários não fazem nada novo: nem propostas, nem posts, nem mensagens.</span></li></ul>
+          ${degraus([[d.suspende, 'a conta é suspensa: só o Dono entra, para pagar ou exportar os dados', 'perigo']])}${volta}`, acoes: pagar };
+      case 'atraso-30': return {
+        tom: 'perigo', chips: chip('st--perigo', 'Conta suspensa'), titulo: 'A conta está suspensa',
+        corpo: `<p class="sit-frase">Desde <b>${dataTxt(d.suspende)}</b>, só você entra, para pagar ou exportar os dados. A mensalidade em aberto é a de ${mes} (${valor}).</p>
+          ${degraus([[d.apaga, 'os dados são apagados de vez, se nada for pago', 'perigo']])}<p class="sit-nota"><b>Pagou, tudo volta na hora:</b> a equipe entra de novo, e os funcionários voltam a trabalhar.</p>`,
+        acoes: [...pagar, bt('data-acao="exportar"', 'Exportar os dados', { cls: 'btn btn--ghost', icone: 'i-download' })] };
+      case 'cancelada': return {
+        tom: '', chips: chip('st--espera', 'Cancelada'), titulo: `A assinatura termina em ${dataTxt(d.prox)}`,
+        corpo: `<p class="sit-frase">${pessoa.contrato ? 'Você cancelou' : 'O Dono cancelou'} em ${dataTxt(c.hoje)}. Até <b>${dataTxt(d.prox)}</b>, tudo funciona como hoje. Depois, os funcionários param, e há até <b>${dataTxt(d.exportaCancelada)}</b> para exportar os dados.</p>${pessoa.contrato ? '' : '<p class="sit-nota">Só o Dono pode manter a assinatura.</p>'}`,
+        acoes: pessoa.contrato ? [bt('data-acao="manter"', 'Manter a assinatura', { cls: 'btn btn--primary' })] : [] };
+      case 'sem': return {
+        tom: '', chips: chip('st--espera', 'Sem assinatura'), titulo: est.devolvida ? 'A assinatura terminou' : 'Escolha um plano para a equipe começar',
+        corpo: `${est.devolvida ? `<p class="sit-frase">Você desistiu em ${dataTxt(c.hoje)}, e os ${valor} estão voltando ${est.forma === 'cartao' ? 'pelo estorno no cartão' : 'para a conta que pagou o PIX'}. Os dados ficam até <b>${dataTxt(mais(c.hoje, 30))}</b> para você exportar.</p>` : ''}<p class="sit-nota">Sem fidelidade: você cancela quando quiser, sem multa. Na primeira contratação, pode desistir em até 7 dias e receber tudo de volta.</p>${planosNaTela(c)}`,
+        acoes: [] };
+      case 'pendente': return {
+        tom: 'atencao', chips: chip('st--aguardando', 'Falta o banco confirmar'), titulo: 'O Pix Automático ainda não foi confirmado',
+        corpo: `<p class="sit-frase">O PIX de ${mes} (${valor}) foi pago em <b>${dataTxt(d.venc)}</b>, mas o seu banco ainda não confirmou a autorização do Pix Automático. Abra o app do banco e confirme.</p><p class="sit-nota">Sem a confirmação, a cobrança de ${esc(mesDe(d.prox))} chega por e-mail com o QR Code, como antes.</p>`,
+        acoes: pessoa.paga ? [bt('data-acao="auto-pendente" aria-haspopup="dialog"', 'Ver como confirmar', { cls: 'btn btn--primary', icone: 'i-repeat' })] : [] };
+      default: return { tom: '', chips: '', titulo: '', corpo: '', acoes: [] };
+    }
+  }
+  function degraus(lista) {
+    return `<dl class="degraus">${lista.map(([quando, oque, tipo]) => `<div class="degrau${tipo ? ' degrau--' + tipo : ''}"><dt>${dataTxt(quando)}</dt><dd>${esc(oque)}</dd></div>`).join('')}</dl>`;
+  }
+  function planosNaTela(c) {
+    return `<div class="planos planos--tela">${Object.values(PLANOS).map((p) => `<div class="plano-op"><div class="plano-op-cab"><b>${esc(p.nome)}</b><span class="plano-preco">${esc(moeda(p.preco))}<small> por mês</small></span></div>${funcs(p)}<span class="fat-det">${esc(p.ia)}</span>${c.pessoa.contrato ? bt(`data-acao="assinar" data-plano="${p.id}" aria-haspopup="dialog"`, `Assinar o ${p.nome}`, { cls: p.id === 'essencial' ? 'btn btn--primary' : 'btn' }) : ''}</div>`).join('')}</div>${c.pessoa.contrato ? '' : '<p class="sit-nota">Assinar é com o Dono.</p>'}<p class="exemplo">Valores de exemplo: o preço e o que entra em cada plano são definidos por você (D-A7-4).</p>`;
+  }
+  const funcs = (p) => `<ul class="funcs" aria-label="Funcionários do plano ${esc(p.nome)}">${p.mais ? `<li class="func func--mais">${esc(p.mais)}</li>` : ''}${p.funcs.map((f) => `<li class="func">${esc(f)}</li>`).join('')}</ul>`;
+
+  /* ---------- o plano, a forma de pagamento, as faturas e as fases ---------- */
+  function cartaoPlano(c) {
+    const { plano, pessoa, d } = c;
+    let acao = '';
+    if (est.situacao === 'cancelada') acao = '';
+    else if (emAtraso()) acao = '<p class="sit-nota">Para trocar de plano, pague antes a mensalidade em aberto.</p>';
+    else if (pessoa.contrato) acao = bt('data-acao="planos" aria-haspopup="dialog"', 'Trocar de plano');
+    else acao = '<p class="sit-nota">Trocar de plano, cancelar e desistir ficam com o Dono, Rodrigo.</p>';
+    const depois = est.planoDepois ? `<p class="sit-nota">A partir de <b>${dataTxt(d.prox)}</b>, o plano passa a ser o ${esc(PLANOS[est.planoDepois].nome)}, por ${esc(moeda(PLANOS[est.planoDepois].preco))} por mês.</p>` : '';
+    return `<article class="card" aria-labelledby="cob-plano-t"><div class="plano-cab"><div><p class="rotulo-marca">Plano</p><h2 class="plano-nome" id="cob-plano-t">${esc(plano.nome)}</h2></div><span class="plano-preco">${esc(moeda(plano.preco))}<small> por mês</small></span></div>${funcs(plano)}<span class="fat-det">${esc(plano.ia)}</span>${depois}${acao}<p class="exemplo">Valores de exemplo (D-A7-4).</p></article>`;
+  }
+  function cartaoForma(c) {
+    const { pessoa, d } = c;
+    const acoes = [];
+    let icone, titulo, texto, oferta = '';
+    if (est.forma === 'pix') {
+      icone = 'i-qr'; titulo = 'PIX a cada mês';
+      texto = `A cobrança chega por e-mail em ${dataTxt(d.emailPix)}, cinco dias antes do vencimento, com o QR Code. Você também pode pagar por aqui.`;
+      oferta = `<div class="oferta"><b>Pix Automático · disponível a partir de 30/12/2026</b><span>Autorize uma vez no app do seu banco, e o PIX de todo mês sai sozinho.</span>${pessoa.paga ? bt('data-acao="auto-previa" aria-haspopup="dialog"', 'Ver como vai ser', { cls: 'link-bt' }) : ''}</div>`;
+      if (pessoa.paga) acoes.push(bt('data-acao="para-cartao" aria-haspopup="dialog"', 'Trocar para cartão', { icone: 'i-card' }));
+    } else if (est.forma === 'auto') {
+      icone = 'i-repeat'; titulo = 'Pix Automático';
+      texto = est.situacao === 'pendente' ? 'Esperando o seu banco confirmar a autorização.' : 'Autorizado no app do seu banco. O débito sai sozinho no dia 21 de cada mês, e o banco avisa quando cada débito é agendado. Para mudar o limite ou cancelar a autorização, use o app do banco.';
+      if (pessoa.paga) acoes.push(bt('data-acao="para-cartao" aria-haspopup="dialog"', 'Trocar para cartão', { icone: 'i-card' }));
+    } else {
+      icone = 'i-card'; titulo = `Cartão ${est.cartao.bandeira} final ${est.cartao.final}`;
+      texto = `Vence em ${est.cartao.vence}. A cobrança sai no dia ${dataTxt(d.venc).slice(0, 2)}. O número do cartão fica só no meio de pagamento: aqui aparecem só a bandeira e o final.`;
+      if (pessoa.paga) acoes.push(bt('data-acao="trocar-cartao" aria-haspopup="dialog"', 'Trocar o cartão', { icone: 'i-card' }), bt('data-acao="para-pix"', 'Trocar para PIX', { icone: 'i-qr' }));
+    }
+    return `<article class="card" aria-labelledby="cob-forma-t"><p class="rotulo-marca">Forma de pagamento</p><div class="forma"><span class="forma-ic" aria-hidden="true">${ic(icone)}</span><div class="forma-txt"><b id="cob-forma-t">${esc(titulo)}</b><span>${esc(texto)}</span></div></div>${oferta}${acoes.length ? `<div class="sit-acoes">${acoes.join('')}</div>` : ''}</article>`;
+  }
+  function faturas(c) {
+    const { d, plano, hoje } = c;
+    const itens = [];
+    const docs = (nota) => `<div class="fat-docs">${bt('data-acao="baixar" data-doc="a fatura"', 'Fatura', { cls: 'btn btn--sm', icone: 'i-file' })}${nota === 'pronta' ? bt('data-acao="baixar" data-doc="a nota fiscal (PDF)"', 'Nota fiscal', { cls: 'btn btn--sm', icone: 'i-download' }) + bt('data-acao="baixar" data-doc="o XML da nota fiscal"', 'XML', { cls: 'btn btn--sm btn--ghost' }) : `<span class="fat-emissao">${esc(nota)}</span>`}</div>`;
+    const item = (mes, det, valor, st, nota) => `<li class="fatura"><div><span class="fat-mes">${esc(mes)}</span><br><span class="fat-det">${det}</span></div><div class="fat-lado"><span class="fat-valor">${esc(moeda(valor))}</span>${st}</div>${docs(nota)}</li>`;
+    const mesAtual = mesDe(d.venc).replace(/^./, (l) => l.toUpperCase());
+    const mesAntes = mesDe(maisMes(d.venc, -1)).replace(/^./, (l) => l.toUpperCase());
+    if (est.situacao === 'sem') {
+      if (!est.devolvida) return `<article class="card" aria-labelledby="cob-fat-t"><h2 class="card-titulo" id="cob-fat-t">Faturas e notas fiscais</h2><div class="vazio vazio--compacto"><div class="vazio-ic">${ic('i-receipt')}</div><p>As faturas e as notas aparecem aqui depois da primeira mensalidade.</p></div></article>`;
+      itens.push(item(mesDe(est.vencDaAssinatura ?? mais(hoje, -1)).replace(/^./, (l) => l.toUpperCase()), `Devolvida em ${dataTxt(hoje)}, ${est.forma === 'cartao' ? 'pelo estorno no cartão' : 'para a conta que pagou o PIX'}`, plano.preco, chip('st--espera', 'Devolvida'), 'A nota foi cancelada.'));
+    } else {
+      for (const x of est.extras) itens.push(item(x.mes, x.det, x.valor, chip('st--concluido', 'Paga'), 'Nota em emissão: aparece aqui e no e-mail assim que sair.'));
+      if (emAtraso()) itens.push(item(mesAtual, `Venceu em ${dataTxt(d.venc)}`, plano.preco, chip(est.situacao === 'atraso-1' ? 'st--aguardando' : 'st--perigo', 'Vencida'), 'A nota sai depois do pagamento.'));
+      else itens.push(item(mesAtual, `Paga ${est.pagoAgora ? 'hoje' : 'em ' + dataTxt(d.venc)}, ${esc(formaDoPago())}`, plano.preco, chip('st--concluido', 'Paga'), est.pagoAgora ? 'Nota em emissão: aparece aqui e no e-mail assim que sair.' : 'pronta'));
+      if (est.situacao !== 'primeira') itens.push(item(mesAntes, `Paga em ${dataTxt(maisMes(d.venc, -1))}, ${esc(formaDoPago())}`, plano.preco, chip('st--concluido', 'Paga'), 'pronta'));
+    }
+    const email = `<p class="email-notas">${ic('i-message')}<span>As notas vão para <b>${esc(EMAIL_NOTAS)}</b>.</span>${c.pessoa.contrato ? bt('data-acao="email-notas"', 'Trocar o e-mail', { cls: 'link-bt' }) : ''}</p>`;
+    return `<article class="card" aria-labelledby="cob-fat-t"><h2 class="card-titulo" id="cob-fat-t">Faturas e notas fiscais</h2><ul class="faturas">${itens.join('')}</ul>${email}</article>`;
+  }
+  function fases(c) {
+    const { d } = c;
+    const comData = emAtraso();
+    const agora = { 'atraso-1': 1, 'atraso-10': 2, 'atraso-30': 3 }[est.situacao];
+    const linhas = [
+      ['No vencimento', d.venc, 'A cobrança sai: no PIX, o QR Code chega por e-mail 5 dias antes; no cartão e no Pix Automático, ela sai sozinha.'],
+      ['1º dia de atraso', mais(d.venc, 1), 'Quem paga recebe um aviso por e-mail e no alto das telas.'],
+      ['10º dia', d.para, 'Os funcionários de IA param. Ver e ler continuam, e nenhum anúncio é pausado pelo Liame.'],
+      ['30º dia', d.suspende, 'A conta é suspensa: só o Dono entra, para pagar ou exportar os dados.'],
+      ['60º dia', d.apaga, 'Os dados são apagados de vez, e o Dono recebe o certificado de exclusão.'],
+    ];
+    return `<article class="card" aria-labelledby="cob-fases-t"><h2 class="card-titulo" id="cob-fases-t">Se a mensalidade atrasar</h2><ol class="fases">${linhas.map(([quando, data, oque], i) => `<li class="fase${i === agora ? ' fase--agora' : ''}"><span class="fase-quando">${esc(quando)}${comData ? `<span class="num">${dataTxt(data)}</span>` : ''}</span><span class="fase-oque">${esc(oque)}${i === agora ? ' <b>(agora)</b>' : ''}</span></li>`).join('')}</ol><p class="fase-volta">Pagou, tudo volta na hora.</p></article>`;
+  }
+  function rodape(c) {
+    if (!c.pessoa.contrato || !['em-dia', 'primeira', 'pendente'].includes(est.situacao)) return '';
+    return `<div class="cob-rodape"><p>Sem multa. A assinatura termina no fim do período pago, em ${dataTxt(c.d.prox)}.</p>${bt('data-acao="cancelar" aria-haspopup="dialog"', 'Cancelar a assinatura', { cls: 'btn btn--sm btn--perigo' })}</div>`;
+  }
+  function semAcesso() {
+    return `<div class="card"><div class="vazio"><div class="vazio-ic">${ic('i-lock')}</div><h2 id="cob-sem-t" tabindex="-1">A cobrança fica com o Dono</h2><p>O plano, os pagamentos e as notas da Mister Burgers são vistos só por quem cuida da cobrança:</p><ul class="quem-cuida"><li><span class="av-user" aria-hidden="true">R</span>Rodrigo, Dono</li><li><span class="av-user" aria-hidden="true">A</span>Ana Lima, Administrador com a cobrança liberada</li></ul><p>Fale com um deles se precisar de uma nota ou de uma mudança no plano.</p></div></div>`;
+  }
+  function suspensa(c) {
+    return `<div class="card"><div class="vazio"><div class="vazio-ic vazio-ic--perigo">${ic('i-lock')}</div><h2 id="cob-susp-t" tabindex="-1">A conta da Mister Burgers está suspensa</h2><p>Desde ${dataTxt(c.d.suspende)}, por uma mensalidade em aberto. Só o Dono entra, para pagar ou exportar os dados. Quem resolve: Rodrigo, o Dono.</p><p>Nada foi apagado. Pagou, a equipe entra de novo na hora.</p></div></div>`;
+  }
+
+  function renderCobranca() {
+    const c = contexto();
+    const corpo = $('#cob-corpo');
+    $('#cob-sub').hidden = false;
+    if (est.situacao === 'atraso-30' && est.quem !== 'dono') { corpo.innerHTML = suspensa(c); $('#cob-sub').hidden = true; return; }
+    if (!c.pessoa.paga) { corpo.innerHTML = semAcesso(); return; }
+    const s = situacao(c);
+    const sit = `<article class="card sit${s.tom ? ' sit--' + s.tom : ''}" aria-labelledby="cob-sit-t"><div class="sit-cab">${s.chips}</div><h2 class="sit-titulo" id="cob-sit-t" tabindex="-1">${esc(s.titulo)}</h2>${s.corpo}${s.acoes.length ? `<div class="sit-acoes">${s.acoes.join('')}</div>` : ''}</article>`;
+    if (est.situacao === 'sem') { corpo.innerHTML = `<div class="cob-grade"><div class="cob-col cob-col--toda">${sit}</div><div class="cob-col">${faturas(c)}</div><div class="cob-col">${fases(c)}</div></div>`; return; }
+    corpo.innerHTML = `<div class="cob-grade"><div class="cob-col">${sit}${cartaoPlano(c)}${cartaoForma(c)}</div><div class="cob-col">${faturas(c)}${fases(c)}</div></div>${rodape(c)}`;
+  }
+
+  /* ---------- o aviso de atraso nas outras telas (D-A7-15) ---------- */
+  function faixaDeAtraso(c) {
+    const { d, plano, pessoa } = c;
+    const valor = moeda(plano.preco), mes = mesDe(d.venc);
+    const faixa = (tipo, icone, titulo, texto, botoes) => `<div class="faixa faixa--${tipo}" role="${tipo === 'perigo' ? 'alert' : 'status'}"><div class="faixa-ic">${ic(icone)}</div><div class="faixa-txt"><b>${esc(titulo)}</b><span>${esc(texto)}</span></div>${botoes.join('')}</div>`;
+    const pagar = bt('data-acao="pagar-pix" aria-haspopup="dialog"', 'Pagar com PIX', { cls: 'btn btn--primary btn--sm' });
+    const ver = bt('data-acao="ver-cobranca"', 'Ver a cobrança', { cls: 'btn btn--sm' });
+    if (est.situacao === 'atraso-1' && pessoa.paga) return faixa('atencao', 'i-alert', `A mensalidade de ${mes} (${valor}) venceu em ${dataTxt(d.venc)}`, `Pague até ${dataTxt(d.pagueAte)} para os funcionários de IA continuarem trabalhando.`, [pagar, ver]);
+    if (est.situacao === 'atraso-10') return pessoa.paga
+      ? faixa('perigo', 'i-pause', `Os funcionários de IA estão parados desde ${dataTxt(d.para)}`, `Falta pagar a mensalidade de ${mes} (${valor}). Você continua vendo tudo. Em ${dataTxt(d.suspende)}, a conta é suspensa.`, [pagar, ver])
+      : faixa('perigo', 'i-pause', `Os funcionários de IA estão parados desde ${dataTxt(d.para)}`, `Há uma mensalidade em aberto. Quem resolve: ${QUEM_CUIDA}. Você continua vendo tudo.`, []);
+    if (est.situacao === 'atraso-30' && est.quem === 'dono') return faixa('perigo', 'i-lock', `A conta está suspensa desde ${dataTxt(d.suspende)}`, `Só você entra, para pagar ou exportar os dados. Se nada for pago, os dados são apagados em ${dataTxt(d.apaga)}.`, [pagar, ver]);
+    if (est.situacao === 'pendente' && pessoa.paga) return faixa('atencao', 'i-repeat', 'Falta o seu banco confirmar o Pix Automático', `Abra o app do banco e confirme a autorização. Sem isso, a cobrança de ${mesDe(d.prox)} chega por e-mail com o QR Code.`, [bt('data-acao="auto-pendente" aria-haspopup="dialog"', 'Ver como confirmar', { cls: 'btn btn--sm' })]);
+    return '';
+  }
+  function renderResumo() {
+    const c = contexto();
+    if (est.situacao === 'atraso-30' && est.quem !== 'dono') { $('#resumo-faixa').innerHTML = ''; $('#resumo-corpo').innerHTML = suspensa(c); return; }
+    $('#resumo-faixa').innerHTML = faixaDeAtraso(c);
+    $('#resumo-corpo').innerHTML = '<p class="lite-frase">Fora deste protótipo: o Resumo fica como está no app. Esta tela mostra só o aviso de atraso, como ele aparece no alto de todas as telas.</p>';
+  }
+
+  /* ---------- o shell: quem está vendo e qual tela ---------- */
+  function renderShell() {
+    const p = PESSOAS[est.quem];
+    $('.ctx-txt span').textContent = p.papel;
+    $('.usuario-txt b').textContent = p.nome;
+    $('.usuario-txt span').textContent = `${p.papel} · Mister Burgers`;
+    $('.usuario .av-user').textContent = p.inicial;
+    $('#nav-cobranca').hidden = !p.paga;
+    for (const a of $$('[data-ir]')) { if (a.dataset.ir === est.tela) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
+    $('#tela-cobranca').hidden = est.tela !== 'cobranca';
+    $('#tela-resumo').hidden = est.tela !== 'resumo';
+    $('#trilha-tela').textContent = est.tela === 'cobranca' ? 'Plano e cobrança' : 'Resumo';
+    // "Plano e cobrança" é uma tela só nos dois modos (como Minha marca): o seletor Lite/Pro some do topo nela.
+    $('#modo-top').hidden = est.tela === 'cobranca';
+  }
+  function renderTudo() { renderShell(); if (est.tela === 'cobranca') renderCobranca(); else renderResumo(); }
+
+  function focarTitulo() {
+    const alvo = $(est.tela === 'cobranca' ? '#cob-sit-t, #cob-sem-t, #cob-susp-t' : '#h-resumo') || $(est.tela === 'cobranca' ? '#h-cobranca' : '#h-resumo');
+    setTimeout(() => { alvo.focus({ preventScroll: false }); if (document.activeElement !== alvo) setTimeout(() => alvo.focus(), 300); }, 0);
+  }
+  // Ao fechar um diálogo, o shell devolve o foco a quem abriu. Se a tela foi redesenhada (o botão sumiu), o foco ficou
+  // no body ou dentro do diálogo: ele vai para o título da situação (V83, V100).
+  function focoAoFechar(dlg) {
+    dlg.addEventListener('close', () => setTimeout(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body || dlg.contains(a)) focarTitulo();
+    }, 0));
+  }
+  function irPara(tela, { focar = true } = {}) {
+    est.tela = tela;
+    if (app.classList.contains('gaveta')) menu(false);
+    renderTudo();
+    if (focar) focarTitulo();
+  }
+  function sincSeletores() { selSit.value = est.situacao; selForma.value = est.forma; selQuem.value = est.quem; }
+  function aplicar() {
+    est.situacao = selSit.value; est.forma = selForma.value; est.quem = selQuem.value;
+    // O Pix Automático pago sem a confirmação do banco só existe com o Pix Automático.
+    if (est.situacao === 'pendente' && est.forma !== 'auto') { est.forma = 'auto'; selForma.value = 'auto'; }
+    zerar();
+    renderTudo();
+  }
+  function mudarPara(situacao, extra = {}) { Object.assign(est, extra, { situacao }); sincSeletores(); renderTudo(); }
+  for (const s of [selSit, selForma, selQuem]) s.addEventListener('change', () => { aplicar(); anunciar('Protótipo: ' + s.selectedOptions[0].text); });
+  $$('[data-ir]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); irPara(a.dataset.ir); }));
+
+  /* ---------- o QR Code de exemplo (não paga nada) ---------- */
+  function qrSvg(semente) {
+    const n = 25, quad = [];
+    let x = 0;
+    for (const ch of semente) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
+    const marca = (r, c) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
+    const anel = (r, c, r0, c0) => { const a = r - r0, b = c - c0; return a === 0 || a === 6 || b === 0 || b === 6 || (a >= 2 && a <= 4 && b >= 2 && b <= 4); };
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      let on;
+      if (marca(r, c)) on = anel(r, c, r < 7 ? 0 : n - 7, c < 7 ? 0 : n - 7);
+      else { x = (x * 1103515245 + 12345) >>> 0; on = (x >>> 16) % 2 === 0; }
+      if (on) quad.push(`<rect x="${c}" y="${r}" width="1" height="1"/>`);
+    }
+    return `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" role="img" aria-label="QR Code de exemplo do PIX">${quad.join('')}</svg>`;
+  }
+  const CODIGO_PIX = '00020126580014br.gov.bcb.pix0136exemplo-do-prototipo-sem-valor-nenhum5204000053039865406197.005802BR5912LIAME EXEMPLO6014RIO DE JANEIRO62070503***6304ABCD';
+
+  /* ---------- pagar com PIX ---------- */
+  const dlgPix = $('#dlg-pix');
+  let motivoPix = 'atraso';
+  function abrirPix(motivo, origem) {
+    motivoPix = motivo;
+    const c = contexto();
+    const assinando = motivo === 'assinar';
+    const valor = moeda(PLANOS[est.planoEscolhido ?? est.plano].preco);
+    const o_que = assinando ? `a primeira mensalidade do plano ${PLANOS[est.planoEscolhido].nome}, da Mister Burgers` : `a mensalidade de ${mesDe(c.d.venc)} da Mister Burgers, plano ${c.plano.nome}`;
+    $('#dlg-pix-t').textContent = `Pagar ${valor} com PIX`;
+    $('#pix-corpo').innerHTML = `<dl class="resumo-banco"><b>O que você está pagando</b><div><dt>Para</dt><dd>Liame</dd></div><div><dt>O que é</dt><dd>${esc(o_que)}</dd></div><div><dt>Valor</dt><dd>${esc(valor)}</dd></div></dl>
+      <div class="qr-caixa"><div class="qr">${qrSvg('p26-' + motivo + valor)}</div>
+      <div class="pix-codigo"><code id="pix-cod">${esc(CODIGO_PIX)}</code><button class="btn btn--sm" type="button" id="bt-pix-copiar">${ic('i-copy')}Copiar o código</button></div></div>
+      <p class="sit-nota">No app do seu banco, leia o QR Code ou cole o código. O PIX confirma em segundos, e esta tela muda sozinha.</p>
+      <p class="pix-espera" id="pix-espera"><span class="girando" aria-hidden="true"></span>Esperando o pagamento…</p>
+      <button class="btn btn--sm btn--ghost so-prototipo" type="button" id="bt-pix-simular">Protótipo: simular o pagamento</button>`;
+    $('#bt-pix-copiar').addEventListener('click', async () => { const ok = await copiar(CODIGO_PIX); toast(ok ? 'Código do PIX copiado.' : 'Não deu para copiar. Selecione o código e copie.', { tipo: ok ? 'ok' : 'perigo' }); });
+    $('#bt-pix-simular').addEventListener('click', () => pixPago());
+    abrirDialogo(dlgPix, origem);
+  }
+  function pixPago() {
+    const c = contexto();
+    $('#pix-espera').outerHTML = `<p class="pix-pago" id="pix-pago" tabindex="-1">${ic('i-check-circle')}<span>Pagamento recebido. ${emAtraso() ? 'Tudo voltou a funcionar.' : 'A assinatura começou.'}</span></p>`;
+    $('#bt-pix-simular').remove();
+    $('#pix-pago').focus();
+    anunciar('Pagamento recebido.');
+    if (motivoPix === 'assinar') {
+      est.plano = est.planoEscolhido; est.forma = 'pix';
+      mudarPara('primeira', { vencDaAssinatura: c.hoje, hojeFixo: c.hoje, devolvida: false, pagoAgora: false });
+    } else if (emAtraso()) {
+      mudarPara('em-dia', { pagoAgora: true, hojeFixo: c.hoje });
+    }
+  }
+  focoAoFechar(dlgPix);
+
+  /* ---------- autorizar o Pix Automático (só a partir de 30/12/2026) ---------- */
+  const dlgAuto = $('#dlg-auto');
+  function abrirAuto(origem, modo = 'pendente') {
+    const c = contexto();
+    const valor = moeda(c.plano.preco);
+    const previa = modo === 'previa';
+    const resumo = `<dl class="resumo-banco"><b>O que o seu banco mostra</b><div><dt>Quem recebe</dt><dd>SISTER TECNOLOGIA LTDA (Liame), CNPJ 67.748.508/0001-43</dd></div><div><dt>O que é</dt><dd>a assinatura do Liame da Mister Burgers, plano ${esc(c.plano.nome)}</dd></div>${previa ? `<div><dt>Hoje</dt><dd>a mensalidade do mês, pelo QR Code (${esc(valor)})</dd></div>` : ''}<div><dt>${previa ? 'Depois' : 'Quanto'}</dt><dd>${esc(valor)} todo dia 21, sem data para acabar</dd></div><div><dt>Limite</dt><dd>você pode pôr um valor máximo no banco (opcional)</dd></div></dl>`;
+    const regras = `<ul class="lista-dlg"><li>${ic('i-check')}<span>O banco avisa quando cada débito é agendado (dá para desligar o aviso no banco).</span></li><li>${ic('i-check')}<span>Você cancela a autorização quando quiser, pelo app do banco.</span></li><li>${ic('i-check')}<span>Sem saldo no dia, o banco tenta de novo, até 7 dias depois do vencimento.</span></li></ul>`;
+    $('#dlg-auto-t').textContent = previa ? 'Como vai ser o Pix Automático' : 'Confirmar o Pix Automático';
+    if (previa) {
+      // A prévia não muda nada: o Pix Automático só pode ser contratado a partir de 30/12/2026 (base §18.1).
+      $('#auto-corpo').innerHTML = `<p class="dlg-lead">A partir de 30/12/2026, você paga a mensalidade do mês pelo QR Code e, no mesmo passo, autoriza as próximas no app do seu banco.</p>${resumo}
+        <div class="qr-caixa"><div class="qr">${qrSvg('p26-previa')}</div><p class="exemplo">Exemplo: o QR Code de verdade aparece aqui a partir de 30/12/2026.</p></div>${regras}`;
+      abrirDialogo(dlgAuto, origem);
+      return;
+    }
+    $('#auto-corpo').innerHTML = `<p class="dlg-lead">Você confirma no app do seu banco que a cobrança de ${esc(mesDe(c.d.prox))} em diante pode sair sozinha.</p>${resumo}${regras}
+      <p class="pix-pendente">${ic('i-alert')}<span>Se o banco não pedir a confirmação, procure no app a área do Pix Automático, nas autorizações pendentes.</span></p>
+      <button class="btn btn--sm btn--ghost so-prototipo" type="button" id="bt-auto-confirmou">Protótipo: o banco confirmou</button>`;
+    $('#bt-auto-confirmou').addEventListener('click', () => {
+      $('#bt-auto-confirmou').outerHTML = `<p class="pix-pago" id="auto-ok" tabindex="-1">${ic('i-check-circle')}<span>O seu banco confirmou o Pix Automático. A cobrança de ${esc(mesDe(c.d.prox))} sai sozinha.</span></p>`;
+      $('#auto-ok').focus();
+      anunciar('Pix Automático confirmado.');
+      mudarPara('em-dia', { hojeFixo: c.hoje });
+    });
+    abrirDialogo(dlgAuto, origem);
+  }
+  focoAoFechar(dlgAuto);
+
+  /* ---------- cartão: a página segura do meio de pagamento ---------- */
+  const dlgCartao = $('#dlg-cartao');
+  let motivoCartao = 'trocar';
+  function abrirCartao(motivo, origem) {
+    motivoCartao = motivo;
+    const c = contexto();
+    const titulo = { trocar: 'Trocar o cartão', 'para-cartao': 'Trocar para cartão', pagar: est.forma === 'cartao' ? 'Trocar o cartão e pagar' : 'Pagar com cartão', assinar: 'Assinar com cartão' }[motivo];
+    const depois = {
+      trocar: `A próxima cobrança, em ${dataTxt(c.d.prox)}, sai no cartão novo.`,
+      'para-cartao': `A próxima cobrança, em ${dataTxt(c.d.prox)}, sai no cartão.`,
+      pagar: `A mensalidade em aberto, de ${moeda(c.plano.preco)}, é cobrada no cartão assim que você salvar.`,
+      assinar: `A primeira mensalidade, de ${moeda(PLANOS[est.planoEscolhido ?? est.plano].preco)}, é cobrada no cartão assim que você salvar.`,
+    }[motivo];
+    $('#dlg-cartao-t').textContent = titulo;
+    $('#cartao-corpo').innerHTML = `<p class="dlg-lead">Você vai para a página segura do meio de pagamento para digitar o cartão.</p><ul class="lista-dlg"><li>${ic('i-lock')}<span>O Liame não vê o número do cartão: guarda só a bandeira e o final.</span></li><li>${ic('i-calendar')}<span>${esc(depois)}</span></li><li>${ic('i-arrow-right')}<span>Depois de salvar, você volta para esta tela.</span></li></ul>`;
+    abrirDialogo(dlgCartao, origem);
+  }
+  $('#bt-cartao-ir').addEventListener('click', () => {
+    const c = contexto();
+    est.cartao = { bandeira: 'Mastercard', final: '5454', vence: '03/2030' };
+    est.forma = 'cartao';
+    dlgCartao.close('ok');
+    if (motivoCartao === 'assinar') { est.plano = est.planoEscolhido; mudarPara('primeira', { vencDaAssinatura: c.hoje, hojeFixo: c.hoje, devolvida: false }); toast('Cartão Mastercard final 5454 salvo. A assinatura começou.'); }
+    else if (motivoCartao === 'pagar') { mudarPara('em-dia', { pagoAgora: true, hojeFixo: c.hoje }); toast('Cartão Mastercard final 5454 salvo e mensalidade paga. Tudo voltou a funcionar.'); }
+    else { sincSeletores(); renderTudo(); toast('Cartão Mastercard final 5454 salvo. A próxima cobrança sai nele.'); }
+  });
+  focoAoFechar(dlgCartao);
+
+  /* ---------- assinar (empresa sem assinatura) ---------- */
+  const dlgAssinar = $('#dlg-assinar');
+  function abrirAssinar(plano, origem) {
+    est.planoEscolhido = plano;
+    const p = PLANOS[plano];
+    $('#dlg-assinar-t').textContent = `Assinar o ${p.nome}`;
+    $('#assinar-corpo').innerHTML = `<p class="dlg-lead">${esc(moeda(p.preco))} por mês, sem fidelidade.</p>
+      <fieldset class="campo"><legend>Como você quer pagar?</legend><div class="opcoes">
+        <label class="opcao"><input type="radio" name="assinar-forma" value="pix" checked><span class="opcao-txt"><b>PIX</b><span>Pague a primeira mensalidade agora pelo QR Code. As próximas chegam por e-mail, cinco dias antes do vencimento.</span></span></label>
+        <label class="opcao"><input type="radio" name="assinar-forma" value="cartao"><span class="opcao-txt"><b>Cartão</b><span>Você digita o cartão na página segura do meio de pagamento. A cobrança sai sozinha todo mês.</span></span></label>
+        <label class="opcao"><input type="radio" name="assinar-forma" value="auto" disabled><span class="opcao-txt"><b>Pix Automático · a partir de 30/12/2026</b><span>Autorize uma vez no app do banco, e o PIX de todo mês sai sozinho.</span></span></label>
+      </div></fieldset>
+      <p class="dialogo-nota">${ic('i-info')}<span>Na primeira contratação, você pode desistir em até 7 dias do pagamento e receber tudo de volta. Para cancelar depois, não há multa.</span></p>
+      <p class="exemplo">Valores de exemplo (D-A7-4).</p>`;
+    abrirDialogo(dlgAssinar, origem);
+  }
+  $('#form-assinar').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const forma = $('input[name="assinar-forma"]:checked').value;
+    dlgAssinar.close('abrindo');
+    if (forma === 'pix') abrirPix('assinar', $('[data-acao="assinar"]'));
+    else abrirCartao('assinar', $('[data-acao="assinar"]'));
+  });
+
+  /* ---------- o código do app (D-A7-14) ---------- */
+  function conferirCodigo(input, erro) {
+    const v = input.value.trim();
+    const ok = v.length === 6 && [...v].every((ch) => ch >= '0' && ch <= '9');
+    input.setAttribute('aria-invalid', String(!ok));
+    erro.hidden = ok;
+    erro.textContent = ok ? '' : (v ? 'O código tem 6 números. Confira no app e digite de novo.' : 'Digite o código de 6 números do app autenticador.');
+    // O foco vai ao campo com erro depois do desenho (V86).
+    if (!ok) setTimeout(() => input.focus(), 0);
+    return ok;
+  }
+
+  /* ---------- trocar de plano (D-A7-16) ---------- */
+  const dlgPlanos = $('#dlg-planos');
+  function contaDoPlano(novoId) {
+    const c = contexto();
+    const atual = PLANOS[est.plano], novo = PLANOS[novoId];
+    if (novoId === est.plano) return { texto: 'Este é o seu plano.', rotulo: 'Trocar de plano', igual: true };
+    const faltam = diasEntre(c.hoje, c.d.prox), periodo = diasEntre(c.d.venc, c.d.prox);
+    const hoje = diferencaDoPlano(atual.preco, novo.preco, faltam, periodo);
+    if (novo.preco > atual.preco) return { hoje, faltam, periodo, rotulo: `Subir para o ${novo.nome}`, texto: `<b>Hoje: ${esc(moeda(hoje))}</b>, a diferença pelos ${faltam} dias que faltam até ${dataTxt(c.d.prox)}.<br>A partir de ${dataTxt(c.d.prox)}: ${esc(moeda(novo.preco))} por mês. O ${esc(novo.nome)} vale na hora.` };
+    return { hoje: 0, rotulo: `Descer para o ${novo.nome}`, texto: `<b>Hoje: nada.</b> O ${esc(atual.nome)} continua até ${dataTxt(c.d.prox)}.<br>A partir de ${dataTxt(c.d.prox)}: o ${esc(novo.nome)}, por ${esc(moeda(novo.preco))} por mês.` };
+  }
+  function sincPlanos() {
+    const escolhido = $('input[name="plano-novo"]:checked').value;
+    const conta = contaDoPlano(escolhido);
+    $('#planos-conta').innerHTML = conta.texto;
+    $('#bt-planos-ok').textContent = conta.rotulo;
+    $('#bt-planos-ok').disabled = !!conta.igual;
+    $('#planos-codigo').hidden = !!conta.igual;
+  }
+  function abrirPlanos(origem) {
+    $('#planos-ops').innerHTML = Object.values(PLANOS).map((p) => `<label class="plano-op"><span class="plano-op-cab"><input type="radio" name="plano-novo" value="${p.id}"${p.id === est.plano ? ' checked' : ''}><b>${esc(p.nome)}${p.id === est.plano ? ' · o seu plano' : ''}</b><span class="plano-preco">${esc(moeda(p.preco))}<small> por mês</small></span></span>${funcs(p)}<span class="fat-det">${esc(p.ia)}</span></label>`).join('');
+    $$('input[name="plano-novo"]').forEach((r) => r.addEventListener('change', sincPlanos));
+    const cod = $('#planos-cod'); cod.value = ''; cod.removeAttribute('aria-invalid'); $('#planos-cod-erro').hidden = true;
+    sincPlanos();
+    abrirDialogo(dlgPlanos, origem);
+  }
+  $('#form-planos').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!conferirCodigo($('#planos-cod'), $('#planos-cod-erro'))) return;
+    const novoId = $('input[name="plano-novo"]:checked').value;
+    const conta = contaDoPlano(novoId);
+    const c = contexto();
+    dlgPlanos.close('ok');
+    if (conta.hoje > 0) {
+      est.extras.push({ mes: `Diferença para o ${PLANOS[novoId].nome}`, det: `Paga hoje, ${formaDoPago()}`, valor: conta.hoje });
+      est.plano = novoId; est.planoDepois = null; est.hojeFixo = c.hoje;
+      toast(`Plano trocado para o ${PLANOS[novoId].nome}. Hoje: ${moeda(conta.hoje)}.`);
+    } else {
+      est.planoDepois = novoId;
+      toast(`A partir de ${dataTxt(c.d.prox)}, o plano passa a ser o ${PLANOS[novoId].nome}.`);
+    }
+    renderTudo();
+  });
+  focoAoFechar(dlgPlanos);
+
+  /* ---------- cancelar no fim do período ---------- */
+  const dlgCancelar = $('#dlg-cancelar');
+  function abrirCancelar(origem) {
+    const c = contexto();
+    $('#cancelar-lead').textContent = `A assinatura termina em ${dataTxt(c.d.prox)}, no fim do período que você já pagou.`;
+    $('#cancelar-lista').innerHTML = [
+      ['i-check', 'Até lá, tudo funciona como hoje.'],
+      ['i-pause', `Depois, os funcionários de IA param. Você ainda entra para ver e exportar os dados até ${dataTxt(c.d.exportaCancelada)}.`],
+      ['i-alert', `Em ${dataTxt(c.d.exportaCancelada)}, os dados são apagados de vez, e você recebe o certificado de exclusão.`],
+      ['i-check', 'Não há multa. Você pode voltar a assinar quando quiser.'],
+    ].map(([i, t]) => `<li>${ic(i)}<span>${esc(t)}</span></li>`).join('');
+    $('#bt-cancelar-ok').textContent = `Cancelar em ${dataTxt(c.d.prox)}`;
+    const cod = $('#cancelar-cod'); cod.value = ''; cod.removeAttribute('aria-invalid'); $('#cancelar-cod-erro').hidden = true;
+    abrirDialogo(dlgCancelar, origem);
+  }
+  $('#form-cancelar').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!conferirCodigo($('#cancelar-cod'), $('#cancelar-cod-erro'))) return;
+    const c = contexto();
+    dlgCancelar.close('ok');
+    mudarPara('cancelada', { hojeFixo: c.hoje });
+    toast(`Assinatura cancelada. Ela termina em ${dataTxt(c.d.prox)}.`);
+  });
+  focoAoFechar(dlgCancelar);
+
+  /* ---------- desistir em 7 dias (D-A7-19) ---------- */
+  const dlgDesistir = $('#dlg-desistir');
+  let desistiu = false;
+  function abrirDesistir(origem) {
+    const c = contexto();
+    const valor = moeda(c.plano.preco);
+    desistiu = false;
+    const volta = est.forma === 'cartao' ? `o cartão ${est.cartao.bandeira} final ${est.cartao.final}: o estorno aparece na fatura do cartão` : 'a conta que pagou o PIX: a devolução sai hoje';
+    $('#desistir-corpo').innerHTML = `<p class="dlg-lead">Na primeira contratação, você pode desistir em até 7 dias do primeiro pagamento, com devolução de 100%.</p>
+      <dl class="resumo-banco"><div><dt>Devolução</dt><dd>${esc(valor)}</dd></div><div><dt>Volta para</dt><dd>${esc(volta)}</dd></div><div><dt>Prazo</dt><dd>até ${dataTxt(c.d.desistirAte)}</dd></div></dl>
+      <ul class="lista-dlg"><li>${ic('i-pause')}<span>A assinatura termina agora: os funcionários de IA param hoje.</span></li><li>${ic('i-download')}<span>Você tem até ${dataTxt(mais(c.hoje, 30))} para exportar os dados.</span></li></ul>
+      <div class="campo codigo-app"><label for="desistir-cod">Código do app autenticador</label><span class="campo-dica" id="desistir-cod-dica">Desistir muda o contrato: confirme com os 6 números do app.</span><input class="input" id="desistir-cod" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-describedby="desistir-cod-dica desistir-cod-erro"><span class="campo-erro" id="desistir-cod-erro" hidden></span></div>`;
+    $('#desistir-acoes').innerHTML = `<button class="btn" type="button" data-fechar>Voltar</button><button class="btn btn--perigo-cheio" type="submit" id="bt-desistir-ok">Desistir e receber ${esc(valor)}</button>`;
+    abrirDialogo(dlgDesistir, origem);
+  }
+  $('#form-desistir').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (desistiu) return;
+    if (!conferirCodigo($('#desistir-cod'), $('#desistir-cod-erro'))) return;
+    const c = contexto();
+    desistiu = true;
+    $('#desistir-corpo').innerHTML = `<div class="protocolo" id="desistir-ok" tabindex="-1"><b>Pedido recebido em ${dataTxt(c.hoje)} às 14:03 · protocolo L-2026-000123</b><span>A devolução de ${esc(moeda(c.plano.preco))} já foi pedida ao meio de pagamento, e a confirmação foi para o seu e-mail.</span></div>`;
+    $('#desistir-acoes').innerHTML = '<button class="btn btn--primary" type="button" data-fechar>Fechar</button>';
+    $('#desistir-ok').focus();
+    anunciar('Pedido de desistência recebido.');
+    mudarPara('sem', { devolvida: true, hojeFixo: c.hoje });
+  });
+  focoAoFechar(dlgDesistir);
+
+  /* ---------- as ações da tela (delegadas) ---------- */
+  document.addEventListener('click', (e) => {
+    const alvo = e.target instanceof Element ? e.target.closest('[data-acao]') : null;
+    if (!alvo) return;
+    const acao = alvo.dataset.acao;
+    if (acao === 'pagar-pix') abrirPix('atraso', alvo);
+    else if (acao === 'cartao-pagar') abrirCartao('pagar', alvo);
+    else if (acao === 'trocar-cartao') abrirCartao('trocar', alvo);
+    else if (acao === 'para-cartao') abrirCartao('para-cartao', alvo);
+    else if (acao === 'para-pix') { est.forma = 'pix'; sincSeletores(); renderTudo(); toast(`Pronto: a próxima cobrança é por PIX. O QR Code chega por e-mail em ${dataTxt(contexto().d.emailPix)}.`); focarTitulo(); }
+    else if (acao === 'auto-pendente') abrirAuto(alvo, 'pendente');
+    else if (acao === 'auto-previa') abrirAuto(alvo, 'previa');
+    else if (acao === 'planos') abrirPlanos(alvo);
+    else if (acao === 'cancelar') abrirCancelar(alvo);
+    else if (acao === 'desistir') abrirDesistir(alvo);
+    else if (acao === 'assinar') abrirAssinar(alvo.dataset.plano, alvo);
+    else if (acao === 'manter') { mudarPara('em-dia'); toast(`Assinatura mantida. A próxima cobrança é em ${dataTxt(contexto().d.prox)}.`); focarTitulo(); }
+    else if (acao === 'ver-cobranca') irPara('cobranca');
+    else if (acao === 'exportar') toast('Fora deste protótipo: a exportação dos dados (CSV ou JSON) é outra tela.');
+    else if (acao === 'email-notas') toast('Fora deste protótipo: o e-mail das notas se troca aqui mesmo, num campo.');
+    else if (acao === 'baixar') toast(`No app, este botão baixa ${alvo.dataset.doc}. No protótipo, nada é baixado.`);
+  });
+
+  /* ---------- começo ---------- */
+  Object.assign(est, { situacao: 'em-dia', forma: 'cartao', quem: 'dono', tela: params.get('tela') === 'resumo' ? 'resumo' : 'cobranca' });
+  sincSeletores();
+  zerar();
+  renderTudo();
+
+  /* ---------- cenários (conferidos no Chrome sem janela) ---------- */
+  const todas = [1440, 1024, 768, 375], pontas = [1440, 375];
+  const exige = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const texto = (sel) => ($(sel)?.innerText ?? '').replace(/\s+/g, ' ').trim();
+  async function preparar(situacao, forma = 'cartao', quem = 'dono', tela = 'cobranca') {
+    for (const d of $$('dialog[open]')) d.close('cancelar');
+    selSit.value = situacao; selForma.value = forma; selQuem.value = quem;
+    aplicar();
+    irPara(tela, { focar: false });
+    await esperar(150);
+  }
+  const cen = (id, larguras, fn) => { window.uiuxCenarios['p26-' + id] = { larguras, executar: async () => { await fn(); await esperar(200); } }; };
+
+  cen('em-dia', todas, async () => { await preparar('em-dia'); exige(texto('#cob-corpo').includes('A próxima cobrança é de R$ 197,00 em 21/11/2026'), 'em dia sem a próxima cobrança'); exige(!texto('#cob-corpo').includes('NaN'), 'NaN'); });
+  cen('em-dia-pix', pontas, async () => { await preparar('em-dia', 'pix'); exige(texto('#cob-corpo').includes('o QR Code chega por e-mail em 16/11/2026'), 'PIX sem a data do e-mail'); exige(texto('#cob-corpo').includes('disponível a partir de 30/12/2026'), 'sem a oferta do Pix Automático'); });
+  cen('pix-automatico', pontas, async () => { await preparar('em-dia', 'auto'); exige(texto('#cob-corpo').includes('21/02/2027'), 'o Pix Automático sem as datas de 2027'); });
+  cen('pendente', pontas, async () => { await preparar('pendente', 'auto'); exige(texto('#cob-sit-t') === 'O Pix Automático ainda não foi confirmado', 'título do pendente'); });
+  cen('primeira', todas, async () => { await preparar('primeira'); exige(texto('#cob-corpo').includes('Até 28/10/2026, você pode desistir'), 'sem o prazo da desistência'); exige(!!$('[data-acao="desistir"]'), 'sem o botão de desistir'); });
+  cen('atraso-1', todas, async () => { await preparar('atraso-1', 'pix'); const t = texto('#cob-corpo'); exige(t.includes('Pague até 30/10/2026') && t.includes('31/10/2026') && t.includes('20/11/2026'), 'datas do 1º dia'); exige(!!$('[data-acao="pagar-pix"]'), 'sem o botão de pagar'); });
+  cen('atraso-1-cartao', pontas, async () => { await preparar('atraso-1', 'cartao'); exige(texto('#cob-corpo').includes('foi recusado em 21/10/2026'), 'cartão recusado'); });
+  cen('atraso-1-auto', pontas, async () => { await preparar('atraso-1', 'auto'); exige(texto('#cob-corpo').includes('O banco tenta de novo até 28/01/2027'), 'as novas tentativas do banco'); });
+  cen('atraso-10', todas, async () => { await preparar('atraso-10', 'pix'); exige(texto('#cob-sit-t') === 'Os funcionários de IA estão parados', 'título do 10º dia'); exige(texto('#cob-corpo').includes('o Liame não pausa nenhum'), 'o que continua'); });
+  cen('atraso-30', todas, async () => { await preparar('atraso-30', 'pix'); exige(texto('#cob-corpo').includes('20/12/2026'), 'a data em que os dados são apagados'); });
+  cen('cancelada', pontas, async () => { await preparar('cancelada'); exige(texto('#cob-corpo').includes('21/12/2026'), 'o prazo para exportar'); exige(!!$('[data-acao="manter"]'), 'sem o manter'); });
+  cen('sem', todas, async () => { await preparar('sem'); exige($$('[data-acao="assinar"]').length === 2, 'os dois planos para assinar'); });
+  cen('adm', pontas, async () => { await preparar('em-dia', 'cartao', 'adm'); exige(!$('[data-acao="planos"]') && texto('#cob-corpo').includes('ficam com o Dono'), 'o administrador não troca de plano'); exige(!!$('[data-acao="trocar-cartao"]'), 'o administrador troca o cartão'); });
+  cen('adm-atraso-1', pontas, async () => { await preparar('atraso-1', 'pix', 'adm'); exige(!!$('[data-acao="pagar-pix"]'), 'o administrador paga'); });
+  cen('gestor', todas, async () => { await preparar('em-dia', 'cartao', 'gestor'); exige(texto('#cob-sem-t') === 'A cobrança fica com o Dono', 'a tela sem acesso'); exige($('#nav-cobranca').hidden, 'o item do menu aparece para o gestor'); });
+  cen('gestor-suspensa', pontas, async () => { await preparar('atraso-30', 'pix', 'gestor'); exige(texto('#cob-susp-t').includes('está suspensa'), 'a conta suspensa para a equipe'); });
+  cen('resumo-dono-1', pontas, async () => { await preparar('atraso-1', 'pix', 'dono', 'resumo'); exige(texto('#resumo-faixa').includes('Pague até 30/10/2026'), 'o aviso do 1º dia'); });
+  cen('resumo-dono-10', pontas, async () => { await preparar('atraso-10', 'pix', 'dono', 'resumo'); exige(texto('#resumo-faixa').includes('parados desde 31/10/2026'), 'o aviso do 10º dia'); });
+  cen('resumo-dono-30', pontas, async () => { await preparar('atraso-30', 'pix', 'dono', 'resumo'); exige(texto('#resumo-faixa').includes('suspensa desde 20/11/2026'), 'o aviso do 30º dia'); });
+  cen('resumo-equipe-1', pontas, async () => { await preparar('atraso-1', 'pix', 'gestor', 'resumo'); exige(texto('#resumo-faixa') === '', 'a equipe não vê o aviso no 1º dia'); });
+  cen('resumo-equipe-10', pontas, async () => { await preparar('atraso-10', 'pix', 'gestor', 'resumo'); exige(texto('#resumo-faixa').includes('Quem resolve: Rodrigo (Dono)'), 'quem resolve, para a equipe'); exige(!$('#resumo-faixa [data-acao="pagar-pix"]'), 'a equipe não tem o botão de pagar'); });
+  cen('dlg-pix', pontas, async () => { await preparar('atraso-1', 'pix'); $('[data-acao="pagar-pix"]').click(); await esperar(300); exige(dlgPix.open, 'o diálogo do PIX não abriu'); exige(texto('#dlg-pix-t') === 'Pagar R$ 197,00 com PIX', 'título do PIX'); });
+  cen('dlg-pix-pago', pontas, async () => { await preparar('atraso-10', 'pix'); $('[data-acao="pagar-pix"]').click(); await esperar(300); $('#bt-pix-simular').click(); await esperar(200); exige(texto('#pix-pago').includes('Tudo voltou a funcionar'), 'o pagamento não foi recebido'); });
+  cen('dlg-auto', pontas, async () => { await preparar('pendente', 'auto'); $('[data-acao="auto-pendente"]').click(); await esperar(300); exige(dlgAuto.open && texto('#auto-corpo').includes('CNPJ 67.748.508/0001-43'), 'o resumo do banco'); });
+  cen('dlg-auto-previa', pontas, async () => { await preparar('em-dia', 'pix'); $('[data-acao="auto-previa"]').click(); await esperar(300); exige(dlgAuto.open && texto('#auto-corpo').includes('a partir de 30/12/2026') && !$('#bt-auto-confirmou'), 'a prévia do Pix Automático'); });
+  cen('sem-planos-legiveis', todas, async () => {
+    await preparar('sem');
+    // O nome do plano não pode ficar por baixo do preço (foi assim na primeira montagem: "EssenciaR$ 197,00").
+    // A caixa do nome encolhia e o TEXTO transbordava por cima do preço: mede-se o texto (Range), não só a caixa.
+    for (const cab of $$('.plano-op-cab')) {
+      const b = cab.querySelector('b'), r = document.createRange();
+      r.selectNodeContents(b);
+      const nome = r.getBoundingClientRect(), preco = cab.querySelector('.plano-preco').getBoundingClientRect();
+      const cruza = nome.left < preco.right - 1 && preco.left < nome.right - 1 && nome.top < preco.bottom - 1 && preco.top < nome.bottom - 1;
+      exige(!cruza, `o nome do plano e o preço se sobrepõem (${b.textContent})`);
+      exige(b.scrollWidth <= b.clientWidth + 1, `o nome do plano transborda a caixa (${b.textContent})`);
+    }
+  });
+  cen('dlg-cartao', pontas, async () => { await preparar('em-dia', 'cartao'); $('[data-acao="trocar-cartao"]').click(); await esperar(300); exige(dlgCartao.open && texto('#cartao-corpo').includes('não vê o número do cartão'), 'a página segura'); });
+  cen('dlg-assinar', pontas, async () => { await preparar('sem'); $('[data-acao="assinar"][data-plano="essencial"]').click(); await esperar(300); exige(dlgAssinar.open && $('input[value="auto"]').disabled, 'o Pix Automático não fica para depois'); });
+  cen('dlg-planos', pontas, async () => { await preparar('em-dia'); $('[data-acao="planos"]').click(); await esperar(350); $('input[name="plano-novo"][value="completo"]').click(); await esperar(150); exige(texto('#planos-conta').includes('Hoje: R$ 193,55'), 'a diferença de hoje: ' + texto('#planos-conta')); });
+  cen('dlg-planos-descer', pontas, async () => { await preparar('em-dia'); est.plano = 'completo'; renderTudo(); $('[data-acao="planos"]').click(); await esperar(350); $('input[name="plano-novo"][value="essencial"]').click(); await esperar(150); exige(texto('#planos-conta').includes('O Completo continua até 21/11/2026'), 'descer vale no período seguinte'); });
+  cen('dlg-cancelar', pontas, async () => { await preparar('em-dia'); $('[data-acao="cancelar"]').click(); await esperar(300); exige(dlgCancelar.open && texto('#bt-cancelar-ok') === 'Cancelar em 21/11/2026', 'o botão de cancelar com a data'); });
+  cen('dlg-desistir', pontas, async () => { await preparar('primeira'); $('[data-acao="desistir"]').click(); await esperar(300); exige(dlgDesistir.open && texto('#desistir-corpo').includes('até 28/10/2026'), 'o prazo da desistência'); });
+  cen('dlg-desistir-protocolo', pontas, async () => { await preparar('primeira'); $('[data-acao="desistir"]').click(); await esperar(300); $('#desistir-cod').value = '482913'; $('#bt-desistir-ok').click(); await esperar(250); exige(texto('#desistir-ok').includes('protocolo L-2026-000123'), 'o protocolo'); });
+  cen('codigo-errado', [1440], async () => {
+    await preparar('em-dia'); $('[data-acao="cancelar"]').click(); await esperar(300);
+    $('#cancelar-cod').value = '1234'; $('#bt-cancelar-ok').click(); await esperar(200);
+    exige(dlgCancelar.open, 'cancelou com o código errado');
+    exige(!$('#cancelar-cod-erro').hidden && document.activeElement === $('#cancelar-cod'), 'o erro e o foco no campo');
+  });
+  cen('conta', [1440], async () => {
+    exige(diferencaDoPlano(197, 397, 30, 31) === 193.55, 'a conta da diferença');
+    exige(diferencaDoPlano(397, 197, 30, 31) === 0, 'descer não cobra hoje');
+    const d = datasDo(dt('21/10/2026'), { primeiro: dt('21/10/2026') });
+    exige(dataTxt(d.para) === '31/10/2026' && dataTxt(d.suspende) === '20/11/2026' && dataTxt(d.apaga) === '20/12/2026' && dataTxt(d.desistirAte) === '28/10/2026' && dataTxt(d.emailPix) === '16/11/2026', 'as datas do atraso');
+    await preparar('em-dia'); $('[data-acao="planos"]').click(); await esperar(350); $('input[name="plano-novo"][value="completo"]').click(); await esperar(150);
+    exige(texto('#planos-conta').includes(moeda(diferencaDoPlano(197, 397, 30, 31)).replace(/\s/g, ' ')), 'a tela e a conta não batem');
+  });
+  cen('fluxo-pagar', [1440], async () => {
+    await preparar('atraso-10', 'pix'); $('[data-acao="pagar-pix"]').click(); await esperar(300); $('#bt-pix-simular').click(); await esperar(200); dlgPix.close('ok'); await esperar(300);
+    exige(est.situacao === 'em-dia' && texto('#cob-corpo').includes('Nota em emissão'), 'depois de pagar, em dia com a nota em emissão');
+  });
+  cen('fluxo-assinar', [1440], async () => {
+    await preparar('sem', 'pix'); $('[data-acao="assinar"][data-plano="essencial"]').click(); await esperar(300); $('#bt-assinar-ok').click(); await esperar(300);
+    exige(dlgPix.open, 'assinar pelo PIX abre o QR Code'); $('#bt-pix-simular').click(); await esperar(200); dlgPix.close('ok'); await esperar(300);
+    exige(est.situacao === 'primeira' && texto('#cob-corpo').includes('Até 29/10/2026'), 'a desistência conta do primeiro pagamento: ' + texto('#cob-sit-t'));
+  });
+  cen('fluxo-cancelar-manter', [1440], async () => {
+    await preparar('em-dia'); $('[data-acao="cancelar"]').click(); await esperar(300); $('#cancelar-cod').value = '482913'; $('#bt-cancelar-ok').click(); await esperar(300);
+    exige(est.situacao === 'cancelada' && texto('#cob-sit-t') === 'A assinatura termina em 21/11/2026', 'cancelada');
+    $('[data-acao="manter"]').click(); await esperar(200); exige(est.situacao === 'em-dia', 'manter volta a em dia');
+  });
+  cen('fluxo-desistir', [1440], async () => {
+    await preparar('primeira', 'pix'); $('[data-acao="desistir"]').click(); await esperar(300); $('#desistir-cod').value = '482913'; $('#bt-desistir-ok').click(); await esperar(200); dlgDesistir.close('ok'); await esperar(300);
+    exige(est.situacao === 'sem' && texto('#cob-corpo').includes('Devolvida'), 'depois de desistir, a fatura devolvida');
+  });
+  cen('fluxo-subir', [1440], async () => {
+    await preparar('em-dia'); $('[data-acao="planos"]').click(); await esperar(350); $('input[name="plano-novo"][value="completo"]').click(); $('#planos-cod').value = '482913'; $('#bt-planos-ok').click(); await esperar(300);
+    exige(est.plano === 'completo' && texto('#cob-corpo').includes('Diferença para o Completo'), 'subir de plano');
+  });
+  cen('gaveta-menu', [375, 768], async () => {
+    await preparar('em-dia');
+    btMenu.click(); await esperar(500);
+    exige(app.classList.contains('gaveta'), 'a gaveta do menu não abriu');
+    exige(document.activeElement === $('#bt-fechar-menu'), 'o foco não foi para o botão de fechar');
+  });
+  cen('modo-pro', [1440, 1024], async () => { await preparar('atraso-1', 'pix', 'dono', 'resumo'); definirModo('pro', { silencioso: true }); await esperar(200); exige(!$('#modo-top').hidden, 'o seletor Lite/Pro some no Resumo'); });
+})();
+</script>
+</body>
+</html>
