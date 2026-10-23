@@ -56,6 +56,8 @@ import { PecasController } from './criativo/pecas.controller.js';
 import { PecasService } from './criativo/pecas.service.js';
 import { FotosController } from './fotos/fotos.controller.js';
 import { FotosService } from './fotos/fotos.service.js';
+import { CobrancaController } from './cobranca/cobranca.controller.js';
+import { CobrancaService } from './cobranca/cobranca.service.js';
 import { ArmazemModule } from './imagens/armazem.module.js';
 import { LinksController } from './links/links.controller.js';
 import { LinksService } from './links/links.service.js';
@@ -86,8 +88,8 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, ArmazemModule, AuthModule],
-  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController, PesquisaController, AutonomiaController, EquipeController, ResumoController, PecasController, ConversoesController, MensageriaController, AvaliacoesController, FotosController],
+  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController, PesquisaController, AutonomiaController, EquipeController, ResumoController, PecasController, ConversoesController, MensageriaController, AvaliacoesController, FotosController, CobrancaController],
   // HubDms: o hub da DMS (Hub DMS, A4, etapa 3; desligado por padrão): a API só manda os erros 5xx; quem bate é o worker.
-  providers: [TelemetryLifecycle, HubDms, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, EscritaMeta, EscritaGoogle, EscritaRegemcast, EscritaPerfil, BudgetService, OpcoesDoPedidoService, LifecycleService, ConnectionsService, MediaService, ResultsService, DesempenhoService, ComoTeAchamService, FotosService,LinksService, CouponsService, AtencaoCicloService, RevisaoService, RelatorioService, ModelosIa, AiGateway, RevisorService, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService, EquipeService, ResumoService, PecasService, DecisoesDePecaService, CustoDasPecasService, ConversoesService, MensageriaService, DescontoDasMensagensService, PedidoDeMensagemService, AvaliacoesService],
+  providers: [TelemetryLifecycle, HubDms, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, EscritaMeta, EscritaGoogle, EscritaRegemcast, EscritaPerfil, BudgetService, OpcoesDoPedidoService, LifecycleService, ConnectionsService, MediaService, ResultsService, DesempenhoService, ComoTeAchamService, FotosService,LinksService, CouponsService, AtencaoCicloService, RevisaoService, RelatorioService, ModelosIa, AiGateway, RevisorService, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService, EquipeService, ResumoService, PecasService, DecisoesDePecaService, CustoDasPecasService, ConversoesService, MensageriaService, DescontoDasMensagensService, PedidoDeMensagemService, AvaliacoesService, CobrancaService],
 })
 export class AppModule {}

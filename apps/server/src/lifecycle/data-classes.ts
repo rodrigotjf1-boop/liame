@@ -199,4 +199,11 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // de imagens. É conteúdo da empresa (a tela pede foto sem pessoas que dê para reconhecer). Fica enquanto a marca
   // existir, ou até alguém apagar; a rotina `fotos` do worker e o expurgo tiram o arquivo antes da linha.
   brand_photo: { class: 'CONFIDENTIAL', retention: 'enquanto a marca existir, ou até alguém apagar (o arquivo sai antes da linha)' },
+  // Plano e cobrança (A7, W1, migration 0080). Os planos são do produto: o preço e os funcionários de cada versão. A
+  // assinatura e as faturas são da empresa: o plano, a forma de pagar, as datas e os valores; nenhum dado de cartão (o
+  // cartão fica no meio de pagamento, A7-1). O que a lei manda guardar de uma cobrança paga fica na auditoria e na nota
+  // fiscal (W4), não aqui.
+  billing_plan: { class: 'PUBLIC', retention: 'do produto' },
+  subscription: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  billing_invoice: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
 };

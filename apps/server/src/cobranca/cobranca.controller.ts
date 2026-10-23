@@ -1,0 +1,160 @@
+import {
+  BillingPlansResponse,
+  BillingQuery,
+  BillingResponse,
+  CancelSubscriptionRequest,
+  ChangePlanRequest,
+  KeepSubscriptionRequest,
+  ProblemDetails,
+  SubscribeRequest,
+  WithdrawSubscriptionRequest,
+} from '@liame/contracts';
+import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiConflictResponse,
+  ApiCookieAuth,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiTooManyRequestsResponse,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import { Auditar } from '../audit/auditar.js';
+import { Auth, Permissao } from '../auth/access.js';
+import type { AuthContext } from '../context/request-context.js';
+import { ACAO_ASSINAR, ACAO_CANCELAR, ACAO_DESISTIR, ACAO_MANTER, ACAO_TROCAR_PLANO, CobrancaService, RECURSO } from './cobranca.service.js';
+
+// Plano e cobrança (A7, W1; protótipo P26, aprovado em 22/10/2026): os planos, a assinatura de cada marca e as faturas.
+// Nenhum dado de cartão passa por aqui (A7-1). O pagamento entra com a W2.
+
+const PRECISA_DA_FUNCAO = 'Precisa da função `cobranca` ligada para a empresa (409 `funcao-desligada`).';
+const PEDE_O_CODIGO =
+  'Pede o código do app autenticador de quem pede (D-A7-14): errado, 401 `codigo-invalido`; sem o app autenticador ativo, 403 `segundo-fator-nao-configurado`; muitas tentativas, 429.';
+
+@ApiTags('cobranca')
+@ApiCookieAuth('liame_sessao')
+@Controller('billing')
+export class CobrancaController {
+  constructor(private readonly cobranca: CobrancaService) {}
+
+  @Get('plans')
+  @Permissao('cobranca.ver')
+  @ApiOperation({
+    summary: 'Os planos para assinar',
+    description: `Os planos que uma assinatura nova recebe (a versão oferecida de cada um), com o preço por mês e os funcionários de IA incluídos, na ordem da tela. Com a função \`cobranca\` desligada para a empresa, \`enabled\` é \`false\` e a lista vem vazia.`,
+  })
+  @ApiOkResponse({ standardSchema: BillingPlansResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  planos(@Auth() auth: AuthContext): Promise<BillingPlansResponse> {
+    return this.cobranca.planos(auth);
+  }
+
+  @Get()
+  @Permissao('cobranca.ver')
+  @ApiOperation({
+    summary: 'A cobrança da marca',
+    description:
+      'A assinatura viva da marca (ou, sem ela, a última que terminou) e as faturas, a mais nova primeiro (até 36), com o dia de hoje no fuso da empresa. A situação segue os dias de atraso da mensalidade mais antiga em aberto: do 1º ao 9º dia, `em_atraso`; do 10º ao 29º, `acoes_paradas`; do 30º em diante, `suspensa` (Termos 10.4). Com a função `cobranca` desligada, `enabled` é `false`, e a assinatura e as faturas vêm vazias.',
+  })
+  @ApiOkResponse({ standardSchema: BillingResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  daMarca(@Auth() auth: AuthContext, @Query({ schema: BillingQuery }) query: BillingQuery): Promise<BillingResponse> {
+    return this.cobranca.daMarca(auth, query.brand_id);
+  }
+
+  @Post('subscription')
+  @HttpCode(200)
+  @Permissao('cobranca.gerenciar')
+  @Auditar(ACAO_ASSINAR, { recurso: RECURSO })
+  @ApiOperation({
+    summary: 'Assinar um plano',
+    description: `A assinatura nasce esperando o primeiro pagamento, com a primeira mensalidade vencendo hoje; sem o pagamento em 7 dias, ela termina sozinha. O mesmo pedido de novo não contrata duas vezes; outro plano ou outra forma, antes do primeiro pagamento, substitui o pedido. A marca com assinatura em andamento, 409 \`assinatura-existe\`; plano fora dos oferecidos, 400. ${PRECISA_DA_FUNCAO}`,
+  })
+  @ApiOkResponse({ standardSchema: BillingResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  assinar(@Auth() auth: AuthContext, @Body({ schema: SubscribeRequest }) body: SubscribeRequest): Promise<BillingResponse> {
+    return this.cobranca.assinar(auth, body);
+  }
+
+  @Post('subscription/plan')
+  @HttpCode(200)
+  @Permissao('cobranca.gerenciar')
+  @Auditar(ACAO_TROCAR_PLANO, { recurso: RECURSO })
+  @ApiOperation({
+    summary: 'Trocar de plano',
+    description: `Subir vale quando a diferença dos dias que faltam no período é paga (a fatura da diferença vence hoje); descer vale no período seguinte; escolher de novo o plano em vigor desfaz a troca marcada. Só na assinatura em dia: antes do primeiro pagamento, 409 \`assinatura-sem-pagamento\`; com mensalidade em aberto, 409 \`assinatura-em-atraso\`; cancelada, 409 \`assinatura-cancelada\`; sem assinatura, 404 \`sem-assinatura\`. ${PEDE_O_CODIGO} ${PRECISA_DA_FUNCAO}`,
+  })
+  @ApiOkResponse({ standardSchema: BillingResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  trocarPlano(@Auth() auth: AuthContext, @Body({ schema: ChangePlanRequest }) body: ChangePlanRequest): Promise<BillingResponse> {
+    return this.cobranca.trocarPlano(auth, body);
+  }
+
+  @Post('subscription/cancel')
+  @HttpCode(200)
+  @Permissao('cobranca.gerenciar')
+  @Auditar(ACAO_CANCELAR, { recurso: RECURSO })
+  @ApiOperation({
+    summary: 'Cancelar a assinatura',
+    description: `Vale no fim do período pago, sem multa (Termos 11.1): até lá, tudo funciona, e a fatura do período seguinte não é cobrada. Se o período em vigor não foi pago, termina agora, e o que está em aberto não é cobrado; a que espera o primeiro pagamento também termina agora. Sem assinatura, 404 \`sem-assinatura\`. ${PEDE_O_CODIGO} ${PRECISA_DA_FUNCAO}`,
+  })
+  @ApiOkResponse({ standardSchema: BillingResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  cancelar(@Auth() auth: AuthContext, @Body({ schema: CancelSubscriptionRequest }) body: CancelSubscriptionRequest): Promise<BillingResponse> {
+    return this.cobranca.cancelar(auth, body);
+  }
+
+  @Post('subscription/keep')
+  @HttpCode(200)
+  @Permissao('cobranca.gerenciar')
+  @Auditar(ACAO_MANTER, { recurso: RECURSO })
+  @ApiOperation({
+    summary: 'Manter a assinatura cancelada',
+    description: `Desfaz o cancelamento antes do fim do período: a assinatura segue como estava. A que não está cancelada fica como está. Sem assinatura, 404 \`sem-assinatura\`. ${PRECISA_DA_FUNCAO}`,
+  })
+  @ApiOkResponse({ standardSchema: BillingResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  manter(@Auth() auth: AuthContext, @Body({ schema: KeepSubscriptionRequest }) body: KeepSubscriptionRequest): Promise<BillingResponse> {
+    return this.cobranca.manter(auth, body);
+  }
+
+  @Post('subscription/withdraw')
+  @HttpCode(200)
+  @Permissao('cobranca.gerenciar')
+  @Auditar(ACAO_DESISTIR, { recurso: RECURSO })
+  @ApiOperation({
+    summary: 'Desistir em 7 dias, com a devolução integral',
+    description: `Só na primeira contratação da empresa, até o 7º dia depois do primeiro pagamento (Termos 11.1): a assinatura termina agora, e o que foi pago fica com a devolução pedida ao meio de pagamento. Fora do prazo, 409 \`fora-do-prazo-de-desistencia\`; sem assinatura, 404 \`sem-assinatura\`. ${PEDE_O_CODIGO} ${PRECISA_DA_FUNCAO}`,
+  })
+  @ApiOkResponse({ standardSchema: BillingResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  desistir(@Auth() auth: AuthContext, @Body({ schema: WithdrawSubscriptionRequest }) body: WithdrawSubscriptionRequest): Promise<BillingResponse> {
+    return this.cobranca.desistir(auth, body);
+  }
+}

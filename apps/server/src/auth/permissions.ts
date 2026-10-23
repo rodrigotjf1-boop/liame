@@ -52,6 +52,16 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 const ALL = new Set<Permission>(PERMISSIONS);
 
+/**
+ * O que o acesso à cobrança dá ao Administrador quando o Dono o libera em Pessoas e acessos (ADR-017; D-A7-13): ver a
+ * cobrança. Pagar e trocar a forma de pagamento entram com o meio de pagamento (W2); mudar o contrato (assinar, trocar de
+ * plano, cancelar, desistir) fica só com o Dono. A sessão e as rotinas que agem sem ela (`pessoa-pode.ts`) usam esta
+ * mesma lista.
+ */
+export const PERMISSOES_DA_COBRANCA_LIBERADA: readonly Permission[] = ['cobranca.ver'];
+/** O único nível que recebe o acesso à cobrança (a mesma regra da tela de Pessoas, `grant-rules.ts`). */
+export const NIVEL_DA_COBRANCA_LIBERADA: RoleKey = 'administrador';
+
 /** Níveis que mexem em dinheiro ou em pessoas: segundo fator obrigatório (ADR-013, ADR-017). */
 export const MFA_REQUIRED: ReadonlySet<RoleKey> = new Set<RoleKey>(['dono', 'administrador', 'gestor', 'aprovador']);
 

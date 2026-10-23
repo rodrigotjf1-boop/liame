@@ -36,7 +36,7 @@
 
 ## 3. Entregas no Liame
 
-Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplicadas na nuvem antes do merge (a última é a 0076). Letra **W**. Antes do código: os protótipos da seção 5 e a reconferência da seção 8. **Quatro blocos que param sozinhos**, cada um entrega valor sem o seguinte:
+Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplicadas na nuvem antes do merge (a da W1 é a 0080). Letra **W**. Antes do código: os protótipos da seção 5 e a reconferência da seção 8. **Quatro blocos que param sozinhos**, cada um entrega valor sem o seguinte:
 
 - **Bloco 1 · Vender sozinho** (W1 a W5): sem ele não há cliente de fora.
 - **Bloco 2 · Agências** (W6 a W8): o parceiro, a visão dele e a conta do dono.
@@ -87,6 +87,18 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | D-A7-17 | **O PIX e o Pix Automático** | Quem escolhe PIX recebe a cobrança do mês por e-mail 5 dias antes do vencimento, com o QR Code, e também paga pela tela; quem paga no cartão continua no cartão. **Revista pelo dono em 22/10/2026** ("não é prioridade, pode deixar pronto porém não usar de início"): o Pix Automático fica pronto no código e **desligado no início**, numa função própria; só com ela ligada a tela oferece autorizá-lo, e nunca antes de 30/12/2026 | O Banco Central só libera o Pix Automático para o CNPJ com seis meses (`base-conhecimento.md` §18.1); o PIX comum com o aviso antes já tira o "esqueci de pagar" |
 | D-A7-18 | **A nota de cada cobrança** | A NFS-e sai depois do pagamento, em PDF e XML, na lista das faturas e no e-mail que o Dono escolhe para as notas; enquanto não sai, a linha diz "em emissão"; a nota de uma cobrança devolvida é cancelada | O critério A7-4 (toda cobrança paga tem a nota), e o contador costuma receber as notas por e-mail |
 | D-A7-19 | **A desistência em 7 dias** | Pela própria tela, como foi a contratação; devolução de 100% (no cartão, o estorno; no PIX, para a conta que pagou), com protocolo e e-mail na hora; a assinatura termina no pedido, e os dados seguem os 30 dias da seção 11.2 dos Termos | Os Termos 11.1; e o Decreto 7.962/2013 (art. 5º) pede a desistência pela mesma ferramenta da contratação, com a confirmação imediata |
+
+### Da W1 (técnicas, tomadas pela recomendação em 23/10/2026; o dono pode trocar)
+
+| # | Decisão | Recomendação | Por quê |
+| --- | --- | --- | --- |
+| D-A7-20 | **O plano tem versão** | Cada plano (`essencial`, `completo`) tem versões, e a assinatura fica presa à versão que contratou. Um preço novo é uma versão nova, para quem assina depois; o reajuste de quem já assina é outro passo, com o aviso de 30 dias e a chance de cancelar antes (Termos 10.3) | Mudar o preço de um plano não pode mudar, sem aviso, a cobrança de quem já assina |
+| D-A7-21 | **O dia do vencimento** | O dia do primeiro pagamento; no mês que não tem esse dia, o último dia do mês (31/01 → 28/02 → 31/03) | O vencimento não escorrega para o mês seguinte, e o dia 31 não vira 28 para sempre depois de fevereiro |
+| D-A7-22 | **Como contam os dias de atraso** | Pela mensalidade mais antiga em aberto, no calendário da empresa (o fuso dela): o 1º dia é o seguinte ao vencimento; no 10º, as ações param; no 30º, a conta é suspensa. Pagou, a situação volta na hora (pela que ainda ficar em aberto, se houver outra) | É o texto dos Termos 10.4 com as datas do P26 aprovado; contar pelo fuso da empresa evita o "atraso" que começa às 21h |
+| D-A7-23 | **Subir de plano** | Vale quando a diferença é paga: no cartão, em segundos; no PIX, quando o PIX cai. A diferença que não for paga até o fim do período deixa de valer, e o plano fica como estava | Ninguém fica com o plano maior sem pagar a diferença, e a diferença esquecida não vira dívida |
+| D-A7-24 | **O primeiro pagamento** | A assinatura espera o primeiro pagamento por 7 dias; sem ele, termina sozinha, e a fatura não é cobrada. Contratar de novo antes disso (outro plano ou outra forma) substitui o pedido | O pedido que ninguém paga não pode ficar aberto para sempre nem travar a marca |
+| D-A7-25 | **Cancelar com a mensalidade em aberto** | Se o período em vigor não foi pago, não há "fim do período pago" para esperar: a assinatura termina na hora, e o que está em aberto não é cobrado | Os Termos 11.1 dizem que o cancelamento vale no fim do período **já pago**; cobrar depois de cancelar é o primeiro risco da seção 10 |
+| D-A7-26 | **A franquia de IA vira o teto da empresa** | O teto de IA da empresa é o que a distribuição definir para ela (`ai_budget`); sem isso, a soma das franquias dos planos das marcas com assinatura viva; sem franquia, o teto padrão do servidor. Os dois planos nascem sem franquia (D-A7-5): nada muda no teto até o valor ser fixado | A franquia é de cada plano, e a empresa pode ter mais de uma marca; o teto que a distribuição define à mão continua valendo, como hoje |
 
 ## 5. Protótipos para aprovação (antes do código de tela)
 
