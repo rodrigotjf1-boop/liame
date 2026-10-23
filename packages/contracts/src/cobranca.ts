@@ -106,6 +106,8 @@ export const BillingResponse = z.strictObject({
   enabled: z.boolean(),
   /** Quem pede muda o contrato (assinar, trocar de plano, cancelar, desistir): só o Dono (D-A7-13). */
   can_manage: z.boolean(),
+  /** Quem pede paga e troca a forma de pagamento: o Dono e o Administrador com a cobrança liberada (D-A7-13). */
+  can_pay: z.boolean(),
   /** O dia de hoje no fuso da empresa: as datas da tela contam dele. */
   today: Dia,
   /** A assinatura viva da marca; sem ela, a última que terminou; nula se a marca nunca assinou. */
@@ -144,3 +146,20 @@ export const WithdrawSubscriptionRequest = z.strictObject({
   code: CodigoDoApp,
 });
 export type WithdrawSubscriptionRequest = z.infer<typeof WithdrawSubscriptionRequest>;
+
+/** O PIX de uma fatura (A7, W2a; D-A7-30): o QR Code da cobrança no meio de pagamento, criada na hora se ainda não existe. */
+export const BillingPixResponse = z.strictObject({
+  invoice_id: z.uuid(),
+  /** O valor e o vencimento da fatura do Liame. */
+  amount_cents: Centavos,
+  due_date: Dia,
+  /** A imagem do QR Code, em PNG (base64). */
+  qr_code_png_base64: z.string().min(1),
+  /** O código "copia e cola" do PIX. */
+  copy_paste: z.string().min(1),
+  /** Até quando o QR Code vale, como o meio de pagamento informa; nulo quando ele não diz. */
+  expires_at: z.string().nullable(),
+  /** A fatura na página do meio de pagamento: outro jeito de pagar o mesmo PIX. */
+  invoice_url: z.string().nullable(),
+});
+export type BillingPixResponse = z.infer<typeof BillingPixResponse>;

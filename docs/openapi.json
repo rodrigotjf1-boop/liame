@@ -78770,6 +78770,9 @@
                     "can_manage": {
                       "type": "boolean"
                     },
+                    "can_pay": {
+                      "type": "boolean"
+                    },
                     "today": {
                       "type": "string",
                       "format": "date",
@@ -79093,6 +79096,7 @@
                     "brand_id",
                     "enabled",
                     "can_manage",
+                    "can_pay",
                     "today",
                     "subscription",
                     "invoices"
@@ -79306,6 +79310,475 @@
         ]
       }
     },
+    "/v1/billing/invoices/{id}/pix": {
+      "get": {
+        "description": "O QR Code da cobrança da fatura no Asaas (a imagem em PNG e o copia e cola), criada na hora se ainda não existe, com o valor e o vencimento da fatura. A cobrança é uma por fatura (D-A7-30): pedir de novo devolve a mesma. Só a fatura em aberto de uma assinatura no PIX (409 `fatura-nao-esta-em-aberto` e `fatura-nao-e-pix`); a de outra empresa, 404 `fatura-nao-encontrada`. Sem o CNPJ da empresa, 409 `cnpj-necessario`. Enquanto outro caminho gera a mesma cobrança, 409 `cobranca-em-criacao`, com `retry-after`. O Asaas fora do ar, 502 `meio-de-pagamento-fora-do-ar`; recusando a cobrança, 502 `meio-de-pagamento-recusou`; pedindo pausa, 503 `meio-de-pagamento-ocupado`, com `retry-after`; sem o Asaas configurado, 503 `pagamento-indisponivel`. Precisa da função `cobranca` ligada para a empresa (409 `funcao-desligada`).",
+        "operationId": "CobrancaController_pix",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoice_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "amount_cents": {
+                      "type": "string",
+                      "pattern": "^\\d+$"
+                    },
+                    "due_date": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "qr_code_png_base64": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "copy_paste": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "expires_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "invoice_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "invoice_id",
+                    "amount_cents",
+                    "due_date",
+                    "qr_code_png_base64",
+                    "copy_paste",
+                    "expires_at",
+                    "invoice_url"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "O PIX de uma fatura",
+        "tags": [
+          "cobranca"
+        ]
+      }
+    },
     "/v1/billing/subscription": {
       "post": {
         "description": "A assinatura nasce esperando o primeiro pagamento, com a primeira mensalidade vencendo hoje; sem o pagamento em 7 dias, ela termina sozinha. O mesmo pedido de novo não contrata duas vezes; outro plano ou outra forma, antes do primeiro pagamento, substitui o pedido. A marca com assinatura em andamento, 409 `assinatura-existe`; plano fora dos oferecidos, 400. Precisa da função `cobranca` ligada para a empresa (409 `funcao-desligada`).",
@@ -79363,6 +79836,9 @@
                       "type": "boolean"
                     },
                     "can_manage": {
+                      "type": "boolean"
+                    },
+                    "can_pay": {
                       "type": "boolean"
                     },
                     "today": {
@@ -79688,6 +80164,7 @@
                     "brand_id",
                     "enabled",
                     "can_manage",
+                    "can_pay",
                     "today",
                     "subscription",
                     "invoices"
@@ -80021,6 +80498,9 @@
                     "can_manage": {
                       "type": "boolean"
                     },
+                    "can_pay": {
+                      "type": "boolean"
+                    },
                     "today": {
                       "type": "string",
                       "format": "date",
@@ -80344,6 +80824,7 @@
                     "brand_id",
                     "enabled",
                     "can_manage",
+                    "can_pay",
                     "today",
                     "subscription",
                     "invoices"
@@ -80799,6 +81280,9 @@
                     "can_manage": {
                       "type": "boolean"
                     },
+                    "can_pay": {
+                      "type": "boolean"
+                    },
                     "today": {
                       "type": "string",
                       "format": "date",
@@ -81122,6 +81606,7 @@
                     "brand_id",
                     "enabled",
                     "can_manage",
+                    "can_pay",
                     "today",
                     "subscription",
                     "invoices"
@@ -81572,6 +82057,9 @@
                     "can_manage": {
                       "type": "boolean"
                     },
+                    "can_pay": {
+                      "type": "boolean"
+                    },
                     "today": {
                       "type": "string",
                       "format": "date",
@@ -81895,6 +82383,7 @@
                     "brand_id",
                     "enabled",
                     "can_manage",
+                    "can_pay",
                     "today",
                     "subscription",
                     "invoices"
@@ -82222,6 +82711,9 @@
                     "can_manage": {
                       "type": "boolean"
                     },
+                    "can_pay": {
+                      "type": "boolean"
+                    },
                     "today": {
                       "type": "string",
                       "format": "date",
@@ -82545,6 +83037,7 @@
                     "brand_id",
                     "enabled",
                     "can_manage",
+                    "can_pay",
                     "today",
                     "subscription",
                     "invoices"

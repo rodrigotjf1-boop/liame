@@ -412,7 +412,9 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
     const gestor = await convidado('gestor');
 
     const visto = await estado(e, adm.cookie);
-    expect(visto).toMatchObject({ enabled: true, can_manage: false });
+    // Desde a W2a, quem tem a cobrança liberada também paga (D-A7-13).
+    expect(visto).toMatchObject({ enabled: true, can_manage: false, can_pay: true });
+    expect(await estado(e)).toMatchObject({ can_manage: true, can_pay: true });
     expect(visto.subscription!.status).toBe('aguardando_pagamento');
     expect((await api.call('GET', '/v1/billing/plans', { cookie: adm.cookie })).status).toBe(200);
     expect((await api.call('POST', '/v1/billing/subscription', { cookie: adm.cookie, body: { brand_id: e.brandId, plan: 'completo', method: 'pix' } })).status).toBe(403);
@@ -424,6 +426,12 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
     const pode = (userId: string, permissao = 'cobranca.ver') => withSystem(database.db, (tx) => pessoaPode(tx, { tenantId: e.tenantId, userId, permissao }));
     expect([await pode(adm.userId), await pode(admSem.userId), await pode(gestor.userId), await pode(e.userId)]).toEqual([true, false, false, true]);
     expect(await pode(adm.userId, 'cobranca.gerenciar')).toBe(false);
+    expect([await pode(adm.userId, 'cobranca.pagar'), await pode(admSem.userId, 'cobranca.pagar'), await pode(gestor.userId, 'cobranca.pagar'), await pode(e.userId, 'cobranca.pagar')]).toEqual([
+      true,
+      false,
+      false,
+      true,
+    ]);
 
     // A marca de outra empresa não aparece (a RLS esconde: 404).
     const outra = await empresa('Casa Brasa Vizinha');

@@ -1,4 +1,5 @@
 import {
+  BillingPixResponse,
   BillingPlansResponse,
   BillingQuery,
   BillingResponse,
@@ -6,11 +7,13 @@ import {
   ChangePlanRequest,
   KeepSubscriptionRequest,
   ProblemDetails,
+  ResourceId,
   SubscribeRequest,
   WithdrawSubscriptionRequest,
 } from '@liame/contracts';
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
+  ApiBadGatewayResponse,
   ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCookieAuth,
@@ -18,6 +21,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
@@ -25,12 +29,15 @@ import {
 import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
+import { SemTransacao } from '../context/sem-transacao.js';
 import { ACAO_ASSINAR, ACAO_CANCELAR, ACAO_DESISTIR, ACAO_MANTER, ACAO_TROCAR_PLANO, CobrancaService, RECURSO } from './cobranca.service.js';
 
-// Plano e cobrança (A7, W1; protótipo P26, aprovado em 22/10/2026): os planos, a assinatura de cada marca e as faturas.
-// Nenhum dado de cartão passa por aqui (A7-1). O pagamento entra com a W2.
+// Plano e cobrança (A7, W1 e W2a; protótipo P26, aprovado em 22/10/2026): os planos, a assinatura de cada marca, as
+// faturas e o PIX de cada uma, pelo Asaas. Nenhum dado de cartão passa por aqui (A7-1).
 
 const PRECISA_DA_FUNCAO = 'Precisa da função `cobranca` ligada para a empresa (409 `funcao-desligada`).';
+const CHAMA_O_MEIO_DE_PAGAMENTO =
+  'lê a fatura e grava a referência da cobrança em transações curtas, com a empresa no contexto da RLS, e chama o Asaas (procurar e criar o cliente e a cobrança, ler o QR Code) sem transação aberta';
 const PEDE_O_CODIGO =
   'Pede o código do app autenticador de quem pede (D-A7-14): errado, 401 `codigo-invalido`; sem o app autenticador ativo, 403 `segundo-fator-nao-configurado`; muitas tentativas, 429.';
 
@@ -65,6 +72,24 @@ export class CobrancaController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   daMarca(@Auth() auth: AuthContext, @Query({ schema: BillingQuery }) query: BillingQuery): Promise<BillingResponse> {
     return this.cobranca.daMarca(auth, query.brand_id);
+  }
+
+  @Get('invoices/:id/pix')
+  @Permissao('cobranca.pagar')
+  @SemTransacao(CHAMA_O_MEIO_DE_PAGAMENTO)
+  @ApiOperation({
+    summary: 'O PIX de uma fatura',
+    description: `O QR Code da cobrança da fatura no Asaas (a imagem em PNG e o copia e cola), criada na hora se ainda não existe, com o valor e o vencimento da fatura. A cobrança é uma por fatura (D-A7-30): pedir de novo devolve a mesma. Só a fatura em aberto de uma assinatura no PIX (409 \`fatura-nao-esta-em-aberto\` e \`fatura-nao-e-pix\`); a de outra empresa, 404 \`fatura-nao-encontrada\`. Sem o CNPJ da empresa, 409 \`cnpj-necessario\`. Enquanto outro caminho gera a mesma cobrança, 409 \`cobranca-em-criacao\`, com \`retry-after\`. O Asaas fora do ar, 502 \`meio-de-pagamento-fora-do-ar\`; recusando a cobrança, 502 \`meio-de-pagamento-recusou\`; pedindo pausa, 503 \`meio-de-pagamento-ocupado\`, com \`retry-after\`; sem o Asaas configurado, 503 \`pagamento-indisponivel\`. ${PRECISA_DA_FUNCAO}`,
+  })
+  @ApiOkResponse({ standardSchema: BillingPixResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiBadGatewayResponse({ standardSchema: ProblemDetails })
+  @ApiServiceUnavailableResponse({ standardSchema: ProblemDetails })
+  pix(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<BillingPixResponse> {
+    return this.cobranca.pix(auth, id);
   }
 
   @Post('subscription')

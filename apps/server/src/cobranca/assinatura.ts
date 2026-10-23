@@ -9,6 +9,7 @@ import {
   diaNoFuso,
   diasEntre,
   diferencaDoPlano,
+  MINIMO_DA_COBRANCA_CENTAVOS,
   passosDoAtraso,
   proximoVencimento,
   situacaoPeloAtraso,
@@ -364,8 +365,9 @@ export async function trocarPlano(tx: Tx, s: LinhaDaAssinatura, novo: { id: stri
   const inicio = s.period_start as string;
   const fim = s.period_end as string;
   const valor = diferencaDoPlano(Number(atual.price_cents), Number(novo.price_cents), diasEntre(hoje, fim), diasEntre(inicio, fim));
-  if (valor === 0) {
-    // Sem dia a pagar (o último dia do período): o plano muda já, e o período seguinte vai por ele.
+  if (valor < MINIMO_DA_COBRANCA_CENTAVOS) {
+    // Sem dia a pagar (o último dia do período) ou abaixo do mínimo do meio de pagamento (D-A7-32): o plano muda já, sem
+    // cobrança, e o período seguinte vai por ele.
     await tx.execute(sql`update liame.subscription set plan_id = ${novo.id}, updated_at = now() where id = ${s.id}`);
     await mensalidadeSeguintePeloPlano(tx, s, novo.id);
     return { tipo: 'subir', diferencaCents: 0, faturaId: null };
@@ -481,11 +483,19 @@ type LinhaDaFatura = {
 /** A cobrança da marca como a tela lê: a assinatura viva (ou a última que terminou) e as faturas. */
 export async function estadoDaMarca(
   tx: Tx,
-  p: { tenantId: string; brandId: string; agora: Date; ligada: boolean; podeMudar: boolean },
+  p: { tenantId: string; brandId: string; agora: Date; ligada: boolean; podeMudar: boolean; podePagar: boolean },
 ): Promise<BillingResponse> {
   const fuso = await fusoDaEmpresa(tx, p.tenantId);
   const hoje = diaNoFuso(p.agora, fuso);
-  const vazio: BillingResponse = { brand_id: p.brandId, enabled: p.ligada, can_manage: p.podeMudar, today: hoje, subscription: null, invoices: [] };
+  const vazio: BillingResponse = {
+    brand_id: p.brandId,
+    enabled: p.ligada,
+    can_manage: p.podeMudar,
+    can_pay: p.podePagar,
+    today: hoje,
+    subscription: null,
+    invoices: [],
+  };
   if (!p.ligada) return vazio;
   const s = (
     await tx.execute<LinhaDaAssinatura>(sql`

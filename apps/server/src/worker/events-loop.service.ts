@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional, type OnApplicationBootstrap, type OnAppli
 import { erroDoLaco, FalhasDoLaco, HubDms, PASSAGEIRAS_ATE_ERRO } from '../connectors/dms/hub.js';
 import { ActionExecutor } from './action-executor.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
+import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
@@ -67,6 +68,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly fotos: FotosLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
     private readonly assinaturas: AssinaturasLoop,
+    private readonly cobrancasPix: CobrancasPixLoop,
     /** O hub da DMS: a falha de um laço vai também à lista de erros dele (desligado por padrão, `HUB_LIGADO`). */
     @Optional() private readonly hub?: HubDms,
   ) {}
@@ -127,6 +129,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // Plano e cobrança (A7, W1): cada assinatura passa uma vez por dia, no começo do dia da empresa; a fila é olhada
       // de 5 em 5 minutos. Com a função `cobranca` desligada, a assinatura espera parada.
       this.loop('assinaturas', 20, 300_000, async (n) => (await this.assinaturas.executarLote(n)).length),
+      // O PIX pelo Asaas (A7, W2a): a fatura que nasce ganha a cobrança no Asaas; a fila é olhada a cada 30 segundos
+      // (a primeira mensalidade nasce com a pessoa assinando, e o QR Code também pode ser pedido por ela na hora).
+      this.loop('cobrancas-pix', 10, 30_000, async (n) => (await this.cobrancasPix.executarLote(n)).length),
     );
   }
 

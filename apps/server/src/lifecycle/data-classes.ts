@@ -206,4 +206,7 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   billing_plan: { class: 'PUBLIC', retention: 'do produto' },
   subscription: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
   billing_invoice: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  // A empresa como cliente no meio de pagamento (A7, W2a, migration 0081): só o id dela lá (`cus_…`). O nome e o CNPJ
+  // que o Asaas guarda são os da empresa, enviados na primeira cobrança.
+  billing_customer: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
 };

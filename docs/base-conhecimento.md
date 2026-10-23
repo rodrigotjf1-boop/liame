@@ -1620,7 +1620,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Autenticação e ambientes** [O] (autenticação, 13/10/2026; chaves de API, 13/10/2026):
   - a chave vai no cabeçalho `access_token`; a de outro ambiente, a ausente ou a inválida dão 401;
   - Sandbox em `https://api-sandbox.asaas.com/v3` (chave `$aact_hmlg_`) e produção em `https://api.asaas.com/v3` (chave `$aact_prod_`);
-  - "O header `User-Agent` é obrigatório para novas contas raiz criadas a partir de 13/06/2024" (a do Liame é nova);
+  - "O header `User-Agent` é obrigatório para novas contas raiz criadas a partir de 13/06/2024" (a do Liame é nova); a resposta sem ele: [NC] (o Liame manda em toda chamada, e o teste da W2a trata a falta como recusa);
   - a chave aparece uma vez só e não se recupera; sem uso, é desabilitada em 3 meses e expira em 6;
   - GET com corpo responde 403.
 - **Limites** [O] (rate e quota limit, 13/10/2026):
@@ -1634,7 +1634,8 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 - **Cobrança** [O] (criar cobrança, 08/09/2026; QR Code do PIX, 08/09/2026; excluir cobrança, 08/09/2026):
   - `POST /v3/payments` com `customer`, `billingType` (`PIX`, `CREDIT_CARD`, `BOLETO` ou `UNDEFINED`, em que o pagador escolhe na fatura), `value`, `dueDate`, `description` (até 500 letras) e `externalReference`; o estado se acompanha pelos avisos, não por consultas repetidas;
   - o QR Code do PIX (`GET /v3/payments/{id}/pixQrCode`) é dinâmico e pago uma vez só; com chave Pix cadastrada, vale até 12 meses depois do vencimento; sem chave, até as 23:59 do dia;
-  - remover (`DELETE /v3/payments/{id}`) não devolve dinheiro e pode ser desfeito (`restore`).
+  - remover (`DELETE /v3/payments/{id}`) não devolve dinheiro e pode ser desfeito (`restore`);
+  - cobrança com `dueDate` no passado: [NC] (a W2a manda a fatura atrasada vencendo hoje, no fuso da empresa, e o teste trata o vencimento no passado como recusado); o formato exato de `invoiceUrl` e de `status` também não tem regra escrita [NC]: o Liame grava só o que cabe nas regras dele (o endereço em `https`, a situação em maiúsculas) e deixa o resto vazio para a releitura.
 - **Valor mínimo e teto** [O] (Central, editado em 19/08/2026): de R$ 5 a R$ 500.000 por cobrança para pessoa jurídica; até 100 cobranças por dia com a conta em análise e 2.000 com ela aprovada. Mínimo diferente para PIX e cartão: [NC].
 - **Cartão sem o número no Liame** [O] (cartão, 22/10/2026; PCI-DSS, 22/10/2026; redirecionamento, 04/08/2026):
   - a fatura hospedada (`invoiceUrl`) e o Asaas Checkout "podem reduzir o escopo" do PCI; a tokenização no servidor deixa a infraestrutura de quem integra no escopo e, em produção, "depende de habilitação e está sujeita à análise";
