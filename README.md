@@ -18,7 +18,7 @@ lia-agente-3d     kit da LIA em 3D (biblioteca, Estúdio, exemplos e avatar 2D)
 
 ## Como rodar
 
-Requisitos: Node **24** (o CI usa o 24; localmente, 22.22.3+ também funciona) e **pnpm 12.6**, que vem do campo `packageManager`.
+Requisitos: Node **24.22.1** (a versão exata do `.nvmrc`, a mesma do CI e das imagens; localmente, 22.23.4+ também funciona; abaixo dessas, o boletim de segurança do Node de 21/10/2026 fica sem correção) e **pnpm 12.6**, que vem do campo `packageManager`.
 
 O Turborepo precisa do executável `pnpm` no PATH: `npm install -g pnpm@12.6.0` (o pnpm global troca sozinho para a versão do `packageManager` de cada projeto; o corepack deixou de vir com o Node a partir do 25).
 
