@@ -4,6 +4,7 @@ import { SpanStatusCode, trace } from '@opentelemetry/api';
 import { APICallError, dynamicTool, generateText, type LanguageModel, type LanguageModelUsage, type ModelMessage, NoObjectGeneratedError, Output, RetryError, type ToolSet } from 'ai';
 import { sql } from 'drizzle-orm';
 import type { z } from 'zod';
+import { tetoDoDia, tetoDoMes } from '../cobranca/franquia.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -490,11 +491,12 @@ export class AiGateway {
       }
     }
 
-    // Dia e mês viram no fuso da empresa, como o orçamento de mídia.
+    // Dia e mês viram no fuso da empresa, como o orçamento de mídia. O teto é o da distribuição, senão a franquia dos
+    // planos, senão o padrão (`cobranca/franquia.ts`, D-A7-26).
     const g = (
       await tx.execute<{ teto_dia: string; teto_mes: string; gasto_dia: string; gasto_mes: string }>(sql`
-        select coalesce(b.daily_usd_micros, ${this.config.ai.dailyLimitUsdMicros})::text as teto_dia,
-               coalesce(b.monthly_usd_micros, ${this.config.ai.monthlyLimitUsdMicros})::text as teto_mes,
+        select ${tetoDoDia(this.config.ai.dailyLimitUsdMicros)} as teto_dia,
+               ${tetoDoMes(this.config.ai.monthlyLimitUsdMicros)} as teto_mes,
                (select coalesce(sum(u.cost_usd_micros), 0)::text from liame.ai_usage u
                  where u.tenant_id = o.id and u.occurred_at >= date_trunc('day', now() at time zone o.timezone) at time zone o.timezone) as gasto_dia,
                (select coalesce(sum(u.cost_usd_micros), 0)::text from liame.ai_usage u

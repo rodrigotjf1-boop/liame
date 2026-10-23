@@ -27,8 +27,6 @@ export const FLAG_COBRANCA = 'cobranca';
 export type Forma = 'cartao' | 'pix' | 'pix_automatico';
 export type MotivoDoFim = 'cancelada' | 'desistencia' | 'nao_paga' | 'substituida';
 
-/** A assinatura que ainda conta (paga ao menos uma vez e não encerrada): a da franquia de IA e a da rotina. */
-export const VIVAS_PAGAS = ['ativa', 'em_atraso', 'acoes_paradas', 'suspensa'] as const;
 /** Quantos períodos a rotina anda numa vez só (o worker parado por meses não trava a assinatura num laço sem fim). */
 const PERIODOS_POR_VEZ = 24;
 /** As faturas na tela: até 36 (três anos de mensalidades). */

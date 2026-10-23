@@ -1,13 +1,15 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
+import { tetoDoDia, tetoDoMes } from '../cobranca/franquia.js';
 import { type Gasto, type SituacaoDoTeto, situacaoDoTeto } from './teto.js';
 
 // O uso de IA da empresa para quem precisa saber, ANTES de pedir, se um pedido cabe no limite (A4, X6; D-A4-32). São
 // os mesmos números que o AI Gateway confere em toda chamada (`gateway.ts`, `preparar`): o gasto do dia e do mês, no
-// fuso da empresa, e o teto dela (`ai_budget`) ou, sem linha, o padrão do servidor. Aqui o relógio é o de quem chama
-// (V34): no gateway é o do banco, e os dois andam juntos fora do teste.
+// fuso da empresa, e o teto dela (`ai_budget`; sem linha, a franquia dos planos, D-A7-26; sem franquia, o padrão do
+// servidor: `cobranca/franquia.ts`). Aqui o relógio é o de quem chama (V34): no gateway é o do banco, e os dois andam
+// juntos fora do teste.
 
-/** O teto que vale para a empresa que não tem linha em `ai_budget`. */
+/** O teto que vale para a empresa que não tem linha em `ai_budget` nem franquia de plano. */
 export interface LimitesPadraoDeIa {
   dailyLimitUsdMicros: number;
   monthlyLimitUsdMicros: number;
@@ -38,8 +40,8 @@ export async function usoDeIaDaEmpresa(tx: Tx, tenantId: string, padrao: Limites
   const instante = agora.toISOString();
   const l = (
     await tx.execute<{ teto_dia: string; teto_mes: string; gasto_dia: string; gasto_mes: string; inicio_do_dia: Date | string }>(sql`
-      select coalesce(b.daily_usd_micros, ${padrao.dailyLimitUsdMicros})::text as teto_dia,
-             coalesce(b.monthly_usd_micros, ${padrao.monthlyLimitUsdMicros})::text as teto_mes,
+      select ${tetoDoDia(padrao.dailyLimitUsdMicros)} as teto_dia,
+             ${tetoDoMes(padrao.monthlyLimitUsdMicros)} as teto_mes,
              (select coalesce(sum(u.cost_usd_micros), 0)::text from liame.ai_usage u
                where u.tenant_id = o.id and u.occurred_at >= date_trunc('day', ${instante}::timestamptz at time zone o.timezone) at time zone o.timezone) as gasto_dia,
              (select coalesce(sum(u.cost_usd_micros), 0)::text from liame.ai_usage u
