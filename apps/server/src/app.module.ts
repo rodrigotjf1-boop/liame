@@ -36,6 +36,7 @@ import { LifecycleController } from './lifecycle/lifecycle.controller.js';
 import { MediaController } from './media/media.controller.js';
 import { MediaService } from './media/media.service.js';
 import { LifecycleService } from './lifecycle/lifecycle.service.js';
+import { AvisoDoAsaasController } from './inbox/aviso-do-asaas.controller.js';
 import { InboxController } from './inbox/inbox.controller.js';
 import { InboxService } from './inbox/inbox.service.js';
 import { KillSwitchController } from './kill-switch/kill-switch.controller.js';
@@ -89,7 +90,7 @@ import { WebhooksService } from './webhooks/webhooks.service.js';
 
 @Module({
   imports: [DiscoveryModule, DatabaseModule, VaultModule, ArmazemModule, AuthModule],
-  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController, PesquisaController, AutonomiaController, EquipeController, ResumoController, PecasController, ConversoesController, MensageriaController, AvaliacoesController, FotosController, CobrancaController],
+  controllers: [HealthController, TenancyController, PeopleController, WebhooksController, InboxController, AuditController, OfrepController, KillSwitchController, PolicyController, ActionsController, LifecycleController, ConnectionsController, MediaController, ResultsController, LinksController, CouponsController, AiController, MarcaController, ConversaController, DemandasController, PlanosController, PesquisaController, AutonomiaController, EquipeController, ResumoController, PecasController, ConversoesController, MensageriaController, AvaliacoesController, FotosController, CobrancaController, AvisoDoAsaasController],
   // HubDms: o hub da DMS (Hub DMS, A4, etapa 3; desligado por padrão): a API só manda os erros 5xx; quem bate é o worker.
   providers: [TelemetryLifecycle, HubDms, PeopleService, WebhooksService, InboxService, FlagService, KillSwitchService, ActionService, EscritaRegem, EscritaMeta, EscritaGoogle, EscritaRegemcast, EscritaPerfil, BudgetService, OpcoesDoPedidoService, LifecycleService, ConnectionsService, MediaService, ResultsService, DesempenhoService, ComoTeAchamService, FotosService,LinksService, CouponsService, AtencaoCicloService, RevisaoService, RelatorioService, ModelosIa, AiGateway, RevisorService, FerramentasDeLeitura, ExplicarService, RetornoService, MarcaService, ConversaService, DemandasService, PropostaDeCupomService, PlanosService, PesquisaService, AutonomiaService, EquipeService, ResumoService, PecasService, DecisoesDePecaService, CustoDasPecasService, ConversoesService, MensageriaService, DescontoDasMensagensService, PedidoDeMensagemService, AvaliacoesService, CobrancaService, MeioAsaas],
 })

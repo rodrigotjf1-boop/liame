@@ -25,7 +25,9 @@ import { ActionExecutor } from './action-executor.js';
 import { MeioAsaas } from '../cobranca/meio-asaas.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
+import { avisoDoAsaas } from './aviso-do-asaas.js';
 import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
+import { CobrancasReleituraLoop } from './cobrancas-releitura-loop.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
 import { FotosLoop } from './fotos-loop.js';
@@ -83,8 +85,15 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
     { provide: Mailer, inject: [APP_CONFIG], useFactory: (config: AppConfig) => createMailer(config) },
-    // Processadores por provedor: o Regem (A2.5) antecipa a leitura das lojas da conexão; os demais só guardam.
-    { provide: INBOX_HANDLERS, useValue: new Map<string, InboxHandler>([['regem', eventoDoRegem]]) },
+    // Processadores por provedor: o Regem (A2.5) antecipa a leitura das lojas da conexão; o Asaas (A7, W2a) marca a
+    // fatura da cobrança para reler; os demais só guardam.
+    {
+      provide: INBOX_HANDLERS,
+      useValue: new Map<string, InboxHandler>([
+        ['regem', eventoDoRegem],
+        ['asaas', avisoDoAsaas],
+      ]),
+    },
     // O hub da DMS (Hub DMS, A4, etapa 3; desligado por padrão): o worker bate, lê a lista de parada e manda os erros dos laços.
     { provide: MODO_DO_HUB, useValue: 'worker' satisfies ModoDoHub },
     HubDms,
@@ -193,6 +202,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // O PIX pelo Asaas (A7, W2a): a cobrança de cada fatura que nasce, criada no Asaas. Sem a chave do Asaas, nada roda.
     MeioAsaas,
     CobrancasPixLoop,
+    // E a releitura (W2a, parte 2): o aviso do Asaas, a conferência diária, a fatura cancelada ou com o valor mudado.
+    CobrancasReleituraLoop,
     VigiaService,
     // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, para mostrar o custo de IA em reais.
     CambioService,

@@ -3,6 +3,8 @@ import { listRoutes } from '../src/auth/routes.js';
 import { startApi, type TestApi } from './helpers/api.js';
 
 // A1-4: guard global que nega por padrão. Toda rota declara o acesso; sem sessão, só as públicas respondem.
+// O aviso do Asaas (A7, W2a, parte 2): pública porque quem prova a origem é o token do aviso, conferido em tempo
+// constante; grava só o evento cru (deduplicado) e responde 200, como o Asaas espera; o resto é do worker.
 const PUBLIC_ROUTES = [
   'GET /health',
   'GET /health/ready',
@@ -11,6 +13,7 @@ const PUBLIC_ROUTES = [
   'POST /v1/auth/login',
   'POST /v1/auth/password/forgot',
   'POST /v1/auth/password/reset',
+  'POST /v1/billing/asaas/webhook',
   'POST /v1/inbox/:provider',
   'POST /v1/inbox/:provider/:connectionId',
   'POST /v1/invitations/preview',

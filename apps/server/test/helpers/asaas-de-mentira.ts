@@ -12,11 +12,17 @@ import type { AddressInfo } from 'node:net';
 //   - o vencimento no passado: [NC], aqui recusado (400), o pior caso;
 //   - o QR Code devolve a imagem, o copia e cola e a validade (QR Code do PIX, 08/09/2026);
 //   - o 429 traz o `RateLimit-Reset` e não traz `Retry-After` (rate e quota limit, 13/10/2026);
-//   - o erro vem em `errors: [{ code, description }]`.
+//   - o erro vem em `errors: [{ code, description }]`;
+//   - remover (`DELETE /payments/{id}`) responde `{ deleted: true, id }` (excluir cobrança, 08/09/2026); remover a
+//     cobrança já recebida: [NC], aqui recusado (400); ler a cobrança removida: [NC], aqui 404, o pior caso;
+//   - o aviso traz o `id` do evento, o `event` e o objeto `payment`, com `paymentDate`, `clientPaymentDate` e
+//     `confirmedDate` (eventos para cobranças, 13/10/2026), e o token no cabeçalho `asaas-access-token`.
 // O teste escolhe como cada caminho responde, e lê o que foi pedido (`vistos`).
 
 /** A chave da conta de teste, num nome neutro e longe do cabeçalho do pedido (o gitleaks lê a chave do lado do nome, ERR-131). */
 export const CHAVE_DE_TESTE_DO_ASAAS = '$aact_hmlg_teste-do-liame-sem-valor-nenhum';
+/** O token do aviso nos testes (de 32 a 255 letras, sem espaço), também num nome neutro (V101, ERR-131). */
+export const MARCA_DO_AVISO_DE_TESTE = 'marca-do-aviso-do-asaas-de-mentira-com-mais-de-32';
 
 /** Como um caminho do Asaas responde: bem, fora do ar (503), pedindo pausa (429) ou recusando a chave (401). */
 export type RespostaDoAsaas = 'ok' | 'fora' | 'sem-cota' | 'chave-recusada';
@@ -36,6 +42,9 @@ export type CobrancaNoAsaas = {
   status: string;
   invoiceUrl: string;
   deleted: boolean;
+  paymentDate: string | null;
+  clientPaymentDate: string | null;
+  confirmedDate: string | null;
 };
 
 type Resposta = { status: number; corpo: unknown; cabecalhos?: Record<string, string> };
@@ -60,15 +69,18 @@ export class AsaasDeMentira {
   readonly vistos: Visto[] = [];
   readonly clientes: ClienteNoAsaas[] = [];
   readonly cobrancas: CobrancaNoAsaas[] = [];
-  /** Como respondem criar a cobrança e ler o QR Code. */
+  /** Como respondem criar a cobrança, ler o QR Code e ler uma cobrança pelo id. */
   criar: RespostaDoAsaas = 'ok';
   qrCode: RespostaDoAsaas = 'ok';
+  ler: RespostaDoAsaas = 'ok';
   /** O Asaas cria a cobrança e a conexão cai antes da resposta (503): a cobrança ficou lá. */
   caiDepoisDeCriar = false;
   /** O que o 429 manda esperar, em segundos (`RateLimit-Reset`). */
   resetEmSegundos = '120';
   /** Segura a resposta de criar a cobrança até o teste soltar (para dois caminhos ao mesmo tempo). */
   segurarCriacao: Promise<void> | null = null;
+  /** Segura a resposta de ler uma cobrança pelo id até o teste soltar (o aviso que chega no meio da releitura). */
+  segurarLeitura: Promise<void> | null = null;
   /**
    * O endereço da fatura hospedada e a situação da cobrança nova. O padrão segue a documentação (`invoiceUrl` em https,
    * `status: PENDING`); o teste troca pelo pior caso para conferir o que o banco aceita (V43).
@@ -77,6 +89,7 @@ export class AsaasDeMentira {
   situacaoNova = 'PENDING';
   private servidor: Server | null = null;
   private readonly anterior: Record<string, string | undefined> = {};
+  private avisos = 0;
 
   async subir(): Promise<void> {
     this.servidor = createServer((req, res) => {
@@ -100,7 +113,11 @@ export class AsaasDeMentira {
     const servidor = this.servidor;
     await new Promise<void>((ok) => servidor.listen(0, '127.0.0.1', ok));
     this.base = `http://127.0.0.1:${(servidor.address() as AddressInfo).port}`;
-    const ambiente: Record<string, string> = { ASAAS_API_URL: `${this.base}/v3`, ASAAS_API_KEY: CHAVE_DE_TESTE_DO_ASAAS };
+    const ambiente: Record<string, string> = {
+      ASAAS_API_URL: `${this.base}/v3`,
+      ASAAS_API_KEY: CHAVE_DE_TESTE_DO_ASAAS,
+      ASAAS_WEBHOOK_TOKEN: MARCA_DO_AVISO_DE_TESTE,
+    };
     for (const k of Object.keys(ambiente)) this.anterior[k] = process.env[k];
     Object.assign(process.env, ambiente);
   }
@@ -117,6 +134,36 @@ export class AsaasDeMentira {
   /** As cobranças criadas para uma fatura do Liame (pelo `externalReference`). */
   cobrancasDa(faturaId: string): CobrancaNoAsaas[] {
     return this.cobrancas.filter((c) => c.externalReference === faturaId);
+  }
+
+  /** O cliente paga a cobrança: a situação (no PIX, `RECEIVED`), o dia e, se o teste quiser, outro valor. */
+  pagar(id: string, dia: string, opcoes: { situacao?: string; valor?: number } = {}): CobrancaNoAsaas {
+    const c = this.cobrancas.find((x) => x.id === id);
+    if (!c) throw new Error(`o Asaas de mentira não tem a cobrança ${id}`);
+    c.status = opcoes.situacao ?? 'RECEIVED';
+    if (opcoes.valor !== undefined) c.value = opcoes.valor;
+    c.paymentDate = dia;
+    c.clientPaymentDate = dia;
+    c.confirmedDate = dia;
+    return c;
+  }
+
+  /** Alguém remove a cobrança no painel do Asaas. */
+  removerNoPainel(id: string): void {
+    const c = this.cobrancas.find((x) => x.id === id);
+    if (c) c.deleted = true;
+  }
+
+  /** O corpo do aviso, como o Asaas o manda (eventos para cobranças, 13/10/2026): o id do evento é único por envio. */
+  aviso(cobranca: CobrancaNoAsaas, evento = 'PAYMENT_RECEIVED'): string {
+    this.avisos += 1;
+    return JSON.stringify({
+      id: `evt_${randomBytes(16).toString('hex')}&${this.avisos}`,
+      event: evento,
+      dateCreated: `${hojeNoBrasil()} 10:00:00`,
+      account: { id: '47ed0d25-f9fb-4b35-b23a-d8895caf92b7', ownerId: null },
+      payment: { object: 'payment', ...cobranca },
+    });
   }
 
   private async responder(req: IncomingMessage, texto: string): Promise<Resposta> {
@@ -191,6 +238,9 @@ export class AsaasDeMentira {
         status: this.situacaoNova,
         invoiceUrl: this.enderecoDaFatura(id),
         deleted: false,
+        paymentDate: null,
+        clientPaymentDate: null,
+        confirmedDate: null,
       };
       this.cobrancas.push(cobranca);
       if (this.caiDepoisDeCriar) return erro(503, 'service_unavailable', 'Serviço indisponível');
@@ -205,8 +255,20 @@ export class AsaasDeMentira {
     }
     const uma = /^\/payments\/([a-z0-9_]+)$/.exec(caminho);
     if (metodo === 'GET' && uma) {
+      if (this.ler === 'fora') return erro(503, 'service_unavailable', 'Serviço indisponível');
+      if (this.segurarLeitura) await this.segurarLeitura;
       const c = this.cobrancas.find((x) => x.id === uma[1]);
-      return c ? { status: 200, corpo: { object: 'payment', ...c } } : erro(404, 'not_found', 'Cobrança não encontrada');
+      // A removida: o pior caso (o que a documentação não diz) é o 404.
+      return c && !c.deleted ? { status: 200, corpo: { object: 'payment', ...c } } : erro(404, 'not_found', 'Cobrança não encontrada');
+    }
+    if (metodo === 'DELETE' && uma) {
+      const c = this.cobrancas.find((x) => x.id === uma[1]);
+      if (!c || c.deleted) return erro(404, 'not_found', 'Cobrança não encontrada');
+      if (c.status === 'RECEIVED' || c.status === 'CONFIRMED' || c.status === 'RECEIVED_IN_CASH') {
+        return erro(400, 'invalid_action', 'Não é possível remover uma cobrança já recebida');
+      }
+      c.deleted = true;
+      return { status: 200, corpo: { deleted: true, id: c.id } };
     }
     return erro(404, 'not_found', 'Recurso não encontrado');
   }

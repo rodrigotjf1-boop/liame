@@ -564,7 +564,14 @@ O pagamento (W2) é o que faz a assinatura começar de verdade: até lá, nada �
 - abaixo de R$ 5, a diferença da troca de plano não vira cobrança, e o plano muda na hora (D-A7-32);
 - sem a chave do Asaas configurada, a rota responde "pagamento indisponível" e a rotina não faz nada.
 
-Falta a W2a, parte 2: o aviso do Asaas, a releitura que marca a fatura paga, a conferência diária e a devolução do PIX. A chave da conta de testes (com o endereço do Sandbox e o token do aviso) vai para o EasyPanel quando a parte 2 estiver pronta, num passo só. Depois, a W2b e a tela (W5).
+A W2a, parte 1, entrou como o PR #327, no ar desde 23/10/2026, 06h33 (horário de Brasília), com a 0081 conferida na produção.
+
+**W2a, parte 2: o aviso do Asaas e a releitura que marca a fatura paga (23/10/2026; migration 0082, só um índice; a função `cobranca` segue desligada):**
+- o aviso do Asaas chega numa rota pública própria (`POST /v1/billing/asaas/webhook`, que responde 200 como o Asaas espera), com o token conferido em tempo constante, e é gravado uma vez só; o processador só marca a fatura para reler (D-A7-28);
+- a releitura lê a cobrança na API e decide: paga entra pelo `pagarFatura`, com o dia que o Asaas informou; pendente espera; a removida no Asaas é refeita; a do valor de antes (a troca de plano reprecifica a mensalidade em aberto) sai e é refeita; a fatura cancelada no Liame tem a cobrança removida no Asaas; e o que só uma pessoa resolve (paga a menos, estornada, paga depois de cancelada) para com o porquê;
+- sem aviso, cada cobrança é relida uma vez por dia (a conferência diária que cobre o aviso perdido); o aviso que chega no meio de uma releitura não se perde.
+
+Falta a W2a, parte 3: o Liame criar o webhook dele no Asaas pela API, conferir todo dia se a fila do webhook parou e devolver o PIX na desistência em 7 dias. A chave da conta de testes (com o endereço do Sandbox e o token do aviso) vai para o EasyPanel quando a parte 3 estiver pronta, num passo só: sem o webhook criado, o pagamento só apareceria na releitura do dia seguinte. Depois, a W2b e a tela (W5).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

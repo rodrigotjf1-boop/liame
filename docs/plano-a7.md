@@ -36,7 +36,7 @@
 
 ## 3. Entregas no Liame
 
-Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplicadas na nuvem antes do merge (a da W1 é a 0080; a da W2a, parte 1, a 0081). Letra **W**. Antes do código: os protótipos da seção 5 e a reconferência da seção 8. **Quatro blocos que param sozinhos**, cada um entrega valor sem o seguinte:
+Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplicadas na nuvem antes do merge (a da W1 é a 0080; as da W2a, a 0081 e a 0082). Letra **W**. Antes do código: os protótipos da seção 5 e a reconferência da seção 8. **Quatro blocos que param sozinhos**, cada um entrega valor sem o seguinte:
 
 - **Bloco 1 · Vender sozinho** (W1 a W5): sem ele não há cliente de fora.
 - **Bloco 2 · Agências** (W6 a W8): o parceiro, a visão dele e a conta do dono.
@@ -166,7 +166,7 @@ Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplic
 | --- | --- |
 | Começar | ✅ Aceite deste plano e das decisões da seção 4 (21/10/2026) |
 | W1 | ✅ O preço e os planos (D-A7-4, 22/10/2026: R$ 249,00 e R$ 449,00); a franquia de IA de cada plano depois de um mês de uso de verdade (D-A7-5) |
-| W2 | ✅ A conta de testes do Asaas (23/10/2026, no nome da empresa, com o e-mail confirmado). Depois, um passo por vez e quando eu avisar: a chave da conta de testes, direto para o EasyPanel, quando o código da W2a estiver pronto; para a W2b, o domínio do Liame nos dados comerciais da conta (a volta da página do cartão); e, depois dos testes, a conta de verdade, no CNPJ da empresa. A chave nunca vai para a conversa |
+| W2 | ✅ A conta de testes do Asaas (23/10/2026, no nome da empresa, com o e-mail confirmado). Depois, um passo por vez e quando eu avisar: a chave da conta de testes, direto para o EasyPanel, quando a W2a estiver pronta (com a parte 3, que cria o webhook do Liame pela API); para a W2b, o domínio do Liame nos dados comerciais da conta (a volta da página do cartão); e, depois dos testes, a conta de verdade, no CNPJ da empresa. A chave nunca vai para a conversa |
 | W4 | O contador: o código de serviço, a alíquota, as retenções e a cidade da nota |
 | W6 e W7 | Uma agência de verdade para o piloto do vínculo, se houver |
 | W12 | O piloto de ações da A4 (A4-14) e a decisão de ligar a flag `autopilot`, empresa por empresa |

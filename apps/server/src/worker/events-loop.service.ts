@@ -3,6 +3,7 @@ import { erroDoLaco, FalhasDoLaco, HubDms, PASSAGEIRAS_ATE_ERRO } from '../conne
 import { ActionExecutor } from './action-executor.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
 import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
+import { CobrancasReleituraLoop } from './cobrancas-releitura-loop.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
@@ -69,6 +70,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly sugestoes: SugestoesDeRespostaLoop,
     private readonly assinaturas: AssinaturasLoop,
     private readonly cobrancasPix: CobrancasPixLoop,
+    private readonly releitura: CobrancasReleituraLoop,
     /** O hub da DMS: a falha de um laço vai também à lista de erros dele (desligado por padrão, `HUB_LIGADO`). */
     @Optional() private readonly hub?: HubDms,
   ) {}
@@ -132,6 +134,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // O PIX pelo Asaas (A7, W2a): a fatura que nasce ganha a cobrança no Asaas; a fila é olhada a cada 30 segundos
       // (a primeira mensalidade nasce com a pessoa assinando, e o QR Code também pode ser pedido por ela na hora).
       this.loop('cobrancas-pix', 10, 30_000, async (n) => (await this.cobrancasPix.executarLote(n)).length),
+      // A releitura (W2a, parte 2): o aviso do Asaas marca a fatura para reler na hora, e a pessoa que pagou espera ver
+      // a fatura paga; a fila é olhada a cada 15 segundos. Sem aviso, cada cobrança é relida uma vez por dia.
+      this.loop('cobrancas-releitura', 10, 15_000, async (n) => (await this.releitura.executarLote(n)).length),
     );
   }
 
