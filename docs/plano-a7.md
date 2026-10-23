@@ -36,7 +36,7 @@
 
 ## 3. Entregas no Liame
 
-Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplicadas na nuvem antes do merge (a da W1 é a 0080). Letra **W**. Antes do código: os protótipos da seção 5 e a reconferência da seção 8. **Quatro blocos que param sozinhos**, cada um entrega valor sem o seguinte:
+Cada entrega é um PR com CI verde. Migrations testadas no local e no CI e aplicadas na nuvem antes do merge (a da W1 é a 0080; a da W2a, parte 1, a 0081). Letra **W**. Antes do código: os protótipos da seção 5 e a reconferência da seção 8. **Quatro blocos que param sozinhos**, cada um entrega valor sem o seguinte:
 
 - **Bloco 1 · Vender sozinho** (W1 a W5): sem ele não há cliente de fora.
 - **Bloco 2 · Agências** (W6 a W8): o parceiro, a visão dele e a conta do dono.

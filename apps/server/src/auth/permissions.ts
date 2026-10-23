@@ -15,6 +15,8 @@ export const PERMISSIONS = [
   'pessoas.alterar_nivel',
   'cobranca.ver',
   'cobranca.gerenciar',
+  // Pagar e trocar a forma de pagamento (A7, W2a, migration 0081; D-A7-13).
+  'cobranca.pagar',
   'auditoria.ver',
   'acoes.aprovar',
   'campanhas.ver',
@@ -54,11 +56,10 @@ const ALL = new Set<Permission>(PERMISSIONS);
 
 /**
  * O que o acesso à cobrança dá ao Administrador quando o Dono o libera em Pessoas e acessos (ADR-017; D-A7-13): ver a
- * cobrança. Pagar e trocar a forma de pagamento entram com o meio de pagamento (W2); mudar o contrato (assinar, trocar de
- * plano, cancelar, desistir) fica só com o Dono. A sessão e as rotinas que agem sem ela (`pessoa-pode.ts`) usam esta
- * mesma lista.
+ * cobrança, pagar e trocar a forma de pagamento (desde a W2a). Mudar o contrato (assinar, trocar de plano, cancelar,
+ * desistir) fica só com o Dono. A sessão e as rotinas que agem sem ela (`pessoa-pode.ts`) usam esta mesma lista.
  */
-export const PERMISSOES_DA_COBRANCA_LIBERADA: readonly Permission[] = ['cobranca.ver'];
+export const PERMISSOES_DA_COBRANCA_LIBERADA: readonly Permission[] = ['cobranca.ver', 'cobranca.pagar'];
 /** O único nível que recebe o acesso à cobrança (a mesma regra da tela de Pessoas, `grant-rules.ts`). */
 export const NIVEL_DA_COBRANCA_LIBERADA: RoleKey = 'administrador';
 

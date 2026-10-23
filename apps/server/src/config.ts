@@ -112,6 +112,14 @@ const Env = z.object({
   AI_USER_HOURLY_CALLS: z.coerce.number().int().min(1).max(10_000).default(30),
   /** Respostas da LIA numa conversa: passou disso, a pessoa começa outra (limite por conversa, A3-9). */
   AI_CONVERSATION_MAX_ANSWERS: z.coerce.number().int().min(1).max(200).default(20),
+  /**
+   * O Asaas (A7, W2; D-A7-33): a chave da conta do Liame no Asaas (da distribuição), o endereço do ambiente (primeiro o
+   * Sandbox) e o token que o Asaas manda em todo aviso (gerado pela distribuição). Sem a chave, o pagamento fica
+   * indisponível e o resto segue.
+   */
+  ASAAS_API_KEY: z.string().trim().min(20).max(400).optional(),
+  ASAAS_API_URL: z.url().default('https://api-sandbox.asaas.com/v3'),
+  ASAAS_WEBHOOK_TOKEN: z.string().min(32).max(255).optional(),
 });
 
 export type AppConfig = {
@@ -191,6 +199,11 @@ export type AppConfig = {
     /** Respostas da LIA numa conversa (limite por conversa). */
     conversationMaxAnswers: number;
   };
+  /**
+   * O Asaas (A7, W2): a chave, o endereço da API, o ambiente que ele é e o token dos avisos. Nulo = sem a chave: o
+   * pagamento fica indisponível.
+   */
+  asaas: { apiKey: string; apiUrl: string; ambiente: 'sandbox' | 'producao'; webhookToken: string | null } | null;
 };
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -318,6 +331,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error('config: em produção, defina MAIL_FROM (remetente do domínio verificado no SES)');
   }
   if (env.AI_MONTHLY_LIMIT_USD < env.AI_DAILY_LIMIT_USD) throw new Error('config: AI_MONTHLY_LIMIT_USD não pode ser menor que AI_DAILY_LIMIT_USD');
+  const asaas = asaasDaConfig(env.NODE_ENV, env.ASAAS_API_KEY, env.ASAAS_API_URL, env.ASAAS_WEBHOOK_TOKEN);
   const inboxSecrets = new Map<string, string>();
   for (const part of env.INBOX_SECRETS.split(',').map((p) => p.trim()).filter(Boolean)) {
     const i = part.indexOf(':');
@@ -373,7 +387,37 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       userHourlyCalls: env.AI_USER_HOURLY_CALLS,
       conversationMaxAnswers: env.AI_CONVERSATION_MAX_ANSWERS,
     },
+    asaas,
   };
+}
+
+/** Os dois endereços oficiais da API do Asaas (base §18.5): o Sandbox, para os testes, e a produção. */
+export const ASAAS_SANDBOX = 'https://api-sandbox.asaas.com/v3';
+export const ASAAS_PRODUCAO = 'https://api.asaas.com/v3';
+
+/**
+ * O Asaas na configuração (A7, W2; D-A7-33). Em produção, o endereço é um dos dois oficiais (a chave sai para ele). Em
+ * todo ambiente, a chave é do mesmo ambiente do endereço: o prefixo diz qual (`$aact_hmlg_` no Sandbox, `$aact_prod_` na
+ * produção; base §18.5); e o token do aviso não tem espaço. Nenhuma mensagem leva a chave ou o token.
+ */
+export function asaasDaConfig(
+  nodeEnv: 'development' | 'test' | 'production',
+  chave: string | undefined,
+  endereco: string,
+  token: string | undefined,
+): AppConfig['asaas'] {
+  const apiUrl = endereco.replace(/\/+$/, '');
+  if (nodeEnv === 'production' && apiUrl !== ASAAS_SANDBOX && apiUrl !== ASAAS_PRODUCAO) {
+    throw new Error(`config: em produção, ASAAS_API_URL é um dos endereços oficiais do Asaas (${ASAAS_SANDBOX} ou ${ASAAS_PRODUCAO})`);
+  }
+  const ambiente = apiUrl === ASAAS_PRODUCAO ? 'producao' : 'sandbox';
+  if (token !== undefined && [...token].some((c) => c.trim() === '')) throw new Error('config: ASAAS_WEBHOOK_TOKEN não pode ter espaço');
+  if (!chave) return null;
+  const prefixo = ambiente === 'producao' ? '$aact_prod_' : '$aact_hmlg_';
+  if (!chave.startsWith(prefixo)) {
+    throw new Error(`config: a ASAAS_API_KEY não é do ambiente de ASAAS_API_URL (a chave dele começa com ${prefixo})`);
+  }
+  return { apiKey: chave, apiUrl, ambiente, webhookToken: token ?? null };
 }
 
 /** Endereço do remetente, com ou sem nome ("Liame <x@y>" → "x@y"); nulo se não for um e-mail. */

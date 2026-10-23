@@ -557,7 +557,14 @@ O pagamento (W2) é o que faz a assinatura começar de verdade: até lá, nada �
 
 **W2: a API do Asaas conferida e o desenho do pagamento (23/10/2026, só documentos):** a `base-conhecimento.md` §18.5 traz a API nas páginas oficiais (a autenticação, os limites, o cliente, a cobrança e o QR Code do PIX, o mínimo de R$ 5, o cartão pela página hospedada, os avisos e a fila que para com 15 falhas seguidas, a devolução, o Sandbox e a nota). O `plano-a7.md` ganhou as decisões D-A7-27 a D-A7-33: a W2 em duas partes (a W2a com o PIX, o aviso, a releitura, a conferência diária e a devolução do PIX; a W2b com o cartão, depois do Sandbox), o aviso que só serve de sinal, o que é "pago", uma cobrança do Asaas por fatura do Liame, a empresa como cliente no Asaas, nada abaixo de R$ 5 e a chave e o webhook com a distribuição.
 
-Falta o código da W2a (a chave da conta de testes vai para o EasyPanel quando ele estiver pronto), a W2b e a tela (W5).
+**W2a, parte 1: a cobrança PIX de cada fatura no Asaas e o QR Code (23/10/2026; migration 0081; a função `cobranca` segue desligada):**
+- a fatura em aberto de uma assinatura no PIX ganha a cobrança dela no Asaas por um caminho só, o da rotina do worker (as faturas que nascem) e o da pessoa que pede o QR Code (`GET /v1/billing/invoices/:id/pix`, com a permissão nova `cobranca.pagar`: o Dono e o Administrador com a cobrança liberada);
+- a empresa vira cliente no Asaas uma vez só, com as notificações do Asaas desligadas (D-A7-31); a cobrança leva o id da fatura e é procurada por ele antes de criar, e uma trava de 2 minutos deixa um caminho só criar de cada vez: a fatura nunca é cobrada duas vezes, nem quando o Asaas cria e cai antes de responder (D-A7-30);
+- a falha grava o porquê em código e a próxima vez (1, 5 e 30 minutos e 2 horas, ou a espera que o Asaas pediu); sem o CNPJ da empresa, a fatura espera 2 horas; o que volta do Asaas cabe nas regras do banco antes de ser gravado;
+- abaixo de R$ 5, a diferença da troca de plano não vira cobrança, e o plano muda na hora (D-A7-32);
+- sem a chave do Asaas configurada, a rota responde "pagamento indisponível" e a rotina não faz nada.
+
+Falta a W2a, parte 2: o aviso do Asaas, a releitura que marca a fatura paga, a conferência diária e a devolução do PIX. A chave da conta de testes (com o endereço do Sandbox e o token do aviso) vai para o EasyPanel quando a parte 2 estiver pronta, num passo só. Depois, a W2b e a tela (W5).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

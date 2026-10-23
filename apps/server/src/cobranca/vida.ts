@@ -14,6 +14,11 @@ export const DIAS_DA_FATURA_ANTES = 5;
 export const DIAS_PARA_DESISTIR = 7;
 /** Sem o primeiro pagamento em 7 dias, o pedido de assinatura termina sozinho (D-A7-24). */
 export const DIAS_PARA_O_PRIMEIRO_PAGAMENTO = 7;
+/**
+ * O mínimo de uma cobrança no meio de pagamento: R$ 5,00 no Asaas (base §18.5). A diferença de troca de plano abaixo
+ * dele não vira cobrança: o plano muda na hora (D-A7-32).
+ */
+export const MINIMO_DA_COBRANCA_CENTAVOS = 500;
 
 export type SituacaoPeloAtraso = 'ativa' | 'em_atraso' | 'acoes_paradas' | 'suspensa';
 

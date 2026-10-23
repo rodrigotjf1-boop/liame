@@ -22,8 +22,10 @@ import { createMailer, Mailer } from '../mail/mailer.js';
 import { TelemetryLifecycle } from '../telemetry.lifecycle.js';
 import { VaultModule } from '../vault/vault.module.js';
 import { ActionExecutor } from './action-executor.js';
+import { MeioAsaas } from '../cobranca/meio-asaas.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
+import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
 import { FotosLoop } from './fotos-loop.js';
@@ -188,6 +190,9 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // Plano e cobrança (A7, W1): a vida de cada assinatura pelo relógio (a fatura do período seguinte, os dias de atraso,
     // o fim do período, o pedido sem o primeiro pagamento). Só com a função `cobranca` ligada; nada é cobrado daqui.
     AssinaturasLoop,
+    // O PIX pelo Asaas (A7, W2a): a cobrança de cada fatura que nasce, criada no Asaas. Sem a chave do Asaas, nada roda.
+    MeioAsaas,
+    CobrancasPixLoop,
     VigiaService,
     // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, para mostrar o custo de IA em reais.
     CambioService,

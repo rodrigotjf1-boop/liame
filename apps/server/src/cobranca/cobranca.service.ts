@@ -1,4 +1,5 @@
 import type {
+  BillingPixResponse,
   BillingPlansResponse,
   BillingResponse,
   CancelSubscriptionRequest,
@@ -7,12 +8,16 @@ import type {
   SubscribeRequest,
   WithdrawSubscriptionRequest,
 } from '@liame/contracts';
-import { Injectable } from '@nestjs/common';
+import { type Database, withContext } from '@liame/database';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { MfaService } from '../auth/mfa.service.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
+import { DATABASE } from '../database/database.module.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
+import { type FalhaDaCobranca, garantirCobrancaPix, type Transacao } from './cobranca-pix.js';
+import { MeioAsaas } from './meio-asaas.js';
 import {
   assinaturaVivaTravada,
   cancelar,
@@ -52,6 +57,22 @@ const desligada = () => new AppProblem(409, 'funcao-desligada', 'Função deslig
 const jaAssinada = () =>
   new AppProblem(409, 'assinatura-existe', 'A marca já tem uma assinatura', 'Para mudar de plano, use "Trocar de plano".');
 const semAssinatura = () => new AppProblem(404, 'sem-assinatura', 'A marca não tem assinatura', 'Escolha um plano para assinar.');
+const pagamentoIndisponivel = () =>
+  new AppProblem(503, 'pagamento-indisponivel', 'Pagamento indisponível', 'O pagamento está indisponível agora. Tente mais tarde.');
+const meioForaDoAr = () =>
+  new AppProblem(502, 'meio-de-pagamento-fora-do-ar', 'O meio de pagamento não respondeu', 'O meio de pagamento não respondeu. Tente de novo.');
+
+/** A falha do meio de pagamento ao gerar o PIX, como a rota responde (os 5xx vão ao log com a causa, V6). */
+function problemaDaFalha(falha: FalhaDaCobranca, esperarMs: number): AppProblem {
+  if (falha === 'sem_cnpj') return new AppProblem(409, 'cnpj-necessario', 'Falta o CNPJ da empresa', 'O CNPJ da empresa é necessário para gerar o PIX.');
+  if (falha === 'limite_do_meio') {
+    const segundos = String(Math.max(1, Math.ceil(esperarMs / 1000)));
+    return new AppProblem(503, 'meio-de-pagamento-ocupado', 'O meio de pagamento pediu uma pausa', 'Tente de novo em instantes.', { 'retry-after': segundos });
+  }
+  if (falha === 'chave_recusada') return pagamentoIndisponivel();
+  if (falha === 'recusada_pelo_meio') return new AppProblem(502, 'meio-de-pagamento-recusou', 'O meio de pagamento recusou a cobrança', 'O meio de pagamento recusou a cobrança desta fatura.');
+  return meioForaDoAr();
+}
 
 /** A marca é da empresa e não está arquivada (a RLS esconde a de outra empresa: 404). */
 async function marcaDaEmpresa(brandId: string): Promise<void> {
@@ -70,9 +91,13 @@ function exigirEmDia(s: LinhaDaAssinatura): void {
 
 @Injectable()
 export class CobrancaService {
+  private readonly logger = new Logger('cobranca');
+
   constructor(
+    @Inject(DATABASE) private readonly database: Database | null,
     private readonly flags: FlagService,
     private readonly mfa: MfaService,
+    private readonly meio: MeioAsaas,
   ) {}
 
   private ligada(quem: Quem, brandId?: string): Promise<boolean> {
@@ -102,7 +127,52 @@ export class CobrancaService {
       agora: new Date(),
       ligada: await this.ligada(quem, brandId),
       podeMudar: auth.permissions.has('cobranca.gerenciar'),
+      podePagar: auth.permissions.has('cobranca.pagar'),
     });
+  }
+
+  /**
+   * O PIX de uma fatura (A7, W2a; D-A7-30): garante a cobrança no Asaas (criada na hora, se ainda não existe) e devolve o
+   * QR Code. Fora da transação da requisição: as chamadas ao Asaas acontecem sem transação aberta, e o banco é usado em
+   * transações curtas, com a empresa no contexto da RLS (a fatura de outra empresa não aparece: 404).
+   */
+  async pix(auth: AuthContext, faturaId: string): Promise<BillingPixResponse> {
+    const quem = quemPede(auth);
+    if (!(await this.ligada(quem))) throw desligada();
+    const api = this.meio.api();
+    const database = this.database;
+    if (!api || !database) throw pagamentoIndisponivel();
+    const transacao: Transacao = (fn) => withContext(database.db, { tenantId: quem.tenantId, userId: quem.userId }, fn);
+    const r = await garantirCobrancaPix(transacao, api, faturaId, new Date());
+    if (r.situacao === 'nao_cobravel') {
+      if (r.motivo === 'nao_existe') throw new AppProblem(404, 'fatura-nao-encontrada', 'Não encontramos', 'Não encontramos esta fatura nesta empresa.');
+      if (r.motivo === 'nao_aberta') throw new AppProblem(409, 'fatura-nao-esta-em-aberto', 'A fatura não está em aberto', 'Esta fatura já foi paga, cancelada ou devolvida.');
+      throw new AppProblem(409, 'fatura-nao-e-pix', 'A fatura não é no PIX', 'Esta assinatura não paga por PIX.');
+    }
+    if (r.situacao === 'em_criacao') {
+      throw new AppProblem(409, 'cobranca-em-criacao', 'O PIX está sendo gerado', 'O PIX desta fatura está sendo gerado. Tente de novo em alguns segundos.', { 'retry-after': '5' });
+    }
+    if (r.situacao === 'sem_cnpj') throw problemaDaFalha('sem_cnpj', 0);
+    if (r.situacao === 'falhou') {
+      if (r.falha !== 'limite_do_meio') this.logger.error(`PIX da fatura ${faturaId}: o meio de pagamento falhou (${r.falha})`);
+      throw problemaDaFalha(r.falha, r.esperarMs);
+    }
+    let qr;
+    try {
+      qr = await api.qrCodePix(r.cobranca.id, 15_000);
+    } catch (err) {
+      this.logger.error(`PIX da fatura ${faturaId}: o QR Code não veio (${err instanceof Error ? err.message : String(err)})`);
+      throw meioForaDoAr();
+    }
+    return {
+      invoice_id: faturaId,
+      amount_cents: String(r.cobranca.valorCentavos),
+      due_date: r.cobranca.vencimento,
+      qr_code_png_base64: qr.imagemPngBase64,
+      copy_paste: qr.copiaECola,
+      expires_at: qr.validaAte,
+      invoice_url: r.cobranca.url,
+    };
   }
 
   /**

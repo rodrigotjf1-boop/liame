@@ -432,6 +432,7 @@ export {
   BillingInvoice,
   BillingMethod,
   BillingPlan,
+  BillingPixResponse,
   BillingPlansResponse,
   BillingQuery,
   BillingResponse,

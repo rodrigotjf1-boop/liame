@@ -252,10 +252,25 @@ export function limiteDoGoogle(erro: Record<string, unknown>): { motivo: string;
 }
 
 /**
+ * O erro do Asaas (A7, W2a; base §18.5): `{ errors: [{ code, description }] }`, na raiz do corpo. No 429, o Asaas não manda
+ * `Retry-After`: a espera vem do `RateLimit-Reset`, em segundos (até uma hora).
+ */
+export function erroDoAsaas(corpo: unknown, h: Headers): { codigo: string | null; mensagem: string | null; esperarMs: number | null } {
+  const erros = (corpo as { errors?: unknown } | null)?.errors;
+  const primeiro = Array.isArray(erros) ? (erros[0] as { code?: unknown; description?: unknown } | null | undefined) : undefined;
+  const codigo = textoCurto(primeiro?.code, 100);
+  const mensagem = textoCurto(primeiro?.description, 300);
+  const reset = Number(h.get('ratelimit-reset'));
+  const esperarMs = Number.isFinite(reset) && reset > 0 ? Math.min(reset, 3600) * 1000 : null;
+  return { codigo, mensagem, esperarMs };
+}
+
+/**
  * Classifica o erro pelo status e pelo corpo de cada plataforma. Meta: `error.code` 4, 17, 32, 613 e
  * 80000–80014 são limite; 190 é token inválido; 10 e 200–299 são permissão (base §2.1). Google:
  * RESOURCE_EXHAUSTED (429) é limite, e no Search Console também o 403 com motivo de cota no formato antigo
- * (`limiteDoGoogle`); UNAUTHENTICATED (401); PERMISSION_DENIED (403).
+ * (`limiteDoGoogle`); UNAUTHENTICATED (401); PERMISSION_DENIED (403). Asaas: o código e o texto em `errors[0]`, e a
+ * espera do 429 no `RateLimit-Reset` (`erroDoAsaas`).
  */
 export function classificar(provider: string, status: number, corpo: unknown, h: Headers, uso: UsoDeCota | null): ErroConector {
   const erro = (corpo as { error?: Record<string, unknown> } | null)?.error ?? {};
@@ -264,16 +279,24 @@ export function classificar(provider: string, status: number, corpo: unknown, h:
   // Produtos DMS respondem em `application/problem+json` (RFC 9457): o tipo é o fim do `type` e o texto é o `detail`.
   const problema = corpo as { type?: unknown; detail?: unknown } | null;
   const tipoProblema = typeof problema?.type === 'string' ? (problema.type.split('/').pop() ?? null) : null;
+  const asaas = provider === 'asaas' ? erroDoAsaas(corpo, h) : null;
   const mensagem =
-    typeof erro.message === 'string' ? erro.message.slice(0, 300) : typeof problema?.detail === 'string' ? problema.detail.slice(0, 300) : `HTTP ${status}`;
+    typeof erro.message === 'string'
+      ? erro.message.slice(0, 300)
+      : typeof problema?.detail === 'string'
+        ? problema.detail.slice(0, 300)
+        : (asaas?.mensagem ?? `HTTP ${status}`);
   // Google Ads: o erro específico (o código, o texto e a espera da cota) vem dentro de `details`.
   const google = provider === 'google_ads' ? falhaDoGoogleAds(erro) : { codigo: null, mensagem: null, esperarMs: null };
-  const esperaPedida = lerRetryAfter(h) ?? (uso?.esperarMs ? uso.esperarMs : null) ?? google.esperarMs;
+  const esperaPedida = lerRetryAfter(h) ?? (uso?.esperarMs ? uso.esperarMs : null) ?? google.esperarMs ?? asaas?.esperarMs ?? null;
   const cod = codigo === null ? NaN : Number(codigo);
   // Meta: o subcódigo diz qual limite ou qual regra; `error_user_msg` é o texto que ela escreve para a pessoa.
   const subcodigo = typeof erro.error_subcode === 'number' || typeof erro.error_subcode === 'string' ? String(erro.error_subcode) : google.codigo;
-  const detalhe = { subcodigo, mensagemUsuario: textoCurto(erro.error_user_msg, 500) ?? textoCurto(erro.error_user_title, 200) ?? google.mensagem };
-  const codigoDoErro = codigo ?? statusGoogle ?? tipoProblema;
+  const detalhe = {
+    subcodigo,
+    mensagemUsuario: textoCurto(erro.error_user_msg, 500) ?? textoCurto(erro.error_user_title, 200) ?? google.mensagem ?? asaas?.mensagem ?? null,
+  };
+  const codigoDoErro = codigo ?? statusGoogle ?? tipoProblema ?? asaas?.codigo ?? null;
 
   const ehLimiteMeta = [4, 17, 32, 613].includes(cod) || (cod >= 80000 && cod <= 80014);
   // Só no Search Console, a API do Google no formato antigo que o Liame usa; as outras dizem a cota pelo status.
