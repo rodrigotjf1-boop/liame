@@ -551,7 +551,11 @@ O contador (D-A7-3) segue pendente. Próximo: a **W1**, o servidor dos planos e 
 - assinar, trocar de plano, cancelar, manter e desistir em 7 dias, com o código do app onde a D-A7-14 pede, e o Administrador com a cobrança liberada vendo a cobrança (D-A7-13);
 - as decisões técnicas D-A7-20 a D-A7-26 (`plano-a7.md` §4).
 
-O pagamento (W2) é o que faz a assinatura começar de verdade: até lá, nada é cobrado. Falta a parte 2 (a franquia de IA como o teto da empresa, D-A7-26), a W2 (o Asaas, a partir da conta de testes do dono) e a tela (W5).
+O pagamento (W2) é o que faz a assinatura começar de verdade: até lá, nada é cobrado. A W1, parte 1, entrou como o PR #324, no ar desde 23/10/2026, 01h32 (horário de Brasília), com a 0080 conferida na produção. Na mesma madrugada, o dono criou a **conta de testes do Asaas** (no Sandbox, no nome da empresa, com o e-mail confirmado); a chave de API fica para quando o código da W2 estiver pronto.
+
+**W1, parte 2: a franquia de IA dos planos como o teto da empresa (23/10/2026; sem migration; D-A7-26):** o teto de IA passa a ser o da distribuição (`ai_budget`), senão a soma das franquias dos planos das marcas com assinatura paga e viva, senão o padrão do servidor, por um pedaço de SQL só (`cobranca/franquia.ts`) nos quatro leitores do teto, com uma lista fechada em teste. Os dois planos nascem sem franquia (D-A7-5): nada muda no teto até o valor ser fixado.
+
+Falta a W2 (o Asaas, a partir da conta de testes) e a tela (W5).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

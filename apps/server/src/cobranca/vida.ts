@@ -17,6 +17,12 @@ export const DIAS_PARA_O_PRIMEIRO_PAGAMENTO = 7;
 
 export type SituacaoPeloAtraso = 'ativa' | 'em_atraso' | 'acoes_paradas' | 'suspensa';
 
+/**
+ * As situações da assinatura paga e viva, as que o atraso dá: é a assinatura que conta na franquia de IA da empresa
+ * (D-A7-26, `franquia.ts`).
+ */
+export const VIVAS_PAGAS: readonly SituacaoPeloAtraso[] = ['ativa', 'em_atraso', 'acoes_paradas', 'suspensa'];
+
 const DIA_MS = 86_400_000;
 const meioDia = (dia: string): number => Date.parse(`${dia}T12:00:00Z`);
 

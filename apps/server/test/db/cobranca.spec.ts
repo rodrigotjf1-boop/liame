@@ -1,6 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import { BillingPlansResponse, BillingResponse } from '@liame/contracts';
 import { createDatabase, type Database, withSystem } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { usoDeIaDaEmpresa } from '../../src/ai/uso.js';
 import { pessoaPode } from '../../src/auth/pessoa-pode.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { criarAssinatura, type Forma, pagarFatura } from '../../src/cobranca/assinatura.js';
@@ -80,8 +82,8 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
     return BillingResponse.parse(r.body);
   }
 
-  function assinar(e: Empresa, plano = 'essencial', forma = 'pix') {
-    return api.call('POST', '/v1/billing/subscription', { cookie: e.cookie, body: { brand_id: e.brandId, plan: plano, method: forma } });
+  function assinar(e: Empresa, plano = 'essencial', forma = 'pix', brandId = e.brandId) {
+    return api.call('POST', '/v1/billing/subscription', { cookie: e.cookie, body: { brand_id: brandId, plan: plano, method: forma } });
   }
 
   const comCodigo = async (e: Empresa, caminho: string, extra: Record<string, unknown> = {}) =>
@@ -441,6 +443,57 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
     const [vez] = await ownerQuery<{ next_check_at: Date }>(`select next_check_at from liame.subscription where id = $1`, [s0.id]);
     expect(vez!.next_check_at.getTime() - agora.getTime()).toBe(3_600_000);
   }, 60_000);
+
+  it('a franquia de IA do plano vira o teto da empresa (D-A7-26): a soma das marcas com assinatura paga e viva; o teto da distribuição vence; sem franquia, o padrão', async () => {
+    const e = await empresa('Casa Brasa Franquia');
+    const padrao = { dailyLimitUsdMicros: 2_000_000, monthlyLimitUsdMicros: 20_000_000 };
+    const teto = async () => {
+      const u = await withSystem(database.db, (tx) => usoDeIaDaEmpresa(tx, e.tenantId, padrao, new Date()));
+      return [String(u.tetoDia), String(u.tetoMes)];
+    };
+    // Sem assinatura: o padrão.
+    expect(await teto()).toEqual(['2000000', '20000000']);
+    // Paga no Essencial, que nasce sem franquia (D-A7-5): o padrão, como antes.
+    expect((await assinar(e)).status).toBe(200);
+    await pagar((await emAberto(e)).id, new Date());
+    expect(await teto()).toEqual(['2000000', '20000000']);
+
+    // Uma versão de plano com franquia (é a distribuição que publica a versão; a assinatura vai para ela aqui, à mão).
+    const sufixo = Array.from(randomBytes(8), (b) => String.fromCharCode(97 + (b % 26))).join('');
+    const [plano] = await ownerQuery<{ id: string }>(
+      `insert into liame.billing_plan (id, key, version, name, price_cents, agents, ai_daily_usd_micros, ai_monthly_usd_micros, offered)
+       values (gen_random_uuid(), $1, 1, 'Teste da franquia', 24900, array['lia'], 5000000, 50000000, false) returning id`,
+      [`franquia_${sufixo}`],
+    );
+    await ownerQuery(`update liame.subscription set plan_id = $2 where brand_id = $1 and status <> 'encerrada'`, [e.brandId, plano!.id]);
+    expect(await teto()).toEqual(['5000000', '50000000']);
+    // Sua equipe mostra o mesmo teto do mês.
+    const equipe = await api.call('GET', `/v1/team?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(equipe.status, JSON.stringify(equipe.body)).toBe(200);
+    expect(equipe.body.ai.ceiling_usd_micros).toBe('50000000');
+
+    // Uma segunda marca, paga no mesmo plano: as franquias somam.
+    const nova = await api.call('POST', '/v1/brands', { cookie: e.cookie, body: { name: 'Casa Brasa Filial' } });
+    expect(nova.status, JSON.stringify(nova.body)).toBe(201);
+    const filial = { ...e, brandId: nova.body.id as string };
+    expect((await assinar(e, 'essencial', 'pix', filial.brandId)).status).toBe(200);
+    await pagar((await emAberto(filial)).id, new Date());
+    await ownerQuery(`update liame.subscription set plan_id = $2 where brand_id = $1 and status <> 'encerrada'`, [filial.brandId, plano!.id]);
+    expect(await teto()).toEqual(['10000000', '100000000']);
+
+    // O teto que a distribuição define para a empresa vence a franquia, como hoje.
+    await ownerQuery(
+      `insert into liame.ai_budget (tenant_id, daily_usd_micros, monthly_usd_micros, set_by, reason) values ($1, 1000000, 10000000, 'testes', 'teto da distribuição')
+       on conflict (tenant_id) do update set daily_usd_micros = excluded.daily_usd_micros, monthly_usd_micros = excluded.monthly_usd_micros`,
+      [e.tenantId],
+    );
+    expect(await teto()).toEqual(['1000000', '10000000']);
+    await ownerQuery(`delete from liame.ai_budget where tenant_id = $1`, [e.tenantId]);
+
+    // A assinatura que termina (a desistência da primeira marca) deixa de contar; a da filial segue.
+    expect((await comCodigo(e, 'withdraw')).status).toBe(200);
+    expect(await teto()).toEqual(['5000000', '50000000']);
+  }, 120_000);
 
   it('as restrições das tabelas (V119): situação, forma, ativa sem pagamento, franquia pela metade, duas assinaturas vivas, a fatura paga sem a hora e duas mensalidades do mesmo período', async () => {
     const e = await empresa('Casa Brasa Restrições');

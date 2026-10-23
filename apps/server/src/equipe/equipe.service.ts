@@ -17,6 +17,7 @@ import { ativoPeloPlano } from '../ai/registro/ativacao.js';
 import { motivoSemDadoPessoal } from '../ai/sanitizar.js';
 import { situacaoDoTeto } from '../ai/teto.js';
 import { ultimaCotacao } from '../cambio/cotacao.js';
+import { tetoDoDia, tetoDoMes } from '../cobranca/franquia.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { contaConectada } from '../connections/conectada.js';
 import { marcaDoCriativo } from '../criativo/base.js';
@@ -68,8 +69,8 @@ export class EquipeService {
                (date_trunc('month', ${instante}::timestamptz at time zone o.timezone) + interval '1 month - 1 day')::date::text as ate,
                (date_trunc('month', ${instante}::timestamptz at time zone o.timezone) at time zone o.timezone) as inicio,
                (date_trunc('day', ${instante}::timestamptz at time zone o.timezone) at time zone o.timezone) as inicio_do_dia,
-               coalesce(b.daily_usd_micros, ${this.config.ai.dailyLimitUsdMicros})::text as teto_dia,
-               coalesce(b.monthly_usd_micros, ${this.config.ai.monthlyLimitUsdMicros})::text as teto_mes
+               ${tetoDoDia(this.config.ai.dailyLimitUsdMicros)} as teto_dia,
+               ${tetoDoMes(this.config.ai.monthlyLimitUsdMicros)} as teto_mes
           from liame.organization o left join liame.ai_budget b on b.tenant_id = o.id
          where o.id = ${tenantId}`)
     ).rows[0];
@@ -194,7 +195,7 @@ export class EquipeService {
       await tx.execute<{ inicio: Date | string; fim: Date | string; teto_mes: string }>(sql`
         select (${mes.from}::date::timestamp at time zone o.timezone) as inicio,
                ((${mes.to}::date + 1)::timestamp at time zone o.timezone) as fim,
-               coalesce(b.monthly_usd_micros, ${this.config.ai.monthlyLimitUsdMicros})::text as teto_mes
+               ${tetoDoMes(this.config.ai.monthlyLimitUsdMicros)} as teto_mes
           from liame.organization o left join liame.ai_budget b on b.tenant_id = o.id
          where o.id = ${tenantId}`)
     ).rows[0];
