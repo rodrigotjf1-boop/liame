@@ -12,7 +12,7 @@ O plano mestre herdou Next 14 e Nest 10. O projeto ainda não começou, então a
 
 | Camada | Escolha | Versão | Por quê | Risco / cuidado |
 | --- | --- | --- | --- | --- |
-| Runtime | **Node.js LTS** | **24.x** (24.21.0) | LTS "Krypton"; atende Nest 12 (≥ 20.19), CLI do Nest (≥ 24.15), pg-boss (≥ 22.12), pnpm 12 (≥ 22), Next (≥ 20.9) | Entra em manutenção em 20/10/2026; **migrar para o Node 26 LTS** (LTS em 28/10/2026) quando as dependências confirmarem suporte |
+| Runtime | **Node.js LTS** | **24.x** (24.22.1 desde 23/10/2026, a correção de segurança de 21/10/2026; antes, 24.21.0) | LTS "Krypton"; atende Nest 12 (≥ 20.19), CLI do Nest (≥ 24.15), pg-boss (≥ 22.12), pnpm 12 (≥ 22), Next (≥ 20.9) | Entra em manutenção em 20/10/2026; **migrar para o Node 26 LTS** (LTS em 28/10/2026) quando as dependências confirmarem suporte |
 | Linguagem | **TypeScript** | **6.0.3** no monorepo todo | Única versão com a API de compilador que a CLI do Nest 12 (`typescript ~6.0.2`) e o plugin do swagger exigem | O TS 7.0.2 existe, mas **não tem API programática** (volta na 7.1): proibido no build do Nest. O tsconfig já nasce "limpo para o 7" (`nodenext`/`bundler`, sem `baseUrl`, `types` explícito) |
 | Backend | **NestJS** | 12.1.0 (+ cli 12.0.6, swagger 12.0.2) | Pacotes ESM; **Standard Schema nativo** (`@Body({ schema })` + `StandardSchemaValidationPipe`); Express 5.2 | Major recente: spike obrigatório |
 | Validação e contratos | **Zod 4** (Standard Schema + Standard JSON Schema) | 4.6.5 | Um schema para validação no Nest, OpenAPI, structured output, ferramentas, eventos e MCP | Usar o Zod "classic" (o `zod/mini` pode não expor JSON Schema); `z.strictObject` para rejeitar campo extra |

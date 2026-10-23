@@ -2,8 +2,9 @@
 # Imagem do webapp (Next 16, saída standalone). Contexto: raiz do repositório.
 #   docker build -f apps/web/Dockerfile -t liame-web --build-arg NEXT_PUBLIC_API_URL=https://api.exemplo .
 
-# Base fixada por digest (a mesma do servidor: Node 24.21.0, bookworm-slim, refeita em 06/10/2026).
-FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS build
+# Base fixada por digest (a mesma do servidor: Node 24.22.1, bookworm-slim, de 21/10/2026; a versão é a do `.nvmrc`,
+# e o job `imagem` do CI confere).
+FROM node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
 ENV CI=true TURBO_TELEMETRY_DISABLED=1 NEXT_TELEMETRY_DISABLED=1
 # pnpm 12 é nativo: o script de instalação DELE troca o marcador pelo binário da plataforma (ERR-017).
 # Os scripts das dependências do projeto continuam desligados (V9, LIC-079).
@@ -16,13 +17,8 @@ ARG NEXT_PUBLIC_API_URL=
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN pnpm turbo run build --filter=@liame/web...
 
-FROM node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20 AS runtime
-# Correção de segurança do Debian que a imagem oficial do Node ainda não trouxe (07/10/2026): perl-base
-# 5.36.0-7+deb12u4, com avisos críticos. Quem acusa é o Grype do CI. Quando a base fixada já vier com a versão
-# corrigida, este passo não faz nada e pode sair (security-model.md §9).
-RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --only-upgrade perl-base \
- && rm -rf /var/lib/apt/lists/*
+FROM node:24.22.1-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS runtime
+# A base de 21/10/2026 já traz o perl-base 5.36.0-7+deb12u4 (o passo que o subia à mão saiu; security-model.md §9).
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 WORKDIR /app
 # O standalone traz o servidor e só as dependências rastreadas; estáticos e public vão ao lado.
