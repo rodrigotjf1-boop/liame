@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
+import { brotliCompressSync } from 'node:zlib';
 import { BrandDossierResponse, BrandDossierSuggestionListResponse, ResearchListResponse, ResearchResponse } from '@liame/contracts';
 import { type Database, runMigrations } from '@liame/database';
 import { MockLanguageModelV4 } from 'ai/test';
@@ -99,6 +100,10 @@ describe.skipIf(!hasDb)('Pesquisador: pedido, robots.txt, leitura, quarentena e 
           return res.end();
         case '/fora':
           return html('erro', 503);
+        // O servidor que manda Brotli sem ter sido pedido (o GET pede só gzip e deflate, LIC-451).
+        case '/brotli':
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-encoding': 'br' });
+          return res.end(brotliCompressSync(CARDAPIO));
         default:
           return html('não achei', 404);
       }
@@ -264,6 +269,19 @@ describe.skipIf(!hasDb)('Pesquisador: pedido, robots.txt, leitura, quarentena e 
     await ownerQuery(`update liame.research_request set attempts = $2, next_attempt_at = null where id = $1`, [p.id, TENTATIVAS_DA_LEITURA - 1]);
     expect(await lerFila(d)).toEqual([{ id: p.id, tenantId: d.tenantId, status: 'falhou_de_vez', motivo: 'fora_do_ar' }]);
     expect(await pedido(d, p.id)).toMatchObject({ status: 'falhou', reason: 'fora_do_ar' });
+  });
+
+  it('site que responde em Brotli sem ter sido pedido: falha de formato, sem IA, e volta para a fila', async () => {
+    const d = await dono();
+    const p = ResearchResponse.parse((await pedir(d, 'site', '/brotli')).body);
+    expect(await lerFila(d)).toEqual([{ id: p.id, tenantId: d.tenantId, status: 'falhou', motivo: 'formato' }]);
+    const [linha] = await ownerQuery<{ status: string; attempts: number; reason: string }>(
+      `select status, attempts, reason from liame.research_request where id = $1`,
+      [p.id],
+    );
+    expect(linha).toEqual({ status: 'pendente', attempts: 1, reason: 'formato' });
+    // A página comprimida não virou texto para o modelo.
+    expect(await usos(d.tenantId)).toEqual([]);
   });
 
   it('pedir pede quem edita o dossiê, a IA ligada e um endereço público; outra empresa não vê', async () => {

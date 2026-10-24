@@ -7,6 +7,7 @@ import { ProblemDetailsFilter } from './errors/problem.filter.js';
 import { issuesToErrors, ValidationProblem } from './errors/problems.js';
 import { leitorDaFoto } from './fotos/leitor-da-foto.js';
 import { applyHttpSecurity } from './http-security.js';
+import { leitorDoCorpoSemCompressao } from './leitor-do-corpo.js';
 import { API_PREFIX, API_PREFIX_EXCLUDE } from './setup-constants.js';
 
 export { API_PREFIX } from './setup-constants.js';
@@ -17,6 +18,8 @@ export function configureApp(app: INestApplication): void {
   applyHttpSecurity(app, app.get<AppConfig>(APP_CONFIG));
   // A foto chega crua na rota de envio (A6, Z4): o leitor do Nest só lê JSON, até 100 kb.
   app.use(leitorDaFoto());
+  // O JSON e o formulário sem descompressão: corpo comprimido recebe 415 (o boletim do Node de 21/10/2026, LIC-451).
+  leitorDoCorpoSemCompressao(app);
   app.setGlobalPrefix(API_PREFIX, { exclude: API_PREFIX_EXCLUDE });
   // Valida pelo schema declarado no parâmetro (`@Body({ schema })`) e entrega o valor já transformado.
   app.useGlobalPipes(

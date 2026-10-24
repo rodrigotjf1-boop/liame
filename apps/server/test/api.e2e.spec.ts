@@ -1,3 +1,4 @@
+import { brotliCompressSync, deflateSync, gzipSync } from 'node:zlib';
 import type { INestApplication, LoggerService } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -19,6 +20,9 @@ class MemoryLogger implements LoggerService {
     this.lines.push(`warn ${String(message)}`);
   }
 }
+
+/** Um corpo que a rota de eco aceita (201). */
+const JSON_VALIDO = '{"message":"oi"}';
 
 describe('API: validação e política de erros (RFC 9457)', () => {
   let app: INestApplication;
@@ -88,6 +92,12 @@ describe('API: validação e política de erros (RFC 9457)', () => {
     ['corpo acima do limite', { 'content-type': 'application/json' }, JSON.stringify({ message: 'x'.repeat(200_000) }), 413, 'grande-demais'],
     ['conjunto de caracteres que o leitor não lê', { 'content-type': 'application/json; charset=latin1' }, '{"message":"oi"}', 415, 'formato-nao-suportado'],
     ['compressão desconhecida', { 'content-type': 'application/json', 'content-encoding': 'xyz' }, '{"message":"oi"}', 415, 'formato-nao-suportado'],
+    // O leitor não descomprime (o boletim do Node de 21/10/2026, LIC-451): o corpo é JSON válido comprimido de verdade,
+    // que o leitor padrão do body-parser 2 abriria e a rota aceitaria (201).
+    ['JSON em gzip', { 'content-type': 'application/json', 'content-encoding': 'gzip' }, gzipSync(JSON_VALIDO), 415, 'formato-nao-suportado'],
+    ['JSON em deflate', { 'content-type': 'application/json', 'content-encoding': 'deflate' }, deflateSync(JSON_VALIDO), 415, 'formato-nao-suportado'],
+    ['JSON em Brotli', { 'content-type': 'application/json', 'content-encoding': 'br' }, brotliCompressSync(JSON_VALIDO), 415, 'formato-nao-suportado'],
+    ['formulário em gzip', { 'content-type': 'application/x-www-form-urlencoded', 'content-encoding': 'gzip' }, gzipSync('message=oi'), 415, 'formato-nao-suportado'],
   ])('%s: o 4xx do leitor em problem+json, não 500, e o log não é de erro', async (_, cabecalhos, corpo, status, code) => {
     const res = await fetch(`${base}/v1/teste/eco`, { method: 'POST', headers: cabecalhos, body: corpo });
     expect(res.status, await res.clone().text()).toBe(status);
@@ -96,6 +106,30 @@ describe('API: validação e política de erros (RFC 9457)', () => {
     expect(body).toMatchObject({ code, status });
     expect(logger.lines.some((l) => l.startsWith('error') && l.includes(body.trace_id))).toBe(false);
     expect(logger.lines.some((l) => l.startsWith('log') && l.includes(body.trace_id))).toBe(true);
+  });
+
+  it('sem compressão, o mesmo corpo passa: sem o cabeçalho, com `identity` e o formulário', async () => {
+    for (const [cabecalhos, corpo] of [
+      [{ 'content-type': 'application/json' }, JSON_VALIDO],
+      [{ 'content-type': 'application/json', 'content-encoding': 'identity' }, JSON_VALIDO],
+      [{ 'content-type': 'application/x-www-form-urlencoded' }, 'message=oi'],
+    ] as const) {
+      const res = await fetch(`${base}/v1/teste/eco`, { method: 'POST', headers: cabecalhos, body: corpo });
+      expect(res.status, await res.clone().text()).toBe(201);
+      expect(await res.json()).toEqual({ message: 'oi', tags: [], length: 2 });
+    }
+  });
+
+  // As rotas públicas que recebem corpo de fora (o aviso do Asaas, a inbox, o login) recusam a compressão antes da rota:
+  // nem a conferência do token ou da assinatura roda, nem o decodificador.
+  it.each(['/v1/billing/asaas/webhook', '/v1/inbox/regemcast', '/v1/auth/login'])('%s: o corpo em Brotli recebe 415 antes da rota', async (caminho) => {
+    const res = await fetch(`${base}${caminho}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-encoding': 'br' },
+      body: brotliCompressSync(JSON.stringify({ id: 'evt_teste', event: 'PAYMENT_RECEIVED' })),
+    });
+    expect(res.status, await res.clone().text()).toBe(415);
+    expect(((await res.json()) as { code: string }).code).toBe('formato-nao-suportado');
   });
 
   // O leitor da foto (A6, Z4: o arquivo cru, até 10 MB) recusa do mesmo jeito, antes da rota e antes da sessão.
