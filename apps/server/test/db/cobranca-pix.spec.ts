@@ -2,14 +2,17 @@ import { randomBytes } from 'node:crypto';
 import { BillingPixResponse } from '@liame/contracts';
 import { createDatabase, type Database, withSystem } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { assinaturaVivaTravada, pagarFatura, trocarPlano } from '../../src/cobranca/assinatura.js';
+import { assinaturaVivaTravada, pagarFatura, trocarPlano, vezDaAssinatura } from '../../src/cobranca/assinatura.js';
 import { MeioAsaas } from '../../src/cobranca/meio-asaas.js';
-import { diaNoFuso } from '../../src/cobranca/vida.js';
+import { diaNoFuso, somarDias } from '../../src/cobranca/vida.js';
 import { PROVIDER_ASAAS } from '../../src/connectors/asaas/api-asaas.js';
 import { chaveDe } from '../../src/connectors/cota.js';
 import { FlagService } from '../../src/flags/flag.service.js';
+import { avisoDoAsaas } from '../../src/worker/aviso-do-asaas.js';
 import { CobrancasPixLoop } from '../../src/worker/cobrancas-pix-loop.js';
-import { AsaasDeMentira } from '../helpers/asaas-de-mentira.js';
+import { CobrancasReleituraLoop } from '../../src/worker/cobrancas-releitura-loop.js';
+import { type InboxHandler, InboxProcessor } from '../../src/worker/inbox-processor.js';
+import { AsaasDeMentira, type CobrancaNoAsaas, MARCA_DO_AVISO_DE_TESTE } from '../helpers/asaas-de-mentira.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { APP_URL, hasDb } from './env.js';
@@ -31,15 +34,19 @@ describe.skipIf(!hasDb)('O PIX pelo Asaas: a cobrança de cada fatura e o QR Cod
   let api: TestApi;
   let database: Database;
   let rotina: CobrancasPixLoop;
+  let releitura: CobrancasReleituraLoop;
+  let processador: InboxProcessor;
 
   beforeAll(async () => {
-    // O Asaas sobe antes da API: a configuração lê o endereço e a chave dele do ambiente.
+    // O Asaas sobe antes da API: a configuração lê o endereço, a chave e o token do aviso dele do ambiente.
     asaas = new AsaasDeMentira();
     await asaas.subir();
     api = await startApi();
     await resetIpRateLimits();
     database = createDatabase({ connectionString: APP_URL, max: 4, applicationName: 'liame-test' });
     rotina = new CobrancasPixLoop(database, api.app.get(MeioAsaas), api.app.get(FlagService));
+    releitura = new CobrancasReleituraLoop(database, api.app.get(MeioAsaas), api.app.get(FlagService));
+    processador = new InboxProcessor(database, new Map<string, InboxHandler>([['asaas', avisoDoAsaas]]));
   }, 120_000);
   beforeEach(async () => {
     await resetIpRateLimits();
@@ -53,6 +60,8 @@ describe.skipIf(!hasDb)('O PIX pelo Asaas: a cobrança de cada fatura e o QR Cod
     asaas.segurarCriacao = null;
     asaas.enderecoDaFatura = (id) => `https://sandbox.asaas.com/i/${id}`;
     asaas.situacaoNova = 'PENDING';
+    asaas.ler = 'ok';
+    asaas.segurarLeitura = null;
   });
   afterAll(async () => {
     await api?.close();
@@ -107,7 +116,38 @@ describe.skipIf(!hasDb)('O PIX pelo Asaas: a cobrança de cada fatura e o QR Cod
 
   const pix = (e: Empresa, faturaId: string, cookie = e.cookie) => api.call('GET', `/v1/billing/invoices/${faturaId}/pix`, { cookie });
   const daRotina = (e: Empresa, agora = new Date()) => rotina.executarLote(10, { tenantIds: [e.tenantId] }, agora);
+  const daReleitura = (e: Empresa, agora = new Date()) => releitura.executarLote(10, { tenantIds: [e.tenantId] }, agora);
   const pedidos = (metodo: string, caminho: string) => asaas.vistos.filter((v) => v.metodo === metodo && v.caminho === caminho);
+
+  /** O aviso pela porta HTTP, como o Asaas manda: o corpo cru e o token no cabeçalho (nulo: sem o cabeçalho). */
+  const avisar = (corpo: string, marca: string | null = MARCA_DO_AVISO_DE_TESTE) =>
+    api.call('POST', '/v1/billing/asaas/webhook', { raw: { data: Buffer.from(corpo, 'utf8'), type: 'application/json' }, headers: marca ? { 'asaas-access-token': marca } : {} });
+
+  /** O worker processa o aviso gravado (só o deste teste, pelo id: V10). */
+  async function processarAviso(corpo: string): Promise<void> {
+    const [ev] = await ownerQuery<{ id: string }>(`select id from liame.inbox_event where provider = 'asaas' and external_event_id = $1`, [JSON.parse(corpo).id as string]);
+    expect(ev, 'o aviso não foi gravado').toBeDefined();
+    await processador.processBatch(50, { ids: [ev!.id] });
+  }
+
+  /** A empresa com a primeira mensalidade e a cobrança dela no Asaas, criada pela rotina. */
+  async function comCobranca(nome: string): Promise<{ e: Empresa; faturaId: string; c: CobrancaNoAsaas }> {
+    const e = await empresa(nome);
+    const faturaId = await assinar(e);
+    expect((await daRotina(e))[0]!.resultado).toBe('pronta');
+    const [c] = asaas.cobrancasDa(faturaId);
+    return { e, faturaId, c: c! };
+  }
+
+  const linha = async (id: string) =>
+    (
+      await ownerQuery<{ status: string; paid_at: Date | null; paid_method: string | null; period_start: string | null; amount_cents: string }>(
+        `select status, paid_at, paid_method, period_start::text as period_start, amount_cents::text as amount_cents from liame.billing_invoice where id = $1`,
+        [id],
+      )
+    )[0]!;
+  const umDiaDepois = () => new Date(Date.now() + 25 * 3_600_000);
+  const meioDia = (dia: string) => new Date(`${dia}T12:00:00-03:00`);
 
   it('a rotina cria a cobrança PIX da primeira mensalidade: o cliente da empresa sem as notificações do Asaas e a cobrança com o id da fatura; de novo, nada novo', async () => {
     const e = await empresa('Casa Brasa PIX');
@@ -299,6 +339,182 @@ describe.skipIf(!hasDb)('O PIX pelo Asaas: a cobrança de cada fatura e o QR Cod
     const [s] = await ownerQuery<{ plan_id: string }>(`select plan_id from liame.subscription where brand_id = $1 and status <> 'encerrada'`, [e.brandId]);
     expect(s!.plan_id).toBe(plano!.id);
     expect(await ownerQuery(`select 1 from liame.billing_invoice where brand_id = $1 and kind = 'diferenca'`, [e.brandId])).toHaveLength(0);
+  }, 60_000);
+
+  // ------------------------------------------------------------ W2a, parte 2: o aviso e a releitura
+
+  it('o aviso pela rota: sem o token ou com outro, 401; com o certo, 200, e o mesmo evento de novo, 200 e uma linha só; o aviso marca a fatura, e a releitura paga, com o dia do Asaas', async () => {
+    const { e, faturaId, c } = await comCobranca('Casa Brasa Aviso');
+    const hoje = diaNoFuso(new Date(), SP);
+    // A cobrança nova fica para a releitura do dia seguinte.
+    expect((await fatura(faturaId)).charge_next_at!.getTime()).toBeGreaterThan(Date.now() + 23 * 3_600_000);
+    asaas.pagar(c.id, hoje);
+    const corpo = asaas.aviso(c);
+    expect((await avisar(corpo, null)).status).toBe(401);
+    expect((await avisar(corpo, `${MARCA_DO_AVISO_DE_TESTE}-outra`)).status).toBe(401);
+    const r = await avisar(corpo);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect((await avisar(corpo)).status).toBe(200);
+    expect(await ownerQuery(`select type from liame.inbox_event where provider = 'asaas' and external_event_id = $1`, [JSON.parse(corpo).id])).toEqual([{ type: 'PAYMENT_RECEIVED' }]);
+    // O token nunca é guardado com o evento.
+    const [h] = await ownerQuery<{ headers: Record<string, unknown> }>(`select headers from liame.inbox_event where provider = 'asaas' and external_event_id = $1`, [JSON.parse(corpo).id]);
+    expect(Object.keys(h!.headers)).not.toContain('asaas-access-token');
+
+    await processarAviso(corpo);
+    expect((await fatura(faturaId)).charge_next_at!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    expect(await daReleitura(e)).toEqual([{ fatura: faturaId, tenantId: e.tenantId, resultado: 'paga' }]);
+    expect(await linha(faturaId)).toMatchObject({ status: 'paga', paid_method: 'pix', period_start: hoje });
+    const [s] = await ownerQuery<{ status: string }>(`select status from liame.subscription where brand_id = $1 and status <> 'encerrada'`, [e.brandId]);
+    expect(s!.status).toBe('ativa');
+    expect(await fatura(faturaId)).toMatchObject({ provider_status: 'RECEIVED', charge_next_at: null, charge_error: null, charge_locked_until: null });
+    expect(await ownerQuery(`select action from liame.audit_event where tenant_id = $1 and action = 'cobranca.pagamento'`, [e.tenantId])).toHaveLength(1);
+    // De novo, nada: a fatura paga saiu da fila.
+    expect(await daReleitura(e, umDiaDepois())).toEqual([]);
+  }, 90_000);
+
+  it('sem aviso, a releitura de cada dia: a cobrança pendente é relida e fica para o dia seguinte', async () => {
+    const { e, faturaId, c } = await comCobranca('Casa Brasa Diária');
+    const proxima = (await fatura(faturaId)).charge_next_at!;
+    expect(await daReleitura(e)).toEqual([]);
+    const depois = new Date(proxima.getTime() + 1000);
+    expect(await daReleitura(e, depois)).toEqual([{ fatura: faturaId, tenantId: e.tenantId, resultado: 'esperando' }]);
+    expect(pedidos('GET', `/payments/${c.id}`)).toHaveLength(1);
+    const f = await fatura(faturaId);
+    expect(f).toMatchObject({ provider_status: 'PENDING', charge_locked_until: null, charge_error: null });
+    expect(f.charge_next_at!.getTime()).toBe(depois.getTime() + 24 * 3_600_000);
+    expect((await linha(faturaId)).status).toBe('aberta');
+  }, 60_000);
+
+  it('a fatura cancelada no Liame (outro plano antes do primeiro pagamento): a cobrança sai do Asaas na hora, e a fila acaba', async () => {
+    const { e, faturaId, c } = await comCobranca('Casa Brasa Cancelada');
+    const r = await api.call('POST', '/v1/billing/subscription', { cookie: e.cookie, body: { brand_id: e.brandId, plan: 'completo', method: 'pix' } });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect((await linha(faturaId)).status).toBe('cancelada');
+    expect((await fatura(faturaId)).charge_next_at!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    expect(await daReleitura(e)).toEqual([{ fatura: faturaId, tenantId: e.tenantId, resultado: 'removida' }]);
+    expect(pedidos('DELETE', `/payments/${c.id}`)).toHaveLength(1);
+    expect(asaas.cobrancas.find((x) => x.id === c.id)!.deleted).toBe(true);
+    expect(await fatura(faturaId)).toMatchObject({ provider_status: 'DELETED', charge_next_at: null, charge_locked_until: null });
+  }, 60_000);
+
+  it('o valor da mensalidade em aberto mudou no Liame (desceu de plano): a cobrança velha sai e nasce outra com o valor novo', async () => {
+    const e = await empresa('Casa Brasa Troca');
+    const primeira = await assinar(e);
+    const pago = new Date();
+    await withSystem(database.db, (tx) => pagarFatura(tx, { faturaId: primeira, pagoEm: pago, forma: 'pix', agora: pago }));
+    const [s] = await ownerQuery<{ id: string; period_end: string }>(`select id, period_end::text as period_end from liame.subscription where brand_id = $1 and status <> 'encerrada'`, [e.brandId]);
+    // A mensalidade seguinte nasce 5 dias antes do vencimento (W1), e a rotina cria a cobrança dela.
+    const antes = meioDia(somarDias(s!.period_end, -5));
+    await withSystem(database.db, (tx) => vezDaAssinatura(tx, s!.id, antes));
+    const [seguinte] = await ownerQuery<{ id: string }>(`select id from liame.billing_invoice where subscription_id = $1 and status = 'aberta'`, [s!.id]);
+    expect((await daRotina(e, antes))[0]).toMatchObject({ fatura: seguinte!.id, resultado: 'pronta' });
+    expect(asaas.cobrancasDa(seguinte!.id).map((x) => x.value)).toEqual([249]);
+
+    // Uma versão de plano mais barata (fora das oferecidas, para não mudar a tela): descer vale no período seguinte.
+    const sufixo = Array.from(randomBytes(8), (b) => String.fromCharCode(97 + (b % 26))).join('');
+    const [barato] = await ownerQuery<{ id: string; price_cents: string }>(
+      `insert into liame.billing_plan (id, key, version, name, price_cents, agents, offered) values (gen_random_uuid(), $1, 1, 'Teste do mais barato', 19900, array['lia'], false) returning id, price_cents::text`,
+      [`barato_${sufixo}`],
+    );
+    const troca = await withSystem(database.db, async (tx) => {
+      const viva = await assinaturaVivaTravada(tx, e.brandId);
+      return trocarPlano(tx, viva!, barato!, antes);
+    });
+    expect(troca).toMatchObject({ tipo: 'descer' });
+    expect((await linha(seguinte!.id)).amount_cents).toBe('19900');
+    expect((await fatura(seguinte!.id)).charge_next_at!.getTime()).toBe(antes.getTime());
+
+    expect(await daReleitura(e, antes)).toEqual([{ fatura: seguinte!.id, tenantId: e.tenantId, resultado: 'refeita' }]);
+    expect(await fatura(seguinte!.id)).toMatchObject({ provider: null, external_id: null });
+    expect((await daRotina(e, antes))[0]).toMatchObject({ fatura: seguinte!.id, resultado: 'pronta' });
+    const cobrancas = asaas.cobrancasDa(seguinte!.id);
+    expect(cobrancas.map((x) => ({ valor: x.value, removida: x.deleted }))).toEqual([
+      { valor: 249, removida: true },
+      { valor: 199, removida: false },
+    ]);
+    expect((await fatura(seguinte!.id)).external_id).toBe(cobrancas[1]!.id);
+  }, 90_000);
+
+  it('a cobrança removida no painel do Asaas (ele responde 404): a releitura refaz, e a rotina cria outra', async () => {
+    const { e, faturaId, c } = await comCobranca('Casa Brasa Removida');
+    asaas.removerNoPainel(c.id);
+    const depois = umDiaDepois();
+    expect(await daReleitura(e, depois)).toEqual([{ fatura: faturaId, tenantId: e.tenantId, resultado: 'refeita' }]);
+    expect(pedidos('DELETE', `/payments/${c.id}`)).toHaveLength(0);
+    expect((await daRotina(e, depois))[0]).toMatchObject({ fatura: faturaId, resultado: 'pronta' });
+    const vivas = asaas.cobrancasDa(faturaId).filter((x) => !x.deleted);
+    expect(vivas).toHaveLength(1);
+    expect((await fatura(faturaId)).external_id).toBe(vivas[0]!.id);
+  }, 60_000);
+
+  it('paga com o valor menor que o da fatura: a releitura para (`valor_divergente`), sem pagar a fatura', async () => {
+    const { e, faturaId, c } = await comCobranca('Casa Brasa Divergente');
+    asaas.pagar(c.id, diaNoFuso(new Date(), SP), { valor: 200 });
+    const corpo = asaas.aviso(c);
+    expect((await avisar(corpo)).status).toBe(200);
+    await processarAviso(corpo);
+    expect(await daReleitura(e)).toEqual([{ fatura: faturaId, tenantId: e.tenantId, resultado: 'parada' }]);
+    expect(await fatura(faturaId)).toMatchObject({ charge_error: 'valor_divergente', charge_next_at: null, provider_status: 'RECEIVED' });
+    expect((await linha(faturaId)).status).toBe('aberta');
+  }, 60_000);
+
+  it('paga no Asaas depois de cancelada no Liame: a releitura para (`paga_apos_cancelar`), e a cobrança não é removida', async () => {
+    const { e, faturaId, c } = await comCobranca('Casa Brasa Paga Depois');
+    asaas.pagar(c.id, diaNoFuso(new Date(), SP));
+    expect((await api.call('POST', '/v1/billing/subscription', { cookie: e.cookie, body: { brand_id: e.brandId, plan: 'completo', method: 'pix' } })).status).toBe(200);
+    expect(await daReleitura(e)).toEqual([{ fatura: faturaId, tenantId: e.tenantId, resultado: 'parada' }]);
+    expect(pedidos('DELETE', `/payments/${c.id}`)).toHaveLength(0);
+    expect(await fatura(faturaId)).toMatchObject({ charge_error: 'paga_apos_cancelar', charge_next_at: null });
+    expect((await linha(faturaId)).status).toBe('cancelada');
+  }, 60_000);
+
+  it('o aviso que chega no meio da releitura não se perde (V49): quem termina a vez não empurra a fatura para o dia seguinte', async () => {
+    const { e, faturaId, c } = await comCobranca('Casa Brasa No Meio');
+    let soltar!: () => void;
+    asaas.segurarLeitura = new Promise<void>((ok) => {
+      soltar = ok;
+    });
+    const vez = daReleitura(e, umDiaDepois());
+    for (let i = 0; i < 100 && pedidos('GET', `/payments/${c.id}`).length === 0; i++) await new Promise((ok) => setTimeout(ok, 50));
+    expect(pedidos('GET', `/payments/${c.id}`)).toHaveLength(1);
+    const corpo = asaas.aviso(c, 'PAYMENT_UPDATED');
+    expect((await avisar(corpo)).status).toBe(200);
+    await processarAviso(corpo);
+    soltar();
+    expect((await vez)[0]!.resultado).toBe('esperando');
+    // A marca do aviso ficou: a próxima vez é agora, e não o dia seguinte ao relógio da releitura.
+    expect((await fatura(faturaId)).charge_next_at!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    expect((await daReleitura(e))[0]!.resultado).toBe('esperando');
+  }, 60_000);
+
+  it('a releitura com o Asaas fora do ar: espera 1 minuto, com o porquê em código', async () => {
+    const { e, faturaId } = await comCobranca('Casa Brasa Releitura Fora');
+    asaas.ler = 'fora';
+    const depois = umDiaDepois();
+    expect((await daReleitura(e, depois))[0]!.resultado).toBe('falhou');
+    const f = await fatura(faturaId);
+    expect(f).toMatchObject({ charge_error: 'meio_fora_do_ar', charge_attempts: 1, charge_locked_until: null });
+    expect(f.charge_next_at!.getTime() - depois.getTime()).toBe(60_000);
+  }, 60_000);
+
+  it('o aviso que chega antes de a referência ser gravada (o Asaas criou e caiu, e o cliente pagou): o aviso acha a fatura pelo id dela, e ela é paga na hora', async () => {
+    const e = await empresa('Casa Brasa Antes da Referência');
+    const faturaId = await assinar(e);
+    asaas.caiDepoisDeCriar = true;
+    expect((await daRotina(e))[0]!.resultado).toBe('falhou');
+    asaas.caiDepoisDeCriar = false;
+    const [c] = asaas.cobrancasDa(faturaId);
+    asaas.pagar(c!.id, diaNoFuso(new Date(), SP));
+    const corpo = asaas.aviso(c!);
+    expect((await avisar(corpo)).status).toBe(200);
+    await processarAviso(corpo);
+    expect(await fatura(faturaId)).toMatchObject({ external_id: null });
+    expect((await fatura(faturaId)).charge_next_at!.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
+    // A fila da criação acha a cobrança pelo id da fatura, já paga: grava e marca a releitura para agora.
+    expect((await daRotina(e))[0]!.resultado).toBe('pronta');
+    expect(asaas.cobrancasDa(faturaId)).toHaveLength(1);
+    expect(await daReleitura(e)).toEqual([{ fatura: faturaId, tenantId: e.tenantId, resultado: 'paga' }]);
+    expect((await linha(faturaId)).status).toBe('paga');
   }, 60_000);
 
   it('as restrições novas (V119): o endereço da fatura só com https, a situação do meio e o porquê em código, e o cliente do meio de uma empresa só', async () => {

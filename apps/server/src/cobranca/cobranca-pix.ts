@@ -1,7 +1,17 @@
 import type { Tx } from '@liame/database';
-import { sql } from 'drizzle-orm';
-import { type ApiAsaas, PROVIDER_ASAAS, situacaoParaGravar } from '../connectors/asaas/api-asaas.js';
+import { type SQL, sql } from 'drizzle-orm';
+import { type ApiAsaas, type CobrancaAsaas, PROVIDER_ASAAS, situacaoParaGravar } from '../connectors/asaas/api-asaas.js';
 import { ErroConector } from '../connectors/cliente-http.js';
+import { pagarFatura } from './assinatura.js';
+import {
+  type DecisaoDaReleitura,
+  decidirReleitura,
+  type ProblemaDaReleitura,
+  pagoEmDaCobranca,
+  RELEITURA_DIARIA_MS,
+  SITUACAO_REMOVIDA,
+  SITUACOES_PAGAS,
+} from './releitura.js';
 import { diaNoFuso, diasEntre } from './vida.js';
 
 // A cobrança PIX de cada fatura no Asaas (A7, W2a; `plano-a7.md` D-A7-30 e D-A7-31; `base-conhecimento.md` §18.5). O
@@ -45,6 +55,8 @@ type LinhaDaFatura = {
   provider_status: string | null;
   charge_locked_until: Date | string | null;
   charge_attempts: number;
+  /** A próxima vez como estava na leitura, em microssegundos (texto): é por ela que se sabe se um aviso a mudou depois. */
+  charge_next_us: string | null;
   method: string;
   plan_name: string;
   empresa: string;
@@ -84,7 +96,8 @@ async function lerFatura(tx: Tx, faturaId: string): Promise<LinhaDaFatura | null
   const r = await tx.execute<LinhaDaFatura>(sql`
     select i.id, i.tenant_id, i.status, i.amount_cents::text as amount_cents, i.due_date::text as due_date,
            i.period_start::text as period_start, i.period_end::text as period_end, i.external_id, i.provider_url,
-           i.provider_status, i.charge_locked_until, i.charge_attempts, s.method, p.name as plan_name, o.name as empresa,
+           i.provider_status, i.charge_locked_until, i.charge_attempts,
+           (extract(epoch from i.charge_next_at) * 1000000)::bigint::text as charge_next_us, s.method, p.name as plan_name, o.name as empresa,
            o.cnpj, o.timezone, c.external_id as cliente
       from liame.billing_invoice i
       join liame.subscription s on s.id = i.subscription_id
@@ -100,6 +113,16 @@ const pronta = (f: { external_id: string; provider_url: string | null; provider_
   situacao: 'pronta',
   cobranca: { id: f.external_id, url: f.provider_url, status: f.provider_status ?? 'PENDING', valorCentavos: Number(f.amount_cents), vencimento: f.due_date },
 });
+
+/**
+ * A próxima vez da fila, só se ninguém a mudou enquanto esta vez falava com o Asaas (V49): o aviso que chega no meio marca
+ * a fatura para reler agora, e quem termina a vez não pode apagar essa marca com a releitura do dia seguinte. A comparação
+ * é pelo carimbo em microssegundos, exato (o `Date` do JavaScript perde os microssegundos).
+ */
+function proximaSeNinguemMudou(lido: string | null, proxima: Date): SQL {
+  return sql`case when (extract(epoch from charge_next_at) * 1000000)::bigint is not distinct from ${lido}::bigint
+                  then ${proxima.toISOString()}::timestamptz else charge_next_at end`;
+}
 
 /** Grava a falha na fila da fatura e solta a trava. */
 async function gravarFalha(tx: Tx, faturaId: string, falha: FalhaDaCobranca, tentativas: number, esperarMs: number, agora: Date): Promise<void> {
@@ -169,14 +192,17 @@ export async function garantirCobrancaPix(transacao: Transacao, api: ApiAsaas, f
     return { situacao: 'falhou', falha, esperarMs };
   }
 
-  // 3. A referência, gravada.
+  // 3. A referência, gravada. Daí em diante, a fila é a da releitura (W2a, parte 2): no dia seguinte, ou na hora, se a
+  // cobrança achada já está paga (a vez anterior caiu depois de criar, e o cliente pagou) ou se chegou um aviso no meio.
   const final = cobranca;
+  const proxima = SITUACOES_PAGAS.has(final.status) ? agora : new Date(agora.getTime() + RELEITURA_DIARIA_MS);
   await transacao(async (tx) => {
     if (!f.cliente) await gravarCliente(tx, f.tenant_id, cliente);
     await tx.execute(sql`
       update liame.billing_invoice
          set provider = ${PROVIDER_ASAAS}, external_id = ${final.id}, provider_url = ${final.urlDaFatura}, provider_status = ${situacaoParaGravar(final.status)},
-             charge_locked_until = null, charge_error = null, charge_next_at = null, updated_at = now()
+             charge_locked_until = null, charge_error = null, charge_attempts = 0,
+             charge_next_at = ${proximaSeNinguemMudou(f.charge_next_us, proxima)}, updated_at = now()
        where id = ${f.id} and external_id is null`);
   });
   return {
@@ -190,4 +216,124 @@ async function gravarCliente(tx: Tx, tenantId: string, externalId: string): Prom
   await tx.execute(sql`
     insert into liame.billing_customer (tenant_id, provider, external_id) values (${tenantId}, ${PROVIDER_ASAAS}, ${externalId})
     on conflict do nothing`);
+}
+
+// ------------------------------------------------------------ a releitura (W2a, parte 2; D-A7-28 a D-A7-30)
+
+export type ResultadoDaReleitura =
+  | { situacao: 'paga' }
+  | { situacao: 'esperando' }
+  | { situacao: 'refeita' }
+  | { situacao: 'removida' }
+  | { situacao: 'encerrada' }
+  | { situacao: 'parada'; problema: ProblemaDaReleitura }
+  | { situacao: 'em_uso' }
+  | { situacao: 'fora_da_fila' }
+  | { situacao: 'falhou'; falha: FalhaDaCobranca; esperarMs: number };
+
+type LinhaDaReleitura = {
+  id: string;
+  status: string;
+  amount_cents: string;
+  provider: string | null;
+  external_id: string | null;
+  charge_locked_until: Date | string | null;
+  charge_attempts: number;
+  charge_next_us: string | null;
+};
+
+/**
+ * Relê a cobrança de uma fatura no Asaas e faz o que a conta de `decidirReleitura` disser, com a mesma trava da vez da
+ * criação (o aviso, a rotina diária e a rota do QR Code nunca mexem na mesma fatura ao mesmo tempo):
+ *   1. numa transação curta, a fatura é lida e reservada (só ela é travada: nada de assinatura aqui);
+ *   2. sem transação aberta, a cobrança é lida no Asaas e, se a decisão manda, removida lá;
+ *   3. noutra transação curta, o resultado é gravado. O pagamento entra pelo `pagarFatura`, que trava a assinatura antes
+ *      das faturas, como todo caminho da cobrança: por isso nenhuma trava de fatura vem antes dele.
+ * Quem chama dá a transação (a do sistema, no worker) e o relógio.
+ */
+export async function relerCobranca(transacao: Transacao, api: ApiAsaas, faturaId: string, agora: Date): Promise<ResultadoDaReleitura> {
+  type Leitura = { tipo: 'resposta'; r: ResultadoDaReleitura } | { tipo: 'reservada'; f: LinhaDaReleitura; externo: string };
+  const lida = await transacao<Leitura>(async (tx) => {
+    const f = (
+      await tx.execute<LinhaDaReleitura>(sql`
+        select id, status, amount_cents::text as amount_cents, provider, external_id, charge_locked_until, charge_attempts,
+               (extract(epoch from charge_next_at) * 1000000)::bigint::text as charge_next_us
+          from liame.billing_invoice where id = ${faturaId} for update`)
+    ).rows[0];
+    // Sem a cobrança (outra vez acabou de refazê-la): a fila da criação é quem cuida dela agora.
+    if (!f || f.provider !== PROVIDER_ASAAS || !f.external_id) return { tipo: 'resposta', r: { situacao: 'fora_da_fila' } };
+    if (f.charge_locked_until && new Date(f.charge_locked_until).getTime() > agora.getTime()) return { tipo: 'resposta', r: { situacao: 'em_uso' } };
+    await tx.execute(sql`
+      update liame.billing_invoice
+         set charge_locked_until = ${new Date(agora.getTime() + TRAVA_DA_COBRANCA_MS).toISOString()}::timestamptz, updated_at = now()
+       where id = ${f.id}`);
+    return { tipo: 'reservada', f, externo: f.external_id };
+  });
+  if (lida.tipo === 'resposta') return lida.r;
+  const { f, externo } = lida;
+
+  // 2. O Asaas, sem transação aberta.
+  let cobranca: CobrancaAsaas | null;
+  let decisao: DecisaoDaReleitura;
+  try {
+    cobranca = await api.lerCobranca(externo);
+    decisao = decidirReleitura(f, cobranca);
+    if (decisao.acao === 'remover' || (decisao.acao === 'refazer' && decisao.removerAntes)) await api.removerCobranca(externo);
+  } catch (err) {
+    const falha = falhaDoErro(err);
+    const tentativas = f.charge_attempts + 1;
+    const esperarMs = esperaDaCobranca(tentativas, err instanceof ErroConector ? err.esperarMs : null);
+    await transacao((tx) => gravarFalha(tx, f.id, falha, tentativas, esperarMs, agora));
+    return { situacao: 'falhou', falha, esperarMs };
+  }
+
+  // 3. O resultado, gravado.
+  const situacao = cobranca ? situacaoParaGravar(cobranca.status) : null;
+  const url = cobranca?.urlDaFatura ?? null;
+  return transacao<ResultadoDaReleitura>(async (tx) => {
+    const fim = sql`charge_locked_until = null, charge_error = null, charge_attempts = 0, updated_at = now()`;
+    switch (decisao.acao) {
+      case 'pagar': {
+        const r = await pagarFatura(tx, { faturaId: f.id, pagoEm: pagoEmDaCobranca(decisao.pagoNoDia, agora), forma: 'pix', agora });
+        if (r.situacao === 'paga' || r.situacao === 'ja_paga') {
+          await tx.execute(sql`update liame.billing_invoice set provider_status = ${situacao}, charge_next_at = null, ${fim} where id = ${f.id}`);
+          return { situacao: 'paga' };
+        }
+        // A fatura mudou entre a reserva e agora (cancelada no Liame): a próxima vez decide com a situação nova.
+        await tx.execute(sql`update liame.billing_invoice set charge_next_at = ${agora.toISOString()}::timestamptz, ${fim} where id = ${f.id}`);
+        return { situacao: 'esperando' };
+      }
+      case 'esperar':
+        await tx.execute(sql`
+          update liame.billing_invoice
+             set provider_status = ${situacao}, provider_url = coalesce(${url}, provider_url),
+                 charge_next_at = ${proximaSeNinguemMudou(f.charge_next_us, new Date(agora.getTime() + RELEITURA_DIARIA_MS))}, ${fim}
+           where id = ${f.id}`);
+        return { situacao: 'esperando' };
+      case 'refazer':
+        // A referência sai (as duas colunas juntas, como a 0080 exige) e a fila da criação faz a cobrança nova na hora.
+        await tx.execute(sql`
+          update liame.billing_invoice
+             set provider = null, external_id = null, provider_url = null, provider_status = null,
+                 charge_next_at = ${agora.toISOString()}::timestamptz, ${fim}
+           where id = ${f.id} and external_id = ${externo}`);
+        return { situacao: 'refeita' };
+      case 'remover':
+        await tx.execute(sql`update liame.billing_invoice set provider_status = ${SITUACAO_REMOVIDA}, charge_next_at = null, ${fim} where id = ${f.id}`);
+        return { situacao: 'removida' };
+      case 'encerrar':
+        await tx.execute(sql`
+          update liame.billing_invoice
+             set provider_status = ${cobranca && !cobranca.removida ? situacao : SITUACAO_REMOVIDA}, charge_next_at = null, ${fim}
+           where id = ${f.id}`);
+        return { situacao: 'encerrada' };
+      case 'parar':
+        await tx.execute(sql`
+          update liame.billing_invoice
+             set provider_status = coalesce(${situacao}, provider_status), charge_next_at = null, charge_locked_until = null,
+                 charge_error = ${decisao.problema}, updated_at = now()
+           where id = ${f.id}`);
+        return { situacao: 'parada', problema: decisao.problema };
+    }
+  });
 }

@@ -398,7 +398,9 @@ export const ASAAS_PRODUCAO = 'https://api.asaas.com/v3';
 /**
  * O Asaas na configuração (A7, W2; D-A7-33). Em produção, o endereço é um dos dois oficiais (a chave sai para ele). Em
  * todo ambiente, a chave é do mesmo ambiente do endereço: o prefixo diz qual (`$aact_hmlg_` no Sandbox, `$aact_prod_` na
- * produção; base §18.5); e o token do aviso não tem espaço. Nenhuma mensagem leva a chave ou o token.
+ * produção; base §18.5); e o token do aviso não tem espaço. Em produção, com a chave, o token do aviso é obrigatório
+ * (W2a, parte 2): sem ele, a rota do aviso não confere nada, e o pagamento só seria visto na releitura do dia seguinte.
+ * Nenhuma mensagem leva a chave ou o token.
  */
 export function asaasDaConfig(
   nodeEnv: 'development' | 'test' | 'production',
@@ -417,6 +419,7 @@ export function asaasDaConfig(
   if (!chave.startsWith(prefixo)) {
     throw new Error(`config: a ASAAS_API_KEY não é do ambiente de ASAAS_API_URL (a chave dele começa com ${prefixo})`);
   }
+  if (nodeEnv === 'production' && !token) throw new Error('config: em produção, a ASAAS_API_KEY vem com o ASAAS_WEBHOOK_TOKEN (o token do aviso)');
   return { apiKey: chave, apiUrl, ambiente, webhookToken: token ?? null };
 }
 

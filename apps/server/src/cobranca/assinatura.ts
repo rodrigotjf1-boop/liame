@@ -143,10 +143,16 @@ async function garantirMensalidade(tx: Tx, s: LinhaDaAssinatura, inicio: string,
     on conflict do nothing`);
 }
 
+/**
+ * A fatura que já tem a cobrança no meio de pagamento volta para a fila da releitura agora (W2a, parte 2): cancelada,
+ * a cobrança sai de lá; com o valor novo, a cobrança velha sai e nasce outra.
+ */
+const relerAgora = (agora: Date) => sql`charge_next_at = case when external_id is not null then ${agora.toISOString()}::timestamptz else charge_next_at end`;
+
 /** Cancela as faturas em aberto da assinatura que o filtro escolher (nenhuma é cobrada depois disso). */
 async function cancelarFaturas(tx: Tx, assinaturaId: string, agora: Date, filtro = sql``): Promise<number> {
   const r = await tx.execute(sql`
-    update liame.billing_invoice set status = 'cancelada', canceled_at = ${agora.toISOString()}::timestamptz, updated_at = now()
+    update liame.billing_invoice set status = 'cancelada', canceled_at = ${agora.toISOString()}::timestamptz, ${relerAgora(agora)}, updated_at = now()
      where subscription_id = ${assinaturaId} and status = 'aberta' ${filtro}`);
   return r.rowCount ?? 0;
 }
@@ -239,7 +245,7 @@ export async function pagarFatura(tx: Tx, p: { faturaId: string; pagoEm: Date; f
     const novo = await planoPeloId(tx, f.plan_id);
     await tx.execute(sql`update liame.subscription set plan_id = ${novo.id}, next_plan_id = null, updated_at = now() where id = ${s.id}`);
     await tx.execute(sql`
-      update liame.billing_invoice set plan_id = ${novo.id}, amount_cents = ${novo.price_cents}::bigint, updated_at = now()
+      update liame.billing_invoice set plan_id = ${novo.id}, amount_cents = ${novo.price_cents}::bigint, ${relerAgora(p.agora)}, updated_at = now()
        where subscription_id = ${s.id} and kind = 'mensalidade' and status = 'aberta' and period_start >= ${s.period_end}::date`);
   }
   const antes = s.status;
@@ -323,10 +329,10 @@ export async function vezDaAssinatura(tx: Tx, assinaturaId: string, agora: Date)
 }
 
 /** A mensalidade do período seguinte que já nasceu (5 dias antes do vencimento) passa a ser a do plano dado. */
-async function mensalidadeSeguintePeloPlano(tx: Tx, s: LinhaDaAssinatura, planoId: string): Promise<void> {
+async function mensalidadeSeguintePeloPlano(tx: Tx, s: LinhaDaAssinatura, planoId: string, agora: Date): Promise<void> {
   const plano = await planoPeloId(tx, planoId);
   await tx.execute(sql`
-    update liame.billing_invoice set plan_id = ${plano.id}, amount_cents = ${plano.price_cents}::bigint, updated_at = now()
+    update liame.billing_invoice set plan_id = ${plano.id}, amount_cents = ${plano.price_cents}::bigint, ${relerAgora(agora)}, updated_at = now()
      where subscription_id = ${s.id} and kind = 'mensalidade' and status = 'aberta' and period_start >= ${s.period_end}::date`);
 }
 
@@ -348,19 +354,19 @@ export async function trocarPlano(tx: Tx, s: LinhaDaAssinatura, novo: { id: stri
   if (novo.id === s.plan_id) {
     if (!s.next_plan_id) return desfezDiferenca ? { tipo: 'desfeita' } : { tipo: 'nada' };
     await tx.execute(sql`update liame.subscription set next_plan_id = null, updated_at = now() where id = ${s.id}`);
-    await mensalidadeSeguintePeloPlano(tx, s, s.plan_id);
+    await mensalidadeSeguintePeloPlano(tx, s, s.plan_id, agora);
     return { tipo: 'desfeita' };
   }
   const atual = await planoPeloId(tx, s.plan_id);
   if (BigInt(novo.price_cents) <= BigInt(atual.price_cents)) {
     await tx.execute(sql`update liame.subscription set next_plan_id = ${novo.id}, updated_at = now() where id = ${s.id}`);
-    await mensalidadeSeguintePeloPlano(tx, s, novo.id);
+    await mensalidadeSeguintePeloPlano(tx, s, novo.id, agora);
     return { tipo: 'descer' };
   }
   // Subir: a descida marcada antes deixa de valer.
   if (s.next_plan_id) {
     await tx.execute(sql`update liame.subscription set next_plan_id = null, updated_at = now() where id = ${s.id}`);
-    await mensalidadeSeguintePeloPlano(tx, s, s.plan_id);
+    await mensalidadeSeguintePeloPlano(tx, s, s.plan_id, agora);
   }
   const inicio = s.period_start as string;
   const fim = s.period_end as string;
@@ -369,7 +375,7 @@ export async function trocarPlano(tx: Tx, s: LinhaDaAssinatura, novo: { id: stri
     // Sem dia a pagar (o último dia do período) ou abaixo do mínimo do meio de pagamento (D-A7-32): o plano muda já, sem
     // cobrança, e o período seguinte vai por ele.
     await tx.execute(sql`update liame.subscription set plan_id = ${novo.id}, updated_at = now() where id = ${s.id}`);
-    await mensalidadeSeguintePeloPlano(tx, s, novo.id);
+    await mensalidadeSeguintePeloPlano(tx, s, novo.id, agora);
     return { tipo: 'subir', diferencaCents: 0, faturaId: null };
   }
   const faturaId = uuidv7();

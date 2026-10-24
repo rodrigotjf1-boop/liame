@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { descricaoDaCobranca, esperaDaCobranca, falhaDoErro } from '../src/cobranca/cobranca-pix.js';
 import { MINIMO_DA_COBRANCA_CENTAVOS } from '../src/cobranca/vida.js';
 import { ASAAS_PRODUCAO, ASAAS_SANDBOX, asaasDaConfig } from '../src/config.js';
-import { ApiAsaas, cobrancaDoAsaas, paraCentavos, paraReais, situacaoParaGravar } from '../src/connectors/asaas/api-asaas.js';
+import { decidirReleitura, pagoEmDaCobranca, SITUACOES_PAGAS } from '../src/cobranca/releitura.js';
+import { ApiAsaas, type CobrancaAsaas, cobrancaDoAsaas, diaDoAsaas, paraCentavos, paraReais, situacaoParaGravar } from '../src/connectors/asaas/api-asaas.js';
 import { type ClienteConector, classificar, ErroConector, erroDoAsaas } from '../src/connectors/cliente-http.js';
+import { eventoDoAsaas } from '../src/inbox/inbox.service.js';
+import { cobrancaDoAviso } from '../src/worker/aviso-do-asaas.js';
 
 // A7 · W2a, parte 1, sem banco e sem rede: a configuração do Asaas (o endereço oficial em produção e a chave do mesmo
 // ambiente, pelo prefixo; base §18.5), o erro do Asaas na classificação do cliente HTTP (`errors[0]` e o 429 com o
@@ -23,7 +26,16 @@ describe('o Asaas na configuração (D-A7-33)', () => {
 
   it('com a chave: o endereço, o ambiente pelo endereço e o token do aviso', () => {
     expect(asaasDaConfig('production', DO_SANDBOX, `${ASAAS_SANDBOX}/`, MARCA_DO_AVISO)).toEqual({ apiKey: DO_SANDBOX, apiUrl: ASAAS_SANDBOX, ambiente: 'sandbox', webhookToken: MARCA_DO_AVISO });
-    expect(asaasDaConfig('production', DA_PRODUCAO, ASAAS_PRODUCAO, undefined)).toEqual({ apiKey: DA_PRODUCAO, apiUrl: ASAAS_PRODUCAO, ambiente: 'producao', webhookToken: null });
+    expect(asaasDaConfig('production', DA_PRODUCAO, ASAAS_PRODUCAO, MARCA_DO_AVISO)).toEqual({ apiKey: DA_PRODUCAO, apiUrl: ASAAS_PRODUCAO, ambiente: 'producao', webhookToken: MARCA_DO_AVISO });
+    // Fora de produção, o token pode faltar (a rota do aviso responde como inexistente).
+    expect(asaasDaConfig('test', DO_SANDBOX, ASAAS_SANDBOX, undefined)?.webhookToken).toBeNull();
+  });
+
+  it('em produção, a chave sem o token do aviso é recusada (W2a, parte 2): sem ele, o pagamento só apareceria no dia seguinte', () => {
+    expect(() => asaasDaConfig('production', DA_PRODUCAO, ASAAS_PRODUCAO, undefined)).toThrow('ASAAS_WEBHOOK_TOKEN');
+    expect(() => asaasDaConfig('production', DO_SANDBOX, ASAAS_SANDBOX, '')).toThrow('ASAAS_WEBHOOK_TOKEN');
+    // Sem a chave, nada é exigido: o pagamento fica indisponível.
+    expect(asaasDaConfig('production', undefined, ASAAS_SANDBOX, undefined)).toBeNull();
   });
 
   it('em produção, só os dois endereços oficiais; fora dela, o do teste vale como Sandbox', () => {
@@ -95,7 +107,7 @@ describe('a cobrança do Asaas no formato do Liame', () => {
   it('a cobrança lida: o id, a situação, o valor, o vencimento, a fatura hospedada e o id da fatura do Liame; sem id, não é cobrança', () => {
     expect(
       cobrancaDoAsaas({ id: 'pay_1', status: 'PENDING', value: 193.55, dueDate: '2026-11-22', invoiceUrl: 'https://sandbox.asaas.com/i/pay_1', externalReference: 'fat-1' }),
-    ).toEqual({ id: 'pay_1', status: 'PENDING', valorCentavos: 19_355, vencimento: '2026-11-22', urlDaFatura: 'https://sandbox.asaas.com/i/pay_1', referencia: 'fat-1', removida: false });
+    ).toEqual({ id: 'pay_1', status: 'PENDING', valorCentavos: 19_355, vencimento: '2026-11-22', urlDaFatura: 'https://sandbox.asaas.com/i/pay_1', referencia: 'fat-1', removida: false, pagaNoDia: null });
     expect(cobrancaDoAsaas({ id: 'pay_2', status: 'RECEIVED', value: 249, dueDate: '2026-11-22', deleted: true })?.removida).toBe(true);
     expect(cobrancaDoAsaas({ status: 'PENDING', value: 1, dueDate: '2026-11-22' })).toBeNull();
     expect(cobrancaDoAsaas(null)).toBeNull();
@@ -147,5 +159,111 @@ describe('a fila da cobrança: a espera e o porquê', () => {
     expect(falhaDoErro(new ErroConector('transitorio', 'asaas', 'x', 503))).toBe('meio_fora_do_ar');
     expect(falhaDoErro(new ErroConector('circuito_aberto', 'asaas', 'x'))).toBe('meio_fora_do_ar');
     expect(falhaDoErro(new Error('qualquer'))).toBe('meio_fora_do_ar');
+  });
+});
+
+// W2a, parte 2: a releitura, sem banco nem rede.
+const FATURA = '0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a';
+const cobranca = (mudar: Partial<CobrancaAsaas> = {}): CobrancaAsaas => ({
+  id: 'pay_1',
+  status: 'PENDING',
+  valorCentavos: 24_900,
+  vencimento: '2026-11-22',
+  urlDaFatura: null,
+  referencia: FATURA,
+  removida: false,
+  pagaNoDia: null,
+  ...mudar,
+});
+const aberta = { id: FATURA, status: 'aberta', amount_cents: '24900' };
+const cancelada = { ...aberta, status: 'cancelada' };
+
+describe('a releitura: o que fazer com a fatura depois de ler a cobrança no Asaas (D-A7-28 a D-A7-30)', () => {
+  it('a fatura em aberto: paga no Asaas, paga no Liame, com o dia que o Asaas informou; o que conta como pago (D-A7-29)', () => {
+    expect([...SITUACOES_PAGAS].sort()).toEqual(['CONFIRMED', 'RECEIVED', 'RECEIVED_IN_CASH']);
+    for (const status of SITUACOES_PAGAS) {
+      expect(decidirReleitura(aberta, cobranca({ status, pagaNoDia: '2026-10-23' }))).toEqual({ acao: 'pagar', pagoNoDia: '2026-10-23' });
+    }
+    // Pagou a mais (o Asaas aceita?): paga do mesmo jeito; a menos, para, e uma pessoa da distribuição olha.
+    expect(decidirReleitura(aberta, cobranca({ status: 'RECEIVED', valorCentavos: 25_000 }))).toMatchObject({ acao: 'pagar' });
+    expect(decidirReleitura(aberta, cobranca({ status: 'RECEIVED', valorCentavos: 24_899 }))).toEqual({ acao: 'parar', problema: 'valor_divergente' });
+  });
+
+  it('a fatura em aberto: pendente ou vencida espera; a situação que o Liame não conhece também (V149), nunca paga', () => {
+    for (const status of ['PENDING', 'OVERDUE', 'AWAITING_RISK_ANALYSIS', 'UMA_SITUACAO_NOVA']) {
+      expect(decidirReleitura(aberta, cobranca({ status }))).toEqual({ acao: 'esperar' });
+    }
+  });
+
+  it('a fatura em aberto: a cobrança removida no Asaas (ou que ele não acha) é refeita; a do valor de antes sai e é refeita', () => {
+    expect(decidirReleitura(aberta, null)).toEqual({ acao: 'refazer', removerAntes: false });
+    expect(decidirReleitura(aberta, cobranca({ removida: true }))).toEqual({ acao: 'refazer', removerAntes: false });
+    // A troca de plano reprecificou a mensalidade em aberto: a cobrança de R$ 249 não vale para a de R$ 449.
+    expect(decidirReleitura({ ...aberta, amount_cents: '44900' }, cobranca())).toEqual({ acao: 'refazer', removerAntes: true });
+  });
+
+  it('a fatura em aberto: a cobrança de outra fatura ou estornada no Asaas para', () => {
+    expect(decidirReleitura(aberta, cobranca({ referencia: 'outra-fatura' }))).toEqual({ acao: 'parar', problema: 'referencia_divergente' });
+    for (const status of ['REFUNDED', 'REFUND_REQUESTED', 'REFUND_IN_PROGRESS', 'CHARGEBACK_REQUESTED', 'CHARGEBACK_DISPUTE', 'AWAITING_CHARGEBACK_REVERSAL']) {
+      expect(decidirReleitura(aberta, cobranca({ status }))).toEqual({ acao: 'parar', problema: 'estornada_no_meio' });
+    }
+  });
+
+  it('a fatura cancelada no Liame: a cobrança viva sai do Asaas; a que já saiu encerra a fila; a paga depois de cancelar para', () => {
+    expect(decidirReleitura(cancelada, cobranca())).toEqual({ acao: 'remover' });
+    expect(decidirReleitura(cancelada, cobranca({ status: 'OVERDUE' }))).toEqual({ acao: 'remover' });
+    expect(decidirReleitura(cancelada, null)).toEqual({ acao: 'encerrar' });
+    expect(decidirReleitura(cancelada, cobranca({ removida: true }))).toEqual({ acao: 'encerrar' });
+    expect(decidirReleitura(cancelada, cobranca({ status: 'RECEIVED' }))).toEqual({ acao: 'parar', problema: 'paga_apos_cancelar' });
+    // A paga no Liame (por outro caminho) só sai da fila.
+    expect(decidirReleitura({ ...aberta, status: 'paga' }, cobranca({ status: 'RECEIVED' }))).toEqual({ acao: 'encerrar' });
+  });
+});
+
+describe('o dia do pagamento', () => {
+  it('o dia do Asaas: AAAA-MM-DD (com ou sem a hora), conferido no calendário (V122)', () => {
+    expect(diaDoAsaas('2026-10-23')).toBe('2026-10-23');
+    expect(diaDoAsaas('2026-10-23 16:45:03')).toBe('2026-10-23');
+    expect(['2026-13-01', '2026-02-30', '2026-10-32', '20261023', '2026/10/23', 'amanhã', '', null, 20261023].map(diaDoAsaas)).toEqual(Array(9).fill(null));
+  });
+
+  it('a cobrança lida traz o dia em que o cliente pagou, senão o do pagamento, senão o da confirmação', () => {
+    const base = { id: 'pay_1', status: 'RECEIVED', value: 249, dueDate: '2026-11-22' };
+    expect(cobrancaDoAsaas({ ...base, clientPaymentDate: '2026-10-21', paymentDate: '2026-10-22', confirmedDate: '2026-10-23' })?.pagaNoDia).toBe('2026-10-21');
+    expect(cobrancaDoAsaas({ ...base, clientPaymentDate: null, paymentDate: '2026-10-22', confirmedDate: '2026-10-23' })?.pagaNoDia).toBe('2026-10-22');
+    expect(cobrancaDoAsaas({ ...base, confirmedDate: '2026-10-23' })?.pagaNoDia).toBe('2026-10-23');
+    expect(cobrancaDoAsaas({ ...base, paymentDate: '2026-02-30' })?.pagaNoDia).toBeNull();
+  });
+
+  it('o instante para o `pagarFatura`: meio-dia de São Paulo do dia informado, nunca depois de agora; sem o dia, agora', () => {
+    const depois = new Date('2026-10-24T09:00:00Z');
+    expect(pagoEmDaCobranca('2026-10-23', depois).toISOString()).toBe('2026-10-23T15:00:00.000Z');
+    // A releitura no mesmo dia, de manhã: agora (o dia, em São Paulo, é o mesmo).
+    const manha = new Date('2026-10-23T11:00:00Z');
+    expect(pagoEmDaCobranca('2026-10-23', manha)).toBe(manha);
+    expect(pagoEmDaCobranca(null, manha)).toBe(manha);
+  });
+});
+
+describe('o aviso do Asaas', () => {
+  const corpo = (mudar: Record<string, unknown> = {}) =>
+    JSON.stringify({ id: 'evt_05b708f961d739ea7eba7e4db318f621&368604920', event: 'PAYMENT_RECEIVED', payment: { id: 'pay_080225913252', externalReference: FATURA }, ...mudar });
+
+  it('o evento: o id (até 200 letras) e o tipo nas regras da situação; fora disso, não é aviso', () => {
+    expect(eventoDoAsaas(corpo())).toEqual({ id: 'evt_05b708f961d739ea7eba7e4db318f621&368604920', tipo: 'PAYMENT_RECEIVED' });
+    expect(eventoDoAsaas(corpo({ id: '' }))).toBeNull();
+    expect(eventoDoAsaas(corpo({ id: 'e'.repeat(201) }))).toBeNull();
+    expect(eventoDoAsaas(corpo({ event: 'payment_received' }))).toBeNull();
+    expect(eventoDoAsaas(corpo({ event: 7 }))).toBeNull();
+    expect(eventoDoAsaas('não é JSON')).toBeNull();
+    expect(eventoDoAsaas('null')).toBeNull();
+  });
+
+  it('a cobrança do aviso: o id no Asaas e o id da fatura do Liame, só no formato (o id da fatura vira `uuid` no SQL)', () => {
+    expect(cobrancaDoAviso(corpo())).toEqual({ cobranca: 'pay_080225913252', fatura: FATURA });
+    expect(cobrancaDoAviso(corpo({ payment: { id: 'pay_1', externalReference: '056984' } }))).toEqual({ cobranca: 'pay_1', fatura: null });
+    expect(cobrancaDoAviso(corpo({ payment: { id: 'pay_1', externalReference: `${FATURA.slice(0, 35)}g` } }))).toEqual({ cobranca: 'pay_1', fatura: null });
+    expect(cobrancaDoAviso(corpo({ payment: null }))).toEqual({ cobranca: null, fatura: null });
+    expect(cobrancaDoAviso('{')).toEqual({ cobranca: null, fatura: null });
   });
 });

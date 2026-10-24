@@ -32,6 +32,11 @@ export type CobrancaAsaas = {
   /** O id da fatura do Liame. */
   referencia: string | null;
   removida: boolean;
+  /**
+   * O dia do pagamento (AAAA-MM-DD, no horário do Asaas): o `clientPaymentDate`, senão o `paymentDate`, senão o
+   * `confirmedDate` (eventos para cobranças, 13/10/2026); nulo enquanto não há pagamento.
+   */
+  pagaNoDia: string | null;
 };
 
 export type QrCodePix = { imagemPngBase64: string; copiaECola: string; validaAte: string | null };
@@ -68,6 +73,20 @@ export function situacaoParaGravar(s: string): string | null {
   return s;
 }
 
+/**
+ * Um dia no formato do Asaas (AAAA-MM-DD, às vezes seguido da hora), conferido letra a letra e no calendário (V122:
+ * 30/02 e o mês 13 não passam); fora disso, nulo.
+ */
+export function diaDoAsaas(v: unknown): string | null {
+  if (typeof v !== 'string' || v.length < 10) return null;
+  const dia = v.slice(0, 10);
+  for (const [i, l] of [...dia].entries()) {
+    if (i === 4 || i === 7 ? l !== '-' : l < '0' || l > '9') return null;
+  }
+  const d = new Date(`${dia}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === dia ? dia : null;
+}
+
 /** A cobrança como o Asaas a devolve, no formato do Liame; sem id, não é cobrança. */
 export function cobrancaDoAsaas(c: Record<string, unknown> | null | undefined): CobrancaAsaas | null {
   if (!c) return null;
@@ -81,6 +100,7 @@ export function cobrancaDoAsaas(c: Record<string, unknown> | null | undefined): 
     urlDaFatura: urlGravavel(c.invoiceUrl),
     referencia: texto(c.externalReference),
     removida: c.deleted === true,
+    pagaNoDia: diaDoAsaas(c.clientPaymentDate) ?? diaDoAsaas(c.paymentDate) ?? diaDoAsaas(c.confirmedDate),
   };
 }
 
@@ -90,7 +110,7 @@ export class ApiAsaas {
     private readonly cfg: ConfigApiAsaas,
   ) {}
 
-  private async chamar<T>(metodo: 'GET' | 'POST', caminho: string, endpoint: string, corpo?: unknown, tempoLimiteMs?: number): Promise<T> {
+  private async chamar<T>(metodo: 'GET' | 'POST' | 'DELETE', caminho: string, endpoint: string, corpo?: unknown, tempoLimiteMs?: number): Promise<T> {
     const r = await this.cliente.requisitar<T>({
       provider: PROVIDER_ASAAS,
       conta: CONTA,
@@ -158,11 +178,36 @@ export class ApiAsaas {
     return lida;
   }
 
-  async lerCobranca(id: string): Promise<CobrancaAsaas> {
-    const r = await this.chamar<Record<string, unknown>>('GET', `/payments/${encodeURIComponent(id)}`, 'payments');
+  /**
+   * A cobrança pelo id do Asaas. Nula quando ele responde 404: a cobrança não existe mais (o que ele devolve ao ler uma
+   * removida não está escrito [NC]; o pior caso é o 404, e a removida que volta com `deleted: true` também é tratada).
+   */
+  async lerCobranca(id: string): Promise<CobrancaAsaas | null> {
+    let r: Record<string, unknown>;
+    try {
+      r = await this.chamar<Record<string, unknown>>('GET', `/payments/${encodeURIComponent(id)}`, 'payments');
+    } catch (err) {
+      if (err instanceof ErroConector && err.status === 404) return null;
+      throw err;
+    }
     const lida = cobrancaDoAsaas(r);
     if (!lida) throw new ErroConector('definitivo', PROVIDER_ASAAS, 'o Asaas devolveu a cobrança fora do formato esperado');
     return lida;
+  }
+
+  /**
+   * Remove a cobrança no Asaas (a fatura do Liame foi cancelada, ou o valor dela mudou). Remover não devolve dinheiro
+   * (excluir cobrança, 08/09/2026); a que já não existe (404) conta como removida.
+   */
+  async removerCobranca(id: string): Promise<void> {
+    let r: Record<string, unknown>;
+    try {
+      r = await this.chamar<Record<string, unknown>>('DELETE', `/payments/${encodeURIComponent(id)}`, 'payments');
+    } catch (err) {
+      if (err instanceof ErroConector && err.status === 404) return;
+      throw err;
+    }
+    if (r?.deleted !== true) throw new ErroConector('definitivo', PROVIDER_ASAAS, 'o Asaas não confirmou a remoção da cobrança');
   }
 
   /** O QR Code do PIX de uma cobrança: a imagem (PNG em base64), o copia e cola e a validade. */
