@@ -33,6 +33,9 @@ const WITHOUT_AUDIT = [
   'POST /v1/ai/explain/results',
   'POST /v1/ai/feedback',
   'POST /v1/auth/password/forgot',
+  // O aviso do Asaas (A7, W2a, parte 2): como a inbox, o registro é o próprio `inbox_event`, cru e deduplicado; o que
+  // muda a cobrança (o pagamento) é auditado pela releitura, no `pagarFatura`.
+  'POST /v1/billing/asaas/webhook',
   // Minha marca (A3, I8): testar uma frase nas regras não muda dado e não guarda nada.
   'POST /v1/brand-dossier/check',
   // Conversa (A3, I10): a mensagem é conteúdo da própria pessoa (30 dias); o que a LIA registra em nome dela, a
