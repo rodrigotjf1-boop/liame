@@ -22,7 +22,8 @@ catalog:
   '@nestjs/cli': 12.0.6
   reflect-metadata: 0.2.2
   rxjs: 7.8.2
-  zod: 4.6.5
+  # 4.6.6: o aviso GHSA-mrhx-c7xc-m3w5 (24/10/2026, acusado pelo osv-scanner do CI).
+  zod: 4.6.6
 
   drizzle-orm: 0.45.3
   pg: 8.23.0
@@ -92,3 +93,9 @@ minimumReleaseAgeStrict: true
 peerDependencyRules:
   allowedVersions:
     openapi-typescript>typescript: 6.0.3
+
+# Correção de segurança que a dependência direta ainda não trouxe (24/10/2026): o @nestjs/platform-express 12 fixa o
+# multer em 2.4.0, com o aviso GHSA-q7qp-rjg7-q26m, corrigido na 2.5.0 (publicada em 22/10/2026). Quando o Nest passar a
+# pedir uma versão corrigida, a linha sai (security-model.md §9).
+overrides:
+  multer: 2.5.0
