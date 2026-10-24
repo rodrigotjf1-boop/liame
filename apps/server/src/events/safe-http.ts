@@ -2,7 +2,7 @@ import { lookup as dnsLookup, type LookupAddress } from 'node:dns';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { BlockList, isIP } from 'node:net';
-import { createBrotliDecompress, createGunzip, createInflate } from 'node:zlib';
+import { createGunzip, createInflate } from 'node:zlib';
 
 // Chamada a URL de terceiro (o POST do webhook de saída; o GET da página que o Pesquisador lê) sem virar porta
 // para a rede interna (SSRF, security-model): só http(s), e o endereço resolvido não pode ser privado, de
@@ -156,11 +156,19 @@ export interface SafeGetResult {
 
 export class ResponseTooLargeError extends Error {}
 
+/** A resposta veio numa compressão que o GET não pediu (`br`, `zstd` ou outra): o corpo não é lido. */
+export class UnsupportedEncodingError extends Error {}
+
+/** As compressões que o GET pede e lê. Brotli fica de fora (o boletim do Node de 21/10/2026, LIC-451). */
+const COMPRESSOES_PEDIDAS = 'gzip, deflate';
+
 /**
  * GET em URL de terceiro (a página que a pessoa informou, o robots.txt), com as mesmas travas do POST. O
  * redirecionamento é seguido à mão, até o limite, com o destino conferido de novo a cada passo (OWASP SSRF, base
- * §16.6): o cliente nunca segue sozinho. O corpo é descomprimido (gzip, deflate, br) e o tamanho máximo vale para o
- * que sai da descompressão (contra a bomba de compressão).
+ * §16.6): o cliente nunca segue sozinho. O corpo é descomprimido (gzip, deflate) e o tamanho máximo vale para o que
+ * sai da descompressão (contra a bomba de compressão). O Brotli não se pede nem se aceita: o decodificador dele é a
+ * peça do Node que o boletim de 21/10/2026 corrigiu, e a página de terceiro é o texto menos confiável que o Liame lê.
+ * A compressão que não pedimos recusa a resposta, em vez de passar o corpo comprimido adiante como texto.
  */
 export async function safeGet(rawUrl: string, options: SafeGetOptions): Promise<SafeGetResult> {
   const prazo = Date.now() + options.timeoutMs;
@@ -192,7 +200,7 @@ function getUmaVez(url: URL, options: SafeGetOptions, prazo: number): Promise<{ 
       url,
       {
         method: 'GET',
-        headers: { 'user-agent': options.userAgent, accept: options.accept, 'accept-encoding': 'gzip, deflate, br' },
+        headers: { 'user-agent': options.userAgent, accept: options.accept, 'accept-encoding': COMPRESSOES_PEDIDAS },
         lookup: guardedLookup(options.allowPrivateNetwork) as never,
         timeout: restante,
       },
@@ -204,9 +212,13 @@ function getUmaVez(url: URL, options: SafeGetOptions, prazo: number): Promise<{ 
           resolve({ status, redirect: location, contentType: null, body: Buffer.alloc(0) });
           return;
         }
-        const codificacao = String(res.headers['content-encoding'] ?? '').toLowerCase();
-        const corpo =
-          codificacao === 'gzip' ? res.pipe(createGunzip()) : codificacao === 'deflate' ? res.pipe(createInflate()) : codificacao === 'br' ? res.pipe(createBrotliDecompress()) : res;
+        const codificacao = String(res.headers['content-encoding'] ?? '').trim().toLowerCase();
+        if (codificacao !== '' && codificacao !== 'identity' && codificacao !== 'gzip' && codificacao !== 'deflate') {
+          reject(new UnsupportedEncodingError(`compressão que não pedimos: ${codificacao.slice(0, 40)}`));
+          req.destroy();
+          return;
+        }
+        const corpo = codificacao === 'gzip' ? res.pipe(createGunzip()) : codificacao === 'deflate' ? res.pipe(createInflate()) : res;
         const partes: Buffer[] = [];
         let total = 0;
         timer = setTimeout(() => req.destroy(new Error('tempo esgotado')), Math.max(1, prazo - Date.now()));

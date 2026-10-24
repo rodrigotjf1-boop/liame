@@ -139,6 +139,8 @@ Todo PR roda: auditoria de dependências, varredura de segredos, SAST, verifica�
 
 **Boletim de segurança do próprio Node (21/10/2026):** a versão corrigida sobe de uma vez no `.nvmrc`, no digest das duas imagens (o da tag exata, consultado no registry) e no mínimo do `engines`, num PR só e antes dos outros. O CI confere que o Node do executor e o das duas imagens são o do `.nvmrc`; com a linha só (`24`), o setup-node usava a versão guardada no executor, e o digest fixado nunca se atualiza sozinho.
 
+**A camada a mais contra o decodificador (24/10/2026, aprovada pelo dono):** o que chega de fora sem autenticação não passa por descompressão de que o Liame não precisa. O leitor de corpo da API não descomprime (`inflate: false` no JSON e no formulário, `apps/server/src/leitor-do-corpo.ts`): o corpo comprimido recebe 415 em problem+json antes da rota, inclusive nas públicas, e nenhum remetente do Liame comprime. O `safeGet` do Pesquisador pede só `gzip, deflate` e recusa a resposta numa compressão que não pediu, em vez de passar o corpo comprimido como texto. Fica o `fetch` das APIs de parceiros e da DMS, por TLS conferido. Atualizar o Node continua sendo a correção; a camada vem a mais, nunca no lugar dela.
+
 ## 10. Kill switch e resposta a incidente
 
 Níveis: global · provider (escrita) · tenant · marca · conta · ferramenta. Quem aciona: dono (para o próprio tenant) e distribuição (todos os níveis). Todo acionamento é auditado e dispara um job que pausa as entidades criadas pelos agentes no escopo. O exercício de "puxar o freio" é periódico.

@@ -14,7 +14,7 @@ import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
-import { ResponseTooLargeError, safeGet, UnsafeUrlError } from '../events/safe-http.js';
+import { ResponseTooLargeError, safeGet, UnsafeUrlError, UnsupportedEncodingError } from '../events/safe-http.js';
 import { DOSSIE_VAZIO } from '../marca/dossie.js';
 import { REGRAS_DE_TEXTO_VERSAO } from '../policy/texto.js';
 import { DIAS_DA_RECUSA, recusados } from '../marca/sugestoes.js';
@@ -133,6 +133,9 @@ export class PesquisadorService {
     } catch (err) {
       if (err instanceof UnsafeUrlError) return { status: 'recusada', motivo: 'rede_interna' };
       if (err instanceof ResponseTooLargeError) return { status: 'recusada', motivo: 'grande_demais' };
+      // O site respondeu numa compressão que não pedimos (Brotli, por exemplo): a resposta veio fora do formato que o
+      // Liame lê. Conta como tentativa, como o site fora do ar: o servidor que errou uma vez costuma acertar na seguinte.
+      if (err instanceof UnsupportedEncodingError) return { status: 'falhou', motivo: 'formato' };
       return { status: 'falhou', motivo: 'fora_do_ar' };
     }
     if (resposta.status === 404 || resposta.status === 410) return { status: 'recusada', motivo: 'nao_achou' };
