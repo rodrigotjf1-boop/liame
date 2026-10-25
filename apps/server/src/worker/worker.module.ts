@@ -26,6 +26,7 @@ import { MeioAsaas } from '../cobranca/meio-asaas.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { avisoDoAsaas } from './aviso-do-asaas.js';
+import { AvisoNoAsaasLoop } from './aviso-no-asaas-loop.js';
 import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
 import { CobrancasReleituraLoop } from './cobrancas-releitura-loop.js';
 import { ConexaoProcessor } from './conexao-processor.js';
@@ -204,6 +205,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     CobrancasPixLoop,
     // E a releitura (W2a, parte 2): o aviso do Asaas, a conferência diária, a fatura cancelada ou com o valor mudado.
     CobrancasReleituraLoop,
+    // O aviso do Liame no Asaas (W2a, parte 3a): criado pela API e conferido uma vez por dia, com a fila que parou reativada.
+    AvisoNoAsaasLoop,
     VigiaService,
     // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, para mostrar o custo de IA em reais.
     CambioService,

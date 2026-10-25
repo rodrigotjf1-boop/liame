@@ -571,7 +571,21 @@ A W2a, parte 1, entrou como o PR #327, no ar desde 23/10/2026, 06h33 (horário d
 - a releitura lê a cobrança na API e decide: paga entra pelo `pagarFatura`, com o dia que o Asaas informou; pendente espera; a removida no Asaas é refeita; a do valor de antes (a troca de plano reprecifica a mensalidade em aberto) sai e é refeita; a fatura cancelada no Liame tem a cobrança removida no Asaas; e o que só uma pessoa resolve (paga a menos, estornada, paga depois de cancelada) para com o porquê;
 - sem aviso, cada cobrança é relida uma vez por dia (a conferência diária que cobre o aviso perdido); o aviso que chega no meio de uma releitura não se perde.
 
-Falta a W2a, parte 3: o Liame criar o webhook dele no Asaas pela API, conferir todo dia se a fila do webhook parou e devolver o PIX na desistência em 7 dias. A chave da conta de testes (com o endereço do Sandbox e o token do aviso) vai para o EasyPanel quando a parte 3 estiver pronta, num passo só: sem o webhook criado, o pagamento só apareceria na releitura do dia seguinte. Depois, a W2b e a tela (W5).
+A W2a, parte 2, entrou como o PR #329, no ar desde 23/10/2026, 22h54 (horário de Brasília), com a 0082 conferida na produção. A parte 3 virou duas: a 3a (o aviso do Liame no Asaas) e a 3b (a devolução do PIX).
+
+**W2a, parte 3a: o aviso do Liame no Asaas, criado pela API e conferido todo dia (25/10/2026; sem migration; a função `cobranca` segue desligada):**
+- o worker cria o webhook do Liame no Asaas pela API (D-A7-33), sem nada a configurar na tela do Asaas:
+  - ligado, com o envio em sequência e o token da configuração;
+  - no endereço da API (`API_URL` + `/v1/billing/asaas/webhook`), com o e-mail do atendimento;
+  - com os eventos que mudam a decisão da releitura (o pago, o mudado, o removido, o estorno e a disputa);
+- a conferência roda na subida do worker e depois uma vez por dia, o que também mantém a chave em uso (D-A7-28, D-A7-33 e D-A7-34):
+  - a fila que parou volta a andar e chama a distribuição, pelo log de erro e pelo hub da DMS;
+  - o que mudarem no painel volta ao certo (ligado, o nome, o endereço, o envio, os eventos e o token);
+  - o aviso repetido sai, e o de outro sistema na mesma conta fica como está;
+  - na primeira conferência de cada subida, o token vai ao Asaas mesmo com o aviso em dia, porque trocar a variável é subir de novo;
+- em produção, com o Asaas configurado, a API e o worker recusam subir sem o `API_URL` por https.
+
+Falta a W2a, parte 3b: devolver o PIX na desistência em 7 dias (a desistência já marca a devolução pedida, W1; falta pedi-la ao Asaas e acompanhar até o estorno feito, D-A7-19 e D-A7-29). A chave da conta de testes (com o endereço do Sandbox e o token do aviso) vai para o EasyPanel quando a 3b estiver pronta, num passo só. Depois, a W2b e a tela (W5).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

@@ -41,6 +41,28 @@ export type CobrancaAsaas = {
 
 export type QrCodePix = { imagemPngBase64: string; copiaECola: string; validaAte: string | null };
 
+/** O aviso (webhook) como está configurado no Asaas (listar webhooks, 08/09/2026; base §18.5). */
+export type AvisoConfigurado = {
+  id: string;
+  nome: string;
+  /** Para onde o Asaas manda os eventos. */
+  url: string;
+  /** `enabled`. */
+  ligado: boolean;
+  /** `interrupted`: a fila parou (15 falhas seguidas, penalização de filas); os eventos esperam até 14 dias. */
+  filaParada: boolean;
+  /** `hasAuthToken`: o aviso leva o token no cabeçalho (o Asaas não devolve o token, só diz se ele existe). */
+  autenticado: boolean;
+  /** `sendType`: `SEQUENTIALLY` ou `NON_SEQUENTIALLY`. */
+  envio: string;
+  eventos: string[];
+  /** `penalizedRequestsCount`: os envios com falha que o Asaas conta. */
+  enviosComFalha: number;
+};
+
+/** O que o `PUT` do aviso aceita mudar (atualizar webhook, 08/09/2026: o e-mail e a versão da API não entram). */
+export type CorrecaoDoAviso = { name?: string; url?: string; enabled?: true; interrupted?: false; sendType?: string; events?: string[] };
+
 /** Centavos para o `value` do Asaas (reais com duas casas). */
 export const paraReais = (centavos: number): number => Math.round(centavos) / 100;
 /** O `value` do Asaas em centavos. */
@@ -104,13 +126,32 @@ export function cobrancaDoAsaas(c: Record<string, unknown> | null | undefined): 
   };
 }
 
+/** O aviso como o Asaas o devolve, no formato do Liame; sem id ou sem o endereço, não é aviso. */
+export function avisoConfigurado(a: Record<string, unknown> | null | undefined): AvisoConfigurado | null {
+  if (!a) return null;
+  const id = idDoAsaas(a.id);
+  const url = texto(a.url);
+  if (!id || !url) return null;
+  return {
+    id,
+    nome: texto(a.name) ?? '',
+    url,
+    ligado: a.enabled === true,
+    filaParada: a.interrupted === true,
+    autenticado: a.hasAuthToken === true,
+    envio: texto(a.sendType) ?? '',
+    eventos: Array.isArray(a.events) ? a.events.filter((e): e is string => typeof e === 'string') : [],
+    enviosComFalha: typeof a.penalizedRequestsCount === 'number' && Number.isFinite(a.penalizedRequestsCount) ? a.penalizedRequestsCount : 0,
+  };
+}
+
 export class ApiAsaas {
   constructor(
     private readonly cliente: ClienteConector,
     private readonly cfg: ConfigApiAsaas,
   ) {}
 
-  private async chamar<T>(metodo: 'GET' | 'POST' | 'DELETE', caminho: string, endpoint: string, corpo?: unknown, tempoLimiteMs?: number): Promise<T> {
+  private async chamar<T>(metodo: 'GET' | 'POST' | 'PUT' | 'DELETE', caminho: string, endpoint: string, corpo?: unknown, tempoLimiteMs?: number): Promise<T> {
     const r = await this.cliente.requisitar<T>({
       provider: PROVIDER_ASAAS,
       conta: CONTA,
@@ -217,5 +258,62 @@ export class ApiAsaas {
     const copiaECola = texto(r?.payload);
     if (!imagem || !copiaECola) throw new ErroConector('definitivo', PROVIDER_ASAAS, 'o Asaas devolveu o QR Code sem a imagem ou o código');
     return { imagemPngBase64: imagem, copiaECola, validaAte: texto(r?.expirationDate) };
+  }
+
+  /**
+   * Os avisos (webhooks) da conta (listar webhooks, 08/09/2026): até 10 por conta (criar webhook pela API, 13/10/2026),
+   * então uma página de 100 traz todos. Um aviso fora do formato é erro, nunca "não existe": pular faria criar outro.
+   */
+  async listarAvisos(): Promise<AvisoConfigurado[]> {
+    const r = await this.chamar<{ data?: Array<Record<string, unknown>> }>('GET', '/webhooks?offset=0&limit=100', 'webhooks');
+    return (r?.data ?? []).map((a) => {
+      const lido = avisoConfigurado(a);
+      if (!lido) throw new ErroConector('definitivo', PROVIDER_ASAAS, 'o Asaas devolveu um aviso fora do formato esperado');
+      return lido;
+    });
+  }
+
+  /**
+   * Cria o aviso do Liame (criar webhook pela API, 13/10/2026; D-A7-33): ligado, com a fila andando, o envio em sequência
+   * (a ordem dos eventos fica; um evento com falha atrasa os seguintes) e o token que o Asaas manda no cabeçalho
+   * `asaas-access-token` de cada aviso. O e-mail recebe as comunicações do Asaas sobre o aviso.
+   */
+  async criarAviso(p: { nome: string; url: string; email: string; segredo: string; eventos: readonly string[] }): Promise<AvisoConfigurado> {
+    const r = await this.chamar<Record<string, unknown>>('POST', '/webhooks', 'webhooks', {
+      name: p.nome,
+      url: p.url,
+      email: p.email,
+      enabled: true,
+      interrupted: false,
+      apiVersion: 3,
+      authToken: p.segredo,
+      sendType: 'SEQUENTIALLY',
+      events: [...p.eventos],
+    });
+    const lido = avisoConfigurado(r);
+    if (!lido) throw new ErroConector('definitivo', PROVIDER_ASAAS, 'o Asaas criou o aviso sem devolver o formato esperado');
+    return lido;
+  }
+
+  /**
+   * Corrige o aviso (atualizar webhook, 08/09/2026): o que não vai no corpo fica como está. Com `interrupted: false`, a fila
+   * parada volta a andar e os eventos guardados saem na ordem (como reativar fila interrompida, 28/08/2026). O token vai
+   * junto em toda correção: o Asaas não devolve o dele, e o da configuração pode ter mudado.
+   */
+  async atualizarAviso(id: string, correcao: CorrecaoDoAviso, segredo: string): Promise<AvisoConfigurado> {
+    const r = await this.chamar<Record<string, unknown>>('PUT', `/webhooks/${encodeURIComponent(id)}`, 'webhooks', { ...correcao, authToken: segredo });
+    const lido = avisoConfigurado(r);
+    if (!lido) throw new ErroConector('definitivo', PROVIDER_ASAAS, 'o Asaas corrigiu o aviso sem devolver o formato esperado');
+    return lido;
+  }
+
+  /** Remove um aviso (remover webhook, citado na página de criar webhook pela API, 13/10/2026); o que não existe (404) conta como removido. */
+  async removerAviso(id: string): Promise<void> {
+    try {
+      await this.chamar<unknown>('DELETE', `/webhooks/${encodeURIComponent(id)}`, 'webhooks');
+    } catch (err) {
+      if (err instanceof ErroConector && err.status === 404) return;
+      throw err;
+    }
   }
 }

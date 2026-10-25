@@ -85,7 +85,7 @@ Sem as peças de um app, a plataforma aparece como "ainda indisponível" (503 `i
 
 | Variável | Para quê | Padrão |
 | --- | --- | --- |
-| `API_URL` **P** | Origem pública da API. O endereço de volta registrado nos dois apps é `API_URL` + `/v1/oauth/callback`. Em produção, com algum app configurado, só https | `http://localhost:3001` |
+| `API_URL` **P** | Origem pública da API. O endereço de volta registrado nos dois apps é `API_URL` + `/v1/oauth/callback`, e o do aviso do Asaas, que o worker cria, é `API_URL` + `/v1/billing/asaas/webhook`. Em produção, com algum app configurado ou com o Asaas, só https | `http://localhost:3001` |
 | `META_APP_ID` · `META_APP_SECRET` · `META_LOGIN_CONFIG_ID` | App da Meta e a configuração do Facebook Login for Business do tipo **token de usuário do sistema** (o segredo também assina as chamadas com `appsecret_proof`) | vazio (Meta indisponível) |
 | `META_LOGIN_CONFIG_ID_ESCRITA` | **Outra** configuração do mesmo login, que também pede para gerenciar anúncios (`ads_management`; A4). Só a empresa com a flag `meta_write` ligada é mandada autorizar por ela; as outras seguem na de leitura, que não muda. A conexão guarda por qual das duas a empresa autorizou (`oauth_connection.requested_access`): quem autorizou pela de leitura precisa conectar de novo para o Liame escrever | vazio (todas autorizam pela de leitura) |
 | `META_DIALOG_URL` | Página de autorização da Meta (oficial em produção) | `https://www.facebook.com` |
@@ -102,6 +102,18 @@ Enquanto o app do Google estiver em **modo de teste**, o refresh token vence em 
 | Google | Projeto `liame-agencia` (duas contas proprietárias); APIs Google Ads, Analytics Data e Analytics Admin ativas; Google Auth Platform "Liame", **Externo, em produção desde 07/10/2026** (ainda sem a verificação do Google: quem autoriza vê o aviso de app não verificado, e vale o teto de 100 usuários; no branding, a página inicial, a Política de Privacidade e os Termos do site, sem logotipo, que exigiria a verificação), escopos `adwords` e `analytics.readonly`; cliente "Liame API" (aplicativo da Web) com a mesma URI de volta; Google Ads API no nível **Explorer** | `GOOGLE_OAUTH_CLIENT_ID=285693801008-armp76vqm8543v88bhcd19um2k1vitnq.apps.googleusercontent.com` |
 
 Falta, nas duas: publicar a política de privacidade, os termos e as instruções de exclusão de dados no site; testadores (contas do restaurante de testes); ir ao vivo (Meta: o `ads_read` foi **aprovado na análise em 20/10/2026**; falta a análise do `ads_management` e ir ao vivo; Google: a marca foi verificada em 17/10/2026, falta a verificação do app e o nível Básico). Para executar ações (A4), a Meta ganha uma **segunda** configuração, de escrita (`META_LOGIN_CONFIG_ID_ESCRITA`, no ar desde 15/10/2026); a de leitura fica como está. O vídeo aprovado do `ads_read` foi gravado com a empresa do piloto, pelo login de escrita (que pede também `ads_management`), e as instruções ao analista dizem isso. Quem já estava conectado passa à escrita conectando a Meta de novo e confirmando a conta em "Escolher contas" (ERR-138).
+
+## Cobrança pelo Asaas (A7, W2; D-A7-33)
+
+As três vão na API e no worker. A chave e o token são da distribuição: só no painel da hospedagem, nunca no git nem no chat.
+
+| Variável | Para quê | Padrão |
+| --- | --- | --- |
+| `ASAAS_API_KEY` | A chave da conta do Liame no Asaas, do mesmo ambiente do `ASAAS_API_URL` (`$aact_hmlg_` no Sandbox, `$aact_prod_` na produção; a de outro ambiente não sobe). O Asaas a mostra uma vez só. Sem ela, o pagamento fica indisponível e o resto segue | vazio |
+| `ASAAS_API_URL` | O ambiente do Asaas; em produção, só os dois oficiais (`https://api-sandbox.asaas.com/v3` e `https://api.asaas.com/v3`) | `https://api-sandbox.asaas.com/v3` |
+| `ASAAS_WEBHOOK_TOKEN` | O token do aviso, de 32 a 255 letras, sem espaço, gerado pela distribuição; em produção, obrigatório com a chave. O worker cria o aviso do Liame no Asaas com ele (o próprio Liame cria o webhook pela API, W2a, parte 3a), e a API confere o que chega no cabeçalho `asaas-access-token`. Para trocar, mudar nos dois serviços: na subida, o worker leva o novo ao aviso do Asaas | vazio |
+
+Com a chave e o token, o worker cria o aviso do Liame no Asaas (nome `Liame`, envio em sequência) e o confere na subida e depois uma vez por dia: a fila que parou volta a andar e chama a distribuição (o log de erro e o hub da DMS), e o que mudarem no painel do Asaas volta ao certo. Nada a configurar na tela do Asaas.
 
 ## Produtos DMS (A2.5, ADR-019)
 

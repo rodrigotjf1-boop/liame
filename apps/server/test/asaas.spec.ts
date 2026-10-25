@@ -3,7 +3,18 @@ import { descricaoDaCobranca, esperaDaCobranca, falhaDoErro } from '../src/cobra
 import { MINIMO_DA_COBRANCA_CENTAVOS } from '../src/cobranca/vida.js';
 import { ASAAS_PRODUCAO, ASAAS_SANDBOX, asaasDaConfig } from '../src/config.js';
 import { decidirReleitura, pagoEmDaCobranca, SITUACOES_PAGAS } from '../src/cobranca/releitura.js';
-import { ApiAsaas, type CobrancaAsaas, cobrancaDoAsaas, diaDoAsaas, paraCentavos, paraReais, situacaoParaGravar } from '../src/connectors/asaas/api-asaas.js';
+import { enderecoDoAviso, EVENTOS_DO_AVISO, NOME_DO_AVISO, planoDoAviso } from '../src/cobranca/aviso-no-asaas.js';
+import {
+  ApiAsaas,
+  type AvisoConfigurado,
+  avisoConfigurado,
+  type CobrancaAsaas,
+  cobrancaDoAsaas,
+  diaDoAsaas,
+  paraCentavos,
+  paraReais,
+  situacaoParaGravar,
+} from '../src/connectors/asaas/api-asaas.js';
 import { type ClienteConector, classificar, ErroConector, erroDoAsaas } from '../src/connectors/cliente-http.js';
 import { eventoDoAsaas } from '../src/inbox/inbox.service.js';
 import { cobrancaDoAviso } from '../src/worker/aviso-do-asaas.js';
@@ -265,5 +276,84 @@ describe('o aviso do Asaas', () => {
     expect(cobrancaDoAviso(corpo({ payment: { id: 'pay_1', externalReference: `${FATURA.slice(0, 35)}g` } }))).toEqual({ cobranca: 'pay_1', fatura: null });
     expect(cobrancaDoAviso(corpo({ payment: null }))).toEqual({ cobranca: null, fatura: null });
     expect(cobrancaDoAviso('{')).toEqual({ cobranca: null, fatura: null });
+  });
+});
+
+describe('o aviso do Liame no Asaas (W2a, parte 3a; D-A7-28 e D-A7-33)', () => {
+  const URL_DO_AVISO = 'https://api.agencialiame.com/v1/billing/asaas/webhook';
+  const certo = (mudar: Partial<AvisoConfigurado> = {}): AvisoConfigurado => ({
+    id: 'wh_1',
+    nome: NOME_DO_AVISO,
+    url: URL_DO_AVISO,
+    ligado: true,
+    filaParada: false,
+    autenticado: true,
+    envio: 'SEQUENTIALLY',
+    eventos: [...EVENTOS_DO_AVISO],
+    enviosComFalha: 0,
+    ...mudar,
+  });
+
+  it('o endereço do aviso: a origem da API com a rota do aviso (sem o caminho que vier no API_URL)', () => {
+    expect(enderecoDoAviso('https://api.agencialiame.com')).toBe(URL_DO_AVISO);
+    expect(enderecoDoAviso('https://api.agencialiame.com/qualquer/')).toBe(URL_DO_AVISO);
+  });
+
+  it('os eventos: os que mudam a decisão da releitura (o pago, o removido, o estorno, a disputa), sem a criada nem a vencida', () => {
+    for (const e of ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_DELETED', 'PAYMENT_RESTORED', 'PAYMENT_REFUNDED', 'PAYMENT_CHARGEBACK_REQUESTED']) {
+      expect(EVENTOS_DO_AVISO).toContain(e);
+    }
+    expect(EVENTOS_DO_AVISO).not.toContain('PAYMENT_CREATED');
+    expect(EVENTOS_DO_AVISO).not.toContain('PAYMENT_OVERDUE');
+    // Cada um passa pela regra da situação que a inbox aplica ao evento (maiúsculas e sublinhado).
+    for (const e of EVENTOS_DO_AVISO) expect(situacaoParaGravar(e)).toBe(e);
+    expect(new Set(EVENTOS_DO_AVISO).size).toBe(EVENTOS_DO_AVISO.length);
+  });
+
+  it('o aviso lido: o formato do Liame; sem id ou sem endereço, não é aviso; a lista com um fora do formato é erro, nunca "não existe"', async () => {
+    const cru = { id: 'wh_1', name: 'Liame', url: URL_DO_AVISO, email: 'suporte@agencialiame.com', enabled: true, interrupted: true, apiVersion: 3, hasAuthToken: true, sendType: 'SEQUENTIALLY', penalizedRequestsCount: 15, events: ['PAYMENT_RECEIVED', 7] };
+    expect(avisoConfigurado(cru)).toEqual({ id: 'wh_1', nome: 'Liame', url: URL_DO_AVISO, ligado: true, filaParada: true, autenticado: true, envio: 'SEQUENTIALLY', eventos: ['PAYMENT_RECEIVED'], enviosComFalha: 15 });
+    expect(avisoConfigurado({ ...cru, id: undefined })).toBeNull();
+    expect(avisoConfigurado({ ...cru, url: '' })).toBeNull();
+    expect(avisoConfigurado({ id: 'wh_2', url: URL_DO_AVISO })).toMatchObject({ ligado: false, filaParada: false, autenticado: false, envio: '', eventos: [], enviosComFalha: 0 });
+    const comLista = (data: Array<Record<string, unknown>>) =>
+      new ApiAsaas({ requisitar: async () => ({ status: 200, corpo: { data }, cabecalhos: new Headers(), uso: null }) } as unknown as ClienteConector, { url: 'http://127.0.0.1:9/v3', chave: DO_SANDBOX });
+    expect(await comLista([cru]).listarAvisos()).toHaveLength(1);
+    await expect(comLista([cru, { name: 'sem id' }]).listarAvisos()).rejects.toMatchObject({ tipo: 'definitivo' });
+  });
+
+  it('sem o aviso do Liame (nem pelo nome nem pelo endereço), ele nasce; o de outro sistema não conta', () => {
+    expect(planoDoAviso([], URL_DO_AVISO)).toEqual({ acao: 'criar', remover: [] });
+    expect(planoDoAviso([certo({ id: 'wh_9', nome: 'ERP', url: 'https://erp.exemplo.com/asaas' })], URL_DO_AVISO)).toEqual({ acao: 'criar', remover: [] });
+  });
+
+  it('o aviso como deve: em dia, sem correção; a ordem dos eventos não importa', () => {
+    expect(planoDoAviso([certo()], URL_DO_AVISO)).toEqual({ acao: 'em_dia', id: 'wh_1', remover: [] });
+    expect(planoDoAviso([certo({ eventos: [...EVENTOS_DO_AVISO].reverse() })], URL_DO_AVISO)).toEqual({ acao: 'em_dia', id: 'wh_1', remover: [] });
+    // O endereço comparado pela forma normalizada (V33): o host em maiúsculas é o mesmo.
+    expect(planoDoAviso([certo({ url: 'https://API.agencialiame.com/v1/billing/asaas/webhook' })], URL_DO_AVISO)).toEqual({ acao: 'em_dia', id: 'wh_1', remover: [] });
+  });
+
+  it('cada coisa fora do lugar vira uma correção e um motivo; a fila parada volta a andar', () => {
+    const caso = (mudar: Partial<AvisoConfigurado>) => planoDoAviso([certo(mudar)], URL_DO_AVISO);
+    expect(caso({ filaParada: true })).toEqual({ acao: 'corrigir', id: 'wh_1', correcao: { interrupted: false }, motivos: ['fila_parada'], remover: [] });
+    expect(caso({ ligado: false })).toMatchObject({ correcao: { enabled: true }, motivos: ['desligado'] });
+    // Sem o token, a correção leva só ele (o `atualizarAviso` manda o token em toda correção).
+    expect(caso({ autenticado: false })).toMatchObject({ acao: 'corrigir', correcao: {}, motivos: ['sem_token'] });
+    expect(caso({ nome: 'Outro' })).toMatchObject({ correcao: { name: NOME_DO_AVISO }, motivos: ['nome'] });
+    expect(caso({ envio: 'NON_SEQUENTIALLY' })).toMatchObject({ correcao: { sendType: 'SEQUENTIALLY' }, motivos: ['envio'] });
+    expect(caso({ eventos: ['PAYMENT_RECEIVED'] })).toMatchObject({ correcao: { events: [...EVENTOS_DO_AVISO] }, motivos: ['eventos'] });
+    // O endereço antigo (a API em outro domínio), reconhecido pelo nome, volta ao certo.
+    expect(caso({ url: 'https://api-antiga.exemplo.com/v1/billing/asaas/webhook' })).toMatchObject({ correcao: { url: URL_DO_AVISO }, motivos: ['endereco'] });
+  });
+
+  it('o repetido sai: fica o do endereço certo, ligado e com a fila andando; depois, o do endereço certo; depois, o primeiro', () => {
+    const parado = certo({ id: 'wh_a', filaParada: true });
+    const andando = certo({ id: 'wh_b' });
+    const antigo = certo({ id: 'wh_c', url: 'https://api-antiga.exemplo.com/v1/billing/asaas/webhook' });
+    expect(planoDoAviso([parado, andando, antigo], URL_DO_AVISO)).toEqual({ acao: 'em_dia', id: 'wh_b', remover: ['wh_a', 'wh_c'] });
+    expect(planoDoAviso([antigo, parado], URL_DO_AVISO)).toMatchObject({ acao: 'corrigir', id: 'wh_a', remover: ['wh_c'], motivos: ['fila_parada'] });
+    const outroAntigo = certo({ id: 'wh_d', url: 'https://outra-antiga.exemplo.com/aviso' });
+    expect(planoDoAviso([antigo, outroAntigo], URL_DO_AVISO)).toMatchObject({ acao: 'corrigir', id: 'wh_c', remover: ['wh_d'], motivos: ['endereco'] });
   });
 });

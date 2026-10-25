@@ -16,7 +16,16 @@ import type { AddressInfo } from 'node:net';
 //   - remover (`DELETE /payments/{id}`) responde `{ deleted: true, id }` (excluir cobrança, 08/09/2026); remover a
 //     cobrança já recebida: [NC], aqui recusado (400); ler a cobrança removida: [NC], aqui 404, o pior caso;
 //   - o aviso traz o `id` do evento, o `event` e o objeto `payment`, com `paymentDate`, `clientPaymentDate` e
-//     `confirmedDate` (eventos para cobranças, 13/10/2026), e o token no cabeçalho `asaas-access-token`.
+//     `confirmedDate` (eventos para cobranças, 13/10/2026), e o token no cabeçalho `asaas-access-token`;
+//   - os avisos da conta (W2a, parte 3a): criar (`POST /webhooks`) pede `name`, `url`, `email`, `enabled`, `interrupted`,
+//     `sendType` e `events` (criar webhook, 08/09/2026), o token de 32 a 255 letras sem espaço e até 10 avisos por conta
+//     (criar webhook pela API, 13/10/2026); a resposta traz o `hasAuthToken`, não o token (o esquema da resposta; a página
+//     diz que o token volta na criação [NC]: o pior caso é não voltar); listar (`GET /webhooks`) traz `enabled`,
+//     `interrupted`, `hasAuthToken`, `sendType`, `events` e `penalizedRequestsCount` (listar webhooks, 08/09/2026);
+//     atualizar (`PUT /webhooks/{id}`) muda só o que vem no corpo, e o e-mail e a versão da API não entram (atualizar
+//     webhook, 08/09/2026; o que acontece se vierem: [NC], aqui recusado, 400); `interrupted: false` faz a fila andar
+//     (como reativar fila interrompida, 28/08/2026); remover (`DELETE /webhooks/{id}`) responde [NC], aqui
+//     `{ deleted: true, id }`, como a cobrança.
 // O teste escolhe como cada caminho responde, e lê o que foi pedido (`vistos`).
 
 /** A chave da conta de teste, num nome neutro e longe do cabeçalho do pedido (o gitleaks lê a chave do lado do nome, ERR-131). */
@@ -47,6 +56,40 @@ export type CobrancaNoAsaas = {
   confirmedDate: string | null;
 };
 
+/** Um aviso (webhook) da conta. O token fica guardado e nunca sai na resposta (só o `hasAuthToken`). */
+export type AvisoNoAsaas = {
+  id: string;
+  name: string;
+  url: string;
+  email: string;
+  enabled: boolean;
+  interrupted: boolean;
+  apiVersion: number;
+  segredo: string | null;
+  sendType: string;
+  events: string[];
+  penalizedRequestsCount: number;
+};
+
+/** O aviso como o Asaas o devolve (`WebhookConfigGetResponseDTO`): sem o token. */
+const avisoParaFora = (a: AvisoNoAsaas) => ({
+  object: 'webhook',
+  id: a.id,
+  name: a.name,
+  url: a.url,
+  email: a.email,
+  enabled: a.enabled,
+  interrupted: a.interrupted,
+  apiVersion: a.apiVersion,
+  hasAuthToken: a.segredo !== null,
+  sendType: a.sendType,
+  penalizedRequestsCount: a.penalizedRequestsCount,
+  events: [...a.events],
+});
+
+/** O token do aviso como o Asaas aceita (criar webhook pela API, 13/10/2026): de 32 a 255 letras, sem espaço. */
+const segredoAceito = (v: unknown): v is string => typeof v === 'string' && v.length >= 32 && v.length <= 255 && ![...v].some((l) => l.trim() === '');
+
 type Resposta = { status: number; corpo: unknown; cabecalhos?: Record<string, string> };
 
 const erro = (status: number, code: string, description: string, cabecalhos?: Record<string, string>): Resposta => ({
@@ -59,7 +102,7 @@ const erro = (status: number, code: string, description: string, cabecalhos?: Re
  * Um id novo do Asaas (`cus_…`, `pay_…`), único entre as execuções, como os de verdade: o banco de teste não é zerado
  * entre uma execução e outra, e um id em sequência repetiria o da anterior no índice único da cobrança (ERR-173).
  */
-const novoId = (prefixo: 'cus' | 'pay'): string => `${prefixo}_${randomBytes(6).toString('hex')}`;
+const novoId = (prefixo: 'cus' | 'pay' | 'wh'): string => `${prefixo}_${randomBytes(6).toString('hex')}`;
 
 /** O dia de hoje no Brasil (o Asaas é daqui). */
 const hojeNoBrasil = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -69,6 +112,10 @@ export class AsaasDeMentira {
   readonly vistos: Visto[] = [];
   readonly clientes: ClienteNoAsaas[] = [];
   readonly cobrancas: CobrancaNoAsaas[] = [];
+  /** Os avisos (webhooks) da conta. */
+  readonly avisosDaConta: AvisoNoAsaas[] = [];
+  /** Como responde a lista dos avisos (a conferência do aviso, W2a, parte 3a). */
+  listarAvisos: RespostaDoAsaas = 'ok';
   /** Como respondem criar a cobrança, ler o QR Code e ler uma cobrança pelo id. */
   criar: RespostaDoAsaas = 'ok';
   qrCode: RespostaDoAsaas = 'ok';
@@ -146,6 +193,33 @@ export class AsaasDeMentira {
     c.clientPaymentDate = dia;
     c.confirmedDate = dia;
     return c;
+  }
+
+  /** A fila de um aviso para (15 falhas seguidas, penalização de filas): o Asaas marca `interrupted`. */
+  pararFila(id: string): void {
+    const a = this.avisosDaConta.find((x) => x.id === id);
+    if (!a) throw new Error(`o Asaas de mentira não tem o aviso ${id}`);
+    a.interrupted = true;
+    a.penalizedRequestsCount = 15;
+  }
+
+  /** Um aviso posto na conta por fora (pelo painel, ou por outro worker), com o que o teste quiser. */
+  porAviso(a: Partial<AvisoNoAsaas> & { url: string }): AvisoNoAsaas {
+    const aviso: AvisoNoAsaas = {
+      id: novoId('wh'),
+      name: 'Liame',
+      email: 'suporte@agencialiame.com',
+      enabled: true,
+      interrupted: false,
+      apiVersion: 3,
+      segredo: MARCA_DO_AVISO_DE_TESTE,
+      sendType: 'SEQUENTIALLY',
+      events: [],
+      penalizedRequestsCount: 0,
+      ...a,
+    };
+    this.avisosDaConta.push(aviso);
+    return aviso;
   }
 
   /** Alguém remove a cobrança no painel do Asaas. */
@@ -269,6 +343,64 @@ export class AsaasDeMentira {
       }
       c.deleted = true;
       return { status: 200, corpo: { deleted: true, id: c.id } };
+    }
+    if (metodo === 'GET' && caminho === '/webhooks') {
+      if (this.listarAvisos === 'fora') return erro(503, 'service_unavailable', 'Serviço indisponível');
+      if (this.listarAvisos === 'chave-recusada') return erro(401, 'invalid_access_token', 'A chave de API fornecida é inválida');
+      const data = this.avisosDaConta.map(avisoParaFora);
+      return { status: 200, corpo: { object: 'list', hasMore: false, totalCount: data.length, limit: Number(url.searchParams.get('limit') ?? 10), offset: 0, data } };
+    }
+    if (metodo === 'POST' && caminho === '/webhooks') {
+      const c = corpo ?? {};
+      for (const campo of ['name', 'url', 'email', 'sendType']) {
+        const v = c[campo];
+        if (typeof v !== 'string' || !v) return erro(400, `invalid_${campo}`, `O campo ${campo} é obrigatório`);
+      }
+      if (typeof c.enabled !== 'boolean' || typeof c.interrupted !== 'boolean') return erro(400, 'invalid_enabled', 'Os campos enabled e interrupted são obrigatórios');
+      if (!Array.isArray(c.events) || c.events.length === 0) return erro(400, 'invalid_events', 'Informe os eventos do webhook');
+      if (c.sendType !== 'SEQUENTIALLY' && c.sendType !== 'NON_SEQUENTIALLY') return erro(400, 'invalid_sendType', 'Tipo de envio inválido');
+      if (c.authToken !== undefined && !segredoAceito(c.authToken)) return erro(400, 'invalid_authToken', 'O token deve ter de 32 a 255 caracteres, sem espaços');
+      if (this.avisosDaConta.length >= 10) return erro(400, 'webhook_limit', 'A conta já tem 10 webhooks');
+      const aviso: AvisoNoAsaas = {
+        id: novoId('wh'),
+        name: c.name as string,
+        url: c.url as string,
+        email: c.email as string,
+        enabled: c.enabled as boolean,
+        interrupted: c.interrupted as boolean,
+        apiVersion: typeof c.apiVersion === 'number' ? c.apiVersion : 3,
+        segredo: typeof c.authToken === 'string' ? c.authToken : null,
+        sendType: c.sendType as string,
+        events: (c.events as unknown[]).filter((e): e is string => typeof e === 'string'),
+        penalizedRequestsCount: 0,
+      };
+      this.avisosDaConta.push(aviso);
+      return { status: 200, corpo: avisoParaFora(aviso) };
+    }
+    const umAviso = /^\/webhooks\/([a-z0-9_]+)$/.exec(caminho);
+    if (metodo === 'PUT' && umAviso) {
+      const a = this.avisosDaConta.find((x) => x.id === umAviso[1]);
+      if (!a) return erro(404, 'not_found', 'Webhook não encontrado');
+      const c = corpo ?? {};
+      if ('email' in c || 'apiVersion' in c) return erro(400, 'invalid_field', 'O e-mail e a versão da API não mudam por aqui');
+      if (c.authToken !== undefined && !segredoAceito(c.authToken)) return erro(400, 'invalid_authToken', 'O token deve ter de 32 a 255 caracteres, sem espaços');
+      if (typeof c.name === 'string') a.name = c.name;
+      if (typeof c.url === 'string') a.url = c.url;
+      if (typeof c.enabled === 'boolean') a.enabled = c.enabled;
+      if (typeof c.interrupted === 'boolean') {
+        a.interrupted = c.interrupted;
+        if (!c.interrupted) a.penalizedRequestsCount = 0;
+      }
+      if (typeof c.authToken === 'string') a.segredo = c.authToken;
+      if (typeof c.sendType === 'string') a.sendType = c.sendType;
+      if (Array.isArray(c.events)) a.events = c.events.filter((e): e is string => typeof e === 'string');
+      return { status: 200, corpo: avisoParaFora(a) };
+    }
+    if (metodo === 'DELETE' && umAviso) {
+      const i = this.avisosDaConta.findIndex((x) => x.id === umAviso[1]);
+      if (i < 0) return erro(404, 'not_found', 'Webhook não encontrado');
+      const [a] = this.avisosDaConta.splice(i, 1);
+      return { status: 200, corpo: { deleted: true, id: a!.id } };
     }
     return erro(404, 'not_found', 'Recurso não encontrado');
   }
