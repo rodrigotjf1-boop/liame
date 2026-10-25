@@ -332,6 +332,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   }
   if (env.AI_MONTHLY_LIMIT_USD < env.AI_DAILY_LIMIT_USD) throw new Error('config: AI_MONTHLY_LIMIT_USD não pode ser menor que AI_DAILY_LIMIT_USD');
   const asaas = asaasDaConfig(env.NODE_ENV, env.ASAAS_API_KEY, env.ASAAS_API_URL, env.ASAAS_WEBHOOK_TOKEN);
+  // O worker cria o aviso do Liame no Asaas com o endereço da API (W2a, parte 3a): em produção, o público, por HTTPS. Sem
+  // isto, o aviso nasceria apontando para o padrão de desenvolvimento.
+  if (env.NODE_ENV === 'production' && asaas && (!source.API_URL || !apiUrl.startsWith('https://'))) {
+    throw new Error('config: em produção, com o Asaas configurado, defina API_URL com https (o endereço do aviso do Asaas)');
+  }
   const inboxSecrets = new Map<string, string>();
   for (const part of env.INBOX_SECRETS.split(',').map((p) => p.trim()).filter(Boolean)) {
     const i = part.indexOf(':');

@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional, type OnApplicationBootstrap, type OnAppli
 import { erroDoLaco, FalhasDoLaco, HubDms, PASSAGEIRAS_ATE_ERRO } from '../connectors/dms/hub.js';
 import { ActionExecutor } from './action-executor.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
+import { AvisoNoAsaasLoop } from './aviso-no-asaas-loop.js';
 import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
 import { CobrancasReleituraLoop } from './cobrancas-releitura-loop.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
@@ -71,6 +72,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly assinaturas: AssinaturasLoop,
     private readonly cobrancasPix: CobrancasPixLoop,
     private readonly releitura: CobrancasReleituraLoop,
+    private readonly avisoNoAsaas: AvisoNoAsaasLoop,
     /** O hub da DMS: a falha de um laço vai também à lista de erros dele (desligado por padrão, `HUB_LIGADO`). */
     @Optional() private readonly hub?: HubDms,
   ) {}
@@ -137,6 +139,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // A releitura (W2a, parte 2): o aviso do Asaas marca a fatura para reler na hora, e a pessoa que pagou espera ver
       // a fatura paga; a fila é olhada a cada 15 segundos. Sem aviso, cada cobrança é relida uma vez por dia.
       this.loop('cobrancas-releitura', 10, 15_000, async (n) => (await this.releitura.executarLote(n)).length),
+      // O aviso do Liame no Asaas (W2a, parte 3a): conferido na subida do worker e depois uma vez por dia; a vez é olhada
+      // de 10 em 10 minutos. Sem a chave e o token do Asaas, não faz nada.
+      this.loop('aviso-no-asaas', 1, 600_000, async () => ((await this.avisoNoAsaas.executar()) ? 1 : 0)),
     );
   }
 

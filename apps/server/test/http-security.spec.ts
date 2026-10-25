@@ -5,6 +5,10 @@ import { AppModule } from '../src/app.module.js';
 import { loadConfig } from '../src/config.js';
 import { configureApp } from '../src/setup.js';
 
+/** Uma chave do Sandbox do Asaas de mentira e o token do aviso, em nomes neutros (V101, V123). */
+const DO_SANDBOX_DE_MENTIRA = '$aact_hmlg_de-mentira-para-a-configuracao-0001';
+const MARCA_DE_MENTIRA = 'marca-de-mentira-do-aviso-com-mais-de-32-letras';
+
 describe('borda HTTP: cabeçalhos de segurança e CORS (security-hardening P1)', () => {
   let app: INestApplication;
   let base: string;
@@ -98,6 +102,17 @@ describe('fail-fast da configuração em produção', () => {
     // Ninguém aceita termos que não foram publicados (A0-6).
     expect(() => loadConfig({ ...prod, TERMS_VERSION: undefined })).toThrow('termos publicados');
     expect(() => loadConfig({ ...prod, PRIVACY_URL: undefined })).toThrow('termos publicados');
+  });
+
+  it('o Asaas (A7, W2a, parte 3a): com a chave e o token, o API_URL público por https, que é o endereço do aviso criado pelo worker', () => {
+    // A chave e o token de mentira em nomes neutros (V123): só o prefixo da chave e o tamanho do token importam aqui.
+    const asaas = { ASAAS_API_KEY: DO_SANDBOX_DE_MENTIRA, ASAAS_API_URL: 'https://api-sandbox.asaas.com/v3', ASAAS_WEBHOOK_TOKEN: MARCA_DE_MENTIRA };
+    expect(() => loadConfig({ ...prod, ...asaas })).toThrow('com o Asaas configurado, defina API_URL com https');
+    expect(() => loadConfig({ ...prod, ...asaas, API_URL: 'http://api.agencialiame.com' })).toThrow('com o Asaas configurado');
+    const ok = loadConfig({ ...prod, ...asaas, API_URL: 'https://api.agencialiame.com' });
+    expect(ok).toMatchObject({ apiUrl: 'https://api.agencialiame.com', asaas: { ambiente: 'sandbox' } });
+    // Sem o Asaas, nada muda: o API_URL só é exigido pelos apps OAuth.
+    expect(loadConfig(prod).asaas).toBeNull();
   });
 
   it('plataformas: em produção só os endereços oficiais; fora dela, trocáveis para os testes', () => {
