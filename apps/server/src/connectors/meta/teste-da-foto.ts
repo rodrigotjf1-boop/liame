@@ -7,7 +7,7 @@ import { VALIDADE_DO_ENDERECO_S } from '../../fotos/fotos.service.js';
 import type { ArmazemDeImagens } from '../../imagens/armazem.js';
 import type { VaultService } from '../../vault/vault.service.js';
 import { versaoRegistrada } from '../tipos.js';
-import { cabeNoInstagram, contaDoInstagram, erroDaMeta, situacaoDoConteiner } from './publicacao.js';
+import { cabeNoInstagram, contaDoInstagram, erroDaMeta, permissaoConcedida, permissaoNoDebug, situacaoDoConteiner } from './publicacao.js';
 
 // O teste da D-A6-10 (A6 · Z5, `plano-a6.md` §8), antes do código dos posts: a Meta aceita buscar a foto no endereço
 // assinado que vale poucos minutos (ADR-021: o arquivo nunca fica público)? Cria um contêiner do Instagram (o rascunho do
@@ -18,6 +18,8 @@ import { cabeNoInstagram, contaDoInstagram, erroDaMeta, situacaoDoConteiner } fr
 
 /** A permissão que a autorização precisa ter para o teste: a de publicar no Instagram. */
 export const PERMISSAO_DE_PUBLICAR = 'instagram_content_publish';
+/** Quantas autorizações em uso o teste confere na Meta, das mais novas para as mais antigas. */
+export const AUTORIZACOES_CONFERIDAS = 5;
 /** Quanto vale o endereço da foto: o mesmo da tela de Fotos. */
 export const VALIDADE_DO_ENDERECO_DO_TESTE_S = VALIDADE_DO_ENDERECO_S;
 export const LEGENDA_DO_TESTE = 'Teste do Liame: rascunho que não é publicado e vence sozinho em 24 horas.';
@@ -28,8 +30,11 @@ export type DepsDoTeste = {
   db: Db;
   vault: Pick<VaultService, 'readSecret'>;
   armazem: Pick<ArmazemDeImagens, 'enderecoDeLeitura'>;
-  /** A Graph API: o endereço (o oficial em produção) e o segredo do app, para o `appsecret_proof`. */
-  meta: { base: string; appSecret: string | null };
+  /**
+   * A Graph API: o endereço (o oficial em produção), o segredo do app, para o `appsecret_proof`, e o id do app, que com o
+   * segredo forma o token do app do `debug_token` (sem os dois, a conferência fica só no `me/permissions`).
+   */
+  meta: { base: string; appId: string | null; appSecret: string | null };
   /** Quanto esperar o contêiner sair de "processando", e de quanto em quanto conferir (os testes encurtam). */
   esperaMs?: number;
   intervaloMs?: number;
@@ -71,29 +76,29 @@ async function graph(g: Graph, metodo: 'GET' | 'POST', caminho: string, params: 
 }
 
 export async function testarFotoNaMeta(deps: DepsDoTeste, p: PedidoDoTeste): Promise<ResultadoDoTeste> {
-  // A autorização mais nova com a permissão de publicar, o token dela e as fotos prontas: na transação da empresa.
+  // As autorizações da Meta em uso (as mais novas primeiro), com os tokens, e as fotos prontas: na transação da empresa.
+  // A permissão de publicar NÃO se filtra pela coluna `scopes`: a troca do código da Meta não a preenche (ERR-179); quem
+  // diz o que o token pode é a própria Meta, logo abaixo.
   const lido = await withTenant(deps.db, p.tenantId, async (tx) => {
     const c = await tx.execute<{ id: string; credential_secret_id: string }>(sql`
       select id, credential_secret_id from liame.oauth_connection
        where tenant_id = ${p.tenantId} and provider = 'meta' and status in ('ativa', 'aguardando_escolha')
-         and credential_secret_id is not null and ${PERMISSAO_DE_PUBLICAR} = any(scopes)
+         and credential_secret_id is not null
        order by coalesce(completed_at, created_at) desc, id desc
-       limit 1`);
-    const conexao = c.rows[0];
-    if (!conexao) return null;
-    const segredo = await deps.vault.readSecret(tx, conexao.credential_secret_id);
+       limit ${AUTORIZACOES_CONFERIDAS}`);
+    const conexoes: Array<{ id: string; segredo: string | null }> = [];
+    for (const l of c.rows) conexoes.push({ id: l.id, segredo: await deps.vault.readSecret(tx, l.credential_secret_id) });
     const f = await tx.execute<{ id: string; object_key: string; width: number; height: number }>(sql`
       select id, object_key, width, height from liame.brand_photo
        where tenant_id = ${p.tenantId} and status = 'pronta' and removed_at is null
          ${p.fotoId ? sql`and id = ${p.fotoId}` : sql``}
        order by created_at desc, id desc
        limit 50`);
-    return { conexao: conexao.id, segredo, fotos: f.rows };
+    return { conexoes, fotos: f.rows };
   });
-  if (!lido) throw new ErroDoTeste(`a empresa não tem autorização da Meta com a permissão de publicar no Instagram (${PERMISSAO_DE_PUBLICAR}): autorize a Meta de novo`);
-  if (!lido.segredo) throw new ErroDoTeste('a credencial da autorização não está mais no cofre');
-  const credencial = JSON.parse(lido.segredo) as { tipo?: string; access_token?: string };
-  if (credencial.tipo !== 'meta' || !credencial.access_token) throw new ErroDoTeste('a credencial da autorização não é da Meta');
+  if (lido.conexoes.length === 0) {
+    throw new ErroDoTeste('a empresa não tem autorização da Meta em uso (ativa ou esperando a escolha das contas): autorize a Meta pela configuração de escrita');
+  }
   const escolhida = lido.fotos.find((f) => cabeNoInstagram(f.width, f.height));
   if (!escolhida) {
     throw new ErroDoTeste(
@@ -101,7 +106,59 @@ export async function testarFotoNaMeta(deps: DepsDoTeste, p: PedidoDoTeste): Pro
     );
   }
 
-  const g: Graph = { base: deps.meta.base, versao: await versaoRegistrada(deps.db, 'meta_ads', 'accounts'), appSecret: deps.meta.appSecret, token: credencial.access_token };
+  // A autorização mais nova cujo token tem a permissão de publicar CONCEDIDA, perguntado à Meta (`me/permissions`).
+  const versao = await versaoRegistrada(deps.db, 'meta_ads', 'accounts');
+  let g: Graph | null = null;
+  let conexaoUsada: string | null = null;
+  const motivos: string[] = [];
+  for (const c of lido.conexoes) {
+    const credencial = c.segredo ? (JSON.parse(c.segredo) as { tipo?: string; access_token?: string }) : null;
+    if (!credencial) {
+      motivos.push('uma sem a credencial no cofre');
+      continue;
+    }
+    if (credencial.tipo !== 'meta' || !credencial.access_token) {
+      motivos.push('uma com credencial que não é da Meta');
+      continue;
+    }
+    const candidata: Graph = { base: deps.meta.base, versao, appSecret: deps.meta.appSecret, token: credencial.access_token };
+    const permissoes = await graph(candidata, 'GET', 'me/permissions', {});
+    let concedida: boolean;
+    if (permissoes.ok) {
+      concedida = permissaoConcedida(permissoes.corpo, PERMISSAO_DE_PUBLICAR);
+    } else if (deps.meta.appId && deps.meta.appSecret) {
+      // Recusado: a página do `me/permissions` não diz se ele serve ao token de usuário do sistema. O `debug_token` serve
+      // a qualquer token, com o token do app; ele leva o token conferido no endereço, como a Meta pede (só a ela, por TLS).
+      const doApp: Graph = { base: deps.meta.base, versao, appSecret: null, token: `${deps.meta.appId}|${deps.meta.appSecret}` };
+      const depurado = await graph(doApp, 'GET', 'debug_token', { input_token: credencial.access_token });
+      if (!depurado.ok) {
+        motivos.push(`uma que a Meta recusou: ${erroDaMeta(permissoes.corpo)}; e no debug_token: ${erroDaMeta(depurado.corpo)}`);
+        continue;
+      }
+      const situacao = permissaoNoDebug(depurado.corpo, PERMISSAO_DE_PUBLICAR);
+      if (situacao === 'token_invalido') {
+        const erro = (depurado.corpo as { data?: { error?: unknown } } | null)?.data?.error;
+        motivos.push(`uma com o token recusado pela Meta: ${erro ? erroDaMeta({ error: erro }) : erroDaMeta(permissoes.corpo)}`);
+        continue;
+      }
+      concedida = situacao === 'concedida';
+    } else {
+      motivos.push(`uma que a Meta recusou: ${erroDaMeta(permissoes.corpo)}`);
+      continue;
+    }
+    if (concedida) {
+      g = candidata;
+      conexaoUsada = c.id;
+      break;
+    }
+    motivos.push('uma sem a permissão concedida');
+  }
+  if (!g || !conexaoUsada) {
+    throw new ErroDoTeste(
+      `nenhuma autorização da Meta em uso tem a permissão de publicar no Instagram (${PERMISSAO_DE_PUBLICAR}) concedida, conferido na Meta (${motivos.join('; ')}): autorize a Meta de novo pela configuração de escrita`,
+    );
+  }
+
   const contas = await graph(g, 'GET', 'me/accounts', { fields: 'id,name,instagram_business_account{id,username}', limit: '100' });
   if (!contas.ok) throw new ErroDoTeste(`a Meta recusou a lista das Páginas: ${erroDaMeta(contas.corpo)}`);
   const ig = contaDoInstagram(contas.corpo);
@@ -147,7 +204,7 @@ export async function testarFotoNaMeta(deps: DepsDoTeste, p: PedidoDoTeste): Pro
       action: 'meta.teste_da_foto',
       resourceType: 'brand_photo',
       resourceId: escolhida.id,
-      after: { conexao: lido.conexao, instagram: ig.usuario ?? ig.instagramId, conteiner, situacao, publicado: false },
+      after: { conexao: conexaoUsada, instagram: ig.usuario ?? ig.instagramId, conteiner, situacao, publicado: false },
       reason: p.motivo,
       origin: 'console',
     }),
