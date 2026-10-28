@@ -33,6 +33,33 @@ export function contaDoInstagram(resposta: unknown): ContaDoInstagram | null {
   return null;
 }
 
+/**
+ * A permissão está concedida no token? Lê a resposta de `GET /me/permissions` (developers.facebook.com/docs/graph-api/
+ * reference/user/permissions, lida em 28/10/2026): `data` com `permission` e `status` (`granted`, `declined` ou
+ * `expired`). Só `granted` vale. É a Meta que diz: a troca do código da Meta não grava as permissões na conexão (a coluna
+ * `scopes` fica vazia, ERR-179), e a pessoa pode desmarcar uma permissão na hora de autorizar.
+ */
+export function permissaoConcedida(resposta: unknown, permissao: string): boolean {
+  const data = (resposta as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return false;
+  return (data as Array<Record<string, unknown> | null>).some((p) => p?.permission === permissao && p?.status === 'granted');
+}
+
+/** O que o `debug_token` diz de uma permissão: concedida, ausente do token, ou o token não vale mais. */
+export type PermissaoNoDebug = 'concedida' | 'ausente' | 'token_invalido';
+
+/**
+ * A permissão pela resposta de `GET /debug_token?input_token=…` (developers.facebook.com/docs/graph-api/reference/
+ * debug_token, lida em 28/10/2026): `data.is_valid` e `data.scopes`, as permissões que a pessoa concedeu ao app no token.
+ * É a conferência que a Meta documenta para qualquer token, com o token do app; a do `me/permissions` não diz se serve ao
+ * token de usuário do sistema que o Facebook Login for Business entrega, então esta fica para quando aquela é recusada.
+ */
+export function permissaoNoDebug(resposta: unknown, permissao: string): PermissaoNoDebug {
+  const d = (resposta as { data?: Record<string, unknown> | null } | null)?.data;
+  if (!d || d.is_valid !== true) return 'token_invalido';
+  return Array.isArray(d.scopes) && d.scopes.includes(permissao) ? 'concedida' : 'ausente';
+}
+
 /** A situação do contêiner (`status_code`): pronto para publicar, ainda processando, com erro, vencido ou já publicado. */
 export type SituacaoDoConteiner = 'pronto' | 'processando' | 'erro' | 'vencido' | 'publicado' | 'desconhecida';
 

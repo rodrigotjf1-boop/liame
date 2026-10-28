@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cabeNoInstagram, contaDoInstagram, erroDaMeta, PROPORCAO_DO_INSTAGRAM, situacaoDoConteiner } from '../src/connectors/meta/publicacao.js';
+import { cabeNoInstagram, contaDoInstagram, erroDaMeta, PROPORCAO_DO_INSTAGRAM, permissaoConcedida, permissaoNoDebug, situacaoDoConteiner } from '../src/connectors/meta/publicacao.js';
 
 // A6 · Z5, sem rede e sem banco: as regras da publicação na Meta que o teste da D-A6-10 (`scripts/teste-foto-meta.ts`)
 // usa e que o post de verdade vai usar (`base-conhecimento.md` §2.2, reconferida em 21/10/2026).
@@ -30,6 +30,38 @@ describe('a publicação na Meta: as regras puras (A6 · Z5)', () => {
     expect(contaDoInstagram({ data: [{ id: '111', name: 'Sem' }] })).toBeNull();
     expect(contaDoInstagram({ data: 'não é lista' })).toBeNull();
     expect(contaDoInstagram(null)).toBeNull();
+  });
+
+  it('a permissão concedida pela resposta do `me/permissions`: só `granted` vale; recusada, vencida, ausente ou fora do formato, não', () => {
+    const resposta = {
+      data: [
+        { permission: 'ads_read', status: 'granted' },
+        { permission: 'instagram_content_publish', status: 'granted' },
+        { permission: 'pages_manage_posts', status: 'declined' },
+        { permission: 'instagram_basic', status: 'expired' },
+      ],
+    };
+    expect(permissaoConcedida(resposta, 'instagram_content_publish')).toBe(true);
+    expect(permissaoConcedida(resposta, 'ads_read')).toBe(true);
+    expect(permissaoConcedida(resposta, 'pages_manage_posts')).toBe(false); // desmarcada na hora de autorizar
+    expect(permissaoConcedida(resposta, 'instagram_basic')).toBe(false); // vencida
+    expect(permissaoConcedida(resposta, 'threads_basic')).toBe(false); // não pedida
+    expect(permissaoConcedida({ data: [{ permission: 'instagram_content_publish' }] }, 'instagram_content_publish')).toBe(false);
+    expect(permissaoConcedida({ data: [null] }, 'instagram_content_publish')).toBe(false);
+    expect(permissaoConcedida({ data: 'não é lista' }, 'instagram_content_publish')).toBe(false);
+    expect(permissaoConcedida(null, 'instagram_content_publish')).toBe(false);
+  });
+
+  it('a permissão pela resposta do `debug_token`: concedida só com o token válido e ela nos `scopes`; sem ela, ausente; token que não vale ou resposta fora do formato, inválido', () => {
+    const valido = { data: { app_id: '100000000000001', type: 'SYSTEM_USER', is_valid: true, scopes: ['ads_read', 'instagram_basic', 'instagram_content_publish'] } };
+    expect(permissaoNoDebug(valido, 'instagram_content_publish')).toBe('concedida');
+    expect(permissaoNoDebug(valido, 'pages_manage_posts')).toBe('ausente');
+    expect(permissaoNoDebug({ data: { is_valid: true } }, 'instagram_content_publish')).toBe('ausente');
+    const vencido = { data: { is_valid: false, scopes: ['instagram_content_publish'], error: { code: 190, message: 'Error validating access token: Session has expired' } } };
+    expect(permissaoNoDebug(vencido, 'instagram_content_publish')).toBe('token_invalido');
+    expect(permissaoNoDebug({ data: { is_valid: 'true', scopes: ['instagram_content_publish'] } }, 'instagram_content_publish')).toBe('token_invalido');
+    expect(permissaoNoDebug({ data: null }, 'instagram_content_publish')).toBe('token_invalido');
+    expect(permissaoNoDebug(null, 'instagram_content_publish')).toBe('token_invalido');
   });
 
   it('a situação do contêiner pelo `status_code`; o desconhecido não vira "pronto"', () => {

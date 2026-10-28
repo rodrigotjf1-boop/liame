@@ -45,7 +45,7 @@ async function main(): Promise<void> {
         db: database.db,
         vault: app.get(VaultService),
         armazem: app.get<ArmazemDeImagens>(ARMAZEM_DE_IMAGENS),
-        meta: { base: config.plataformas.metaGraphUrl, appSecret: config.plataformas.metaAppSecret },
+        meta: { base: config.plataformas.metaGraphUrl, appId: config.oauth.meta?.appId ?? null, appSecret: config.plataformas.metaAppSecret },
       },
       { tenantId: empresa.data, fotoId: foto?.success ? foto.data : null, por: values.por.trim().slice(0, 80), motivo: values.motivo.trim().slice(0, 300) },
     );
