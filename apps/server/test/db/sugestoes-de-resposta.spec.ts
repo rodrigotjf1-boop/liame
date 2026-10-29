@@ -574,6 +574,8 @@ describe.skipIf(!hasDb)('as sugestões de resposta do Social media (A6 · Z6, pa
     const enviado = JSON.stringify(simulado.doGenerateCalls.at(-1)!.prompt);
     expect(enviado).toContain('já viu');
     expect(enviado).toContain(BOAS[0]!.texto);
+    // O enfoque de cada uma vai junto: o modelo só evita repetir o enfoque que vê (eval de 29/10/2026).
+    for (const s of BOAS) expect(enviado).toContain(`enfoque \\"${s.enfoque}\\": \\"${s.texto}\\"`);
     // O pedido é o mesmo: as novas antes das primeiras, cada uma com a rodada; o texto passa a ser o da primeira nova, e o
     // plano é outro (a aprovação do anterior não vale mais).
     const [trocado] = await pedidos(e);

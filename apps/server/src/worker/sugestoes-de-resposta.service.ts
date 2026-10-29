@@ -8,7 +8,7 @@ import { PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-goo
 import { AiError, AiGateway } from '../ai/gateway.js';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { registrarRecusa } from '../ai/recusas.js';
-import { baseDoPedidoDoSocial, contextoDoSocial, mensagemDoSocial, type PedidoDoSocial, sugestoesPedidas } from '../ai/social/contexto.js';
+import { baseDoPedidoDoSocial, contextoDoSocial, mensagemDoSocial, type PedidoDoSocial, type SugestaoVista, sugestoesPedidas } from '../ai/social/contexto.js';
 import { PROMPT_SOCIAL_RESPOSTA, SOCIAL, TAREFA_SOCIAL_RESPOSTA, WORKFLOW_DO_SOCIAL } from '../ai/social/prompt.js';
 import { type BaseDaSugestao, RespostaDoSocial, sugestoesDaResposta } from '../ai/social/resposta.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
@@ -172,7 +172,7 @@ export class SugestoesDeRespostaService {
     if (!resposta.success) return this.falhou(alvo, 'formato', agora);
 
     // Na segunda rodada, a sugestão que repete uma das que a pessoa já viu também é descartada.
-    const { sugestoes, descartes } = sugestoesDaResposta(resposta.data, lido.base, lido.pedidas, lido.conhecido, lido.pedido.anteriores ?? []);
+    const { sugestoes, descartes } = sugestoesDaResposta(resposta.data, lido.base, lido.pedidas, lido.conhecido, (lido.pedido.anteriores ?? []).map((a) => a.texto));
     const passaram = sugestoes.filter((s) => s.conferencia.situacao !== 'barrou');
     const barradas = sugestoes.filter((s) => s.conferencia.situacao === 'barrou');
     if (descartes.length) this.logger.warn(`sugestão ${alvo.id}: o código descartou ${descartes.join(', ')} antes da conferência; uso ${r.usageId}`);
@@ -348,7 +348,7 @@ export class SugestoesDeRespostaService {
 
     let dono: string | null = null;
     let pedidoAtual: string | null = null;
-    let anteriores: string[] = [];
+    let anteriores: SugestaoVista[] = [];
     if (s.round === 2) {
       // O "Pedir outras": as sugestões novas entram no pedido da primeira rodada, que tem de seguir esperando a decisão.
       const primeira = await primeiraRodada(tx, { tenantId: alvo.tenantId, reviewId: a.id });
@@ -360,7 +360,8 @@ export class SugestoesDeRespostaService {
       const params = ParametrosDaResposta.safeParse(atual?.params);
       if (!atual || atual.status !== 'aguardando_aprovacao' || !params.success || !params.data.sugestoes) return this.descartar(tx, alvo, 'pedido_decidido', agora);
       pedidoAtual = primeira.action_id;
-      anteriores = params.data.sugestoes.map((x) => x.texto);
+      // O enfoque vai junto do texto: o modelo só evita repetir o enfoque que vê.
+      anteriores = params.data.sugestoes.map((x) => ({ enfoque: x.enfoque, texto: x.texto }));
     } else {
       // Uma pessoa já pediu a resposta (ou ela já saiu pelo Liame): o Social media não escreve por cima.
       const comPedido = (
