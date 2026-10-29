@@ -17,6 +17,7 @@ const DESENHOS = {
     </>
   ),
   'chevron-left': <path d="m15 18-6-6 6-6" />,
+  'chevron-right': <path d="m9 18 6-6-6-6" />,
   undo: (
     <>
       <path d="M9 14 4 9l5-5" />

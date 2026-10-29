@@ -22,6 +22,7 @@
 @import "../styles/avaliacoes.css";
 @import "../styles/fotos.css";
 @import "../styles/relatorio.css";
+@import "../styles/agenda.css";
 
 /* Tema escuro manual (data-theme) além do automático do sistema (base §15, Tailwind 4.3). */
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
