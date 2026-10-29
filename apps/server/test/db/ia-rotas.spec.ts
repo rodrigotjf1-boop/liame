@@ -141,4 +141,46 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
     );
     expect(hoje).toEqual({ cache_read: 100_000 });
   });
+
+  it('o Haiku 5.5 entra com a faixa do prompt longo; a faixa vem inteira ou não vem, e rodar de novo não duplica (migration 0089)', async () => {
+    const sql = readFileSync(resolve(MIGRATIONS, '0089_preco_do_haiku_por_faixa.sql'), 'utf8');
+    await ownerQuery(sql);
+    await ownerQuery(sql);
+    const linhas = await ownerQuery<Record<string, number | string>>(
+      `select to_char(valid_from, 'YYYY-MM-DD') as valid_from, input_usd_micros_per_mtok::int as input, output_usd_micros_per_mtok::int as output,
+              cache_read_usd_micros_per_mtok::int as cache_read, cache_write_5m_usd_micros_per_mtok::int as write_5m,
+              cache_write_1h_usd_micros_per_mtok::int as write_1h, long_prompt_above_tokens as acima_de,
+              long_input_usd_micros_per_mtok::int as l_input, long_output_usd_micros_per_mtok::int as l_output,
+              long_cache_read_usd_micros_per_mtok::int as l_cache_read, long_cache_write_5m_usd_micros_per_mtok::int as l_write_5m,
+              long_cache_write_1h_usd_micros_per_mtok::int as l_write_1h
+         from liame.ai_model_price where provider = 'anthropic' and model = 'claude-haiku-5-5' order by valid_from`,
+    );
+    expect(linhas).toEqual([
+      {
+        valid_from: '2026-10-29', input: 100_000, output: 500_000, cache_read: 10_000, write_5m: 125_000, write_1h: 200_000,
+        acima_de: 100_000, l_input: 500_000, l_output: 2_500_000, l_cache_read: 50_000, l_write_5m: 625_000, l_write_1h: 1_000_000,
+      },
+    ]);
+    // Os outros modelos da distribuição seguem sem faixa (o preço é o mesmo em todo o contexto).
+    const comFaixa = await ownerQuery<{ model: string }>(
+      `select model from liame.ai_model_price where provider = 'anthropic' and long_prompt_above_tokens is not null group by model order by model collate "C"`,
+    );
+    expect(comFaixa).toEqual([{ model: 'claude-haiku-5-5' }]);
+
+    // A restrição (V119): a faixa pela metade, o limite zerado e o preço negativo não entram; a inteira entra.
+    const gravar = (faixa: string) =>
+      ownerQuery(
+        `select set_config('app.scope', 'sistema', true);
+         insert into liame.ai_model_price (id, provider, model, valid_from, input_usd_micros_per_mtok, output_usd_micros_per_mtok,
+                cache_read_usd_micros_per_mtok, cache_write_5m_usd_micros_per_mtok, cache_write_1h_usd_micros_per_mtok,
+                long_prompt_above_tokens, long_input_usd_micros_per_mtok, long_output_usd_micros_per_mtok,
+                long_cache_read_usd_micros_per_mtok, long_cache_write_5m_usd_micros_per_mtok, long_cache_write_1h_usd_micros_per_mtok, source, checked_on)
+         values (gen_random_uuid(), 'teste', 'faixa-0089', '2026-10-29', 1, 1, 1, 1, 1, ${faixa}, 'https://exemplo.test/precos', '2026-10-29')`,
+      );
+    await expect(gravar('100000, 5, 5, 5, 5, null')).rejects.toThrow(/ai_model_price_faixa_check/);
+    await expect(gravar('0, 5, 5, 5, 5, 5')).rejects.toThrow(/ai_model_price_faixa_check/);
+    await expect(gravar('100000, 5, -1, 5, 5, 5')).rejects.toThrow(/ai_model_price_faixa_check/);
+    await gravar('100000, 5, 5, 5, 5, 5');
+    await ownerQuery(`select set_config('app.scope', 'sistema', true); delete from liame.ai_model_price where provider = 'teste' and model = 'faixa-0089'`);
+  });
 });

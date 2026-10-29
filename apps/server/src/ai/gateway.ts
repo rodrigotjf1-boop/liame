@@ -10,7 +10,7 @@ import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { type Esforco, ModelosIa } from './modelos.js';
-import { custoMicros, type PrecoModelo, type TokensUsados, tokensDe } from './precos.js';
+import { custoMicros, type LinhaDoPreco, type PrecoModelo, precoDaLinha, type TokensUsados, tokensDe } from './precos.js';
 import { limparJson, limparTexto } from './sanitizar.js';
 import { type Gasto, situacaoDoTeto, virouDeFaixa } from './teto.js';
 
@@ -521,21 +521,20 @@ export class AiGateway {
           ...rota.fallback.map((f) => ({ provider: f.provider, model: f.model, servedBy: 'reserva' as const })),
         ];
 
-    const linhas = await tx.execute<{ provider: string; model: string; input: string; output: string; cache_read: string; cache_write_5m: string; cache_write_1h: string }>(sql`
+    // O preço que vale hoje de cada candidato, com a faixa do prompt longo quando o modelo tem (o Haiku 5.5, 0089).
+    const linhas = await tx.execute<LinhaDoPreco & { provider: string; model: string }>(sql`
       select distinct on (provider, model) provider, model,
              input_usd_micros_per_mtok::text as input, output_usd_micros_per_mtok::text as output,
              cache_read_usd_micros_per_mtok::text as cache_read, cache_write_5m_usd_micros_per_mtok::text as cache_write_5m,
-             cache_write_1h_usd_micros_per_mtok::text as cache_write_1h
+             cache_write_1h_usd_micros_per_mtok::text as cache_write_1h,
+             long_prompt_above_tokens as acima_de, long_input_usd_micros_per_mtok::text as l_input,
+             long_output_usd_micros_per_mtok::text as l_output, long_cache_read_usd_micros_per_mtok::text as l_cache_read,
+             long_cache_write_5m_usd_micros_per_mtok::text as l_cache_write_5m, long_cache_write_1h_usd_micros_per_mtok::text as l_cache_write_1h
         from liame.ai_model_price
        where provider in ${[...new Set(candidatos.map((c) => c.provider))]} and model in ${[...new Set(candidatos.map((c) => c.model))]}
          and valid_from <= (now() at time zone 'UTC')::date
        order by provider, model, valid_from desc`);
-    const precos = new Map<string, PrecoModelo>(
-      linhas.rows.map((p) => [
-        chave(p.provider, p.model),
-        { input: BigInt(p.input), output: BigInt(p.output), cacheRead: BigInt(p.cache_read), cacheWrite5m: BigInt(p.cache_write_5m), cacheWrite1h: BigInt(p.cache_write_1h) },
-      ]),
-    );
+    const precos = new Map<string, PrecoModelo>(linhas.rows.map((p) => [chave(p.provider, p.model), precoDaLinha(p)]));
     return { barrado: null, rota, gasto, candidatos, precos };
   }
 
