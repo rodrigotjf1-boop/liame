@@ -87,6 +87,7 @@ export {
   ActionOpenRequest,
   ActionOptionsQuery,
   ActionOptionsResponse,
+  ActionPost,
   ActionRecommendation,
   ActionResponse,
   ActionReview,

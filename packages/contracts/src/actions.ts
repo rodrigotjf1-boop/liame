@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AutonomyMode, BudgetImpact, PolicyDecision, RiskLevel } from './policy.js';
+import { PostResponse } from './posts.js';
 import { ReviewItem } from './reviews.js';
 
 // Pedido de ação (ADR-007): toda escrita fora do Liame passa por aqui. Risco, impacto e valores vêm
@@ -248,6 +249,18 @@ export const ActionReview = z.strictObject({
 });
 export type ActionReview = z.infer<typeof ActionReview>;
 
+/**
+ * O post do pedido de publicar (A6, Z5c, parte 4; protótipo P19): o post como o Liame o guarda agora, o mesmo de
+ * `GET /v1/posts/{id}` (a foto, o recorte, a hora, cada canal com a conta, o texto e a situação, e a situação do post),
+ * com o fuso da empresa, em que a hora marcada se mostra. O texto, a foto e os canais não mudam depois do pedido (mudar é
+ * outro post, D-A6-7): é o que a aprovação publica.
+ */
+export const ActionPost = PostResponse.extend({
+  /** O fuso da empresa (a janela das 8h às 22h é nele). */
+  timezone: z.string().min(1).max(64),
+});
+export type ActionPost = z.infer<typeof ActionPost>;
+
 export const ActionExecution = z.strictObject({
   status: z.string(),
   finished_at: z.string(),
@@ -340,6 +353,8 @@ export const ActionResponse = z.strictObject({
   message: ActionMessage.nullable().optional(),
   /** A avaliação do Google do pedido de resposta ou de apagar a resposta (A6, Z2); nula nos outros pedidos. */
   review: ActionReview.nullable().optional(),
+  /** O post do pedido de publicar (A6, Z5c); nulo nos outros pedidos e quando o post não está mais no Liame. */
+  post: ActionPost.nullable().optional(),
 });
 export type ActionResponse = z.infer<typeof ActionResponse>;
 

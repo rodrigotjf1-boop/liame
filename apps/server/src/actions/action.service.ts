@@ -1,5 +1,6 @@
 import type {
   ActionMessage,
+  ActionPost,
   ActionProposal,
   ActionResponse,
   ActionReview,
@@ -33,6 +34,8 @@ import { Mailer } from '../mail/mailer.js';
 import { actionMatches, evaluatePolicy, type LoadedPolicy, rateLimitsFor } from '../policy/engine.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { currentTraceparent, inSpan } from '../observability/trace.js';
+import { fusoDaEmpresa, lerPosts } from '../posts/ler-posts.js';
+import { postDoRecurso, PROVEDOR_DO_CANAL } from '../posts/post-plano.js';
 import { alvoDaRecomendacao, direcaoDaRecomendacao, type FalhaDaLigacao } from '../sombra/pedido.js';
 import type { AcaoSombra } from '../sombra/regras.js';
 import { advance, workflowOf } from '../workflow/workflow.js';
@@ -117,7 +120,17 @@ type Apresentacao = {
   avaliacoes: Map<string, NonNullable<ActionReview['current']>>;
   /** A segunda rodada das sugestões do Social media (o "Pedir outras", A6, Z6), pelo id da avaliação. */
   segundasRodadas: Map<string, { status: SituacaoDaSugestao; reason: string | null; pedidaEm: string }>;
+  /** O post de cada pedido de publicar (A6, Z5c, parte 4), como a Agenda o lê e com o fuso da empresa, pelo id do post. */
+  posts: Map<string, ActionPost>;
 };
+
+/** Os provedores do pedido de post (o da conta do primeiro canal: o Instagram ou a Página). */
+const PROVEDORES_DO_POST: readonly string[] = Object.values(PROVEDOR_DO_CANAL);
+
+/** O id do post de um pedido de post; nulo nos outros pedidos. */
+function postDoPedido(row: Pick<ActionRow, 'provider' | 'resource_id'>): string | null {
+  return PROVEDORES_DO_POST.includes(row.provider) ? postDoRecurso(row.resource_id) : null;
+}
 
 /** O retrato da mensagem, como a resposta o mostra (sem o plano do disparo, que é de cada pedido). */
 type RetratoDaMensagem = Omit<ActionMessage, 'campaign_id' | 'plan'>;
@@ -1263,8 +1276,17 @@ export class ActionService {
       cuponsSemData: new Map(),
       avaliacoes: new Map(),
       segundasRodadas: new Map(),
+      posts: new Map(),
     };
     if (!rows.length) return ap;
+    // O post do pedido de publicar (A6, Z5c, parte 4): como a Agenda o lê, com o fuso da empresa (a hora se mostra nele).
+    const dePost = [...new Set(rows.flatMap((r) => postDoPedido(r) ?? []))];
+    if (dePost.length) {
+      const tenantId = rows[0]!.tenant_id;
+      const posts = await lerPosts(tx, tenantId, sql`p.id in ${dePost}`, PREFIXO_RECUSA);
+      const fuso = await fusoDaEmpresa(tx, tenantId);
+      for (const p of posts) ap.posts.set(p.id, { ...p, timezone: fuso });
+    }
     // A avaliação do pedido de resposta (A6, Z2), do que o Liame guarda dela: o pedido não leva o texto.
     const deAvaliacao = [...new Set(rows.flatMap((r) => (r.provider === PROVEDOR_DO_PERFIL ? (avaliacaoDoRecurso(r.resource_id) ?? []) : [])))];
     if (deAvaliacao.length) {
@@ -1656,7 +1678,14 @@ function toResponse(row: ActionRow, approvals: ApprovalRow[], workflow: ActionRe
     execution: execucao ? { ...execucao, provider_reply: execucao.status === 'falhou' ? respostaDaPlataforma(row.provider, row.status_reason) : null } : null,
     message: mensagemDaResposta(row, ap),
     review: avaliacaoDaResposta(row, ap),
+    post: postDaResposta(row, ap),
   };
+}
+
+/** O post do pedido de publicar, como o Liame o guarda agora; nulo nos outros pedidos e no post que saiu do Liame. */
+function postDaResposta(row: ActionRow, ap: Apresentacao): ActionPost | null {
+  const id = postDoPedido(row);
+  return id ? (ap.posts.get(id) ?? null) : null;
 }
 
 export { ACTIVE as ACTIVE_ACTION_STATUSES };

@@ -224,6 +224,27 @@ describe.skipIf(!hasDb)('o post da marca no trilho (A6 · Z5b, parte 1)', () => 
     expect((await agenda(e)).body).toEqual({ enabled: false, timezone: FUSO, channels: [], items: [] });
   });
 
+  it('o pedido em Aprovações traz o post, o mesmo da Agenda, com o fuso da empresa (Z5c, parte 4)', async () => {
+    const e = await empresaComCanais(api, 'Casa Brasa Post em Aprovações');
+    const foto = await fotoPronta(e);
+    const r = await novo(e, foto.id);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const daAgenda = (await api.call('GET', `/v1/posts/${r.body.id}`, { cookie: e.cookie })).body;
+    // O pedido aberto e a lista de Aprovações: o post como a Agenda o mostra, com o fuso em que a hora se lê.
+    const aberto = await api.call('GET', `/v1/actions/${r.body.action_id}`, { cookie: e.cookie });
+    expect(aberto.body.post).toEqual({ ...daAgenda, timezone: FUSO });
+    const lista = await api.call('GET', '/v1/actions?status=aguardando_aprovacao', { cookie: e.cookie });
+    expect(lista.body.items.find((a: { id: string }) => a.id === r.body.action_id)?.post).toEqual({ ...daAgenda, timezone: FUSO });
+    // Recusado, a resposta da recusa já traz o post recusado (a tela troca o pedido aberto por ela).
+    const plano = await pedidoDe(r.body.action_id);
+    const recusa = await api.call('POST', `/v1/actions/${r.body.action_id}/reject`, { cookie: e.cookie, body: { plan_hash: plano.plan_hash, reason: 'Quero outra foto' } });
+    expect(recusa.status, JSON.stringify(recusa.body)).toBe(200);
+    expect(recusa.body.post).toMatchObject({ id: r.body.id, status: 'recusado', timezone: FUSO });
+    // A outra empresa não abre o pedido (nem o post dentro dele).
+    const outra = await empresaComCanais(api, 'Outra Casa Aprovações');
+    expect((await api.call('GET', `/v1/actions/${r.body.action_id}`, { cookie: outra.cookie })).status).toBe(404);
+  });
+
   it('as restrições das tabelas (V119): o canal, a situação, o recorte, o texto e o resumo da foto', async () => {
     const e = await empresaComCanais(api, 'Casa Brasa Restrições');
     const foto = await fotoPronta(e);

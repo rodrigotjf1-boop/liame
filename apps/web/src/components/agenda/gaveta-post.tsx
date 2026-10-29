@@ -2,14 +2,14 @@
 
 import type { BrandPhoto, PostResponse } from '@liame/contracts';
 import Link from 'next/link';
-import { type RefObject, useId, useRef, useState } from 'react';
+import { type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
-import { PreviaDoCanal } from './previa-do-canal';
-import { formatoDaPrevia, fraseDaSituacao, linhaDoCanal, NOME_DO_CANAL, noFuso, quando, situacaoDoPost } from './textos';
+import { PreviasDoPost } from './previas-do-post';
+import { fraseDaSituacao, linhaDoCanal, noFuso, quando, situacaoDoPost } from './textos';
 
 // Um post da Agenda (P19, gaveta à direita): a situação, a prévia de cada canal (a foto, com o recorte do Instagram, e
 // o texto), o que aconteceu em cada canal e o que dá para fazer: abrir o pedido em Aprovações (o post que espera),
@@ -37,13 +37,16 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
   const fecharBt = useRef<HTMLButtonElement>(null);
   const cancelarBt = useRef<HTMLButtonElement>(null);
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: fecharBt, reserva });
-  const [aba, setAba] = useState(post.channels[0]?.channel ?? 'instagram');
   const [cancelando, setCancelando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // "Manter": o foco volta ao "Cancelar o post" depois que ele volta à tela (no efeito, depois do commit; V27, ERR-185).
+  const [focarCancelar, setFocarCancelar] = useState(0);
+  useEffect(() => {
+    if (focarCancelar) cancelarBt.current?.focus();
+  }, [focarCancelar]);
   const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
   const situacao = situacaoDoPost(post.status);
-  const canal = post.channels.find((c) => c.channel === aba) ?? post.channels[0];
   const pedidoEm = noFuso(new Date(post.created_at), fuso);
 
   async function cancelar() {
@@ -67,7 +70,6 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
     fechar();
   }
 
-  const formato = foto ? formatoDaPrevia(canal?.channel ?? 'facebook', foto.width, foto.height) : 'inteira';
   const linhas = post.channels.map((c) => linhaDoCanal(c, post, fuso, hoje));
   const podeCancelar = podeOperar && post.status === 'agendado' && post.action_id;
 
@@ -105,41 +107,7 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
             <Icone nome={situacao.icone} pequeno />
             {fraseDaSituacao(post, fuso, hoje)}
           </p>
-          {post.channels.length > 1 && (
-            <div className="seg po-canais-seg" role="group" aria-label="Ver como sai em">
-              {post.channels.map((c) => (
-                <button key={c.channel} type="button" aria-pressed={c.channel === aba} onClick={() => setAba(c.channel)}>
-                  {NOME_DO_CANAL[c.channel] ?? c.channel}
-                </button>
-              ))}
-            </div>
-          )}
-          {canal && (
-            <PreviaDoCanal
-              canal={canal.channel}
-              conta={canal.account_name}
-              texto={canal.text}
-              foto={foto}
-              recorte={post.crop_pos}
-              semFoto={post.photo_id ? 'A foto deste post não pôde ser mostrada aqui.' : 'A foto deste post foi apagada nas Fotos: ele não sai.'}
-              aoFalharImagem={aoFalharImagem}
-            />
-          )}
-          {canal?.channel === 'instagram' && formato !== 'inteira' && (
-            <p className="po-nota">
-              <Icone nome="info" pequeno />
-              <span>
-                No Instagram, a foto sai recortada em {formato === 'alta' ? '4:5, em pé' : '1,91:1, deitada'}: a foto inteira é {formato === 'alta' ? 'mais alta' : 'mais larga'} do que o Instagram aceita.
-                {post.channels.length > 1 ? ' Na Página, ela vai inteira.' : ''}
-              </span>
-            </p>
-          )}
-          {canal?.channel === 'instagram' && (
-            <p className="po-nota">
-              <Icone nome="link" pequeno />
-              <span>No Instagram, a legenda não tem link que abre: o texto diz onde pedir (&ldquo;Peça pelo link da bio&rdquo;).</span>
-            </p>
-          )}
+          <PreviasDoPost key={post.id} post={post} foto={foto} aoFalharImagem={aoFalharImagem} />
           <section aria-labelledby={`${ids}-sit`}>
             <h3 className="rotulo-marca" id={`${ids}-sit`}>
               Em cada canal
@@ -192,7 +160,7 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
                 aoConfirmar={() => disparar(cancelar())}
                 aoCancelar={() => {
                   setCancelando(false);
-                  requestAnimationFrame(() => cancelarBt.current?.focus());
+                  setFocarCancelar((n) => n + 1);
                 }}
               />
             ) : (
