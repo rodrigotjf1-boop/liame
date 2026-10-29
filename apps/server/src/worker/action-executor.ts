@@ -7,6 +7,7 @@ import { type ApplyResult, CONNECTORS } from '../actions/connectors.js';
 import { TOOLS } from '../actions/tools.js';
 import { writeAudit } from '../audit/audit.js';
 import { ErroConector } from '../connectors/cliente-http.js';
+import { CONTEINER_EM_PREPARO, COTA_DE_POSTS } from '../connectors/meta/publicacao.js';
 import { DATABASE } from '../database/database.module.js';
 import { emitEvent } from '../events/outbox.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -49,6 +50,9 @@ export function esperaDoAdiamento(esperarMs: number | null, tentativa: number): 
 
 /** Por que a execução esperou, em palavras (sem o texto da plataforma: ele pode trazer o que não é para a tela). */
 function motivoDoAdiamento(err: ErroConector): string {
+  // O post do Instagram (A6, Z5b): o contêiner que ainda prepara a foto e o limite de posts do dia não são "limite de uso".
+  if (err.codigoProvider === CONTEINER_EM_PREPARO) return 'o Instagram ainda prepara a foto do post';
+  if (err.codigoProvider === COTA_DE_POSTS) return 'o Instagram chegou ao limite de posts pela API nas últimas 24 horas';
   const quem = NOME_DO_PROVEDOR[err.provider] ?? 'a plataforma';
   // No Google o limite de operações é do projeto, para todas as contas juntas (não há limite por conta de anúncios).
   if (err.tipo === 'limite') return `${quem} pediu para esperar (${LIMITE_DO_PROJETO.has(err.provider) ? 'limite de uso do Google' : 'limite de uso da conta'})`;
@@ -127,6 +131,13 @@ export class ActionExecutor {
       const r = await tx.execute<ActionRow>(sql`select * from liame.action_request where id = ${id} and status = 'executando' for update`);
       const row = r.rows[0];
       if (!row) return;
+      // A ferramenta com hora própria (o post: só das 8h às 22h no fuso da empresa, D-A6-33) não sai fora dela, nem
+      // depois de um adiamento que passou da janela: volta para a fila com a hora em que pode sair, sem contar tentativa.
+      const espera = await this.horaDaFerramenta(tx, tenantId, row);
+      if (espera && espera.getTime() > Date.now()) {
+        await this.esperarAHora(tx, row, espera);
+        return;
+      }
       const startedAt = new Date().toISOString();
       const approval = await this.validApproval(tx, row);
       let outcome = await this.run(tx, row, approval);
@@ -227,6 +238,37 @@ export class ActionExecutor {
       if (err instanceof ErroConector && ADIA.has(err.tipo)) return { status: 'adiada', reason: motivoDoAdiamento(err), esperarMs: err.esperarMs };
       throw err;
     }
+  }
+
+  /** A hora em que a ferramenta pode executar agora (`executeAt`), no fuso da empresa; nula = a qualquer hora. */
+  private async horaDaFerramenta(tx: Tx, tenantId: string, row: ActionRow): Promise<Date | null> {
+    const tool = TOOLS[row.tool];
+    if (!tool?.executeAt) return null;
+    const r = await tx.execute<{ timezone: string | null }>(sql`select timezone from liame.organization where id = ${tenantId}`);
+    return tool.executeAt(row.before_state ?? {}, new Date(), r.rows[0]?.timezone ?? 'America/Sao_Paulo');
+  }
+
+  /** Fora da hora da ferramenta: a ação volta para a fila, aprovada, para a hora em que pode sair (não é tentativa). */
+  private async esperarAHora(tx: Tx, row: ActionRow, quando: Date): Promise<void> {
+    const motivo = 'espera a hora em que pode sair';
+    await tx.execute(sql`
+      update liame.action_request
+         set status = 'aprovada', status_reason = ${motivo}, next_attempt_at = ${quando.toISOString()}::timestamptz, updated_at = now()
+       where id = ${row.id}`);
+    await writeAudit(tx, {
+      tenantId: row.tenant_id,
+      actorType: 'system',
+      actorId: null,
+      actorLabel: 'Liame (execução)',
+      action: 'acao.esperar_hora',
+      resourceType: 'action_request',
+      resourceId: row.id,
+      after: { motivo, ate: quando.toISOString() },
+      approvalId: null,
+      tool: row.tool,
+      origin: 'worker',
+    });
+    this.logger.log(`ação ${row.id} espera a hora da ferramenta (${quando.toISOString()})`);
   }
 
   /** A ação volta para a fila, aprovada, com a hora da próxima tentativa; a reserva do envelope fica. */

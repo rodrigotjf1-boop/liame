@@ -21,6 +21,8 @@ export interface ArmazemDeImagens {
   apagarPrefixo(prefixo: string): Promise<number>;
   /** O endereço de leitura da imagem, que vale `segundos`. */
   enderecoDeLeitura(chave: string, segundos: number): Promise<string>;
+  /** Os bytes da imagem guardada (o recorte do post do Instagram sai da cópia da foto). */
+  ler(chave: string): Promise<Buffer>;
 }
 
 /** A função de imagem está indisponível (produção sem o bucket). */
@@ -30,22 +32,43 @@ export class ArmazemIndisponivel extends Error {
   }
 }
 
-/** O armazenamento recusou ou falhou (rede, permissão). A mensagem não leva credencial nem endereço assinado. */
-export class FalhaDoArmazem extends Error {}
+/**
+ * O armazenamento recusou ou falhou (rede, permissão). A mensagem não leva credencial nem endereço assinado.
+ * `semArquivo`: a chave não tem imagem (apagada, ou nunca gravada): tentar de novo não resolve.
+ */
+export class FalhaDoArmazem extends Error {
+  constructor(
+    mensagem: string,
+    readonly semArquivo = false,
+  ) {
+    super(mensagem);
+  }
+}
 
-// As chaves que o Liame grava (`t/{empresa}/b/{marca}/foto_produto/{id}.jpg` e a miniatura) e os prefixos que apaga.
-// Conferidas parte por parte antes de qualquer gravação ou apagamento: nada fora do desenho chega ao disco ou ao bucket.
+/** A maior imagem que o servidor lê do armazenamento: a cópia guardada tem o lado maior em até 2.048 px (ADR-021). */
+export const MAIOR_LEITURA_BYTES = 20 * 1024 * 1024;
+
+// As chaves que o Liame grava e os prefixos que apaga. A foto das Fotos (`t/{empresa}/b/{marca}/foto_produto/{id}.jpg`)
+// e a miniatura dela; o recorte do post do Instagram (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`, A6 · Z5b).
+// Conferidas parte por parte antes de qualquer gravação, leitura ou apagamento: nada fora do desenho chega ao disco ou
+// ao bucket.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function ehUuid(s: string): boolean {
   return UUID.test(s);
 }
 
+/** O nome do arquivo sem o final (`-mini.jpg`, `.jpg`); vazio quando não termina por nenhum dos aceitos. */
+function semFinal(arquivo: string, finais: readonly string[]): string {
+  for (const f of finais) if (arquivo.endsWith(f)) return arquivo.slice(0, -f.length);
+  return '';
+}
+
 function chaveValida(chave: string): boolean {
   const p = chave.split('/');
-  if (chave.length > 300 || p.length !== 6 || p[0] !== 't' || p[2] !== 'b' || p[4] !== 'foto_produto') return false;
+  if (chave.length > 300 || p.length !== 6 || p[0] !== 't' || p[2] !== 'b') return false;
   const arquivo = p[5] ?? '';
-  const id = arquivo.endsWith('-mini.jpg') ? arquivo.slice(0, -'-mini.jpg'.length) : arquivo.endsWith('.jpg') ? arquivo.slice(0, -'.jpg'.length) : '';
+  const id = p[4] === 'foto_produto' ? semFinal(arquivo, ['-mini.jpg', '.jpg']) : p[4] === 'post' ? semFinal(arquivo, ['-instagram.jpg']) : '';
   return ehUuid(p[1] ?? '') && ehUuid(p[3] ?? '') && ehUuid(id);
 }
 
@@ -71,12 +94,20 @@ export class ArmazemNaMemoria implements ArmazemDeImagens {
   readonly tipo = 'memoria';
   readonly objetos = new Map<string, Buffer>();
   /** O que falha de propósito, para os testes. */
-  falhar: { gravar?: boolean; apagar?: boolean } = {};
+  falhar: { gravar?: boolean; apagar?: boolean; ler?: boolean } = {};
 
   async gravar(chave: string, bytes: Buffer): Promise<void> {
     exigirChave(chave);
     if (this.falhar.gravar) throw new FalhaDoArmazem('memória: falha simulada ao gravar');
     this.objetos.set(chave, Buffer.from(bytes));
+  }
+
+  async ler(chave: string): Promise<Buffer> {
+    exigirChave(chave);
+    if (this.falhar.ler) throw new FalhaDoArmazem('memória: falha simulada ao ler');
+    const bytes = this.objetos.get(chave);
+    if (!bytes) throw new FalhaDoArmazem('memória: a chave não tem imagem', true);
+    return Buffer.from(bytes);
   }
 
   async apagar(chaves: readonly string[]): Promise<void> {
@@ -142,6 +173,16 @@ export class ArmazemNoDisco implements ArmazemDeImagens {
     exigirChave(chave);
     return `data:image/jpeg;base64,${(await readFile(this.caminho(chave))).toString('base64')}`;
   }
+
+  async ler(chave: string): Promise<Buffer> {
+    exigirChave(chave);
+    try {
+      return await readFile(this.caminho(chave));
+    } catch (e) {
+      const codigo = (e as NodeJS.ErrnoException).code;
+      throw new FalhaDoArmazem(`disco: ${codigo ?? 'erro'}`, codigo === 'ENOENT');
+    }
+  }
 }
 
 /** Em produção sem o bucket: indisponível. */
@@ -158,6 +199,9 @@ export class ArmazemFechado implements ArmazemDeImagens {
     return Promise.reject(new ArmazemIndisponivel());
   }
   enderecoDeLeitura(): Promise<string> {
+    return Promise.reject(new ArmazemIndisponivel());
+  }
+  ler(): Promise<Buffer> {
     return Promise.reject(new ArmazemIndisponivel());
   }
 }
@@ -257,6 +301,28 @@ export class ArmazemS3 implements ArmazemDeImagens {
     } catch (e) {
       throw new FalhaDoArmazem(`S3: ${nomeDoErro(e)}`);
     }
+  }
+
+  async ler(chave: string): Promise<Buffer> {
+    exigirChave(chave);
+    let r: { Body?: { transformToByteArray?: () => Promise<Uint8Array> }; ContentLength?: number } | undefined;
+    try {
+      r = (await this.cliente.send(new this.sdk.GetObjectCommand({ Bucket: this.bucket, Key: chave }))) as typeof r;
+    } catch (e) {
+      const nome = nomeDoErro(e);
+      throw new FalhaDoArmazem(`S3: ${nome}`, nome.startsWith('NoSuchKey'));
+    }
+    if (typeof r?.ContentLength === 'number' && r.ContentLength > MAIOR_LEITURA_BYTES) throw new FalhaDoArmazem('S3: a imagem passa do tamanho que o servidor lê');
+    const corpo = r?.Body;
+    if (!corpo?.transformToByteArray) throw new FalhaDoArmazem('S3: a resposta veio sem a imagem');
+    let bytes: Uint8Array;
+    try {
+      bytes = await corpo.transformToByteArray();
+    } catch (e) {
+      throw new FalhaDoArmazem(`S3: ${nomeDoErro(e)}`);
+    }
+    if (bytes.byteLength > MAIOR_LEITURA_BYTES) throw new FalhaDoArmazem('S3: a imagem passa do tamanho que o servidor lê');
+    return Buffer.from(bytes);
   }
 }
 

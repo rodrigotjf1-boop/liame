@@ -57,14 +57,14 @@ O preço do S3 é o custo de quem escolhe: o dono cria o bucket e amplia a permi
    - A imagem é **regravada pelo servidor** (decodificada e codificada de novo), **em JPEG, com o lado maior em até 2.048 pixels**, depois de aplicar a orientação que a câmera gravou. Isso tira os metadados (a foto do celular traz a localização) e qualquer coisa que não seja imagem. O JPEG é o que o Instagram publica, e a cópia fica abaixo dos 4 MB da Página do Facebook: serve aos quatro canais da A6 (Instagram, Threads, Página do Facebook e Perfil no Google; páginas oficiais lidas em 21/10/2026).
    - Na tela, só os avisos mínimos (pedido do dono em 21/10/2026): antes de enviar, os formatos, o tamanho, a dica de preferir foto quadrada ou na horizontal e o direito de uso; depois, o motivo de cada foto que não entrou.
 4. **O banco guarda o registro; o S3, os bytes.** Uma tabela nova, com RLS como as outras: empresa, marca, tipo (`foto_produto` ou `imagem_de_peca`), chave do objeto, hash, tamanho, largura, altura, formato, origem (`envio` ou `ia`), quem enviou e quando. O nome original do arquivo não é guardado.
-5. **A chave do objeto começa pela empresa e pela marca** (`t/{empresa}/b/{marca}/{tipo}/{id}`): apagar uma empresa é apagar um prefixo.
+5. **A chave do objeto começa pela empresa e pela marca** (`t/{empresa}/b/{marca}/{tipo}/{id}`): apagar uma empresa é apagar um prefixo. *Atualização de 29/10/2026 (A6 · Z5b, parte 2; D-A6-21 e D-A6-38):* o recorte do post do Instagram, quando a foto não cabe na proporção dele, é um arquivo de passagem na mesma marca (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`), apagado quando o canal termina (publicado ou não); o prefixo da marca e o da empresa o levam junto.
 6. **Expurgo (ADR-014).** O objeto sai primeiro, a linha depois, com nova tentativa se o S3 falhar.
    - Foto de produto: fica enquanto a marca existir, ou até a pessoa apagar.
    - Imagem de peça recusada: 30 dias.
    - Imagem de peça aprovada: como o criativo arquivado, 12 meses depois de arquivada.
    - Fim do contrato: o prefixo inteiro da empresa, no mesmo passo em que a organização é apagada.
 7. **Local e teste.** No desenvolvimento, um adaptador de disco (pasta fora do git); nos testes, um de memória; em produção, o S3. Sem o bucket configurado, a função de imagem fica indisponível e o resto do produto não muda.
-8. **O que sai do Liame.** A foto e o pedido da peça vão ao fornecedor de imagem (X7), e a imagem aprovada vai à Meta (X5), sempre pelo servidor, em bytes. Nenhum terceiro recebe endereço do bucket.
+8. **O que sai do Liame.** A foto e o pedido da peça vão ao fornecedor de imagem (X7), e a imagem aprovada vai à Meta (X5), sempre pelo servidor, em bytes. Nenhum terceiro recebe endereço do bucket. *Atualização de 29/10/2026 (A6 · Z5; D-A6-10, aprovada pelo dono com o plano da A6 e confirmada num teste em 28/10/2026):* o post do Instagram não aceita a imagem em bytes, só por endereço que a Meta busca na hora; para ele, a Meta recebe um endereço assinado que vale 5 minutos (o mesmo da tela das Fotos), só na hora de criar o post. O arquivo continua privado: o endereço não abre outra coisa e vence sozinho.
 
 ## Consequências
 
