@@ -16,6 +16,9 @@ export const trackingLink = liame.table('tracking_link', {
   campaignId: uuid('campaign_id'),
   adGroupId: uuid('ad_group_id'),
   adId: uuid('ad_id'),
+  // O link do post (A6 · Z7; migration 0091): `campanha` ou `post`, e o post dele.
+  kind: text('kind').notNull().default('campanha'),
+  postId: uuid('post_id'),
   destinationUrl: text('destination_url').notNull(),
   utmSource: text('utm_source').notNull(),
   utmMedium: text('utm_medium').notNull(),
