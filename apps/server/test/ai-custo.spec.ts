@@ -4,7 +4,7 @@ import { APICallError } from 'ai';
 import { describe, expect, it } from 'vitest';
 import { codigoDoErro } from '../src/ai/gateway.js';
 import { aceitaGeo, ModelosIa } from '../src/ai/modelos.js';
-import { custoMicros, type PrecoModelo, tokensDe } from '../src/ai/precos.js';
+import { custoMicros, type PrecoModelo, precoDaLinha, tamanhoDoPrompt, tokensDe } from '../src/ai/precos.js';
 import { limparJson, limparTexto } from '../src/ai/sanitizar.js';
 import { loadConfig } from '../src/config.js';
 import { situacaoDoTeto, virouDeFaixa } from '../src/ai/teto.js';
@@ -30,6 +30,57 @@ describe('custo de uma chamada de IA (A3-2)', () => {
     expect(custoMicros(PRECO, tokens(1, 0), { geo: 'us' })).toBe(5n);
     // Soma grande não perde precisão: 3 bilhões de tokens de saída = US$ 60.000.
     expect(custoMicros(PRECO, tokens(0, 3_000_000_000), { geo: 'global' })).toBe(60_000_000_000n);
+  });
+
+  // O Haiku 5.5 (migration 0089, a página oficial lida em 29/10/2026): US$ 0,10 / 0,50 por milhão até 100.000 tokens de
+  // prompt; acima, US$ 0,50 / 2,50, e o cache na mesma proporção (0,01 e 0,05 a leitura; 0,125 e 0,625 a escrita de 5
+  // minutos; 0,20 e 1 a de 1 hora).
+  const HAIKU: PrecoModelo = {
+    input: 100_000n,
+    output: 500_000n,
+    cacheRead: 10_000n,
+    cacheWrite5m: 125_000n,
+    cacheWrite1h: 200_000n,
+    acima: { tokens: 100_000, preco: { input: 500_000n, output: 2_500_000n, cacheRead: 50_000n, cacheWrite5m: 625_000n, cacheWrite1h: 1_000_000n } },
+  };
+
+  it('o Haiku 5.5 cobra pelo tamanho do prompt: até 100.000 tokens, o preço de sempre; acima, o da faixa em tudo', () => {
+    // 100.000 de entrada e 1.000 de saída: a faixa de baixo. 100.000 × 0,10 + 1.000 × 0,50 = 10.500 micros.
+    expect(custoMicros(HAIKU, tokens(100_000, 1000), { geo: 'global' })).toBe(10_500n);
+    // Um token a mais passa da faixa: tudo pelo preço alto, a saída também. 100.001 × 0,50 + 1.000 × 2,50 = 52.500,5 → 52.501.
+    expect(custoMicros(HAIKU, tokens(100_001, 1000), { geo: 'global' })).toBe(52_501n);
+    // O prompt conta o cache lido e o escrito: 10.000 + 85.000 lidos + 5.001 escritos = 100.001, a faixa alta.
+    // 10.000 × 0,50 + 85.000 × 0,05 + 5.001 × 0,625 + 2.000 × 2,50 = 17.375,625 → 17.376.
+    expect(tamanhoDoPrompt(tokens(10_000, 2000, 85_000, 5001))).toBe(100_001);
+    expect(custoMicros(HAIKU, tokens(10_000, 2000, 85_000, 5001), { geo: 'global' })).toBe(17_376n);
+    // Com 5.000 escritos, 100.000: a faixa de baixo. 10.000 × 0,10 + 85.000 × 0,01 + 5.000 × 0,125 + 2.000 × 0,50 = 3.475.
+    expect(custoMicros(HAIKU, tokens(10_000, 2000, 85_000, 5000), { geo: 'global' })).toBe(3_475n);
+    // A saída não conta para a faixa: 1.000 de entrada e 200.000 de saída = 100 + 100.000.
+    expect(custoMicros(HAIKU, tokens(1000, 200_000), { geo: 'global' })).toBe(100_100n);
+    // A escrita de 1 hora também vai para a faixa: 1 × 0,50 + 100.000 × 1 = 100.000,5 → 100.001.
+    expect(custoMicros(HAIKU, tokens(1, 0, 0, 100_000), { geo: 'global', cache: '1h' })).toBe(100_001n);
+  });
+
+  it('no Haiku 5.5, o 1,1 dos Estados Unidos e a metade do lote valem nas duas faixas', () => {
+    // 52.500,5 × 1,1 = 57.750,55 → 57.751; em lote, 26.250,25 → 26.251; os dois, 28.875,275 → 28.876.
+    expect(custoMicros(HAIKU, tokens(100_001, 1000), { geo: 'us' })).toBe(57_751n);
+    expect(custoMicros(HAIKU, tokens(100_001, 1000), { geo: 'global', lote: true })).toBe(26_251n);
+    expect(custoMicros(HAIKU, tokens(100_001, 1000), { geo: 'us', lote: true })).toBe(28_876n);
+    // Na faixa de baixo: 10.500 × 1,1 = 11.550.
+    expect(custoMicros(HAIKU, tokens(100_000, 1000), { geo: 'us' })).toBe(11_550n);
+  });
+
+  it('a linha da tabela de preços vira o preço: a faixa só quando vem inteira', () => {
+    const linha = { input: '100000', output: '500000', cache_read: '10000', cache_write_5m: '125000', cache_write_1h: '200000' };
+    const semFaixa = { acima_de: null, l_input: null, l_output: null, l_cache_read: null, l_cache_write_5m: null, l_cache_write_1h: null };
+    const faixa = { acima_de: 100_000, l_input: '500000', l_output: '2500000', l_cache_read: '50000', l_cache_write_5m: '625000', l_cache_write_1h: '1000000' };
+    expect(precoDaLinha({ ...linha, ...faixa })).toEqual(HAIKU);
+    const sem = { input: HAIKU.input, output: HAIKU.output, cacheRead: HAIKU.cacheRead, cacheWrite5m: HAIKU.cacheWrite5m, cacheWrite1h: HAIKU.cacheWrite1h };
+    expect(precoDaLinha({ ...linha, ...semFaixa })).toStrictEqual(sem);
+    // A linha com a faixa pela metade (o banco não deixa gravar: 0089) é lida sem faixa, nunca com um preço inventado.
+    expect(precoDaLinha({ ...linha, ...faixa, l_cache_write_1h: null })).toStrictEqual(sem);
+    // O preço sem faixa (todos os outros modelos) não muda com o prompt longo: 200.000 × 4 = 800.000.
+    expect(custoMicros(PRECO, tokens(200_000, 0), { geo: 'global' })).toBe(800_000n);
   });
 
   it('lê o uso do SDK: a entrada cheia é o total menos o cache; o raciocínio já está na saída', () => {
@@ -131,6 +182,8 @@ describe('configuração da IA', () => {
     expect(aceitaGeo('anthropic', 'claude-sonnet-5-5')).toBe(true);
     expect(aceitaGeo('anthropic', 'claude-opus-5-5')).toBe(true);
     expect(aceitaGeo('anthropic', 'claude-fable-5-1')).toBe(true);
+    // O Haiku 5.5 (0089) aceita: a página de preços aplica o 1,1 também às duas faixas dele.
+    expect(aceitaGeo('anthropic', 'claude-haiku-5-5')).toBe(true);
     // A fronteira é o 4.6, com data no fim do id ou sem ela; o que não dá para ler não aceita.
     expect(['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-opus-4-7', 'claude-opus-5', 'claude-opus-4-6-20260101'].map((m) => aceitaGeo('anthropic', m))).toEqual([true, true, true, true, true]);
     expect(['claude-opus-4-5-20251101', 'claude-sonnet-4-5-20250929', 'claude-opus-4-1-20250805', 'claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022', 'modelo-novo', ''].map((m) => aceitaGeo('anthropic', m))).toEqual([
