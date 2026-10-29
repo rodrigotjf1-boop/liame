@@ -1691,6 +1691,14 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - `POST /v3/payments/{id}/refund`; sem valor, a devolução é integral;
   - no cartão, confirmado ou recebido há até 365 dias (até 10 dias úteis para aparecer na fatura; a Central diz até 5); no PIX, recebido há até 90 dias e com saldo na conta (logo depois do recebimento pode faltar saldo: 400), e as taxas não voltam;
   - a devolução só está feita com o `status` `DONE`.
+  - *Reconferido em 29/10/2026 para a W2a, parte 3b* (estornar cobrança, editada em 08/09/2026; estornos, 04/08/2026; eventos para cobranças, 27/10/2026; Security):
+    - **o corpo:** `value` (o total a estornar), `description` e `splitRefunds` (o estorno das divisões), todos opcionais;
+    - **a resposta:** a cobrança inteira, com o array `refunds`. Cada estorno traz `dateCreated`, `status`, `value`, `description`, `transactionReceiptUrl`, `refundedSplits` e, no PIX, `endToEndIdentifier` e `effectiveDate`. O esquema não tem o id do estorno;
+    - **as situações do estorno:** `PENDING`, `AWAITING_CRITICAL_ACTION_AUTHORIZATION`, `AWAITING_CUSTOMER_EXTERNAL_AUTHORIZATION`, `CANCELLED` e `DONE`; as da cobrança no caminho, `REFUND_REQUESTED`, `REFUND_IN_PROGRESS` e `REFUNDED`;
+    - **o que a página de estornos manda:** "a existência do array `refunds` não significa que o valor já foi devolvido"; "uma cobrança pode possuir mais de um estorno", então não vale olhar só o primeiro; e o cancelado "não deve ser considerado devolvido";
+    - **os eventos:** `PAYMENT_REFUND_IN_PROGRESS` (a liquidação agendada), `PAYMENT_REFUNDED`, `PAYMENT_PARTIALLY_REFUNDED` e `PAYMENT_REFUND_DENIED` ("disponível somente para boletos");
+    - **o PIX** aceita o estorno integral ou vários parciais, desde que o total não passe do valor da cobrança;
+    - **[NC]:** o que acontece ao pedir o mesmo estorno duas vezes, os motivos do 400 (só o do saldo é descrito, sem o código), o prazo do estorno do PIX nesta página (a Central diz 90 dias) e a página própria do `AWAITING_CRITICAL_ACTION_AUTHORIZATION`. As ações críticas do Asaas (Security) pedem o token por SMS ou pelo app, e a ação pendente não conta como feita.
 - **Sandbox** [O] (confirmar pagamento, 08/09/2026; cartão de teste, 02/09/2026; aprovar conta, 08/09/2026): confirmar um pagamento por `POST /v3/sandbox/payment/{id}/confirm` (e vencer por `/overdue`); cartões de recusa publicados; aprovar a conta por `POST /v3/sandbox/myAccount/approve`; e-mail e SMS podem sair no Sandbox.
 - **Nota fiscal (W4)** [O] (agendar nota, 25/09/2026; webhook de notas, 27/08/2026): `POST /v3/invoices`, ligada à cobrança; a nota está emitida com o aviso `INVOICE_AUTHORIZED` e falhou com `INVOICE_ERROR`; a assinatura pode emitir sozinha na confirmação do pagamento.
 - **O que isso decide no desenho da W2:** `plano-a7.md` §4, D-A7-27 a D-A7-33.

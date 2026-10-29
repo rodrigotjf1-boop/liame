@@ -333,6 +333,13 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
     const [f] = await faturas(e);
     expect(f).toMatchObject({ status: 'paga', amount_cents: ESSENCIAL });
     expect(f!.refund_requested_at).not.toBeNull();
+    // Paga aqui sem a cobrança no Asaas (o teste paga direto): a devolução não entra na fila, e o porquê fica para a
+    // distribuição devolver à mão (W2a, parte 3b; com a cobrança no Asaas, a fila está em `devolucao.spec.ts`).
+    const [fila] = await ownerQuery<{ charge_error: string | null; charge_next_at: Date | null }>(
+      `select charge_error, charge_next_at from liame.billing_invoice where brand_id = $1 and status = 'paga'`,
+      [e.brandId],
+    );
+    expect(fila).toEqual({ charge_error: 'devolucao_sem_cobranca', charge_next_at: null });
     const [ev] = await ownerQuery<{ after: Record<string, unknown> }>(`select after from liame.audit_event where tenant_id = $1 and action = 'cobranca.desistir'`, [e.tenantId]);
     expect(ev!.after).toMatchObject({ devolve_cents: 24_900 });
 

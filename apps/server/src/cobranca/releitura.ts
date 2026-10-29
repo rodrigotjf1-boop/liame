@@ -52,7 +52,10 @@ export type DecisaoDaReleitura =
 export function decidirReleitura(fatura: FaturaRelida, cobranca: CobrancaAsaas | null): DecisaoDaReleitura {
   const viva = cobranca !== null && !cobranca.removida;
   const paga = viva && SITUACOES_PAGAS.has(cobranca.status);
-  if (fatura.status === 'cancelada' || fatura.status === 'devolvida') {
+  // A devolvida já teve o estorno feito conferido (W2a, parte 3b): o aviso que chega depois (`PAYMENT_REFUNDED`) só
+  // encerra a fila. Antes, ela caía na regra da cancelada e parava com "paga depois de cancelar", um alarme falso.
+  if (fatura.status === 'devolvida') return { acao: 'encerrar' };
+  if (fatura.status === 'cancelada') {
     if (!viva) return { acao: 'encerrar' };
     if (paga || SITUACOES_DE_ESTORNO.has(cobranca.status)) return { acao: 'parar', problema: 'paga_apos_cancelar' };
     return { acao: 'remover' };

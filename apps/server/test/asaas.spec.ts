@@ -3,6 +3,7 @@ import { descricaoDaCobranca, esperaDaCobranca, falhaDoErro } from '../src/cobra
 import { MINIMO_DA_COBRANCA_CENTAVOS } from '../src/cobranca/vida.js';
 import { ASAAS_PRODUCAO, ASAAS_SANDBOX, asaasDaConfig } from '../src/config.js';
 import { decidirReleitura, pagoEmDaCobranca, SITUACOES_PAGAS } from '../src/cobranca/releitura.js';
+import { decidirDevolucao, devolvidoCentavos, ESPERAM_AUTORIZACAO } from '../src/cobranca/devolucao.js';
 import { enderecoDoAviso, EVENTOS_DO_AVISO, NOME_DO_AVISO, planoDoAviso } from '../src/cobranca/aviso-no-asaas.js';
 import {
   ApiAsaas,
@@ -11,6 +12,8 @@ import {
   type CobrancaAsaas,
   cobrancaDoAsaas,
   diaDoAsaas,
+  type EstornoAsaas,
+  estornosDoAsaas,
   paraCentavos,
   paraReais,
   situacaoParaGravar,
@@ -118,7 +121,7 @@ describe('a cobrança do Asaas no formato do Liame', () => {
   it('a cobrança lida: o id, a situação, o valor, o vencimento, a fatura hospedada e o id da fatura do Liame; sem id, não é cobrança', () => {
     expect(
       cobrancaDoAsaas({ id: 'pay_1', status: 'PENDING', value: 193.55, dueDate: '2026-11-22', invoiceUrl: 'https://sandbox.asaas.com/i/pay_1', externalReference: 'fat-1' }),
-    ).toEqual({ id: 'pay_1', status: 'PENDING', valorCentavos: 19_355, vencimento: '2026-11-22', urlDaFatura: 'https://sandbox.asaas.com/i/pay_1', referencia: 'fat-1', removida: false, pagaNoDia: null });
+    ).toEqual({ id: 'pay_1', status: 'PENDING', valorCentavos: 19_355, vencimento: '2026-11-22', urlDaFatura: 'https://sandbox.asaas.com/i/pay_1', referencia: 'fat-1', removida: false, pagaNoDia: null, estornos: [] });
     expect(cobrancaDoAsaas({ id: 'pay_2', status: 'RECEIVED', value: 249, dueDate: '2026-11-22', deleted: true })?.removida).toBe(true);
     expect(cobrancaDoAsaas({ status: 'PENDING', value: 1, dueDate: '2026-11-22' })).toBeNull();
     expect(cobrancaDoAsaas(null)).toBeNull();
@@ -184,10 +187,74 @@ const cobranca = (mudar: Partial<CobrancaAsaas> = {}): CobrancaAsaas => ({
   referencia: FATURA,
   removida: false,
   pagaNoDia: null,
+  estornos: [],
   ...mudar,
 });
 const aberta = { id: FATURA, status: 'aberta', amount_cents: '24900' };
 const cancelada = { ...aberta, status: 'cancelada' };
+
+// W2a, parte 3b: a devolução na desistência em 7 dias, sem banco nem rede.
+const estorno = (situacao: string, valorCentavos = 24_900): EstornoAsaas => ({ situacao, valorCentavos });
+
+describe('a devolução: o que fazer com a fatura de devolução pedida (D-A7-19, D-A7-29, D-A7-35 a D-A7-37)', () => {
+  it('a cobrança paga sem estorno: pede o estorno integral (sem valor); com parte já devolvida, só o que falta', () => {
+    for (const status of SITUACOES_PAGAS) expect(decidirDevolucao(cobranca({ status }))).toEqual({ acao: 'pedir', valorCentavos: null });
+    expect(decidirDevolucao(cobranca({ status: 'RECEIVED', estornos: [estorno('DONE', 10_000)] }))).toEqual({ acao: 'pedir', valorCentavos: 14_900 });
+  });
+
+  it('o estorno feito (DONE) conclui; a cobrança estornada (REFUNDED) também, mesmo sem o estorno na lista', () => {
+    expect(decidirDevolucao(cobranca({ status: 'RECEIVED', estornos: [estorno('DONE')] }))).toEqual({ acao: 'concluir' });
+    expect(decidirDevolucao(cobranca({ status: 'REFUNDED' }))).toEqual({ acao: 'concluir' });
+    // Duas partes feitas somam o total.
+    expect(decidirDevolucao(cobranca({ status: 'RECEIVED', estornos: [estorno('DONE', 12_000), estorno('DONE', 12_900)] }))).toEqual({ acao: 'concluir' });
+    expect(devolvidoCentavos(cobranca({ estornos: [estorno('DONE', 12_000), estorno('CANCELLED', 900), estorno('PENDING', 900)] }))).toBe(12_000);
+  });
+
+  it('o estorno em andamento espera, e NUNCA pede de novo: pendente, a situação que o Liame não conhece (V149) e a cobrança em estorno', () => {
+    for (const situacao of ['PENDING', 'UMA_SITUACAO_NOVA', 'DESCONHECIDA']) {
+      expect(decidirDevolucao(cobranca({ status: 'RECEIVED', estornos: [estorno(situacao)] }))).toEqual({ acao: 'esperar', autorizacao: false });
+    }
+    for (const status of ['REFUND_REQUESTED', 'REFUND_IN_PROGRESS']) expect(decidirDevolucao(cobranca({ status }))).toEqual({ acao: 'esperar', autorizacao: false });
+    // Uma parte feita e outra pendente: espera a outra.
+    expect(decidirDevolucao(cobranca({ status: 'RECEIVED', estornos: [estorno('DONE', 10_000), estorno('PENDING', 14_900)] }))).toEqual({ acao: 'esperar', autorizacao: false });
+  });
+
+  it('o estorno que espera uma autorização fora do Liame (a ação crítica, o pagador): espera, chamando a distribuição', () => {
+    expect([...ESPERAM_AUTORIZACAO].sort()).toEqual(['AWAITING_CRITICAL_ACTION_AUTHORIZATION', 'AWAITING_CUSTOMER_EXTERNAL_AUTHORIZATION']);
+    for (const situacao of ESPERAM_AUTORIZACAO) expect(decidirDevolucao(cobranca({ status: 'RECEIVED', estornos: [estorno(situacao)] }))).toEqual({ acao: 'esperar', autorizacao: true });
+  });
+
+  it('o que para e chama a distribuição: sem a cobrança, a disputa, o estorno cancelado e a cobrança que não está paga no Asaas', () => {
+    expect(decidirDevolucao(null)).toEqual({ acao: 'parar', problema: 'devolucao_sem_cobranca' });
+    expect(decidirDevolucao(cobranca({ status: 'RECEIVED', removida: true }))).toEqual({ acao: 'parar', problema: 'devolucao_sem_cobranca' });
+    for (const status of ['CHARGEBACK_REQUESTED', 'CHARGEBACK_DISPUTE', 'AWAITING_CHARGEBACK_REVERSAL']) {
+      expect(decidirDevolucao(cobranca({ status }))).toEqual({ acao: 'parar', problema: 'devolucao_em_disputa' });
+    }
+    // O cancelado não conta como devolvido, e pedir de novo sem saber por quê poderia repetir o cancelamento para sempre.
+    expect(decidirDevolucao(cobranca({ status: 'RECEIVED', estornos: [estorno('CANCELLED')] }))).toEqual({ acao: 'parar', problema: 'devolucao_cancelada' });
+    for (const status of ['PENDING', 'OVERDUE']) expect(decidirDevolucao(cobranca({ status }))).toEqual({ acao: 'parar', problema: 'devolucao_sem_pagamento' });
+  });
+
+  it('os estornos lidos do Asaas: a situação e o valor; o fora do formato entra como desconhecido (espera), nunca é pulado', () => {
+    expect(estornosDoAsaas([{ status: 'DONE', value: 249, dateCreated: '2026-10-29 10:00:00' }, { status: 'PENDING', value: 10.5 }])).toEqual([
+      { situacao: 'DONE', valorCentavos: 24_900 },
+      { situacao: 'PENDING', valorCentavos: 1_050 },
+    ]);
+    expect(estornosDoAsaas([{ value: 249 }, { status: 'done', value: 249 }, null, { status: 'DONE' }])).toEqual([
+      { situacao: 'DESCONHECIDA', valorCentavos: 24_900 },
+      { situacao: 'DESCONHECIDA', valorCentavos: 24_900 },
+      { situacao: 'DESCONHECIDA', valorCentavos: 0 },
+      { situacao: 'DONE', valorCentavos: 0 },
+    ]);
+    expect(estornosDoAsaas(undefined)).toEqual([]);
+    expect(cobrancaDoAsaas({ id: 'pay_3', status: 'REFUNDED', value: 249, dueDate: '2026-11-22', refunds: [{ status: 'DONE', value: 249 }] })?.estornos).toEqual([{ situacao: 'DONE', valorCentavos: 24_900 }]);
+  });
+
+  it('a releitura da fatura já devolvida só encerra a fila: o aviso atrasado do estorno não vira alarme', () => {
+    const devolvida = { ...aberta, status: 'devolvida' };
+    for (const c of [cobranca({ status: 'REFUNDED' }), cobranca({ status: 'RECEIVED' }), null]) expect(decidirReleitura(devolvida, c)).toEqual({ acao: 'encerrar' });
+  });
+});
 
 describe('a releitura: o que fazer com a fatura depois de ler a cobrança no Asaas (D-A7-28 a D-A7-30)', () => {
   it('a fatura em aberto: paga no Asaas, paga no Liame, com o dia que o Asaas informou; o que conta como pago (D-A7-29)', () => {

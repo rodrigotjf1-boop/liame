@@ -2,7 +2,8 @@ import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
 import { type ApiAsaas, type CobrancaAsaas, PROVIDER_ASAAS, situacaoParaGravar } from '../connectors/asaas/api-asaas.js';
 import { ErroConector } from '../connectors/cliente-http.js';
-import { pagarFatura } from './assinatura.js';
+import { devolverFatura, pagarFatura } from './assinatura.js';
+import { DESCRICAO_DO_ESTORNO, type DecisaoDaDevolucao, decidirDevolucao, type ProblemaDaDevolucao } from './devolucao.js';
 import {
   type DecisaoDaReleitura,
   decidirReleitura,
@@ -327,6 +328,127 @@ export async function relerCobranca(transacao: Transacao, api: ApiAsaas, faturaI
              set provider_status = ${cobranca && !cobranca.removida ? situacao : SITUACAO_REMOVIDA}, charge_next_at = null, ${fim}
            where id = ${f.id}`);
         return { situacao: 'encerrada' };
+      case 'parar':
+        await tx.execute(sql`
+          update liame.billing_invoice
+             set provider_status = coalesce(${situacao}, provider_status), charge_next_at = null, charge_locked_until = null,
+                 charge_error = ${decisao.problema}, updated_at = now()
+           where id = ${f.id}`);
+        return { situacao: 'parada', problema: decisao.problema };
+    }
+  });
+}
+
+// ------------------------------------------------------------ a devolução (W2a, parte 3b; D-A7-19, D-A7-29, D-A7-35 a D-A7-37)
+
+/** Depois de pedir o estorno: a confirmação costuma vir pelo aviso; sem ele, a releitura em meia hora. */
+export const RELEITURA_DEPOIS_DO_PEDIDO_MS = 30 * 60_000;
+/** O estorno em andamento: o aviso traz a mudança; sem ele, a releitura a cada 6 horas (o cartão leva dias). */
+export const RELEITURA_DO_ESTORNO_MS = 6 * 3_600_000;
+/** O estorno que espera uma autorização fora do Liame: a releitura uma vez por dia, com o chamado à distribuição. */
+export const RELEITURA_DA_AUTORIZACAO_MS = 24 * 3_600_000;
+
+export type ResultadoDaDevolucao =
+  | { situacao: 'devolvida' }
+  /** O estorno foi pedido agora ao Asaas, e ainda não está feito. `autorizacao`: ele já nasceu esperando alguém fora do Liame. */
+  | { situacao: 'pedida'; autorizacao: boolean }
+  | { situacao: 'esperando'; autorizacao: boolean }
+  | { situacao: 'parada'; problema: ProblemaDaDevolucao }
+  | { situacao: 'em_uso' }
+  | { situacao: 'fora_da_fila' }
+  | { situacao: 'falhou'; falha: FalhaDaCobranca; esperarMs: number };
+
+type LinhaDaDevolucao = {
+  id: string;
+  status: string;
+  provider: string | null;
+  external_id: string | null;
+  refund_requested_at: Date | string | null;
+  charge_locked_until: Date | string | null;
+  charge_attempts: number;
+  charge_next_us: string | null;
+};
+
+/**
+ * Devolve o que foi pago numa fatura com a devolução pedida (a desistência em 7 dias), com a mesma trava da vez da criação
+ * e da releitura:
+ *   1. numa transação curta, a fatura é lida e reservada;
+ *   2. sem transação aberta, a cobrança é lida no Asaas e, só se não há estorno feito nem em andamento, o estorno é pedido
+ *      (uma vez por vez: a resposta é decidida de novo, e o que ainda falta espera a próxima leitura);
+ *   3. noutra transação curta, o resultado é gravado: o estorno feito vira a fatura devolvida (`devolverFatura`).
+ * Quem chama dá a transação (a do sistema, no worker) e o relógio.
+ */
+export async function devolverCobranca(transacao: Transacao, api: ApiAsaas, faturaId: string, agora: Date): Promise<ResultadoDaDevolucao> {
+  type Leitura = { tipo: 'resposta'; r: ResultadoDaDevolucao } | { tipo: 'reservada'; f: LinhaDaDevolucao; externo: string };
+  const lida = await transacao<Leitura>(async (tx) => {
+    const f = (
+      await tx.execute<LinhaDaDevolucao>(sql`
+        select id, status, provider, external_id, refund_requested_at, charge_locked_until, charge_attempts,
+               (extract(epoch from charge_next_at) * 1000000)::bigint::text as charge_next_us
+          from liame.billing_invoice where id = ${faturaId} for update`)
+    ).rows[0];
+    if (!f || f.status !== 'paga' || !f.refund_requested_at) return { tipo: 'resposta', r: { situacao: 'fora_da_fila' } };
+    if (f.provider !== PROVIDER_ASAAS || !f.external_id) {
+      await tx.execute(sql`
+        update liame.billing_invoice
+           set charge_error = 'devolucao_sem_cobranca', charge_next_at = null, charge_locked_until = null, updated_at = now()
+         where id = ${f.id}`);
+      return { tipo: 'resposta', r: { situacao: 'parada', problema: 'devolucao_sem_cobranca' } };
+    }
+    if (f.charge_locked_until && new Date(f.charge_locked_until).getTime() > agora.getTime()) return { tipo: 'resposta', r: { situacao: 'em_uso' } };
+    await tx.execute(sql`
+      update liame.billing_invoice
+         set charge_locked_until = ${new Date(agora.getTime() + TRAVA_DA_COBRANCA_MS).toISOString()}::timestamptz, updated_at = now()
+       where id = ${f.id}`);
+    return { tipo: 'reservada', f, externo: f.external_id };
+  });
+  if (lida.tipo === 'resposta') return lida.r;
+  const { f, externo } = lida;
+
+  // 2. O Asaas, sem transação aberta.
+  let cobranca: CobrancaAsaas | null;
+  let decisao: DecisaoDaDevolucao;
+  let pedida = false;
+  try {
+    cobranca = await api.lerCobranca(externo);
+    decisao = decidirDevolucao(cobranca);
+    if (decisao.acao === 'pedir') {
+      cobranca = await api.estornarCobranca(externo, { valorCentavos: decisao.valorCentavos, descricao: DESCRICAO_DO_ESTORNO });
+      pedida = true;
+      decisao = decidirDevolucao(cobranca);
+      // Um pedido por vez: se a resposta ainda não mostra o estorno, a próxima leitura decide (nunca um segundo pedido aqui).
+      if (decisao.acao === 'pedir') decisao = { acao: 'esperar', autorizacao: false };
+    }
+  } catch (err) {
+    // Pedido sem resposta conta como talvez feito: a próxima vez relê antes de pedir de novo. A falha do Asaas (fora do ar,
+    // limite, saldo que falta no PIX logo depois do recebimento) espera e tenta de novo, com o porquê em código.
+    const falha = falhaDoErro(err);
+    const tentativas = f.charge_attempts + 1;
+    const esperarMs = esperaDaCobranca(tentativas, err instanceof ErroConector ? err.esperarMs : null);
+    await transacao((tx) => gravarFalha(tx, f.id, falha, tentativas, esperarMs, agora));
+    return { situacao: 'falhou', falha, esperarMs };
+  }
+
+  // 3. O resultado, gravado.
+  const situacao = cobranca ? situacaoParaGravar(cobranca.status) : null;
+  return transacao<ResultadoDaDevolucao>(async (tx) => {
+    const fim = sql`charge_locked_until = null, charge_error = null, charge_attempts = 0, updated_at = now()`;
+    switch (decisao.acao) {
+      case 'concluir': {
+        await devolverFatura(tx, { faturaId: f.id, agora });
+        await tx.execute(sql`update liame.billing_invoice set provider_status = coalesce(${situacao}, provider_status), charge_next_at = null, ${fim} where id = ${f.id}`);
+        return { situacao: 'devolvida' };
+      }
+      case 'esperar': {
+        const autorizacao = decisao.autorizacao;
+        const espera = autorizacao ? RELEITURA_DA_AUTORIZACAO_MS : pedida ? RELEITURA_DEPOIS_DO_PEDIDO_MS : RELEITURA_DO_ESTORNO_MS;
+        await tx.execute(sql`
+          update liame.billing_invoice
+             set provider_status = coalesce(${situacao}, provider_status),
+                 charge_next_at = ${proximaSeNinguemMudou(f.charge_next_us, new Date(agora.getTime() + espera))}, ${fim}
+           where id = ${f.id}`);
+        return pedida ? { situacao: 'pedida', autorizacao } : { situacao: 'esperando', autorizacao };
+      }
       case 'parar':
         await tx.execute(sql`
           update liame.billing_invoice

@@ -25,7 +25,13 @@ import type { AddressInfo } from 'node:net';
 //     atualizar (`PUT /webhooks/{id}`) muda só o que vem no corpo, e o e-mail e a versão da API não entram (atualizar
 //     webhook, 08/09/2026; o que acontece se vierem: [NC], aqui recusado, 400); `interrupted: false` faz a fila andar
 //     (como reativar fila interrompida, 28/08/2026); remover (`DELETE /webhooks/{id}`) responde [NC], aqui
-//     `{ deleted: true, id }`, como a cobrança.
+//     `{ deleted: true, id }`, como a cobrança;
+//   - o estorno (W2a, parte 3b; estornar cobrança, 08/09/2026; estornos, 04/08/2026; eventos para cobranças, 27/10/2026):
+//     `POST /payments/{id}/refund`, sem valor integral, responde a cobrança com o array `refunds` (a situação, o valor, a
+//     data e a descrição); só a cobrança recebida ou confirmada é estornada (a outra: [NC], aqui 400); o total estornado não
+//     passa do valor (400); o saldo que falta no PIX logo depois do recebimento é 400 (o código exato: [NC]); pedir de novo:
+//     [NC], aqui aceito enquanto o total cabe, o pior caso (devolveria duas vezes, se o total deixasse). A cobrança fica
+//     `REFUND_REQUESTED` enquanto o estorno não está feito, e `REFUNDED` com ele feito.
 // O teste escolhe como cada caminho responde, e lê o que foi pedido (`vistos`).
 
 /** A chave da conta de teste, num nome neutro e longe do cabeçalho do pedido (o gitleaks lê a chave do lado do nome, ERR-131). */
@@ -54,7 +60,12 @@ export type CobrancaNoAsaas = {
   paymentDate: string | null;
   clientPaymentDate: string | null;
   confirmedDate: string | null;
+  /** Os estornos da cobrança (o array `refunds`). */
+  refunds: EstornoNoAsaas[];
 };
+
+/** Um estorno da cobrança, como o Asaas o devolve (o esquema não tem id). */
+export type EstornoNoAsaas = { status: string; value: number; dateCreated: string; description: string | null };
 
 /** Um aviso (webhook) da conta. O token fica guardado e nunca sai na resposta (só o `hasAuthToken`). */
 export type AvisoNoAsaas = {
@@ -134,6 +145,12 @@ export class AsaasDeMentira {
    */
   enderecoDaFatura: (id: string) => string = (id) => `https://sandbox.asaas.com/i/${id}`;
   situacaoNova = 'PENDING';
+  /** Como responde o pedido de estorno: bem, fora do ar, recusando a chave ou sem saldo na conta (400). */
+  estornar: RespostaDoAsaas | 'sem-saldo' = 'ok';
+  /** A situação do estorno novo: `PENDING` (o padrão), `DONE` na hora, ou a que espera uma autorização. */
+  situacaoDoEstorno = 'PENDING';
+  /** O Asaas estorna e a conexão cai antes da resposta (503): o estorno ficou lá. */
+  caiDepoisDeEstornar = false;
   private servidor: Server | null = null;
   private readonly anterior: Record<string, string | undefined> = {};
   private avisos = 0;
@@ -193,6 +210,22 @@ export class AsaasDeMentira {
     c.clientPaymentDate = dia;
     c.confirmedDate = dia;
     return c;
+  }
+
+  /** O estorno em andamento fica feito (ou com outra situação): a cobrança vira `REFUNDED` quando o feito cobre o valor. */
+  concluirEstorno(id: string, situacao = 'DONE'): CobrancaNoAsaas {
+    const c = this.cobrancas.find((x) => x.id === id);
+    if (!c) throw new Error(`o Asaas de mentira não tem a cobrança ${id}`);
+    for (const e of c.refunds) if (e.status !== 'DONE' && e.status !== 'CANCELLED') e.status = situacao;
+    this.situacaoPelosEstornos(c);
+    return c;
+  }
+
+  private situacaoPelosEstornos(c: CobrancaNoAsaas): void {
+    const feito = c.refunds.filter((e) => e.status === 'DONE').reduce((t, e) => t + e.value, 0);
+    const andando = c.refunds.some((e) => e.status !== 'DONE' && e.status !== 'CANCELLED');
+    if (feito >= c.value) c.status = 'REFUNDED';
+    else if (andando) c.status = 'REFUND_REQUESTED';
   }
 
   /** A fila de um aviso para (15 falhas seguidas, penalização de filas): o Asaas marca `interrupted`. */
@@ -315,6 +348,7 @@ export class AsaasDeMentira {
         paymentDate: null,
         clientPaymentDate: null,
         confirmedDate: null,
+        refunds: [],
       };
       this.cobrancas.push(cobranca);
       if (this.caiDepoisDeCriar) return erro(503, 'service_unavailable', 'Serviço indisponível');
@@ -326,6 +360,22 @@ export class AsaasDeMentira {
       const c = this.cobrancas.find((x) => x.id === qr[1]);
       if (!c) return erro(404, 'not_found', 'Cobrança não encontrada');
       return { status: 200, corpo: { encodedImage: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg==', payload: `00020101021226820014br.gov.bcb.pix2560${c.id}5204000053039865802BR`, expirationDate: '2027-10-23 23:59:59' } };
+    }
+    const estornar = /^\/payments\/([a-z0-9_]+)\/refund$/.exec(caminho);
+    if (metodo === 'POST' && estornar) {
+      if (this.estornar === 'fora') return erro(503, 'service_unavailable', 'Serviço indisponível');
+      if (this.estornar === 'chave-recusada') return erro(401, 'invalid_access_token', 'A chave de API fornecida é inválida');
+      const c = this.cobrancas.find((x) => x.id === estornar[1]);
+      if (!c || c.deleted) return erro(404, 'not_found', 'Cobrança não encontrada');
+      if (!['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH', 'REFUND_REQUESTED'].includes(c.status)) return erro(400, 'invalid_action', 'Não é possível estornar esta cobrança');
+      if (this.estornar === 'sem-saldo') return erro(400, 'insufficient_balance', 'Saldo insuficiente para realizar o estorno');
+      const jaEstornado = c.refunds.filter((e) => e.status !== 'CANCELLED').reduce((t, e) => t + e.value, 0);
+      const valor = typeof corpo?.value === 'number' ? corpo.value : c.value - jaEstornado;
+      if (valor <= 0 || jaEstornado + valor > c.value + 1e-9) return erro(400, 'invalid_value', 'O valor do estorno ultrapassa o valor da cobrança');
+      c.refunds.push({ status: this.situacaoDoEstorno, value: valor, dateCreated: `${hojeNoBrasil()} 10:00:00`, description: typeof corpo?.description === 'string' ? corpo.description : null });
+      this.situacaoPelosEstornos(c);
+      if (this.caiDepoisDeEstornar) return erro(503, 'service_unavailable', 'Serviço indisponível');
+      return { status: 200, corpo: { object: 'payment', ...c } };
     }
     const uma = /^\/payments\/([a-z0-9_]+)$/.exec(caminho);
     if (metodo === 'GET' && uma) {
