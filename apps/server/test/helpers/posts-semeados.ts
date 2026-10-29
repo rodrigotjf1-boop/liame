@@ -112,3 +112,19 @@ export async function fotoPronta(e: Pick<EmpresaComCanais, 'tenantId' | 'brandId
   );
   return { id, sha256 };
 }
+
+/**
+ * Uma loja da marca com o Regem ligado e o cardápio online (A6 · Z7: o destino do link do post). `cardapio` nulo: a loja
+ * sem o cardápio informado. Devolve a loja e a conta do Regem.
+ */
+export async function lojaComCardapio(e: Pick<EmpresaComCanais, 'tenantId' | 'brandId'>, nome: string, cardapio: string | null): Promise<{ unitId: string; contaId: string }> {
+  const unitId = randomUUID();
+  const contaId = randomUUID();
+  await ownerQuery(`insert into liame.unit (id, tenant_id, brand_id, name) values ($1, $2, $3, $4)`, [unitId, e.tenantId, e.brandId, nome]);
+  await ownerQuery(
+    `insert into liame.connected_account (id, tenant_id, brand_id, unit_id, provider, external_id, name, currency, timezone, provider_attributes)
+     values ($1, $2, $3, $4, 'regem', $5, $6, 'BRL', 'America/Sao_Paulo', $7::jsonb)`,
+    [contaId, e.tenantId, e.brandId, unitId, randomUUID(), `${nome} (Regem)`, JSON.stringify({ cardapio_url: cardapio })],
+  );
+  return { unitId, contaId };
+}

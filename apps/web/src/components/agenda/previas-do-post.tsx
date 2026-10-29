@@ -11,7 +11,7 @@ import { formatoDaPrevia, NOME_DO_CANAL } from './textos';
 // usa troca a `key` quando o post muda: a aba volta para o primeiro canal.
 
 type Props = {
-  post: Pick<PostResponse, 'channels' | 'crop_pos' | 'photo_id'>;
+  post: Pick<PostResponse, 'channels' | 'crop_pos' | 'photo_id'> & { link?: string | null };
   /** A foto do post (das Fotos); nula quando ela saiu das Fotos, ou a lista não pôde ser lida, ou quem vê não vê as Fotos. */
   foto: BrandPhoto | null;
   /** O que dizer no lugar da foto que existe mas não pode ser mostrada aqui. */
@@ -43,6 +43,7 @@ export function PreviasDoPost({ post, foto, semFoto = 'A foto deste post não p�
           recorte={post.crop_pos}
           semFoto={post.photo_id ? semFoto : 'A foto deste post foi apagada nas Fotos: ele não sai.'}
           aoFalharImagem={aoFalharImagem}
+          link={post.link ?? null}
         />
       )}
       {canal?.channel === 'instagram' && formato !== 'inteira' && (
@@ -58,6 +59,12 @@ export function PreviasDoPost({ post, foto, semFoto = 'A foto deste post não p�
         <p className="po-nota">
           <Icone nome="link" pequeno />
           <span>No Instagram, a legenda não tem link que abre: o texto diz onde pedir (&ldquo;Peça pelo link da bio&rdquo;).</span>
+        </p>
+      )}
+      {canal?.channel === 'facebook' && post.link && (
+        <p className="po-nota">
+          <Icone nome="link" pequeno />
+          <span>O link do post vai no fim do texto da Página, com o código só deste post: o pedido por ele fica separado dos anúncios.</span>
         </p>
       )}
     </>

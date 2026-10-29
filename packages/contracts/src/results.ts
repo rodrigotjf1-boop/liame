@@ -419,7 +419,7 @@ export const OrderOrigin = z.strictObject({
     hours_before: z.number().nullable(),
     window_days: z.number().int(),
     counted: z.boolean(),
-    /** Para sem origem: `sem_evidencia`, `fora_da_janela`, `canal_sem_clique`, `sem_id`; ou `cancelado`. */
+    /** Para sem origem: `sem_evidencia`, `fora_da_janela`, `canal_sem_clique`, `sem_id`, `link_do_post` (veio pelo link de um post, A6 · Z7); ou `cancelado`. */
     reason: Slug.nullable(),
   }),
   /**

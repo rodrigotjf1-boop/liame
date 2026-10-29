@@ -1,6 +1,6 @@
 {
   "modelo": "ultimo_toque v1 (ADR-020)",
-  "notas": "Casos de referência do motor de atribuição (critério A2.5-3). Mudar a regra do modelo sem atualizar estes casos reprova o CI. Horas relativas à confirmação do pedido (positivo = antes). Campanhas do catálogo do teste: C_META_1 (120001; grupo 230001; anúncio 340001), C_META_2 (120002), C_GOOG_1 (9001; grupo 9101; anúncio 9201). Link LKGOOG9001 aponta para C_GOOG_1.",
+  "notas": "Casos de referência do motor de atribuição (critério A2.5-3). Mudar a regra do modelo sem atualizar estes casos reprova o CI. Horas relativas à confirmação do pedido (positivo = antes). Campanhas do catálogo do teste: C_META_1 (120001; grupo 230001; anúncio 340001), C_META_2 (120002), C_GOOG_1 (9001; grupo 9101; anúncio 9201). Link LKGOOG9001 aponta para C_GOOG_1. Link LKPOSTFB01 é o link de um post da Página (A6 · Z7; D-A6-48): o clique nele não é evidência de anúncio.",
   "casos": [
     {
       "caso": "cupom_vence_clique",
@@ -32,6 +32,33 @@
       "pedido": { "grupo": "cardapio" },
       "toques": [{ "tipo": "clique", "horas_antes": 30, "lk": "LKGOOG9001", "utm_source": "google" }],
       "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_GOOG_1", "provider": "google_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "clique_pelo_link_do_post",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 20, "lk": "LKPOSTFB01", "utm_source": "facebook" }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "link_do_post" }
+    },
+    {
+      "caso": "link_do_post_com_id_de_clique",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 20, "lk": "LKPOSTFB01", "fbclid": "IwAR0post2", "utm_source": "facebook" }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "link_do_post" }
+    },
+    {
+      "caso": "anuncio_vence_link_do_post",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [
+        { "tipo": "clique", "horas_antes": 30, "fbclid": "IwAR0post3", "campaign_id": "120001" },
+        { "tipo": "clique", "horas_antes": 10, "lk": "LKPOSTFB01", "utm_source": "facebook" }
+      ],
+      "esperado": { "status": "atribuido", "evidencia": "clique_campanha", "campanha": "C_META_1", "provider": "meta_ads", "confianca": "alta", "conta": true }
+    },
+    {
+      "caso": "link_do_post_fora_da_janela",
+      "pedido": { "grupo": "cardapio" },
+      "toques": [{ "tipo": "clique", "horas_antes": 169, "lk": "LKPOSTFB01", "utm_source": "facebook" }],
+      "esperado": { "status": "sem_origem", "conta": false, "motivo": "fora_da_janela" }
     },
     {
       "caso": "fora_da_janela",

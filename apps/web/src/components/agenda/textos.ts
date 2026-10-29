@@ -282,12 +282,32 @@ export function avisoDoNovo(post: Pick<PostResponse, 'publish_at'>, canais: read
   return um ? `Pacote pronto. Ele aparece na Agenda ${em}, para você publicar ${no}.` : `Pacotes prontos. Eles aparecem na Agenda ${em}, para você publicar ${no}.`;
 }
 
-/** A dica do texto de cada canal no novo post (o que o canal faz com o link e quem publica). */
-export function dicaDoTexto(canal: string): string {
+/** A dica do texto de cada canal no novo post (o que o canal faz com o link e quem publica; na Página, o link do post). */
+export function dicaDoTexto(canal: string, postLink?: { ok: boolean; reason: string | null }): string {
   if (canal === 'instagram') return 'No Instagram, a legenda não tem link que abre: diga onde pedir (“Peça pelo link da bio”).';
   if (canal === 'tiktok') return 'No TikTok, a legenda não tem link que abre: diga onde pedir (“Peça pelo link da bio”). Quem publica é você: o Liame monta o pacote.';
   if (canal === 'youtube') return 'Quem publica é você: o Liame monta o pacote com o texto e a foto.';
-  return 'O texto que sai na Página, com a foto.';
+  return `O texto que sai na Página, com a foto. ${dicaDoLinkDoPost(postLink)}`;
+}
+
+/** O link do post como a tela o mostra: o cardápio sem os parâmetros ("cardapio.regem.com/casa-brasa"). */
+export function linkCurto(link: string): string {
+  try {
+    const u = new URL(link);
+    return `${u.host}${u.pathname === '/' ? '' : u.pathname}`;
+  } catch {
+    return link;
+  }
+}
+
+/**
+ * O que o novo post diz do link do post na Página (D-A6-46 e D-A6-47): que ele entra no fim do texto, ou por que o post
+ * sai sem ele (a marca sem loja com o cardápio, ou com mais de uma). Sem a resposta (o servidor antigo), como o P19.
+ */
+export function dicaDoLinkDoPost(postLink: { ok: boolean; reason: string | null } | undefined): string {
+  if (!postLink || postLink.ok) return 'O link do post entra no fim, com o código só deste post.';
+  if (postLink.reason === 'varias_lojas') return 'A marca tem mais de uma loja com o cardápio ligado: por enquanto, o post sai sem o link.';
+  return 'Sem o cardápio do Regem ligado a uma loja desta marca, o post sai sem o link.';
 }
 
 /** A frase do topo da gaveta do pacote: para quando é, ou quando a pessoa marcou "Publiquei". */

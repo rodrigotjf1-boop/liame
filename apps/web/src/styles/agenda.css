@@ -146,3 +146,10 @@
   .pk-passos li { grid-template-columns: 28px minmax(0, 1fr); }
   .pk-passos li > .btn { grid-column: 2; justify-self: start; }
 }
+
+/* ===== A6 · Z7 · O link do post (P19 e P22): destacado no fim do texto da Página; o da bio, na gaveta do pacote ===== */
+.po-link { color: var(--link); font-weight: 600; overflow-wrap: anywhere; }
+.pk-link { flex-wrap: wrap; align-items: center; }
+.pk-link > span:not(.sr-only) { flex: 1 1 240px; }
+.pk-link > .btn { flex: none; margin-left: auto; }
+.po-fatos dd .btn { margin-left: var(--sp-1); }

@@ -3,13 +3,14 @@
 import type { BrandPhoto, PostResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
+import { copiar } from '@/components/links/copiar';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { PreviasDoPost } from './previas-do-post';
-import { fraseDaSituacao, linhaDoCanal, noFuso, quando, situacaoDoPost } from './textos';
+import { fraseDaSituacao, linhaDoCanal, linkCurto, noFuso, quando, situacaoDoPost } from './textos';
 
 // Um post da Agenda (P19, gaveta à direita): a situação, a prévia de cada canal (a foto, com o recorte do Instagram, e
 // o texto), o que aconteceu em cada canal e o que dá para fazer: abrir o pedido em Aprovações (o post que espera),
@@ -68,6 +69,11 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
     setCancelando(false);
     if (atual.ok) aoMudar(atual.data);
     fechar();
+  }
+
+  const [copiado, setCopiado] = useState<'sim' | 'nao' | null>(null);
+  async function copiarLink() {
+    if (post.link) setCopiado((await copiar(post.link)) ? 'sim' : 'nao');
   }
 
   const linhas = post.channels.map((c) => linhaDoCanal(c, post, fuso, hoje));
@@ -140,6 +146,21 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
               <dt>Pedido</dt>
               <dd>{quando(pedidoEm.dia, pedidoEm.hora, hoje)}</dd>
             </div>
+            {post.link && (
+              <div>
+                <dt>Link</dt>
+                <dd>
+                  {linkCurto(post.link)}, com o código só deste post{' '}
+                  <button className="btn btn--sm btn--ghost" type="button" onClick={() => disparar(copiarLink())}>
+                    <Icone nome="copy" pequeno />
+                    Copiar o link
+                  </button>
+                  <span className="sr-only" aria-live="polite">
+                    {copiado === 'sim' ? 'Link copiado.' : copiado === 'nao' ? 'Não deu para copiar aqui.' : ''}
+                  </span>
+                </dd>
+              </div>
+            )}
           </dl>
         </div>
         <div className="dialogo-acoes">

@@ -27,6 +27,7 @@ import {
   recursoDoPost,
 } from './post-plano.js';
 import { fusoDaEmpresa, lerPosts } from './ler-posts.js';
+import { CANAIS_COM_LINK, criarLinkDoPost, destinoDoPost, SEPARADOR, tamanhoNoTexto } from './link-do-post.js';
 
 // Os posts da marca (A6, Z5b; protótipo P19, aprovado pelo dono em 21/10/2026; D-A6-3, D-A6-6 a D-A6-8 e D-A6-21; as
 // decisões técnicas D-A6-32 a D-A6-37). Criar um post grava o post e os canais e faz o pedido em Aprovações, na mesma
@@ -106,10 +107,16 @@ export class PostsService {
     const doPacote = body.channels
       .filter((c): c is { channel: CanalDoPacote; text: string } => ehCanalDoPacote(c.channel))
       .sort((a, b) => CANAIS_DO_PACOTE.indexOf(a.channel) - CANAIS_DO_PACOTE.indexOf(b.channel));
+    // O link do post (D-A6-46): o cardápio da loja da marca, quando ela tem uma loja só com ele ligado. Na Página, o link
+    // vai no fim do texto (D-A6-47), e o limite dela conta o link.
+    const comLink = canais.some((c) => CANAIS_COM_LINK.includes(c));
+    const destino = comLink ? await destinoDoPost(tx, quem.tenantId, body.brand_id) : null;
     for (const c of [...ordenados, ...doPacote]) {
       const limite = ehCanalDoPacote(c.channel) ? LIMITE_DO_PACOTE[c.channel] : LIMITE_DO_TEXTO[c.channel];
-      if (c.text.length > limite) {
-        throw recusa('texto-longo-demais', 'Texto longo demais', `O texto ${DO_CANAL[c.channel]} passa de ${limite.toLocaleString('pt-BR')} caracteres.`, 'channels');
+      const doLink = c.channel === 'facebook' && destino?.ok ? tamanhoNoTexto(destino.url, c.channel) : 0;
+      if (c.text.length + doLink > limite) {
+        const comOLink = doLink ? ', com o link do post no fim,' : '';
+        throw recusa('texto-longo-demais', 'Texto longo demais', `O texto ${DO_CANAL[c.channel]}${comOLink} passa de ${limite.toLocaleString('pt-BR')} caracteres.`, 'channels');
       }
     }
 
@@ -165,14 +172,21 @@ export class PostsService {
       contaDo.set(c.channel, achadas[0]!.id);
     }
 
+    const nomeDoLink = (rede: string) => `Post · ${rede} · ${new Intl.DateTimeFormat('pt-BR', { timeZone: fuso, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(hora)}`;
     let id: string | null = null;
     let pedidoId: string | null = null;
+    let linkDoPost: string | null = null;
     if (ordenados.length) {
       id = uuidv7();
       await tx.execute(sql`
         insert into liame.social_post (id, tenant_id, brand_id, photo_id, photo_sha256, crop_pos, publish_at, created_by)
         values (${id}, ${quem.tenantId}, ${body.brand_id}, ${foto.id}, ${foto.sha256}, ${recorte}, ${hora.toISOString()}, ${quem.userId})`);
-      const linhas = ordenados.map((c) => ({ id: uuidv7(), channel: c.channel, conta: contaDo.get(c.channel)!, body: c.text }));
+      // Com a Página e o cardápio da loja, o link do post nasce com ele e vai no fim do texto da Página: é o que vai para
+      // Aprovações e o que sai (D-A6-47).
+      if (canais.includes('facebook') && destino?.ok) {
+        linkDoPost = await criarLinkDoPost(tx, { tenantId: quem.tenantId, brandId: body.brand_id, postId: id, canal: 'facebook', destino, nome: nomeDoLink('Página do Facebook'), userId: quem.userId });
+      }
+      const linhas = ordenados.map((c) => ({ id: uuidv7(), channel: c.channel, conta: contaDo.get(c.channel)!, body: c.channel === 'facebook' && linkDoPost ? `${c.text}${SEPARADOR}${linkDoPost}` : c.text }));
       await tx.execute(sql`
         insert into liame.social_post_channel (id, tenant_id, post_id, channel, connected_account_id, body)
         select x.id, ${quem.tenantId}, ${id}, x.channel, x.conta, x.body
@@ -203,6 +217,12 @@ export class PostsService {
         insert into liame.social_post_channel (id, tenant_id, post_id, channel, connected_account_id, body, status)
         select x.canal, ${quem.tenantId}, x.id, x.channel, null, x.body, 'pronto'
           from jsonb_to_recordset(${JSON.stringify(pacotes)}::jsonb) as x (id uuid, canal uuid, channel text, body text)`);
+      // O link de cada pacote é o da bio (D-A6-47): o texto do pacote não muda.
+      if (destino?.ok) {
+        for (const p of pacotes) {
+          await criarLinkDoPost(tx, { tenantId: quem.tenantId, brandId: body.brand_id, postId: p.id, canal: p.channel, destino, nome: nomeDoLink(p.channel === 'tiktok' ? 'TikTok' : 'YouTube'), userId: quem.userId });
+        }
+      }
     }
     auditDetail({
       resourceId: id ?? pacotes[0]!.id,
@@ -213,6 +233,8 @@ export class PostsService {
         pacotes: pacotes.map((p) => ({ id: p.id, canal: p.channel })),
         publish_at: hora.toISOString(),
         crop_pos: recorte,
+        // O link do post (D-A6-46): criado, ou por que não.
+        link_do_post: destino === null ? null : destino.ok ? 'criado' : destino.motivo,
       },
     });
     return this.obter(auth, id ?? pacotes[0]!.id);
@@ -327,14 +349,22 @@ export class PostsService {
       throw new AppProblem(422, 'periodo-invalido', 'Período inválido', `O período vai de 1 a ${DIAS_DA_AGENDA} dias, com o início antes do fim.`);
     }
     const fuso = await fusoDaEmpresa(currentTx(), quem.tenantId);
-    if (!(await this.ligada(quem, q.brand_id))) return { enabled: false, timezone: fuso, channels: [], items: [] };
+    if (!(await this.ligada(quem, q.brand_id))) return { enabled: false, timezone: fuso, channels: [], items: [], post_link: { ok: false, reason: null } };
     const items = await this.ler(
       quem.tenantId,
       sql`p.brand_id = ${q.brand_id}
           and p.publish_at >= (${q.from}::date)::timestamp at time zone ${fuso}
           and p.publish_at < ((${q.to}::date + 1)::timestamp at time zone ${fuso})`,
     );
-    return { enabled: true, timezone: fuso, channels: await this.contasDosCanais(quem.tenantId, q.brand_id), items };
+    // Se o post novo ganha o link do post (D-A6-46): o novo post diz, na Página e no pacote.
+    const destino = await destinoDoPost(currentTx(), quem.tenantId, q.brand_id);
+    return {
+      enabled: true,
+      timezone: fuso,
+      channels: await this.contasDosCanais(quem.tenantId, q.brand_id),
+      items,
+      post_link: destino.ok ? { ok: true, reason: null } : { ok: false, reason: destino.motivo },
+    };
   }
 
   /**

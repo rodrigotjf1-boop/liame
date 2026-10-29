@@ -433,12 +433,15 @@ export class LinksService {
     if (!r.rows[0]) throw naoEncontrado('Marca não encontrada nesta empresa.');
   }
 
-  /** Links pelo filtro, com os pedidos dos últimos 7 dias que chegaram pelo código de cada um. */
+  /**
+   * Links de campanha pelo filtro, com os pedidos dos últimos 7 dias que chegaram pelo código de cada um. O link do post
+   * (A6, Z7; D-A6-46) fica de fora: ele é do post, e a Agenda o mostra.
+   */
   private async links(filtro: SQL, agora: Date): Promise<LinhaLink[]> {
     const desde = new Date(agora.getTime() - DIAS_PEDIDOS * DIA_MS).toISOString();
     const r = await currentTx().execute<LinhaLink>(sql`
       with links as (
-        select tl.* from liame.tracking_link tl where tl.archived_at is null and ${filtro}
+        select tl.* from liame.tracking_link tl where tl.archived_at is null and tl.kind = 'campanha' and ${filtro}
       ),
       -- Pedido do link = resultado contado do modelo padrão cuja evidência é o clique com o código dele (o
       -- cupom exclusivo vence o clique, e esse pedido conta pelo cupom).

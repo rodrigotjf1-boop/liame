@@ -93,6 +93,12 @@ export const PostResponse = z.strictObject({
   status: z.string().regex(/^[a-z_]{2,30}$/),
   created_at: z.iso.datetime(),
   channels: z.array(PostChannelResponse),
+  /**
+   * O link do post (A6, Z7; D-A6-16 e D-A6-46): o cardápio da loja com o código só deste post. No post com a Página, ele
+   * já está no fim do texto dela (D-A6-47); no pacote, é o link da bio. Nulo quando o post nasceu sem link (sem a
+   * Página, ou a marca sem uma loja só com o cardápio ligado).
+   */
+  link: z.string().nullable(),
 });
 export type PostResponse = z.infer<typeof PostResponse>;
 
@@ -116,6 +122,12 @@ export const PostListResponse = z.strictObject({
   /** As contas conectadas à marca em cada canal do post; vazio com a função desligada. */
   channels: z.array(PostChannelAccounts),
   items: z.array(PostResponse),
+  /**
+   * Se o post novo da marca ganha o link do post (D-A6-46): `ok`, ou o porquê de não ganhar, em `reason`:
+   * `sem_cardapio` (nenhuma loja da marca com o cardápio do Regem ligado) ou `varias_lojas` (mais de uma; a escolha da
+   * loja ainda não existe). A lista pode crescer.
+   */
+  post_link: z.strictObject({ ok: z.boolean(), reason: z.string().regex(/^[a-z_]{2,30}$/).nullable() }),
 });
 export type PostListResponse = z.infer<typeof PostListResponse>;
 

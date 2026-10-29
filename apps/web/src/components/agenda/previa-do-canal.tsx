@@ -17,10 +17,13 @@ type Props = {
   /** O que dizer no lugar da foto, quando não há foto para mostrar. */
   semFoto?: string;
   aoFalharImagem?: () => void;
+  /** O link do post (A6, Z7): no fim do texto da Página, ele aparece destacado, como no P19. */
+  link?: string | null;
 };
 
-export function PreviaDoCanal({ canal, conta, texto, foto, recorte, semFoto, aoFalharImagem }: Props) {
+export function PreviaDoCanal({ canal, conta, texto, foto, recorte, semFoto, aoFalharImagem, link }: Props) {
   const formato = foto ? formatoDaPrevia(canal, foto.width, foto.height) : 'inteira';
+  const comLink = canal === 'facebook' && link && texto.endsWith(link);
   return (
     <div className="po-previa" role="group" aria-label={`Como sai: ${NOME_DO_CANAL[canal] ?? canal}`}>
       <div className="po-previa-cab">
@@ -33,7 +36,16 @@ export function PreviaDoCanal({ canal, conta, texto, foto, recorte, semFoto, aoF
           <span>{canal === 'instagram' ? 'no feed' : 'na Página'}</span>
         </span>
       </div>
-      {canal !== 'instagram' && <p className="po-texto">{texto}</p>}
+      {canal !== 'instagram' &&
+        (comLink ? (
+          <p className="po-texto">
+            {texto.slice(0, texto.length - link.length).trimEnd()}
+            {'\n\n'}
+            <span className="po-link">{link}</span>
+          </p>
+        ) : (
+          <p className="po-texto">{texto}</p>
+        ))}
       {foto ? (
         <div className={`po-foto po-foto--${formato}`}>
           <img

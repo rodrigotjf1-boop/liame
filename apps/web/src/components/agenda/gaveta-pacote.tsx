@@ -9,13 +9,13 @@ import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { PreviaDoPacote } from './previa-do-pacote';
-import { fraseDoPacote, NOME_DO_CANAL, NO_CANAL, noFuso, quando } from './textos';
+import { fraseDoPacote, linkCurto, NOME_DO_CANAL, NO_CANAL, noFuso, quando } from './textos';
 
 // O pacote pronto na Agenda (mockups/prototipo-pacote.html, P22 aprovado em 21/10/2026; Z8 da A6): no TikTok e no
 // YouTube o Liame não publica. A gaveta mostra o pacote (a foto inteira e o texto) e os quatro passos: baixar a foto (a
 // cópia que o Liame guarda, por um endereço de 5 minutos que baixa como arquivo; D-A6-43), copiar o texto, publicar na
-// rede e marcar "Publiquei"; e "Tirar da Agenda". O link do cardápio só deste pacote, para a bio, fica para quando o
-// servidor fizer o link do post (divergência do P22, como a do P19).
+// rede e marcar "Publiquei"; e "Tirar da Agenda". Embaixo, o link do cardápio só deste pacote, para a bio (A6, Z7;
+// D-A6-47), quando a marca tem uma loja só com o cardápio ligado.
 
 type Props = {
   post: PostResponse;
@@ -49,6 +49,7 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
   const [tirando, setTirando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [copiado, setCopiado] = useState<'sim' | 'nao' | null>(null);
+  const [linkCopiado, setLinkCopiado] = useState<'sim' | 'nao' | null>(null);
   // O foco depois do "Publiquei" (na frase da situação) e do "Manter" (no "Tirar da Agenda"): no efeito, depois que a
   // tela redesenha (V27, ERR-185).
   const [focarSituacao, setFocarSituacao] = useState(0);
@@ -118,6 +119,10 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
 
   async function copiarTexto() {
     setCopiado((await copiar(canal?.text ?? '')) ? 'sim' : 'nao');
+  }
+
+  async function copiarLink() {
+    if (post.link) setLinkCopiado((await copiar(post.link)) ? 'sim' : 'nao');
   }
 
   return (
@@ -222,6 +227,21 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
               </li>
             </ol>
           </section>
+          {post.link && (
+            <p className="po-nota pk-link">
+              <Icone nome="link" pequeno />
+              <span>
+                Para medir pelo pedido, o link do cardápio só deste pacote pode ir na bio: <b>{linkCurto(post.link)}</b>, com o código do pacote.
+              </span>
+              <button className="btn btn--sm btn--ghost" type="button" onClick={() => disparar(copiarLink())}>
+                <Icone nome="copy" pequeno />
+                Copiar o link
+              </button>
+              <span className="sr-only" aria-live="polite">
+                {linkCopiado === 'sim' ? 'Link copiado.' : linkCopiado === 'nao' ? 'Não deu para copiar aqui: selecione o link e copie.' : ''}
+              </span>
+            </p>
+          )}
         </div>
         <div className="dialogo-acoes">
           {podeOperar &&
