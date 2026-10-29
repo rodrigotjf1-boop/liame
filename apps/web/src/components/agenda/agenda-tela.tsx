@@ -11,13 +11,16 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
 import { GavetaNovoPost } from './gaveta-novo-post';
+import { GavetaPacote } from './gaveta-pacote';
 import { GavetaPost } from './gaveta-post';
-import { type DiaDaAgenda, inicioDaSemana, noFuso, periodo, quando, somaDias, telaDaAgenda } from './textos';
+import { avisoDoNovo, type DiaDaAgenda, ehPacote, inicioDaSemana, noFuso, periodo, somaDias, telaDaAgenda } from './textos';
 
 // A Agenda (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; Z5c da A6): os posts da marca na semana, de
 // segunda a domingo, no fuso da empresa (`GET /v1/posts`, de quem acompanha as campanhas). Cada post abre a gaveta dele.
 // A miniatura de cada post vem das Fotos (`GET /v1/brand-photos`, com endereços de 5 minutos): sem elas, o cartão fica
-// sem a imagem e o resto segue. O novo post e o post em Aprovações são as partes seguintes do port.
+// sem a imagem e o resto segue. O pacote pronto (mockups/prototipo-pacote.html, P22; Z8): o cartão com a borda
+// pontilhada ("Você publica") e a gaveta dos quatro passos. Sem conta conectada, a semana segue, com o aviso: o pacote
+// não precisa de conta (D-A6-44).
 
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: PostListResponse; semana: string } | { tipo: 'erro'; problema: Problema };
 
@@ -149,14 +152,23 @@ export function AgendaTela() {
     setCarga((c) => (c.tipo === 'ok' ? { ...c, dados: { ...c.dados, items: c.dados.items.map((p) => (p.id === post.id ? post : p)) } } : c));
   }
 
-  /** O post mandado para aprovação: a Agenda vai para a semana dele, lê de novo e avisa quando ele sai. */
-  function mandou(post: PostResponse) {
-    const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
+  /**
+   * O post mandado para aprovação (ou o pacote que ficou pronto): a Agenda vai para a semana dele, lê de novo (o pacote
+   * de cada rede aparece junto) e avisa o que aconteceu.
+   */
+  function mandou(post: PostResponse, canais: string[]) {
+    const { dia } = noFuso(new Date(post.publish_at), fuso);
     navegou.current = true;
     focarPost.current = post.id;
     setSemana(inicioDaSemana(dia));
     setTentativa((t) => t + 1);
-    avisar(`Mandado para aprovação. O post sai ${quando(dia, hora, hoje)}, depois de aprovado.`);
+    avisar(avisoDoNovo(post, canais, fuso, hoje));
+  }
+
+  /** O pacote tirado da Agenda: o cartão sai (o cancelado não vai à semana) e a tela avisa. */
+  function tirou(post: PostResponse) {
+    trocarPost(post);
+    avisar('Pacote tirado da Agenda. Nada foi publicado pelo Liame.');
   }
 
   const problema = erroMarcas ?? (carga.tipo === 'erro' ? carga.problema : null);
@@ -205,38 +217,32 @@ export function AgendaTela() {
         </Estado>
       </div>
     );
-  } else if (tela.tipo === 'sem-canal') {
-    corpo = (
-      <div className="card">
-        <Estado
-          icone="plug"
-          titulo="Conecte uma rede para publicar"
-          acao={
-            podeVerContas ? (
-              <div className="vazio-acoes">
-                <Link className="btn btn--primary" href="/contas">
-                  <Icone nome="plug" />
-                  Abrir Contas conectadas
-                </Link>
-              </div>
-            ) : undefined
-          }
-        >
-          O post sai no Instagram e na Página do Facebook ligados a esta marca. Ligue um deles em Contas conectadas, com a permissão de publicar; o resto do Liame segue igual.
-        </Estado>
-      </div>
-    );
   } else {
     corpo = (
       <>
-        {tela.faltam.length > 0 && (
+        {tela.semConta ? (
           <p className="po-nota ag-falta">
-            <Icone nome="info" pequeno />
+            <Icone nome="plug" pequeno />
             <span>
-              {tela.faltam.join(' e ')} não {tela.faltam.length > 1 ? 'estão conectados' : 'está conectada'} a esta marca: os posts saem só nos outros canais.
-              {podeVerContas ? ' Para ligar, abra Contas conectadas.' : ''}
+              O Instagram e a Página do Facebook não estão conectados a esta marca: o Liame não publica por enquanto. O pacote pronto do TikTok e do YouTube, que você publica, segue igual.
             </span>
+            {podeVerContas && (
+              <Link className="btn btn--sm" href="/contas">
+                <Icone nome="plug" pequeno />
+                Abrir Contas conectadas
+              </Link>
+            )}
           </p>
+        ) : (
+          tela.faltam.length > 0 && (
+            <p className="po-nota ag-falta">
+              <Icone nome="info" pequeno />
+              <span>
+                {tela.faltam.join(' e ')} não {tela.faltam.length > 1 ? 'estão conectados' : 'está conectada'} a esta marca: os posts saem só nos outros canais.
+                {podeVerContas ? ' Para ligar, abra Contas conectadas.' : ''}
+              </span>
+            </p>
+          )
         )}
         <div className="ag-semana" aria-busy={buscando || undefined}>
           {tela.dias.map((d) => (
@@ -256,6 +262,10 @@ export function AgendaTela() {
             <Icone nome="alert" pequeno />
             espera a aprovação
           </span>
+          <span>
+            <Icone nome="send" pequeno />
+            você publica: o pacote pronto
+          </span>
         </p>
       </>
     );
@@ -270,7 +280,7 @@ export function AgendaTela() {
           <h1 id="h-agenda" ref={titulo} tabIndex={-1}>
             Agenda
           </h1>
-          <p>Os posts da marca na semana: o que saiu, o que está marcado e o que espera a aprovação.</p>
+          <p>Os posts da marca na semana: o que saiu, o que está marcado, o que espera a aprovação e o pacote que você publica.</p>
         </div>
         {mostraNavegacao && (
           <div className="ag-acoes">
@@ -314,7 +324,22 @@ export function AgendaTela() {
         </div>
       )}
       {corpo}
-      {postAberto && carga.tipo === 'ok' && (
+      {postAberto && carga.tipo === 'ok' && ehPacote(postAberto) && (
+        <GavetaPacote
+          key={`pacote-${postAberto.id}`}
+          post={postAberto}
+          fuso={carga.dados.timezone}
+          hoje={hoje}
+          foto={postAberto.photo_id ? (fotos.get(postAberto.photo_id) ?? null) : null}
+          podeOperar={podeOperar}
+          reserva={titulo}
+          aoMudar={trocarPost}
+          aoTirar={tirou}
+          aoFalharImagem={() => marca && disparar(carregarFotos(marca))}
+          aoFechar={() => setAberto(null)}
+        />
+      )}
+      {postAberto && carga.tipo === 'ok' && !ehPacote(postAberto) && (
         <GavetaPost
           key={`gaveta-${postAberto.id}`}
           post={postAberto}
@@ -366,7 +391,7 @@ function Dia({ dia, fotos, aoAbrir }: { dia: DiaDaAgenda; fotos: Map<string, Bra
             return (
               <li key={p.post.id}>
                 <button
-                  className={`ag-post${p.post.status === 'esperando_aprovacao' ? ' ag-post--espera' : tom === 'falha' ? ' ag-post--falha' : ''}`}
+                  className={`ag-post${ehPacote(p.post) ? ' ag-post--pacote' : p.post.status === 'esperando_aprovacao' ? ' ag-post--espera' : tom === 'falha' ? ' ag-post--falha' : ''}`}
                   type="button"
                   aria-haspopup="dialog"
                   aria-label={p.rotulo}

@@ -1,6 +1,6 @@
-import { type CreatePostRequest, type PostListQuery, type PostListResponse, type PostResponse } from '@liame/contracts';
+import { type CreatePostRequest, type PostListQuery, type PostListResponse, type PostPhotoResponse, type PostResponse } from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
 import { ActionService, PREFIXO_RECUSA } from '../actions/action.service.js';
 import { contaConectada } from '../connections/conectada.js';
@@ -9,6 +9,7 @@ import { type AuthContext, auditDetail, currentTx } from '../context/request-con
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { recorteDoInstagram } from '../fotos/conferencia.js';
+import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens, ArmazemIndisponivel, FalhaDoArmazem } from '../imagens/armazem.js';
 import { palavrasProibidasNoTexto } from '../policy/engine.js';
 import { carregarPoliticas } from '../policy/policy.service.js';
 import {
@@ -47,6 +48,8 @@ export const ACAO_PACOTE_TIRADO = 'posts.pacote_tirado';
 const DO_CANAL: Record<string, string> = { instagram: 'do Instagram', facebook: 'da Página', tiktok: 'do TikTok', youtube: 'do YouTube' };
 /** O período da Agenda vai até este tanto de dias. */
 export const DIAS_DA_AGENDA = 62;
+/** Quanto vale o endereço da foto do pacote: o bastante para o clique baixar (o bucket recusa mais de 10 minutos). */
+export const VALIDADE_DA_FOTO_DO_PACOTE_S = 300;
 
 type Quem = { tenantId: string; userId: string };
 
@@ -63,6 +66,7 @@ export class PostsService {
   constructor(
     private readonly actions: ActionService,
     private readonly flags: FlagService,
+    @Inject(ARMAZEM_DE_IMAGENS) private readonly armazem: ArmazemDeImagens,
   ) {}
 
   private ligada(quem: Quem, brandId: string): Promise<boolean> {
@@ -252,12 +256,50 @@ export class PostsService {
     return this.obter(auth, id);
   }
 
+  /**
+   * A foto do pacote para baixar (P22, o passo "Baixe a foto"; D-A6-43): o endereço assinado da cópia que o Liame guarda
+   * (JPEG, sem os dados do celular), que baixa como arquivo e vale 5 minutos. Só o pacote da empresa, pronto ou
+   * publicado; a foto que saiu das Fotos (ou mudou) não volta.
+   */
+  async fotoDoPacote(auth: AuthContext, id: string, agora: Date = new Date()): Promise<PostPhotoResponse> {
+    const quem = this.quem(auth);
+    const p = await this.pacoteDaEmpresa(quem, id, false);
+    if (!p.situacoes.some((s) => s === 'pronto' || s === 'publicado')) {
+      throw new AppProblem(409, 'pacote-tirado', 'O pacote saiu da Agenda', 'Este pacote foi tirado da Agenda: monte outro no "Novo post".');
+    }
+    const fuso = await fusoDaEmpresa(currentTx(), quem.tenantId);
+    const f = (
+      await currentTx().execute<{ chave: string; dia: string }>(sql`
+        select f.object_key as chave, to_char(p.publish_at at time zone ${fuso}, 'YYYY-MM-DD') as dia
+          from liame.social_post p
+          join liame.brand_photo f on f.id = p.photo_id and f.tenant_id = p.tenant_id
+         where p.id = ${id} and p.tenant_id = ${quem.tenantId}
+           and f.status = 'pronta' and f.removed_at is null and f.sha256 = p.photo_sha256`)
+    ).rows[0];
+    if (!f) throw new AppProblem(409, 'foto-apagada', 'A foto saiu das Fotos', 'A foto deste pacote foi apagada nas Fotos: monte outro pacote com outra foto.');
+    const nome = `liame-${p.canais[0] ?? 'pacote'}-${f.dia}.jpg`;
+    try {
+      const url = await this.armazem.enderecoDeLeitura(f.chave, VALIDADE_DA_FOTO_DO_PACOTE_S, nome);
+      return { url, filename: nome, expires_at: new Date(agora.getTime() + VALIDADE_DA_FOTO_DO_PACOTE_S * 1000).toISOString() };
+    } catch (e) {
+      if (e instanceof ArmazemIndisponivel || e instanceof FalhaDoArmazem) {
+        throw new AppProblem(503, 'fotos-indisponiveis', 'Fotos indisponíveis', 'Não deu para preparar a foto agora. Tente de novo em instantes.');
+      }
+      throw e;
+    }
+  }
+
   /** O pacote da empresa, travado até o fim da transação (o "Publiquei" e o "Tirar" ao mesmo tempo não se atropelam). */
-  private async pacoteTravado(quem: Quem, id: string): Promise<{ brand_id: string; situacoes: string[]; canais: string[] }> {
+  private pacoteTravado(quem: Quem, id: string): Promise<{ brand_id: string; situacoes: string[]; canais: string[] }> {
+    return this.pacoteDaEmpresa(quem, id, true);
+  }
+
+  /** O pacote da empresa, com a situação de cada canal (`travar`: até o fim da transação). */
+  private async pacoteDaEmpresa(quem: Quem, id: string, travar: boolean): Promise<{ brand_id: string; situacoes: string[]; canais: string[] }> {
     const tx = currentTx();
     const p = (
       await tx.execute<{ brand_id: string; kind: string }>(sql`
-        select brand_id, kind from liame.social_post where id = ${id} and tenant_id = ${quem.tenantId} for update`)
+        select brand_id, kind from liame.social_post where id = ${id} and tenant_id = ${quem.tenantId} ${travar ? sql`for update` : sql``}`)
     ).rows[0];
     if (!p) throw new AppProblem(404, 'post-nao-encontrado', 'Não encontramos', 'Este post não está mais aqui.');
     if (p.kind !== 'pacote') throw new AppProblem(409, 'nao-e-pacote', 'Não é um pacote', 'O Liame publica este post: ele não tem "Publiquei".');

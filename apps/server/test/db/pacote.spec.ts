@@ -11,7 +11,9 @@ import { hasDb } from './env.js';
 //   - só o TikTok: um pacote pronto, sem pedido; a Agenda o mostra; "Publiquei" o marca, uma vez só;
 //   - o Instagram com o TikTok e o YouTube: o post com o pedido (só o Instagram nele) e um pacote para cada rede;
 //   - tirar da Agenda; o "Publiquei" e o "Tirar" só no pacote, da empresa, com a função ligada;
-//   - as recusas do pacote: o texto longo e a palavra que a política proíbe, sem gravar nada.
+//   - as recusas do pacote: o texto longo e a palavra que a política proíbe, sem gravar nada;
+//   - a foto do pacote para baixar (Z8, parte b; D-A6-43): o endereço da cópia guardada, como arquivo, só do pacote
+//     pronto ou publicado, com a foto ainda nas Fotos.
 
 const FUSO = 'America/Sao_Paulo';
 const DIA_MS = 86_400_000;
@@ -159,4 +161,48 @@ describe.skipIf(!hasDb)('o pacote pronto: onde o Liame não publica (A6 · Z8, p
     expect((await postsDaEmpresa(e)).length).toBe(antes);
     expect(await pedidos(e)).toBe(0);
   }, 90_000);
+
+  it('a foto do pacote para baixar (Z8, parte b; D-A6-43): o endereço da cópia guardada, como arquivo com o nome da rede e do dia, por 5 minutos; só o pacote pronto ou publicado, com a foto nas Fotos', async () => {
+    const e = await empresaComCanais(api, 'Casa Brasa Foto do Pacote');
+    const foto = await fotoPronta(e);
+    const pacote = (await novo(e, foto.id, [{ channel: 'tiktok', text: TEXTO_TIKTOK }])).body;
+    const antes = Date.now();
+    const r = await api.call('GET', `/v1/posts/${pacote.id}/photo`, { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const nome = `liame-tiktok-${diaNoFuso(1)}.jpg`;
+    expect(r.body).toMatchObject({ filename: nome, url: `memoria://imagens/t/${e.tenantId}/b/${e.brandId}/foto_produto/${foto.id}.jpg?valido=300&baixar=${nome}` });
+    const vence = Date.parse(r.body.expires_at);
+    expect(vence).toBeGreaterThanOrEqual(antes + 299_000);
+    expect(vence).toBeLessThanOrEqual(Date.now() + 301_000);
+    // Ler a foto não muda nada nem vira auditoria de mudança.
+    expect(await ownerQuery(`select 1 from liame.audit_event where tenant_id = $1 and action like 'posts.pacote%'`, [e.tenantId])).toHaveLength(0);
+    // Depois de "Publiquei", a foto continua ali (a pessoa pode precisar de novo).
+    expect((await api.call('POST', `/v1/posts/${pacote.id}/published`, { cookie: e.cookie })).status).toBe(200);
+    expect((await api.call('GET', `/v1/posts/${pacote.id}/photo`, { cookie: e.cookie })).status).toBe(200);
+
+    // O tirado da Agenda não tem foto; o post do Liame não é pacote; a outra empresa não acha.
+    const tirado = (await novo(e, foto.id, [{ channel: 'youtube', text: TEXTO_YOUTUBE }])).body;
+    expect((await api.call('POST', `/v1/posts/${tirado.id}/remove`, { cookie: e.cookie })).status).toBe(200);
+    const semFoto = await api.call('GET', `/v1/posts/${tirado.id}/photo`, { cookie: e.cookie });
+    expect([semFoto.status, semFoto.body.code]).toEqual([409, 'pacote-tirado']);
+    const post = (await novo(e, foto.id, [{ channel: 'instagram', text: 'Batata nova. Peça pelo link da bio.' }])).body;
+    const doLiame = await api.call('GET', `/v1/posts/${post.id}/photo`, { cookie: e.cookie });
+    expect([doLiame.status, doLiame.body.code]).toEqual([409, 'nao-e-pacote']);
+    const outra = await empresaComCanais(api, 'Outra Casa Foto do Pacote');
+    expect((await api.call('GET', `/v1/posts/${pacote.id}/photo`, { cookie: outra.cookie })).status).toBe(404);
+
+    // A foto apagada nas Fotos (ou trocada: outro conteúdo com o mesmo id) não volta.
+    const outroPacote = (await novo(e, foto.id, [{ channel: 'youtube', text: TEXTO_YOUTUBE }])).body;
+    await ownerQuery(`update liame.brand_photo set sha256 = $2 where id = $1`, [foto.id, 'f'.repeat(64)]);
+    const trocada = await api.call('GET', `/v1/posts/${outroPacote.id}/photo`, { cookie: e.cookie });
+    expect([trocada.status, trocada.body.code]).toEqual([409, 'foto-apagada']);
+    await ownerQuery(`update liame.brand_photo set sha256 = $2, removed_at = now() where id = $1`, [foto.id, foto.sha256]);
+    const apagada = await api.call('GET', `/v1/posts/${outroPacote.id}/photo`, { cookie: e.cookie });
+    expect([apagada.status, apagada.body.code]).toEqual([409, 'foto-apagada']);
+
+    // Com a função desligada, nada.
+    await ligarFlagDaEmpresa(api, 'social_write', e.tenantId, false);
+    const desligada = await api.call('GET', `/v1/posts/${pacote.id}/photo`, { cookie: e.cookie });
+    expect([desligada.status, desligada.body.code]).toEqual([409, 'funcao-desligada']);
+  }, 120_000);
 });

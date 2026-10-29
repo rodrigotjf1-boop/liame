@@ -1,21 +1,34 @@
-import { POST_TEXT_LIMITS, type PostChannelResponse, type PostListResponse, type PostResponse } from '@liame/contracts';
+import { PACKAGE_CHANNELS, POST_TEXT_LIMITS, type PostChannelResponse, type PostListResponse, type PostResponse } from '@liame/contracts';
 import type { NomeIcone } from '@/components/ui/icone';
 
 // A Agenda (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; Z5c da A6): os posts da marca na semana, dia a
 // dia, no fuso da empresa (que vem do servidor: a janela das 8h às 22h é nele). Funções puras: a semana, o dia e a hora
 // de cada post, a situação dele e a de cada canal. O que o P19 mostra e o servidor ainda não faz (a pauta e a data
 // comercial do dia, mudar a hora, apagar das redes, tentar de novo, o link do post) fica fora, como divergência
-// (`decisoes-design.md`, 29/10/2026).
+// (`decisoes-design.md`, 29/10/2026). O pacote pronto (mockups/prototipo-pacote.html, P22 aprovado em 21/10/2026; Z8
+// da A6): no TikTok e no YouTube o Liame não publica; ele monta o texto, a foto e a hora, e quem publica é a pessoa.
 
 export const DIAS_CURTOS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'] as const;
 export const DIAS_LONGOS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'] as const;
 
+/** Os canais em que o Liame publica, depois de aprovado, na ordem do post. */
+export const CANAIS_DO_LIAME = ['instagram', 'facebook'] as const;
+/** Os canais do pacote pronto (P22): o Liame monta, a pessoa publica. */
+export const CANAIS_DO_PACOTE: readonly string[] = PACKAGE_CHANNELS;
+/** O canal é do pacote (a pessoa publica), e não do Liame. */
+export const ehDoPacote = (canal: string): boolean => CANAIS_DO_PACOTE.includes(canal);
+
 /** O nome de cada canal nas frases e nas abas. */
-export const NOME_DO_CANAL: Record<string, string> = { instagram: 'Instagram', facebook: 'Página do Facebook' };
+export const NOME_DO_CANAL: Record<string, string> = { instagram: 'Instagram', facebook: 'Página do Facebook', tiktok: 'TikTok', youtube: 'YouTube' };
 /** O nome curto, no cartão do dia. */
-const NOME_CURTO: Record<string, string> = { instagram: 'Instagram', facebook: 'Facebook' };
+const NOME_CURTO: Record<string, string> = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube' };
 /** "no Instagram", "na Página do Facebook" (V121: a preposição vai com o nome). */
-export const NO_CANAL: Record<string, string> = { instagram: 'no Instagram', facebook: 'na Página do Facebook' };
+export const NO_CANAL: Record<string, string> = { instagram: 'no Instagram', facebook: 'na Página do Facebook', tiktok: 'no TikTok', youtube: 'no YouTube' };
+/** "do TikTok", "do YouTube": o pacote de cada rede, na frase. */
+const DO_CANAL: Record<string, string> = { tiktok: 'do TikTok', youtube: 'do YouTube' };
+
+/** Os nomes na frase, com "e" antes do último: "do TikTok e do YouTube". */
+const emFrase = (partes: string[]): string => (partes.length > 1 ? `${partes.slice(0, -1).join(', ')} e ${partes[partes.length - 1]}` : (partes[0] ?? ''));
 
 const ehDiaIso = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
@@ -62,6 +75,9 @@ const SITUACAO: Record<string, SituacaoNaTela> = {
   cancelado: { rotulo: 'Cancelado', icone: 'x', tom: '' },
   recusado: { rotulo: 'Recusado', icone: 'x', tom: '' },
   expirado: { rotulo: 'Expirou sem aprovação', icone: 'x', tom: '' },
+  // O pacote pronto (P22): a pessoa publica e marca "Publiquei".
+  pacote_pronto: { rotulo: 'Você publica', icone: 'send', tom: '' },
+  pacote_publicado: { rotulo: 'Você publicou', icone: 'check-circle', tom: 'ok' },
 };
 /** A situação que o servidor manda; a desconhecida (a lista pode crescer) fica neutra, com o próprio nome. */
 export function situacaoDoPost(status: string): SituacaoNaTela {
@@ -76,9 +92,14 @@ export type DiaDaAgenda = { iso: string; curto: string; longo: string; num: stri
 
 export type TelaDaAgenda =
   | { tipo: 'desligada' }
-  /** A marca não tem conta conectada em nenhum canal: o post não tem onde sair. */
-  | { tipo: 'sem-canal'; dias: DiaDaAgenda[] }
-  | { tipo: 'semana'; dias: DiaDaAgenda[]; faltam: string[] };
+  /**
+   * A semana. `faltam`: os canais do Liame sem conta conectada; `semConta`: nenhum deles tem conta (o Liame não publica
+   * nada, e o pacote pronto, que não precisa de conta, segue; D-A6-44).
+   */
+  | { tipo: 'semana'; dias: DiaDaAgenda[]; faltam: string[]; semConta: boolean };
+
+/** O post é um pacote pronto (P22): quem publica é a pessoa. */
+export const ehPacote = (p: Pick<PostResponse, 'kind'>): boolean => p.kind === 'pacote';
 
 /** Os nomes dos canais do post, no cartão: "Instagram · Facebook". */
 const canaisDoPost = (p: PostResponse) => p.channels.map((c) => NOME_CURTO[c.channel] ?? c.channel).join(' · ');
@@ -92,7 +113,8 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
     const { dia, hora } = noFuso(new Date(post.publish_at), dados.timezone);
     const situacao = situacaoDoPost(post.status);
     const canais = canaisDoPost(post);
-    const item: PostNoDia = { post, dia, hora, canais, situacao, rotulo: `Post de ${quando(dia, hora, hoje)}, ${post.channels.map((c) => NOME_DO_CANAL[c.channel] ?? c.channel).join(' e ')}: ${situacao.rotulo.toLowerCase()}` };
+    const nomes = post.channels.map((c) => NOME_DO_CANAL[c.channel] ?? c.channel).join(' e ');
+    const item: PostNoDia = { post, dia, hora, canais, situacao, rotulo: `${ehPacote(post) ? 'Pacote' : 'Post'} de ${quando(dia, hora, hoje)}, ${nomes}: ${situacao.rotulo.toLowerCase()}` };
     porDia.set(dia, [...(porDia.get(dia) ?? []), item]);
   }
   const dias: DiaDaAgenda[] = Array.from({ length: 7 }, (_, i) => {
@@ -101,8 +123,7 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
     return { iso, curto: DIAS_CURTOS[diaDaSemana(iso)]!, longo: DIAS_LONGOS[diaDaSemana(iso)]!, num: iso.slice(8, 10), hoje: iso === hoje, passado: iso < hoje, posts };
   });
   const semConta = dados.channels.filter((c) => c.accounts.length === 0).map((c) => c.channel);
-  if (dados.channels.length > 0 && semConta.length === dados.channels.length) return { tipo: 'sem-canal', dias };
-  return { tipo: 'semana', dias, faltam: semConta.map((c) => NOME_DO_CANAL[c] ?? c) };
+  return { tipo: 'semana', dias, faltam: semConta.map((c) => NOME_DO_CANAL[c] ?? c), semConta: dados.channels.length > 0 && semConta.length === dados.channels.length };
 }
 
 /** "26/10 a 01/11". */
@@ -200,7 +221,8 @@ export type NovoPost = { foto: string | null; canais: string[]; textos: Record<s
 export type ErrosDoNovo = Record<string, string>;
 
 const numero = (n: number) => n.toLocaleString('pt-BR');
-const DO_TEXTO: Record<string, string> = { instagram: 'da legenda no Instagram', facebook: 'na Página do Facebook' };
+/** O texto de cada canal, no rótulo do campo e no erro: "Escreva o texto da legenda no Instagram." */
+export const DO_TEXTO: Record<string, string> = { instagram: 'da legenda no Instagram', facebook: 'na Página do Facebook', tiktok: 'no TikTok', youtube: 'no YouTube' };
 
 /** O que a tela confere antes de mandar (o servidor confere de novo, com as mesmas regras). */
 export function conferirNovo(n: NovoPost, agora: Date, fuso: string): ErrosDoNovo {
@@ -223,6 +245,60 @@ export function conferirNovo(n: NovoPost, agora: Date, fuso: string): ErrosDoNov
     else if (instante > agora.getTime() + DIAS_DE_ANTECEDENCIA * 86_400_000) e.hora = `O post pode ser marcado para até ${DIAS_DE_ANTECEDENCIA} dias.`;
   }
   return e;
+}
+
+/**
+ * O que o botão do novo post diz (P22): com canal do Liame, vai para aprovação; só canal do pacote, o pacote fica pronto
+ * na Agenda; com os dois, as duas coisas.
+ */
+export function textoDoBotao(canais: readonly string[]): string {
+  const doPacote = canais.filter(ehDoPacote).length;
+  if (doPacote && doPacote === canais.length) return 'Montar o pacote';
+  return doPacote ? 'Mandar para aprovação e montar o pacote' : 'Mandar para aprovação';
+}
+
+/** A dica da hora no novo post: o que acontece nela, para o post e para o pacote. */
+export function dicaDaHora(canais: readonly string[]): string {
+  const doPacote = canais.filter(ehDoPacote).length;
+  if (doPacote && doPacote === canais.length) return 'Entre 8h e 22h. O pacote aparece na Agenda nessa hora, para você publicar.';
+  if (doPacote) return 'Entre 8h e 22h. O Liame publica na hora marcada, só depois de aprovado; o pacote fica pronto na Agenda, na mesma hora.';
+  return 'Entre 8h e 22h. O Liame publica na hora marcada, só depois de aprovado.';
+}
+
+/**
+ * O aviso depois de mandar: o post que foi para aprovação e o pacote que ficou pronto (na hora do fuso da empresa).
+ * `canais` são os que a pessoa escolheu; a resposta do servidor é o post do Liame ou, sem ele, o primeiro pacote.
+ */
+export function avisoDoNovo(post: Pick<PostResponse, 'publish_at'>, canais: readonly string[], fuso: string, hoje: string): string {
+  const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
+  const em = quando(dia, hora, hoje);
+  const doPacote = CANAIS_DO_PACOTE.filter((c) => canais.includes(c));
+  const doLiame = canais.some((c) => !ehDoPacote(c));
+  if (!doPacote.length) return `Mandado para aprovação. O post sai ${em}, depois de aprovado.`;
+  const de = emFrase(doPacote.map((c) => DO_CANAL[c] ?? c));
+  const no = emFrase(doPacote.map((c) => NO_CANAL[c] ?? c));
+  const um = doPacote.length === 1;
+  if (doLiame) return `Mandado para aprovação, e ${um ? 'o pacote' : 'os pacotes'} ${de} ${um ? 'está' : 'estão'} na Agenda ${em}, para você publicar.`;
+  return um ? `Pacote pronto. Ele aparece na Agenda ${em}, para você publicar ${no}.` : `Pacotes prontos. Eles aparecem na Agenda ${em}, para você publicar ${no}.`;
+}
+
+/** A dica do texto de cada canal no novo post (o que o canal faz com o link e quem publica). */
+export function dicaDoTexto(canal: string): string {
+  if (canal === 'instagram') return 'No Instagram, a legenda não tem link que abre: diga onde pedir (“Peça pelo link da bio”).';
+  if (canal === 'tiktok') return 'No TikTok, a legenda não tem link que abre: diga onde pedir (“Peça pelo link da bio”). Quem publica é você: o Liame monta o pacote.';
+  if (canal === 'youtube') return 'Quem publica é você: o Liame monta o pacote com o texto e a foto.';
+  return 'O texto que sai na Página, com a foto.';
+}
+
+/** A frase do topo da gaveta do pacote: para quando é, ou quando a pessoa marcou "Publiquei". */
+export function fraseDoPacote(post: PostResponse, fuso: string, hoje: string): string {
+  const c = post.channels[0];
+  if (post.status === 'pacote_publicado') {
+    const em = c?.published_at ? noFuso(new Date(c.published_at), fuso) : null;
+    return em ? `Você marcou como publicado ${quando(em.dia, em.hora, hoje)}.` : 'Você marcou como publicado.';
+  }
+  const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
+  return `Você publica: ${NOME_DO_CANAL[c?.channel ?? ''] ?? c?.channel ?? ''}, ${quando(dia, hora, hoje)}.`;
 }
 
 /** O campo da recusa do servidor (o código do problema), para o erro aparecer no lugar certo; o resto vai para o topo. */

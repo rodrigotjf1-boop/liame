@@ -118,3 +118,15 @@ export const PostListResponse = z.strictObject({
   items: z.array(PostResponse),
 });
 export type PostListResponse = z.infer<typeof PostListResponse>;
+
+/**
+ * A foto do pacote pronto para baixar (A6, Z8; P22, o passo "Baixe a foto"): a cópia que o Liame guarda, em JPEG, sem os
+ * dados do celular. O endereço vale poucos minutos e baixa como arquivo (D-A6-43).
+ */
+export const PostPhotoResponse = z.strictObject({
+  url: z.string().min(1),
+  /** O nome do arquivo: `liame-<rede>-<dia>.jpg`, o dia da hora marcada no fuso da empresa. */
+  filename: z.string().regex(/^[a-z0-9-]{1,80}\.jpg$/),
+  expires_at: z.iso.datetime(),
+});
+export type PostPhotoResponse = z.infer<typeof PostPhotoResponse>;

@@ -72,6 +72,9 @@
 .po-nota span { min-width: 0; overflow-wrap: anywhere; }
 .po-gaveta .dialogo-corpo { display: grid; gap: var(--sp-3); align-content: start; }
 .po-gaveta .dialogo-acoes { flex-wrap: wrap; }
+/* o botão que diz o que acontece ("Mandar para aprovação e montar o pacote") quebra a linha no estreito, em vez de
+   alargar a gaveta além da tela (o `.btn` não quebra; ERR-188) */
+.po-gaveta .dialogo-acoes .btn { max-width: 100%; white-space: normal; text-align: center; padding-block: 6px; }
 .po-gaveta .dialogo-acoes .spacer { flex: 1; }
 .po-fatos { display: grid; gap: 6px; margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
 .po-fatos div { display: flex; flex-wrap: wrap; gap: 2px var(--sp-2); min-width: 0; }
@@ -120,4 +123,26 @@
 @container pagina (max-width: 479px) {
   .po-situacao li { grid-template-columns: 20px minmax(0, 1fr); }
   .po-situacao li > :last-child:not(:nth-child(2)) { grid-column: 2; justify-self: start; }
+}
+
+/* ===== A6 · Z8 · O pacote pronto (mockups/prototipo-pacote.html, P22 aprovado em 21/10/2026) ===== */
+/* No TikTok e no YouTube o Liame não publica: o novo post separa os canais em dois grupos, o cartão do pacote tem a
+   borda pontilhada ("Você publica") e a gaveta mostra os quatro passos. */
+.po-grupo-t { margin: var(--sp-2) 0 var(--sp-1); font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.po-gaveta legend + .po-grupo-t { margin-top: 0; }
+.ag-post--pacote { border-style: dashed; background: var(--surface); }
+.pk-passos { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.pk-passos li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: var(--sp-2) var(--sp-3); align-items: start; padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); }
+.pk-passos li:last-child { border-bottom: 0; }
+.pk-passos li > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.pk-passos li > span:nth-child(2) span { font-size: var(--text-xs); color: var(--text-muted); }
+.pk-n { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--primary-soft); color: var(--link); font-size: var(--text-xs); font-weight: 700; font-variant-numeric: tabular-nums; }
+.po-gaveta .ag-st:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-sm); }
+/* o aviso de "nenhuma conta conectada", com o caminho para Contas conectadas ao lado */
+.ag-falta { flex-wrap: wrap; align-items: center; }
+.ag-falta > span { flex: 1 1 260px; }
+.ag-falta > .btn { flex: none; }
+@container pagina (max-width: 479px) {
+  .pk-passos li { grid-template-columns: 28px minmax(0, 1fr); }
+  .pk-passos li > .btn { grid-column: 2; justify-self: start; }
 }
