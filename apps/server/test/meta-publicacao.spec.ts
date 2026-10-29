@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { cabeNoInstagram, contaDoInstagram, erroDaMeta, PROPORCAO_DO_INSTAGRAM, permissaoConcedida, permissaoNoDebug, situacaoDoConteiner } from '../src/connectors/meta/publicacao.js';
+import {
+  cabeNoInstagram,
+  canaisDaMeta,
+  contaDoInstagram,
+  erroDaMeta,
+  PROPORCAO_DO_INSTAGRAM,
+  permissaoConcedida,
+  permissaoNoDebug,
+  permissoesConcedidas,
+  permissoesDoDebug,
+  situacaoDoConteiner,
+} from '../src/connectors/meta/publicacao.js';
 
 // A6 · Z5, sem rede e sem banco: as regras da publicação na Meta que o teste da D-A6-10 (`scripts/teste-foto-meta.ts`)
 // usa e que o post de verdade vai usar (`base-conhecimento.md` §2.2, reconferida em 21/10/2026).
@@ -62,6 +73,61 @@ describe('a publicação na Meta: as regras puras (A6 · Z5)', () => {
     expect(permissaoNoDebug({ data: { is_valid: 'true', scopes: ['instagram_content_publish'] } }, 'instagram_content_publish')).toBe('token_invalido');
     expect(permissaoNoDebug({ data: null }, 'instagram_content_publish')).toBe('token_invalido');
     expect(permissaoNoDebug(null, 'instagram_content_publish')).toBe('token_invalido');
+  });
+
+  it('as permissões para a coluna da autorização (A6 · Z5a): só as `granted` do `me/permissions`, sem repetir e em ordem; fora do formato, nulo (não "nenhuma")', () => {
+    const resposta = {
+      data: [
+        { permission: 'pages_show_list', status: 'granted' },
+        { permission: 'instagram_content_publish', status: 'granted' },
+        { permission: 'pages_manage_posts', status: 'declined' },
+        { permission: 'read_insights', status: 'expired' },
+        { permission: 'ads_read', status: 'granted' },
+        { permission: 'ads_read', status: 'granted' },
+        { permission: '', status: 'granted' },
+        null,
+      ],
+    };
+    expect(permissoesConcedidas(resposta)).toEqual(['ads_read', 'instagram_content_publish', 'pages_show_list']);
+    expect(permissoesConcedidas({ data: [] })).toEqual([]);
+    expect(permissoesConcedidas({ data: 'não é lista' })).toBeNull();
+    expect(permissoesConcedidas(null)).toBeNull();
+  });
+
+  it('as permissões pelo `debug_token`: os `scopes` só com o token válido, sem repetir e em ordem; token que não vale ou fora do formato, nulo', () => {
+    expect(permissoesDoDebug({ data: { is_valid: true, scopes: ['pages_manage_posts', 'ads_read', 'ads_read', 7, ''] } })).toEqual(['ads_read', 'pages_manage_posts']);
+    expect(permissoesDoDebug({ data: { is_valid: true, scopes: [] } })).toEqual([]);
+    expect(permissoesDoDebug({ data: { is_valid: true } })).toBeNull();
+    expect(permissoesDoDebug({ data: { is_valid: false, scopes: ['ads_read'] } })).toBeNull();
+    expect(permissoesDoDebug({ data: { is_valid: 'true', scopes: ['ads_read'] } })).toBeNull();
+    expect(permissoesDoDebug(null)).toBeNull();
+  });
+
+  it('as Páginas e os Instagram da autorização (A6 · Z5a): cada Página com o Instagram dela, quando tem; id fora do formato fica de fora', () => {
+    const resposta = {
+      data: [
+        { id: '102030405060708', name: 'Casa Brasa', instagram_business_account: { id: '17841400000000001', username: 'casabrasa' } },
+        { id: '102030405060709', name: 'Casa Brasa Eventos' },
+        { id: '102030405060710', instagram_business_account: { id: '17841400000000002' } },
+        { id: '1020/../me', name: 'Caminho' },
+        { id: '102030405060711', name: 'Instagram com id estranho', instagram_business_account: { id: '1784?x=1' } },
+        null,
+      ],
+    };
+    expect(canaisDaMeta(resposta)).toEqual({
+      paginas: [
+        { id: '102030405060708', nome: 'Casa Brasa', instagramId: '17841400000000001' },
+        { id: '102030405060709', nome: 'Casa Brasa Eventos', instagramId: null },
+        { id: '102030405060710', nome: '102030405060710', instagramId: '17841400000000002' },
+        { id: '102030405060711', nome: 'Instagram com id estranho', instagramId: null },
+      ],
+      instagrams: [
+        { id: '17841400000000001', usuario: 'casabrasa', paginaId: '102030405060708', pagina: 'Casa Brasa' },
+        { id: '17841400000000002', usuario: null, paginaId: '102030405060710', pagina: '102030405060710' },
+      ],
+    });
+    expect(canaisDaMeta({ data: 'não é lista' })).toEqual({ paginas: [], instagrams: [] });
+    expect(canaisDaMeta(null)).toEqual({ paginas: [], instagrams: [] });
   });
 
   it('a situação do contêiner pelo `status_code`; o desconhecido não vira "pronto"', () => {

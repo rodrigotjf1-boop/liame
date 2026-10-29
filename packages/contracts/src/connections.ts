@@ -34,9 +34,11 @@ export const SEARCH_CONSOLE_SCOPE = 'https://www.googleapis.com/auth/webmasters.
 
 /**
  * Plataforma da conta ligada. `google_business`: a loja do Perfil da Empresa no Google; `search_console`: um site do
- * Search Console (as duas vêm na autorização do Google, cada uma com a função dela ligada).
+ * Search Console (as duas vêm na autorização do Google, cada uma com a função dela ligada). `facebook_page` e
+ * `instagram`: a Página e o Instagram onde o post sai (vêm na autorização da Meta com a permissão de publicar, com a
+ * função dos posts ligada; A6 · Z5a).
  */
-export const AccountProvider = z.enum(['meta_ads', 'google_ads', 'ga4', 'regem', 'regemcast', 'google_business', 'search_console']);
+export const AccountProvider = z.enum(['meta_ads', 'google_ads', 'ga4', 'regem', 'regemcast', 'google_business', 'search_console', 'facebook_page', 'instagram']);
 export type AccountProvider = z.infer<typeof AccountProvider>;
 
 const Slug = z.string().regex(/^[a-z0-9_]+$/);

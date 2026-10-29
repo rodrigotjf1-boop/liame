@@ -268,6 +268,12 @@ describe('a Atenção sem avisos', () => {
     expect(temContaQueConta([{ provider: 'search_console' }, { provider: 'meta_ads' }])).toBe(true);
     expect(temContaQueConta([{ provider: 'regem' }])).toBe(true);
   });
+
+  it('a Página e o Instagram onde o post sai também não são contas de anúncio (A6 · Z5a, V136)', () => {
+    expect(temContaQueConta([{ provider: 'facebook_page' }])).toBe(false);
+    expect(temContaQueConta([{ provider: 'instagram' }, { provider: 'facebook_page' }])).toBe(false);
+    expect(temContaQueConta([{ provider: 'instagram' }, { provider: 'meta_ads' }])).toBe(true);
+  });
 });
 
 describe('menu', () => {

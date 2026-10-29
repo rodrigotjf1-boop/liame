@@ -41,10 +41,10 @@ export function contadorDoMenu(itens: Pick<AttentionItem, 'severity'>[]): number
 
 /**
  * As contas ligadas que NÃO contam como "a empresa já conectou as plataformas" na Atenção sem avisos: a loja do perfil
- * da empresa no Google (P17, parte B) e o site do Search Console (P18, parte B) não são contas de anúncio. Ligadas
- * sozinhas, o convite para conectar continua.
+ * da empresa no Google (P17, parte B), o site do Search Console (P18, parte B) e a Página e o Instagram onde o post sai
+ * (A6 · Z5a) não são contas de anúncio. Ligadas sozinhas, o convite para conectar continua.
  */
-const NAO_SAO_DE_ANUNCIO = new Set(['google_business', 'search_console']);
+const NAO_SAO_DE_ANUNCIO = new Set(['google_business', 'search_console', 'facebook_page', 'instagram']);
 
 /** Há conta ligada que tira a Atenção do convite "conecte as plataformas" (V136: cada provedor novo entra aqui). */
 export function temContaQueConta(contas: Pick<{ provider: string }, 'provider'>[]): boolean {

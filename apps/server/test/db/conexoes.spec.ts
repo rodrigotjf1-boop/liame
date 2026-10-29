@@ -30,7 +30,13 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
   let processador: ConexaoProcessor;
   let plataforma: Server;
   let base = '';
-  const vistos: { caminho: string; autorizacao?: string; corpo?: URLSearchParams }[] = [];
+  const vistos: { caminho: string; autorizacao?: string; corpo?: URLSearchParams; consulta?: URLSearchParams }[] = [];
+  /**
+   * O que a Meta de mentira responde às permissões do token, ao `debug_token` e às Páginas (A6 · Z5a). Nulo = 404, como
+   * antes da Z5a (os testes das outras entregas seguem sem essas respostas: a coluna `scopes` fica vazia).
+   */
+  type Resposta = { status: number; corpo: unknown };
+  const metaPosts: { permissoes: Resposta | null; debug: Resposta | null; paginas: Resposta | null } = { permissoes: null, debug: null, paginas: null };
   const desafios = new Map<string, string>();
   const revogados: string[] = [];
   const anterior: Record<string, string | undefined> = {};
@@ -40,8 +46,11 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
   function responder(req: IncomingMessage, texto: string): { status: number; corpo: unknown } {
     const url = new URL(req.url ?? '/', base);
     const corpo = req.headers['content-type']?.includes('x-www-form-urlencoded') ? new URLSearchParams(texto) : undefined;
-    vistos.push({ caminho: url.pathname, autorizacao: req.headers.authorization, corpo });
+    vistos.push({ caminho: url.pathname, autorizacao: req.headers.authorization, corpo, consulta: url.searchParams });
     const p = url.pathname;
+    if (p === '/graph/v26.0/me/permissions' && metaPosts.permissoes) return metaPosts.permissoes;
+    if (p === '/graph/v26.0/debug_token' && metaPosts.debug) return metaPosts.debug;
+    if (p === '/graph/v26.0/me/accounts' && metaPosts.paginas) return metaPosts.paginas;
     // Meta: troca do código e contas de anúncio.
     if (p === '/graph/v26.0/oauth/access_token') {
       const q = url.searchParams;
@@ -320,6 +329,124 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     await ligarEscritaNaMeta(api, e.tenantId, false);
     expect((await iniciar(e)).config).toBe(CONFIG_LEITURA);
     expect(await comEscrita(e)).toEqual([]);
+  });
+
+  it('Meta: as permissões concedidas vão para a autorização; com a função dos posts e a permissão de publicar, a Página e o Instagram aparecem para ligar (A6 · Z5a)', async () => {
+    const e = await empresa('Casa Brasa Posts');
+    const conectar = async () => {
+      const r = await api.call('POST', '/v1/connections', { cookie: e.cookie, body: { provider: 'meta', brand_id: e.brandId } });
+      expect(r.status).toBe(201);
+      expect((await voltar(e.cookie, { state: new URL(r.body.authorize_url).searchParams.get('state')!, code: 'codigo-meta-bom' })).status).toBe(303);
+      expect(await processador.processarLote(5, { tenantIds: [e.tenantId] })).toBe(1);
+      return r.body.id as string;
+    };
+    const concedidas = (...nomes: string[]): Resposta => ({
+      status: 200,
+      corpo: { data: [...nomes.map((permission) => ({ permission, status: 'granted' })), { permission: 'read_insights', status: 'declined' }] },
+    });
+    const notaDosCanais = async (id: string) =>
+      (await ownerQuery<{ n: unknown }>(`select discovery_notes -> 'meta_canais' as n from liame.oauth_connection where id = $1`, [id]))[0]!.n;
+    type Descoberta = { provider: string; external_id: string; name: string; provider_attributes: Record<string, unknown> };
+    const canaisDe = async (id: string) =>
+      ((await conexao(id)).discovered as Descoberta[]).filter((d) => d.provider !== 'meta_ads').map((d) => `${d.provider}:${d.external_id}:${d.name}`);
+    metaPosts.paginas = {
+      status: 200,
+      corpo: {
+        data: [
+          { id: '102030405060708', name: 'Casa Brasa', instagram_business_account: { id: '17841400000000001', username: 'casabrasa' } },
+          { id: '102030405060709', name: 'Casa Brasa Eventos' },
+        ],
+      },
+    };
+    try {
+      // (1) Sem a função dos posts: as permissões concedidas (só as `granted`, em ordem) vão para a autorização, que
+      // deixa de ter a coluna vazia (ERR-179); nenhuma Página é procurada e não fica anotação.
+      metaPosts.permissoes = concedidas('pages_show_list', 'instagram_content_publish', 'ads_read', 'pages_manage_posts');
+      const antes = vistos.length;
+      const semFuncao = await conectar();
+      expect((await conexao(semFuncao)).scopes).toEqual(['ads_read', 'instagram_content_publish', 'pages_manage_posts', 'pages_show_list']);
+      expect(await canaisDe(semFuncao)).toEqual([]);
+      expect(await notaDosCanais(semFuncao)).toBeNull();
+      const novos = vistos.slice(antes);
+      expect(novos.find((v) => v.caminho === '/graph/v26.0/me/permissions')?.autorizacao).toBe('Bearer token-sistema-meta');
+      expect(novos.some((v) => v.caminho === '/graph/v26.0/me/accounts')).toBe(false);
+      expect(novos.some((v) => v.caminho === '/graph/v26.0/debug_token')).toBe(false);
+
+      // (2) Com a função: as Páginas (permissão da Página) e o Instagram de cada uma (permissão do Instagram) entram na
+      // escolha, ao lado das contas de anúncio; a pessoa liga o que quiser à marca.
+      await ligarFlagDaEmpresa(api, 'social_write', e.tenantId, true);
+      const comFuncao = await conectar();
+      expect(await canaisDe(comFuncao)).toEqual([
+        'facebook_page:102030405060708:Casa Brasa',
+        'facebook_page:102030405060709:Casa Brasa Eventos',
+        'instagram:17841400000000001:@casabrasa',
+      ]);
+      const instagram = ((await conexao(comFuncao)).discovered as Descoberta[]).find((d) => d.provider === 'instagram')!;
+      expect(instagram.provider_attributes).toEqual({ usuario: 'casabrasa', pagina_id: '102030405060708', pagina: 'Casa Brasa' });
+      expect(await notaDosCanais(comFuncao)).toMatchObject({ resultado: 'ok', paginas: 2, instagrams: 1 });
+      const ligar = await api.call('POST', `/v1/connections/${comFuncao}/accounts`, {
+        cookie: e.cookie,
+        body: { accounts: [{ provider: 'instagram', external_id: '17841400000000001' }, { provider: 'facebook_page', external_id: '102030405060708' }] },
+      });
+      expect(ligar.status, JSON.stringify(ligar.body)).toBe(200);
+      expect(ligar.body.linked.map((l: { provider: string; name: string; brand_id: string }) => [l.provider, l.name, l.brand_id]).sort()).toEqual([
+        ['facebook_page', 'Casa Brasa', e.brandId],
+        ['instagram', '@casabrasa', e.brandId],
+      ]);
+      const [concluida] = await ownerQuery<{ depois: Record<string, unknown> }>(
+        `select "after" as depois from liame.audit_event where tenant_id = $1 and action = 'conexao.concluir' and resource_id = $2`,
+        [e.tenantId, comFuncao],
+      );
+      expect(concluida!.depois).toMatchObject({ pagina_e_instagram: 'ok', permissoes_da_meta: ['ads_read', 'instagram_content_publish', 'pages_manage_posts', 'pages_show_list'] });
+
+      // (3) Só a permissão do Instagram: só o Instagram (a Página sem a permissão de publicar nela fica de fora).
+      metaPosts.permissoes = concedidas('pages_show_list', 'instagram_content_publish');
+      const soInstagram = await conectar();
+      expect(await canaisDe(soInstagram)).toEqual(['instagram:17841400000000001:@casabrasa']);
+      expect(await notaDosCanais(soInstagram)).toMatchObject({ resultado: 'ok', paginas: 0, instagrams: 1 });
+
+      // (4) O `me/permissions` recusado (o token de usuário do sistema): a segunda camada é o `debug_token`, com o token do
+      // app no cabeçalho e o token conferido na consulta; só a permissão da Página, então só as Páginas.
+      metaPosts.permissoes = { status: 400, corpo: { error: { message: 'Unsupported get request.', type: 'GraphMethodException', code: 100 } } };
+      metaPosts.debug = { status: 200, corpo: { data: { is_valid: true, app_id: '1234567890123', scopes: ['pages_show_list', 'pages_manage_posts'] } } };
+      const antesDoDebug = vistos.length;
+      const peloDebug = await conectar();
+      expect((await conexao(peloDebug)).scopes).toEqual(['pages_manage_posts', 'pages_show_list']);
+      expect(await canaisDe(peloDebug)).toEqual(['facebook_page:102030405060708:Casa Brasa', 'facebook_page:102030405060709:Casa Brasa Eventos']);
+      const debug = vistos.slice(antesDoDebug).find((v) => v.caminho === '/graph/v26.0/debug_token');
+      expect(debug?.autorizacao).toBe('Bearer 1234567890123|segredo-do-app-meta-teste');
+      expect(debug?.consulta?.get('input_token')).toBe('token-sistema-meta');
+      expect(debug?.consulta?.has('appsecret_proof')).toBe(false);
+
+      // (5) Sem resposta das duas camadas: a coluna fica como estava (vazia na autorização nova), nada de Página, e a
+      // conexão termina com as contas de anúncio (V42).
+      metaPosts.debug = { status: 400, corpo: { error: { message: 'Invalid OAuth access token.', type: 'OAuthException', code: 190 } } };
+      const semResposta = await conectar();
+      expect(await conexao(semResposta)).toMatchObject({ status: 'aguardando_escolha', scopes: [], error_code: null });
+      expect(await canaisDe(semResposta)).toEqual([]);
+
+      // (6) Procurar de novo com a Meta no limite das Páginas: as que a autorização já conhecia ficam na lista, a nota
+      // diz o limite, e os anúncios seguem.
+      metaPosts.permissoes = concedidas('pages_show_list', 'instagram_content_publish', 'pages_manage_posts');
+      metaPosts.debug = null;
+      metaPosts.paginas = { status: 400, corpo: { error: { message: 'Application request limit reached', type: 'OAuthException', code: 4 } } };
+      const procura = await api.call('POST', `/v1/connections/${comFuncao}/discover`, { cookie: e.cookie });
+      expect(procura.status).toBe(202);
+      expect(await processador.processarLote(5, { tenantIds: [e.tenantId] })).toBe(1);
+      expect(await canaisDe(comFuncao)).toEqual([
+        'facebook_page:102030405060708:Casa Brasa',
+        'facebook_page:102030405060709:Casa Brasa Eventos',
+        'instagram:17841400000000001:@casabrasa',
+      ]);
+      expect(await notaDosCanais(comFuncao)).toMatchObject({ resultado: 'limite', paginas: 0, instagrams: 0 });
+      expect(((await conexao(comFuncao)).discovered as Descoberta[]).filter((d) => d.provider === 'meta_ads')).toHaveLength(2);
+      expect((await conexao(comFuncao)).status).toBe('ativa');
+    } finally {
+      metaPosts.permissoes = null;
+      metaPosts.debug = null;
+      metaPosts.paginas = null;
+      await ligarFlagDaEmpresa(api, 'social_write', e.tenantId, false);
+    }
   });
 
   it('Google: PKCE, Google Ads e GA4 na mesma autorização, procurar de novo pelo refresh token e revogar', async () => {

@@ -25222,7 +25222,9 @@
                             "regem",
                             "regemcast",
                             "google_business",
-                            "search_console"
+                            "search_console",
+                            "facebook_page",
+                            "instagram"
                           ]
                         },
                         "external_id": {

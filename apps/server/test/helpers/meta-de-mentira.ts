@@ -203,10 +203,10 @@ export async function empresaComMeta(api: TestApi, meta: MetaDeMentira, nome: st
   return { cookie: s.cookie, userId: s.me.user.id as string, secret, tenantId, brandId, conta, contaSemToken };
 }
 
-/** Liga ou desliga uma flag (`meta_write`, `google_write`, `conversoes_google`, `perfil_google`, `perfil_google_write`, `search_console`, `desempenho_anuncios`, `fotos`, `cobranca`) para a empresa. */
+/** Liga ou desliga uma flag (`meta_write`, `google_write`, `conversoes_google`, `perfil_google`, `perfil_google_write`, `search_console`, `desempenho_anuncios`, `fotos`, `cobranca`, `social_write`) para a empresa. */
 export async function ligarFlagDaEmpresa(
   api: TestApi,
-  chave: 'meta_write' | 'google_write' | 'conversoes_google' | 'perfil_google' | 'perfil_google_write' | 'search_console' | 'desempenho_anuncios' | 'fotos' | 'cobranca',
+  chave: 'meta_write' | 'google_write' | 'conversoes_google' | 'perfil_google' | 'perfil_google_write' | 'search_console' | 'desempenho_anuncios' | 'fotos' | 'cobranca' | 'social_write',
   tenantId: string,
   valor: boolean,
 ): Promise<void> {

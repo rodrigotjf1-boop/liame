@@ -132,10 +132,11 @@ type LinhaConexao = {
 
 /**
  * Conta descoberta, como o worker guarda em `oauth_connection.discovered`. `google_business`: a loja do Perfil da Empresa
- * no Google; `search_console`: um site do Search Console.
+ * no Google; `search_console`: um site do Search Console; `facebook_page` e `instagram`: a Página e o Instagram onde o
+ * post sai (A6 · Z5a, só com a função dos posts e a permissão de publicar).
  */
 export type DescobertaGuardada = {
-  provider: 'meta_ads' | 'google_ads' | 'ga4' | 'regem' | 'regemcast' | 'google_business' | 'search_console';
+  provider: 'meta_ads' | 'google_ads' | 'ga4' | 'regem' | 'regemcast' | 'google_business' | 'search_console' | 'facebook_page' | 'instagram';
   external_id: string;
   name: string;
   currency: string | null;
