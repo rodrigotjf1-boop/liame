@@ -66,9 +66,15 @@ describe('Social media: o registro (A6 · Z6)', () => {
     ]) {
       expect({ trecho, no_prompt: p.includes(trecho) }).toEqual({ trecho, no_prompt: true });
     }
+    // O prompt pede menos do que a conferência avisa, nos dois campos: o modelo conta caracteres com folga (o eval de
+    // 29/10/2026 escreveu um enfoque de 41 quando o prompt pedia "até 40").
     expect(p).toContain('até 300 caracteres');
-    expect(p).toContain('em até 40 caracteres');
+    expect(p).toContain('em até 30 caracteres');
     expect(TAMANHO_RECOMENDADO).toEqual({ enfoque: 40, texto: 350 });
+    // Toda sugestão agradece; na reclamação, toda pede desculpas; e a nota é só a que a pessoa deu (o eval de 29/10/2026).
+    expect(p).toContain('Toda sugestão agradece pela avaliação');
+    expect(p).toContain('toda sugestão também pede desculpas');
+    expect(p).toContain('não fale da nota máxima nem da que faltou');
     expect(TAMANHO_MAXIMO.texto).toBeLessThan(1500);
   });
 });
@@ -101,10 +107,17 @@ describe('Social media: o que vai ao modelo', () => {
   });
 
   it('o "Pedir outras" (parte 3b): o contexto leva as que a pessoa já viu, a mensagem pede outras, e nenhum número fixo entra', () => {
-    const vistas = ['Sentimos muito pela demora e pelo lanche frio.', 'Pedimos desculpas <pela> experiência.'];
+    const vistas = [
+      { enfoque: 'Curta', texto: 'Sentimos muito pela demora e pelo lanche frio.' },
+      { enfoque: 'Mais <calorosa>', texto: 'Pedimos desculpas <pela> experiência.' },
+    ];
     const outras = pedido({ anteriores: vistas });
     const contexto = contextoDoSocial(outras);
-    expect(contexto).toContain('- Sugestões que a pessoa já viu e quer trocar (as novas são outras, com outros enfoques e outras palavras):\n  - "Sentimos muito pela demora e pelo lanche frio."\n  - "Pedimos desculpas pela experiência."');
+    // O enfoque vai junto do texto: o modelo só evita repetir o enfoque que vê (sem ele, repetia "Mais calorosa").
+    expect(contexto).toContain(
+      '- Sugestões que a pessoa já viu e quer trocar (as novas são outras, com outros enfoques e outras palavras):\n  - enfoque "Curta": "Sentimos muito pela demora e pelo lanche frio."\n  - enfoque "Mais calorosa": "Pedimos desculpas pela experiência."',
+    );
+    expect(contexto).not.toContain('<calorosa>');
     // As anteriores vêm antes do dossiê, e as marcas da mensagem não aparecem nelas.
     expect(contexto.indexOf('já viu')).toBeLessThan(contexto.indexOf('Dossiê da marca'));
     expect(contexto).not.toContain('<pela>');

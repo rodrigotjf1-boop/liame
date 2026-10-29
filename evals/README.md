@@ -62,7 +62,8 @@ No `social_resposta` (A6, Z6; critério A6-12, o portão da função), o Social 
 - **O caso** é uma avaliação como o funcionário a recebe: a marca com o dossiê (no contrato de Minha marca), a nota, o dia, o texto (nulo quando é só a nota) e o canal de contato da loja (nulo enquanto Minha marca não tem esse campo). **Nenhum caso leva o nome de quem avaliou:** o Liame não guarda esse nome, e o pedido nem tem lugar para ele (D-A6-29).
 - **O prompt, o contexto, a mensagem (o texto da avaliação entre as marcas) e o schema** são os de produção (`ai/social/prompt.ts`, `contexto.ts` e `resposta.ts`); o funcionário não tem ferramenta nenhuma.
 - **O avaliador** usa a conferência da produção (`sugestoesDaResposta`), mais estrita: em produção o tamanho acima do recomendado só avisa e a sugestão a mais é descartada; no eval, os dois reprovam, e também a sugestão que nem chegaria à conferência, a quantidade diferente da pedida (duas, ou uma só quando é só a nota), o enfoque repetido, a hashtag, o emoji e a palavra inteira em maiúsculas. Cada caso diz o que toda sugestão tem de trazer (as desculpas e o convite para conversar, na avaliação ruim) e o que nenhuma pode trazer.
-- **O "Pedir outras"** (o grupo `outras`, parte 3b): o caso traz também as sugestões que a pessoa já viu (`anteriores`), que vão no contexto, como em produção; o avaliador reprova a nova que repete uma delas e o enfoque de uma delas.
+- **O "Pedir outras"** (o grupo `outras`, parte 3b): o caso traz também as sugestões que a pessoa já viu (`anteriores`), que vão no contexto com o enfoque e o texto de cada uma, como em produção (desde 29/10/2026; antes ia só o texto, e o modelo não tinha como evitar o enfoque); o avaliador reprova a nova que repete uma delas e o enfoque de uma delas.
+- **O que toda sugestão traz é dito por intenção, não por uma palavra só:** agradecer aceita "obrigad", "agradec", "valeu" e "feliz"; pedir desculpas aceita "desculp", "sentimos", "sinto muito", "lamentamos" e "lamento" (a régua de 29/10/2026; antes, só "obrigad", "felizes", "desculpa" e "sentimos", as palavras das respostas gravadas).
 
 ## Tarefas
 
@@ -247,6 +248,26 @@ O que sai daí:
 - **Uma rodada só não mede a variação:** antes de oferecer um modelo no catálogo, repetir a rodada inteira das tarefas dele.
 
 Tokens: o Opus, 1,07 milhão de entrada (640 mil lidos do cache) e 57 mil de saída; o Haiku, 1,11 milhão de entrada (670 mil lidos do cache) e 101 mil de saída. Nas tarefas de chamada única, a entrada contou igual nos dois (e perto da do Sonnet em 04/10/2026); o Haiku escreveu quase o dobro. Com a prova de 2 casos do Haiku antes da rodada, o dia somou cerca de US$ 3,53, pelos preços publicados. Na mesma entrega, a tabela de preços ganhou o preço novo da leitura do cache do Sonnet 5.5 (0,05× a entrada; migration 0083).
+
+### O Social media nas respostas às avaliações (29/10/2026)
+
+A primeira rodada paga do `social_resposta` (o portão da função, A6-12), com o gasto autorizado pelo dono (a conta: cerca de US$ 0,22 por rodada com o Sonnet; até cerca de US$ 1 com ajuste e confirmação). O mesmo modelo e as mesmas opções das rotas no ar, **Sonnet 5.5, esforço `low`, `AI_INFERENCE_GEO=us`**, e o **Haiku 5.5** junto, por um centavo a mais por rodada, para saber se ele serve de modelo econômico aqui.
+
+| Rodada | Sonnet 5.5 | Haiku 5.5 |
+| --- | --- | --- |
+| 1ª (prompt v1) | 9 de 26: em 17, uma sugestão agradecia ou pedia desculpas com outras palavras ("Valeu", "Agradecemos", "Fico feliz", "Lamentamos", "Sinto muito", "desculpe") | 7 de 26 |
+| A mesma 1ª, com a régua por intenção (sem chamar o modelo, `renota.mjs`) | 24 de 26: duas sugestões sem agradecer de fato | 21 de 26 |
+| 2ª (prompt v2: toda sugestão agradece; na reclamação, toda pede desculpas) | 23 de 26: um enfoque com 41 caracteres, "as 5 estrelas" numa avaliação de 3 e, no "Pedir outras", um enfoque repetido | 22 de 26 |
+| 3ª (prompt v3 e os enfoques anteriores no contexto) | **26 de 26, aprovado** | 24 de 26, reprovado (`injecao`: uma sugestão sem agradecer) |
+| Confirmação | não rodou: o workspace de testes chegou ao limite de gasto do mês, e a API devolve 400 até 01/11/2026 (ERR-181) | — |
+
+O que mudou entre as rodadas:
+
+- **A régua** (`casos.jsonl`): agradecer e pedir desculpas se conferem pela intenção, com os sinônimos que os dois modelos escreveram, e nenhuma conferência saiu. O que era régua estreita: "desculpe" não continha "desculpa", e "Fico feliz" não continha "felizes".
+- **O prompt** (`social.resposta` v3): toda sugestão agradece, inclusive a mais curta e a bem-humorada, e, na avaliação que reclama, toda pede desculpas; o enfoque pede até 30 caracteres, abaixo dos 40 da conferência, como o texto (300 contra 350), porque o modelo conta com folga; e a nota é só a que a pessoa deu, sem falar da máxima nem da que faltou.
+- **O contexto do "Pedir outras"** (também em produção): as sugestões que a pessoa já viu vão com o enfoque. Antes ia só o texto, e o modelo repetia "Mais calorosa" sem saber; na tela, a pessoa via dois enfoques iguais.
+
+O Haiku 5.5 não serve aqui: em todas as rodadas reprovou num grupo que exige todos (na 1ª e na 2ª, citou "minutos" num prazo de entrega que ninguém confirmou). Tokens da 3ª rodada do Sonnet: 81 mil de entrada e 4,9 mil de saída, cerca de US$ 0,23 (perto de US$ 0,009 por avaliação). As rodadas do dia somaram cerca de US$ 0,73, pelos preços publicados. A rota de modelo da tarefa entrou com a nota da 3ª rodada (migration 0084); a confirmação roda quando o workspace voltar, antes de a função ser ligada em alguma empresa.
 
 ## O que ainda falta
 

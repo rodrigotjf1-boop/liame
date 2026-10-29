@@ -89,7 +89,7 @@ export function pedidoDoCasoDoSocial(c: CasoDoSocial): PedidoDoSocial {
     feitaEm: c.feita_em,
     texto: c.texto,
     canal: c.canal,
-    anteriores: c.anteriores.map((a) => a.texto),
+    anteriores: c.anteriores.map((a) => ({ enfoque: a.enfoque, texto: a.texto })),
   };
 }
 
