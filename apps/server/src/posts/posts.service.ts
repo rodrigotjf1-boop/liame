@@ -191,15 +191,31 @@ export class PostsService {
     if (!(dias >= 1 && dias <= DIAS_DA_AGENDA)) {
       throw new AppProblem(422, 'periodo-invalido', 'Período inválido', `O período vai de 1 a ${DIAS_DA_AGENDA} dias, com o início antes do fim.`);
     }
-    if (!(await this.ligada(quem, q.brand_id))) return { enabled: false, items: [] };
     const fuso = await this.fusoDaEmpresa(quem.tenantId);
+    if (!(await this.ligada(quem, q.brand_id))) return { enabled: false, timezone: fuso, channels: [], items: [] };
     const items = await this.ler(
       quem.tenantId,
       sql`p.brand_id = ${q.brand_id}
           and p.publish_at >= (${q.from}::date)::timestamp at time zone ${fuso}
           and p.publish_at < ((${q.to}::date + 1)::timestamp at time zone ${fuso})`,
     );
-    return { enabled: true, items };
+    return { enabled: true, timezone: fuso, channels: await this.contasDosCanais(quem.tenantId, q.brand_id), items };
+  }
+
+  /**
+   * As contas conectadas à marca em cada canal do post (ligadas e sem a recusa da plataforma: as que valem para agir),
+   * na ordem em que o Liame publica: o novo post escolhe entre elas, e a Agenda diz o que falta conectar.
+   */
+  private async contasDosCanais(tenantId: string, brandId: string): Promise<PostListResponse['channels']> {
+    const r = await currentTx().execute<{ id: string; name: string; provider: string }>(sql`
+      select a.id, a.name, a.provider from liame.connected_account a
+       where a.tenant_id = ${tenantId} and a.brand_id = ${brandId} and ${contaConectada('a')}
+         and a.provider in ${CANAIS_DO_POST.map((c) => PROVEDOR_DO_CANAL[c])}
+       order by a.name collate "C", a.id`);
+    return CANAIS_DO_POST.map((channel) => ({
+      channel,
+      accounts: r.rows.filter((l) => l.provider === PROVEDOR_DO_CANAL[channel]).map((l) => ({ id: l.id, name: l.name })),
+    }));
   }
 
   /** Os posts que casam com o filtro, com os canais, numa consulta para os posts e uma para os canais. */

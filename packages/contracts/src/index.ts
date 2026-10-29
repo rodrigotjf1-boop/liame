@@ -432,6 +432,7 @@ export {
   POST_CHANNELS,
   POST_TEXT_LIMITS,
   PostChannel,
+  PostChannelAccounts,
   PostChannelResponse,
   PostListQuery,
   PostListResponse,
