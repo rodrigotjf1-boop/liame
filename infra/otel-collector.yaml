@@ -37,6 +37,11 @@ processors:
           - replace_pattern(attributes["network.peer.address"], "^(\\d+\\.\\d+\\.\\d+)\\.\\d+$", "$$1.0")
           - delete_key(attributes, "http.request.header.cookie")
           - delete_key(attributes, "http.request.header.authorization")
+          # Segredo na consulta da URL (o client_secret da troca da Meta, o input_token do debug_token): o valor sai,
+          # pelo fim do nome do parâmetro, como no processo (packages/telemetry, redact.ts; ERR-183).
+          - replace_pattern(attributes["url.full"], "(?i)([?&][a-z0-9_.-]{0,40}(?:token|code|secret|password|key|proof|verifier|email|state)=)[^&#]*", "$$1[removido]")
+          - replace_pattern(attributes["url.query"], "(?i)((?:^|&)[a-z0-9_.-]{0,40}(?:token|code|secret|password|key|proof|verifier|email|state)=)[^&#]*", "$$1[removido]")
+          - replace_pattern(attributes["http.url"], "(?i)([?&][a-z0-9_.-]{0,40}(?:token|code|secret|password|key|proof|verifier|email|state)=)[^&#]*", "$$1[removido]")
 
   # Guarda tudo o que tem erro ou ação (dinheiro); do resto, uma amostra.
   tail_sampling:
