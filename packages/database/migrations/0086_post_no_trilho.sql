@@ -27,7 +27,9 @@ create table if not exists liame.social_post (
   -- O arquivo do recorte que vai ao Instagram (parte seguinte), no armazenamento de imagens, ao lado da foto.
   instagram_object_key text check (instagram_object_key is null or length(instagram_object_key) between 1 and 300),
   publish_at           timestamptz not null,
-  -- Sobe a cada mudança do post ou de um canal: é a versão que o trilho confere antes de escrever na rede.
+  -- Sobe a cada mudança do que o post é (a hora, a foto, o recorte, o texto ou a conta de um canal): é a versão que o
+  -- trilho confere antes de escrever na rede. A situação de cada canal (o que já saiu) não sobe a versão: a tentativa
+  -- seguinte de um post que saiu em parte continua valendo para o mesmo post aprovado.
   version              integer not null default 1 check (version >= 1),
   created_by           uuid references liame.app_user (id) on delete set null,
   created_at           timestamptz not null default now(),
