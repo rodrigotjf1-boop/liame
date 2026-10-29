@@ -80,6 +80,7 @@ Tarefas iniciais: `strategic_plan`, `creative_generation`, `comment_classificati
 
 - **Finalidades:** conversa e atendimento · análise e decisão · texto criativo · imagem · vídeo curto · voz (depois). Cada `task_type` pertence a uma finalidade.
 - **Catálogo curado pela distribuição:** o modelo só entra numa finalidade depois do eval dela, com contrato de dados, preço e limite conhecidos.
+  - **Notas de 28/10/2026** (`evals/README.md`; esforço `low`, só nos Estados Unidos): o Opus 5.5 passou em todas as tarefas da **conversa**, e só nela; na análise ele reprovou no Estrategista e, no texto, no CRM. O Haiku 5.5 não passou em nenhuma finalidade inteira, mas passou em `compliance_revisao`, `pesquisador_pagina` e `criativo_texto`: é o candidato a modelo econômico dessas rotas, depois que o custo tiver a faixa de preço dele acima de 100 mil tokens de entrada. Antes de um modelo entrar no catálogo, a rodada inteira das tarefas dele se repete (uma rodada só não mede a variação).
 - **Lite:** "Automático (recomendado)". **Pro:** escolhe por finalidade dentro do catálogo, vendo custo, velocidade e nota; a troca é auditada.
 - **Sem chave própria do cliente (BYOK)** por enquanto: exigiria que o cliente manuseasse segredo.
 - Mídia gerada passa pelo Compliance, leva credencial de conteúdo quando houver (C2PA, SynthID) e rótulo de IA onde for exigido.

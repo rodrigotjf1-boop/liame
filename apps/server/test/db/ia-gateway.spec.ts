@@ -492,8 +492,8 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
 
   it('cache de prompt: no laço da Anthropic as instruções levam o ponto de cache, o contexto vai depois, e o lido e o escrito entram no custo; na chamada única, nada de cache', async () => {
     const d = await dono();
-    // O Sonnet 5.5 da tabela publicada (migration 0028), por milhão: US$ 2 de entrada, US$ 10 de saída, US$ 0,20 de
-    // cache lido e US$ 2,50 de cache escrito (5 minutos).
+    // O Sonnet 5.5 da tabela publicada (migration 0028, com a leitura do cache da 0083), por milhão: US$ 2 de entrada,
+    // US$ 10 de saída, US$ 0,10 de cache lido (0,05× a entrada, desde 28/10/2026) e US$ 2,50 de cache escrito (5 minutos).
     const passo = (content: ReturnType<typeof rodada>['content'], usage: ReturnType<typeof uso>) => ({ ...rodada(content), usage });
     const mock = new MockLanguageModelV4({
       doGenerate: [
@@ -513,7 +513,7 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
       ...pedido(d, task, comContexto),
       ferramentas: [ferramentaDeTeste(async () => ({ ok: true, valor: { pedidos: '38' } }))],
     });
-    expect(r).toMatchObject({ text: 'Foram 38 pedidos.', rodadas: 2, costUsdMicros: 28_889 });
+    expect(r).toMatchObject({ text: 'Foram 38 pedidos.', rodadas: 2, costUsdMicros: 27_899 });
     const PONTO = { anthropic: { cacheControl: { type: 'ephemeral' } } };
     for (const chamada of mock.doGenerateCalls.slice(0, 2)) {
       // O ponto automático, no fim do pedido, anda com a conversa: a rodada seguinte relê o que esta escreveu.
@@ -524,10 +524,11 @@ describe.skipIf(!hasDb)('AI Gateway: custo, teto, limpeza de dado pessoal e func
         { role: 'system', content: 'Hoje é 04/10/2026. Marca: Pizzaria da IA.' },
       ]);
     }
-    // O custo conta o cache: escrever sai a 1,25× a entrada e ler, a 0,1×. As mesmas duas rodadas sem cache dariam 41.594.
+    // O custo conta o cache: escrever sai a 1,25× a entrada e ler, a 0,05× (o Sonnet 5.5 desde 28/10/2026; antes,
+    // 0,1×, e a 2ª rodada dava 3.470). As mesmas duas rodadas sem cache dariam 41.594.
     expect((await usos(d.tenantId, task)).map((u) => [u.input_tokens, u.cache_read_tokens, u.cache_write_tokens, u.cost_usd_micros])).toEqual([
       [4, 0, 9000, 25_419],
-      [2, 9000, 300, 3_470],
+      [2, 9000, 300, 2_480],
     ]);
     const [guardado] = await ownerQuery<{ request: { instructions: string; context: string } }>(`select request from liame.ai_exchange where usage_id = $1`, [r.usageId]);
     expect(guardado!.request).toMatchObject(comContexto);
