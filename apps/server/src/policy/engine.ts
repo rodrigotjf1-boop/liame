@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 8,
+  version: 9,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -70,6 +70,10 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // aviso que quem avaliou já recebeu não volta, com ou sem aprovação. O funcionário de IA continua na regra de cima,
       // e nem chega a pedir: a ferramenta só existe como a volta de uma resposta publicada (`onlyAsUndo`).
       { type: 'autonomy', action: 'avaliacao.apagar_resposta', actor: 'human', mode: 'AUTO' },
+      // v9 (A6, Z5b; D-A6-3; P19, aprovado em 21/10/2026): o post da marca só sai com a aprovação de uma pessoa, com o
+      // código do app, peça quem pedir (uma pessoa ou, depois da Z6, o Social media); a ferramenta tem também a trava
+      // `alwaysApproval`. Sem esta regra, a ação nova ficaria em sombra.
+      { type: 'autonomy', action: 'post.*', mode: 'APPROVAL' },
     ],
   },
 };

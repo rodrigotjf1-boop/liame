@@ -854,7 +854,12 @@ export class ActionService {
       throw err;
     }
     if (sufficient) {
-      await tx.execute(sql`update liame.action_request set status = 'aprovada', status_reason = null, updated_at = now() where id = ${id}`);
+      // O pedido que tem hora para sair (A6, Z5b: o post, D-A6-8) espera por ela no próprio trilho: o executor só pega
+      // o aprovado quando a `next_attempt_at` chega. Sem hora, ele executa como sempre.
+      const quando = await this.horaDeExecutar(tx, tenantId, row);
+      await tx.execute(sql`
+        update liame.action_request set status = 'aprovada', status_reason = null, next_attempt_at = ${quando ? quando.toISOString() : null}::timestamptz, updated_at = now()
+         where id = ${id}`);
       await advance(tx, {
         tenantId,
         kind: 'acao',
@@ -871,6 +876,14 @@ export class ActionService {
     }
     auditDetail({ after: { plan_hash: row.plan_hash, sufficient, amount_micros: amount } });
     return this.get(auth, id);
+  }
+
+  /** A hora em que o pedido aprovado executa, pela ferramenta (`executeAt`), no fuso da empresa; nula = na hora. */
+  private async horaDeExecutar(tx: Tx, tenantId: string, row: ActionRow): Promise<Date | null> {
+    const tool = TOOLS[row.tool];
+    if (!tool?.executeAt) return null;
+    const r = await tx.execute<{ timezone: string | null }>(sql`select timezone from liame.organization where id = ${tenantId}`);
+    return tool.executeAt(row.before_state ?? {}, new Date(), r.rows[0]?.timezone ?? 'America/Sao_Paulo');
   }
 
   /**

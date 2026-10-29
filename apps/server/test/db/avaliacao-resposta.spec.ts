@@ -146,7 +146,7 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
       status: 'aguardando_aprovacao',
       policy: { allowed: true, mode: 'APPROVAL', violations: [] },
     });
-    expect(p.body.policy.versions[0]).toBe('plataforma@8');
+    expect(p.body.policy.versions[0]).toBe('plataforma@9');
     // O pedido leu a avaliação no Google, com o acesso renovado, e mais nada. Sem a aprovação, o executor nem olha para ele.
     expect(google.de('avaliacoes').map((v) => [v.metodo, v.caminho, v.autorizacao])).toEqual([['GET', `/avaliacoes/v4/${CONTA_DO_PERFIL}/${LOJA_DO_PERFIL}/reviews/rev-5`, `Bearer ${ACESSO_RENOVADO}`]]);
     await ciclo(e);
@@ -433,7 +433,7 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
       requested_by: { id: adm.userId },
       review: { id: id5, stars: 5, owner_only: false, reply_text: ACERTADO },
     });
-    expect(volta.body.policy.versions[0]).toBe('plataforma@8');
+    expect(volta.body.policy.versions[0]).toBe('plataforma@9');
     expect((await desfazer(adm, p.id)).body.code).toBe('volta-ja-pedida');
     // O Google apaga, e a conexão cai antes de ele responder: a tentativa seguinte vê a resposta fora e não apaga de novo.
     google.apagarCaiDepoisDeApagar = true;

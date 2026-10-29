@@ -76,6 +76,10 @@
       "version": 1,
       "hash": "ed8b6061c8a8a799bebc6827f9c8d690b23d805281f49cb0a18bc2d4ded23021"
     },
+    "post_publicar": {
+      "version": 1,
+      "hash": "87ccec67fc8a0d49dfb2585254f65da54fe833083be2022d17a6d2f3f61dd992"
+    },
     "propor_cupom": {
       "version": 1,
       "hash": "2af959493bf4fd2d45ea5f954c2673c419d8e2b04cd50a277832a292fa204588"

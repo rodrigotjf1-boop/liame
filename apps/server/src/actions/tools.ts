@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { type ContextoDaAvaliacao, EstadoDaAvaliacao, ehNotaBaixa, ParametrosDaResposta, planoDaResposta, planoDeApagar } from './avaliacao-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
+import { EstadoDoPost, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
 // Registro de ferramentas (arquitetura §6, ADR-007): cada ferramenta declara risco, impacto financeiro,
@@ -94,6 +95,12 @@ export interface ToolDefinition {
    * pessoa troca o texto escolhido, e o que aparece como escrito pelo funcionário é o que ele escreveu.
    */
   agentParams?: readonly string[];
+  /**
+   * A hora em que o pedido aprovado executa (A6, Z5b; D-A6-8: o post sai na hora marcada, que o Liame segura), a partir
+   * do estado que o pedido guardou, da hora da aprovação e do fuso da empresa. Sem esta função, ou com nulo, o pedido
+   * aprovado executa na hora, como sempre. É a `next_attempt_at` do pedido: o executor só o pega quando ela chega.
+   */
+  executeAt?(before: ResourceState, agora: Date, fuso: string): Date | null;
 }
 
 /** O plano não pode ser montado com este estado (cupom que já existe, loja sem permissão): vira 422 no pedido. */
@@ -427,6 +434,41 @@ export const TOOLS: Record<string, ToolDefinition> = {
       const plano = planoDeApagar(before);
       if (!plano.ok) throw new PlanoRecusado(plano.motivo);
       return { action: plano.acao, budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado };
+    },
+  },
+  // O post da marca (A6, Z5b; P19). O estado do recurso é o post como o Liame o guarda (`posts/post-plano.ts`): a foto
+  // pelo resumo do arquivo, o recorte, a hora e cada canal com o texto. A aprovação vale para o conjunto (D-A6-7) e o
+  // pedido aprovado espera a hora marcada no trilho (D-A6-8). Sem a flag de escrita `social_write`, nenhum pedido chega
+  // a esta ferramenta.
+  post_publicar: {
+    name: 'post_publicar',
+    version: 1,
+    owner: 'social',
+    description:
+      'Publica o post da marca nos canais escolhidos (o Instagram e a Página do Facebook), com a foto e o texto que a pessoa aprova, na hora marcada. O post é público e sai em nome da empresa; apagar depois não desfaz quem já viu.',
+    // Fala em público em nome da empresa, e quem viu não "desvê": sempre com a aprovação de uma pessoa (D-A6-3).
+    risk: 'R2',
+    providers: ['instagram', 'facebook_page'],
+    compensation: 'apagar_o_post_das_redes',
+    alwaysApproval: true,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDoPost(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return {
+        action: 'post.publicar',
+        // Publicar não gasta verba de mídia: nada a reservar no envelope do mês.
+        budgetImpact: 'none',
+        valueMicros: null,
+        currentValueMicros: null,
+        reserveMicros: 0,
+        desiredState: plano.desejado,
+        text: plano.texto,
+      };
+    },
+    executeAt(before, agora, fuso) {
+      const lido = EstadoDoPost.safeParse(before);
+      return lido.success ? quandoSai(lido.data.hora, agora, fuso) : null;
     },
   },
 };
