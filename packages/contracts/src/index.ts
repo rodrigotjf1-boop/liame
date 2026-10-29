@@ -430,6 +430,8 @@ export {
 } from './fotos.js';
 export {
   CreatePostRequest,
+  PACKAGE_CHANNELS,
+  PackageChannel,
   POST_CHANNELS,
   POST_TEXT_LIMITS,
   PostChannel,

@@ -39,6 +39,30 @@ const DO_CANAL: Record<CanalDoPost, string> = { instagram: 'do Instagram', faceb
  */
 export const LIMITE_DO_TEXTO: Record<CanalDoPost, number> = { instagram: 2200, facebook: 10000 };
 
+/**
+ * Os canais do pacote pronto (A6, Z8; D-A6-12 e D-A6-25; P22): o Liame monta o texto, a foto e a hora, e quem publica é a
+ * pessoa. Cada rede vira um pacote (`social_post.kind = 'pacote'`), sem pedido em Aprovações e sem conta ligada.
+ */
+export const CANAIS_DO_PACOTE = ['tiktok', 'youtube'] as const;
+export type CanalDoPacote = (typeof CANAIS_DO_PACOTE)[number];
+export const ehCanalDoPacote = (c: string): c is CanalDoPacote => (CANAIS_DO_PACOTE as readonly string[]).includes(c);
+
+/**
+ * O limite do texto do pacote (decisão técnica D-A6-41): o TikTok, 2.200 caracteres (o que vale em toda conta; a Central do
+ * TikTok não publica o número [NC]); o YouTube, os 5.000 da descrição (Central do YouTube, lida em 29/10/2026).
+ */
+export const LIMITE_DO_PACOTE: Record<CanalDoPacote, number> = { tiktok: 2200, youtube: 5000 };
+
+/** A situação do pacote na Agenda: espera a pessoa (`pronto`), ela marcou "Publiquei", ou foi tirado da Agenda. */
+export type SituacaoDoPacote = 'pacote_pronto' | 'pacote_publicado' | 'cancelado';
+
+/** A situação do pacote pelos canais dele (um só, D-A6-40): pronto, publicado ou, tirado, cancelado. */
+export function situacaoDoPacote(canais: readonly string[]): SituacaoDoPacote {
+  if (canais.some((s) => s === 'pronto')) return 'pacote_pronto';
+  if (canais.length > 0 && canais.every((s) => s === 'publicado')) return 'pacote_publicado';
+  return 'cancelado';
+}
+
 /** A janela da hora do post (D-A6-8): das 8h às 22h, no fuso da empresa, em minutos do dia (22h00 ainda vale). */
 export const JANELA_DO_POST = { de: 8 * 60, ate: 22 * 60 } as const;
 

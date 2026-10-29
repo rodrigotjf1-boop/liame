@@ -261,8 +261,23 @@ describe.skipIf(!hasDb)('o post da marca no trilho (A6 · Z5b, parte 1)', () => 
     expect(await erro(`update liame.social_post set crop_pos = 101 where id = $1`, [post.id])).toBe('23514:social_post_crop_pos_check');
     expect(await erro(`update liame.social_post set photo_sha256 = 'abc' where id = $1`, [post.id])).toBe('23514:social_post_photo_sha256_check');
     expect(await erro(`update liame.social_post set version = 0 where id = $1`, [post.id])).toBe('23514:social_post_version_check');
-    expect(await erro(`update liame.social_post_channel set channel = 'tiktok' where post_id = $1`, [post.id])).toBe('23514:social_post_channel_channel_check');
+    expect(await erro(`update liame.social_post_channel set channel = 'threads' where post_id = $1`, [post.id])).toBe('23514:social_post_channel_channel_check');
     expect(await erro(`update liame.social_post_channel set status = 'outra' where post_id = $1`, [post.id])).toBe('23514:social_post_channel_status_check');
+    // Z8 (0090): o canal do pacote não tem conta; só ele fica `pronto`; o pacote não tem pedido nem recorte.
+    expect(await erro(`update liame.social_post_channel set channel = 'tiktok' where post_id = $1 and channel = 'instagram'`, [post.id])).toBe('23514:social_post_channel_pacote_check');
+    expect(await erro(`update liame.social_post_channel set status = 'pronto' where post_id = $1 and channel = 'instagram'`, [post.id])).toBe('23514:social_post_channel_pacote_check');
+    expect(await erro(`update liame.social_post set kind = 'outro' where id = $1`, [post.id])).toBe('23514:social_post_kind_check');
+    expect(await erro(`update liame.social_post set kind = 'pacote' where id = $1`, [post.id])).toBe('23514:social_post_pacote_check');
+    // O que vale no pacote passa: o canal sem conta, pronto; a hora de publicado.
+    const pacote = (
+      await api.call('POST', '/v1/posts', {
+        cookie: e.cookie,
+        body: { brand_id: e.brandId, photo_id: foto.id, publish_at: horaNoFuso(1, '19:00'), channels: [{ channel: 'tiktok', text: 'Batata nova. Peça pelo link da bio.' }] },
+      })
+    ).body;
+    expect(await erro(`update liame.social_post_channel set status = 'publicado', published_at = now() where post_id = $1`, [pacote.id])).toBeNull();
+    expect(await erro(`update liame.social_post_channel set status = 'aguardando' where post_id = $1`, [pacote.id])).toBe('23514:social_post_channel_pacote_check');
+    expect(await erro(`update liame.social_post_channel set connected_account_id = $2 where post_id = $1`, [pacote.id, e.instagram!.id])).toBe('23514:social_post_channel_pacote_check');
     expect(await erro(`update liame.social_post_channel set body = '' where post_id = $1`, [post.id])).toBe('23514:social_post_channel_body_check');
     expect(await erro(`update liame.social_post_channel set channel = 'facebook' where post_id = $1 and channel = 'instagram'`, [post.id])).toBe('23505:social_post_channel_post_id_channel_key');
     // O que vale passa.

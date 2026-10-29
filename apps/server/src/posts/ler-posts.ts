@@ -1,7 +1,7 @@
 import type { PostResponse } from '@liame/contracts';
 import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
-import { situacaoDoPost } from './post-plano.js';
+import { situacaoDoPacote, situacaoDoPost } from './post-plano.js';
 
 // A leitura dos posts como as telas os veem (a Agenda e o pedido em Aprovações, A6, Z5c): o post, os canais com a conta
 // e a situação de cada um, e a situação do post pelo pedido. Fica à parte do serviço dos posts porque o serviço das
@@ -10,6 +10,7 @@ import { situacaoDoPost } from './post-plano.js';
 type LinhaDoPost = {
   id: string;
   brand_id: string;
+  kind: string;
   photo_id: string | null;
   crop_pos: number | null;
   publish_at: Date;
@@ -46,7 +47,7 @@ export async function fusoDaEmpresa(tx: Tx, tenantId: string): Promise<string> {
  */
 export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaRecusa: string): Promise<PostResponse[]> {
   const p = await tx.execute<LinhaDoPost>(sql`
-    select p.id, p.brand_id, p.photo_id, p.crop_pos, p.publish_at, p.action_id, p.created_at, r.status as pedido_status, r.status_reason as pedido_motivo
+    select p.id, p.brand_id, p.kind, p.photo_id, p.crop_pos, p.publish_at, p.action_id, p.created_at, r.status as pedido_status, r.status_reason as pedido_motivo
       from liame.social_post p
       left join liame.action_request r on r.id = p.action_id and r.tenant_id = p.tenant_id
      where p.tenant_id = ${tenantId} and ${filtro}
@@ -63,14 +64,20 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
   for (const l of c.rows) canaisDo.set(l.post_id, [...(canaisDo.get(l.post_id) ?? []), l]);
   return p.rows.map((l): PostResponse => {
     const canais = canaisDo.get(l.id) ?? [];
+    const situacoes = canais.map((x) => x.status);
     return {
       id: l.id,
       brand_id: l.brand_id,
+      kind: l.kind,
       photo_id: l.photo_id,
       crop_pos: l.crop_pos,
       publish_at: iso(l.publish_at),
       action_id: l.action_id,
-      status: situacaoDoPost(l.pedido_status ? { status: l.pedido_status, status_reason: l.pedido_motivo } : null, canais.map((x) => x.status), prefixoDaRecusa),
+      // O pacote não tem pedido: a situação é a dos canais dele (A6, Z8).
+      status:
+        l.kind === 'pacote'
+          ? situacaoDoPacote(situacoes)
+          : situacaoDoPost(l.pedido_status ? { status: l.pedido_status, status_reason: l.pedido_motivo } : null, situacoes, prefixoDaRecusa),
       created_at: iso(l.created_at),
       channels: canais.map((x) => ({
         channel: x.channel,

@@ -277,3 +277,20 @@ export function evaluatePolicy(policies: LoadedPolicy[], p: ActionProposal, ctx:
     versions: policies.map((x) => `${x.source === 'platform' ? 'plataforma' : x.source === 'tenant' ? 'empresa' : 'marca'}@${x.version}`),
   };
 }
+
+/**
+ * As palavras proibidas (as regras `forbidden_words` da distribuição, da empresa e da marca) num texto que não vira
+ * pedido (o pacote pronto, A6, Z8; D-A6-25: "o texto passa pelo Compliance como o do post"): a mesma conta do pedido, só
+ * com essas regras, que valem para qualquer texto. Vazio: o texto passa.
+ */
+export function palavrasProibidasNoTexto(policies: LoadedPolicy[], texto: string): PolicyViolation[] {
+  const violations: PolicyViolation[] = [];
+  for (const policy of policies) {
+    policy.document.rules.forEach((rule, index) => {
+      if (rule.type !== 'forbidden_words') return;
+      const message = violationOf(rule, { text: texto } as ActionProposal, { at: new Date(0), timezone: 'UTC' });
+      if (message) violations.push({ source: policy.source, rule_index: index, type: rule.type, message });
+    });
+  }
+  return violations;
+}
