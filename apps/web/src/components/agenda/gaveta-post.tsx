@@ -8,7 +8,8 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
-import { formatoDaPrevia, fraseDaSituacao, linhaDoCanal, NOME_DO_CANAL, noFuso, posicaoDoRecorte, quando, situacaoDoPost } from './textos';
+import { PreviaDoCanal } from './previa-do-canal';
+import { formatoDaPrevia, fraseDaSituacao, linhaDoCanal, NOME_DO_CANAL, noFuso, quando, situacaoDoPost } from './textos';
 
 // Um post da Agenda (P19, gaveta à direita): a situação, a prévia de cada canal (a foto, com o recorte do Instagram, e
 // o texto), o que aconteceu em cada canal e o que dá para fazer: abrir o pedido em Aprovações (o post que espera),
@@ -114,40 +115,15 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
             </div>
           )}
           {canal && (
-            <div className="po-previa" role="group" aria-label={`Como sai: ${NOME_DO_CANAL[canal.channel] ?? canal.channel}`}>
-              <div className="po-previa-cab">
-                <span className="po-avatar" aria-hidden="true">
-                  {(canal.account_name ?? '?').replace('@', '').slice(0, 2).toUpperCase()}
-                </span>
-                <span>
-                  <b>{canal.account_name ?? 'Conta desligada da marca'}</b>
-                  <br />
-                  <span>{canal.channel === 'instagram' ? 'no feed' : 'na Página'}</span>
-                </span>
-              </div>
-              {canal.channel !== 'instagram' && <p className="po-texto">{canal.text}</p>}
-              {foto ? (
-                <div className={`po-foto po-foto--${formato}`}>
-                  <img
-                    src={foto.url}
-                    alt={foto.description || `Foto do produto: ${foto.product ?? 'sem produto'}`}
-                    referrerPolicy="no-referrer"
-                    onError={aoFalharImagem}
-                    style={formato === 'inteira' ? undefined : { objectPosition: posicaoDoRecorte(formato, post.crop_pos) }}
-                  />
-                </div>
-              ) : (
-                <p className="po-nota">
-                  <Icone nome="image" pequeno />
-                  <span>{post.photo_id ? 'A foto deste post não pôde ser mostrada aqui.' : 'A foto deste post foi apagada nas Fotos: ele não sai.'}</span>
-                </p>
-              )}
-              {canal.channel === 'instagram' && (
-                <p className="po-texto">
-                  <b>{canal.account_name ?? ''}</b> {canal.text}
-                </p>
-              )}
-            </div>
+            <PreviaDoCanal
+              canal={canal.channel}
+              conta={canal.account_name}
+              texto={canal.text}
+              foto={foto}
+              recorte={post.crop_pos}
+              semFoto={post.photo_id ? 'A foto deste post não pôde ser mostrada aqui.' : 'A foto deste post foi apagada nas Fotos: ele não sai.'}
+              aoFalharImagem={aoFalharImagem}
+            />
           )}
           {canal?.channel === 'instagram' && formato !== 'inteira' && (
             <p className="po-nota">

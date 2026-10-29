@@ -2,17 +2,24 @@ import type { BrandPhoto, PostChannelResponse, PostListResponse, PostResponse } 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { GavetaNovoPost } from '@/components/agenda/gaveta-novo-post';
 import { GavetaPost } from '@/components/agenda/gaveta-post';
 import {
+  campoDaRecusa,
+  conferirNovo,
+  contaDoCanal,
   ddmm,
   enderecoSeguro,
   formatoDaPrevia,
   fraseDaSituacao,
   inicioDaSemana,
+  instanteNoFuso,
   linhaDoCanal,
   noFuso,
+  type NovoPost,
   periodo,
   posicaoDoRecorte,
+  quadroDoRecorte,
   quando,
   situacaoDoPost,
   somaDias,
@@ -232,5 +239,79 @@ describe('a gaveta do post', () => {
     expect(html).toContain('a legenda não tem link que abre');
     // Sem a foto (apagada nas Fotos), a gaveta diz que o post não sai.
     expect(gaveta(post(1, '2026-10-30', '19:00', 'agendado', undefined, { photo_id: null }), { foto: null })).toContain('A foto deste post foi apagada nas Fotos: ele não sai.');
+  });
+});
+
+describe('o novo post (Z5c, parte 3)', () => {
+  // Quinta, 29/10/2026, às 10h em São Paulo.
+  const AGORA = new Date(sp('2026-10-29', '10:00'));
+  const base: NovoPost = { foto: id(901), canais: ['instagram', 'facebook'], textos: { instagram: 'Peça pelo link da bio.', facebook: 'Peça pelo cardápio.' }, dia: '2026-10-30', hora: '19:00', recorte: 50 };
+  const conferir = (p: Partial<NovoPost>) => conferirNovo({ ...base, ...p }, AGORA, SP);
+
+  it('a conferência antes de mandar: a foto, os canais, o texto de cada canal e a hora (8h às 22h, 15 minutos adiante, até 60 dias)', () => {
+    expect(conferir({})).toEqual({});
+    expect(conferir({ foto: null })).toEqual({ foto: 'Escolha a foto do post.' });
+    expect(conferir({ canais: [] })).toEqual({ canais: 'Escolha pelo menos um canal.' });
+    expect(conferir({ textos: { instagram: '  ', facebook: 'ok' } })).toEqual({ 'texto-instagram': 'Escreva o texto da legenda no Instagram.' });
+    expect(conferir({ textos: { instagram: 'x'.repeat(2201), facebook: 'ok' } })).toEqual({ 'texto-instagram': 'No Instagram, o texto passa de 2.200 caracteres (tem 2.201).' });
+    // O texto do canal que não está no post não conta.
+    expect(conferir({ canais: ['facebook'], textos: { instagram: '', facebook: 'ok' } })).toEqual({});
+    expect(conferir({ hora: '07:45' }).hora).toBe('Escolha uma hora entre 8h e 22h.');
+    expect(conferir({ hora: '22:15' }).hora).toBe('Escolha uma hora entre 8h e 22h.');
+    expect(conferir({ hora: '22:00' })).toEqual({});
+    expect(conferir({ dia: '2026-10-29', hora: '10:10' }).hora).toBe('Escolha uma hora daqui a pelo menos 15 minutos.');
+    expect(conferir({ dia: '2026-10-29', hora: '10:15' })).toEqual({});
+    expect(conferir({ dia: '2026-12-29' }).hora).toBe('O post pode ser marcado para até 60 dias.');
+    expect(conferir({ dia: '' }).hora).toBe('Escolha o dia e a hora.');
+  });
+
+  it('a hora no fuso da empresa vira o instante certo; o quadro do recorte; a conta de cada canal; o campo da recusa do servidor', () => {
+    expect(instanteNoFuso('2026-10-30', '19:00', SP).toISOString()).toBe('2026-10-30T22:00:00.000Z');
+    expect(instanteNoFuso('2026-10-30', '19:00', 'Europe/Lisbon').toISOString()).toBe('2026-10-30T19:00:00.000Z');
+    expect(instanteNoFuso('2026-07-30', '19:00', 'Europe/Lisbon').toISOString()).toBe('2026-07-30T18:00:00.000Z');
+    expect(quadroDoRecorte(1200, 1800, 0)).toEqual({ top: 0, left: 0, width: 100, height: (1500 / 1800) * 100 });
+    expect(quadroDoRecorte(1200, 1800, 100)!.top).toBeCloseTo(100 - (1500 / 1800) * 100);
+    expect(quadroDoRecorte(2048, 800, 100)).toEqual({ top: 0, left: 100 - ((800 * 1.91) / 2048) * 100, width: ((800 * 1.91) / 2048) * 100, height: 100 });
+    expect(quadroDoRecorte(1600, 1200, 50)).toBeNull();
+    expect(contaDoCanal([{ id: IG, name: '@misterburgers' }])).toEqual({ conta: { id: IG, name: '@misterburgers' }, fora: null });
+    expect(contaDoCanal([]).fora).toBe('Não conectado: ligue em Contas conectadas para publicar aqui.');
+    expect(contaDoCanal([{ id: IG, name: 'a' }, { id: FB, name: 'b' }]).fora).toBe('Mais de uma conta ligada à marca: deixe uma só em Contas conectadas.');
+    expect(['hora-no-passado', 'hora-fora-da-janela', 'foto-fora-da-marca', 'canal-nao-conectado', 'texto-longo-demais', 'funcao-desligada'].map(campoDaRecusa)).toEqual(['hora', 'hora', 'foto', 'canais', 'texto', null]);
+  });
+
+  const novo = (canais: PostListResponse['channels'], fotos: BrandPhoto[] | null = [foto(1200, 1800)]) =>
+    renderToStaticMarkup(
+      createElement(GavetaNovoPost, {
+        marca: MARCA,
+        fotos,
+        canais,
+        fuso: SP,
+        hoje: HOJE,
+        podeVerContas: true,
+        podeVerFotos: true,
+        reserva: { current: null },
+        aoMandar: () => undefined,
+        aoFechar: () => undefined,
+      }),
+    );
+
+  it('a gaveta: as fotos das Fotos, os canais com a conta (o sem conta, desligado), o texto com o limite, amanhã às 19h e mandar para aprovação', () => {
+    const html = novo(contas(true, false));
+    expect(html).toContain('Novo post');
+    expect(html).toContain('aria-label="Smash duplo"');
+    expect(html).toContain('@misterburgers');
+    expect(html).toContain('Não conectado: ligue em Contas conectadas para publicar aqui.');
+    expect(html).toMatch(/<input type="checkbox" disabled=""\/>Página do Facebook/);
+    expect(html).toContain('Texto da legenda no Instagram');
+    expect(html).toContain('0 de 2.200');
+    expect(html).toContain('value="2026-10-30"');
+    expect(html).toContain('value="19:00"');
+    expect(html).toContain('Mandar para aprovação');
+    // Sem foto nas Fotos, a gaveta diz por quê; sem conta em canal nenhum, o caminho para Contas e mandar desligado.
+    expect(novo(contas(true, true), [])).toContain('Nenhuma foto pronta nas Fotos desta marca');
+    expect(novo(contas(true, true), null)).toContain('As Fotos não estão ligadas para esta empresa');
+    const semConta = novo(contas(false, false));
+    expect(semConta).toContain('href="/contas"');
+    expect(semConta).toMatch(/<button class="btn btn--primary" type="submit" disabled="">/);
   });
 });

@@ -1,4 +1,4 @@
-import type { PostChannelResponse, PostListResponse, PostResponse } from '@liame/contracts';
+import { POST_TEXT_LIMITS, type PostChannelResponse, type PostListResponse, type PostResponse } from '@liame/contracts';
 import type { NomeIcone } from '@/components/ui/icone';
 
 // A Agenda (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; Z5c da A6): os posts da marca na semana, dia a
@@ -172,3 +172,87 @@ export function posicaoDoRecorte(formato: 'alta' | 'larga' | 'inteira', pos: num
 
 /** `AAAA-MM-DD` válido (o que vem do endereço ou do seletor de semana). */
 export const ehDia = ehDiaIso;
+
+// ---- o novo post (P19; Z5c, parte 3) ------------------------------------------------------------------------------
+
+/** O limite do texto de cada canal, o mesmo do servidor: a legenda do Instagram até 2.200; a Página, até 10.000. */
+export const LIMITE_DO_TEXTO: Record<string, number> = { ...POST_TEXT_LIMITS };
+/** Com quanta antecedência mínima o post pode ser marcado (a tela; o servidor aceita até agora). */
+export const ANTECEDENCIA_MINIMA_MIN = 15;
+/** Até quantos dias o post pode ser marcado (D-A6-34). */
+export const DIAS_DE_ANTECEDENCIA = 60;
+
+/** O instante da hora `HH:MM` do dia `AAAA-MM-DD` no fuso da empresa (o relógio da parede de lá, em UTC). */
+export function instanteNoFuso(dia: string, hora: string, fuso: string): Date {
+  const alvo = Date.parse(`${dia}T${hora}:00Z`);
+  // A diferença do fuso naquele instante, conferida duas vezes (a troca de horário de verão muda a diferença).
+  let palpite = alvo;
+  for (let i = 0; i < 2; i++) {
+    const v = noFuso(new Date(palpite), fuso);
+    palpite += alvo - Date.parse(`${v.dia}T${v.hora}:00Z`);
+  }
+  return new Date(palpite);
+}
+
+/** O que a pessoa monta no novo post. */
+export type NovoPost = { foto: string | null; canais: string[]; textos: Record<string, string>; dia: string; hora: string; recorte: number };
+/** O erro de cada campo (o texto, por canal: `texto-instagram`, `texto-facebook`). */
+export type ErrosDoNovo = Record<string, string>;
+
+const numero = (n: number) => n.toLocaleString('pt-BR');
+const DO_TEXTO: Record<string, string> = { instagram: 'da legenda no Instagram', facebook: 'na Página do Facebook' };
+
+/** O que a tela confere antes de mandar (o servidor confere de novo, com as mesmas regras). */
+export function conferirNovo(n: NovoPost, agora: Date, fuso: string): ErrosDoNovo {
+  const e: ErrosDoNovo = {};
+  if (!n.foto) e.foto = 'Escolha a foto do post.';
+  if (!n.canais.length) e.canais = 'Escolha pelo menos um canal.';
+  for (const c of n.canais) {
+    const t = (n.textos[c] ?? '').trim();
+    const lim = LIMITE_DO_TEXTO[c];
+    if (!t) e[`texto-${c}`] = `Escreva o texto ${DO_TEXTO[c] ?? `em ${c}`}.`;
+    else if (lim && t.length > lim) e[`texto-${c}`] = `${NO_CANAL[c]?.replace(/^./, (x) => x.toUpperCase()) ?? c}, o texto passa de ${numero(lim)} caracteres (tem ${numero(t.length)}).`;
+  }
+  const m = /^(\d{2}):(\d{2})$/.exec(n.hora);
+  const minutos = m ? Number(m[1]) * 60 + Number(m[2]) : Number.NaN;
+  if (!ehDiaIso(n.dia) || Number.isNaN(minutos)) e.hora = 'Escolha o dia e a hora.';
+  else if (minutos < 8 * 60 || minutos > 22 * 60) e.hora = 'Escolha uma hora entre 8h e 22h.';
+  else {
+    const instante = instanteNoFuso(n.dia, n.hora, fuso).getTime();
+    if (instante < agora.getTime() + ANTECEDENCIA_MINIMA_MIN * 60_000) e.hora = `Escolha uma hora daqui a pelo menos ${ANTECEDENCIA_MINIMA_MIN} minutos.`;
+    else if (instante > agora.getTime() + DIAS_DE_ANTECEDENCIA * 86_400_000) e.hora = `O post pode ser marcado para até ${DIAS_DE_ANTECEDENCIA} dias.`;
+  }
+  return e;
+}
+
+/** O campo da recusa do servidor (o código do problema), para o erro aparecer no lugar certo; o resto vai para o topo. */
+export function campoDaRecusa(code: string): 'foto' | 'canais' | 'hora' | 'texto' | null {
+  if (code.startsWith('hora-')) return 'hora';
+  if (code.startsWith('foto-')) return 'foto';
+  if (code.startsWith('canal-')) return 'canais';
+  if (code.startsWith('texto-')) return 'texto';
+  return null;
+}
+
+/**
+ * O quadro do recorte do Instagram sobre a foto inteira, em porcentagem: 4:5 na foto alta (anda para cima e para
+ * baixo), 1,91:1 na larga (para os lados). Nulo quando a foto cabe.
+ */
+export function quadroDoRecorte(largura: number, altura: number, pos: number): { top: number; left: number; width: number; height: number } | null {
+  const formato = formatoDaPrevia('instagram', largura, altura);
+  if (formato === 'inteira') return null;
+  const p = Math.min(100, Math.max(0, pos));
+  if (formato === 'alta') {
+    const h = Math.min(100, ((largura * 5) / 4 / altura) * 100);
+    return { top: ((100 - h) * p) / 100, left: 0, width: 100, height: h };
+  }
+  const w = Math.min(100, ((altura * 1.91) / largura) * 100);
+  return { top: 0, left: ((100 - w) * p) / 100, width: w, height: 100 };
+}
+
+/** As contas de um canal no novo post: a que vale (uma só) ou o porquê de não dar (nenhuma, ou mais de uma; D-A6-36). */
+export function contaDoCanal(accounts: { id: string; name: string }[]): { conta: { id: string; name: string } | null; fora: string | null } {
+  if (accounts.length === 1) return { conta: accounts[0]!, fora: null };
+  if (accounts.length === 0) return { conta: null, fora: 'Não conectado: ligue em Contas conectadas para publicar aqui.' };
+  return { conta: null, fora: 'Mais de uma conta ligada à marca: deixe uma só em Contas conectadas.' };
+}
