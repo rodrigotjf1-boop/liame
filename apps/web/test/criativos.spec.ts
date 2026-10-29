@@ -558,7 +558,7 @@ describe('menu: "Criativos" depois de Mensagens e de Avaliações, para quem aco
     const agencia = NAVEGACAO.find((g) => g.id === 'agencia')!;
     const i = agencia.itens.findIndex((x) => x.href === '/criativos');
     expect(agencia.itens[i]).toEqual({ href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true });
-    expect(agencia.itens.slice(i - 2, i).map((x) => x.href)).toEqual(['/mensagens', '/avaliacoes']);
+    expect(agencia.itens.slice(i - 3, i).map((x) => x.href)).toEqual(['/mensagens', '/avaliacoes', '/agenda']);
     expect(itensVisiveis(agencia, (p) => p !== 'campanhas.ver').map((x) => x.href)).not.toContain('/criativos');
     expect(tituloDa('/criativos')).toBe('Criativos');
     expect(temModos('/criativos', () => true)).toBe(true);

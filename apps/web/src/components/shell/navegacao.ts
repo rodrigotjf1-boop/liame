@@ -51,6 +51,8 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/mensagens', rotulo: 'Mensagens', icone: 'send', permissao: 'campanhas.ver', modos: true },
       // A tela Avaliações é uma só nos dois modos (protótipo P17): sem o seletor de modo.
       { href: '/avaliacoes', rotulo: 'Avaliações', icone: 'message', permissao: 'campanhas.ver' },
+      // A Agenda dos posts (P19, D-A6-24): logo abaixo de Avaliações, uma tela só nos dois modos.
+      { href: '/agenda', rotulo: 'Agenda', icone: 'calendar', permissao: 'campanhas.ver' },
       { href: '/criativos', rotulo: 'Criativos', icone: 'image', permissao: 'campanhas.ver', contador: 'criativos', modos: true },
       { href: '/equipe', rotulo: 'Sua equipe', icone: 'users', permissao: 'campanhas.ver', modos: true },
       { href: '/marca', rotulo: 'Minha marca', icone: 'palette', permissao: 'dossie.ver' },

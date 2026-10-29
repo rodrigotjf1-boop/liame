@@ -373,7 +373,7 @@ describe('menu: "Avaliações" depois de Mensagens, para quem acompanha as campa
   it('o item, a permissão e o ícone', () => {
     const i = agencia.itens.findIndex((x) => x.href === '/avaliacoes');
     expect(agencia.itens[i]).toEqual({ href: '/avaliacoes', rotulo: 'Avaliações', icone: 'message', permissao: 'campanhas.ver' });
-    expect(agencia.itens.slice(i - 2, i + 2).map((x) => x.href)).toEqual(['/verba', '/mensagens', '/avaliacoes', '/criativos']);
+    expect(agencia.itens.slice(i - 2, i + 3).map((x) => x.href)).toEqual(['/verba', '/mensagens', '/avaliacoes', '/agenda', '/criativos']);
     expect(itensVisiveis(agencia, (p) => p !== 'campanhas.ver').map((x) => x.href)).not.toContain('/avaliacoes');
     expect(itensVisiveis(agencia, () => true, 'lite').map((x) => x.href)).toContain('/avaliacoes');
     expect(itensVisiveis(agencia, () => true, 'pro').map((x) => x.href)).toContain('/avaliacoes');

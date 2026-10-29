@@ -1,0 +1,92 @@
+/* ===== A6 · Z5c · A Agenda e o post (mockups/prototipo-post.html, P19 aprovado em 21/10/2026) ===== */
+/* Portado do protótipo: a semana com os posts de cada dia e a gaveta de um post (a prévia por canal e a situação em
+   cada um). A pauta e a data comercial do dia ficam para quando o servidor as mandar (divergência do P19). */
+
+/* --- a Agenda: a semana, com os posts de cada dia --- */
+.ag-semana-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.ag-semana-nav .ag-periodo { min-width: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ag-semana { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--sp-2); }
+.ag-semana[aria-busy="true"] { opacity: 0.6; }
+.ag-dia { display: grid; align-content: start; gap: var(--sp-2); min-width: 0; min-height: 220px; padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.ag-dia--hoje { border-color: color-mix(in srgb, var(--fio) 55%, var(--border)); box-shadow: inset 0 3px 0 var(--fio); }
+.ag-dia--passado { background: var(--bg-subtle); }
+.ag-dia-cab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-1); min-width: 0; }
+.ag-dia-cab h2 { font-size: var(--text-sm); font-weight: 600; text-transform: lowercase; }
+.ag-dia-cab .num { font-size: var(--text-lg); font-weight: 600; }
+.ag-dia-cab .ag-hoje { font-size: var(--text-xs); color: var(--link); font-weight: 600; }
+.ag-itens { display: grid; gap: var(--sp-2); list-style: none; margin: 0; padding: 0; }
+.ag-vazio-dia { font-size: var(--text-xs); color: var(--text-subtle); }
+/* o post no dia: a foto, a hora, os canais e a situação */
+.ag-post { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--sp-2); align-items: start; width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ag-post:hover { border-color: var(--border-strong); }
+.ag-post:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.ag-post--espera { border-color: color-mix(in srgb, var(--warning) 55%, var(--border)); background: var(--warning-soft); }
+.ag-post--falha { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.ag-mini { display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-subtle); color: var(--text-subtle); }
+.ag-mini img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ag-post-txt { display: grid; gap: 2px; min-width: 0; }
+.ag-post-txt b { font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.ag-post-txt .ag-canais { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.ag-st { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); line-height: 1.35; color: var(--text-muted); overflow-wrap: break-word; }
+/* no cartão, a situação ocupa a largura inteira, embaixo da foto e da hora (não quebra palavra na coluna estreita) */
+.ag-post > .ag-st { grid-column: 1 / -1; }
+.ag-st .ic { width: 12px; height: 12px; flex: none; }
+.ag-st--ok { color: var(--success); }
+.ag-st--espera { color: var(--warning); }
+.ag-st--falha { color: var(--danger); }
+.ag-legenda { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-3); font-size: var(--text-xs); color: var(--text-muted); }
+.ag-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.ag-falta { margin-bottom: var(--sp-3); }
+.ag-esq { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--sp-2); }
+.ag-esq .esqueleto { height: 220px; border-radius: var(--radius-lg); }
+/* no estreito, a semana vira a lista dos dias (sem rolagem para o lado) */
+@container pagina (max-width: 899px) {
+  .ag-semana, .ag-esq { grid-template-columns: minmax(0, 1fr); }
+  .ag-dia { min-height: 0; grid-template-columns: 92px minmax(0, 1fr); align-items: start; }
+  .ag-dia-cab { display: grid; justify-content: start; }
+  .ag-dia > :not(.ag-dia-cab) { grid-column: 2; }
+  .ag-esq .esqueleto { height: 72px; }
+}
+@container pagina (max-width: 479px) {
+  .ag-dia { grid-template-columns: minmax(0, 1fr); }
+  .ag-dia > :not(.ag-dia-cab) { grid-column: 1; }
+  .ag-dia-cab { display: flex; }
+}
+
+/* --- a prévia por canal (na gaveta do post) --- */
+.po-canais-seg { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.po-previa { display: grid; gap: var(--sp-2); max-width: 420px; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.po-previa-cab { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; font-size: var(--text-sm); }
+.po-avatar { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--primary-soft); color: var(--link); font-size: var(--text-xs); font-weight: 700; }
+.po-previa-cab b { min-width: 0; overflow-wrap: anywhere; }
+.po-previa-cab span { color: var(--text-muted); font-size: var(--text-xs); }
+.po-foto { position: relative; max-width: 100%; overflow: hidden; border-radius: var(--radius); background: var(--bg-subtle); }
+.po-foto img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.po-foto--alta { aspect-ratio: 4 / 5; }
+.po-foto--larga { aspect-ratio: 1.91 / 1; }
+.po-foto--inteira img { height: auto; object-fit: contain; }
+.po-texto { margin: 0; font-size: var(--text-sm); line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.po-nota { display: flex; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-xs); line-height: 1.45; color: var(--text-muted); }
+.po-nota .ic { flex: none; width: 14px; height: 14px; margin-top: 2px; color: var(--link); }
+.po-nota span { min-width: 0; overflow-wrap: anywhere; }
+.po-gaveta .dialogo-corpo { display: grid; gap: var(--sp-3); align-content: start; }
+.po-gaveta .dialogo-acoes { flex-wrap: wrap; }
+.po-gaveta .dialogo-acoes .spacer { flex: 1; }
+.po-fatos { display: grid; gap: 6px; margin: 0; font-size: var(--text-sm); color: var(--text-muted); }
+.po-fatos div { display: flex; flex-wrap: wrap; gap: 2px var(--sp-2); min-width: 0; }
+.po-fatos dt { font-weight: 600; color: var(--text); }
+.po-fatos dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+
+/* --- a situação de cada canal --- */
+.po-situacao { display: grid; gap: var(--sp-2); list-style: none; margin: 0; padding: 0; }
+.po-situacao li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: var(--sp-2); align-items: start; padding: var(--sp-2) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.po-situacao li:last-child { border-bottom: 0; }
+.po-situacao .ic { width: 18px; height: 18px; margin-top: 1px; }
+.po-situacao .ok { color: var(--success); }
+.po-situacao .espera { color: var(--warning); }
+.po-situacao .falha { color: var(--danger); }
+.po-situacao span { min-width: 0; overflow-wrap: anywhere; }
+@container pagina (max-width: 479px) {
+  .po-situacao li { grid-template-columns: 20px minmax(0, 1fr); }
+  .po-situacao li > :last-child:not(:nth-child(2)) { grid-column: 2; justify-self: start; }
+}
