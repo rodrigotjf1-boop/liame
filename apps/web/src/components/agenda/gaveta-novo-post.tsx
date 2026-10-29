@@ -2,7 +2,7 @@
 
 import type { BrandPhoto, PostChannelAccounts, PostResponse } from '@liame/contracts';
 import Link from 'next/link';
-import { type FormEvent, type RefObject, useId, useRef, useState } from 'react';
+import { type FormEvent, type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
@@ -71,19 +71,30 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
   const mudar = (parcial: Partial<NovoPost>) => setNovo((n) => ({ ...n, ...parcial }));
   const tirarErro = (campo: string) => setErros((e) => (e[campo] ? Object.fromEntries(Object.entries(e).filter(([k]) => k !== campo)) : e));
 
+  // O foco vai ao primeiro erro depois que a tela redesenha: na recusa do servidor, os campos só voltam a aceitar foco
+  // quando o "Mandando…" sai da tela (um campo desabilitado recusa o foco, e ele cairia na página).
+  const focoPendente = useRef<ErrosDoNovo | null>(null);
+  const [pedidoDeFoco, setPedidoDeFoco] = useState(0);
+  useEffect(() => {
+    const e = focoPendente.current;
+    if (!e || enviando) return;
+    focoPendente.current = null;
+    const textoComErro = novo.canais.find((c) => e[`texto-${c}`]);
+    const alvo = e.foto
+      ? ref.current?.querySelector<HTMLElement>('.po-foto-op')
+      : e.canais
+        ? ref.current?.querySelector<HTMLElement>('.po-canal input:not([disabled])')
+        : textoComErro
+          ? ref.current?.querySelector<HTMLElement>(`#${CSS.escape(`${ids}-texto`)}`)
+          : ref.current?.querySelector<HTMLElement>(`#${CSS.escape(`${ids}-hora`)}`);
+    alvo?.focus();
+  }, [pedidoDeFoco, enviando, novo.canais, ref, ids]);
+
   function focarErro(e: ErrosDoNovo) {
     const textoComErro = novo.canais.find((c) => e[`texto-${c}`]);
     if (textoComErro && !e[`texto-${abaAtual}`]) setAba(textoComErro);
-    requestAnimationFrame(() => {
-      const alvo = e.foto
-        ? ref.current?.querySelector<HTMLElement>('.po-foto-op')
-        : e.canais
-          ? ref.current?.querySelector<HTMLElement>('.po-canal input:not([disabled])')
-          : textoComErro
-            ? ref.current?.querySelector<HTMLElement>(`#${CSS.escape(`${ids}-texto`)}`)
-            : ref.current?.querySelector<HTMLElement>(`#${CSS.escape(`${ids}-hora`)}`);
-      alvo?.focus();
-    });
+    focoPendente.current = e;
+    setPedidoDeFoco((n) => n + 1);
   }
 
   async function mandar(ev: FormEvent) {
