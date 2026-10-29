@@ -3,6 +3,7 @@
    cada um). A pauta e a data comercial do dia ficam para quando o servidor as mandar (divergência do P19). */
 
 /* --- a Agenda: a semana, com os posts de cada dia --- */
+.ag-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
 .ag-semana-nav { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .ag-semana-nav .ag-periodo { min-width: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .ag-semana { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--sp-2); }
@@ -76,6 +77,36 @@
 .po-fatos div { display: flex; flex-wrap: wrap; gap: 2px var(--sp-2); min-width: 0; }
 .po-fatos dt { font-weight: 600; color: var(--text); }
 .po-fatos dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+
+/* --- o novo post: a foto, os canais, o texto, o recorte e a hora --- */
+.po-fotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: var(--sp-2); list-style: none; margin: 0; padding: 0; }
+.po-foto-op { display: block; width: 100%; padding: 0; border: 2px solid transparent; border-radius: var(--radius); background: none; cursor: pointer; overflow: hidden; }
+.po-foto-op img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+.po-foto-op[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent); }
+.po-foto-op:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.po-canais { display: grid; gap: var(--sp-2); }
+.po-canal { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); }
+.po-canal label { display: inline-flex; align-items: center; gap: var(--sp-2); font-weight: 600; cursor: pointer; }
+.po-canal .campo-dica { flex-basis: 100%; overflow-wrap: anywhere; }
+.po-canal--fora { background: var(--bg-subtle); }
+.po-canal--fora label { cursor: default; color: var(--text-muted); }
+.po-contador { justify-self: end; font-size: var(--text-xs); color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.po-contador--passou { color: var(--danger); font-weight: 600; }
+.po-copiar { justify-self: start; }
+.po-recorte { display: grid; gap: var(--sp-2); }
+.po-recorte-foto { position: relative; max-width: 100%; overflow: hidden; border-radius: var(--radius); background: var(--bg-subtle); }
+.po-recorte-foto--alta { max-width: 220px; }
+.po-recorte-foto img { display: block; width: 100%; height: auto; }
+.po-quadro { position: absolute; border: 2px solid var(--primary); border-radius: 4px; box-shadow: 0 0 0 9999px rgb(11 13 23 / .45); pointer-events: none; }
+.po-recorte label { font-size: var(--text-sm); font-weight: 600; }
+.po-recorte input[type="range"] { width: 100%; accent-color: var(--primary); }
+.po-hora { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
+.po-hora .campo { flex: 1 1 160px; min-width: 0; }
+.po-como-sai { display: grid; gap: var(--sp-2); }
+.po-gaveta textarea.input { min-height: 96px; padding: var(--sp-2) var(--sp-3); resize: vertical; }
+.po-gaveta .rotulo { font-size: var(--text-sm); font-weight: 600; }
+.po-gaveta fieldset.campo { min-width: 0; margin: 0; padding: 0; border: 0; }
+.po-gaveta legend { margin-bottom: var(--sp-2); padding: 0; font-size: var(--text-sm); font-weight: 600; }
 
 /* --- a situação de cada canal --- */
 .po-situacao { display: grid; gap: var(--sp-2); list-style: none; margin: 0; padding: 0; }

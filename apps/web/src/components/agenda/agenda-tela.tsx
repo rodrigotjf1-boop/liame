@@ -4,13 +4,15 @@ import type { BrandPhoto, BrandResponse, PostListResponse, PostResponse } from '
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Estado } from '@/components/ui/estado';
+import { useAvisar } from '@/components/ui/avisos';
 import { Icone } from '@/components/ui/icone';
 import { useAgora } from '@/lib/agora';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
+import { GavetaNovoPost } from './gaveta-novo-post';
 import { GavetaPost } from './gaveta-post';
-import { type DiaDaAgenda, inicioDaSemana, noFuso, periodo, somaDias, telaDaAgenda } from './textos';
+import { type DiaDaAgenda, inicioDaSemana, noFuso, periodo, quando, somaDias, telaDaAgenda } from './textos';
 
 // A Agenda (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; Z5c da A6): os posts da marca na semana, de
 // segunda a domingo, no fuso da empresa (`GET /v1/posts`, de quem acompanha as campanhas). Cada post abre a gaveta dele.
@@ -38,7 +40,13 @@ export function AgendaTela() {
   const navegou = useRef(false);
   const [carga, setCarga] = useState<Carga>({ tipo: 'carregando' });
   const [fotos, setFotos] = useState<Map<string, BrandPhoto>>(new Map());
+  /** As fotos para o novo post (a mais nova primeiro); nula quando as Fotos não estão ligadas ou não abriram. */
+  const [fotosLista, setFotosLista] = useState<BrandPhoto[] | null>(null);
   const [aberto, setAberto] = useState<string | null>(null);
+  const [novoAberto, setNovoAberto] = useState(false);
+  /** O post que acabou de ser mandado: o foco vai para o cartão dele quando a semana chega. */
+  const focarPost = useRef<string | null>(null);
+  const avisar = useAvisar();
   const [buscando, setBuscando] = useState(false);
   const [tentativa, setTentativa] = useState(0);
   const focarTitulo = useRef(false);
@@ -67,8 +75,9 @@ export function AgendaTela() {
     const id = ++seqFotos.current;
     const r = await chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: brand } } }));
     if (id !== seqFotos.current) return;
-    // Sem as Fotos (desligadas ou fora do ar), os cartões ficam sem a miniatura; a Agenda segue.
+    // Sem as Fotos (desligadas ou fora do ar), os cartões ficam sem a miniatura e o novo post diz por quê; a Agenda segue.
     setFotos(r.ok ? new Map(r.data.items.map((f) => [f.id, f])) : new Map());
+    setFotosLista(r.ok && r.data.enabled ? r.data.items : null);
   }, [podeVerFotos]);
 
   useEffect(() => {
@@ -104,6 +113,14 @@ export function AgendaTela() {
     titulo.current?.focus({ preventScroll: true });
   }, [carga]);
 
+  // O post recém-mandado: quando a semana dele chega, o foco vai para o cartão (quem usa o teclado continua dali).
+  useEffect(() => {
+    const id = focarPost.current;
+    if (!id || carga.tipo !== 'ok' || !carga.dados.items.some((p) => p.id === id)) return;
+    focarPost.current = null;
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-post="${id}"]`)?.focus());
+  }, [carga]);
+
   const tela = useMemo(() => (carga.tipo === 'ok' ? telaDaAgenda(carga.dados, carga.semana, hoje) : null), [carga, hoje]);
   const postAberto = carga.tipo === 'ok' && aberto ? (carga.dados.items.find((p) => p.id === aberto) ?? null) : null;
 
@@ -130,6 +147,16 @@ export function AgendaTela() {
 
   function trocarPost(post: PostResponse) {
     setCarga((c) => (c.tipo === 'ok' ? { ...c, dados: { ...c.dados, items: c.dados.items.map((p) => (p.id === post.id ? post : p)) } } : c));
+  }
+
+  /** O post mandado para aprovação: a Agenda vai para a semana dele, lê de novo e avisa quando ele sai. */
+  function mandou(post: PostResponse) {
+    const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
+    navegou.current = true;
+    focarPost.current = post.id;
+    setSemana(inicioDaSemana(dia));
+    setTentativa((t) => t + 1);
+    avisar(`Mandado para aprovação. O post sai ${quando(dia, hora, hoje)}, depois de aprovado.`);
   }
 
   const problema = erroMarcas ?? (carga.tipo === 'erro' ? carga.problema : null);
@@ -246,19 +273,27 @@ export function AgendaTela() {
           <p>Os posts da marca na semana: o que saiu, o que está marcado e o que espera a aprovação.</p>
         </div>
         {mostraNavegacao && (
-          <div className="ag-semana-nav" role="group" aria-label="Semana">
-            <button className="btn btn--icon btn--sm" type="button" onClick={() => irPara(-7)} aria-label="Semana anterior">
-              <Icone nome="chevron-left" />
-            </button>
-            <span className="ag-periodo" aria-live="polite">
-              {periodo(semana)}
-            </span>
-            <button className="btn btn--icon btn--sm" type="button" ref={seguinte} onClick={() => irPara(7)} aria-label="Semana seguinte">
-              <Icone nome="chevron-right" />
-            </button>
-            {!naSemanaDeHoje && (
-              <button className="btn btn--sm" type="button" onClick={() => irPara(0)}>
-                Esta semana
+          <div className="ag-acoes">
+            <div className="ag-semana-nav" role="group" aria-label="Semana">
+              <button className="btn btn--icon btn--sm" type="button" onClick={() => irPara(-7)} aria-label="Semana anterior">
+                <Icone nome="chevron-left" />
+              </button>
+              <span className="ag-periodo" aria-live="polite">
+                {periodo(semana)}
+              </span>
+              <button className="btn btn--icon btn--sm" type="button" ref={seguinte} onClick={() => irPara(7)} aria-label="Semana seguinte">
+                <Icone nome="chevron-right" />
+              </button>
+              {!naSemanaDeHoje && (
+                <button className="btn btn--sm" type="button" onClick={() => irPara(0)}>
+                  Esta semana
+                </button>
+              )}
+            </div>
+            {podeOperar && (
+              <button className="btn btn--primary" type="button" aria-haspopup="dialog" aria-expanded={novoAberto} onClick={() => setNovoAberto(true)}>
+                <Icone nome="plus" />
+                Novo post
               </button>
             )}
           </div>
@@ -294,6 +329,20 @@ export function AgendaTela() {
           aoFechar={() => setAberto(null)}
         />
       )}
+      {novoAberto && carga.tipo === 'ok' && marca && (
+        <GavetaNovoPost
+          marca={marca}
+          fotos={fotosLista}
+          canais={carga.dados.channels}
+          fuso={carga.dados.timezone}
+          hoje={hoje}
+          podeVerContas={podeVerContas}
+          podeVerFotos={podeVerFotos}
+          reserva={titulo}
+          aoMandar={mandou}
+          aoFechar={() => setNovoAberto(false)}
+        />
+      )}
     </section>
   );
 }
@@ -321,6 +370,7 @@ function Dia({ dia, fotos, aoAbrir }: { dia: DiaDaAgenda; fotos: Map<string, Bra
                   type="button"
                   aria-haspopup="dialog"
                   aria-label={p.rotulo}
+                  data-post={p.post.id}
                   onClick={() => aoAbrir(p.post.id)}
                 >
                   <span className="ag-mini" aria-hidden="true">
