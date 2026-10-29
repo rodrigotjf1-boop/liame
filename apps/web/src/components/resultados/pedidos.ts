@@ -106,6 +106,8 @@ export function motivoDe(reason: string | null, janela: number): string {
       return 'Id da campanha ausente ou inválido';
     case 'canal_sem_clique':
       return 'Canal sem clique';
+    case 'link_do_post':
+      return 'Pelo link de um post';
     case 'cancelado':
       return 'Pedido cancelado';
     default:
@@ -221,6 +223,11 @@ function frasesDaEvidencia(o: OrderOrigin, janela: number, fuso: string): string
       return o.channel_group === 'marketplace'
         ? ['Pedido de marketplace chega sem nenhum identificador do cliente.', 'Só entraria numa campanha por cupom exclusivo.', 'Aparece em Canais sem clique, fora do ROAS de mídia própria.']
         : ['Este canal não tem clique: só um cupom exclusivo prova a campanha.', 'Aparece em Canais sem clique, fora do ROAS de mídia própria.'];
+    case 'link_do_post':
+      return [
+        'O acesso ao cardápio veio pelo link de um post da marca, com o código só dele.',
+        'O post é orgânico: o pedido fica fora do ROAS dos anúncios, mesmo com o id de clique da rede.',
+      ];
     default:
       return ['Pode ser quem já conhece a loja e pediu direto.', 'Pedido sem evidência fica sem origem: não vira “provavelmente de um anúncio”.'];
   }
@@ -262,6 +269,7 @@ function textoDaEvidencia(o: OrderOrigin, fuso: string, janela: number): string 
       if (a.reason === 'canal_sem_clique') return `Pedido ${o.channel_group === 'marketplace' ? 'de marketplace' : 'de canal sem clique'} (${nomeDoCanal(o)}) · sem clique nem cupom exclusivo`;
       if (a.reason === 'fora_da_janela') return `O último toque de anúncio foi antes da janela de ${janela} dias do pedido`;
       if (a.reason === 'sem_id') return 'Acesso ao cardápio sem o id da campanha e sem id de clique';
+      if (a.reason === 'link_do_post') return 'Acesso ao cardápio pelo link de um post da marca · fora do ROAS dos anúncios';
       return `Nenhum clique, conversa por anúncio ou cupom exclusivo nos ${janela} dias antes do pedido`;
   }
   if (a.touch_at && a.evidence !== 'cupom') {

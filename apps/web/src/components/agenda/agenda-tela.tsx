@@ -359,6 +359,7 @@ export function AgendaTela() {
           marca={marca}
           fotos={fotosLista}
           canais={carga.dados.channels}
+          postLink={carga.dados.post_link}
           fuso={carga.dados.timezone}
           hoje={hoje}
           podeVerContas={podeVerContas}

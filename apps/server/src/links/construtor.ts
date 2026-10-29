@@ -117,7 +117,19 @@ export type ChaveDoLink = { tenantId: string; unitId: string; campaignId: string
  * sequência é a mesma a cada criação, então o reenvio encontra o mesmo link.
  */
 export function codigoDoLink(chave: ChaveDoLink, tentativa = 0): string {
-  const texto = ['liame-lk', 'v1', chave.tenantId, chave.unitId, chave.campaignId, chave.adId ?? '*', chave.destinationUrl, String(tentativa)].join('\n');
+  return codigoDoTexto(['liame-lk', 'v1', chave.tenantId, chave.unitId, chave.campaignId, chave.adId ?? '*', chave.destinationUrl, String(tentativa)].join('\n'));
+}
+
+/**
+ * O `lk` do link do post (A6, Z7; D-A6-46): a chave é a empresa e o post (um link por post), com um prefixo próprio,
+ * que não dá o mesmo texto de nenhuma chave de link de campanha. A colisão resolve como lá (`tentativa`).
+ */
+export function codigoDoPost(tenantId: string, postId: string, tentativa = 0): string {
+  return codigoDoTexto(['liame-lk', 'post-v1', tenantId, postId, String(tentativa)].join('\n'));
+}
+
+/** O texto da chave em SHA-256, os primeiros 50 bits em base 32 de Crockford. */
+function codigoDoTexto(texto: string): string {
   const hash = createHash('sha256').update(texto, 'utf8').digest();
   let codigo = '';
   let acumulado = 0;

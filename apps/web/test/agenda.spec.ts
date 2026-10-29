@@ -12,6 +12,7 @@ import {
   contaDoCanal,
   ddmm,
   dicaDaHora,
+  dicaDoLinkDoPost,
   dicaDoTexto,
   ehDoPacote,
   ehPacote,
@@ -22,6 +23,7 @@ import {
   inicioDaSemana,
   instanteNoFuso,
   linhaDoCanal,
+  linkCurto,
   noFuso,
   type NovoPost,
   periodo,
@@ -33,6 +35,7 @@ import {
   telaDaAgenda,
   textoDoBotao,
 } from '@/components/agenda/textos';
+import { motivoDe } from '@/components/resultados/pedidos';
 import { itensVisiveis, NAVEGACAO, temModos, tituloDa } from '@/components/shell/navegacao';
 
 // A Agenda (A6 · Z5c; mockups/prototipo-post.html, P19 aprovado em 21/10/2026): os posts da marca na semana, de segunda
@@ -75,6 +78,7 @@ function post(n: number, dia: string, hora: string, status: string, canais = [ca
     status,
     created_at: sp('2026-10-28', '10:15'),
     channels: canais,
+    link: null,
     ...parcial,
   };
 }
@@ -85,7 +89,7 @@ const contas = (ig = true, fb = true): PostListResponse['channels'] => [
 ];
 
 function lista(items: PostResponse[], parcial: Partial<PostListResponse> = {}): PostListResponse {
-  return { enabled: true, timezone: SP, channels: contas(), items, ...parcial };
+  return { enabled: true, timezone: SP, channels: contas(), items, post_link: { ok: true, reason: null }, ...parcial };
 }
 
 function foto(largura: number, altura: number): BrandPhoto {
@@ -439,5 +443,93 @@ describe('o pacote pronto (Z8, parte b; P22)', () => {
     expect(semFoto).toContain('A foto deste pacote foi apagada nas Fotos.');
     expect(semFoto).toContain('A foto foi apagada nas Fotos: monte outro pacote com outra foto.');
     expect(semFoto).not.toContain('Baixar a foto');
+  });
+});
+
+describe('o link do post (Z7, parte a; D-A6-46 a D-A6-48)', () => {
+  const LINK = 'https://cardapio.regem.exemplo/casa-brasa-centro?utm_source=facebook&utm_medium=social&utm_campaign=post&lk=ABCDE12345';
+  const LINK_BIO = 'https://cardapio.regem.exemplo/casa-brasa-centro?utm_source=tiktok&utm_medium=social&utm_campaign=post&lk=FGHJK67890';
+  const comLink = (p: PostResponse): PostResponse => ({
+    ...p,
+    link: LINK,
+    channels: p.channels.map((c) => (c.channel === 'facebook' ? { ...c, text: `${c.text}\n\n${LINK}` } : c)),
+  });
+
+  it('o link curto (o cardápio sem os parâmetros), o que o novo post diz da Página e o motivo em Resultados', () => {
+    expect(linkCurto(LINK)).toBe('cardapio.regem.exemplo/casa-brasa-centro');
+    expect(linkCurto('não é endereço')).toBe('não é endereço');
+    expect(dicaDoLinkDoPost({ ok: true, reason: null })).toBe('O link do post entra no fim, com o código só deste post.');
+    expect(dicaDoLinkDoPost(undefined)).toBe('O link do post entra no fim, com o código só deste post.');
+    expect(dicaDoLinkDoPost({ ok: false, reason: 'varias_lojas' })).toBe('A marca tem mais de uma loja com o cardápio ligado: por enquanto, o post sai sem o link.');
+    expect(dicaDoLinkDoPost({ ok: false, reason: 'sem_cardapio' })).toBe('Sem o cardápio do Regem ligado a uma loja desta marca, o post sai sem o link.');
+    expect(dicaDoTexto('facebook', { ok: true, reason: null })).toBe('O texto que sai na Página, com a foto. O link do post entra no fim, com o código só deste post.');
+    expect(dicaDoTexto('instagram', { ok: true, reason: null })).not.toContain('link do post');
+    expect(motivoDe('link_do_post', 7)).toBe('Pelo link de um post');
+  });
+
+  const gaveta = (p: PostResponse) =>
+    renderToStaticMarkup(
+      createElement(GavetaPost, {
+        post: p,
+        fuso: SP,
+        hoje: HOJE,
+        foto: foto(1600, 1200),
+        podeOperar: true,
+        podeVerContas: true,
+        reserva: { current: null },
+        aoMudar: () => undefined,
+        aoFalharImagem: () => undefined,
+        aoFechar: () => undefined,
+      }),
+    );
+
+  it('a gaveta do post com a Página: o link destacado no fim do texto, a nota e o fato "Link" com "Copiar o link"', () => {
+    const p = comLink(post(1, '2026-10-30', '19:00', 'agendado', [canal('facebook')]));
+    const html = gaveta(p);
+    expect(html).toContain(`<span class="po-link">${LINK.replaceAll('&', '&amp;')}</span>`);
+    expect(html).toContain('O link do post vai no fim do texto da Página, com o código só deste post: o pedido por ele fica separado dos anúncios.');
+    expect(html).toContain('<dt>Link</dt>');
+    expect(html).toContain('cardapio.regem.exemplo/casa-brasa-centro, com o código só deste post');
+    expect(html).toContain('Copiar o link');
+    // Sem o link (o post sem a Página, ou a marca sem uma loja só), nada disso aparece.
+    const sem = gaveta(post(2, '2026-10-30', '19:00', 'agendado'));
+    for (const t of ['po-link', '<dt>Link</dt>', 'Copiar o link', 'O link do post vai no fim']) expect(sem, t).not.toContain(t);
+  });
+
+  it('o pacote com o link da bio: o link curto e "Copiar o link"; o novo post só com a Página diz por que sai sem o link', () => {
+    const pacote = post(3, '2026-10-30', '12:00', 'pacote_pronto', [{ channel: 'tiktok', account_id: null, account_name: null, text: 'Peça pelo link da bio!', status: 'pronto', permalink: null, error: null, published_at: null }], { kind: 'pacote', action_id: null, link: LINK_BIO });
+    const html = renderToStaticMarkup(
+      createElement(GavetaPacote, {
+        post: pacote,
+        fuso: SP,
+        hoje: HOJE,
+        foto: foto(1200, 1800),
+        podeOperar: true,
+        reserva: { current: null },
+        aoMudar: () => undefined,
+        aoTirar: () => undefined,
+        aoFalharImagem: () => undefined,
+        aoFechar: () => undefined,
+      }),
+    );
+    expect(html).toContain('Para medir pelo pedido, o link do cardápio só deste pacote pode ir na bio: <b>cardapio.regem.exemplo/casa-brasa-centro</b>, com o código do pacote.');
+    expect(html).toContain('Copiar o link');
+    const novo = renderToStaticMarkup(
+      createElement(GavetaNovoPost, {
+        marca: MARCA,
+        fotos: [foto(1600, 1200)],
+        canais: contas(false, true),
+        postLink: { ok: false, reason: 'varias_lojas' },
+        fuso: SP,
+        hoje: HOJE,
+        podeVerContas: true,
+        podeVerFotos: true,
+        reserva: { current: null },
+        aoMandar: () => undefined,
+        aoFechar: () => undefined,
+      }),
+    );
+    expect(novo).toContain('Texto na Página do Facebook');
+    expect(novo).toContain('A marca tem mais de uma loja com o cardápio ligado: por enquanto, o post sai sem o link.');
   });
 });

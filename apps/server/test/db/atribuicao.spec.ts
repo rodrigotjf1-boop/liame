@@ -177,6 +177,14 @@ describe.skipIf(!hasDb)('atribuição determinística (ADR-020)', () => {
        values ($1, $2, $3, 'LKGOOG9001', 'Busca · cardápio', 'google_ads', $4, 'https://cardapio.exemplo.com.br/loja', 'google', 'cpc')`,
       [randomUUID(), tenantId, brandId, campanhas.C_GOOG_1],
     );
+    // O link de um post da Página (A6 · Z7; D-A6-46 e D-A6-48): marcado como de post, sem campanha.
+    const postId = randomUUID();
+    await ownerQuery(`insert into liame.social_post (id, tenant_id, brand_id, photo_sha256, publish_at) values ($1, $2, $3, $4, now())`, [postId, tenantId, brandId, 'a'.repeat(64)]);
+    await ownerQuery(
+      `insert into liame.tracking_link (id, tenant_id, brand_id, code, name, provider, kind, post_id, destination_url, utm_source, utm_medium, utm_campaign)
+       values ($1, $2, $3, 'LKPOSTFB01', 'Post · Página do Facebook', 'facebook', 'post', $4, 'https://cardapio.exemplo.com.br/loja', 'facebook', 'social', 'post')`,
+      [randomUUID(), tenantId, brandId, postId],
+    );
 
     for (const c of CASOS) {
       for (const cupom of c.cupons ?? []) {

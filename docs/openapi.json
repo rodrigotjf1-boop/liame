@@ -7858,6 +7858,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "link": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -7875,6 +7881,7 @@
                         "status",
                         "created_at",
                         "channels",
+                        "link",
                         "timezone"
                       ],
                       "additionalProperties": false
@@ -9532,6 +9539,12 @@
                                   "additionalProperties": false
                                 }
                               },
+                              "link": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
                               "timezone": {
                                 "type": "string",
                                 "minLength": 1,
@@ -9549,6 +9562,7 @@
                               "status",
                               "created_at",
                               "channels",
+                              "link",
                               "timezone"
                             ],
                             "additionalProperties": false
@@ -11858,6 +11872,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "link": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -11875,6 +11895,7 @@
                         "status",
                         "created_at",
                         "channels",
+                        "link",
                         "timezone"
                       ],
                       "additionalProperties": false
@@ -13347,6 +13368,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "link": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -13364,6 +13391,7 @@
                         "status",
                         "created_at",
                         "channels",
+                        "link",
                         "timezone"
                       ],
                       "additionalProperties": false
@@ -14818,6 +14846,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "link": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -14835,6 +14869,7 @@
                         "status",
                         "created_at",
                         "channels",
+                        "link",
                         "timezone"
                       ],
                       "additionalProperties": false
@@ -16378,6 +16413,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "link": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -16395,6 +16436,7 @@
                         "status",
                         "created_at",
                         "channels",
+                        "link",
                         "timezone"
                       ],
                       "additionalProperties": false
@@ -17939,6 +17981,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "link": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -17956,6 +18004,7 @@
                         "status",
                         "created_at",
                         "channels",
+                        "link",
                         "timezone"
                       ],
                       "additionalProperties": false
@@ -19538,6 +19587,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "link": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -19555,6 +19610,7 @@
                         "status",
                         "created_at",
                         "channels",
+                        "link",
                         "timezone"
                       ],
                       "additionalProperties": false
@@ -21137,6 +21193,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "link": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -21154,6 +21216,7 @@
                         "status",
                         "created_at",
                         "channels",
+                        "link",
                         "timezone"
                       ],
                       "additionalProperties": false
@@ -22608,6 +22671,12 @@
                             "additionalProperties": false
                           }
                         },
+                        "link": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -22625,6 +22694,7 @@
                         "status",
                         "created_at",
                         "channels",
+                        "link",
                         "timezone"
                       ],
                       "additionalProperties": false
@@ -80233,6 +80303,12 @@
                               ],
                               "additionalProperties": false
                             }
+                          },
+                          "link": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -80245,17 +80321,39 @@
                           "action_id",
                           "status",
                           "created_at",
-                          "channels"
+                          "channels",
+                          "link"
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "post_link": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "pattern": "^[a-z_]{2,30}$"
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "reason"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "enabled",
                     "timezone",
                     "channels",
-                    "items"
+                    "items",
+                    "post_link"
                   ],
                   "additionalProperties": false
                 }
@@ -80724,6 +80822,12 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "link": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -80736,7 +80840,8 @@
                     "action_id",
                     "status",
                     "created_at",
-                    "channels"
+                    "channels",
+                    "link"
                   ],
                   "additionalProperties": false
                 }
@@ -81214,6 +81319,12 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "link": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -81226,7 +81337,8 @@
                     "action_id",
                     "status",
                     "created_at",
-                    "channels"
+                    "channels",
+                    "link"
                   ],
                   "additionalProperties": false
                 }
@@ -81956,6 +82068,12 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "link": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -81968,7 +82086,8 @@
                     "action_id",
                     "status",
                     "created_at",
-                    "channels"
+                    "channels",
+                    "link"
                   ],
                   "additionalProperties": false
                 }
@@ -82382,6 +82501,12 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "link": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
@@ -82394,7 +82519,8 @@
                     "action_id",
                     "status",
                     "created_at",
-                    "channels"
+                    "channels",
+                    "link"
                   ],
                   "additionalProperties": false
                 }

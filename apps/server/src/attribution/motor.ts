@@ -66,7 +66,8 @@ export async function atribuirPedidos(
          where p.coupon_code is not null
       ),
       -- Clique captado na sessão do pedido: link do Liame > anúncio > grupo > campanha; sem nenhum deles,
-      -- só a plataforma (id de clique).
+      -- só a plataforma (id de clique). O clique pelo link de um post não é evidência de mídia (D-A6-48): o post é
+      -- orgânico, e o id de clique que a rede põe no link não faz dele um anúncio.
       cliques as (
         select p.id as order_id,
                case when coalesce(tl.campaign_id, ra.campaign_id, rg.campaign_id, rc.campaign_id) is not null
@@ -91,6 +92,7 @@ export async function atribuirPedidos(
              where c.tenant_id = p.tenant_id and c.external_id = t.campaign_external_id and (t.provider is null or c.provider = t.provider)
              order by c.last_seen_at desc, c.id limit 1) rc on true
          where coalesce(tl.provider, ra.provider, rg.provider, rc.provider, t.provider) is not null
+           and tl.kind is distinct from 'post'
       ),
       -- Conversa aberta por anúncio com o mesmo cliente pseudonimizado.
       conversas as (
@@ -131,7 +133,17 @@ export async function atribuirPedidos(
       motivo as (
         select p.id as order_id,
                case when p.so_cupom then 'canal_sem_clique'
-                    when exists (select 1 from todas a join hierarquia h on h.evidencia = a.evidencia where a.order_id = p.id) then 'fora_da_janela'
+                    -- Veio pelo link de um post, dentro da janela (D-A6-48): a origem é conhecida e não é anúncio.
+                    when exists (select 1 from liame.touchpoint t
+                                   join liame.tracking_link tl on tl.tenant_id = p.tenant_id and tl.code = t.link_code and tl.kind = 'post'
+                                  cross join modelo m
+                                  where t.connected_account_id = p.connected_account_id and t.order_external_id = p.external_id and t.kind = 'clique'
+                                    and t.occurred_at <= p.confirmed_at and t.occurred_at > p.confirmed_at - make_interval(days => m.window_days)) then 'link_do_post'
+                    when exists (select 1 from todas a join hierarquia h on h.evidencia = a.evidencia where a.order_id = p.id)
+                      or exists (select 1 from liame.touchpoint t
+                                   join liame.tracking_link tl on tl.tenant_id = p.tenant_id and tl.code = t.link_code and tl.kind = 'post'
+                                  where t.connected_account_id = p.connected_account_id and t.order_external_id = p.external_id and t.kind = 'clique'
+                                    and t.occurred_at <= p.confirmed_at) then 'fora_da_janela'
                     when exists (select 1 from liame.touchpoint t
                                   where t.connected_account_id = p.connected_account_id and t.order_external_id = p.external_id and t.kind = 'clique') then 'sem_id'
                     else 'sem_evidencia' end as reason

@@ -43,6 +43,8 @@ type Props = {
   /** As fotos prontas das Fotos da marca, a mais nova primeiro; nula quando as Fotos não estão ligadas ou não abriram. */
   fotos: BrandPhoto[] | null;
   canais: PostChannelAccounts[];
+  /** Se o post novo ganha o link do post (D-A6-46); ausente (servidor antigo), como o P19. */
+  postLink?: { ok: boolean; reason: string | null };
   fuso: string;
   hoje: string;
   podeVerContas: boolean;
@@ -56,7 +58,7 @@ type Props = {
 /** A ordem dos canais na tela e no pedido: os do Liame, depois os do pacote. */
 const ORDEM: readonly string[] = [...CANAIS_DO_LIAME, ...CANAIS_DO_PACOTE];
 
-export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas, podeVerFotos, reserva, aoMandar, aoFechar }: Props) {
+export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, podeVerContas, podeVerFotos, reserva, aoMandar, aoFechar }: Props) {
   const ids = useId();
   const primeiroCampo = useRef<HTMLButtonElement>(null);
   const fecharBt = useRef<HTMLButtonElement>(null);
@@ -322,7 +324,7 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
                 {tamanho.toLocaleString('pt-BR')} de {limite.toLocaleString('pt-BR')}
               </span>
               <span className="campo-dica" id={`${ids}-texto-d`}>
-                {dicaDoTexto(abaAtual)}
+                {dicaDoTexto(abaAtual, postLink)}
                 {novo.canais.length > 1 ? ` Cada canal tem o seu texto: comece por um e copie para ${novo.canais.length > 2 ? 'os outros' : 'o outro'}.` : ''}
               </span>
               {novo.canais.length > 1 && (

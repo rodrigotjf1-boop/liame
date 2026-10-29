@@ -1,6 +1,7 @@
 import type { PostResponse } from '@liame/contracts';
 import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
+import { linkComRastreio } from '../links/construtor.js';
 import { situacaoDoPacote, situacaoDoPost } from './post-plano.js';
 
 // A leitura dos posts como as telas os veem (a Agenda e o pedido em Aprovações, A6, Z5c): o post, os canais com a conta
@@ -18,6 +19,11 @@ type LinhaDoPost = {
   created_at: Date;
   pedido_status: string | null;
   pedido_motivo: string | null;
+  link_destino: string | null;
+  link_origem: string | null;
+  link_meio: string | null;
+  link_campanha: string | null;
+  link_codigo: string | null;
 };
 type LinhaDoCanal = {
   post_id: string;
@@ -47,9 +53,11 @@ export async function fusoDaEmpresa(tx: Tx, tenantId: string): Promise<string> {
  */
 export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaRecusa: string): Promise<PostResponse[]> {
   const p = await tx.execute<LinhaDoPost>(sql`
-    select p.id, p.brand_id, p.kind, p.photo_id, p.crop_pos, p.publish_at, p.action_id, p.created_at, r.status as pedido_status, r.status_reason as pedido_motivo
+    select p.id, p.brand_id, p.kind, p.photo_id, p.crop_pos, p.publish_at, p.action_id, p.created_at, r.status as pedido_status, r.status_reason as pedido_motivo,
+           tl.destination_url as link_destino, tl.utm_source as link_origem, tl.utm_medium as link_meio, tl.utm_campaign as link_campanha, tl.code as link_codigo
       from liame.social_post p
       left join liame.action_request r on r.id = p.action_id and r.tenant_id = p.tenant_id
+      left join liame.tracking_link tl on tl.post_id = p.id and tl.tenant_id = p.tenant_id and tl.kind = 'post'
      where p.tenant_id = ${tenantId} and ${filtro}
      order by p.publish_at, p.id
      limit 500`);
@@ -89,6 +97,11 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
         error: x.error,
         published_at: isoOuNulo(x.published_at),
       })),
+      // O link do post (A6, Z7; D-A6-46), montado como na criação (o mesmo endereço que está no fim do texto da Página).
+      link:
+        l.link_destino && l.link_origem && l.link_meio && l.link_codigo
+          ? linkComRastreio(l.link_destino, { utmSource: l.link_origem, utmMedium: l.link_meio, utmCampaign: l.link_campanha, codigo: l.link_codigo })
+          : null,
     };
   });
 }
