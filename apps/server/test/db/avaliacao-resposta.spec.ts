@@ -169,6 +169,8 @@ describe.skipIf(!hasDb)('responder a uma avaliação do Google pelo trilho (A6 �
     }
     expect(p.body.review.current.text).toBe('Comentário da avaliação rev-5');
     expect(JSON.stringify(p.body.review)).not.toContain('Pessoa Número');
+    // O post (Z5c, parte 4) é só do pedido de publicar.
+    expect(p.body.post).toBeNull();
 
     expect((await aprovar(dono(e), p.body)).body).toMatchObject({ status: 'aprovada' });
     await ciclo(e);

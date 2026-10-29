@@ -1,6 +1,6 @@
 'use client';
 
-import type { ActionResponse, BrandResponse, BudgetMonthResponse, PlanContent, PlanResponse, PlanSummary } from '@liame/contracts';
+import type { ActionResponse, BrandPhoto, BrandResponse, BudgetMonthResponse, PlanContent, PlanResponse, PlanSummary } from '@liame/contracts';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -24,10 +24,12 @@ import { DetalheMensagem, type Feito } from './detalhe-mensagem';
 import { type AcaoDeMensagem, ehPedidoDeMensagem, etiquetaDaMensagem, mensagemApresentada } from './mensagem-textos';
 import { DetalhePedido } from './detalhe-pedido';
 import { DetalhePlano } from './detalhe-plano';
+import { DetalhePost } from './detalhe-post';
 import { DetalheResposta, type Rascunho, RascunhoDaResposta } from './detalhe-resposta';
 import { DetalheSugestoes } from './detalhe-sugestoes';
 import { chaveDaAcao, chaveDoPlano, type ItemDaLista, montarLista, pendentesDe } from './lista';
 import { dinheiroDoPlano, erroDoPlano, etiquetaDoPlano, type MotivoDaRecusa, riscoDoPlano } from './planos-textos';
+import { type AcaoDePost, canaisDaLista, ehPedidoDePost, etiquetaDoPost, postApresentado } from './post-textos';
 import { type AcaoDeResposta, ehPedidoDeResposta, erroDoTexto, estrelasDoPedido, estrelasEscritas, etiquetaDaResposta, respostaApresentada, riscoDaResposta, situacaoDaResposta } from './resposta-textos';
 import { ehDoSocialMedia, ESPERA_DAS_OUTRAS_MS, escolhaDoPedido, outrasNaTela, resultadoDasSugestoes } from './sugestoes-textos';
 import { apresentar, avisoDepoisDeAprovar, erroDaDecisao, etiquetaDoDecidido, type Grupo, grupoDe, pedidoDaUrl, prazoDe, riscoDe, ROTULO_GRUPO, ROTULO_RISCO } from './textos';
@@ -76,6 +78,7 @@ export function AprovacoesTela() {
   const podeDecidirPlanos = podeVerPlanos && pode('planos.decidir');
   const podeConferirTexto = pode('dossie.ver');
   const podeOperar = pode('campanhas.operar');
+  const podeVerFotos = pode('fotos.ver');
   const temApp = me.mfa !== 'not_configured';
   // A resposta a uma avaliação de 1 ou 2 estrelas só o dono decide (A6, D-A6-4): o servidor confere; a tela só não oferece.
   const souDono = me.organizations.find((o) => o.id === me.active_organization_id)?.role === 'dono';
@@ -204,6 +207,36 @@ export function AprovacoesTela() {
   }, [marcasDasRespostas, lerNomes]);
   const nomeDe = (a: ActionResponse) => (ehPedidoDeResposta(a) ? (nomes.get(a.review.id) ?? null) : null);
 
+  // A foto de cada pedido de post (P19): das Fotos das marcas dos pedidos (`/v1/brand-photos`, endereços de 5 minutos),
+  // para quem vê as Fotos. Sem ela, a prévia diz que a foto não pôde ser mostrada; o pedido segue. A imagem que não
+  // carrega (o endereço venceu) pede endereços novos, no máximo uma vez por minuto (a quebrada não vira laço).
+  const [fotos, setFotos] = useState<Map<string, BrandPhoto>>(() => new Map());
+  const [releFotos, setReleFotos] = useState(0);
+  const releuFotosEm = useRef(0);
+  const marcasDosPosts = [...new Set([...acoes, ...(avulso ? [avulso] : [])].flatMap((a) => (ehPedidoDePost(a) && a.brand_id ? [a.brand_id] : [])))].sort().join(',');
+  useEffect(() => {
+    if (!podeVerFotos || !marcasDosPosts) return;
+    let vivo = true;
+    disparar(
+      Promise.all(marcasDosPosts.split(',').map((b) => chamar(() => api.GET('/v1/brand-photos', { params: { query: { brand_id: b } } })))).then((rs) => {
+        if (!vivo) return;
+        setFotos((antes) => {
+          const m = new Map(antes);
+          for (const r of rs) if (r.ok) for (const f of r.data.items) m.set(f.id, f);
+          return m;
+        });
+      }),
+    );
+    return () => {
+      vivo = false;
+    };
+  }, [podeVerFotos, marcasDosPosts, releFotos]);
+  const fotoFalhou = () => {
+    if (Date.now() - releuFotosEm.current < 60_000) return;
+    releuFotosEm.current = Date.now();
+    setReleFotos((n) => n + 1);
+  };
+
   // O rascunho: a avaliação é lida do que o Liame guarda (`/v1/reviews` da marca), com a resposta que já espera por ela.
   useEffect(() => {
     if (!pedidoDeRascunho) return setCargaDoRascunho(null);
@@ -226,9 +259,17 @@ export function AprovacoesTela() {
     };
   }, [pedidoDeRascunho, releRascunho, lerNomes]);
 
-  /** O pedido em palavras, para a lista e os avisos: o de anúncio, o de mensagem e o de resposta têm os textos deles. */
+  /** O pedido em palavras, para a lista e os avisos: o de anúncio, o de mensagem, o de resposta e o de post têm os textos deles. */
   const emPalavras = (a: ActionResponse) =>
-    ehPedidoDeAnuncio(a) ? anuncioApresentado(a, mes) : ehPedidoDeMensagem(a) ? mensagemApresentada(a) : ehPedidoDeResposta(a) ? respostaApresentada(a, nomeDe(a)) : apresentar(a);
+    ehPedidoDeAnuncio(a)
+      ? anuncioApresentado(a, mes)
+      : ehPedidoDeMensagem(a)
+        ? mensagemApresentada(a)
+        : ehPedidoDeResposta(a)
+          ? respostaApresentada(a, nomeDe(a))
+          : ehPedidoDePost(a)
+            ? postApresentado(a, agora)
+            : apresentar(a);
   const planos = carga.tipo === 'ok' ? carga.planos : [];
   const marcas = carga.tipo === 'ok' ? carga.marcas : [];
   const grupos = montarLista(acoes, planos, agora);
@@ -389,6 +430,20 @@ export function AprovacoesTela() {
     const r = await chamar(() => api.POST('/v1/actions/{id}/undo', { params: { path: { id: acao.id } } }));
     if (!r.ok) return { ok: false, texto: mensagemDe(r.problema) };
     avisar(r.data.status === 'aguardando_aprovacao' ? 'Pausa pedida. Nesta empresa ela espera a aprovação de uma pessoa.' : 'Pausa pedida. O que já saiu não volta.');
+    await carregar();
+    focarOTitulo();
+    return { ok: true };
+  }
+
+  // ---- o post (P19): o agendado se cancela antes de sair, direto (sem o código do app: tira o risco, D-A6-23).
+  async function cancelarPost(acao: AcaoDePost): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/actions/{id}/cancel', { params: { path: { id: acao.id } } }));
+    if (!r.ok) {
+      // O post pode ter começado a sair no meio: a leitura nova mostra como ele está agora.
+      setTentativa((n) => n + 1);
+      return { ok: false, texto: r.problema.status === 409 ? 'Não deu para cancelar: o post já começou a sair, ou já não espera mais. Veja acima como ele está agora.' : mensagemDe(r.problema) };
+    }
+    avisar('Post cancelado. Ele não sai em nenhum canal.');
     await carregar();
     focarOTitulo();
     return { ok: true };
@@ -563,9 +618,11 @@ export function AprovacoesTela() {
     const anuncio = ehPedidoDeAnuncio(a) ? a : null;
     const mensagem = ehPedidoDeMensagem(a) ? a : null;
     const resposta = ehPedidoDeResposta(a) ? a : null;
+    const post = ehPedidoDePost(a) ? a : null;
     const risco = anuncio ? textosDoAnuncio(anuncio, mes).risco : riscoDe(a);
-    // Na resposta a uma avaliação, a nota vem à frente, e a de 1 ou 2 estrelas diz que só o dono aprova (P17).
-    const riscoEscrito = resposta ? riscoDaResposta(resposta) : { classe: risco, rotulo: ROTULO_RISCO[risco] };
+    // Na resposta a uma avaliação, a nota vem à frente, e a de 1 ou 2 estrelas diz que só o dono aprova (P17); o post
+    // diz que é público, e os canais vêm à frente (P19).
+    const riscoEscrito = resposta ? riscoDaResposta(resposta) : post ? { classe: 'medio', rotulo: 'Post público' } : { classe: risco, rotulo: ROTULO_RISCO[risco] };
     const estrelas = resposta ? estrelasDoPedido(resposta) : null;
     // O pedido do Social media diz quantas sugestões traz (P31): as da rodada mais nova.
     const sugestoes = resposta && ehDoSocialMedia(resposta) ? escolhaDoPedido(resposta).novas.length : 0;
@@ -582,6 +639,7 @@ export function AprovacoesTela() {
               {i.grupo === 'pendente' ? (
                 <>
                   {p.impacto && <span className="dinheiro">{p.impacto}</span>}
+                  {post && <span>{canaisDaLista(post.post)}</span>}
                   {estrelas && <span>{estrelasEscritas(estrelas)}</span>}
                   {sugestoes > 0 && <span>{sugestoes === 1 ? '1 sugestão' : `${sugestoes} sugestões`}</span>}
                   <span className={`risco risco--${riscoEscrito.classe}`}>{riscoEscrito.rotulo}</span>
@@ -590,7 +648,7 @@ export function AprovacoesTela() {
               ) : (
                 <>
                   <span>{quem.nome}</span>
-                  <span>{anuncio ? etiquetaDoAnuncio(anuncio) : mensagem ? etiquetaDaMensagem(mensagem) : resposta ? etiquetaDaResposta(resposta) : etiquetaDoDecidido(a)}</span>
+                  <span>{anuncio ? etiquetaDoAnuncio(anuncio) : mensagem ? etiquetaDaMensagem(mensagem) : resposta ? etiquetaDaResposta(resposta) : post ? etiquetaDoPost(post) : etiquetaDoDecidido(a)}</span>
                 </>
               )}
             </span>
@@ -748,6 +806,28 @@ export function AprovacoesTela() {
         aoDesfazer={desfazer}
         aoPedirDeNovo={setPedindo}
         aoAbrir={(id) => abrir(chaveDaAcao(id), true)}
+      />
+    );
+  } else if (aberta?.tipo === 'acao' && ehPedidoDePost(aberta.acao)) {
+    const post = aberta.acao;
+    detalhe = (
+      <DetalhePost
+        acao={post}
+        grupo={grupoDe(post, agora)}
+        agora={agora}
+        pro={pro}
+        podeDecidir={podeDecidir}
+        podeOperar={podeOperar}
+        podeVerContas={pode('contas.ver')}
+        temApp={temApp}
+        foto={post.post.photo_id ? (fotos.get(post.post.photo_id) ?? null) : null}
+        titulo={tituloDoDetalhe}
+        campoCodigo={campoCodigo}
+        aoVoltar={voltarParaALista}
+        aoAprovar={aprovar}
+        aoRecusar={recusar}
+        aoCancelar={cancelarPost}
+        aoFalharImagem={fotoFalhou}
       />
     );
   } else if (aberta?.tipo === 'acao' && ehPedidoDeMensagem(aberta.acao)) {
