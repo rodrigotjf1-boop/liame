@@ -24,7 +24,18 @@ import { criarConectorGa4 } from '../connectors/ga4/conector-ga4.js';
 import { criarConectorGoogleAds } from '../connectors/google-ads/conector-google-ads.js';
 import { BALDE_DO_PERFIL_GOOGLE, criarConectorPerfilGoogle, type LojaDoPerfil } from '../connectors/google-business/conector-perfil-google.js';
 import { ESCOPO_PERFIL_GOOGLE, FLAG_PERFIL_GOOGLE, falhaDaProcura, PROVEDOR_PERFIL_GOOGLE, type ProcuraDoPerfil } from '../connectors/google-business/perfil-google.js';
-import { criarConectorMeta } from '../connectors/meta/conector-meta.js';
+import { type ConectorMeta, criarConectorMeta } from '../connectors/meta/conector-meta.js';
+import {
+  FLAG_DOS_POSTS,
+  type InstagramDaMeta,
+  NOTA_DOS_CANAIS,
+  type PaginaDaMeta,
+  PERMISSAO_DE_PUBLICAR_NA_PAGINA,
+  PERMISSAO_DE_PUBLICAR_NO_INSTAGRAM,
+  type ProcuraDosCanais,
+  PROVEDOR_INSTAGRAM,
+  PROVEDOR_PAGINA,
+} from '../connectors/meta/publicacao.js';
 import { BALDE_DO_SEARCH_CONSOLE, criarConectorSearchConsole } from '../connectors/search-console/conector-search-console.js';
 import {
   ESCOPO_SEARCH_CONSOLE,
@@ -241,18 +252,28 @@ export class ConexaoProcessor {
     let descobertas: DescobertaGuardada[];
     let perfil: ProcuraDoPerfil | null;
     let sites: ProcuraDosSites | null;
+    let canais: ProcuraDosCanais | null = null;
+    let escoposDaMeta: string[] | null = null;
     try {
-      ({ descobertas, perfil, sites } = await this.descobrir(provedor, accessToken, credencial, { tenantId, brandId: dados.brandId }));
+      ({ descobertas, perfil, sites, canais = null, escopos: escoposDaMeta = null } = await this.descobrir(provedor, accessToken, credencial, { tenantId, brandId: dados.brandId }));
     } catch (err) {
       await this.falhar(id, tenantId, err, tentativa, false);
       return;
     }
-    // A procura das lojas do Perfil (ou dos sites do Search Console) que não deu certo (o limite do Google, uma falha
-    // passageira) não apaga as que a conexão já conhecia: elas seguem na lista, e a anotação diz o que aconteceu desta
-    // vez. Sem procura (função desligada ou permissão não concedida), não fica anotação nem loja ou site.
+    // A procura das lojas do Perfil (ou dos sites do Search Console, ou da Página e do Instagram) que não deu certo (o
+    // limite do Google, uma falha passageira) não apaga as que a conexão já conhecia: elas seguem na lista, e a anotação
+    // diz o que aconteceu desta vez. Sem procura (função desligada ou permissão não concedida), não fica anotação nem
+    // loja, site, Página ou Instagram.
     const manterAsLojas = perfil !== null && perfil.resultado !== 'ok';
     const manterOsSites = sites !== null && sites.resultado !== 'ok';
-    const notas = { ...(perfil ? { [PROVEDOR_PERFIL_GOOGLE]: perfil } : {}), ...(sites ? { [PROVEDOR_SEARCH_CONSOLE]: sites } : {}) };
+    const manterOsCanais = canais !== null && canais.resultado !== 'ok';
+    const notas = {
+      ...(perfil ? { [PROVEDOR_PERFIL_GOOGLE]: perfil } : {}),
+      ...(sites ? { [PROVEDOR_SEARCH_CONSOLE]: sites } : {}),
+      ...(canais ? { [NOTA_DOS_CANAIS]: canais } : {}),
+    };
+    // As permissões da Meta, perguntadas a ela na descoberta (ERR-179): sem resposta, a coluna fica como estava.
+    const gravarEscopos = escoposDaMeta !== null;
     await withTenant(this.db, tenantId, async (tx) => {
       await tx.execute(sql`
         update liame.oauth_connection
@@ -263,8 +284,12 @@ export class ConexaoProcessor {
                  else '[]'::jsonb end
                  || case when ${manterOsSites}::boolean
                  then coalesce((select jsonb_agg(d) from jsonb_array_elements(liame.oauth_connection.discovered) as d where d ->> 'provider' = ${PROVEDOR_SEARCH_CONSOLE}), '[]'::jsonb)
+                 else '[]'::jsonb end
+                 || case when ${manterOsCanais}::boolean
+                 then coalesce((select jsonb_agg(d) from jsonb_array_elements(liame.oauth_connection.discovered) as d where d ->> 'provider' in (${PROVEDOR_PAGINA}, ${PROVEDOR_INSTAGRAM})), '[]'::jsonb)
                  else '[]'::jsonb end,
-               discovery_notes = (liame.oauth_connection.discovery_notes - ${PROVEDOR_PERFIL_GOOGLE}::text - ${PROVEDOR_SEARCH_CONSOLE}::text) || ${JSON.stringify(notas)}::jsonb,
+               discovery_notes = (liame.oauth_connection.discovery_notes - ${PROVEDOR_PERFIL_GOOGLE}::text - ${PROVEDOR_SEARCH_CONSOLE}::text - ${NOTA_DOS_CANAIS}::text) || ${JSON.stringify(notas)}::jsonb,
+               scopes = case when ${gravarEscopos}::boolean then array(select jsonb_array_elements_text(${JSON.stringify(escoposDaMeta ?? [])}::jsonb)) else liame.oauth_connection.scopes end,
                error_code = null, locked_at = null, updated_at = now()
          where id = ${id} and status = 'processando'`);
       await writeAudit(tx, {
@@ -280,6 +305,8 @@ export class ConexaoProcessor {
           contas_encontradas: descobertas.length,
           ...(perfil ? { perfil_no_google: perfil.resultado } : {}),
           ...(sites ? { search_console: sites.resultado } : {}),
+          ...(canais ? { pagina_e_instagram: canais.resultado } : {}),
+          ...(gravarEscopos ? { permissoes_da_meta: escoposDaMeta } : {}),
         },
         origin: 'worker',
       });
@@ -479,7 +506,15 @@ export class ConexaoProcessor {
     accessToken: string,
     credencial: CredencialGuardada,
     alvo: { tenantId: string; brandId: string },
-  ): Promise<{ descobertas: DescobertaGuardada[]; perfil: ProcuraDoPerfil | null; sites: ProcuraDosSites | null }> {
+  ): Promise<{
+    descobertas: DescobertaGuardada[];
+    perfil: ProcuraDoPerfil | null;
+    sites: ProcuraDosSites | null;
+    /** A procura da Página e do Instagram (só na Meta, com a função dos posts e a permissão de publicar). */
+    canais?: ProcuraDosCanais | null;
+    /** As permissões concedidas na Meta, perguntadas a ela; nulo = não se soube (a coluna fica como estava). */
+    escopos?: string[] | null;
+  }> {
     const cliente = new ClienteConector(this.db, { enderecos: enderecosDasPlataformas(this.config.plataformas, this.config.produtos) });
     if (credencial.tipo === 'regem') {
       return { descobertas: await descobrirLojas(cliente, this.config.produtos.regemApiUrl, credencial), perfil: null, sites: null };
@@ -510,7 +545,10 @@ export class ConexaoProcessor {
       );
     if (provedor === 'meta') {
       const meta = await criarConectorMeta(this.db, cliente, this.config.plataformas);
-      return { descobertas: guardar('meta_ads', await meta.descobrirContas(credencialLeitura)), perfil: null, sites: null };
+      const escopos = await this.permissoesDaMeta(meta, credencialLeitura, alvo);
+      const anuncios = guardar('meta_ads', await meta.descobrirContas(credencialLeitura));
+      const canais = await this.procurarCanaisDaMeta(meta, escopos, credencialLeitura, alvo);
+      return { descobertas: [...anuncios, ...canais.descobertas], perfil: null, sites: null, canais: canais.procura, escopos };
     }
     const escopos = credencial.tipo === 'google' ? credencial.escopos : [];
     // Escopo não concedido (a pessoa desmarcou na tela do Google) ou sem acesso: aquela plataforma fica vazia.
@@ -530,6 +568,58 @@ export class ConexaoProcessor {
       this.procurarSites(escopos, credencialLeitura, alvo),
     ]);
     return { descobertas: [...ads, ...ga4, ...lojas.descobertas, ...sites.descobertas], perfil: lojas.perfil, sites: sites.procura };
+  }
+
+  /**
+   * As permissões concedidas nesta autorização da Meta, perguntadas a ela (ERR-179: a troca do código não as devolve):
+   * o `me/permissions` e, se ele for recusado ou vier fora do formato, o `debug_token` com o token do app. Nada aqui
+   * derruba a conexão (V42): sem resposta, nulo, e a coluna `scopes` fica como estava.
+   */
+  private async permissoesDaMeta(meta: ConectorMeta, credencial: Credencial, alvo: { tenantId: string }): Promise<string[] | null> {
+    try {
+      const lidas = await meta.lerPermissoes(credencial);
+      if (lidas) return lidas;
+    } catch (err) {
+      this.logger.warn(`permissões da Meta (empresa ${alvo.tenantId}), pelo me/permissions: ${err instanceof ErroConector ? err.tipo : 'erro'}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    const app = this.config.oauth.meta;
+    if (!app?.appId || !app.appSecret) return null;
+    try {
+      return await meta.lerPermissoesPeloApp(`${app.appId}|${app.appSecret}`, credencial);
+    } catch (err) {
+      this.logger.warn(`permissões da Meta (empresa ${alvo.tenantId}), pelo debug_token: ${err instanceof ErroConector ? err.tipo : 'erro'}: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /**
+   * A Página e o Instagram onde o post sai (A6 · Z5a): só para a empresa com a função dos posts ligada E com a permissão
+   * de publicar concedida nesta autorização (a da Página traz as Páginas; a do Instagram, os Instagram), como as lojas
+   * do Perfil (D-A6-17). Nada do que acontece aqui derruba a conexão: os anúncios não têm nada com isso (V42). O que
+   * aconteceu fica anotado na conexão. A escolha de qual ligar é da pessoa, em Contas conectadas.
+   */
+  private async procurarCanaisDaMeta(
+    meta: ConectorMeta,
+    escopos: string[] | null,
+    credencial: Credencial,
+    alvo: { tenantId: string; brandId: string },
+    agora = new Date(),
+  ): Promise<{ descobertas: DescobertaGuardada[]; procura: ProcuraDosCanais | null }> {
+    const pagina = escopos?.includes(PERMISSAO_DE_PUBLICAR_NA_PAGINA) ?? false;
+    const instagram = escopos?.includes(PERMISSAO_DE_PUBLICAR_NO_INSTAGRAM) ?? false;
+    if (!pagina && !instagram) return { descobertas: [], procura: null };
+    if (!(await this.flags.isEnabled(FLAG_DOS_POSTS, this.flags.context(alvo)))) return { descobertas: [], procura: null };
+    const em = agora.toISOString();
+    try {
+      const canais = await meta.descobrirCanais(credencial);
+      const paginas = pagina ? canais.paginas.map(paginaDescoberta) : [];
+      const instagrams = instagram ? canais.instagrams.map(instagramDescoberto) : [];
+      return { descobertas: [...paginas, ...instagrams], procura: { resultado: 'ok', em, paginas: paginas.length, instagrams: instagrams.length } };
+    } catch (err) {
+      const resultado = falhaDaProcura(err instanceof ErroConector ? err.tipo : null);
+      this.logger.warn(`Páginas e Instagram da Meta (empresa ${alvo.tenantId}): ${resultado}: ${err instanceof Error ? err.message : String(err)}`);
+      return { descobertas: [], procura: { resultado, em, paginas: 0, instagrams: 0 } };
+    }
   }
 
   /**
@@ -651,6 +741,30 @@ export function lojaDoPerfilDescoberta(l: LojaDoPerfil): DescobertaGuardada {
     currency: null,
     timezone: null,
     provider_attributes: { conta: l.conta, site: l.site, place_id: l.placeId, maps_uri: l.mapsUri },
+  };
+}
+
+/**
+ * A Página do Facebook como conta descoberta (A6 · Z5a): o código é o id da Página; o nome, o dela. Guarda o Instagram
+ * ligado a ela, quando há, para a tela dizer qual vai junto. Sem moeda e sem fuso.
+ */
+export function paginaDescoberta(p: PaginaDaMeta): DescobertaGuardada {
+  return { provider: PROVEDOR_PAGINA, external_id: p.id, name: p.nome, currency: null, timezone: null, provider_attributes: { instagram_id: p.instagramId } };
+}
+
+/**
+ * O Instagram profissional como conta descoberta (A6 · Z5a): o código é o id da conta do Instagram; o nome, o usuário
+ * com a arroba (ou o nome da Página, se a Meta não mandou o usuário). Guarda a Página a que ele está ligado: é por ela
+ * que a autorização o alcança.
+ */
+export function instagramDescoberto(i: InstagramDaMeta): DescobertaGuardada {
+  return {
+    provider: PROVEDOR_INSTAGRAM,
+    external_id: i.id,
+    name: i.usuario ? `@${i.usuario}` : i.pagina,
+    currency: null,
+    timezone: null,
+    provider_attributes: { usuario: i.usuario, pagina_id: i.paginaId, pagina: i.pagina },
   };
 }
 

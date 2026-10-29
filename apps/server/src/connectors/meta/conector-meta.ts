@@ -19,6 +19,7 @@ import {
   textoDeUrl,
   versaoRegistrada,
 } from '../tipos.js';
+import { canaisDaMeta, type InstagramDaMeta, type PaginaDaMeta, permissoesConcedidas, permissoesDoDebug } from './publicacao.js';
 import { orcamentoEmMicros, SEM_DECIMAIS } from './verba.js';
 
 // Conector de LEITURA da Meta Marketing API (A2, G4; base de conhecimento §2.1). Versão vinda do
@@ -207,6 +208,44 @@ export class ConectorMeta implements ConectorLeitura {
       timezone: c.timezone_name ?? null,
       providerAttributes: { account_status: c.account_status ?? null },
     }));
+  }
+
+  /**
+   * As permissões que a pessoa concedeu ao Liame nesta autorização (`me/permissions`, só as `granted`; base §2.2, lida
+   * em 28/10/2026). A troca do código da Meta não as devolve (ERR-179): é por aqui que a coluna `scopes` da autorização
+   * passa a ter o concedido (A6 · Z5a). Nulo quando a resposta vem fora do formato.
+   */
+  async lerPermissoes(credencial: Credencial): Promise<string[] | null> {
+    const r = await this.chamar<unknown>(credencial, 'me', this.endereco(credencial, 'me/permissions', { limit: '200' }), 'permissions');
+    return permissoesConcedidas(r.corpo);
+  }
+
+  /**
+   * A segunda camada, quando o `me/permissions` é recusado (o token de usuário do sistema do Facebook Login for
+   * Business): o `debug_token`, com o token do app no cabeçalho. O token conferido vai na consulta, como a Meta pede (o
+   * rastro tira o `input_token` pelo nome, ERR-183); sem `appsecret_proof`, que é do token de usuário.
+   */
+  async lerPermissoesPeloApp(tokenDoApp: string, credencial: Credencial): Promise<string[] | null> {
+    const url = `${this.base}/${this.apiVersion}/debug_token?${new URLSearchParams({ input_token: credencial.accessToken }).toString()}`;
+    const r = await this.cliente.requisitar<unknown>({
+      provider: this.provider,
+      conta: 'me',
+      url,
+      metodo: 'GET',
+      endpoint: 'debug_token',
+      apiVersion: this.apiVersion,
+      cabecalhos: { authorization: `Bearer ${tokenDoApp}` },
+    });
+    return permissoesDoDebug(r.corpo);
+  }
+
+  /**
+   * As Páginas e as contas profissionais do Instagram que a autorização alcança (`me/accounts`, com o Instagram de cada
+   * Página; o mesmo pedido do teste da D-A6-10), para o post (A6 · Z5a). Só lê: a escolha de qual ligar é da pessoa.
+   */
+  async descobrirCanais(credencial: Credencial): Promise<{ paginas: PaginaDaMeta[]; instagrams: InstagramDaMeta[] }> {
+    const paginas = await this.paginas<unknown>(credencial, 'me', 'me/accounts', { fields: 'id,name,instagram_business_account{id,username}', limit: '100' }, 'pages');
+    return canaisDaMeta({ data: paginas });
   }
 
   /**
