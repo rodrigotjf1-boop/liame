@@ -128,7 +128,7 @@ describe.skipIf(!hasDb)('o post da marca no trilho (A6 · Z5b, parte 1)', () => 
 
     // Se a vez do pedido chegar antes da hora marcada (um adiamento, uma volta da fila), o executor o devolve para a hora
     // marcada, sem tentar nada (parte 2: a hora da ferramenta é conferida a cada execução). A publicação na hora está em
-    // `post-instagram.spec.ts`.
+    // `post-nas-redes.spec.ts`.
     await ownerQuery(`update liame.action_request set next_attempt_at = now() - interval '1 second' where id = $1`, [r.body.action_id]);
     expect(await executor.executeBatch(20, { tenantIds: [e.tenantId] })).toBe(1);
     const devolvido = await pedidoDe(r.body.action_id);

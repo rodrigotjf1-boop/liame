@@ -6,6 +6,7 @@ import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { versaoRegistrada } from '../connectors/tipos.js';
 import { DATABASE } from '../database/database.module.js';
 import { ARMAZEM_DE_IMAGENS, type ArmazemDeImagens } from '../imagens/armazem.js';
+import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { VaultService } from '../vault/vault.service.js';
 import { type DependenciasDoPost, postNaPaginaConnector, postNoInstagramConnector } from './post-publicacao.js';
 
@@ -22,6 +23,7 @@ export class EscritaPosts implements OnModuleInit {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly vault: VaultService,
     @Inject(ARMAZEM_DE_IMAGENS) private readonly armazem: ArmazemDeImagens,
+    private readonly travas: KillSwitchService,
   ) {}
 
   onModuleInit(): void {
@@ -36,6 +38,11 @@ export class EscritaPosts implements OnModuleInit {
       appSecret: this.config.plataformas.metaAppSecret,
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
       armazem: this.armazem,
+      // A trava da conta do outro canal do post (a do pedido o executor confere), com o mesmo motivo que ele mostra.
+      trava: async (tx, alvo) => {
+        const t = await this.travas.check(tx, { ...alvo, tool: 'post_publicar' });
+        return t ? `${t.level}: ${t.reason}` : null;
+      },
     };
     postNoInstagramConnector.ligar(deps);
     postNaPaginaConnector.ligar(deps);

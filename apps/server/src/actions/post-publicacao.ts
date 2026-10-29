@@ -11,12 +11,17 @@ import {
   COTA_DE_POSTS,
   ESPERA_DO_CONTEINER_MS,
   enderecoDoPost,
+  enderecoNaPagina,
   FLAG_DOS_POSTS,
+  fotoJaNaPagina,
   idDaResposta,
+  idDoPostDaPagina,
   limiteDePosts,
+  MAIOR_FOTO_DA_PAGINA_BYTES,
   postJaPublicado,
   type SituacaoDoConteiner,
   situacaoDoConteiner,
+  tokenDaPagina,
 } from '../connectors/meta/publicacao.js';
 import { chaveDoRecorteDoPost, recorteDoInstagram } from '../fotos/conferencia.js';
 import { VALIDADE_DO_ENDERECO_S } from '../fotos/fotos.service.js';
@@ -32,13 +37,16 @@ import type { ResourceState } from './tools.js';
 //
 // O recurso é o post: `resource_id` = `post:<id do post no Liame>`; `account_id` é a conta do primeiro canal (o Instagram,
 // quando ele está no post; senão, a Página), e o provedor do pedido é o dela (`instagram` ou `facebook_page`): a trava
-// por conta vale para ela (decisão técnica D-A6-32).
+// por conta vale para ela no executor, e para a conta do outro canal aqui (decisão técnica D-A6-32).
 //
 // - O estado é o post como o Liame o guarda: a foto pelo resumo do arquivo (o que sai é o aprovado, A6-10), o recorte, a
 //   hora (com a hora no fuso da empresa, que o plano confere com a janela das 8h às 22h) e cada canal com a conta, o texto
 //   e a situação. A conta desligada da marca, ou de outra marca, vira nula: o plano recusa.
 // - A versão é a do post (`social_post.version`), que sobe a cada mudança do que o post é: o trilho confere antes de
 //   escrever. A situação de cada canal não sobe a versão: a tentativa seguinte continua valendo para o mesmo post.
+// - Cada canal sai por conta própria (D-A6-7: a aprovação vale para o conjunto; um canal que não sai não segura o
+//   outro). O que é passageiro (o contêiner em preparo, o limite, a rede fora do ar) faz o pedido inteiro esperar; a
+//   volta seguinte pula o canal que já saiu.
 //
 // O Instagram (parte 2; base §2.2, reconferida em 29/10/2026): o contêiner (`POST /{ig}/media`, com o endereço assinado
 // da foto, que a Meta busca na hora, e a legenda), a situação dele (`status_code`) e a publicação (`media_publish`), com
@@ -52,8 +60,11 @@ import type { ResourceState } from './tools.js';
 //      espera, em vez de a Meta recusar;
 //   4. a foto que não cabe no Instagram vai recortada na posição aprovada (D-A6-21), num arquivo à parte no
 //      armazenamento, que sai assim que o Instagram busca a imagem.
-// A Página do Facebook é a parte seguinte: o post com ela ainda não sai (nem no Instagram), sem chamar rede nenhuma.
-// O token sai do cofre só na hora de chamar e nunca vai para log, estado ou auditoria.
+// A Página do Facebook (parte 3; base §2.2, reconferida em 29/10/2026): o token da Página pela lista das Páginas da
+// autorização (`me/accounts`, com as tarefas de quem autorizou: publicar pede `CREATE_CONTENT`) e a foto inteira com a
+// legenda (`POST /{página}/photos`, até 4 MB). Uma vez só: antes de publicar, as fotos da Página (a mesma legenda desde
+// a criação do post é a desta tentativa); depois de uma tentativa sem resposta, sem essa lista não publica de novo.
+// Os tokens saem do cofre (ou da Meta) só na hora de chamar e nunca vão para log, estado ou auditoria.
 
 const META = 'meta_ads';
 
@@ -68,29 +79,46 @@ export type DependenciasDoPost = {
   /** A versão da API registrada para cada capacidade (Capability Registry). */
   versao: (capacidade: CapacidadeDoPost) => Promise<string>;
   armazem: Pick<ArmazemDeImagens, 'ler' | 'gravar' | 'apagar' | 'enderecoDeLeitura'>;
+  /**
+   * A trava ligada para a conta de um canal que não é a do pedido (a do pedido o executor já conferiu): o motivo, ou nulo.
+   * Sem ela (os testes que não a ligam), nenhuma trava.
+   */
+  trava?: (tx: Tx, alvo: { tenantId: string; brandId: string; provider: string; accountId: string }) => Promise<string | null>;
   /** O recorte da foto (o sharp, por padrão; os testes trocam). Nulo: a foto cabe inteira. */
   recortar?: (bytes: Buffer, posicao: number) => Promise<Buffer | null>;
   /** Quanto esperar depois de criar o contêiner para a primeira conferência (os testes zeram). */
   esperaDoConteinerMs?: number;
 };
 
-/** As capacidades da Meta que o post usa, no registro (migration 0087): publicar e ler o que foi publicado. */
-export type CapacidadeDoPost = 'instagram_publish' | 'instagram_media';
+/**
+ * As capacidades da Meta que o post usa, no registro: publicar no Instagram e ler o que foi publicado lá (0087); a lista
+ * das Páginas da autorização (0085); publicar a foto na Página e ler as fotos e o post dela (0088).
+ */
+export type CapacidadeDoPost = 'instagram_publish' | 'instagram_media' | 'pages' | 'pagina_publish' | 'pagina_media';
 
 /** Depois de criar o contêiner, quanto esperar até a primeira conferência: a foto pequena costuma ficar pronta em segundos. */
 const PRIMEIRA_CONFERENCIA_MS = 5_000;
 /** No limite de posts do dia, quanto esperar até tentar de novo (o limite é de 24 horas, em janela móvel). */
 const ESPERA_DA_COTA_MS = 60 * 60_000;
-/** Quantos posts recentes do Instagram a tentativa olha antes de publicar (o post desta tentativa é dos mais novos). */
-const POSTS_RECENTES = 25;
+/** Quantos posts recentes (ou fotos da Página) a tentativa olha antes de publicar (o desta tentativa é dos mais novos). */
+const RECENTES = 25;
 
-const NO_INSTAGRAM = 'O post não saiu no Instagram.';
-const SEM_ACESSO = `A Meta recusou o acesso desta conta (a autorização foi revogada ou venceu). Conecte a Meta de novo em Contas conectadas. ${NO_INSTAGRAM}`;
-const SEM_PERMISSAO = `A Meta não deixou o Liame publicar neste Instagram: a permissão de publicar não está concedida, ou a conta deixou de ser profissional. Conecte a Meta de novo em Contas conectadas e confirme a permissão de publicar. ${NO_INSTAGRAM}`;
-const FOTO_RECUSADA = `O Instagram não aceitou a foto deste post. ${NO_INSTAGRAM} Faça um post novo com outra foto.`;
-const NAO_ACEITOU = `O Instagram não aceitou o post. ${NO_INSTAGRAM}`;
-const SEM_ARQUIVO = `O arquivo da foto deste post não está mais guardado no Liame. ${NO_INSTAGRAM} Faça um post novo.`;
-const PAGINA_DEPOIS = 'A publicação na Página do Facebook ainda não está pronta nesta versão do Liame: o post não saiu. Faça o post só com o Instagram.';
+/** A frase de cada canal: o que não saiu, e onde. */
+const NAO_SAIU: Record<CanalDoPost, string> = { instagram: 'O post não saiu no Instagram.', facebook: 'O post não saiu na Página do Facebook.' };
+const NO_CANAL: Record<CanalDoPost, string> = { instagram: 'no Instagram', facebook: 'na Página do Facebook' };
+const SEM_ACESSO = (c: CanalDoPost) =>
+  `A Meta recusou o acesso desta conta (a autorização foi revogada ou venceu). Conecte a Meta de novo em Contas conectadas. ${NAO_SAIU[c]}`;
+const SEM_PERMISSAO: Record<CanalDoPost, string> = {
+  instagram: `A Meta não deixou o Liame publicar neste Instagram: a permissão de publicar não está concedida, ou a conta deixou de ser profissional. Conecte a Meta de novo em Contas conectadas e confirme a permissão de publicar. ${NAO_SAIU.instagram}`,
+  facebook: `A Meta não deixou o Liame publicar nesta Página: a permissão de publicar não está concedida, ou quem autorizou não pode criar conteúdo nela. Conecte a Meta de novo em Contas conectadas com uma pessoa que administra a Página. ${NAO_SAIU.facebook}`,
+};
+const FOTO_RECUSADA = (c: CanalDoPost) => `${c === 'instagram' ? 'O Instagram' : 'A Página do Facebook'} não aceitou a foto deste post. ${NAO_SAIU[c]} Faça um post novo com outra foto.`;
+const NAO_ACEITOU = (c: CanalDoPost) => `${c === 'instagram' ? 'O Instagram' : 'A Página do Facebook'} não aceitou o post. ${NAO_SAIU[c]}`;
+const SEM_ARQUIVO = (c: CanalDoPost) => `O arquivo da foto deste post não está mais guardado no Liame. ${NAO_SAIU[c]} Faça um post novo.`;
+const PAGINA_FORA = `A autorização da Meta não alcança mais esta Página. Conecte a Meta de novo em Contas conectadas. ${NAO_SAIU.facebook}`;
+const FOTO_GRANDE = `A foto deste post passa de 4 MB, o limite da Página do Facebook. ${NAO_SAIU.facebook}`;
+const SEM_CONFERIR =
+  'Uma tentativa anterior pode ter publicado este post na Página do Facebook, e a Meta não deixou o Liame conferir. Para não publicar duas vezes, o Liame não tentou de novo: confira na Página e, se o post não estiver lá, faça um post novo.';
 const SUMIU = 'Este post não está mais no Liame.';
 const FORA_DO_AMBIENTE = 'A publicação nas redes não está disponível neste ambiente.';
 
@@ -103,6 +131,7 @@ type LinhaDoPost = {
   foto_chave: string | null;
   foto_largura: number | null;
   foto_altura: number | null;
+  foto_bytes: number | null;
   crop_pos: number | null;
   instagram_object_key: string | null;
   publish_at: Date;
@@ -117,7 +146,7 @@ export type PostLido = {
   estado: EstadoDoPost;
   versao: number;
   marca: string;
-  foto: { chave: string; largura: number; altura: number } | null;
+  foto: { chave: string; largura: number; altura: number; bytes: number } | null;
   criadoEm: Date;
   recorteGuardado: string | null;
 };
@@ -130,7 +159,7 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
   if (!id) return null;
   const p = await tx.execute<LinhaDoPost>(sql`
     select p.id, p.brand_id, p.photo_id, p.photo_sha256, (f.status = 'pronta' and f.removed_at is null and f.sha256 = p.photo_sha256) as foto_pronta,
-           f.object_key as foto_chave, f.width as foto_largura, f.height as foto_altura,
+           f.object_key as foto_chave, f.width as foto_largura, f.height as foto_altura, f.bytes as foto_bytes,
            p.crop_pos, p.instagram_object_key, p.publish_at, p.created_at, p.version, o.timezone as fuso
       from liame.social_post p
       join liame.organization o on o.id = p.tenant_id
@@ -163,7 +192,10 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
     estado,
     versao: post.version,
     marca: post.brand_id,
-    foto: pronta && post.foto_chave && post.foto_largura && post.foto_altura ? { chave: post.foto_chave, largura: post.foto_largura, altura: post.foto_altura } : null,
+    foto:
+      pronta && post.foto_chave && post.foto_largura && post.foto_altura
+        ? { chave: post.foto_chave, largura: post.foto_largura, altura: post.foto_altura, bytes: Number(post.foto_bytes ?? 0) }
+        : null,
     criadoEm: new Date(post.created_at),
     recorteGuardado: post.instagram_object_key,
   };
@@ -172,8 +204,14 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
 /** O canal não sai: a frase vai para a pessoa (o pedido termina como "falhou", com ela). */
 class CanalNaoSaiu extends Error {}
 
-/** O que cada chamada à Graph API leva: as dependências, a conta do Instagram, o token e as versões registradas. */
-type Graph = { deps: DependenciasDoPost; igId: string; token: string; versoes: Record<CapacidadeDoPost, string> };
+/** O que cada chamada à Graph API leva: as dependências, a conta na rede (a chave da cota), o token e as versões. */
+type Graph = { deps: DependenciasDoPost; conta: string; token: string; versoes: Partial<Record<CapacidadeDoPost, string>> };
+
+/** A linha do canal e a conta dele, como a execução as lê (travada até o fim da transação). */
+type CanalLido = { id: string; status: string; container_id: string | null; body: string; external_id: string; credential_secret_id: string | null; conta: string };
+
+/** As situações em que o canal ainda pode sair (o que já saiu, não saiu ou foi cancelado fica como está). */
+const AINDA_SAI = new Set<SituacaoDoCanal>(['aguardando', 'publicando']);
 
 export class PostPublicacaoConnector implements Connector {
   // O mesmo conector responde pelos dois provedores do post (o da conta do primeiro canal); ver o registro.
@@ -207,93 +245,52 @@ export class PostPublicacaoConnector implements Connector {
     // Na hora de sair, de novo: a foto apagada ou a conta que deixou de estar conectada não sai.
     const motivo = recusaNaHoraDeSair(lido.estado);
     if (motivo) return recusado(motivo);
-    if (lido.estado.canais.some((c) => c.canal === 'facebook')) return recusado(PAGINA_DEPOIS);
     if (options.validateOnly) return { ok: true, state: estado, version: lido.versao };
     const deps = this.deps;
     if (!deps) return recusado(FORA_DO_AMBIENTE);
 
-    try {
-      for (const canal of lido.estado.canais) {
-        if (canal.canal === 'instagram' && canal.situacao !== 'publicado') await this.noInstagram(tx, ref, lido, deps);
+    // Cada canal por conta própria: o que não sai fica anotado no canal e na frase; o passageiro faz o pedido esperar.
+    const falhas: string[] = [];
+    for (const canal of lido.estado.canais) {
+      if (!AINDA_SAI.has(canal.situacao)) continue;
+      try {
+        if (canal.canal === 'instagram') await this.noInstagram(tx, ref, lido, deps);
+        else await this.naPagina(tx, ref, lido, deps);
+      } catch (err) {
+        if (!(err instanceof CanalNaoSaiu)) throw err;
+        falhas.push(err.message);
       }
-    } catch (err) {
-      if (err instanceof CanalNaoSaiu) return recusado(err.message);
-      throw err;
     }
-    const depois = await lerEstadoDoPost(tx, ref.tenantId, ref.resourceId);
-    return { ok: true, state: (depois ?? lido).estado as unknown as ResourceState, version: lido.versao };
+    const depois = (await lerEstadoDoPost(tx, ref.tenantId, ref.resourceId)) ?? lido;
+    if (falhas.length) {
+      const sairam = depois.estado.canais.filter((c) => c.situacao === 'publicado').map((c) => NO_CANAL[c.canal]);
+      return recusado(`${sairam.length ? `O post saiu ${sairam.join(' e ')}. ` : ''}${falhas.join(' ')}`);
+    }
+    return { ok: true, state: depois.estado as unknown as ResourceState, version: lido.versao };
   }
 
-  // ---- O Instagram -------------------------------------------------------------------------------------------------
+  // ---- O que os dois canais dividem -------------------------------------------------------------------------------
 
-  private async noInstagram(tx: Tx, ref: ResourceRef, post: PostLido, deps: DependenciasDoPost): Promise<void> {
-    const c = await tx.execute<{ id: string; status: string; container_id: string | null; body: string; external_id: string; credential_secret_id: string | null }>(sql`
-      select ch.id, ch.status, ch.container_id, ch.body, a.external_id, a.credential_secret_id
+  /** O canal e a conta dele, travados até o fim da transação; e a trava da conta, se não é a do pedido. */
+  private async canal(tx: Tx, ref: ResourceRef, post: PostLido, canal: CanalDoPost, deps: DependenciasDoPost): Promise<CanalLido> {
+    const c = await tx.execute<CanalLido>(sql`
+      select ch.id, ch.status, ch.container_id, ch.body, a.external_id, a.credential_secret_id, a.id as conta
         from liame.social_post_channel ch
         join liame.connected_account a on a.id = ch.connected_account_id and a.tenant_id = ch.tenant_id
-       where ch.post_id = ${post.estado.post} and ch.tenant_id = ${ref.tenantId} and ch.channel = 'instagram'
+       where ch.post_id = ${post.estado.post} and ch.tenant_id = ${ref.tenantId} and ch.channel = ${canal}
        for update of ch`);
-    const canal = c.rows[0];
-    if (!canal) throw new CanalNaoSaiu(SUMIU);
-    if (canal.status === 'publicado') return;
-
-    try {
-      const token = await this.token(tx, canal.credential_secret_id, deps);
-      const g: Graph = { deps, igId: canal.external_id, token, versoes: { instagram_publish: await deps.versao('instagram_publish'), instagram_media: await deps.versao('instagram_media') } };
-
-      // 1. A tentativa anterior pode ter publicado sem a resposta chegar: o post já está lá?
-      const recentes = await this.chamar<unknown>(g, 'GET', `${g.igId}/media`, 'instagram_media', {
-        params: { fields: 'id,caption,timestamp,permalink', limit: String(POSTS_RECENTES) },
-      });
-      const jaSaiu = postJaPublicado(recentes, canal.body, post.criadoEm);
-      if (jaSaiu) return await this.publicado(tx, ref, post, canal.id, jaSaiu.id, jaSaiu.permalink, deps);
-
-      // 2. O contêiner da tentativa anterior, antes de criar outro.
-      if (canal.container_id) {
-        const situacao = await this.situacao(g, canal.container_id);
-        if (situacao === 'publicado') return await this.publicado(tx, ref, post, canal.id, null, null, deps);
-        if (situacao === 'pronto') return await this.publicar(tx, ref, post, canal.id, canal.container_id, g);
-        if (situacao === 'processando') throw emPreparo();
-        if (situacao === 'erro') throw new CanalNaoSaiu(FOTO_RECUSADA);
-        // Vencido (passou de 24 horas) ou sem situação conhecida: um contêiner novo.
+    const linha = c.rows[0];
+    if (!linha) throw new CanalNaoSaiu(SUMIU);
+    // A conta do pedido o executor já conferiu; a do outro canal, aqui (a trava por conta vale para os dois).
+    if (linha.conta !== ref.accountId && deps.trava) {
+      const travado = await deps.trava(tx, { tenantId: ref.tenantId, brandId: post.marca, provider: PROVEDOR_DO_CANAL[canal], accountId: linha.conta });
+      if (travado) {
+        const frase = `Uma trava está ligada (${travado}). ${NAO_SAIU[canal]}`;
+        await this.naoSaiu(tx, ref, post, linha.id, frase, deps);
+        throw new CanalNaoSaiu(frase);
       }
-
-      // 3. O limite de posts pela API, antes de criar o contêiner (A6-11).
-      const limite = limiteDePosts(await this.chamar<unknown>(g, 'GET', `${g.igId}/content_publishing_limit`, 'instagram_media', { params: { fields: 'quota_usage,config' } }));
-      if (limite && limite.usados >= limite.total) {
-        throw new ErroConector('limite', META, `o Instagram chegou a ${limite.usados} de ${limite.total} posts pela API nas últimas 24 horas`, null, ESPERA_DA_COTA_MS, COTA_DE_POSTS);
-      }
-
-      // 4. O contêiner: a foto (recortada, se não cabe no Instagram) e a legenda. A Meta busca a imagem na hora.
-      const imagem = await this.enderecoDaImagem(tx, ref, post, deps);
-      const criado = await this.chamar<unknown>(g, 'POST', `${g.igId}/media`, 'instagram_publish', { corpo: { image_url: imagem, caption: canal.body }, custo: 3 });
-      const conteiner = idDaResposta(criado);
-      if (!conteiner) throw new CanalNaoSaiu(NAO_ACEITOU);
-      await tx.execute(sql`
-        update liame.social_post_channel
-           set container_id = ${conteiner}, status = 'publicando', attempted_at = now(), error = null, updated_at = now()
-         where id = ${canal.id}`);
-      await esperar(deps.esperaDoConteinerMs ?? PRIMEIRA_CONFERENCIA_MS);
-      const situacao = await this.situacao(g, conteiner);
-      if (situacao === 'pronto') return await this.publicar(tx, ref, post, canal.id, conteiner, g);
-      if (situacao === 'publicado') return await this.publicado(tx, ref, post, canal.id, null, null, deps);
-      if (situacao === 'erro') throw new CanalNaoSaiu(FOTO_RECUSADA);
-      // Ainda preparando a foto (ou sem situação conhecida logo depois de criar): o pedido espera um minuto.
-      throw emPreparo();
-    } catch (err) {
-      if (err instanceof CanalNaoSaiu) {
-        await this.naoSaiu(tx, ref, post, canal.id, err.message, deps);
-        throw err;
-      }
-      const motivo = recusaDoInstagram(err);
-      if (!motivo) throw err;
-      if (err instanceof ErroConector) {
-        // O que a Meta disse fica no registro, para quem cuida do produto; a pessoa lê a frase em português.
-        this.logger.warn(`post ${post.estado.post}: a Meta recusou o Instagram (${err.tipo}, HTTP ${err.status ?? '?'}, código ${err.codigoProvider ?? '?'}): ${err.message}`);
-      }
-      await this.naoSaiu(tx, ref, post, canal.id, motivo, deps);
-      throw new CanalNaoSaiu(motivo);
     }
+    return linha;
   }
 
   private async token(tx: Tx, secretId: string | null, deps: DependenciasDoPost): Promise<string> {
@@ -301,6 +298,13 @@ export class PostPublicacaoConnector implements Connector {
     const credencial = guardada ? (JSON.parse(guardada) as CredencialGuardada) : null;
     if (!credencial || credencial.tipo !== 'meta') throw new ErroConector('autenticacao', META, 'autorização revogada ou ausente');
     return credencial.access_token;
+  }
+
+  /** As versões registradas das capacidades que o canal usa. */
+  private async versoes(deps: DependenciasDoPost, capacidades: readonly CapacidadeDoPost[]): Promise<Partial<Record<CapacidadeDoPost, string>>> {
+    const v: Partial<Record<CapacidadeDoPost, string>> = {};
+    for (const c of capacidades) v[c] = await deps.versao(c);
+    return v;
   }
 
   /** Uma chamada à Graph API: o token no cabeçalho e a prova do segredo do app no endereço (nunca o token, V161). */
@@ -312,12 +316,13 @@ export class PostPublicacaoConnector implements Connector {
     o: { params?: Record<string, string>; corpo?: Record<string, string>; custo?: number } = {},
   ): Promise<T | null> {
     const versao = g.versoes[capacidade];
+    if (!versao) throw new Error(`post nas redes: a versão de ${capacidade} não foi lida`);
     const q = new URLSearchParams(o.params ?? {});
     if (g.deps.appSecret) q.set('appsecret_proof', createHmac('sha256', g.deps.appSecret).update(g.token).digest('hex'));
     const consulta = q.toString();
     const r = await g.deps.cliente().requisitar<T | null>({
       provider: META,
-      conta: g.igId,
+      conta: g.conta,
       url: `${g.deps.graphUrl}/${versao}/${caminho}${consulta ? `?${consulta}` : ''}`,
       metodo,
       endpoint: capacidade,
@@ -329,32 +334,20 @@ export class PostPublicacaoConnector implements Connector {
     return r.corpo;
   }
 
-  private async situacao(g: Graph, conteiner: string): Promise<SituacaoDoConteiner> {
-    const r = await this.chamar<{ status_code?: unknown }>(g, 'GET', conteiner, 'instagram_media', { params: { fields: 'status_code' } });
-    return situacaoDoConteiner(r?.status_code);
-  }
-
-  /** Publica o contêiner pronto e guarda o post publicado (o id e o endereço). */
-  private async publicar(tx: Tx, ref: ResourceRef, post: PostLido, canal: string, conteiner: string, g: Graph): Promise<void> {
-    let publicado: unknown;
-    try {
-      publicado = await this.chamar<unknown>(g, 'POST', `${g.igId}/media_publish`, 'instagram_publish', { corpo: { creation_id: conteiner }, custo: 3 });
-    } catch (err) {
-      // "A mídia ainda não está pronta" (código 9007): espera, como o contêiner que prepara a foto (base §2.2, [NC]).
-      if (err instanceof ErroConector && err.tipo === 'definitivo' && err.codigoProvider === '9007') throw emPreparo();
+  /** O canal que não sai: a frase da recusa da Meta (ou a nossa), anotada no canal. O passageiro sobe para o trilho. */
+  private async recusaDoCanal(tx: Tx, ref: ResourceRef, post: PostLido, canal: CanalDoPost, linha: string, err: unknown, deps: DependenciasDoPost): Promise<never> {
+    if (err instanceof CanalNaoSaiu) {
+      await this.naoSaiu(tx, ref, post, linha, err.message, deps);
       throw err;
     }
-    const id = idDaResposta(publicado);
-    let permalink: string | null = null;
-    if (id) {
-      // O endereço do post é só para a Agenda: se a leitura falhar, o post saiu do mesmo jeito.
-      try {
-        permalink = enderecoDoPost((await this.chamar<{ permalink?: unknown }>(g, 'GET', id, 'instagram_media', { params: { fields: 'permalink' } }))?.permalink);
-      } catch (err) {
-        if (!(err instanceof ErroConector)) throw err;
-      }
+    const motivo = recusaDaRede(err, canal);
+    if (!motivo) throw err;
+    if (err instanceof ErroConector) {
+      // O que a Meta disse fica no registro, para quem cuida do produto; a pessoa lê a frase em português.
+      this.logger.warn(`post ${post.estado.post}: a Meta recusou ${NO_CANAL[canal]} (${err.tipo}, HTTP ${err.status ?? '?'}, código ${err.codigoProvider ?? '?'}): ${err.message}`);
     }
-    await this.publicado(tx, ref, post, canal, id, permalink, g.deps);
+    await this.naoSaiu(tx, ref, post, linha, motivo, deps);
+    throw new CanalNaoSaiu(motivo);
   }
 
   private async publicado(tx: Tx, ref: ResourceRef, post: PostLido, canal: string, externo: string | null, permalink: string | null, deps: DependenciasDoPost): Promise<void> {
@@ -374,13 +367,91 @@ export class PostPublicacaoConnector implements Connector {
     await this.limparRecorte(tx, ref, post, deps);
   }
 
+  // ---- O Instagram -------------------------------------------------------------------------------------------------
+
+  private async noInstagram(tx: Tx, ref: ResourceRef, post: PostLido, deps: DependenciasDoPost): Promise<void> {
+    const canal = await this.canal(tx, ref, post, 'instagram', deps);
+    if (canal.status === 'publicado') return;
+    try {
+      const g: Graph = { deps, conta: canal.external_id, token: await this.token(tx, canal.credential_secret_id, deps), versoes: await this.versoes(deps, ['instagram_publish', 'instagram_media']) };
+      const ig = canal.external_id;
+
+      // 1. A tentativa anterior pode ter publicado sem a resposta chegar: o post já está lá?
+      const recentes = await this.chamar<unknown>(g, 'GET', `${ig}/media`, 'instagram_media', { params: { fields: 'id,caption,timestamp,permalink', limit: String(RECENTES) } });
+      const jaSaiu = postJaPublicado(recentes, canal.body, post.criadoEm);
+      if (jaSaiu) return await this.publicado(tx, ref, post, canal.id, jaSaiu.id, jaSaiu.permalink, deps);
+
+      // 2. O contêiner da tentativa anterior, antes de criar outro.
+      if (canal.container_id) {
+        const situacao = await this.situacao(g, canal.container_id);
+        if (situacao === 'publicado') return await this.publicado(tx, ref, post, canal.id, null, null, deps);
+        if (situacao === 'pronto') return await this.publicarNoInstagram(tx, ref, post, canal.id, canal.container_id, g);
+        if (situacao === 'processando') throw emPreparo();
+        if (situacao === 'erro') throw new CanalNaoSaiu(FOTO_RECUSADA('instagram'));
+        // Vencido (passou de 24 horas) ou sem situação conhecida: um contêiner novo.
+      }
+
+      // 3. O limite de posts pela API, antes de criar o contêiner (A6-11).
+      const limite = limiteDePosts(await this.chamar<unknown>(g, 'GET', `${ig}/content_publishing_limit`, 'instagram_media', { params: { fields: 'quota_usage,config' } }));
+      if (limite && limite.usados >= limite.total) {
+        throw new ErroConector('limite', META, `o Instagram chegou a ${limite.usados} de ${limite.total} posts pela API nas últimas 24 horas`, null, ESPERA_DA_COTA_MS, COTA_DE_POSTS);
+      }
+
+      // 4. O contêiner: a foto (recortada, se não cabe no Instagram) e a legenda. A Meta busca a imagem na hora.
+      const imagem = await this.imagemDoInstagram(tx, ref, post, deps);
+      const conteiner = idDaResposta(await this.chamar<unknown>(g, 'POST', `${ig}/media`, 'instagram_publish', { corpo: { image_url: imagem, caption: canal.body }, custo: 3 }));
+      if (!conteiner) throw new CanalNaoSaiu(NAO_ACEITOU('instagram'));
+      await tx.execute(sql`
+        update liame.social_post_channel
+           set container_id = ${conteiner}, status = 'publicando', attempted_at = now(), error = null, updated_at = now()
+         where id = ${canal.id}`);
+      await esperar(deps.esperaDoConteinerMs ?? PRIMEIRA_CONFERENCIA_MS);
+      const situacao = await this.situacao(g, conteiner);
+      if (situacao === 'pronto') return await this.publicarNoInstagram(tx, ref, post, canal.id, conteiner, g);
+      if (situacao === 'publicado') return await this.publicado(tx, ref, post, canal.id, null, null, deps);
+      if (situacao === 'erro') throw new CanalNaoSaiu(FOTO_RECUSADA('instagram'));
+      // Ainda preparando a foto (ou sem situação conhecida logo depois de criar): o pedido espera um minuto.
+      throw emPreparo();
+    } catch (err) {
+      return await this.recusaDoCanal(tx, ref, post, 'instagram', canal.id, err, deps);
+    }
+  }
+
+  private async situacao(g: Graph, conteiner: string): Promise<SituacaoDoConteiner> {
+    const r = await this.chamar<{ status_code?: unknown }>(g, 'GET', conteiner, 'instagram_media', { params: { fields: 'status_code' } });
+    return situacaoDoConteiner(r?.status_code);
+  }
+
+  /** Publica o contêiner pronto e guarda o post publicado (o id e o endereço). */
+  private async publicarNoInstagram(tx: Tx, ref: ResourceRef, post: PostLido, canal: string, conteiner: string, g: Graph): Promise<void> {
+    let publicado: unknown;
+    try {
+      publicado = await this.chamar<unknown>(g, 'POST', `${g.conta}/media_publish`, 'instagram_publish', { corpo: { creation_id: conteiner }, custo: 3 });
+    } catch (err) {
+      // "A mídia ainda não está pronta" (código 9007): espera, como o contêiner que prepara a foto (base §2.2, [NC]).
+      if (err instanceof ErroConector && err.tipo === 'definitivo' && err.codigoProvider === '9007') throw emPreparo();
+      throw err;
+    }
+    const id = idDaResposta(publicado);
+    let permalink: string | null = null;
+    if (id) {
+      // O endereço do post é só para a Agenda: se a leitura falhar, o post saiu do mesmo jeito.
+      try {
+        permalink = enderecoDoPost((await this.chamar<{ permalink?: unknown }>(g, 'GET', id, 'instagram_media', { params: { fields: 'permalink' } }))?.permalink);
+      } catch (err) {
+        if (!(err instanceof ErroConector)) throw err;
+      }
+    }
+    await this.publicado(tx, ref, post, canal, id, permalink, g.deps);
+  }
+
   /**
    * O endereço assinado da foto que vai ao Instagram (5 minutos, como a tela das Fotos): a própria foto, quando cabe; o
    * recorte na posição aprovada, quando não cabe (D-A6-21), gravado ao lado das fotos da marca.
    */
-  private async enderecoDaImagem(tx: Tx, ref: ResourceRef, post: PostLido, deps: DependenciasDoPost): Promise<string> {
+  private async imagemDoInstagram(tx: Tx, ref: ResourceRef, post: PostLido, deps: DependenciasDoPost): Promise<string> {
     const foto = post.foto;
-    if (!foto) throw new CanalNaoSaiu(SEM_ARQUIVO);
+    if (!foto) throw new CanalNaoSaiu(SEM_ARQUIVO('instagram'));
     try {
       if (recorteDoInstagram(foto.largura, foto.altura) === 'nenhum') return await deps.armazem.enderecoDeLeitura(foto.chave, VALIDADE_DO_ENDERECO_S);
       const recorte = await (deps.recortar ?? recortarParaOInstagram)(await deps.armazem.ler(foto.chave), post.estado.recorte ?? 50);
@@ -392,7 +463,7 @@ export class PostPublicacaoConnector implements Connector {
       post.recorteGuardado = chave;
       return await deps.armazem.enderecoDeLeitura(chave, VALIDADE_DO_ENDERECO_S);
     } catch (err) {
-      if (err instanceof FalhaDoArmazem && err.semArquivo) throw new CanalNaoSaiu(SEM_ARQUIVO);
+      if (err instanceof FalhaDoArmazem && err.semArquivo) throw new CanalNaoSaiu(SEM_ARQUIVO('instagram'));
       throw err;
     }
   }
@@ -411,6 +482,70 @@ export class PostPublicacaoConnector implements Connector {
     await tx.execute(sql`update liame.social_post set instagram_object_key = null, updated_at = now() where id = ${post.estado.post} and tenant_id = ${ref.tenantId}`);
     post.recorteGuardado = null;
   }
+
+  // ---- A Página do Facebook ----------------------------------------------------------------------------------------
+
+  private async naPagina(tx: Tx, ref: ResourceRef, post: PostLido, deps: DependenciasDoPost): Promise<void> {
+    const canal = await this.canal(tx, ref, post, 'facebook', deps);
+    if (canal.status === 'publicado') return;
+    try {
+      const pagina = canal.external_id;
+      const versoes = await this.versoes(deps, ['pages', 'pagina_publish', 'pagina_media']);
+      // O token da Página, pela lista das Páginas da autorização (com as tarefas de quem autorizou).
+      const daAutorizacao: Graph = { deps, conta: pagina, token: await this.token(tx, canal.credential_secret_id, deps), versoes };
+      const contas = await this.chamar<unknown>(daAutorizacao, 'GET', 'me/accounts', 'pages', { params: { fields: 'id,access_token,tasks', limit: '100' } });
+      const daPagina = tokenDaPagina(contas, pagina);
+      if (!daPagina) throw new CanalNaoSaiu(PAGINA_FORA);
+      if (!daPagina.podePublicar) throw new CanalNaoSaiu(SEM_PERMISSAO.facebook);
+      const g: Graph = { deps, conta: pagina, token: daPagina.token, versoes };
+
+      // 1. A tentativa anterior pode ter publicado sem a resposta chegar: a foto já está na Página?
+      let fotos: unknown = null;
+      try {
+        fotos = await this.chamar<unknown>(g, 'GET', `${pagina}/photos`, 'pagina_media', { params: { type: 'uploaded', fields: 'id,name,created_time,link,page_story_id', limit: String(RECENTES) } });
+      } catch (err) {
+        // Sem a lista (ler as fotos pede outra tarefa na Página): na primeira tentativa, publica; depois de uma
+        // tentativa sem resposta, não arrisca publicar de novo.
+        if (!(err instanceof ErroConector) || (err.tipo !== 'permissao' && err.tipo !== 'definitivo')) throw err;
+        if (canal.status === 'publicando') throw new CanalNaoSaiu(SEM_CONFERIR);
+      }
+      const jaSaiu = fotoJaNaPagina(fotos, canal.body, post.criadoEm);
+      if (jaSaiu) return await this.publicado(tx, ref, post, canal.id, jaSaiu.post ?? jaSaiu.id, jaSaiu.link, deps);
+
+      // 2. A foto inteira (a Página aceita qualquer proporção), até 4 MB, e a legenda. A tentativa fica anotada antes.
+      const foto = post.foto;
+      if (!foto) throw new CanalNaoSaiu(SEM_ARQUIVO('facebook'));
+      if (foto.bytes > MAIOR_FOTO_DA_PAGINA_BYTES) throw new CanalNaoSaiu(FOTO_GRANDE);
+      let imagem: string;
+      try {
+        imagem = await deps.armazem.enderecoDeLeitura(foto.chave, VALIDADE_DO_ENDERECO_S);
+      } catch (err) {
+        if (err instanceof FalhaDoArmazem && err.semArquivo) throw new CanalNaoSaiu(SEM_ARQUIVO('facebook'));
+        throw err;
+      }
+      await tx.execute(sql`update liame.social_post_channel set status = 'publicando', attempted_at = now(), error = null, updated_at = now() where id = ${canal.id}`);
+      const r = await this.chamar<{ id?: unknown; post_id?: unknown }>(g, 'POST', `${pagina}/photos`, 'pagina_publish', { corpo: { url: imagem, caption: canal.body }, custo: 3 });
+      const foi = idDoPostDaPagina(r?.post_id) ?? idDaResposta(r);
+      if (!foi) throw new CanalNaoSaiu(NAO_ACEITOU('facebook'));
+      // O endereço do post é só para a Agenda: se a leitura falhar, o post saiu do mesmo jeito.
+      let permalink: string | null = null;
+      const postDaPagina = idDoPostDaPagina(r?.post_id);
+      if (postDaPagina) {
+        try {
+          permalink = enderecoNaPagina((await this.chamar<{ permalink_url?: unknown }>(g, 'GET', postDaPagina, 'pagina_media', { params: { fields: 'permalink_url' } }))?.permalink_url);
+        } catch (err) {
+          if (!(err instanceof ErroConector)) throw err;
+        }
+      }
+      await this.publicado(tx, ref, post, canal.id, foi, permalink, deps);
+    } catch (err) {
+      // A Página recusa a imagem com o código 324 ("Missing or invalid image file").
+      if (err instanceof ErroConector && err.tipo === 'definitivo' && err.codigoProvider === '324') {
+        return await this.recusaDoCanal(tx, ref, post, 'facebook', canal.id, new CanalNaoSaiu(FOTO_RECUSADA('facebook')), deps);
+      }
+      return await this.recusaDoCanal(tx, ref, post, 'facebook', canal.id, err, deps);
+    }
+  }
 }
 
 const recusado = (mensagem: string): ApplyResult => ({ ok: false, reason: 'recusado', mensagem });
@@ -421,15 +556,15 @@ function emPreparo(): ErroConector {
 }
 
 /**
- * A recusa definitiva da Meta em palavras; nulo para o que é passageiro (limite, fora do ar, o contêiner em preparo):
- * isso sobe para o trilho adiar. O texto da Meta não vai para a pessoa (vem em inglês e é de quem programa).
+ * A recusa definitiva da Meta em palavras, para o canal; nulo para o que é passageiro (limite, fora do ar, o contêiner
+ * em preparo): isso sobe para o trilho adiar. O texto da Meta não vai para a pessoa (vem em inglês e é de quem programa).
  */
-export function recusaDoInstagram(err: unknown): string | null {
+export function recusaDaRede(err: unknown, canal: CanalDoPost): string | null {
   if (!(err instanceof ErroConector)) return null;
-  if (err.tipo === 'autenticacao') return SEM_ACESSO;
-  if (err.tipo === 'permissao') return SEM_PERMISSAO;
+  if (err.tipo === 'autenticacao') return SEM_ACESSO(canal);
+  if (err.tipo === 'permissao') return SEM_PERMISSAO[canal];
   if (err.tipo !== 'definitivo') return null;
-  return NAO_ACEITOU;
+  return NAO_ACEITOU(canal);
 }
 
 /** Um para cada provedor do pedido do post: o do Instagram e o da Página (a conta do primeiro canal). */

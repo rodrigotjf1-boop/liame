@@ -243,3 +243,65 @@ export function enderecoDoPost(v: unknown): string | null {
 export function idDaResposta(corpo: unknown): string | null {
   return idDaGraph((corpo as { id?: unknown } | null)?.id);
 }
+
+// A foto na Página do Facebook (A6 · Z5b, parte 3; base §2.2, reconferida em 29/10/2026 nas páginas oficiais
+// `…/docs/graph-api/reference/page/photos/`, `…/reference/photo/` e `…/docs/pages-api/getting-started`, v26.0).
+
+/** O maior arquivo que a Página aceita na foto ("no máximo 4 MB"). A cópia guardada (ADR-021) fica bem abaixo. */
+export const MAIOR_FOTO_DA_PAGINA_BYTES = 4 * 1024 * 1024;
+/** A tarefa que a pessoa precisa ter na Página para o token dela publicar (`CREATE_CONTENT`). */
+export const TAREFA_DE_PUBLICAR = 'CREATE_CONTENT';
+
+/**
+ * O token da Página, na resposta de `GET /me/accounts?fields=id,access_token,tasks` (Pages API, "Get a Page access
+ * token": cada Página com o token dela e as tarefas de quem autorizou). Nulo quando a autorização não alcança a Página.
+ * `podePublicar`: quem autorizou tem a tarefa de criar conteúdo nela.
+ */
+export function tokenDaPagina(resposta: unknown, paginaId: string): { token: string; podePublicar: boolean } | null {
+  const data = (resposta as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return null;
+  for (const p of data as Array<Record<string, unknown> | null>) {
+    if (idDaGraph(p?.id) !== paginaId) continue;
+    const token = texto(p?.access_token);
+    if (!token) return null;
+    const tarefas = Array.isArray(p?.tasks) ? (p.tasks as unknown[]) : [];
+    return { token, podePublicar: tarefas.includes(TAREFA_DE_PUBLICAR) };
+  }
+  return null;
+}
+
+/** O id do post da Página (`{página}_{post}`, como o `post_id` da foto publicada); fora do formato, nulo. */
+export function idDoPostDaPagina(v: unknown): string | null {
+  return typeof v === 'string' && /^\d{1,30}_\d{1,30}$/.test(v) ? v : null;
+}
+
+/** O endereço do post na Página (`permalink_url` do post, ou o `link` da foto): só `https` de um domínio do Facebook. */
+export function enderecoNaPagina(v: unknown): string | null {
+  if (typeof v !== 'string' || v.length > 500) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' && (u.hostname === 'facebook.com' || u.hostname.endsWith('.facebook.com')) ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A foto que já saiu na Página com esta legenda desde `desde`, na resposta de `GET /{página}/photos?type=uploaded&fields=
+ * id,name,created_time,link,page_story_id` (o `name` da foto é a legenda: "Corresponds to caption when creating
+ * photos"; a data vem como a do Instagram, `+0000`). É como a tentativa seguinte sabe que a anterior publicou sem a
+ * resposta ter chegado (A6-9). Nulo quando não há.
+ */
+export function fotoJaNaPagina(resposta: unknown, legenda: string, desde: Date): { id: string; post: string | null; link: string | null } | null {
+  const data = (resposta as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return null;
+  const procurada = legendaComparavel(legenda);
+  const aPartirDe = Math.floor(desde.getTime() / 1000) * 1000;
+  for (const f of data as Array<Record<string, unknown> | null>) {
+    const id = idDaGraph(f?.id);
+    if (!id || typeof f?.name !== 'string' || legendaComparavel(f.name) !== procurada) continue;
+    const quando = horaDoInstagram(f.created_time);
+    if (!Number.isNaN(quando) && quando >= aPartirDe) return { id, post: idDoPostDaPagina(f.page_story_id), link: enderecoNaPagina(f.link) };
+  }
+  return null;
+}
