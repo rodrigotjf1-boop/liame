@@ -10,8 +10,20 @@ export const POST_CHANNELS = ['instagram', 'facebook'] as const;
 export const PostChannel = z.enum(POST_CHANNELS);
 export type PostChannel = z.infer<typeof PostChannel>;
 
-/** O limite do texto de cada canal: a legenda do Instagram até 2.200 caracteres; a Página, o do Liame. */
-export const POST_TEXT_LIMITS = { instagram: 2200, facebook: 10000 } as const;
+/**
+ * Os canais do pacote pronto (A6, Z8; D-A6-12 e D-A6-25; P22): o Liame monta o texto, a foto e a hora, e quem publica é a
+ * pessoa. Cada rede vira um pacote à parte, sem pedido em Aprovações.
+ */
+export const PACKAGE_CHANNELS = ['tiktok', 'youtube'] as const;
+export const PackageChannel = z.enum(PACKAGE_CHANNELS);
+export type PackageChannel = z.infer<typeof PackageChannel>;
+
+/**
+ * O limite do texto de cada canal: a legenda do Instagram até 2.200 caracteres; a Página, o do Liame; o TikTok, 2.200 (o
+ * que vale em toda conta: a Central do TikTok não publica o número, e há contas com 4.000 [NC]); o YouTube, os 5.000 da
+ * descrição (Central do YouTube, lida em 29/10/2026).
+ */
+export const POST_TEXT_LIMITS = { instagram: 2200, facebook: 10000, tiktok: 2200, youtube: 5000 } as const;
 
 export const CreatePostRequest = z.strictObject({
   brand_id: z.uuid(),
@@ -25,11 +37,15 @@ export const CreatePostRequest = z.strictObject({
    * o recorte é no centro.
    */
   crop_pos: z.int().min(0).max(100).optional(),
-  /** Um ou dois canais, cada um com o texto dele (sem repetir o canal). */
+  /**
+   * De um a quatro canais, cada um com o texto dele (sem repetir o canal). Os do Liame (o Instagram e a Página) viram o
+   * post com o pedido em Aprovações; os do pacote (o TikTok e o YouTube) viram um pacote para cada rede, pronto na Agenda,
+   * sem pedido (D-A6-25).
+   */
   channels: z
-    .array(z.strictObject({ channel: PostChannel, text: z.string().trim().min(1).max(10000) }))
+    .array(z.strictObject({ channel: z.enum([...POST_CHANNELS, ...PACKAGE_CHANNELS]), text: z.string().trim().min(1).max(10000) }))
     .min(1)
-    .max(POST_CHANNELS.length),
+    .max(POST_CHANNELS.length + PACKAGE_CHANNELS.length),
 });
 export type CreatePostRequest = z.infer<typeof CreatePostRequest>;
 
@@ -41,8 +57,9 @@ export const PostChannelResponse = z.strictObject({
   account_name: z.string().nullable(),
   text: z.string(),
   /**
-   * `aguardando` (o pedido espera a aprovação ou a hora), `publicando`, `publicado`, `falhou`, `cancelado` ou `apagado`
-   * (a lista pode crescer).
+   * `aguardando` (o pedido espera a aprovação ou a hora), `publicando`, `publicado`, `falhou`, `cancelado` ou `apagado`;
+   * no pacote, `pronto` (espera a pessoa publicar), `publicado` (a pessoa marcou) ou `cancelado` (tirado da Agenda). A
+   * lista pode crescer.
    */
   status: z.string().regex(/^[a-z_]{2,30}$/),
   /** O endereço do post publicado na rede. */
@@ -56,6 +73,11 @@ export type PostChannelResponse = z.infer<typeof PostChannelResponse>;
 export const PostResponse = z.strictObject({
   id: z.uuid(),
   brand_id: z.uuid(),
+  /**
+   * `post` (o Liame publica, depois do pedido aprovado) ou `pacote` (o pacote pronto de uma rede, que a pessoa publica;
+   * A6, Z8). A lista pode crescer.
+   */
+  kind: z.string().regex(/^[a-z_]{2,30}$/),
   /** A foto das Fotos; nula quando ela foi apagada depois (o post não sai). */
   photo_id: z.uuid().nullable(),
   crop_pos: z.int().min(0).max(100).nullable(),
@@ -65,7 +87,8 @@ export const PostResponse = z.strictObject({
   /**
    * A situação do post: `esperando_aprovacao`, `agendado` (aprovado, espera a hora), `publicando`, `publicado`,
    * `em_parte` (saiu num canal e não no outro), `nao_saiu`, `cancelado`, `recusado` ou `expirado` (ninguém aprovou no
-   * prazo). A lista pode crescer.
+   * prazo); a do pacote: `pacote_pronto` (a pessoa publica), `pacote_publicado` (ela marcou "Publiquei") ou `cancelado`
+   * (tirado da Agenda). A lista pode crescer.
    */
   status: z.string().regex(/^[a-z_]{2,30}$/),
   created_at: z.iso.datetime(),

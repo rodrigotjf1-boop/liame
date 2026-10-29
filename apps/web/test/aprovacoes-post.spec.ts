@@ -31,6 +31,7 @@ type Post = AcaoDePost['post'];
 const post = (o: Partial<Post> = {}): Post => ({
   id: uuid(70),
   brand_id: uuid(50),
+  kind: 'post',
   photo_id: uuid(80),
   crop_pos: null,
   // Sexta, 30/10, 19:00 em São Paulo.

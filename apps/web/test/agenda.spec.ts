@@ -59,6 +59,7 @@ function post(n: number, dia: string, hora: string, status: string, canais = [ca
   return {
     id: id(n),
     brand_id: MARCA,
+    kind: 'post',
     photo_id: id(900 + n),
     crop_pos: null,
     publish_at: sp(dia, hora),

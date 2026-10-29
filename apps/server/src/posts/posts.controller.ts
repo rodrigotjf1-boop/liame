@@ -15,7 +15,7 @@ import {
 import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
-import { ACAO_CRIAR_POST, PostsService, RECURSO_DO_POST } from './posts.service.js';
+import { ACAO_CRIAR_POST, ACAO_PACOTE_PUBLICADO, ACAO_PACOTE_TIRADO, PostsService, RECURSO_DO_POST } from './posts.service.js';
 
 // Os posts da marca (A6, Z5b; protótipo P19, aprovado em 21/10/2026). A Agenda (os posts de um período) e o novo post,
 // que vira um pedido em Aprovações: nada sai sem a aprovação de uma pessoa, com o código do app, na hora marcada. A
@@ -61,7 +61,7 @@ export class PostsController {
   @ApiOperation({
     summary: 'Novo post: o post e o pedido em Aprovações',
     description:
-      'Grava o post (a foto das Fotos da marca, os canais com o texto de cada um, a hora e o recorte do Instagram) e faz o pedido em Aprovações (a ferramenta `post_publicar`), que só sai com a aprovação de uma pessoa, com o código do app, na hora marcada. Precisa da função `social_write` ligada (409 `funcao-desligada`). Recusas (422): `canal-repetido`, `texto-longo-demais` (o Instagram aceita até 2.200 caracteres), `foto-fora-da-marca` (a foto não é uma pronta das Fotos desta marca), `hora-no-passado`, `hora-longe-demais` (até 60 dias), `hora-fora-da-janela` (das 8h às 22h, no fuso da empresa), `canal-nao-conectado` (a Página ou o Instagram não está ligado à marca em Contas conectadas) e `canal-com-duas-contas`. O recorte (`crop_pos`, de 0 a 100) só vale quando o Instagram está no post e a foto não cabe nele; sem ele, no centro. O trilho também pode recusar o pedido (a política, a trava).',
+      'Grava o post (a foto das Fotos da marca, os canais com o texto de cada um, a hora e o recorte do Instagram) e faz o pedido em Aprovações (a ferramenta `post_publicar`), que só sai com a aprovação de uma pessoa, com o código do app, na hora marcada. O TikTok e o YouTube não entram no pedido: cada um vira um pacote pronto (`kind: pacote`), na mesma hora, sem pedido e sem o código, que a pessoa publica e marca (A6, Z8). Devolve o post do Liame ou, sem ele, o primeiro pacote. Precisa da função `social_write` ligada (409 `funcao-desligada`). Recusas (422): `canal-repetido`, `texto-longo-demais` (o Instagram e o TikTok aceitam até 2.200 caracteres; o YouTube, 5.000), `foto-fora-da-marca` (a foto não é uma pronta das Fotos desta marca), `hora-no-passado`, `hora-longe-demais` (até 60 dias), `hora-fora-da-janela` (das 8h às 22h, no fuso da empresa), `canal-nao-conectado` (a Página ou o Instagram não está ligado à marca em Contas conectadas), `canal-com-duas-contas` e `politica-negou` (o texto do pacote com uma palavra que a política proíbe). O recorte (`crop_pos`, de 0 a 100) só vale quando o Instagram está no post e a foto não cabe nele; sem ele, no centro. O trilho também pode recusar o pedido (a política, a trava).',
   })
   @ApiCreatedResponse({ standardSchema: PostResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
@@ -71,5 +71,41 @@ export class PostsController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   criar(@Auth() auth: AuthContext, @Body({ schema: CreatePostRequest }) body: CreatePostRequest): Promise<PostResponse> {
     return this.posts.criar(auth, body);
+  }
+
+  @Post(':id/published')
+  @HttpCode(200)
+  @Permissao('campanhas.operar')
+  @Auditar(ACAO_PACOTE_PUBLICADO, { recurso: RECURSO_DO_POST })
+  @ApiOperation({
+    summary: '"Publiquei": o pacote pronto foi publicado pela pessoa',
+    description:
+      'Só para o pacote (`kind: pacote`; o post do Liame, 409 `nao-e-pacote`): o pacote pronto fica publicado, com a hora. A segunda vez não muda nada; o pacote tirado da Agenda, 409 `pacote-tirado`. O Liame não confere na rede (não lê o TikTok nem o YouTube). Sem o código do app (D-A6-25).',
+  })
+  @ApiOkResponse({ standardSchema: PostResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  marcarPublicado(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<PostResponse> {
+    return this.posts.marcarPublicado(auth, id);
+  }
+
+  @Post(':id/remove')
+  @HttpCode(200)
+  @Permissao('campanhas.operar')
+  @Auditar(ACAO_PACOTE_TIRADO, { recurso: RECURSO_DO_POST })
+  @ApiOperation({
+    summary: 'Tirar o pacote pronto da Agenda',
+    description:
+      'Só para o pacote (`kind: pacote`; o post do Liame, 409 `nao-e-pacote`, e ele se cancela pelo pedido): o pacote pronto sai da Agenda, e nada foi publicado pelo Liame. A segunda vez não muda nada; o já marcado como publicado, 409 `pacote-ja-publicado`.',
+  })
+  @ApiOkResponse({ standardSchema: PostResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  tirar(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<PostResponse> {
+    return this.posts.tirar(auth, id);
   }
 }
