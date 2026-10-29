@@ -171,6 +171,7 @@ const PRINCIPAIS: Record<string, Array<[chave: string, texto: (n: number) => str
   pesquisador: [['paginas_lidas', (n) => (n === 1 ? 'página lida' : 'páginas lidas')], ['sugestoes', (n) => (n === 1 ? 'sugestão para Minha marca' : 'sugestões para Minha marca')]],
   criativo: [['pecas_escritas', (n) => (n === 1 ? 'peça feita' : 'peças feitas')], ['pecas_aprovadas', (n) => (n === 1 ? 'aprovada' : 'aprovadas')]],
   crm: [['mensagens_propostas', (n) => (n === 1 ? 'mensagem proposta' : 'mensagens propostas')], ['mensagens_enviadas', (n) => (n === 1 ? 'enviada' : 'enviadas')]],
+  social: [['respostas_propostas', (n) => (n === 1 ? 'resposta sugerida' : 'respostas sugeridas')], ['respostas_aprovadas', (n) => (n === 1 ? 'aprovada e enviada ao Google' : 'aprovadas e enviadas ao Google')]],
   trafego: [['recomendacoes', (n) => (n === 1 ? 'recomendação' : 'recomendações')], ['mesma_direcao', () => 'na mesma direção do que a equipe fez']],
   compliance: [['textos_barrados', (n) => (n === 1 ? 'texto barrado antes de aparecer' : 'textos barrados antes de aparecer')], ['textos_conferidos', (n) => (n === 1 ? 'texto conferido' : 'textos conferidos')]],
 };

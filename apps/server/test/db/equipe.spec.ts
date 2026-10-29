@@ -5,6 +5,7 @@ import { createDatabase, type Database, runMigrations, uuidv7, withTenant } from
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ActionService } from '../../src/actions/action.service.js';
 import { funcionarioAtivo } from '../../src/ai/registro/ativacao.js';
+import { oQueDesligaAsSugestoes } from '../../src/avaliacoes/sugestoes.js';
 import { FlagService } from '../../src/flags/flag.service.js';
 import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { ResultsService } from '../../src/results/results.service.js';
@@ -15,6 +16,7 @@ import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, sta
 import { ligarCriativo, ligarIa } from '../helpers/ia.js';
 import { contaDoRegemcast, descontoDasMensagens, semearMensagemDoCrm, semearPropostaDoCrm } from '../helpers/mensagens-semeadas.js';
 import { pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
+import { avaliacaoDaLoja, lojaDoPerfil, semearPedidoDoSocial, semearVezDoSocial } from '../helpers/respostas-semeadas.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // A3 · I13b: Sua equipe. A leitura mostra a situação de cada membro (pelas chaves da empresa, do plano, das flags e da
@@ -116,6 +118,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
       trafego: 'desligado_pela_liame',
       criativo: 'desligado_pela_liame',
       crm: 'desligado_pela_liame',
+      social: 'desligado_pela_liame',
     });
     expect(t).toMatchObject({ ai: { enabled: false, spent_usd_micros: '0', band: 'livre' }, stop: null, can_manage: true, can_stop: true });
     expect(t.month.from <= hoje && hoje <= t.month.to).toBe(true);
@@ -127,7 +130,18 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     await ligarSombra(e.tenantId);
     t = await ver(e, e.brandId);
     // O Criativo precisa da flag dele além da IA: sem ela, segue desligado pela distribuição.
-    expect(situacoes(t)).toEqual({ lia: 'ativo', analista: 'ativo', relatorios: 'ativo', compliance: 'ativo', estrategista: 'ativo', pesquisador: 'ativo', trafego: 'sombra', criativo: 'desligado_pela_liame', crm: 'desligado_pela_liame' });
+    expect(situacoes(t)).toEqual({
+      lia: 'ativo',
+      analista: 'ativo',
+      relatorios: 'ativo',
+      compliance: 'ativo',
+      estrategista: 'ativo',
+      pesquisador: 'ativo',
+      trafego: 'sombra',
+      criativo: 'desligado_pela_liame',
+      crm: 'desligado_pela_liame',
+      social: 'desligado_pela_liame',
+    });
     await ligarCriativo(flags, e.tenantId);
     t = await ver(e, e.brandId);
     expect(situacoes(t).criativo).toBe('ativo');
@@ -137,7 +151,18 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     expect(parada.status).toBe(201);
     t = await ver(e, e.brandId);
     expect(t.stop).toMatchObject({ id: parada.body.id, level: 'tenant', by_company: true, reason: 'Revisando os textos da semana', by: { id: e.userId } });
-    expect(situacoes(t)).toEqual({ lia: 'parado', analista: 'parado', relatorios: 'ativo', compliance: 'ativo', estrategista: 'parado', pesquisador: 'parado', trafego: 'sombra', criativo: 'parado', crm: 'desligado_pela_liame' });
+    expect(situacoes(t)).toEqual({
+      lia: 'parado',
+      analista: 'parado',
+      relatorios: 'ativo',
+      compliance: 'ativo',
+      estrategista: 'parado',
+      pesquisador: 'parado',
+      trafego: 'sombra',
+      criativo: 'parado',
+      crm: 'desligado_pela_liame',
+      social: 'desligado_pela_liame',
+    });
     expect((await api.call('DELETE', `/v1/kill-switches/${parada.body.id}`, { cookie: e.cookie })).status).toBe(204);
     expect((await ver(e, e.brandId)).stop).toBeNull();
   });
@@ -354,6 +379,88 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     expect(numeros(await ver(vizinha, vizinha.brandId), 'crm')).toEqual(zerado);
   });
 
+  it('o Social media (A6 · P21, sem os posts): ainda não ligado sem as chaves dele; ligado, a loja do Perfil, a fila e o teto; as respostas do mês; e desligar, que para as sugestões', async () => {
+    const e = await empresa();
+    await ligarIa(flags, e.tenantId);
+    const social = async () => doMembro(await ver(e, e.brandId), 'social');
+    const ligar = async (flag: string) => {
+      await ownerQuery(`insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), $1, 'tenant', $2, 'true'::jsonb, 'testes')`, [flag, e.tenantId]);
+      flags.invalidate();
+    };
+    const zerado = { respostas_propostas: '0', respostas_aprovadas: '0', respostas_recusadas: '0', respostas_esperando: '0', sugestoes_barradas: '0', retiradas_na_conferencia: '0' };
+
+    // Com a IA ligada e sem as chaves dele: ainda não está ligado para a empresa, e não há o que dizer do que falta.
+    let t = await ver(e, e.brandId);
+    expect(doMembro(t, 'social')).toMatchObject({ kind: 'ia', status: 'desligado_pela_liame', working_now: false, can_pause: true, paused: null, in_progress: null, blocked_by: null, cost: { usd_micros: '0', calls: 0 } });
+    expect(numeros(t, 'social')).toEqual(zerado);
+    // Só a função das sugestões não basta: sem a resposta pelo Liame, o pedido nem nasceria.
+    await ligar('respostas_sugeridas');
+    expect((await social()).status).toBe('desligado_pela_liame');
+    await ligar('perfil_google_write');
+
+    // Ligado, sem loja do Perfil conectada nesta marca: não há avaliação para responder.
+    expect(await social()).toMatchObject({ status: 'ativo', blocked_by: 'sem_perfil', in_progress: null, working_now: false });
+    const loja = await lojaDoPerfil(e);
+    // A loja que o Google recusou (desconectada, ainda ligada) não serve.
+    await ownerQuery(`update liame.connected_account set status = 'desconectada' where id = $1`, [loja]);
+    expect((await social()).blocked_by).toBe('sem_perfil');
+    await ownerQuery(`update liame.connected_account set status = 'ativa' where id = $1`, [loja]);
+    expect(await social()).toMatchObject({ status: 'ativo', blocked_by: null, in_progress: null, working_now: false });
+
+    // A fila: duas avaliações esperam as sugestões (uma delas, uma nova tentativa); ele está trabalhando, com quantas e
+    // desde quando espera a mais antiga, sem o texto de nenhuma.
+    const alvo = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId };
+    const [a1, a2] = [await avaliacaoDaLoja(e, loja, 5), await avaliacaoDaLoja(e, loja, 2)];
+    await semearVezDoSocial(alvo, a1, { status: 'esperando', haMinutos: 10 });
+    await semearVezDoSocial(alvo, a2, { status: 'esperando', motivo: 'ia_fora_do_ar', haMinutos: 4 });
+    const m = await social();
+    expect(m).toMatchObject({ status: 'ativo', working_now: true, blocked_by: null, in_progress: { subject: null, count: 2, by: null } });
+    expect(Date.now() - new Date(m.in_progress!.since).getTime()).toBeGreaterThanOrEqual(9 * 60_000);
+    // O teto de IA da empresa segura a fila: a vez guarda qual, e a ficha diz; o do mês pesa mais que o do dia.
+    await ownerQuery(`update liame.review_suggestion set reason = 'ia_teto_dia' where review_id = $1`, [a2]);
+    expect(await social()).toMatchObject({ working_now: false, blocked_by: 'limite_de_ia_do_dia', in_progress: { count: 2 } });
+    await ownerQuery(`update liame.review_suggestion set reason = 'ia_teto_mes' where review_id = $1`, [a1]);
+    expect((await social()).blocked_by).toBe('limite_de_ia_do_mes');
+    // A vez que acabou sai da fila: nada mais a dizer.
+    await ownerQuery(`update liame.review_suggestion set status = 'descartada', reason = 'antiga', finished_at = now(), next_attempt_at = null where review_id in ($1, $2)`, [a1, a2]);
+    expect(await social()).toMatchObject({ working_now: false, blocked_by: null, in_progress: null });
+
+    // As respostas do mês: uma aprovada (a resposta foi ao Google), uma esperando a decisão, uma recusada, uma que ele
+    // mesmo tirou de Aprovações (a avaliação mudou) e uma que passou do prazo; e uma avaliação com as sugestões barradas.
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'executada', estrelas: 5, aprovadaPor: e.userId, haMinutos: 6 });
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'aguardando', estrelas: 1, haMinutos: 5 });
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'recusada', estrelas: 4, haMinutos: 4 });
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'retirada', estrelas: 3, haMinutos: 3 });
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'aguardando', estrelas: 5, haMinutos: 8, venceuHaMinutos: 2 });
+    await semearVezDoSocial(alvo, await avaliacaoDaLoja(e, loja, 1), { status: 'barrada', barradaPor: ['regras_da_resposta'], haMinutos: 2 });
+    // Não contam: o pedido de outro mês (quarenta dias atrás é sempre antes deste mês) e o pedido de resposta de uma pessoa.
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'executada', aprovadaPor: e.userId, haMinutos: 60 * 24 * 40 });
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'aguardando', funcionario: null, haMinutos: 2 });
+    await chamada(e, 'social.resposta', 9_000);
+    await chamada(e, 'social.resposta', 8_000);
+    t = await ver(e, e.brandId);
+    expect(numeros(t, 'social')).toEqual({ ...zerado, respostas_propostas: '5', respostas_aprovadas: '1', respostas_recusadas: '1', respostas_esperando: '1', sugestoes_barradas: '1' });
+    expect(doMembro(t, 'social')).toMatchObject({ status: 'ativo', cost: { usd_micros: '17000', calls: 2 } });
+    // Os outros funcionários seguem sem os números dele.
+    expect(numeros(t, 'crm')).not.toHaveProperty('respostas_propostas');
+
+    // A empresa desliga nesta marca: ele para de sugerir, e o pedido que já espera em Aprovações segue contado.
+    const desligado = await api.call('POST', '/v1/team/members/social/pause', { cookie: e.cookie, body: { brand_id: e.brandId, reason: 'Vamos responder à mão' } });
+    expect(desligado.status, JSON.stringify(desligado.body)).toBe(200);
+    expect(doMembro(TeamResponse.parse(desligado.body), 'social')).toMatchObject({ status: 'desligado', blocked_by: null, in_progress: null, paused: { by: { id: e.userId }, reason: 'Vamos responder à mão' } });
+    expect(numeros(TeamResponse.parse(desligado.body), 'social').respostas_esperando).toBe('1');
+    // A pausa é a mesma que a rotina das sugestões confere: desligado aqui, ele não sugere nesta marca.
+    const desliga = () => withTenant(database.db, e.tenantId, (tx) => oQueDesligaAsSugestoes(tx, flags, { tenantId: e.tenantId, brandId: e.brandId, connectedAccountId: loja }));
+    expect(await desliga()).toBe('funcionario_desligado');
+    const ligado = await api.call('POST', '/v1/team/members/social/resume', { cookie: e.cookie, body: { brand_id: e.brandId } });
+    expect(doMembro(TeamResponse.parse(ligado.body), 'social')).toMatchObject({ status: 'ativo', paused: null });
+    expect(await desliga()).toBeNull();
+
+    // Outra empresa não vê nada disto.
+    const vizinha = await empresa();
+    expect(numeros(await ver(vizinha, vizinha.brandId), 'social')).toEqual(zerado);
+  });
+
   it('o CRM e mensageria e a fila das propostas (A5 · P16): preparando é trabalho em andamento; o rascunho que espera o modelo diz o que falta', async () => {
     const e = await empresa();
     await ligarIa(flags, e.tenantId);
@@ -535,8 +642,8 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     expect(await ativo()).toBe(false);
     expect((await api.call('POST', '/v1/team/members/lia/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).body.code).toBe('ja-desligado');
     expect((await api.call('POST', '/v1/team/members/compliance/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).body.code).toBe('nao-desliga');
-    // Quem não é da equipe desta fase não tem o que desligar (o CRM e mensageria entrou na A5; o de redes sociais, ainda não).
-    expect((await api.call('POST', '/v1/team/members/social/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).status).toBe(400);
+    // Quem não é da equipe desta fase não tem o que desligar (o Social media entrou na A6; o de CRO e páginas, ainda não).
+    expect((await api.call('POST', '/v1/team/members/cro/pause', { cookie: e.cookie, body: { brand_id: e.brandId } })).status).toBe(400);
 
     const volta = await api.call('POST', '/v1/team/members/lia/resume', { cookie: e.cookie, body: { brand_id: e.brandId } });
     expect(volta.status).toBe(200);

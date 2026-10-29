@@ -1,7 +1,7 @@
 import type { TeamActivityItem } from '@liame/contracts';
 import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
-import { PREFIXO_RECUSA } from '../actions/action.service.js';
+import { PREFIXO_RECUSA, PREFIXO_RETIRADA } from '../actions/action.service.js';
 import { RECUSAS_DO_COMPLIANCE } from '../ai/recusas.js';
 import type { Membro } from './membros.js';
 
@@ -253,6 +253,49 @@ function ramosDoMembro(membro: Membro, q: QuemOlha): SQL[] {
             subject: nome,
             n: sql`m.people_can_receive`,
             by: sql`case when r.status = 'executada' then (select a.approved_by from liame.approval a where a.action_request_id = r.id order by a.created_at desc limit 1) end`,
+          },
+          sql`${doPedido} and r.status in ('executada', 'falhou', 'expirada', 'cancelada') and r.updated_at >= ${q.desde}::timestamptz`,
+        ),
+        retiradas(q, membro),
+        ...pausas(q, membro),
+      ];
+    }
+    case 'social': {
+      // As respostas às avaliações (A6, Z6). A nota da avaliação vai em `n`; o texto dela e o nome de quem avaliou nunca
+      // (o nome nem é guardado: D-A6-29). O pedido liga à avaliação pela vez da primeira rodada (`review_suggestion.action_id`).
+      const doPedido = sql`from liame.action_request r
+                           left join liame.review_suggestion s on s.action_id = r.id
+                           left join liame.profile_review a on a.id = s.review_id
+                          where r.tenant_id = ${q.tenantId} and r.brand_id = ${q.brandId} and r.agent_key = ${membro} and r.tool = 'avaliacao_responder'`;
+      const daVez = sql`from liame.review_suggestion s join liame.profile_review a on a.id = s.review_id
+                       where s.tenant_id = ${q.tenantId} and s.brand_id = ${q.brandId}`;
+      // O porquê da retirada pelo funcionário, quando o motivo do pedido o traz no formato de código.
+      const retirada = sql`substr(r.status_reason, length(${PREFIXO_RETIRADA}::text) + 1)`;
+      return [
+        // O pedido de resposta que ele montou em Aprovações, com as sugestões da primeira rodada.
+        ramo({ at: sql`r.created_at`, kind: 'propos_resposta', n: sql`a.stars` }, sql`${doPedido} and r.created_at >= ${q.desde}::timestamptz`),
+        // Outras sugestões para o mesmo pedido, a pedido de uma pessoa (a segunda rodada, P31).
+        ramo(
+          { at: sql`s.finished_at`, kind: 'propos_outras', n: sql`a.stars`, by: sql`s.requested_by` },
+          sql`${daVez} and s.round = 2 and s.status = 'pronta' and s.finished_at >= ${q.desde}::timestamptz`,
+        ),
+        // A conferência barrou todas as sugestões de uma avaliação: ficam os nomes do que barrou, e o texto não é guardado.
+        ramo(
+          { at: sql`s.finished_at`, kind: 'sugestoes_barradas', n: sql`a.stars`, rules: sql`to_jsonb(s.barred_by)` },
+          sql`${daVez} and s.status = 'barrada' and s.finished_at >= ${q.desde}::timestamptz`,
+        ),
+        // O que aconteceu com o pedido: uma pessoa aprovou e a resposta foi para o Google, recusou, ele mesmo tirou o
+        // pedido de Aprovações (a avaliação mudou ou foi respondida direto no Google), quem opera cancelou, ninguém decidiu
+        // no prazo, ou a publicação falhou. Quem aprovou é a aprovação mais recente; quem recusou não fica em coluna.
+        ramo(
+          {
+            at: sql`r.updated_at`,
+            kind: sql`case when r.status = 'executada' then 'resposta_aprovada' when r.status = 'falhou' then 'resposta_falhou' when r.status = 'expirada' then 'resposta_expirou'
+                           when r.status_reason like ${`${PREFIXO_RECUSA}%`} then 'resposta_recusada'
+                           when r.status_reason like ${`${PREFIXO_RETIRADA}%`} then 'resposta_retirada' else 'resposta_cancelada' end`,
+            detail: sql`case when r.status_reason like ${`${PREFIXO_RETIRADA}%`} and ${retirada} ~ '^[a-z_]{2,40}$' then ${retirada} end`,
+            n: sql`a.stars`,
+            by: sql`case when r.status = 'executada' then (select x.approved_by from liame.approval x where x.action_request_id = r.id order by x.created_at desc limit 1) end`,
           },
           sql`${doPedido} and r.status in ('executada', 'falhou', 'expirada', 'cancelada') and r.updated_at >= ${q.desde}::timestamptz`,
         ),

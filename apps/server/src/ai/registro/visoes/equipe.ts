@@ -21,6 +21,7 @@ export const NOME_DO_MEMBRO: Record<string, string> = {
   trafego: 'Gestor de tráfego',
   criativo: 'Criativo',
   crm: 'CRM e mensageria',
+  social: 'Social media',
 };
 
 /** O funcionário na frase ("o trabalho do Analista de dados", "de Relatórios"), como a tela escreve. */
@@ -34,6 +35,7 @@ export const DO_MEMBRO: Record<string, string> = {
   trafego: 'do Gestor de tráfego',
   criativo: 'do Criativo',
   crm: 'do CRM e mensageria',
+  social: 'do Social media',
 };
 
 const SITUACAO: Record<string, string> = {
@@ -82,6 +84,32 @@ const NUMERO: Record<string, string> = {
   mensagens_esperando: 'mensagens_esperando_a_decisao_de_uma_pessoa_agora',
   rascunhos_esperando_o_modelo: 'rascunhos_de_modelo_no_regemcast_esperando_a_meta_agora',
   pedidos_com_cupom: 'pedidos_confirmados_no_caixa_com_o_cupom_das_mensagens_do_mes',
+  // O Social media (A6, P21, sem os posts): as respostas às avaliações que ele propôs no mês e as que esperam agora.
+  respostas_propostas: 'respostas_a_avaliacoes_propostas_no_mes',
+  respostas_aprovadas: 'respostas_do_mes_aprovadas_por_uma_pessoa_e_enviadas_ao_google',
+  respostas_recusadas: 'respostas_do_mes_recusadas_por_uma_pessoa',
+  respostas_esperando: 'respostas_esperando_a_decisao_de_uma_pessoa_agora',
+  sugestoes_barradas: 'avaliacoes_do_mes_em_que_a_conferencia_barrou_todas_as_sugestoes',
+};
+/** Por que o Social media, ligado, não tem como sugerir agora (`blocked_by`), como a ficha dele diz. */
+const NAO_PODE_SUGERIR: Record<string, string> = {
+  sem_perfil: 'nenhuma loja do Perfil no Google está conectada nesta marca: não há avaliação para ele responder',
+  limite_de_ia_do_dia: 'o limite de uso de IA de hoje foi atingido: as avaliações da fila ficam para amanhã',
+  limite_de_ia_do_mes: 'o limite de uso de IA do mês foi atingido: as avaliações da fila ficam para quando o mês virar',
+};
+/** Por que ele tirou um pedido de resposta de Aprovações (o código da retirada, em `detail`). */
+const RESPOSTA_RETIRADA: Record<string, string> = {
+  avaliacao_mudou: 'a pessoa editou a avaliação depois das sugestões; as novas, para o texto de agora, chegam num pedido novo',
+  respondida_no_google: 'a avaliação foi respondida direto no Google',
+};
+/** O que a conferência das sugestões apontou quando barrou (os itens de `conferirSugestao`), em palavras. */
+const ITEM_DA_SUGESTAO: Record<string, string> = {
+  regras_da_resposta: 'compensação prometida, o nome de alguém ou uma resolução que a loja não confirmou',
+  regras_da_liame: 'regra de texto da Liame',
+  regras_da_marca: 'o que a marca nunca diz, ou o nome de um concorrente',
+  numeros: 'número que não está na avaliação nem em Minha marca',
+  politica_da_empresa: 'a política da empresa não deixa ele pedir esta resposta',
+  tamanho: 'texto longo demais para o Google',
 };
 /** Por que o CRM e mensageria, ligado, não tem como propor agora (`blocked_by`), como a ficha dele diz. */
 const NAO_PODE_PROPOR: Record<string, string> = {
@@ -234,6 +262,9 @@ function doMembro(m: TeamMember, naTela: (usdMicros: string) => string, fuso: st
   const escrevendo = criativo && m.working_now ? (m.in_progress ?? null) : null;
   // O CRM e mensageria (A5, P16) propõe mensagens, sempre como pedido em Aprovações, e precisa estar ligado para a empresa.
   const crm = m.key === 'crm';
+  // O Social media (A6, P21, sem os posts) sugere respostas às avaliações, sempre como pedido em Aprovações, e precisa
+  // estar ligado para a empresa (a função das sugestões e a resposta pelo Liame).
+  const social = m.key === 'social';
   return soOQueExiste({
     funcionario: NOME_DO_MEMBRO[m.key] ?? m.key,
     situacao:
@@ -241,8 +272,20 @@ function doMembro(m: TeamMember, naTela: (usdMicros: string) => string, fuso: st
         ? 'desligado pela Liame (a IA ou o Criativo não está ligado para a empresa)'
         : crm && m.status === 'desligado_pela_liame'
           ? 'ainda não ligado para a empresa (quem liga é a Liame, a pedido do dono); enquanto isso, ninguém propõe mensagem e ele não custa nada'
-          : (SITUACAO[m.status] ?? m.status.replaceAll('_', ' ')),
-    trabalha: criativo ? 'com um modelo de IA, só quando alguém pede uma peça na tela Criativos' : crm ? 'com um modelo de IA, no modo Aprovação: toda mensagem é um pedido em Aprovações, que uma pessoa aprova com o código do app; nenhuma mensagem sai sozinha' : m.kind === 'ia' ? 'com um modelo de IA' : doRevisor ? 'por regras do sistema; o custo de IA é do revisor de IA, que lê o texto depois das regras' : 'por regras do sistema',
+          : social && m.status === 'desligado_pela_liame'
+            ? 'ainda não ligado para a empresa (quem liga é a Liame, a pedido do dono); enquanto isso, ele não sugere resposta e não custa nada'
+            : (SITUACAO[m.status] ?? m.status.replaceAll('_', ' ')),
+    trabalha: criativo
+      ? 'com um modelo de IA, só quando alguém pede uma peça na tela Criativos'
+      : crm
+        ? 'com um modelo de IA, no modo Aprovação: toda mensagem é um pedido em Aprovações, que uma pessoa aprova com o código do app; nenhuma mensagem sai sozinha'
+        : social
+          ? 'com um modelo de IA, no modo Aprovação: sugere uma ou duas respostas para cada avaliação nova sem resposta do Perfil no Google, e toda resposta é um pedido em Aprovações, que uma pessoa aprova com o código do app (a de uma ou duas estrelas, só o dono); nenhuma resposta sai sozinha. Os posts ainda não são com ele'
+          : m.kind === 'ia'
+            ? 'com um modelo de IA'
+            : doRevisor
+              ? 'por regras do sistema; o custo de IA é do revisor de IA, que lê o texto depois das regras'
+              : 'por regras do sistema',
     trabalhando_agora: m.working_now ? 'sim' : null,
     // O que ele escreve agora: sem o nome de quem pediu.
     escrevendo_agora: escrevendo
@@ -262,6 +305,10 @@ function doMembro(m: TeamMember, naTela: (usdMicros: string) => string, fuso: st
           })
         : null,
     nao_pode_propor_agora: crm && m.blocked_by ? (NAO_PODE_PROPOR[m.blocked_by] ?? m.blocked_by.replaceAll('_', ' ')) : null,
+    // As avaliações que esperam as sugestões dele: quantas e desde quando (o texto delas fica na tela Avaliações).
+    avaliacoes_na_fila:
+      social && m.in_progress ? soOQueExiste({ avaliacoes: inteiro(m.in_progress.count ?? 0), a_mais_antiga_desde: quando(m.in_progress.since, fuso) }) : null,
+    nao_pode_sugerir_agora: social && m.blocked_by ? (NAO_PODE_SUGERIR[m.blocked_by] ?? m.blocked_by.replaceAll('_', ' ')) : null,
     desligado_desde: m.paused ? quando(m.paused.at, fuso) : null,
     motivo_de_estar_desligado: m.paused?.reason ?? null,
     custo_de_ia_no_mes: naTela(m.cost.usd_micros),
@@ -395,6 +442,28 @@ function doAcontecimento(i: TeamActivityItem, fuso: string) {
       return o({ o_que: 'teve uma proposta de mensagem que não virou pedido', mensagem: i.subject, motivo: PROPOSTA_ENCERRADA[detalhe] ?? (detalhe ? detalhe.replaceAll('_', ' ') : null) });
     case 'proposta_falhou':
       return o({ o_que: 'não conseguiu concluir uma proposta de mensagem', mensagem: i.subject, motivo: PROPOSTA_ENCERRADA[detalhe] ?? (detalhe ? detalhe.replaceAll('_', ' ') : null) });
+    case 'propos_resposta':
+      return o({ o_que: 'sugeriu a resposta a uma avaliação do Google, num pedido em Aprovações', nota_da_avaliacao_em_estrelas: i.count === null ? null : inteiro(n) });
+    case 'propos_outras':
+      return o({ o_que: 'escreveu outras sugestões para o mesmo pedido de resposta, a pedido de uma pessoa', nota_da_avaliacao_em_estrelas: i.count === null ? null : inteiro(n), quem_pediu: pessoa });
+    case 'sugestoes_barradas':
+      return o({
+        o_que: 'teve as sugestões de uma avaliação barradas na conferência, antes de qualquer pessoa ver: nada foi para Aprovações, e o texto não é guardado',
+        nota_da_avaliacao_em_estrelas: i.count === null ? null : inteiro(n),
+        o_que_barrou: i.rules.map((r) => ITEM_DA_SUGESTAO[r] ?? REGRA[r] ?? r.replaceAll('_', ' ')),
+      });
+    case 'resposta_aprovada':
+      return o({ o_que: 'teve uma resposta aprovada: ela foi para o Google', nota_da_avaliacao_em_estrelas: i.count === null ? null : inteiro(n), quem_decidiu: pessoa });
+    case 'resposta_recusada':
+      return o({ o_que: 'teve uma resposta recusada: nada foi publicado', nota_da_avaliacao_em_estrelas: i.count === null ? null : inteiro(n) });
+    case 'resposta_retirada':
+      return o({ o_que: 'tirou um pedido de resposta de Aprovações antes da decisão: nada foi publicado', motivo: RESPOSTA_RETIRADA[detalhe] ?? null });
+    case 'resposta_cancelada':
+      return o({ o_que: 'teve um pedido de resposta cancelado por quem opera: nada foi publicado' });
+    case 'resposta_expirou':
+      return o({ o_que: 'teve um pedido de resposta que expirou sem decisão: nada foi publicado' });
+    case 'resposta_falhou':
+      return o({ o_que: 'teve uma resposta aprovada que não foi publicada: o envio ao Google falhou' });
     case 'desligado':
       return o({ o_que: 'foi desligado pela empresa nesta marca', quem_decidiu: pessoa });
     case 'ligado':

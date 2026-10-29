@@ -1,5 +1,5 @@
 import type { TeamStat } from '@liame/contracts';
-import { CRIATIVO_DA_EQUIPE, CRM_DA_EQUIPE, type DefinicaoDoMembro, GESTOR_DE_TRAFEGO, type Membro } from './membros.js';
+import { CRIATIVO_DA_EQUIPE, CRM_DA_EQUIPE, type DefinicaoDoMembro, GESTOR_DE_TRAFEGO, type Membro, SOCIAL_DA_EQUIPE } from './membros.js';
 
 // Sua equipe (A3, I13b): a situação de cada membro e o que ele fez no mês, montados pelo código a partir das
 // contagens que o serviço lê do banco. Funções puras.
@@ -22,6 +22,12 @@ export interface FatosDoMembro {
    * `whatsapp_campaign`). Sem uma delas ele não consegue propor nada, e a tela diz que ainda não está ligado.
    */
   crm: boolean;
+  /**
+   * O Social media está ligado para a empresa: a função das sugestões (`respostas_sugeridas`) e a resposta pelo Liame
+   * (`perfil_google_write`), as duas chaves da distribuição que a rotina confere (`oQueDesligaAsSugestoes`). Sem uma
+   * delas ele não sugere nada, e a tela diz que ainda não está ligado.
+   */
+  social: boolean;
   /** Há uma parada (da empresa ou da Liame) que trava a IA desta marca. */
   parada: boolean;
 }
@@ -40,6 +46,7 @@ export function situacaoDoMembro(def: DefinicaoDoMembro, f: FatosDoMembro): Situ
     if (!f.ia) return 'desligado_pela_liame';
     if (def.key === CRIATIVO_DA_EQUIPE && !f.criativo) return 'desligado_pela_liame';
     if (def.key === CRM_DA_EQUIPE && !f.crm) return 'desligado_pela_liame';
+    if (def.key === SOCIAL_DA_EQUIPE && !f.social) return 'desligado_pela_liame';
     return f.parada ? 'parado' : 'ativo';
   }
   if (def.key === GESTOR_DE_TRAFEGO) return f.sombra ? 'sombra' : 'desligado_pela_liame';
@@ -81,6 +88,50 @@ export interface ContagensDoMes {
   pecas: PecasDoCriativo;
   /** O trabalho do CRM e mensageria (A5, Y6): as mensagens que ele propôs no mês e o que elas trouxeram pelo cupom. */
   mensagens: MensagensDoCrm;
+  /** O trabalho do Social media (A6, Z6): as respostas às avaliações que ele propôs no mês e o que as pessoas decidiram. */
+  respostas: RespostasDoSocial;
+}
+
+export interface RespostasDoSocial {
+  /** Pedidos de resposta que ele montou no mês (cada um com uma ou duas sugestões). */
+  propostas: number;
+  /** Dos propostos no mês, os que uma pessoa aprovou e foram para o Google, e os que foram recusados. */
+  aprovadas: number;
+  recusadas: number;
+  /** Agora, na marca inteira: os pedidos dele que esperam a decisão em Aprovações. */
+  esperando: number;
+  /** As avaliações do mês em que a conferência barrou todas as sugestões (nada foi para Aprovações). */
+  barradas: number;
+}
+
+/** A fila do Social media agora, como o serviço a leu (as vezes `esperando` da marca). */
+export interface FilaDoSocial {
+  /** Quantas avaliações esperam as sugestões dele, inclusive a que espera uma nova tentativa. */
+  avaliacoes: number;
+  /** Desde quando espera a mais antiga, em ISO (nulo sem fila). */
+  desde: string | null;
+  /** O teto de gasto de IA da empresa segura a fila: o do mês pesa mais que o do dia. */
+  teto: 'dia' | 'mes' | null;
+}
+
+export interface AgoraDoSocial {
+  workingNow: boolean;
+  inProgress: { subject: null; count: number; by: null; since: string } | null;
+  blockedBy: string | null;
+}
+
+/**
+ * O que o Social media tem na fila e o que o segura agora (P21, sem os posts), do que mais pesa ao que menos: sem uma
+ * loja do Perfil conectada não há avaliação para responder, e nada mais importa; o teto de IA da empresa segura a fila
+ * inteira (a tela diz qual, e quantas esperam); com avaliação na fila, ele está trabalhando. Desligado ou parado, nada
+ * disso se diz. Sem o texto da avaliação: ele fica na tela Avaliações.
+ */
+export function agoraDoSocial(f: { ativo: boolean; semPerfil: boolean; fila: FilaDoSocial }): AgoraDoSocial {
+  if (!f.ativo) return { workingNow: false, inProgress: null, blockedBy: null };
+  if (f.semPerfil) return { workingNow: false, inProgress: null, blockedBy: 'sem_perfil' };
+  const naFila = f.fila.avaliacoes > 0 && f.fila.desde ? { subject: null, count: f.fila.avaliacoes, by: null, since: f.fila.desde } : null;
+  if (f.fila.teto) return { workingNow: false, inProgress: naFila, blockedBy: f.fila.teto === 'mes' ? 'limite_de_ia_do_mes' : 'limite_de_ia_do_dia' };
+  return { workingNow: naFila !== null, inProgress: naFila, blockedBy: null };
 }
 
 export interface MensagensDoCrm {
@@ -190,6 +241,7 @@ export const NUMEROS_DE_AGORA: ReadonlySet<string> = new Set([
   'pecas_barradas',
   'mensagens_esperando',
   'rascunhos_esperando_o_modelo',
+  'respostas_esperando',
 ]);
 
 /** O que o membro fez no mês, como a tela mostra (as chaves estão no contrato `TeamStat`). */
@@ -244,6 +296,15 @@ export function numerosDoMembro(def: DefinicaoDoMembro, c: ContagensDoMes): Team
         qtd('rascunhos_esperando_o_modelo', c.mensagens.rascunhos),
         qtd('pedidos_com_cupom', c.mensagens.pedidosComCupom),
         { key: 'caixa_com_cupom', value: c.mensagens.caixaComCupomMicros.toString(), unit: 'brl_micros' },
+        retiradas,
+      ];
+    case 'social':
+      return [
+        qtd('respostas_propostas', c.respostas.propostas),
+        qtd('respostas_aprovadas', c.respostas.aprovadas),
+        qtd('respostas_recusadas', c.respostas.recusadas),
+        qtd('respostas_esperando', c.respostas.esperando),
+        qtd('sugestoes_barradas', c.respostas.barradas),
         retiradas,
       ];
     case 'trafego':

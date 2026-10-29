@@ -77,7 +77,7 @@ const numero = (m: TeamMember, chave: string): bigint => BigInt(m.stats.find((s)
 
 // ------------------------------------------------------------------ quem é quem
 
-export type ChaveDoMembro = 'lia' | 'analista' | 'relatorios' | 'compliance' | 'estrategista' | 'pesquisador' | 'criativo' | 'crm' | 'trafego';
+export type ChaveDoMembro = 'lia' | 'analista' | 'relatorios' | 'compliance' | 'estrategista' | 'pesquisador' | 'criativo' | 'crm' | 'social' | 'trafego';
 
 export interface Ficha {
   nome: string;
@@ -179,6 +179,17 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
       'Enviar o modelo para a análise da Meta no lugar de uma pessoa',
     ],
   },
+  // O Social media (P21, aprovado em 21/10/2026), por ora só com as respostas às avaliações: os posts entram com a Z5.
+  social: {
+    nome: 'Social media',
+    cargo: 'Posts e avaliações',
+    icone: 'share',
+    modo: 'Aprovação',
+    resumo:
+      'Sugere a resposta às avaliações do Perfil no Google: para cada avaliação nova sem resposta, escreve uma ou duas sugestões com enfoques diferentes. O Compliance confere o texto antes de alguém ver, e quem aprova é uma pessoa, com o código do app; a de 1 ou 2 estrelas, só o dono. Os posts chegam depois.',
+    faz: ['Sugere a resposta às avaliações novas do Perfil no Google', 'Escreve outras sugestões quando alguém pede'],
+    nunca: ['Publicar sem a aprovação de uma pessoa, com o código do app', 'Prometer desconto, brinde ou reembolso numa resposta', 'Citar o nome de quem avaliou', 'Aprovar a resposta a 1 ou 2 estrelas: só o dono aprova'],
+  },
   trafego: {
     nome: 'Gestor de tráfego',
     cargo: 'Campanhas da Meta e do Google',
@@ -191,7 +202,7 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
   },
 };
 
-export const ORDEM: ChaveDoMembro[] = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'criativo', 'crm', 'trafego'];
+export const ORDEM: ChaveDoMembro[] = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'criativo', 'crm', 'social', 'trafego'];
 
 /** "do Analista de dados", "de Relatórios": o funcionário na frase. */
 const DO_MEMBRO: Record<ChaveDoMembro, string> = {
@@ -203,6 +214,7 @@ const DO_MEMBRO: Record<ChaveDoMembro, string> = {
   pesquisador: 'do Pesquisador',
   criativo: 'do Criativo',
   crm: 'do CRM e mensageria',
+  social: 'do Social media',
   trafego: 'do Gestor de tráfego',
 };
 
@@ -217,17 +229,19 @@ export function perguntaSobre(chave: ChaveDoMembro): string {
 /**
  * O botão "Conversar sobre ele" aparece para quem conversa com a LIA, quando ela está trabalhando nesta marca. Sobre
  * a própria LIA não há o que perguntar por aqui: a conversa com ela é o botão do topo. No Criativo, o botão é o
- * atalho "Abrir Criativos" (P12), e no CRM e mensageria, "Abrir Mensagens" (P16): o trabalho de cada um está lá.
+ * atalho "Abrir Criativos" (P12), no CRM e mensageria, "Abrir Mensagens" (P16), e no Social media, "Abrir Avaliações"
+ * (no P21 é "Abrir a Agenda", que chega com os posts): o trabalho de cada um está lá.
  */
 export function podeConversarSobre(chave: ChaveDoMembro, t: TeamResponse, conversaDisponivel: boolean): boolean {
-  return chave !== 'lia' && chave !== 'criativo' && chave !== 'crm' && conversaDisponivel && t.ai.enabled && t.members.some((m) => m.key === 'lia' && m.status === 'ativo');
+  return (
+    chave !== 'lia' && chave !== 'criativo' && chave !== 'crm' && chave !== 'social' && conversaDisponivel && t.ai.enabled && t.members.some((m) => m.key === 'lia' && m.status === 'ativo')
+  );
 }
 
 export const ehMembro = (chave: string): chave is ChaveDoMembro => (ORDEM as string[]).includes(chave);
 
 /** Os funcionários das fases seguintes do roadmap: aparecem na lista, sem trabalhar ainda. */
 export const PROXIMAS_FASES: Array<{ chave: string; nome: string; cargo: string; icone: NomeIcone; fase: string; resumo: string }> = [
-  { chave: 'social', nome: 'Social media', cargo: 'Redes e comunidade', icone: 'share', fase: 'A6', resumo: 'Calendário e publicação orgânica, com aprovação.' },
   { chave: 'cro', nome: 'CRO e páginas', cargo: 'Páginas e funil', icone: 'target', fase: 'A8', resumo: 'Páginas e formulários que levam ao pedido.' },
 ];
 
@@ -271,8 +285,11 @@ export const criativoNaoLigado = (m: TeamMember, t: Pick<TeamResponse, 'ai'>): b
 /** O CRM e mensageria que a Liame ainda não ligou para a empresa (P16): o mesmo caso, com a chave dele e as do envio de mensagens. */
 export const crmNaoLigado = (m: TeamMember, t: Pick<TeamResponse, 'ai'>): boolean => m.key === 'crm' && m.status === 'desligado_pela_liame' && t.ai.enabled;
 
+/** O Social media que a Liame ainda não ligou para a empresa (P21): o mesmo caso, com a função das sugestões e a resposta pelo Liame. */
+export const socialNaoLigado = (m: TeamMember, t: Pick<TeamResponse, 'ai'>): boolean => m.key === 'social' && m.status === 'desligado_pela_liame' && t.ai.enabled;
+
 /** O funcionário que tem chave própria e ainda não foi ligado pela Liame: fica com os desligados, sem botão de ligar. */
-export const aindaNaoLigado = (m: TeamMember, t: Pick<TeamResponse, 'ai'>): boolean => criativoNaoLigado(m, t) || crmNaoLigado(m, t);
+export const aindaNaoLigado = (m: TeamMember, t: Pick<TeamResponse, 'ai'>): boolean => criativoNaoLigado(m, t) || crmNaoLigado(m, t) || socialNaoLigado(m, t);
 
 /** O selo "Modo": como ele trabalha. O Gestor de tráfego mostra "Sombra e Sugerir" quando alguma ação já foi promovida. */
 export function modoDo(m: TeamMember, autonomia: AutonomyItem[] | null): { rotulo: string; classe: string } {
@@ -309,7 +326,7 @@ export function gruposDa(t: TeamResponse, comAprovacao = false): Grupos {
 /** A linha de baixo de cada funcionário na lista: o que ele fez no mês, ou o que faz. */
 export function atividadeDo(m: TeamMember, mes: string, agora: Date): string {
   if (m.status === 'desligado') return m.paused ? `Desligado ${m.paused.by ? `por ${m.paused.by.name} ` : ''}${quandoNaFrase(m.paused.at, agora)}` : 'Desligado nesta marca';
-  if (m.status === 'desligado_pela_liame') return m.key === 'criativo' || m.key === 'crm' ? 'Ainda não ligado para esta empresa' : ehMembro(m.key) ? FICHAS[m.key].cargo : m.key;
+  if (m.status === 'desligado_pela_liame') return m.key === 'criativo' || m.key === 'crm' || m.key === 'social' ? 'Ainda não ligado para esta empresa' : ehMembro(m.key) ? FICHAS[m.key].cargo : m.key;
   if (m.status === 'parado') return 'Parado com a equipe';
   switch (m.key) {
     case 'lia':
@@ -351,6 +368,17 @@ export function atividadeDo(m: TeamMember, mes: string, agora: Date): string {
       if (m.blocked_by === 'sem_desconto') return 'Espera o desconto do cupom em Mensagens';
       if (m.blocked_by === 'sem_oferta') return 'Espera a primeira oferta em Minha marca';
       return numero(m, 'mensagens_propostas') > 0n ? `Propôs ${vezes(numero(m, 'mensagens_propostas'), 'mensagem', 'mensagens')} em ${mes}` : `Sem proposta de mensagem em ${mes}`;
+    }
+    case 'social': {
+      // "Uma decisão", e não "a sua": a resposta a 1 ou 2 estrelas só o dono aprova, e quem vê a lista nem sempre é ele (V128).
+      const esperam = numero(m, 'respostas_esperando');
+      const eEsperam = esperam > 0n ? `; ${vezes(esperam, 'resposta espera', 'respostas esperam')} uma decisão` : '';
+      if (m.blocked_by === 'sem_perfil') return 'Espera uma loja do Perfil no Google conectada';
+      if (m.blocked_by === 'limite_de_ia_do_dia') return `O limite de IA de hoje acabou${eEsperam}`;
+      if (m.blocked_by === 'limite_de_ia_do_mes') return `O limite de IA do mês acabou${eEsperam}`;
+      if (m.working_now && m.in_progress?.count) return `Escrevendo as sugestões de ${vezes(m.in_progress.count, 'avaliação', 'avaliações')}${eEsperam}`;
+      if (esperam > 0n) return `${vezes(esperam, 'resposta espera', 'respostas esperam')} uma decisão`;
+      return numero(m, 'respostas_propostas') > 0n ? `Sugeriu ${vezes(numero(m, 'respostas_propostas'), 'resposta', 'respostas')} em ${mes}` : `Nenhuma resposta sugerida em ${mes}`;
     }
     case 'trafego':
       return numero(m, 'recomendacoes') > 0n ? `Recomendou ${vezes(numero(m, 'recomendacoes'), 'ação', 'ações')} em ${mes}, sem mexer em nada` : 'Registra o que faria, sem mexer em nada';
@@ -437,6 +465,18 @@ export function acertoDo(m: TeamMember, mes: string): Numero[] {
         ...(recusadas > 0n ? [{ valor: n('mensagens_recusadas'), rotulo: recusadas === 1n ? 'recusada por você' : 'recusadas por você' }] : []),
       ];
     }
+    case 'social': {
+      // As respostas que ele sugeriu no mês e o que as pessoas decidiram delas; o que espera a decisão é de agora. Sem
+      // "você": a de 1 ou 2 estrelas só o dono decide (V128).
+      const [propostas, aprovadas, recusadas, barradas] = [numero(m, 'respostas_propostas'), numero(m, 'respostas_aprovadas'), numero(m, 'respostas_recusadas'), numero(m, 'sugestoes_barradas')];
+      return [
+        { valor: n('respostas_propostas'), rotulo: propostas === 1n ? 'resposta sugerida' : 'respostas sugeridas' },
+        { valor: n('respostas_aprovadas'), rotulo: aprovadas === 1n ? 'aprovada e enviada ao Google' : 'aprovadas e enviadas ao Google' },
+        { valor: n('respostas_esperando'), rotulo: 'esperando uma decisão' },
+        ...(barradas > 0n ? [{ valor: n('sugestoes_barradas'), rotulo: barradas === 1n ? 'avaliação com as sugestões barradas' : 'avaliações com as sugestões barradas' }] : []),
+        ...(recusadas > 0n ? [{ valor: n('respostas_recusadas'), rotulo: recusadas === 1n ? 'recusada' : 'recusadas' }] : []),
+      ];
+    }
     default:
       return [];
   }
@@ -463,6 +503,10 @@ function feitosDo(m: TeamMember): string {
     case 'crm': {
       const propostas = numero(m, 'mensagens_propostas');
       return propostas === 0n ? 'ele só custa quando escreve' : `custo de IA para escrever ${vezes(propostas, 'mensagem', 'mensagens')}`;
+    }
+    case 'social': {
+      const propostas = numero(m, 'respostas_propostas');
+      return propostas === 0n ? 'ele só custa quando escreve' : `custo de IA para sugerir ${vezes(propostas, 'resposta', 'respostas')}`;
     }
     default:
       return 'custo de IA';
@@ -689,6 +733,90 @@ export function trouxeDoCrm(m: TeamMember): Numero[] | null {
   ];
 }
 
+// ------------------------------------------------------------------ o Social media: o que acontece agora
+
+/** O mesmo desenho do CRM e mensageria: a faixa de cima, com o caminho quando a pessoa resolve no Liame, e o bloco. */
+export type AgoraDoSocial = AgoraDoCrm;
+
+/**
+ * O que a ficha do Social media diz de agora (P21, sem os posts). Toda resposta dele é um pedido em Aprovações: a ficha
+ * diz as avaliações na fila dele, quantos pedidos esperam uma decisão e, quando ele não tem como sugerir (sem a loja do
+ * Perfil, no limite de IA), por quê, com o caminho que resolve. "Uma decisão", e não "a sua": a de 1 ou 2 estrelas só o
+ * dono aprova, e quem vê a ficha nem sempre é ele (V128). Não ligado pela Liame, não há o que dizer.
+ */
+export function agoraDoSocial(m: TeamMember, t: TeamResponse, agora: Date): AgoraDoSocial {
+  if (m.status === 'desligado_pela_liame') return { faixa: null, bloco: null };
+  const mes = mesDe(t.month.from);
+  const esperam = numero(m, 'respostas_esperando');
+  // O pedido que espera a decisão nunca some da ficha: quando o bloco fala de outra coisa, ele entra como frase a mais.
+  const eEsperam = esperam > 0n ? [{ texto: ` ${vezes(esperam, 'resposta espera', 'respostas esperam')} uma decisão em Aprovações.` }] : [];
+  const esperandoDecisao: AgoraDoSocial['bloco'] =
+    esperam > 0n
+      ? {
+          titulo: 'Esperando uma decisão',
+          frase: [
+            { texto: `${vezes(esperam, 'resposta espera', 'respostas esperam')} uma decisão`, forte: true },
+            { texto: ' em Aprovações. Lá, quem decide vê a avaliação e as sugestões, escolhe uma, ajusta se quiser e aprova com o código do app; a de 1 ou 2 estrelas, só o dono.' },
+          ],
+          aprovacoes: true,
+        }
+      : null;
+  const fila = m.in_progress ?? null;
+  if (m.blocked_by === 'sem_perfil') {
+    return {
+      faixa: {
+        tipo: 'acao',
+        icone: 'plug',
+        titulo: 'Nenhuma loja do Perfil no Google conectada',
+        texto: 'O Social media sugere a resposta às avaliações do Perfil no Google desta marca. Sem uma loja conectada, não há avaliação para ele responder.',
+        destino: { href: '/contas', rotulo: 'Abrir Contas conectadas' },
+      },
+      bloco: esperandoDecisao,
+    };
+  }
+  if (m.blocked_by === 'limite_de_ia_do_dia' || m.blocked_by === 'limite_de_ia_do_mes') {
+    const doMes = m.blocked_by === 'limite_de_ia_do_mes';
+    const naFila = fila?.count ? `${vezes(fila.count, 'avaliação espera', 'avaliações esperam')} as sugestões dele, que ficam para ` : 'As sugestões ficam para ';
+    return {
+      faixa: {
+        tipo: 'atencao',
+        icone: 'alert',
+        titulo: doMes ? `O limite de uso de IA de ${mes} foi atingido` : 'O limite de uso de IA de hoje foi atingido',
+        texto: `${naFila}${doMes ? 'quando o mês virar' : 'amanhã'}. Dá para responder escrevendo, em Avaliações.`,
+        destino: null,
+      },
+      bloco: esperandoDecisao,
+    };
+  }
+  if (m.working_now && fila?.count) {
+    return {
+      faixa: null,
+      bloco: {
+        titulo: 'Agora',
+        frase: [
+          { texto: 'Está escrevendo as sugestões de ' },
+          { texto: vezes(fila.count, 'avaliação', 'avaliações'), forte: true },
+          { texto: `, ${fila.count === 1 ? 'na fila' : 'a mais antiga na fila'} ${quandoNaFrase(fila.since, agora)}. O Compliance confere cada sugestão antes de o pedido chegar em Aprovações.` },
+          ...eEsperam,
+        ],
+        aprovacoes: esperam > 0n,
+      },
+    };
+  }
+  if (esperandoDecisao) return { faixa: null, bloco: esperandoDecisao };
+  if (numero(m, 'respostas_propostas') > 0n) {
+    return { faixa: null, bloco: { titulo: 'Nada esperando uma decisão', frase: [{ texto: `As respostas de ${mes} já foram decididas. As avaliações e as respostas estão em Avaliações.` }], aprovacoes: false } };
+  }
+  return {
+    faixa: null,
+    bloco: {
+      titulo: 'Ele sugere quando chega avaliação nova',
+      frase: [{ texto: `Nenhuma resposta sugerida em ${mes}. Quando o Liame lê uma avaliação nova sem resposta do Perfil no Google, ele escreve as sugestões, que chegam em Aprovações.` }],
+      aprovacoes: false,
+    },
+  };
+}
+
 // ------------------------------------------------------------------ avisos do topo
 
 export interface AvisoDoTopo {
@@ -828,6 +956,22 @@ const PROPOSTA_ENCERRADA: Record<string, string> = {
   ia_fora_do_ar: 'A IA não respondeu.',
   regemcast_fora_do_ar: 'O RegemCast não respondeu.',
 };
+/** O que a conferência das sugestões apontou quando barrou (os itens de `conferirSugestao`, no servidor), como a pessoa lê. */
+const ITEM_DA_SUGESTAO: Record<string, string> = {
+  regras_da_resposta: 'compensação prometida, o nome de alguém ou uma resolução que a loja não confirmou',
+  regras_da_liame: 'uma regra da Liame para todo texto',
+  regras_da_marca: 'o que Minha marca pede para nunca dizer',
+  numeros: 'um número que não está na avaliação nem em Minha marca',
+  politica_da_empresa: 'a política da empresa não deixa ele pedir esta resposta',
+  tamanho: 'texto longo demais para o Google',
+};
+/** Por que ele tirou um pedido de resposta de Aprovações (o código da retirada), como a pessoa lê. */
+const RESPOSTA_RETIRADA: Record<string, string> = {
+  avaliacao_mudou: 'A pessoa editou a avaliação; as sugestões novas, para o texto de agora, chegam num pedido novo.',
+  respondida_no_google: 'A avaliação foi respondida direto no Google.',
+};
+/** " de 5 estrelas", " de 1 estrela": a nota da avaliação no título; vazio sem a nota. */
+const daNota = (n: number) => (n > 0 ? ` de ${n} ${n === 1 ? 'estrela' : 'estrelas'}` : '');
 const CONFERENCIA_DA_PECA: Record<string, string> = {
   passou: 'passou na conferência',
   aviso: 'passou na conferência, com um aviso',
@@ -1029,6 +1173,34 @@ export function historicoDo(i: TeamActivityItem, agora: Date): LinhaDoHistorico 
       return { quando, titulo: i.subject ? `A proposta “${i.subject}” não virou pedido` : 'Uma proposta de mensagem não virou pedido', texto: `${PROPOSTA_ENCERRADA[i.detail ?? ''] ?? 'A proposta foi descartada.'} Nada foi enviado.` };
     case 'proposta_falhou':
       return { quando, titulo: i.subject ? `Não conseguiu concluir a proposta “${i.subject}”` : 'Não conseguiu concluir uma proposta de mensagem', texto: `${PROPOSTA_ENCERRADA[i.detail ?? ''] ?? 'A proposta falhou.'} Nada foi enviado.` };
+    case 'propos_resposta':
+      return { quando, titulo: `Sugeriu a resposta a uma avaliação${daNota(n)}`, texto: 'O pedido foi para Aprovações: nenhuma resposta sai sem a aprovação de uma pessoa, com o código do app.' };
+    case 'propos_outras':
+      return {
+        quando,
+        titulo: `Escreveu outras sugestões para a avaliação${daNota(n)}`,
+        texto: `${i.mine ? 'A seu pedido. ' : i.by ? `A pedido de ${i.by.name}. ` : ''}Elas entraram no mesmo pedido, em Aprovações.`,
+      };
+    case 'sugestoes_barradas': {
+      const oQueBarrou = i.rules.map((r) => ITEM_DA_SUGESTAO[r] ?? nomeDaRegra(r));
+      return {
+        quando,
+        titulo: `A conferência barrou as sugestões para a avaliação${daNota(n)}`,
+        texto: `${oQueBarrou.length ? `Motivo: ${emLista(oQueBarrou)}. ` : ''}Nada foi para Aprovações, e o texto não foi guardado. Dá para responder escrevendo, em Avaliações.`,
+      };
+    }
+    case 'resposta_aprovada':
+      return { quando, titulo: `Resposta${daNota(n) ? ` à avaliação${daNota(n)}` : ''} aprovada: foi para o Google`, texto: `${quemFez(i, 'aprovou', 'Aprovada')}. O Google confere antes de publicar; a situação está em Avaliações.` };
+    case 'resposta_recusada':
+      return { quando, titulo: `Resposta${daNota(n) ? ` à avaliação${daNota(n)}` : ''} recusada`, texto: 'Uma pessoa recusou o pedido. Nada foi publicado.' };
+    case 'resposta_retirada':
+      return { quando, titulo: 'Tirou um pedido de resposta de Aprovações', texto: `${RESPOSTA_RETIRADA[i.detail ?? ''] ?? 'A avaliação mudou.'} Nada foi publicado.` };
+    case 'resposta_cancelada':
+      return { quando, titulo: 'Pedido de resposta cancelado', texto: 'O pedido saiu da fila antes da decisão. Nada foi publicado.' };
+    case 'resposta_expirou':
+      return { quando, titulo: 'Pedido de resposta expirou sem decisão', texto: 'Ninguém decidiu no prazo. Nada foi publicado.' };
+    case 'resposta_falhou':
+      return { quando, titulo: 'Resposta aprovada, mas não publicada', texto: 'O envio ao Google falhou. O motivo está no pedido, em Aprovações.' };
     case 'desligado':
       return { quando, titulo: 'Desligado nesta marca', texto: `${quemFez(i, 'desligou', 'Desligado pela empresa')}. O histórico ficou guardado.` };
     case 'ligado':

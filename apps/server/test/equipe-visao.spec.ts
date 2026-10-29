@@ -494,6 +494,81 @@ describe('a leitura `equipe_trabalho`: o que a LIA recebe de Sua equipe (A3, P7)
     expect(rotuloDoPasso('equipe_trabalho', { brand_id: 'x', funcionario: 'crm' })).toBe('Lendo o trabalho do CRM e mensageria em Sua equipe');
   });
 
+  it('o Social media (A6 · P21, sem os posts): o modo dele, as respostas com o nome de quando são, a fila, por que não pode sugerir e os acontecimentos dele', () => {
+    const respostas = [stat('respostas_propostas', 4), stat('respostas_aprovadas', 2), stat('respostas_recusadas', 1), stat('respostas_esperando', 1), stat('sugestoes_barradas', 1), stat('retiradas_na_conferencia', 0)];
+    const comSocial = (extra: Partial<TeamMember> = {}): TeamResponse => ({
+      ...EQUIPE,
+      members: [...EQUIPE.members, membro('social', { cost: { usd_micros: '30000', calls: 2 }, stats: respostas, in_progress: null, blocked_by: null, ...extra })],
+    });
+    const doSocial = (t: TeamResponse) => (visaoDaEquipe(t, null, 'America/Sao_Paulo') as Record<string, any>).equipe.find((m: { funcionario: string }) => m.funcionario === 'Social media');
+    expect(doSocial(comSocial())).toEqual({
+      funcionario: 'Social media',
+      situacao: 'ativo',
+      trabalha:
+        'com um modelo de IA, no modo Aprovação: sugere uma ou duas respostas para cada avaliação nova sem resposta do Perfil no Google, e toda resposta é um pedido em Aprovações, que uma pessoa aprova com o código do app (a de uma ou duas estrelas, só o dono); nenhuma resposta sai sozinha. Os posts ainda não são com ele',
+      custo_de_ia_no_mes: 'R$ 0,16',
+      chamadas_ao_modelo_no_mes: '2',
+      no_mes: {
+        respostas_a_avaliacoes_propostas_no_mes: '4',
+        respostas_do_mes_aprovadas_por_uma_pessoa_e_enviadas_ao_google: '2',
+        respostas_do_mes_recusadas_por_uma_pessoa: '1',
+        respostas_esperando_a_decisao_de_uma_pessoa_agora: '1',
+        avaliacoes_do_mes_em_que_a_conferencia_barrou_todas_as_sugestoes: '1',
+        textos_retirados_na_conferencia: '0',
+      },
+    });
+    // A fila: quantas avaliações esperam as sugestões dele e desde quando, sem o texto de nenhuma; trabalhando, a visão diz.
+    const naFila = doSocial(comSocial({ working_now: true, in_progress: { subject: null, count: 3, by: null, since: '2026-10-03T12:00:00.000Z' } }));
+    expect(naFila).toMatchObject({ trabalhando_agora: 'sim', avaliacoes_na_fila: { avaliacoes: '3' } });
+    expect(naFila.avaliacoes_na_fila.a_mais_antiga_desde).toContain('03/10/2026');
+    // Ligado e sem ter como sugerir: o porquê, como a ficha diz.
+    expect(doSocial(comSocial({ blocked_by: 'sem_perfil' })).nao_pode_sugerir_agora).toBe('nenhuma loja do Perfil no Google está conectada nesta marca: não há avaliação para ele responder');
+    expect(doSocial(comSocial({ blocked_by: 'limite_de_ia_do_mes' })).nao_pode_sugerir_agora).toContain('quando o mês virar');
+    expect(doSocial(comSocial({ blocked_by: 'motivo_novo' })).nao_pode_sugerir_agora).toBe('motivo novo');
+    expect(doSocial(comSocial())).not.toHaveProperty('nao_pode_sugerir_agora');
+    expect(doSocial(comSocial())).not.toHaveProperty('avaliacoes_na_fila');
+    // Ainda não ligado para a empresa: a situação diz isso, e não "a IA ou a sombra".
+    expect(doSocial(comSocial({ status: 'desligado_pela_liame' })).situacao).toBe('ainda não ligado para a empresa (quem liga é a Liame, a pedido do dono); enquanto isso, ele não sugere resposta e não custa nada');
+    // Os outros não ganham os campos dele.
+    expect((visaoDaEquipe(comSocial(), null, 'America/Sao_Paulo') as Record<string, any>).equipe[0]).not.toHaveProperty('nao_pode_sugerir_agora');
+
+    // Os acontecimentos: cada um com o campo do que ele é (a nota da avaliação com o nome dela), e sem o nome de quem decidiu.
+    const v = ver('social', [
+      item({ kind: 'propos_resposta', count: 5 }),
+      item({ kind: 'propos_outras', count: 1, by: JULIANA }),
+      item({ kind: 'sugestoes_barradas', count: 3, rules: ['regras_da_resposta', 'numeros'] }),
+      item({ kind: 'resposta_aprovada', count: 5, by: RODRIGO, mine: true }),
+      item({ kind: 'resposta_recusada', count: 2 }),
+      item({ kind: 'resposta_retirada', count: 4, detail: 'respondida_no_google' }),
+      item({ kind: 'resposta_cancelada' }),
+      item({ kind: 'resposta_expirou' }),
+      item({ kind: 'resposta_falhou' }),
+    ], comSocial());
+    expect(semHora(v)).toEqual([
+      { o_que: 'sugeriu a resposta a uma avaliação do Google, num pedido em Aprovações', nota_da_avaliacao_em_estrelas: '5' },
+      { o_que: 'escreveu outras sugestões para o mesmo pedido de resposta, a pedido de uma pessoa', nota_da_avaliacao_em_estrelas: '1', quem_pediu: 'outra pessoa da empresa' },
+      {
+        o_que: 'teve as sugestões de uma avaliação barradas na conferência, antes de qualquer pessoa ver: nada foi para Aprovações, e o texto não é guardado',
+        nota_da_avaliacao_em_estrelas: '3',
+        o_que_barrou: ['compensação prometida, o nome de alguém ou uma resolução que a loja não confirmou', 'número que não está na avaliação nem em Minha marca'],
+      },
+      { o_que: 'teve uma resposta aprovada: ela foi para o Google', nota_da_avaliacao_em_estrelas: '5', quem_decidiu: 'você' },
+      { o_que: 'teve uma resposta recusada: nada foi publicado', nota_da_avaliacao_em_estrelas: '2' },
+      { o_que: 'tirou um pedido de resposta de Aprovações antes da decisão: nada foi publicado', motivo: 'a avaliação foi respondida direto no Google' },
+      { o_que: 'teve um pedido de resposta cancelado por quem opera: nada foi publicado' },
+      { o_que: 'teve um pedido de resposta que expirou sem decisão: nada foi publicado' },
+      { o_que: 'teve uma resposta aprovada que não foi publicada: o envio ao Google falhou' },
+    ]);
+    expect(v.equipe.map((m: { funcionario: string }) => m.funcionario)).toEqual(['Social media']);
+    const texto = JSON.stringify(v);
+    expect(texto).not.toContain('Juliana');
+    expect(texto).not.toContain('Rodrigo');
+    // Nenhum algarismo no texto fixo (V139): "uma ou duas estrelas", por extenso.
+    expect(doSocial(comSocial()).trabalha).not.toMatch(/\d/);
+    expect(NOME_DO_MEMBRO.social).toBe('Social media');
+    expect(rotuloDoPasso('equipe_trabalho', { brand_id: 'x', funcionario: 'social' })).toBe('Lendo o trabalho do Social media em Sua equipe');
+  });
+
   it('o CRM e mensageria e a fila das propostas (A5 · P16): a proposta em andamento em palavras, o que falta ao modelo e os acontecimentos da fila', () => {
     const OFERTA = 'Combo sexta: smash, batata e refri por R$ 34,90';
     const mensagens = [stat('mensagens_propostas', 1), stat('mensagens_esperando', 0), stat('rascunhos_esperando_o_modelo', 1), stat('retiradas_na_conferencia', 0)];

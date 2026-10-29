@@ -14,6 +14,8 @@ import { type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { ativoPeloPlano } from '../ai/registro/ativacao.js';
+import { ESPERA_PELO_TETO, FLAG_DA_RESPOSTA, FLAG_DAS_SUGESTOES } from '../avaliacoes/sugestoes.js';
+import { PROVEDOR_PERFIL_GOOGLE } from '../connectors/google-business/perfil-google.js';
 import { motivoSemDadoPessoal } from '../ai/sanitizar.js';
 import { situacaoDoTeto } from '../ai/teto.js';
 import { ultimaCotacao } from '../cambio/cotacao.js';
@@ -30,8 +32,17 @@ import { acordarLeiturasDaMarca } from '../marca/leituras-na-fila.js';
 import { REGRAS_VERSAO } from '../sombra/regras.js';
 import { atividadeDoMembro, DIAS_DA_ATIVIDADE } from './atividade.js';
 import { PREFIXO_RECUSA } from '../actions/action.service.js';
-import { CRIATIVO_DA_EQUIPE, CRM_DA_EQUIPE, EQUIPE, ehMembro, type Membro, MEMBROS } from './membros.js';
-import { agoraDoCrm, type ContagensDoMes, NUMEROS_DE_AGORA, numerosDoMembro, type PropostaEmAndamento, situacaoDoMembro } from './numeros.js';
+import { CRIATIVO_DA_EQUIPE, CRM_DA_EQUIPE, EQUIPE, ehMembro, type Membro, MEMBROS, SOCIAL_DA_EQUIPE } from './membros.js';
+import {
+  agoraDoCrm,
+  agoraDoSocial,
+  type ContagensDoMes,
+  type FilaDoSocial,
+  NUMEROS_DE_AGORA,
+  numerosDoMembro,
+  type PropostaEmAndamento,
+  situacaoDoMembro,
+} from './numeros.js';
 
 // Sua equipe (A3, I13b; protótipo P7, aprovado em 03/10/2026). Na requisição, sob a RLS da empresa: quem
 // trabalha para a marca, a situação de cada um, o custo de IA e o que fez no mês. A empresa desliga e liga um membro
@@ -108,6 +119,9 @@ export class EquipeService {
     const [ia, sombra, criativo] = [await this.flags.isEnabled('ia', contexto), await this.flags.isEnabled('sombra', contexto), await this.flags.isEnabled('criativo', contexto)];
     // O CRM e mensageria só propõe com a flag dele e as duas do envio de mensagens: sem uma delas, ainda não está ligado.
     const crm = (await this.flags.isEnabled('crm', contexto)) && (await this.flags.isEnabled('mensageria', contexto)) && (await this.flags.isEnabled('whatsapp_campaign', contexto));
+    // O Social media só sugere com a função das sugestões e a resposta pelo Liame (as chaves da distribuição que a
+    // rotina confere): sem uma delas, ainda não está ligado.
+    const social = (await this.flags.isEnabled(FLAG_DAS_SUGESTOES, contexto)) && (await this.flags.isEnabled(FLAG_DA_RESPOSTA, contexto));
     const trava = await this.switches.check(tx, { tenantId, provider: 'ai', brandId });
     const parada = trava
       ? (
@@ -126,16 +140,22 @@ export class EquipeService {
         : true;
       const pausa = pausas.get(key);
       const doMembro = def.fluxos.map((f) => usos.get(f)).filter((u) => u !== undefined);
-      const status = situacaoDoMembro(def, { pausado: pausa !== undefined, peloPlano, ia, sombra, criativo, crm, parada: parada !== undefined });
+      const status = situacaoDoMembro(def, { pausado: pausa !== undefined, peloPlano, ia, sombra, criativo, crm, social, parada: parada !== undefined });
       const doCriativo = key === CRIATIVO_DA_EQUIPE;
       // O CRM e mensageria: o que ele tem em andamento e o que o segura agora, numa regra só (`agoraDoCrm`).
       const doCrm = key === CRM_DA_EQUIPE ? agoraDoCrm({ ativo: status === 'ativo', ...(await this.oQueFaltaAoCrm(status === 'ativo', brandId, org.fuso, agora)), emAndamento: propostas, veAsCampanhas: auth.permissions.has('campanhas.ver') }) : null;
+      // O Social media: as avaliações na fila dele e o que o segura agora, numa regra só (`agoraDoSocial`).
+      const doSocial = key === SOCIAL_DA_EQUIPE && status === 'ativo' ? agoraDoSocial({ ativo: true, ...(await this.oQueSeguraOSocial(brandId)) }) : null;
       membros.push({
         key,
         kind: def.kind,
         status,
         working_now:
-          (key === 'estrategista' && Number(n.preparando_agora) > 0) || (key === 'pesquisador' && Number(n.lendo_agora) > 0) || (doCriativo && escrevendo !== undefined) || doCrm?.workingNow === true,
+          (key === 'estrategista' && Number(n.preparando_agora) > 0) ||
+          (key === 'pesquisador' && Number(n.lendo_agora) > 0) ||
+          (doCriativo && escrevendo !== undefined) ||
+          doCrm?.workingNow === true ||
+          doSocial?.workingNow === true,
         // O que o Criativo está escrevendo: a oferta só para quem vê as campanhas (é quem vê a tela de Criativos).
         ...(doCriativo
           ? {
@@ -152,6 +172,8 @@ export class EquipeService {
           : {}),
         // O CRM e mensageria: a proposta em andamento e, ligado e sem ter como seguir, o que falta.
         ...(doCrm ? { in_progress: doCrm.inProgress, blocked_by: doCrm.blockedBy } : {}),
+        // O Social media: a fila e, ligado e sem ter como seguir, o que falta. Desligado ou parado, nada se diz.
+        ...(key === SOCIAL_DA_EQUIPE ? { in_progress: doSocial?.inProgress ?? null, blocked_by: doSocial?.blockedBy ?? null } : {}),
         can_pause: def.desligavel,
         paused: pausa ? { by: quem(pausa.paused_by, pausa.name), at: iso(pausa.paused_at), reason: pausa.reason } : null,
         cost: { usd_micros: doMembro.reduce((s, u) => s + BigInt(u.custo), 0n).toString(), calls: doMembro.reduce((s, u) => s + Number(u.chamadas), 0) },
@@ -318,6 +340,19 @@ export class EquipeService {
                                     and o.status = 'confirmado' and o.confirmed_at >= m.coupon_created_at and (${fim}::timestamptz is null or o.confirmed_at < ${fim}::timestamptz)
             where m.brand_id = ${brandId} and m.agent_key = ${CRM_DA_EQUIPE} and m.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or m.created_at < ${fim}::timestamptz) and m.coupon_created_at is not null)::text as caixa_com_cupom`)
     ).rows[0]!;
+    // O trabalho do Social media (A6, Z6): os pedidos de resposta que ele montou no mês, o que as pessoas decidiram
+    // deles, os que esperam agora e as avaliações em que a conferência barrou todas as sugestões (a vez `barrada`).
+    const doSocial = sql`from liame.action_request r where r.brand_id = ${brandId} and r.agent_key = ${SOCIAL_DA_EQUIPE} and r.tool = 'avaliacao_responder'`;
+    const respostas = (
+      await tx.execute<Record<string, number>>(sql`
+        select
+          (select count(*) ${doSocial} and r.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or r.created_at < ${fim}::timestamptz))::int as propostas,
+          (select count(*) ${doSocial} and r.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or r.created_at < ${fim}::timestamptz) and r.status = 'executada')::int as aprovadas,
+          (select count(*) ${doSocial} and r.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or r.created_at < ${fim}::timestamptz) and r.status = 'cancelada' and r.status_reason like ${`${PREFIXO_RECUSA}%`})::int as recusadas,
+          (select count(*) ${doSocial} and r.status = 'aguardando_aprovacao' and r.expires_at > ${instante}::timestamptz)::int as esperando,
+          (select count(*) from liame.review_suggestion s
+            where s.brand_id = ${brandId} and s.status = 'barrada' and s.finished_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or s.finished_at < ${fim}::timestamptz))::int as barradas`)
+    ).rows[0]!;
     // As propostas dele que ainda estão no caminho (a fila `message_proposal`, migration 0062): a que ele prepara e o
     // rascunho que espera o modelo. Uma por motivo de cada vez; a que está em preparo vem primeiro.
     const propostas: PropostaEmAndamento[] = (
@@ -374,6 +409,13 @@ export class EquipeService {
         pedidosComCupom: Number(mensagens.pedidos_com_cupom),
         caixaComCupomMicros: BigInt(mensagens.caixa_com_cupom as string),
       },
+      respostas: {
+        propostas: Number(respostas.propostas),
+        aprovadas: Number(respostas.aprovadas),
+        recusadas: Number(respostas.recusadas),
+        esperando: Number(respostas.esperando),
+        barradas: Number(respostas.barradas),
+      },
     };
     return { gasto, usos, n, propostas, contagens };
   }
@@ -409,6 +451,32 @@ export class EquipeService {
     const desconto = await currentTx().execute(sql`select 1 from liame.message_discount where brand_id = ${brandId}`);
     const marca = await marcaDoCriativo(brandId, fuso, agora);
     return { semRegemcast: false, semDesconto: !desconto.rows[0], semOferta: !marca || !marca.conteudo.offers.items.length };
+  }
+
+  /**
+   * O que o Social media, ligado, tem e o que o segura: nenhuma loja do Perfil no Google conectada nesta marca (sem ela
+   * não há avaliação para responder; a conta que o Google recusou não serve) e a fila dele, as vezes que esperam as
+   * sugestões, com o teto de IA da empresa quando é ele que as segura (o porquê que a vez guarda, como a tela Avaliações
+   * lê). O que pesa mais é decidido em `agoraDoSocial`.
+   */
+  private async oQueSeguraOSocial(brandId: string): Promise<{ semPerfil: boolean; fila: FilaDoSocial }> {
+    const tx = currentTx();
+    const loja = await tx.execute(sql`select 1 from liame.connected_account a where a.brand_id = ${brandId} and a.provider = ${PROVEDOR_PERFIL_GOOGLE} and ${contaConectada('a')} limit 1`);
+    const fila = (
+      await tx.execute<{ avaliacoes: number; desde: Date | string | null; motivos: string[] | null }>(sql`
+        select count(*)::int as avaliacoes, min(s.created_at) as desde, array_agg(distinct s.reason) filter (where s.reason is not null) as motivos
+          from liame.review_suggestion s
+         where s.brand_id = ${brandId} and s.status = 'esperando'`)
+    ).rows[0];
+    const tetos = new Set((fila?.motivos ?? []).map((m) => ESPERA_PELO_TETO.get(m)));
+    return {
+      semPerfil: !loja.rows[0],
+      fila: {
+        avaliacoes: Number(fila?.avaliacoes ?? 0),
+        desde: fila?.desde ? iso(fila.desde) : null,
+        teto: tetos.has('limite_mes') ? 'mes' : tetos.has('limite_dia') ? 'dia' : null,
+      },
+    };
   }
 
   /** "O que fez": os acontecimentos do membro nesta marca nos últimos 90 dias, do mais novo para o mais antigo. */
