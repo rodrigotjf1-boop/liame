@@ -14,8 +14,13 @@ const CNPJ = /(?<!\d)\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}(?!\d)/g;
 // Telefone: +55 e DDD, com ou sem separadores (10 a 13 dígitos).
 const PHONE = /(?<![\d+])(?:\+?55[\s.-]?)?\(?\d{2}\)?[\s.-]?9?\d{4}[\s.-]?\d{4}(?!\d)/g;
 const IPV4 = /\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b/g;
-/** Parâmetros de URL que carregam segredo ou dado pessoal. */
-const SENSITIVE_PARAMS = /([?&](?:token|code|secret|senha|password|email|telefone|phone|cpf|key)=)[^&#\s]*/gi;
+/**
+ * Parâmetros de URL que carregam segredo ou dado pessoal, pelo FIM do nome: `input_token` (o `debug_token` da Meta),
+ * `access_token`, `refresh_token`, `client_secret` (a troca do código da Meta vai por GET), `appsecret_proof`,
+ * `code_verifier` e `api_key` saem como `token`, `code` e `secret` sempre saíram (ERR-183). O `state` do OAuth também.
+ * O que sobra demais (`pageToken`, `country_code`) é cursor ou código sem segredo: perder no rastro não faz falta.
+ */
+const SENSITIVE_PARAMS = /([?&](?:[a-z0-9_.-]{0,40}(?:token|code|secret|senha|password|email|telefone|phone|cpf|key|proof|verifier)|state)=)[^&#\s]*/gi;
 /** Atributos que são endereço de rede de pessoa. */
 const IP_KEYS = new Set(['client.address', 'net.peer.ip', 'http.client_ip', 'net.sock.peer.addr', 'network.peer.address', 'source.address']);
 /** Atributos que nunca saem, qualquer que seja o valor. */
