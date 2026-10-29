@@ -94,8 +94,10 @@ const EQUIPE: MonthlyReportTeam = {
     { key: 'lia', stats: [numero('respostas', 12), numero('fez_sentido', 3), numero('discordo', 0), numero('demandas', 0)] },
     { key: 'relatorios', stats: [numero('revisoes', 4), numero('com_leitura_da_ia', 3), numero('so_do_sistema', 1)] },
     { key: 'compliance', stats: [numero('textos_conferidos', 40), numero('textos_barrados', 0)] },
+    // O Social media (A6, P21): as respostas às avaliações que ele sugeriu e as aprovadas.
+    { key: 'social', stats: [numero('respostas_propostas', 3), numero('respostas_aprovadas', 1), numero('respostas_recusadas', 0), numero('sugestoes_barradas', 0)] },
     // Um funcionário que a tela ainda não conhece não vira linha (V23).
-    { key: 'social', stats: [numero('posts', 3)] },
+    { key: 'cro', stats: [numero('paginas', 3)] },
   ],
   ai: { spent_usd_micros: '12500000', ceiling_usd_micros: '50000000' },
   usd_brl: { rate: '5.40', date: '2026-09-30', source: 'bcb' },
@@ -262,6 +264,16 @@ describe('relatório do mês: como a tela escreve o que a API manda', () => {
         feito: [
           { valor: '0', texto: 'textos barrados antes de aparecer' },
           { valor: '40', texto: 'textos conferidos' },
+        ],
+      },
+      {
+        chave: 'social',
+        nome: 'Social media',
+        cargo: 'Posts e avaliações',
+        icone: 'share',
+        feito: [
+          { valor: '3', texto: 'respostas sugeridas' },
+          { valor: '1', texto: 'aprovada e enviada ao Google' },
         ],
       },
     ]);

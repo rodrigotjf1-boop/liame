@@ -13,10 +13,11 @@ const Inteiro = z.string().regex(/^-?\d+$/);
 const Pessoa = z.strictObject({ id: z.uuid(), name: z.string() }).nullable();
 
 /**
- * Os membros da equipe: os da A3; desde a A4, o Criativo (protótipo P12, aprovado em 09/10/2026); e, desde a A5, o CRM e
- * mensageria (protótipo P16, aprovado em 09/10/2026).
+ * Os membros da equipe: os da A3; desde a A4, o Criativo (protótipo P12, aprovado em 09/10/2026); desde a A5, o CRM e
+ * mensageria (protótipo P16, aprovado em 09/10/2026); e, desde a A6, o Social media (protótipo P21, aprovado em
+ * 21/10/2026; por ora, só as respostas às avaliações: os posts entram com a Z5).
  */
-export const TEAM_MEMBERS = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'trafego', 'criativo', 'crm'] as const;
+export const TEAM_MEMBERS = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'trafego', 'criativo', 'crm', 'social'] as const;
 export const TeamMemberKey = z.enum(TEAM_MEMBERS);
 export type TeamMemberKey = z.infer<typeof TeamMemberKey>;
 
@@ -40,7 +41,11 @@ export const TeamStat = z.strictObject({
    * `mensagens_esperando` (os pedidos que esperam a decisão em Aprovações) e `rascunhos_esperando_o_modelo` (as
    * propostas cujo rascunho de modelo está no RegemCast, esperando a Meta); e o que as mensagens do mês trouxeram pelo
    * cupom de cada uma, `pedidos_com_cupom` (contagem) e `caixa_com_cupom` (receita confirmada no caixa, em micros de
-   * real).
+   * real). Social media (as respostas às avaliações do Google): do mês, `respostas_propostas` (os pedidos de resposta que
+   * ele montou em Aprovações, cada um com uma ou duas sugestões), `respostas_aprovadas` (as que uma pessoa aprovou e
+   * foram para o Google), `respostas_recusadas`, `sugestoes_barradas` (as avaliações em que a conferência barrou todas
+   * as sugestões: nada foi para Aprovações) e `retiradas_na_conferencia`; de agora, `respostas_esperando` (os pedidos
+   * dele que esperam a decisão em Aprovações).
    */
   key: Slug,
   value: Inteiro,
@@ -71,7 +76,9 @@ export const TeamMember = z.strictObject({
    * (`promocao` ou `volte_a_pedir`) e quantas pessoas podem receber em `count`. Enquanto ele a prepara
    * (`working_now`), `subject` é a oferta de Minha marca (nula no "volte a pedir") e `since`, quando começou; com o
    * rascunho do modelo esperando a Meta (`blocked_by` `modelo_sem_envio` ou `modelo_em_analise`), `subject` é o nome
-   * da mensagem e `since`, quando o rascunho nasceu. `subject` é nulo para quem não vê as campanhas.
+   * da mensagem e `since`, quando o rascunho nasceu. `subject` é nulo para quem não vê as campanhas. Social media: as
+   * avaliações na fila dele agora (`count`) e desde quando espera a mais antiga (`since`); sem `subject` (o texto da
+   * avaliação fica na tela Avaliações).
    */
   in_progress: z
     .strictObject({ subject: z.string().nullable(), count: z.int().nullable(), by: Pessoa, since: z.iso.datetime(), kind: Slug.nullable().optional() })
@@ -84,7 +91,9 @@ export const TeamMember = z.strictObject({
    * marca: não há para quem propor); `modelo_sem_envio` (o rascunho do modelo está no RegemCast e uma pessoa ainda não
    * o enviou para a análise da Meta) ou `modelo_em_analise` (a Meta ainda analisa): só com o modelo aprovado ele monta
    * o pedido de envio; `sem_desconto` (ninguém definiu o desconto do cupom das mensagens: toda mensagem leva um cupom);
-   * ou `sem_oferta`. Nulo quando ele pode trabalhar, e quando está desligado ou parado.
+   * ou `sem_oferta`. Social media: `sem_perfil` (nenhuma loja do Perfil no Google conectada nesta marca: não há
+   * avaliação para responder), `limite_de_ia_do_dia` ou `limite_de_ia_do_mes` (as avaliações da fila esperam o limite de
+   * uso de IA da empresa). Nulo quando ele pode trabalhar, e quando está desligado ou parado.
    */
   blocked_by: Slug.nullable().optional(),
   /** A empresa pode desligar (o Compliance não). */
@@ -147,7 +156,14 @@ export const TeamActivityItem = z.strictObject({
    * `mensagem_expirou` e `mensagem_falhou`; e, antes do pedido, o caminho da proposta: `escreveu_rascunho` (o texto
    * passou na conferência e o rascunho do modelo foi para o RegemCast: `subject` é o nome da mensagem),
    * `mensagem_barrada` (a conferência não deixou o texto passar: os nomes do que barrou vão em `rules`, e o texto não
-   * é guardado), `proposta_descartada` e `proposta_falhou` (o porquê em `detail`). Gestor de tráfego, no modo Aprovação: `pediu` (ele mesmo fez o pedido
+   * é guardado), `proposta_descartada` e `proposta_falhou` (o porquê em `detail`). Social media: `propos_resposta`
+   * (montou o pedido de resposta a uma avaliação, com as sugestões), `propos_outras` (escreveu outras sugestões para o
+   * mesmo pedido, a pedido de uma pessoa) e `sugestoes_barradas` (a conferência barrou todas as sugestões de uma
+   * avaliação: os nomes do que barrou vão em `rules`, e o texto não é guardado), nos três com a nota da avaliação, em
+   * estrelas, em `count`; e o que aconteceu com o pedido, `resposta_aprovada` (uma pessoa aprovou e a resposta foi para o Google),
+   * `resposta_recusada`, `resposta_retirada` (ele tirou o pedido de Aprovações porque a avaliação mudou ou foi
+   * respondida direto no Google: o porquê em `detail`), `resposta_cancelada`, `resposta_expirou` e `resposta_falhou`.
+   * Gestor de tráfego, no modo Aprovação: `pediu` (ele mesmo fez o pedido
    * da mudança, que espera uma pessoa) e `nao_pediu` (tentou e não conseguiu: o motivo vai no `detail`). De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
    * aparecer), `desligado` e `ligado` (pela empresa, nesta marca).
    */
@@ -169,7 +185,7 @@ export const TeamActivityItem = z.strictObject({
   period: z.strictObject({ from: z.iso.date(), to: z.iso.date() }).nullable(),
   /**
    * Um número do acontecimento: as pessoas que receberam o e-mail, as partes do dossiê que ganharam sugestão, os textos
-   * barrados de uma vez, a versão do plano, o percentual da verba recomendado.
+   * barrados de uma vez, a versão do plano, o percentual da verba recomendado, a nota da avaliação (Social media).
    */
   count: z.int().nullable(),
   /** Das peças escritas num pedido (`escreveu_pecas`), quantas a conferência barrou. Nulo nos outros acontecimentos. */

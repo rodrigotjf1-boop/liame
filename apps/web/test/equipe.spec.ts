@@ -10,6 +10,7 @@ import {
   acertoDo,
   agoraDoCriativo,
   agoraDoCrm,
+  agoraDoSocial,
   aindaNaoLigado,
   alvoDe,
   atividadeDo,
@@ -35,6 +36,7 @@ import {
   rodadaDa,
   seloDaIa,
   situacaoDo,
+  socialNaoLigado,
   trouxeDoCrm,
   usdDeMicros,
 } from '@/components/equipe/textos';
@@ -425,10 +427,11 @@ describe('Sua equipe: a tela', () => {
     });
     expect(html).toContain('Trabalhando para você');
     expect(html).toContain('Chegam nas próximas fases');
-    // O Criativo (P12) e o CRM e mensageria (P16) saíram das próximas fases: a primeira que falta é a A6.
-    expect(html).toContain('Na fase A6');
+    // O Criativo (P12), o CRM e mensageria (P16) e o Social media (P21) saíram das próximas fases: a que falta é a A8.
+    expect(html).toContain('Na fase A8');
     expect(html).not.toContain('Na fase A4');
     expect(html).not.toContain('Na fase A5');
+    expect(html).not.toContain('Na fase A6');
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('Modo: Explica');
     expect(html).toContain('Custo em outubro');
@@ -488,8 +491,8 @@ describe('Sua equipe: a tela', () => {
   });
 
   it('funcionário de uma fase seguinte: entra depois, não trabalha ainda', () => {
-    const html = desenhar({ escolhido: 'social' });
-    expect(html).toContain('Ele entra na fase <b>A6</b> do roadmap. Até lá, não trabalha para a Mister Burgers.');
+    const html = desenhar({ escolhido: 'cro' });
+    expect(html).toContain('Ele entra na fase <b>A8</b> do roadmap. Até lá, não trabalha para a Mister Burgers.');
     expect(html).not.toContain('O que fez');
   });
 
@@ -852,8 +855,8 @@ describe('o CRM e mensageria em Sua equipe (A5 · P16, aprovado em 09/10/2026)',
     expect(html).toContain('O custo de cada mensagem escrita é medido pelo Liame');
     expect(html).toContain('Desligar este funcionário');
     expect(html).toContain('<b>Nunca:</b> enviar sem a sua aprovação com o código do app; ver nome ou telefone de cliente;');
-    // Só dois funcionários seguem nas próximas fases.
-    expect(html.match(/Na fase A\d/g)).toHaveLength(2);
+    // Só um funcionário segue nas próximas fases (o de CRO e páginas; o Social media entrou na A6).
+    expect(html.match(/Na fase A\d/g)).toHaveLength(1);
     expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
     // Nenhum telefone na ficha.
     expect(html).not.toMatch(/\+55\d{10,11}/);
@@ -1031,8 +1034,8 @@ describe('o Criativo em Sua equipe (A4 · P12, aprovado em 09/10/2026)', () => {
     expect(html).toContain('O custo de cada pedido é medido pelo Liame');
     expect(html).toContain('Desligar este funcionário');
     expect(html).toContain('<b>Nunca:</b> inventar oferta ou preço; aprovar a própria peça; publicar ou mandar algo para a Meta; trabalhar sem alguém pedir.');
-    // Só dois funcionários seguem nas próximas fases (o CRM e mensageria entrou na equipe com o P16).
-    expect(html.match(/Na fase A\d/g)).toHaveLength(2);
+    // Só um funcionário segue nas próximas fases (o CRM e mensageria entrou na equipe com o P16, e o Social media, com o P21).
+    expect(html.match(/Na fase A\d/g)).toHaveLength(1);
     expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
   });
 
@@ -1060,5 +1063,217 @@ describe('o Criativo em Sua equipe (A4 · P12, aprovado em 09/10/2026)', () => {
     const soVe = desenhar({ t: comCriativo({}, { can_manage: false }), escolhido: 'criativo' });
     expect(soVe).toContain('Abrir Criativos');
     expect(soVe).not.toContain('Desligar este funcionário');
+  });
+});
+
+describe('o Social media em Sua equipe (A6 · P21, aprovado em 21/10/2026; por ora sem os posts)', () => {
+  const RODRIGO = { id: uuid(9), name: 'Rodrigo' };
+  /** As respostas do mês: 3 sugeridas, 1 aprovada e enviada ao Google, 1 esperando uma decisão. */
+  const RESPOSTAS = [stat('respostas_propostas', 3), stat('respostas_aprovadas', 1), stat('respostas_recusadas', 0), stat('respostas_esperando', 1), stat('sugestoes_barradas', 0), stat('retiradas_na_conferencia', 0)];
+  const SEM_RESPOSTAS = RESPOSTAS.map((s) => stat(s.key, 0, s.unit));
+  const com = (chave: string, valor: number) => RESPOSTAS.map((s) => (s.key === chave ? stat(chave, valor, s.unit) : s));
+  const social = (over: Partial<TeamMember> = {}): TeamMember => membro('social', { stats: RESPOSTAS, in_progress: null, blocked_by: null, cost: { usd_micros: '17000', calls: 2 }, ...over });
+  const comSocial = (over: Partial<TeamMember> = {}, daEquipe: Partial<TeamResponse> = {}): TeamResponse => {
+    const t = equipe(daEquipe);
+    return { ...t, members: [...t.members, social(over)] };
+  };
+  const nomes = (ms: TeamMember[]) => ms.map((m) => m.key);
+  const frase = (m: TeamMember, t = comSocial()) => {
+    const a = agoraDoSocial(m, t, AGORA);
+    return { faixa: a.faixa, titulo: a.bloco?.titulo ?? null, texto: a.bloco ? a.bloco.frase.map((x) => x.texto).join('') : null, aprovacoes: a.bloco?.aprovacoes ?? null };
+  };
+  const DESDE = '2026-10-03T15:20:00.000Z';
+  const naFila = (count: number) => ({ subject: null, count, by: null, since: DESDE });
+
+  it('sai de "Chegam nas próximas fases" e entra com quem trabalha; desligado, ou ainda não ligado pela Liame, fica com os desligados', () => {
+    expect(nomes(gruposDa(comSocial()).ativos)).toEqual(['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'social']);
+    expect(nomes(gruposDa(comSocial({ status: 'desligado' })).desligados)).toEqual(['social']);
+    // A IA está ligada e as chaves dele (a função das sugestões e a resposta pelo Liame), não: fica com os desligados.
+    const naoLigado = comSocial({ status: 'desligado_pela_liame' });
+    expect(nomes(gruposDa(naoLigado).desligados)).toEqual(['social']);
+    expect([socialNaoLigado(social({ status: 'desligado_pela_liame' }), naoLigado), aindaNaoLigado(social({ status: 'desligado_pela_liame' }), naoLigado), aindaNaoLigado(social(), comSocial())]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    // Com a IA inteira desligada, ele segue como os outros funcionários de IA; e a resposta de um servidor que ainda não o manda: ele só não aparece.
+    expect(nomes(gruposDa(comSocial({ status: 'desligado_pela_liame' }, { ai: { enabled: false, spent_usd_micros: '0', ceiling_usd_micros: '20000000', band: 'livre' } })).ativos)).toContain('social');
+    expect(nomes(gruposDa(equipe()).ativos)).not.toContain('social');
+  });
+
+  it('o selo, o modo "Aprovação" e a linha da lista em cada situação, sem "a sua decisão" (V128)', () => {
+    expect(situacaoDo(social()).rotulo).toBe('Em espera');
+    expect(situacaoDo(social({ working_now: true, in_progress: naFila(2) })).rotulo).toBe('Trabalhando');
+    expect(modoDo(social(), null).rotulo).toBe('Aprovação');
+    expect(modoDo(social({ status: 'desligado' }), null).rotulo).toBe('Desligado');
+    const linha = (over: Partial<TeamMember>) => atividadeDo(social(over), 'outubro', AGORA);
+    expect(linha({})).toBe('1 resposta espera uma decisão');
+    expect(linha({ stats: com('respostas_esperando', 2) })).toBe('2 respostas esperam uma decisão');
+    expect(linha({ stats: com('respostas_esperando', 0) })).toBe('Sugeriu 3 respostas em outubro');
+    expect(linha({ stats: SEM_RESPOSTAS })).toBe('Nenhuma resposta sugerida em outubro');
+    expect(linha({ working_now: true, in_progress: naFila(2), stats: com('respostas_esperando', 0) })).toBe('Escrevendo as sugestões de 2 avaliações');
+    expect(linha({ working_now: true, in_progress: naFila(1) })).toBe('Escrevendo as sugestões de 1 avaliação; 1 resposta espera uma decisão');
+    expect(linha({ blocked_by: 'sem_perfil', stats: SEM_RESPOSTAS })).toBe('Espera uma loja do Perfil no Google conectada');
+    expect(linha({ blocked_by: 'limite_de_ia_do_dia', in_progress: naFila(2) })).toBe('O limite de IA de hoje acabou; 1 resposta espera uma decisão');
+    expect(linha({ blocked_by: 'limite_de_ia_do_mes', stats: SEM_RESPOSTAS })).toBe('O limite de IA do mês acabou');
+    expect(linha({ status: 'desligado_pela_liame' })).toBe('Ainda não ligado para esta empresa');
+    expect(linha({ status: 'parado' })).toBe('Parado com a equipe');
+  });
+
+  it('"Respostas em outubro" e o custo de IA', () => {
+    expect(acertoDo(social(), 'outubro')).toEqual([
+      { valor: '3', rotulo: 'respostas sugeridas' },
+      { valor: '1', rotulo: 'aprovada e enviada ao Google' },
+      { valor: '1', rotulo: 'esperando uma decisão' },
+    ]);
+    // A barrada e a recusada só aparecem quando há.
+    const comMais = acertoDo(social({ stats: [...com('sugestoes_barradas', 1).filter((s) => s.key !== 'respostas_recusadas'), stat('respostas_recusadas', 2)] }), 'outubro');
+    expect(comMais.slice(3)).toEqual([
+      { valor: '1', rotulo: 'avaliação com as sugestões barradas' },
+      { valor: '2', rotulo: 'recusadas' },
+    ]);
+    expect(acertoDo(social({ stats: com('respostas_propostas', 1) }), 'outubro')[0]).toEqual({ valor: '1', rotulo: 'resposta sugerida' });
+    expect(custoDo(social(), comSocial())).toEqual({ valor: nbsp('R$ 0,09'), rotulo: 'custo de IA para sugerir 3 respostas' });
+    expect(custoDo(social({ stats: SEM_RESPOSTAS, cost: { usd_micros: '0', calls: 0 } }), comSocial())).toEqual({ valor: nbsp('R$ 0,00'), rotulo: 'ele só custa quando escreve' });
+  });
+
+  it('o que a ficha diz de agora: esperando uma decisão, escrevendo, nada esperando, nenhuma ainda, sem loja do Perfil e no limite de IA', () => {
+    const decisao = '1 resposta espera uma decisão em Aprovações. Lá, quem decide vê a avaliação e as sugestões, escolhe uma, ajusta se quiser e aprova com o código do app; a de 1 ou 2 estrelas, só o dono.';
+    expect(frase(social())).toEqual({ faixa: null, titulo: 'Esperando uma decisão', texto: decisao, aprovacoes: true });
+    expect(frase(social({ stats: com('respostas_esperando', 0) }))).toMatchObject({ titulo: 'Nada esperando uma decisão', texto: 'As respostas de outubro já foram decididas. As avaliações e as respostas estão em Avaliações.', aprovacoes: false });
+    expect(frase(social({ stats: SEM_RESPOSTAS }))).toMatchObject({
+      titulo: 'Ele sugere quando chega avaliação nova',
+      texto: 'Nenhuma resposta sugerida em outubro. Quando o Liame lê uma avaliação nova sem resposta do Perfil no Google, ele escreve as sugestões, que chegam em Aprovações.',
+    });
+    // Escrevendo: quantas avaliações e desde quando espera a mais antiga; o pedido que espera a decisão não some.
+    expect(frase(social({ working_now: true, in_progress: naFila(2), stats: com('respostas_esperando', 0) }))).toEqual({
+      faixa: null,
+      titulo: 'Agora',
+      texto: `Está escrevendo as sugestões de 2 avaliações, a mais antiga na fila ${quandoNaFrase(DESDE, AGORA)}. O Compliance confere cada sugestão antes de o pedido chegar em Aprovações.`,
+      aprovacoes: false,
+    });
+    expect(frase(social({ working_now: true, in_progress: naFila(1) }))).toMatchObject({
+      texto: `Está escrevendo as sugestões de 1 avaliação, na fila ${quandoNaFrase(DESDE, AGORA)}. O Compliance confere cada sugestão antes de o pedido chegar em Aprovações. 1 resposta espera uma decisão em Aprovações.`,
+      aprovacoes: true,
+    });
+    // Sem loja do Perfil: a faixa com o caminho que resolve; o pedido que já espera segue à vista.
+    expect(frase(social({ blocked_by: 'sem_perfil', stats: SEM_RESPOSTAS }))).toEqual({
+      faixa: {
+        tipo: 'acao',
+        icone: 'plug',
+        titulo: 'Nenhuma loja do Perfil no Google conectada',
+        texto: 'O Social media sugere a resposta às avaliações do Perfil no Google desta marca. Sem uma loja conectada, não há avaliação para ele responder.',
+        destino: { href: '/contas', rotulo: 'Abrir Contas conectadas' },
+      },
+      titulo: null,
+      texto: null,
+      aprovacoes: null,
+    });
+    expect(frase(social({ blocked_by: 'sem_perfil' }))).toMatchObject({ titulo: 'Esperando uma decisão', aprovacoes: true });
+    // No limite de IA: a faixa diz qual, quantas esperam e que dá para responder escrevendo (a espera passa sozinha: sem caminho).
+    expect(frase(social({ blocked_by: 'limite_de_ia_do_dia', in_progress: naFila(2), stats: SEM_RESPOSTAS }))).toEqual({
+      faixa: {
+        tipo: 'atencao',
+        icone: 'alert',
+        titulo: 'O limite de uso de IA de hoje foi atingido',
+        texto: '2 avaliações esperam as sugestões dele, que ficam para amanhã. Dá para responder escrevendo, em Avaliações.',
+        destino: null,
+      },
+      titulo: null,
+      texto: null,
+      aprovacoes: null,
+    });
+    expect(frase(social({ blocked_by: 'limite_de_ia_do_mes', stats: SEM_RESPOSTAS })).faixa).toMatchObject({
+      titulo: 'O limite de uso de IA de outubro foi atingido',
+      texto: 'As sugestões ficam para quando o mês virar. Dá para responder escrevendo, em Avaliações.',
+    });
+    // Nada de "a sua decisão" nem de "você aprova": a de 1 ou 2 estrelas só o dono aprova (V128).
+    for (const over of [{}, { working_now: true, in_progress: naFila(1) }, { blocked_by: 'sem_perfil' }]) expect(JSON.stringify(frase(social(over)))).not.toMatch(/sua decisão|você aprova|Esperando você/);
+    // Não ligado pela Liame: nada a dizer de agora.
+    expect(agoraDoSocial(social({ status: 'desligado_pela_liame' }), comSocial(), AGORA)).toEqual({ faixa: null, bloco: null });
+  });
+
+  it('o histórico: a resposta sugerida com a nota, as outras a pedido, a barrada sem o texto e o que aconteceu com o pedido', () => {
+    const h = (over: Partial<TeamActivityItem>) => historicoDo(item(over), AGORA);
+    expect(h({ kind: 'propos_resposta', count: 5 })).toMatchObject({
+      titulo: 'Sugeriu a resposta a uma avaliação de 5 estrelas',
+      texto: 'O pedido foi para Aprovações: nenhuma resposta sai sem a aprovação de uma pessoa, com o código do app.',
+    });
+    expect(h({ kind: 'propos_resposta', count: 1 }).titulo).toBe('Sugeriu a resposta a uma avaliação de 1 estrela');
+    expect(h({ kind: 'propos_resposta', count: null }).titulo).toBe('Sugeriu a resposta a uma avaliação');
+    expect(h({ kind: 'propos_outras', count: 2, mine: true, by: RODRIGO })).toMatchObject({ titulo: 'Escreveu outras sugestões para a avaliação de 2 estrelas', texto: 'A seu pedido. Elas entraram no mesmo pedido, em Aprovações.' });
+    expect(h({ kind: 'propos_outras', count: 2, by: RODRIGO }).texto).toBe('A pedido de Rodrigo. Elas entraram no mesmo pedido, em Aprovações.');
+    expect(h({ kind: 'sugestoes_barradas', count: 3, rules: ['regras_da_resposta', 'numeros'] })).toMatchObject({
+      titulo: 'A conferência barrou as sugestões para a avaliação de 3 estrelas',
+      texto:
+        'Motivo: compensação prometida, o nome de alguém ou uma resolução que a loja não confirmou e um número que não está na avaliação nem em Minha marca. Nada foi para Aprovações, e o texto não foi guardado. Dá para responder escrevendo, em Avaliações.',
+    });
+    expect(h({ kind: 'sugestoes_barradas', count: null, rules: [] }).texto).toBe('Nada foi para Aprovações, e o texto não foi guardado. Dá para responder escrevendo, em Avaliações.');
+    expect(h({ kind: 'resposta_aprovada', count: 5, mine: true, by: RODRIGO })).toMatchObject({
+      titulo: 'Resposta à avaliação de 5 estrelas aprovada: foi para o Google',
+      texto: 'Você aprovou. O Google confere antes de publicar; a situação está em Avaliações.',
+    });
+    expect(h({ kind: 'resposta_aprovada', count: null, by: RODRIGO })).toMatchObject({ titulo: 'Resposta aprovada: foi para o Google', texto: 'Rodrigo aprovou. O Google confere antes de publicar; a situação está em Avaliações.' });
+    expect(h({ kind: 'resposta_recusada', count: 2 })).toMatchObject({ titulo: 'Resposta à avaliação de 2 estrelas recusada', texto: 'Uma pessoa recusou o pedido. Nada foi publicado.' });
+    expect(h({ kind: 'resposta_retirada', detail: 'respondida_no_google' })).toMatchObject({ titulo: 'Tirou um pedido de resposta de Aprovações', texto: 'A avaliação foi respondida direto no Google. Nada foi publicado.' });
+    expect(h({ kind: 'resposta_retirada', detail: 'avaliacao_mudou' }).texto).toBe('A pessoa editou a avaliação; as sugestões novas, para o texto de agora, chegam num pedido novo. Nada foi publicado.');
+    expect(h({ kind: 'resposta_cancelada' })).toMatchObject({ titulo: 'Pedido de resposta cancelado', texto: 'O pedido saiu da fila antes da decisão. Nada foi publicado.' });
+    expect(h({ kind: 'resposta_expirou' })).toMatchObject({ titulo: 'Pedido de resposta expirou sem decisão', texto: 'Ninguém decidiu no prazo. Nada foi publicado.' });
+    expect(h({ kind: 'resposta_falhou' })).toMatchObject({ titulo: 'Resposta aprovada, mas não publicada', texto: 'O envio ao Google falhou. O motivo está no pedido, em Aprovações.' });
+  });
+
+  it('desenhado: a ficha no desenho dos outros, com "Abrir Avaliações" no lugar de "Conversar sobre ele" e o modo Aprovação à vista', () => {
+    const html = desenhar({ t: comSocial(), escolhido: 'social', comConversa: true });
+    expect(html).toContain('<h2 id="eqp-det-t" tabindex="-1">Social media</h2>');
+    expect(html).toContain('Posts e avaliações');
+    expect(html).toContain('Modo: Aprovação');
+    expect(html).toContain('href="/avaliacoes"');
+    expect(html).toContain('Abrir Avaliações');
+    expect(html).not.toContain('Conversar sobre ele');
+    expect(html).toContain('<h3>Esperando uma decisão</h3>');
+    expect(html).toContain('<b>1 resposta espera uma decisão</b>');
+    expect(html).toContain('id="eqp-bt-aprovacoes"');
+    expect(html).toContain('id="eqp-social-agora"');
+    expect(html).toContain('id="eqp-social-modo"');
+    expect(html).toContain('nenhuma resposta sai sozinha');
+    expect(html).toContain('<h3>Respostas em outubro</h3>');
+    expect(html).not.toContain('<h3>Acerto</h3>');
+    expect(html).not.toContain('O que as mensagens trouxeram');
+    expect(html).toContain('O custo das sugestões de cada avaliação é medido pelo Liame');
+    expect(html).toContain('Desligar este funcionário');
+    expect(html).toContain('<b>Nunca:</b> publicar sem a aprovação de uma pessoa, com o código do app; prometer desconto, brinde ou reembolso numa resposta; citar o nome de quem avaliou;');
+    // A ficha é de quem vê, e a de 1 ou 2 estrelas só o dono aprova: nada de "a sua decisão" (V128).
+    expect(html).not.toContain('a sua decisão');
+    expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
+  });
+
+  it('desenhado: sem loja do Perfil, o caminho que resolve; desligado, o que continua valendo; não ligado, sem botão nem números', () => {
+    const semPerfil = desenhar({ t: comSocial({ blocked_by: 'sem_perfil', stats: SEM_RESPOSTAS }), escolhido: 'social' });
+    expect(semPerfil).toContain('Nenhuma loja do Perfil no Google conectada');
+    expect(semPerfil).toContain('href="/contas"');
+    expect(semPerfil).not.toContain('id="eqp-social-agora"');
+    // O modo dele continua à vista: ele trabalha assim que houver avaliação para responder.
+    expect(semPerfil).toContain('id="eqp-social-modo"');
+
+    const pausa = { by: RODRIGO, at: '2026-09-30T21:20:00.000Z', reason: 'Vamos responder à mão' };
+    const desligado = desenhar({ t: comSocial({ status: 'desligado', paused: pausa }), escolhido: 'social' });
+    expect(desligado).toContain('Desligado por Rodrigo em');
+    expect(desligado).toContain('Motivo: &quot;Vamos responder à mão&quot;. Enquanto estiver desligado, ele não sugere resposta nesta marca e não custa nada. O pedido que já está em Aprovações segue lá: dá para aprovar ou recusar. Em Avaliações, dá para responder escrevendo.');
+    expect(desligado).toContain('Ligar de novo');
+    expect(desligado).toContain('Abrir Avaliações');
+    expect(desligado).toContain('<h3>Esperando uma decisão</h3>');
+
+    const naoLigado = desenhar({ t: comSocial({ status: 'desligado_pela_liame', stats: SEM_RESPOSTAS }), escolhido: 'social' });
+    expect(naoLigado).toContain('O Social media ainda não está ligado para esta empresa');
+    expect(naoLigado).toContain('Quem liga é a Liame, a pedido do dono. Enquanto isso, ele não sugere resposta e não custa nada. Em Avaliações, dá para responder escrevendo.');
+    expect(naoLigado).toContain('Desligado pela Liame');
+    for (const fora of ['Abrir Avaliações', 'Ligar de novo', 'Desligar este funcionário', 'Respostas em outubro', 'Custo em outubro', 'id="eqp-social-agora"', 'id="eqp-social-modo"']) expect(naoLigado, fora).not.toContain(fora);
+    // Quem não gerencia a equipe vê a ficha e o atalho, sem o botão de desligar.
+    const soVe = desenhar({ t: comSocial({}, { can_manage: false }), escolhido: 'social' });
+    expect(soVe).toContain('Abrir Avaliações');
+    expect(soVe).not.toContain('Desligar este funcionário');
+    // Sobre ele não há "Conversar sobre ele": o atalho é a tela Avaliações.
+    expect(podeConversarSobre('social', comSocial(), true)).toBe(false);
+    expect(perguntaSobre('social')).toBe('Quero falar sobre o trabalho do Social media: o que ele fez este mês?');
   });
 });

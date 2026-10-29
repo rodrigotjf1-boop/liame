@@ -8,6 +8,7 @@ import { diaNoFuso, menosDias } from '../../src/results/fora-do-normal.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, TERMOS, type TestApi, tokenFrom, uniqueEmail } from '../helpers/api.js';
 import { contaDoRegemcast, semearMensagemDoCrm, semearPropostaDoCrm } from '../helpers/mensagens-semeadas.js';
 import { decisaoDaPeca, pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
+import { avaliacaoDaLoja, lojaDoPerfil, semearPedidoDoSocial, semearVezDoSocial } from '../helpers/respostas-semeadas.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // A3 · Sua equipe (protótipo P7): "O que fez" de cada membro e a sombra do Gestor de tráfego, pela API. Tudo é lido do
@@ -449,6 +450,55 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     expect((await atividade(outraEmpresa, outraEmpresa.brandId, 'crm')).items).toEqual([]);
   });
 
+  it('Social media (A6 · P21, sem os posts): a resposta que ele sugeriu, com a nota, e o que aconteceu com o pedido; outras a pedido; a barrada sem o texto', async () => {
+    const e = await empresa();
+    const loja = await lojaDoPerfil(e);
+    const alvo = { tenantId: e.tenantId, brandId: e.brandId, userId: e.userId };
+    // Há 50: sugeriu a resposta a uma avaliação de 5 estrelas; há 40, uma pessoa aprovou e a resposta foi ao Google.
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'executada', estrelas: 5, haMinutos: 50, decididaHaMinutos: 40, aprovadaPor: e.userId });
+    // Há 30: sugeriu para uma de 2 estrelas; há 20, uma pessoa recusou.
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'recusada', estrelas: 2, haMinutos: 30, decididaHaMinutos: 20 });
+    // Há 15: sugeriu para uma de 4 estrelas; há 12, a pessoa editou a avaliação, e ele tirou o pedido de Aprovações.
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'retirada', retirada: 'avaliacao_mudou', estrelas: 4, haMinutos: 15, decididaHaMinutos: 12 });
+    // Há 10: sugeriu para uma de 1 estrela, que ainda espera a decisão; há 8, a pessoa pediu outras, e ele escreveu.
+    const espera = await semearPedidoDoSocial(alvo, loja, { situacao: 'aguardando', estrelas: 1, haMinutos: 10 });
+    await semearVezDoSocial(alvo, espera.avaliacao, { status: 'pronta', rodada: 2, pedidaPor: e.userId, haMinutos: 8 });
+    // Há 5: a conferência barrou as sugestões de uma avaliação de 3 estrelas: nada foi para Aprovações.
+    await semearVezDoSocial(alvo, await avaliacaoDaLoja(e, loja, 3), { status: 'barrada', barradaPor: ['regras_da_resposta', 'numeros'], haMinutos: 5 });
+    // A vez que ainda espera e o pedido de resposta de uma pessoa não entram no histórico dele.
+    await semearVezDoSocial(alvo, await avaliacaoDaLoja(e, loja, 5), { status: 'esperando', haMinutos: 3 });
+    await semearPedidoDoSocial(alvo, loja, { situacao: 'aguardando', funcionario: null, haMinutos: 2 });
+
+    const t = await atividade(e, e.brandId, 'social');
+    expect(tipos(t)).toEqual([
+      'sugestoes_barradas',
+      'propos_outras',
+      'propos_resposta',
+      'resposta_retirada',
+      'propos_resposta',
+      'resposta_recusada',
+      'propos_resposta',
+      'resposta_aprovada',
+      'propos_resposta',
+    ]);
+    expect(t.items[0]).toMatchObject({ count: 3, rules: ['regras_da_resposta', 'numeros'], by: null, subject: null });
+    // As outras foram a pedido de uma pessoa: ela aparece; a sugestão da rotina é dele, sem pessoa.
+    expect(t.items[1]).toMatchObject({ count: 1, by: { id: e.userId }, mine: true });
+    expect(t.items[2]).toMatchObject({ count: 1, by: null });
+    // A retirada diz o porquê, em código.
+    expect(t.items[3]).toMatchObject({ detail: 'avaliacao_mudou', count: 4, by: null });
+    expect(t.items[5]).toMatchObject({ count: 2, by: null });
+    // Quem aprovou aparece na resposta que foi ao Google.
+    expect(t.items[7]).toMatchObject({ count: 5, by: { id: e.userId }, mine: true });
+    expect(t.items[8]).toMatchObject({ kind: 'propos_resposta', count: 5, by: null });
+    expect(t.has_more).toBe(false);
+    // Nada do texto da avaliação nem do nome de quem avaliou: só a nota e os códigos.
+    expect(JSON.stringify(t)).not.toContain('Chegou tudo certinho');
+    // Outra empresa não vê as respostas desta.
+    const outraEmpresa = await empresa();
+    expect((await atividade(outraEmpresa, outraEmpresa.brandId, 'social')).items).toEqual([]);
+  });
+
   it('CRM e mensageria (A5 · P16): o caminho da proposta na fila: o rascunho do modelo, a barrada sem o texto, a descartada e a que falhou', async () => {
     const e = await empresa();
     const conta = await contaDoRegemcast(e);
@@ -499,8 +549,8 @@ describe.skipIf(!hasDb)('Sua equipe: o que cada um fez e a sombra do Gestor de t
     const outra = await empresa();
     expect((await api.call('GET', `/v1/team/members/pesquisador/activity?brand_id=${e.brandId}`, { cookie: outra.cookie })).status).toBe(404);
     expect((await api.call('GET', `/v1/team/shadow?brand_id=${e.brandId}`, { cookie: outra.cookie })).status).toBe(404);
-    // Funcionário que não é da equipe desta fase, e limite fora da faixa.
-    expect((await api.call('GET', `/v1/team/members/social/activity?brand_id=${e.brandId}`, { cookie: e.cookie })).status).toBe(400);
+    // Funcionário que não é da equipe desta fase (o de CRO e páginas entra na A8), e limite fora da faixa.
+    expect((await api.call('GET', `/v1/team/members/cro/activity?brand_id=${e.brandId}`, { cookie: e.cookie })).status).toBe(400);
     expect((await api.call('GET', `/v1/team/members/lia/activity?brand_id=${e.brandId}&limit=500`, { cookie: e.cookie })).status).toBe(400);
     // Só relatórios: não vê campanhas nem vendas.
     const soRelatorios = await membro(e, 'so_relatorios');
