@@ -1,8 +1,18 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { recusaDoInstagram } from '../src/actions/post-publicacao.js';
+import { recusaDaRede } from '../src/actions/post-publicacao.js';
 import { ErroConector } from '../src/connectors/cliente-http.js';
-import { enderecoDoPost, horaDoInstagram, idDaResposta, limiteDePosts, postJaPublicado } from '../src/connectors/meta/publicacao.js';
+import {
+  enderecoDoPost,
+  enderecoNaPagina,
+  fotoJaNaPagina,
+  horaDoInstagram,
+  idDaResposta,
+  idDoPostDaPagina,
+  limiteDePosts,
+  postJaPublicado,
+  tokenDaPagina,
+} from '../src/connectors/meta/publicacao.js';
 import { type EstadoDoPost, recusaNaHoraDeSair } from '../src/posts/post-plano.js';
 import { areaDoRecorte, recortarParaOInstagram } from '../src/posts/recorte.js';
 
@@ -104,11 +114,48 @@ describe('o post no Instagram: as regras puras (A6 · Z5b, parte 2)', () => {
     expect(idDaResposta(null)).toBeNull();
   });
 
-  it('a recusa em palavras: a autorização, a permissão e a recusa definitiva; o passageiro (limite, fora do ar), nulo para o trilho adiar', () => {
-    expect(recusaDoInstagram(new ErroConector('autenticacao', 'meta_ads', 'x'))).toContain('Conecte a Meta de novo em Contas conectadas. O post não saiu no Instagram.');
-    expect(recusaDoInstagram(new ErroConector('permissao', 'meta_ads', 'x'))).toContain('a permissão de publicar não está concedida');
-    expect(recusaDoInstagram(new ErroConector('definitivo', 'meta_ads', 'x'))).toBe('O Instagram não aceitou o post. O post não saiu no Instagram.');
-    for (const tipo of ['limite', 'transitorio', 'circuito_aberto'] as const) expect(recusaDoInstagram(new ErroConector(tipo, 'meta_ads', 'x'))).toBeNull();
-    expect(recusaDoInstagram(new Error('outro'))).toBeNull();
+  it('a recusa em palavras, com o canal: a autorização, a permissão e a recusa definitiva; o passageiro (limite, fora do ar), nulo para o trilho adiar', () => {
+    expect(recusaDaRede(new ErroConector('autenticacao', 'meta_ads', 'x'), 'instagram')).toContain('Conecte a Meta de novo em Contas conectadas. O post não saiu no Instagram.');
+    expect(recusaDaRede(new ErroConector('autenticacao', 'meta_ads', 'x'), 'facebook')).toContain('O post não saiu na Página do Facebook.');
+    expect(recusaDaRede(new ErroConector('permissao', 'meta_ads', 'x'), 'instagram')).toContain('a permissão de publicar não está concedida');
+    expect(recusaDaRede(new ErroConector('permissao', 'meta_ads', 'x'), 'facebook')).toContain('quem autorizou não pode criar conteúdo nela');
+    expect(recusaDaRede(new ErroConector('definitivo', 'meta_ads', 'x'), 'instagram')).toBe('O Instagram não aceitou o post. O post não saiu no Instagram.');
+    expect(recusaDaRede(new ErroConector('definitivo', 'meta_ads', 'x'), 'facebook')).toBe('A Página do Facebook não aceitou o post. O post não saiu na Página do Facebook.');
+    for (const tipo of ['limite', 'transitorio', 'circuito_aberto'] as const) expect(recusaDaRede(new ErroConector(tipo, 'meta_ads', 'x'), 'facebook')).toBeNull();
+    expect(recusaDaRede(new Error('outro'), 'instagram')).toBeNull();
+  });
+
+  it('a Página: o token dela pela lista da autorização (com a tarefa de publicar), a foto que já saiu, o id do post e o endereço', () => {
+    const DA_PAGINA_A = 'pagina-a-de-teste';
+    const DA_PAGINA_B = 'pagina-b-de-teste';
+    const contas = {
+      data: [
+        { id: '111111111111111', access_token: DA_PAGINA_A, tasks: ['ANALYZE', 'ADVERTISE'] },
+        { id: '222222222222222', access_token: DA_PAGINA_B, tasks: ['MANAGE', 'CREATE_CONTENT', 'MODERATE'] },
+        { id: '333333333333333', tasks: ['CREATE_CONTENT'] },
+      ],
+    };
+    expect(tokenDaPagina(contas, '222222222222222')).toEqual({ token: DA_PAGINA_B, podePublicar: true });
+    expect(tokenDaPagina(contas, '111111111111111')).toEqual({ token: DA_PAGINA_A, podePublicar: false });
+    // Sem o token na lista, ou a Página fora da autorização: nulo.
+    expect(tokenDaPagina(contas, '333333333333333')).toBeNull();
+    expect(tokenDaPagina(contas, '444444444444444')).toBeNull();
+    expect(tokenDaPagina({}, '222222222222222')).toBeNull();
+
+    const desde = new Date('2026-10-30T22:00:00.400Z');
+    const fotos = {
+      data: [
+        { id: '9000000000000002', name: 'Smash duplo hoje.\r\n', created_time: '2026-10-30T22:00:00+0000', link: 'https://www.facebook.com/photo/?fbid=9000000000000002', page_story_id: '222222222222222_8000000000000002' },
+        { id: '9000000000000001', name: 'Smash duplo hoje.', created_time: '2026-10-29T22:00:00+0000', link: 'https://www.facebook.com/photo/?fbid=9000000000000001' },
+      ],
+    };
+    expect(fotoJaNaPagina(fotos, 'Smash duplo hoje.', desde)).toEqual({ id: '9000000000000002', post: '222222222222222_8000000000000002', link: 'https://www.facebook.com/photo/?fbid=9000000000000002' });
+    expect(fotoJaNaPagina({ data: [fotos.data[1]] }, 'Smash duplo hoje.', desde)).toBeNull();
+    expect(fotoJaNaPagina(null, 'x', desde)).toBeNull();
+
+    expect(idDoPostDaPagina('222222222222222_8000000000000002')).toBe('222222222222222_8000000000000002');
+    for (const ruim of ['8000000000000002', '222_../x', 42, null]) expect(idDoPostDaPagina(ruim)).toBeNull();
+    expect(enderecoNaPagina('https://www.facebook.com/222222222222222/posts/8000000000000002')).toBe('https://www.facebook.com/222222222222222/posts/8000000000000002');
+    for (const ruim of ['http://www.facebook.com/x', 'https://facebook.com.exemplo.com/x', 'https://www.instagram.com/p/x/', 42]) expect(enderecoNaPagina(ruim)).toBeNull();
   });
 });

@@ -17,9 +17,24 @@ import type { AddressInfo } from 'node:net';
 // O que a documentação NÃO diz vira o PIOR caso aqui (V125; base §2.2, [NC]): publicar duas vezes o mesmo contêiner cria
 // DOIS posts (o teste prova que o Liame nunca faz isso), e publicar o contêiner que ainda não está pronto responde o erro
 // 9007 ("a mídia ainda não está pronta").
+//
+// A Página do Facebook (parte 3), pelas páginas oficiais lidas em 29/10/2026 (`…/reference/page/photos/`,
+// `…/reference/photo/` e o "Get a Page access token" das Pages API, v26.0):
+//   - `GET /{v}/me/accounts?fields=id,access_token,tasks`, com o token da autorização → cada Página com o token dela e as
+//     tarefas de quem autorizou;
+//   - `POST /{v}/{página}/photos` com `url` e `caption`, com o token da Página de quem tem `CREATE_CONTENT` → `{"id",
+//     "post_id"}`; a Página busca a imagem pelo endereço (o pior caso: na hora, como o Instagram);
+//   - `GET /{v}/{página}/photos?type=uploaded&fields=id,name,created_time,link,page_story_id` (o `name` é a legenda; a
+//     leitura pede a tarefa `MODERATE`: sem ela, a recusa de permissão, código 200);
+//   - `GET /{v}/{post}?fields=permalink_url`.
+// Publicar a mesma foto duas vezes cria dois posts (a documentação não fala em evitar a repetição: o pior caso).
 
 export const TOKEN_DO_INSTAGRAM = `token-do-instagram-${randomBytes(6).toString('hex')}`;
 export const SEGREDO_DO_APP = `segredo-do-app-${randomBytes(6).toString('hex')}`;
+/** O token que a lista das Páginas devolve para a Página da marca (é com ele que a foto é publicada). */
+export const TOKEN_DA_PAGINA = `token-da-pagina-${randomBytes(6).toString('hex')}`;
+
+export type FotoNaPagina = { id: string; pagina: string; name: string; created_time: string; link: string; page_story_id: string; imagem: Buffer | null };
 
 export type PostNoInstagram = { id: string; caption: string; timestamp: string; permalink: string; conteiner: string; imagem: Buffer | null };
 export type Conteiner = { id: string; ig: string; caption: string; imagem: Buffer | null; endereco: string; status: string };
@@ -48,6 +63,11 @@ export class InstagramDeMentira {
   perderARespostaDaPublicacao = false;
   /** Como buscar a imagem pelo endereço (o armazenamento dos testes). Nulo: a imagem não está lá. */
   buscarImagem: (endereco: string) => Buffer | null = () => null;
+  /** As Páginas que a autorização alcança, com as tarefas de quem autorizou em cada uma. */
+  readonly paginas = new Map<string, string[]>();
+  readonly fotosNaPagina: FotoNaPagina[] = [];
+  /** A próxima foto na Página sai, mas a resposta não chega (a Meta responde 503 depois de publicar). */
+  perderARespostaDaFoto = false;
   base = '';
   private servidor: Server | null = null;
 
@@ -78,6 +98,7 @@ export class InstagramDeMentira {
     this.cota = { usados: 0, total: 50 };
     this.falhas.clear();
     this.perderARespostaDaPublicacao = false;
+    this.perderARespostaDaFoto = false;
     this.chamadas.length = 0;
     this.defeitos.length = 0;
   }
@@ -90,6 +111,11 @@ export class InstagramDeMentira {
   /** Os posts publicados numa conta do Instagram. */
   postsDe(ig: string): PostNoInstagram[] {
     return this.posts.filter((p) => this.conteineres.get(p.conteiner)?.ig === ig);
+  }
+
+  /** As fotos publicadas numa Página. */
+  fotosDe(pagina: string): FotoNaPagina[] {
+    return this.fotosNaPagina.filter((f) => f.pagina === pagina);
   }
 
   private responder(req: IncomingMessage, texto: string): { status: number; corpo: unknown } {
@@ -105,16 +131,46 @@ export class InstagramDeMentira {
     }
     const metodo = req.method ?? 'GET';
     this.chamadas.push({ metodo, caminho: url.pathname, params, corpo });
-    // O token vai no cabeçalho, nunca na URL; a prova do segredo do app vai junto, calculada com o token.
-    if (params.access_token) this.defeitos.push('token na URL');
-    if (req.headers.authorization !== `Bearer ${TOKEN_DO_INSTAGRAM}`) return erro(401, 190, 'Invalid OAuth access token');
-    if (params.appsecret_proof !== createHmac('sha256', SEGREDO_DO_APP).update(TOKEN_DO_INSTAGRAM).digest('hex')) this.defeitos.push('sem a prova do segredo do app');
-
     const partes = url.pathname.split('/').filter(Boolean); // graph, v26.0, id, [aresta]
     const [, , id, aresta] = partes;
+    // O token vai no cabeçalho, nunca na URL; a prova do segredo do app vai junto, calculada com o token. O que é da
+    // Página (as fotos dela e o post) pede o token da Página; o resto, o da autorização.
+    const daPagina = this.paginas.has(id ?? '') || (id ?? '').includes('_');
+    const esperado = daPagina ? TOKEN_DA_PAGINA : TOKEN_DO_INSTAGRAM;
+    if (params.access_token) this.defeitos.push('token na URL');
+    if (req.headers.authorization !== `Bearer ${esperado}`) return erro(401, 190, 'Invalid OAuth access token');
+    if (params.appsecret_proof !== createHmac('sha256', SEGREDO_DO_APP).update(esperado).digest('hex')) this.defeitos.push('sem a prova do segredo do app');
+
     const final = aresta ?? (params.fields === 'status_code' ? 'status_code' : 'objeto');
     const falha = this.falhas.get(final)?.shift();
     if (falha) return falha;
+
+    if (metodo === 'GET' && id === 'me' && aresta === 'accounts') {
+      return { status: 200, corpo: { data: [...this.paginas.entries()].map(([pagina, tasks]) => ({ id: pagina, access_token: TOKEN_DA_PAGINA, tasks })) } };
+    }
+    if (aresta === 'photos' && this.paginas.has(id!)) {
+      const tarefas = this.paginas.get(id!)!;
+      if (metodo === 'GET') {
+        if (!tarefas.includes('MODERATE')) return erro(403, 200, 'Requires the MODERATE task on the Page');
+        const lista = this.fotosDe(id!).slice(0, Number(params.limit ?? 25));
+        return { status: 200, corpo: { data: lista.map((f) => ({ id: f.id, name: f.name, created_time: f.created_time, link: f.link, page_story_id: f.page_story_id })) } };
+      }
+      if (!tarefas.includes('CREATE_CONTENT')) return erro(403, 200, 'Requires the CREATE_CONTENT task on the Page');
+      const imagem = this.buscarImagem(typeof corpo?.url === 'string' ? corpo.url : '');
+      if (!imagem) return erro(400, 324, 'Missing or invalid image file');
+      const foto: FotoNaPagina = { id: idDaMeta(), pagina: id!, name: String(corpo?.caption ?? ''), created_time: dataDoInstagram(new Date()), link: '', page_story_id: `${id}_${idDaMeta()}`, imagem };
+      foto.link = `https://www.facebook.com/photo/?fbid=${foto.id}`;
+      this.fotosNaPagina.unshift(foto);
+      if (this.perderARespostaDaFoto) {
+        this.perderARespostaDaFoto = false;
+        return erro(503, 2, 'Service temporarily unavailable');
+      }
+      return { status: 200, corpo: { id: foto.id, post_id: foto.page_story_id } };
+    }
+    if (metodo === 'GET' && !aresta && (id ?? '').includes('_')) {
+      const f = this.fotosNaPagina.find((x) => x.page_story_id === id);
+      if (f) return { status: 200, corpo: { permalink_url: `https://www.facebook.com/${f.pagina}/posts/${id!.split('_')[1]}`, id } };
+    }
 
     if (metodo === 'POST' && aresta === 'media') {
       const endereco = typeof corpo?.image_url === 'string' ? corpo.image_url : '';

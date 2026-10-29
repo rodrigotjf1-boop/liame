@@ -18,8 +18,8 @@ import { InstagramDeMentira, SEGREDO_DO_APP, TOKEN_DO_INSTAGRAM } from '../helpe
 import { type EmpresaComCanais, empresaComCanais, fotoGuardada } from '../helpers/posts-semeados.js';
 import { hasDb } from './env.js';
 
-// A6 · Z5b, parte 2: o post aprovado sai no Instagram, na hora marcada, contra um Instagram de mentira que segue as
-// páginas oficiais lidas em 29/10/2026 (`helpers/instagram-de-mentira.ts`). O que se prova aqui:
+// A6 · Z5b, partes 2 e 3: o post aprovado sai no Instagram e na Página do Facebook, na hora marcada, contra uma Meta de
+// mentira que segue as páginas oficiais lidas em 29/10/2026 (`helpers/instagram-de-mentira.ts`). O que se prova aqui:
 //   - na hora, o post sai UMA vez (A6-9): o contêiner com a foto (a inteira, ou o recorte na posição aprovada, D-A6-21)
 //     e a legenda, a publicação e o endereço do post; o canal guarda o post, e o recorte sai do armazenamento;
 //   - o contêiner que ainda prepara a foto: o pedido espera um minuto e, na volta, publica o MESMO contêiner;
@@ -27,13 +27,21 @@ import { hasDb } from './env.js';
 //   - o limite de posts do dia (A6-11): o pedido espera, sem criar contêiner;
 //   - as recusas definitivas (a foto que o Instagram não aceita, a autorização e a permissão recusadas, o arquivo da foto
 //     que sumiu) terminam o pedido com a frase em português, e o canal diz que não saiu;
-//   - na hora de sair, o que mudou desde a aprovação não sai (A6-10: a foto apagada), e o post com a Página ainda não
-//     sai (é a parte 3), os dois sem chamar a rede;
+//   - na hora de sair, o que mudou desde a aprovação não sai (A6-10: a foto apagada), sem chamar a rede;
 //   - fora das 8h às 22h no fuso da empresa (D-A6-33), o pedido volta para a fila com a hora em que pode sair, sem contar
-//     tentativa e sem chamar a rede.
+//     tentativa e sem chamar a rede;
+//   - a Página (parte 3): o token dela pela lista das Páginas da autorização, a foto inteira com a legenda e o endereço do
+//     post; cada canal sai por conta própria (sem a tarefa de publicar na Página, o Instagram sai e o post fica "em
+//     parte"); a resposta da foto que não chega (a volta seguinte acha a foto e não publica de novo; sem poder ler as
+//     fotos, não arrisca); a Página que a autorização não alcança; a trava da conta da Página; e o post só com a Página.
 
 const LEGENDA = 'Hoje tem smash duplo na Casa Brasa. Peça pelo link da bio.';
 const FUSO_DO_PEDIDO = 'America/Sao_Paulo';
+/** O post nos dois canais, cada um com o texto dele. */
+const DOIS_CANAIS = [
+  { channel: 'instagram', text: LEGENDA },
+  { channel: 'facebook', text: 'Hoje tem smash duplo na Casa Brasa. Peça pelo link: liame.link/abc' },
+];
 
 /** `AAAA-MM-DD` de hoje mais `n` dias, em São Paulo. */
 const diaEmSaoPaulo = (n: number): string =>
@@ -56,7 +64,7 @@ async function corNoPonto(imagem: Buffer, x: number, y: number): Promise<{ r: nu
   return { r: px[0]!, g: px[1]!, b: px[2]! };
 }
 
-describe.skipIf(!hasDb)('o post no Instagram (A6 · Z5b, parte 2)', () => {
+describe.skipIf(!hasDb)('o post no Instagram e na Página (A6 · Z5b, partes 2 e 3)', () => {
   let api: TestApi;
   let executor: ActionExecutor;
   let armazem: ArmazemNaMemoria;
@@ -83,6 +91,11 @@ describe.skipIf(!hasDb)('o post no Instagram (A6 · Z5b, parte 2)', () => {
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
       armazem,
       esperaDoConteinerMs: 0,
+      // A trava da conta do outro canal, como o provedor da subida a liga (`escrita-posts.provider.ts`).
+      trava: async (tx, alvo) => {
+        const t = await api.app.get(KillSwitchService).check(tx, { ...alvo, tool: 'post_publicar' });
+        return t ? `${t.level}: ${t.reason}` : null;
+      },
     };
     postNoInstagramConnector.ligar(deps);
     postNaPaginaConnector.ligar(deps);
@@ -96,7 +109,14 @@ describe.skipIf(!hasDb)('o post no Instagram (A6 · Z5b, parte 2)', () => {
     await api?.close();
   });
 
-  const empresa = (nome: string, o: { pagina?: boolean } = {}) => empresaComCanais(api, nome, { pagina: o.pagina ?? false, token: TOKEN_DO_INSTAGRAM });
+  const empresa = (nome: string, o: { pagina?: boolean; instagram?: boolean } = {}) =>
+    empresaComCanais(api, nome, { pagina: o.pagina ?? false, instagram: o.instagram ?? true, token: TOKEN_DO_INSTAGRAM });
+  /** A empresa com a Página que a autorização alcança, com as tarefas de quem autorizou (por padrão, publicar e moderar). */
+  const comPagina = async (nome: string, tarefas = ['CREATE_CONTENT', 'MODERATE'], o: { instagram?: boolean } = {}) => {
+    const e = await empresa(nome, { pagina: true, ...o });
+    ig.paginas.set(e.pagina!.externo, tarefas);
+    return e;
+  };
   const pedidoDe = async (id: string) =>
     (
       await ownerQuery<{ status: string; status_reason: string | null; attempts: number; next_attempt_at: Date | null; plan_hash: string; before_state: Record<string, unknown> }>(
@@ -300,25 +320,128 @@ describe.skipIf(!hasDb)('o post no Instagram (A6 · Z5b, parte 2)', () => {
     expect(ig.contar('media', 'POST')).toBe(0);
   });
 
-  it('na hora de sair, a foto apagada depois da aprovação não sai (A6-10), e o post com a Página ainda não sai; os dois sem chamar a rede', async () => {
-    const e = await empresa('Brasa IG Na Hora', { pagina: true });
+  it('na hora de sair, a foto apagada depois da aprovação não sai (A6-10), sem chamar a rede', async () => {
+    const e = await comPagina('Brasa IG Na Hora');
     const foto = await fotoGuardada(e, armazem, { largura: 1600, altura: 1200 });
-    const apagada = await postAprovado(e, foto.id);
+    const apagada = await postAprovado(e, foto.id, { canais: DOIS_CANAIS });
     await ownerQuery(`update liame.brand_photo set removed_at = now() where id = $1`, [foto.id]);
     expect(await executar(e)).toBe(1);
     expect(await pedidoDe(apagada.pedido)).toMatchObject({ status: 'falhou', status_reason: 'A foto deste post foi apagada nas Fotos: o post não sai. Faça um post novo com outra foto.' });
+    expect([(await canalDe(apagada.post)).status, (await canalDe(apagada.post, 'facebook')).status]).toEqual(['aguardando', 'aguardando']);
+    expect(ig.chamadas).toEqual([]);
+  });
 
-    const outra = await fotoGuardada(e, armazem, { largura: 1600, altura: 1200 });
-    const comPagina = await postAprovado(e, outra.id, {
-      canais: [
-        { channel: 'instagram', text: LEGENDA },
-        { channel: 'facebook', text: `${LEGENDA} Na Página.` },
-      ],
+  it('o post nos dois canais: o recorte no Instagram e a foto inteira na Página, com o token da Página e o endereço do post', async () => {
+    const e = await comPagina('Brasa Dois Canais');
+    const foto = await fotoGuardada(e, armazem, { largura: 1200, altura: 1800 });
+    const { post, pedido } = await postAprovado(e, foto.id, { canais: DOIS_CANAIS, crop: 0 });
+    expect(await executar(e)).toBe(1);
+    expect(await pedidoDe(pedido)).toMatchObject({ status: 'executada', status_reason: null });
+
+    const [noInstagram] = ig.postsDe(e.instagram!.externo);
+    expect((await sharp(noInstagram!.imagem!).metadata()).height).toBe(1500);
+    const fotos = ig.fotosDe(e.pagina!.externo);
+    expect(fotos).toHaveLength(1);
+    // A Página recebe a foto inteira (ela aceita qualquer proporção) e o texto dela.
+    expect(fotos[0]!.imagem?.equals(armazem.objetos.get(foto.chave)!)).toBe(true);
+    expect(fotos[0]!.name).toBe(DOIS_CANAIS[1]!.text);
+    expect(await canalDe(post, 'facebook')).toMatchObject({
+      status: 'publicado',
+      external_id: fotos[0]!.page_story_id,
+      permalink: `https://www.facebook.com/${e.pagina!.externo}/posts/${fotos[0]!.page_story_id.split('_')[1]}`,
+      error: null,
+    });
+    // O token da Página veio da lista das Páginas da autorização, uma vez; os dois tokens foram no cabeçalho, com a prova.
+    expect(ig.contar('accounts')).toBe(1);
+    expect(ig.defeitos).toEqual([]);
+    expect((await api.call('GET', `/v1/posts/${post}`, { cookie: e.cookie })).body.status).toBe('publicado');
+  });
+
+  it('cada canal por conta própria: sem a tarefa de publicar na Página, o Instagram sai, a Página não, e o post fica "em parte"', async () => {
+    const e = await comPagina('Brasa Em Parte', ['ANALYZE', 'ADVERTISE']);
+    const foto = await fotoGuardada(e, armazem, { largura: 1600, altura: 1200 });
+    const { post, pedido } = await postAprovado(e, foto.id, { canais: DOIS_CANAIS });
+    expect(await executar(e)).toBe(1);
+    const p = await pedidoDe(pedido);
+    expect(p.status).toBe('falhou');
+    expect(p.status_reason).toMatch(/^O post saiu no Instagram\. A Meta não deixou o Liame publicar nesta Página/);
+    expect([(await canalDe(post)).status, (await canalDe(post, 'facebook')).status]).toEqual(['publicado', 'falhou']);
+    expect(ig.fotosDe(e.pagina!.externo)).toHaveLength(0);
+    expect((await api.call('GET', `/v1/posts/${post}`, { cookie: e.cookie })).body.status).toBe('em_parte');
+  });
+
+  it('a resposta da foto que não chega: a volta seguinte acha a foto na Página e não publica de novo; sem poder ler as fotos, não arrisca', async () => {
+    // Com a leitura das fotos: a volta seguinte acha a foto e dá o canal como publicado.
+    const e = await comPagina('Brasa Pagina Sem Resposta');
+    const foto = await fotoGuardada(e, armazem, { largura: 1600, altura: 1200 });
+    const a = await postAprovado(e, foto.id, { canais: DOIS_CANAIS });
+    ig.perderARespostaDaFoto = true;
+    expect(await executar(e)).toBe(1);
+    // O Instagram saiu na mesma volta; a Página publicou, mas o Liame não soube: o pedido espera.
+    expect(await pedidoDe(a.pedido)).toMatchObject({ status: 'aprovada', attempts: 1, status_reason: 'a Meta não respondeu' });
+    expect([(await canalDe(a.post)).status, (await canalDe(a.post, 'facebook')).status]).toEqual(['publicado', 'publicando']);
+    await passaAEspera(a.pedido);
+    expect(await executar(e)).toBe(1);
+    expect((await pedidoDe(a.pedido)).status).toBe('executada');
+    const fotos = ig.fotosDe(e.pagina!.externo);
+    expect(fotos).toHaveLength(1);
+    expect(ig.postsDe(e.instagram!.externo)).toHaveLength(1);
+    expect(await canalDe(a.post, 'facebook')).toMatchObject({ status: 'publicado', external_id: fotos[0]!.page_story_id, permalink: fotos[0]!.link });
+
+    // Sem a tarefa de moderar (ler as fotos da Página): a primeira tentativa publica; depois de uma sem resposta, não arrisca.
+    const s = await comPagina('Brasa Pagina Sem Moderar', ['CREATE_CONTENT']);
+    const outra = await fotoGuardada(s, armazem, { largura: 1600, altura: 1200 });
+    const b = await postAprovado(s, outra.id, { canais: [{ channel: 'facebook', text: `${LEGENDA} Só na Página.` }] });
+    ig.perderARespostaDaFoto = true;
+    expect(await executar(s)).toBe(1);
+    expect((await pedidoDe(b.pedido)).status).toBe('aprovada');
+    await passaAEspera(b.pedido);
+    expect(await executar(s)).toBe(1);
+    const pb = await pedidoDe(b.pedido);
+    expect(pb.status).toBe('falhou');
+    expect(pb.status_reason).toContain('Para não publicar duas vezes, o Liame não tentou de novo');
+    expect(ig.fotosDe(s.pagina!.externo)).toHaveLength(1);
+  });
+
+  it('a Página que a autorização não alcança mais, e a trava ligada para a conta da Página: o Instagram sai, a Página não', async () => {
+    const fora = await comPagina('Brasa Pagina Fora');
+    ig.paginas.delete(fora.pagina!.externo);
+    const f1 = await fotoGuardada(fora, armazem, { largura: 1600, altura: 1200 });
+    const a = await postAprovado(fora, f1.id, { canais: DOIS_CANAIS });
+    expect(await executar(fora)).toBe(1);
+    expect((await pedidoDe(a.pedido)).status_reason).toContain('A autorização da Meta não alcança mais esta Página.');
+    expect([(await canalDe(a.post)).status, (await canalDe(a.post, 'facebook')).status]).toEqual(['publicado', 'falhou']);
+
+    const travada = await comPagina('Brasa Pagina Travada');
+    await ownerQuery(`insert into liame.kill_switch (id, level, tenant_id, provider, account_id, reason) values (gen_random_uuid(), 'account', $1, 'facebook_page', $2, 'teste: Página parada')`, [
+      travada.tenantId,
+      travada.pagina!.id,
+    ]);
+    const f2 = await fotoGuardada(travada, armazem, { largura: 1600, altura: 1200 });
+    const b = await postAprovado(travada, f2.id, { canais: DOIS_CANAIS });
+    const antes = ig.contar('accounts');
+    expect(await executar(travada)).toBe(1);
+    expect((await pedidoDe(b.pedido)).status_reason).toContain('Uma trava está ligada (account: teste: Página parada).');
+    expect([(await canalDe(b.post)).status, (await canalDe(b.post, 'facebook')).status]).toEqual(['publicado', 'falhou']);
+    // A Página travada nem chegou a ser chamada.
+    expect(ig.contar('accounts')).toBe(antes);
+    expect(ig.fotosDe(travada.pagina!.externo)).toHaveLength(0);
+  });
+
+  it('o post só com a Página: o pedido é pela conta da Página, e a foto sai nela', async () => {
+    const e = await comPagina('Brasa So Pagina', undefined, { instagram: false });
+    const foto = await fotoGuardada(e, armazem, { largura: 2048, altura: 800 });
+    const { post, pedido } = await postAprovado(e, foto.id, { canais: [{ channel: 'facebook', text: `${LEGENDA} Só na Página.` }] });
+    expect((await ownerQuery<{ provider: string; account_id: string }>(`select provider, account_id from liame.action_request where id = $1`, [pedido]))[0]).toEqual({
+      provider: 'facebook_page',
+      account_id: e.pagina!.id,
     });
     expect(await executar(e)).toBe(1);
-    expect((await pedidoDe(comPagina.pedido)).status_reason).toContain('A publicação na Página do Facebook ainda não está pronta');
-    expect([(await canalDe(comPagina.post)).status, (await canalDe(comPagina.post, 'facebook')).status]).toEqual(['aguardando', 'aguardando']);
-    expect(ig.chamadas).toEqual([]);
+    expect((await pedidoDe(pedido)).status).toBe('executada');
+    expect((await canalDe(post, 'facebook')).status).toBe('publicado');
+    // A foto deitada de 2,56:1 vai inteira à Página (o recorte é só do Instagram).
+    expect(ig.fotosDe(e.pagina!.externo)[0]!.imagem?.equals(armazem.objetos.get(foto.chave)!)).toBe(true);
+    expect([...armazem.objetos.keys()].filter((k) => k.includes('/post/'))).toEqual([]);
   });
 
   it('fora das 8h às 22h no fuso da empresa, o pedido volta para a fila com a hora em que pode sair, sem contar tentativa e sem chamar a rede', async () => {
