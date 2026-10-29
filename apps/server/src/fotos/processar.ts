@@ -43,7 +43,8 @@ export function carregadorDoSharp(importar: () => Promise<unknown> = () => impor
   };
 }
 
-const carregarSharp = carregadorDoSharp();
+/** O sharp do processo, carregado uma vez (o recorte do post do Instagram usa o mesmo). */
+export const carregarSharp = carregadorDoSharp();
 
 /** O lado menor da miniatura: a grade mostra a foto em quadrado de até uns 220 px, em tela de densidade 2. */
 export const LADO_DA_MINIATURA = 480;

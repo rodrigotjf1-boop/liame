@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   chaveDaFoto,
   chaveDaMiniatura,
+  chaveDoRecorteDoPost,
   conferirMedidas,
   estreitaParaOInstagram,
   medidasOrientadas,
@@ -18,6 +19,7 @@ import {
 } from '../src/fotos/conferencia.js';
 import { carregadorDoSharp, LADO_DA_MINIATURA, processarFoto, RecusaDaFoto, SemSharp } from '../src/fotos/processar.js';
 import {
+  type ArmazemDeImagens,
   ArmazemFechado,
   ArmazemIndisponivel,
   ArmazemNaMemoria,
@@ -25,6 +27,7 @@ import {
   ArmazemS3,
   criarArmazem,
   FalhaDoArmazem,
+  MAIOR_LEITURA_BYTES,
   type SdkDoS3,
 } from '../src/imagens/armazem.js';
 
@@ -245,6 +248,56 @@ describe('o armazenamento de imagens', () => {
     enviados.length = 0;
     await a.apagar(muitas);
     expect(enviados.map((e) => ((e.input.Delete as { Objects: unknown[] }).Objects).length)).toEqual([1000, 500]);
+  });
+
+  it('ler a imagem guardada (o recorte do post sai da cópia da foto) e a chave do recorte, ao lado das fotos da marca (A6 · Z5b)', async () => {
+    const POST = '0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5d';
+    const recorte = chaveDoRecorteDoPost(EMPRESA, MARCA, POST);
+    expect(recorte).toBe(`t/${EMPRESA}/b/${MARCA}/post/${POST}-instagram.jpg`);
+    // Na memória: lê o que foi gravado; a chave sem imagem é "sem arquivo" (tentar de novo não resolve).
+    const m = new ArmazemNaMemoria();
+    await m.gravar(recorte, Buffer.from('recorte'));
+    expect((await m.ler(recorte)).toString()).toBe('recorte');
+    await expect(m.ler(chave)).rejects.toMatchObject({ semArquivo: true });
+    // Fora do desenho: outra pasta, outro final, id que não é uuid, a chave de outro jeito.
+    for (const ruim of [`t/${EMPRESA}/b/${MARCA}/post/${POST}.jpg`, `t/${EMPRESA}/b/${MARCA}/outra/${POST}-instagram.jpg`, `t/${EMPRESA}/b/${MARCA}/post/x-instagram.jpg`, `t/${EMPRESA}/b/${MARCA}/foto_produto/${POST}-instagram.jpg`]) {
+      await expect(m.gravar(ruim, Buffer.from('x')), ruim).rejects.toThrow('chave fora do formato');
+      await expect(m.ler(ruim), ruim).rejects.toThrow('chave fora do formato');
+    }
+    // O apagamento da marca leva o recorte junto.
+    expect(await m.apagarPrefixo(prefixoDaMarca(EMPRESA, MARCA))).toBe(1);
+    // No disco: o arquivo que não existe também é "sem arquivo".
+    const d = new ArmazemNoDisco(pasta);
+    await d.gravar(recorte, Buffer.from('no disco'));
+    expect((await d.ler(recorte)).toString()).toBe('no disco');
+    await expect(d.ler(chaveDaFoto(EMPRESA, MARCA, POST))).rejects.toMatchObject({ semArquivo: true });
+    // No S3: o corpo da resposta; a chave que não existe (NoSuchKey) é "sem arquivo"; a grande demais, recusada.
+    const pedidos: Array<Record<string, unknown>> = [];
+    const sdk = {
+      PutObjectCommand: class {},
+      DeleteObjectsCommand: class {},
+      ListObjectsV2Command: class {},
+      GetObjectCommand: class {
+        constructor(readonly input: Record<string, unknown>) {
+          pedidos.push(input);
+        }
+      },
+    } as unknown as SdkDoS3;
+    let resposta: unknown = { ContentLength: 5, Body: { transformToByteArray: async () => new Uint8Array(Buffer.from('do s3')) } };
+    const s3 = new ArmazemS3(sdk, { send: async () => (resposta instanceof Error ? Promise.reject(resposta) : resposta) }, async () => '', 'liame-imagens-teste');
+    expect((await s3.ler(recorte)).toString()).toBe('do s3');
+    expect(pedidos).toEqual([{ Bucket: 'liame-imagens-teste', Key: recorte }]);
+    resposta = Object.assign(new Error('The specified key does not exist.'), { name: 'NoSuchKey', $metadata: { httpStatusCode: 404 } });
+    await expect(s3.ler(recorte)).rejects.toMatchObject({ semArquivo: true, message: 'S3: NoSuchKey (404)' });
+    resposta = Object.assign(new Error('Access Denied'), { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } });
+    await expect(s3.ler(recorte)).rejects.toMatchObject({ semArquivo: false });
+    resposta = { ContentLength: MAIOR_LEITURA_BYTES + 1, Body: { transformToByteArray: async () => new Uint8Array(1) } };
+    await expect(s3.ler(recorte)).rejects.toBeInstanceOf(FalhaDoArmazem);
+    resposta = {};
+    await expect(s3.ler(recorte)).rejects.toThrow('a resposta veio sem a imagem');
+    // Fechado (produção sem o bucket): indisponível.
+    const fechado: ArmazemDeImagens = new ArmazemFechado();
+    await expect(fechado.ler(recorte)).rejects.toBeInstanceOf(ArmazemIndisponivel);
   });
 
   it('no S3 de verdade (o SDK e a assinatura, sem rede): o endereço sai do host do bucket na região, o que a CSP do web libera', async () => {

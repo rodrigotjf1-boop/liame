@@ -126,12 +126,16 @@ describe.skipIf(!hasDb)('o post da marca no trilho (A6 · Z5b, parte 1)', () => 
     expect(await executor.executeBatch(20, { tenantIds: [e.tenantId] })).toBe(0);
     expect((await pedidoDe(r.body.action_id)).status).toBe('aprovada');
 
-    // Na hora, ele pega; a publicação nas redes é a parte seguinte, então nada sai e o post "não saiu".
+    // Se a vez do pedido chegar antes da hora marcada (um adiamento, uma volta da fila), o executor o devolve para a hora
+    // marcada, sem tentar nada (parte 2: a hora da ferramenta é conferida a cada execução). A publicação na hora está em
+    // `post-instagram.spec.ts`.
     await ownerQuery(`update liame.action_request set next_attempt_at = now() - interval '1 second' where id = $1`, [r.body.action_id]);
     expect(await executor.executeBatch(20, { tenantIds: [e.tenantId] })).toBe(1);
-    expect((await pedidoDe(r.body.action_id)).status).toBe('falhou');
+    const devolvido = await pedidoDe(r.body.action_id);
+    expect(devolvido.status).toBe('aprovada');
+    expect(devolvido.next_attempt_at?.toISOString()).toBe(new Date(horaNoFuso(1, '19:00')).toISOString());
     const ultimo = (await api.call('GET', `/v1/posts/${r.body.id}`, { cookie: e.cookie })).body;
-    expect(ultimo.status).toBe('nao_saiu');
+    expect(ultimo.status).toBe('agendado');
     expect(ultimo.channels.every((c: { status: string }) => c.status === 'aguardando')).toBe(true);
   });
 

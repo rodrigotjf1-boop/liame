@@ -122,7 +122,7 @@ export const CONNECTORS: Record<string, Connector> = {
   // A6, Z2: a resposta a uma avaliação do perfil no Google. Só com a flag de escrita `perfil_google_write` ligada.
   google_business: perfilAvaliacaoConnector,
   // A6, Z5b: o post da marca, pelo provedor da conta do primeiro canal (o Instagram ou a Página). Só com a flag de
-  // escrita `social_write` ligada. A publicação nas redes entra na parte seguinte: por ora, a execução recusa.
+  // escrita `social_write` ligada. O Instagram publica desde a parte 2; a Página é a parte 3 (o post com ela recusa).
   instagram: postNoInstagramConnector,
   facebook_page: postNaPaginaConnector,
 };

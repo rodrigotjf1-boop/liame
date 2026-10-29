@@ -173,3 +173,73 @@ export function erroDaMeta(corpo: unknown): string {
   if (paraPessoa) partes.push(paraPessoa);
   return partes.join(' · ').slice(0, 500);
 }
+
+// O post no Instagram (A6 · Z5b, parte 2; base §2.2, reconferida em 29/10/2026 nas páginas oficiais `…/docs/instagram-
+// platform/content-publishing` e `…/instagram-graph-api/reference/ig-user/content_publishing_limit`, v26.0).
+
+/** O código do adiamento enquanto o Instagram prepara a foto do contêiner: o executor diz isso, e não "limite de uso". */
+export const CONTEINER_EM_PREPARO = 'conteiner_em_preparo';
+/** O código do adiamento quando o Instagram chegou ao limite de posts pela API nas últimas 24 horas. */
+export const COTA_DE_POSTS = 'cota_de_posts';
+/** De quanto em quanto conferir o contêiner que ainda prepara a foto (a Meta recomenda uma vez por minuto). */
+export const ESPERA_DO_CONTEINER_MS = 60_000;
+
+/**
+ * O limite de posts pela API, na resposta de `GET /{ig}/content_publishing_limit?fields=quota_usage,config`: quantos o
+ * app já publicou nas últimas 24 horas (`quota_usage`) e o máximo (`config.quota_total`; 50 na referência, 100 na página
+ * geral: o Liame lê o número, A6-11). A resposta vem na lista `data` (a referência mostra só os campos: aceita os dois
+ * jeitos). Fora do formato, nulo: quem chama segue, e a Meta recusa o que passar do limite.
+ */
+export function limiteDePosts(resposta: unknown): { usados: number; total: number } | null {
+  const corpo = resposta as { data?: unknown } | null;
+  const item = (Array.isArray(corpo?.data) ? corpo.data[0] : corpo) as { quota_usage?: unknown; config?: { quota_total?: unknown } | null } | null | undefined;
+  const usados = item?.quota_usage;
+  const total = item?.config?.quota_total;
+  if (typeof usados !== 'number' || typeof total !== 'number' || !Number.isFinite(usados) || !Number.isFinite(total) || total <= 0) return null;
+  return { usados, total };
+}
+
+/** O texto como a comparação o vê: o fim de linha do Windows vira o de sempre, e as pontas saem. */
+const legendaComparavel = (t: string): string => t.replace(/\r\n/g, '\n').trim();
+
+/** A data do Instagram (`2026-10-29T19:00:00+0000`, sem os dois-pontos no fuso) em milissegundos; inválida, NaN. */
+export function horaDoInstagram(v: unknown): number {
+  if (typeof v !== 'string') return Number.NaN;
+  return Date.parse(v.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+}
+
+/**
+ * O post que já saiu no Instagram com esta legenda desde `desde` (a criação do post no Liame), na resposta de `GET
+ * /{ig}/media?fields=id,caption,timestamp,permalink`: é como a tentativa seguinte sabe que a anterior publicou mesmo
+ * sem a resposta dela ter chegado, e não publica de novo (A6-9). Nulo quando não há.
+ */
+export function postJaPublicado(resposta: unknown, legenda: string, desde: Date): { id: string; permalink: string | null } | null {
+  const data = (resposta as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return null;
+  const procurada = legendaComparavel(legenda);
+  // A data do Instagram vem em segundos: o post publicado no mesmo segundo da criação conta.
+  const aPartirDe = Math.floor(desde.getTime() / 1000) * 1000;
+  for (const m of data as Array<Record<string, unknown> | null>) {
+    const id = idDaGraph(m?.id);
+    if (!id || typeof m?.caption !== 'string' || legendaComparavel(m.caption) !== procurada) continue;
+    const quando = horaDoInstagram(m.timestamp);
+    if (!Number.isNaN(quando) && quando >= aPartirDe) return { id, permalink: enderecoDoPost(m.permalink) };
+  }
+  return null;
+}
+
+/** O endereço do post publicado (`permalink`): só `https` de um domínio do Instagram; o resto, nulo. */
+export function enderecoDoPost(v: unknown): string | null {
+  if (typeof v !== 'string' || v.length > 500) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' && (u.hostname === 'instagram.com' || u.hostname.endsWith('.instagram.com')) ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** O id que a Graph API devolve ao criar o contêiner ou publicar (`{"id": "…"}`); fora do formato, nulo. */
+export function idDaResposta(corpo: unknown): string | null {
+  return idDaGraph((corpo as { id?: unknown } | null)?.id);
+}

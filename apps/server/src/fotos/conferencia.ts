@@ -71,6 +71,14 @@ export function chaveDaFoto(tenantId: string, brandId: string, id: string): stri
   return `${prefixoDaMarca(tenantId, brandId)}foto_produto/${id}.jpg`;
 }
 
+/**
+ * A chave do recorte do post do Instagram (A6 · Z5b): ao lado das fotos da marca, para sair junto quando a marca ou a
+ * empresa é apagada. Só existe enquanto o Instagram busca a imagem.
+ */
+export function chaveDoRecorteDoPost(tenantId: string, brandId: string, postId: string): string {
+  return `${prefixoDaMarca(tenantId, brandId)}post/${postId}-instagram.jpg`;
+}
+
 export function chaveDaMiniatura(chave: string): string {
   return chave.endsWith('.jpg') ? `${chave.slice(0, -'.jpg'.length)}-mini.jpg` : `${chave}-mini`;
 }

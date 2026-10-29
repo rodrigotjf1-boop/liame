@@ -100,10 +100,10 @@ export function planoDoPost(before: unknown): PlanoDoPost {
   const lido = EstadoDoPost.safeParse(before);
   if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para um post do Liame.' };
   const e = lido.data;
-  if (!e.foto) return { ok: false, motivo: 'A foto deste post foi apagada nas Fotos: o post não sai. Faça um post novo com outra foto.' };
-  if (e.canais.some((c) => c.situacao !== 'aguardando')) return { ok: false, motivo: 'Este post já saiu, ou não sai mais: não dá para publicar de novo.' };
+  if (!e.foto) return { ok: false, motivo: FOTO_APAGADA };
+  if (e.canais.some((c) => c.situacao !== 'aguardando')) return { ok: false, motivo: JA_SAIU };
   for (const c of e.canais) {
-    if (!c.conta) return { ok: false, motivo: `A conta ${DO_CANAL[c.canal]} deste post não está conectada à marca agora: o post não sai ${NO_CANAL[c.canal]}. Confira em Contas conectadas.` };
+    if (!c.conta) return { ok: false, motivo: contaFora(c.canal) };
     if (c.texto.trim().length === 0) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} está vazio.` };
     if (c.texto.length > LIMITE_DO_TEXTO[c.canal]) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} passa de ${LIMITE_DO_TEXTO[c.canal].toLocaleString('pt-BR')} caracteres.` };
   }
@@ -113,6 +113,24 @@ export function planoDoPost(before: unknown): PlanoDoPost {
     desejado: { ...e, canais: e.canais.map((c) => ({ ...c, situacao: 'publicado' as const })) },
     texto: e.canais.map((c) => c.texto).join('\n\n'),
   };
+}
+
+const FOTO_APAGADA = 'A foto deste post foi apagada nas Fotos: o post não sai. Faça um post novo com outra foto.';
+const JA_SAIU = 'Este post já saiu, ou não sai mais: não dá para publicar de novo.';
+const contaFora = (canal: CanalDoPost): string =>
+  `A conta ${DO_CANAL[canal]} deste post não está conectada à marca agora: o post não sai ${NO_CANAL[canal]}. Confira em Contas conectadas.`;
+
+/**
+ * Na hora de sair, o post aprovado ainda pode sair (A6-10)? A foto continua nas Fotos, e cada canal que ainda não saiu
+ * (esperando, ou com a publicação começada numa tentativa anterior) tem a conta conectada à marca. O canal já publicado
+ * não conta: a tentativa seguinte completa o resto. Nulo: pode sair. Função pura.
+ */
+export function recusaNaHoraDeSair(e: EstadoDoPost): string | null {
+  const faltam = e.canais.filter((c) => c.situacao === 'aguardando' || c.situacao === 'publicando');
+  if (faltam.length === 0) return JA_SAIU;
+  if (!e.foto) return FOTO_APAGADA;
+  for (const c of faltam) if (!c.conta) return contaFora(c.canal);
+  return null;
 }
 
 /** A situação do post que a Agenda mostra (o contrato a lista em `PostResponse.status`). */

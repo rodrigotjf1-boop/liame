@@ -3,6 +3,7 @@ import { ActionService } from '../actions/action.service.js';
 import { BudgetService } from '../actions/budget.service.js';
 import { EscritaGoogle } from '../actions/escrita-google.provider.js';
 import { EscritaPerfil } from '../actions/escrita-perfil.provider.js';
+import { EscritaPosts } from '../actions/escrita-posts.provider.js';
 import { EscritaRegemcast } from '../actions/escrita-regemcast.provider.js';
 import { EscritaMeta } from '../actions/escrita-meta.provider.js';
 import { EscritaRegem } from '../actions/escrita-regem.provider.js';
@@ -116,6 +117,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     EscritaRegemcast,
     // O da resposta a avaliações do perfil no Google (A6, Z2): o cofre, a troca do token e o conector do Perfil.
     EscritaPerfil,
+    // O do post da marca (A6, Z5b): o cofre, o cliente HTTP, a versão da API do registro e o armazenamento das imagens.
+    EscritaPosts,
     LifecyclePurgeService,
     // Grava na subida as versões de ferramenta, prompt e funcionário de IA que este código traz (A3, I2).
     RegistroIaService,
