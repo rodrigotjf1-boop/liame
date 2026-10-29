@@ -77,9 +77,21 @@ export type PostResponse = z.infer<typeof PostResponse>;
 export const PostListQuery = z.strictObject({ brand_id: z.uuid(), from: z.iso.date(), to: z.iso.date() });
 export type PostListQuery = z.infer<typeof PostListQuery>;
 
+/** As contas conectadas à marca num canal (a Página, o Instagram), para o novo post escolher e a Agenda dizer o que falta. */
+export const PostChannelAccounts = z.strictObject({
+  channel: PostChannel,
+  /** As contas conectadas (ligadas e sem a recusa da plataforma); o post pede uma só por canal (D-A6-36). */
+  accounts: z.array(z.strictObject({ id: z.uuid(), name: z.string() })),
+});
+export type PostChannelAccounts = z.infer<typeof PostChannelAccounts>;
+
 export const PostListResponse = z.strictObject({
   /** A função dos posts (`social_write`) ligada para a empresa; desligada, a lista vem vazia. */
   enabled: z.boolean(),
+  /** O fuso da empresa: os dias da Agenda e a janela das 8h às 22h são nele. */
+  timezone: z.string().min(1).max(64),
+  /** As contas conectadas à marca em cada canal do post; vazio com a função desligada. */
+  channels: z.array(PostChannelAccounts),
   items: z.array(PostResponse),
 });
 export type PostListResponse = z.infer<typeof PostListResponse>;
