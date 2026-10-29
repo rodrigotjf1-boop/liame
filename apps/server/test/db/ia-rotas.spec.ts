@@ -41,7 +41,7 @@ type Rota = {
   publicada: boolean;
 };
 
-describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6; migrations 0046, 0051 e 0061)', () => {
+describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, Y6; migrations 0046, 0051 e 0061) e o preço novo do Sonnet (0083)', () => {
   const rotas = () =>
     ownerQuery<Rota>(
       `select task, status, version, purpose, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros::int as max_cost, fallback, economy_model,
@@ -109,5 +109,30 @@ describe.skipIf(!hasDb)('rotas de modelo da distribuição (A3, I3; A4, X6; A5, 
          from liame.feature_flag f where f.key = 'crm'`,
     );
     expect(flag).toEqual([{ default_value: false, is_write: false, owner: 'mensageria', regras: 0 }]);
+  });
+
+  it('o preço do Sonnet 5.5 que vale hoje lê o cache a 0,05× a entrada; o de 01/10/2026 fica como estava, e rodar de novo não duplica (migration 0083)', async () => {
+    const sql = readFileSync(resolve(MIGRATIONS, '0083_preco_novo_do_sonnet.sql'), 'utf8');
+    await ownerQuery(sql);
+    await ownerQuery(sql);
+    const linhas = await ownerQuery<{ valid_from: string; input: number; output: number; cache_read: number; write_5m: number; write_1h: number }>(
+      `select to_char(valid_from, 'YYYY-MM-DD') as valid_from, input_usd_micros_per_mtok::int as input, output_usd_micros_per_mtok::int as output,
+              cache_read_usd_micros_per_mtok::int as cache_read, cache_write_5m_usd_micros_per_mtok::int as write_5m,
+              cache_write_1h_usd_micros_per_mtok::int as write_1h
+         from liame.ai_model_price where provider = 'anthropic' and model = 'claude-sonnet-5-5' order by valid_from`,
+    );
+    expect(linhas).toEqual([
+      // A da página de 02/10/2026: o custo já registrado com ela não muda.
+      { valid_from: '2026-10-01', input: 2_000_000, output: 10_000_000, cache_read: 200_000, write_5m: 2_500_000, write_1h: 4_000_000 },
+      // A da página de 28/10/2026: só a leitura do cache mudou.
+      { valid_from: '2026-10-28', input: 2_000_000, output: 10_000_000, cache_read: 100_000, write_5m: 2_500_000, write_1h: 4_000_000 },
+    ]);
+    // A que o gateway usa hoje, pela mesma regra dele: a mais nova que já começou.
+    const [hoje] = await ownerQuery<{ cache_read: number }>(
+      `select cache_read_usd_micros_per_mtok::int as cache_read from liame.ai_model_price
+        where provider = 'anthropic' and model = 'claude-sonnet-5-5' and valid_from <= (now() at time zone 'UTC')::date
+        order by valid_from desc limit 1`,
+    );
+    expect(hoje).toEqual({ cache_read: 100_000 });
   });
 });
