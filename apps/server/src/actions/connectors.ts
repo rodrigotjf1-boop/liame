@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { googleAnunciosConnector } from './google-anuncios.js';
 import { metaAnunciosConnector } from './meta-anuncios.js';
 import { perfilAvaliacaoConnector } from './perfil-avaliacao.js';
+import { postNaPaginaConnector, postNoInstagramConnector } from './post-publicacao.js';
 import { regemCupomConnector } from './regem-cupom.js';
 import { regemcastMensagemConnector } from './regemcast-mensagem.js';
 import type { ResourceState } from './tools.js';
@@ -120,4 +121,8 @@ export const CONNECTORS: Record<string, Connector> = {
   regemcast: regemcastMensagemConnector,
   // A6, Z2: a resposta a uma avaliação do perfil no Google. Só com a flag de escrita `perfil_google_write` ligada.
   google_business: perfilAvaliacaoConnector,
+  // A6, Z5b: o post da marca, pelo provedor da conta do primeiro canal (o Instagram ou a Página). Só com a flag de
+  // escrita `social_write` ligada. A publicação nas redes entra na parte seguinte: por ora, a execução recusa.
+  instagram: postNoInstagramConnector,
+  facebook_page: postNaPaginaConnector,
 };

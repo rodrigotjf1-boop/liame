@@ -25,7 +25,16 @@ const ESPERA_MAXIMA_MS = 2 * 3_600_000;
 
 /** O que a plataforma manda esperar: limite de uso, falha passageira e o disjuntor aberto. O resto é recusa ou defeito. */
 const ADIA = new Set(['limite', 'transitorio', 'circuito_aberto']);
-const NOME_DO_PROVEDOR: Record<string, string> = { meta_ads: 'a Meta', google_ads: 'o Google', regem: 'o Regem', regemcast: 'o RegemCast', google_business: 'o Google' };
+const NOME_DO_PROVEDOR: Record<string, string> = {
+  meta_ads: 'a Meta',
+  google_ads: 'o Google',
+  regem: 'o Regem',
+  regemcast: 'o RegemCast',
+  google_business: 'o Google',
+  // O post da marca (A6, Z5b): o provedor do pedido é o da conta do primeiro canal.
+  instagram: 'o Instagram',
+  facebook_page: 'a Meta',
+};
 /** No Google, o limite de uso é do projeto do Liame, para todas as empresas juntas (Google Ads e Perfil da Empresa). */
 const LIMITE_DO_PROJETO = new Set(['google_ads', 'google_business']);
 

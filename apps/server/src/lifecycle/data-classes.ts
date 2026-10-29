@@ -199,6 +199,11 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // de imagens. É conteúdo da empresa (a tela pede foto sem pessoas que dê para reconhecer). Fica enquanto a marca
   // existir, ou até alguém apagar; a rotina `fotos` do worker e o expurgo tiram o arquivo antes da linha.
   brand_photo: { class: 'CONFIDENTIAL', retention: 'enquanto a marca existir, ou até alguém apagar (o arquivo sai antes da linha)' },
+  // Os posts da marca (A6, Z5b, migration 0086): a foto (pela referência e o resumo), a hora e cada canal com o texto
+  // que a empresa escreveu em nome dela e o que aconteceu na rede. Conteúdo da empresa, sem dado de pessoa. Fica com a
+  // marca: é o histórico da Agenda e o que diz o que saiu, onde e quando.
+  social_post: { class: 'CONFIDENTIAL', retention: 'enquanto a marca existir' },
+  social_post_channel: { class: 'CONFIDENTIAL', retention: 'com o post' },
   // Plano e cobrança (A7, W1, migration 0080). Os planos são do produto: o preço e os funcionários de cada versão. A
   // assinatura e as faturas são da empresa: o plano, a forma de pagar, as datas e os valores; nenhum dado de cartão (o
   // cartão fica no meio de pagamento, A7-1). O que a lei manda guardar de uma cobrança paga fica na auditoria e na nota

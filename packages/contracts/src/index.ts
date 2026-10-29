@@ -428,6 +428,16 @@ export {
   UpdateBrandPhotoRequest,
 } from './fotos.js';
 export {
+  CreatePostRequest,
+  POST_CHANNELS,
+  POST_TEXT_LIMITS,
+  PostChannel,
+  PostChannelResponse,
+  PostListQuery,
+  PostListResponse,
+  PostResponse,
+} from './posts.js';
+export {
   BILLING_METHODS,
   BillingInvoice,
   BillingMethod,

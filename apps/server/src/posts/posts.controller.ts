@@ -1,0 +1,75 @@
+import { CreatePostRequest, PostListQuery, PostListResponse, PostResponse, ProblemDetails, ResourceId } from '@liame/contracts';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiConflictResponse,
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnprocessableEntityResponse,
+} from '@nestjs/swagger';
+import { Auditar } from '../audit/auditar.js';
+import { Auth, Permissao } from '../auth/access.js';
+import type { AuthContext } from '../context/request-context.js';
+import { ACAO_CRIAR_POST, PostsService, RECURSO_DO_POST } from './posts.service.js';
+
+// Os posts da marca (A6, Z5b; protótipo P19, aprovado em 21/10/2026). A Agenda (os posts de um período) e o novo post,
+// que vira um pedido em Aprovações: nada sai sem a aprovação de uma pessoa, com o código do app, na hora marcada. A
+// publicação nas redes entra na parte seguinte da Z5; a função `social_write` nasce desligada.
+
+@ApiTags('posts')
+@ApiCookieAuth('liame_sessao')
+@Controller('posts')
+export class PostsController {
+  constructor(private readonly posts: PostsService) {}
+
+  @Get()
+  @Permissao('campanhas.ver')
+  @ApiOperation({
+    summary: 'Os posts da marca num período (a Agenda)',
+    description:
+      'Os posts marcados de `from` a `to` (os dois dias inclusive, no fuso da empresa; até 62 dias, senão 422 `periodo-invalido`), na ordem da hora, cada um com os canais (a conta, o texto, a situação, o endereço do que saiu) e a situação do post (`status`: esperando a aprovação, agendado, publicando, publicado, em parte, não saiu, cancelado, recusado ou expirado). Com a função `social_write` desligada para a empresa, `enabled` é `false` e a lista vem vazia.',
+  })
+  @ApiOkResponse({ standardSchema: PostListResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  listar(@Auth() auth: AuthContext, @Query({ schema: PostListQuery }) query: PostListQuery): Promise<PostListResponse> {
+    return this.posts.listar(auth, query);
+  }
+
+  @Get(':id')
+  @Permissao('campanhas.ver')
+  @ApiOperation({ summary: 'Um post', description: 'O post, com os canais e a situação; o de outra empresa, ou que não existe, 404 `post-nao-encontrado`.' })
+  @ApiOkResponse({ standardSchema: PostResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  obter(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<PostResponse> {
+    return this.posts.obter(auth, id);
+  }
+
+  @Post()
+  @HttpCode(201)
+  @Permissao('campanhas.operar')
+  @Auditar(ACAO_CRIAR_POST, { recurso: RECURSO_DO_POST })
+  @ApiOperation({
+    summary: 'Novo post: o post e o pedido em Aprovações',
+    description:
+      'Grava o post (a foto das Fotos da marca, os canais com o texto de cada um, a hora e o recorte do Instagram) e faz o pedido em Aprovações (a ferramenta `post_publicar`), que só sai com a aprovação de uma pessoa, com o código do app, na hora marcada. Precisa da função `social_write` ligada (409 `funcao-desligada`). Recusas (422): `canal-repetido`, `texto-longo-demais` (o Instagram aceita até 2.200 caracteres), `foto-fora-da-marca` (a foto não é uma pronta das Fotos desta marca), `hora-no-passado`, `hora-longe-demais` (até 60 dias), `hora-fora-da-janela` (das 8h às 22h, no fuso da empresa), `canal-nao-conectado` (a Página ou o Instagram não está ligado à marca em Contas conectadas) e `canal-com-duas-contas`. O recorte (`crop_pos`, de 0 a 100) só vale quando o Instagram está no post e a foto não cabe nele; sem ele, no centro. O trilho também pode recusar o pedido (a política, a trava).',
+  })
+  @ApiCreatedResponse({ standardSchema: PostResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  criar(@Auth() auth: AuthContext, @Body({ schema: CreatePostRequest }) body: CreatePostRequest): Promise<PostResponse> {
+    return this.posts.criar(auth, body);
+  }
+}
