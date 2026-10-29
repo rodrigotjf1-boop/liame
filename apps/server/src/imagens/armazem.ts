@@ -19,8 +19,11 @@ export interface ArmazemDeImagens {
   apagar(chaves: readonly string[]): Promise<void>;
   /** Apaga tudo o que começa pelo prefixo (a marca ou a empresa inteira) e diz quantos objetos saíram. */
   apagarPrefixo(prefixo: string): Promise<number>;
-  /** O endereço de leitura da imagem, que vale `segundos`. */
-  enderecoDeLeitura(chave: string, segundos: number): Promise<string>;
+  /**
+   * O endereço de leitura da imagem, que vale `segundos`. Com `baixarComo` (um nome `.jpg` do Liame), o endereço baixa a
+   * imagem como arquivo com esse nome, em vez de abri-la (o pacote pronto, D-A6-43).
+   */
+  enderecoDeLeitura(chave: string, segundos: number, baixarComo?: string): Promise<string>;
   /** Os bytes da imagem guardada (o recorte do post do Instagram sai da cópia da foto). */
   ler(chave: string): Promise<Buffer>;
 }
@@ -43,6 +46,13 @@ export class FalhaDoArmazem extends Error {
   ) {
     super(mensagem);
   }
+}
+
+/** O nome do arquivo que o endereço baixa: só minúsculas, números e hífen, terminado em `.jpg` (nada que quebre o cabeçalho). */
+const NOME_DE_ARQUIVO = /^[a-z0-9-]{1,80}\.jpg$/;
+
+function exigirNome(nome: string | undefined): void {
+  if (nome !== undefined && !NOME_DE_ARQUIVO.test(nome)) throw new Error('armazenamento de imagens: nome de arquivo fora do desenho');
 }
 
 /** A maior imagem que o servidor lê do armazenamento: a cópia guardada tem o lado maior em até 2.048 px (ADR-021). */
@@ -129,9 +139,10 @@ export class ArmazemNaMemoria implements ArmazemDeImagens {
     return n;
   }
 
-  async enderecoDeLeitura(chave: string, segundos: number): Promise<string> {
+  async enderecoDeLeitura(chave: string, segundos: number, baixarComo?: string): Promise<string> {
     exigirChave(chave);
-    return `memoria://imagens/${chave}?valido=${segundos}`;
+    exigirNome(baixarComo);
+    return `memoria://imagens/${chave}?valido=${segundos}${baixarComo ? `&baixar=${baixarComo}` : ''}`;
   }
 }
 
@@ -169,8 +180,10 @@ export class ArmazemNoDisco implements ArmazemDeImagens {
     return n;
   }
 
-  async enderecoDeLeitura(chave: string, _segundos: number): Promise<string> {
+  async enderecoDeLeitura(chave: string, _segundos: number, baixarComo?: string): Promise<string> {
     exigirChave(chave);
+    exigirNome(baixarComo);
+    // `data:` não leva o nome do arquivo: a tela dá o nome no link (só no desenvolvimento).
     return `data:image/jpeg;base64,${(await readFile(this.caminho(chave))).toString('base64')}`;
   }
 
@@ -211,7 +224,7 @@ export interface SdkDoS3 {
   PutObjectCommand: new (input: { Bucket: string; Key: string; Body: Buffer; ContentType: string; CacheControl: string }) => unknown;
   DeleteObjectsCommand: new (input: { Bucket: string; Delete: { Objects: Array<{ Key: string }>; Quiet: boolean } }) => unknown;
   ListObjectsV2Command: new (input: { Bucket: string; Prefix: string; ContinuationToken?: string; MaxKeys: number }) => unknown;
-  GetObjectCommand: new (input: { Bucket: string; Key: string }) => unknown;
+  GetObjectCommand: new (input: { Bucket: string; Key: string; ResponseContentDisposition?: string }) => unknown;
 }
 export interface ClienteDoS3 {
   send(comando: unknown): Promise<unknown>;
@@ -294,10 +307,13 @@ export class ArmazemS3 implements ArmazemDeImagens {
     return n;
   }
 
-  async enderecoDeLeitura(chave: string, segundos: number): Promise<string> {
+  async enderecoDeLeitura(chave: string, segundos: number, baixarComo?: string): Promise<string> {
     exigirChave(chave);
+    exigirNome(baixarComo);
+    // Com o nome, o S3 responde com `Content-Disposition: attachment` (vai na assinatura): o navegador baixa o arquivo.
+    const comando = new this.sdk.GetObjectCommand({ Bucket: this.bucket, Key: chave, ...(baixarComo ? { ResponseContentDisposition: `attachment; filename="${baixarComo}"` } : {}) });
     try {
-      return await this.assinar(this.cliente, new this.sdk.GetObjectCommand({ Bucket: this.bucket, Key: chave }), segundos);
+      return await this.assinar(this.cliente, comando, segundos);
     } catch (e) {
       throw new FalhaDoArmazem(`S3: ${nomeDoErro(e)}`);
     }

@@ -8,11 +8,18 @@ import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { PreviaDoCanal } from './previa-do-canal';
+import { PreviaDoPacote } from './previa-do-pacote';
 import {
+  CANAIS_DO_LIAME,
+  CANAIS_DO_PACOTE,
   campoDaRecusa,
   conferirNovo,
   contaDoCanal,
+  DO_TEXTO,
+  dicaDaHora,
+  dicaDoTexto,
   type ErrosDoNovo,
+  ehDoPacote,
   formatoDaPrevia,
   instanteNoFuso,
   LIMITE_DO_TEXTO,
@@ -20,13 +27,16 @@ import {
   type NovoPost,
   quadroDoRecorte,
   somaDias,
+  textoDoBotao,
 } from './textos';
 
 // O novo post (P19, gaveta à direita; D-A6-20): a foto (das Fotos), onde sai (o Instagram e a Página ligados à marca, uma
 // conta em cada, D-A6-36), o texto de cada canal com o limite da rede, o recorte do Instagram quando a foto não cabe
 // nele (D-A6-21), o dia e a hora (entre 8h e 22h no fuso da empresa). A tela confere antes de mandar, e o servidor
 // confere de novo; o post vira um pedido em Aprovações, que só sai com o código do app. O item da pauta ("Fazer o
-// post") fica para quando o servidor mandar a pauta na Agenda (divergência do P19).
+// post") fica para quando o servidor mandar a pauta na Agenda (divergência do P19). O pacote pronto (P22; Z8): os
+// canais em dois grupos, o que o Liame publica e o que a pessoa publica (o TikTok e o YouTube, sem conta); o botão diz o
+// que acontece (mandar para aprovação, montar o pacote, ou os dois), e o pacote fica pronto na Agenda, na mesma hora.
 
 type Props = {
   marca: string;
@@ -38,23 +48,25 @@ type Props = {
   podeVerContas: boolean;
   podeVerFotos: boolean;
   reserva: RefObject<HTMLElement | null>;
-  aoMandar: (post: PostResponse) => void;
+  /** O post mandado (o do Liame ou, sem ele, o primeiro pacote) e os canais que a pessoa escolheu. */
+  aoMandar: (post: PostResponse, canais: string[]) => void;
   aoFechar: () => void;
 };
 
-const ORDEM = ['instagram', 'facebook'];
+/** A ordem dos canais na tela e no pedido: os do Liame, depois os do pacote. */
+const ORDEM: readonly string[] = [...CANAIS_DO_LIAME, ...CANAIS_DO_PACOTE];
 
 export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas, podeVerFotos, reserva, aoMandar, aoFechar }: Props) {
   const ids = useId();
   const primeiroCampo = useRef<HTMLButtonElement>(null);
   const fecharBt = useRef<HTMLButtonElement>(null);
   const corpo = useRef<HTMLDivElement>(null);
-  const contas = Object.fromEntries(ORDEM.map((c) => [c, contaDoCanal(canais.find((x) => x.channel === c)?.accounts ?? [])]));
+  const contas = Object.fromEntries(CANAIS_DO_LIAME.map((c) => [c, contaDoCanal(canais.find((x) => x.channel === c)?.accounts ?? [])]));
   const { ref, fechar, devolverFoco } = useDialogo({ focoInicial: fotos?.length ? primeiroCampo : fecharBt, reserva });
   const [novo, setNovo] = useState<NovoPost>(() => ({
     foto: null,
-    canais: ORDEM.filter((c) => contas[c]?.conta),
-    textos: { instagram: '', facebook: '' },
+    canais: CANAIS_DO_LIAME.filter((c) => contas[c]?.conta),
+    textos: Object.fromEntries(ORDEM.map((c) => [c, ''])),
     dia: somaDias(hoje, 1),
     hora: '19:00',
     recorte: 50,
@@ -112,13 +124,13 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
           photo_id: novo.foto!,
           publish_at: instanteNoFuso(novo.dia, novo.hora, fuso).toISOString(),
           ...(quadro ? { crop_pos: novo.recorte } : {}),
-          channels: canaisNaOrdem.map((c) => ({ channel: c as 'instagram' | 'facebook', text: (novo.textos[c] ?? '').trim() })),
+          channels: canaisNaOrdem.map((c) => ({ channel: c as 'instagram' | 'facebook' | 'tiktok' | 'youtube', text: (novo.textos[c] ?? '').trim() })),
         },
       }),
     );
     setEnviando(false);
     if (r.ok) {
-      aoMandar(r.data);
+      aoMandar(r.data, canaisNaOrdem);
       return fechar();
     }
     const campo = campoDaRecusa(r.problema.code);
@@ -145,7 +157,31 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
   const limite = LIMITE_DO_TEXTO[abaAtual] ?? 0;
   const tamanho = (novo.textos[abaAtual] ?? '').length;
   const erroTexto = erros[`texto-${abaAtual}`];
-  const algumCanal = ORDEM.some((c) => contas[c]?.conta);
+  const algumCanal = CANAIS_DO_LIAME.some((c) => contas[c]?.conta);
+
+  /** A linha de um canal: a caixa de marcar, o nome e a conta (ou por que não dá). O canal do pacote não tem conta. */
+  const caixaDoCanal = (c: string) => {
+    const { conta, fora } = contas[c] ?? { conta: null, fora: null };
+    return (
+      <div key={c} className={`po-canal${fora ? ' po-canal--fora' : ''}`}>
+        <label>
+          <input
+            type="checkbox"
+            checked={novo.canais.includes(c)}
+            disabled={Boolean(fora) || enviando}
+            onChange={(e) => {
+              mudar({ canais: e.target.checked ? ORDEM.filter((x) => x === c || novo.canais.includes(x)) : novo.canais.filter((x) => x !== c) });
+              if (e.target.checked) setAba(c);
+              tirarErro('canais');
+            }}
+          />
+          {NOME_DO_CANAL[c]}
+        </label>
+        {conta && <span className="campo-dica">{conta.name}</span>}
+        {fora && <span className="campo-dica">{fora}</span>}
+      </div>
+    );
+  };
 
   return (
     <dialog
@@ -221,31 +257,13 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
             )}
           </div>
 
-          <fieldset className="campo" aria-describedby={erros.canais ? `${ids}-canais-erro` : undefined}>
+          <fieldset className="campo" aria-describedby={`${erros.canais ? `${ids}-canais-erro ` : ''}${ids}-pacote-d`}>
             <legend>Onde sai</legend>
-            <div className="po-canais">
-              {ORDEM.map((c) => {
-                const { conta, fora } = contas[c] ?? { conta: null, fora: null };
-                return (
-                  <div key={c} className={`po-canal${fora ? ' po-canal--fora' : ''}`}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={novo.canais.includes(c)}
-                        disabled={Boolean(fora) || enviando}
-                        onChange={(e) => {
-                          mudar({ canais: e.target.checked ? ORDEM.filter((x) => x === c || novo.canais.includes(x)) : novo.canais.filter((x) => x !== c) });
-                          if (e.target.checked) setAba(c);
-                          tirarErro('canais');
-                        }}
-                      />
-                      {NOME_DO_CANAL[c]}
-                    </label>
-                    {conta && <span className="campo-dica">{conta.name}</span>}
-                    {fora && <span className="campo-dica">{fora}</span>}
-                  </div>
-                );
-              })}
+            <p className="po-grupo-t" id={`${ids}-liame-t`}>
+              O Liame publica, depois de aprovado
+            </p>
+            <div className="po-canais" role="group" aria-labelledby={`${ids}-liame-t`}>
+              {CANAIS_DO_LIAME.map(caixaDoCanal)}
             </div>
             {!algumCanal && podeVerContas && (
               <Link className="btn btn--sm" href="/contas">
@@ -253,6 +271,15 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
                 Abrir Contas conectadas
               </Link>
             )}
+            <p className="po-grupo-t" id={`${ids}-pacote-t`}>
+              Você publica: o Liame monta o pacote
+            </p>
+            <div className="po-canais" role="group" aria-labelledby={`${ids}-pacote-t`}>
+              {CANAIS_DO_PACOTE.map(caixaDoCanal)}
+            </div>
+            <span className="campo-dica" id={`${ids}-pacote-d`}>
+              No TikTok e no YouTube, o Liame não publica: ele monta o texto, a foto e a hora, e o pacote aparece na Agenda para você publicar.
+            </span>
             {erros.canais && (
               <span className="campo-erro" id={`${ids}-canais-erro`}>
                 {erros.canais}
@@ -272,7 +299,7 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
                   ))}
                 </div>
               )}
-              <label htmlFor={`${ids}-texto`}>Texto {abaAtual === 'instagram' ? 'da legenda no Instagram' : 'na Página do Facebook'}</label>
+              <label htmlFor={`${ids}-texto`}>Texto {DO_TEXTO[abaAtual] ?? `em ${abaAtual}`}</label>
               <textarea
                 className="input"
                 id={`${ids}-texto`}
@@ -295,13 +322,13 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
                 {tamanho.toLocaleString('pt-BR')} de {limite.toLocaleString('pt-BR')}
               </span>
               <span className="campo-dica" id={`${ids}-texto-d`}>
-                {abaAtual === 'instagram' ? 'No Instagram, a legenda não tem link que abre: diga onde pedir (“Peça pelo link da bio”).' : 'O texto que sai na Página, com a foto.'}
-                {novo.canais.length > 1 ? ' Cada canal tem o seu texto: comece por um e copie para o outro.' : ''}
+                {dicaDoTexto(abaAtual)}
+                {novo.canais.length > 1 ? ` Cada canal tem o seu texto: comece por um e copie para ${novo.canais.length > 2 ? 'os outros' : 'o outro'}.` : ''}
               </span>
               {novo.canais.length > 1 && (
                 <button className="btn btn--sm btn--ghost po-copiar" type="button" onClick={copiarTexto} disabled={enviando}>
                   <Icone nome="copy" pequeno />
-                  Usar este texto no outro canal
+                  {novo.canais.length > 2 ? 'Usar este texto nos outros canais' : 'Usar este texto no outro canal'}
                 </button>
               )}
             </div>
@@ -328,7 +355,13 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
               />
               <span className="campo-dica" id={`${ids}-recorte-d`}>
                 A foto é {formato === 'alta' ? 'mais alta' : 'mais larga'} do que o Instagram aceita: lá, sai o que está no quadro.
-                {novo.canais.includes('facebook') ? ' Na Página, a foto vai inteira.' : ''}
+                {novo.canais.includes('facebook') && novo.canais.some(ehDoPacote)
+                  ? ' Na Página e no pacote, a foto vai inteira.'
+                  : novo.canais.includes('facebook')
+                    ? ' Na Página, a foto vai inteira.'
+                    : novo.canais.some(ehDoPacote)
+                      ? ' No pacote, a foto vai inteira.'
+                      : ''}
               </span>
             </div>
           )}
@@ -378,7 +411,7 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
             </span>
           ) : (
             <span className="campo-dica" id={`${ids}-hora-d`}>
-              Entre 8h e 22h. O Liame publica na hora marcada, só depois de aprovado.
+              {dicaDaHora(novo.canais)}
             </span>
           )}
 
@@ -387,13 +420,17 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
               <h3 className="rotulo-marca" id={`${ids}-previa-t`}>
                 Como sai
               </h3>
-              <PreviaDoCanal
-                canal={abaAtual}
-                conta={contas[abaAtual]?.conta?.name ?? null}
-                texto={(novo.textos[abaAtual] ?? '').trim() || '…'}
-                foto={foto}
-                recorte={quadro ? novo.recorte : null}
-              />
+              {ehDoPacote(abaAtual) ? (
+                <PreviaDoPacote canal={abaAtual} texto={(novo.textos[abaAtual] ?? '').trim() || '…'} foto={foto} />
+              ) : (
+                <PreviaDoCanal
+                  canal={abaAtual}
+                  conta={contas[abaAtual]?.conta?.name ?? null}
+                  texto={(novo.textos[abaAtual] ?? '').trim() || '…'}
+                  foto={foto}
+                  recorte={quadro ? novo.recorte : null}
+                />
+              )}
             </section>
           )}
         </div>
@@ -402,8 +439,8 @@ export function GavetaNovoPost({ marca, fotos, canais, fuso, hoje, podeVerContas
           <button className="btn" type="button" onClick={fechar} disabled={enviando}>
             Cancelar
           </button>
-          <button className="btn btn--primary" type="submit" disabled={enviando || !algumCanal}>
-            {enviando ? 'Mandando…' : 'Mandar para aprovação'}
+          <button className="btn btn--primary" type="submit" disabled={enviando}>
+            {enviando ? 'Mandando…' : textoDoBotao(novo.canais)}
           </button>
         </div>
       </form>

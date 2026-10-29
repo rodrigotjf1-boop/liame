@@ -3,15 +3,22 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { GavetaNovoPost } from '@/components/agenda/gaveta-novo-post';
+import { GavetaPacote } from '@/components/agenda/gaveta-pacote';
 import { GavetaPost } from '@/components/agenda/gaveta-post';
 import {
+  avisoDoNovo,
   campoDaRecusa,
   conferirNovo,
   contaDoCanal,
   ddmm,
+  dicaDaHora,
+  dicaDoTexto,
+  ehDoPacote,
+  ehPacote,
   enderecoSeguro,
   formatoDaPrevia,
   fraseDaSituacao,
+  fraseDoPacote,
   inicioDaSemana,
   instanteNoFuso,
   linhaDoCanal,
@@ -24,6 +31,7 @@ import {
   situacaoDoPost,
   somaDias,
   telaDaAgenda,
+  textoDoBotao,
 } from '@/components/agenda/textos';
 import { itensVisiveis, NAVEGACAO, temModos, tituloDa } from '@/components/shell/navegacao';
 
@@ -138,7 +146,8 @@ describe('a Agenda: o menu e a semana', () => {
 
   it('a tela: desligada, sem conta em nenhum canal, e a semana com os posts no dia certo, pela hora, sem os que não vão ao ar', () => {
     expect(telaDaAgenda(lista([], { enabled: false, channels: [] }), '2026-10-26', HOJE)).toEqual({ tipo: 'desligada' });
-    expect(telaDaAgenda(lista([], { channels: contas(false, false) }), '2026-10-26', HOJE).tipo).toBe('sem-canal');
+    // Sem conta em canal nenhum, a semana segue (o pacote pronto não precisa de conta; D-A6-44), com o aviso.
+    expect(telaDaAgenda(lista([], { channels: contas(false, false) }), '2026-10-26', HOJE)).toMatchObject({ tipo: 'semana', semConta: true, faltam: ['Instagram', 'Página do Facebook'] });
 
     const posts = [
       post(1, '2026-10-30', '19:00', 'agendado'),
@@ -152,6 +161,7 @@ describe('a Agenda: o menu e a semana', () => {
     const t = telaDaAgenda(lista(posts), '2026-10-26', HOJE);
     if (t.tipo !== 'semana') throw new Error('era a semana');
     expect(t.faltam).toEqual([]);
+    expect(t.semConta).toBe(false);
     expect(t.dias.map((d) => [d.iso, d.curto, d.hoje, d.passado, d.posts.map((p) => `${p.hora} ${p.post.status}`)])).toEqual([
       ['2026-10-26', 'seg', false, true, []],
       ['2026-10-27', 'ter', false, true, ['19:00 publicado', '21:30 em_parte']],
@@ -308,11 +318,126 @@ describe('o novo post (Z5c, parte 3)', () => {
     expect(html).toContain('value="2026-10-30"');
     expect(html).toContain('value="19:00"');
     expect(html).toContain('Mandar para aprovação');
-    // Sem foto nas Fotos, a gaveta diz por quê; sem conta em canal nenhum, o caminho para Contas e mandar desligado.
+    // Sem foto nas Fotos, a gaveta diz por quê; sem conta em canal nenhum, o caminho para Contas, e mandar segue ligado:
+    // o pacote do TikTok e do YouTube não precisa de conta (P22).
     expect(novo(contas(true, true), [])).toContain('Nenhuma foto pronta nas Fotos desta marca');
     expect(novo(contas(true, true), null)).toContain('As Fotos não estão ligadas para esta empresa');
     const semConta = novo(contas(false, false));
     expect(semConta).toContain('href="/contas"');
-    expect(semConta).toMatch(/<button class="btn btn--primary" type="submit" disabled="">/);
+    expect(semConta).toMatch(/<button class="btn btn--primary" type="submit">Mandar para aprovação<\/button>/);
+  });
+
+  it('os canais em dois grupos (P22): o que o Liame publica e o que você publica, o TikTok e o YouTube sem conta e livres', () => {
+    const html = novo(contas(true, true));
+    expect(html).toContain('O Liame publica, depois de aprovado');
+    expect(html).toContain('Você publica: o Liame monta o pacote');
+    expect(html).toMatch(/<input type="checkbox"\/>TikTok/);
+    expect(html).toMatch(/<input type="checkbox"\/>YouTube/);
+    expect(html).toContain('No TikTok e no YouTube, o Liame não publica');
+    // Os do Liame vêm marcados (com a conta); os do pacote, não.
+    expect(html).toMatch(/<input type="checkbox" checked=""\/>Instagram/);
+  });
+});
+
+describe('o pacote pronto (Z8, parte b; P22)', () => {
+  // Quinta, 29/10/2026, às 10h em São Paulo.
+  const AGORA = new Date(sp('2026-10-29', '10:00'));
+  const base: NovoPost = { foto: id(901), canais: ['tiktok'], textos: { tiktok: 'Peça pelo link da bio!', youtube: 'Peça pelo cardápio no link do canal.' }, dia: '2026-10-30', hora: '12:00', recorte: 50 };
+
+  function canalDoPacote(c: 'tiktok' | 'youtube', parcial: Partial<PostChannelResponse> = {}): PostChannelResponse {
+    return { channel: c, account_id: null, account_name: null, text: 'A batata nova chegou 🍟 Peça pelo link da bio! #batatafrita', status: 'pronto', permalink: null, error: null, published_at: null, ...parcial };
+  }
+  const pacote = (n: number, dia: string, hora: string, status = 'pacote_pronto', c = canalDoPacote('tiktok'), parcial: Partial<PostResponse> = {}) =>
+    post(n, dia, hora, status, [c], { kind: 'pacote', action_id: null, ...parcial });
+
+  it('o canal e o post do pacote; a situação ("Você publica", "Você publicou"); o cartão diz "Pacote de…"; o tirado sai da semana', () => {
+    expect(['tiktok', 'youtube', 'instagram', 'facebook'].map(ehDoPacote)).toEqual([true, true, false, false]);
+    expect(ehPacote(pacote(1, '2026-10-30', '12:00'))).toBe(true);
+    expect(ehPacote(post(2, '2026-10-30', '12:00', 'agendado'))).toBe(false);
+    expect(situacaoDoPost('pacote_pronto')).toEqual({ rotulo: 'Você publica', icone: 'send', tom: '' });
+    expect(situacaoDoPost('pacote_publicado')).toEqual({ rotulo: 'Você publicou', icone: 'check-circle', tom: 'ok' });
+    const t = telaDaAgenda(
+      lista([pacote(1, '2026-10-30', '12:00'), pacote(2, '2026-10-27', '19:00', 'pacote_publicado', canalDoPacote('youtube', { status: 'publicado' })), pacote(3, '2026-10-30', '18:00', 'cancelado', canalDoPacote('tiktok', { status: 'cancelado' }))]),
+      '2026-10-26',
+      HOJE,
+    );
+    if (t.tipo !== 'semana') throw new Error('era a semana');
+    expect(t.dias[4]!.posts.map((p) => [p.canais, p.rotulo])).toEqual([['TikTok', 'Pacote de amanhã, às 12:00, TikTok: você publica']]);
+    expect(t.dias[1]!.posts.map((p) => p.rotulo)).toEqual(['Pacote de terça, 27/10, às 19:00, YouTube: você publicou']);
+  });
+
+  it('o novo post: o botão diz o que acontece, a dica da hora e a do texto, a conferência do texto do TikTok e do YouTube', () => {
+    expect(textoDoBotao(['instagram', 'facebook'])).toBe('Mandar para aprovação');
+    expect(textoDoBotao(['tiktok'])).toBe('Montar o pacote');
+    expect(textoDoBotao(['tiktok', 'youtube'])).toBe('Montar o pacote');
+    expect(textoDoBotao(['instagram', 'tiktok'])).toBe('Mandar para aprovação e montar o pacote');
+    expect(textoDoBotao([])).toBe('Mandar para aprovação');
+    expect(dicaDaHora(['tiktok'])).toBe('Entre 8h e 22h. O pacote aparece na Agenda nessa hora, para você publicar.');
+    expect(dicaDaHora(['facebook', 'youtube'])).toContain('o pacote fica pronto na Agenda, na mesma hora');
+    expect(dicaDaHora(['instagram'])).toBe('Entre 8h e 22h. O Liame publica na hora marcada, só depois de aprovado.');
+    expect(dicaDoTexto('tiktok')).toContain('No TikTok, a legenda não tem link que abre');
+    expect(dicaDoTexto('youtube')).toBe('Quem publica é você: o Liame monta o pacote com o texto e a foto.');
+    const conferir = (p: Partial<NovoPost>) => conferirNovo({ ...base, ...p }, AGORA, SP);
+    expect(conferir({})).toEqual({});
+    expect(conferir({ textos: { tiktok: ' ' } })).toEqual({ 'texto-tiktok': 'Escreva o texto no TikTok.' });
+    expect(conferir({ textos: { tiktok: 'x'.repeat(2201) } })).toEqual({ 'texto-tiktok': 'No TikTok, o texto passa de 2.200 caracteres (tem 2.201).' });
+    expect(conferir({ canais: ['youtube'], textos: { youtube: 'x'.repeat(5000) } })).toEqual({});
+    expect(conferir({ canais: ['youtube'], textos: { youtube: 'x'.repeat(5001) } })).toEqual({ 'texto-youtube': 'No YouTube, o texto passa de 5.000 caracteres (tem 5.001).' });
+    // A hora vale para o pacote também (o servidor confere a mesma janela).
+    expect(conferir({ hora: '07:45' }).hora).toBe('Escolha uma hora entre 8h e 22h.');
+  });
+
+  it('o aviso depois de mandar: o post para aprovação, o pacote pronto, os dois, e dois pacotes', () => {
+    const resposta = { publish_at: sp('2026-10-30', '12:00') };
+    expect(avisoDoNovo(resposta, ['instagram'], SP, HOJE)).toBe('Mandado para aprovação. O post sai amanhã, às 12:00, depois de aprovado.');
+    expect(avisoDoNovo(resposta, ['tiktok'], SP, HOJE)).toBe('Pacote pronto. Ele aparece na Agenda amanhã, às 12:00, para você publicar no TikTok.');
+    expect(avisoDoNovo(resposta, ['tiktok', 'youtube'], SP, HOJE)).toBe('Pacotes prontos. Eles aparecem na Agenda amanhã, às 12:00, para você publicar no TikTok e no YouTube.');
+    expect(avisoDoNovo(resposta, ['instagram', 'tiktok'], SP, HOJE)).toBe('Mandado para aprovação, e o pacote do TikTok está na Agenda amanhã, às 12:00, para você publicar.');
+    expect(avisoDoNovo(resposta, ['instagram', 'facebook', 'tiktok', 'youtube'], SP, HOJE)).toBe('Mandado para aprovação, e os pacotes do TikTok e do YouTube estão na Agenda amanhã, às 12:00, para você publicar.');
+  });
+
+  const gaveta = (p: PostResponse, o: { foto?: BrandPhoto | null; podeOperar?: boolean } = {}) =>
+    renderToStaticMarkup(
+      createElement(GavetaPacote, {
+        post: p,
+        fuso: SP,
+        hoje: HOJE,
+        foto: o.foto === undefined ? foto(1200, 1800) : o.foto,
+        podeOperar: o.podeOperar ?? true,
+        reserva: { current: null },
+        aoMudar: () => undefined,
+        aoTirar: () => undefined,
+        aoFalharImagem: () => undefined,
+        aoFechar: () => undefined,
+      }),
+    );
+
+  it('a gaveta do pacote pronto: a foto inteira e o texto, os quatro passos, "Publiquei" e "Tirar da Agenda" (quem opera)', () => {
+    const p = pacote(1, '2026-10-30', '12:00');
+    expect(fraseDoPacote(p, SP, HOJE)).toBe('Você publica: TikTok, amanhã, às 12:00.');
+    const html = gaveta(p);
+    for (const t of ['Pacote pronto', 'Pacote de amanhã, às 12:00', 'Pacote para o TikTok', 'você publica', 'po-foto po-foto--inteira', 'Baixe a foto', 'Baixar a foto', 'Copie o texto', 'Copiar o texto', 'Publique no TikTok', 'Amanhã, às 12:00. O Liame não publica nessa rede: quem publica é você.', 'Marque como publicado', 'Publiquei', 'Tirar da Agenda', 'A batata nova chegou']) {
+      expect(html, t).toContain(t);
+    }
+    // Sem a permissão de operar: só ler e copiar o texto.
+    const leitor = gaveta(p, { podeOperar: false });
+    expect(leitor).toContain('Copiar o texto');
+    for (const t of ['Baixar a foto', 'Publiquei', 'Tirar da Agenda']) expect(leitor, t).not.toContain(t);
+    // O YouTube: o passo 3 diz a rede.
+    expect(gaveta(pacote(2, '2026-10-30', '12:00', 'pacote_pronto', canalDoPacote('youtube')))).toContain('Publique no YouTube');
+  });
+
+  it('o pacote publicado: a hora em que a pessoa marcou, sem "Publiquei" nem "Tirar"; sem a foto, o passo 1 diz por quê', () => {
+    const feito = pacote(1, '2026-10-29', '12:00', 'pacote_publicado', canalDoPacote('tiktok', { status: 'publicado', published_at: sp('2026-10-29', '12:04') }));
+    expect(fraseDoPacote(feito, SP, HOJE)).toBe('Você marcou como publicado hoje, às 12:04.');
+    const html = gaveta(feito);
+    expect(html).toContain('Você marcou como publicado hoje, às 12:04.');
+    expect(html).toContain('Feito: a Agenda mostra que saiu.');
+    expect(html).toContain('Baixar a foto');
+    for (const t of ['Publiquei', 'Tirar da Agenda']) expect(html, t).not.toContain(t);
+    const semFoto = gaveta(pacote(3, '2026-10-30', '12:00', 'pacote_pronto', canalDoPacote('tiktok'), { photo_id: null }), { foto: null });
+    expect(semFoto).toContain('A foto deste pacote foi apagada nas Fotos.');
+    expect(semFoto).toContain('A foto foi apagada nas Fotos: monte outro pacote com outra foto.');
+    expect(semFoto).not.toContain('Baixar a foto');
   });
 });

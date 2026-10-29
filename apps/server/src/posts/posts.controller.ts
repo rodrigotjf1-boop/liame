@@ -1,4 +1,4 @@
-import { CreatePostRequest, PostListQuery, PostListResponse, PostResponse, ProblemDetails, ResourceId } from '@liame/contracts';
+import { CreatePostRequest, PostListQuery, PostListResponse, PostPhotoResponse, PostResponse, ProblemDetails, ResourceId } from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -9,6 +9,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiServiceUnavailableResponse,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
@@ -52,6 +53,23 @@ export class PostsController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   obter(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<PostResponse> {
     return this.posts.obter(auth, id);
+  }
+
+  @Get(':id/photo')
+  @Permissao('campanhas.operar')
+  @ApiOperation({
+    summary: 'A foto do pacote pronto, para baixar',
+    description:
+      'Só para o pacote (`kind: pacote`; o post do Liame, 409 `nao-e-pacote`), pronto ou publicado (o tirado da Agenda, 409 `pacote-tirado`): o endereço da cópia que o Liame guarda (JPEG, sem os dados do celular), que baixa como arquivo (`filename`, `liame-<rede>-<dia>.jpg`) e vale 5 minutos (`expires_at`). A foto que saiu das Fotos, ou mudou, 409 `foto-apagada`; o armazenamento fora do ar, 503 `fotos-indisponiveis`. Precisa da função `social_write` ligada (409 `funcao-desligada`).',
+  })
+  @ApiOkResponse({ standardSchema: PostPhotoResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiServiceUnavailableResponse({ standardSchema: ProblemDetails })
+  foto(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<PostPhotoResponse> {
+    return this.posts.fotoDoPacote(auth, id);
   }
 
   @Post()
