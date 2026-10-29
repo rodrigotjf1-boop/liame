@@ -37,7 +37,19 @@ export type CobrancaAsaas = {
    * `confirmedDate` (eventos para cobranças, 13/10/2026); nulo enquanto não há pagamento.
    */
   pagaNoDia: string | null;
+  /**
+   * Os estornos da cobrança (o array `refunds`; estornar cobrança, 08/09/2026; estornos, 04/08/2026), na ordem em que o
+   * Asaas os devolve. Uma cobrança pode ter mais de um; a existência dele não quer dizer devolvido: só o `DONE` conta.
+   */
+  estornos: EstornoAsaas[];
 };
+
+/**
+ * Um estorno da cobrança. `situacao`: `PENDING`, `AWAITING_CRITICAL_ACTION_AUTHORIZATION`,
+ * `AWAITING_CUSTOMER_EXTERNAL_AUTHORIZATION`, `CANCELLED` ou `DONE` (estornar cobrança, 08/09/2026); a que o Liame não
+ * conhece fica como veio, e quem decide trata como "ainda não feito".
+ */
+export type EstornoAsaas = { situacao: string; valorCentavos: number };
 
 export type QrCodePix = { imagemPngBase64: string; copiaECola: string; validaAte: string | null };
 
@@ -109,12 +121,28 @@ export function diaDoAsaas(v: unknown): string | null {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === dia ? dia : null;
 }
 
+/**
+ * Os estornos que o Asaas devolve na cobrança. O estorno fora do formato (sem a situação ou sem o valor) não é pulado:
+ * ele entra como de situação desconhecida, que conta como "ainda não feito" e faz esperar. Pular poderia fazer o Liame
+ * pedir de novo um estorno que já existe, e devolver duas vezes.
+ */
+export function estornosDoAsaas(v: unknown): EstornoAsaas[] {
+  if (!Array.isArray(v)) return [];
+  return v.map((e: unknown) => {
+    const r = (e ?? {}) as { status?: unknown; value?: unknown };
+    const situacao = typeof r.status === 'string' ? (situacaoParaGravar(r.status) ?? 'DESCONHECIDA') : 'DESCONHECIDA';
+    const valorCentavos = typeof r.value === 'number' && Number.isFinite(r.value) && r.value > 0 ? paraCentavos(r.value) : 0;
+    return { situacao, valorCentavos };
+  });
+}
+
 /** A cobrança como o Asaas a devolve, no formato do Liame; sem id, não é cobrança. */
 export function cobrancaDoAsaas(c: Record<string, unknown> | null | undefined): CobrancaAsaas | null {
   if (!c) return null;
   const id = idDoAsaas(c.id);
   if (!id || typeof c.status !== 'string' || typeof c.value !== 'number' || typeof c.dueDate !== 'string') return null;
   return {
+    estornos: estornosDoAsaas(c.refunds),
     id,
     status: c.status,
     valorCentavos: paraCentavos(c.value),
@@ -249,6 +277,21 @@ export class ApiAsaas {
       throw err;
     }
     if (r?.deleted !== true) throw new ErroConector('definitivo', PROVIDER_ASAAS, 'o Asaas não confirmou a remoção da cobrança');
+  }
+
+  /**
+   * Pede o estorno da cobrança (estornar cobrança, 08/09/2026): sem o valor, integral; com ele, só esse tanto. A resposta
+   * é a cobrança, com os estornos. A página não diz o que acontece ao pedir de novo, e o PIX aceita mais de um estorno
+   * até o total: quem chama relê a cobrança antes e só pede quando não há estorno feito nem em andamento.
+   */
+  async estornarCobranca(id: string, p: { valorCentavos: number | null; descricao: string }): Promise<CobrancaAsaas> {
+    const r = await this.chamar<Record<string, unknown>>('POST', `/payments/${encodeURIComponent(id)}/refund`, 'refund', {
+      ...(p.valorCentavos === null ? {} : { value: paraReais(p.valorCentavos) }),
+      description: p.descricao.slice(0, 500),
+    });
+    const lida = cobrancaDoAsaas(r);
+    if (!lida) throw new ErroConector('definitivo', PROVIDER_ASAAS, 'o Asaas estornou a cobrança sem devolver o formato esperado');
+    return lida;
   }
 
   /** O QR Code do PIX de uma cobrança: a imagem (PNG em base64), o copia e cola e a validade. */

@@ -438,15 +438,43 @@ export async function manter(tx: Tx, s: LinhaDaAssinatura, agora: Date): Promise
 export async function desistir(tx: Tx, s: LinhaDaAssinatura, agora: Date): Promise<{ devolveCents: number } | 'fora_do_prazo'> {
   const hoje = diaNoFuso(agora, s.timezone);
   if (!s.withdraw_until || diasEntre(hoje, s.withdraw_until) < 0) return 'fora_do_prazo';
+  // A devolução vai para a fila da releitura na hora (W2a, parte 3b): a rotina pede o estorno ao Asaas e acompanha até o
+  // estorno feito. A paga sem a cobrança no Asaas (nunca devia existir) fica com o porquê, para a distribuição devolver à mão.
   const r = await tx.execute<{ total: string }>(sql`
     with pedidas as (
-      update liame.billing_invoice set refund_requested_at = ${agora.toISOString()}::timestamptz, updated_at = now()
+      update liame.billing_invoice
+         set refund_requested_at = ${agora.toISOString()}::timestamptz, ${relerAgora(agora)},
+             charge_error = case when external_id is null then 'devolucao_sem_cobranca' else charge_error end, updated_at = now()
        where subscription_id = ${s.id} and status = 'paga' and refund_requested_at is null
       returning amount_cents
     )
     select coalesce(sum(amount_cents), 0)::text as total from pedidas`);
   await encerrar(tx, s.id, 'desistencia', agora);
   return { devolveCents: Number(r.rows[0]?.total ?? 0) };
+}
+
+/**
+ * Registra a devolução feita de uma fatura (W2a, parte 3b; D-A7-29: só com o estorno feito, `DONE`, lido no meio de
+ * pagamento). Só a paga com a devolução pedida vira devolvida; a repetida não muda nada (`ja_devolvida`). A assinatura já
+ * terminou na desistência: aqui não há o que mudar nela.
+ */
+export async function devolverFatura(tx: Tx, p: { faturaId: string; agora: Date }): Promise<'devolvida' | 'ja_devolvida' | 'sem_pedido'> {
+  const dona = (await tx.execute<{ subscription_id: string }>(sql`select subscription_id from liame.billing_invoice where id = ${p.faturaId}`)).rows[0];
+  if (!dona) return 'sem_pedido';
+  // A ordem das travas de todo caminho da cobrança: a assinatura, depois a fatura.
+  const s = await assinaturaTravadaPeloId(tx, dona.subscription_id);
+  if (!s) return 'sem_pedido';
+  const f = (
+    await tx.execute<{ id: string; status: string; amount_cents: string; refund_requested_at: Date | string | null }>(sql`
+      select id, status, amount_cents::text as amount_cents, refund_requested_at from liame.billing_invoice where id = ${p.faturaId} for update`)
+  ).rows[0];
+  if (!f) return 'sem_pedido';
+  if (f.status === 'devolvida') return 'ja_devolvida';
+  if (f.status !== 'paga' || !f.refund_requested_at) return 'sem_pedido';
+  await tx.execute(sql`
+    update liame.billing_invoice set status = 'devolvida', refunded_at = ${p.agora.toISOString()}::timestamptz, updated_at = now() where id = ${f.id}`);
+  await auditarDaRotina(tx, s, 'cobranca.devolucao', { status: 'paga' }, { fatura: f.id, devolvido_cents: Number(f.amount_cents), status: 'devolvida' }, 'integration');
+  return 'devolvida';
 }
 
 async function auditarDaRotina(

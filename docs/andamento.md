@@ -613,6 +613,18 @@ A W2a, parte 2, entrou como o PR #329, no ar desde 23/10/2026, 22h54 (horário d
 
 Falta a W2a, parte 3b: devolver o PIX na desistência em 7 dias (a desistência já marca a devolução pedida, W1; falta pedi-la ao Asaas e acompanhar até o estorno feito, D-A7-19 e D-A7-29). A chave da conta de testes (com o endereço do Sandbox e o token do aviso) vai para o EasyPanel quando a 3b estiver pronta, num passo só. Depois, a W2b e a tela (W5).
 
+**W2a, parte 3b: a devolução na desistência em 7 dias (29/10/2026; sem migration; a função `cobranca` segue desligada), com as decisões técnicas D-A7-35 a D-A7-37 e a API do estorno reconferida (`base-conhecimento.md` §18.5):**
+- **a desistência põe a fatura paga na fila da releitura**; a paga sem a cobrança no Asaas fica com o porquê (`devolucao_sem_cobranca`), para a distribuição devolver à mão;
+- **a rotina leva a fatura de devolução pedida pelo caminho da devolução** (`devolverCobranca`), com a trava da vez:
+  - relê a cobrança no Asaas e soma os estornos feitos;
+  - pede o estorno integral (sem valor) só quando a cobrança está paga e sem estorno feito ou em andamento (D-A7-35). A API não tem chave de idempotência, e o PIX aceita mais de um estorno: a resposta que se perdeu aparece na leitura seguinte, e nada sai duas vezes;
+  - espera o estorno em andamento: o aviso traz a mudança; sem ele, a releitura em meia hora depois do pedido e a cada 6 horas;
+- **com o estorno feito (`DONE`, ou a cobrança `REFUNDED`), a fatura vira devolvida**, com a hora e a auditoria `cobranca.devolucao` (D-A7-36); a releitura da devolvida só encerra a fila, e o aviso atrasado do estorno não vira alarme;
+- **o que não anda chama a distribuição** pelo log de erro (D-A7-37): a falha do Asaas (o saldo que falta logo depois do PIX, ele fora do ar) tenta de novo; o estorno que espera a autorização de uma ação crítica é relido uma vez por dia; e a cobrança em disputa, a removida, a que não está paga lá e o estorno cancelado param a fila com o porquê em código;
+- **testes:** `test/asaas.spec.ts` (a conta da devolução e os estornos lidos) e `test/db/devolucao.spec.ts` (sete casos contra um Asaas local, que ganhou o estorno), e o caso da paga sem a cobrança em `test/db/cobranca.spec.ts`.
+
+A W2a está completa no código e desligada. Falta a chave da conta de testes do Asaas no EasyPanel (o passo do dono, com o endereço do Sandbox e o token do aviso, num passo só) para o teste de ponta a ponta no Sandbox; depois, a W2b (o cartão) e a tela (W5). O e-mail com o protocolo na hora da desistência (D-A7-19) entra com a tela.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
