@@ -1,5 +1,5 @@
 import type { ActionResponse } from '@liame/contracts';
-import { ANTECEDENCIA_MINIMA_MIN, DIAS_DE_ANTECEDENCIA, instanteNoFuso, NO_CANAL, noFuso, quando, situacaoDoPost } from '@/components/agenda/textos';
+import { ANTECEDENCIA_MINIMA_MIN, DIAS_DE_ANTECEDENCIA, ehDia, instanteNoFuso, NO_CANAL, noFuso, quando, situacaoDoPost } from '@/components/agenda/textos';
 import { type PedidoApresentado, recusaDe } from './textos';
 
 // O pedido de post em Aprovações (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; A6, Z5c, parte 4). O servidor
@@ -41,15 +41,20 @@ export function erroDaHoraNova(
   post: { publish_at: string; timezone: string },
   agora: Date,
 ): { campo: 'dia' | 'hora' | 'codigo'; texto: string } | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(n.dia)) return { campo: 'dia', texto: 'Escolha o dia.' };
-  if (!/^\d{2}:\d{2}$/.test(n.hora) || n.hora < '08:00' || n.hora > '22:00') return { campo: 'hora', texto: 'Escolha uma hora entre 8h e 22h.' };
+  if (!ehDia(n.dia)) return { campo: 'dia', texto: 'Escolha o dia.' };
+  if (!ehHoraDoRelogio(n.hora) || n.hora < '08:00' || n.hora > '22:00') return { campo: 'hora', texto: 'Escolha uma hora entre 8h e 22h.' };
   const instante = instanteNoFuso(n.dia, n.hora, post.timezone).getTime();
   if (instante < agora.getTime() + ANTECEDENCIA_MINIMA_MIN * 60_000) return { campo: 'hora', texto: `Escolha uma hora daqui a pelo menos ${ANTECEDENCIA_MINIMA_MIN} minutos.` };
   if (instante > agora.getTime() + DIAS_DE_ANTECEDENCIA * 86_400_000) return { campo: 'dia', texto: `O post pode ser marcado para até ${DIAS_DE_ANTECEDENCIA} dias.` };
   if (instante === new Date(post.publish_at).getTime()) return { campo: 'hora', texto: 'O post já está marcado para essa hora.' };
-  if (!/^\d{6}$/.test(n.codigo)) return { campo: 'codigo', texto: 'Digite os 6 números do app.' };
+  if (n.codigo.length !== 6 || !soDigitos(n.codigo)) return { campo: 'codigo', texto: 'Digite os 6 números do app.' };
   return null;
 }
+
+/** Só algarismos, conferidos um a um (sem expressão regular sobre o que a pessoa digita). */
+const soDigitos = (v: string): boolean => [...v].every((d) => d >= '0' && d <= '9');
+/** `HH:MM`, como o campo de hora do navegador devolve. */
+const ehHoraDoRelogio = (v: string): boolean => v.length === 5 && v[2] === ':' && soDigitos(v.slice(0, 2) + v.slice(3));
 
 /** Os motivos prontos da recusa de um post (os do P19). */
 export const MOTIVOS_DO_POST = ['Quero outro texto', 'Quero outra foto', 'Não é o momento'];
