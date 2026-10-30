@@ -4,7 +4,8 @@ import type { BrandPhoto } from '@liame/contracts';
 import Link from 'next/link';
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
 import { PreviasDoPost } from '@/components/agenda/previas-do-post';
-import { linhaDoCanal, noFuso } from '@/components/agenda/textos';
+import { SituacaoDosCanais } from '@/components/agenda/situacao-dos-canais';
+import { noFuso } from '@/components/agenda/textos';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
 import { disparar } from '@/lib/disparar';
@@ -16,8 +17,9 @@ import { aprovacaoParcial, cabecalhoDe, type Grupo, identidadeDoPlano, prazoDe }
 // O post em Aprovações (P19, aprovado pelo dono em 21/10/2026; A6, Z5c, parte 4): quem pediu, a frase do modo simples,
 // a prévia de cada canal (a foto, com o recorte do Instagram, e o texto), o que foi conferido e a decisão com o código do
 // app. Decidido: o resultado (agendado, publicando, publicado, em parte, não saiu, cancelado, recusado, expirado), o que
-// aconteceu em cada canal e, no agendado, "Cancelar o post" (sem o código: tira o risco, D-A6-23). Mudar a hora e apagar
-// das redes ficam para quando o servidor fizer (divergência do P19, como na Agenda).
+// aconteceu em cada canal, no agendado "Cancelar o post" (sem o código: tira o risco, D-A6-23) e, no canal que não saiu,
+// "Tentar de novo" (A6, Z5d; D-A6-54). Mudar a hora e apagar das redes ficam para quando o servidor fizer (divergência do
+// P19, como na Agenda).
 
 type Props = {
   acao: AcaoDePost;
@@ -38,13 +40,33 @@ type Props = {
   aoAprovar: (acao: AcaoDePost, codigo: string) => Promise<Decisao>;
   aoRecusar: (acao: AcaoDePost, motivo: string) => Promise<Decisao>;
   aoCancelar: (acao: AcaoDePost) => Promise<Feito>;
+  /** "Tentar de novo" no canal que não saiu (A6, Z5d): a tela pede, avisa e lê de novo. */
+  aoTentarDeNovo: (acao: AcaoDePost, canal: string) => Promise<Feito>;
   /** A foto não carregou (o endereço de 5 minutos venceu): a tela pede endereços novos. */
   aoFalharImagem: () => void;
 };
 
 const MOTIVOS = MOTIVOS_DO_POST.map((m) => ({ valor: m, rotulo: m }));
 
-export function DetalhePost({ acao, grupo, agora, pro, podeDecidir, podeOperar, podeVerContas, temApp, foto, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar, aoCancelar, aoFalharImagem }: Props) {
+export function DetalhePost({
+  acao,
+  grupo,
+  agora,
+  pro,
+  podeDecidir,
+  podeOperar,
+  podeVerContas,
+  temApp,
+  foto,
+  titulo,
+  campoCodigo,
+  aoVoltar,
+  aoAprovar,
+  aoRecusar,
+  aoCancelar,
+  aoTentarDeNovo,
+  aoFalharImagem,
+}: Props) {
   const ids = useId();
   const post = acao.post;
   const p = postApresentado(acao, agora);
@@ -61,10 +83,15 @@ export function DetalhePost({ acao, grupo, agora, pro, podeDecidir, podeOperar, 
     if (focarCancelar) cancelarBt.current?.focus();
   }, [focarCancelar]);
 
+  // "Tentar de novo" no canal que não saiu (A6, Z5d; D-A6-54): o canal que está sendo pedido e a recusa.
+  const [tentando, setTentando] = useState<string | null>(null);
+  const [erroAoTentar, setErroAoTentar] = useState<string | null>(null);
+
   // Outro pedido aberto: a confirmação e o erro eram do anterior.
   useEffect(() => {
     setCancelando('nao');
     setErroAoCancelar(null);
+    setErroAoTentar(null);
   }, [acao.id]);
 
   async function cancelar() {
@@ -73,6 +100,14 @@ export function DetalhePost({ acao, grupo, agora, pro, podeDecidir, podeOperar, 
     const r = await aoCancelar(acao);
     setCancelando('nao');
     if (!r.ok) setErroAoCancelar(r.texto);
+  }
+
+  async function tentarDeNovo(canal: string) {
+    setTentando(canal);
+    setErroAoTentar(null);
+    const r = await aoTentarDeNovo(acao, canal);
+    setTentando(null);
+    if (!r.ok) setErroAoTentar(r.texto);
   }
 
   const voltar = (
@@ -103,7 +138,6 @@ export function DetalhePost({ acao, grupo, agora, pro, podeDecidir, podeOperar, 
 
   if (grupo !== 'pendente') {
     const r = resultadoDoPost(acao, agora);
-    const linhas = post.channels.map((c) => linhaDoCanal(c, post, post.timezone, hoje));
     const mostraCanais = ['publicado', 'em_parte', 'nao_saiu', 'publicando'].includes(post.status);
     const podeCancelar = podeOperar && post.status === 'agendado';
     return (
@@ -119,24 +153,19 @@ export function DetalhePost({ acao, grupo, agora, pro, podeDecidir, podeOperar, 
             </span>
           </div>
           {mostraCanais && (
-            <ul className="po-situacao" aria-label="Em cada canal">
-              {linhas.map((l) => (
-                <li key={l.canal}>
-                  <span className={l.tom}>
-                    <Icone nome={l.icone} />
-                  </span>
-                  <span>
-                    <b>{l.nome}:</b> {l.frase}
-                  </span>
-                  {l.endereco && (
-                    <a className="btn btn--sm btn--ghost" href={l.endereco} target="_blank" rel="noopener noreferrer">
-                      <Icone nome="external" pequeno />
-                      {l.rotuloDoEndereco}
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <SituacaoDosCanais
+              post={post}
+              fuso={post.timezone}
+              hoje={hoje}
+              agora={agora}
+              rotulo="Em cada canal"
+              tentar={podeOperar ? { aoTentar: (canal) => disparar(tentarDeNovo(canal)), ocupado: tentando } : null}
+            />
+          )}
+          {erroAoTentar && (
+            <p className="campo-erro" role="alert">
+              {erroAoTentar}
+            </p>
           )}
           {podeCancelar && (
             <div className="desfazer">

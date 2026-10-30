@@ -124,6 +124,7 @@ function desenho(a: AcaoDePost, o: { pro?: boolean; podeDecidir?: boolean; podeO
       aoAprovar: async () => ({ ok: true }) as const,
       aoRecusar: async () => ({ ok: true }) as const,
       aoCancelar: async () => ({ ok: true }) as const,
+      aoTentarDeNovo: async () => ({ ok: true }) as const,
       aoFalharImagem: () => {},
     }),
   );
@@ -261,5 +262,51 @@ describe('pedido de post: o detalhe', () => {
     expect(semMarcas(html)).toContain('Instagram: não saiu. A Meta recusou o acesso desta conta.');
     expect(html).toContain('href="/contas"');
     expect(desenho(falhou, { podeVerContas: false })).not.toContain('href="/contas"');
+    // Não saiu em nenhum canal: sem "Tentar de novo" (o servidor não manda `retry_until`).
+    expect(html).not.toContain('data-tentar-de-novo');
+  });
+
+  it('em parte (A6 · Z5d): "Tentar de novo" no canal que não saiu, para quem opera e enquanto o prazo vale', () => {
+    const emParte = (ate: string | null) =>
+      pedido({
+        status: 'falhou',
+        updated_at: '2026-10-29T15:05:00.000Z',
+        post: post({
+          status: 'em_parte',
+          channels: [
+            { ...post().channels[0]!, status: 'publicado', permalink: 'https://www.instagram.com/p/abc/', published_at: '2026-10-29T14:00:00.000Z' },
+            { ...post().channels[1]!, status: 'falhou', error: 'A Meta não deixou o Liame publicar nesta Página.', retry_until: ate },
+          ],
+        }),
+      });
+    const html = desenho(emParte('2026-10-30T14:00:00.000Z'));
+    expect(html).toContain('data-tentar-de-novo="facebook"');
+    expect(semMarcas(html)).toContain('Página do Facebook: não saiu. A Meta não deixou o Liame publicar nesta Página.Tentar de novo na Página do Facebook');
+    expect(html).not.toContain('data-tentar-de-novo="instagram"');
+    // Quem não opera as campanhas não vê; o prazo que passou (ou o canal sem prazo) também não.
+    expect(desenho(emParte('2026-10-30T14:00:00.000Z'), { podeOperar: false })).not.toContain('data-tentar-de-novo');
+    expect(desenho(emParte('2026-10-29T14:59:00.000Z'))).not.toContain('data-tentar-de-novo');
+    expect(desenho(emParte(null))).not.toContain('data-tentar-de-novo');
+  });
+
+  it('o pedido da nova tentativa (A6 · Z5d): é um pedido de post, feito por uma pessoa, com o canal no título', () => {
+    const nova = pedido({
+      id: uuid(9),
+      tool: 'post_tentar_de_novo',
+      action: 'post.tentar_de_novo',
+      provider: 'facebook_page',
+      account_id: uuid(61),
+      status: 'aprovada',
+      mode: 'AUTO',
+      approvals: [],
+      updated_at: '2026-10-29T15:05:00.000Z',
+      post: post({ status: 'publicando' }),
+    });
+    expect(ehPedidoDePost(nova)).toBe(true);
+    expect(postApresentado(nova, agora).titulo).toBe('De novo na Página do Facebook: post de amanhã, às 19:00');
+    expect(postApresentado(nova, agora).resumo).toBe('A nova tentativa manda o mesmo post aprovado só na Página do Facebook, sem o código do app: o texto, a foto e o canal são os que a aprovação cobriu.');
+    // Pedido direto de uma pessoa: entra no que foi feito hoje, não no que o Liame fez sozinho.
+    expect(grupoDe({ ...nova, status: 'executada' }, agora)).toBe('feito');
+    expect(semMarcas(desenho(nova))).toContain('Publicando…');
   });
 });

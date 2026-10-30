@@ -4,6 +4,7 @@ import type { ActionResponse, BrandPhoto, BrandResponse, BudgetMonthResponse, Pl
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { NO_CANAL } from '@/components/agenda/textos';
 import { GavetaPedir } from '@/components/pedir/gaveta-pedir';
 import { destinoInicial } from '@/components/shell/inicio';
 import { useAvisar } from '@/components/ui/avisos';
@@ -449,6 +450,20 @@ export function AprovacoesTela() {
     return { ok: true };
   }
 
+  // "Tentar de novo" no canal que não saiu (A6, Z5d; D-A6-54): o mesmo post aprovado, só nesse canal, sem o código do app.
+  // O pedido da nova tentativa entra no que foi feito hoje; o detalhe aberto mostra o post como está agora.
+  async function tentarDeNovoNoPost(acao: AcaoDePost, canal: string): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/posts/{id}/retry', { params: { path: { id: acao.post.id } } }));
+    if (!r.ok) {
+      setTentativa((n) => n + 1);
+      return { ok: false, texto: mensagemDe(r.problema) };
+    }
+    avisar(`Tentando de novo ${NO_CANAL[canal] ?? canal}: o mesmo post aprovado, só no canal que faltou.`);
+    await carregar();
+    focarOTitulo();
+    return { ok: true };
+  }
+
   // ---- a resposta a uma avaliação do Google (P17): o texto se edita (o plano é outro, e a aprovação vale para ele),
   // a resposta publicada se apaga (direto, sem código), e a avaliação ganha outra resposta pelo rascunho.
   async function salvarTextoDaResposta(acao: AcaoDeResposta, texto: string): Promise<Feito> {
@@ -827,6 +842,7 @@ export function AprovacoesTela() {
         aoAprovar={aprovar}
         aoRecusar={recusar}
         aoCancelar={cancelarPost}
+        aoTentarDeNovo={tentarDeNovoNoPost}
         aoFalharImagem={fotoFalhou}
       />
     );

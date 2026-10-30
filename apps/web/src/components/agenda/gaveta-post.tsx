@@ -10,12 +10,14 @@ import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { PreviasDoPost } from './previas-do-post';
-import { fraseDaSituacao, linhaDoCanal, linkCurto, noFuso, quando, situacaoDoPost } from './textos';
+import { SituacaoDosCanais } from './situacao-dos-canais';
+import { fraseDaSituacao, linkCurto, NO_CANAL, noFuso, quando, situacaoDoPost } from './textos';
 
 // Um post da Agenda (P19, gaveta à direita): a situação, a prévia de cada canal (a foto, com o recorte do Instagram, e
 // o texto), o que aconteceu em cada canal e o que dá para fazer: abrir o pedido em Aprovações (o post que espera),
-// cancelar antes de sair (sem o código do app: tira o risco, D-A6-23) e abrir Contas conectadas (o que não saiu). Mudar
-// a hora, apagar das redes e tentar de novo num canal ficam para quando o servidor fizer (divergência do P19).
+// cancelar antes de sair (sem o código do app: tira o risco, D-A6-23), abrir Contas conectadas (o que não saiu) e, no
+// canal que não saiu, "Tentar de novo" (A6, Z5d; D-A6-54). Mudar a hora e apagar das redes ficam para quando o servidor
+// fizer (divergência do P19).
 
 type Props = {
   post: PostResponse;
@@ -46,6 +48,17 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
   useEffect(() => {
     if (focarCancelar) cancelarBt.current?.focus();
   }, [focarCancelar]);
+  // "Tentar de novo" (A6, Z5d; P19): o canal que está sendo pedido e o aviso do que aconteceu. O foco vai para o aviso,
+  // porque o botão some quando o canal volta para a espera (no efeito, depois do commit; V27, ERR-185).
+  const [tentando, setTentando] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const avisoRef = useRef<HTMLParagraphElement>(null);
+  const [focarAviso, setFocarAviso] = useState(0);
+  useEffect(() => {
+    if (focarAviso) avisoRef.current?.focus();
+  }, [focarAviso]);
+  const ocupado = enviando || tentando !== null;
+  const agora = new Date();
   const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
   const situacao = situacaoDoPost(post.status);
   const pedidoEm = noFuso(new Date(post.created_at), fuso);
@@ -71,12 +84,30 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
     fechar();
   }
 
+  // O mesmo post aprovado, só no canal que não saiu, sem o código do app (D-A6-54). A recusa (o prazo que passou, outra
+  // tentativa no meio) diz o porquê, e a gaveta mostra o post como está agora.
+  async function tentarDeNovo(canal: string) {
+    setTentando(canal);
+    setErro(null);
+    setAviso(null);
+    const r = await chamar(() => api.POST('/v1/posts/{id}/retry', { params: { path: { id: post.id } } }));
+    setTentando(null);
+    if (!r.ok) {
+      setErro(mensagemDe(r.problema));
+      const atual = await chamar(() => api.GET('/v1/posts/{id}', { params: { path: { id: post.id } } }));
+      if (atual.ok) aoMudar(atual.data);
+      return;
+    }
+    aoMudar(r.data);
+    setAviso(`Tentando de novo ${NO_CANAL[canal] ?? canal}: o mesmo post aprovado, só no canal que faltou. A Agenda mostra quando ele sair.`);
+    setFocarAviso((n) => n + 1);
+  }
+
   const [copiado, setCopiado] = useState<'sim' | 'nao' | null>(null);
   async function copiarLink() {
     if (post.link) setCopiado((await copiar(post.link)) ? 'sim' : 'nao');
   }
 
-  const linhas = post.channels.map((c) => linhaDoCanal(c, post, fuso, hoje));
   const podeCancelar = podeOperar && post.status === 'agendado' && post.action_id;
 
   return (
@@ -89,7 +120,7 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
         devolverFoco();
       }}
       onClick={(e) => {
-        if (e.target === ref.current && !enviando) fechar();
+        if (e.target === ref.current && !ocupado) fechar();
       }}
     >
       <div className="dialogo-form">
@@ -98,7 +129,7 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
             <p className="rotulo-marca">Post</p>
             <h2 id={`${ids}-t`}>Post de {quando(dia, hora, hoje)}</h2>
           </div>
-          <button className="btn btn--icon btn--ghost" type="button" ref={fecharBt} onClick={fechar} aria-label="Fechar" disabled={enviando}>
+          <button className="btn btn--icon btn--ghost" type="button" ref={fecharBt} onClick={fechar} aria-label="Fechar" disabled={ocupado}>
             <Icone nome="x" />
           </button>
         </div>
@@ -118,24 +149,19 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
             <h3 className="rotulo-marca" id={`${ids}-sit`}>
               Em cada canal
             </h3>
-            <ul className="po-situacao">
-              {linhas.map((l) => (
-                <li key={l.canal}>
-                  <span className={l.tom}>
-                    <Icone nome={l.icone} />
-                  </span>
-                  <span>
-                    <b>{l.nome}:</b> {l.frase}
-                  </span>
-                  {l.endereco && (
-                    <a className="btn btn--sm btn--ghost" href={l.endereco} target="_blank" rel="noopener noreferrer">
-                      <Icone nome="external" pequeno />
-                      {l.rotuloDoEndereco}
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <SituacaoDosCanais
+              post={post}
+              fuso={fuso}
+              hoje={hoje}
+              agora={agora}
+              tentar={podeOperar ? { aoTentar: (canal) => disparar(tentarDeNovo(canal)), ocupado: tentando } : null}
+            />
+            {aviso && (
+              <p className="po-nota" role="status" tabIndex={-1} ref={avisoRef}>
+                <Icone nome="refresh" pequeno />
+                <span>{aviso}</span>
+              </p>
+            )}
           </section>
           <dl className="po-fatos">
             <div>
@@ -197,7 +223,7 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
             </Link>
           )}
           <span className="spacer" />
-          <button className="btn" type="button" onClick={fechar} disabled={enviando}>
+          <button className="btn" type="button" onClick={fechar} disabled={ocupado}>
             Fechar
           </button>
         </div>

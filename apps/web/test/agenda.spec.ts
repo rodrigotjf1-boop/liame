@@ -245,6 +245,20 @@ describe('a gaveta do post', () => {
     const naoSaiu = gaveta(post(4, '2026-10-27', '19:00', 'nao_saiu'));
     expect(naoSaiu).toContain('href="/contas"');
     expect(gaveta(post(4, '2026-10-27', '19:00', 'nao_saiu'), { podeVerContas: false })).not.toContain('href="/contas"');
+    expect(naoSaiu).not.toContain('data-tentar-de-novo');
+
+    // Em parte (A6 · Z5d; P19): "Tentar de novo" no canal que não saiu, enquanto o servidor diz que dá e para quem opera.
+    const publicado = canal('instagram', { status: 'publicado', published_at: sp('2026-10-27', '19:01'), permalink: 'https://www.instagram.com/p/abc/' });
+    const emParte = (ate: string | null) => post(5, '2026-10-27', '19:00', 'em_parte', [publicado, canal('facebook', { status: 'falhou', error: 'A Meta não deixou o Liame publicar nesta Página.', retry_until: ate })]);
+    const html = gaveta(emParte('2099-01-01T00:00:00.000Z'));
+    expect(html).toContain('data-tentar-de-novo="facebook"');
+    expect(html).toContain('Tentar de novo<span class="sr-only"> na Página do Facebook</span>');
+    expect(gaveta(emParte('2099-01-01T00:00:00.000Z'), { podeOperar: false })).not.toContain('data-tentar-de-novo');
+    expect(gaveta(emParte('2000-01-01T00:00:00.000Z'))).not.toContain('data-tentar-de-novo');
+    expect(gaveta(emParte(null))).not.toContain('data-tentar-de-novo');
+    // O canal que ficou esperando quando o pedido terminou (uma trava barrou a execução) não "sai" mais: não saiu.
+    const travado = post(6, '2026-10-27', '19:00', 'em_parte', [publicado, canal('facebook')]);
+    expect(linhaDoCanal(travado.channels[1]!, travado, SP, HOJE).frase).toBe('não saiu.');
   });
 
   it('a prévia do Instagram: as abas dos canais, a foto alta recortada no ponto aprovado, a nota do recorte e a do link', () => {

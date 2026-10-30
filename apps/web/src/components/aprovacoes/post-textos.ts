@@ -11,10 +11,19 @@ type Acao = ActionResponse;
 export type AcaoDePost = Acao & { post: NonNullable<Acao['post']> };
 type Post = AcaoDePost['post'];
 
-/** O pedido é de publicar um post do Liame (e o post ainda está no Liame)? */
+/**
+ * O pedido é de publicar um post do Liame, ou a nova tentativa dele no canal que não saiu (A6, Z5d), e o post ainda está
+ * no Liame?
+ */
 export function ehPedidoDePost(a: Acao): a is AcaoDePost {
-  return a.tool === 'post_publicar' && Boolean(a.post);
+  return (a.tool === 'post_publicar' || a.tool === 'post_tentar_de_novo') && Boolean(a.post);
 }
+
+/** A nova tentativa de um post no canal que não saiu (A6, Z5d; D-A6-54): pedida por uma pessoa, sem o código do app. */
+export const ehNovaTentativa = (a: Pick<Acao, 'tool'>): boolean => a.tool === 'post_tentar_de_novo';
+
+/** O canal da nova tentativa, pelo provedor do pedido (a conta do canal que não saiu). */
+const CANAL_DO_PROVEDOR: Record<string, string> = { instagram: 'instagram', facebook_page: 'facebook' };
 
 /** Os motivos prontos da recusa de um post (os do P19). */
 export const MOTIVOS_DO_POST = ['Quero outro texto', 'Quero outra foto', 'Não é o momento'];
@@ -53,6 +62,17 @@ function quandoSaiAprovado(post: Post, agora: Date): string {
 export function postApresentado(a: AcaoDePost, agora: Date): PedidoApresentado {
   const post = a.post;
   const quando = quandoDoPost(post, agora);
+  if (ehNovaTentativa(a)) {
+    const no = NO_CANAL[CANAL_DO_PROVEDOR[a.provider] ?? ''] ?? 'no canal que faltou';
+    return {
+      titulo: `De novo ${no}: post de ${quando}`,
+      resumo: `A nova tentativa manda o mesmo post aprovado só ${no}, sem o código do app: o texto, a foto e o canal são os que a aprovação cobriu.`,
+      impacto: null,
+      mudancas: [],
+      desfazer: 'Depois de publicado, o post se apaga na própria rede: o Liame ainda não apaga posts. Quem já viu, viu.',
+      depoisDeAprovar: '',
+    };
+  }
   return {
     titulo: `Post de ${quando}`,
     resumo: `Você vai publicar um post ${ondeSai(post)}, ${quando}. Ele é público e sai em nome da empresa. Se você aprovar, o Liame publica na hora marcada.`,
