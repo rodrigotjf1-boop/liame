@@ -6,7 +6,9 @@ import { DetalhePost } from '@/components/aprovacoes/detalhe-post';
 import {
   type AcaoDePost,
   canaisDaLista,
+  ehHoraMudada,
   ehPedidoDePost,
+  erroDaHoraNova,
   etiquetaDoPost,
   horaJaPassou,
   MOTIVOS_DO_POST,
@@ -125,6 +127,7 @@ function desenho(a: AcaoDePost, o: { pro?: boolean; podeDecidir?: boolean; podeO
       aoRecusar: async () => ({ ok: true }) as const,
       aoCancelar: async () => ({ ok: true }) as const,
       aoTentarDeNovo: async () => ({ ok: true }) as const,
+      aoMudarAHora: async () => ({ ok: true }) as const,
       aoFalharImagem: () => {},
     }),
   );
@@ -230,6 +233,41 @@ describe('pedido de post: o detalhe', () => {
     expect(html).toContain('data-po-cancelar');
     expect(semMarcas(html)).toContain('Cancelar não pede o código do app: o post não sai.');
     expect(desenho(agendado, { podeOperar: false })).not.toContain('data-po-cancelar');
+  });
+
+  it('agendado (A6 · Z5d, parte 4): "Mudar a hora" para quem pode aprovar, no pedido do post, com o código', () => {
+    const agendado = pedido({ status: 'aprovada', approvals: aprovacao, updated_at: '2026-10-29T15:05:00.000Z', post: post({ status: 'agendado' }) });
+    const html = desenho(agendado);
+    expect(html).toContain('data-po-mudar-hora');
+    expect(html).toContain('aria-expanded="false"');
+    expect(semMarcas(html)).toContain('Cancelar não pede o código do app: o post não sai. Mudar a hora pede o código do app de novo: a hora muda quem vê o post.');
+    // Quem não aprova não muda a hora (cancelar segue para quem opera); o pedido que não é mais o do post também não.
+    const semAprovar = desenho(agendado, { podeDecidir: false });
+    expect(semAprovar).not.toContain('data-po-mudar-hora');
+    expect(semMarcas(semAprovar)).toContain('Cancelar não pede o código do app: o post não sai.');
+    expect(desenho(pedido({ ...agendado, id: uuid(5) }))).not.toContain('data-po-mudar-hora');
+  });
+
+  it('a hora nova, conferida antes de mandar: o dia, a janela, os 15 minutos, os 60 dias, a mesma hora e o código', () => {
+    const p = { publish_at: '2026-10-30T22:00:00.000Z', timezone: SP };
+    expect(erroDaHoraNova({ dia: '2026-10-31', hora: '20:30', codigo: '123456' }, p, agora)).toBeNull();
+    expect(erroDaHoraNova({ dia: '', hora: '20:30', codigo: '123456' }, p, agora)).toEqual({ campo: 'dia', texto: 'Escolha o dia.' });
+    expect(erroDaHoraNova({ dia: '2026-10-31', hora: '22:30', codigo: '123456' }, p, agora)).toEqual({ campo: 'hora', texto: 'Escolha uma hora entre 8h e 22h.' });
+    // Agora são 12:00 em São Paulo: 12:10 é cedo demais; 12:15, não.
+    expect(erroDaHoraNova({ dia: '2026-10-29', hora: '12:10', codigo: '123456' }, p, agora)?.texto).toBe('Escolha uma hora daqui a pelo menos 15 minutos.');
+    expect(erroDaHoraNova({ dia: '2026-10-29', hora: '12:15', codigo: '123456' }, p, agora)).toBeNull();
+    expect(erroDaHoraNova({ dia: '2027-01-15', hora: '12:00', codigo: '123456' }, p, agora)).toEqual({ campo: 'dia', texto: 'O post pode ser marcado para até 60 dias.' });
+    expect(erroDaHoraNova({ dia: '2026-10-30', hora: '19:00', codigo: '123456' }, p, agora)).toEqual({ campo: 'hora', texto: 'O post já está marcado para essa hora.' });
+    expect(erroDaHoraNova({ dia: '2026-10-31', hora: '20:30', codigo: '12345' }, p, agora)).toEqual({ campo: 'codigo', texto: 'Digite os 6 números do app.' });
+  });
+
+  it('o pedido trocado pela hora nova: "Hora mudada", e o post segue no pedido novo', () => {
+    const trocado = pedido({ status: 'cancelada', status_reason: 'hora mudada para 31/10, 20:30', approvals: aprovacao, updated_at: '2026-10-29T15:05:00.000Z', post: post({ status: 'agendado', action_id: uuid(5) }) });
+    expect(ehHoraMudada(trocado)).toBe(true);
+    expect(etiquetaDoPost(trocado)).toBe('Hora mudada');
+    expect(resultadoDoPost(trocado, agora)).toMatchObject({ titulo: 'Hora mudada.', texto: 'Este pedido foi trocado por um novo, com a hora nova, aprovado de novo com o código do app. O post segue no pedido novo.' });
+    expect(ehHoraMudada(pedido({ status: 'cancelada', status_reason: 'cancelada por quem opera' }))).toBe(false);
+    expect(desenho(trocado)).not.toContain('data-po-mudar-hora');
   });
 
   it('publicado: cada canal com a hora e o link do post na rede (só https)', () => {

@@ -15,9 +15,9 @@ import { fraseDaSituacao, linkCurto, NO_CANAL, noFuso, quando, situacaoDoPost } 
 
 // Um post da Agenda (P19, gaveta à direita): a situação, a prévia de cada canal (a foto, com o recorte do Instagram, e
 // o texto), o que aconteceu em cada canal e o que dá para fazer: abrir o pedido em Aprovações (o post que espera),
-// cancelar antes de sair (sem o código do app: tira o risco, D-A6-23), abrir Contas conectadas (o que não saiu) e, no
-// canal que não saiu, "Tentar de novo" (A6, Z5d; D-A6-54). Mudar a hora e apagar das redes ficam para quando o servidor
-// fizer (divergência do P19).
+// cancelar antes de sair (sem o código do app: tira o risco, D-A6-23), mudar a hora (em Aprovações, com o código de novo,
+// D-A6-55), abrir Contas conectadas (o que não saiu) e, no canal que não saiu, "Tentar de novo" (A6, Z5d; D-A6-54).
+// Apagar das redes fica para quando o servidor fizer (divergência do P19).
 
 type Props = {
   post: PostResponse;
@@ -26,6 +26,8 @@ type Props = {
   /** A foto do post (das Fotos); nula quando ela saiu das Fotos ou a lista não pôde ser lida. */
   foto: BrandPhoto | null;
   podeOperar: boolean;
+  /** Pode aprovar (`acoes.aprovar`): mudar a hora do post aprovado pede o código do app de novo. */
+  podeAprovar: boolean;
   podeVerContas: boolean;
   reserva: RefObject<HTMLElement | null>;
   /** O post mudou (cancelado): a tela troca o cartão. */
@@ -35,7 +37,7 @@ type Props = {
   aoFechar: () => void;
 };
 
-export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, reserva, aoMudar, aoFalharImagem, aoFechar }: Props) {
+export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, podeVerContas, reserva, aoMudar, aoFalharImagem, aoFechar }: Props) {
   const ids = useId();
   const fecharBt = useRef<HTMLButtonElement>(null);
   const cancelarBt = useRef<HTMLButtonElement>(null);
@@ -216,6 +218,13 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeVerContas, 
                 Cancelar o post
               </button>
             ))}
+          {/* Mudar a hora pede o código do app de novo (D-A6-23 e D-A6-55): é em Aprovações, no pedido do post (P19). */}
+          {post.status === 'agendado' && post.action_id && podeAprovar && !cancelando && (
+            <Link className="btn" href={`/aprovacoes?pedido=${post.action_id}`}>
+              <Icone nome="clock" />
+              Mudar a hora
+            </Link>
+          )}
           {(post.status === 'nao_saiu' || post.status === 'em_parte') && podeVerContas && (
             <Link className="btn" href="/contas">
               <Icone nome="plug" />

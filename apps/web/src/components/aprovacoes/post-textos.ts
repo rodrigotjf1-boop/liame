@@ -1,5 +1,5 @@
 import type { ActionResponse } from '@liame/contracts';
-import { NO_CANAL, noFuso, quando, situacaoDoPost } from '@/components/agenda/textos';
+import { ANTECEDENCIA_MINIMA_MIN, DIAS_DE_ANTECEDENCIA, instanteNoFuso, NO_CANAL, noFuso, quando, situacaoDoPost } from '@/components/agenda/textos';
 import { type PedidoApresentado, recusaDe } from './textos';
 
 // O pedido de post em Aprovações (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; A6, Z5c, parte 4). O servidor
@@ -24,6 +24,32 @@ export const ehNovaTentativa = (a: Pick<Acao, 'tool'>): boolean => a.tool === 'p
 
 /** O canal da nova tentativa, pelo provedor do pedido (a conta do canal que não saiu). */
 const CANAL_DO_PROVEDOR: Record<string, string> = { instagram: 'instagram', facebook_page: 'facebook' };
+
+/** O começo do motivo do pedido trocado por um novo quando a hora do post mudou (A6, Z5d, parte 3; D-A6-55). */
+const HORA_MUDADA = 'hora mudada para ';
+
+/** O pedido aprovado que saiu de cena porque a hora do post mudou (o post seguiu num pedido novo, aprovado de novo). */
+export const ehHoraMudada = (a: Pick<Acao, 'status' | 'status_reason'>): boolean => a.status === 'cancelada' && Boolean(a.status_reason?.startsWith(HORA_MUDADA));
+
+/**
+ * A hora nova do "Mudar a hora" (P19; D-A6-23 e D-A6-55), conferida antes de mandar: o código com 6 números, a hora das
+ * 8h às 22h, daqui a pelo menos 15 minutos, até 60 dias e diferente da marcada. O servidor confere de novo. Nulo: pode
+ * mandar; senão, a frase e o campo que recebe o foco.
+ */
+export function erroDaHoraNova(
+  n: { dia: string; hora: string; codigo: string },
+  post: { publish_at: string; timezone: string },
+  agora: Date,
+): { campo: 'dia' | 'hora' | 'codigo'; texto: string } | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(n.dia)) return { campo: 'dia', texto: 'Escolha o dia.' };
+  if (!/^\d{2}:\d{2}$/.test(n.hora) || n.hora < '08:00' || n.hora > '22:00') return { campo: 'hora', texto: 'Escolha uma hora entre 8h e 22h.' };
+  const instante = instanteNoFuso(n.dia, n.hora, post.timezone).getTime();
+  if (instante < agora.getTime() + ANTECEDENCIA_MINIMA_MIN * 60_000) return { campo: 'hora', texto: `Escolha uma hora daqui a pelo menos ${ANTECEDENCIA_MINIMA_MIN} minutos.` };
+  if (instante > agora.getTime() + DIAS_DE_ANTECEDENCIA * 86_400_000) return { campo: 'dia', texto: `O post pode ser marcado para até ${DIAS_DE_ANTECEDENCIA} dias.` };
+  if (instante === new Date(post.publish_at).getTime()) return { campo: 'hora', texto: 'O post já está marcado para essa hora.' };
+  if (!/^\d{6}$/.test(n.codigo)) return { campo: 'codigo', texto: 'Digite os 6 números do app.' };
+  return null;
+}
 
 /** Os motivos prontos da recusa de um post (os do P19). */
 export const MOTIVOS_DO_POST = ['Quero outro texto', 'Quero outra foto', 'Não é o momento'];
@@ -85,6 +111,8 @@ export function postApresentado(a: AcaoDePost, agora: Date): PedidoApresentado {
 
 /** A segunda linha do pedido de post decidido, na lista: a situação do post (a mesma da Agenda). */
 export function etiquetaDoPost(a: AcaoDePost): string {
+  // O pedido trocado pela hora nova não diz a situação do post: ela é a do pedido novo.
+  if (ehHoraMudada(a)) return 'Hora mudada';
   return situacaoDoPost(a.post.status).rotulo;
 }
 
@@ -98,6 +126,9 @@ export function resultadoDoPost(a: AcaoDePost, agora: Date): ResultadoDoPost {
   // A hora da aprovação também no fuso da empresa, como a do post.
   const quem = aprovacao ? `Aprovado por ${aprovacao.approver_name} às ${noFuso(new Date(aprovacao.created_at), post.timezone).hora}.` : 'Aprovado.';
   const quantos = post.channels.length > 1 ? `nos ${post.channels.length === 2 ? 'dois' : String(post.channels.length)} canais` : ondeSai(post);
+  if (ehHoraMudada(a)) {
+    return { tom: '', icone: 'clock', titulo: 'Hora mudada.', texto: 'Este pedido foi trocado por um novo, com a hora nova, aprovado de novo com o código do app. O post segue no pedido novo.' };
+  }
   switch (post.status) {
     case 'recusado':
       return { tom: '', icone: 'x', titulo: 'Recusado.', texto: recusa?.motivo ? `Por ${recusa.quem}: “${recusa.motivo}”. Nada foi publicado.` : `Por ${recusa?.quem ?? 'quem aprova'}. Nada foi publicado.` };

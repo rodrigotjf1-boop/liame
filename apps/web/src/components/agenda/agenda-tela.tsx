@@ -32,6 +32,7 @@ export function AgendaTela() {
   const podeVer = pode('campanhas.ver');
   const podeOperar = pode('campanhas.operar');
   const podeVerContas = pode('contas.ver');
+  const podeAprovar = pode('acoes.aprovar');
   const podeVerFotos = pode('fotos.ver');
   const titulo = useRef<HTMLHeadingElement>(null);
   const seguinte = useRef<HTMLButtonElement>(null);
@@ -347,6 +348,7 @@ export function AgendaTela() {
           hoje={hoje}
           foto={postAberto.photo_id ? (fotos.get(postAberto.photo_id) ?? null) : null}
           podeOperar={podeOperar}
+          podeAprovar={podeAprovar}
           podeVerContas={podeVerContas}
           reserva={titulo}
           aoMudar={trocarPost}

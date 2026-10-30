@@ -215,7 +215,7 @@ describe('a gaveta do post', () => {
     expect(posicaoDoRecorte('alta', null)).toBe('50% 50%');
   });
 
-  const gaveta = (p: PostResponse, o: { foto?: BrandPhoto | null; podeOperar?: boolean; podeVerContas?: boolean } = {}) =>
+  const gaveta = (p: PostResponse, o: { foto?: BrandPhoto | null; podeOperar?: boolean; podeAprovar?: boolean; podeVerContas?: boolean } = {}) =>
     renderToStaticMarkup(
       createElement(GavetaPost, {
         post: p,
@@ -223,6 +223,7 @@ describe('a gaveta do post', () => {
         hoje: HOJE,
         foto: o.foto === undefined ? foto(1200, 1800) : o.foto,
         podeOperar: o.podeOperar ?? true,
+        podeAprovar: o.podeAprovar ?? true,
         podeVerContas: o.podeVerContas ?? true,
         reserva: { current: null },
         aoMudar: () => undefined,
@@ -241,6 +242,11 @@ describe('a gaveta do post', () => {
     expect(agendado).toContain('Cancelar o post');
     expect(agendado).toContain('Post de amanhã, às 19:00');
     expect(gaveta(post(3, '2026-10-30', '19:00', 'agendado'), { podeOperar: false })).not.toContain('Cancelar o post');
+    // Mudar a hora (A6 · Z5d, parte 4): pede o código de novo, em Aprovações, no pedido do post; só para quem pode aprovar.
+    expect(agendado).toContain(`href="/aprovacoes?pedido=${id(503)}"`);
+    expect(agendado).toContain('Mudar a hora');
+    expect(gaveta(post(3, '2026-10-30', '19:00', 'agendado'), { podeAprovar: false })).not.toContain('Mudar a hora');
+    expect(gaveta(post(2, '2026-10-30', '19:00', 'esperando_aprovacao'))).not.toContain('Mudar a hora');
 
     const naoSaiu = gaveta(post(4, '2026-10-27', '19:00', 'nao_saiu'));
     expect(naoSaiu).toContain('href="/contas"');
@@ -493,6 +499,7 @@ describe('o link do post (Z7, parte a; D-A6-46 a D-A6-48)', () => {
         hoje: HOJE,
         foto: foto(1600, 1200),
         podeOperar: true,
+        podeAprovar: true,
         podeVerContas: true,
         reserva: { current: null },
         aoMudar: () => undefined,

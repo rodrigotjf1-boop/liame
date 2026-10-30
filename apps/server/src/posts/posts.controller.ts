@@ -1,4 +1,4 @@
-import { CreatePostRequest, PostListQuery, PostListResponse, PostPhotoResponse, PostResponse, ProblemDetails, ResourceId } from '@liame/contracts';
+import { CreatePostRequest, PostListQuery, PostListResponse, PostPhotoResponse, PostResponse, ProblemDetails, ReschedulePostRequest, ResourceId } from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -11,12 +11,13 @@ import {
   ApiOperation,
   ApiServiceUnavailableResponse,
   ApiTags,
+  ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
-import { ACAO_CRIAR_POST, ACAO_PACOTE_PUBLICADO, ACAO_PACOTE_TIRADO, ACAO_TENTAR_DE_NOVO, PostsService, RECURSO_DO_POST } from './posts.service.js';
+import { ACAO_CRIAR_POST, ACAO_MUDAR_A_HORA, ACAO_PACOTE_PUBLICADO, ACAO_PACOTE_TIRADO, ACAO_TENTAR_DE_NOVO, PostsService, RECURSO_DO_POST } from './posts.service.js';
 
 // Os posts da marca (A6, Z5b; protótipo P19, aprovado em 21/10/2026). A Agenda (os posts de um período) e o novo post,
 // que vira um pedido em Aprovações: nada sai sem a aprovação de uma pessoa, com o código do app, na hora marcada. A
@@ -144,5 +145,25 @@ export class PostsController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   tentarDeNovo(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<PostResponse> {
     return this.posts.tentarDeNovo(auth, id);
+  }
+
+  @Post(':id/reschedule')
+  @HttpCode(200)
+  @Permissao('acoes.aprovar')
+  @Auditar(ACAO_MUDAR_A_HORA, { recurso: RECURSO_DO_POST })
+  @ApiOperation({
+    summary: 'Mudar a hora de um post aprovado',
+    description:
+      'Só para o post aprovado que ainda espera a hora (A6, Z5d; P19; D-A6-23 e D-A6-55): a hora muda quem vê o post, então a aprovação vale de novo, com o código do app de quem muda (quem pode aprovar). O pedido aprovado é cancelado (o motivo diz a hora nova), o post muda de hora e um pedido novo é feito e aprovado na mesma transação, pelo trilho de sempre; ele passa a ser o pedido do post (`action_id`) e sai na hora nova. O código errado, ou o trilho que recusa, deixa tudo como estava. Recusas: 409 `post-nao-agendado` (o pedido ainda espera a aprovação, ou o post já está saindo ou saiu), `e-pacote` e `funcao-desligada`; 422 `hora-no-passado`, `hora-longe-demais` (até 60 dias), `hora-fora-da-janela` (das 8h às 22h, no fuso da empresa), `mesma-hora` e `canal-nao-conectado`; as do código do app, como em aprovar um pedido.',
+  })
+  @ApiOkResponse({ standardSchema: PostResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  mudarAHora(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string, @Body({ schema: ReschedulePostRequest }) body: ReschedulePostRequest): Promise<PostResponse> {
+    return this.posts.mudarAHora(auth, id, body);
   }
 }

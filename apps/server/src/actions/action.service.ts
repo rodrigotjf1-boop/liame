@@ -971,14 +971,18 @@ export class ActionService {
     return this.get(auth, id);
   }
 
-  async cancel(auth: AuthContext, id: string): Promise<ActionResponse> {
+  /**
+   * Cancela o pedido que ainda não executou. `motivo`: o que fica no pedido (A6, Z5d: o post que mudou de hora troca o
+   * pedido aprovado por um novo, aprovado de novo; o antigo fica cancelado com a hora nova no motivo).
+   */
+  async cancel(auth: AuthContext, id: string, motivo = 'cancelada por quem opera'): Promise<ActionResponse> {
     const tx = currentTx();
     const tenantId = tenantOf(auth);
     const row = await this.lock(tx, tenantId, id);
     if (!['sombra', 'aguardando_aprovacao', 'aprovada'].includes(row.status)) {
       throw new AppProblem(409, 'acao-nao-cancela', 'Não dá para cancelar', 'A ação já está em execução ou terminou.');
     }
-    await tx.execute(sql`update liame.action_request set status = 'cancelada', status_reason = 'cancelada por quem opera', updated_at = now() where id = ${id}`);
+    await tx.execute(sql`update liame.action_request set status = 'cancelada', status_reason = ${motivo}, updated_at = now() where id = ${id}`);
     const released = await this.budget.release(tx, tenantId, id);
     await advance(tx, { tenantId, kind: 'acao', subjectId: id, steps: [{ name: 'execucao', status: 'pulado', output: { motivo: 'cancelada' } }], run: 'cancelado' });
     await emitEvent(tx, { tenantId, type: 'liame.action.cancelled', subject: id, data: { action_id: id } });

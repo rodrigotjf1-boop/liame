@@ -30,7 +30,7 @@ import { DetalheResposta, type Rascunho, RascunhoDaResposta } from './detalhe-re
 import { DetalheSugestoes } from './detalhe-sugestoes';
 import { chaveDaAcao, chaveDoPlano, type ItemDaLista, montarLista, pendentesDe } from './lista';
 import { dinheiroDoPlano, erroDoPlano, etiquetaDoPlano, type MotivoDaRecusa, riscoDoPlano } from './planos-textos';
-import { type AcaoDePost, canaisDaLista, ehPedidoDePost, etiquetaDoPost, postApresentado } from './post-textos';
+import { type AcaoDePost, canaisDaLista, ehPedidoDePost, etiquetaDoPost, postApresentado, quandoDoPost } from './post-textos';
 import { type AcaoDeResposta, ehPedidoDeResposta, erroDoTexto, estrelasDoPedido, estrelasEscritas, etiquetaDaResposta, respostaApresentada, riscoDaResposta, situacaoDaResposta } from './resposta-textos';
 import { ehDoSocialMedia, ESPERA_DAS_OUTRAS_MS, escolhaDoPedido, outrasNaTela, resultadoDasSugestoes } from './sugestoes-textos';
 import { apresentar, avisoDepoisDeAprovar, erroDaDecisao, etiquetaDoDecidido, type Grupo, grupoDe, pedidoDaUrl, prazoDe, riscoDe, ROTULO_GRUPO, ROTULO_RISCO } from './textos';
@@ -464,6 +464,22 @@ export function AprovacoesTela() {
     return { ok: true };
   }
 
+  // "Mudar a hora" do post aprovado (A6, Z5d, parte 4; D-A6-23 e D-A6-55): com o código do app, o pedido aprovado é
+  // trocado por um novo, aprovado de novo com a hora nova; a tela abre o pedido novo. O código que não confere e as
+  // recusas do servidor voltam para o formulário.
+  async function mudarAHoraDoPost(acao: AcaoDePost, publishAt: string, codigo: string): Promise<Feito> {
+    const r = await chamar(() => api.POST('/v1/posts/{id}/reschedule', { params: { path: { id: acao.post.id } }, body: { publish_at: publishAt, code: codigo } }));
+    if (!r.ok) {
+      if (r.problema.code === 'post-nao-agendado') setTentativa((n) => n + 1);
+      return { ok: false, texto: erroDaDecisao(r.problema).texto };
+    }
+    avisar(`Hora mudada. O post sai ${quandoDoPost({ ...acao.post, publish_at: r.data.publish_at }, new Date())}.`);
+    await carregar();
+    if (r.data.action_id) abrir(chaveDaAcao(r.data.action_id), false);
+    focarOTitulo();
+    return { ok: true };
+  }
+
   // ---- a resposta a uma avaliação do Google (P17): o texto se edita (o plano é outro, e a aprovação vale para ele),
   // a resposta publicada se apaga (direto, sem código), e a avaliação ganha outra resposta pelo rascunho.
   async function salvarTextoDaResposta(acao: AcaoDeResposta, texto: string): Promise<Feito> {
@@ -843,6 +859,7 @@ export function AprovacoesTela() {
         aoRecusar={recusar}
         aoCancelar={cancelarPost}
         aoTentarDeNovo={tentarDeNovoNoPost}
+        aoMudarAHora={mudarAHoraDoPost}
         aoFalharImagem={fotoFalhou}
       />
     );
