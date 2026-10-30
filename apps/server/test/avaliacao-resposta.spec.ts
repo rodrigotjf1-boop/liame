@@ -128,9 +128,10 @@ describe('avaliacao_responder: o registro e o conector (A6 · Z2)', () => {
     expect(apagar.ownerOnly).toBeUndefined();
     expect(apagar.params.safeParse({}).success).toBe(true);
     expect(apagar.params.safeParse({ texto: TEXTO }).success).toBe(false);
-    // Só as duas ferramentas de avaliação existem neste provedor, e só a de apagar nasce como volta.
+    // Só as duas ferramentas de avaliação existem neste provedor, e só a de apagar nasce como volta (fora das avaliações,
+    // só apagar o post das redes, A6, Z5d, parte 6).
     expect(Object.values(TOOLS).filter((t) => t.providers.includes('google_business')).map((t) => t.name)).toEqual(['avaliacao_responder', 'avaliacao_apagar_resposta']);
-    expect(Object.values(TOOLS).filter((t) => t.onlyAsUndo).map((t) => t.name)).toEqual(['avaliacao_apagar_resposta']);
+    expect(Object.values(TOOLS).filter((t) => t.onlyAsUndo).map((t) => t.name)).toEqual(['avaliacao_apagar_resposta', 'post_apagar']);
 
     const publicada = estado({ resposta: { texto: TEXTO, atualizadaEm: null, situacao: 'aprovada', violacao: null } });
     const plano = apagar.plan(publicada, {});
