@@ -20,7 +20,9 @@ import {
   custoNaTela,
   dataDe,
   diaDaLoja,
+  diaDoPost,
   emReais,
+  fichaDo,
   fraseDaSombra,
   gruposDa,
   historicoDo,
@@ -37,6 +39,7 @@ import {
   seloDaIa,
   situacaoDo,
   socialNaoLigado,
+  trabalhosDoSocial,
   trouxeDoCrm,
   usdDeMicros,
 } from '@/components/equipe/textos';
@@ -1275,5 +1278,180 @@ describe('o Social media em Sua equipe (A6 · P21, aprovado em 21/10/2026; por o
     // Sobre ele não há "Conversar sobre ele": o atalho é a tela Avaliações.
     expect(podeConversarSobre('social', comSocial(), true)).toBe(false);
     expect(perguntaSobre('social')).toBe('Quero falar sobre o trabalho do Social media: o que ele fez este mês?');
+  });
+});
+
+describe('o Social media com os posts (A6 · Z6, os posts, parte 3b; P21 inteiro)', () => {
+  const RODRIGO = { id: uuid(9), name: 'Rodrigo' };
+  /** Os posts do mês: 4 propostos, 2 publicados, 1 esperando, 1 recusado; e 3 respostas sugeridas. */
+  const NUMEROS = [
+    stat('posts_propostos', 4),
+    stat('posts_publicados', 2),
+    stat('posts_recusados', 1),
+    stat('posts_esperando', 1),
+    stat('posts_barrados', 0),
+    stat('respostas_propostas', 3),
+    stat('respostas_aprovadas', 2),
+    stat('respostas_recusadas', 0),
+    stat('respostas_esperando', 0),
+    stat('sugestoes_barradas', 0),
+    stat('retiradas_na_conferencia', 0),
+  ];
+  const SEM_NADA = NUMEROS.map((s) => stat(s.key, 0, s.unit));
+  const com = (mudar: Record<string, number>) => NUMEROS.map((s) => (s.key in mudar ? stat(s.key, mudar[s.key]!, s.unit) : s));
+  const social = (over: Partial<TeamMember> = {}): TeamMember =>
+    membro('social', { stats: NUMEROS, in_progress: null, blocked_by: null, works_on: ['posts', 'respostas'], cost: { usd_micros: '23000', calls: 7 }, ...over });
+  const comSocial = (over: Partial<TeamMember> = {}, daEquipe: Partial<TeamResponse> = {}): TeamResponse => {
+    const t = equipe(daEquipe);
+    return { ...t, members: [...t.members, social(over)] };
+  };
+  const frase = (m: TeamMember) => {
+    const a = agoraDoSocial(m, comSocial(), AGORA);
+    return { faixa: a.faixa, titulo: a.bloco?.titulo ?? null, texto: a.bloco ? a.bloco.frase.map((x) => x.texto).join('') : null, aprovacoes: a.bloco?.aprovacoes ?? null };
+  };
+  const DESDE = '2026-10-03T15:20:00.000Z';
+  const dias = (count: number) => ({ subject: null, count, by: null, since: DESDE, kind: 'posts' });
+
+  it('os trabalhos ligados: os posts, as respostas, os dois ou nenhum; sem a lista (a API de antes), só as respostas', () => {
+    expect(trabalhosDoSocial({ works_on: ['posts'] })).toEqual({ posts: true, respostas: false });
+    expect(trabalhosDoSocial({ works_on: ['respostas'] })).toEqual({ posts: false, respostas: true });
+    expect(trabalhosDoSocial({ works_on: ['posts', 'respostas'] })).toEqual({ posts: true, respostas: true });
+    expect(trabalhosDoSocial({ works_on: [] })).toEqual({ posts: true, respostas: true });
+    expect(trabalhosDoSocial({})).toEqual({ posts: false, respostas: true });
+    // A ficha: com os posts, a do P21 (o canal e a hora de agora); só com as respostas, a de antes.
+    expect(fichaDo('social', social()).faz).toEqual([
+      'Transforma o item da pauta da semana em post, com o texto de cada canal',
+      'Escolhe a foto entre as Fotos da empresa e marca o post para as 19h do dia',
+      'Propõe a resposta às avaliações do Google',
+    ]);
+    expect(fichaDo('social', social({ works_on: ['posts'] })).nunca).toEqual([
+      'Publicar sem a sua aprovação com o código do app',
+      'Criar imagem com IA ou usar foto que não seja das Fotos da empresa',
+      'Publicar fora das 8h às 22h',
+    ]);
+    expect(fichaDo('social', social({ works_on: ['posts'] })).resumo).not.toContain('avaliações');
+    expect(fichaDo('social', social({ works_on: ['respostas'] }))).toEqual(fichaDo('social', undefined));
+    expect(diaDoPost('2026-10-30')).toBe('sexta, 30/10');
+  });
+
+  it('a linha da lista, os números do mês e o custo: os posts primeiro, as respostas ao lado', () => {
+    const linha = (over: Partial<TeamMember>) => atividadeDo(social(over), 'outubro', AGORA);
+    expect(linha({ blocked_by: 'sem_rede' })).toBe('Espera uma rede conectada para publicar');
+    expect(linha({ blocked_by: 'sem_fotos' })).toBe('Espera as primeiras Fotos da empresa');
+    expect(linha({ blocked_by: 'limite_de_ia_do_dia' })).toBe('O limite de IA de hoje acabou; 1 post espera a sua decisão');
+    expect(linha({ working_now: true, in_progress: dias(1) })).toBe('Escrevendo o post da pauta; 1 post espera a sua decisão');
+    expect(linha({ working_now: true, in_progress: dias(2), stats: com({ posts_esperando: 0 }) })).toBe('Escrevendo os posts de 2 dias da pauta');
+    expect(linha({ working_now: true, in_progress: { subject: null, count: 3, by: null, since: DESDE }, stats: com({ posts_esperando: 0 }) })).toBe('Escrevendo as sugestões de 3 avaliações');
+    expect(linha({})).toBe('1 post espera a sua decisão');
+    expect(linha({ stats: com({ posts_esperando: 0, respostas_esperando: 2 }) })).toBe('2 respostas esperam uma decisão');
+    expect(linha({ blocked_by: 'sem_pauta', stats: com({ posts_esperando: 0 }) })).toBe('Sem pauta aprovada nesta semana');
+    expect(linha({ stats: com({ posts_esperando: 0 }) })).toBe('Propôs 4 posts em outubro');
+    expect(linha({ stats: SEM_NADA })).toBe('Nenhum post proposto em outubro');
+
+    expect(acertoDo(social(), 'outubro')).toEqual([
+      { valor: '4', rotulo: 'posts propostos' },
+      { valor: '2', rotulo: 'aprovados e publicados' },
+      { valor: '1', rotulo: 'esperando a sua decisão' },
+      { valor: '1', rotulo: 'recusado por você' },
+      { valor: '3', rotulo: 'respostas a avaliações propostas' },
+    ]);
+    // Sem nada no mês, os três do P21 (zerados); o dia barrado aparece só quando houve; sem as respostas, nada delas.
+    expect(acertoDo(social({ stats: SEM_NADA, works_on: ['posts'] }), 'outubro')).toEqual([
+      { valor: '0', rotulo: 'posts propostos' },
+      { valor: '0', rotulo: 'aprovados e publicados' },
+      { valor: '0', rotulo: 'esperando a sua decisão' },
+    ]);
+    expect(acertoDo(social({ stats: com({ posts_barrados: 1 }), works_on: ['posts'] }), 'outubro')).toContainEqual({ valor: '1', rotulo: 'dia barrado na conferência' });
+    expect(custoDo(social(), equipe()).rotulo).toBe('custo de IA para escrever 4 posts e 3 respostas');
+    expect(custoDo(social({ stats: com({ respostas_propostas: 0 }) }), equipe()).rotulo).toBe('custo de IA para escrever 4 posts');
+    expect(custoDo(social({ stats: SEM_NADA }), equipe()).rotulo).toBe('ele só custa quando escreve');
+  });
+
+  it('o que acontece agora: sem rede e sem Fotos com o caminho, o limite com os dias, escrevendo, esperando você e sem pauta', () => {
+    expect(frase(social({ blocked_by: 'sem_rede' }))).toMatchObject({
+      faixa: { tipo: 'acao', icone: 'plug', titulo: 'Nenhuma rede conectada para publicar', destino: { href: '/contas', rotulo: 'Abrir Contas conectadas' } },
+      titulo: 'Esperando você',
+      texto: '1 post espera a sua decisão em Aprovações: você vê o texto de cada canal, a foto e a hora, e aprova com o código do app.',
+    });
+    expect(frase(social({ blocked_by: 'sem_fotos', stats: SEM_NADA }))).toMatchObject({
+      faixa: { tipo: 'acao', icone: 'camera', titulo: 'Nenhuma foto da empresa ainda', destino: { href: '/fotos', rotulo: 'Abrir Fotos' } },
+      titulo: null,
+    });
+    expect(frase(social({ blocked_by: 'limite_de_ia_do_mes', in_progress: dias(2), stats: SEM_NADA })).faixa).toMatchObject({
+      tipo: 'atencao',
+      titulo: 'O limite de uso de IA de outubro foi atingido',
+      texto: '2 dias da pauta esperam o post dele, que fica para quando o mês virar. Dá para fazer o post à mão, na Agenda.',
+    });
+    expect(frase(social({ working_now: true, in_progress: dias(1), stats: com({ posts_esperando: 0 }) }))).toMatchObject({
+      titulo: 'Agora',
+      texto: `Está escrevendo o post de 1 dia da pauta, na fila ${quandoNaFrase(DESDE, AGORA)}: o texto de cada canal e a foto, escolhida entre as Fotos da empresa. O Compliance confere antes de o pedido chegar em Aprovações.`,
+      aprovacoes: false,
+    });
+    // O que espera a decisão nunca some: os posts e, com as respostas ligadas, as respostas.
+    expect(frase(social({ stats: com({ respostas_esperando: 2 }) })).texto).toBe(
+      '1 post espera a sua decisão e 2 respostas esperam uma decisão em Aprovações: você vê o texto de cada canal, a foto e a hora, e aprova com o código do app.',
+    );
+    expect(frase(social({ blocked_by: 'sem_pauta', stats: com({ posts_esperando: 0 }) }))).toMatchObject({
+      titulo: 'Ele propõe a partir da pauta',
+      texto: 'Nenhuma pauta aprovada nesta semana. Ele propõe um post para cada item da pauta da semana que o Estrategista monta e você aprova; as respostas às avaliações ele propõe quando chega avaliação nova.',
+    });
+    expect(frase(social({ stats: com({ posts_esperando: 0 }) }))).toMatchObject({ titulo: 'Nada esperando você', texto: 'Os posts de outubro já foram decididos. Eles estão na Agenda.' });
+    expect(frase(social({ stats: SEM_NADA, works_on: ['posts'] })).texto).toBe(
+      'Nenhum post proposto em outubro. Ele propõe o post de amanhã e o de depois de amanhã a partir da pauta da semana aprovada, e o pedido chega em Aprovações.',
+    );
+    expect(agoraDoSocial(social({ status: 'desligado_pela_liame' }), comSocial(), AGORA)).toEqual({ faixa: null, bloco: null });
+  });
+
+  it('o histórico dos posts: o dia, o item da pauta e as redes; nunca o texto do post', () => {
+    const h = (over: Partial<TeamActivityItem>) => historicoDo(item(over), AGORA);
+    const DIA = { from: '2026-10-30', to: '2026-10-30' };
+    const ITEM = 'O combo de sexta, para lembrar do fim de semana';
+    expect(h({ kind: 'propos_post', subject: ITEM, period: DIA, rules: ['instagram', 'facebook'] })).toMatchObject({
+      titulo: 'Propôs o post de sexta, 30/10',
+      texto: `Do item da pauta “${ITEM}”: no Instagram e na Página do Facebook, às 19:00. Espera a decisão em Aprovações.`,
+    });
+    expect(h({ kind: 'propos_post', subject: null, period: DIA, rules: ['instagram'] }).texto).toBe('No Instagram, às 19:00. Espera a decisão em Aprovações.');
+    expect(h({ kind: 'post_barrado', subject: null, period: DIA, rules: ['regras_do_post', 'numeros'] })).toMatchObject({
+      titulo: 'A conferência barrou o post de sexta, 30/10',
+      texto:
+        'Motivo: o link escrito, a chamada do canal errado, hashtags demais, ou "grátis", desconto ou preço que não estão no item nem em Minha marca e um número que não está no item, no dia nem em Minha marca. Nada foi para Aprovações, e o texto não foi guardado. Dá para fazer o post à mão, na Agenda.',
+    });
+    expect(h({ kind: 'post_sem_foto', period: DIA })).toMatchObject({
+      titulo: 'Não propôs o post de sexta, 30/10',
+      texto: 'Nenhuma das Fotos da empresa combinava com o item. Dá para enviar a foto em Fotos ou fazer o post à mão, na Agenda.',
+    });
+    expect(h({ kind: 'post_publicado', period: DIA, rules: ['instagram'], mine: true, by: RODRIGO })).toMatchObject({ titulo: 'O post de sexta, 30/10 saiu', texto: 'Você aprovou. Saiu no Instagram.' });
+    expect(h({ kind: 'post_publicado', period: DIA, rules: ['instagram', 'facebook'], by: RODRIGO }).texto).toBe('Rodrigo aprovou. Saiu no Instagram e na Página do Facebook.');
+    expect(h({ kind: 'post_nao_saiu', period: DIA })).toMatchObject({ titulo: 'O post de sexta, 30/10 não saiu', texto: 'Ele não saiu em nenhuma rede. O motivo está no post, na Agenda.' });
+    expect(h({ kind: 'post_recusado', period: DIA })).toMatchObject({ titulo: 'Post de sexta, 30/10 recusado', texto: 'Uma pessoa recusou o pedido. Nada foi publicado.' });
+    expect(h({ kind: 'post_cancelado', period: DIA }).titulo).toBe('Post de sexta, 30/10 cancelado');
+    expect(h({ kind: 'post_expirou', period: null }).titulo).toBe('Pedido do post expirou sem decisão');
+  });
+
+  it('desenhado: a ficha do P21, com "Abrir a Agenda", "Posts em outubro" e o modo; desligado e não ligado com o texto dos posts', () => {
+    const html = desenhar({ t: comSocial(), escolhido: 'social', comConversa: true });
+    expect(html).toContain('Abrir a Agenda');
+    expect(html).toContain('href="/agenda"');
+    expect(html).not.toContain('Abrir Avaliações');
+    expect(html).toContain('<h3>Esperando você</h3>');
+    expect(html).toContain('<b>1 post espera a sua decisão</b>');
+    expect(html).toContain('nenhum post sai sozinho');
+    expect(html).toContain('<h3>Posts em outubro</h3>');
+    expect(html).toContain('O custo de cada post e das sugestões de cada avaliação é medido pelo Liame');
+    expect(html).toContain('<b>Nunca:</b> publicar sem a sua aprovação com o código do app; criar imagem com IA ou usar foto que não seja das Fotos da empresa;');
+    expect(html).not.toMatch(/NaN|undefined|\[object Object\]/);
+
+    const semRede = desenhar({ t: comSocial({ blocked_by: 'sem_rede', stats: SEM_NADA, works_on: ['posts'] }), escolhido: 'social' });
+    expect(semRede).toContain('Nenhuma rede conectada para publicar');
+    expect(semRede).toContain('href="/contas"');
+    expect(semRede).toContain('O custo de cada post é medido pelo Liame');
+
+    const pausa = { by: RODRIGO, at: '2026-09-30T21:20:00.000Z', reason: null };
+    const desligado = desenhar({ t: comSocial({ status: 'desligado', paused: pausa }), escolhido: 'social' });
+    expect(desligado).toContain('Enquanto estiver desligado, ele não propõe post nem resposta e não custa nada. O que já está em Aprovações segue lá, e o post aprovado sai na hora marcada (dá para cancelar na Agenda).');
+
+    const naoLigado = desenhar({ t: comSocial({ status: 'desligado_pela_liame', stats: SEM_NADA, works_on: [] }), escolhido: 'social' });
+    expect(naoLigado).toContain('Quem liga é a Liame, a pedido do dono. Enquanto isso, ninguém propõe post e ele não custa nada. O &quot;Novo post&quot; da Agenda continua para quem escreve à mão.');
+    for (const fora of ['Abrir a Agenda', 'Posts em outubro', 'Custo em outubro', 'id="eqp-social-modo"']) expect(naoLigado, fora).not.toContain(fora);
   });
 });

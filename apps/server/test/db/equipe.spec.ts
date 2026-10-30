@@ -406,7 +406,19 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
 
     // Com a IA ligada e sem as chaves dele: ainda não está ligado para a empresa, e não há o que dizer do que falta.
     let t = await ver(e, e.brandId);
-    expect(doMembro(t, 'social')).toMatchObject({ kind: 'ia', status: 'desligado_pela_liame', working_now: false, can_pause: true, paused: null, in_progress: null, blocked_by: null, cost: { usd_micros: '0', calls: 0 } });
+    expect(doMembro(t, 'social')).toMatchObject({
+      kind: 'ia',
+      status: 'desligado_pela_liame',
+      working_now: false,
+      can_pause: true,
+      paused: null,
+      in_progress: null,
+      blocked_by: null,
+      works_on: [],
+      cost: { usd_micros: '0', calls: 0 },
+    });
+    // Os outros funcionários não têm a lista dos trabalhos (só quem tem mais de um).
+    expect(doMembro(t, 'crm')).not.toHaveProperty('works_on');
     expect(numeros(t, 'social')).toEqual(zerado);
     // Só a função das sugestões não basta: sem a resposta pelo Liame, o pedido nem nasceria.
     await ligar('respostas_sugeridas');
@@ -414,7 +426,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     await ligar('perfil_google_write');
 
     // Ligado, sem loja do Perfil conectada nesta marca: não há avaliação para responder.
-    expect(await social()).toMatchObject({ status: 'ativo', blocked_by: 'sem_perfil', in_progress: null, working_now: false });
+    expect(await social()).toMatchObject({ status: 'ativo', blocked_by: 'sem_perfil', in_progress: null, working_now: false, works_on: ['respostas'] });
     const loja = await lojaDoPerfil(e);
     // A loja que o Google recusou (desconectada, ainda ligada) não serve.
     await ownerQuery(`update liame.connected_account set status = 'desconectada' where id = $1`, [loja]);
@@ -492,7 +504,7 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     flags.invalidate();
     // Ligado só pelos posts (sem as respostas): o que segura, do que mais pesa ao que menos. As contas caíram: sem rede.
     await ownerQuery(`update liame.connected_account set status = 'desconectada' where tenant_id = $1`, [e.tenantId]);
-    expect(await social()).toMatchObject({ status: 'ativo', blocked_by: 'sem_rede', in_progress: null, working_now: false });
+    expect(await social()).toMatchObject({ status: 'ativo', blocked_by: 'sem_rede', in_progress: null, working_now: false, works_on: ['posts'] });
     await ownerQuery(`update liame.connected_account set status = 'ativa' where tenant_id = $1`, [e.tenantId]);
     // Sem nenhuma foto pronta nas Fotos: ele só usa as fotos de verdade da empresa.
     expect((await social()).blocked_by).toBe('sem_fotos');

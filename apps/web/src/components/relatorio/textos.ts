@@ -176,6 +176,16 @@ const PRINCIPAIS: Record<string, Array<[chave: string, texto: (n: number) => str
   compliance: [['textos_barrados', (n) => (n === 1 ? 'texto barrado antes de aparecer' : 'textos barrados antes de aparecer')], ['textos_conferidos', (n) => (n === 1 ? 'texto conferido' : 'textos conferidos')]],
 };
 
+/**
+ * O Social media no mês em que ele propôs post (A6 · Z6, os posts): os posts primeiro, e as respostas sugeridas quando
+ * houve. No mês sem post, a lista de sempre (as respostas), para quem só tem as respostas ligadas não ler "0 posts".
+ */
+const SOCIAL_COM_POSTS: Array<[chave: string, texto: (n: number) => string]> = [
+  ['posts_propostos', (n) => (n === 1 ? 'post proposto' : 'posts propostos')],
+  ['posts_publicados', (n) => (n === 1 ? 'aprovado e publicado' : 'aprovados e publicados')],
+  ['respostas_propostas', (n) => (n === 1 ? 'resposta sugerida' : 'respostas sugeridas')],
+];
+
 export type MembroDoMes = { chave: string; nome: string; cargo: string; icone: Ficha['icone']; feito: Array<{ valor: string; texto: string }> };
 
 /** Quem trabalhou no mês, com os números que o protótipo mostra (só os acima de zero, menos o primeiro). */
@@ -184,7 +194,8 @@ export function equipeDoMes(t: MonthlyReportTeam): MembroDoMes[] {
     if (!ehMembro(m.key)) return [];
     const ficha = FICHAS[m.key];
     const valores = new Map(m.stats.map((s) => [s.key, Number(s.value)]));
-    const feito = (PRINCIPAIS[m.key] ?? [])
+    const lista = m.key === 'social' && (valores.get('posts_propostos') ?? 0) > 0 ? SOCIAL_COM_POSTS : (PRINCIPAIS[m.key] ?? []);
+    const feito = lista
       .filter(([chave], i) => valores.has(chave) && (i === 0 || (valores.get(chave) ?? 0) > 0))
       .map(([chave, texto]) => {
         const n = valores.get(chave) ?? 0;
