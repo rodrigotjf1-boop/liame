@@ -11,15 +11,16 @@ import { Icone } from '@/components/ui/icone';
 import { disparar } from '@/lib/disparar';
 import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
 import type { Feito } from './detalhe-mensagem';
+import { MudarAHora } from './mudar-a-hora';
 import { type AcaoDePost, horaJaPassou, MOTIVOS_DO_POST, postApresentado, quandoDoPost, resultadoDoPost } from './post-textos';
 import { aprovacaoParcial, cabecalhoDe, type Grupo, identidadeDoPlano, prazoDe } from './textos';
 
 // O post em Aprovações (P19, aprovado pelo dono em 21/10/2026; A6, Z5c, parte 4): quem pediu, a frase do modo simples,
 // a prévia de cada canal (a foto, com o recorte do Instagram, e o texto), o que foi conferido e a decisão com o código do
 // app. Decidido: o resultado (agendado, publicando, publicado, em parte, não saiu, cancelado, recusado, expirado), o que
-// aconteceu em cada canal, no agendado "Cancelar o post" (sem o código: tira o risco, D-A6-23) e, no canal que não saiu,
-// "Tentar de novo" (A6, Z5d; D-A6-54). Mudar a hora e apagar das redes ficam para quando o servidor fizer (divergência do
-// P19, como na Agenda).
+// aconteceu em cada canal, no agendado "Cancelar o post" (sem o código: tira o risco, D-A6-23) e "Mudar a hora" (com o
+// código de novo, D-A6-55) e, no canal que não saiu, "Tentar de novo" (A6, Z5d; D-A6-54). Apagar das redes fica para
+// quando o servidor fizer (divergência do P19, como na Agenda).
 
 type Props = {
   acao: AcaoDePost;
@@ -42,6 +43,8 @@ type Props = {
   aoCancelar: (acao: AcaoDePost) => Promise<Feito>;
   /** "Tentar de novo" no canal que não saiu (A6, Z5d): a tela pede, avisa e lê de novo. */
   aoTentarDeNovo: (acao: AcaoDePost, canal: string) => Promise<Feito>;
+  /** "Mudar a hora" do post aprovado (A6, Z5d; D-A6-55): a tela pede com o código, avisa e abre o pedido novo. */
+  aoMudarAHora: (acao: AcaoDePost, publishAt: string, codigo: string) => Promise<Feito>;
   /** A foto não carregou (o endereço de 5 minutos venceu): a tela pede endereços novos. */
   aoFalharImagem: () => void;
 };
@@ -65,6 +68,7 @@ export function DetalhePost({
   aoRecusar,
   aoCancelar,
   aoTentarDeNovo,
+  aoMudarAHora,
   aoFalharImagem,
 }: Props) {
   const ids = useId();
@@ -86,12 +90,15 @@ export function DetalhePost({
   // "Tentar de novo" no canal que não saiu (A6, Z5d; D-A6-54): o canal que está sendo pedido e a recusa.
   const [tentando, setTentando] = useState<string | null>(null);
   const [erroAoTentar, setErroAoTentar] = useState<string | null>(null);
+  // "Mudar a hora" (A6, Z5d, parte 4): o formulário aberto.
+  const [mudando, setMudando] = useState(false);
 
-  // Outro pedido aberto: a confirmação e o erro eram do anterior.
+  // Outro pedido aberto: a confirmação, o formulário e o erro eram do anterior.
   useEffect(() => {
     setCancelando('nao');
     setErroAoCancelar(null);
     setErroAoTentar(null);
+    setMudando(false);
   }, [acao.id]);
 
   async function cancelar() {
@@ -140,6 +147,8 @@ export function DetalhePost({
     const r = resultadoDoPost(acao, agora);
     const mostraCanais = ['publicado', 'em_parte', 'nao_saiu', 'publicando'].includes(post.status);
     const podeCancelar = podeOperar && post.status === 'agendado';
+    // Mudar a hora (A6, Z5d; D-A6-23 e D-A6-55): quem pode aprovar, no pedido aprovado do post que espera a hora.
+    const podeMudar = podeDecidir && post.status === 'agendado' && acao.status === 'aprovada' && acao.id === post.action_id;
     return (
       <>
         {voltar}
@@ -167,26 +176,33 @@ export function DetalhePost({
               {erroAoTentar}
             </p>
           )}
-          {podeCancelar && (
+          {(podeCancelar || podeMudar) && (
             <div className="desfazer">
-              {cancelando === 'nao' ? (
-                <button ref={cancelarBt} className="btn" type="button" data-po-cancelar onClick={() => setCancelando('confirmando')}>
-                  <Icone nome="x" pequeno />
-                  Cancelar o post
+              {podeCancelar &&
+                (cancelando === 'nao' ? (
+                  <button ref={cancelarBt} className="btn" type="button" data-po-cancelar onClick={() => setCancelando('confirmando')}>
+                    <Icone nome="x" pequeno />
+                    Cancelar o post
+                  </button>
+                ) : (
+                  <ConfirmaNaLinha
+                    texto="O post não sai em nenhum canal."
+                    rotulo="Cancelar o post"
+                    rotuloOcupado="Cancelando…"
+                    voltar="Manter"
+                    ocupado={cancelando === 'enviando'}
+                    aoConfirmar={() => disparar(cancelar())}
+                    aoCancelar={() => {
+                      setCancelando('nao');
+                      setFocarCancelar((n) => n + 1);
+                    }}
+                  />
+                ))}
+              {podeMudar && cancelando === 'nao' && (
+                <button className="btn" type="button" data-po-mudar-hora aria-expanded={mudando} aria-controls={`${ids}-mudar`} onClick={() => setMudando((m) => !m)}>
+                  <Icone nome="clock" pequeno />
+                  Mudar a hora
                 </button>
-              ) : (
-                <ConfirmaNaLinha
-                  texto="O post não sai em nenhum canal."
-                  rotulo="Cancelar o post"
-                  rotuloOcupado="Cancelando…"
-                  voltar="Manter"
-                  ocupado={cancelando === 'enviando'}
-                  aoConfirmar={() => disparar(cancelar())}
-                  aoCancelar={() => {
-                    setCancelando('nao');
-                    setFocarCancelar((n) => n + 1);
-                  }}
-                />
               )}
               {erroAoCancelar && (
                 <p className="campo-erro" role="alert">
@@ -195,8 +211,17 @@ export function DetalhePost({
               )}
               <p className="nota">
                 <Icone nome="info" />
-                <span>Cancelar não pede o código do app: o post não sai.</span>
+                <span>
+                  {podeCancelar ? 'Cancelar não pede o código do app: o post não sai.' : ''}
+                  {podeCancelar && podeMudar ? ' ' : ''}
+                  {podeMudar ? 'Mudar a hora pede o código do app de novo: a hora muda quem vê o post.' : ''}
+                </span>
               </p>
+            </div>
+          )}
+          {podeMudar && (
+            <div id={`${ids}-mudar`} hidden={!mudando}>
+              {mudando && <MudarAHora id={`${ids}-mudar-form`} post={post} agora={agora} aoMudar={(publishAt, codigo) => aoMudarAHora(acao, publishAt, codigo)} />}
             </div>
           )}
           {(post.status === 'nao_saiu' || post.status === 'em_parte') && podeVerContas && (

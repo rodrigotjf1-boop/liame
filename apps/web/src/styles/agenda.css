@@ -105,6 +105,9 @@
 .po-recorte input[type="range"] { width: 100%; accent-color: var(--primary); }
 .po-hora { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); }
 .po-hora .campo { flex: 1 1 160px; min-width: 0; }
+/* "Mudar a hora" do post aprovado (P19; A6, Z5d, parte 4): o formulário em caixa, embaixo das ações do pedido. */
+.po-mudar { align-items: end; margin-top: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.po-mudar .campo-erro { flex-basis: 100%; }
 .po-como-sai { display: grid; gap: var(--sp-2); }
 .po-gaveta textarea.input { min-height: 96px; padding: var(--sp-2) var(--sp-3); resize: vertical; }
 .po-gaveta .rotulo { font-size: var(--text-sm); font-weight: 600; }

@@ -1,4 +1,4 @@
-import { type CreatePostRequest, type PostListQuery, type PostListResponse, type PostPhotoResponse, type PostResponse } from '@liame/contracts';
+import { type CreatePostRequest, type PostListQuery, type PostListResponse, type PostPhotoResponse, type PostResponse, type ReschedulePostRequest } from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
@@ -52,6 +52,7 @@ export const ACAO_CRIAR_POST = 'posts.criar';
 export const ACAO_PACOTE_PUBLICADO = 'posts.pacote_publicado';
 export const ACAO_PACOTE_TIRADO = 'posts.pacote_tirado';
 export const ACAO_TENTAR_DE_NOVO = 'posts.tentar_de_novo';
+export const ACAO_MUDAR_A_HORA = 'posts.mudar_a_hora';
 
 /** O canal na frase, com a preposição dele (V121). */
 const DO_CANAL: Record<string, string> = { instagram: 'do Instagram', facebook: 'da Página', tiktok: 'do TikTok', youtube: 'do YouTube' };
@@ -69,6 +70,23 @@ function desligada(): AppProblem {
 function recusa(code: string, title: string, detail: string, path?: string): AppProblem {
   return new AppProblem(422, code, title, detail, {}, path ? [{ path, message: detail }] : undefined);
 }
+
+/**
+ * A hora do post (D-A6-8 e D-A6-34): depois de agora (com um minuto de folga), até 60 dias e entre 8h e 22h no fuso da
+ * empresa. A recusa (422, com o campo), ou nula. O "Novo post" e "Mudar a hora" conferem igual.
+ */
+function conferirAHora(hora: Date, agora: Date, fuso: string): AppProblem | null {
+  if (hora.getTime() < agora.getTime() - 60_000) return recusa('hora-no-passado', 'Hora no passado', 'Escolha uma hora depois de agora.', 'publish_at');
+  if (hora.getTime() > agora.getTime() + DIAS_DE_ANTECEDENCIA * 86_400_000) {
+    return recusa('hora-longe-demais', 'Longe demais', `O post pode ser marcado para até ${DIAS_DE_ANTECEDENCIA} dias.`, 'publish_at');
+  }
+  if (!dentroDaJanela(horaLocal(hora, fuso))) return recusa('hora-fora-da-janela', 'Fora do horário', 'O post sai entre 8h e 22h.', 'publish_at');
+  return null;
+}
+
+/** "30/10, 19:00", no fuso da empresa. */
+const diaEHora = (instante: Date, fuso: string): string =>
+  new Intl.DateTimeFormat('pt-BR', { timeZone: fuso, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(instante);
 
 /** O canal na frase, com a preposição de lugar (V121). */
 const NO_CANAL: Record<string, string> = { instagram: 'no Instagram', facebook: 'na Página do Facebook' };
@@ -171,11 +189,8 @@ export class PostsService {
 
     const hora = new Date(body.publish_at);
     const fuso = await fusoDaEmpresa(tx, quem.tenantId);
-    if (hora.getTime() < agora.getTime() - 60_000) throw recusa('hora-no-passado', 'Hora no passado', 'Escolha uma hora depois de agora.', 'publish_at');
-    if (hora.getTime() > agora.getTime() + DIAS_DE_ANTECEDENCIA * 86_400_000) {
-      throw recusa('hora-longe-demais', 'Longe demais', `O post pode ser marcado para até ${DIAS_DE_ANTECEDENCIA} dias.`, 'publish_at');
-    }
-    if (!dentroDaJanela(horaLocal(hora, fuso))) throw recusa('hora-fora-da-janela', 'Fora do horário', 'O post sai entre 8h e 22h.', 'publish_at');
+    const recusaDaHora = conferirAHora(hora, agora, fuso);
+    if (recusaDaHora) throw recusaDaHora;
 
     // O texto do pacote: as palavras que a empresa ou a marca proíbem na política, como no pedido do post (D-A6-25). O do
     // post é conferido pelo trilho, no pedido.
@@ -375,6 +390,76 @@ export class PostsService {
       resourceId: id,
       before: { canal: nome, situacao: canal.status, erro: canal.error, action_id: p.action_id },
       after: { brand_id: p.brand_id, canal: nome, situacao: 'aguardando', action_id: pedido, ate: decisao.ate.toISOString() },
+    });
+    return this.obter(auth, id);
+  }
+
+  /**
+   * Mudar a hora de um post aprovado que ainda espera a hora (A6, Z5d; P19; D-A6-23 e D-A6-55): a hora muda quem vê o
+   * post, então a aprovação vale de novo, com o código do app. Com o post travado: o pedido aprovado é cancelado (o motivo
+   * diz a hora nova), o post muda de hora (e de versão: o que sai é o que foi aprovado agora) e um pedido novo nasce e é
+   * aprovado pelo trilho de sempre (a política, o plano, o código de quem muda), na mesma transação: o código errado, ou o
+   * trilho que recusa (a conta que saiu da marca, a trava), deixa tudo como estava. O pedido novo passa a ser o do post.
+   */
+  async mudarAHora(auth: AuthContext, id: string, body: ReschedulePostRequest, agora: Date = new Date()): Promise<PostResponse> {
+    const tx = currentTx();
+    const quem = this.quem(auth);
+    const p = (
+      await tx.execute<{ brand_id: string; kind: string; action_id: string | null; publish_at: Date; pedido: string | null; ferramenta: string | null }>(sql`
+        select p.brand_id, p.kind, p.action_id, p.publish_at, r.status as pedido, r.tool as ferramenta
+          from liame.social_post p
+          left join liame.action_request r on r.id = p.action_id and r.tenant_id = p.tenant_id
+         where p.id = ${id} and p.tenant_id = ${quem.tenantId}
+           for update of p`)
+    ).rows[0];
+    if (!p) throw new AppProblem(404, 'post-nao-encontrado', 'Não encontramos', 'Este post não está mais aqui.');
+    if (p.kind !== 'post') throw new AppProblem(409, 'e-pacote', 'É um pacote', 'O pacote não tem pedido: para outra hora, tire-o da Agenda e monte outro no "Novo post".');
+    if (!(await this.ligada(quem, p.brand_id))) throw desligada();
+    const canais = (
+      await tx.execute<{ channel: string; connected_account_id: string | null; status: string }>(sql`
+        select channel, connected_account_id, status from liame.social_post_channel
+         where post_id = ${id} and tenant_id = ${quem.tenantId}
+         order by case channel when 'instagram' then 0 else 1 end
+           for update`)
+    ).rows;
+    if (p.pedido !== 'aprovada' || p.ferramenta !== 'post_publicar' || !p.action_id || canais.some((c) => c.status !== 'aguardando')) {
+      throw new AppProblem(
+        409,
+        'post-nao-agendado',
+        'O post não espera a hora',
+        'Só muda a hora o post aprovado que ainda espera a hora de sair. O que espera a aprovação se recusa e se faz de novo; o que já saiu, saiu.',
+      );
+    }
+    const hora = new Date(body.publish_at);
+    const fuso = await fusoDaEmpresa(tx, quem.tenantId);
+    const recusaDaHora = conferirAHora(hora, agora, fuso);
+    if (recusaDaHora) throw recusaDaHora;
+    const antes = new Date(p.publish_at);
+    if (hora.getTime() === antes.getTime()) throw recusa('mesma-hora', 'A mesma hora', 'O post já está marcado para essa hora.', 'publish_at');
+    const primeiro = canais[0]!;
+    if (!primeiro.connected_account_id) {
+      throw recusa('canal-nao-conectado', 'Canal não conectado', `A conta ${DO_CANAL[primeiro.channel]} deste post não está mais ligada à marca: conecte de novo em Contas conectadas.`, 'channels');
+    }
+    // O pedido aprovado sai de cena com a hora nova no motivo; o post muda de hora e de versão; o pedido novo nasce e é
+    // aprovado com o código de quem muda, pela conta do primeiro canal (D-A6-32), como no "Novo post".
+    await this.actions.cancel(auth, p.action_id, `hora mudada para ${diaEHora(hora, fuso)}`);
+    await tx.execute(sql`
+      update liame.social_post set publish_at = ${hora.toISOString()}, version = version + 1, updated_at = now()
+       where id = ${id} and tenant_id = ${quem.tenantId}`);
+    const novo = await this.actions.create(auth, {
+      tool: 'post_publicar',
+      brand_id: p.brand_id,
+      provider: PROVEDOR_DO_CANAL[primeiro.channel as CanalDoPost],
+      account_id: primeiro.connected_account_id,
+      resource_id: recursoDoPost(id),
+      params: {},
+    });
+    const aprovado = await this.actions.approve(auth, novo.id, { plan_hash: novo.plan_hash, code: body.code });
+    await tx.execute(sql`update liame.social_post set action_id = ${novo.id}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
+    auditDetail({
+      resourceId: id,
+      before: { publish_at: antes.toISOString(), action_id: p.action_id },
+      after: { brand_id: p.brand_id, publish_at: hora.toISOString(), action_id: novo.id, plan_hash: novo.plan_hash, aprovado: aprovado.status === 'aprovada' },
     });
     return this.obter(auth, id);
   }

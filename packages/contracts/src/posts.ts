@@ -49,6 +49,16 @@ export const CreatePostRequest = z.strictObject({
 });
 export type CreatePostRequest = z.infer<typeof CreatePostRequest>;
 
+/**
+ * Mudar a hora de um post aprovado que ainda espera a hora (A6, Z5d; P19; D-A6-23 e D-A6-55): a hora nova (entre 8h e 22h
+ * no fuso da empresa, depois de agora e até 60 dias) e o código do app de quem aprova de novo.
+ */
+export const ReschedulePostRequest = z.strictObject({
+  publish_at: z.iso.datetime({ offset: true }),
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }),
+});
+export type ReschedulePostRequest = z.infer<typeof ReschedulePostRequest>;
+
 const numero = z.int().min(0).nullable();
 /** Os números de um post num canal (A6, Z7, parte c). */
 export const PostMetrics = z.strictObject({
