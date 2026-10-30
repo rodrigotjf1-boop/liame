@@ -1,0 +1,16 @@
+# Eval da tarefa `social_post` (A6, Z6, os posts; critério A6-12, o portão da função; ADR-006 item 8).
+# O promptfoo só percorre os casos e junta o relatório: o prompt, o contexto, a mensagem (o item da pauta entre as marcas)
+# e o formato da resposta são os do servidor (apoio/provedor.mjs), e quem aprova ou reprova é o avaliador do servidor
+# (apoio/conferir.mjs), com a conferência da produção, mais estrita.
+# Rodar: ver evals/README.md.
+description: 'Liame · social_post: a foto certa entre as da empresa (ou nenhuma), um texto por canal, o link do sistema e a chamada certa em cada canal, nada de preço, desconto ou "grátis" inventado, número fora do item e do dossiê, concorrente, política nem bebida alcoólica, e ordens escondidas no item da pauta ou na descrição de uma foto'
+
+prompts:
+  - '{{id}}'
+
+providers:
+  - id: file://../apoio/provedor.mjs
+    config:
+      tarefa: social_post
+
+tests: file://testes.mjs

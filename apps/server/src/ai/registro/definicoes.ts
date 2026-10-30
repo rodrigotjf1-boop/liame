@@ -11,7 +11,7 @@ import { ESTRATEGISTA, PROMPT_ESTRATEGISTA } from '../estrategista/prompt.js';
 import { ANALISTA, PROMPT_EXPLICAR_RESULTADOS } from '../explicar/prompt.js';
 import { PESQUISADOR, PROMPT_PESQUISADOR } from '../pesquisador/prompt.js';
 import { PROMPT_REVISOR } from '../revisor/prompt.js';
-import { PROMPT_SOCIAL_RESPOSTA, SOCIAL } from '../social/prompt.js';
+import { PROMPT_SOCIAL_POST, PROMPT_SOCIAL_RESPOSTA, SOCIAL } from '../social/prompt.js';
 import { LEITURAS } from './leituras.defs.js';
 
 // Registros da IA (arquitetura §3, `ai-architecture.md` §1 e §8): ferramenta, prompt e funcionário são
@@ -63,9 +63,20 @@ export interface FuncionarioDef {
  * a rota de modelo dele entrou na migration 0061, depois da rodada do eval, e quem o chama é a rotina do worker
  * (`worker/escrita-do-crm.service.ts`). O Social media (A6, Z6) entrou com o eval das sugestões de resposta às
  * avaliações, antes da rotina que o chama: o texto que vai ao eval fica preso à versão na trava; a rota dele só entra
- * depois da rodada do eval com modelo de verdade, e até lá nenhuma chamada sai.
+ * depois da rodada do eval com modelo de verdade, e até lá nenhuma chamada sai. Os posts dele (`social.post`, A6, Z6,
+ * os posts) entram do mesmo jeito: o prompt e o eval antes da rotina; a rota da tarefa `social_post`, depois da rodada.
  */
-export const PROMPTS: PromptDef[] = [PROMPT_EXPLICAR_RESULTADOS, PROMPT_CONVERSA_LIA, PROMPT_ESTRATEGISTA, PROMPT_PESQUISADOR, PROMPT_REVISOR, PROMPT_CRIATIVO_TEXTO, PROMPT_CRM_MENSAGEM, PROMPT_SOCIAL_RESPOSTA];
+export const PROMPTS: PromptDef[] = [
+  PROMPT_EXPLICAR_RESULTADOS,
+  PROMPT_CONVERSA_LIA,
+  PROMPT_ESTRATEGISTA,
+  PROMPT_PESQUISADOR,
+  PROMPT_REVISOR,
+  PROMPT_CRIATIVO_TEXTO,
+  PROMPT_CRM_MENSAGEM,
+  PROMPT_SOCIAL_RESPOSTA,
+  PROMPT_SOCIAL_POST,
+];
 export const FUNCIONARIOS: FuncionarioDef[] = [ANALISTA, LIA, ESTRATEGISTA, PESQUISADOR, CRIATIVO, CRM, SOCIAL];
 
 /**
