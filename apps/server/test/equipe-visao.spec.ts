@@ -505,7 +505,7 @@ describe('a leitura `equipe_trabalho`: o que a LIA recebe de Sua equipe (A3, P7)
       funcionario: 'Social media',
       situacao: 'ativo',
       trabalha:
-        'com um modelo de IA, no modo Aprovação: sugere uma ou duas respostas para cada avaliação nova sem resposta do Perfil no Google, e toda resposta é um pedido em Aprovações, que uma pessoa aprova com o código do app (a de uma ou duas estrelas, só o dono); nenhuma resposta sai sozinha. Os posts ainda não são com ele',
+        'com um modelo de IA, no modo Aprovação: para cada dia da pauta aprovada, propõe o post (o texto de cada rede e a foto, escolhida entre as Fotos da empresa, às 19h), e sugere uma ou duas respostas para cada avaliação nova sem resposta do Perfil no Google; todo post e toda resposta é um pedido em Aprovações, que uma pessoa aprova com o código do app (a resposta de uma ou duas estrelas, só o dono); nada sai sozinho, e ele não cria imagem',
       custo_de_ia_no_mes: 'R$ 0,16',
       chamadas_ao_modelo_no_mes: '2',
       no_mes: {
@@ -528,7 +528,9 @@ describe('a leitura `equipe_trabalho`: o que a LIA recebe de Sua equipe (A3, P7)
     expect(doSocial(comSocial())).not.toHaveProperty('nao_pode_sugerir_agora');
     expect(doSocial(comSocial())).not.toHaveProperty('avaliacoes_na_fila');
     // Ainda não ligado para a empresa: a situação diz isso, e não "a IA ou a sombra".
-    expect(doSocial(comSocial({ status: 'desligado_pela_liame' })).situacao).toBe('ainda não ligado para a empresa (quem liga é a Liame, a pedido do dono); enquanto isso, ele não sugere resposta e não custa nada');
+    expect(doSocial(comSocial({ status: 'desligado_pela_liame' })).situacao).toBe(
+      'ainda não ligado para a empresa (quem liga é a Liame, a pedido do dono); enquanto isso, ele não propõe post nem sugere resposta e não custa nada',
+    );
     // Os outros não ganham os campos dele.
     expect((visaoDaEquipe(comSocial(), null, 'America/Sao_Paulo') as Record<string, any>).equipe[0]).not.toHaveProperty('nao_pode_sugerir_agora');
 
@@ -564,9 +566,71 @@ describe('a leitura `equipe_trabalho`: o que a LIA recebe de Sua equipe (A3, P7)
     expect(texto).not.toContain('Juliana');
     expect(texto).not.toContain('Rodrigo');
     // Nenhum algarismo no texto fixo (V139): "uma ou duas estrelas", por extenso.
-    expect(doSocial(comSocial()).trabalha).not.toMatch(/\d/);
+    expect(doSocial(comSocial()).trabalha.replace('19h', '')).not.toMatch(/\d/);
     expect(NOME_DO_MEMBRO.social).toBe('Social media');
     expect(rotuloDoPasso('equipe_trabalho', { brand_id: 'x', funcionario: 'social' })).toBe('Lendo o trabalho do Social media em Sua equipe');
+  });
+
+  it('o Social media com os posts (A6 · Z6, os posts, parte 3): os números, os dias na fila, o que segura os posts e os acontecimentos, sem o texto do post', () => {
+    const posts = [stat('posts_propostos', 5), stat('posts_publicados', 3), stat('posts_recusados', 1), stat('posts_esperando', 1), stat('posts_barrados', 2)];
+    const comSocial = (extra: Partial<TeamMember> = {}): TeamResponse => ({
+      ...EQUIPE,
+      members: [...EQUIPE.members, membro('social', { cost: { usd_micros: '30000', calls: 2 }, stats: posts, in_progress: null, blocked_by: null, ...extra })],
+    });
+    const doSocial = (t: TeamResponse) => (visaoDaEquipe(t, null, 'America/Sao_Paulo') as Record<string, any>).equipe.find((m: { funcionario: string }) => m.funcionario === 'Social media');
+    expect(doSocial(comSocial()).no_mes).toEqual({
+      posts_propostos_no_mes: '5',
+      posts_do_mes_aprovados_por_uma_pessoa_e_publicados: '3',
+      posts_do_mes_recusados_por_uma_pessoa: '1',
+      posts_esperando_a_decisao_de_uma_pessoa_agora: '1',
+      dias_do_mes_em_que_a_conferencia_barrou_o_post: '2',
+    });
+    // Os dias da pauta na fila (o `kind` posts): quantos e desde quando, sem o item; e nada de "avaliações na fila".
+    const naFila = doSocial(comSocial({ working_now: true, in_progress: { subject: null, count: 2, by: null, since: '2026-10-30T12:00:00.000Z', kind: 'posts' } }));
+    expect(naFila).toMatchObject({ trabalhando_agora: 'sim', dias_da_pauta_na_fila: { dias: '2' } });
+    expect(naFila.dias_da_pauta_na_fila.o_mais_antigo_desde).toContain('30/10/2026');
+    expect(naFila).not.toHaveProperty('avaliacoes_na_fila');
+    // O que segura os posts, como a ficha diz.
+    expect(doSocial(comSocial({ blocked_by: 'sem_rede' })).nao_pode_sugerir_agora).toBe('nenhum Instagram nem Página do Facebook está conectado nesta marca: não há onde publicar o post');
+    expect(doSocial(comSocial({ blocked_by: 'sem_fotos' })).nao_pode_sugerir_agora).toContain('ele só usa as fotos de verdade da empresa');
+    expect(doSocial(comSocial({ blocked_by: 'sem_pauta' })).nao_pode_sugerir_agora).toContain('a partir da pauta da semana');
+
+    // Os acontecimentos: o dia do post, o item da pauta e as redes; nunca o texto do post nem o nome de quem decidiu.
+    const DIA = { from: '2026-10-31', to: '2026-10-31' };
+    const ITEM = 'O combo de sexta, para lembrar do fim de semana';
+    const v = ver(
+      'social',
+      [
+        item({ kind: 'propos_post', subject: ITEM, period: DIA, rules: ['instagram', 'facebook'] }),
+        item({ kind: 'post_barrado', subject: ITEM, period: DIA, rules: ['regras_do_post', 'numeros'] }),
+        item({ kind: 'post_sem_foto', subject: null, period: DIA }),
+        item({ kind: 'post_publicado', subject: ITEM, period: DIA, rules: ['instagram'], by: RODRIGO, mine: true }),
+        item({ kind: 'post_nao_saiu', period: DIA }),
+        item({ kind: 'post_recusado', period: DIA }),
+        item({ kind: 'post_cancelado', period: DIA }),
+        item({ kind: 'post_expirou', period: DIA }),
+      ],
+      comSocial(),
+    );
+    expect(semHora(v)).toEqual([
+      { o_que: 'propôs o post de um dia da pauta: o post está na Agenda, e o pedido, em Aprovações', dia_do_post: '31/10/2026', item_da_pauta: ITEM, redes: ['Instagram', 'Página do Facebook'] },
+      {
+        o_que: 'teve o post de um dia da pauta barrado na conferência, antes de qualquer pessoa ver: nada foi para Aprovações, e o texto não é guardado',
+        dia_do_post: '31/10/2026',
+        item_da_pauta: ITEM,
+        o_que_barrou: [
+          'o link escrito, a chamada do canal errado, hashtags demais, ou "grátis", desconto ou preço que não estão no item nem em Minha marca',
+          'número que não está no item, no dia nem em Minha marca',
+        ],
+      },
+      { o_que: 'não propôs o post de um dia da pauta: nenhuma das Fotos da empresa combinava com o item', dia_do_post: '31/10/2026' },
+      { o_que: 'teve um post aprovado que saiu nas redes', dia_do_post: '31/10/2026', item_da_pauta: ITEM, saiu_em: ['Instagram'], quem_decidiu: 'você' },
+      { o_que: 'teve um post que não saiu em nenhuma rede', dia_do_post: '31/10/2026' },
+      { o_que: 'teve um post recusado: nada foi publicado', dia_do_post: '31/10/2026' },
+      { o_que: 'teve um post cancelado antes de sair: nada foi publicado', dia_do_post: '31/10/2026' },
+      { o_que: 'teve um pedido de post que expirou sem decisão: nada foi publicado', dia_do_post: '31/10/2026' },
+    ]);
+    expect(JSON.stringify(v)).not.toContain('Rodrigo');
   });
 
   it('o CRM e mensageria e a fila das propostas (A5 · P16): a proposta em andamento em palavras, o que falta ao modelo e os acontecimentos da fila', () => {

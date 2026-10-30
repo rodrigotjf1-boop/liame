@@ -3,7 +3,9 @@ import { resolve } from 'node:path';
 import { TeamResponse } from '@liame/contracts';
 import { createDatabase, type Database, runMigrations, uuidv7, withTenant } from '@liame/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ActionService } from '../../src/actions/action.service.js';
+import { ActionService, PREFIXO_RECUSA } from '../../src/actions/action.service.js';
+import { naTransacaoDaEmpresa } from '../../src/ai/na-empresa.js';
+import { PostsService } from '../../src/posts/posts.service.js';
 import { funcionarioAtivo } from '../../src/ai/registro/ativacao.js';
 import { oQueDesligaAsSugestoes } from '../../src/avaliacoes/sugestoes.js';
 import { FlagService } from '../../src/flags/flag.service.js';
@@ -17,6 +19,7 @@ import { ligarCriativo, ligarIa } from '../helpers/ia.js';
 import { contaDoRegemcast, descontoDasMensagens, semearMensagemDoCrm, semearPropostaDoCrm } from '../helpers/mensagens-semeadas.js';
 import { pecaEscrita, pedidoDePecas, versaoDaPeca } from '../helpers/pecas-semeadas.js';
 import { avaliacaoDaLoja, lojaDoPerfil, semearPedidoDoSocial, semearVezDoSocial } from '../helpers/respostas-semeadas.js';
+import { empresaComCanais, fotoPronta } from '../helpers/posts-semeados.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // A3 · I13b: Sua equipe. A leitura mostra a situação de cada membro (pelas chaves da empresa, do plano, das flags e da
@@ -387,7 +390,19 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
       await ownerQuery(`insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), $1, 'tenant', $2, 'true'::jsonb, 'testes')`, [flag, e.tenantId]);
       flags.invalidate();
     };
-    const zerado = { respostas_propostas: '0', respostas_aprovadas: '0', respostas_recusadas: '0', respostas_esperando: '0', sugestoes_barradas: '0', retiradas_na_conferencia: '0' };
+    const zerado = {
+      posts_propostos: '0',
+      posts_publicados: '0',
+      posts_recusados: '0',
+      posts_esperando: '0',
+      posts_barrados: '0',
+      respostas_propostas: '0',
+      respostas_aprovadas: '0',
+      respostas_recusadas: '0',
+      respostas_esperando: '0',
+      sugestoes_barradas: '0',
+      retiradas_na_conferencia: '0',
+    };
 
     // Com a IA ligada e sem as chaves dele: ainda não está ligado para a empresa, e não há o que dizer do que falta.
     let t = await ver(e, e.brandId);
@@ -459,6 +474,125 @@ describe.skipIf(!hasDb)('Sua equipe: situação, custo, números do mês e desli
     // Outra empresa não vê nada disto.
     const vizinha = await empresa();
     expect(numeros(await ver(vizinha, vizinha.brandId), 'social')).toEqual(zerado);
+  });
+
+  it('o Social media com os posts (A6 · Z6, os posts, parte 3): ligado só pelos posts; sem rede, sem Fotos e sem pauta; os dias na fila e o teto; os posts do mês e o custo; o que ele fez', async () => {
+    const e = await empresaComCanais(api, 'Brasa da Equipe');
+    await ownerQuery(`update liame.organization set timezone = $2 where id = $1`, [e.tenantId, FUSO]);
+    await ligarIa(flags, e.tenantId);
+    const social = async () => doMembro(await ver(e, e.brandId), 'social');
+    const diaEmSP = (n: number) =>
+      new Intl.DateTimeFormat('en-CA', { timeZone: FUSO, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + n * 86_400_000));
+
+    // A publicação pelo Liame (`social_write`) está ligada, mas sem a função dos posts ele ainda não está ligado.
+    expect((await social()).status).toBe('desligado_pela_liame');
+    await ownerQuery(`insert into liame.feature_flag_rule (id, flag_key, scope_type, scope_id, value, created_by) values (gen_random_uuid(), 'posts_sugeridos', 'tenant', $1, 'true'::jsonb, 'testes')`, [
+      e.tenantId,
+    ]);
+    flags.invalidate();
+    // Ligado só pelos posts (sem as respostas): o que segura, do que mais pesa ao que menos. As contas caíram: sem rede.
+    await ownerQuery(`update liame.connected_account set status = 'desconectada' where tenant_id = $1`, [e.tenantId]);
+    expect(await social()).toMatchObject({ status: 'ativo', blocked_by: 'sem_rede', in_progress: null, working_now: false });
+    await ownerQuery(`update liame.connected_account set status = 'ativa' where tenant_id = $1`, [e.tenantId]);
+    // Sem nenhuma foto pronta nas Fotos: ele só usa as fotos de verdade da empresa.
+    expect((await social()).blocked_by).toBe('sem_fotos');
+    const foto = await fotoPronta(e, { largura: 1080, altura: 1080 });
+    // Sem item da pauta aprovada daqui em diante: ele espera a pauta. O "nada novo" não conta como item.
+    expect((await social()).blocked_by).toBe('sem_pauta');
+    const ITEM = 'O combo de sexta, para lembrar do fim de semana';
+    const dias = [1, 2, 3, 4, 5].map(diaEmSP);
+    const plano = randomUUID();
+    await ownerQuery(
+      `insert into liame.plan (id, tenant_id, brand_id, kind, title, status, version, expires_at) values ($1, $2, $3, 'pauta', 'Pauta da semana', 'aprovado', 1, now() + interval '3 days')`,
+      [plano, e.tenantId, e.brandId],
+    );
+    await ownerQuery(
+      `insert into liame.plan_version (id, tenant_id, plan_id, version, content, risk, content_hash, author) values ($1, $2, $3, 1, $4::jsonb, 'baixo', $5, 'estrategista')`,
+      [randomUUID(), e.tenantId, plano, JSON.stringify({ kind: 'pauta', days: [{ day: dias[0], item: ITEM }, ...dias.slice(1).map((day) => ({ day, item: `Item do dia ${day}` }))] }), 'a'.repeat(64)],
+    );
+    expect(await social()).toMatchObject({ status: 'ativo', blocked_by: null, in_progress: null, working_now: false });
+
+    // A fila: dois dias da pauta esperam o post dele; ele está escrevendo, quantos e desde quando, sem o item.
+    const vez = (day: string, minutos: number) =>
+      ownerQuery(
+        `insert into liame.post_suggestion (id, tenant_id, brand_id, plan_id, day, status, created_at, updated_at) values ($1, $2, $3, $4, $5::date, 'esperando', now() - make_interval(mins => $6), now())`,
+        [uuidv7(), e.tenantId, e.brandId, plano, day, minutos],
+      );
+    await vez(diaEmSP(6), 10);
+    await vez(diaEmSP(7), 4);
+    const m = await social();
+    expect(m).toMatchObject({ working_now: true, blocked_by: null, in_progress: { subject: null, count: 2, by: null, kind: 'posts' } });
+    expect(Date.now() - new Date(m.in_progress!.since).getTime()).toBeGreaterThanOrEqual(9 * 60_000);
+    // O teto de IA da empresa segura a fila dos dias, como a das avaliações.
+    await ownerQuery(`update liame.post_suggestion set reason = 'ia_teto_dia' where brand_id = $1 and day = $2::date`, [e.brandId, diaEmSP(7)]);
+    expect(await social()).toMatchObject({ working_now: false, blocked_by: 'limite_de_ia_do_dia', in_progress: { count: 2, kind: 'posts' } });
+    await ownerQuery(`update liame.post_suggestion set status = 'descartada', reason = 'dia_passou', finished_at = now(), next_attempt_at = null where brand_id = $1 and status = 'esperando'`, [e.brandId]);
+    expect(await social()).toMatchObject({ working_now: false, blocked_by: null, in_progress: null });
+
+    // Os posts do mês, montados pelo caminho da rotina (o "Novo post" do funcionário, em nome do dono): um saiu no
+    // Instagram, um espera a decisão e um foi recusado; e um dia barrado na conferência e um sem foto que combinasse.
+    const posts = api.app.get(PostsService);
+    const montar = (day: string) =>
+      naTransacaoDaEmpresa(database, { tenantId: e.tenantId, userId: null }, () =>
+        posts.criarPeloFuncionario(
+          { tenantId: e.tenantId, agentKey: 'social', agentLabel: 'Social media', emNomeDe: e.userId },
+          { brand_id: e.brandId, photo_id: foto.id, publish_at: `${day}T19:00:00-03:00`, channels: [{ channel: 'instagram', text: 'O combo da sexta.' }, { channel: 'facebook', text: 'O combo da sexta.' }] },
+        ),
+      );
+    const feitos: Array<{ post: string; pedido: string }> = [];
+    for (const [i, day] of dias.slice(0, 3).entries()) {
+      const f = await montar(day);
+      feitos.push(f);
+      await ownerQuery(`update liame.action_request set created_at = now() - make_interval(mins => $2), updated_at = now() - make_interval(mins => $2) where id = $1`, [f.pedido, 10 - i]);
+      await ownerQuery(
+        `insert into liame.post_suggestion (id, tenant_id, brand_id, plan_id, day, status, post_id, action_id, created_at, updated_at, finished_at)
+         values ($1, $2, $3, $4, $5::date, 'pronta', $6, $7, now() - interval '11 minutes', now() - interval '11 minutes', now() - interval '11 minutes')`,
+        [uuidv7(), e.tenantId, e.brandId, plano, day, f.post, f.pedido],
+      );
+    }
+    const [saiu, espera, recusado] = feitos;
+    await ownerQuery(`update liame.action_request set status = 'executada', updated_at = now() - interval '5 minutes' where id = $1`, [saiu!.pedido]);
+    await ownerQuery(`update liame.social_post_channel set status = 'publicado', published_at = now() - interval '5 minutes' where post_id = $1 and channel = 'instagram'`, [saiu!.post]);
+    await ownerQuery(`update liame.social_post_channel set status = 'falhou' where post_id = $1 and channel = 'facebook'`, [saiu!.post]);
+    await ownerQuery(
+      `insert into liame.approval (id, tenant_id, action_request_id, plan_hash, approved_by, approver_role, approver_limit_micros, sufficient, method)
+       select $1, r.tenant_id, r.id, r.plan_hash, $2, 'dono', null, true, 'totp' from liame.action_request r where r.id = $3`,
+      [randomUUID(), e.userId, saiu!.pedido],
+    );
+    await ownerQuery(`update liame.action_request set status = 'cancelada', status_reason = $2, updated_at = now() - interval '4 minutes' where id = $1`, [recusado!.pedido, `${PREFIXO_RECUSA}Dono: não é a nossa cara`]);
+    await ownerQuery(
+      `insert into liame.post_suggestion (id, tenant_id, brand_id, plan_id, day, status, reason, barred_by, created_at, updated_at, finished_at)
+       values ($1, $2, $3, $4, $5::date, 'barrada', 'conferencia', '{regras_do_post}', now() - interval '3 minutes', now() - interval '3 minutes', now() - interval '3 minutes'),
+              ($6, $2, $3, $4, $7::date, 'descartada', 'sem_foto', null, now() - interval '2 minutes', now() - interval '2 minutes', now() - interval '2 minutes')`,
+      [uuidv7(), e.tenantId, e.brandId, plano, dias[3], uuidv7(), dias[4]],
+    );
+    // O custo dele soma as chamadas dos posts (e as das respostas, que aqui não há).
+    await ownerQuery(
+      `insert into liame.ai_usage (id, tenant_id, brand_id, workflow, task, provider, model, served_by, cost_usd_micros, outcome, tool_calls, answered)
+       values ($1, $2, $3, 'social.post', 'social_post', 'teste', 'modelo', 'principal', 7000, 'ok', 0, true)`,
+      [uuidv7(), e.tenantId, e.brandId],
+    );
+    const t = await ver(e, e.brandId);
+    expect(numeros(t, 'social')).toMatchObject({ posts_propostos: '3', posts_publicados: '1', posts_recusados: '1', posts_esperando: '1', posts_barrados: '1', respostas_propostas: '0' });
+    expect(doMembro(t, 'social')).toMatchObject({ status: 'ativo', cost: { usd_micros: '7000', calls: 1 } });
+    expect(espera).toBeDefined();
+
+    // O que ele fez: os acontecimentos dos posts, do mais novo para o mais antigo, com o dia do post, o item da pauta e as
+    // redes; nunca o texto do post.
+    const r = await api.call('GET', `/v1/team/members/social/activity?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    const itens = r.body.items as Array<{ kind: string; subject: string | null; period: { from: string; to: string } | null; rules: string[]; by: { id: string } | null; mine: boolean }>;
+    expect(itens.map((i) => i.kind)).toEqual(['post_sem_foto', 'post_barrado', 'post_recusado', 'post_publicado', 'propos_post', 'propos_post', 'propos_post']);
+    const doDia = (kind: string, day: string) => itens.find((i) => i.kind === kind && i.period?.from === day);
+    expect(doDia('propos_post', dias[0]!)).toMatchObject({ subject: ITEM, period: { from: dias[0], to: dias[0] }, rules: ['instagram', 'facebook'] });
+    expect(doDia('post_publicado', dias[0]!)).toMatchObject({ subject: ITEM, rules: ['instagram'], by: { id: e.userId }, mine: true });
+    expect(doDia('post_barrado', dias[3]!)).toMatchObject({ subject: `Item do dia ${dias[3]}`, rules: ['regras_do_post'] });
+    expect(doDia('post_sem_foto', dias[4]!)).toMatchObject({ subject: `Item do dia ${dias[4]}`, rules: [] });
+    expect(JSON.stringify(r.body)).not.toContain('O combo da sexta.');
+
+    // Outra empresa não vê nada disto.
+    const vizinha = await empresa();
+    expect(numeros(await ver(vizinha, vizinha.brandId), 'social')).toMatchObject({ posts_propostos: '0', posts_esperando: '0' });
   });
 
   it('o CRM e mensageria e a fila das propostas (A5 · P16): preparando é trabalho em andamento; o rascunho que espera o modelo diz o que falta', async () => {

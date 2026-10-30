@@ -29,6 +29,11 @@ import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
 import { acordarLeiturasDaMarca } from '../marca/leituras-na-fila.js';
+import { diaNoFuso, somarDias } from '../cobranca/vida.js';
+import { FLAG_DOS_POSTS } from '../connectors/meta/publicacao.js';
+import { ehNadaNovo, itensDaPauta } from '../posts/pauta.js';
+import { CANAIS_DO_POST, PROVEDOR_DO_CANAL } from '../posts/post-plano.js';
+import { FLAG_DOS_POSTS_SUGERIDOS } from '../posts/sugestoes-de-post.js';
 import { REGRAS_VERSAO } from '../sombra/regras.js';
 import { atividadeDoMembro, DIAS_DA_ATIVIDADE } from './atividade.js';
 import { PREFIXO_RECUSA } from '../actions/action.service.js';
@@ -40,6 +45,7 @@ import {
   type FilaDoSocial,
   NUMEROS_DE_AGORA,
   numerosDoMembro,
+  type PostsAgora,
   type PropostaEmAndamento,
   situacaoDoMembro,
 } from './numeros.js';
@@ -119,9 +125,12 @@ export class EquipeService {
     const [ia, sombra, criativo] = [await this.flags.isEnabled('ia', contexto), await this.flags.isEnabled('sombra', contexto), await this.flags.isEnabled('criativo', contexto)];
     // O CRM e mensageria só propõe com a flag dele e as duas do envio de mensagens: sem uma delas, ainda não está ligado.
     const crm = (await this.flags.isEnabled('crm', contexto)) && (await this.flags.isEnabled('mensageria', contexto)) && (await this.flags.isEnabled('whatsapp_campaign', contexto));
-    // O Social media só sugere com a função das sugestões e a resposta pelo Liame (as chaves da distribuição que a
-    // rotina confere): sem uma delas, ainda não está ligado.
-    const social = (await this.flags.isEnabled(FLAG_DAS_SUGESTOES, contexto)) && (await this.flags.isEnabled(FLAG_DA_RESPOSTA, contexto));
+    // O Social media trabalha por um dos dois caminhos, cada um com as chaves da distribuição que a rotina dele confere:
+    // as respostas (a função das sugestões e a resposta pelo Liame) e os posts (a função dos posts e a publicação pelo
+    // Liame). Sem nenhum dos dois, ainda não está ligado.
+    const respostasLigadas = (await this.flags.isEnabled(FLAG_DAS_SUGESTOES, contexto)) && (await this.flags.isEnabled(FLAG_DA_RESPOSTA, contexto));
+    const postsLigados = (await this.flags.isEnabled(FLAG_DOS_POSTS_SUGERIDOS, contexto)) && (await this.flags.isEnabled(FLAG_DOS_POSTS, contexto));
+    const social = respostasLigadas || postsLigados;
     const trava = await this.switches.check(tx, { tenantId, provider: 'ai', brandId });
     const parada = trava
       ? (
@@ -144,8 +153,11 @@ export class EquipeService {
       const doCriativo = key === CRIATIVO_DA_EQUIPE;
       // O CRM e mensageria: o que ele tem em andamento e o que o segura agora, numa regra só (`agoraDoCrm`).
       const doCrm = key === CRM_DA_EQUIPE ? agoraDoCrm({ ativo: status === 'ativo', ...(await this.oQueFaltaAoCrm(status === 'ativo', brandId, org.fuso, agora)), emAndamento: propostas, veAsCampanhas: auth.permissions.has('campanhas.ver') }) : null;
-      // O Social media: as avaliações na fila dele e o que o segura agora, numa regra só (`agoraDoSocial`).
-      const doSocial = key === SOCIAL_DA_EQUIPE && status === 'ativo' ? agoraDoSocial({ ativo: true, ...(await this.oQueSeguraOSocial(brandId)) }) : null;
+      // O Social media: os dias da pauta e as avaliações na fila dele e o que o segura agora, numa regra só (`agoraDoSocial`).
+      const doSocial =
+        key === SOCIAL_DA_EQUIPE && status === 'ativo'
+          ? agoraDoSocial({ ativo: true, respostas: respostasLigadas, ...(await this.oQueSeguraOSocial(tenantId, brandId, postsLigados, org.fuso, agora)) })
+          : null;
       membros.push({
         key,
         kind: def.kind,
@@ -353,6 +365,23 @@ export class EquipeService {
           (select count(*) from liame.review_suggestion s
             where s.brand_id = ${brandId} and s.status = 'barrada' and s.finished_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or s.finished_at < ${fim}::timestamptz))::int as barradas`)
     ).rows[0]!;
+    // Os posts dele (A6, Z6, os posts; D-A6-60): os pedidos de post que ele montou no mês, os que saíram em pelo menos uma
+    // rede (o canal com `published_at`, mesmo que depois apagado), os recusados, os que esperam agora e os dias em que a
+    // conferência barrou o post (a vez `barrada`).
+    const doPost = sql`from liame.action_request r where r.brand_id = ${brandId} and r.agent_key = ${SOCIAL_DA_EQUIPE} and r.tool = 'post_publicar'`;
+    const doMes = sql`r.created_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or r.created_at < ${fim}::timestamptz)`;
+    const posts = (
+      await tx.execute<Record<string, number>>(sql`
+        select
+          (select count(*) ${doPost} and ${doMes})::int as propostos,
+          (select count(*) ${doPost} and ${doMes}
+              and exists (select 1 from liame.social_post p join liame.social_post_channel c on c.post_id = p.id
+                           where p.action_id = r.id and c.published_at is not null))::int as publicados,
+          (select count(*) ${doPost} and ${doMes} and r.status = 'cancelada' and r.status_reason like ${`${PREFIXO_RECUSA}%`})::int as recusados,
+          (select count(*) ${doPost} and r.status = 'aguardando_aprovacao' and r.expires_at > ${instante}::timestamptz)::int as esperando,
+          (select count(*) from liame.post_suggestion s
+            where s.brand_id = ${brandId} and s.status = 'barrada' and s.finished_at >= ${inicio}::timestamptz and (${fim}::timestamptz is null or s.finished_at < ${fim}::timestamptz))::int as barrados`)
+    ).rows[0]!;
     // As propostas dele que ainda estão no caminho (a fila `message_proposal`, migration 0062): a que ele prepara e o
     // rascunho que espera o modelo. Uma por motivo de cada vez; a que está em preparo vem primeiro.
     const propostas: PropostaEmAndamento[] = (
@@ -416,6 +445,13 @@ export class EquipeService {
         esperando: Number(respostas.esperando),
         barradas: Number(respostas.barradas),
       },
+      posts: {
+        propostos: Number(posts.propostos),
+        publicados: Number(posts.publicados),
+        recusados: Number(posts.recusados),
+        esperando: Number(posts.esperando),
+        barrados: Number(posts.barrados),
+      },
     };
     return { gasto, usos, n, propostas, contagens };
   }
@@ -457,10 +493,19 @@ export class EquipeService {
    * O que o Social media, ligado, tem e o que o segura: nenhuma loja do Perfil no Google conectada nesta marca (sem ela
    * não há avaliação para responder; a conta que o Google recusou não serve) e a fila dele, as vezes que esperam as
    * sugestões, com o teto de IA da empresa quando é ele que as segura (o porquê que a vez guarda, como a tela Avaliações
-   * lê). O que pesa mais é decidido em `agoraDoSocial`.
+   * lê). Com os posts ligados, também o que segura os posts: nenhum Instagram nem Página conectados à marca, nenhuma foto
+   * pronta nas Fotos, nenhum item da pauta aprovada daqui em diante (no fuso da empresa) e os dias da pauta na fila dele,
+   * com o teto de IA quando é ele que os segura. O que pesa mais é decidido em `agoraDoSocial`.
    */
-  private async oQueSeguraOSocial(brandId: string): Promise<{ semPerfil: boolean; fila: FilaDoSocial }> {
+  private async oQueSeguraOSocial(
+    tenantId: string,
+    brandId: string,
+    postsLigados: boolean,
+    fuso: string,
+    agora: Date,
+  ): Promise<{ semPerfil: boolean; fila: FilaDoSocial; posts: PostsAgora | null }> {
     const tx = currentTx();
+    const posts = postsLigados ? await this.oQueSeguraOsPosts(tenantId, brandId, fuso, agora) : null;
     const loja = await tx.execute(sql`select 1 from liame.connected_account a where a.brand_id = ${brandId} and a.provider = ${PROVEDOR_PERFIL_GOOGLE} and ${contaConectada('a')} limit 1`);
     const fila = (
       await tx.execute<{ avaliacoes: number; desde: Date | string | null; motivos: string[] | null }>(sql`
@@ -473,6 +518,40 @@ export class EquipeService {
       semPerfil: !loja.rows[0],
       fila: {
         avaliacoes: Number(fila?.avaliacoes ?? 0),
+        desde: fila?.desde ? iso(fila.desde) : null,
+        teto: tetos.has('limite_mes') ? 'mes' : tetos.has('limite_dia') ? 'dia' : null,
+      },
+      posts,
+    };
+  }
+
+  /**
+   * O que segura os posts do Social media agora (P21): as mesmas condições que a rotina confere antes de chamar o modelo
+   * (os canais conectados à marca e as Fotos prontas; `worker/posts-sugeridos.service.ts`), a pauta aprovada daqui em
+   * diante (de hoje a duas semanas, no fuso da empresa: a rotina abre amanhã e depois) e a fila dos dias, com o teto de IA
+   * quando é ele que a segura (o porquê que a vez guarda, pelo mesmo código das respostas).
+   */
+  private async oQueSeguraOsPosts(tenantId: string, brandId: string, fuso: string, agora: Date): Promise<PostsAgora> {
+    const tx = currentTx();
+    const rede = await tx.execute(sql`
+      select 1 from liame.connected_account a
+       where a.brand_id = ${brandId} and a.provider in ${CANAIS_DO_POST.map((c) => PROVEDOR_DO_CANAL[c])} and ${contaConectada('a')} limit 1`);
+    const foto = await tx.execute(sql`select 1 from liame.brand_photo f where f.brand_id = ${brandId} and f.status = 'pronta' and f.removed_at is null limit 1`);
+    const hoje = diaNoFuso(agora, fuso);
+    const pauta = await itensDaPauta(tx, tenantId, brandId, hoje, somarDias(hoje, 14));
+    const fila = (
+      await tx.execute<{ dias: number; desde: Date | string | null; motivos: string[] | null }>(sql`
+        select count(*)::int as dias, min(s.created_at) as desde, array_agg(distinct s.reason) filter (where s.reason is not null) as motivos
+          from liame.post_suggestion s
+         where s.brand_id = ${brandId} and s.status = 'esperando'`)
+    ).rows[0];
+    const tetos = new Set((fila?.motivos ?? []).map((m) => ESPERA_PELO_TETO.get(m)));
+    return {
+      semRede: !rede.rows[0],
+      semFotos: !foto.rows[0],
+      semPauta: !pauta.some((i) => !ehNadaNovo(i.item)),
+      fila: {
+        dias: Number(fila?.dias ?? 0),
         desde: fila?.desde ? iso(fila.desde) : null,
         teto: tetos.has('limite_mes') ? 'mes' : tetos.has('limite_dia') ? 'dia' : null,
       },

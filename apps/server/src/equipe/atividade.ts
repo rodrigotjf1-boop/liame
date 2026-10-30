@@ -95,6 +95,58 @@ const pausas = (q: QuemOlha, membro: Membro): SQL[] => [
   ),
 ];
 
+/**
+ * Os posts do Social media (A6, Z6, os posts; D-A6-60 e D-A6-61): o dia do post vai no período (`d1` = `d2`); o item da
+ * pauta de onde ele veio, em `subject`, só para quem vê os planos (é o que a tela da pauta mostra); os canais, em `rules`
+ * (os do pedido em `propos_post`, os em que saiu em `post_publicado`). O texto do post fica na Agenda, e o barrado não é
+ * guardado (só os nomes do que barrou, em `rules`).
+ */
+const dosPosts = (q: QuemOlha, membro: Membro): SQL[] => {
+  const item = sql`case when ${q.podePlanos}::boolean then (
+      select d.item from liame.plan pl
+        join liame.plan_version v on v.plan_id = pl.id and v.version = pl.version and v.tenant_id = pl.tenant_id
+        cross join lateral jsonb_to_recordset(case when jsonb_typeof(v.content->'days') = 'array' then v.content->'days' else '[]'::jsonb end) as d(day date, item text)
+       where pl.id = s.plan_id and d.day = s.day limit 1) end`;
+  const canais = (filtro: SQL) => sql`coalesce((select jsonb_agg(c.channel order by c.channel desc) from liame.social_post_channel c where c.post_id = p.id ${filtro}), '[]'::jsonb)`;
+  const saiu = sql`exists (select 1 from liame.social_post_channel c where c.post_id = p.id and c.published_at is not null)`;
+  const doPedido = sql`from liame.action_request r
+                       join liame.social_post p on p.action_id = r.id and p.tenant_id = r.tenant_id
+                       left join liame.post_suggestion s on s.action_id = r.id
+                      where r.tenant_id = ${q.tenantId} and r.brand_id = ${q.brandId} and r.agent_key = ${membro} and r.tool = 'post_publicar'`;
+  const daVez = sql`from liame.post_suggestion s where s.tenant_id = ${q.tenantId} and s.brand_id = ${q.brandId}`;
+  return [
+    // O post que ele montou na Agenda, com o pedido em Aprovações.
+    ramo({ at: sql`r.created_at`, kind: 'propos_post', subject: item, d1: sql`s.day`, d2: sql`s.day`, rules: canais(sql``) }, sql`${doPedido} and r.created_at >= ${q.desde}::timestamptz`),
+    // A conferência barrou o que ele escreveu para o dia: nada foi para Aprovações, e o texto não é guardado.
+    ramo(
+      { at: sql`s.finished_at`, kind: 'post_barrado', subject: item, d1: sql`s.day`, d2: sql`s.day`, rules: sql`to_jsonb(s.barred_by)` },
+      sql`${daVez} and s.status = 'barrada' and s.finished_at >= ${q.desde}::timestamptz`,
+    ),
+    // Nenhuma das Fotos combinava com o item do dia: o dia ficou sem post dele.
+    ramo(
+      { at: sql`s.finished_at`, kind: 'post_sem_foto', subject: item, d1: sql`s.day`, d2: sql`s.day` },
+      sql`${daVez} and s.status = 'descartada' and s.reason = 'sem_foto' and s.finished_at >= ${q.desde}::timestamptz`,
+    ),
+    // O que aconteceu com o pedido: saiu (em pelo menos uma rede; quem aprovou é a aprovação mais recente), não saiu,
+    // foi recusado, cancelado ou ninguém decidiu no prazo.
+    ramo(
+      {
+        at: sql`r.updated_at`,
+        kind: sql`case when r.status = 'expirada' then 'post_expirou'
+                       when r.status = 'cancelada' and r.status_reason like ${`${PREFIXO_RECUSA}%`} then 'post_recusado'
+                       when ${saiu} then 'post_publicado'
+                       when r.status = 'cancelada' then 'post_cancelado' else 'post_nao_saiu' end`,
+        subject: item,
+        d1: sql`s.day`,
+        d2: sql`s.day`,
+        rules: canais(sql`and c.published_at is not null`),
+        by: sql`case when ${saiu} then (select x.approved_by from liame.approval x where x.action_request_id = r.id order by x.created_at desc limit 1) end`,
+      },
+      sql`${doPedido} and r.status in ('executada', 'falhou', 'expirada', 'cancelada', 'bloqueada', 'estado_mudou') and r.updated_at >= ${q.desde}::timestamptz`,
+    ),
+  ];
+};
+
 /** As demandas (o título, para quem vê os planos ou para quem pediu). */
 const demandas = (q: QuemOlha, kind: string, filtro: SQL): SQL =>
   ramo(
@@ -299,6 +351,8 @@ function ramosDoMembro(membro: Membro, q: QuemOlha): SQL[] {
           },
           sql`${doPedido} and r.status in ('executada', 'falhou', 'expirada', 'cancelada') and r.updated_at >= ${q.desde}::timestamptz`,
         ),
+        // Os posts dele (A6, Z6, os posts).
+        ...dosPosts(q, membro),
         retiradas(q, membro),
         ...pausas(q, membro),
       ];
