@@ -251,13 +251,15 @@ export function idDaResposta(corpo: unknown): string | null {
 export const MAIOR_FOTO_DA_PAGINA_BYTES = 4 * 1024 * 1024;
 /** A tarefa que a pessoa precisa ter na Página para o token dela publicar (`CREATE_CONTENT`). */
 export const TAREFA_DE_PUBLICAR = 'CREATE_CONTENT';
+/** A tarefa que a pessoa precisa ter na Página para o token dela ler os números (`ANALYZE`; A6, Z7). */
+export const TAREFA_DE_ANALISAR = 'ANALYZE';
 
 /**
  * O token da Página, na resposta de `GET /me/accounts?fields=id,access_token,tasks` (Pages API, "Get a Page access
  * token": cada Página com o token dela e as tarefas de quem autorizou). Nulo quando a autorização não alcança a Página.
- * `podePublicar`: quem autorizou tem a tarefa de criar conteúdo nela.
+ * `podePublicar`: quem autorizou tem a tarefa de criar conteúdo nela; `podeAnalisar`, a de ler os números dela.
  */
-export function tokenDaPagina(resposta: unknown, paginaId: string): { token: string; podePublicar: boolean } | null {
+export function tokenDaPagina(resposta: unknown, paginaId: string): { token: string; podePublicar: boolean; podeAnalisar: boolean } | null {
   const data = (resposta as { data?: unknown } | null)?.data;
   if (!Array.isArray(data)) return null;
   for (const p of data as Array<Record<string, unknown> | null>) {
@@ -265,7 +267,7 @@ export function tokenDaPagina(resposta: unknown, paginaId: string): { token: str
     const token = texto(p?.access_token);
     if (!token) return null;
     const tarefas = Array.isArray(p?.tasks) ? (p.tasks as unknown[]) : [];
-    return { token, podePublicar: tarefas.includes(TAREFA_DE_PUBLICAR) };
+    return { token, podePublicar: tarefas.includes(TAREFA_DE_PUBLICAR), podeAnalisar: tarefas.includes(TAREFA_DE_ANALISAR) };
   }
   return null;
 }

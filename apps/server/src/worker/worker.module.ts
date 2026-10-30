@@ -33,6 +33,7 @@ import { CobrancasReleituraLoop } from './cobrancas-releitura-loop.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
 import { FotosLoop } from './fotos-loop.js';
+import { PostsNumerosLoop } from './posts-numeros-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { ExplicarService } from '../ai/explicar/explicar.service.js';
 import { AiGateway } from '../ai/gateway.js';
@@ -136,6 +137,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     ComparacaoDmsIdLoop,
     // Fotos dos produtos (A6, Z4): tira do armazenamento o arquivo da foto apagada (e do envio que não terminou), e depois a linha.
     FotosLoop,
+    // Os números de cada post nas redes (A6, Z7, parte c): a leitura do alcance e das interações, como apoio; só com a função dos posts.
+    PostsNumerosLoop,
     // Conversões para o Google (A5, Y1): a venda confirmada que veio de um anúncio do Google volta para ele; nasce desligada.
     ConversoesLoop,
     // Sombra de verdade (A3, I5): lê os resultados como a tela e registra o que o Liame recomendaria.

@@ -42,8 +42,8 @@ const post = (o: Partial<Post> = {}): Post => ({
   timezone: SP,
   link: null,
   channels: [
-    { channel: 'instagram', account_id: uuid(60), account_name: '@casabrasa', text: 'Sexta é dia de combo. Peça pelo link da bio.', status: 'aguardando', permalink: null, error: null, published_at: null },
-    { channel: 'facebook', account_id: uuid(61), account_name: 'Casa Brasa', text: 'Sexta é dia de combo: smash, batata e refrigerante.', status: 'aguardando', permalink: null, error: null, published_at: null },
+    { channel: 'instagram', account_id: uuid(60), account_name: '@casabrasa', text: 'Sexta é dia de combo. Peça pelo link da bio.', status: 'aguardando', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null },
+    { channel: 'facebook', account_id: uuid(61), account_name: 'Casa Brasa', text: 'Sexta é dia de combo: smash, batata e refrigerante.', status: 'aguardando', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null },
   ],
   ...o,
 });

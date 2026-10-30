@@ -190,6 +190,12 @@ describe.skipIf(!hasDb)('o post no Instagram e na Página (A6 · Z5b, partes 2 e
     expect(ig.conteineres.get(publicados[0]!.conteiner)!.endereco).toBe(`memoria://imagens/${foto.chave}?valido=300`);
     expect(await canalDe(post)).toMatchObject({ status: 'publicado', external_id: publicados[0]!.id, permalink: publicados[0]!.permalink, error: null });
     expect((await canalDe(post)).published_at).not.toBeNull();
+    // O canal que saiu entra na fila dos números, uma hora depois (A6, Z7, parte c; D-A6-51).
+    const [fila] = await ownerQuery<{ espera_min: number }>(
+      `select round(extract(epoch from (metrics_next_at - published_at)) / 60)::int as espera_min from liame.social_post_channel where post_id = $1 and channel = 'instagram'`,
+      [post],
+    );
+    expect(fila!.espera_min).toBe(60);
     // A ordem: os recentes (já saiu?), o limite do dia, o contêiner, a situação dele, a publicação e o endereço.
     expect([ig.contar('media', 'GET'), ig.contar('content_publishing_limit'), ig.contar('media', 'POST'), ig.contar('status_code'), ig.contar('media_publish')]).toEqual([1, 1, 1, 1, 1]);
     // O token foi no cabeçalho, com a prova do segredo do app; nunca na URL.
