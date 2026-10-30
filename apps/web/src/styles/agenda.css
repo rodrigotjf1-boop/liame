@@ -17,6 +17,13 @@
 .ag-dia-cab .ag-hoje { font-size: var(--text-xs); color: var(--link); font-weight: 600; }
 .ag-itens { display: grid; gap: var(--sp-2); list-style: none; margin: 0; padding: 0; }
 .ag-vazio-dia { font-size: var(--text-xs); color: var(--text-subtle); }
+/* A data do calendário comercial e o item da pauta do Estrategista no dia (P19; A6, Z5d, parte 5). */
+.ag-data { display: flex; gap: 6px; align-items: flex-start; min-width: 0; margin: 0; padding: 6px var(--sp-2); border-radius: var(--radius-sm); background: var(--primary-soft); font-size: var(--text-xs); line-height: 1.4; overflow-wrap: anywhere; }
+.ag-data .ic { width: 14px; height: 14px; flex: none; margin-top: 2px; color: var(--link); }
+.ag-pauta { display: grid; gap: 6px; min-width: 0; padding: var(--sp-2); border: 1.5px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
+.ag-pauta b { color: var(--text); font-weight: 600; }
+/* Na coluna estreita do dia (7 por linha), o botão quebra a linha em vez de alargar a coluna (V164). */
+.ag-pauta .btn { justify-self: start; max-width: 100%; white-space: normal; text-align: left; }
 /* o post no dia: a foto, a hora, os canais e a situação */
 .ag-post { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--sp-2); align-items: start; width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .ag-post:hover { border-color: var(--border-strong); }

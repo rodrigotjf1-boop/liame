@@ -48,6 +48,8 @@ export function AgendaTela() {
   const [fotosLista, setFotosLista] = useState<BrandPhoto[] | null>(null);
   const [aberto, setAberto] = useState<string | null>(null);
   const [novoAberto, setNovoAberto] = useState(false);
+  // O item da pauta de onde o novo post nasce ("Fazer o post" no dia; D-A6-20); nulo: o "Novo post" do topo.
+  const [daPauta, setDaPauta] = useState<{ dia: string; item: string } | null>(null);
   /** O post que acabou de ser mandado: o foco vai para o cartão dele quando a semana chega. */
   const focarPost = useRef<string | null>(null);
   const avisar = useAvisar();
@@ -247,7 +249,20 @@ export function AgendaTela() {
         )}
         <div className="ag-semana" aria-busy={buscando || undefined}>
           {tela.dias.map((d) => (
-            <Dia key={d.iso} dia={d} fotos={fotos} aoAbrir={setAberto} />
+            <Dia
+              key={d.iso}
+              dia={d}
+              fotos={fotos}
+              aoAbrir={setAberto}
+              aoFazer={
+                podeOperar
+                  ? (dia, item) => {
+                      setDaPauta({ dia, item });
+                      setNovoAberto(true);
+                    }
+                  : null
+              }
+            />
           ))}
         </div>
         <p className="ag-legenda" aria-hidden="true">
@@ -302,7 +317,16 @@ export function AgendaTela() {
               )}
             </div>
             {podeOperar && (
-              <button className="btn btn--primary" type="button" aria-haspopup="dialog" aria-expanded={novoAberto} onClick={() => setNovoAberto(true)}>
+              <button
+                className="btn btn--primary"
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={novoAberto && !daPauta}
+                onClick={() => {
+                  setDaPauta(null);
+                  setNovoAberto(true);
+                }}
+              >
                 <Icone nome="plus" />
                 Novo post
               </button>
@@ -358,6 +382,8 @@ export function AgendaTela() {
       )}
       {novoAberto && carga.tipo === 'ok' && marca && (
         <GavetaNovoPost
+          key={`novo-${daPauta?.dia ?? 'topo'}`}
+          pauta={daPauta}
           marca={marca}
           fotos={fotosLista}
           canais={carga.dados.channels}
@@ -375,7 +401,21 @@ export function AgendaTela() {
   );
 }
 
-function Dia({ dia, fotos, aoAbrir }: { dia: DiaDaAgenda; fotos: Map<string, BrandPhoto>; aoAbrir: (id: string) => void }) {
+/**
+ * Um dia da semana: os posts, a data do calendário comercial e, sem post no dia, o item da pauta do Estrategista com
+ * "Fazer o post" para quem opera (P19; D-A6-20 e D-A6-56; o dia que passou não oferece).
+ */
+function Dia({
+  dia,
+  fotos,
+  aoAbrir,
+  aoFazer,
+}: {
+  dia: DiaDaAgenda;
+  fotos: Map<string, BrandPhoto>;
+  aoAbrir: (id: string) => void;
+  aoFazer: ((dia: string, item: string) => void) | null;
+}) {
   const idTitulo = `ag-d-${dia.iso}`;
   return (
     <section className={`ag-dia${dia.hoje ? ' ag-dia--hoje' : ''}${dia.passado ? ' ag-dia--passado' : ''}`} aria-labelledby={idTitulo}>
@@ -386,6 +426,25 @@ function Dia({ dia, fotos, aoAbrir }: { dia: DiaDaAgenda; fotos: Map<string, Bra
         </h2>
         {dia.hoje && <span className="ag-hoje">hoje</span>}
       </div>
+      {dia.datas.map((d) => (
+        <p className="ag-data" key={d}>
+          <Icone nome="calendar" pequeno />
+          <span>{d}</span>
+        </p>
+      ))}
+      {dia.pauta && (
+        <div className="ag-pauta">
+          <span>
+            <b>Na pauta:</b> {dia.pauta}
+          </span>
+          {aoFazer && !dia.passado && (
+            <button className="btn btn--sm" type="button" aria-haspopup="dialog" data-fazer-post={dia.iso} onClick={() => aoFazer(dia.iso, dia.pauta!)}>
+              <Icone nome="plus" pequeno />
+              Fazer o post
+            </button>
+          )}
+        </div>
+      )}
       {dia.posts.length > 0 ? (
         <ul className="ag-itens" aria-label={`Posts de ${dia.longo}`}>
           {dia.posts.map((p) => {
@@ -417,7 +476,7 @@ function Dia({ dia, fotos, aoAbrir }: { dia: DiaDaAgenda; fotos: Map<string, Bra
             );
           })}
         </ul>
-      ) : (
+      ) : dia.pauta ? null : (
         <p className="ag-vazio-dia">{dia.passado ? 'Nada saiu.' : 'Nada marcado.'}</p>
       )}
     </section>

@@ -88,7 +88,11 @@ export function situacaoDoPost(status: string): SituacaoNaTela {
 const FORA_DA_SEMANA = new Set(['cancelado', 'recusado', 'expirado']);
 
 export type PostNoDia = { post: PostResponse; dia: string; hora: string; canais: string; situacao: SituacaoNaTela; rotulo: string };
-export type DiaDaAgenda = { iso: string; curto: string; longo: string; num: string; hoje: boolean; passado: boolean; posts: PostNoDia[] };
+/**
+ * Um dia da semana. `pauta`: o item da pauta do Estrategista no dia (D-A6-20 e D-A6-56), só quando nenhum post está
+ * marcado nele (o post já feito cobre a pauta, como no P19); `datas`: as datas do calendário comercial.
+ */
+export type DiaDaAgenda = { iso: string; curto: string; longo: string; num: string; hoje: boolean; passado: boolean; posts: PostNoDia[]; pauta: string | null; datas: string[] };
 
 export type TelaDaAgenda =
   | { tipo: 'desligada' }
@@ -117,10 +121,14 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
     const item: PostNoDia = { post, dia, hora, canais, situacao, rotulo: `${ehPacote(post) ? 'Pacote' : 'Post'} de ${quando(dia, hora, hoje)}, ${nomes}: ${situacao.rotulo.toLowerCase()}` };
     porDia.set(dia, [...(porDia.get(dia) ?? []), item]);
   }
+  const pautaDoDia = new Map((dados.pauta ?? []).map((p) => [p.day, p.item]));
+  const datasDoDia = new Map<string, string[]>();
+  for (const d of dados.dates ?? []) datasDoDia.set(d.day, [...(datasDoDia.get(d.day) ?? []), d.name]);
   const dias: DiaDaAgenda[] = Array.from({ length: 7 }, (_, i) => {
     const iso = somaDias(inicio, i);
     const posts = (porDia.get(iso) ?? []).sort((a, b) => a.hora.localeCompare(b.hora) || a.post.id.localeCompare(b.post.id));
-    return { iso, curto: DIAS_CURTOS[diaDaSemana(iso)]!, longo: DIAS_LONGOS[diaDaSemana(iso)]!, num: iso.slice(8, 10), hoje: iso === hoje, passado: iso < hoje, posts };
+    const pauta = posts.length ? null : (pautaDoDia.get(iso) ?? null);
+    return { iso, curto: DIAS_CURTOS[diaDaSemana(iso)]!, longo: DIAS_LONGOS[diaDaSemana(iso)]!, num: iso.slice(8, 10), hoje: iso === hoje, passado: iso < hoje, posts, pauta, datas: datasDoDia.get(iso) ?? [] };
   });
   const semConta = dados.channels.filter((c) => c.accounts.length === 0).map((c) => c.channel);
   return { tipo: 'semana', dias, faltam: semConta.map((c) => NOME_DO_CANAL[c] ?? c), semConta: dados.channels.length > 0 && semConta.length === dados.channels.length };
