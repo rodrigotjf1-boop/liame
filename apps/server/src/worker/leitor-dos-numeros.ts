@@ -6,7 +6,6 @@ import { contaConectada } from '../connections/conectada.js';
 import { type ClienteConector, ErroConector } from '../connectors/cliente-http.js';
 import { FLAG_DOS_POSTS, tokenDaPagina } from '../connectors/meta/publicacao.js';
 import type { FlagService } from '../flags/flag.service.js';
-import { type JobScope, tenantFilter } from '../worker/outbox-publisher.js';
 import {
   METRICAS_DA_PAGINA,
   METRICAS_DO_INSTAGRAM,
@@ -15,7 +14,8 @@ import {
   numerosDaPagina,
   numerosDoInstagram,
   proximaLeitura,
-} from './numeros-do-post.js';
+} from '../posts/numeros-do-post.js';
+import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
 // A leitura dos números de cada post nas redes (A6, Z7, parte c; D-A6-50 a D-A6-52). A fila é o próprio canal publicado
 // (`metrics_next_at`): a reserva é feita com SKIP LOCKED no escopo do sistema, na mesma linha que ela altera (ERR-029),

@@ -5,7 +5,7 @@ import { ClienteConector } from '../../src/connectors/cliente-http.js';
 import { versaoRegistrada } from '../../src/connectors/tipos.js';
 import { DATABASE } from '../../src/database/database.module.js';
 import { FlagService } from '../../src/flags/flag.service.js';
-import { LeitorDosNumeros } from '../../src/posts/leitor-dos-numeros.js';
+import { LeitorDosNumeros } from '../../src/worker/leitor-dos-numeros.js';
 import { VaultService } from '../../src/vault/vault.service.js';
 import { ownerQuery, resetIpRateLimits, startApi, type TestApi } from '../helpers/api.js';
 import { InstagramDeMentira, SEGREDO_DO_APP, TOKEN_DO_INSTAGRAM } from '../helpers/instagram-de-mentira.js';

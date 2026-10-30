@@ -6,7 +6,7 @@ import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { versaoRegistrada } from '../connectors/tipos.js';
 import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
-import { LeitorDosNumeros, type VezDosNumeros } from '../posts/leitor-dos-numeros.js';
+import { LeitorDosNumeros, type VezDosNumeros } from './leitor-dos-numeros.js';
 import { VaultService } from '../vault/vault.service.js';
 import type { JobScope } from './outbox-publisher.js';
 
