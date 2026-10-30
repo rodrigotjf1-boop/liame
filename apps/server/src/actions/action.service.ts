@@ -524,10 +524,25 @@ export class ActionService {
   }
 
   /**
-   * O pedido, do começo ao fim; devolve o id dele. `quem`: a pessoa que pede ou o funcionário de IA (em nome de uma
-   * pessoa). `volta`: a ação que este pedido desfaz e a versão em que ela deixou o objeto.
+   * A nova tentativa de um post no canal que não saiu (A6, Z5d; D-A6-54; P19), pedida pela rota do post, que já conferiu o
+   * pedido anterior, o prazo e o motivo, e pôs o canal de volta na espera: um pedido novo, pelo mesmo trilho (a trava, a
+   * flag, a política, o plano). `de`: o pedido que terminou sem sair no canal. Devolve o id do pedido novo.
    */
-  private async pedir(quem: Solicitante, input: CreateActionRequest, volta: { de: string; versaoDepois: number } | null): Promise<string> {
+  async pedirNovaTentativa(auth: AuthContext, input: CreateActionRequest, de: string): Promise<string> {
+    return this.pedir(pessoa(auth), input, null, { de });
+  }
+
+  /**
+   * O pedido, do começo ao fim; devolve o id dele. `quem`: a pessoa que pede ou o funcionário de IA (em nome de uma
+   * pessoa). `volta`: a ação que este pedido desfaz e a versão em que ela deixou o objeto. `tentativa`: o pedido de que
+   * este é a nova tentativa (A6, Z5d).
+   */
+  private async pedir(
+    quem: Solicitante,
+    input: CreateActionRequest,
+    volta: { de: string; versaoDepois: number } | null,
+    tentativa: { de: string } | null = null,
+  ): Promise<string> {
     const tx = currentTx();
     const tenantId = quem.tenantId;
     const { tool, connector } = this.resolve(input.tool, input.provider);
@@ -535,10 +550,16 @@ export class ActionService {
     if (tool.onlyAsUndo && !volta) {
       throw new AppProblem(422, 'acao-so-como-volta', 'Esta ação não se pede direto', 'Esta ação só existe como a volta de outra: desfaça o pedido que foi executado.');
     }
+    // Nem a que só existe como a nova tentativa de outra (A6, Z5d: o post no canal que não saiu, pela rota do post).
+    if (tool.onlyAsRetry && !tentativa) {
+      throw new AppProblem(422, 'acao-so-como-nova-tentativa', 'Esta ação não se pede direto', 'Esta ação só existe como a nova tentativa de um post: use "Tentar de novo" no post.');
+    }
     if (input.brand_id) await this.assertBrand(tx, tenantId, input.brand_id);
     const brandId = await this.marcaDoPedido(tx, tenantId, input);
     const target = { tenantId, provider: input.provider, brandId, accountId: input.account_id, tool: tool.name };
     await this.assertNotStopped(tx, target);
+    // A trava de outra ferramenta que também para esta (A6, Z5d: a do `post_publicar` para a nova tentativa do post).
+    if (tool.travaTambem) await this.assertNotStopped(tx, { ...target, tool: tool.travaTambem });
     await this.assertWriteEnabled(quem, connector, brandId, input.account_id);
 
     const params = this.parseParams(tool, input.params);
@@ -615,6 +636,7 @@ export class ActionService {
         plan_hash: planHash,
         reserved_micros: plan.reserveMicros,
         ...(volta ? { volta_de: volta.de } : {}),
+        ...(tentativa ? { tentativa_de: tentativa.de } : {}),
         ...(recomendacao ? { recommendation_id: recomendacao.id } : {}),
       },
     });

@@ -3,6 +3,7 @@ import { uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
 import { ActionService, PREFIXO_RECUSA } from '../actions/action.service.js';
+import { pedeUmPostNovo } from '../actions/post-publicacao.js';
 import { contaConectada } from '../connections/conectada.js';
 import { FLAG_DOS_POSTS } from '../connectors/meta/publicacao.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
@@ -23,6 +24,8 @@ import {
   horaLocal,
   LIMITE_DO_PACOTE,
   LIMITE_DO_TEXTO,
+  type NovaTentativa,
+  novaTentativa,
   PROVEDOR_DO_CANAL,
   recursoDoPost,
 } from './post-plano.js';
@@ -39,11 +42,16 @@ import { CANAIS_COM_LINK, criarLinkDoPost, destinoDoPost, SEPARADOR, tamanhoNoTe
 // Liame não publica. O mesmo "Novo post" monta um pacote para cada uma dessas redes (o texto, a foto e a hora), sem pedido
 // em Aprovações e sem o código do app: quem publica é a pessoa, que marca "Publiquei" ou tira o pacote da Agenda. O texto
 // do pacote passa pelas palavras proibidas da política, como o do post.
+//
+// "Tentar de novo" (A6, Z5d; P19; D-A6-54): o post que saiu num canal e não no outro manda o mesmo post aprovado só no
+// canal que faltou, pedido por uma pessoa, sem o código do app, até 24 horas depois de sair no outro (a ferramenta
+// `post_tentar_de_novo`, que só existe por esta rota).
 
 export const RECURSO_DO_POST = 'social_post';
 export const ACAO_CRIAR_POST = 'posts.criar';
 export const ACAO_PACOTE_PUBLICADO = 'posts.pacote_publicado';
 export const ACAO_PACOTE_TIRADO = 'posts.pacote_tirado';
+export const ACAO_TENTAR_DE_NOVO = 'posts.tentar_de_novo';
 
 /** O canal na frase, com a preposição dele (V121). */
 const DO_CANAL: Record<string, string> = { instagram: 'do Instagram', facebook: 'da Página', tiktok: 'do TikTok', youtube: 'do YouTube' };
@@ -60,6 +68,38 @@ function desligada(): AppProblem {
 
 function recusa(code: string, title: string, detail: string, path?: string): AppProblem {
   return new AppProblem(422, code, title, detail, {}, path ? [{ path, message: detail }] : undefined);
+}
+
+/** O canal na frase, com a preposição de lugar (V121). */
+const NO_CANAL: Record<string, string> = { instagram: 'no Instagram', facebook: 'na Página do Facebook' };
+
+/** Por que não dá para "Tentar de novo" (A6, Z5d; D-A6-54): 409, com o código e a frase de cada motivo. */
+function semNovaTentativa(motivo: Exclude<NovaTentativa, { ok: true }>['motivo'], saiu?: string, falta?: string): AppProblem {
+  const no = (c: string | undefined, senao: string) => (c ? (NO_CANAL[c] ?? senao) : senao);
+  switch (motivo) {
+    case 'ainda_sai':
+      return new AppProblem(409, 'post-ainda-sai', 'O post ainda sai', 'Este post ainda espera a aprovação ou a hora, ou está saindo agora: não há o que tentar de novo.');
+    case 'nao_tenta':
+      return new AppProblem(409, 'post-nao-sai', 'O post não sai', 'Este post foi cancelado, recusado ou não foi aprovado a tempo: para publicar, faça um post novo.');
+    case 'nao_saiu_em_nenhum':
+      return new AppProblem(
+        409,
+        'post-nao-saiu',
+        'O post não saiu',
+        '"Tentar de novo" vale para o post que saiu num canal e não no outro. Este não saiu em nenhum: confira o motivo em cada canal e faça um post novo.',
+      );
+    case 'ja_saiu':
+      return new AppProblem(409, 'post-ja-saiu', 'O post já saiu', 'Este post já saiu em todos os canais.');
+    case 'pede_post_novo':
+      return new AppProblem(409, 'tentar-nao-adianta', 'Tentar de novo não adianta', `Pelo motivo de o post não ter saído ${no(falta, 'no outro canal')}, tentar de novo não resolve: faça um post novo.`);
+    case 'passou_o_prazo':
+      return new AppProblem(
+        409,
+        'prazo-da-tentativa',
+        'Passou o prazo',
+        `Já passou um dia desde que o post saiu ${no(saiu, 'no outro canal')}: a hora mudaria quem vê o post. Para publicar ${no(falta, 'no canal que faltou')}, faça um post novo.`,
+      );
+  }
 }
 
 @Injectable()
@@ -275,6 +315,67 @@ export class PostsService {
     } else if (p.situacoes.some((s) => s === 'publicado')) {
       throw new AppProblem(409, 'pacote-ja-publicado', 'O pacote já foi publicado', 'Você marcou este pacote como publicado: ele fica na Agenda.');
     }
+    return this.obter(auth, id);
+  }
+
+  /**
+   * "Tentar de novo" (A6, Z5d; P19, aprovado em 21/10/2026; D-A6-54): o post que saiu num canal e não no outro manda o
+   * mesmo post aprovado só no canal que faltou, sem o código do app. Confere, com o post travado, o pedido mais novo do
+   * post (terminou sem sair: falhou, inclusive barrado), o canal que falta, o motivo (o que pede um post novo não tenta) e o
+   * prazo (24 horas depois de o post sair no outro canal); põe o canal de volta na espera e faz o pedido da nova tentativa
+   * pelo trilho (a trava, a flag, a política v10, o plano), que passa a ser o pedido do post. Tudo na mesma transação: o
+   * pedido recusado pelo trilho deixa o canal como estava.
+   */
+  async tentarDeNovo(auth: AuthContext, id: string, agora: Date = new Date()): Promise<PostResponse> {
+    const tx = currentTx();
+    const quem = this.quem(auth);
+    const p = (
+      await tx.execute<{ brand_id: string; kind: string; action_id: string | null; pedido: string | null }>(sql`
+        select p.brand_id, p.kind, p.action_id, r.status as pedido
+          from liame.social_post p
+          left join liame.action_request r on r.id = p.action_id and r.tenant_id = p.tenant_id
+         where p.id = ${id} and p.tenant_id = ${quem.tenantId}
+           for update of p`)
+    ).rows[0];
+    if (!p) throw new AppProblem(404, 'post-nao-encontrado', 'Não encontramos', 'Este post não está mais aqui.');
+    if (p.kind !== 'post') throw new AppProblem(409, 'e-pacote', 'É um pacote', 'O pacote, quem publica é você: ele não tem "Tentar de novo".');
+    if (!(await this.ligada(quem, p.brand_id))) throw desligada();
+    const canais = (
+      await tx.execute<{ id: string; channel: string; connected_account_id: string | null; status: string; error: string | null; published_at: Date | null }>(sql`
+        select id, channel, connected_account_id, status, error, published_at from liame.social_post_channel
+         where post_id = ${id} and tenant_id = ${quem.tenantId}
+         order by case channel when 'instagram' then 0 else 1 end
+           for update`)
+    ).rows;
+    const decisao = novaTentativa(
+      p.pedido,
+      canais.map((c) => ({ canal: c.channel, situacao: c.status, publicadoEm: c.published_at ? new Date(c.published_at) : null, pedePostNovo: pedeUmPostNovo(c.error) })),
+      agora,
+    );
+    if (!decisao.ok) {
+      const outro = canais.find((c) => c.status === 'publicado')?.channel;
+      const falta = canais.find((c) => c.status !== 'publicado')?.channel;
+      throw semNovaTentativa(decisao.motivo, outro, falta);
+    }
+    const canal = canais.find((c) => c.channel === decisao.canal)!;
+    const nome = canal.channel as CanalDoPost;
+    if (!canal.connected_account_id) {
+      throw recusa('canal-nao-conectado', 'Canal não conectado', `A conta ${DO_CANAL[nome]} deste post não está mais ligada à marca: conecte de novo em Contas conectadas.`, 'channels');
+    }
+    // O canal volta para a espera (o contêiner e a hora da tentativa anterior ficam: é por eles que a publicação confere
+    // se a tentativa anterior já publicou, A6-9). O pedido novo nasce aprovado e sai agora, na janela das 8h às 22h.
+    await tx.execute(sql`update liame.social_post_channel set status = 'aguardando', error = null, updated_at = now() where id = ${canal.id}`);
+    const pedido = await this.actions.pedirNovaTentativa(
+      auth,
+      { tool: 'post_tentar_de_novo', brand_id: p.brand_id, provider: PROVEDOR_DO_CANAL[nome], account_id: canal.connected_account_id, resource_id: recursoDoPost(id), params: {} },
+      p.action_id!,
+    );
+    await tx.execute(sql`update liame.social_post set action_id = ${pedido}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
+    auditDetail({
+      resourceId: id,
+      before: { canal: nome, situacao: canal.status, erro: canal.error, action_id: p.action_id },
+      after: { brand_id: p.brand_id, canal: nome, situacao: 'aguardando', action_id: pedido, ate: decisao.ate.toISOString() },
+    });
     return this.obter(auth, id);
   }
 

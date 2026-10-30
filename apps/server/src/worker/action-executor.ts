@@ -207,13 +207,10 @@ export class ActionExecutor {
 
   /** As checagens da hora e a escrita no provedor. */
   private async run(tx: Tx, row: ActionRow, approvalId: string | null): Promise<Outcome> {
-    const stop = await this.switches.check(tx, {
-      tenantId: row.tenant_id,
-      provider: row.provider,
-      brandId: row.brand_id,
-      accountId: row.account_id,
-      tool: row.tool,
-    });
+    const alvo = { tenantId: row.tenant_id, provider: row.provider, brandId: row.brand_id, accountId: row.account_id, tool: row.tool };
+    // A trava de outra ferramenta que também para esta (A6, Z5d: a do `post_publicar` para a nova tentativa do post).
+    const tambem = TOOLS[row.tool]?.travaTambem;
+    const stop = (await this.switches.check(tx, alvo)) ?? (tambem ? await this.switches.check(tx, { ...alvo, tool: tambem }) : null);
     if (stop) return { status: 'bloqueada', reason: `trava ativa (${stop.level}): ${stop.reason}` };
     if (!approvalId && !(await this.autoApproved(row))) return { status: 'bloqueada', reason: 'sem aprovação válida para o plano atual' };
     const connector = CONNECTORS[row.provider];

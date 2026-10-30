@@ -1,8 +1,9 @@
 import type { PostMetrics, PostResponse } from '@liame/contracts';
 import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
+import { pedeUmPostNovo } from '../actions/post-publicacao.js';
 import { linkComRastreio } from '../links/construtor.js';
-import { situacaoDoPacote, situacaoDoPost } from './post-plano.js';
+import { novaTentativa, situacaoDoPacote, situacaoDoPost } from './post-plano.js';
 
 // A leitura dos posts como as telas os veem (a Agenda e o pedido em Aprovações, A6, Z5c): o post, os canais com a conta
 // e a situação de cada um, e a situação do post pelo pedido. Fica à parte do serviço dos posts porque o serviço das
@@ -70,9 +71,9 @@ export async function fusoDaEmpresa(tx: Tx, tenantId: string): Promise<string> {
 /**
  * Os posts da empresa que casam com o filtro (sobre `liame.social_post p`), com os canais, numa consulta para os posts e
  * uma para os canais. `prefixoDaRecusa`: o começo do motivo do pedido recusado (do serviço das ações), que separa
- * "recusado" de "cancelado".
+ * "recusado" de "cancelado". `agora`: a hora em que se lê (até quando dá para "Tentar de novo" num canal, A6, Z5d).
  */
-export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaRecusa: string): Promise<PostResponse[]> {
+export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaRecusa: string, agora: Date = new Date()): Promise<PostResponse[]> {
   const p = await tx.execute<LinhaDoPost>(sql`
     select p.id, p.brand_id, p.kind, p.photo_id, p.crop_pos, p.publish_at, p.action_id, p.created_at, r.status as pedido_status, r.status_reason as pedido_motivo,
            tl.destination_url as link_destino, tl.utm_source as link_origem, tl.utm_medium as link_meio, tl.utm_campaign as link_campanha, tl.code as link_codigo
@@ -95,6 +96,15 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
   return p.rows.map((l): PostResponse => {
     const canais = canaisDo.get(l.id) ?? [];
     const situacoes = canais.map((x) => x.status);
+    // "Tentar de novo" (A6, Z5d; D-A6-54): em qual canal, e até quando; o pacote não tem.
+    const tentativa =
+      l.kind === 'post'
+        ? novaTentativa(
+            l.pedido_status,
+            canais.map((x) => ({ canal: x.channel, situacao: x.status, publicadoEm: x.published_at ? new Date(x.published_at) : null, pedePostNovo: pedeUmPostNovo(x.error) })),
+            agora,
+          )
+        : null;
     return {
       id: l.id,
       brand_id: l.brand_id,
@@ -121,6 +131,7 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
         metrics: numerosDoCanal(x.metrics),
         metrics_status: x.metrics_status,
         metrics_read_at: isoOuNulo(x.metrics_read_at),
+        retry_until: tentativa?.ok && tentativa.canal === x.channel ? tentativa.ate.toISOString() : null,
       })),
       // O link do post (A6, Z7; D-A6-46), montado como na criação (o mesmo endereço que está no fim do texto da Página).
       link:

@@ -108,10 +108,10 @@ describe.skipIf(!hasDb)('o post da marca no trilho (A6 · Z5b, parte 1)', () => 
     ]);
     const pedido = await pedidoDe(r.body.action_id);
     expect(pedido).toMatchObject({ tool: 'post_publicar', provider: 'instagram', account_id: e.instagram!.id, resource_id: `post:${r.body.id}`, status: 'aguardando_aprovacao', mode: 'APPROVAL', action: 'post.publicar' });
-    // O pedido pela API: a política da distribuição na versão 9 e o estado do post no plano.
+    // O pedido pela API: a política da distribuição na versão 10 e o estado do post no plano.
     const doPedido = await api.call('GET', `/v1/actions/${r.body.action_id}`, { cookie: e.cookie });
     expect(doPedido.body.policy).toMatchObject({ allowed: true, mode: 'APPROVAL' });
-    expect(doPedido.body.policy.versions[0]).toBe('plataforma@9');
+    expect(doPedido.body.policy.versions[0]).toBe('plataforma@10');
     const [guardado] = await ownerQuery<{ before_state: Record<string, unknown> }>(`select before_state from liame.action_request where id = $1`, [r.body.action_id]);
     expect(guardado!.before_state).toMatchObject({ post: r.body.id, foto: { id: foto.id, sha256: foto.sha256 }, recorte: null, hora_local: '19:00' });
 

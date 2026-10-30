@@ -62,8 +62,9 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
     // duas das mensagens não aceitam parâmetro.
     expect(Object.values(TOOLS).filter((t) => t.alwaysApproval).map((t) => t.name)).toEqual(['mensagem_disparar', 'avaliacao_responder', 'post_publicar']);
     for (const nome of ['mensagem_disparar', 'mensagem_pausar']) expect(TOOLS[nome]!.params.safeParse({ pessoas: 1 }).success).toBe(false);
-    // Só a pausa é direta para uma pessoa: não gasta, não envia e não desfaz nada.
-    expect(Object.values(TOOLS).filter((t) => t.directByPerson).map((t) => t.name)).toEqual(['mensagem_pausar', 'avaliacao_apagar_resposta']);
+    // Diretas para uma pessoa: a pausa (não gasta, não envia e não desfaz nada), apagar a resposta que o Liame publicou e a
+    // nova tentativa do post no canal que não saiu (A6, Z5d: o mesmo post que uma pessoa já aprovou com o código).
+    expect(Object.values(TOOLS).filter((t) => t.directByPerson).map((t) => t.name)).toEqual(['mensagem_pausar', 'avaliacao_apagar_resposta', 'post_tentar_de_novo']);
     // O conector está no registro (Y5, parte 6), com a flag de escrita das mensagens e sem exigir os tetos de verba de
     // mídia (D-A5-12): sem a flag, que nasce desligada, nenhum pedido passa do trilho.
     expect([regemcastMensagemConnector.provider, regemcastMensagemConnector.writeFlag, regemcastMensagemConnector.requiresSpendLimits]).toEqual(['regemcast', 'whatsapp_campaign', false]);
@@ -225,7 +226,7 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
   });
 
   it('D-A5-11: a política da distribuição manda o envio esperar a aprovação de uma pessoa, peça quem pedir; a pausa é direta só para uma pessoa (versão 6)', () => {
-    expect(PLATFORM_POLICY.version).toBe(9);
+    expect(PLATFORM_POLICY.version).toBe(10);
     const proposta = (action: string, actor: 'human' | 'agent') =>
       ActionProposal.parse({
         tool: action === 'mensagem.disparar' ? 'mensagem_disparar' : 'mensagem_pausar',
@@ -239,14 +240,14 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
         actor,
       });
     for (const actor of ['human', 'agent'] as const) {
-      expect(chooseMode([PLATFORM_POLICY], proposta('mensagem.disparar', actor)), `enviar ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 9 });
+      expect(chooseMode([PLATFORM_POLICY], proposta('mensagem.disparar', actor)), `enviar ${actor}`).toEqual({ mode: 'APPROVAL', source: 'platform', version: 10 });
     }
     // Pausar: a pessoa pausa direto (decisão do dono de 09/10/2026); o funcionário de IA continua esperando a aprovação.
-    expect(chooseMode([PLATFORM_POLICY], proposta('mensagem.pausar', 'human'))).toEqual({ mode: 'AUTO', source: 'platform', version: 9 });
-    expect(chooseMode([PLATFORM_POLICY], proposta('mensagem.pausar', 'agent'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 9 });
+    expect(chooseMode([PLATFORM_POLICY], proposta('mensagem.pausar', 'human'))).toEqual({ mode: 'AUTO', source: 'platform', version: 10 });
+    expect(chooseMode([PLATFORM_POLICY], proposta('mensagem.pausar', 'agent'))).toEqual({ mode: 'APPROVAL', source: 'platform', version: 10 });
     // Sábado, 26/09/2026, 15:00 em São Paulo.
     const em = { at: new Date('2026-09-26T18:00:00Z'), timezone: 'America/Sao_Paulo' };
-    expect(evaluatePolicy([PLATFORM_POLICY], proposta('mensagem.disparar', 'human'), em)).toMatchObject({ allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@9'] });
+    expect(evaluatePolicy([PLATFORM_POLICY], proposta('mensagem.disparar', 'human'), em)).toMatchObject({ allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@10'] });
     // A regra mais específica de uma marca venceria a da distribuição no modo: por isso a trava também está na ferramenta.
     const daMarca = { source: 'brand' as const, version: 1, document: { rules: [{ type: 'autonomy' as const, action: 'mensagem.disparar', provider: 'regemcast', mode: 'AUTO' as const }] } };
     expect(chooseMode([PLATFORM_POLICY, daMarca], proposta('mensagem.disparar', 'human')).mode).toBe('AUTO');

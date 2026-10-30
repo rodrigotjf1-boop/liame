@@ -123,6 +123,17 @@ const SEM_CONFERIR =
 const SUMIU = 'Este post não está mais no Liame.';
 const FORA_DO_AMBIENTE = 'A publicação nas redes não está disponível neste ambiente.';
 
+/**
+ * O motivo de o canal não ter saído pede um post novo, e "Tentar de novo" não adianta (A6, Z5d; D-A6-54): a foto que a
+ * rede recusou, o arquivo da foto que não está mais guardado, a foto grande demais para a Página e a tentativa que não deu
+ * para conferir (tentar de novo poderia publicar duas vezes). Os outros (a autorização, a permissão, a Página fora da
+ * autorização, a trava, a rede que não aceitou) podem passar.
+ */
+export function pedeUmPostNovo(erro: string | null): boolean {
+  if (!erro) return false;
+  return erro === FOTO_GRANDE || erro === SEM_CONFERIR || CANAIS_DO_POST.some((c) => erro === FOTO_RECUSADA(c) || erro === SEM_ARQUIVO(c));
+}
+
 type LinhaDoPost = {
   id: string;
   brand_id: string;

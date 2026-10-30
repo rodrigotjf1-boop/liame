@@ -42,8 +42,8 @@ const post = (o: Partial<Post> = {}): Post => ({
   timezone: SP,
   link: null,
   channels: [
-    { channel: 'instagram', account_id: uuid(60), account_name: '@casabrasa', text: 'Sexta é dia de combo. Peça pelo link da bio.', status: 'aguardando', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null },
-    { channel: 'facebook', account_id: uuid(61), account_name: 'Casa Brasa', text: 'Sexta é dia de combo: smash, batata e refrigerante.', status: 'aguardando', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null },
+    { channel: 'instagram', account_id: uuid(60), account_name: '@casabrasa', text: 'Sexta é dia de combo. Peça pelo link da bio.', status: 'aguardando', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null, retry_until: null },
+    { channel: 'facebook', account_id: uuid(61), account_name: 'Casa Brasa', text: 'Sexta é dia de combo: smash, batata e refrigerante.', status: 'aguardando', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null, retry_until: null },
   ],
   ...o,
 });
@@ -72,7 +72,7 @@ const pedido = (o: Partial<ActionResponse> = {}): AcaoDePost =>
     next_attempt_at: null,
     undoes: null,
     undone_by: null,
-    policy: { allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@9'] },
+    policy: { allowed: true, mode: 'APPROVAL', violations: [], versions: ['plataforma@10'] },
     approvals: [],
     workflow: null,
     expires_at: '2026-11-01T14:20:00.000Z',

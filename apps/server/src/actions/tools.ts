@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { type ContextoDaAvaliacao, EstadoDaAvaliacao, ehNotaBaixa, ParametrosDaResposta, planoDaResposta, planoDeApagar } from './avaliacao-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
-import { EstadoDoPost, planoDoPost, quandoSai } from '../posts/post-plano.js';
+import { EstadoDoPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
 // Registro de ferramentas (arquitetura §6, ADR-007): cada ferramenta declara risco, impacto financeiro,
@@ -74,7 +74,9 @@ export interface ToolDefinition {
   /**
    * Quando quem pede é uma pessoa e a política deixa a ação em modo automático, ela executa sem o código do app e
    * sem depender do `autopilot` (A5, Y5: pausar um envio de mensagem). A pessoa confirma na tela, e o pedido fica com o
-   * nome dela. Só para ação que não gasta, não envia e não desfaz nada. O funcionário de IA não ganha isto.
+   * nome dela. Só para ação que não gasta, não envia e não desfaz nada. O funcionário de IA não ganha isto. A exceção é a
+   * nova tentativa do post (A6, Z5d; D-A6-54; P19): ela publica, mas o mesmo post que uma pessoa já aprovou com o código,
+   * no canal que a aprovação cobriu e que não saiu.
    */
   directByPerson?: boolean;
   /**
@@ -89,6 +91,16 @@ export interface ToolDefinition {
    * (`POST /v1/actions`), nem por um funcionário de IA: o Liame não apaga o que não publicou.
    */
   onlyAsUndo?: boolean;
+  /**
+   * Só existe como a nova tentativa de outra ação (A6, Z5d: o post no canal que não saiu), pedida pela rota dela, que
+   * confere o prazo e o motivo e prepara o recurso. Não se pede direto (`POST /v1/actions`), nem por um funcionário de IA.
+   */
+  onlyAsRetry?: boolean;
+  /**
+   * A trava (kill switch) de outra ferramenta que também para esta (A6, Z5d: a trava do `post_publicar` para a nova
+   * tentativa do post). Conferida no pedido e na execução, junto com a desta.
+   */
+  travaTambem?: string;
   /**
    * Os parâmetros que só o funcionário de IA preenche (A6, Z6: as sugestões de resposta do Social media). O pedido de
    * uma pessoa não os traz (400, como parâmetro inválido), e alterar o pedido os mantém como o funcionário deixou: a
@@ -466,6 +478,36 @@ export const TOOLS: Record<string, ToolDefinition> = {
         text: plano.texto,
       };
     },
+    executeAt(before, agora, fuso) {
+      const lido = EstadoDoPost.safeParse(before);
+      return lido.success ? quandoSai(lido.data.hora, agora, fuso) : null;
+    },
+  },
+  // "Tentar de novo" (A6, Z5d; P19, aprovado pelo dono em 21/10/2026; D-A6-54): o post que saiu num canal e não no outro
+  // manda o MESMO post aprovado só no canal que faltou. Quem pede é uma pessoa (na gaveta do post ou em Aprovações), e o
+  // pedido executa sem o código do app: o texto, a foto e o canal são os que a aprovação cobriu (a política da
+  // distribuição v10 põe a ação em AUTO só para uma pessoa). Só existe pela rota do post (`POST /v1/posts/{id}/retry`),
+  // que confere o prazo de 24 horas e o motivo da falha e põe o canal de volta na espera; a trava do `post_publicar` vale
+  // para ela também.
+  post_tentar_de_novo: {
+    name: 'post_tentar_de_novo',
+    version: 1,
+    owner: 'social',
+    description:
+      'Publica de novo o post aprovado no canal em que ele não saiu (o mesmo texto e a mesma foto), quando ele já saiu no outro canal. O post é público e sai em nome da empresa.',
+    risk: 'R2',
+    providers: ['instagram', 'facebook_page'],
+    compensation: 'apagar_o_post_das_redes',
+    directByPerson: true,
+    onlyAsRetry: true,
+    travaTambem: 'post_publicar',
+    params: NoParams,
+    plan(before) {
+      const plano = planoDeTentarDeNovo(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return { action: 'post.tentar_de_novo', budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado, text: plano.texto };
+    },
+    // Sai agora, dentro da janela das 8h às 22h no fuso da empresa (a hora marcada já passou).
     executeAt(before, agora, fuso) {
       const lido = EstadoDoPost.safeParse(before);
       return lido.success ? quandoSai(lido.data.hora, agora, fuso) : null;
