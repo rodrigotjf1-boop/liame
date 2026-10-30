@@ -3,9 +3,10 @@
 import type { BrandPhoto } from '@liame/contracts';
 import Link from 'next/link';
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
+import { ApagarDasRedes, type FeitoDoApagar } from '@/components/agenda/apagar-das-redes';
 import { PreviasDoPost } from '@/components/agenda/previas-do-post';
 import { SituacaoDosCanais } from '@/components/agenda/situacao-dos-canais';
-import { noFuso } from '@/components/agenda/textos';
+import { avisoDoApagar, deOndeSai, noFuso, podeApagar } from '@/components/agenda/textos';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
 import { disparar } from '@/lib/disparar';
@@ -19,8 +20,8 @@ import { aprovacaoParcial, cabecalhoDe, type Grupo, identidadeDoPlano, prazoDe }
 // a prévia de cada canal (a foto, com o recorte do Instagram, e o texto), o que foi conferido e a decisão com o código do
 // app. Decidido: o resultado (agendado, publicando, publicado, em parte, não saiu, cancelado, recusado, expirado), o que
 // aconteceu em cada canal, no agendado "Cancelar o post" (sem o código: tira o risco, D-A6-23) e "Mudar a hora" (com o
-// código de novo, D-A6-55) e, no canal que não saiu, "Tentar de novo" (A6, Z5d; D-A6-54). Apagar das redes fica para
-// quando o servidor fizer (divergência do P19, como na Agenda).
+// código de novo, D-A6-55), no canal que não saiu, "Tentar de novo" (A6, Z5d; D-A6-54), e, no post no ar, "Apagar das
+// redes", com o código do app (A6, Z5d, parte 7; D-A6-57). O pedido de apagar também abre aqui, com o que aconteceu.
 
 type Props = {
   acao: AcaoDePost;
@@ -45,6 +46,8 @@ type Props = {
   aoTentarDeNovo: (acao: AcaoDePost, canal: string) => Promise<Feito>;
   /** "Mudar a hora" do post aprovado (A6, Z5d; D-A6-55): a tela pede com o código, avisa e abre o pedido novo. */
   aoMudarAHora: (acao: AcaoDePost, publishAt: string, codigo: string) => Promise<Feito>;
+  /** "Apagar das redes" (A6, Z5d, parte 7; D-A6-57): a tela pede com o código, avisa e abre o pedido de apagar. */
+  aoApagar: (acao: AcaoDePost, codigo: string) => Promise<FeitoDoApagar>;
   /** A foto não carregou (o endereço de 5 minutos venceu): a tela pede endereços novos. */
   aoFalharImagem: () => void;
 };
@@ -69,6 +72,7 @@ export function DetalhePost({
   aoCancelar,
   aoTentarDeNovo,
   aoMudarAHora,
+  aoApagar,
   aoFalharImagem,
 }: Props) {
   const ids = useId();
@@ -92,6 +96,13 @@ export function DetalhePost({
   const [erroAoTentar, setErroAoTentar] = useState<string | null>(null);
   // "Mudar a hora" (A6, Z5d, parte 4): o formulário aberto.
   const [mudando, setMudando] = useState(false);
+  // "Apagar das redes" (A6, Z5d, parte 7): o formulário com o código no lugar do botão; "Manter" devolve o foco ao botão.
+  const [apagando, setApagando] = useState(false);
+  const apagarBt = useRef<HTMLButtonElement>(null);
+  const [focarApagar, setFocarApagar] = useState(0);
+  useEffect(() => {
+    if (focarApagar) apagarBt.current?.focus();
+  }, [focarApagar]);
 
   // Outro pedido aberto: a confirmação, o formulário e o erro eram do anterior.
   useEffect(() => {
@@ -99,6 +110,7 @@ export function DetalhePost({
     setErroAoCancelar(null);
     setErroAoTentar(null);
     setMudando(false);
+    setApagando(false);
   }, [acao.id]);
 
   async function cancelar() {
@@ -145,10 +157,15 @@ export function DetalhePost({
 
   if (grupo !== 'pendente') {
     const r = resultadoDoPost(acao, agora);
-    const mostraCanais = ['publicado', 'em_parte', 'nao_saiu', 'publicando'].includes(post.status);
+    const mostraCanais = ['publicado', 'em_parte', 'nao_saiu', 'publicando', 'apagado'].includes(post.status);
     const podeCancelar = podeOperar && post.status === 'agendado';
     // Mudar a hora (A6, Z5d; D-A6-23 e D-A6-55): quem pode aprovar, no pedido aprovado do post que espera a hora.
     const podeMudar = podeDecidir && post.status === 'agendado' && acao.status === 'aprovada' && acao.id === post.action_id;
+    // Apagar das redes (A6, Z5d, parte 7; D-A6-57): quem pode aprovar, no pedido que é o do post (o de publicar, ou o
+    // último de apagar), com o post no ar em algum canal.
+    const podeApagarAqui = podeDecidir && podeApagar(post) && (acao.id === post.action_id || acao.id === post.removal?.action_id);
+    // O pedido de apagar que deixou o post no ar num canal já diz o porquê no resultado; o de publicar, logo abaixo.
+    const naoApagou = acao.tool === 'post_apagar' ? null : avisoDoApagar(post);
     return (
       <>
         {voltar}
@@ -175,6 +192,38 @@ export function DetalhePost({
             <p className="campo-erro" role="alert">
               {erroAoTentar}
             </p>
+          )}
+          {naoApagou && (
+            <p className="alerta-versao" role="status" data-po-nao-apagou>
+              <Icone nome="alert" pequeno />
+              <span>Apagar das redes: {naoApagou}</span>
+            </p>
+          )}
+          {podeApagarAqui && (
+            <div className="desfazer">
+              {apagando ? (
+                <ApagarDasRedes
+                  id={`${ids}-apagar`}
+                  deOnde={deOndeSai(post)}
+                  aoApagar={(codigo) => aoApagar(acao, codigo)}
+                  aoManter={() => {
+                    setApagando(false);
+                    setFocarApagar((n) => n + 1);
+                  }}
+                />
+              ) : (
+                <>
+                  <button ref={apagarBt} className="btn btn--perigo" type="button" data-po-apagar onClick={() => setApagando(true)}>
+                    <Icone nome="undo" pequeno />
+                    Apagar das redes
+                  </button>
+                  <p className="nota">
+                    <Icone nome="info" />
+                    <span>Apagar tira o post de cada canal em que ele está no ar e pede o código do app. Não desfaz quem já viu.</span>
+                  </p>
+                </>
+              )}
+            </div>
           )}
           {(podeCancelar || podeMudar) && (
             <div className="desfazer">

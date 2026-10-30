@@ -3,9 +3,8 @@ import type { NomeIcone } from '@/components/ui/icone';
 
 // A Agenda (mockups/prototipo-post.html, P19 aprovado em 21/10/2026; Z5c da A6): os posts da marca na semana, dia a
 // dia, no fuso da empresa (que vem do servidor: a janela das 8h às 22h é nele). Funções puras: a semana, o dia e a hora
-// de cada post, a situação dele e a de cada canal. O que o P19 mostra e o servidor ainda não faz (a pauta e a data
-// comercial do dia, mudar a hora, apagar das redes, tentar de novo, o link do post) fica fora, como divergência
-// (`decisoes-design.md`, 29/10/2026). O pacote pronto (mockups/prototipo-pacote.html, P22 aprovado em 21/10/2026; Z8
+// de cada post, a situação dele e a de cada canal. O que o P19 mostra entrou aos poucos (a Z5d: tentar de novo, mudar a
+// hora, a pauta e a data comercial do dia e apagar das redes; as divergências estão em `decisoes-design.md`). O pacote pronto (mockups/prototipo-pacote.html, P22 aprovado em 21/10/2026; Z8
 // da A6): no TikTok e no YouTube o Liame não publica; ele monta o texto, a foto e a hora, e quem publica é a pessoa.
 
 export const DIAS_CURTOS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'] as const;
@@ -24,8 +23,8 @@ export const NOME_DO_CANAL: Record<string, string> = { instagram: 'Instagram', f
 const NOME_CURTO: Record<string, string> = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube' };
 /** "no Instagram", "na Página do Facebook" (V121: a preposição vai com o nome). */
 export const NO_CANAL: Record<string, string> = { instagram: 'no Instagram', facebook: 'na Página do Facebook', tiktok: 'no TikTok', youtube: 'no YouTube' };
-/** "do TikTok", "do YouTube": o pacote de cada rede, na frase. */
-const DO_CANAL: Record<string, string> = { tiktok: 'do TikTok', youtube: 'do YouTube' };
+/** "do TikTok", "do Instagram": o pacote de cada rede, e o canal de onde o post sai (apagar das redes), na frase. */
+const DO_CANAL: Record<string, string> = { instagram: 'do Instagram', facebook: 'da Página do Facebook', tiktok: 'do TikTok', youtube: 'do YouTube' };
 
 /** Os nomes na frase, com "e" antes do último: "do TikTok e do YouTube". */
 const emFrase = (partes: string[]): string => (partes.length > 1 ? `${partes.slice(0, -1).join(', ')} e ${partes[partes.length - 1]}` : (partes[0] ?? ''));
@@ -75,6 +74,8 @@ const SITUACAO: Record<string, SituacaoNaTela> = {
   cancelado: { rotulo: 'Cancelado', icone: 'x', tom: '' },
   recusado: { rotulo: 'Recusado', icone: 'x', tom: '' },
   expirado: { rotulo: 'Expirou sem aprovação', icone: 'x', tom: '' },
+  // Apagado das redes em todos os canais em que saiu (A6, Z5d, parte 7; P19).
+  apagado: { rotulo: 'Apagado das redes', icone: 'undo', tom: '' },
   // O pacote pronto (P22): a pessoa publica e marca "Publiquei".
   pacote_pronto: { rotulo: 'Você publica', icone: 'send', tom: '' },
   pacote_publicado: { rotulo: 'Você publicou', icone: 'check-circle', tom: 'ok' },
@@ -82,6 +83,11 @@ const SITUACAO: Record<string, SituacaoNaTela> = {
 /** A situação que o servidor manda; a desconhecida (a lista pode crescer) fica neutra, com o próprio nome. */
 export function situacaoDoPost(status: string): SituacaoNaTela {
   return SITUACAO[status] ?? { rotulo: status.replace(/_/g, ' '), icone: 'info', tom: '' };
+}
+
+/** A situação no cartão do dia: a do post, ou "Apagando" enquanto o pedido de apagar das redes executa (A6, Z5d, parte 7). */
+export function situacaoDoCartao(post: Pick<PostResponse, 'status' | 'removal'>): SituacaoNaTela {
+  return post.removal?.status === 'apagando' ? { rotulo: 'Apagando das redes', icone: 'clock', tom: '' } : situacaoDoPost(post.status);
 }
 
 /** O que sai da semana: o cancelado, o recusado e o que expirou sem aprovação não vão ao ar (o P19 também os tira). */
@@ -115,7 +121,7 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
   for (const post of dados.items) {
     if (FORA_DA_SEMANA.has(post.status)) continue;
     const { dia, hora } = noFuso(new Date(post.publish_at), dados.timezone);
-    const situacao = situacaoDoPost(post.status);
+    const situacao = situacaoDoCartao(post);
     const canais = canaisDoPost(post);
     const nomes = post.channels.map((c) => NOME_DO_CANAL[c.channel] ?? c.channel).join(' e ');
     const item: PostNoDia = { post, dia, hora, canais, situacao, rotulo: `${ehPacote(post) ? 'Pacote' : 'Post'} de ${quando(dia, hora, hoje)}, ${nomes}: ${situacao.rotulo.toLowerCase()}` };
@@ -151,7 +157,10 @@ export function linhaDoCanal(c: PostChannelResponse, post: PostResponse, fuso: s
   }
   if (c.status === 'falhou') return { ...base, icone: 'alert-circle', tom: 'falha', frase: `não saiu. ${c.error ?? ''}`.trim() };
   if (c.status === 'cancelado') return { ...base, icone: 'x', tom: '', frase: 'cancelado: não saiu.' };
-  if (c.status === 'apagado') return { ...base, icone: 'undo', tom: '', frase: 'apagado.' };
+  if (c.status === 'apagado') {
+    const em = c.removed_at ? noFuso(new Date(c.removed_at), fuso) : null;
+    return { ...base, icone: 'undo', tom: '', frase: em ? `apagado ${em.dia === hoje ? 'hoje' : `em ${ddmm(em.dia)}`}, às ${em.hora}.` : 'apagado.' };
+  }
   // Esperando ou publicando: o pedido que espera a aprovação não tem hora certa para sair.
   const marcado = noFuso(new Date(post.publish_at), fuso);
   if (post.status === 'esperando_aprovacao') return { ...base, icone: 'clock', tom: 'espera', frase: `sai ${quando(marcado.dia, marcado.hora, hoje)}, depois de aprovado.` };
@@ -179,10 +188,42 @@ export function enderecoSeguro(v: string | null): string | null {
   }
 }
 
+/**
+ * Dá para "Apagar das redes" agora (A6, Z5d, parte 7; P19; D-A6-57)? O post do Liame no ar em algum canal, sem nada dele
+ * saindo (publicando) e sem outro pedido de apagar executando. Quem pode (quem aprova, com o código) a tela confere à
+ * parte; o servidor confere tudo de novo.
+ */
+export function podeApagar(post: PostResponse): boolean {
+  return !ehPacote(post) && post.status !== 'publicando' && post.removal?.status !== 'apagando' && post.channels.some((c) => c.status === 'publicado');
+}
+
+/** "do Instagram e da Página do Facebook": os canais em que o post está no ar, de onde "Apagar das redes" o tira. */
+export function deOndeSai(post: Pick<PostResponse, 'channels'>): string {
+  return emFrase(post.channels.filter((c) => c.status === 'publicado').map((c) => DO_CANAL[c.channel] ?? c.channel));
+}
+
+/**
+ * O pedido de apagar que terminou com o post ainda no ar em algum canal (A6, Z5d, parte 7): o porquê, como o servidor
+ * escreveu ("O post saiu da Página do Facebook. A Meta não deixou…"). Nulo quando não há o que dizer.
+ */
+export function avisoDoApagar(post: Pick<PostResponse, 'removal'>): string | null {
+  const r = post.removal;
+  if (!r || (r.status !== 'em_parte' && r.status !== 'nao_apagou')) return null;
+  return r.reason ?? (r.status === 'em_parte' ? 'O post saiu de um canal e continua no outro.' : 'O post continua no ar.');
+}
+
 /** A frase do topo da gaveta: a situação, com o que ela quer dizer. */
 export function fraseDaSituacao(post: PostResponse, fuso: string, hoje: string): string {
   const s = situacaoDoPost(post.status);
   const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
+  if (post.removal?.status === 'apagando') return 'Apagando das redes: o Liame tira o post de cada canal em que ele está no ar.';
+  if (post.status === 'apagado') {
+    // A hora em que saiu do último canal, no fuso da empresa.
+    const saiu = post.channels.map((c) => c.removed_at).filter((x): x is string => typeof x === 'string').sort().at(-1);
+    const em = saiu ? noFuso(new Date(saiu), fuso) : null;
+    const quem = post.removal?.requested_by_name ? ` por ${post.removal.requested_by_name}` : '';
+    return `${s.rotulo}${quem}${em ? `, ${quando(em.dia, em.hora, hoje)}` : ''}. O post não aparece mais nas redes; quem já viu, viu.`;
+  }
   if (post.status === 'esperando_aprovacao') return `${s.rotulo}: o post só sai depois de aprovado, com o código do app.`;
   if (post.status === 'agendado') return `${s.rotulo}: aprovado, sai ${quando(dia, hora, hoje)}.`;
   if (post.status === 'em_parte') return `${s.rotulo}: veja abaixo onde saiu e onde não saiu.`;

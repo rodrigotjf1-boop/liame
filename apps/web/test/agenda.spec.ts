@@ -2,15 +2,18 @@ import type { BrandPhoto, PostChannelResponse, PostListResponse, PostResponse } 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { ApagarDasRedes, erroDoCodigo } from '@/components/agenda/apagar-das-redes';
 import { GavetaNovoPost } from '@/components/agenda/gaveta-novo-post';
 import { GavetaPacote } from '@/components/agenda/gaveta-pacote';
 import { GavetaPost } from '@/components/agenda/gaveta-post';
 import {
+  avisoDoApagar,
   avisoDoNovo,
   campoDaRecusa,
   conferirNovo,
   contaDoCanal,
   ddmm,
+  deOndeSai,
   dicaDaHora,
   dicaDoLinkDoPost,
   dicaDoTexto,
@@ -27,9 +30,11 @@ import {
   noFuso,
   type NovoPost,
   periodo,
+  podeApagar,
   posicaoDoRecorte,
   quadroDoRecorte,
   quando,
+  situacaoDoCartao,
   situacaoDoPost,
   somaDias,
   telaDaAgenda,
@@ -308,6 +313,70 @@ describe('a gaveta do post', () => {
     expect(html).toContain('a legenda não tem link que abre');
     // Sem a foto (apagada nas Fotos), a gaveta diz que o post não sai.
     expect(gaveta(post(1, '2026-10-30', '19:00', 'agendado', undefined, { photo_id: null }), { foto: null })).toContain('A foto deste post foi apagada nas Fotos: ele não sai.');
+  });
+
+  it('apagar das redes (A6 · Z5d, parte 7; P19): o botão no post no ar, para quem aprova; o andamento, o apagado e o que ficou no ar', () => {
+    const saiu = sp('2026-10-27', '19:01');
+    const doisNoAr = [canal('instagram', { status: 'publicado', published_at: saiu }), canal('facebook', { status: 'publicado', published_at: saiu })];
+    const noAr = (status = 'publicado', canais: PostChannelResponse[] = doisNoAr, removal: PostResponse['removal'] = null) => post(7, '2026-10-27', '19:00', status, canais, { removal });
+    const pedido = (status: string, reason: string | null = null): PostResponse['removal'] => ({ action_id: id(800), status, reason, requested_by_name: 'Rodrigo', requested_at: sp('2026-10-29', '14:04') });
+    expect(podeApagar(noAr())).toBe(true);
+    expect(deOndeSai(noAr())).toBe('do Instagram e da Página do Facebook');
+    const html = gaveta(noAr());
+    expect(html).toContain('data-po-apagar');
+    expect(html).toContain('Apagar das redes');
+    expect(gaveta(noAr(), { podeAprovar: false })).not.toContain('data-po-apagar');
+    // Em parte: o canal que está no ar sai (o P19 só mostrava no publicado; divergência em decisoes-design).
+    const emParte = noAr('em_parte', [canal('instagram', { status: 'publicado', published_at: saiu }), canal('facebook', { status: 'falhou', error: 'A Página do Facebook não aceitou o post.' })]);
+    expect(podeApagar(emParte)).toBe(true);
+    expect(deOndeSai(emParte)).toBe('do Instagram');
+    // Não dá: o que ainda não saiu, o que está publicando, o pacote e o que já está saindo das redes.
+    expect(podeApagar(post(3, '2026-10-30', '19:00', 'agendado'))).toBe(false);
+    expect(podeApagar(noAr('publicando'))).toBe(false);
+    expect(podeApagar({ ...noAr(), kind: 'pacote' })).toBe(false);
+    const saindo = noAr('publicado', doisNoAr, pedido('apagando'));
+    expect(podeApagar(saindo)).toBe(false);
+    expect(fraseDaSituacao(saindo, SP, HOJE)).toBe('Apagando das redes: o Liame tira o post de cada canal em que ele está no ar.');
+    expect(situacaoDoCartao(saindo)).toMatchObject({ rotulo: 'Apagando das redes', icone: 'clock' });
+    expect(situacaoDoCartao(noAr())).toMatchObject({ rotulo: 'Publicado' });
+    expect(gaveta(saindo)).not.toContain('data-po-apagar');
+    // Apagado: por quem e quando (a hora em que saiu do último canal), e cada canal com a hora dele.
+    const apagado = noAr(
+      'apagado',
+      [canal('instagram', { status: 'apagado', published_at: saiu, removed_at: sp('2026-10-29', '14:05') }), canal('facebook', { status: 'apagado', published_at: saiu, removed_at: sp('2026-10-29', '14:04') })],
+      pedido('apagado'),
+    );
+    expect(situacaoDoPost('apagado')).toMatchObject({ rotulo: 'Apagado das redes', icone: 'undo', tom: '' });
+    expect(fraseDaSituacao(apagado, SP, HOJE)).toBe('Apagado das redes por Rodrigo, hoje, às 14:05. O post não aparece mais nas redes; quem já viu, viu.');
+    expect(linhaDoCanal(apagado.channels[0]!, apagado, SP, HOJE)).toMatchObject({ icone: 'undo', frase: 'apagado hoje, às 14:05.' });
+    expect(linhaDoCanal(apagado.channels[1]!, apagado, SP, '2026-10-30').frase).toBe('apagado em 29/10, às 14:04.');
+    expect(podeApagar(apagado)).toBe(false);
+    expect(gaveta(apagado)).not.toContain('data-po-apagar');
+    // O que ficou no ar num canal: o porquê, como o servidor escreveu, e o botão para apagar de novo.
+    const porque = 'O post saiu da Página do Facebook. A Meta não deixou o Liame apagar neste Instagram.';
+    const ficou = noAr('publicado', [canal('instagram', { status: 'publicado', published_at: saiu }), canal('facebook', { status: 'apagado', removed_at: sp('2026-10-29', '14:05') })], pedido('em_parte', porque));
+    expect(avisoDoApagar(ficou)).toBe(porque);
+    expect(avisoDoApagar(noAr('publicado', doisNoAr, pedido('nao_apagou')))).toBe('O post continua no ar.');
+    expect(avisoDoApagar(noAr())).toBeNull();
+    expect(avisoDoApagar(apagado)).toBeNull();
+    const h = gaveta(ficou);
+    expect(h).toContain(porque);
+    expect(h).toContain('data-po-apagar');
+    expect(deOndeSai(ficou)).toBe('do Instagram');
+  });
+
+  it('o formulário do apagar: de onde sai, o código do app (6 números) e "Apagar das redes" ou "Manter"', () => {
+    const html = renderToStaticMarkup(createElement(ApagarDasRedes, { id: 'f', deOnde: 'do Instagram e da Página do Facebook', aoApagar: async () => ({ ok: true }) as const, aoManter: () => undefined }));
+    expect(html).toContain('Sai do Instagram e da Página do Facebook, onde o Liame publicou. Apagar não se desfaz, e quem já viu o post, viu.');
+    expect(html).toContain('Código do app');
+    expect(html).toContain('autoComplete="one-time-code"');
+    expect(html).toContain('inputMode="numeric"');
+    expect(html).toContain('Apagar das redes');
+    expect(html).toContain('Manter');
+    expect(erroDoCodigo('123456')).toBeNull();
+    expect(erroDoCodigo('12345')).toBe('Digite os 6 números do app.');
+    expect(erroDoCodigo('12a456')).toBe('Digite os 6 números do app.');
+    expect(erroDoCodigo('')).toBe('Digite os 6 números do app.');
   });
 });
 
