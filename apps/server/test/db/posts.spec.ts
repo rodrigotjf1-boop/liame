@@ -82,7 +82,7 @@ describe.skipIf(!hasDb)('o post da marca no trilho (A6 · Z5b, parte 1)', () => 
   it('com a função desligada, a Agenda vem vazia e o novo post responde 409, antes de qualquer conferência', async () => {
     const e = await empresaComCanais(api, 'Casa Brasa Posts Desligados', { ligada: false });
     const foto = await fotoPronta(e);
-    expect((await agenda(e)).body).toEqual({ enabled: false, timezone: FUSO, channels: [], items: [], post_link: { ok: false, reason: null } });
+    expect((await agenda(e)).body).toEqual({ enabled: false, timezone: FUSO, channels: [], items: [], post_link: { ok: false, reason: null }, pauta: [], dates: [] });
     const r = await novo(e, foto.id, { publish_at: horaNoFuso(-3, '19:00') });
     expect([r.status, r.body.code]).toEqual([409, 'funcao-desligada']);
     expect(await ownerQuery(`select 1 from liame.social_post where tenant_id = $1`, [e.tenantId])).toHaveLength(0);
@@ -221,7 +221,7 @@ describe.skipIf(!hasDb)('o post da marca no trilho (A6 · Z5b, parte 1)', () => 
     expect((await api.call('GET', `/v1/posts?brand_id=${e.brandId}&from=${diaNoFuso(0)}&to=${diaNoFuso(3)}`, { cookie: outra.cookie })).status).toBe(404);
     // Desligada depois, a Agenda vem vazia (os posts ficam guardados).
     await ligarFlagDaEmpresa(api, 'social_write', e.tenantId, false);
-    expect((await agenda(e)).body).toEqual({ enabled: false, timezone: FUSO, channels: [], items: [], post_link: { ok: false, reason: null } });
+    expect((await agenda(e)).body).toEqual({ enabled: false, timezone: FUSO, channels: [], items: [], post_link: { ok: false, reason: null }, pauta: [], dates: [] });
   });
 
   it('o pedido em Aprovações traz o post, o mesmo da Agenda, com o fuso da empresa (Z5c, parte 4)', async () => {

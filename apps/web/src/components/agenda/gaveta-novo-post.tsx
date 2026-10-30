@@ -50,6 +50,11 @@ type Props = {
   podeVerContas: boolean;
   podeVerFotos: boolean;
   reserva: RefObject<HTMLElement | null>;
+  /**
+   * O item da pauta do Estrategista de onde o post nasce ("Fazer o post" no dia; P19, D-A6-20): o dia já vem marcado, e a
+   * gaveta mostra o item. Nulo: o "Novo post" do topo.
+   */
+  pauta?: { dia: string; item: string } | null;
   /** O post mandado (o do Liame ou, sem ele, o primeiro pacote) e os canais que a pessoa escolheu. */
   aoMandar: (post: PostResponse, canais: string[]) => void;
   aoFechar: () => void;
@@ -58,7 +63,7 @@ type Props = {
 /** A ordem dos canais na tela e no pedido: os do Liame, depois os do pacote. */
 const ORDEM: readonly string[] = [...CANAIS_DO_LIAME, ...CANAIS_DO_PACOTE];
 
-export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, podeVerContas, podeVerFotos, reserva, aoMandar, aoFechar }: Props) {
+export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, podeVerContas, podeVerFotos, reserva, pauta = null, aoMandar, aoFechar }: Props) {
   const ids = useId();
   const primeiroCampo = useRef<HTMLButtonElement>(null);
   const fecharBt = useRef<HTMLButtonElement>(null);
@@ -69,7 +74,7 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
     foto: null,
     canais: CANAIS_DO_LIAME.filter((c) => contas[c]?.conta),
     textos: Object.fromEntries(ORDEM.map((c) => [c, ''])),
-    dia: somaDias(hoje, 1),
+    dia: pauta?.dia ?? somaDias(hoje, 1),
     hora: '19:00',
     recorte: 50,
   }));
@@ -209,6 +214,14 @@ export function GavetaNovoPost({ marca, fotos, canais, postLink, fuso, hoje, pod
           </button>
         </div>
         <div className="dialogo-corpo" ref={corpo}>
+          {pauta && (
+            <p className="po-nota">
+              <Icone nome="compass" pequeno />
+              <span>
+                <b>Da pauta da semana:</b> {pauta.item}
+              </span>
+            </p>
+          )}
           {erroGeral && (
             <p className="dialogo-erro" role="alert">
               <Icone nome="alert" pequeno />

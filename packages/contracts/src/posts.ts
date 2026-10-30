@@ -177,6 +177,17 @@ export const PostListResponse = z.strictObject({
    * loja ainda não existe). A lista pode crescer.
    */
   post_link: z.strictObject({ ok: z.boolean(), reason: z.string().regex(/^[a-z_]{2,30}$/).nullable() }),
+  /**
+   * A pauta da semana nos dias do período (A6, Z5d, parte 5; D-A6-20 e D-A6-56): o item de cada dia, do plano de pauta do
+   * Estrategista aprovado mais novo que cobre o dia (`plan_id`). Só para quem vê os planos (`planos.ver`); vazia sem
+   * eles e com a função desligada.
+   */
+  pauta: z.array(z.strictObject({ day: z.iso.date(), item: z.string(), plan_id: z.uuid() })),
+  /**
+   * As datas do calendário comercial do Liame no período (D-A6-20): feriados nacionais e datas do varejo, as mesmas que o
+   * Estrategista usa. `kind`: `feriado_nacional` ou `varejo` (a lista pode crescer). Vazia com a função desligada.
+   */
+  dates: z.array(z.strictObject({ day: z.iso.date(), name: z.string(), kind: z.string().regex(/^[a-z_]{2,30}$/) })),
 });
 export type PostListResponse = z.infer<typeof PostListResponse>;
 

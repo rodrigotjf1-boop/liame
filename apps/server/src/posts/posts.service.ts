@@ -535,7 +535,7 @@ export class PostsService {
       throw new AppProblem(422, 'periodo-invalido', 'Período inválido', `O período vai de 1 a ${DIAS_DA_AGENDA} dias, com o início antes do fim.`);
     }
     const fuso = await fusoDaEmpresa(currentTx(), quem.tenantId);
-    if (!(await this.ligada(quem, q.brand_id))) return { enabled: false, timezone: fuso, channels: [], items: [], post_link: { ok: false, reason: null } };
+    if (!(await this.ligada(quem, q.brand_id))) return { enabled: false, timezone: fuso, channels: [], items: [], post_link: { ok: false, reason: null }, pauta: [], dates: [] };
     const items = await this.ler(
       quem.tenantId,
       sql`p.brand_id = ${q.brand_id}
@@ -550,7 +550,36 @@ export class PostsService {
       channels: await this.contasDosCanais(quem.tenantId, q.brand_id),
       items,
       post_link: destino.ok ? { ok: true, reason: null } : { ok: false, reason: destino.motivo },
+      // A pauta e as datas comerciais em cada dia (A6, Z5d, parte 5; D-A6-20 e D-A6-56).
+      pauta: auth.permissions.has('planos.ver') ? await this.pautaDoPeriodo(quem.tenantId, q) : [],
+      dates: await this.datasDoPeriodo(q),
     };
+  }
+
+  /**
+   * A pauta da semana no período (D-A6-20 e D-A6-56): o item de cada dia, do plano de pauta aprovado mais novo da marca
+   * que cobre o dia (a versão atual dele). Os dias de fora do período e os planos que esperam, recusados ou vencidos não
+   * entram.
+   */
+  private async pautaDoPeriodo(tenantId: string, q: PostListQuery): Promise<PostListResponse['pauta']> {
+    const r = await currentTx().execute<{ day: string; item: string; plan_id: string }>(sql`
+      select distinct on (d.day) to_char(d.day, 'YYYY-MM-DD') as day, d.item, p.id as plan_id
+        from liame.plan p
+        join liame.plan_version v on v.plan_id = p.id and v.version = p.version and v.tenant_id = p.tenant_id
+        cross join lateral jsonb_to_recordset(case when jsonb_typeof(v.content->'days') = 'array' then v.content->'days' else '[]'::jsonb end) as d(day date, item text)
+       where p.tenant_id = ${tenantId} and p.brand_id = ${q.brand_id} and p.kind = 'pauta' and p.status = 'aprovado'
+         and d.day between ${q.from}::date and ${q.to}::date and d.item is not null
+       order by d.day, p.updated_at desc, p.id desc`);
+    return r.rows.map((l) => ({ day: l.day, item: l.item, plan_id: l.plan_id }));
+  }
+
+  /** As datas do calendário comercial do Liame no período (feriados nacionais e datas do varejo; D-A6-20). */
+  private async datasDoPeriodo(q: PostListQuery): Promise<PostListResponse['dates']> {
+    const r = await currentTx().execute<{ day: string; name: string; kind: string }>(sql`
+      select to_char(day, 'YYYY-MM-DD') as day, name, kind from liame.commercial_date
+       where day between ${q.from}::date and ${q.to}::date
+       order by day, kind, name`);
+    return r.rows;
   }
 
   /**

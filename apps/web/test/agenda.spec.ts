@@ -93,7 +93,7 @@ const contas = (ig = true, fb = true): PostListResponse['channels'] => [
 ];
 
 function lista(items: PostResponse[], parcial: Partial<PostListResponse> = {}): PostListResponse {
-  return { enabled: true, timezone: SP, channels: contas(), items, post_link: { ok: true, reason: null }, ...parcial };
+  return { enabled: true, timezone: SP, channels: contas(), items, post_link: { ok: true, reason: null }, pauta: [], dates: [], ...parcial };
 }
 
 function foto(largura: number, altura: number): BrandPhoto {
@@ -182,6 +182,34 @@ describe('a Agenda: o menu e a semana', () => {
     const sexta = t.dias[4]!.posts;
     expect(sexta[1]).toMatchObject({ canais: 'Instagram · Facebook', rotulo: 'Post de amanhã, às 19:00, Instagram e Página do Facebook: agendado' });
     expect(t.dias[1]!.posts[1]!.canais).toBe('Instagram');
+    expect(t.dias.every((d) => d.pauta === null && d.datas.length === 0)).toBe(true);
+
+    // A pauta e as datas comerciais (A6 · Z5d, parte 5; D-A6-20): o item do dia sem post (o dia com post já cobre a pauta)
+    // e cada data do calendário no dia dela.
+    const comPauta = telaDaAgenda(
+      lista(posts, {
+        pauta: [
+          { day: '2026-10-30', item: 'O combo de sexta', plan_id: id(900) },
+          { day: '2026-10-31', item: 'A batata nova, no almoço de sábado', plan_id: id(900) },
+        ],
+        dates: [
+          { day: '2026-10-31', name: 'Halloween', kind: 'varejo' },
+          { day: '2026-11-01', name: 'Dia de Todos os Santos', kind: 'varejo' },
+        ],
+      }),
+      '2026-10-26',
+      HOJE,
+    );
+    if (comPauta.tipo !== 'semana') throw new Error('era a semana');
+    expect(comPauta.dias.map((d) => [d.iso, d.pauta, d.datas])).toEqual([
+      ['2026-10-26', null, []],
+      ['2026-10-27', null, []],
+      ['2026-10-28', null, []],
+      ['2026-10-29', null, []],
+      ['2026-10-30', null, []],
+      ['2026-10-31', 'A batata nova, no almoço de sábado', ['Halloween']],
+      ['2026-11-01', null, ['Dia de Todos os Santos']],
+    ]);
 
     // Um canal sem conta: a semana aparece, com o aviso do que falta conectar.
     const semPagina = telaDaAgenda(lista(posts, { channels: contas(true, false) }), '2026-10-26', HOJE);
@@ -318,7 +346,7 @@ describe('o novo post (Z5c, parte 3)', () => {
     expect(['hora-no-passado', 'hora-fora-da-janela', 'foto-fora-da-marca', 'canal-nao-conectado', 'texto-longo-demais', 'funcao-desligada'].map(campoDaRecusa)).toEqual(['hora', 'hora', 'foto', 'canais', 'texto', null]);
   });
 
-  const novo = (canais: PostListResponse['channels'], fotos: BrandPhoto[] | null = [foto(1200, 1800)]) =>
+  const novo = (canais: PostListResponse['channels'], fotos: BrandPhoto[] | null = [foto(1200, 1800)], pauta: { dia: string; item: string } | null = null) =>
     renderToStaticMarkup(
       createElement(GavetaNovoPost, {
         marca: MARCA,
@@ -329,10 +357,18 @@ describe('o novo post (Z5c, parte 3)', () => {
         podeVerContas: true,
         podeVerFotos: true,
         reserva: { current: null },
+        pauta,
         aoMandar: () => undefined,
         aoFechar: () => undefined,
       }),
     );
+
+  it('o novo post da pauta (A6 · Z5d, parte 5): o item da pauta no topo e o dia dele já marcado', () => {
+    const html = novo(contas(), [foto(1200, 1800)], { dia: '2026-10-31', item: 'A batata nova, no almoço de sábado' });
+    expect(html).toContain('<b>Da pauta da semana:</b> A batata nova, no almoço de sábado');
+    expect(html).toContain('value="2026-10-31"');
+    expect(novo(contas())).not.toContain('Da pauta da semana');
+  });
 
   it('a gaveta: as fotos das Fotos, os canais com a conta (o sem conta, desligado), o texto com o limite, amanhã às 19h e mandar para aprovação', () => {
     const html = novo(contas(true, false));
