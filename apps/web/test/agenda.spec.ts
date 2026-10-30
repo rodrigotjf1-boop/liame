@@ -65,6 +65,7 @@ function canal(c: 'instagram' | 'facebook', parcial: Partial<PostChannelResponse
     metrics: null,
     metrics_status: null,
     metrics_read_at: null,
+    retry_until: null,
     ...parcial,
   };
 }
@@ -352,7 +353,7 @@ describe('o pacote pronto (Z8, parte b; P22)', () => {
   const base: NovoPost = { foto: id(901), canais: ['tiktok'], textos: { tiktok: 'Peça pelo link da bio!', youtube: 'Peça pelo cardápio no link do canal.' }, dia: '2026-10-30', hora: '12:00', recorte: 50 };
 
   function canalDoPacote(c: 'tiktok' | 'youtube', parcial: Partial<PostChannelResponse> = {}): PostChannelResponse {
-    return { channel: c, account_id: null, account_name: null, text: 'A batata nova chegou 🍟 Peça pelo link da bio! #batatafrita', status: 'pronto', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null, ...parcial };
+    return { channel: c, account_id: null, account_name: null, text: 'A batata nova chegou 🍟 Peça pelo link da bio! #batatafrita', status: 'pronto', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null, retry_until: null, ...parcial };
   }
   const pacote = (n: number, dia: string, hora: string, status = 'pacote_pronto', c = canalDoPacote('tiktok'), parcial: Partial<PostResponse> = {}) =>
     post(n, dia, hora, status, [c], { kind: 'pacote', action_id: null, ...parcial });
@@ -500,7 +501,7 @@ describe('o link do post (Z7, parte a; D-A6-46 a D-A6-48)', () => {
   });
 
   it('o pacote com o link da bio: o link curto e "Copiar o link"; o novo post só com a Página diz por que sai sem o link', () => {
-    const pacote = post(3, '2026-10-30', '12:00', 'pacote_pronto', [{ channel: 'tiktok', account_id: null, account_name: null, text: 'Peça pelo link da bio!', status: 'pronto', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null }], { kind: 'pacote', action_id: null, link: LINK_BIO });
+    const pacote = post(3, '2026-10-30', '12:00', 'pacote_pronto', [{ channel: 'tiktok', account_id: null, account_name: null, text: 'Peça pelo link da bio!', status: 'pronto', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null, retry_until: null }], { kind: 'pacote', action_id: null, link: LINK_BIO });
     const html = renderToStaticMarkup(
       createElement(GavetaPacote, {
         post: pacote,

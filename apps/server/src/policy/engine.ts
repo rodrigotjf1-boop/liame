@@ -23,7 +23,7 @@ export const VARIACAO_MAXIMA_DA_VERBA_PCT = 10;
  */
 export const PLATFORM_POLICY: LoadedPolicy = {
   source: 'platform',
-  version: 9,
+  version: 10,
   document: {
     rules: [
       // Conteúdo político bloqueado por padrão (ADR-007; TSE 23.755/2026, base §6.1).
@@ -74,6 +74,11 @@ export const PLATFORM_POLICY: LoadedPolicy = {
       // código do app, peça quem pedir (uma pessoa ou, depois da Z6, o Social media); a ferramenta tem também a trava
       // `alwaysApproval`. Sem esta regra, a ação nova ficaria em sombra.
       { type: 'autonomy', action: 'post.*', mode: 'APPROVAL' },
+      // v10 (A6, Z5d; P19, aprovado em 21/10/2026; D-A6-54): "Tentar de novo" no canal que não saiu é direto quando quem
+      // pede é uma pessoa. Sai o MESMO post que uma pessoa aprovou com o código do app, no canal que a aprovação cobriu,
+      // até 24 horas depois de ele sair no outro; o pedido fica com o nome de quem tentou (a ferramenta declara
+      // `directByPerson` e só existe pela rota do post, `onlyAsRetry`). O funcionário de IA continua na regra de cima.
+      { type: 'autonomy', action: 'post.tentar_de_novo', actor: 'human', mode: 'AUTO' },
     ],
   },
 };

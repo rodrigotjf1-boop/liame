@@ -95,6 +95,14 @@ export const PostChannelResponse = z.strictObject({
    */
   metrics_status: z.string().regex(/^[a-z_]{2,30}$/).nullable(),
   metrics_read_at: z.iso.datetime().nullable(),
+  /**
+   * Até quando dá para "Tentar de novo" neste canal (A6, Z5d; P19; D-A6-54: `POST /v1/posts/{id}/retry`): o post saiu no
+   * outro canal e não neste, por um motivo que pode passar (a conta, a permissão, a rede fora do ar, uma trava), e faz
+   * menos de 24 horas que ele saiu no outro. Nulo: não dá (o canal saiu ou ainda vai sair, o post não saiu em nenhum, o
+   * prazo passou, ou o motivo pede um post novo: a foto recusada, o arquivo que sumiu, a foto grande demais para a Página,
+   * a tentativa que não deu para conferir).
+   */
+  retry_until: z.iso.datetime().nullable(),
 });
 export type PostChannelResponse = z.infer<typeof PostChannelResponse>;
 
@@ -110,7 +118,10 @@ export const PostResponse = z.strictObject({
   photo_id: z.uuid().nullable(),
   crop_pos: z.int().min(0).max(100).nullable(),
   publish_at: z.iso.datetime(),
-  /** O pedido em Aprovações. */
+  /**
+   * O pedido do post no trilho: o de publicar, que passou por Aprovações, ou, depois de um "Tentar de novo" (A6, Z5d), o
+   * da nova tentativa, que é o mais novo e diz a situação. Nulo no pacote.
+   */
   action_id: z.uuid().nullable(),
   /**
    * A situação do post: `esperando_aprovacao`, `agendado` (aprovado, espera a hora), `publicando`, `publicado`,

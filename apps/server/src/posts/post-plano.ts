@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { localClock } from '../policy/engine.js';
 
 // O post no trilho (A6, Z5b; `plano-a6.md` §3 Z5; D-A6-3, D-A6-6 a D-A6-8, D-A6-21 e D-A6-23; as decisões técnicas
-// D-A6-32 a D-A6-37 estão em `decisoes-design.md`). Funções puras: o estado do post que o conector lê do banco, o plano da
-// ferramenta `post_publicar` e a hora em que o pedido aprovado sai. Sem rede e sem banco.
+// D-A6-32 a D-A6-37 estão em `decisoes-design.md`). Funções puras: o estado do post que o conector lê do banco, os planos das
+// ferramentas `post_publicar` e `post_tentar_de_novo` (a nova tentativa no canal que faltou, Z5d; D-A6-54) e a hora em
+// que o pedido aprovado sai. Sem rede e sem banco.
 //
 // O post é um recurso do Liame (D-A6-32): `post:<id>`. O estado traz a foto (pelo resumo do arquivo), o recorte do
 // Instagram, a hora e cada canal com o texto e a situação; é ele que vai para o pedido e entra no hash do plano. A
@@ -141,6 +142,75 @@ export function planoDoPost(before: unknown): PlanoDoPost {
 
 const FOTO_APAGADA = 'A foto deste post foi apagada nas Fotos: o post não sai. Faça um post novo com outra foto.';
 const JA_SAIU = 'Este post já saiu, ou não sai mais: não dá para publicar de novo.';
+const SEM_O_QUE_TENTAR = 'Tentar de novo vale para o post que saiu num canal e não no outro: não há canal para tentar agora.';
+
+/**
+ * "Tentar de novo" (A6, Z5d; P19, aprovado pelo dono em 21/10/2026; decisão técnica D-A6-54): o post que saiu num canal e
+ * não no outro manda o MESMO post aprovado só no canal que faltou. Vale até este tanto de horas depois de o post sair no
+ * outro canal: depois, a hora já mudaria quem vê o post (D-A6-23), e o caminho é um post novo.
+ */
+export const HORAS_PARA_TENTAR_DE_NOVO = 24;
+
+/**
+ * O pedido do post terminou sem sair em todos os canais: falhou (o executor grava assim também a execução barrada por uma
+ * trava ou pela função desligada).
+ */
+const TERMINOU_SEM_SAIR: readonly string[] = ['falhou'];
+/** O pedido ainda vai executar (espera a aprovação, a hora, ou está saindo agora). */
+const PEDIDO_AINDA_SAI: readonly string[] = ['sombra', 'aguardando_aprovacao', 'aprovada', 'executando'];
+/** O canal que não saiu: falhou, ou ficou esperando ou publicando quando o pedido terminou. */
+const CANAL_NAO_SAIU: readonly string[] = ['falhou', 'aguardando', 'publicando'];
+
+/** O canal como a nova tentativa o vê: a situação, quando saiu, e se o motivo de não ter saído pede um post novo. */
+export type CanalParaTentar = { canal: string; situacao: string; publicadoEm: Date | null; pedePostNovo: boolean };
+
+/** Dá para tentar de novo (e em qual canal, até quando), ou por que não. */
+export type NovaTentativa =
+  | { ok: true; canal: string; ate: Date }
+  | { ok: false; motivo: 'ainda_sai' | 'nao_tenta' | 'nao_saiu_em_nenhum' | 'ja_saiu' | 'pede_post_novo' | 'passou_o_prazo' };
+
+/**
+ * Dá para "Tentar de novo" (D-A6-54)? Só quando o pedido do post (o de publicar, ou a nova tentativa anterior) terminou
+ * sem sair em todos os canais (falhou, inclusive barrado), um canal saiu e o outro não, e o motivo do que não saiu pode passar
+ * (a conta, a permissão, a rede fora do ar, uma trava). Vale até 24 horas depois de o post sair no outro canal. O pedido
+ * cancelado, recusado ou que expirou não tenta: alguém decidiu que ele não sai. Função pura.
+ */
+export function novaTentativa(pedido: string | null, canais: readonly CanalParaTentar[], agora: Date): NovaTentativa {
+  if (pedido && PEDIDO_AINDA_SAI.includes(pedido)) return { ok: false, motivo: 'ainda_sai' };
+  const sairam = canais.filter((c) => c.situacao === 'publicado');
+  const faltam = canais.filter((c) => CANAL_NAO_SAIU.includes(c.situacao));
+  if (sairam.length > 0 && faltam.length === 0) return { ok: false, motivo: 'ja_saiu' };
+  if (!pedido || !TERMINOU_SEM_SAIR.includes(pedido)) return { ok: false, motivo: 'nao_tenta' };
+  if (sairam.length === 0) return { ok: false, motivo: 'nao_saiu_em_nenhum' };
+  // Com dois canais e um no ar, falta um; o motivo dele decide.
+  const falta = faltam[0]!;
+  if (faltam.length > 1 || falta.pedePostNovo) return { ok: false, motivo: 'pede_post_novo' };
+  const saiuEm = Math.min(...sairam.map((c) => c.publicadoEm?.getTime() ?? agora.getTime()));
+  const ate = new Date(saiuEm + HORAS_PARA_TENTAR_DE_NOVO * 3_600_000);
+  if (ate.getTime() <= agora.getTime()) return { ok: false, motivo: 'passou_o_prazo' };
+  return { ok: true, canal: falta.canal, ate };
+}
+
+/**
+ * O plano da nova tentativa (a ferramenta `post_tentar_de_novo`): um canal saiu, e o que falta (que a rota pôs de volta na
+ * espera) tem a conta conectada e o texto no limite; a foto ainda está nas Fotos. O estado desejado é o post com o canal
+ * que faltava publicado; o texto do plano é o desse canal (as palavras proibidas da política valem de novo). A hora não é
+ * conferida aqui: o pedido sai agora, dentro da janela das 8h às 22h (`quandoSai`). Função pura.
+ */
+export function planoDeTentarDeNovo(before: unknown): PlanoDoPost {
+  const lido = EstadoDoPost.safeParse(before);
+  if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para um post do Liame.' };
+  const e = lido.data;
+  if (!e.foto) return { ok: false, motivo: FOTO_APAGADA };
+  const faltam = e.canais.filter((c) => c.situacao === 'aguardando');
+  const sairam = e.canais.filter((c) => c.situacao === 'publicado');
+  if (sairam.length === 0 || faltam.length !== 1 || sairam.length + faltam.length !== e.canais.length) return { ok: false, motivo: SEM_O_QUE_TENTAR };
+  const c = faltam[0]!;
+  if (!c.conta) return { ok: false, motivo: contaFora(c.canal) };
+  if (c.texto.trim().length === 0) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} está vazio.` };
+  if (c.texto.length > LIMITE_DO_TEXTO[c.canal]) return { ok: false, motivo: `O texto ${NO_CANAL[c.canal]} passa de ${LIMITE_DO_TEXTO[c.canal].toLocaleString('pt-BR')} caracteres.` };
+  return { ok: true, desejado: { ...e, canais: e.canais.map((x) => ({ ...x, situacao: 'publicado' as const })) }, texto: c.texto };
+}
 const contaFora = (canal: CanalDoPost): string =>
   `A conta ${DO_CANAL[canal]} deste post não está conectada à marca agora: o post não sai ${NO_CANAL[canal]}. Confira em Contas conectadas.`;
 
