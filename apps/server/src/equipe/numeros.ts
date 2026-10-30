@@ -23,9 +23,10 @@ export interface FatosDoMembro {
    */
   crm: boolean;
   /**
-   * O Social media está ligado para a empresa: a função das sugestões (`respostas_sugeridas`) e a resposta pelo Liame
-   * (`perfil_google_write`), as duas chaves da distribuição que a rotina confere (`oQueDesligaAsSugestoes`). Sem uma
-   * delas ele não sugere nada, e a tela diz que ainda não está ligado.
+   * O Social media está ligado para a empresa, por um dos dois trabalhos dele: as respostas (a função das sugestões,
+   * `respostas_sugeridas`, e a resposta pelo Liame, `perfil_google_write`, que a rotina confere em
+   * `oQueDesligaAsSugestoes`) ou os posts (a função `posts_sugeridos` e a publicação pelo Liame, `social_write`, que a
+   * rotina confere em `oQueDesligaOsPosts`). Sem nenhum dos dois ele não propõe nada, e a tela diz que ainda não está ligado.
    */
   social: boolean;
   /** Há uma parada (da empresa ou da Liame) que trava a IA desta marca. */
@@ -90,6 +91,8 @@ export interface ContagensDoMes {
   mensagens: MensagensDoCrm;
   /** O trabalho do Social media (A6, Z6): as respostas às avaliações que ele propôs no mês e o que as pessoas decidiram. */
   respostas: RespostasDoSocial;
+  /** O trabalho do Social media (A6, Z6, os posts): os posts que ele propôs no mês e o que as pessoas decidiram. */
+  posts: PostsDoSocial;
 }
 
 export interface RespostasDoSocial {
@@ -104,6 +107,30 @@ export interface RespostasDoSocial {
   barradas: number;
 }
 
+export interface PostsDoSocial {
+  /** Pedidos de post que ele montou no mês (o post na Agenda, um pedido em Aprovações). */
+  propostos: number;
+  /** Dos propostos no mês, os que saíram em pelo menos uma rede, e os que uma pessoa recusou. */
+  publicados: number;
+  recusados: number;
+  /** Agora, na marca inteira: os pedidos de post dele que esperam a decisão em Aprovações. */
+  esperando: number;
+  /** Os dias do mês em que a conferência barrou o post que ele escreveu (nada foi para Aprovações). */
+  barrados: number;
+}
+
+/** Os posts do Social media agora, como o serviço os leu (ligados os posts para a empresa). */
+export interface PostsAgora {
+  /** Nenhum Instagram nem Página conectados a esta marca: não há onde publicar. */
+  semRede: boolean;
+  /** Nenhuma foto pronta nas Fotos da marca: ele só usa as fotos de verdade da empresa. */
+  semFotos: boolean;
+  /** Nenhum item da pauta aprovada daqui em diante: ele propõe a partir da pauta, e não há o que propor. */
+  semPauta: boolean;
+  /** Os dias da pauta na fila dele (as vezes `esperando`), desde quando espera o mais antigo e o teto de IA que os segura. */
+  fila: { dias: number; desde: string | null; teto: 'dia' | 'mes' | null };
+}
+
 /** A fila do Social media agora, como o serviço a leu (as vezes `esperando` da marca). */
 export interface FilaDoSocial {
   /** Quantas avaliações esperam as sugestões dele, inclusive a que espera uma nova tentativa. */
@@ -116,23 +143,46 @@ export interface FilaDoSocial {
 
 export interface AgoraDoSocial {
   workingNow: boolean;
-  inProgress: { subject: null; count: number; by: null; since: string } | null;
+  /** `kind` é `posts` quando o que está na fila são os dias da pauta; nas avaliações, não vem. */
+  inProgress: { subject: null; count: number; by: null; since: string; kind?: string } | null;
   blockedBy: string | null;
 }
 
 /**
- * O que o Social media tem na fila e o que o segura agora (P21, sem os posts), do que mais pesa ao que menos: sem uma
- * loja do Perfil conectada não há avaliação para responder, e nada mais importa; o teto de IA da empresa segura a fila
- * inteira (a tela diz qual, e quantas esperam); com avaliação na fila, ele está trabalhando. Desligado ou parado, nada
- * disso se diz. Sem o texto da avaliação: ele fica na tela Avaliações.
+ * O que o Social media tem na fila e o que o segura agora (P21), do que mais pesa ao que menos. Só com as respostas: sem
+ * uma loja do Perfil conectada não há avaliação para responder, e nada mais importa; o teto de IA da empresa segura a
+ * fila inteira (a tela diz qual, e quantas esperam); com avaliação na fila, ele está trabalhando. Com os posts (o
+ * trabalho principal, D-A6-60): o teto segura as duas filas; sem Instagram nem Página conectados (`sem_rede`) ou sem
+ * nenhuma foto pronta (`sem_fotos`) ele não propõe post, e as respostas da fila seguem; os dias da pauta na fila vêm
+ * antes das avaliações; sem fila e sem item da pauta aprovada daqui em diante, ele espera a pauta (`sem_pauta`).
+ * Desligado ou parado, nada disso se diz. Sem o texto da avaliação nem o do item: eles ficam nas telas deles.
  */
-export function agoraDoSocial(f: { ativo: boolean; semPerfil: boolean; fila: FilaDoSocial }): AgoraDoSocial {
+export function agoraDoSocial(f: { ativo: boolean; semPerfil: boolean; fila: FilaDoSocial; respostas?: boolean; posts?: PostsAgora | null }): AgoraDoSocial {
   if (!f.ativo) return { workingNow: false, inProgress: null, blockedBy: null };
-  if (f.semPerfil) return { workingNow: false, inProgress: null, blockedBy: 'sem_perfil' };
-  const naFila = f.fila.avaliacoes > 0 && f.fila.desde ? { subject: null, count: f.fila.avaliacoes, by: null, since: f.fila.desde } : null;
-  if (f.fila.teto) return { workingNow: false, inProgress: naFila, blockedBy: f.fila.teto === 'mes' ? 'limite_de_ia_do_mes' : 'limite_de_ia_do_dia' };
-  return { workingNow: naFila !== null, inProgress: naFila, blockedBy: null };
+  // Só as respostas ligadas (o P21 antes dos posts): a regra de sempre.
+  if (!f.posts) {
+    if (f.semPerfil) return { workingNow: false, inProgress: null, blockedBy: 'sem_perfil' };
+    const naFila = f.fila.avaliacoes > 0 && f.fila.desde ? { subject: null, count: f.fila.avaliacoes, by: null, since: f.fila.desde } : null;
+    if (f.fila.teto) return { workingNow: false, inProgress: naFila, blockedBy: limiteDeIa(f.fila.teto) };
+    return { workingNow: naFila !== null, inProgress: naFila, blockedBy: null };
+  }
+  // Com os posts (o P21 inteiro): o post é o trabalho principal, e as respostas, quando ligadas, seguem ao lado.
+  const p = f.posts;
+  const respostas = f.respostas === true && !f.semPerfil;
+  const avaliacoes = respostas && f.fila.avaliacoes > 0 && f.fila.desde ? { subject: null, count: f.fila.avaliacoes, by: null, since: f.fila.desde } : null;
+  const semOndePostar = p.semRede ? 'sem_rede' : p.semFotos ? 'sem_fotos' : null;
+  const dias = !semOndePostar && p.fila.dias > 0 && p.fila.desde ? { subject: null, count: p.fila.dias, by: null, since: p.fila.desde, kind: 'posts' } : null;
+  // O teto de IA da empresa segura as duas filas: o do mês pesa mais que o do dia.
+  const teto = p.fila.teto === 'mes' || (respostas && f.fila.teto === 'mes') ? 'mes' : p.fila.teto === 'dia' || (respostas && f.fila.teto === 'dia') ? 'dia' : null;
+  if (teto && (dias || avaliacoes)) return { workingNow: false, inProgress: dias ?? avaliacoes, blockedBy: limiteDeIa(teto) };
+  // Sem rede ou sem Fotos, ele não propõe post (a tela diz o que falta); as respostas da fila seguem.
+  if (semOndePostar) return { workingNow: avaliacoes !== null, inProgress: avaliacoes, blockedBy: semOndePostar };
+  if (dias || avaliacoes) return { workingNow: true, inProgress: dias ?? avaliacoes, blockedBy: null };
+  // Nada na fila e nenhum item da pauta aprovada daqui em diante: ele espera a pauta.
+  return { workingNow: false, inProgress: null, blockedBy: p.semPauta ? 'sem_pauta' : null };
 }
+
+const limiteDeIa = (teto: 'dia' | 'mes'): string => (teto === 'mes' ? 'limite_de_ia_do_mes' : 'limite_de_ia_do_dia');
 
 export interface MensagensDoCrm {
   /** Pedidos de envio que ele montou no mês. */
@@ -242,6 +292,7 @@ export const NUMEROS_DE_AGORA: ReadonlySet<string> = new Set([
   'mensagens_esperando',
   'rascunhos_esperando_o_modelo',
   'respostas_esperando',
+  'posts_esperando',
 ]);
 
 /** O que o membro fez no mês, como a tela mostra (as chaves estão no contrato `TeamStat`). */
@@ -300,6 +351,11 @@ export function numerosDoMembro(def: DefinicaoDoMembro, c: ContagensDoMes): Team
       ];
     case 'social':
       return [
+        qtd('posts_propostos', c.posts.propostos),
+        qtd('posts_publicados', c.posts.publicados),
+        qtd('posts_recusados', c.posts.recusados),
+        qtd('posts_esperando', c.posts.esperando),
+        qtd('posts_barrados', c.posts.barrados),
         qtd('respostas_propostas', c.respostas.propostas),
         qtd('respostas_aprovadas', c.respostas.aprovadas),
         qtd('respostas_recusadas', c.respostas.recusadas),

@@ -4,7 +4,7 @@ import { WORKFLOW_DO_CRIATIVO } from '../src/ai/criativo/prompt.js';
 import { WORKFLOW_DO_CRM } from '../src/ai/crm/prompt.js';
 import { WORKFLOW_DA_REVISAO, WORKFLOW_DO_AVISO, WORKFLOW_DO_RELATORIO, WORKFLOW_DOS_RESULTADOS } from '../src/ai/explicar/explicar.service.js';
 import { WORKFLOW_DO_REVISOR } from '../src/ai/revisor/prompt.js';
-import { WORKFLOW_DO_SOCIAL } from '../src/ai/social/prompt.js';
+import { WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST } from '../src/ai/social/prompt.js';
 import { WORKFLOW as WORKFLOW_DA_CONVERSA } from '../src/conversa/conversa.service.js';
 import { EQUIPE, MEMBROS } from '../src/equipe/membros.js';
 import {
@@ -48,6 +48,7 @@ const vazio: ContagensDoMes = {
   pecas: semPecas,
   mensagens: semMensagens,
   respostas: { propostas: 0, aprovadas: 0, recusadas: 0, esperando: 0, barradas: 0 },
+  posts: { propostos: 0, publicados: 0, recusados: 0, esperando: 0, barrados: 0 },
 };
 
 describe('Sua equipe (A3, I13b)', () => {
@@ -61,8 +62,9 @@ describe('Sua equipe (A3, I13b)', () => {
     // O Compliance segue por regra e não desliga; o fluxo dele é o do revisor de IA (o custo, quando a empresa o tem).
     expect(EQUIPE.compliance).toMatchObject({ kind: 'regra', desligavel: false, fluxos: [WORKFLOW_DO_REVISOR] });
     expect(MEMBROS.filter((m) => EQUIPE[m].kind === 'ia')).toEqual(['lia', 'analista', 'estrategista', 'pesquisador', 'criativo', 'crm', 'social']);
-    // O Social media (A6; P21, sem os posts): o fluxo é o da rotina das sugestões de resposta, e a empresa pode desligar.
-    expect(EQUIPE.social).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_SOCIAL] });
+    // O Social media (A6; P21): os fluxos são os das duas rotinas dele, as sugestões de resposta e os posts (o custo
+    // soma os dois), e a empresa pode desligar.
+    expect(EQUIPE.social).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_SOCIAL, WORKFLOW_DO_SOCIAL_POST] });
     // O Criativo (A4; P12): o fluxo é o que o worker das peças grava, e a empresa pode desligar.
     expect(EQUIPE.criativo).toMatchObject({ kind: 'ia', desligavel: true, fluxos: [WORKFLOW_DO_CRIATIVO] });
     // O CRM e mensageria (A5; P16): o fluxo é o das chamadas que escrevem a mensagem, e a empresa pode desligar.
@@ -164,6 +166,8 @@ describe('Sua equipe (A3, I13b)', () => {
       mensagens: { propostas: 2, enviadas: 1, recusadas: 0, esperando: 1, rascunhos: 1, pedidosComCupom: 12, caixaComCupomMicros: 540_000_000n },
       // O Social media: 4 pedidos de resposta no mês (2 aprovados, 1 recusado), 1 esperando agora e 1 avaliação barrada.
       respostas: { propostas: 4, aprovadas: 2, recusadas: 1, esperando: 1, barradas: 1 },
+      // Os posts dele: 5 propostos no mês (3 saíram, 1 recusado), 1 esperando agora e 2 dias barrados na conferência.
+      posts: { propostos: 5, publicados: 3, recusados: 1, esperando: 1, barrados: 2 },
     };
     const ver = (m: (typeof MEMBROS)[number]) => Object.fromEntries(numerosDoMembro(EQUIPE[m], c).map((x) => [x.key, `${x.value} ${x.unit}`]));
     expect(ver('lia')).toEqual({ respostas: '61 qtd', fez_sentido: '28 qtd', discordo: '5 qtd', demandas: '2 qtd', retiradas_na_conferencia: '5 qtd' });
@@ -201,6 +205,11 @@ describe('Sua equipe (A3, I13b)', () => {
     });
     expect(numerosDoMembro(EQUIPE.crm, vazio).every((x) => x.value === '0')).toBe(true);
     expect(ver('social')).toEqual({
+      posts_propostos: '5 qtd',
+      posts_publicados: '3 qtd',
+      posts_recusados: '1 qtd',
+      posts_esperando: '1 qtd',
+      posts_barrados: '2 qtd',
       respostas_propostas: '4 qtd',
       respostas_aprovadas: '2 qtd',
       respostas_recusadas: '1 qtd',
@@ -281,13 +290,55 @@ describe('Sua equipe (A3, I13b)', () => {
     expect(agora({ ativo: false, semPerfil: true, fila: fila({ avaliacoes: 2, desde: DESDE, teto: 'dia' }) })).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
   });
 
+  it('o Social media agora, com os posts (A6 · Z6, os posts, parte 3; P21): os dias da pauta, o que segura os posts e as respostas ao lado', () => {
+    const DESDE = '2026-10-30T12:00:00.000Z';
+    const ANTES = '2026-10-29T12:00:00.000Z';
+    const fila = (over: Partial<Parameters<typeof agoraDoSocial>[0]['fila']> = {}) => ({ avaliacoes: 0, desde: null, teto: null, ...over });
+    type Posts = NonNullable<Parameters<typeof agoraDoSocial>[0]['posts']>;
+    const posts = (over: Partial<Omit<Posts, 'fila'>> & { fila?: Partial<Posts['fila']> } = {}): Posts => ({
+      semRede: false,
+      semFotos: false,
+      semPauta: false,
+      ...over,
+      fila: { dias: 0, desde: null, teto: null, ...over.fila },
+    });
+    const agora = (over: Partial<Parameters<typeof agoraDoSocial>[0]> = {}) => agoraDoSocial({ ativo: true, semPerfil: false, fila: fila(), respostas: false, posts: posts(), ...over });
+    const dias = (count: number, since = DESDE) => ({ subject: null, count, by: null, since, kind: 'posts' });
+    const avaliacoes = (count: number, since = ANTES) => ({ subject: null, count, by: null, since });
+    // Ligado, com rede, Fotos e pauta, e nada na fila: nada a dizer.
+    expect(agora()).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
+    // Os dias da pauta na fila: ele está escrevendo, quantos e desde quando, sem o item.
+    expect(agora({ posts: posts({ fila: { dias: 2, desde: DESDE } }) })).toEqual({ workingNow: true, inProgress: dias(2), blockedBy: null });
+    // Os dias vêm antes das avaliações, quando as duas filas têm trabalho.
+    expect(agora({ respostas: true, fila: fila({ avaliacoes: 3, desde: ANTES }), posts: posts({ fila: { dias: 1, desde: DESDE } }) })).toEqual({ workingNow: true, inProgress: dias(1), blockedBy: null });
+    // Sem rede, ou sem Fotos, ele não propõe post: a tela diz o que falta (a rede pesa mais), e as respostas da fila seguem.
+    expect(agora({ posts: posts({ semRede: true, semFotos: true, fila: { dias: 1, desde: DESDE } }) })).toEqual({ workingNow: false, inProgress: null, blockedBy: 'sem_rede' });
+    expect(agora({ posts: posts({ semFotos: true }) }).blockedBy).toBe('sem_fotos');
+    expect(agora({ respostas: true, fila: fila({ avaliacoes: 3, desde: ANTES }), posts: posts({ semRede: true }) })).toEqual({ workingNow: true, inProgress: avaliacoes(3), blockedBy: 'sem_rede' });
+    // As respostas desligadas: a fila das avaliações e a falta do Perfil não contam.
+    expect(agora({ respostas: false, semPerfil: true, fila: fila({ avaliacoes: 3, desde: ANTES }) })).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
+    // O teto de IA segura as duas filas; o do mês pesa mais que o do dia.
+    expect(agora({ posts: posts({ fila: { dias: 2, desde: DESDE, teto: 'dia' } }) })).toEqual({ workingNow: false, inProgress: dias(2), blockedBy: 'limite_de_ia_do_dia' });
+    expect(agora({ respostas: true, fila: fila({ avaliacoes: 1, desde: ANTES, teto: 'mes' }), posts: posts({ fila: { dias: 2, desde: DESDE, teto: 'dia' } }) }).blockedBy).toBe('limite_de_ia_do_mes');
+    // Sem fila e sem item da pauta aprovada daqui em diante: ele espera a pauta.
+    expect(agora({ posts: posts({ semPauta: true }) })).toEqual({ workingNow: false, inProgress: null, blockedBy: 'sem_pauta' });
+    // Com avaliação na fila, ele trabalha nelas, e a falta de pauta não é o que se diz.
+    expect(agora({ respostas: true, fila: fila({ avaliacoes: 2, desde: ANTES }), posts: posts({ semPauta: true }) })).toEqual({ workingNow: true, inProgress: avaliacoes(2), blockedBy: null });
+    // Desligado, não ligado ou parado: nada disso se diz.
+    expect(agora({ ativo: false, posts: posts({ semRede: true, fila: { dias: 1, desde: DESDE } }) })).toEqual({ workingNow: false, inProgress: null, blockedBy: null });
+    // Sem os posts (só as respostas), a regra de antes não muda: sem o Perfil, nada mais importa.
+    expect(agora({ posts: null, semPerfil: true, fila: fila({ avaliacoes: 2, desde: ANTES }) })).toEqual({ workingNow: false, inProgress: null, blockedBy: 'sem_perfil' });
+  });
+
   it('os números de agora, que o relatório do mês fechado tira (D-A3-22), são números que Sua equipe mostra de verdade', () => {
     // Um número renomeado ficaria no relatório do mês sem aviso: cada chave da lista tem de sair de algum funcionário.
     const chaves = new Set(MEMBROS.flatMap((key) => numerosDoMembro(EQUIPE[key], vazio).map((s) => s.key)));
     expect([...NUMEROS_DE_AGORA].filter((k) => !chaves.has(k))).toEqual([]);
     // E o que é do mês fica: as respostas da LIA, as revisões e as peças escritas não estão na lista.
-    for (const doMes of ['respostas', 'revisoes', 'pecas_escritas', 'mensagens_propostas', 'respostas_propostas', 'planos_aprovados']) expect(NUMEROS_DE_AGORA.has(doMes), doMes).toBe(false);
-    // O pedido de resposta que espera a decisão é de agora: no dia 1º, ele diria o que está acontecendo.
+    for (const doMes of ['respostas', 'revisoes', 'pecas_escritas', 'mensagens_propostas', 'respostas_propostas', 'posts_propostos', 'posts_publicados', 'planos_aprovados'])
+      expect(NUMEROS_DE_AGORA.has(doMes), doMes).toBe(false);
+    // O pedido de resposta e o de post que esperam a decisão são de agora: no dia 1º, eles diriam o que está acontecendo.
     expect(NUMEROS_DE_AGORA.has('respostas_esperando')).toBe(true);
+    expect(NUMEROS_DE_AGORA.has('posts_esperando')).toBe(true);
   });
 });

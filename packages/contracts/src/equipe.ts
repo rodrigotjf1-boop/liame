@@ -45,7 +45,10 @@ export const TeamStat = z.strictObject({
    * ele montou em Aprovações, cada um com uma ou duas sugestões), `respostas_aprovadas` (as que uma pessoa aprovou e
    * foram para o Google), `respostas_recusadas`, `sugestoes_barradas` (as avaliações em que a conferência barrou todas
    * as sugestões: nada foi para Aprovações) e `retiradas_na_conferencia`; de agora, `respostas_esperando` (os pedidos
-   * dele que esperam a decisão em Aprovações).
+   * dele que esperam a decisão em Aprovações). Social media, os posts (A6, Z6): do mês, `posts_propostos` (os pedidos
+   * de post que ele montou, cada um com o post na Agenda), `posts_publicados` (dos propostos, os que saíram em pelo
+   * menos uma rede), `posts_recusados` e `posts_barrados` (os dias em que a conferência barrou o post que ele escreveu:
+   * nada foi para Aprovações); de agora, `posts_esperando` (os pedidos de post dele que esperam a decisão).
    */
   key: Slug,
   value: Inteiro,
@@ -78,7 +81,8 @@ export const TeamMember = z.strictObject({
    * rascunho do modelo esperando a Meta (`blocked_by` `modelo_sem_envio` ou `modelo_em_analise`), `subject` é o nome
    * da mensagem e `since`, quando o rascunho nasceu. `subject` é nulo para quem não vê as campanhas. Social media: as
    * avaliações na fila dele agora (`count`) e desde quando espera a mais antiga (`since`); sem `subject` (o texto da
-   * avaliação fica na tela Avaliações).
+   * avaliação fica na tela Avaliações). Com os posts ligados, os dias da pauta na fila vêm antes, com `kind` `posts`
+   * (`count` é quantos dias; sem `subject`: o item fica na Agenda).
    */
   in_progress: z
     .strictObject({ subject: z.string().nullable(), count: z.int().nullable(), by: Pessoa, since: z.iso.datetime(), kind: Slug.nullable().optional() })
@@ -93,7 +97,10 @@ export const TeamMember = z.strictObject({
    * o pedido de envio; `sem_desconto` (ninguém definiu o desconto do cupom das mensagens: toda mensagem leva um cupom);
    * ou `sem_oferta`. Social media: `sem_perfil` (nenhuma loja do Perfil no Google conectada nesta marca: não há
    * avaliação para responder), `limite_de_ia_do_dia` ou `limite_de_ia_do_mes` (as avaliações da fila esperam o limite de
-   * uso de IA da empresa). Nulo quando ele pode trabalhar, e quando está desligado ou parado.
+   * uso de IA da empresa). Com os posts ligados: `sem_rede` (nenhum Instagram nem Página conectados à marca: não há onde
+   * publicar), `sem_fotos` (nenhuma foto pronta nas Fotos: ele só usa as fotos de verdade da empresa) e `sem_pauta`
+   * (nada na fila e nenhum item da pauta aprovada daqui em diante); o limite de IA segura também os dias da pauta.
+   * Nulo quando ele pode trabalhar, e quando está desligado ou parado.
    */
   blocked_by: Slug.nullable().optional(),
   /** A empresa pode desligar (o Compliance não). */
@@ -163,6 +170,12 @@ export const TeamActivityItem = z.strictObject({
    * estrelas, em `count`; e o que aconteceu com o pedido, `resposta_aprovada` (uma pessoa aprovou e a resposta foi para o Google),
    * `resposta_recusada`, `resposta_retirada` (ele tirou o pedido de Aprovações porque a avaliação mudou ou foi
    * respondida direto no Google: o porquê em `detail`), `resposta_cancelada`, `resposta_expirou` e `resposta_falhou`.
+   * Social media, os posts: `propos_post` (montou o post de um dia da pauta na Agenda, com o pedido em Aprovações),
+   * `post_barrado` (a conferência barrou o que ele escreveu para o dia: os nomes do que barrou em `rules`, e o texto não
+   * é guardado), `post_sem_foto` (nenhuma das Fotos combinava com o item do dia) e o que aconteceu com o pedido,
+   * `post_publicado` (saiu em pelo menos uma rede: as redes em `rules`, e quem aprovou em `by`), `post_nao_saiu`,
+   * `post_recusado`, `post_cancelado` e `post_expirou`; em todos, o dia do post em `period` (`from` = `to`) e o item da
+   * pauta em `subject` (para quem vê os planos), e em `propos_post` as redes do pedido em `rules`.
    * Gestor de tráfego, no modo Aprovação: `pediu` (ele mesmo fez o pedido
    * da mudança, que espera uma pessoa) e `nao_pediu` (tentou e não conseguiu: o motivo vai no `detail`). De qualquer um: `retirada_na_conferencia` (um texto dele que a conferência não deixou
    * aparecer), `desligado` e `ligado` (pela empresa, nesta marca).
@@ -170,7 +183,8 @@ export const TeamActivityItem = z.strictObject({
   kind: Slug,
   /**
    * O nome do que foi tratado, quando a pessoa pode vê-lo na tela de origem: o título da conversa (só a própria), da
-   * demanda ou do plano, o site lido, a campanha, a conta de anúncio, a oferta do pedido de peças ou o título da peça.
+   * demanda ou do plano, o site lido, a campanha, a conta de anúncio, a oferta do pedido de peças, o título da peça ou
+   * o item da pauta de onde veio o post (com `planos.ver`).
    * Nulo quando não há ou quando falta a permissão.
    */
   subject: z.string().nullable(),
@@ -181,7 +195,7 @@ export const TeamActivityItem = z.strictObject({
    * em `nao_pediu`, o código do problema com `_` no lugar de `-` (`plataforma_indisponivel`, `acao_duplicada`…).
    */
   detail: Slug.nullable(),
-  /** A semana da revisão. */
+  /** A semana da revisão; nos posts do Social media, o dia do post (`from` = `to`). */
   period: z.strictObject({ from: z.iso.date(), to: z.iso.date() }).nullable(),
   /**
    * Um número do acontecimento: as pessoas que receberam o e-mail, as partes do dossiê que ganharam sugestão, os textos
@@ -192,7 +206,8 @@ export const TeamActivityItem = z.strictObject({
   barred: z.int().nullable().optional(),
   /**
    * As regras de texto que barraram (`barrou_texto` e `retirada_na_conferencia`), pelo nome. Quando quem barrou foi o
-   * revisor de IA do Compliance, as categorias que ele apontou: `tom`, `clareza`, `alegacao`.
+   * revisor de IA do Compliance, as categorias que ele apontou: `tom`, `clareza`, `alegacao`. Nos posts do Social
+   * media, os itens da conferência que barraram (`post_barrado`) ou as redes do post (`instagram`, `facebook`).
    */
   rules: z.array(Slug),
   /**
