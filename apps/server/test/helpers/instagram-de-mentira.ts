@@ -68,6 +68,13 @@ export class InstagramDeMentira {
   readonly fotosNaPagina: FotoNaPagina[] = [];
   /** A próxima foto na Página sai, mas a resposta não chega (a Meta responde 503 depois de publicar). */
   perderARespostaDaFoto = false;
+  /**
+   * Os números de cada post (A6, Z7, parte c), pelo id do objeto (a mídia do Instagram ou o post da Página): a lista
+   * `data` da resposta de `GET /{id}/insights`, como a Meta a manda. Sem números, a lista vem vazia (não zero).
+   */
+  readonly numeros = new Map<string, unknown[]>();
+  /** A autorização sem a permissão de ler os números do Instagram (`instagram_manage_insights`): a recusa (#10). */
+  semPermissaoDeNumeros = false;
   base = '';
   private servidor: Server | null = null;
 
@@ -99,6 +106,7 @@ export class InstagramDeMentira {
     this.falhas.clear();
     this.perderARespostaDaPublicacao = false;
     this.perderARespostaDaFoto = false;
+    this.semPermissaoDeNumeros = false;
     this.chamadas.length = 0;
     this.defeitos.length = 0;
   }
@@ -145,6 +153,18 @@ export class InstagramDeMentira {
     const falha = this.falhas.get(final)?.shift();
     if (falha) return falha;
 
+    // Os números do post (A6, Z7, parte c; base §2.2, conferida em 29/10/2026): o post da Página pede o token dela, de quem
+    // tem a tarefa ANALYZE; a mídia do Instagram, a permissão de ler os números. O dado que falta volta como lista vazia.
+    if (metodo === 'GET' && aresta === 'insights') {
+      if (!params.metric) return erro(400, 100, '(#100) The parameter metric is required');
+      if ((id ?? '').includes('_')) {
+        const pagina = id!.split('_')[0]!;
+        if (!(this.paginas.get(pagina) ?? []).includes('ANALYZE')) return erro(403, 200, 'Requires the ANALYZE task on the Page');
+      } else if (this.semPermissaoDeNumeros) {
+        return erro(403, 10, '(#10) Application does not have permission for this action');
+      }
+      return { status: 200, corpo: { data: this.numeros.get(id!) ?? [], paging: {} } };
+    }
     if (metodo === 'GET' && id === 'me' && aresta === 'accounts') {
       return { status: 200, corpo: { data: [...this.paginas.entries()].map(([pagina, tasks]) => ({ id: pagina, access_token: TOKEN_DA_PAGINA, tasks })) } };
     }

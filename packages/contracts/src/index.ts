@@ -439,6 +439,7 @@ export {
   PostChannelResponse,
   PostListQuery,
   PostListResponse,
+  PostMetrics,
   PostPhotoResponse,
   PostResponse,
 } from './posts.js';

@@ -49,6 +49,20 @@ export const CreatePostRequest = z.strictObject({
 });
 export type CreatePostRequest = z.infer<typeof CreatePostRequest>;
 
+const numero = z.int().min(0).nullable();
+/** Os números de um post num canal (A6, Z7, parte c). */
+export const PostMetrics = z.strictObject({
+  views: numero,
+  reach: numero,
+  likes: numero,
+  comments: numero,
+  shares: numero,
+  saves: numero,
+  clicks: numero,
+  reactions: numero,
+});
+export type PostMetrics = z.infer<typeof PostMetrics>;
+
 export const PostChannelResponse = z.strictObject({
   /** `instagram` ou `facebook` (a lista pode crescer: o Threads e o Perfil no Google). */
   channel: z.string().regex(/^[a-z_]{2,30}$/),
@@ -67,6 +81,20 @@ export const PostChannelResponse = z.strictObject({
   /** Por que não saiu neste canal, em palavras do Liame. */
   error: z.string().nullable(),
   published_at: z.iso.datetime().nullable(),
+  /**
+   * Os números do post neste canal, lidos da rede como apoio (A6, Z7, parte c; o resultado do post é o pedido pelo link
+   * dele): as vezes em que foi visto, as pessoas que viram (estimado pela rede), as curtidas, os comentários, os
+   * compartilhamentos, os salvos, os cliques e as reações. Nulo o que a rede não dá; o objeto inteiro, nulo antes da
+   * primeira leitura.
+   */
+  metrics: PostMetrics.nullable(),
+  /**
+   * A situação da leitura: `lido`, `sem_dados` (a rede ainda não tem o número, ou não tem para este post: a Página com
+   * menos de 100 curtidas), `sem_permissao` (a autorização não permite ler os números) ou `sem_conta` (a conta saiu da
+   * marca ou a autorização venceu); nulo antes da primeira leitura. A lista pode crescer.
+   */
+  metrics_status: z.string().regex(/^[a-z_]{2,30}$/).nullable(),
+  metrics_read_at: z.iso.datetime().nullable(),
 });
 export type PostChannelResponse = z.infer<typeof PostChannelResponse>;
 

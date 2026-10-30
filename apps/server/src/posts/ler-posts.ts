@@ -1,4 +1,4 @@
-import type { PostResponse } from '@liame/contracts';
+import type { PostMetrics, PostResponse } from '@liame/contracts';
 import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
 import { linkComRastreio } from '../links/construtor.js';
@@ -35,10 +35,31 @@ type LinhaDoCanal = {
   permalink: string | null;
   error: string | null;
   published_at: Date | null;
+  metrics: Record<string, unknown> | null;
+  metrics_status: string | null;
+  metrics_read_at: Date | null;
 };
 
 const iso = (d: Date | string) => new Date(d).toISOString();
 const isoOuNulo = (d: Date | string | null) => (d ? iso(d) : null);
+
+/** Um número guardado: inteiro não negativo, ou nulo (o que veio fora do formato não passa para a tela). */
+const numeroGuardado = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null);
+
+/** Os números do canal como o contrato os mostra (A6, Z7, parte c); nulo antes da primeira leitura. */
+function numerosDoCanal(m: Record<string, unknown> | null): PostMetrics | null {
+  if (!m) return null;
+  return {
+    views: numeroGuardado(m.views),
+    reach: numeroGuardado(m.reach),
+    likes: numeroGuardado(m.likes),
+    comments: numeroGuardado(m.comments),
+    shares: numeroGuardado(m.shares),
+    saves: numeroGuardado(m.saves),
+    clicks: numeroGuardado(m.clicks),
+    reactions: numeroGuardado(m.reactions),
+  };
+}
 
 /** O fuso da empresa (o da Agenda e o da janela das 8h às 22h); São Paulo quando ela não tem um. */
 export async function fusoDaEmpresa(tx: Tx, tenantId: string): Promise<string> {
@@ -63,7 +84,8 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
      limit 500`);
   if (p.rows.length === 0) return [];
   const c = await tx.execute<LinhaDoCanal>(sql`
-    select ch.post_id, ch.channel, ch.connected_account_id, a.name as account_name, ch.body, ch.status, ch.permalink, ch.error, ch.published_at
+    select ch.post_id, ch.channel, ch.connected_account_id, a.name as account_name, ch.body, ch.status, ch.permalink, ch.error, ch.published_at,
+           ch.metrics, ch.metrics_status, ch.metrics_read_at
       from liame.social_post_channel ch
       left join liame.connected_account a on a.id = ch.connected_account_id
      where ch.tenant_id = ${tenantId} and ch.post_id in ${p.rows.map((x) => x.id)}
@@ -96,6 +118,9 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
         permalink: x.permalink,
         error: x.error,
         published_at: isoOuNulo(x.published_at),
+        metrics: numerosDoCanal(x.metrics),
+        metrics_status: x.metrics_status,
+        metrics_read_at: isoOuNulo(x.metrics_read_at),
       })),
       // O link do post (A6, Z7; D-A6-46), montado como na criação (o mesmo endereço que está no fim do texto da Página).
       link:

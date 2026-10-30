@@ -27,6 +27,7 @@ import { chaveDoRecorteDoPost, recorteDoInstagram } from '../fotos/conferencia.j
 import { VALIDADE_DO_ENDERECO_S } from '../fotos/fotos.service.js';
 import { type ArmazemDeImagens, FalhaDoArmazem } from '../imagens/armazem.js';
 import { type CanalDoPost, CANAIS_DO_POST, type EstadoDoPost, horaLocal, postDoRecurso, PROVEDOR_DO_CANAL, recusaNaHoraDeSair, type SituacaoDoCanal } from '../posts/post-plano.js';
+import { PRIMEIRA_LEITURA_MIN } from '../posts/numeros-do-post.js';
 import { recortarParaOInstagram } from '../posts/recorte.js';
 import type { ApplyOptions, ApplyResult, Connector, ReadResult, ResourceRef } from './connectors.js';
 import type { ResourceState } from './tools.js';
@@ -354,7 +355,9 @@ export class PostPublicacaoConnector implements Connector {
     await tx.execute(sql`
       update liame.social_post_channel
          set status = 'publicado', external_id = ${externo}, permalink = ${permalink}, error = null,
-             published_at = coalesce(published_at, now()), attempted_at = coalesce(attempted_at, now()), updated_at = now()
+             published_at = coalesce(published_at, now()), attempted_at = coalesce(attempted_at, now()), updated_at = now(),
+             -- A primeira leitura dos números, uma hora depois de sair (A6, Z7, parte c; D-A6-51).
+             metrics_next_at = coalesce(metrics_next_at, now() + make_interval(mins => ${PRIMEIRA_LEITURA_MIN}))
        where id = ${canal}`);
     await this.limparRecorte(tx, ref, post, deps);
   }

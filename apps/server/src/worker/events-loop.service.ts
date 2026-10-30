@@ -12,6 +12,7 @@ import { ConversasLoop } from './conversas-loop.js';
 import { ConversoesLoop } from './conversoes-loop.js';
 import { CriativoLoop } from './criativo-loop.js';
 import { FotosLoop } from './fotos-loop.js';
+import { PostsNumerosLoop } from './posts-numeros-loop.js';
 import { EstrategistaAgenda, MARCAS_POR_VOLTA } from './estrategista-agenda.js';
 import { EstrategistaLoop } from './estrategista-loop.js';
 import { PedidosQueEsperam } from './pedidos-que-esperam.js';
@@ -68,6 +69,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly searchConsole: SearchConsoleLoop,
     private readonly comparacao: ComparacaoDmsIdLoop,
     private readonly fotos: FotosLoop,
+    private readonly numerosDosPosts: PostsNumerosLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
     private readonly assinaturas: AssinaturasLoop,
     private readonly cobrancasPix: CobrancasPixLoop,
@@ -122,6 +124,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('comparacao-dms-id', 2, 300_000, async (n) => (await this.comparacao.executarLote(n)).length),
       // As fotos apagadas e os envios que não terminaram (A6, Z4): o arquivo sai do armazenamento e depois a linha; a fila é olhada a cada minuto.
       this.loop('fotos', 20, 60_000, async (n) => (await this.fotos.executarLote(n)).length),
+      // Os números de cada post nas redes (A6, Z7, parte c): cada canal publicado uma hora depois de sair e depois uma vez
+      // por dia, por 30 dias; a fila é olhada de 5 em 5 minutos, só com a função dos posts ligada.
+      this.loop('posts-numeros', 5, 300_000, async (n) => (await this.numerosDosPosts.executarLote(n)).length),
       // As sugestões de resposta do Social media (A6, Z6): a avaliação nova entra na fila na leitura do Perfil que a
       // trouxe, e o "Pedir outras" entra quando a pessoa pede, com ela esperando na tela de Aprovações (P31): por isso a
       // fila é olhada de 15 em 15 segundos (a do "Pedir outras" primeiro). Quem espera a vez (a IA desligada, o limite)

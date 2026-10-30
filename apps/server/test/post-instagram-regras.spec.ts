@@ -135,8 +135,8 @@ describe('o post no Instagram: as regras puras (A6 · Z5b, parte 2)', () => {
         { id: '333333333333333', tasks: ['CREATE_CONTENT'] },
       ],
     };
-    expect(tokenDaPagina(contas, '222222222222222')).toEqual({ token: DA_PAGINA_B, podePublicar: true });
-    expect(tokenDaPagina(contas, '111111111111111')).toEqual({ token: DA_PAGINA_A, podePublicar: false });
+    expect(tokenDaPagina(contas, '222222222222222')).toEqual({ token: DA_PAGINA_B, podePublicar: true, podeAnalisar: false });
+    expect(tokenDaPagina(contas, '111111111111111')).toEqual({ token: DA_PAGINA_A, podePublicar: false, podeAnalisar: true });
     // Sem o token na lista, ou a Página fora da autorização: nulo.
     expect(tokenDaPagina(contas, '333333333333333')).toBeNull();
     expect(tokenDaPagina(contas, '444444444444444')).toBeNull();

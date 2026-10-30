@@ -7843,6 +7843,104 @@
                                 ],
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              "metrics": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "views": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reach": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "likes": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "comments": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "shares": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "saves": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "clicks": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reactions": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "views",
+                                  "reach",
+                                  "likes",
+                                  "comments",
+                                  "shares",
+                                  "saves",
+                                  "clicks",
+                                  "reactions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "metrics_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "metrics_read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -7853,7 +7951,10 @@
                               "status",
                               "permalink",
                               "error",
-                              "published_at"
+                              "published_at",
+                              "metrics",
+                              "metrics_status",
+                              "metrics_read_at"
                             ],
                             "additionalProperties": false
                           }
@@ -9524,6 +9625,104 @@
                                       ],
                                       "format": "date-time",
                                       "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                    },
+                                    "metrics": {
+                                      "type": [
+                                        "object",
+                                        "null"
+                                      ],
+                                      "properties": {
+                                        "views": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "reach": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "likes": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "comments": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "shares": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "saves": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "clicks": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "reactions": {
+                                          "type": [
+                                            "integer",
+                                            "null"
+                                          ],
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        }
+                                      },
+                                      "required": [
+                                        "views",
+                                        "reach",
+                                        "likes",
+                                        "comments",
+                                        "shares",
+                                        "saves",
+                                        "clicks",
+                                        "reactions"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "metrics_status": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ],
+                                      "pattern": "^[a-z_]{2,30}$"
+                                    },
+                                    "metrics_read_at": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ],
+                                      "format": "date-time",
+                                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                                     }
                                   },
                                   "required": [
@@ -9534,7 +9733,10 @@
                                     "status",
                                     "permalink",
                                     "error",
-                                    "published_at"
+                                    "published_at",
+                                    "metrics",
+                                    "metrics_status",
+                                    "metrics_read_at"
                                   ],
                                   "additionalProperties": false
                                 }
@@ -11857,6 +12059,104 @@
                                 ],
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              "metrics": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "views": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reach": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "likes": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "comments": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "shares": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "saves": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "clicks": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reactions": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "views",
+                                  "reach",
+                                  "likes",
+                                  "comments",
+                                  "shares",
+                                  "saves",
+                                  "clicks",
+                                  "reactions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "metrics_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "metrics_read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -11867,7 +12167,10 @@
                               "status",
                               "permalink",
                               "error",
-                              "published_at"
+                              "published_at",
+                              "metrics",
+                              "metrics_status",
+                              "metrics_read_at"
                             ],
                             "additionalProperties": false
                           }
@@ -13353,6 +13656,104 @@
                                 ],
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              "metrics": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "views": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reach": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "likes": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "comments": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "shares": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "saves": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "clicks": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reactions": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "views",
+                                  "reach",
+                                  "likes",
+                                  "comments",
+                                  "shares",
+                                  "saves",
+                                  "clicks",
+                                  "reactions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "metrics_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "metrics_read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -13363,7 +13764,10 @@
                               "status",
                               "permalink",
                               "error",
-                              "published_at"
+                              "published_at",
+                              "metrics",
+                              "metrics_status",
+                              "metrics_read_at"
                             ],
                             "additionalProperties": false
                           }
@@ -14831,6 +15235,104 @@
                                 ],
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              "metrics": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "views": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reach": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "likes": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "comments": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "shares": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "saves": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "clicks": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reactions": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "views",
+                                  "reach",
+                                  "likes",
+                                  "comments",
+                                  "shares",
+                                  "saves",
+                                  "clicks",
+                                  "reactions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "metrics_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "metrics_read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -14841,7 +15343,10 @@
                               "status",
                               "permalink",
                               "error",
-                              "published_at"
+                              "published_at",
+                              "metrics",
+                              "metrics_status",
+                              "metrics_read_at"
                             ],
                             "additionalProperties": false
                           }
@@ -16398,6 +16903,104 @@
                                 ],
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              "metrics": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "views": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reach": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "likes": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "comments": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "shares": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "saves": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "clicks": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reactions": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "views",
+                                  "reach",
+                                  "likes",
+                                  "comments",
+                                  "shares",
+                                  "saves",
+                                  "clicks",
+                                  "reactions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "metrics_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "metrics_read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -16408,7 +17011,10 @@
                               "status",
                               "permalink",
                               "error",
-                              "published_at"
+                              "published_at",
+                              "metrics",
+                              "metrics_status",
+                              "metrics_read_at"
                             ],
                             "additionalProperties": false
                           }
@@ -17966,6 +18572,104 @@
                                 ],
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              "metrics": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "views": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reach": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "likes": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "comments": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "shares": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "saves": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "clicks": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reactions": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "views",
+                                  "reach",
+                                  "likes",
+                                  "comments",
+                                  "shares",
+                                  "saves",
+                                  "clicks",
+                                  "reactions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "metrics_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "metrics_read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -17976,7 +18680,10 @@
                               "status",
                               "permalink",
                               "error",
-                              "published_at"
+                              "published_at",
+                              "metrics",
+                              "metrics_status",
+                              "metrics_read_at"
                             ],
                             "additionalProperties": false
                           }
@@ -19572,6 +20279,104 @@
                                 ],
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              "metrics": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "views": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reach": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "likes": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "comments": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "shares": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "saves": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "clicks": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reactions": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "views",
+                                  "reach",
+                                  "likes",
+                                  "comments",
+                                  "shares",
+                                  "saves",
+                                  "clicks",
+                                  "reactions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "metrics_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "metrics_read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -19582,7 +20387,10 @@
                               "status",
                               "permalink",
                               "error",
-                              "published_at"
+                              "published_at",
+                              "metrics",
+                              "metrics_status",
+                              "metrics_read_at"
                             ],
                             "additionalProperties": false
                           }
@@ -21178,6 +21986,104 @@
                                 ],
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              "metrics": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "views": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reach": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "likes": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "comments": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "shares": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "saves": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "clicks": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reactions": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "views",
+                                  "reach",
+                                  "likes",
+                                  "comments",
+                                  "shares",
+                                  "saves",
+                                  "clicks",
+                                  "reactions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "metrics_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "metrics_read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -21188,7 +22094,10 @@
                               "status",
                               "permalink",
                               "error",
-                              "published_at"
+                              "published_at",
+                              "metrics",
+                              "metrics_status",
+                              "metrics_read_at"
                             ],
                             "additionalProperties": false
                           }
@@ -22656,6 +23565,104 @@
                                 ],
                                 "format": "date-time",
                                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              },
+                              "metrics": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "views": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reach": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "likes": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "comments": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "shares": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "saves": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "clicks": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "reactions": {
+                                    "type": [
+                                      "integer",
+                                      "null"
+                                    ],
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "views",
+                                  "reach",
+                                  "likes",
+                                  "comments",
+                                  "shares",
+                                  "saves",
+                                  "clicks",
+                                  "reactions"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "metrics_status": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "pattern": "^[a-z_]{2,30}$"
+                              },
+                              "metrics_read_at": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                               }
                             },
                             "required": [
@@ -22666,7 +23673,10 @@
                               "status",
                               "permalink",
                               "error",
-                              "published_at"
+                              "published_at",
+                              "metrics",
+                              "metrics_status",
+                              "metrics_read_at"
                             ],
                             "additionalProperties": false
                           }
@@ -80289,6 +81299,104 @@
                                   ],
                                   "format": "date-time",
                                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                                },
+                                "metrics": {
+                                  "type": [
+                                    "object",
+                                    "null"
+                                  ],
+                                  "properties": {
+                                    "views": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "reach": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "likes": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "comments": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "shares": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "saves": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "clicks": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "reactions": {
+                                      "type": [
+                                        "integer",
+                                        "null"
+                                      ],
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    }
+                                  },
+                                  "required": [
+                                    "views",
+                                    "reach",
+                                    "likes",
+                                    "comments",
+                                    "shares",
+                                    "saves",
+                                    "clicks",
+                                    "reactions"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "metrics_status": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "pattern": "^[a-z_]{2,30}$"
+                                },
+                                "metrics_read_at": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "format": "date-time",
+                                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                                 }
                               },
                               "required": [
@@ -80299,7 +81407,10 @@
                                 "status",
                                 "permalink",
                                 "error",
-                                "published_at"
+                                "published_at",
+                                "metrics",
+                                "metrics_status",
+                                "metrics_read_at"
                               ],
                               "additionalProperties": false
                             }
@@ -80808,6 +81919,104 @@
                             ],
                             "format": "date-time",
                             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "metrics": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "views": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "reach": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "likes": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "comments": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "shares": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "saves": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "clicks": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "reactions": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "views",
+                              "reach",
+                              "likes",
+                              "comments",
+                              "shares",
+                              "saves",
+                              "clicks",
+                              "reactions"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "metrics_status": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z_]{2,30}$"
+                          },
+                          "metrics_read_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                           }
                         },
                         "required": [
@@ -80818,7 +82027,10 @@
                           "status",
                           "permalink",
                           "error",
-                          "published_at"
+                          "published_at",
+                          "metrics",
+                          "metrics_status",
+                          "metrics_read_at"
                         ],
                         "additionalProperties": false
                       }
@@ -81305,6 +82517,104 @@
                             ],
                             "format": "date-time",
                             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "metrics": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "views": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "reach": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "likes": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "comments": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "shares": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "saves": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "clicks": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "reactions": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "views",
+                              "reach",
+                              "likes",
+                              "comments",
+                              "shares",
+                              "saves",
+                              "clicks",
+                              "reactions"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "metrics_status": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z_]{2,30}$"
+                          },
+                          "metrics_read_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                           }
                         },
                         "required": [
@@ -81315,7 +82625,10 @@
                           "status",
                           "permalink",
                           "error",
-                          "published_at"
+                          "published_at",
+                          "metrics",
+                          "metrics_status",
+                          "metrics_read_at"
                         ],
                         "additionalProperties": false
                       }
@@ -82054,6 +83367,104 @@
                             ],
                             "format": "date-time",
                             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "metrics": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "views": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "reach": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "likes": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "comments": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "shares": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "saves": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "clicks": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "reactions": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "views",
+                              "reach",
+                              "likes",
+                              "comments",
+                              "shares",
+                              "saves",
+                              "clicks",
+                              "reactions"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "metrics_status": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z_]{2,30}$"
+                          },
+                          "metrics_read_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                           }
                         },
                         "required": [
@@ -82064,7 +83475,10 @@
                           "status",
                           "permalink",
                           "error",
-                          "published_at"
+                          "published_at",
+                          "metrics",
+                          "metrics_status",
+                          "metrics_read_at"
                         ],
                         "additionalProperties": false
                       }
@@ -82487,6 +83901,104 @@
                             ],
                             "format": "date-time",
                             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "metrics": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "views": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "reach": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "likes": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "comments": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "shares": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "saves": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "clicks": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "reactions": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "views",
+                              "reach",
+                              "likes",
+                              "comments",
+                              "shares",
+                              "saves",
+                              "clicks",
+                              "reactions"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "metrics_status": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^[a-z_]{2,30}$"
+                          },
+                          "metrics_read_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
                           }
                         },
                         "required": [
@@ -82497,7 +84009,10 @@
                           "status",
                           "permalink",
                           "error",
-                          "published_at"
+                          "published_at",
+                          "metrics",
+                          "metrics_status",
+                          "metrics_read_at"
                         ],
                         "additionalProperties": false
                       }
