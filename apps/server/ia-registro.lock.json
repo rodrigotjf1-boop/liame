@@ -80,6 +80,10 @@
       "version": 1,
       "hash": "87ccec67fc8a0d49dfb2585254f65da54fe833083be2022d17a6d2f3f61dd992"
     },
+    "post_tentar_de_novo": {
+      "version": 1,
+      "hash": "e32cab8005e276eabf00033fdd5cc4fc4cba5c4cfee581a1a84005210891f1a2"
+    },
     "propor_cupom": {
       "version": 1,
       "hash": "2af959493bf4fd2d45ea5f954c2673c419d8e2b04cd50a277832a292fa204588"
