@@ -55,9 +55,24 @@ describe.skipIf(!hasDb)('o pacote pronto: onde o Liame não publica (A6 · Z8, p
     const foto = await fotoPronta(e);
     const r = await novo(e, foto.id, [{ channel: 'tiktok', text: TEXTO_TIKTOK }], { crop_pos: 10 });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
-    expect(r.body).toMatchObject({ kind: 'pacote', photo_id: foto.id, crop_pos: null, action_id: null, status: 'pacote_pronto', publish_at: new Date(horaNoFuso(1, '12:00')).toISOString() });
+    // O pacote não tem pedido de apagar das redes (A6, Z5d, parte 6): quem publicou apaga direto na rede.
+    expect(r.body).toMatchObject({ kind: 'pacote', photo_id: foto.id, crop_pos: null, action_id: null, status: 'pacote_pronto', publish_at: new Date(horaNoFuso(1, '12:00')).toISOString(), removal: null });
     expect(r.body.channels).toEqual([
-      { channel: 'tiktok', account_id: null, account_name: null, text: TEXTO_TIKTOK, status: 'pronto', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null, retry_until: null },
+      {
+        channel: 'tiktok',
+        account_id: null,
+        account_name: null,
+        text: TEXTO_TIKTOK,
+        status: 'pronto',
+        permalink: null,
+        error: null,
+        published_at: null,
+        removed_at: null,
+        metrics: null,
+        metrics_status: null,
+        metrics_read_at: null,
+        retry_until: null,
+      },
     ]);
     expect(await pedidos(e)).toBe(0);
     // A Agenda: o pacote no dia e na hora, pronto.

@@ -1,4 +1,12 @@
-import { type CreatePostRequest, type PostListQuery, type PostListResponse, type PostPhotoResponse, type PostResponse, type ReschedulePostRequest } from '@liame/contracts';
+import {
+  type CreatePostRequest,
+  type PostListQuery,
+  type PostListResponse,
+  type PostPhotoResponse,
+  type PostResponse,
+  type ReschedulePostRequest,
+  type UnpublishPostRequest,
+} from '@liame/contracts';
 import { uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { type SQL, sql } from 'drizzle-orm';
@@ -26,6 +34,7 @@ import {
   LIMITE_DO_TEXTO,
   type NovaTentativa,
   novaTentativa,
+  PEDIDO_AINDA_SAI,
   PROVEDOR_DO_CANAL,
   recursoDoPost,
 } from './post-plano.js';
@@ -46,6 +55,10 @@ import { CANAIS_COM_LINK, criarLinkDoPost, destinoDoPost, SEPARADOR, tamanhoNoTe
 // "Tentar de novo" (A6, Z5d; P19; D-A6-54): o post que saiu num canal e não no outro manda o mesmo post aprovado só no
 // canal que faltou, pedido por uma pessoa, sem o código do app, até 24 horas depois de sair no outro (a ferramenta
 // `post_tentar_de_novo`, que só existe por esta rota).
+//
+// "Apagar das redes" (A6, Z5d, parte 6; P19; D-A6-57): o post que o Liame publicou sai de cada canal em que está no ar,
+// com o código do app de quem apaga, pedido e aprovado na mesma chamada (a ferramenta `post_apagar`, a volta da
+// publicação, que só existe por esta rota). O pedido executa em seguida, no worker.
 
 export const RECURSO_DO_POST = 'social_post';
 export const ACAO_CRIAR_POST = 'posts.criar';
@@ -53,6 +66,7 @@ export const ACAO_PACOTE_PUBLICADO = 'posts.pacote_publicado';
 export const ACAO_PACOTE_TIRADO = 'posts.pacote_tirado';
 export const ACAO_TENTAR_DE_NOVO = 'posts.tentar_de_novo';
 export const ACAO_MUDAR_A_HORA = 'posts.mudar_a_hora';
+export const ACAO_APAGAR_DAS_REDES = 'posts.apagar_das_redes';
 
 /** O canal na frase, com a preposição dele (V121). */
 const DO_CANAL: Record<string, string> = { instagram: 'do Instagram', facebook: 'da Página', tiktok: 'do TikTok', youtube: 'do YouTube' };
@@ -460,6 +474,78 @@ export class PostsService {
       resourceId: id,
       before: { publish_at: antes.toISOString(), action_id: p.action_id },
       after: { brand_id: p.brand_id, publish_at: hora.toISOString(), action_id: novo.id, plan_hash: novo.plan_hash, aprovado: aprovado.status === 'aprovada' },
+    });
+    return this.obter(auth, id);
+  }
+
+  /**
+   * "Apagar das redes" (A6, Z5d, parte 6; P19; D-A6-57): o post do Liame que está no ar em algum canal sai de cada um, com
+   * o código do app de quem apaga. O post fica travado; nada dele pode estar saindo agora (o pedido de publicar ou a nova
+   * tentativa ainda executando, um canal publicando), nem já saindo das redes. O pedido `post_apagar` (a volta do pedido
+   * que publicou) nasce e é aprovado com o código na mesma transação: o código errado desfaz tudo. Executa em seguida, no
+   * worker; a Agenda mostra o andamento em `removal`.
+   */
+  async apagarDasRedes(auth: AuthContext, id: string, body: UnpublishPostRequest): Promise<PostResponse> {
+    const tx = currentTx();
+    const quem = this.quem(auth);
+    const p = (
+      await tx.execute<{ brand_id: string; kind: string; action_id: string | null; version: number; pedido: string | null }>(sql`
+        select p.brand_id, p.kind, p.action_id, p.version, r.status as pedido
+          from liame.social_post p
+          left join liame.action_request r on r.id = p.action_id and r.tenant_id = p.tenant_id
+         where p.id = ${id} and p.tenant_id = ${quem.tenantId}
+           for update of p`)
+    ).rows[0];
+    if (!p) throw new AppProblem(404, 'post-nao-encontrado', 'Não encontramos', 'Este post não está mais aqui.');
+    if (p.kind !== 'post') throw new AppProblem(409, 'e-pacote', 'É um pacote', 'O pacote o Liame não publicou: quem publicou apaga direto na rede.');
+    if (!(await this.ligada(quem, p.brand_id))) throw desligada();
+    const canais = (
+      await tx.execute<{ channel: string; connected_account_id: string | null; status: string }>(sql`
+        select channel, connected_account_id, status from liame.social_post_channel
+         where post_id = ${id} and tenant_id = ${quem.tenantId}
+         order by case channel when 'instagram' then 0 else 1 end
+           for update`)
+    ).rows;
+    const noAr = canais.filter((c) => c.status === 'publicado');
+    if (!p.action_id || noAr.length === 0) {
+      throw new AppProblem(409, 'post-fora-do-ar', 'O post não está no ar', 'Apagar das redes vale para o post que o Liame publicou: este post não está no ar em nenhum canal.');
+    }
+    if ((p.pedido && PEDIDO_AINDA_SAI.includes(p.pedido)) || canais.some((c) => c.status === 'publicando')) {
+      throw new AppProblem(409, 'post-saindo', 'O post ainda está saindo', 'O post ainda está saindo num canal: espere terminar para apagar.');
+    }
+    const jaApagando = await tx.execute<{ id: string }>(sql`
+      select id from liame.action_request
+       where tenant_id = ${quem.tenantId} and tool = 'post_apagar' and resource_id = ${recursoDoPost(id)}
+         and status in ('aguardando_aprovacao', 'aprovada', 'executando')
+       limit 1`);
+    if (jaApagando.rows[0]) throw new AppProblem(409, 'post-saindo-das-redes', 'Já está saindo das redes', 'O pedido de apagar este post já foi aprovado e executa agora.');
+    // A conta do primeiro canal no ar é a do pedido (D-A6-32); a do outro canal, o conector confere na execução.
+    const primeiro = noAr[0]!;
+    if (!primeiro.connected_account_id) {
+      throw new AppProblem(
+        409,
+        'canal-nao-conectado',
+        'Canal não conectado',
+        `A conta ${DO_CANAL[primeiro.channel]} deste post não está mais ligada à marca: conecte de novo em Contas conectadas, ou apague direto na rede.`,
+      );
+    }
+    const pedido = await this.actions.pedirVolta(
+      auth,
+      {
+        tool: 'post_apagar',
+        brand_id: p.brand_id,
+        provider: PROVEDOR_DO_CANAL[primeiro.channel as CanalDoPost],
+        account_id: primeiro.connected_account_id,
+        resource_id: recursoDoPost(id),
+        params: {},
+      },
+      { de: p.action_id, versaoDepois: p.version },
+    );
+    const aprovado = await this.actions.approve(auth, pedido.id, { plan_hash: pedido.plan_hash, code: body.code });
+    auditDetail({
+      resourceId: id,
+      before: { canais_no_ar: noAr.map((c) => c.channel) },
+      after: { brand_id: p.brand_id, action_id: pedido.id, plan_hash: pedido.plan_hash, aprovado: aprovado.status === 'aprovada' },
     });
     return this.obter(auth, id);
   }

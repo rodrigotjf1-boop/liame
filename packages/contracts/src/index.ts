@@ -441,8 +441,10 @@ export {
   PostListResponse,
   PostMetrics,
   PostPhotoResponse,
+  PostRemoval,
   PostResponse,
   ReschedulePostRequest,
+  UnpublishPostRequest,
 } from './posts.js';
 export {
   BILLING_METHODS,

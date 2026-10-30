@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { emMenorUnidade } from '../connectors/meta/verba.js';
 import { type ContextoDaAvaliacao, EstadoDaAvaliacao, ehNotaBaixa, ParametrosDaResposta, planoDaResposta, planoDeApagar } from './avaliacao-plano.js';
 import { EstadoDaMensagem, faseDaMensagem, impedimentoDaMensagem } from './mensagem-plano.js';
-import { EstadoDoPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
+import { EstadoDoPost, planoDeApagarOPost, planoDeTentarDeNovo, planoDoPost, quandoSai } from '../posts/post-plano.js';
 import { motivoDoCompartilhado, orcamentoCompartilhado } from './orcamento-compartilhado.js';
 
 // Registro de ferramentas (arquitetura §6, ADR-007): cada ferramenta declara risco, impacto financeiro,
@@ -87,8 +87,9 @@ export interface ToolDefinition {
    */
   ownerOnly?(before: ResourceState): boolean;
   /**
-   * Só existe como a volta de outra ação (A6, Z2: apagar a resposta que o Liame publicou). Não se pede direto
-   * (`POST /v1/actions`), nem por um funcionário de IA: o Liame não apaga o que não publicou.
+   * Só existe como a volta de outra ação (A6, Z2: apagar a resposta que o Liame publicou; Z5d, parte 6: apagar das redes
+   * o post que o Liame publicou, pela rota do post). Não se pede direto (`POST /v1/actions`), nem por um funcionário de IA:
+   * o Liame não apaga o que não publicou.
    */
   onlyAsUndo?: boolean;
   /**
@@ -511,6 +512,31 @@ export const TOOLS: Record<string, ToolDefinition> = {
     executeAt(before, agora, fuso) {
       const lido = EstadoDoPost.safeParse(before);
       return lido.success ? quandoSai(lido.data.hora, agora, fuso) : null;
+    },
+  },
+  // "Apagar das redes" (A6, Z5d, parte 6; P19, aprovado pelo dono em 21/10/2026; D-A6-57): o post que o Liame publicou sai
+  // de cada canal em que está no ar. Só existe como a volta da publicação, pela rota do post (`POST /v1/posts/{id}/unpublish`),
+  // que pede e aprova com o código do app na mesma chamada, como o P19 desenhou: apagar não se desfaz (o post não volta, nem
+  // as curtidas e os comentários dele). A regra `post.*` da política já pede a aprovação; a trava `alwaysApproval` segura a
+  // regra de uma empresa ou de uma marca. Executa na hora, a qualquer hora do dia: tirar do ar não espera a janela do post.
+  // A trava do `post_publicar` NÃO para esta: apagar é o que se faz quando algo saiu errado.
+  post_apagar: {
+    name: 'post_apagar',
+    version: 1,
+    owner: 'social',
+    description:
+      'Apaga das redes o post da marca que o Liame publicou, em cada canal em que ele está no ar (o Instagram e a Página do Facebook). Apagar não se desfaz, e quem já viu o post, viu.',
+    // Tira do ar o que a própria empresa publicou: não gasta, não envia e não fala com ninguém. A aprovação vem do P19.
+    risk: 'R1',
+    providers: ['instagram', 'facebook_page'],
+    compensation: 'sem_volta_pelo_liame',
+    alwaysApproval: true,
+    onlyAsUndo: true,
+    params: NoParams,
+    plan(before) {
+      const plano = planoDeApagarOPost(before);
+      if (!plano.ok) throw new PlanoRecusado(plano.motivo);
+      return { action: 'post.apagar', budgetImpact: 'none', valueMicros: null, currentValueMicros: null, reserveMicros: 0, desiredState: plano.desejado };
     },
   },
 };

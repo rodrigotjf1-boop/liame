@@ -76,6 +76,10 @@
       "version": 1,
       "hash": "ed8b6061c8a8a799bebc6827f9c8d690b23d805281f49cb0a18bc2d4ded23021"
     },
+    "post_apagar": {
+      "version": 1,
+      "hash": "ff79e9d63c14e6e0944360068facb371852f019daa956f97a58b8470eeb5ae85"
+    },
     "post_publicar": {
       "version": 1,
       "hash": "87ccec67fc8a0d49dfb2585254f65da54fe833083be2022d17a6d2f3f61dd992"

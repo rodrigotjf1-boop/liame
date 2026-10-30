@@ -3,8 +3,8 @@ import { localClock } from '../policy/engine.js';
 
 // O post no trilho (A6, Z5b; `plano-a6.md` §3 Z5; D-A6-3, D-A6-6 a D-A6-8, D-A6-21 e D-A6-23; as decisões técnicas
 // D-A6-32 a D-A6-37 estão em `decisoes-design.md`). Funções puras: o estado do post que o conector lê do banco, os planos das
-// ferramentas `post_publicar` e `post_tentar_de_novo` (a nova tentativa no canal que faltou, Z5d; D-A6-54) e a hora em
-// que o pedido aprovado sai. Sem rede e sem banco.
+// ferramentas `post_publicar`, `post_tentar_de_novo` (a nova tentativa no canal que faltou, Z5d; D-A6-54) e `post_apagar`
+// (apagar das redes, Z5d, parte 6; D-A6-57) e a hora em que o pedido aprovado sai. Sem rede e sem banco.
 //
 // O post é um recurso do Liame (D-A6-32): `post:<id>`. O estado traz a foto (pelo resumo do arquivo), o recorte do
 // Instagram, a hora e cada canal com o texto e a situação; é ele que vai para o pedido e entra no hash do plano. A
@@ -157,7 +157,7 @@ export const HORAS_PARA_TENTAR_DE_NOVO = 24;
  */
 const TERMINOU_SEM_SAIR: readonly string[] = ['falhou'];
 /** O pedido ainda vai executar (espera a aprovação, a hora, ou está saindo agora). */
-const PEDIDO_AINDA_SAI: readonly string[] = ['sombra', 'aguardando_aprovacao', 'aprovada', 'executando'];
+export const PEDIDO_AINDA_SAI: readonly string[] = ['sombra', 'aguardando_aprovacao', 'aprovada', 'executando'];
 /** O canal que não saiu: falhou, ou ficou esperando ou publicando quando o pedido terminou. */
 const CANAL_NAO_SAIU: readonly string[] = ['falhou', 'aguardando', 'publicando'];
 
@@ -214,6 +214,57 @@ export function planoDeTentarDeNovo(before: unknown): PlanoDoPost {
 const contaFora = (canal: CanalDoPost): string =>
   `A conta ${DO_CANAL[canal]} deste post não está conectada à marca agora: o post não sai ${NO_CANAL[canal]}. Confira em Contas conectadas.`;
 
+const NADA_NO_AR = 'Apagar das redes vale para o post que o Liame publicou: este post não está no ar em nenhum canal.';
+const contaForaParaApagar = (canal: CanalDoPost): string =>
+  `A conta ${DO_CANAL[canal]} deste post não está conectada à marca agora: o Liame não alcança o post ${NO_CANAL[canal]}. Conecte de novo em Contas conectadas, ou apague direto na rede.`;
+
+/**
+ * "Apagar das redes" (A6, Z5d, parte 6; P19, aprovado pelo dono em 21/10/2026; decisão técnica D-A6-57): o plano da
+ * ferramenta `post_apagar`. Tira o post de cada canal em que ele está no ar (publicado); o que não saiu, ou já foi apagado,
+ * fica como está. Cada canal no ar precisa da conta conectada à marca (é por ela que o Liame alcança o post). O estado
+ * desejado é o post com esses canais apagados; sem texto (apagar não diz nada em público). Função pura.
+ */
+export function planoDeApagarOPost(before: unknown): PlanoDoPost {
+  const lido = EstadoDoPost.safeParse(before);
+  if (!lido.success) return { ok: false, motivo: 'Esta ferramenta é para um post do Liame.' };
+  const e = lido.data;
+  const motivo = recusaNaHoraDeApagar(e);
+  if (motivo) return { ok: false, motivo };
+  return { ok: true, desejado: { ...e, canais: e.canais.map((c) => (c.situacao === 'publicado' ? { ...c, situacao: 'apagado' as const } : c)) }, texto: '' };
+}
+
+/**
+ * Na hora de apagar (a do pedido e a da execução), o post ainda pode sair das redes? Algum canal está no ar, e cada um
+ * deles tem a conta conectada à marca. Nulo: pode. Função pura.
+ */
+export function recusaNaHoraDeApagar(e: EstadoDoPost): string | null {
+  const noAr = e.canais.filter((c) => c.situacao === 'publicado');
+  if (noAr.length === 0) return NADA_NO_AR;
+  for (const c of noAr) if (!c.conta) return contaForaParaApagar(c.canal);
+  return null;
+}
+
+/** O pedido de apagar quer tirar algum canal do ar (o estado desejado tem um canal apagado): é o que o conector faz. */
+export function querApagar(desejado: unknown): boolean {
+  const lido = EstadoDoPost.safeParse(desejado);
+  return lido.success && lido.data.canais.some((c) => c.situacao === 'apagado');
+}
+
+/**
+ * Como foi o pedido de apagar das redes, para a Agenda e Aprovações (o contrato a lista em `PostResponse.removal`):
+ * `apagando` (aprovado, executa agora), `apagado` (saiu de todos os canais em que estava no ar), `em_parte` (saiu de um e
+ * continua no outro) ou `nao_apagou` (continua no ar). Função pura.
+ */
+export type SituacaoDoApagar = 'apagando' | 'apagado' | 'em_parte' | 'nao_apagou';
+
+export function situacaoDoApagar(pedido: string, canais: readonly string[]): SituacaoDoApagar {
+  if (PEDIDO_AINDA_SAI.includes(pedido)) return 'apagando';
+  const apagados = canais.filter((s) => s === 'apagado').length;
+  const noAr = canais.filter((s) => s === 'publicado').length;
+  if (apagados > 0 && noAr === 0) return 'apagado';
+  return apagados > 0 ? 'em_parte' : 'nao_apagou';
+}
+
 /**
  * Na hora de sair, o post aprovado ainda pode sair (A6-10)? A foto continua nas Fotos, e cada canal que ainda não saiu
  * (esperando, ou com a publicação começada numa tentativa anterior) tem a conta conectada à marca. O canal já publicado
@@ -237,16 +288,20 @@ export type SituacaoDoPost =
   | 'nao_saiu'
   | 'cancelado'
   | 'recusado'
-  | 'expirado';
+  | 'expirado'
+  | 'apagado';
 
 /**
  * A situação do post, pelo pedido em Aprovações e pelos canais: o pedido que espera é "esperando a aprovação"; o aprovado
  * espera a hora ("agendado"); o que executa está "publicando"; o que terminou diz o que saiu (todos os canais, parte deles,
- * nenhum). Recusado e cancelado vêm do pedido (a recusa tem o prefixo dela no motivo).
+ * nenhum). Recusado e cancelado vêm do pedido (a recusa tem o prefixo dela no motivo). O canal apagado das redes (Z5d,
+ * parte 6) saiu: o post que continua no ar nos outros é "publicado", e o que saiu de todos é "apagado".
  */
 export function situacaoDoPost(pedido: { status: string; status_reason: string | null } | null, canais: readonly string[], prefixoDaRecusa: string): SituacaoDoPost {
   const publicados = canais.filter((s) => s === 'publicado').length;
-  const deTodos = publicados > 0 && publicados === canais.length ? 'publicado' : publicados > 0 ? 'em_parte' : 'nao_saiu';
+  const apagados = canais.filter((s) => s === 'apagado').length;
+  const deTodos =
+    publicados === 0 && apagados > 0 ? 'apagado' : publicados > 0 && publicados + apagados === canais.length ? 'publicado' : publicados > 0 ? 'em_parte' : 'nao_saiu';
   if (!pedido) return 'esperando_aprovacao';
   switch (pedido.status) {
     case 'aguardando_aprovacao':

@@ -3,7 +3,7 @@ import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
 import { pedeUmPostNovo } from '../actions/post-publicacao.js';
 import { linkComRastreio } from '../links/construtor.js';
-import { novaTentativa, situacaoDoPacote, situacaoDoPost } from './post-plano.js';
+import { novaTentativa, recursoDoPost, situacaoDoApagar, situacaoDoPacote, situacaoDoPost } from './post-plano.js';
 
 // A leitura dos posts como as telas os veem (a Agenda e o pedido em Aprovações, A6, Z5c): o post, os canais com a conta
 // e a situação de cada um, e a situação do post pelo pedido. Fica à parte do serviço dos posts porque o serviço das
@@ -36,10 +36,13 @@ type LinhaDoCanal = {
   permalink: string | null;
   error: string | null;
   published_at: Date | null;
+  removed_at: Date | null;
   metrics: Record<string, unknown> | null;
   metrics_status: string | null;
   metrics_read_at: Date | null;
 };
+/** O pedido de apagar das redes mais novo de cada post (A6, Z5d, parte 6). */
+type LinhaDoApagar = { resource_id: string; id: string; status: string; status_reason: string | null; created_at: Date; quem: string | null };
 
 const iso = (d: Date | string) => new Date(d).toISOString();
 const isoOuNulo = (d: Date | string | null) => (d ? iso(d) : null);
@@ -86,16 +89,29 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
   if (p.rows.length === 0) return [];
   const c = await tx.execute<LinhaDoCanal>(sql`
     select ch.post_id, ch.channel, ch.connected_account_id, a.name as account_name, ch.body, ch.status, ch.permalink, ch.error, ch.published_at,
-           ch.metrics, ch.metrics_status, ch.metrics_read_at
+           ch.removed_at, ch.metrics, ch.metrics_status, ch.metrics_read_at
       from liame.social_post_channel ch
       left join liame.connected_account a on a.id = ch.connected_account_id
      where ch.tenant_id = ${tenantId} and ch.post_id in ${p.rows.map((x) => x.id)}
      order by ch.post_id, case ch.channel when 'instagram' then 0 else 1 end`);
   const canaisDo = new Map<string, LinhaDoCanal[]>();
   for (const l of c.rows) canaisDo.set(l.post_id, [...(canaisDo.get(l.post_id) ?? []), l]);
+  // O pedido de apagar das redes mais novo de cada post do Liame (A6, Z5d, parte 6; D-A6-57), com o nome de quem pediu.
+  const doLiame = p.rows.filter((x) => x.kind === 'post').map((x) => recursoDoPost(x.id));
+  const apagar = new Map<string, LinhaDoApagar>();
+  if (doLiame.length) {
+    const a = await tx.execute<LinhaDoApagar>(sql`
+      select distinct on (r.resource_id) r.resource_id, r.id, r.status, r.status_reason, r.created_at, u.name as quem
+        from liame.action_request r
+        left join liame.app_user u on u.id = r.requested_by
+       where r.tenant_id = ${tenantId} and r.tool = 'post_apagar' and r.resource_id in ${doLiame}
+       order by r.resource_id, r.created_at desc, r.id desc`);
+    for (const l of a.rows) apagar.set(l.resource_id, l);
+  }
   return p.rows.map((l): PostResponse => {
     const canais = canaisDo.get(l.id) ?? [];
     const situacoes = canais.map((x) => x.status);
+    const pedidoDeApagar = l.kind === 'post' ? apagar.get(recursoDoPost(l.id)) : undefined;
     // "Tentar de novo" (A6, Z5d; D-A6-54): em qual canal, e até quando; o pacote não tem.
     const tentativa =
       l.kind === 'post'
@@ -128,11 +144,22 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
         permalink: x.permalink,
         error: x.error,
         published_at: isoOuNulo(x.published_at),
+        removed_at: isoOuNulo(x.removed_at),
         metrics: numerosDoCanal(x.metrics),
         metrics_status: x.metrics_status,
         metrics_read_at: isoOuNulo(x.metrics_read_at),
         retry_until: tentativa?.ok && tentativa.canal === x.channel ? tentativa.ate.toISOString() : null,
       })),
+      removal: pedidoDeApagar
+        ? {
+            action_id: pedidoDeApagar.id,
+            status: situacaoDoApagar(pedidoDeApagar.status, situacoes),
+            // O porquê só do pedido que terminou sem apagar tudo (o que continua no ar diz onde e por quê).
+            reason: pedidoDeApagar.status === 'falhou' ? pedidoDeApagar.status_reason : null,
+            requested_by_name: pedidoDeApagar.quem,
+            requested_at: iso(pedidoDeApagar.created_at),
+          }
+        : null,
       // O link do post (A6, Z7; D-A6-46), montado como na criação (o mesmo endereço que está no fim do texto da Página).
       link:
         l.link_destino && l.link_origem && l.link_meio && l.link_codigo

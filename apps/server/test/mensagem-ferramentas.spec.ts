@@ -58,9 +58,9 @@ describe('pedido de mensagem: as ferramentas e o plano (A5 · Y5)', () => {
       mensagem_pausar: ['R1', 'regemcast', 'sem_volta_pelo_liame', false, false],
     });
     expect(TOOLS.mensagem_disparar!.undo!({})).toEqual({ tool: 'mensagem_pausar', params: {} });
-    // Fora das mensagens, só a resposta a uma avaliação do Google (A6, Z2) e o post da marca (A6, Z5b) têm a trava; e as
-    // duas das mensagens não aceitam parâmetro.
-    expect(Object.values(TOOLS).filter((t) => t.alwaysApproval).map((t) => t.name)).toEqual(['mensagem_disparar', 'avaliacao_responder', 'post_publicar']);
+    // Fora das mensagens, só a resposta a uma avaliação do Google (A6, Z2), o post da marca (A6, Z5b) e apagar o post das
+    // redes (A6, Z5d, parte 6: o P19 pede o código do app) têm a trava; e as duas das mensagens não aceitam parâmetro.
+    expect(Object.values(TOOLS).filter((t) => t.alwaysApproval).map((t) => t.name)).toEqual(['mensagem_disparar', 'avaliacao_responder', 'post_publicar', 'post_apagar']);
     for (const nome of ['mensagem_disparar', 'mensagem_pausar']) expect(TOOLS[nome]!.params.safeParse({ pessoas: 1 }).success).toBe(false);
     // Diretas para uma pessoa: a pausa (não gasta, não envia e não desfaz nada), apagar a resposta que o Liame publicou e a
     // nova tentativa do post no canal que não saiu (A6, Z5d: o mesmo post que uma pessoa já aprovou com o código).

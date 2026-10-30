@@ -59,6 +59,30 @@ export const ReschedulePostRequest = z.strictObject({
 });
 export type ReschedulePostRequest = z.infer<typeof ReschedulePostRequest>;
 
+/**
+ * Apagar das redes o post que o Liame publicou (A6, Z5d, parte 6; P19; D-A6-57): o código do app de quem aprova. Sai de
+ * cada canal em que o post está no ar.
+ */
+export const UnpublishPostRequest = z.strictObject({
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }),
+});
+export type UnpublishPostRequest = z.infer<typeof UnpublishPostRequest>;
+
+/**
+ * O pedido de apagar das redes mais novo do post (A6, Z5d, parte 6; D-A6-57). `status`: `apagando` (aprovado, executa
+ * agora), `apagado` (saiu de todos os canais em que estava no ar), `em_parte` (saiu de um e continua no outro) ou
+ * `nao_apagou` (continua no ar); a lista pode crescer. `reason`: por que não saiu de algum canal, em palavras do Liame.
+ */
+export const PostRemoval = z.strictObject({
+  action_id: z.uuid(),
+  status: z.string().regex(/^[a-z_]{2,30}$/),
+  reason: z.string().nullable(),
+  /** Quem pediu (e aprovou, com o código do app); nulo quando a pessoa saiu da empresa. */
+  requested_by_name: z.string().nullable(),
+  requested_at: z.iso.datetime(),
+});
+export type PostRemoval = z.infer<typeof PostRemoval>;
+
 const numero = z.int().min(0).nullable();
 /** Os números de um post num canal (A6, Z7, parte c). */
 export const PostMetrics = z.strictObject({
@@ -91,6 +115,8 @@ export const PostChannelResponse = z.strictObject({
   /** Por que não saiu neste canal, em palavras do Liame. */
   error: z.string().nullable(),
   published_at: z.iso.datetime().nullable(),
+  /** Quando o post saiu do ar neste canal, apagado pelo Liame (A6, Z5d, parte 6). */
+  removed_at: z.iso.datetime().nullable(),
   /**
    * Os números do post neste canal, lidos da rede como apoio (A6, Z7, parte c; o resultado do post é o pedido pelo link
    * dele): as vezes em que foi visto, as pessoas que viram (estimado pela rede), as curtidas, os comentários, os
@@ -135,13 +161,16 @@ export const PostResponse = z.strictObject({
   action_id: z.uuid().nullable(),
   /**
    * A situação do post: `esperando_aprovacao`, `agendado` (aprovado, espera a hora), `publicando`, `publicado`,
-   * `em_parte` (saiu num canal e não no outro), `nao_saiu`, `cancelado`, `recusado` ou `expirado` (ninguém aprovou no
-   * prazo); a do pacote: `pacote_pronto` (a pessoa publica), `pacote_publicado` (ela marcou "Publiquei") ou `cancelado`
-   * (tirado da Agenda). A lista pode crescer.
+   * `em_parte` (saiu num canal e não no outro), `nao_saiu`, `cancelado`, `recusado`, `expirado` (ninguém aprovou no
+   * prazo) ou `apagado` (apagado das redes em todos os canais em que saiu; o que continua no ar num canal é `publicado`);
+   * a do pacote: `pacote_pronto` (a pessoa publica), `pacote_publicado` (ela marcou "Publiquei") ou `cancelado` (tirado da
+   * Agenda). A lista pode crescer.
    */
   status: z.string().regex(/^[a-z_]{2,30}$/),
   created_at: z.iso.datetime(),
   channels: z.array(PostChannelResponse),
+  /** O pedido de apagar das redes mais novo (A6, Z5d, parte 6); nulo sem pedido, e no pacote. */
+  removal: PostRemoval.nullable(),
   /**
    * O link do post (A6, Z7; D-A6-16 e D-A6-46): o cardápio da loja com o código só deste post. No post com a Página, ele
    * já está no fim do texto dela (D-A6-47); no pacote, é o link da bio. Nulo quando o post nasceu sem link (sem a
