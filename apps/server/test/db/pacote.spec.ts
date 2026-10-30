@@ -57,7 +57,7 @@ describe.skipIf(!hasDb)('o pacote pronto: onde o Liame não publica (A6 · Z8, p
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(r.body).toMatchObject({ kind: 'pacote', photo_id: foto.id, crop_pos: null, action_id: null, status: 'pacote_pronto', publish_at: new Date(horaNoFuso(1, '12:00')).toISOString() });
     expect(r.body.channels).toEqual([
-      { channel: 'tiktok', account_id: null, account_name: null, text: TEXTO_TIKTOK, status: 'pronto', permalink: null, error: null, published_at: null },
+      { channel: 'tiktok', account_id: null, account_name: null, text: TEXTO_TIKTOK, status: 'pronto', permalink: null, error: null, published_at: null, metrics: null, metrics_status: null, metrics_read_at: null },
     ]);
     expect(await pedidos(e)).toBe(0);
     // A Agenda: o pacote no dia e na hora, pronto.
