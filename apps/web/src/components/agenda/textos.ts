@@ -148,8 +148,17 @@ export function linhaDoCanal(c: PostChannelResponse, post: PostResponse, fuso: s
   const marcado = noFuso(new Date(post.publish_at), fuso);
   if (post.status === 'esperando_aprovacao') return { ...base, icone: 'clock', tom: 'espera', frase: `sai ${quando(marcado.dia, marcado.hora, hoje)}, depois de aprovado.` };
   if (c.status === 'publicando' || post.status === 'publicando') return { ...base, icone: 'clock', tom: 'espera', frase: 'publicando agora.' };
-  if (['cancelado', 'recusado', 'expirado'].includes(post.status)) return { ...base, icone: 'x', tom: '', frase: 'não saiu.' };
+  // O pedido terminou com o canal ainda esperando (uma trava barrou a execução, por exemplo): ele não saiu.
+  if (['cancelado', 'recusado', 'expirado', 'em_parte', 'nao_saiu'].includes(post.status)) return { ...base, icone: 'x', tom: '', frase: 'não saiu.' };
   return { ...base, icone: 'clock', tom: 'espera', frase: `sai ${quando(marcado.dia, marcado.hora, hoje)}.` };
+}
+
+/**
+ * Dá para "Tentar de novo" neste canal agora (A6, Z5d; P19; D-A6-54)? O servidor diz até quando (`retry_until`: o post
+ * saiu no outro canal, o motivo pode passar, e faz menos de 24 horas); a tela só confere que o prazo não passou.
+ */
+export function podeTentarDeNovo(c: Pick<PostChannelResponse, 'retry_until'>, agora: Date): boolean {
+  return c.retry_until !== null && new Date(c.retry_until).getTime() > agora.getTime();
 }
 
 /** O endereço do post na rede, só `https` (o servidor já confere o domínio; a tela não abre outra coisa). */

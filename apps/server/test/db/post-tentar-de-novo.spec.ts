@@ -218,7 +218,9 @@ describe.skipIf(!hasDb)('"Tentar de novo" no canal que não saiu (A6 · Z5d, par
     expect(await tentar(e, post)).toMatchObject({ status: 409, body: { code: 'tentar-nao-adianta' } });
     expect(await canalDe(post, 'facebook')).toMatchObject({ status: 'falhou', error: FOTO_GRANDE });
 
-    // O pacote, quem publica é a pessoa.
+    // O pacote, quem publica é a pessoa. Ele nasce no fuso de São Paulo, como o post do teste: no fuso "de agora são 12h",
+    // as 19h de amanhã em São Paulo caem fora das 8h às 22h em parte do dia (ERR-190).
+    await ownerQuery(`update liame.organization set timezone = $2 where id = $1`, [e.tenantId, FUSO_DO_PEDIDO]);
     const pacote = await api.call('POST', '/v1/posts', {
       cookie: e.cookie,
       body: { brand_id: e.brandId, photo_id: (await fotoGuardada(e, armazem, { largura: 1080, altura: 1080 })).id, publish_at: `${diaEmSaoPaulo(1)}T19:00:00-03:00`, channels: [{ channel: 'tiktok', text: 'Smash duplo 🍔' }] },
