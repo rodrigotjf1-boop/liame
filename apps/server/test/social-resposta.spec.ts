@@ -48,7 +48,17 @@ describe('Social media: o registro (A6 · Z6)', () => {
     expect([TAREFA_SOCIAL_RESPOSTA, WORKFLOW_DO_SOCIAL]).toEqual(['social_resposta', 'social.resposta']);
     expect(PROMPTS).toContain(PROMPT_SOCIAL_RESPOSTA);
     expect(FUNCIONARIOS).toContain(SOCIAL);
-    expect(SOCIAL).toMatchObject({ key: 'social', name: 'Social media', cargo: 'Posts e avaliações', ferramentas: [], tarefas: [{ task: 'social_resposta', prompt: 'social.resposta' }] });
+    // Desde a v2 (A6, Z6, os posts), a tarefa dos posts vem junto (`social-post.spec.ts`).
+    expect(SOCIAL).toMatchObject({
+      key: 'social',
+      name: 'Social media',
+      cargo: 'Posts e avaliações',
+      ferramentas: [],
+      tarefas: [
+        { task: 'social_resposta', prompt: 'social.resposta' },
+        { task: 'social_post', prompt: 'social.post' },
+      ],
+    });
     expect(conferirRegistro(registroAtual())).toEqual([]);
   });
 
