@@ -204,6 +204,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // marca: é o histórico da Agenda e o que diz o que saiu, onde e quando.
   social_post: { class: 'CONFIDENTIAL', retention: 'enquanto a marca existir' },
   social_post_channel: { class: 'CONFIDENTIAL', retention: 'com o post' },
+  // Os posts do Social media (A6, Z6, os posts, migration 0093): a vez de cada dia da pauta, com a situação, o porquê, o
+  // que a conferência barrou (os nomes das regras), o post e o pedido que saíram; nenhum texto (o do post fica no post).
+  post_suggestion: { class: 'INTERNAL', retention: 'enquanto a marca existir (uma linha por dia proposto)' },
   // Plano e cobrança (A7, W1, migration 0080). Os planos são do produto: o preço e os funcionários de cada versão. A
   // assinatura e as faturas são da empresa: o plano, a forma de pagar, as datas e os valores; nenhum dado de cartão (o
   // cartão fica no meio de pagamento, A7-1). O que a lei manda guardar de uma cobrança paga fica na auditoria e na nota
