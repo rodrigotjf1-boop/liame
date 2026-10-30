@@ -24,6 +24,7 @@ import { SearchConsoleLoop } from './search-console-loop.js';
 import { RotinaDoCrmLoop } from './rotina-do-crm-loop.js';
 import { SincronizacaoLoop } from './sincronizacao-loop.js';
 import { SombraLoop } from './sombra-loop.js';
+import { PostsSugeridosLoop } from './posts-sugeridos-loop.js';
 import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
 import { VendasLoop } from './vendas-loop.js';
 import { InboxProcessor } from './inbox-processor.js';
@@ -71,6 +72,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly fotos: FotosLoop,
     private readonly numerosDosPosts: PostsNumerosLoop,
     private readonly sugestoes: SugestoesDeRespostaLoop,
+    private readonly postsSugeridos: PostsSugeridosLoop,
     private readonly assinaturas: AssinaturasLoop,
     private readonly cobrancasPix: CobrancasPixLoop,
     private readonly releitura: CobrancasReleituraLoop,
@@ -135,6 +137,11 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // O pedido do Social media cuja avaliação mudou ou foi respondida direto no Google sai de Aprovações (P31); a
       // avaliação chega pela leitura do Perfil, de hora em hora: a fila é olhada de 5 em 5 minutos.
       this.loop('sugestoes-retirada', 20, 300_000, async (n) => (await this.sugestoes.retirarLote(n)).length),
+      // Os posts do Social media (A6, Z6, os posts; D-A6-60): de hora em hora, a vez dos dias de amanhã e de depois de
+      // amanhã que têm item na pauta aprovada abre (com a função ligada para a marca); a fila é olhada a cada minuto.
+      // Quem espera a vez (a IA desligada, sem rede, sem Fotos, o limite) volta em uma hora.
+      this.loop('posts-sugeridos-abrir', 200, 3_600_000, (n) => this.postsSugeridos.abrir(n)),
+      this.loop('posts-sugeridos', 3, 60_000, async (n) => (await this.postsSugeridos.executarLote(n)).length),
       // Plano e cobrança (A7, W1): cada assinatura passa uma vez por dia, no começo do dia da empresa; a fila é olhada
       // de 5 em 5 minutos. Com a função `cobranca` desligada, a assinatura espera parada.
       this.loop('assinaturas', 20, 300_000, async (n) => (await this.assinaturas.executarLote(n)).length),

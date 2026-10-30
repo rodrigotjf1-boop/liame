@@ -39,6 +39,7 @@ import {
   recursoDoPost,
 } from './post-plano.js';
 import { fusoDaEmpresa, lerPosts } from './ler-posts.js';
+import { itensDaPauta } from './pauta.js';
 import { CANAIS_COM_LINK, criarLinkDoPost, destinoDoPost, SEPARADOR, tamanhoNoTexto } from './link-do-post.js';
 
 // Os posts da marca (A6, Z5b; protótipo P19, aprovado pelo dono em 21/10/2026; D-A6-3, D-A6-6 a D-A6-8 e D-A6-21; as
@@ -165,8 +166,42 @@ export class PostsService {
    * proibidas da política. Devolve o post do Liame ou, sem ele, o primeiro pacote; os outros aparecem na Agenda.
    */
   async criar(auth: AuthContext, body: CreatePostRequest, agora: Date = new Date()): Promise<PostResponse> {
-    const tx = currentTx();
     const quem = this.quem(auth);
+    const feito = await this.montar(quem, body, agora, async (input) => (await this.actions.create(auth, input)).id);
+    auditDetail({ resourceId: feito.id, after: feito.auditoria });
+    return this.obter(auth, feito.id);
+  }
+
+  /**
+   * O post que o Social media propõe para um dia da pauta (A6, Z6, os posts, parte 2; D-A6-60): o mesmo caminho do "Novo
+   * post" (a foto, as contas, a hora, o link e as conferências), só com os canais do Liame, e o pedido em Aprovações feito
+   * pelo funcionário em nome do dono da empresa (`alvo.emNomeDe`, que fica também como quem criou o post). Quem chama é a
+   * rotina, na transação da empresa, e grava a auditoria dela com o que volta. As recusas são as do "Novo post" (422 e
+   * 409, com o código) e as do trilho.
+   */
+  async criarPeloFuncionario(
+    alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string },
+    body: CreatePostRequest,
+    agora: Date = new Date(),
+  ): Promise<{ post: string; pedido: string; auditoria: Record<string, unknown> }> {
+    if (body.channels.some((c) => ehCanalDoPacote(c.channel))) throw recusa('canal-do-pacote', 'Canal do pacote', 'O funcionário só propõe post nos canais em que o Liame publica.', 'channels');
+    const feito = await this.montar({ tenantId: alvo.tenantId, userId: alvo.emNomeDe }, body, agora, (input) => this.actions.pedirPostPeloFuncionario(alvo, input));
+    if (!feito.pedido) throw new Error('post do funcionário sem pedido');
+    return { post: feito.id, pedido: feito.pedido, auditoria: feito.auditoria };
+  }
+
+  /**
+   * O que o "Novo post" e o post do funcionário dividem: confere tudo, grava o post, os canais, o link e os pacotes, e faz
+   * o pedido em Aprovações por quem chama (`pedir`, que devolve o id do pedido). Devolve o id do post do Liame (ou do
+   * primeiro pacote), o do pedido e o que vai para a auditoria.
+   */
+  private async montar(
+    quem: Quem,
+    body: CreatePostRequest,
+    agora: Date,
+    pedir: (input: { tool: string; brand_id: string; provider: string; account_id: string; resource_id: string; params: Record<string, unknown> }) => Promise<string>,
+  ): Promise<{ id: string; pedido: string | null; auditoria: Record<string, unknown> }> {
+    const tx = currentTx();
     await this.marcaDaEmpresa(quem.tenantId, body.brand_id);
     if (!(await this.ligada(quem, body.brand_id))) throw desligada();
 
@@ -263,7 +298,7 @@ export class PostsService {
 
       // O pedido em Aprovações, pela conta do primeiro canal (o provedor do pedido é o dela; D-A6-32).
       const primeiro = ordenados[0]!.channel;
-      const pedido = await this.actions.create(auth, {
+      pedidoId = await pedir({
         tool: 'post_publicar',
         brand_id: body.brand_id,
         provider: PROVEDOR_DO_CANAL[primeiro],
@@ -271,8 +306,7 @@ export class PostsService {
         resource_id: recursoDoPost(id),
         params: {},
       });
-      pedidoId = pedido.id;
-      await tx.execute(sql`update liame.social_post set action_id = ${pedido.id}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
+      await tx.execute(sql`update liame.social_post set action_id = ${pedidoId}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
     }
 
     // Um pacote para cada rede (D-A6-40): a foto inteira (sem recorte), na mesma hora, pronto na Agenda; sem pedido.
@@ -293,9 +327,10 @@ export class PostsService {
         }
       }
     }
-    auditDetail({
-      resourceId: id ?? pacotes[0]!.id,
-      after: {
+    return {
+      id: id ?? pacotes[0]!.id,
+      pedido: pedidoId,
+      auditoria: {
         brand_id: body.brand_id,
         action_id: pedidoId,
         canais: ordenados.map((c) => c.channel),
@@ -305,8 +340,7 @@ export class PostsService {
         // O link do post (D-A6-46): criado, ou por que não.
         link_do_post: destino === null ? null : destino.ok ? 'criado' : destino.motivo,
       },
-    });
-    return this.obter(auth, id ?? pacotes[0]!.id);
+    };
   }
 
   /**
@@ -648,15 +682,8 @@ export class PostsService {
    * entram.
    */
   private async pautaDoPeriodo(tenantId: string, q: PostListQuery): Promise<PostListResponse['pauta']> {
-    const r = await currentTx().execute<{ day: string; item: string; plan_id: string }>(sql`
-      select distinct on (d.day) to_char(d.day, 'YYYY-MM-DD') as day, d.item, p.id as plan_id
-        from liame.plan p
-        join liame.plan_version v on v.plan_id = p.id and v.version = p.version and v.tenant_id = p.tenant_id
-        cross join lateral jsonb_to_recordset(case when jsonb_typeof(v.content->'days') = 'array' then v.content->'days' else '[]'::jsonb end) as d(day date, item text)
-       where p.tenant_id = ${tenantId} and p.brand_id = ${q.brand_id} and p.kind = 'pauta' and p.status = 'aprovado'
-         and d.day between ${q.from}::date and ${q.to}::date and d.item is not null
-       order by d.day, p.updated_at desc, p.id desc`);
-    return r.rows.map((l) => ({ day: l.day, item: l.item, plan_id: l.plan_id }));
+    const r = await itensDaPauta(currentTx(), tenantId, q.brand_id, q.from, q.to);
+    return r.map((l) => ({ day: l.day, item: l.item, plan_id: l.plan_id }));
   }
 
   /** As datas do calendário comercial do Liame no período (feriados nacionais e datas do varejo; D-A6-20). */

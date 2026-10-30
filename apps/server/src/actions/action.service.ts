@@ -307,6 +307,20 @@ export class ActionService {
   }
 
   /**
+   * O pedido de publicar o post que o Social media propôs para um dia da pauta (A6, Z6, os posts; D-A6-60). Quem chama é
+   * o serviço dos posts, na transação da empresa em que a rotina grava o post. Passa pelo mesmo trilho do pedido de uma
+   * pessoa (trava, flag de escrita, política, o post lido, o plano) e sempre espera a aprovação de uma pessoa com o
+   * código do app (a regra `post.*` da política e a trava `alwaysApproval`). `emNomeDe` é o dono da empresa: é ele quem
+   * responde pelo que o funcionário propõe em público.
+   */
+  async pedirPostPeloFuncionario(alvo: { tenantId: string; agentKey: string; agentLabel: string; emNomeDe: string }, input: CreateActionRequest): Promise<string> {
+    if (input.tool !== 'post_publicar') {
+      throw new AppProblem(400, 'ferramenta-nao-e-de-post', 'Não é um post', 'Por aqui o funcionário só pede a publicação de um post.');
+    }
+    return this.pedirEmNomeDoFuncionario(alvo, input, {});
+  }
+
+  /**
    * O pedido de resposta a uma avaliação do Google que o Social media propõe (A6, Z6; D-A6-26 e D-A6-27), com as
    * sugestões que ele escreveu nos parâmetros. Quem chama é a rotina das sugestões, na transação da empresa. Passa pelo
    * mesmo trilho do pedido de uma pessoa (trava, flag de escrita, política, a avaliação lida no Google, o plano) e

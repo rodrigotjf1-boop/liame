@@ -70,6 +70,9 @@ import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { RotinaDoCrmService } from './rotina-do-crm.service.js';
 import { SugestoesDeRespostaLoop } from './sugestoes-de-resposta-loop.js';
 import { SugestoesDeRespostaService } from './sugestoes-de-resposta.service.js';
+import { PostsService } from '../posts/posts.service.js';
+import { PostsSugeridosLoop } from './posts-sugeridos-loop.js';
+import { PostsSugeridosService } from './posts-sugeridos.service.js';
 import { VigiaService } from './vigia.service.js';
 import { CambioService } from './cambio.service.js';
 import { EscritaDoCrmService } from './escrita-do-crm.service.js';
@@ -203,6 +206,13 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // as flags `respostas_sugeridas`, `ia` e `perfil_google_write` ligadas e ele ativo na marca; nada é publicado daqui.
     SugestoesDeRespostaService,
     SugestoesDeRespostaLoop,
+    // Os posts do Social media (A6, Z6, os posts; D-A6-60): a vez de cada dia da pauta aprovada abre de hora em hora, ele
+    // escreve, o código confere, e o que passa vira o post na Agenda e o pedido em Aprovações, pelo mesmo caminho do
+    // "Novo post" (o serviço dos posts). Só com as flags `posts_sugeridos`, `ia` e `social_write` ligadas e ele ativo na
+    // marca; nada é publicado daqui.
+    PostsService,
+    PostsSugeridosService,
+    PostsSugeridosLoop,
     // Plano e cobrança (A7, W1): a vida de cada assinatura pelo relógio (a fatura do período seguinte, os dias de atraso,
     // o fim do período, o pedido sem o primeiro pagamento). Só com a função `cobranca` ligada; nada é cobrado daqui.
     AssinaturasLoop,
