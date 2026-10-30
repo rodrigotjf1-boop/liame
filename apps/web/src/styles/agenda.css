@@ -115,6 +115,13 @@
 /* "Mudar a hora" do post aprovado (P19; A6, Z5d, parte 4): o formulário em caixa, embaixo das ações do pedido. */
 .po-mudar { align-items: end; margin-top: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
 .po-mudar .campo-erro { flex-basis: 100%; }
+/* "Apagar das redes" (P19; A6, Z5d, parte 7): a confirmação na linha com o código do app, no lugar do botão (nas ações da
+   gaveta e na área de desfazer de Aprovações); ocupa a linha inteira, e os botões quebram no estreito (ERR-188). */
+.po-apagar { display: grid; gap: var(--sp-2); flex: 1 1 100%; width: 100%; min-width: 0; padding: var(--sp-3); border: 1px dashed color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: var(--radius); background: var(--surface-2); }
+.po-apagar-frase { margin: 0; font-size: var(--text-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.po-apagar .campo { max-width: 14rem; min-width: 0; }
+.po-apagar-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.po-apagar-acoes .btn { max-width: 100%; white-space: normal; }
 .po-como-sai { display: grid; gap: var(--sp-2); }
 .po-gaveta textarea.input { min-height: 96px; padding: var(--sp-2) var(--sp-3); resize: vertical; }
 .po-gaveta .rotulo { font-size: var(--text-sm); font-weight: 600; }

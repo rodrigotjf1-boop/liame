@@ -4,7 +4,7 @@ import type { ActionResponse, BrandPhoto, BrandResponse, BudgetMonthResponse, Pl
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { NO_CANAL } from '@/components/agenda/textos';
+import { deOndeSai, NO_CANAL } from '@/components/agenda/textos';
 import { GavetaPedir } from '@/components/pedir/gaveta-pedir';
 import { destinoInicial } from '@/components/shell/inicio';
 import { useAvisar } from '@/components/ui/avisos';
@@ -480,6 +480,23 @@ export function AprovacoesTela() {
     return { ok: true };
   }
 
+  // "Apagar das redes" (A6, Z5d, parte 7; D-A6-57): com o código do app, o pedido de apagar nasce aprovado e executa em
+  // seguida; a tela abre o pedido de apagar, que diz o andamento. O código que não confere e as recusas do servidor
+  // voltam para o formulário; a que diz que o post mudou também lê a lista de novo.
+  async function apagarDoPost(acao: AcaoDePost, codigo: string): Promise<Feito> {
+    const deOnde = deOndeSai(acao.post);
+    const r = await chamar(() => api.POST('/v1/posts/{id}/unpublish', { params: { path: { id: acao.post.id } }, body: { code: codigo } }));
+    if (!r.ok) {
+      if (r.problema.status === 409) setTentativa((n) => n + 1);
+      return { ok: false, texto: erroDaDecisao(r.problema).texto };
+    }
+    avisar(`Apagando ${deOnde}: o Liame tira o post agora.`);
+    await carregar();
+    if (r.data.removal) abrir(chaveDaAcao(r.data.removal.action_id), false);
+    focarOTitulo();
+    return { ok: true };
+  }
+
   // ---- a resposta a uma avaliação do Google (P17): o texto se edita (o plano é outro, e a aprovação vale para ele),
   // a resposta publicada se apaga (direto, sem código), e a avaliação ganha outra resposta pelo rascunho.
   async function salvarTextoDaResposta(acao: AcaoDeResposta, texto: string): Promise<Feito> {
@@ -860,6 +877,7 @@ export function AprovacoesTela() {
         aoCancelar={cancelarPost}
         aoTentarDeNovo={tentarDeNovoNoPost}
         aoMudarAHora={mudarAHoraDoPost}
+        aoApagar={apagarDoPost}
         aoFalharImagem={fotoFalhou}
       />
     );

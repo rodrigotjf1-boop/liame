@@ -3,21 +3,23 @@
 import type { BrandPhoto, PostResponse } from '@liame/contracts';
 import Link from 'next/link';
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
+import { erroDaDecisao } from '@/components/aprovacoes/textos';
 import { copiar } from '@/components/links/copiar';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { ApagarDasRedes, type FeitoDoApagar } from './apagar-das-redes';
 import { PreviasDoPost } from './previas-do-post';
 import { SituacaoDosCanais } from './situacao-dos-canais';
-import { fraseDaSituacao, linkCurto, NO_CANAL, noFuso, quando, situacaoDoPost } from './textos';
+import { avisoDoApagar, deOndeSai, fraseDaSituacao, linkCurto, NO_CANAL, noFuso, podeApagar, quando, situacaoDoCartao } from './textos';
 
 // Um post da Agenda (P19, gaveta à direita): a situação, a prévia de cada canal (a foto, com o recorte do Instagram, e
 // o texto), o que aconteceu em cada canal e o que dá para fazer: abrir o pedido em Aprovações (o post que espera),
 // cancelar antes de sair (sem o código do app: tira o risco, D-A6-23), mudar a hora (em Aprovações, com o código de novo,
-// D-A6-55), abrir Contas conectadas (o que não saiu) e, no canal que não saiu, "Tentar de novo" (A6, Z5d; D-A6-54).
-// Apagar das redes fica para quando o servidor fizer (divergência do P19).
+// D-A6-55), abrir Contas conectadas (o que não saiu), no canal que não saiu, "Tentar de novo" (A6, Z5d; D-A6-54), e, no
+// post no ar, "Apagar das redes", com o código do app (A6, Z5d, parte 7; D-A6-57).
 
 type Props = {
   post: PostResponse;
@@ -26,7 +28,7 @@ type Props = {
   /** A foto do post (das Fotos); nula quando ela saiu das Fotos ou a lista não pôde ser lida. */
   foto: BrandPhoto | null;
   podeOperar: boolean;
-  /** Pode aprovar (`acoes.aprovar`): mudar a hora do post aprovado pede o código do app de novo. */
+  /** Pode aprovar (`acoes.aprovar`): mudar a hora do post aprovado e apagar das redes pedem o código do app. */
   podeAprovar: boolean;
   podeVerContas: boolean;
   reserva: RefObject<HTMLElement | null>;
@@ -59,10 +61,20 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, po
   useEffect(() => {
     if (focarAviso) avisoRef.current?.focus();
   }, [focarAviso]);
+  // "Apagar das redes" (A6, Z5d, parte 7; D-A6-57): o formulário com o código no lugar do botão; "Manter" devolve o foco
+  // ao botão depois que ele volta à tela (V27, ERR-185).
+  const [apagando, setApagando] = useState(false);
+  const apagarBt = useRef<HTMLButtonElement>(null);
+  const [focarApagar, setFocarApagar] = useState(0);
+  useEffect(() => {
+    // O botão some quando o post não dá mais para apagar (a recusa que mostrou o post como está agora): o foco vai ao "Fechar".
+    if (focarApagar) (apagarBt.current ?? fecharBt.current)?.focus();
+  }, [focarApagar]);
   const ocupado = enviando || tentando !== null;
   const agora = new Date();
   const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
-  const situacao = situacaoDoPost(post.status);
+  const situacao = situacaoDoCartao(post);
+  const naoApagou = avisoDoApagar(post);
   const pedidoEm = noFuso(new Date(post.created_at), fuso);
 
   async function cancelar() {
@@ -103,6 +115,34 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, po
     aoMudar(r.data);
     setAviso(`Tentando de novo ${NO_CANAL[canal] ?? canal}: o mesmo post aprovado, só no canal que faltou. A Agenda mostra quando ele sair.`);
     setFocarAviso((n) => n + 1);
+  }
+
+  // Com o código do app de quem apaga (D-A6-57). A recusa fica no formulário; a que diz que o post mudou (já está saindo,
+  // não está mais no ar) também mostra o post como está agora.
+  async function apagarDasRedes(codigo: string): Promise<FeitoDoApagar> {
+    const deOnde = deOndeSai(post);
+    setErro(null);
+    setAviso(null);
+    const r = await chamar(() => api.POST('/v1/posts/{id}/unpublish', { params: { path: { id: post.id } }, body: { code: codigo } }));
+    if (!r.ok) {
+      // O código que não confere com a mesma frase de Aprovações; o resto, como o servidor escreveu (com o código de rastreio no 5xx).
+      const texto = r.problema.code === 'codigo-invalido' ? erroDaDecisao(r.problema).texto : mensagemDe(r.problema);
+      // O post mudou (já está saindo das redes, não está mais no ar): a recusa vai para o topo, e a gaveta mostra o post
+      // como está agora. A do código fica no formulário, para digitar de novo.
+      if (r.problema.status === 409) {
+        setErro(texto);
+        setApagando(false);
+        setFocarApagar((n) => n + 1);
+        const atual = await chamar(() => api.GET('/v1/posts/{id}', { params: { path: { id: post.id } } }));
+        if (atual.ok) aoMudar(atual.data);
+      }
+      return { ok: false, texto };
+    }
+    aoMudar(r.data);
+    setApagando(false);
+    setAviso(`Apagando ${deOnde}: o Liame tira o post agora. A Agenda mostra quando ele sair.`);
+    setFocarAviso((n) => n + 1);
+    return { ok: true };
   }
 
   const [copiado, setCopiado] = useState<'sim' | 'nao' | null>(null);
@@ -146,6 +186,12 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, po
             <Icone nome={situacao.icone} pequeno />
             {fraseDaSituacao(post, fuso, hoje)}
           </p>
+          {naoApagou && (
+            <p className="dialogo-erro" role="status" data-po-nao-apagou>
+              <Icone nome="alert" pequeno />
+              <span>{naoApagou}</span>
+            </p>
+          )}
           <PreviasDoPost key={post.id} post={post} foto={foto} aoFalharImagem={aoFalharImagem} />
           <section aria-labelledby={`${ids}-sit`}>
             <h3 className="rotulo-marca" id={`${ids}-sit`}>
@@ -225,16 +271,37 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, po
               Mudar a hora
             </Link>
           )}
-          {(post.status === 'nao_saiu' || post.status === 'em_parte') && podeVerContas && (
+          {(post.status === 'nao_saiu' || post.status === 'em_parte') && podeVerContas && !apagando && (
             <Link className="btn" href="/contas">
               <Icone nome="plug" />
               Abrir Contas conectadas
             </Link>
           )}
-          <span className="spacer" />
-          <button className="btn" type="button" onClick={fechar} disabled={ocupado}>
-            Fechar
-          </button>
+          {/* Apagar das redes pede o código do app (P19; D-A6-57): o formulário fica no lugar do botão, como a confirmação. */}
+          {podeAprovar &&
+            podeApagar(post) &&
+            (apagando ? (
+              <ApagarDasRedes
+                id={`${ids}-apagar`}
+                deOnde={deOndeSai(post)}
+                aoApagar={apagarDasRedes}
+                aoManter={() => {
+                  setApagando(false);
+                  setFocarApagar((n) => n + 1);
+                }}
+              />
+            ) : (
+              <button className="btn btn--perigo" type="button" ref={apagarBt} data-po-apagar onClick={() => setApagando(true)} disabled={ocupado}>
+                <Icone nome="undo" />
+                Apagar das redes
+              </button>
+            ))}
+          {!apagando && <span className="spacer" />}
+          {!apagando && (
+            <button className="btn" type="button" onClick={fechar} disabled={ocupado}>
+              Fechar
+            </button>
+          )}
         </div>
       </div>
     </dialog>

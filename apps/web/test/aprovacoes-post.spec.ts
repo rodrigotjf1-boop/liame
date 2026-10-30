@@ -129,6 +129,7 @@ function desenho(a: AcaoDePost, o: { pro?: boolean; podeDecidir?: boolean; podeO
       aoCancelar: async () => ({ ok: true }) as const,
       aoTentarDeNovo: async () => ({ ok: true }) as const,
       aoMudarAHora: async () => ({ ok: true }) as const,
+      aoApagar: async () => ({ ok: true }) as const,
       aoFalharImagem: () => {},
     }),
   );
@@ -347,5 +348,86 @@ describe('pedido de post: o detalhe', () => {
     // Pedido direto de uma pessoa: entra no que foi feito hoje, não no que o Liame fez sozinho.
     expect(grupoDe({ ...nova, status: 'executada' }, agora)).toBe('feito');
     expect(semMarcas(desenho(nova))).toContain('Publicando…');
+  });
+});
+
+describe('pedido de post: apagar das redes (A6 · Z5d, parte 7; P19)', () => {
+  const noAr = [
+    { ...post().channels[0]!, status: 'publicado', permalink: 'https://www.instagram.com/p/abc/', published_at: '2026-10-28T22:01:00.000Z' },
+    { ...post().channels[1]!, status: 'publicado', published_at: '2026-10-28T22:01:00.000Z' },
+  ];
+  const publicado = (o: Partial<AcaoDePost['post']> = {}) =>
+    pedido({ status: 'executada', approvals: aprovacao, updated_at: '2026-10-29T15:05:00.000Z', post: post({ status: 'publicado', channels: noAr, ...o }) });
+  const remocao = (status: string, reason: string | null = null) => ({ action_id: uuid(30), status, reason, requested_by_name: 'Rodrigo', requested_at: '2026-10-29T17:04:00.000Z' });
+  const apagados = [
+    { ...noAr[0]!, status: 'apagado', removed_at: '2026-10-29T17:05:00.000Z' },
+    { ...noAr[1]!, status: 'apagado', removed_at: '2026-10-29T17:04:30.000Z' },
+  ];
+
+  it('o post no ar: "Apagar das redes" para quem pode aprovar, no pedido do post, com a nota do código; o desfazer do P19', () => {
+    const html = desenho(publicado());
+    expect(html).toContain('data-po-apagar');
+    expect(semMarcas(html)).toContain('Apagar tira o post de cada canal em que ele está no ar e pede o código do app. Não desfaz quem já viu.');
+    expect(desenho(publicado(), { podeDecidir: false })).not.toContain('data-po-apagar');
+    // O pedido antigo (trocado pela hora nova, por exemplo) não oferece: o do post é outro.
+    expect(desenho({ ...publicado(), id: uuid(5) })).not.toContain('data-po-apagar');
+    // Saindo das redes, não oferece de novo; e o que espera a aprovação diz como se desfaz.
+    expect(desenho(publicado({ removal: remocao('apagando') }))).not.toContain('data-po-apagar');
+    expect(postApresentado(pedido(), agora).desfazer).toBe('Depois de publicado, dá para apagar das redes, com o código do app. Quem já viu, viu.');
+  });
+
+  it('o post apagado: por quem e quando, cada canal com a hora em que saiu; sem o botão', () => {
+    const apagado = publicado({ status: 'apagado', channels: apagados, removal: remocao('apagado') });
+    expect(etiquetaDoPost(apagado)).toBe('Apagado das redes');
+    expect(resultadoDoPost(apagado, agora)).toMatchObject({ icone: 'undo', titulo: 'Apagado das redes por Rodrigo, hoje, às 14:05.' });
+    const html = semMarcas(desenho(apagado));
+    expect(html).toContain('Instagram: apagado hoje, às 14:05.');
+    expect(html).toContain('Página do Facebook: apagado hoje, às 14:04.');
+    expect(desenho(apagado)).not.toContain('data-po-apagar');
+  });
+
+  it('o pedido de apagar: é um pedido de post, com o título, a etiqueta e o resultado de cada andamento', () => {
+    const doApagar = (status: AcaoDePost['status'], o: Partial<AcaoDePost['post']> = {}, reason: string | null = null) =>
+      pedido({
+        id: uuid(30),
+        tool: 'post_apagar',
+        action: 'post.apagar',
+        risk_level: 'R1',
+        status,
+        status_reason: reason,
+        approvals: aprovacao,
+        undoes: uuid(1),
+        updated_at: '2026-10-29T17:05:00.000Z',
+        post: post({ status: 'publicado', channels: noAr, ...o }),
+      });
+    const saindo = doApagar('aprovada', { removal: remocao('apagando') });
+    expect(ehPedidoDePost(saindo)).toBe(true);
+    expect(postApresentado(saindo, agora).titulo).toBe('Apagar das redes: post de amanhã, às 19:00');
+    expect(etiquetaDoPost(saindo)).toBe('Apagando das redes');
+    expect(resultadoDoPost(saindo, agora)).toMatchObject({ tom: 'espera', titulo: 'Apagando das redes…' });
+    expect(grupoDe(saindo, agora)).toBe('feito');
+
+    const feito = doApagar('executada', { status: 'apagado', channels: apagados, removal: remocao('apagado') });
+    expect(etiquetaDoPost(feito)).toBe('Apagado das redes');
+    expect(resultadoDoPost(feito, agora).titulo).toBe('Apagado das redes por Rodrigo, hoje, às 14:05.');
+    expect(desenho(feito)).not.toContain('data-po-apagar');
+
+    // Em parte: o porquê no resultado (o servidor escreveu), uma vez só, e o botão para apagar o que ficou.
+    const porque = 'O post saiu da Página do Facebook. A Meta não deixou o Liame apagar neste Instagram.';
+    const parte = doApagar('falhou', { channels: [noAr[0]!, apagados[1]!], removal: remocao('em_parte', porque) }, porque);
+    expect(etiquetaDoPost(parte)).toBe('Apagado em parte');
+    expect(resultadoDoPost(parte, agora)).toMatchObject({ tom: 'falha', titulo: 'Apagado em parte.', texto: porque });
+    const html = desenho(parte);
+    expect(semMarcas(html).split(porque)).toHaveLength(2);
+    expect(html).toContain('data-po-apagar');
+    // O pedido de apagar mais antigo (outro já foi feito depois) diz como terminou, pelo próprio pedido.
+    const antigo = { ...doApagar('falhou', { removal: remocao('apagado') }, porque), id: uuid(31) };
+    expect(etiquetaDoPost(antigo)).toBe('Não apagou');
+  });
+
+  it('o pedido de publicar de um post que ficou no ar num canal: o aviso do apagar, com o porquê', () => {
+    const porque = 'O post saiu da Página do Facebook. A Meta não deixou o Liame apagar neste Instagram.';
+    const html = semMarcas(desenho(publicado({ channels: [noAr[0]!, apagados[1]!], removal: remocao('em_parte', porque) })));
+    expect(html).toContain(`Apagar das redes: ${porque}`);
   });
 });

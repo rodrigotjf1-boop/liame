@@ -12,15 +12,32 @@ export type AcaoDePost = Acao & { post: NonNullable<Acao['post']> };
 type Post = AcaoDePost['post'];
 
 /**
- * O pedido é de publicar um post do Liame, ou a nova tentativa dele no canal que não saiu (A6, Z5d), e o post ainda está
- * no Liame?
+ * O pedido é de publicar um post do Liame, a nova tentativa dele no canal que não saiu (A6, Z5d), ou apagá-lo das redes
+ * (A6, Z5d, parte 7), e o post ainda está no Liame?
  */
 export function ehPedidoDePost(a: Acao): a is AcaoDePost {
-  return (a.tool === 'post_publicar' || a.tool === 'post_tentar_de_novo') && Boolean(a.post);
+  return (a.tool === 'post_publicar' || a.tool === 'post_tentar_de_novo' || a.tool === 'post_apagar') && Boolean(a.post);
 }
 
 /** A nova tentativa de um post no canal que não saiu (A6, Z5d; D-A6-54): pedida por uma pessoa, sem o código do app. */
 export const ehNovaTentativa = (a: Pick<Acao, 'tool'>): boolean => a.tool === 'post_tentar_de_novo';
+
+/** O pedido de apagar o post das redes (A6, Z5d, parte 7; D-A6-57): pedido e aprovado junto, com o código do app. */
+export const ehApagarDasRedes = (a: Pick<Acao, 'tool'>): boolean => a.tool === 'post_apagar';
+
+/** O que o post publicado diz sobre desfazer (P19): apagar das redes, com o código do app. */
+const DESFAZER_DO_POST = 'Depois de publicado, dá para apagar das redes, com o código do app. Quem já viu, viu.';
+
+/**
+ * Como foi o pedido de apagar das redes: o do post, quando este é o pedido de apagar mais novo dele (o servidor diz pelos
+ * canais); senão, pelo próprio pedido.
+ */
+export function situacaoDoApagar(a: AcaoDePost): string {
+  if (a.post.removal?.action_id === a.id) return a.post.removal.status;
+  if (a.status === 'executada') return 'apagado';
+  return a.status === 'aprovada' || a.status === 'executando' ? 'apagando' : 'nao_apagou';
+}
+const ETIQUETA_DO_APAGAR: Record<string, string> = { apagando: 'Apagando das redes', apagado: 'Apagado das redes', em_parte: 'Apagado em parte', nao_apagou: 'Não apagou' };
 
 /** O canal da nova tentativa, pelo provedor do pedido (a conta do canal que não saiu). */
 const CANAL_DO_PROVEDOR: Record<string, string> = { instagram: 'instagram', facebook_page: 'facebook' };
@@ -93,6 +110,16 @@ function quandoSaiAprovado(post: Post, agora: Date): string {
 export function postApresentado(a: AcaoDePost, agora: Date): PedidoApresentado {
   const post = a.post;
   const quando = quandoDoPost(post, agora);
+  if (ehApagarDasRedes(a)) {
+    return {
+      titulo: `Apagar das redes: post de ${quando}`,
+      resumo: 'Apagar tira o post de cada canal em que o Liame o publicou, com o código do app de quem apaga. Quem já viu, viu.',
+      impacto: null,
+      mudancas: [],
+      desfazer: 'Apagar não se desfaz: o post não volta, nem as curtidas e os comentários dele.',
+      depoisDeAprovar: '',
+    };
+  }
   if (ehNovaTentativa(a)) {
     const no = NO_CANAL[CANAL_DO_PROVEDOR[a.provider] ?? ''] ?? 'no canal que faltou';
     return {
@@ -100,7 +127,7 @@ export function postApresentado(a: AcaoDePost, agora: Date): PedidoApresentado {
       resumo: `A nova tentativa manda o mesmo post aprovado só ${no}, sem o código do app: o texto, a foto e o canal são os que a aprovação cobriu.`,
       impacto: null,
       mudancas: [],
-      desfazer: 'Depois de publicado, o post se apaga na própria rede: o Liame ainda não apaga posts. Quem já viu, viu.',
+      desfazer: DESFAZER_DO_POST,
       depoisDeAprovar: '',
     };
   }
@@ -109,20 +136,40 @@ export function postApresentado(a: AcaoDePost, agora: Date): PedidoApresentado {
     resumo: `Você vai publicar um post ${ondeSai(post)}, ${quando}. Ele é público e sai em nome da empresa. Se você aprovar, o Liame publica na hora marcada.`,
     impacto: null,
     mudancas: [],
-    desfazer: 'Depois de publicado, o post se apaga na própria rede: o Liame ainda não apaga posts. Quem já viu, viu.',
+    desfazer: DESFAZER_DO_POST,
     depoisDeAprovar: `O post sai ${quandoSaiAprovado(post, agora)}.`,
   };
 }
 
-/** A segunda linha do pedido de post decidido, na lista: a situação do post (a mesma da Agenda). */
+/** A segunda linha do pedido de post decidido, na lista: a situação do post (a mesma da Agenda), ou a do apagar. */
 export function etiquetaDoPost(a: AcaoDePost): string {
   // O pedido trocado pela hora nova não diz a situação do post: ela é a do pedido novo.
   if (ehHoraMudada(a)) return 'Hora mudada';
+  if (ehApagarDasRedes(a)) return ETIQUETA_DO_APAGAR[situacaoDoApagar(a)] ?? 'Apagar das redes';
   return situacaoDoPost(a.post.status).rotulo;
 }
 
 /** O que aconteceu com o post depois da decisão, no detalhe: o tom, o ícone e a frase. */
-export type ResultadoDoPost = { tom: 'ok' | 'espera' | 'falha' | ''; icone: 'check' | 'clock' | 'alert' | 'x'; titulo: string; texto: string };
+export type ResultadoDoPost = { tom: 'ok' | 'espera' | 'falha' | ''; icone: 'check' | 'clock' | 'alert' | 'x' | 'undo'; titulo: string; texto: string };
+
+/** "Rodrigo, hoje, às 14:05": quem e quando o post saiu das redes (a hora em que saiu do último canal). */
+function quemApagou(post: Post, quem: string | null, agora: Date): string {
+  const saiu = post.channels.map((c) => c.removed_at).filter((x): x is string => typeof x === 'string').sort().at(-1);
+  const hoje = noFuso(agora, post.timezone).dia;
+  const em = saiu ? noFuso(new Date(saiu), post.timezone) : null;
+  return `${quem ? ` por ${quem}` : ''}${em ? `, ${quando(em.dia, em.hora, hoje)}` : ''}`;
+}
+
+/** O pedido de apagar das redes, no detalhe (A6, Z5d, parte 7). */
+function resultadoDoApagar(a: AcaoDePost, agora: Date): ResultadoDoPost {
+  const s = situacaoDoApagar(a);
+  if (s === 'apagando') return { tom: 'espera', icone: 'clock', titulo: 'Apagando das redes…', texto: 'O Liame tira o post de cada canal em que ele está no ar.' };
+  if (s === 'apagado') {
+    return { tom: '', icone: 'undo', titulo: `Apagado das redes${quemApagou(a.post, a.requested_by.name, agora)}.`, texto: 'O post não aparece mais nas redes. Quem já viu, viu.' };
+  }
+  const porque = a.status_reason ?? 'Veja abaixo em cada canal.';
+  return { tom: 'falha', icone: 'alert', titulo: s === 'em_parte' ? 'Apagado em parte.' : 'Não apagou.', texto: porque };
+}
 
 export function resultadoDoPost(a: AcaoDePost, agora: Date): ResultadoDoPost {
   const post = a.post;
@@ -131,8 +178,12 @@ export function resultadoDoPost(a: AcaoDePost, agora: Date): ResultadoDoPost {
   // A hora da aprovação também no fuso da empresa, como a do post.
   const quem = aprovacao ? `Aprovado por ${aprovacao.approver_name} às ${noFuso(new Date(aprovacao.created_at), post.timezone).hora}.` : 'Aprovado.';
   const quantos = post.channels.length > 1 ? `nos ${post.channels.length === 2 ? 'dois' : String(post.channels.length)} canais` : ondeSai(post);
+  if (ehApagarDasRedes(a)) return resultadoDoApagar(a, agora);
   if (ehHoraMudada(a)) {
     return { tom: '', icone: 'clock', titulo: 'Hora mudada.', texto: 'Este pedido foi trocado por um novo, com a hora nova, aprovado de novo com o código do app. O post segue no pedido novo.' };
+  }
+  if (post.status === 'apagado') {
+    return { tom: '', icone: 'undo', titulo: `Apagado das redes${quemApagou(post, post.removal?.requested_by_name ?? null, agora)}.`, texto: 'Saiu publicado; depois, foi apagado de cada canal. Quem já viu, viu.' };
   }
   switch (post.status) {
     case 'recusado':
