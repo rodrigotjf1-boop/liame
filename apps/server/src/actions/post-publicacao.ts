@@ -26,7 +26,18 @@ import {
 import { chaveDoRecorteDoPost, recorteDoInstagram } from '../fotos/conferencia.js';
 import { VALIDADE_DO_ENDERECO_S } from '../fotos/fotos.service.js';
 import { type ArmazemDeImagens, FalhaDoArmazem } from '../imagens/armazem.js';
-import { type CanalDoPost, CANAIS_DO_POST, type EstadoDoPost, horaLocal, postDoRecurso, PROVEDOR_DO_CANAL, recusaNaHoraDeSair, type SituacaoDoCanal } from '../posts/post-plano.js';
+import {
+  type CanalDoPost,
+  CANAIS_DO_POST,
+  type EstadoDoPost,
+  horaLocal,
+  postDoRecurso,
+  PROVEDOR_DO_CANAL,
+  querApagar,
+  recusaNaHoraDeApagar,
+  recusaNaHoraDeSair,
+  type SituacaoDoCanal,
+} from '../posts/post-plano.js';
 import { PRIMEIRA_LEITURA_MIN } from '../posts/numeros-do-post.js';
 import { recortarParaOInstagram } from '../posts/recorte.js';
 import type { ApplyOptions, ApplyResult, Connector, ReadResult, ResourceRef } from './connectors.js';
@@ -66,6 +77,12 @@ import type { ResourceState } from './tools.js';
 // legenda (`POST /{página}/photos`, até 4 MB). Uma vez só: antes de publicar, as fotos da Página (a mesma legenda desde
 // a criação do post é a desta tentativa); depois de uma tentativa sem resposta, sem essa lista não publica de novo.
 // Os tokens saem do cofre (ou da Meta) só na hora de chamar e nunca vão para log, estado ou auditoria.
+//
+// Apagar das redes (Z5d, parte 6; D-A6-57; base §2.2, reconferida em 30/10/2026): o pedido `post_apagar` deseja o post com
+// os canais no ar apagados, e o mesmo conector tira o post de cada um (`DELETE` no post do Instagram, que pede a permissão
+// `instagram_manage_contents` na autorização; `DELETE` no post da Página, com o token dela). O canal que sai do ar fica
+// `apagado`; o que não sai continua publicado, e o porquê vai na frase do pedido. A trava da conta do outro canal é a da
+// ferramenta de apagar: a trava de publicar não segura o apagar.
 
 const META = 'meta_ads';
 
@@ -81,10 +98,11 @@ export type DependenciasDoPost = {
   versao: (capacidade: CapacidadeDoPost) => Promise<string>;
   armazem: Pick<ArmazemDeImagens, 'ler' | 'gravar' | 'apagar' | 'enderecoDeLeitura'>;
   /**
-   * A trava ligada para a conta de um canal que não é a do pedido (a do pedido o executor já conferiu): o motivo, ou nulo.
-   * Sem ela (os testes que não a ligam), nenhuma trava.
+   * A trava ligada para a conta de um canal que não é a do pedido (a do pedido o executor já conferiu), na ferramenta do
+   * pedido (`post_publicar` para publicar e tentar de novo; `post_apagar` para apagar das redes): o motivo, ou nulo. Sem
+   * ela (os testes que não a ligam), nenhuma trava.
    */
-  trava?: (tx: Tx, alvo: { tenantId: string; brandId: string; provider: string; accountId: string }) => Promise<string | null>;
+  trava?: (tx: Tx, alvo: { tenantId: string; brandId: string; provider: string; accountId: string; tool: string }) => Promise<string | null>;
   /** O recorte da foto (o sharp, por padrão; os testes trocam). Nulo: a foto cabe inteira. */
   recortar?: (bytes: Buffer, posicao: number) => Promise<Buffer | null>;
   /** Quanto esperar depois de criar o contêiner para a primeira conferência (os testes zeram). */
@@ -122,6 +140,21 @@ const SEM_CONFERIR =
   'Uma tentativa anterior pode ter publicado este post na Página do Facebook, e a Meta não deixou o Liame conferir. Para não publicar duas vezes, o Liame não tentou de novo: confira na Página e, se o post não estiver lá, faça um post novo.';
 const SUMIU = 'Este post não está mais no Liame.';
 const FORA_DO_AMBIENTE = 'A publicação nas redes não está disponível neste ambiente.';
+
+// Apagar das redes (Z5d, parte 6; D-A6-57): o que não sai do ar, e onde o post continua.
+const CONTINUA: Record<CanalDoPost, string> = { instagram: 'O post continua no Instagram.', facebook: 'O post continua na Página do Facebook.' };
+const DO_CANAL: Record<CanalDoPost, string> = { instagram: 'do Instagram', facebook: 'da Página do Facebook' };
+const A_REDE: Record<CanalDoPost, string> = { instagram: 'O Instagram', facebook: 'A Página do Facebook' };
+const SEM_ACESSO_AO_APAGAR = (c: CanalDoPost) =>
+  `A Meta recusou o acesso desta conta (a autorização foi revogada ou venceu). Conecte a Meta de novo em Contas conectadas, ou apague direto na rede. ${CONTINUA[c]}`;
+const SEM_PERMISSAO_DE_APAGAR: Record<CanalDoPost, string> = {
+  instagram: `A Meta não deixou o Liame apagar neste Instagram: a autorização não tem a permissão de apagar posts. Conecte a Meta de novo em Contas conectadas e confirme a permissão de apagar, ou apague direto no Instagram. ${CONTINUA.instagram}`,
+  facebook: `A Meta não deixou o Liame apagar nesta Página: a permissão não está concedida, ou quem autorizou não pode apagar posts nela. Conecte a Meta de novo em Contas conectadas com uma pessoa que administra a Página, ou apague direto na Página. ${CONTINUA.facebook}`,
+};
+const NAO_DEIXOU = (c: CanalDoPost) => `${A_REDE[c]} não deixou apagar o post. ${CONTINUA[c]}`;
+const NAO_ACHOU = (c: CanalDoPost) => `${A_REDE[c]} não achou este post para apagar: ele pode já ter sido apagado direto na rede. Confira ${NO_CANAL[c]}.`;
+const SEM_O_POST = (c: CanalDoPost) => `O Liame não achou este post ${NO_CANAL[c]} para apagar. Confira ${NO_CANAL[c]} e apague por lá, se ele ainda estiver no ar.`;
+const PAGINA_FORA_AO_APAGAR = `A autorização da Meta não alcança mais esta Página. Conecte a Meta de novo em Contas conectadas, ou apague direto na Página. ${CONTINUA.facebook}`;
 
 /**
  * O motivo de o canal não ter saído pede um post novo, e "Tentar de novo" não adianta (A6, Z5d; D-A6-54): a foto que a
@@ -215,12 +248,26 @@ export async function lerEstadoDoPost(tx: Tx, tenantId: string, resourceId: stri
 
 /** O canal não sai: a frase vai para a pessoa (o pedido termina como "falhou", com ela). */
 class CanalNaoSaiu extends Error {}
+/** O canal não sai do ar (apagar das redes): a frase vai para a pessoa, e o canal continua publicado. */
+class CanalNaoApagou extends Error {}
 
 /** O que cada chamada à Graph API leva: as dependências, a conta na rede (a chave da cota), o token e as versões. */
 type Graph = { deps: DependenciasDoPost; conta: string; token: string; versoes: Partial<Record<CapacidadeDoPost, string>> };
 
-/** A linha do canal e a conta dele, como a execução as lê (travada até o fim da transação). */
-type CanalLido = { id: string; status: string; container_id: string | null; body: string; external_id: string; credential_secret_id: string | null; conta: string };
+/**
+ * A linha do canal e a conta dele, como a execução as lê (travada até o fim da transação). `external_id` é o da conta na
+ * rede (o Instagram, a Página); `postagem`, o do post publicado nela.
+ */
+type CanalLido = {
+  id: string;
+  status: string;
+  container_id: string | null;
+  body: string;
+  external_id: string;
+  credential_secret_id: string | null;
+  conta: string;
+  postagem: string | null;
+};
 
 /** As situações em que o canal ainda pode sair (o que já saiu, não saiu ou foi cancelado fica como está). */
 const AINDA_SAI = new Set<SituacaoDoCanal>(['aguardando', 'publicando']);
@@ -246,12 +293,14 @@ export class PostPublicacaoConnector implements Connector {
     return { state: lido.estado as unknown as ResourceState, version: lido.versao };
   }
 
-  async apply(tx: Tx, ref: ResourceRef, _desired: ResourceState, expectedVersion: number, options: ApplyOptions = {}): Promise<ApplyResult> {
+  async apply(tx: Tx, ref: ResourceRef, desired: ResourceState, expectedVersion: number, options: ApplyOptions = {}): Promise<ApplyResult> {
     const lido = await lerEstadoDoPost(tx, ref.tenantId, ref.resourceId);
     if (!lido) return recusado(SUMIU);
     const estado = lido.estado as unknown as ResourceState;
     // O post mudou desde o pedido (a hora, a foto, o texto, uma conta): o que sai tem de ser o aprovado (A6-10).
     if (lido.versao !== expectedVersion) return { ok: false, reason: 'estado-mudou', current: { state: estado, version: lido.versao } };
+    // Apagar das redes (Z5d, parte 6; D-A6-57): o estado desejado com um canal apagado. Publicar nunca deseja isso.
+    if (querApagar(desired)) return this.apagarDasRedes(tx, ref, lido, options);
     // Já saiu em todos os canais (a tentativa anterior publicou): nada a mandar de novo.
     if (lido.estado.canais.every((c) => c.situacao === 'publicado')) return { ok: true, state: estado, version: lido.versao };
     // Na hora de sair, de novo: a foto apagada ou a conta que deixou de estar conectada não sai.
@@ -283,24 +332,35 @@ export class PostPublicacaoConnector implements Connector {
 
   // ---- O que os dois canais dividem -------------------------------------------------------------------------------
 
-  /** O canal e a conta dele, travados até o fim da transação; e a trava da conta, se não é a do pedido. */
-  private async canal(tx: Tx, ref: ResourceRef, post: PostLido, canal: CanalDoPost, deps: DependenciasDoPost): Promise<CanalLido> {
+  /** O canal e a conta dele, travados até o fim da transação; nulo quando o canal (ou a conta) sumiu. */
+  private async lerCanal(tx: Tx, ref: ResourceRef, post: PostLido, canal: CanalDoPost): Promise<CanalLido | null> {
     const c = await tx.execute<CanalLido>(sql`
-      select ch.id, ch.status, ch.container_id, ch.body, a.external_id, a.credential_secret_id, a.id as conta
+      select ch.id, ch.status, ch.container_id, ch.body, a.external_id, a.credential_secret_id, a.id as conta, ch.external_id as postagem
         from liame.social_post_channel ch
         join liame.connected_account a on a.id = ch.connected_account_id and a.tenant_id = ch.tenant_id
        where ch.post_id = ${post.estado.post} and ch.tenant_id = ${ref.tenantId} and ch.channel = ${canal}
        for update of ch`);
-    const linha = c.rows[0];
+    return c.rows[0] ?? null;
+  }
+
+  /**
+   * A trava da conta do canal, na ferramenta do pedido, quando a conta não é a do pedido (a do pedido o executor já
+   * conferiu; a do outro canal, aqui: a trava por conta vale para os dois). O motivo, ou nulo.
+   */
+  private async travaDoOutroCanal(tx: Tx, ref: ResourceRef, post: PostLido, canal: CanalDoPost, linha: CanalLido, tool: string, deps: DependenciasDoPost): Promise<string | null> {
+    if (linha.conta === ref.accountId || !deps.trava) return null;
+    return deps.trava(tx, { tenantId: ref.tenantId, brandId: post.marca, provider: PROVEDOR_DO_CANAL[canal], accountId: linha.conta, tool });
+  }
+
+  /** O canal que vai sair, travado até o fim da transação; e a trava da conta, se não é a do pedido. */
+  private async canal(tx: Tx, ref: ResourceRef, post: PostLido, canal: CanalDoPost, deps: DependenciasDoPost): Promise<CanalLido> {
+    const linha = await this.lerCanal(tx, ref, post, canal);
     if (!linha) throw new CanalNaoSaiu(SUMIU);
-    // A conta do pedido o executor já conferiu; a do outro canal, aqui (a trava por conta vale para os dois).
-    if (linha.conta !== ref.accountId && deps.trava) {
-      const travado = await deps.trava(tx, { tenantId: ref.tenantId, brandId: post.marca, provider: PROVEDOR_DO_CANAL[canal], accountId: linha.conta });
-      if (travado) {
-        const frase = `Uma trava está ligada (${travado}). ${NAO_SAIU[canal]}`;
-        await this.naoSaiu(tx, ref, post, linha.id, frase, deps);
-        throw new CanalNaoSaiu(frase);
-      }
+    const travado = await this.travaDoOutroCanal(tx, ref, post, canal, linha, 'post_publicar', deps);
+    if (travado) {
+      const frase = `Uma trava está ligada (${travado}). ${NAO_SAIU[canal]}`;
+      await this.naoSaiu(tx, ref, post, linha.id, frase, deps);
+      throw new CanalNaoSaiu(frase);
     }
     return linha;
   }
@@ -322,7 +382,7 @@ export class PostPublicacaoConnector implements Connector {
   /** Uma chamada à Graph API: o token no cabeçalho e a prova do segredo do app no endereço (nunca o token, V161). */
   private async chamar<T>(
     g: Graph,
-    metodo: 'GET' | 'POST',
+    metodo: 'GET' | 'POST' | 'DELETE',
     caminho: string,
     capacidade: CapacidadeDoPost,
     o: { params?: Record<string, string>; corpo?: Record<string, string>; custo?: number } = {},
@@ -558,6 +618,131 @@ export class PostPublicacaoConnector implements Connector {
         return await this.recusaDoCanal(tx, ref, post, 'facebook', canal.id, new CanalNaoSaiu(FOTO_RECUSADA('facebook')), deps);
       }
       return await this.recusaDoCanal(tx, ref, post, 'facebook', canal.id, err, deps);
+    }
+  }
+
+  // ---- Apagar das redes (A6, Z5d, parte 6; D-A6-57) -----------------------------------------------------------------
+
+  /**
+   * Tira o post de cada canal em que ele está no ar, cada um por conta própria (como publicar): o canal que não sai do ar
+   * fica publicado, com o porquê na frase do pedido; o que é passageiro (o limite, a rede fora do ar) faz o pedido esperar
+   * (a transação grava o que já saiu do ar, e a volta seguinte pula o canal já apagado). O canal que sai do ar fica
+   * `apagado`, com a hora, e deixa a fila dos números.
+   */
+  private async apagarDasRedes(tx: Tx, ref: ResourceRef, lido: PostLido, options: ApplyOptions): Promise<ApplyResult> {
+    const estado = lido.estado as unknown as ResourceState;
+    const noAr = lido.estado.canais.filter((c) => c.situacao === 'publicado');
+    // Já saiu de todos (a tentativa anterior apagou): nada a fazer.
+    if (noAr.length === 0) return { ok: true, state: estado, version: lido.versao };
+    const motivo = recusaNaHoraDeApagar(lido.estado);
+    if (motivo) return recusado(motivo);
+    if (options.validateOnly) return { ok: true, state: estado, version: lido.versao };
+    const deps = this.deps;
+    if (!deps) return recusado(FORA_DO_AMBIENTE);
+
+    const falhas: string[] = [];
+    for (const canal of noAr) {
+      try {
+        if (canal.canal === 'instagram') await this.apagarDoInstagram(tx, ref, lido, deps);
+        else await this.apagarDaPagina(tx, ref, lido, deps);
+      } catch (err) {
+        if (!(err instanceof CanalNaoApagou)) throw err;
+        falhas.push(err.message);
+      }
+    }
+    const depois = (await lerEstadoDoPost(tx, ref.tenantId, ref.resourceId)) ?? lido;
+    if (falhas.length) {
+      const sairam = depois.estado.canais.filter((c) => c.situacao === 'apagado' && noAr.some((n) => n.canal === c.canal)).map((c) => DO_CANAL[c.canal]);
+      return recusado(`${sairam.length ? `O post saiu ${sairam.join(' e ')}. ` : ''}${falhas.join(' ')}`);
+    }
+    return { ok: true, state: depois.estado as unknown as ResourceState, version: lido.versao };
+  }
+
+  /** O canal que vai sair do ar, travado até o fim da transação; e a trava da conta (na ferramenta de apagar), se não é a do pedido. */
+  private async canalParaApagar(tx: Tx, ref: ResourceRef, post: PostLido, canal: CanalDoPost, deps: DependenciasDoPost): Promise<CanalLido> {
+    const linha = await this.lerCanal(tx, ref, post, canal);
+    if (!linha) throw new CanalNaoApagou(SUMIU);
+    const travado = await this.travaDoOutroCanal(tx, ref, post, canal, linha, 'post_apagar', deps);
+    if (travado) throw new CanalNaoApagou(`Uma trava está ligada (${travado}). ${CONTINUA[canal]}`);
+    return linha;
+  }
+
+  /** O canal saiu do ar: apagado, com a hora, e fora da fila dos números (os já lidos ficam). */
+  private async apagado(tx: Tx, canal: string, postagem: string): Promise<void> {
+    await tx.execute(sql`
+      update liame.social_post_channel
+         set status = 'apagado', external_id = coalesce(external_id, ${postagem}), removed_at = coalesce(removed_at, now()), metrics_next_at = null, updated_at = now()
+       where id = ${canal}`);
+  }
+
+  /**
+   * A recusa da Meta ao apagar, em palavras, para o canal; o passageiro (o limite, a rede fora do ar) sobe para o trilho
+   * adiar. "Não existe" (o código 100 com o subcódigo 33) a Meta usa também para o objeto que o token não alcança: o Liame
+   * não afirma que o post saiu, e pede para conferir na rede [NC: a referência não separa os dois casos].
+   */
+  private recusaAoApagar(post: PostLido, canal: CanalDoPost, err: unknown): never {
+    if (err instanceof CanalNaoApagou || !(err instanceof ErroConector)) throw err;
+    const motivo =
+      err.tipo === 'autenticacao'
+        ? SEM_ACESSO_AO_APAGAR(canal)
+        : err.tipo === 'permissao'
+          ? SEM_PERMISSAO_DE_APAGAR[canal]
+          : err.tipo === 'definitivo'
+            ? err.codigoProvider === '100' && err.subcodigo === '33'
+              ? NAO_ACHOU(canal)
+              : NAO_DEIXOU(canal)
+            : null;
+    if (!motivo) throw err;
+    this.logger.warn(`post ${post.estado.post}: a Meta não deixou apagar ${NO_CANAL[canal]} (${err.tipo}, HTTP ${err.status ?? '?'}, código ${err.codigoProvider ?? '?'}): ${err.message}`);
+    throw new CanalNaoApagou(motivo);
+  }
+
+  /**
+   * O Instagram (base §2.2, reconferida em 30/10/2026: `DELETE /<IG_MEDIA_ID>`, v26.0, com `instagram_basic` e
+   * `instagram_manage_contents` pelo Facebook Login; volta `success` e `deleted_id`). O post publicado sem o id guardado
+   * (o contêiner que apareceu já publicado) é achado entre os recentes, pela legenda, como na publicação.
+   */
+  private async apagarDoInstagram(tx: Tx, ref: ResourceRef, post: PostLido, deps: DependenciasDoPost): Promise<void> {
+    const canal = await this.canalParaApagar(tx, ref, post, 'instagram', deps);
+    if (canal.status !== 'publicado') return;
+    try {
+      const g: Graph = { deps, conta: canal.external_id, token: await this.token(tx, canal.credential_secret_id, deps), versoes: await this.versoes(deps, ['instagram_publish', 'instagram_media']) };
+      let midia = canal.postagem;
+      if (!midia) {
+        const recentes = await this.chamar<unknown>(g, 'GET', `${canal.external_id}/media`, 'instagram_media', { params: { fields: 'id,caption,timestamp,permalink', limit: String(RECENTES) } });
+        midia = postJaPublicado(recentes, canal.body, post.criadoEm)?.id ?? null;
+        if (!midia) throw new CanalNaoApagou(SEM_O_POST('instagram'));
+      }
+      // Apagar usa a mesma API da publicação (a versão registrada para publicar no Instagram).
+      const r = await this.chamar<{ success?: unknown }>(g, 'DELETE', midia, 'instagram_publish');
+      if (r?.success !== true) throw new CanalNaoApagou(NAO_DEIXOU('instagram'));
+      await this.apagado(tx, canal.id, midia);
+    } catch (err) {
+      this.recusaAoApagar(post, 'instagram', err);
+    }
+  }
+
+  /**
+   * A Página do Facebook (base §2.2, reconferida em 30/10/2026: `DELETE /{page_post_id}`, v26.0, com o token da Página;
+   * volta `{"success": true}`), com o token da Página pela lista das Páginas da autorização, como na publicação.
+   */
+  private async apagarDaPagina(tx: Tx, ref: ResourceRef, post: PostLido, deps: DependenciasDoPost): Promise<void> {
+    const canal = await this.canalParaApagar(tx, ref, post, 'facebook', deps);
+    if (canal.status !== 'publicado') return;
+    try {
+      const pagina = canal.external_id;
+      const versoes = await this.versoes(deps, ['pages', 'pagina_publish']);
+      const daAutorizacao: Graph = { deps, conta: pagina, token: await this.token(tx, canal.credential_secret_id, deps), versoes };
+      const contas = await this.chamar<unknown>(daAutorizacao, 'GET', 'me/accounts', 'pages', { params: { fields: 'id,access_token,tasks', limit: '100' } });
+      const daPagina = tokenDaPagina(contas, pagina);
+      if (!daPagina) throw new CanalNaoApagou(PAGINA_FORA_AO_APAGAR);
+      const postagem = canal.postagem;
+      if (!postagem) throw new CanalNaoApagou(SEM_O_POST('facebook'));
+      const r = await this.chamar<{ success?: unknown }>({ deps, conta: pagina, token: daPagina.token, versoes }, 'DELETE', postagem, 'pagina_publish');
+      if (r?.success !== true) throw new CanalNaoApagou(NAO_DEIXOU('facebook'));
+      await this.apagado(tx, canal.id, postagem);
+    } catch (err) {
+      this.recusaAoApagar(post, 'facebook', err);
     }
   }
 }

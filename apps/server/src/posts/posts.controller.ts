@@ -1,4 +1,14 @@
-import { CreatePostRequest, PostListQuery, PostListResponse, PostPhotoResponse, PostResponse, ProblemDetails, ReschedulePostRequest, ResourceId } from '@liame/contracts';
+import {
+  CreatePostRequest,
+  PostListQuery,
+  PostListResponse,
+  PostPhotoResponse,
+  PostResponse,
+  ProblemDetails,
+  ReschedulePostRequest,
+  ResourceId,
+  UnpublishPostRequest,
+} from '@liame/contracts';
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -17,7 +27,16 @@ import {
 import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
-import { ACAO_CRIAR_POST, ACAO_MUDAR_A_HORA, ACAO_PACOTE_PUBLICADO, ACAO_PACOTE_TIRADO, ACAO_TENTAR_DE_NOVO, PostsService, RECURSO_DO_POST } from './posts.service.js';
+import {
+  ACAO_APAGAR_DAS_REDES,
+  ACAO_CRIAR_POST,
+  ACAO_MUDAR_A_HORA,
+  ACAO_PACOTE_PUBLICADO,
+  ACAO_PACOTE_TIRADO,
+  ACAO_TENTAR_DE_NOVO,
+  PostsService,
+  RECURSO_DO_POST,
+} from './posts.service.js';
 
 // Os posts da marca (A6, Z5b; protótipo P19, aprovado em 21/10/2026). A Agenda (os posts de um período) e o novo post,
 // que vira um pedido em Aprovações: nada sai sem a aprovação de uma pessoa, com o código do app, na hora marcada. A
@@ -165,5 +184,25 @@ export class PostsController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   mudarAHora(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string, @Body({ schema: ReschedulePostRequest }) body: ReschedulePostRequest): Promise<PostResponse> {
     return this.posts.mudarAHora(auth, id, body);
+  }
+
+  @Post(':id/unpublish')
+  @HttpCode(200)
+  @Permissao('acoes.aprovar')
+  @Auditar(ACAO_APAGAR_DAS_REDES, { recurso: RECURSO_DO_POST })
+  @ApiOperation({
+    summary: 'Apagar das redes o post que o Liame publicou',
+    description:
+      'Só para o post do Liame que está no ar em algum canal (A6, Z5d, parte 6; P19; D-A6-57): ele sai de cada canal em que está no ar (o Instagram e a Página do Facebook), com o código do app de quem apaga (quem pode aprovar). O pedido `post_apagar` (a volta do pedido que publicou) é feito e aprovado na mesma transação, pelo trilho de sempre, e executa em seguida, a qualquer hora; o andamento aparece em `removal` (`apagando`, `apagado`, `em_parte` ou `nao_apagou`, com o porquê). Apagar não se desfaz, e quem já viu o post, viu. No Instagram, a Meta pede a permissão de apagar posts na autorização; sem ela, o post continua lá e o porquê aparece em `removal.reason`. O código errado, ou o trilho que recusa, deixa tudo como estava. Recusas: 409 `post-fora-do-ar` (não está no ar em nenhum canal), `post-saindo` (o post ainda está saindo num canal), `post-saindo-das-redes` (já há um pedido de apagar executando), `canal-nao-conectado`, `e-pacote` e `funcao-desligada`; as do código do app, como em aprovar um pedido.',
+  })
+  @ApiOkResponse({ standardSchema: PostResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  apagarDasRedes(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string, @Body({ schema: UnpublishPostRequest }) body: UnpublishPostRequest): Promise<PostResponse> {
+    return this.posts.apagarDasRedes(auth, id, body);
   }
 }

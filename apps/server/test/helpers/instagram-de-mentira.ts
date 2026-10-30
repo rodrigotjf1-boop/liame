@@ -28,6 +28,14 @@ import type { AddressInfo } from 'node:net';
 //     leitura pede a tarefa `MODERATE`: sem ela, a recusa de permissão, código 200);
 //   - `GET /{v}/{post}?fields=permalink_url`.
 // Publicar a mesma foto duas vezes cria dois posts (a documentação não fala em evitar a repetição: o pior caso).
+//
+// Apagar das redes (A6, Z5d, parte 6), pelas páginas oficiais lidas em 30/10/2026 (`…/instagram-graph-api/reference/
+// ig-media` e `…/docs/pages-api/posts`, v26.0):
+//   - `DELETE /{v}/{ig-media-id}`, com `instagram_basic` e `instagram_manage_contents` → `{"success": true, "deleted_id"}`;
+//     sem a permissão, a recusa (#10);
+//   - `DELETE /{v}/{page_post_id}`, com o token da Página → `{"success": true}`. A página não diz qual tarefa apagar pede
+//     (fala em `CREATE_CONTENT`, `MANAGE` e `MODERATE` para os posts em geral): aqui, a de publicar, `CREATE_CONTENT`;
+//   - o que não existe (já apagado direto na rede): o código 100 com o subcódigo 33, como qualquer objeto que a Meta não acha.
 
 export const TOKEN_DO_INSTAGRAM = `token-do-instagram-${randomBytes(6).toString('hex')}`;
 export const SEGREDO_DO_APP = `segredo-do-app-${randomBytes(6).toString('hex')}`;
@@ -75,6 +83,8 @@ export class InstagramDeMentira {
   readonly numeros = new Map<string, unknown[]>();
   /** A autorização sem a permissão de ler os números do Instagram (`instagram_manage_insights`): a recusa (#10). */
   semPermissaoDeNumeros = false;
+  /** A autorização sem a permissão de apagar no Instagram (`instagram_manage_contents`): a recusa (#10). */
+  semPermissaoDeApagar = false;
   base = '';
   private servidor: Server | null = null;
 
@@ -107,6 +117,7 @@ export class InstagramDeMentira {
     this.perderARespostaDaPublicacao = false;
     this.perderARespostaDaFoto = false;
     this.semPermissaoDeNumeros = false;
+    this.semPermissaoDeApagar = false;
     this.chamadas.length = 0;
     this.defeitos.length = 0;
   }
@@ -152,6 +163,23 @@ export class InstagramDeMentira {
     const final = aresta ?? (params.fields === 'status_code' ? 'status_code' : 'objeto');
     const falha = this.falhas.get(final)?.shift();
     if (falha) return falha;
+
+    // Apagar das redes (A6, Z5d, parte 6): o post da Página (o id com `_`, pelo token dela) ou a mídia do Instagram.
+    if (metodo === 'DELETE' && !aresta) {
+      const naoExiste = erro(400, 100, `Unsupported delete request. Object with ID '${id}' does not exist, cannot be loaded due to missing permissions, or does not support this operation`, 33);
+      if ((id ?? '').includes('_')) {
+        if (!(this.paginas.get(id!.split('_')[0]!) ?? []).includes('CREATE_CONTENT')) return erro(403, 200, 'Requires the CREATE_CONTENT task on the Page');
+        const i = this.fotosNaPagina.findIndex((f) => f.page_story_id === id);
+        if (i < 0) return naoExiste;
+        this.fotosNaPagina.splice(i, 1);
+        return { status: 200, corpo: { success: true } };
+      }
+      if (this.semPermissaoDeApagar) return erro(403, 10, '(#10) Application does not have permission for this action');
+      const i = this.posts.findIndex((p) => p.id === id);
+      if (i < 0) return naoExiste;
+      this.posts.splice(i, 1);
+      return { status: 200, corpo: { success: true, deleted_id: id } };
+    }
 
     // Os números do post (A6, Z7, parte c; base §2.2, conferida em 29/10/2026): o post da Página pede o token dela, de quem
     // tem a tarefa ANALYZE; a mídia do Instagram, a permissão de ler os números. O dado que falta volta como lista vazia.

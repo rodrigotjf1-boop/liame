@@ -38,9 +38,10 @@ export class EscritaPosts implements OnModuleInit {
       appSecret: this.config.plataformas.metaAppSecret,
       versao: (capacidade) => versaoRegistrada(database.db, 'meta_ads', capacidade),
       armazem: this.armazem,
-      // A trava da conta do outro canal do post (a do pedido o executor confere), com o mesmo motivo que ele mostra.
+      // A trava da conta do outro canal do post (a do pedido o executor confere), na ferramenta do pedido (publicar ou
+      // apagar das redes), com o mesmo motivo que ele mostra.
       trava: async (tx, alvo) => {
-        const t = await this.travas.check(tx, { ...alvo, tool: 'post_publicar' });
+        const t = await this.travas.check(tx, alvo);
         return t ? `${t.level}: ${t.reason}` : null;
       },
     };

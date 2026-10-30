@@ -533,6 +533,17 @@ export class ActionService {
   }
 
   /**
+   * A volta pedida pela rota do próprio recurso (A6, Z5d, parte 6; D-A6-57: apagar das redes o post que o Liame publicou,
+   * pela rota do post, que travou o post, conferiu que ele está no ar e que nada dele ainda executa). É o mesmo trilho da
+   * volta de sempre (a trava, a flag, a política, o plano), com a versão em que o recurso está agora. `de`: o pedido que
+   * publicou. Devolve o pedido novo, para quem chama aprovar com o código na mesma transação.
+   */
+  async pedirVolta(auth: AuthContext, input: CreateActionRequest, volta: { de: string; versaoDepois: number }): Promise<ActionResponse> {
+    const id = await this.pedir(pessoa(auth), input, volta);
+    return this.get(auth, id);
+  }
+
+  /**
    * O pedido, do começo ao fim; devolve o id dele. `quem`: a pessoa que pede ou o funcionário de IA (em nome de uma
    * pessoa). `volta`: a ação que este pedido desfaz e a versão em que ela deixou o objeto. `tentativa`: o pedido de que
    * este é a nova tentativa (A6, Z5d).
