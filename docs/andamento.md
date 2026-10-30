@@ -643,6 +643,15 @@ Falta a W2a, parte 3b: devolver o PIX na desistência em 7 dias (a desistência 
 
 A W2a está completa no código e desligada. Falta a chave da conta de testes do Asaas no EasyPanel (o passo do dono, com o endereço do Sandbox e o token do aviso, num passo só) para o teste de ponta a ponta no Sandbox; depois, a W2b (o cartão) e a tela (W5). O e-mail com o protocolo na hora da desistência (D-A7-19) entra com a tela.
 
+**W3, parte 1: a parada da cobrança (30/10/2026; migration 0094; a função `cobranca` segue desligada), com a decisão técnica D-A7-38.** Da W3, o cancelamento no fim do período, a desistência em 7 dias com a devolução e a situação pelo atraso (em atraso, ações paradas, suspensa) já estavam no código desde a W1 e a W2a. Esta parte dá o efeito do 10º dia (D-A7-6):
+- **no 10º dia de atraso, a parada da marca** (`acertarParadaDaCobranca`, `cobranca/assinatura.ts`): a parada que já existe, no nível da marca da assinatura, acionada pela rotina (sem pessoa) e ligada à assinatura (`kill_switch.subscription_id`, uma viva por assinatura). A IA e as ações dos funcionários da marca param; a leitura e as telas continuam, e o Liame não pausa anúncio: a parada da cobrança não dispara o evento que pausa o que os funcionários criaram;
+- **pagou, ela sai na hora** (o pagamento e a rotina acertam a parada pela situação nova), e **sai junto quando a assinatura termina**; o 30º dia (suspensa) segue com a mesma parada;
+- **uma pessoa não a desliga**: 409 `parada-da-cobranca`, "voltam sozinhas assim que ela for paga"; a lista das paradas e Sua equipe dizem que ela é da cobrança (`by_billing`), para a tela não oferecer "retomar";
+- cada mudança na auditoria da assinatura (`cobranca.parar_acoes`, `cobranca.voltar_acoes`);
+- **testes:** um caso novo em `test/db/cobranca.spec.ts` (do 1º ao 9º dia nada para; no 10º, a parada da marca, sem pessoa, e outra marca segue; a rotina de novo e o 30º dia não abrem outra; a lista, Sua equipe e o 409; a parada de uma pessoa segue com o "retomar"; pagar a mais antiga tira a parada; de novo no 10º, e a assinatura que termina a tira; as restrições novas, V119), rodado duas vezes, com os testes da parada, das ações, de Sua equipe e do ciclo de vida.
+
+Falta da W3: os e-mails do atraso a quem paga, no 1º, no 7º, no 10º e no 30º dia (parte 2, D-A7-15), e a suspensão no 30º dia, quando só o Dono entra, para pagar ou exportar os dados (parte 3, D-A7-6).
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

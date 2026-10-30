@@ -42,6 +42,8 @@ export const killSwitch = liame.table('kill_switch', {
   activatedAt: ts('activated_at').notNull().defaultNow(),
   deactivatedBy: uuid('deactivated_by'),
   deactivatedAt: ts('deactivated_at'),
+  /** A parada da cobrança (migration 0094; A7, W3): a assinatura da marca que está do 10º dia de atraso em diante. */
+  subscriptionId: uuid('subscription_id'),
 });
 
 // Migration 0010 (políticas versionadas, ADR-007).

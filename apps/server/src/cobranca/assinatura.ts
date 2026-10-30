@@ -157,13 +157,52 @@ async function cancelarFaturas(tx: Tx, assinaturaId: string, agora: Date, filtro
   return r.rowCount ?? 0;
 }
 
-/** Encerra a assinatura agora, com o porquê, e cancela as faturas em aberto. */
+/** Encerra a assinatura agora, com o porquê, e cancela as faturas em aberto. A parada da cobrança dela sai junto. */
 export async function encerrar(tx: Tx, assinaturaId: string, motivo: MotivoDoFim, agora: Date): Promise<void> {
   await cancelarFaturas(tx, assinaturaId, agora);
   await tx.execute(sql`
     update liame.subscription
        set status = 'encerrada', end_reason = ${motivo}, ended_at = ${agora.toISOString()}::timestamptz, updated_at = now()
      where id = ${assinaturaId} and status <> 'encerrada'`);
+  await tx.execute(sql`
+    update liame.kill_switch set deactivated_at = ${agora.toISOString()}::timestamptz
+     where subscription_id = ${assinaturaId} and deactivated_at is null`);
+}
+
+/** O motivo da parada da cobrança, como a empresa lê na lista das paradas e em Sua equipe. */
+export const MOTIVO_DA_PARADA_DA_COBRANCA =
+  'Cobrança: a mensalidade desta marca chegou ao 10º dia de atraso. As ações dos funcionários de IA voltam assim que ela for paga.';
+
+/** As situações em que as ações da marca param (D-A7-6): do 10º dia de atraso em diante. */
+export const SITUACOES_QUE_PARAM: readonly string[] = ['acoes_paradas', 'suspensa'];
+
+/**
+ * A parada da cobrança acompanha a situação da assinatura (D-A7-6, D-A7-38), na transação de quem mudou a situação:
+ * do 10º dia de atraso em diante, a parada da marca, acionada pela rotina e ligada à assinatura (uma de cada vez: o
+ * índice único segura a segunda volta); em dia, ou só em atraso, a parada sai, na hora. Cada mudança fica na auditoria
+ * da assinatura. Devolve o que mudou.
+ */
+export async function acertarParadaDaCobranca(tx: Tx, s: LinhaDaAssinatura, status: string, agora: Date): Promise<'parou' | 'voltou' | 'nada'> {
+  const quando = agora.toISOString();
+  if (SITUACOES_QUE_PARAM.includes(status)) {
+    const r = await tx.execute<{ id: string }>(sql`
+      insert into liame.kill_switch (id, level, tenant_id, brand_id, reason, activated_by, activated_at, subscription_id)
+      values (${uuidv7()}, 'brand', ${s.tenant_id}, ${s.brand_id}, ${MOTIVO_DA_PARADA_DA_COBRANCA}, null, ${quando}::timestamptz, ${s.id})
+      on conflict do nothing
+      returning id`);
+    const id = r.rows[0]?.id;
+    if (!id) return 'nada';
+    await auditarDaRotina(tx, s, 'cobranca.parar_acoes', null, { status, parada: id });
+    return 'parou';
+  }
+  const r = await tx.execute<{ id: string }>(sql`
+    update liame.kill_switch set deactivated_at = ${quando}::timestamptz
+     where subscription_id = ${s.id} and deactivated_at is null
+     returning id`);
+  const id = r.rows[0]?.id;
+  if (!id) return 'nada';
+  await auditarDaRotina(tx, s, 'cobranca.voltar_acoes', null, { status, parada: id });
+  return 'voltou';
 }
 
 /** Cria a assinatura que espera o primeiro pagamento e a primeira mensalidade, vencendo hoje. */
@@ -252,6 +291,8 @@ export async function pagarFatura(tx: Tx, p: { faturaId: string; pagoEm: Date; f
   const depois = s.status === 'encerrada' ? s.status : situacaoPeloAtraso(await vencimentoEmAberto(tx, s.id, diaNoFuso(p.agora, s.timezone)), diaNoFuso(p.agora, s.timezone));
   if (depois !== antes) await tx.execute(sql`update liame.subscription set status = ${depois}, updated_at = now() where id = ${s.id}`);
   await auditarDaRotina(tx, s, 'cobranca.pagamento', { status: antes }, { fatura: f.id, tipo: f.kind, forma: p.forma, status: depois }, 'integration');
+  // Pagou: as ações voltam na hora (pela mensalidade que ainda ficar em aberto, se houver outra; D-A7-6).
+  await acertarParadaDaCobranca(tx, s, depois, p.agora);
   return { situacao: 'paga', assinatura: s.id, status: depois };
 }
 
@@ -325,6 +366,8 @@ export async function vezDaAssinatura(tx: Tx, assinaturaId: string, agora: Date)
   const depois = situacaoPeloAtraso(await vencimentoEmAberto(tx, s.id, hoje), hoje);
   await tx.execute(sql`update liame.subscription set status = ${depois}, next_check_at = ${amanha}, updated_at = now() where id = ${s.id}`);
   if (depois !== s.status) await auditarDaRotina(tx, s, 'cobranca.situacao', { status: s.status }, { status: depois });
+  // No 10º dia de atraso, as ações da marca param; em dia de novo, voltam (D-A7-6).
+  await acertarParadaDaCobranca(tx, s, depois, agora);
   return 'conferida';
 }
 

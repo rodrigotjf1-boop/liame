@@ -1,13 +1,14 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { BillingPlansResponse, BillingResponse } from '@liame/contracts';
 import { createDatabase, type Database, withSystem } from '@liame/database';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { usoDeIaDaEmpresa } from '../../src/ai/uso.js';
 import { pessoaPode } from '../../src/auth/pessoa-pode.js';
 import { currentStep, totpCode } from '../../src/auth/totp.js';
-import { criarAssinatura, type Forma, pagarFatura } from '../../src/cobranca/assinatura.js';
+import { criarAssinatura, encerrar, type Forma, pagarFatura } from '../../src/cobranca/assinatura.js';
 import { diaNoFuso, diasEntre, diferencaDoPlano, proximoVencimento, somarDias } from '../../src/cobranca/vida.js';
 import { FlagService } from '../../src/flags/flag.service.js';
+import { KillSwitchService } from '../../src/kill-switch/kill-switch.service.js';
 import { AssinaturasLoop } from '../../src/worker/assinaturas-loop.js';
 import {
   codigoErrado,
@@ -262,6 +263,87 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
     expect(await pagar((await emAberto(e)).id, meioDia('2026-12-23'))).toMatchObject({ situacao: 'paga', status: 'ativa' });
     expect((await estado(e)).subscription!.status).toBe('ativa');
   }, 90_000);
+
+  it('a parada da cobrança (A7 · W3, parte 1; D-A7-6, D-A7-38): no 10º dia as ações da marca param, uma pessoa não a desliga, e pagar a tira na hora', async () => {
+    const e = await empresa('Casa Brasa Parada');
+    const [plano] = await ownerQuery<{ id: string }>(`select id from liame.billing_plan where key = 'essencial' and offered`);
+    await withSystem(database.db, (tx) => criarAssinatura(tx, { tenantId: e.tenantId, brandId: e.brandId, planoId: plano!.id, forma: 'pix', quem: e.userId, agora: meioDia('2026-10-21') }));
+    await pagar((await emAberto(e)).id, meioDia('2026-10-22'));
+    const s = await assinatura(e);
+    const paradas = () =>
+      ownerQuery<{ id: string; level: string; brand_id: string; activated_by: string | null; deactivated_at: string | null; subscription_id: string | null }>(
+        `select id, level, brand_id, activated_by, deactivated_at::text, subscription_id from liame.kill_switch where tenant_id = $1 order by activated_at`,
+        [e.tenantId],
+      );
+    const trava = (brandId = e.brandId) => withSystem(database.db, (tx) => api.app.get(KillSwitchService).check(tx, { tenantId: e.tenantId, provider: 'ai', brandId }));
+
+    // Do 1º ao 9º dia de atraso, a marca segue trabalhando.
+    await rotinaEm(e, meioDia('2026-11-17'));
+    await rotinaEm(e, meioDia('2026-12-01'));
+    expect((await assinatura(e)).status).toBe('em_atraso');
+    expect(await paradas()).toEqual([]);
+    // No 10º dia, a parada da marca: pela rotina (sem pessoa), ligada à assinatura; a IA e as ações da marca param.
+    await rotinaEm(e, meioDia('2026-12-02'));
+    const [p] = await paradas();
+    expect(p).toMatchObject({ level: 'brand', brand_id: e.brandId, activated_by: null, deactivated_at: null, subscription_id: s.id });
+    expect(await trava()).toMatchObject({ id: p!.id, level: 'brand' });
+    // Outra marca da empresa não para (a parada é a da marca da assinatura).
+    expect(await trava(randomUUID())).toBeNull();
+    // A rotina de novo no mesmo dia, e no 30º (suspensa), não abre outra parada.
+    await rotinaEm(e, meioDia('2026-12-02'));
+    await rotinaEm(e, meioDia('2026-12-22'));
+    expect((await assinatura(e)).status).toBe('suspensa');
+    expect((await paradas()).filter((x) => x.deactivated_at === null)).toHaveLength(1);
+
+    // A empresa vê que a parada é da cobrança, na lista e em Sua equipe; uma pessoa não a desliga.
+    const lista = await api.call('GET', '/v1/kill-switches', { cookie: e.cookie });
+    expect(lista.status).toBe(200);
+    // (A lista traz também as paradas da distribuição, que outros testes criam no mesmo banco: só a desta empresa importa.)
+    expect(lista.body.items.filter((i: { brand_id: string | null }) => i.brand_id === e.brandId)).toEqual([expect.objectContaining({ id: p!.id, level: 'brand', by_billing: true })]);
+    const equipe = await api.call('GET', `/v1/team?brand_id=${e.brandId}`, { cookie: e.cookie });
+    expect(equipe.body.stop).toMatchObject({ id: p!.id, by_billing: true, by: null });
+    const desligar = await api.call('DELETE', `/v1/kill-switches/${p!.id}`, { cookie: e.cookie });
+    expect(desligar.status).toBe(409);
+    expect(desligar.body.code).toBe('parada-da-cobranca');
+    expect((await paradas())[0]!.deactivated_at).toBeNull();
+    // A parada que a pessoa aciona segue com o "retomar" dela, e não é da cobrança.
+    const minha = await api.call('POST', '/v1/kill-switches', { cookie: e.cookie, body: { level: 'tenant', reason: 'Parando para revisar' } });
+    expect(minha.status).toBe(201);
+    expect(minha.body.by_billing).toBe(false);
+    expect((await api.call('DELETE', `/v1/kill-switches/${minha.body.id}`, { cookie: e.cookie })).status).toBe(204);
+
+    // Pagou a mais antiga (novembro): a de dezembro ainda deixa em atraso (1º dia), e as ações voltam na hora.
+    expect(await pagar((await emAberto(e)).id, meioDia('2026-12-23'))).toMatchObject({ situacao: 'paga', status: 'em_atraso' });
+    expect((await paradas()).find((x) => x.id === p!.id)!.deactivated_at).not.toBeNull();
+    expect(await trava()).toBeNull();
+    const eventos = await ownerQuery<{ action: string; after: Record<string, unknown> }>(
+      `select action, after from liame.audit_event where tenant_id = $1 and action in ('cobranca.parar_acoes', 'cobranca.voltar_acoes') order by chain_seq`,
+      [e.tenantId],
+    );
+    expect(eventos.map((x) => [x.action, x.after.status])).toEqual([
+      ['cobranca.parar_acoes', 'acoes_paradas'],
+      ['cobranca.voltar_acoes', 'em_atraso'],
+    ]);
+
+    // De novo no 10º dia da de dezembro, e a assinatura termina (cancelada com atraso, D-A7-25; pelo relógio do teste,
+    // porque a rota usa o de agora): a parada sai junto.
+    await rotinaEm(e, meioDia('2027-01-01'));
+    expect((await paradas()).filter((x) => x.deactivated_at === null)).toHaveLength(1);
+    await withSystem(database.db, (tx) => encerrar(tx, s.id, 'cancelada', meioDia('2027-01-02')));
+    expect(await assinatura(e)).toMatchObject({ status: 'encerrada' });
+    expect((await paradas()).filter((x) => x.deactivated_at === null)).toEqual([]);
+
+    // V119: a parada da cobrança é da marca e da rotina; uma viva por assinatura.
+    const inserir = (nivel: string, por: string | null) =>
+      ownerQuery(
+        `insert into liame.kill_switch (id, level, tenant_id, brand_id, reason, activated_by, subscription_id) values (gen_random_uuid(), $1, $2, $3, 'teste', $4, $5)`,
+        [nivel, e.tenantId, nivel === 'brand' ? e.brandId : null, por, s.id],
+      );
+    await expect(inserir('tenant', null)).rejects.toMatchObject({ code: '23514', constraint: 'kill_switch_da_cobranca' });
+    await expect(inserir('brand', e.userId)).rejects.toMatchObject({ code: '23514', constraint: 'kill_switch_da_cobranca' });
+    await inserir('brand', null);
+    await expect(inserir('brand', null)).rejects.toMatchObject({ code: '23505', constraint: 'uq_kill_switch_cobranca' });
+  }, 120_000);
 
   it('o pedido sem o primeiro pagamento termina sozinho no 7º dia, e a fatura não é cobrada', async () => {
     const e = await empresa('Casa Brasa Sem Pagar');

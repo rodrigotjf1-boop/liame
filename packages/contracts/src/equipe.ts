@@ -134,8 +134,13 @@ export const TeamResponse = z.strictObject({
    * limitados em dólar. Nula antes da primeira leitura: a tela mostra só o dólar.
    */
   usd_brl: z.strictObject({ rate: z.string().regex(/^\d{1,4}\.\d{1,6}$/), date: z.iso.date(), source: Slug }).nullable(),
-  /** A parada que vale para a marca agora (da empresa ou da Liame), ou nula. */
-  stop: z.strictObject({ id: z.uuid(), level: Slug, by_company: z.boolean(), since: z.iso.datetime(), reason: z.string(), by: Pessoa }).nullable(),
+  /**
+   * A parada que vale para a marca agora (da empresa ou da Liame), ou nula. `by_billing`: é a parada da cobrança (o 10º
+   * dia de atraso da mensalidade da marca; A7, W3), que sai sozinha quando ela é paga, sem "retomar".
+   */
+  stop: z
+    .strictObject({ id: z.uuid(), level: Slug, by_company: z.boolean(), since: z.iso.datetime(), reason: z.string(), by: Pessoa, by_billing: z.boolean().optional() })
+    .nullable(),
   members: z.array(TeamMember),
   /** A pessoa pode desligar e ligar um funcionário (`agentes.gerenciar`). */
   can_manage: z.boolean(),

@@ -31,7 +31,11 @@ type Row = {
   reason: string;
   activated_at: Date | string;
   deactivated_at: Date | string | null;
+  /** A assinatura que causou a parada da cobrança (A7, W3; migration 0094), ou nulo. */
+  subscription_id: string | null;
 };
+
+const COLUNAS = sql`id, level, provider, brand_id, account_id, tool, reason, activated_at, deactivated_at, subscription_id`;
 
 // Ordem de checagem: do mais amplo ao mais estreito (a mensagem cita a trava mais ampla).
 const ORDER: KillSwitchLevel[] = ['global', 'provider', 'tenant', 'brand', 'account', 'tool'];
@@ -59,7 +63,7 @@ export class KillSwitchService {
   /** Travas da empresa ativa (as da distribuição também aparecem, só para leitura). */
   async list(auth: AuthContext): Promise<KillSwitchResponse[]> {
     const r = await currentTx().execute<Row>(sql`
-      select id, level, provider, brand_id, account_id, tool, reason, activated_at, deactivated_at from liame.kill_switch
+      select ${COLUNAS} from liame.kill_switch
        where (tenant_id = ${tenantOf(auth)} or tenant_id is null)
        order by deactivated_at nulls first, activated_at desc limit 200`);
     return r.rows.map(toResponse);
@@ -79,7 +83,7 @@ export class KillSwitchService {
               ${input.level === 'account' ? input.provider : null}, ${input.level === 'brand' ? input.brand_id : null},
               ${input.level === 'account' ? input.account_id : null}, ${input.level === 'tool' ? input.tool : null},
               ${input.reason}, ${auth.userId})
-      returning id, level, provider, brand_id, account_id, tool, reason, activated_at, deactivated_at`);
+      returning ${COLUNAS}`);
     const row = r.rows[0]!;
     // O evento dispara, adiante, a pausa das entidades criadas pelos agentes no escopo (connectors, A2).
     await emitEvent(tx, { tenantId, type: 'liame.kill_switch.activated', subject: id, data: scopeOf(row) });
@@ -90,12 +94,25 @@ export class KillSwitchService {
   async deactivate(auth: AuthContext, id: string): Promise<void> {
     const tx = currentTx();
     const tenantId = tenantOf(auth);
+    // A parada da cobrança (A7, W3; D-A7-38) não sai pela mão de uma pessoa: quem a tira é o pagamento.
     const r = await tx.execute<Row>(sql`
       update liame.kill_switch set deactivated_at = now(), deactivated_by = ${auth.userId}
-       where id = ${id} and tenant_id = ${tenantId} and deactivated_at is null
-       returning id, level, provider, brand_id, account_id, tool, reason, activated_at, deactivated_at`);
+       where id = ${id} and tenant_id = ${tenantId} and deactivated_at is null and subscription_id is null
+       returning ${COLUNAS}`);
     const row = r.rows[0];
-    if (!row) throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Trava ativa não encontrada nesta empresa.');
+    if (!row) {
+      const daCobranca = await tx.execute(sql`
+        select 1 from liame.kill_switch where id = ${id} and tenant_id = ${tenantId} and deactivated_at is null and subscription_id is not null`);
+      if (daCobranca.rows[0]) {
+        throw new AppProblem(
+          409,
+          'parada-da-cobranca',
+          'Esta parada é da cobrança',
+          'As ações desta marca param pelo atraso da mensalidade e voltam sozinhas assim que ela for paga, em Plano e cobrança.',
+        );
+      }
+      throw new AppProblem(404, 'nao-encontrado', 'Não encontramos', 'Trava ativa não encontrada nesta empresa.');
+    }
     await emitEvent(tx, { tenantId, type: 'liame.kill_switch.deactivated', subject: id, data: scopeOf(row) });
     auditDetail({ before: scopeOf(row) });
   }
@@ -130,5 +147,6 @@ function toResponse(r: Row): KillSwitchResponse {
     reason: r.reason,
     activated_at: new Date(r.activated_at).toISOString(),
     deactivated_at: r.deactivated_at === null ? null : new Date(r.deactivated_at).toISOString(),
+    by_billing: r.subscription_id !== null,
   };
 }
