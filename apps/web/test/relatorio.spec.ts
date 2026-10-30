@@ -277,6 +277,16 @@ describe('relatório do mês: como a tela escreve o que a API manda', () => {
         ],
       },
     ]);
+    // O Social media no mês com post (A6 · Z6, os posts): os posts primeiro, e as respostas sugeridas quando houve; no mês
+    // sem post (acima), a lista de sempre, para quem só tem as respostas não ler "0 posts".
+    const comPosts: MonthlyReportTeam = {
+      ...EQUIPE,
+      members: [{ key: 'social', stats: [numero('posts_propostos', 4), numero('posts_publicados', 0), numero('respostas_propostas', 2), numero('respostas_aprovadas', 1)] }],
+    };
+    expect(equipeDoMes(comPosts)[0]!.feito).toEqual([
+      { valor: '4', texto: 'posts propostos' },
+      { valor: '2', texto: 'respostas sugeridas' },
+    ]);
     expect(custoDoMes(EQUIPE)).toEqual({ valor: nbsp('R$ 67,50'), doTeto: '25%' });
     expect(custoDoMes({ ...EQUIPE, usd_brl: null }).valor).toBe(`US$${String.fromCharCode(160)}12,50`);
     expect(custoDoMes({ ...EQUIPE, ai: { spent_usd_micros: '12500000', ceiling_usd_micros: '0' } }).doTeto).toBeNull();

@@ -184,8 +184,15 @@ export class EquipeService {
           : {}),
         // O CRM e mensageria: a proposta em andamento e, ligado e sem ter como seguir, o que falta.
         ...(doCrm ? { in_progress: doCrm.inProgress, blocked_by: doCrm.blockedBy } : {}),
-        // O Social media: a fila e, ligado e sem ter como seguir, o que falta. Desligado ou parado, nada se diz.
-        ...(key === SOCIAL_DA_EQUIPE ? { in_progress: doSocial?.inProgress ?? null, blocked_by: doSocial?.blockedBy ?? null } : {}),
+        // O Social media: a fila e, ligado e sem ter como seguir, o que falta. Desligado ou parado, nada se diz. Os
+        // trabalhos ligados dizem à tela de que ele fala (os posts, as respostas ou os dois).
+        ...(key === SOCIAL_DA_EQUIPE
+          ? {
+              in_progress: doSocial?.inProgress ?? null,
+              blocked_by: doSocial?.blockedBy ?? null,
+              works_on: [...(postsLigados ? ['posts'] : []), ...(respostasLigadas ? ['respostas'] : [])],
+            }
+          : {}),
         can_pause: def.desligavel,
         paused: pausa ? { by: quem(pausa.paused_by, pausa.name), at: iso(pausa.paused_at), reason: pausa.reason } : null,
         cost: { usd_micros: doMembro.reduce((s, u) => s + BigInt(u.custo), 0n).toString(), calls: doMembro.reduce((s, u) => s + Number(u.chamadas), 0) },

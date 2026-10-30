@@ -62048,6 +62048,14 @@
                             "maxLength": 60,
                             "pattern": "^[a-z0-9_]+$"
                           },
+                          "works_on": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
                           "can_pause": {
                             "type": "boolean"
                           },
@@ -63614,6 +63622,14 @@
                             "maxLength": 60,
                             "pattern": "^[a-z0-9_]+$"
                           },
+                          "works_on": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
+                          },
                           "can_pause": {
                             "type": "boolean"
                           },
@@ -64376,6 +64392,14 @@
                             ],
                             "maxLength": 60,
                             "pattern": "^[a-z0-9_]+$"
+                          },
+                          "works_on": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "maxLength": 60,
+                              "pattern": "^[a-z0-9_]+$"
+                            }
                           },
                           "can_pause": {
                             "type": "boolean"

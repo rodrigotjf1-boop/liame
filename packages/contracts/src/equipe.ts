@@ -103,6 +103,12 @@ export const TeamMember = z.strictObject({
    * Nulo quando ele pode trabalhar, e quando está desligado ou parado.
    */
   blocked_by: Slug.nullable().optional(),
+  /**
+   * Os trabalhos dele que a Liame ligou para a empresa, para quem tem mais de um. Social media: `posts` (o post de cada
+   * dia da pauta) e `respostas` (as sugestões de resposta às avaliações), um, os dois ou nenhum (ainda não ligado). Só
+   * vem para quem tem mais de um trabalho; a tela fala só do que está ligado.
+   */
+  works_on: z.array(Slug).optional(),
   /** A empresa pode desligar (o Compliance não). */
   can_pause: z.boolean(),
   /** Quem desligou, quando e por quê, enquanto estiver desligado pela empresa. */

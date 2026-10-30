@@ -21,7 +21,7 @@ import {
   aindaNaoLigado,
   type ChaveDoMembro,
   custoDo,
-  FICHAS,
+  fichaDo,
   mesDe,
   modoDo,
   notaDaCotacao,
@@ -29,6 +29,7 @@ import {
   podeConversarSobre,
   PROXIMAS_FASES,
   quandoNaFrase,
+  trabalhosDoSocial,
   trouxeDoCrm,
 } from './textos';
 
@@ -36,9 +37,10 @@ import {
 // o que fez. O Gestor de tráfego mostra a sombra e a prontidão no lugar do acerto. O Criativo (protótipo P12) só
 // trabalha a pedido: a ficha dele diz o que está escrevendo, o que espera a pessoa e por que não escreve, e leva a Criativos.
 // O CRM e mensageria (protótipo P16) trabalha no modo Aprovação: a ficha diz quantas mensagens esperam a decisão, o que
-// as do mês trouxeram pelo cupom e por que ele não tem como propor, e leva a Mensagens. O Social media (protótipo P21,
-// por ora sem os posts) também trabalha no modo Aprovação: a ficha diz as avaliações na fila dele, quantas respostas
-// esperam uma decisão e por que ele não tem como sugerir, e leva a Avaliações.
+// as do mês trouxeram pelo cupom e por que ele não tem como propor, e leva a Mensagens. O Social media (protótipo P21)
+// também trabalha no modo Aprovação: com os posts ligados, a ficha diz os dias da pauta na fila, quantos posts esperam a
+// decisão e por que ele não tem como propor (sem rede, sem Fotos, sem pauta), e leva à Agenda; só com as respostas, as
+// avaliações na fila, as respostas que esperam e por que não sugere, e leva a Avaliações.
 
 export interface AcoesDoMembro {
   /** `desligar:<chave>` ou `ligar:<chave>` enquanto a chamada está em andamento. */
@@ -93,7 +95,7 @@ export function DetalheDaProximaFase({ chave, nomeDaMarca, aoVoltar }: { chave: 
 }
 
 function AcoesDoFuncionario({ m, chave, t, acoes }: { m: TeamMember; chave: ChaveDoMembro; t: TeamResponse; acoes: AcoesDoMembro }) {
-  const f = FICHAS[chave];
+  const f = fichaDo(chave, m);
   const [motivo, setMotivo] = useState('');
   const conversa = useConversa();
   // "Conversar sobre ele" (P7): abre a conversa com a LIA já com a pergunta sobre o trabalho deste funcionário.
@@ -108,8 +110,14 @@ function AcoesDoFuncionario({ m, chave, t, acoes }: { m: TeamMember; chave: Chav
       <Icone nome="send" pequeno />
       Abrir Mensagens
     </Link>
+  ) : chave === 'social' && trabalhosDoSocial(m).posts ? (
+    // No P21 o atalho é "Abrir a Agenda": é lá que os posts dele estão.
+    <Link className="btn" href="/agenda" id="eqp-bt-agenda">
+      <Icone nome="calendar" pequeno />
+      Abrir a Agenda
+    </Link>
   ) : chave === 'social' ? (
-    // No P21 o atalho é "Abrir a Agenda", que chega com os posts (Z5); por ora, o trabalho dele está em Avaliações.
+    // Só com as respostas, o trabalho dele está em Avaliações.
     <Link className="btn" href="/avaliacoes" id="eqp-bt-avaliacoes">
       <Icone nome="message" pequeno />
       Abrir Avaliações
@@ -206,9 +214,12 @@ export function DetalheDoMembro({
   quem: QuemVeAFicha;
   aoVoltar: () => void;
 }) {
-  const f = FICHAS[chave];
+  const f = fichaDo(chave, m);
   const mes = mesDe(t.month.from);
   const selo = modoDo(m, autonomia?.items ?? null);
+  // O Social media com os posts ligados (o P21 inteiro) fala dos posts; só com as respostas, das avaliações.
+  const trabalhos = chave === 'social' ? trabalhosDoSocial(m) : null;
+  const comPosts = trabalhos?.posts === true;
   const custo = custoDo(m, t);
   const cotacao = notaDaCotacao(t.usd_brl);
   const acerto = acertoDo(m, mes);
@@ -249,7 +260,9 @@ export function DetalheDoMembro({
               ? `${m.paused?.reason ? `Motivo: "${m.paused.reason}". ` : ''}Enquanto estiver desligado, ninguém pede peça nova nem outra versão, e ele não custa nada. As peças que já existem seguem em Criativos: dá para editar, aprovar ou recusar.`
               : chave === 'crm'
                 ? `${m.paused?.reason ? `Motivo: "${m.paused.reason}". ` : ''}Enquanto estiver desligado, ele não propõe mensagem nova e não custa nada. O pedido que já está em Aprovações segue lá: dá para aprovar ou recusar. Envio em andamento segue no RegemCast, e dá para pausar em Aprovações.`
-                : chave === 'social'
+                : comPosts
+                  ? `${m.paused?.reason ? `Motivo: "${m.paused.reason}". ` : ''}Enquanto estiver desligado, ele não propõe post nem resposta e não custa nada. O que já está em Aprovações segue lá, e o post aprovado sai na hora marcada (dá para cancelar na Agenda).`
+                  : chave === 'social'
                   ? `${m.paused?.reason ? `Motivo: "${m.paused.reason}". ` : ''}Enquanto estiver desligado, ele não sugere resposta nesta marca e não custa nada. O pedido que já está em Aprovações segue lá: dá para aprovar ou recusar. Em Avaliações, dá para responder escrevendo.`
                   : `${m.paused?.reason ? `Motivo: "${m.paused.reason}". ` : ''}Enquanto estiver desligado, ${pronome} não trabalha e não custa nada.`
           }
@@ -276,7 +289,9 @@ export function DetalheDoMembro({
                 ? 'Quem liga é a Liame, a pedido do dono. Enquanto isso, ninguém pede peça e ele não custa nada.'
                 : chave === 'crm'
                   ? 'Quem liga é a Liame, a pedido do dono. Enquanto isso, ninguém propõe mensagem e ele não custa nada.'
-                  : chave === 'social'
+                  : comPosts
+                    ? 'Quem liga é a Liame, a pedido do dono. Enquanto isso, ninguém propõe post e ele não custa nada. O "Novo post" da Agenda continua para quem escreve à mão.'
+                    : chave === 'social'
                     ? 'Quem liga é a Liame, a pedido do dono. Enquanto isso, ele não sugere resposta e não custa nada. Em Avaliações, dá para responder escrevendo.'
                     : `${pronome === 'ela' ? 'Ela' : 'Ele'} não trabalha para esta empresa agora. Quem liga é a Liame, a pedido do dono.`
           }
@@ -354,7 +369,9 @@ export function DetalheDoMembro({
             <span className="modo-chip modo-chip--aprovacao">Aprovação</span>
           </div>
           <p className="card-sub">
-            Toda resposta é um pedido em Aprovações: quem decide vê a avaliação e as sugestões, escolhe uma, ajusta se quiser e aprova com o código do app; a de 1 ou 2 estrelas, só o dono. Nesta fase ele não tem sombra nem sobe de nível: nenhuma resposta sai sozinha.
+            {comPosts
+              ? 'Todo post e toda resposta é um pedido em Aprovações: você vê o texto de cada canal, a foto e a hora, e aprova com o código do app. Nesta fase ele não tem sombra nem sobe de nível: nenhum post sai sozinho.'
+              : 'Toda resposta é um pedido em Aprovações: quem decide vê a avaliação e as sugestões, escolhe uma, ajusta se quiser e aprova com o código do app; a de 1 ou 2 estrelas, só o dono. Nesta fase ele não tem sombra nem sobe de nível: nenhuma resposta sai sozinha.'}
           </p>
         </div>
       )}
@@ -373,7 +390,12 @@ export function DetalheDoMembro({
         </>
       ) : (
         acerto.length > 0 &&
-        !naoLigado && <BlocoNumeros titulo={chave === 'criativo' ? `Peças em ${mes}` : chave === 'crm' ? `Mensagens em ${mes}` : chave === 'social' ? `Respostas em ${mes}` : 'Acerto'} numeros={acerto} />
+        !naoLigado && (
+          <BlocoNumeros
+            titulo={chave === 'criativo' ? `Peças em ${mes}` : chave === 'crm' ? `Mensagens em ${mes}` : comPosts ? `Posts em ${mes}` : chave === 'social' ? `Respostas em ${mes}` : 'Acerto'}
+            numeros={acerto}
+          />
+        )
       )}
       {trouxe && !naoLigado && (
         <BlocoNumeros titulo="O que as mensagens trouxeram" numeros={trouxe}>
@@ -385,7 +407,7 @@ export function DetalheDoMembro({
       {!naoLigado && (
         <BlocoNumeros titulo={`Custo em ${mes}`} numeros={[custo]}>
           <p className="explica-nota">
-            {chave === 'social' ? 'O custo das sugestões de cada avaliação' : `O custo de cada ${chave === 'criativo' ? 'pedido' : chave === 'crm' ? 'mensagem escrita' : 'resposta'}`} é medido pelo Liame e entra no teto da empresa.
+            {comPosts ? (trabalhos?.respostas ? 'O custo de cada post e das sugestões de cada avaliação' : 'O custo de cada post') : chave === 'social' ? 'O custo das sugestões de cada avaliação' : `O custo de cada ${chave === 'criativo' ? 'pedido' : chave === 'crm' ? 'mensagem escrita' : 'resposta'}`} é medido pelo Liame e entra no teto da empresa.
             {cotacao ? ` ${cotacao}` : ''}
           </p>
         </BlocoNumeros>

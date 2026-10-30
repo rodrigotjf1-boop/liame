@@ -1,4 +1,5 @@
 import type { AutonomyItem, AutonomyThresholds, TeamActivityItem, TeamMember, TeamResponse, TeamShadowDecision, TeamShadowResponse } from '@liame/contracts';
+import { DIAS_LONGOS, diaDaSemana } from '@/components/agenda/textos';
 import type { NomeIcone } from '@/components/ui/icone';
 import { inteiro, paraSeletor, quandoComHora, reaisDeMicros } from '@/lib/formato';
 
@@ -179,7 +180,8 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
       'Enviar o modelo para a análise da Meta no lugar de uma pessoa',
     ],
   },
-  // O Social media (P21, aprovado em 21/10/2026), por ora só com as respostas às avaliações: os posts entram com a Z5.
+  // O Social media (P21, aprovado em 21/10/2026) só com as respostas às avaliações. Com os posts ligados, a ficha é a de
+  // `fichaDo` (o P21 inteiro).
   social: {
     nome: 'Social media',
     cargo: 'Posts e avaliações',
@@ -201,6 +203,50 @@ export const FICHAS: Record<ChaveDoMembro, Ficha> = {
     nunca: ['Pausar, mudar verba ou criar campanha'],
   },
 };
+
+/**
+ * Os trabalhos do Social media que a Liame ligou para a empresa (`works_on`, A6 · Z6, os posts, parte 3): os posts, as
+ * respostas, os dois ou nenhum (ainda não ligado, quando a ficha mostra o P21 inteiro). Sem a lista (a API de antes),
+ * só as respostas.
+ */
+export function trabalhosDoSocial(m: Pick<TeamMember, 'works_on'>): { posts: boolean; respostas: boolean } {
+  const w = m.works_on;
+  if (!w) return { posts: false, respostas: true };
+  if (w.length === 0) return { posts: true, respostas: true };
+  return { posts: w.includes('posts'), respostas: w.includes('respostas') };
+}
+
+/**
+ * A ficha de um funcionário. O Social media com os posts ligados é a do P21 (o post de cada dia da pauta), com a
+ * resposta às avaliações só quando ela também está ligada. O canal e a hora são os de agora: o Instagram e a Página do
+ * Facebook, às 19h do dia (D-A6-60).
+ */
+export function fichaDo(chave: ChaveDoMembro, m: Pick<TeamMember, 'works_on'> | undefined): Ficha {
+  const f = FICHAS[chave];
+  if (chave !== 'social' || !m) return f;
+  const { posts, respostas } = trabalhosDoSocial(m);
+  if (!posts) return f;
+  return {
+    ...f,
+    resumo: `Transforma o item da pauta da semana em post: escreve o texto de cada canal (o Instagram e a Página do Facebook, os que estiverem conectados) e escolhe a foto entre as Fotos da empresa, para as 19h do dia.${respostas ? ' Também propõe a resposta às avaliações do Google.' : ''} O Compliance confere o texto antes de você ver, quem aprova é você, com o código do app, e o Liame publica na hora marcada.`,
+    faz: [
+      'Transforma o item da pauta da semana em post, com o texto de cada canal',
+      'Escolhe a foto entre as Fotos da empresa e marca o post para as 19h do dia',
+      ...(respostas ? ['Propõe a resposta às avaliações do Google'] : []),
+    ],
+    nunca: [
+      'Publicar sem a sua aprovação com o código do app',
+      'Criar imagem com IA ou usar foto que não seja das Fotos da empresa',
+      ...(respostas ? ['Prometer desconto, brinde ou reembolso numa resposta', 'Citar o nome de quem avaliou', 'Aprovar a resposta a 1 ou 2 estrelas: só o dono aprova'] : []),
+      'Publicar fora das 8h às 22h',
+    ],
+  };
+}
+
+/** O dia de um post na frase: "sexta, 31/10". */
+export function diaDoPost(dia: string): string {
+  return `${DIAS_LONGOS[diaDaSemana(dia)]}, ${diaMesDe(dia)}`;
+}
 
 export const ORDEM: ChaveDoMembro[] = ['lia', 'analista', 'relatorios', 'compliance', 'estrategista', 'pesquisador', 'criativo', 'crm', 'social', 'trafego'];
 
@@ -373,6 +419,23 @@ export function atividadeDo(m: TeamMember, mes: string, agora: Date): string {
       // "Uma decisão", e não "a sua": a resposta a 1 ou 2 estrelas só o dono aprova, e quem vê a lista nem sempre é ele (V128).
       const esperam = numero(m, 'respostas_esperando');
       const eEsperam = esperam > 0n ? `; ${vezes(esperam, 'resposta espera', 'respostas esperam')} uma decisão` : '';
+      // Com os posts ligados (o P21 inteiro), o post é o trabalho principal: o que o segura e o que espera vêm antes.
+      if (trabalhosDoSocial(m).posts) {
+        const posts = numero(m, 'posts_esperando');
+        const ePosts = posts > 0n ? `; ${vezes(posts, 'post espera', 'posts esperam')} a sua decisão` : '';
+        if (m.blocked_by === 'sem_rede') return 'Espera uma rede conectada para publicar';
+        if (m.blocked_by === 'sem_fotos') return 'Espera as primeiras Fotos da empresa';
+        if (m.blocked_by === 'limite_de_ia_do_dia') return `O limite de IA de hoje acabou${ePosts}`;
+        if (m.blocked_by === 'limite_de_ia_do_mes') return `O limite de IA do mês acabou${ePosts}`;
+        if (m.working_now && m.in_progress?.kind === 'posts' && m.in_progress.count) {
+          return `${m.in_progress.count === 1 ? 'Escrevendo o post da pauta' : `Escrevendo os posts de ${vezes(m.in_progress.count, 'dia', 'dias')} da pauta`}${ePosts}`;
+        }
+        if (m.working_now && m.in_progress?.count) return `Escrevendo as sugestões de ${vezes(m.in_progress.count, 'avaliação', 'avaliações')}${ePosts || eEsperam}`;
+        if (posts > 0n) return `${vezes(posts, 'post espera', 'posts esperam')} a sua decisão`;
+        if (esperam > 0n) return `${vezes(esperam, 'resposta espera', 'respostas esperam')} uma decisão`;
+        if (m.blocked_by === 'sem_pauta') return 'Sem pauta aprovada nesta semana';
+        return numero(m, 'posts_propostos') > 0n ? `Propôs ${vezes(numero(m, 'posts_propostos'), 'post', 'posts')} em ${mes}` : `Nenhum post proposto em ${mes}`;
+      }
       if (m.blocked_by === 'sem_perfil') return 'Espera uma loja do Perfil no Google conectada';
       if (m.blocked_by === 'limite_de_ia_do_dia') return `O limite de IA de hoje acabou${eEsperam}`;
       if (m.blocked_by === 'limite_de_ia_do_mes') return `O limite de IA do mês acabou${eEsperam}`;
@@ -466,6 +529,26 @@ export function acertoDo(m: TeamMember, mes: string): Numero[] {
       ];
     }
     case 'social': {
+      // Com os posts ligados (P21): os posts do mês e o que as pessoas decidiram deles, o que espera agora e, com as
+      // respostas também ligadas, quantas ele propôs.
+      const { posts, respostas } = trabalhosDoSocial(m);
+      if (posts) {
+        const [propostos, publicados, recusados, barrados, sugeridas] = [
+          numero(m, 'posts_propostos'),
+          numero(m, 'posts_publicados'),
+          numero(m, 'posts_recusados'),
+          numero(m, 'posts_barrados'),
+          numero(m, 'respostas_propostas'),
+        ];
+        return [
+          { valor: n('posts_propostos'), rotulo: propostos === 1n ? 'post proposto' : 'posts propostos' },
+          { valor: n('posts_publicados'), rotulo: publicados === 1n ? 'aprovado e publicado' : 'aprovados e publicados' },
+          { valor: n('posts_esperando'), rotulo: 'esperando a sua decisão' },
+          ...(barrados > 0n ? [{ valor: n('posts_barrados'), rotulo: barrados === 1n ? 'dia barrado na conferência' : 'dias barrados na conferência' }] : []),
+          ...(recusados > 0n ? [{ valor: n('posts_recusados'), rotulo: recusados === 1n ? 'recusado por você' : 'recusados por você' }] : []),
+          ...(respostas ? [{ valor: n('respostas_propostas'), rotulo: sugeridas === 1n ? 'resposta a avaliação proposta' : 'respostas a avaliações propostas' }] : []),
+        ];
+      }
       // As respostas que ele sugeriu no mês e o que as pessoas decidiram delas; o que espera a decisão é de agora. Sem
       // "você": a de 1 ou 2 estrelas só o dono decide (V128).
       const [propostas, aprovadas, recusadas, barradas] = [numero(m, 'respostas_propostas'), numero(m, 'respostas_aprovadas'), numero(m, 'respostas_recusadas'), numero(m, 'sugestoes_barradas')];
@@ -506,6 +589,11 @@ function feitosDo(m: TeamMember): string {
     }
     case 'social': {
       const propostas = numero(m, 'respostas_propostas');
+      if (trabalhosDoSocial(m).posts) {
+        const posts = numero(m, 'posts_propostos');
+        if (posts === 0n && propostas === 0n) return 'ele só custa quando escreve';
+        return `custo de IA para escrever ${[posts > 0n ? vezes(posts, 'post', 'posts') : null, propostas > 0n ? vezes(propostas, 'resposta', 'respostas') : null].filter((x) => x !== null).join(' e ')}`;
+      }
       return propostas === 0n ? 'ele só custa quando escreve' : `custo de IA para sugerir ${vezes(propostas, 'resposta', 'respostas')}`;
     }
     default:
@@ -746,6 +834,7 @@ export type AgoraDoSocial = AgoraDoCrm;
  */
 export function agoraDoSocial(m: TeamMember, t: TeamResponse, agora: Date): AgoraDoSocial {
   if (m.status === 'desligado_pela_liame') return { faixa: null, bloco: null };
+  if (trabalhosDoSocial(m).posts) return agoraDosPosts(m, t, agora);
   const mes = mesDe(t.month.from);
   const esperam = numero(m, 'respostas_esperando');
   // O pedido que espera a decisão nunca some da ficha: quando o bloco fala de outra coisa, ele entra como frase a mais.
@@ -812,6 +901,125 @@ export function agoraDoSocial(m: TeamMember, t: TeamResponse, agora: Date): Agor
     bloco: {
       titulo: 'Ele sugere quando chega avaliação nova',
       frase: [{ texto: `Nenhuma resposta sugerida em ${mes}. Quando o Liame lê uma avaliação nova sem resposta do Perfil no Google, ele escreve as sugestões, que chegam em Aprovações.` }],
+      aprovacoes: false,
+    },
+  };
+}
+
+/**
+ * O "agora" do Social media com os posts ligados (P21; A6 · Z6, os posts, parte 3). O post é o trabalho principal: sem
+ * rede conectada ou sem Fotos, a faixa diz o que falta, com o caminho; no limite de IA, quantos dias da pauta esperam; com
+ * os dias na fila, ele está escrevendo; o que espera a decisão nunca some (posts e, com as respostas ligadas, respostas).
+ * Sem pauta aprovada, ele espera a pauta. O item da pauta e o texto do post ficam na Agenda: aqui, só as contagens.
+ */
+function agoraDosPosts(m: TeamMember, t: TeamResponse, agora: Date): AgoraDoSocial {
+  const mes = mesDe(t.month.from);
+  const { respostas } = trabalhosDoSocial(m);
+  const posts = numero(m, 'posts_esperando');
+  const avaliacoes = respostas ? numero(m, 'respostas_esperando') : 0n;
+  // O que espera a decisão, em uma frase: os posts primeiro.
+  const esperando: Array<{ texto: string; forte?: boolean }> = [
+    ...(posts > 0n ? [{ texto: `${vezes(posts, 'post espera', 'posts esperam')} a sua decisão`, forte: true }] : []),
+    ...(posts > 0n && avaliacoes > 0n ? [{ texto: ' e ' }] : []),
+    ...(avaliacoes > 0n ? [{ texto: `${vezes(avaliacoes, 'resposta espera', 'respostas esperam')} uma decisão`, forte: true }] : []),
+  ];
+  const emAprovacoes = { texto: ' em Aprovações: você vê o texto de cada canal, a foto e a hora, e aprova com o código do app.' };
+  const esperandoVoce: AgoraDoSocial['bloco'] = esperando.length ? { titulo: 'Esperando você', frase: [...esperando, emAprovacoes], aprovacoes: true } : null;
+  const eEsperam = esperando.length ? [{ texto: ' ' }, ...esperando, { texto: ' em Aprovações.' }] : [];
+  const fila = m.in_progress ?? null;
+  const dias = fila?.kind === 'posts' && fila.count ? fila : null;
+  if (m.blocked_by === 'sem_rede') {
+    return {
+      faixa: {
+        tipo: 'acao',
+        icone: 'plug',
+        titulo: 'Nenhuma rede conectada para publicar',
+        texto: 'O post sai no Instagram e na Página do Facebook. Conecte um deles com a permissão de publicar; até lá, ele não tem onde propor.',
+        destino: { href: '/contas', rotulo: 'Abrir Contas conectadas' },
+      },
+      bloco: esperandoVoce,
+    };
+  }
+  if (m.blocked_by === 'sem_fotos') {
+    return {
+      faixa: {
+        tipo: 'acao',
+        icone: 'camera',
+        titulo: 'Nenhuma foto da empresa ainda',
+        texto: 'O post usa só as fotos de verdade dos produtos, enviadas pela empresa em Fotos. Ele não cria imagem nem usa foto de fora.',
+        destino: { href: '/fotos', rotulo: 'Abrir Fotos' },
+      },
+      bloco: esperandoVoce,
+    };
+  }
+  if (m.blocked_by === 'limite_de_ia_do_dia' || m.blocked_by === 'limite_de_ia_do_mes') {
+    const doMes = m.blocked_by === 'limite_de_ia_do_mes';
+    const naFila = dias
+      ? `${vezes(dias.count!, 'dia da pauta espera', 'dias da pauta esperam')} o post dele, que fica para `
+      : fila?.count
+        ? `${vezes(fila.count, 'avaliação espera', 'avaliações esperam')} as sugestões dele, que ficam para `
+        : 'O que ele escreve fica para ';
+    return {
+      faixa: {
+        tipo: 'atencao',
+        icone: 'alert',
+        titulo: doMes ? `O limite de uso de IA de ${mes} foi atingido` : 'O limite de uso de IA de hoje foi atingido',
+        texto: `${naFila}${doMes ? 'quando o mês virar' : 'amanhã'}. Dá para fazer o post à mão, na Agenda.`,
+        destino: null,
+      },
+      bloco: esperandoVoce,
+    };
+  }
+  if (m.working_now && dias) {
+    return {
+      faixa: null,
+      bloco: {
+        titulo: 'Agora',
+        frase: [
+          { texto: 'Está escrevendo o post de ' },
+          { texto: vezes(dias.count!, 'dia da pauta', 'dias da pauta'), forte: true },
+          { texto: `, ${dias.count === 1 ? 'na fila' : 'o mais antigo na fila'} ${quandoNaFrase(dias.since, agora)}: o texto de cada canal e a foto, escolhida entre as Fotos da empresa. O Compliance confere antes de o pedido chegar em Aprovações.` },
+          ...eEsperam,
+        ],
+        aprovacoes: esperando.length > 0,
+      },
+    };
+  }
+  if (m.working_now && fila?.count) {
+    return {
+      faixa: null,
+      bloco: {
+        titulo: 'Agora',
+        frase: [
+          { texto: 'Está escrevendo as sugestões de ' },
+          { texto: vezes(fila.count, 'avaliação', 'avaliações'), forte: true },
+          { texto: `, ${fila.count === 1 ? 'na fila' : 'a mais antiga na fila'} ${quandoNaFrase(fila.since, agora)}. O Compliance confere cada sugestão antes de o pedido chegar em Aprovações.` },
+          ...eEsperam,
+        ],
+        aprovacoes: esperando.length > 0,
+      },
+    };
+  }
+  if (esperandoVoce) return { faixa: null, bloco: esperandoVoce };
+  const comAsRespostas = respostas ? '; as respostas às avaliações ele propõe quando chega avaliação nova' : '';
+  if (m.blocked_by === 'sem_pauta') {
+    return {
+      faixa: null,
+      bloco: {
+        titulo: 'Ele propõe a partir da pauta',
+        frase: [{ texto: `Nenhuma pauta aprovada nesta semana. Ele propõe um post para cada item da pauta da semana que o Estrategista monta e você aprova${comAsRespostas}.` }],
+        aprovacoes: false,
+      },
+    };
+  }
+  if (numero(m, 'posts_propostos') > 0n) {
+    return { faixa: null, bloco: { titulo: 'Nada esperando você', frase: [{ texto: `Os posts de ${mes} já foram decididos. Eles estão na Agenda.` }], aprovacoes: false } };
+  }
+  return {
+    faixa: null,
+    bloco: {
+      titulo: 'Ele propõe a partir da pauta',
+      frase: [{ texto: `Nenhum post proposto em ${mes}. Ele propõe o post de amanhã e o de depois de amanhã a partir da pauta da semana aprovada, e o pedido chega em Aprovações${comAsRespostas}.` }],
       aprovacoes: false,
     },
   };
@@ -972,6 +1180,23 @@ const RESPOSTA_RETIRADA: Record<string, string> = {
 };
 /** " de 5 estrelas", " de 1 estrela": a nota da avaliação no título; vazio sem a nota. */
 const daNota = (n: number) => (n > 0 ? ` de ${n} ${n === 1 ? 'estrela' : 'estrelas'}` : '');
+/** O que a conferência do post apontou quando barrou (os itens de `conferirTextoDoPost`), como a pessoa lê. */
+const ITEM_DO_POST: Record<string, string> = {
+  regras_do_post: 'o link escrito, a chamada do canal errado, hashtags demais, ou "grátis", desconto ou preço que não estão no item nem em Minha marca',
+  regras_da_liame: 'uma regra da Liame ou das plataformas',
+  regras_da_marca: 'o que Minha marca pede para nunca dizer',
+  numeros: 'um número que não está no item, no dia nem em Minha marca',
+  politica_da_empresa: 'a política da empresa não deixa ele pedir este post',
+};
+const REDE_DO_POST: Record<string, string> = { instagram: 'no Instagram', facebook: 'na Página do Facebook' };
+/** " de sexta, 31/10": o dia do post no título (vem em `period`); vazio sem o dia. */
+const doDia = (i: TeamActivityItem) => (i.period ? ` de ${diaDoPost(i.period.from)}` : '');
+/** "Do item da pauta "…": " quando a pessoa vê os planos (o servidor manda o item só para ela). */
+const doItem = (i: TeamActivityItem) => (i.subject ? `Do item da pauta “${i.subject}”: ` : '');
+const nasRedes = (rules: string[]) => {
+  const redes = rules.map((r) => REDE_DO_POST[r]).filter((r): r is string => r !== undefined);
+  return emLista(redes);
+};
 const CONFERENCIA_DA_PECA: Record<string, string> = {
   passou: 'passou na conferência',
   aviso: 'passou na conferência, com um aviso',
@@ -1201,6 +1426,35 @@ export function historicoDo(i: TeamActivityItem, agora: Date): LinhaDoHistorico 
       return { quando, titulo: 'Pedido de resposta expirou sem decisão', texto: 'Ninguém decidiu no prazo. Nada foi publicado.' };
     case 'resposta_falhou':
       return { quando, titulo: 'Resposta aprovada, mas não publicada', texto: 'O envio ao Google falhou. O motivo está no pedido, em Aprovações.' };
+    // Os posts do Social media (A6 · Z6, os posts): o dia do post, as redes e o item da pauta; nunca o texto do post.
+    case 'propos_post': {
+      const redes = nasRedes(i.rules);
+      // Depois do item (e dos dois-pontos), em minúscula; sozinho, a frase começa com maiúscula.
+      const onde = redes ? `${redes}, às 19:00` : 'às 19:00';
+      return { quando, titulo: `Propôs o post${doDia(i)}`, texto: `${i.subject ? `${doItem(i)}${onde}` : `${onde.charAt(0).toUpperCase()}${onde.slice(1)}`}. Espera a decisão em Aprovações.` };
+    }
+    case 'post_barrado': {
+      const oQueBarrou = i.rules.map((r) => ITEM_DO_POST[r] ?? nomeDaRegra(r));
+      return {
+        quando,
+        titulo: `A conferência barrou o post${doDia(i)}`,
+        texto: `${doItem(i)}${oQueBarrou.length ? `Motivo: ${emLista(oQueBarrou)}. ` : ''}Nada foi para Aprovações, e o texto não foi guardado. Dá para fazer o post à mão, na Agenda.`,
+      };
+    }
+    case 'post_sem_foto':
+      return { quando, titulo: `Não propôs o post${doDia(i)}`, texto: `${doItem(i)}Nenhuma das Fotos da empresa combinava com o item. Dá para enviar a foto em Fotos ou fazer o post à mão, na Agenda.` };
+    case 'post_publicado': {
+      const redes = nasRedes(i.rules);
+      return { quando, titulo: `O post${doDia(i)} saiu`, texto: `${quemFez(i, 'aprovou', 'Aprovado')}. Saiu ${redes || 'nas redes'}.` };
+    }
+    case 'post_nao_saiu':
+      return { quando, titulo: `O post${doDia(i)} não saiu`, texto: 'Ele não saiu em nenhuma rede. O motivo está no post, na Agenda.' };
+    case 'post_recusado':
+      return { quando, titulo: `Post${doDia(i)} recusado`, texto: 'Uma pessoa recusou o pedido. Nada foi publicado.' };
+    case 'post_cancelado':
+      return { quando, titulo: `Post${doDia(i)} cancelado`, texto: 'O post saiu da Agenda antes da hora. Nada foi publicado.' };
+    case 'post_expirou':
+      return { quando, titulo: `Pedido do post${doDia(i)} expirou sem decisão`, texto: 'Ninguém decidiu no prazo. Nada foi publicado.' };
     case 'desligado':
       return { quando, titulo: 'Desligado nesta marca', texto: `${quemFez(i, 'desligou', 'Desligado pela empresa')}. O histórico ficou guardado.` };
     case 'ligado':
