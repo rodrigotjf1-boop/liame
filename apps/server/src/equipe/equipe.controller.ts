@@ -23,7 +23,7 @@ import {
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
-import { Auth, Permissao } from '../auth/access.js';
+import { Auth, DuranteSuspensao, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { EquipeService } from './equipe.service.js';
 
@@ -89,6 +89,8 @@ export class EquipeController {
   @Post('members/:key/pause')
   @HttpCode(200)
   @Permissao('agentes.gerenciar', 'campanhas.ver', 'vendas.ver')
+  // O freio nunca trava: vale para o Dono com a marca suspensa (D-A7-40), como a parada.
+  @DuranteSuspensao()
   @Auditar('equipe.desligar_funcionario', { recurso: 'agent_pause' })
   @ApiOperation({
     summary: 'Desligar um funcionário',
@@ -108,6 +110,8 @@ export class EquipeController {
   @Post('members/:key/resume')
   @HttpCode(200)
   @Permissao('agentes.gerenciar', 'campanhas.ver', 'vendas.ver')
+  // Com a marca suspensa, ligar de novo não faz ninguém trabalhar: a parada da cobrança segura a marca (D-A7-38, D-A7-40).
+  @DuranteSuspensao()
   @Auditar('equipe.ligar_funcionario', { recurso: 'agent_pause' })
   @ApiOperation({ summary: 'Ligar de novo', description: 'Nesta marca. Não estava desligado: 409 `ja-ligado`.' })
   @ApiOkResponse({ standardSchema: TeamResponse })

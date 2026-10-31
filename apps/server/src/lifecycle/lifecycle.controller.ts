@@ -2,7 +2,7 @@ import { CloseOrganizationRequest, ExportResponse, ProblemDetails } from '@liame
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ApiConflictResponse, ApiCookieAuth, ApiNoContentResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
-import { Auth, DuranteEncerramento, Permissao } from '../auth/access.js';
+import { Auth, DuranteEncerramento, DuranteSuspensao, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { GRACE_DAYS, LifecycleService } from './lifecycle.service.js';
 
@@ -15,6 +15,7 @@ export class LifecycleController {
 
   @Post('organization/close')
   @Permissao('empresa.encerrar')
+  @DuranteSuspensao()
   @Auditar('empresa.encerrar', { recurso: 'organization' })
   @HttpCode(204)
   @ApiOperation({
@@ -31,6 +32,7 @@ export class LifecycleController {
   @Post('organization/reactivate')
   @Permissao('empresa.encerrar')
   @DuranteEncerramento()
+  @DuranteSuspensao()
   @Auditar('empresa.reativar', { recurso: 'organization' })
   @HttpCode(204)
   @ApiOperation({ summary: 'Reativar a conta', description: 'Durante a graça, cancela o encerramento.' })
