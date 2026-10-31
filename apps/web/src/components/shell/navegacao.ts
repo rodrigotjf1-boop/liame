@@ -60,6 +60,8 @@ export const NAVEGACAO: GrupoNav[] = [
       { href: '/fotos', rotulo: 'Fotos', icone: 'camera', permissao: 'fotos.ver' },
       { href: '/contas', rotulo: 'Contas conectadas', icone: 'plug', permissao: 'contas.ver' },
       { href: '/pessoas', rotulo: 'Pessoas e acessos', icone: 'user-plus', permissao: 'pessoas.ver' },
+      // Plano e cobrança (P26, W5): depois de Pessoas e acessos, só para o Dono e quem tem a cobrança liberada (D-A7-13).
+      { href: '/cobranca', rotulo: 'Plano e cobrança', icone: 'wallet', permissao: 'cobranca.ver' },
     ],
   },
   {
