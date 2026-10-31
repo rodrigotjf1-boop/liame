@@ -25,6 +25,7 @@ import { VaultModule } from '../vault/vault.module.js';
 import { ActionExecutor } from './action-executor.js';
 import { MeioAsaas } from '../cobranca/meio-asaas.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
+import { AvisosDeAtrasoService } from './avisos-de-atraso.service.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { avisoDoAsaas } from './aviso-do-asaas.js';
 import { AvisoNoAsaasLoop } from './aviso-no-asaas-loop.js';
@@ -216,6 +217,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // Plano e cobrança (A7, W1): a vida de cada assinatura pelo relógio (a fatura do período seguinte, os dias de atraso,
     // o fim do período, o pedido sem o primeiro pagamento). Só com a função `cobranca` ligada; nada é cobrado daqui.
     AssinaturasLoop,
+    // O aviso do atraso por e-mail a quem paga (A7, W3, parte 2). Só com a função `cobranca` ligada.
+    AvisosDeAtrasoService,
     // O PIX pelo Asaas (A7, W2a): a cobrança de cada fatura que nasce, criada no Asaas. Sem a chave do Asaas, nada roda.
     MeioAsaas,
     CobrancasPixLoop,

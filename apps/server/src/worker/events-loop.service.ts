@@ -3,6 +3,7 @@ import { erroDoLaco, FalhasDoLaco, HubDms, PASSAGEIRAS_ATE_ERRO } from '../conne
 import { ActionExecutor } from './action-executor.js';
 import { AssinaturasLoop } from './assinaturas-loop.js';
 import { AvisoNoAsaasLoop } from './aviso-no-asaas-loop.js';
+import { AvisosDeAtrasoService } from './avisos-de-atraso.service.js';
 import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
 import { CobrancasReleituraLoop } from './cobrancas-releitura-loop.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
@@ -74,6 +75,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly sugestoes: SugestoesDeRespostaLoop,
     private readonly postsSugeridos: PostsSugeridosLoop,
     private readonly assinaturas: AssinaturasLoop,
+    private readonly avisosDeAtraso: AvisosDeAtrasoService,
     private readonly cobrancasPix: CobrancasPixLoop,
     private readonly releitura: CobrancasReleituraLoop,
     private readonly avisoNoAsaas: AvisoNoAsaasLoop,
@@ -145,6 +147,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // Plano e cobrança (A7, W1): cada assinatura passa uma vez por dia, no começo do dia da empresa; a fila é olhada
       // de 5 em 5 minutos. Com a função `cobranca` desligada, a assinatura espera parada.
       this.loop('assinaturas', 20, 300_000, async (n) => (await this.assinaturas.executarLote(n)).length),
+      // O aviso do atraso por e-mail (A7, W3, parte 2): no 1º, no 7º, no 10º e no 30º dia, a quem paga, uma vez por
+      // fatura, dia e pessoa; olhado de 30 em 30 minutos, em páginas por todas as assinaturas em atraso.
+      this.loop('avisos-de-atraso', 100, 1_800_000, async (n) => (await this.avisosDeAtraso.executarLote(n)).length),
       // O PIX pelo Asaas (A7, W2a): a fatura que nasce ganha a cobrança no Asaas; a fila é olhada a cada 30 segundos
       // (a primeira mensalidade nasce com a pessoa assinando, e o QR Code também pode ser pedido por ela na hora).
       this.loop('cobrancas-pix', 10, 30_000, async (n) => (await this.cobrancasPix.executarLote(n)).length),
