@@ -1,4 +1,4 @@
-import { type BillingInvoice, type BillingPlan, BillingResponse, type BrandSubscription } from '@liame/contracts';
+import { type BillingInvoice, type BillingOverdue, type BillingPlan, BillingResponse, type BrandSubscription } from '@liame/contracts';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -8,11 +8,14 @@ import {
   diasEntre,
   diferencaDoPlano,
   emAberto,
+  faixaDoAtraso,
   fases,
+  faturaDaFaixa,
   funcionariosDo,
   linhaDaFatura,
   momentoDa,
   nomeDaFatura,
+  quemResolve,
   reaisDeCentavos,
   situacao,
   somarDias,
@@ -216,6 +219,65 @@ describe('Plano e cobrança: mudar o contrato (W5, parte 3)', () => {
   });
 });
 
+describe('Plano e cobrança: a faixa do atraso nas outras telas (W5, parte 4; D-A7-15)', () => {
+  const od = (o: Partial<BillingOverdue> = {}): BillingOverdue => ({
+    brand_id: MARCA,
+    brand_name: 'Mister Burgers',
+    status: 'em_atraso',
+    plan_name: 'Essencial',
+    due_date: '2026-11-22',
+    days: 3,
+    actions_stop_on: '2026-12-02',
+    suspends_on: '2026-12-22',
+    amount_cents: '24900',
+    invoice_id: '01a40000-0000-7000-8000-000000000f01',
+    ...o,
+  });
+  const resolve = quemResolve([
+    { name: 'Rodrigo', role: 'dono' },
+    { name: 'Ana Lima', role: 'administrador' },
+  ]);
+
+  it('quem resolve: o Dono e quem tem a cobrança liberada, pelo nome', () => {
+    expect(resolve).toBe('Rodrigo (Dono) ou Ana Lima (Administrador, com a cobrança liberada)');
+    expect(quemResolve([{ name: 'Rodrigo', role: 'dono' }])).toBe('Rodrigo (Dono)');
+    expect(quemResolve([])).toBe('o Dono da conta');
+  });
+
+  it('no 1º dia, só quem paga vê, com o valor e o PIX; a equipe, nada', () => {
+    const f = faixaDoAtraso(od(), { paga: true, souDono: false, resolve })!;
+    expect(f.tipo).toBe('atencao');
+    expect(f.titulo).toMatch(/^A mensalidade de novembro da Mister Burgers \(R\$\s249,00\) venceu em 22\/11$/);
+    expect(f.texto).toBe('Pague até 01/12 para os funcionários de IA continuarem trabalhando.');
+    expect(f.pagar).toBe(true);
+    expect(faixaDoAtraso(od({ amount_cents: null, invoice_id: null }), { paga: false, souDono: false, resolve })).toBeNull();
+  });
+
+  it('no 10º dia: quem paga vê o valor e a suspensão; a equipe vê quem resolve', () => {
+    const paga = faixaDoAtraso(od({ status: 'acoes_paradas', days: 11 }), { paga: true, souDono: true, resolve })!;
+    expect(paga.tipo).toBe('perigo');
+    expect(paga.titulo).toBe('Os funcionários de IA da Mister Burgers estão parados desde 02/12');
+    expect(paga.texto).toMatch(/^Falta pagar a mensalidade de novembro \(R\$\s249,00\)\. Você continua vendo tudo\. Em 22\/12, a conta é suspensa\.$/);
+    const equipe = faixaDoAtraso(od({ status: 'acoes_paradas', days: 11, amount_cents: null, invoice_id: null }), { paga: false, souDono: false, resolve })!;
+    expect(equipe.texto).toBe(`Há uma mensalidade em aberto. Quem resolve: ${resolve}. Você continua vendo tudo.`);
+    expect(equipe.pagar).toBe(false);
+  });
+
+  it('suspensa: o Dono paga ou exporta; quem não é o Dono vê que só o Dono entra (e nada sobre apagar, V39)', () => {
+    const dono = faixaDoAtraso(od({ status: 'suspensa', days: 30 }), { paga: true, souDono: true, resolve })!;
+    expect(dono).toMatchObject({ titulo: 'A conta da Mister Burgers está suspensa desde 22/12', texto: 'Só você entra, para pagar ou exportar os dados.', pagar: true });
+    const outro = faixaDoAtraso(od({ status: 'suspensa', days: 30 }), { paga: true, souDono: false, resolve })!;
+    expect(outro.texto).toBe(`Por uma mensalidade em aberto, só o Dono entra nela. Quem resolve: ${resolve}.`);
+    expect(outro.pagar).toBe(false);
+    expect(JSON.stringify([dono, outro])).not.toMatch(/apagad/);
+  });
+
+  it('a fatura da faixa é a do PIX: a mensalidade em aberto, com o plano e o vencimento', () => {
+    expect(faturaDaFaixa(od())).toMatchObject({ id: '01a40000-0000-7000-8000-000000000f01', kind: 'mensalidade', plan_name: 'Essencial', due_date: '2026-11-22', amount_cents: '24900', status: 'aberta' });
+    expect(faturaDaFaixa(od({ invoice_id: null, amount_cents: null }))).toBeNull();
+  });
+});
+
 describe('Plano e cobrança: as faturas e as fases', () => {
   it('cada fatura diz a situação dela, com o tom do selo pelo atraso', () => {
     expect(nomeDaFatura(fatura())).toBe('Novembro de 2026');
@@ -235,8 +297,8 @@ describe('Plano e cobrança: as faturas e as fases', () => {
     const dez = fases('atraso-10', assinatura({ status: 'acoes_paradas', overdue: atraso(11) }));
     expect(dez.map((f) => f.dia)).toEqual(['2026-11-22', '2026-11-23', '2026-12-02', '2026-12-22']);
     expect(dez.map((f) => f.agora)).toEqual([false, false, true, false]);
-    // O 1º dia diz só o e-mail: a faixa no alto das telas chega com a W5, parte 4.
-    expect(dez[1]!.oQue).toBe('Quem paga recebe um aviso por e-mail.');
+    // O 1º dia: o e-mail (W3, parte 2) e a faixa no alto das telas (W5, parte 4).
+    expect(dez[1]!.oQue).toBe('Quem paga recebe um aviso por e-mail e no alto das telas.');
   });
 
   it('os cartões mostram o que os textos dizem', () => {
@@ -248,7 +310,7 @@ describe('Plano e cobrança: as faturas e as fases', () => {
     expect(cartao).toContain('Pagar R$ 249,00 com PIX');
     expect(cartao).not.toContain('Exportar os dados');
     expect(texto(createElement(CartaoFaturas, { invoices: [], hoje: '2026-11-25' }))).toContain('As faturas aparecem aqui depois da primeira mensalidade.');
-    expect(texto(createElement(CartaoFases, { linhas: fases('atraso-1', r.subscription) }))).toContain('1º dia de atraso 23/11 Quem paga recebe um aviso por e-mail. (agora)');
+    expect(texto(createElement(CartaoFases, { linhas: fases('atraso-1', r.subscription) }))).toContain('1º dia de atraso 23/11 Quem paga recebe um aviso por e-mail e no alto das telas. (agora)');
     const planos = texto(createElement(PlanosParaAssinar, { planos: [ESSENCIAL, COMPLETO], podeAssinar: false, aoAssinar: () => {} }));
     expect(planos).toContain('Essencial');
     expect(planos).toContain('Assinar é com o Dono.');

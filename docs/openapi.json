@@ -87622,7 +87622,7 @@
     },
     "/v1/billing/contacts": {
       "get": {
-        "description": "Para todos da empresa, também com a conta suspensa (D-A7-41): o Dono e quem tem a cobrança liberada (o Dono primeiro, até 20), para a tela de quem não vê a cobrança (\"Fale com um deles\"), e as marcas com a conta suspensa no 30º dia de atraso, com o dia em que a suspensão começou (\"Quem resolve\"). Com a função `cobranca` desligada, `enabled` é `false`, e as duas listas vêm vazias.",
+        "description": "Para todos da empresa, também com a conta suspensa (D-A7-41, D-A7-42): o Dono e quem tem a cobrança liberada (o Dono primeiro, até 20), para a tela de quem não vê a cobrança (\"Fale com um deles\"); as marcas com a conta suspensa no 30º dia de atraso, com o dia em que a suspensão começou (\"Quem resolve\"), e se todas as marcas vivas estão suspensas; e as marcas em atraso para a faixa no alto das telas (D-A7-15): quem paga (`cobranca.pagar`) vê desde o 1º dia, com o valor e a fatura; o resto da equipe, só a partir do 10º dia, sem os dois. Com a função `cobranca` desligada, `enabled` é `false`, as listas vêm vazias e `all_suspended` é `false`.",
         "operationId": "CobrancaController_contatos",
         "parameters": [],
         "responses": {
@@ -87683,12 +87683,89 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "all_suspended": {
+                      "type": "boolean"
+                    },
+                    "overdue": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "brand_id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "brand_name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "maxLength": 60,
+                            "pattern": "^[a-z0-9_]+$"
+                          },
+                          "plan_name": {
+                            "type": "string"
+                          },
+                          "due_date": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "days": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "actions_stop_on": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "suspends_on": {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          "amount_cents": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "pattern": "^\\d+$"
+                          },
+                          "invoice_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          }
+                        },
+                        "required": [
+                          "brand_id",
+                          "brand_name",
+                          "status",
+                          "plan_name",
+                          "due_date",
+                          "days",
+                          "actions_stop_on",
+                          "suspends_on",
+                          "amount_cents",
+                          "invoice_id"
+                        ],
+                        "additionalProperties": false
+                      }
                     }
                   },
                   "required": [
                     "enabled",
                     "items",
-                    "suspended"
+                    "suspended",
+                    "all_suspended",
+                    "overdue"
                   ],
                   "additionalProperties": false
                 }
@@ -87765,7 +87842,7 @@
             "liame_sessao": []
           }
         ],
-        "summary": "Quem cuida da cobrança",
+        "summary": "Quem cuida da cobrança e a situação dela",
         "tags": [
           "cobranca"
         ]

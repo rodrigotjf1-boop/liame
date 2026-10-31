@@ -67,9 +67,9 @@ export class CobrancaController {
   @Permissao('empresa.ver')
   @AbertaNaSuspensao()
   @ApiOperation({
-    summary: 'Quem cuida da cobrança',
+    summary: 'Quem cuida da cobrança e a situação dela',
     description:
-      'Para todos da empresa, também com a conta suspensa (D-A7-41): o Dono e quem tem a cobrança liberada (o Dono primeiro, até 20), para a tela de quem não vê a cobrança ("Fale com um deles"), e as marcas com a conta suspensa no 30º dia de atraso, com o dia em que a suspensão começou ("Quem resolve"). Com a função `cobranca` desligada, `enabled` é `false`, e as duas listas vêm vazias.',
+      'Para todos da empresa, também com a conta suspensa (D-A7-41, D-A7-42): o Dono e quem tem a cobrança liberada (o Dono primeiro, até 20), para a tela de quem não vê a cobrança ("Fale com um deles"); as marcas com a conta suspensa no 30º dia de atraso, com o dia em que a suspensão começou ("Quem resolve"), e se todas as marcas vivas estão suspensas; e as marcas em atraso para a faixa no alto das telas (D-A7-15): quem paga (`cobranca.pagar`) vê desde o 1º dia, com o valor e a fatura; o resto da equipe, só a partir do 10º dia, sem os dois. Com a função `cobranca` desligada, `enabled` é `false`, as listas vêm vazias e `all_suspended` é `false`.',
   })
   @ApiOkResponse({ standardSchema: BillingContactsResponse })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })

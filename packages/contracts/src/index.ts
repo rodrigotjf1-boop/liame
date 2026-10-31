@@ -452,6 +452,7 @@ export {
   BillingContactsResponse,
   BillingInvoice,
   BillingMethod,
+  BillingOverdue,
   BillingPlan,
   BillingPixResponse,
   BillingPlansResponse,
