@@ -655,7 +655,12 @@ A W2a está completa no código e desligada. Falta a chave da conta de testes do
 - **a rotina** (`worker/avisos-de-atraso.service.ts`, de 30 em 30 minutos, em páginas por todas as assinaturas em atraso): uma entrega por fatura, dia e pessoa (`billing_notice`), reservada antes do envio; a que falhou tenta de novo até 3 vezes, e a reservada por uma volta que caiu volta depois de 15 minutos; a linha guarda a situação, as tentativas e o tipo do erro, sem o endereço nem o texto;
 - **testes:** `test/aviso-de-atraso.spec.ts` (os dias e o texto de cada aviso, também no mês curto) e `test/db/aviso-de-atraso.spec.ts` (com o relógio: nada no vencimento; o 1º dia a quem paga, com a marca, o valor e o link; nada em dobro; o 7º com a falha que tenta de novo; o 10º; a entrega reservada que volta; o 30º; pagou, nada mais; a função desligada; as restrições da tabela, V119), rodados duas vezes.
 
-Falta da W3: a suspensão no 30º dia, quando só o Dono entra, para pagar ou exportar os dados (parte 3, D-A7-6).
+**W3, parte 3: a conta suspensa no 30º dia, quando só o Dono entra (31/10/2026; sem migration; a função `cobranca` segue desligada), com a decisão técnica D-A7-40:**
+- **a sessão** (`auth/session.service.ts`) lê, na mesma consulta de cada pedido, as marcas da empresa com a assinatura suspensa e se todas as marcas vivas estão (`suspendedBrands`, `allBrandsSuspended`);
+- **a guarda** (`auth/access.guard.ts`): com a função ligada, quem não é o Dono recebe 403 `marca-suspensa` na rota da marca suspensa (a marca na query, no corpo ou no caminho) e, com todas as marcas suspensas, em toda rota da empresa; o Dono lê e exporta, e muda só o que leva `@DuranteSuspensao()`: a cobrança, encerrar e reativar a conta, a parada e desligar ou ligar um funcionário (o freio nunca trava); com a função desligada, nada trava; pagou, tudo volta na hora;
+- **testes:** `test/db/suspensao.spec.ts` (com o relógio: no 10º dia todos entram; no 30º, o Gestor e o Administrador com a cobrança liberada recebem 403 na marca e na empresa, e ver quem sou continua; o Dono lê, exporta e paga, não cria nem arquiva marca nem conversa com a LIA, e aciona a parada; a outra marca segue; arquivada a outra, a empresa inteira fica suspensa; a função desligada; pagou, volta na hora), rodado duas vezes, com os testes da sessão, do acesso, dos níveis, do encerramento, da cobrança e da parada.
+
+Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (cancelada, desistência) e, com a conta suspensa, o expurgo dos dados 30 dias depois da suspensão, com o certificado ao Dono (Termos 11.2; o expurgo da marca arquivada e o da empresa encerrada já existem).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

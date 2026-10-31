@@ -37,3 +37,10 @@ export const Auth = createParamDecorator((_: unknown, ctx: ExecutionContext): Au
 /** Rota que muda dado e continua valendo com a empresa em encerramento (exportar, reativar; ADR-014). */
 export const DURING_CLOSURE_KEY = 'liame:durante-encerramento';
 export const DuranteEncerramento = () => SetMetadata(DURING_CLOSURE_KEY, true);
+
+/**
+ * Rota que muda dado e continua valendo para o Dono com a marca suspensa no 30º dia de atraso (pagar, cancelar, desistir,
+ * encerrar ou reativar a conta; `plano-a7.md` D-A7-40). Quem decide se o pedido vale é o serviço da rota.
+ */
+export const DURING_SUSPENSION_KEY = 'liame:durante-suspensao';
+export const DuranteSuspensao = () => SetMetadata(DURING_SUSPENSION_KEY, true);

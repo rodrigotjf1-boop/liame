@@ -27,7 +27,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
-import { Auth, Permissao } from '../auth/access.js';
+import { Auth, DuranteSuspensao, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { SemTransacao } from '../context/sem-transacao.js';
 import { ACAO_ASSINAR, ACAO_CANCELAR, ACAO_DESISTIR, ACAO_MANTER, ACAO_TROCAR_PLANO, CobrancaService, RECURSO } from './cobranca.service.js';
@@ -43,6 +43,9 @@ const PEDE_O_CODIGO =
 
 @ApiTags('cobranca')
 @ApiCookieAuth('liame_sessao')
+// Com a marca suspensa no 30º dia de atraso, o Dono ainda paga, cancela e desiste por aqui (D-A7-40); o serviço decide
+// se cada pedido vale na situação da assinatura.
+@DuranteSuspensao()
 @Controller('billing')
 export class CobrancaController {
   constructor(private readonly cobranca: CobrancaService) {}

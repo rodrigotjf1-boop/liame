@@ -1,16 +1,39 @@
 import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { ModuleRef, Reflector } from '@nestjs/core';
 import { APP_CONFIG, type AppConfig } from '../config.js';
+import type { AuthContext } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
-import { ACCESS_KEY, type Access, DURING_CLOSURE_KEY, type RequestWithAuth } from './access.js';
+import { FlagService } from '../flags/flag.service.js';
+import { ACCESS_KEY, type Access, DURING_CLOSURE_KEY, DURING_SUSPENSION_KEY, type RequestWithAuth } from './access.js';
 import { MFA_REQUIRED } from './permissions.js';
 import { readCookie, SESSION_COOKIE, SessionService } from './session.service.js';
 
 const MUTATIONS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+/** A função da cobrança (`FLAG_COBRANCA` de `cobranca/assinatura.ts`): desligada, a suspensão não trava ninguém. */
+const FLAG_DA_COBRANCA = 'cobranca';
+/** A marca no caminho: `/v1/brands/<id>/...` (arquivar, reativar). */
+const MARCA_NO_CAMINHO = /\/brands\/([0-9a-f-]{36})(?:[/?#]|$)/i;
 
 interface GuardRequest extends RequestWithAuth {
   method: string;
+  url?: string;
   headers: Record<string, string | string[] | undefined>;
+  query?: Record<string, unknown>;
+  body?: unknown;
+}
+
+/** As marcas que o pedido nomeia: `brand_id` na query ou no corpo, e a marca no caminho. */
+function marcasDoPedido(req: GuardRequest): string[] {
+  const out: string[] = [];
+  const add = (v: unknown) => {
+    if (typeof v === 'string') out.push(v.toLowerCase());
+    else if (Array.isArray(v)) for (const x of v) if (typeof x === 'string') out.push(x.toLowerCase());
+  };
+  add(req.query?.brand_id);
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) add((req.body as Record<string, unknown>).brand_id);
+  const caminho = req.url ? MARCA_NO_CAMINHO.exec(req.url) : null;
+  if (caminho) add(caminho[1]);
+  return out;
 }
 
 /**
@@ -23,6 +46,7 @@ export class AccessGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly sessions: SessionService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly modules: ModuleRef,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -68,8 +92,54 @@ export class AccessGuard implements CanActivate {
       if (closing && MUTATIONS.has(req.method.toUpperCase()) && !allowed) {
         throw new AppProblem(403, 'empresa-em-encerramento', 'Conta em encerramento', 'A conta está encerrando: dá para ver, exportar os dados e reativar, mas não mudar nada.');
       }
+      // A marca suspensa no 30º dia de atraso (Termos 10.4; D-A7-6, D-A7-40): só o Dono entra, para pagar ou exportar.
+      if (await this.marcaSuspensa(req, auth)) {
+        if (auth.roleKey !== 'dono') {
+          throw new AppProblem(
+            403,
+            'marca-suspensa',
+            'Conta suspensa',
+            'A conta desta marca está suspensa por uma mensalidade em aberto: só o Dono entra, para pagar ou exportar os dados. Pagou, a equipe entra de novo na hora.',
+          );
+        }
+        const pagar = this.reflector.getAllAndOverride<boolean | undefined>(DURING_SUSPENSION_KEY, [ctx.getHandler(), ctx.getClass()]);
+        if (MUTATIONS.has(req.method.toUpperCase()) && !pagar) {
+          throw new AppProblem(
+            403,
+            'marca-suspensa',
+            'Conta suspensa',
+            'A conta desta marca está suspensa por uma mensalidade em aberto: dá para pagar e exportar os dados, mas não mudar nada. Pagou, tudo volta na hora.',
+          );
+        }
+      }
     }
     return true;
+  }
+
+  /**
+   * O pedido é de uma marca suspensa: a marca que ele nomeia está suspensa, ou todas as marcas vivas da empresa estão
+   * (aí vale para toda rota da empresa). Só com a função `cobranca` ligada: desligada, a situação gravada não trava
+   * ninguém. A função só é lida quando há marca suspensa (o caso raro); o resto do pedido não paga nada a mais.
+   */
+  private async marcaSuspensa(req: GuardRequest, auth: AuthContext): Promise<boolean> {
+    if (!auth.tenantId || auth.suspendedBrands.size === 0) return false;
+    const alvo = auth.allBrandsSuspended ? [...auth.suspendedBrands] : marcasDoPedido(req).filter((b) => auth.suspendedBrands.has(b));
+    if (!alvo.length) return false;
+    const flags = this.flags();
+    if (!flags) return false;
+    for (const brandId of alvo) {
+      if (await flags.isEnabled(FLAG_DA_COBRANCA, flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId }))) return true;
+    }
+    return false;
+  }
+
+  /** As funções ficam no módulo do app, não no de autenticação: lidas pelo contêiner inteiro (como o `setup.ts` faz). */
+  private flags(): FlagService | null {
+    try {
+      return this.modules.get(FlagService, { strict: false });
+    } catch {
+      return null;
+    }
   }
 
   /** Mutação vinda de navegador precisa vir de uma origem conhecida (defesa contra CSRF, além do SameSite). */

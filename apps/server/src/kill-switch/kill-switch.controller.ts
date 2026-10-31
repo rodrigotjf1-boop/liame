@@ -12,13 +12,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
-import { Auth, Permissao } from '../auth/access.js';
+import { Auth, DuranteSuspensao, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { KillSwitchService } from './kill-switch.service.js';
 
 // Botão de parada da empresa (ADR-007): trava a execução na hora, da empresa inteira a uma ferramenta.
 @ApiTags('kill-switch')
 @ApiCookieAuth('liame_sessao')
+// O freio nunca trava: com a marca suspensa no 30º dia de atraso, o Dono ainda aciona e retoma as paradas dele
+// (D-A7-40). A parada da cobrança segue sem sair por uma pessoa (409 `parada-da-cobranca`, D-A7-38).
+@DuranteSuspensao()
 @Controller('kill-switches')
 export class KillSwitchController {
   constructor(private readonly switches: KillSwitchService) {}

@@ -15,6 +15,13 @@ export interface AuthContext {
   permissions: ReadonlySet<string>;
   /** Situação da empresa ativa: em encerramento (`suspensa`), só leitura, exportar e reativar (ADR-014). */
   tenantStatus: 'ativa' | 'suspensa' | 'encerrada' | null;
+  /**
+   * Marcas da empresa ativa com a assinatura suspensa (30º dia de atraso; `plano-a7.md` D-A7-40): nelas, só o Dono
+   * entra, para pagar ou exportar os dados. Não confundir com `tenantStatus = 'suspensa'` (a empresa em encerramento).
+   */
+  suspendedBrands: ReadonlySet<string>;
+  /** Todas as marcas vivas da empresa ativa estão suspensas: a conta inteira fica suspensa (D-A7-40). */
+  allBrandsSuspended: boolean;
   mfaVerifiedAt: Date | null;
   /** A pessoa tem app autenticador ativo. */
   mfaConfigured: boolean;

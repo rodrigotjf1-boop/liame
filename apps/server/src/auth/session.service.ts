@@ -56,11 +56,19 @@ export class SessionService {
         billing_access: boolean | null;
         permissions: string[] | null;
         tenant_status: 'ativa' | 'suspensa' | 'encerrada' | null;
+        suspended_brands: string[] | null;
+        all_brands_suspended: boolean;
       }>(sql`
         select s.id as session_id, u.id as user_id, u.email, u.name, s.mfa_verified_at, s.mfa_method, s.last_seen_at,
                m.tenant_id, m.role_key, m.last_seen_at as member_seen_at, m.billing_access, p.permissions, o.status as tenant_status,
                exists (select 1 from liame.secret x
-                        where x.owner_user_id = u.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured
+                        where x.owner_user_id = u.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured,
+               susp.brands as suspended_brands,
+               -- A conta inteira suspensa: há marca suspensa e nenhuma marca viva (não arquivada) fora dela (D-A7-40).
+               (susp.brands is not null and not exists (
+                  select 1 from liame.brand b
+                   where b.tenant_id = m.tenant_id and b.archived_at is null
+                     and not exists (select 1 from liame.subscription x where x.brand_id = b.id and x.status = 'suspensa'))) as all_brands_suspended
           from liame.session s
           join liame.app_user u on u.id = s.user_id
           left join liame.membership m
@@ -74,6 +82,12 @@ export class SessionService {
                and rp.tenant_id is not distinct from (select t.tenant_id from liame.role_permission t
                                                         where t.tenant_id = m.tenant_id and t.role_key = m.role_key limit 1)
           ) p on m.id is not null
+          -- As marcas com a assinatura suspensa (30º dia de atraso): só o Dono entra nelas (D-A7-40).
+          left join lateral (
+            select array_agg(sub.brand_id::text) as brands
+              from liame.subscription sub
+             where sub.tenant_id = m.tenant_id and sub.status = 'suspensa'
+          ) susp on m.id is not null
           left join liame.organization o on o.id = m.tenant_id
          where s.token_hash = ${hashToken(token)}
            and s.revoked_at is null
@@ -103,6 +117,8 @@ export class SessionService {
         roleKey: row.role_key,
         permissions,
         tenantStatus: row.tenant_status,
+        suspendedBrands: new Set(row.suspended_brands ?? []),
+        allBrandsSuspended: row.all_brands_suspended === true,
         mfaVerifiedAt: row.mfa_verified_at ? new Date(row.mfa_verified_at) : null,
         mfaConfigured: row.mfa_configured,
         mfaMethod: row.mfa_method,
