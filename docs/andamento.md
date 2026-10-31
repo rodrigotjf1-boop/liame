@@ -672,7 +672,13 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **o que mudou do P26** está no changelog de `decisoes-design.md` (31/10/2026): fica de fora o que ainda não tem código (o cartão, o Pix Automático, as notas, o e-mail com o QR Code, a faixa nas outras telas, o que acontece com os dados depois), e entram a assinatura esperando o primeiro pagamento, a que terminou e a fatura do mês seguinte já aberta;
 - **testes:** `test/cobranca.spec.ts` (web: cada situação da API vira o momento da tela; as frases de cada uma, sem o que não tem código; as faturas e as fases; os cartões) e o roteiro no navegador (`scratchpad/w5p2-cenarios.mjs`, motor `vgt-cabeca.mjs`): as 13 situações de 375 a 1440 px nos dois temas, o assinar com o PIX até o pagamento chegar, o PIX aberto sem nada para o lado, exportar os dados e o erro com "Tentar de novo".
 
-Falta, fora da W5: o e-mail da cobrança do mês com o QR Code, cinco dias antes do vencimento (D-A7-17; o Asaas tem as notificações desligadas, D-A7-31, e o Liame ainda não manda esse e-mail).
+**W5, parte 3: mudar o contrato na tela (31/10/2026; web; sem migration; a função `cobranca` segue desligada):**
+- **trocar de plano** (o Dono, com a assinatura em dia): os planos para escolher e a conta de hoje pela mesma fórmula do servidor (V74); subir cria a diferença e abre o PIX dela, e o plano novo vale quando ela é paga; descer vale no período seguinte; **cancelar** (no rodapé, o Dono, em dia): termina no fim do período pago; **manter** a cancelada, sem o código; **desistir** na primeira contratação, dentro dos 7 dias: a devolução do que foi pago e a confirmação na hora (`components/cobranca/dialogos-do-contrato.tsx`, `dialogo-com-codigo.tsx`);
+- o código do app nas três que mudam o contrato (D-A7-14): o vazio é recusado na tela, e o errado volta da API com o campo limpo e o foco nele;
+- **o que mudou do P26** está no changelog de `decisoes-design.md` (31/10/2026);
+- **testes:** em `test/cobranca.spec.ts`, a diferença com os casos do teste do servidor, a conta da troca, quem desiste e quem mantém, a soma da devolução e a diferença em aberto; o roteiro no navegador (`scratchpad/w5p3-cenarios.mjs`): subir (a conta, o pedido e o PIX da diferença), descer, o código vazio e o errado, cancelar, manter, desistir e o Administrador que vê sem mudar o contrato, de 375 a 1440 px nos dois temas.
+
+Falta, fora da W5: o e-mail da cobrança do mês com o QR Code, cinco dias antes do vencimento (D-A7-17; o Asaas tem as notificações desligadas, D-A7-31, e o Liame ainda não manda esse e-mail); e, na desistência, o protocolo e o e-mail da confirmação (D-A7-19; o Decreto 7.962/2013, art. 5º, pede a confirmação imediata: hoje ela aparece só na tela).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

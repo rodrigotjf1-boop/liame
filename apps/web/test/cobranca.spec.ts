@@ -4,7 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { CartaoFases, CartaoFaturas, CartaoSituacao, PlanosParaAssinar } from '@/components/cobranca/cartoes';
 import {
+  contaDaTroca,
   diasEntre,
+  diferencaDoPlano,
   emAberto,
   fases,
   funcionariosDo,
@@ -16,6 +18,7 @@ import {
   somarDias,
   textoDoFim,
   ultimaPaga,
+  valorDaDesistencia,
 } from '@/components/cobranca/textos';
 
 // A7 · W5, parte 2 (P26): os textos de Plano e cobrança tirados da resposta da API, situação por situação, e os cartões.
@@ -166,6 +169,50 @@ describe('Plano e cobrança: o que a situação diz (P26, só o que o servidor f
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'desistencia' }), [{ ...devolvendo, status: 'devolvida' }])).toContain('voltaram para a conta que pagou o PIX');
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'nao_paga' }), [])).toBe('O pedido de assinatura terminou em 25/10: a primeira mensalidade não foi paga em 7 dias.');
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'cancelada' }), [])).toBe('A assinatura terminou em 25/10, depois do cancelamento.');
+  });
+});
+
+describe('Plano e cobrança: mudar o contrato (W5, parte 3)', () => {
+  it('a diferença da troca é a MESMA conta do servidor (V74): os casos de `cobranca-vida.spec.ts`', () => {
+    expect(diferencaDoPlano(24_900, 44_900, 30, 31)).toBe(19_355);
+    expect(diferencaDoPlano(24_900, 44_900, 31, 31)).toBe(20_000);
+    expect(diferencaDoPlano(24_900, 44_900, 1, 30)).toBe(667);
+    expect(diferencaDoPlano(24_900, 44_900, 0, 31)).toBe(0);
+    expect(diferencaDoPlano(24_900, 44_900, 40, 31)).toBe(20_000);
+    expect(diferencaDoPlano(44_900, 24_900, 30, 31)).toBe(0);
+  });
+
+  it('a conta da troca pelos dias do servidor: de hoje ao fim do período, sobre o período inteiro', () => {
+    // O período de 22/10 a 22/11 (31 dias); hoje, 23/10: faltam 30, R$ 193,55 (o exemplo do P26).
+    const s = assinatura();
+    expect(contaDaTroca(s, ESSENCIAL, '2026-10-23')).toEqual({ tipo: 'igual' });
+    expect(contaDaTroca(s, COMPLETO, '2026-10-23')).toEqual({ tipo: 'sobe', hojeCentavos: 19_355, faltam: 30, fim: '2026-11-22', novo: COMPLETO });
+    expect(reaisDeCentavos('19355')).toMatch(/^R\$\s193,55$/);
+    // Descer: nada hoje, vale no período seguinte.
+    expect(contaDaTroca(assinatura({ plan: COMPLETO }), ESSENCIAL, '2026-10-23')).toEqual({ tipo: 'desce', fim: '2026-11-22', atual: COMPLETO, novo: ESSENCIAL });
+  });
+
+  it('desistir é do Dono na primeira contratação, manter é do Dono na cancelada, e a devolução soma o que foi pago', () => {
+    const primeira = resposta({ subscription: assinatura({ withdraw_until: '2026-10-29' }), today: '2026-10-25', invoices: [PAGA_OUT] });
+    expect(situacao('primeira', primeira, { aberta: null, paga: PAGA_OUT, souDono: true }).desistir).toBe(true);
+    expect(situacao('primeira', primeira, { aberta: null, paga: PAGA_OUT, souDono: false }).desistir).toBe(false);
+    expect(situacao('primeira', resposta({ ...primeira, can_manage: false }), { aberta: null, paga: PAGA_OUT, souDono: true }).desistir).toBe(false);
+    const cancelada = resposta({ subscription: assinatura({ cancel_at_period_end: true }) });
+    expect(situacao('cancelada', cancelada, { aberta: null, paga: PAGA_OUT, souDono: true }).manter).toBe(true);
+    expect(situacao('cancelada', cancelada, { aberta: null, paga: PAGA_OUT, souDono: false }).manter).toBe(false);
+    expect(situacao('em-dia', resposta(), { aberta: null, paga: PAGA_OUT, souDono: true })).toMatchObject({ desistir: false, manter: false });
+    // A devolução: as pagas sem pedido (a mesma escolha do servidor); sem nenhuma, o preço do plano.
+    const diferenca = fatura({ id: '01a40000-0000-7000-8000-000000000f09', kind: 'diferenca', status: 'paga', amount_cents: '19355', paid_at: '2026-10-23T15:00:00.000Z' });
+    expect(valorDaDesistencia([PAGA_OUT, diferenca], '24900')).toBe('44255');
+    expect(valorDaDesistencia([{ ...PAGA_OUT, refund_requested_at: '2026-10-25T15:00:00.000Z' }], '24900')).toBe('24900');
+    expect(valorDaDesistencia([], '24900')).toBe('24900');
+  });
+
+  it('em dia com a diferença da troca em aberto: o plano novo vale quando ela for paga', () => {
+    const diferenca = fatura({ kind: 'diferenca', plan_key: 'completo', plan_name: 'Completo', amount_cents: '19355', due_date: '2026-10-23', period_start: '2026-10-23' });
+    const s = situacao('em-dia', resposta({ today: '2026-10-23', invoices: [diferenca, PAGA_OUT] }), { aberta: diferenca, paga: PAGA_OUT, souDono: true });
+    expect(s.frase).toMatch(/A diferença para o Completo, de R\$\s193,55, está em aberto: o Completo vale quando ela for paga\.$/);
+    expect(s.pagar).toBe(true);
   });
 });
 

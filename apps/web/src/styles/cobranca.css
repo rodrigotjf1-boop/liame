@@ -97,6 +97,20 @@
 .resumo-banco dt { color: var(--text-muted); }
 .resumo-banco dd { margin: 0; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
 
+/* mudar o contrato (W5, parte 3): trocar de plano, cancelar e desistir, com o código do app (D-A7-14) */
+label.plano-op { cursor: pointer; }
+label.plano-op:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.plano-op-cab input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--link); }
+/* bloco comum (não grade): o texto e o negrito correm na mesma linha */
+.conta-hoje { display: block; padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); line-height: 1.6; }
+.conta-hoje b { font-weight: 600; }
+.codigo-app .input { max-width: 11em; font-family: var(--font-mono); letter-spacing: .18em; }
+.lista-dlg { display: grid; gap: 6px; padding-left: 1.2em; list-style: disc; font-size: var(--text-sm); color: var(--text-muted); }
+.protocolo { display: grid; gap: var(--sp-2); padding: var(--sp-4); border-radius: var(--radius-lg); background: var(--success-soft); font-size: var(--text-sm); outline: none; }
+.protocolo b { font-weight: 600; }
+.cob-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); padding-top: var(--sp-5); border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-muted); }
+.cob-rodape p { flex: 1 1 260px; max-width: 64ch; }
+
 /* quem não vê a cobrança */
 .quem-cuida { display: grid; gap: var(--sp-2); justify-items: center; padding-bottom: var(--sp-5); font-size: var(--text-sm); }
 .quem-cuida li { display: inline-flex; align-items: center; gap: var(--sp-2); }
