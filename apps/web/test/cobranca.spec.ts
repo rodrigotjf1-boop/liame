@@ -297,6 +297,8 @@ describe('Plano e cobrança: as faturas e as fases', () => {
     const semAtraso = fases('em-dia', assinatura());
     expect(semAtraso.map((f) => f.quando)).toEqual(['No vencimento', '1º dia de atraso', '10º dia', '30º dia']);
     expect(semAtraso.every((f) => f.dia === null && !f.agora)).toBe(true);
+    // O e-mail com o código do PIX existe desde a D-A7-44 (`worker/cobrancas-do-mes.service.ts`).
+    expect(semAtraso[0]!.oQue).toBe('A fatura vence. No PIX, ela aparece aqui cinco dias antes, com o QR Code, e o código vai por e-mail a quem paga.');
     const dez = fases('atraso-10', assinatura({ status: 'acoes_paradas', overdue: atraso(11) }));
     expect(dez.map((f) => f.dia)).toEqual(['2026-11-22', '2026-11-23', '2026-12-02', '2026-12-22']);
     expect(dez.map((f) => f.agora)).toEqual([false, false, true, false]);

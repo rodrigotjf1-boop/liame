@@ -690,7 +690,11 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **o e-mail** vai a quem desistiu, só texto, depois de a transação gravar: a data e a hora no calendário da empresa, o protocolo, quanto volta e por onde, e o link de Plano e cobrança; a tela mostra a confirmação na hora, com o protocolo, e a assinatura que terminou na desistência segue mostrando o protocolo;
 - **testes:** `test/confirmacao-da-desistencia.spec.ts` (o protocolo e a virada do ano; o texto do e-mail no fuso da empresa, com o espaço comum no "R$"; o cartão e o nada a devolver); em `test/db/cobranca.spec.ts`, o mesmo protocolo na resposta, na tela, na auditoria e no e-mail ao Dono; em `apps/web/test/cobranca.spec.ts`, o protocolo na assinatura que terminou.
 
-Falta, fora da W5: o e-mail da cobrança do mês com o QR Code, cinco dias antes do vencimento (D-A7-17; o Asaas tem as notificações desligadas, D-A7-31, e o Liame ainda não manda esse e-mail).
+**A cobrança do mês por e-mail, com o PIX (31/10/2026; servidor e web; migration 0096; a função `cobranca` segue desligada), com a decisão técnica D-A7-44:**
+- **a rotina** (`worker/cobrancas-do-mes.service.ts`, a cada 30 minutos, em páginas por todas as assinaturas): a mensalidade do período seguinte, no PIX, que já tem a cobrança no Asaas e vence em até 5 dias vai por e-mail a quem paga, com o código do PIX para copiar e colar e o link de Plano e cobrança (`cobranca/cobranca-do-mes.ts`); uma vez por fatura e pessoa, na tabela dos avisos do atraso com o dia 0 (`billing_notice`; a 0096 só acrescenta o dia 0 à regra da coluna);
+- **fica de fora:** a primeira mensalidade, a assinatura em atraso (os avisos do atraso cuidam dela) e a função desligada; sem a chave do Asaas, ou com ele fora do ar, ninguém é reservado;
+- **a tela** diz, na forma de pagamento, nas fases e ao assinar, que o código do PIX vai por e-mail a quem paga;
+- **testes:** `test/cobranca-do-mes.spec.ts` (o texto do e-mail, com o espaço comum no "R$"); `test/db/cobranca-do-mes.spec.ts` (contra um Asaas local: nada antes de a fatura nascer nem antes da cobrança existir no Asaas; o e-mail ao Dono e ao Administrador com a cobrança liberada, com o código do PIX; nada em dobro, sem ler o Asaas de novo; paga, nada mais; o Asaas fora do ar não reserva ninguém; a falha do envio tenta de novo; a função desligada segura o envio; a primeira mensalidade fora; e a regra do dia na tabela, V119); em `apps/web/test/cobranca.spec.ts`, a frase das fases.
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

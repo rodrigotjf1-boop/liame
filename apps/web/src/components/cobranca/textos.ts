@@ -383,7 +383,7 @@ export function fases(m: Momento, s: BrandSubscription | null): Fase[] {
   const od = s?.overdue ?? null;
   const agora = m === 'atraso-1' ? 1 : m === 'atraso-10' ? 2 : m === 'atraso-30' ? 3 : -1;
   const linhas: Array<[string, string | null, string]> = [
-    ['No vencimento', od?.due_date ?? null, 'A fatura vence. No PIX, ela aparece aqui cinco dias antes, com o QR Code.'],
+    ['No vencimento', od?.due_date ?? null, 'A fatura vence. No PIX, ela aparece aqui cinco dias antes, com o QR Code, e o código vai por e-mail a quem paga.'],
     ['1º dia de atraso', od ? somarDias(od.due_date, 1) : null, 'Quem paga recebe um aviso por e-mail e no alto das telas.'],
     ['10º dia', od?.actions_stop_on ?? null, 'Os funcionários de IA param. Ver e ler continuam, e nenhum anúncio é pausado pelo Liame.'],
     ['30º dia', od?.suspends_on ?? null, 'A conta é suspensa: só o Dono entra, para pagar ou exportar os dados.'],
