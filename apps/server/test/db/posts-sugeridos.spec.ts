@@ -291,7 +291,8 @@ describe.skipIf(!hasDb)('os posts do Social media (A6 · Z6, os posts, parte 2)'
     await abrir(tarde.e);
     const amanha = new Date(Date.now() + 86_400_000);
     expect((await rodar(tarde.e, amanha)).map((x) => x.feito)).toEqual([{ status: 'descartada', motivo: 'dia_passou' }]);
-  });
+    // Sete empresas inteiras (cadastro, código do app, Fotos): ~25 s sozinho; na suíte cheia, passou dos 60 s padrão (ERR-191).
+  }, 120_000);
 
   it('a resposta fora do formato (para o gateway, nenhum modelo respondeu) conta tentativa e volta em 15 e em 30 minutos; na terceira, falha de vez', async () => {
     const { e } = await empresa('Brasa Fora Do Formato');
