@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { AvisoDaCobranca } from '@/components/cobranca/aviso-no-shell';
 import { ConversaProvider, ID_DO_BOTAO_DA_LIA, ID_DO_PAINEL, useConversa } from '@/components/conversa/contexto';
 import { PainelDaLia } from '@/components/conversa/painel';
 import { IconeLia, Simbolo } from '@/components/marca/logo';
@@ -172,8 +173,11 @@ function Estrutura({ children }: { children: ReactNode }) {
           </header>
           <main id="conteudo" className="conteudo" tabIndex={-1}>
             <div className="pagina">
-              {empresa || pessoal ? (
+              {pessoal ? (
                 children
+              ) : empresa ? (
+                // O atraso da cobrança (W5, parte 4): a faixa no alto das telas da empresa e a conta suspensa.
+                <AvisoDaCobranca>{children}</AvisoDaCobranca>
               ) : (
                 <Estado icone="lock" titulo="Você ainda não tem acesso a uma empresa">
                   Quando alguém convidar você, o convite chega por e-mail e a empresa aparece aqui.

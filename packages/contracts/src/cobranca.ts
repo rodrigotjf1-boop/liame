@@ -126,9 +126,31 @@ export const BillingContact = z.strictObject({
 export type BillingContact = z.infer<typeof BillingContact>;
 
 /**
- * Quem cuida da cobrança e as marcas com a conta suspensa (A7 · W5; D-A7-40, D-A7-41), para todos da empresa: é o que
- * a tela mostra a quem não vê a cobrança ("Fale com um deles") e a quem não é o Dono com a conta suspensa ("Quem
- * resolve"). Com a função `cobranca` desligada, `enabled` é `false`, e as duas listas vêm vazias.
+ * Uma marca com mensalidade em atraso, para a faixa no alto das telas (D-A7-15). Quem paga a vê desde o 1º dia, com o
+ * valor e a fatura para pagar; o resto da equipe, só a partir do 10º dia (as ações paradas), sem o valor nem a fatura.
+ */
+export const BillingOverdue = z.strictObject({
+  brand_id: z.uuid(),
+  brand_name: z.string(),
+  /** `em_atraso`, `acoes_paradas` ou `suspensa`. */
+  status: Slug,
+  plan_name: z.string(),
+  /** O vencimento da mensalidade mais antiga em aberto, os dias de atraso e os próximos passos (Termos 10.4). */
+  due_date: Dia,
+  days: z.int().min(1),
+  actions_stop_on: Dia,
+  suspends_on: Dia,
+  /** Só para quem paga: o valor e a fatura em aberto (o PIX dela abre da faixa). */
+  amount_cents: Centavos.nullable(),
+  invoice_id: z.uuid().nullable(),
+});
+export type BillingOverdue = z.infer<typeof BillingOverdue>;
+
+/**
+ * Quem cuida da cobrança e a situação dela para todos da empresa (A7 · W5; D-A7-15, D-A7-40, D-A7-41, D-A7-42): é o
+ * que a tela mostra a quem não vê a cobrança ("Fale com um deles"), a faixa do atraso no alto das telas e a tela da
+ * conta suspensa para quem não é o Dono ("Quem resolve"). Com a função `cobranca` desligada, `enabled` é `false`, as
+ * listas vêm vazias e `all_suspended` é `false`.
  */
 export const BillingContactsResponse = z.strictObject({
   enabled: z.boolean(),
@@ -136,6 +158,10 @@ export const BillingContactsResponse = z.strictObject({
   items: z.array(BillingContact),
   /** As marcas da empresa com a conta suspensa (30º dia de atraso) e o dia em que a suspensão começou. */
   suspended: z.array(z.strictObject({ brand_id: z.uuid(), brand_name: z.string(), since: Dia })),
+  /** Todas as marcas vivas da empresa estão suspensas: quem não é o Dono não entra em nada da empresa (D-A7-40). */
+  all_suspended: z.boolean(),
+  /** As marcas em atraso que a pessoa pode ver na faixa (D-A7-15), a mais atrasada primeiro. */
+  overdue: z.array(BillingOverdue),
 });
 export type BillingContactsResponse = z.infer<typeof BillingContactsResponse>;
 

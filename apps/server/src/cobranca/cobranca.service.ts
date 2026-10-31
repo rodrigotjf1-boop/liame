@@ -34,7 +34,7 @@ import {
   planosOferecidos,
   trocarPlano,
 } from './assinatura.js';
-import { passosDoAtraso } from './vida.js';
+import { diaNoFuso, diasEntre, passosDoAtraso } from './vida.js';
 
 // Plano e cobrança (A7, W1; protótipo P26, aprovado em 22/10/2026; `plano-a7.md` D-A7-13 a D-A7-26): os planos, a
 // assinatura de cada marca e as mudanças do contrato. Ver é do Dono e do Administrador com a cobrança liberada; mudar o
@@ -122,14 +122,16 @@ export class CobrancaService {
   }
 
   /**
-   * Quem cuida da cobrança e as marcas com a conta suspensa (A7 · W5; D-A7-41), para todos da empresa. Quem cuida: quem
-   * tem `cobranca.ver` pelo papel (o conjunto da empresa, se ela tiver um; senão, o padrão) ou pela cobrança liberada,
-   * com o vínculo ativo e a conta viva, pelo mesmo critério de `pessoa-pode.ts`. A suspensão vale com a função ligada
-   * para a marca, como na guarda (D-A7-40), e começa no 30º dia da mensalidade mais antiga em aberto (D-A7-22).
+   * Quem cuida da cobrança e a situação dela, para todos da empresa (A7 · W5; D-A7-15, D-A7-41, D-A7-42). Quem cuida:
+   * quem tem `cobranca.ver` pelo papel (o conjunto da empresa, se ela tiver um; senão, o padrão) ou pela cobrança
+   * liberada, com o vínculo ativo e a conta viva, pelo mesmo critério de `pessoa-pode.ts`. O atraso e a suspensão valem
+   * com a função ligada para a marca, como na guarda (D-A7-40), e contam da mensalidade mais antiga em aberto, no
+   * calendário da empresa (D-A7-22). Na faixa (D-A7-15), quem paga vê o atraso desde o 1º dia, com o valor e a fatura;
+   * o resto da equipe, só a partir do 10º dia, sem os dois.
    */
   async contatos(auth: AuthContext): Promise<BillingContactsResponse> {
     const quem = quemPede(auth);
-    if (!(await this.ligada(quem))) return { enabled: false, items: [], suspended: [] };
+    if (!(await this.ligada(quem))) return { enabled: false, items: [], suspended: [], all_suspended: false, overdue: [] };
     const tx = currentTx();
     const pessoas = await tx.execute<{ name: string; role_key: string }>(sql`
       select u.name, m.role_key
@@ -144,19 +146,52 @@ export class CobrancaService {
               or (m.billing_access and m.role_key = ${NIVEL_DA_COBRANCA_LIBERADA}))
        order by (m.role_key = 'dono') desc, u.name, u.id
        limit 20`);
-    const marcas = await tx.execute<{ brand_id: string; brand_name: string; venc: string | null }>(sql`
-      select s.brand_id, b.name as brand_name,
-             (select min(f.due_date)::text from liame.billing_invoice f
-               where f.subscription_id = s.id and f.kind = 'mensalidade' and f.status = 'aberta') as venc
-        from liame.subscription s join liame.brand b on b.id = s.brand_id
-       where s.tenant_id = ${quem.tenantId} and s.status = 'suspensa' and b.archived_at is null
+    // As marcas em atraso, com a mensalidade em aberto mais antiga (o vencimento, a fatura e o valor) e o fuso da empresa.
+    const marcas = await tx.execute<{ brand_id: string; brand_name: string; status: string; plan_name: string; venc: string | null; fatura: string | null; valor: string | null; fuso: string }>(sql`
+      select s.brand_id, b.name as brand_name, s.status, p.name as plan_name, f.due_date::text as venc, f.id as fatura,
+             f.amount_cents::text as valor, o.timezone as fuso
+        from liame.subscription s
+        join liame.brand b on b.id = s.brand_id
+        join liame.billing_plan p on p.id = s.plan_id
+        join liame.organization o on o.id = s.tenant_id
+        left join lateral (
+          select i.id, i.due_date, i.amount_cents from liame.billing_invoice i
+           where i.subscription_id = s.id and i.kind = 'mensalidade' and i.status = 'aberta'
+           order by i.due_date, i.id limit 1
+        ) f on true
+       where s.tenant_id = ${quem.tenantId} and s.status in ('em_atraso', 'acoes_paradas', 'suspensa') and b.archived_at is null
        order by b.name, s.brand_id`);
+    const paga = auth.permissions.has('cobranca.pagar');
     const suspended: BillingContactsResponse['suspended'] = [];
+    const overdue: BillingContactsResponse['overdue'] = [];
     for (const m of marcas.rows) {
       if (!m.venc || !(await this.ligada(quem, m.brand_id))) continue;
-      suspended.push({ brand_id: m.brand_id, brand_name: m.brand_name, since: passosDoAtraso(m.venc).suspendeEm });
+      const passos = passosDoAtraso(m.venc);
+      if (m.status === 'suspensa') suspended.push({ brand_id: m.brand_id, brand_name: m.brand_name, since: passos.suspendeEm });
+      // Quem não paga só vê da parada em diante (D-A7-15): antes disso, o atraso é assunto de quem paga.
+      if (!paga && m.status === 'em_atraso') continue;
+      overdue.push({
+        brand_id: m.brand_id,
+        brand_name: m.brand_name,
+        status: m.status,
+        plan_name: m.plan_name,
+        due_date: m.venc,
+        days: Math.max(1, diasEntre(m.venc, diaNoFuso(new Date(), m.fuso))),
+        actions_stop_on: passos.acoesParamEm,
+        suspends_on: passos.suspendeEm,
+        amount_cents: paga ? m.valor : null,
+        invoice_id: paga ? m.fatura : null,
+      });
     }
-    return { enabled: true, items: pessoas.rows.map((p) => ({ name: p.name, role: p.role_key })), suspended };
+    overdue.sort((a, b) => b.days - a.days || a.brand_name.localeCompare(b.brand_name));
+    return {
+      enabled: true,
+      items: pessoas.rows.map((p) => ({ name: p.name, role: p.role_key })),
+      suspended,
+      // A conta inteira suspensa é a da sessão (as marcas vivas todas suspensas), com a função ligada (D-A7-40).
+      all_suspended: auth.allBrandsSuspended && suspended.length > 0,
+      overdue,
+    };
   }
 
   async daMarca(auth: AuthContext, brandId: string): Promise<BillingResponse> {

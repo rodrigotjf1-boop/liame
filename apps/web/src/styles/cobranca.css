@@ -111,6 +111,10 @@ label.plano-op:has(input:checked) { border-color: var(--foco); background: var(-
 .cob-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); padding-top: var(--sp-5); border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-muted); }
 .cob-rodape p { flex: 1 1 260px; max-width: 64ch; }
 
+/* a faixa do atraso no alto das telas (W5, parte 4; D-A7-15): a faixa já tem a margem de baixo */
+.cob-faixa { outline: none; }
+.cob-faixa-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
 /* quem não vê a cobrança */
 .quem-cuida { display: grid; gap: var(--sp-2); justify-items: center; padding-bottom: var(--sp-5); font-size: var(--text-sm); }
 .quem-cuida li { display: inline-flex; align-items: center; gap: var(--sp-2); }

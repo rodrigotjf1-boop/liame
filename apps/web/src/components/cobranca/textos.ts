@@ -1,11 +1,11 @@
-import type { BillingInvoice, BillingPlan, BillingResponse, BrandSubscription } from '@liame/contracts';
+import type { BillingInvoice, BillingOverdue, BillingPlan, BillingResponse, BrandSubscription } from '@liame/contracts';
 import { dataDe, diaMesDe, ehMembro, FICHAS, mesDe } from '@/components/equipe/textos';
 import { reaisDeMicros } from '@/lib/formato';
 
 // Plano e cobrança (A7 · W5, parte 2; protótipo P26, aprovado em 22/10/2026). Os textos da tela, tirados da resposta da
 // API: cada frase diz só o que o servidor faz hoje (V39). Ficam de fora, até o código que as sustenta existir: o cartão
-// (W2b), o Pix Automático, as notas fiscais (W4), o e-mail com o QR Code do mês, a faixa no alto das telas (W5, parte 4)
-// e o que acontece com os dados depois da suspensão (W3, parte 4).
+// (W2b), o Pix Automático, as notas fiscais (W4), o e-mail com o QR Code do mês e o que acontece com os dados depois da
+// suspensão (W3, parte 4). A faixa no alto das telas entrou com a W5, parte 4 (`aviso-no-shell.tsx`).
 
 /** O momento da assinatura, como o P26 desenha a tela (D-A7-22: os dias contam da mensalidade mais antiga em aberto). */
 export type Momento = 'desligada' | 'sem' | 'terminou' | 'aguardando' | 'em-dia' | 'primeira' | 'cancelada' | 'atraso-1' | 'atraso-10' | 'atraso-30';
@@ -142,6 +142,71 @@ export function contaDaTroca(s: BrandSubscription, novo: BillingPlan, hoje: stri
     return { tipo: 'sobe', hojeCentavos: diferencaDoPlano(atual, preco, faltam, diasEntre(inicio, fim)), faltam, fim, novo };
   }
   return { tipo: 'desce', fim, atual: s.plan, novo };
+}
+
+/** "Rodrigo (Dono) ou Ana Lima (Administrador, com a cobrança liberada)", para "Quem resolve" (P26). */
+export function quemResolve(contatos: Array<{ name: string; role: string }>): string {
+  const nomes = contatos.map((c) => `${c.name} (${c.role === 'dono' ? 'Dono' : 'Administrador, com a cobrança liberada'})`);
+  if (!nomes.length) return 'o Dono da conta';
+  return nomes.length === 1 ? nomes[0]! : `${nomes.slice(0, -1).join(', ')} ou ${nomes[nomes.length - 1]}`;
+}
+
+/** A faixa do atraso no alto das telas (D-A7-15; P26), para a marca mais atrasada que a pessoa pode ver. */
+export type TextoDaFaixa = { tipo: 'atencao' | 'perigo'; titulo: string; texto: string; pagar: boolean };
+
+export function faixaDoAtraso(o: BillingOverdue, quem: { paga: boolean; souDono: boolean; resolve: string }): TextoDaFaixa | null {
+  const mes = mesDe(o.due_date);
+  const valor = o.amount_cents ? ` (${reaisDeCentavos(o.amount_cents)})` : '';
+  const podePagar = quem.paga && Boolean(o.invoice_id);
+  if (o.status === 'em_atraso') {
+    if (!quem.paga) return null;
+    return {
+      tipo: 'atencao',
+      titulo: `A mensalidade de ${mes} da ${o.brand_name}${valor} venceu em ${diaMesDe(o.due_date)}`,
+      texto: `Pague até ${diaMesDe(somarDias(o.actions_stop_on, -1))} para os funcionários de IA continuarem trabalhando.`,
+      pagar: podePagar,
+    };
+  }
+  if (o.status === 'acoes_paradas') {
+    return {
+      tipo: 'perigo',
+      titulo: `Os funcionários de IA da ${o.brand_name} estão parados desde ${diaMesDe(o.actions_stop_on)}`,
+      texto: quem.paga
+        ? `Falta pagar a mensalidade de ${mes}${valor}. Você continua vendo tudo. Em ${diaMesDe(o.suspends_on)}, a conta é suspensa.`
+        : `Há uma mensalidade em aberto. Quem resolve: ${quem.resolve}. Você continua vendo tudo.`,
+      pagar: podePagar,
+    };
+  }
+  if (o.status === 'suspensa') {
+    return quem.souDono
+      ? { tipo: 'perigo', titulo: `A conta da ${o.brand_name} está suspensa desde ${diaMesDe(o.suspends_on)}`, texto: 'Só você entra, para pagar ou exportar os dados.', pagar: podePagar }
+      : {
+          tipo: 'perigo',
+          titulo: `A conta da ${o.brand_name} está suspensa desde ${diaMesDe(o.suspends_on)}`,
+          texto: `Por uma mensalidade em aberto, só o Dono entra nela. Quem resolve: ${quem.resolve}.`,
+          pagar: false,
+        };
+  }
+  return null;
+}
+
+/** A fatura em aberto da faixa, como o PIX a recebe (o que a faixa sabe dela: a mensalidade, o plano, o vencimento). */
+export function faturaDaFaixa(o: BillingOverdue): BillingInvoice | null {
+  if (!o.invoice_id || !o.amount_cents) return null;
+  return {
+    id: o.invoice_id,
+    kind: 'mensalidade',
+    plan_key: '',
+    plan_name: o.plan_name,
+    period_start: null,
+    period_end: null,
+    due_date: o.due_date,
+    amount_cents: o.amount_cents,
+    status: 'aberta',
+    paid_at: null,
+    paid_method: null,
+    refund_requested_at: null,
+  };
 }
 
 /** Um degrau do atraso: o dia e o que acontece nele. */
@@ -316,7 +381,7 @@ export function fases(m: Momento, s: BrandSubscription | null): Fase[] {
   const agora = m === 'atraso-1' ? 1 : m === 'atraso-10' ? 2 : m === 'atraso-30' ? 3 : -1;
   const linhas: Array<[string, string | null, string]> = [
     ['No vencimento', od?.due_date ?? null, 'A fatura vence. No PIX, ela aparece aqui cinco dias antes, com o QR Code.'],
-    ['1º dia de atraso', od ? somarDias(od.due_date, 1) : null, 'Quem paga recebe um aviso por e-mail.'],
+    ['1º dia de atraso', od ? somarDias(od.due_date, 1) : null, 'Quem paga recebe um aviso por e-mail e no alto das telas.'],
     ['10º dia', od?.actions_stop_on ?? null, 'Os funcionários de IA param. Ver e ler continuam, e nenhum anúncio é pausado pelo Liame.'],
     ['30º dia', od?.suspends_on ?? null, 'A conta é suspensa: só o Dono entra, para pagar ou exportar os dados.'],
   ];

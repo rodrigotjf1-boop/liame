@@ -678,6 +678,13 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **o que mudou do P26** está no changelog de `decisoes-design.md` (31/10/2026);
 - **testes:** em `test/cobranca.spec.ts`, a diferença com os casos do teste do servidor, a conta da troca, quem desiste e quem mantém, a soma da devolução e a diferença em aberto; o roteiro no navegador (`scratchpad/w5p3-cenarios.mjs`): subir (a conta, o pedido e o PIX da diferença), descer, o código vazio e o errado, cancelar, manter, desistir e o Administrador que vê sem mudar o contrato, de 375 a 1440 px nos dois temas.
 
+**W5, parte 4: a faixa do atraso e a conta suspensa nas outras telas (31/10/2026; servidor e web; sem migration; a função `cobranca` segue desligada), com a decisão técnica D-A7-42:**
+- **o servidor:** `GET /v1/billing/contacts` traz também as marcas em atraso (a mais atrasada primeiro) e se todas as marcas vivas estão suspensas; quem paga vê desde o 1º dia, com o valor e a fatura; o resto da equipe, só a partir do 10º dia, sem os dois (D-A7-15);
+- **a tela:** o shell (`components/cobranca/aviso-no-shell.tsx`) mostra a faixa no alto de toda tela da empresa (menos Plano e cobrança e as telas pessoais), com "Pagar com PIX" (o PIX abre da faixa) e "Ver a cobrança" para quem paga, e "Quem resolve" para a equipe; com todas as marcas suspensas, quem não é o Dono vê a tela da conta suspensa no lugar do conteúdo; a situação é lida ao abrir e ao trocar de empresa, e de novo a cada tela só enquanto há atraso; a fase do 1º dia em Plano e cobrança passa a dizer "e no alto das telas";
+- **testes:** em `test/db/suspensao.spec.ts`, a faixa do 1º dia só para quem paga (com o valor e a fatura), a do 10º para a equipe sem o valor, a conta inteira suspensa e a outra marca viva; em `apps/web/test/cobranca.spec.ts`, os textos da faixa por nível e "quem resolve"; o roteiro no navegador (`scratchpad/w5p4-cenarios.mjs`): o 1º dia com o PIX da faixa, a equipe no 1º e no 10º dia, a conta suspensa para a equipe e para o Dono, a tela pessoal que segue e Plano e cobrança sem a faixa, de 375 a 1440 px nos dois temas.
+
+**A W5 está completa no código** (sem o cartão, que é a W2b, e sem as notas, que são a W4).
+
 Falta, fora da W5: o e-mail da cobrança do mês com o QR Code, cinco dias antes do vencimento (D-A7-17; o Asaas tem as notificações desligadas, D-A7-31, e o Liame ainda não manda esse e-mail); e, na desistência, o protocolo e o e-mail da confirmação (D-A7-19; o Decreto 7.962/2013, art. 5º, pede a confirmação imediata: hoje ela aparece só na tela).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
