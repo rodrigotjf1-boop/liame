@@ -97,5 +97,12 @@ peerDependencyRules:
 # Correção de segurança que a dependência direta ainda não trouxe (24/10/2026): o @nestjs/platform-express 12 fixa o
 # multer em 2.4.0, com o aviso GHSA-q7qp-rjg7-q26m, corrigido na 2.5.0 (publicada em 22/10/2026). Quando o Nest passar a
 # pedir uma versão corrigida, a linha sai (security-model.md §9).
+# O mesmo para o minimatch (30/10/2026): o aviso GHSA-g3hv-75wg-m249 (média; padrão de glob que faz o pré-processamento
+# crescer em CPU e memória) vale para toda versão antes da 11.0.1, sem correção nas linhas 5 e 10. Só as ferramentas de
+# desenvolvimento o usam: o @nestjs/cli 12 (fixa a 10.2.6; importa `{ minimatch }`, que a 11 mantém) e o
+# @redocly/openapi-core 1.34 do gerador do SDK (fixa a 5.1.9; chama o pacote como função só ao baixar um arquivo por
+# endereço com cabeçalhos, o que o SDK, gerado do `docs/openapi.json` local, não faz). Quando os dois pedirem uma versão
+# corrigida, a linha sai.
 overrides:
   multer: 2.5.0
+  minimatch: 11.0.3
