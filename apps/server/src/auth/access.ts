@@ -44,3 +44,10 @@ export const DuranteEncerramento = () => SetMetadata(DURING_CLOSURE_KEY, true);
  */
 export const DURING_SUSPENSION_KEY = 'liame:durante-suspensao';
 export const DuranteSuspensao = () => SetMetadata(DURING_SUSPENSION_KEY, true);
+
+/**
+ * Rota de leitura que todos da empresa usam com a marca suspensa: a que diz quem resolve e desde quando (P26; D-A7-41).
+ * A suspensão não a trava para ninguém; a permissão dela continua valendo.
+ */
+export const OPEN_DURING_SUSPENSION_KEY = 'liame:aberta-na-suspensao';
+export const AbertaNaSuspensao = () => SetMetadata(OPEN_DURING_SUSPENSION_KEY, true);

@@ -99,6 +99,14 @@ describe.skipIf(!hasDb)('A conta suspensa no 30º dia de atraso: só o Dono entr
     expect(await rotinaEm(e, '2026-12-21')).toBe('acoes_paradas');
     expect(codigo(await ler(gestor, daMarca))).toBe(200);
     expect(codigo(await ler(adm, `/v1/billing?brand_id=${e.brandId}`))).toBe(200);
+    // Quem cuida da cobrança (W5, parte 1; D-A7-41): o Dono primeiro e quem tem a cobrança liberada, nunca o Gestor; ainda
+    // sem marca suspensa.
+    const [dono] = await ownerQuery<{ name: string }>(`select name from liame.app_user where id = $1`, [e.userId]);
+    const quemCuida = [
+      { name: dono!.name, role: 'dono' },
+      { name: 'Pessoa administrador', role: 'administrador' },
+    ];
+    expect((await ler(gestor, '/v1/billing/contacts')).body).toEqual({ enabled: true, items: quemCuida, suspended: [] });
 
     // No 30º dia, suspensa: a equipe recebe 403 `marca-suspensa` na marca e, como a empresa só tem esta marca, em toda
     // rota da empresa. Ver quem sou, trocar de empresa e sair continuam (não são da empresa).
@@ -111,6 +119,11 @@ describe.skipIf(!hasDb)('A conta suspensa no 30º dia de atraso: só o Dono entr
     expect(codigo(await ler(gestor, '/v1/brands'))).toBe('marca-suspensa');
     expect(codigo(await ler(adm, `/v1/billing?brand_id=${e.brandId}`))).toBe('marca-suspensa');
     expect(codigo(await ler(gestor, '/v1/me'))).toBe(200);
+    // A rota de quem cuida fica aberta a todos com a conta suspensa: diz quem resolve e desde quando (o 30º dia da
+    // mensalidade de 22/11).
+    const suspensa = { brand_id: e.brandId, brand_name: expect.any(String), since: '2026-12-22' };
+    expect((await ler(gestor, '/v1/billing/contacts')).body).toEqual({ enabled: true, items: quemCuida, suspended: [suspensa] });
+    expect((await ler(adm, '/v1/billing/contacts')).body.suspended).toEqual([suspensa]);
 
     // O Dono lê tudo e exporta os dados; mudar alguma coisa, só na cobrança.
     expect(codigo(await ler(e, daMarca))).toBe(200);
@@ -138,6 +151,7 @@ describe.skipIf(!hasDb)('A conta suspensa no 30º dia de atraso: só o Dono entr
     expect(codigo(await ler(gestor, daMarca))).toBe(200);
     expect(codigo(await ler(gestor, '/v1/organization'))).toBe(200);
     expect(codigo(await ler(adm, `/v1/billing?brand_id=${e.brandId}`))).toBe(200);
+    expect((await ler(gestor, '/v1/billing/contacts')).body.suspended).toEqual([]);
   }, 120_000);
 
   it('a outra marca da empresa segue; arquivada a outra, a empresa inteira fica suspensa; e a função desligada não trava ninguém', async () => {
@@ -170,5 +184,7 @@ describe.skipIf(!hasDb)('A conta suspensa no 30º dia de atraso: só o Dono entr
     await ligarFlagDaEmpresa(api, 'cobranca', e.tenantId, false);
     expect(codigo(await ler(gestor, `/v1/team?brand_id=${e.brandId}`))).toBe(200);
     expect(codigo(await ler(gestor, '/v1/organization'))).toBe(200);
+    // E a rota de quem cuida diz que a função está desligada, sem listas.
+    expect((await ler(gestor, '/v1/billing/contacts')).body).toEqual({ enabled: false, items: [], suspended: [] });
   }, 120_000);
 });

@@ -1,4 +1,5 @@
 import {
+  BillingContactsResponse,
   BillingPixResponse,
   BillingPlansResponse,
   BillingQuery,
@@ -27,7 +28,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Auditar } from '../audit/auditar.js';
-import { Auth, DuranteSuspensao, Permissao } from '../auth/access.js';
+import { AbertaNaSuspensao, Auth, DuranteSuspensao, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { SemTransacao } from '../context/sem-transacao.js';
 import { ACAO_ASSINAR, ACAO_CANCELAR, ACAO_DESISTIR, ACAO_MANTER, ACAO_TROCAR_PLANO, CobrancaService, RECURSO } from './cobranca.service.js';
@@ -60,6 +61,20 @@ export class CobrancaController {
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })
   planos(@Auth() auth: AuthContext): Promise<BillingPlansResponse> {
     return this.cobranca.planos(auth);
+  }
+
+  @Get('contacts')
+  @Permissao('empresa.ver')
+  @AbertaNaSuspensao()
+  @ApiOperation({
+    summary: 'Quem cuida da cobrança',
+    description:
+      'Para todos da empresa, também com a conta suspensa (D-A7-41): o Dono e quem tem a cobrança liberada (o Dono primeiro, até 20), para a tela de quem não vê a cobrança ("Fale com um deles"), e as marcas com a conta suspensa no 30º dia de atraso, com o dia em que a suspensão começou ("Quem resolve"). Com a função `cobranca` desligada, `enabled` é `false`, e as duas listas vêm vazias.',
+  })
+  @ApiOkResponse({ standardSchema: BillingContactsResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  contatos(@Auth() auth: AuthContext): Promise<BillingContactsResponse> {
+    return this.cobranca.contatos(auth);
   }
 
   @Get()
