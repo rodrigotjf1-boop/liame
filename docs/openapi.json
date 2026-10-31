@@ -4001,6 +4001,9 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "by_billing": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -4221,6 +4224,9 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "by_billing": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -61942,6 +61948,9 @@
                             "name"
                           ],
                           "additionalProperties": false
+                        },
+                        "by_billing": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -63516,6 +63525,9 @@
                             "name"
                           ],
                           "additionalProperties": false
+                        },
+                        "by_billing": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -64287,6 +64299,9 @@
                             "name"
                           ],
                           "additionalProperties": false
+                        },
+                        "by_billing": {
+                          "type": "boolean"
                         }
                       },
                       "required": [

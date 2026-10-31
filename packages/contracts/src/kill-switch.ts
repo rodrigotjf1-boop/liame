@@ -18,6 +18,11 @@ export const KillSwitchResponse = z.strictObject({
   reason: z.string(),
   activated_at: z.string(),
   deactivated_at: z.string().nullable(),
+  /**
+   * A parada é da cobrança (A7, W3): as ações da marca param no 10º dia de atraso da mensalidade e voltam sozinhas
+   * quando ela é paga; uma pessoa não a desliga (409 `parada-da-cobranca`).
+   */
+  by_billing: z.boolean().optional(),
 });
 export type KillSwitchResponse = z.infer<typeof KillSwitchResponse>;
 
