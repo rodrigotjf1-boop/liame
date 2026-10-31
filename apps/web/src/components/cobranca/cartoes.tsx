@@ -18,10 +18,14 @@ type AcoesDaSituacao = {
   aoPagar: () => void;
   aoExportar: () => void;
   exportando: boolean;
+  desistirRotulo?: string;
+  aoDesistir?: () => void;
+  aoManter?: () => void;
+  mantendo?: boolean;
 };
 
 export function CartaoSituacao({ s, acoes, idTitulo }: { s: TextoDaSituacao; acoes: AcoesDaSituacao; idTitulo: string }) {
-  const temAcoes = (s.pagar && acoes.pagarRotulo) || s.exportar;
+  const temAcoes = (s.pagar && acoes.pagarRotulo) || s.exportar || (s.desistir && acoes.aoDesistir) || (s.manter && acoes.aoManter);
   return (
     <article className={`card sit${s.tom ? ` sit--${s.tom}` : ''}`} aria-labelledby={idTitulo}>
       <div className="sit-cab">
@@ -73,6 +77,16 @@ export function CartaoSituacao({ s, acoes, idTitulo }: { s: TextoDaSituacao; aco
               {acoes.exportando ? 'Exportando…' : 'Exportar os dados'}
             </button>
           )}
+          {s.manter && acoes.aoManter && (
+            <button className="btn btn--primary" type="button" onClick={acoes.aoManter} disabled={acoes.mantendo} aria-busy={acoes.mantendo}>
+              {acoes.mantendo ? 'Mantendo…' : 'Manter a assinatura'}
+            </button>
+          )}
+          {s.desistir && acoes.aoDesistir && (
+            <button className="btn btn--perigo" type="button" aria-haspopup="dialog" onClick={acoes.aoDesistir}>
+              {acoes.desistirRotulo ?? 'Desistir'}
+            </button>
+          )}
         </div>
       )}
     </article>
@@ -101,11 +115,25 @@ export function Preco({ centavos }: { centavos: string }) {
 }
 
 /** O plano em vigor, com o que muda no período seguinte e quem pode trocar. */
-export function CartaoPlano({ s, momento, souDono, nomeDoDono }: { s: BrandSubscription; momento: Momento; souDono: boolean; nomeDoDono: string | null }) {
+export function CartaoPlano({
+  s,
+  momento,
+  souDono,
+  nomeDoDono,
+  aoTrocar,
+}: {
+  s: BrandSubscription;
+  momento: Momento;
+  souDono: boolean;
+  nomeDoDono: string | null;
+  /** "Trocar de plano": o Dono, com a assinatura em dia (o servidor recusa o resto: D-A7-16). */
+  aoTrocar?: () => void;
+}) {
   let nota: string | null = null;
   if (momento === 'cancelada' || momento === 'aguardando') nota = null;
   else if (emAtraso(momento)) nota = 'Para trocar de plano, pague antes a mensalidade em aberto.';
   else if (!souDono) nota = `Trocar de plano, cancelar e desistir ficam com o Dono${nomeDoDono ? `, ${nomeDoDono}` : ''}.`;
+  const podeTrocar = souDono && aoTrocar && (momento === 'em-dia' || momento === 'primeira');
   return (
     <article className="card" aria-labelledby="cob-plano-t">
       <div className="plano-cab">
@@ -124,7 +152,24 @@ export function CartaoPlano({ s, momento, souDono, nomeDoDono }: { s: BrandSubsc
         </p>
       )}
       {nota && <p className="sit-nota">{nota}</p>}
+      {podeTrocar && (
+        <button className="btn" type="button" aria-haspopup="dialog" onClick={aoTrocar}>
+          Trocar de plano
+        </button>
+      )}
     </article>
+  );
+}
+
+/** Cancelar, no fim da tela, só para o Dono e com a assinatura em dia (P26): vale no fim do período pago. */
+export function RodapeCancelar({ fim, aoCancelar }: { fim: string | null; aoCancelar: () => void }) {
+  return (
+    <div className="cob-rodape">
+      <p>{fim ? `Sem multa. A assinatura termina no fim do período pago, em ${diaMesDe(fim)}.` : 'Sem multa. A assinatura termina no fim do período pago.'}</p>
+      <button className="btn btn--sm btn--perigo" type="button" aria-haspopup="dialog" onClick={aoCancelar}>
+        Cancelar a assinatura
+      </button>
+    </div>
   );
 }
 

@@ -72,6 +72,16 @@ export function ultimaPaga(invoices: BillingInvoice[]): BillingInvoice | null {
   return invoices.filter((f) => f.kind === 'mensalidade' && (f.status === 'paga' || f.status === 'devolvida')).sort((a, b) => b.due_date.localeCompare(a.due_date))[0] ?? null;
 }
 
+/**
+ * Quanto volta na desistência (D-A7-19): o que foi pago na assinatura e ainda não teve a devolução pedida (a mesma
+ * escolha do servidor: as faturas pagas, sem pedido). Sem fatura paga na lista, o preço do plano.
+ */
+export function valorDaDesistencia(invoices: BillingInvoice[], precoDoPlano: string): string {
+  const pagas = invoices.filter((f) => f.status === 'paga' && !f.refund_requested_at);
+  if (!pagas.length) return precoDoPlano;
+  return String(pagas.reduce((soma, f) => soma + BigInt(f.amount_cents), 0n));
+}
+
 /** O dia do pagamento, no calendário de quem vê (o horário do Brasil para as empresas daqui). */
 export function diaDoPagamento(iso: string): string {
   const d = new Date(iso);
@@ -106,6 +116,34 @@ export function diasEntre(de: string, ate: string): number {
   return Math.round((Date.UTC(a2!, m2! - 1, d2!) - Date.UTC(a1!, m1! - 1, d1!)) / 86_400_000);
 }
 
+/**
+ * A diferença de hoje ao subir de plano, em centavos: a MESMA conta do servidor (`cobranca/vida.ts`, D-A7-16; V74): a
+ * diferença de preço na proporção dos dias que faltam no período, arredondada ao centavo. Descer não tem diferença.
+ */
+export function diferencaDoPlano(precoAtual: number, precoNovo: number, diasQueFaltam: number, diasDoPeriodo: number): number {
+  if (precoNovo <= precoAtual || diasQueFaltam <= 0 || diasDoPeriodo <= 0) return 0;
+  return Math.round(((precoNovo - precoAtual) * Math.min(diasQueFaltam, diasDoPeriodo)) / diasDoPeriodo);
+}
+
+/** O que a troca para o plano dado custa hoje e quando vale (P26), pelos mesmos dias que o servidor usa. */
+export type ContaDaTroca =
+  | { tipo: 'igual' }
+  | { tipo: 'sobe'; hojeCentavos: number; faltam: number; fim: string; novo: BillingPlan }
+  | { tipo: 'desce'; fim: string; atual: BillingPlan; novo: BillingPlan };
+
+export function contaDaTroca(s: BrandSubscription, novo: BillingPlan, hoje: string): ContaDaTroca {
+  if (novo.key === s.plan.key) return { tipo: 'igual' };
+  const inicio = s.period_start ?? hoje;
+  const fim = s.period_end ?? hoje;
+  const atual = Number(s.plan.price_cents);
+  const preco = Number(novo.price_cents);
+  if (preco > atual) {
+    const faltam = diasEntre(hoje, fim);
+    return { tipo: 'sobe', hojeCentavos: diferencaDoPlano(atual, preco, faltam, diasEntre(inicio, fim)), faltam, fim, novo };
+  }
+  return { tipo: 'desce', fim, atual: s.plan, novo };
+}
+
 /** Um degrau do atraso: o dia e o que acontece nele. */
 export type Degrau = { dia: string; oQue: string; tom?: 'agora' | 'perigo' };
 
@@ -123,6 +161,10 @@ export interface TextoDaSituacao {
   pagar: boolean;
   /** Mostra o botão de exportar os dados (o Dono com a conta suspensa). */
   exportar: boolean;
+  /** Mostra "Desistir" (o Dono, na primeira contratação, dentro dos 7 dias; D-A7-19). */
+  desistir: boolean;
+  /** Mostra "Manter a assinatura" (o Dono, com a assinatura cancelada no fim do período). */
+  manter: boolean;
 }
 
 export const VOLTA = 'Pagou, tudo volta na hora. Nenhum dado se perde.';
@@ -133,7 +175,8 @@ export const VOLTA = 'Pagou, tudo volta na hora. Nenhum dado se perde.';
  */
 export function situacao(m: Momento, r: BillingResponse, o: { aberta: BillingInvoice | null; paga: BillingInvoice | null; souDono: boolean }): TextoDaSituacao {
   const s = r.subscription as BrandSubscription;
-  const base: TextoDaSituacao = { tom: '', selos: [], titulo: '', frase: '', nota: null, degraus: [], continua: [], pagar: false, exportar: false };
+  const base: TextoDaSituacao = { tom: '', selos: [], titulo: '', frase: '', nota: null, degraus: [], continua: [], pagar: false, exportar: false, desistir: false, manter: false };
+  const mudaContrato = o.souDono && r.can_manage;
   const preco = s ? reaisDeCentavos(s.plan.price_cents) : '';
   const forma = s ? formaDoPagamento(s.method) : '';
   const valorAberto = o.aberta ? reaisDeCentavos(o.aberta.amount_cents) : preco;
@@ -150,7 +193,12 @@ export function situacao(m: Momento, r: BillingResponse, o: { aberta: BillingInv
     case 'em-dia': {
       const pagaTxt = o.paga ? ` · a mensalidade de ${mesDe(o.paga.period_start ?? o.paga.due_date)} foi paga em ${o.paga.paid_at ? diaDoPagamento(o.paga.paid_at) : diaMesDe(o.paga.due_date)}, ${formaDoPagamento(o.paga.paid_method)}` : '';
       const proxima = s.period_end ? `A próxima cobrança é de ${preco} em ${diaMesDe(s.period_end)}, ${forma}.` : `A próxima cobrança é de ${preco}, ${forma}.`;
-      const jaAberta = o.aberta ? ` A fatura de ${mesDe(o.aberta.period_start ?? o.aberta.due_date)} já está aberta: dá para pagar agora.` : '';
+      // A diferença da troca para um plano maior (D-A7-16): o plano novo vale quando ela for paga.
+      const jaAberta = !o.aberta
+        ? ''
+        : o.aberta.kind === 'diferenca'
+          ? ` A diferença para o ${o.aberta.plan_name}, de ${reaisDeCentavos(o.aberta.amount_cents)}, está em aberto: o ${o.aberta.plan_name} vale quando ela for paga.`
+          : ` A fatura de ${mesDe(o.aberta.period_start ?? o.aberta.due_date)} já está aberta: dá para pagar agora.`;
       return {
         ...base,
         selos: [{ texto: 'Em dia', tom: 'concluido' }],
@@ -172,6 +220,8 @@ export function situacao(m: Momento, r: BillingResponse, o: { aberta: BillingInv
         titulo: 'A assinatura começou',
         frase: `A primeira mensalidade, de ${preco}, foi paga${quando ? ` em ${quando}` : ''}, ${o.paga ? formaDoPagamento(o.paga.paid_method) : forma}.${s.period_end ? ` A próxima é em ${diaMesDe(s.period_end)}, ${forma}.` : ''}`,
         nota: o.souDono ? `Até ${ate}, você pode desistir e receber de volta os ${preco}, sem multa.` : `Até ${ate}, o Dono pode desistir e receber de volta os ${preco}.`,
+        desistir: mudaContrato,
+        pagar: Boolean(o.aberta) && r.can_pay,
       };
     }
     case 'cancelada':
@@ -181,6 +231,7 @@ export function situacao(m: Momento, r: BillingResponse, o: { aberta: BillingInv
         titulo: s.period_end ? `A assinatura termina em ${diaMesDe(s.period_end)}` : 'A assinatura foi cancelada',
         frase: s.period_end ? `A assinatura foi cancelada. Até ${diaMesDe(s.period_end)}, tudo funciona como hoje, e a mensalidade seguinte não é cobrada.` : 'A assinatura foi cancelada, e a mensalidade seguinte não é cobrada.',
         nota: o.souDono ? null : 'Só o Dono pode manter a assinatura.',
+        manter: mudaContrato,
       };
     case 'atraso-1': {
       const od = s.overdue;

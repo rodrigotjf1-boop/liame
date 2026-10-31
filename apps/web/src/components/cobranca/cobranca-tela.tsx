@@ -8,10 +8,11 @@ import { Estado } from '@/components/ui/estado';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
-import { CartaoFases, CartaoFaturas, CartaoForma, CartaoPlano, CartaoSituacao, PlanosParaAssinar } from './cartoes';
+import { CartaoFases, CartaoFaturas, CartaoForma, CartaoPlano, CartaoSituacao, PlanosParaAssinar, RodapeCancelar } from './cartoes';
 import { DialogoAssinar } from './dialogo-assinar';
 import { DialogoPix } from './dialogo-pix';
-import { emAberto, fases, momentoDa, reaisDeCentavos, situacao, textoDoFim, ultimaPaga } from './textos';
+import { DialogoCancelar, DialogoDesistir, DialogoTrocarPlano } from './dialogos-do-contrato';
+import { diaMesDe, emAberto, fases, momentoDa, reaisDeCentavos, situacao, textoDoFim, ultimaPaga, valorDaDesistencia } from './textos';
 
 // Plano e cobrança (A7 · W5, parte 2; protótipo P26, aprovado em 22/10/2026; `plano-a7.md` D-A7-13 a D-A7-19, D-A7-41).
 // Para o Dono e o Administrador com a cobrança liberada (`cobranca.ver`): a situação da assinatura da marca, com a ação
@@ -21,7 +22,12 @@ import { emAberto, fases, momentoDa, reaisDeCentavos, situacao, textoDoFim, ulti
 // faixa do atraso nas outras telas e a conta suspensa para a equipe, na parte 4.
 
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: BillingResponse } | { tipo: 'erro'; problema: Problema };
-type Dialogo = { tipo: 'pix'; fatura: BillingInvoice; assinando: boolean } | { tipo: 'assinar'; plano: BillingPlan };
+type Dialogo =
+  | { tipo: 'pix'; fatura: BillingInvoice; assinando: boolean }
+  | { tipo: 'assinar'; plano: BillingPlan }
+  | { tipo: 'trocar' }
+  | { tipo: 'cancelar' }
+  | { tipo: 'desistir' };
 
 /** O nome do arquivo da exportação: "liame-dados-2026-10-31.json". */
 const nomeDaExportacao = (hoje: string) => `liame-dados-${hoje}.json`;
@@ -43,6 +49,7 @@ export function CobrancaTela() {
   const [contatos, setContatos] = useState<BillingContactsResponse | null>(null);
   const [dialogo, setDialogo] = useState<Dialogo | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [mantendo, setMantendo] = useState(false);
   const seq = useRef(0);
 
   const carregarMarcas = useCallback(async () => {
@@ -80,9 +87,9 @@ export function CobrancaTela() {
     );
   }, [marca, podeVer, tentativa]);
 
-  // Os planos só fazem falta sem assinatura viva (para escolher um).
+  // Os planos fazem falta sem assinatura viva (para escolher um) e para trocar de plano.
   const dados = carga.tipo === 'ok' ? carga.dados : null;
-  const precisaDosPlanos = Boolean(dados?.enabled && (!dados.subscription || dados.subscription.status === 'encerrada'));
+  const precisaDosPlanos = Boolean(dados?.enabled && (!dados.subscription || dados.subscription.status === 'encerrada' || dialogo?.tipo === 'trocar'));
   useEffect(() => {
     if (!precisaDosPlanos || planos) return;
     disparar(chamar(() => api.GET('/v1/billing/plans')).then((r) => setPlanos(r.ok ? r.data.items : [])));
@@ -109,6 +116,31 @@ export function CobrancaTela() {
     URL.revokeObjectURL(url);
     avisar('Os dados da empresa foram baixados, em JSON.');
   }
+
+  // Manter a assinatura cancelada (P26): sem o código do app, como pagar; só o Dono (D-A7-13).
+  async function manter() {
+    if (!marca) return;
+    setMantendo(true);
+    const r = await chamar(() => api.POST('/v1/billing/subscription/keep', { body: { brand_id: marca } }));
+    setMantendo(false);
+    if (!r.ok) return avisar(mensagemDe(r.problema), { tipo: 'perigo' });
+    atualizar(r.data);
+    const fim = r.data.subscription?.period_end;
+    avisar(fim ? `Assinatura mantida. A próxima cobrança é em ${diaMesDe(fim)}.` : 'Assinatura mantida.');
+    titulo.current?.focus({ preventScroll: true });
+  }
+
+  // Depois de mudar o contrato: a tela com a resposta; subir de plano deixa a diferença em aberto, e o PIX dela abre.
+  const depoisDeMudar = (anterior: Dialogo['tipo']) => (r: BillingResponse) => {
+    atualizar(r);
+    const diferenca = anterior === 'trocar' ? r.invoices.find((f) => f.kind === 'diferenca' && f.status === 'aberta') : undefined;
+    if (diferenca) setDialogo({ tipo: 'pix', fatura: diferenca, assinando: false });
+    else if (anterior === 'trocar') {
+      const s = r.subscription;
+      avisar(s?.next_plan && s.period_end ? `A partir de ${diaMesDe(s.period_end)}, o plano passa a ser o ${s.next_plan.name}.` : 'Plano trocado.');
+    }
+    else if (anterior === 'cancelar') avisar(r.subscription?.period_end ? `Assinatura cancelada. Ela termina em ${diaMesDe(r.subscription.period_end)}.` : 'Assinatura cancelada.');
+  };
 
   const cabecalho = (
     <div className="view-cab">
@@ -261,17 +293,26 @@ export function CobrancaTela() {
                 aoPagar: () => aberta && setDialogo({ tipo: 'pix', fatura: aberta, assinando: m === 'aguardando' }),
                 aoExportar: () => disparar(exportar(r.today)),
                 exportando,
+                desistirRotulo: `Desistir e receber ${reaisDeCentavos(valorDaDesistencia(r.invoices, s.plan.price_cents))}`,
+                aoDesistir: () => setDialogo({ tipo: 'desistir' }),
+                aoManter: () => disparar(manter()),
+                mantendo,
               }}
             />
           </div>
           <div className="cob-col">
-            <CartaoPlano s={s} momento={m} souDono={souDono} nomeDoDono={dono} />
+            <CartaoPlano s={s} momento={m} souDono={souDono && r.can_manage} nomeDoDono={dono} aoTrocar={() => setDialogo({ tipo: 'trocar' })} />
             <CartaoForma s={s} />
           </div>
           <div className="cob-col">
             <CartaoFaturas invoices={r.invoices} hoje={r.today} />
             <CartaoFases linhas={fases(m, s)} />
           </div>
+          {souDono && r.can_manage && (m === 'em-dia' || m === 'primeira') && (
+            <div className="cob-col cob-col--toda">
+              <RodapeCancelar fim={s.period_end} aoCancelar={() => setDialogo({ tipo: 'cancelar' })} />
+            </div>
+          )}
         </div>
       );
     }
@@ -292,6 +333,36 @@ export function CobrancaTela() {
             const primeira = emAberto(r.invoices);
             setDialogo(primeira ? { tipo: 'pix', fatura: primeira, assinando: true } : null);
           }}
+        />
+      )}
+      {dialogo?.tipo === 'trocar' && marca && dados?.subscription && planos && (
+        <DialogoTrocarPlano
+          brandId={marca}
+          s={dados.subscription}
+          hoje={dados.today}
+          planos={planos}
+          reserva={titulo}
+          aoFechar={() => setDialogo((d) => (d?.tipo === 'trocar' ? null : d))}
+          aoMudar={depoisDeMudar('trocar')}
+        />
+      )}
+      {dialogo?.tipo === 'cancelar' && marca && dados?.subscription && (
+        <DialogoCancelar
+          brandId={marca}
+          s={dados.subscription}
+          reserva={titulo}
+          aoFechar={() => setDialogo((d) => (d?.tipo === 'cancelar' ? null : d))}
+          aoMudar={depoisDeMudar('cancelar')}
+        />
+      )}
+      {dialogo?.tipo === 'desistir' && marca && dados?.subscription && (
+        <DialogoDesistir
+          brandId={marca}
+          s={dados.subscription}
+          valorCentavos={valorDaDesistencia(dados.invoices, dados.subscription.plan.price_cents)}
+          reserva={titulo}
+          aoFechar={() => setDialogo((d) => (d?.tipo === 'desistir' ? null : d))}
+          aoMudar={depoisDeMudar('desistir')}
         />
       )}
       {dialogo?.tipo === 'pix' && marca && (
