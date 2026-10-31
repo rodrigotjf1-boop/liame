@@ -295,7 +295,9 @@ describe.skipIf(!hasDb)('os posts do Social media (A6 · Z6, os posts, parte 2)'
   }, 120_000);
 
   it('a resposta fora do formato (para o gateway, nenhum modelo respondeu) conta tentativa e volta em 15 e em 30 minutos; na terceira, falha de vez', async () => {
-    const { e } = await empresa('Brasa Fora Do Formato');
+    // A vez de depois de amanhã: o relógio do caso anda 47 minutos e, com a vez de amanhã, passaria da meia-noite quando o
+    // teste roda depois das 23h13 (o dia chegaria, e a vez seria descartada; ERR-192).
+    const { e } = await empresa('Brasa Fora Do Formato', { dias: [{ day: diaEmSP(2), item: ITEM }] });
     await abrir(e);
     responder = () => ({ outra: 'coisa' });
     const agora = new Date();
