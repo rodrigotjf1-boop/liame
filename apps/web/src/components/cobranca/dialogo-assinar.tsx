@@ -73,7 +73,7 @@ export function DialogoAssinar({ brandId, plano, reserva, aoFechar, aoAssinar }:
                 <input type="radio" name={`${ids}-forma`} value="pix" defaultChecked disabled={indo} />
                 <span className="opcao-txt">
                   <b>PIX</b>
-                  <span>Pague a primeira mensalidade agora pelo QR Code. A fatura de cada mês aparece aqui cinco dias antes do vencimento.</span>
+                  <span>Pague a primeira mensalidade agora pelo QR Code. A fatura de cada mês aparece aqui cinco dias antes do vencimento, e o código do PIX vai por e-mail a quem paga.</span>
                 </span>
               </label>
             </div>

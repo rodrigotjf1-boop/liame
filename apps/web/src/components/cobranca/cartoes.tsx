@@ -188,7 +188,7 @@ export function CartaoForma({ s }: { s: BrandSubscription }) {
           <span>
             {cartao
               ? 'A cobrança sai no cartão. O número do cartão fica só no meio de pagamento.'
-              : 'A fatura de cada mês aparece aqui cinco dias antes do vencimento, com o QR Code para pagar.'}
+              : 'A fatura de cada mês aparece aqui cinco dias antes do vencimento, com o QR Code para pagar, e o código do PIX vai por e-mail a quem paga.'}
           </span>
         </div>
       </div>
