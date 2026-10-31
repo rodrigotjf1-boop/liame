@@ -214,6 +214,8 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   billing_plan: { class: 'PUBLIC', retention: 'do produto' },
   subscription: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
   billing_invoice: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
+  // O aviso do atraso por e-mail (A7, W3, parte 2, migration 0095): cada entrega a quem paga, sem o endereço nem o texto.
+  billing_notice: { class: 'PERSONAL', retention: 'com a fatura e com a pessoa (some com qualquer uma das duas)' },
   // A empresa como cliente no meio de pagamento (A7, W2a, migration 0081): só o id dela lá (`cus_…`). O nome e o CNPJ
   // que o Asaas guarda são os da empresa, enviados na primeira cobrança.
   billing_customer: { class: 'CONFIDENTIAL', retention: 'com a empresa' },

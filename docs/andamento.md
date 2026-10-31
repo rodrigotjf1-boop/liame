@@ -650,7 +650,12 @@ A W2a está completa no código e desligada. Falta a chave da conta de testes do
 - cada mudança na auditoria da assinatura (`cobranca.parar_acoes`, `cobranca.voltar_acoes`);
 - **testes:** um caso novo em `test/db/cobranca.spec.ts` (do 1º ao 9º dia nada para; no 10º, a parada da marca, sem pessoa, e outra marca segue; a rotina de novo e o 30º dia não abrem outra; a lista, Sua equipe e o 409; a parada de uma pessoa segue com o "retomar"; pagar a mais antiga tira a parada; de novo no 10º, e a assinatura que termina a tira; as restrições novas, V119), rodado duas vezes, com os testes da parada, das ações, de Sua equipe e do ciclo de vida.
 
-Falta da W3: os e-mails do atraso a quem paga, no 1º, no 7º, no 10º e no 30º dia (parte 2, D-A7-15), e a suspensão no 30º dia, quando só o Dono entra, para pagar ou exportar os dados (parte 3, D-A7-6).
+**W3, parte 2: o aviso do atraso por e-mail (30/10/2026; migration 0095; a função `cobranca` segue desligada), com a decisão técnica D-A7-39:**
+- **quando e para quem:** no 1º, no 7º, no 10º e no 30º dia de atraso da mensalidade mais antiga em aberto, um e-mail só texto a quem paga (o Dono e o Administrador com a cobrança liberada; nunca o Administrador sem ela nem o resto da equipe), com as frases do P26 e o link de Plano e cobrança da marca (`cobranca/aviso-de-atraso.ts`); vale o aviso do maior dia já alcançado;
+- **a rotina** (`worker/avisos-de-atraso.service.ts`, de 30 em 30 minutos, em páginas por todas as assinaturas em atraso): uma entrega por fatura, dia e pessoa (`billing_notice`), reservada antes do envio; a que falhou tenta de novo até 3 vezes, e a reservada por uma volta que caiu volta depois de 15 minutos; a linha guarda a situação, as tentativas e o tipo do erro, sem o endereço nem o texto;
+- **testes:** `test/aviso-de-atraso.spec.ts` (os dias e o texto de cada aviso, também no mês curto) e `test/db/aviso-de-atraso.spec.ts` (com o relógio: nada no vencimento; o 1º dia a quem paga, com a marca, o valor e o link; nada em dobro; o 7º com a falha que tenta de novo; o 10º; a entrega reservada que volta; o 30º; pagou, nada mais; a função desligada; as restrições da tabela, V119), rodados duas vezes.
+
+Falta da W3: a suspensão no 30º dia, quando só o Dono entra, para pagar ou exportar os dados (parte 3, D-A7-6).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 
