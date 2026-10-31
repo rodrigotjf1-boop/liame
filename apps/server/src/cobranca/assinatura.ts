@@ -2,6 +2,7 @@ import type { BillingInvoice, BillingPlan, BillingResponse, BrandSubscription } 
 import { type Tx, uuidv7 } from '@liame/database';
 import { sql } from 'drizzle-orm';
 import { writeAudit } from '../audit/audit.js';
+import { protocoloDaDesistencia } from './confirmacao-da-desistencia.js';
 import {
   DIAS_DA_FATURA_ANTES,
   DIAS_PARA_O_PRIMEIRO_PAGAMENTO,
@@ -628,5 +629,6 @@ async function paraATela(tx: Tx, s: LinhaDaAssinatura, hoje: string): Promise<Br
     withdraw_until: viva && s.withdraw_until && diasEntre(hoje, s.withdraw_until) >= 0 ? s.withdraw_until : null,
     ended_at: isoOuNulo(s.ended_at),
     end_reason: s.end_reason,
+    withdraw_protocol: s.end_reason === 'desistencia' && s.ended_at ? protocoloDaDesistencia(s.id, new Date(iso(s.ended_at))) : null,
   };
 }

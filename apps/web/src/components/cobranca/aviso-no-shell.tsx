@@ -28,7 +28,11 @@ export function AvisoDaCobranca({ children }: { children: ReactNode }) {
   const reserva = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
   const empresaId = empresa?.id ?? null;
-  const comAtraso = Boolean(situacao && (situacao.overdue.length || situacao.all_suspended));
+  // Tolerante à resposta sem os campos novos (a tela nova pode falar com a API antiga durante um deploy): sem eles, não
+  // há faixa nem conta suspensa, e a tela segue.
+  const atrasos = situacao?.overdue ?? [];
+  const todaSuspensa = situacao?.all_suspended === true;
+  const comAtraso = atrasos.length > 0 || todaSuspensa;
 
   const ler = useCallback(async () => {
     const id = ++seq.current;
@@ -55,8 +59,8 @@ export function AvisoDaCobranca({ children }: { children: ReactNode }) {
 
   // A conta inteira suspensa: quem não é o Dono não entra em nada da empresa (D-A7-40); a tela diz desde quando e quem
   // resolve (P26). Nada foi apagado: o que acontece com os dados depois é a W3, parte 4.
-  if (situacao.all_suspended && !souDono) {
-    const marca = situacao.suspended[0];
+  if (todaSuspensa && !souDono) {
+    const marca = situacao.suspended?.[0];
     return (
       <section aria-labelledby="h-conta-suspensa">
         <div className="card">
@@ -79,7 +83,7 @@ export function AvisoDaCobranca({ children }: { children: ReactNode }) {
   }
 
   const naCobranca = caminho === '/cobranca' || caminho.startsWith('/cobranca/');
-  const primeira = situacao.overdue[0];
+  const primeira = atrasos[0];
   const paga = pode('cobranca.pagar');
   const faixa = primeira && !naCobranca ? faixaDoAtraso(primeira, { paga, souDono, resolve }) : null;
   const fatura = primeira && faixa?.pagar ? faturaDaFaixa(primeira) : null;

@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { NIVEL_DA_COBRANCA_LIBERADA } from '../auth/permissions.js';
 import { FLAG_COBRANCA } from '../cobranca/assinatura.js';
-import { avisoDoDia, type DiaDoAviso, emailDoAviso, TENTATIVAS_DO_AVISO } from '../cobranca/aviso-de-atraso.js';
+import { avisoDoDia, CAMINHO_DA_COBRANCA, type DiaDoAviso, emailDoAviso, TENTATIVAS_DO_AVISO } from '../cobranca/aviso-de-atraso.js';
 import { diaNoFuso, diasEntre } from '../cobranca/vida.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { DATABASE } from '../database/database.module.js';
@@ -11,11 +11,7 @@ import { FlagService } from '../flags/flag.service.js';
 import { Mailer, maskEmail } from '../mail/mailer.js';
 import { type JobScope, tenantFilter } from './outbox-publisher.js';
 
-/**
- * O endereço da tela "Plano e cobrança" no web (a W5 nasce nele; D-A7-39): o link do aviso leva a pessoa a pagar a
- * mensalidade da marca.
- */
-export const CAMINHO_DA_COBRANCA = '/cobranca';
+export { CAMINHO_DA_COBRANCA };
 
 /** A entrega reservada por uma volta que caiu no meio volta a ser tentada depois disto. */
 const RETOMAR_DEPOIS = '15 minutes';

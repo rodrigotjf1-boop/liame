@@ -94,6 +94,11 @@ export const BrandSubscription = z.strictObject({
   ended_at: z.iso.datetime().nullable(),
   /** `cancelada`, `desistencia`, `nao_paga` ou `substituida`. */
   end_reason: Slug.nullable(),
+  /**
+   * O protocolo da desistência em 7 dias ("L-2026-1A2B3C4D"; D-A7-19, D-A7-43), quando a assinatura terminou nela: o
+   * mesmo da auditoria e do e-mail de confirmação. Nulo nos outros casos.
+   */
+  withdraw_protocol: z.string().nullable(),
 });
 export type BrandSubscription = z.infer<typeof BrandSubscription>;
 

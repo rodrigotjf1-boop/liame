@@ -366,7 +366,10 @@ export function textoDoFim(s: BrandSubscription, invoices: BillingInvoice[]): st
     const devolvida = invoices.find((f) => f.status === 'devolvida' || f.refund_requested_at);
     const valor = devolvida ? reaisDeCentavos(devolvida.amount_cents) : reaisDeCentavos(s.plan.price_cents);
     const para = devolvida?.paid_method === 'cartao' ? 'pelo estorno no cartão' : 'para a conta que pagou o PIX';
-    return devolvida?.status === 'devolvida' ? `A assinatura terminou${em}, na desistência. Os ${valor} voltaram ${para}.` : `A assinatura terminou${em}, na desistência. Os ${valor} estão voltando ${para}.`;
+    const protocolo = s.withdraw_protocol ? ` Protocolo: ${s.withdraw_protocol}.` : '';
+    return devolvida?.status === 'devolvida'
+      ? `A assinatura terminou${em}, na desistência. Os ${valor} voltaram ${para}.${protocolo}`
+      : `A assinatura terminou${em}, na desistência. Os ${valor} estão voltando ${para}.${protocolo}`;
   }
   if (s.end_reason === 'nao_paga') return `O pedido de assinatura terminou${em}: a primeira mensalidade não foi paga em 7 dias.`;
   if (s.end_reason === 'cancelada') return `A assinatura terminou${em}, depois do cancelamento.`;

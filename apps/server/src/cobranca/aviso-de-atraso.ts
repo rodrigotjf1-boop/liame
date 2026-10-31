@@ -5,6 +5,12 @@ import { DIA_DA_SUSPENSAO, DIA_DAS_ACOES_PARADAS, diasEntre, passosDoAtraso, som
 // puras: em que dia de atraso cada aviso vai e o texto de cada um, com as frases do protótipo P26 (a faixa do atraso).
 // Vai a quem paga (o Dono e o Administrador com a cobrança liberada), nunca ao resto da equipe.
 
+/**
+ * O endereço da tela "Plano e cobrança" no web (W5; D-A7-39): os e-mails da cobrança (o aviso do atraso, a confirmação
+ * da desistência) levam a pessoa a ela, com a marca (`?marca=…`).
+ */
+export const CAMINHO_DA_COBRANCA = '/cobranca';
+
 /** Os dias de atraso em que o aviso vai (D-A7-15): o 1º, o 7º, o 10º (as ações param) e o 30º (a conta é suspensa). */
 export const DIAS_DO_AVISO = [1, 7, DIA_DAS_ACOES_PARADAS, DIA_DA_SUSPENSAO] as const;
 export type DiaDoAviso = (typeof DIAS_DO_AVISO)[number];
