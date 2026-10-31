@@ -28,6 +28,7 @@ import { AssinaturasLoop } from './assinaturas-loop.js';
 import { AvisosDeAtrasoService } from './avisos-de-atraso.service.js';
 import { AuditAnchorService } from './audit-anchor.service.js';
 import { CobrancasDoMesService } from './cobrancas-do-mes.service.js';
+import { ResumoDasPessoasService } from './resumo-das-pessoas.service.js';
 import { avisoDoAsaas } from './aviso-do-asaas.js';
 import { AvisoNoAsaasLoop } from './aviso-no-asaas-loop.js';
 import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
@@ -222,6 +223,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     AvisosDeAtrasoService,
     // A cobrança do mês por e-mail, com o código do PIX (A7; D-A7-44). Só com a função ligada e o Asaas configurado.
     CobrancasDoMesService,
+    // O resumo da semana do que cada pessoa fez, ao Dono (A7, W8; D-A7-53). Só com a função ligada.
+    ResumoDasPessoasService,
     // O PIX pelo Asaas (A7, W2a): a cobrança de cada fatura que nasce, criada no Asaas. Sem a chave do Asaas, nada roda.
     MeioAsaas,
     CobrancasPixLoop,

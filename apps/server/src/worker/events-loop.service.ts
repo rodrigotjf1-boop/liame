@@ -7,6 +7,7 @@ import { AvisosDeAtrasoService } from './avisos-de-atraso.service.js';
 import { CobrancasDoMesService } from './cobrancas-do-mes.service.js';
 import { CobrancasPixLoop } from './cobrancas-pix-loop.js';
 import { CobrancasReleituraLoop } from './cobrancas-releitura-loop.js';
+import { ResumoDasPessoasService } from './resumo-das-pessoas.service.js';
 import { ComparacaoDmsIdLoop } from './comparacao-dms-id.js';
 import { ConexaoProcessor } from './conexao-processor.js';
 import { ConferenciaDoGasto } from './conferencia-do-gasto.js';
@@ -78,6 +79,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly assinaturas: AssinaturasLoop,
     private readonly avisosDeAtraso: AvisosDeAtrasoService,
     private readonly cobrancasDoMes: CobrancasDoMesService,
+    private readonly resumoDasPessoas: ResumoDasPessoasService,
     private readonly cobrancasPix: CobrancasPixLoop,
     private readonly releitura: CobrancasReleituraLoop,
     private readonly avisoNoAsaas: AvisoNoAsaasLoop,
@@ -155,6 +157,9 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // A cobrança do mês por e-mail, com o código do PIX (A7; D-A7-17, D-A7-44): a fatura do período seguinte que já tem a
       // cobrança no Asaas, a quem paga, uma vez por fatura e pessoa; olhada de 30 em 30 minutos.
       this.loop('cobranca-do-mes', 100, 1_800_000, async (n) => (await this.cobrancasDoMes.executarLote(n)).length),
+      // O resumo da semana do que cada pessoa fez na conta, por e-mail ao Dono (A7, W8; ADR-017; D-A7-53): às segundas,
+      // a partir das 8h no fuso da empresa, uma vez por empresa, semana e Dono; olhado de 30 em 30 minutos.
+      this.loop('resumo-das-pessoas', 100, 1_800_000, async (n) => (await this.resumoDasPessoas.executarLote(n)).length),
       // O PIX pelo Asaas (A7, W2a): a fatura que nasce ganha a cobrança no Asaas; a fila é olhada a cada 30 segundos
       // (a primeira mensalidade nasce com a pessoa assinando, e o QR Code também pode ser pedido por ela na hora).
       this.loop('cobrancas-pix', 10, 30_000, async (n) => (await this.cobrancasPix.executarLote(n)).length),
