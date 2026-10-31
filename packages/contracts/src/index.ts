@@ -448,6 +448,8 @@ export {
 } from './posts.js';
 export {
   BILLING_METHODS,
+  BillingContact,
+  BillingContactsResponse,
   BillingInvoice,
   BillingMethod,
   BillingPlan,

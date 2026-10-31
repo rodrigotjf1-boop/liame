@@ -4,7 +4,7 @@ import { APP_CONFIG, type AppConfig } from '../config.js';
 import type { AuthContext } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
-import { ACCESS_KEY, type Access, DURING_CLOSURE_KEY, DURING_SUSPENSION_KEY, type RequestWithAuth } from './access.js';
+import { ACCESS_KEY, type Access, DURING_CLOSURE_KEY, DURING_SUSPENSION_KEY, OPEN_DURING_SUSPENSION_KEY, type RequestWithAuth } from './access.js';
 import { MFA_REQUIRED } from './permissions.js';
 import { readCookie, SESSION_COOKIE, SessionService } from './session.service.js';
 
@@ -93,7 +93,9 @@ export class AccessGuard implements CanActivate {
         throw new AppProblem(403, 'empresa-em-encerramento', 'Conta em encerramento', 'A conta está encerrando: dá para ver, exportar os dados e reativar, mas não mudar nada.');
       }
       // A marca suspensa no 30º dia de atraso (Termos 10.4; D-A7-6, D-A7-40): só o Dono entra, para pagar ou exportar.
-      if (await this.marcaSuspensa(req, auth)) {
+      // A rota que diz quem resolve fica aberta a todos (D-A7-41).
+      const aberta = this.reflector.getAllAndOverride<boolean | undefined>(OPEN_DURING_SUSPENSION_KEY, [ctx.getHandler(), ctx.getClass()]);
+      if (!aberta && (await this.marcaSuspensa(req, auth))) {
         if (auth.roleKey !== 'dono') {
           throw new AppProblem(
             403,

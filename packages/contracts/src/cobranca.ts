@@ -117,6 +117,28 @@ export const BillingResponse = z.strictObject({
 });
 export type BillingResponse = z.infer<typeof BillingResponse>;
 
+/** Uma pessoa que cuida da cobrança da empresa (P26: "A cobrança fica com o Dono"; D-A7-13). */
+export const BillingContact = z.strictObject({
+  name: z.string(),
+  /** O nível dela na empresa: `dono` ou o de quem tem a cobrança liberada (`administrador`). */
+  role: Slug,
+});
+export type BillingContact = z.infer<typeof BillingContact>;
+
+/**
+ * Quem cuida da cobrança e as marcas com a conta suspensa (A7 · W5; D-A7-40, D-A7-41), para todos da empresa: é o que
+ * a tela mostra a quem não vê a cobrança ("Fale com um deles") e a quem não é o Dono com a conta suspensa ("Quem
+ * resolve"). Com a função `cobranca` desligada, `enabled` é `false`, e as duas listas vêm vazias.
+ */
+export const BillingContactsResponse = z.strictObject({
+  enabled: z.boolean(),
+  /** O Dono primeiro; depois, quem tem a cobrança liberada, pelo nome (até 20). */
+  items: z.array(BillingContact),
+  /** As marcas da empresa com a conta suspensa (30º dia de atraso) e o dia em que a suspensão começou. */
+  suspended: z.array(z.strictObject({ brand_id: z.uuid(), brand_name: z.string(), since: Dia })),
+});
+export type BillingContactsResponse = z.infer<typeof BillingContactsResponse>;
+
 export const SubscribeRequest = z.strictObject({
   brand_id: z.uuid(),
   /** A chave de um dos planos oferecidos (`essencial`, `completo`). */

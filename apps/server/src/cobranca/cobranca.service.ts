@@ -1,4 +1,5 @@
 import type {
+  BillingContactsResponse,
   BillingPixResponse,
   BillingPlansResponse,
   BillingResponse,
@@ -12,6 +13,7 @@ import { type Database, withContext } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { MfaService } from '../auth/mfa.service.js';
+import { NIVEL_DA_COBRANCA_LIBERADA } from '../auth/permissions.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
@@ -32,6 +34,7 @@ import {
   planosOferecidos,
   trocarPlano,
 } from './assinatura.js';
+import { passosDoAtraso } from './vida.js';
 
 // Plano e cobrança (A7, W1; protótipo P26, aprovado em 22/10/2026; `plano-a7.md` D-A7-13 a D-A7-26): os planos, a
 // assinatura de cada marca e as mudanças do contrato. Ver é do Dono e do Administrador com a cobrança liberada; mudar o
@@ -116,6 +119,44 @@ export class CobrancaService {
     const quem = quemPede(auth);
     const ligada = await this.ligada(quem);
     return { enabled: ligada, items: ligada ? await planosOferecidos(currentTx()) : [] };
+  }
+
+  /**
+   * Quem cuida da cobrança e as marcas com a conta suspensa (A7 · W5; D-A7-41), para todos da empresa. Quem cuida: quem
+   * tem `cobranca.ver` pelo papel (o conjunto da empresa, se ela tiver um; senão, o padrão) ou pela cobrança liberada,
+   * com o vínculo ativo e a conta viva, pelo mesmo critério de `pessoa-pode.ts`. A suspensão vale com a função ligada
+   * para a marca, como na guarda (D-A7-40), e começa no 30º dia da mensalidade mais antiga em aberto (D-A7-22).
+   */
+  async contatos(auth: AuthContext): Promise<BillingContactsResponse> {
+    const quem = quemPede(auth);
+    if (!(await this.ligada(quem))) return { enabled: false, items: [], suspended: [] };
+    const tx = currentTx();
+    const pessoas = await tx.execute<{ name: string; role_key: string }>(sql`
+      select u.name, m.role_key
+        from liame.membership m
+        join liame.app_user u on u.id = m.user_id and u.disabled_at is null
+       where m.tenant_id = ${quem.tenantId} and m.revoked_at is null and (m.expires_at is null or m.expires_at > now())
+         and (exists (
+                select 1 from liame.role_permission rp
+                 where rp.role_key = m.role_key and rp.permission = 'cobranca.ver'
+                   and rp.tenant_id is not distinct from (select t.tenant_id from liame.role_permission t
+                                                            where t.tenant_id = m.tenant_id and t.role_key = m.role_key limit 1))
+              or (m.billing_access and m.role_key = ${NIVEL_DA_COBRANCA_LIBERADA}))
+       order by (m.role_key = 'dono') desc, u.name, u.id
+       limit 20`);
+    const marcas = await tx.execute<{ brand_id: string; brand_name: string; venc: string | null }>(sql`
+      select s.brand_id, b.name as brand_name,
+             (select min(f.due_date)::text from liame.billing_invoice f
+               where f.subscription_id = s.id and f.kind = 'mensalidade' and f.status = 'aberta') as venc
+        from liame.subscription s join liame.brand b on b.id = s.brand_id
+       where s.tenant_id = ${quem.tenantId} and s.status = 'suspensa' and b.archived_at is null
+       order by b.name, s.brand_id`);
+    const suspended: BillingContactsResponse['suspended'] = [];
+    for (const m of marcas.rows) {
+      if (!m.venc || !(await this.ligada(quem, m.brand_id))) continue;
+      suspended.push({ brand_id: m.brand_id, brand_name: m.brand_name, since: passosDoAtraso(m.venc).suspendeEm });
+    }
+    return { enabled: true, items: pessoas.rows.map((p) => ({ name: p.name, role: p.role_key })), suspended };
   }
 
   async daMarca(auth: AuthContext, brandId: string): Promise<BillingResponse> {
