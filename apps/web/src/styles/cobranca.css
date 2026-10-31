@@ -1,0 +1,107 @@
+/* ===== A7 · W5 · Plano e cobrança (protótipo P26, aprovado em 22/10/2026) ===== */
+/* Uma coluna no estreito; duas a partir de 980 px de conteúdo: a situação no alto; o plano e a forma à esquerda; as
+   faturas e as fases à direita. Tudo pelos tokens da base. O QR Code do PIX tem nomes próprios (`.pix-qr`): o `.qr`
+   e o `.qr-caixa` são da tela de entrada (o app autenticador). */
+.cob-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+@container pagina (min-width: 980px) { .cob-grade { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+.cob-col { display: grid; gap: var(--sp-5); min-width: 0; }
+.cob-col--toda { grid-column: 1 / -1; }
+.cob-grade .card > .btn { align-self: flex-start; }
+
+/* a situação: o que está acontecendo e a ação do momento */
+.sit { gap: var(--sp-4); }
+.sit--atencao { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.sit--perigo { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.sit-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.sit-titulo { font-size: var(--text-lg); outline: none; }
+.sit-frase { max-width: 62ch; font-size: var(--text-md); line-height: 1.5; }
+.sit-frase b { font-weight: 600; }
+.sit-nota { max-width: 64ch; font-size: var(--text-sm); color: var(--text-muted); }
+.sit-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.sit-continua { display: grid; gap: 6px; font-size: var(--text-sm); }
+.sit-continua li { display: flex; gap: var(--sp-2); }
+.sit-continua .ic { margin-top: 2px; }
+.sit-continua .sim { color: var(--success); }
+.sit-continua .nao { color: var(--danger); }
+
+/* os degraus do atraso, com as datas reais */
+.degraus { display: grid; gap: var(--sp-2); }
+.degrau { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: var(--sp-3); align-items: baseline; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.degrau dt { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.degrau dd { margin: 0; min-width: 0; color: var(--text-muted); }
+.degrau--agora { background: var(--warning-soft); }
+.degrau--agora dd { color: var(--text); }
+.degrau--perigo { background: var(--danger-soft); }
+.degrau--perigo dd { color: var(--text); }
+
+/* o plano */
+.plano-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.plano-nome { font-size: var(--text-lg); }
+.plano-preco { font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plano-preco small { font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 400; color: var(--text-muted); }
+.funcs { display: flex; flex-wrap: wrap; gap: 6px; }
+.func { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: var(--radius-full); background: var(--bg-subtle); font-size: var(--text-xs); font-weight: 500; }
+
+/* a forma de pagamento */
+.forma { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
+.forma-ic { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--primary-soft); color: var(--link); }
+.forma-txt { display: grid; gap: 4px; min-width: 0; }
+.forma-txt b { font-weight: 600; }
+.forma-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+
+/* as faturas */
+.faturas { display: grid; }
+.fatura { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.fatura:first-child { padding-top: 0; }
+.fatura:last-child { border-bottom: 0; padding-bottom: 0; }
+.fat-mes { font-weight: 600; }
+.fat-det { font-size: var(--text-sm); color: var(--text-muted); }
+.fat-lado { display: grid; justify-items: end; align-content: start; gap: 4px; }
+.fat-valor { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* o que acontece em cada fase do atraso */
+.fases { display: grid; }
+.fase { display: grid; grid-template-columns: 8em minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.fase:first-child { padding-top: 0; }
+.fase:last-child { border-bottom: 0; padding-bottom: 0; }
+.fase-quando { font-weight: 600; }
+.fase-quando .num { display: block; font-size: var(--text-xs); font-weight: 500; color: var(--text-muted); }
+.fase-oque { min-width: 0; color: var(--text-muted); }
+.fase--agora .fase-quando { color: var(--warning); }
+.fase--agora .fase-oque { color: var(--text); }
+.fase-volta { font-size: var(--text-sm); font-weight: 600; }
+
+/* os planos para assinar */
+.planos { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+@container pagina (min-width: 720px) { .planos--tela { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plano-op { display: grid; gap: var(--sp-3); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.plano-op-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+/* o nome não encolhe abaixo de 8em: sem espaço, o preço desce para a linha de baixo */
+.plano-op-cab b { flex: 1 1 8em; min-width: 0; font-size: var(--text-md); font-weight: 600; overflow-wrap: anywhere; }
+.plano-op-cab .plano-preco { flex: none; }
+.plano-op .plano-preco { font-size: var(--text-lg); }
+.plano-op .btn { justify-self: start; }
+
+/* o PIX: o resumo do que se paga, o QR Code (fundo branco: o PNG do meio de pagamento é escuro sobre branco) e o código */
+.pix-qr-caixa { display: grid; justify-items: center; gap: var(--sp-3); }
+.pix-qr { width: 188px; height: 188px; padding: 12px; border-radius: var(--radius); background: #FFFFFF; box-shadow: inset 0 0 0 1px var(--border); }
+.pix-qr img { display: block; width: 100%; height: 100%; }
+.pix-codigo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); width: 100%; }
+.pix-codigo code { flex: 1 1 220px; min-width: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--surface-2); font-size: 11px; overflow-wrap: anywhere; word-break: break-all; }
+.pix-espera { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.pix-pago { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--success-soft); font-size: var(--text-sm); font-weight: 500; outline: none; }
+.pix-pago .ic { flex: none; margin-top: 2px; color: var(--success); }
+.resumo-banco { display: grid; gap: 6px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); font-size: var(--text-sm); }
+.resumo-banco > b { font-weight: 600; }
+.resumo-banco div { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: var(--sp-2); }
+.resumo-banco dt { color: var(--text-muted); }
+.resumo-banco dd { margin: 0; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+
+/* quem não vê a cobrança */
+.quem-cuida { display: grid; gap: var(--sp-2); justify-items: center; padding-bottom: var(--sp-5); font-size: var(--text-sm); }
+.quem-cuida li { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.quem-cuida .av-user { width: 28px; height: 28px; }
+
+@media (max-width: 480px) {
+  .resumo-banco div, .degrau, .fase { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
