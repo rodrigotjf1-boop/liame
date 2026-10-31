@@ -170,6 +170,8 @@ Para desligar, `--desligar` no lugar de `--ligar` (a regra da empresa é apagada
 
 **`fotos` (A6, Z4; P20):** nasce desligada para todos, e sem ela nada muda: a lista das fotos vem vazia, e enviar ou mudar uma foto responde 409. Com ela ligada para a empresa (`--flag fotos`), o Dono, o Administrador e o Gestor enviam as fotos dos produtos, mudam o produto e apagam (D-A6-19); quem tem acesso à empresa vê. Ligar só com `IMAGENS_BUCKET` no ar na API, no worker e no web (seção "Imagens"): sem o bucket, a lista e o envio respondem 503, e sem ele no web as imagens não aparecem. A tela Fotos (no menu, abaixo de Minha marca) existe para todos com `fotos.ver`; com a função desligada, ela diz que as fotos ainda não estão ligadas e não envia nada. Não publica em nenhuma rede.
 
+**`resumo_das_pessoas` (A7, W8; D-A7-53):** nasce desligada para todos, e sem ela nada sai. Com ela ligada para a empresa (`--flag resumo_das_pessoas`), o Dono recebe toda segunda-feira, a partir das 8h no fuso da empresa, o e-mail com as contagens do que cada pessoa além dele fez na conta na semana que fechou no domingo (o que Pessoas e acessos promete: "você recebe um resumo por semana"). A semana em que só o Dono mexeu não manda nada. Não depende de outra função nem de variável: usa o e-mail do serviço, como os convites.
+
 ## Imagens (ADR-021)
 
 | Variável | Para quê | Padrão |
