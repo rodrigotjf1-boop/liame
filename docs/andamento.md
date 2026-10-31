@@ -685,7 +685,12 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 
 **A W5 está completa no código** (sem o cartão, que é a W2b, e sem as notas, que são a W4).
 
-Falta, fora da W5: o e-mail da cobrança do mês com o QR Code, cinco dias antes do vencimento (D-A7-17; o Asaas tem as notificações desligadas, D-A7-31, e o Liame ainda não manda esse e-mail); e, na desistência, o protocolo e o e-mail da confirmação (D-A7-19; o Decreto 7.962/2013, art. 5º, pede a confirmação imediata: hoje ela aparece só na tela).
+**A confirmação da desistência: o protocolo e o e-mail (31/10/2026; servidor e web; sem migration; a função `cobranca` segue desligada), com a decisão técnica D-A7-43:**
+- **o protocolo** sai da própria assinatura ("L-" + o ano do pedido + os 8 últimos caracteres do id; `cobranca/confirmacao-da-desistencia.ts`): o mesmo na resposta (`withdraw_protocol`), na tela, na auditoria e no e-mail;
+- **o e-mail** vai a quem desistiu, só texto, depois de a transação gravar: a data e a hora no calendário da empresa, o protocolo, quanto volta e por onde, e o link de Plano e cobrança; a tela mostra a confirmação na hora, com o protocolo, e a assinatura que terminou na desistência segue mostrando o protocolo;
+- **testes:** `test/confirmacao-da-desistencia.spec.ts` (o protocolo e a virada do ano; o texto do e-mail no fuso da empresa, com o espaço comum no "R$"; o cartão e o nada a devolver); em `test/db/cobranca.spec.ts`, o mesmo protocolo na resposta, na tela, na auditoria e no e-mail ao Dono; em `apps/web/test/cobranca.spec.ts`, o protocolo na assinatura que terminou.
+
+Falta, fora da W5: o e-mail da cobrança do mês com o QR Code, cinco dias antes do vencimento (D-A7-17; o Asaas tem as notificações desligadas, D-A7-31, e o Liame ainda não manda esse e-mail).
 
 ## Hub DMS · F2 (o Liame na credencial nova)
 

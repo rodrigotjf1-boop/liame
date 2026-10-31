@@ -100,6 +100,7 @@ export function DialogoCancelar({ brandId, s, reserva, aoFechar, aoMudar }: Base
 export function DialogoDesistir({ brandId, s, valorCentavos, reserva, aoFechar, aoMudar }: Base & { valorCentavos: string }) {
   const valor = reaisDeCentavos(valorCentavos);
   const [quando, setQuando] = useState<Date | null>(null);
+  const [protocolo, setProtocolo] = useState<string | null>(null);
   return (
     <DialogoComCodigo
       titulo="Desistir da assinatura"
@@ -110,9 +111,13 @@ export function DialogoDesistir({ brandId, s, valorCentavos, reserva, aoFechar, 
       reserva={reserva}
       aoFechar={aoFechar}
       enviar={async (code) => {
-        const r = await pedir(() => chamar(() => api.POST('/v1/billing/subscription/withdraw', { body: { brand_id: brandId, code } })), aoMudar);
-        if (r.ok) setQuando(new Date());
-        return r;
+        const r = await chamar(() => api.POST('/v1/billing/subscription/withdraw', { body: { brand_id: brandId, code } }));
+        if (!r.ok) return r;
+        // A confirmação imediata (D-A7-19, D-A7-43): o protocolo da resposta, o mesmo do e-mail que acabou de sair.
+        setProtocolo(r.data.subscription?.withdraw_protocol ?? null);
+        setQuando(new Date());
+        aoMudar(r.data);
+        return { ok: true };
       }}
       concluido={
         quando && (
@@ -120,8 +125,9 @@ export function DialogoDesistir({ brandId, s, valorCentavos, reserva, aoFechar, 
             <b>
               Pedido recebido em {String(quando.getDate()).padStart(2, '0')}/{String(quando.getMonth() + 1).padStart(2, '0')} às {String(quando.getHours()).padStart(2, '0')}:
               {String(quando.getMinutes()).padStart(2, '0')}
+              {protocolo ? ` · protocolo ${protocolo}` : ''}
             </b>
-            <span>A assinatura terminou, e a devolução de {valor} foi pedida ao meio de pagamento. Ela aparece em Faturas quando for feita.</span>
+            <span>A assinatura terminou, e a devolução de {valor} foi pedida ao meio de pagamento. A confirmação, com o protocolo, foi para o seu e-mail.</span>
           </>
         )
       }

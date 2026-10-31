@@ -88090,6 +88090,12 @@
                           ],
                           "maxLength": 60,
                           "pattern": "^[a-z0-9_]+$"
+                        },
+                        "withdraw_protocol": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -88105,7 +88111,8 @@
                         "cancel_at_period_end",
                         "withdraw_until",
                         "ended_at",
-                        "end_reason"
+                        "end_reason",
+                        "withdraw_protocol"
                       ],
                       "additionalProperties": false
                     },
@@ -89158,6 +89165,12 @@
                           ],
                           "maxLength": 60,
                           "pattern": "^[a-z0-9_]+$"
+                        },
+                        "withdraw_protocol": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -89173,7 +89186,8 @@
                         "cancel_at_period_end",
                         "withdraw_until",
                         "ended_at",
-                        "end_reason"
+                        "end_reason",
+                        "withdraw_protocol"
                       ],
                       "additionalProperties": false
                     },
@@ -89818,6 +89832,12 @@
                           ],
                           "maxLength": 60,
                           "pattern": "^[a-z0-9_]+$"
+                        },
+                        "withdraw_protocol": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -89833,7 +89853,8 @@
                         "cancel_at_period_end",
                         "withdraw_until",
                         "ended_at",
-                        "end_reason"
+                        "end_reason",
+                        "withdraw_protocol"
                       ],
                       "additionalProperties": false
                     },
@@ -90600,6 +90621,12 @@
                           ],
                           "maxLength": 60,
                           "pattern": "^[a-z0-9_]+$"
+                        },
+                        "withdraw_protocol": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -90615,7 +90642,8 @@
                         "cancel_at_period_end",
                         "withdraw_until",
                         "ended_at",
-                        "end_reason"
+                        "end_reason",
+                        "withdraw_protocol"
                       ],
                       "additionalProperties": false
                     },
@@ -91377,6 +91405,12 @@
                           ],
                           "maxLength": 60,
                           "pattern": "^[a-z0-9_]+$"
+                        },
+                        "withdraw_protocol": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -91392,7 +91426,8 @@
                         "cancel_at_period_end",
                         "withdraw_until",
                         "ended_at",
-                        "end_reason"
+                        "end_reason",
+                        "withdraw_protocol"
                       ],
                       "additionalProperties": false
                     },
@@ -92031,6 +92066,12 @@
                           ],
                           "maxLength": 60,
                           "pattern": "^[a-z0-9_]+$"
+                        },
+                        "withdraw_protocol": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         }
                       },
                       "required": [
@@ -92046,7 +92087,8 @@
                         "cancel_at_period_end",
                         "withdraw_until",
                         "ended_at",
-                        "end_reason"
+                        "end_reason",
+                        "withdraw_protocol"
                       ],
                       "additionalProperties": false
                     },

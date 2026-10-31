@@ -14,8 +14,12 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { MfaService } from '../auth/mfa.service.js';
 import { NIVEL_DA_COBRANCA_LIBERADA } from '../auth/permissions.js';
-import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
+import { APP_CONFIG, type AppConfig } from '../config.js';
+import { afterCommit, type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
+import { Mailer } from '../mail/mailer.js';
+import { CAMINHO_DA_COBRANCA } from './aviso-de-atraso.js';
+import { emailDaDesistencia, protocoloDaDesistencia } from './confirmacao-da-desistencia.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { type FalhaDaCobranca, garantirCobrancaPix, type Transacao } from './cobranca-pix.js';
@@ -101,6 +105,8 @@ export class CobrancaService {
     private readonly flags: FlagService,
     private readonly mfa: MfaService,
     private readonly meio: MeioAsaas,
+    private readonly mailer: Mailer,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   private ligada(quem: Quem, brandId?: string): Promise<boolean> {
@@ -340,7 +346,9 @@ export class CobrancaService {
     await this.mfa.verifyStepUp(tx, auth.userId, req.code);
     const s = await assinaturaVivaTravada(tx, req.brand_id);
     if (!s) throw semAssinatura();
-    const r = await desistir(tx, s, new Date());
+    // O mesmo instante na gravação (`ended_at`) e no protocolo: a tela, que o tira do `ended_at`, e o e-mail dão o mesmo.
+    const agora = new Date();
+    const r = await desistir(tx, s, agora);
     if (r === 'fora_do_prazo') {
       throw new AppProblem(
         409,
@@ -349,7 +357,21 @@ export class CobrancaService {
         'A desistência com a devolução integral vale até 7 dias depois do primeiro pagamento, na primeira contratação. Você ainda pode cancelar: a assinatura vai até o fim do período pago.',
       );
     }
-    auditDetail({ resourceId: s.id, before: { status: s.status }, after: { brand_id: req.brand_id, devolve_cents: r.devolveCents } });
+    // A confirmação imediata (D-A7-19, D-A7-43; Decreto 7.962/2013, art. 5º): o protocolo vai na auditoria, na resposta e
+    // no e-mail a quem desistiu, que sai só depois de a transação gravar (o pedido que falhou não confirma nada).
+    const protocolo = protocoloDaDesistencia(s.id, agora);
+    auditDetail({ resourceId: s.id, before: { status: s.status }, after: { brand_id: req.brand_id, devolve_cents: r.devolveCents, protocolo } });
+    const marca = await tx.execute<{ name: string }>(sql`select name from liame.brand where id = ${req.brand_id}`);
+    const email = emailDaDesistencia({
+      marca: marca.rows[0]?.name ?? 'sua marca',
+      protocolo,
+      quando: agora,
+      fuso: s.timezone,
+      devolveCents: r.devolveCents,
+      forma: s.method,
+      link: `${this.config.appUrl}${CAMINHO_DA_COBRANCA}?marca=${req.brand_id}`,
+    });
+    afterCommit(() => this.mailer.send({ to: auth.email, subject: email.subject, text: email.text }));
     return this.daMarca(auth, req.brand_id);
   }
 }

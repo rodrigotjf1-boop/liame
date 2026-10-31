@@ -59,6 +59,7 @@ const assinatura = (o: Partial<BrandSubscription> = {}): BrandSubscription => ({
   withdraw_until: null,
   ended_at: null,
   end_reason: null,
+  withdraw_protocol: null,
   ...o,
 });
 const resposta = (o: Partial<BillingResponse> = {}): BillingResponse =>
@@ -169,6 +170,8 @@ describe('Plano e cobrança: o que a situação diz (P26, só o que o servidor f
     const fim = { status: 'encerrada', ended_at: '2026-10-25T15:00:00.000Z' } as const;
     const devolvendo = fatura({ status: 'paga', paid_at: '2026-10-22T15:00:00.000Z', paid_method: 'pix', refund_requested_at: '2026-10-25T15:00:00.000Z' });
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'desistencia' }), [devolvendo])).toMatch(/^A assinatura terminou em 25\/10, na desistência\. Os R\$\s249,00 estão voltando para a conta que pagou o PIX\.$/);
+    // Com o protocolo da desistência (D-A7-43), a frase termina com ele: o mesmo do e-mail.
+    expect(textoDoFim(assinatura({ ...fim, end_reason: 'desistencia', withdraw_protocol: 'L-2026-001A2B3C' }), [devolvendo])).toMatch(/estão voltando para a conta que pagou o PIX\. Protocolo: L-2026-001A2B3C\.$/);
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'desistencia' }), [{ ...devolvendo, status: 'devolvida' }])).toContain('voltaram para a conta que pagou o PIX');
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'nao_paga' }), [])).toBe('O pedido de assinatura terminou em 25/10: a primeira mensalidade não foi paga em 7 dias.');
     expect(textoDoFim(assinatura({ ...fim, end_reason: 'cancelada' }), [])).toBe('A assinatura terminou em 25/10, depois do cancelamento.');

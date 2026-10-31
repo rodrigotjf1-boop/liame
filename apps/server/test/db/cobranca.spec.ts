@@ -424,6 +424,18 @@ describe.skipIf(!hasDb)('Plano e cobrança: os planos, a assinatura e a vida del
     expect(fila).toEqual({ charge_error: 'devolucao_sem_cobranca', charge_next_at: null });
     const [ev] = await ownerQuery<{ after: Record<string, unknown> }>(`select after from liame.audit_event where tenant_id = $1 and action = 'cobranca.desistir'`, [e.tenantId]);
     expect(ev!.after).toMatchObject({ devolve_cents: 24_900 });
+    // A confirmação imediata (D-A7-19, D-A7-43; Decreto 7.962/2013, art. 5º): o mesmo protocolo na resposta, na tela
+    // (lida de novo), na auditoria e no e-mail a quem desistiu, com a data, a devolução e o link de Plano e cobrança.
+    const protocolo = d.body.subscription.withdraw_protocol as string;
+    expect(protocolo).toMatch(/^L-\d{4}-[0-9A-F]{8}$/);
+    expect((await estado(e)).subscription!.withdraw_protocol).toBe(protocolo);
+    expect(ev!.after).toMatchObject({ protocolo });
+    const [dono] = await ownerQuery<{ email: string }>(`select email from liame.app_user where id = $1`, [e.userId]);
+    const confirmacao = api.mailer.lastTo(dono!.email)!;
+    expect(confirmacao.subject).toMatch(/^Liame: recebemos a sua desistência da assinatura da /);
+    expect(confirmacao.text).toContain(`Protocolo: ${protocolo}`);
+    expect(confirmacao.text).toContain('Devolução: R$ 249,00, para a conta que pagou o PIX.');
+    expect(confirmacao.text).toContain(`/cobranca?marca=${e.brandId}`);
 
     // A mesma empresa assina de novo: não é mais a primeira contratação, e a desistência não vale.
     expect((await assinar(e)).status).toBe(200);
