@@ -56,7 +56,7 @@ export interface AcoesDoMembro {
 
 const minuscula = (s: string) => s.charAt(0).toLocaleLowerCase('pt-BR') + s.slice(1);
 
-function Voltar({ aoVoltar }: { aoVoltar: () => void }) {
+export function Voltar({ aoVoltar }: { aoVoltar: () => void }) {
   return (
     <button className="btn btn--ghost btn--sm eqp-voltar" type="button" onClick={aoVoltar}>
       <Icone nome="chevron-left" pequeno />

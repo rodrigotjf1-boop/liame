@@ -6,8 +6,10 @@ import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import type { Modo } from '@/lib/modo';
 import type { Historico } from './bloco-historico';
+import { type AcoesDosModelos, DetalheDosModelos } from './bloco-modelos';
 import type { AcoesDaProntidao } from './bloco-prontidao';
-import { type AcoesDoMembro, DetalheDaProximaFase, DetalheDoMembro } from './detalhe';
+import { type AcoesDoMembro, DetalheDaProximaFase, DetalheDoMembro, Voltar } from './detalhe';
+import { type CargaDosModelos, resumoDosModelos } from './modelos-textos';
 import { Avatar, ConfirmaNaLinha, SeloDaSituacao } from './pecas';
 import { gestorNaLista, type QuemVeAFicha, rodadaDoGestor, SUBTITULO_DA_EQUIPE, temModoAprovacao } from './aprovacao-textos';
 import { atividadeDo, avisosDa, ehMembro, FICHAS, gruposDa, mesDe, PROXIMAS_FASES, seloDaIa } from './textos';
@@ -45,6 +47,11 @@ interface Props {
   prontidao: AcoesDaProntidao;
   /** Quem vê a tela: se é o dono e se pode pedir ações (a frase da rodada do Gestor depende disso). */
   quem: QuemVeAFicha;
+  /**
+   * Os modelos de IA da empresa (só no Pro; A3, I13): a entrada "Modelos de IA" aparece com a função
+   * `escolha_de_modelo` ligada. Sem esta propriedade, a tela fica como antes.
+   */
+  modelos?: { carga: CargaDosModelos; acoes: AcoesDosModelos };
   aoEscolher: (chave: string) => void;
   aoVoltar: () => void;
 }
@@ -62,7 +69,9 @@ function Grupo({ rotulo, quantos, children }: { rotulo: string; quantos: number;
   );
 }
 
-export function EquipeConteudo({ t, autonomia, sombra, historicos, escolhido, mostraDetalhe, modo, agora, nomeDaMarca, seletor, tituloRef, topo, membro, prontidao, quem, aoEscolher, aoVoltar }: Props) {
+export function EquipeConteudo({ t, autonomia, sombra, historicos, escolhido, mostraDetalhe, modo, agora, nomeDaMarca, seletor, tituloRef, topo, membro, prontidao, quem, modelos, aoEscolher, aoVoltar }: Props) {
+  // "Modelos de IA" só no Pro e com a função ligada; a carga que ainda não chegou ou falhou não mostra a entrada.
+  const comModelos = modo === 'pro' && modelos?.carga.tipo === 'ok' && modelos.carga.dados.enabled ? modelos.carga.dados : null;
   const mes = mesDe(t.month.from);
   // Com o modo Aprovação (P11), o Gestor de tráfego aparece na lista com o que fez na rodada.
   const comAprovacao = temModoAprovacao(autonomia);
@@ -166,9 +175,30 @@ export function EquipeConteudo({ t, autonomia, sombra, historicos, escolhido, mo
                 </li>
               ))}
             </Grupo>
+            {comModelos && (
+              // Como no P7: o grupo da configuração não leva contagem (não é gente da equipe).
+              <div className="eqp-grupo">
+                <p className="eqp-grupo-rot rotulo-marca">
+                  <span>Configuração da equipe</span>
+                </p>
+                <ul className="eqp-itens">
+                  <li>
+                    <button className="eqp-item" type="button" id="eqp-item-modelos" aria-current={escolhido === 'modelos' ? 'true' : undefined} onClick={() => aoEscolher('modelos')}>
+                      <Avatar icone="sparkles" />
+                      <span className="eqp-txt">
+                        <b>Modelos de IA</b>
+                        <span>{resumoDosModelos(comModelos)}</span>
+                      </span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            )}
           </nav>
           <article className="card eqp-det" id="eqp-det" aria-labelledby="eqp-det-t">
-            {doEscolhido && ehMembro(doEscolhido.key) ? (
+            {escolhido === 'modelos' && modo === 'pro' && modelos ? (
+              <DetalheDosModelos carga={modelos.carga} acoes={modelos.acoes} voltar={<Voltar aoVoltar={aoVoltar} />} />
+            ) : doEscolhido && ehMembro(doEscolhido.key) ? (
               <DetalheDoMembro
                 m={doEscolhido}
                 chave={doEscolhido.key}
