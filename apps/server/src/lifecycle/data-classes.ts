@@ -102,6 +102,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   ai_model_price: { class: 'PUBLIC', retention: 'do produto' },
   ai_model_route: { class: 'INTERNAL', retention: 'do produto' },
   ai_budget: { class: 'INTERNAL', retention: 'com a empresa' },
+  // A escolha do modelo no Pro (A3, I13; migration 0098): o catálogo é do produto; a escolha é uma configuração da
+  // empresa, com quem escolheu (a referência some com a pessoa).
+  ai_model_option: { class: 'INTERNAL', retention: 'do produto' },
+  ai_model_choice: { class: 'INTERNAL', retention: 'com a empresa' },
   // Câmbio de referência (A3, D-A3-14): a PTAX de venda do Banco Central, dado público, uma cotação por dia útil.
   exchange_rate: { class: 'PUBLIC', retention: 'do produto (cotação pública do Banco Central)' },
   ai_usage: { class: 'PERSONAL', retention: 'com a empresa (registro técnico, sem conteúdo)' },

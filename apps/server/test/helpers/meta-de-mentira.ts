@@ -206,7 +206,19 @@ export async function empresaComMeta(api: TestApi, meta: MetaDeMentira, nome: st
 /** Liga ou desliga uma flag (`meta_write`, `google_write`, `conversoes_google`, `perfil_google`, `perfil_google_write`, `search_console`, `desempenho_anuncios`, `fotos`, `cobranca`, `social_write`) para a empresa. */
 export async function ligarFlagDaEmpresa(
   api: TestApi,
-  chave: 'meta_write' | 'google_write' | 'conversoes_google' | 'perfil_google' | 'perfil_google_write' | 'search_console' | 'desempenho_anuncios' | 'fotos' | 'cobranca' | 'social_write' | 'resumo_das_pessoas',
+  chave:
+    | 'meta_write'
+    | 'google_write'
+    | 'conversoes_google'
+    | 'perfil_google'
+    | 'perfil_google_write'
+    | 'search_console'
+    | 'desempenho_anuncios'
+    | 'fotos'
+    | 'cobranca'
+    | 'social_write'
+    | 'resumo_das_pessoas'
+    | 'escolha_de_modelo',
   tenantId: string,
   valor: boolean,
 ): Promise<void> {

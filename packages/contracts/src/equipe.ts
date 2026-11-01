@@ -318,3 +318,71 @@ export type PauseTeamMemberRequest = z.infer<typeof PauseTeamMemberRequest>;
 
 export const ResumeTeamMemberRequest = z.strictObject({ brand_id: z.uuid() });
 export type ResumeTeamMemberRequest = z.infer<typeof ResumeTeamMemberRequest>;
+
+// ------------------------------------------------------------ os modelos de IA (Pro)
+
+/**
+ * As finalidades da escolha do modelo (A3, I13; D-A3-12): a conversa (a LIA), a análise e os textos. Lista fechada no
+ * pedido; na resposta, texto (V23).
+ */
+export const MODEL_PURPOSES = ['conversa', 'analise', 'texto'] as const;
+export const TeamModelPurpose = z.enum(MODEL_PURPOSES);
+export type TeamModelPurpose = z.infer<typeof TeamModelPurpose>;
+
+const Modelo = z.strictObject({ provider: Slug, model: z.string().min(1).max(100) });
+
+export const TeamModelOption = z.strictObject({
+  provider: Slug,
+  model: z.string(),
+  /** O nome para a tela ("Claude Opus 5.5"). */
+  label: z.string(),
+  /** `mais_rapido`, `rapido`, `medio`, `mais_lento` (texto, V23). */
+  speed: Slug,
+  /** A nota na rodada de confirmação, de 0 a 1 (a menor entre as tarefas da finalidade). */
+  eval_score: z.string().regex(/^[01](\.\d{1,4})?$/),
+  /** Quanto as chamadas da janela teriam custado com ele, em micros de dólar; nulo sem preço cadastrado. */
+  estimated_usd_micros: Inteiro.nullable(),
+});
+export type TeamModelOption = z.infer<typeof TeamModelOption>;
+
+export const TeamModelPurposeState = z.strictObject({
+  purpose: Slug,
+  /** O nome da finalidade para a tela. */
+  label: z.string(),
+  /** As tarefas ativas da finalidade e os funcionários que as usam. */
+  tasks: z.array(Slug),
+  members: z.array(z.string()),
+  /** As respostas entregues na janela (a base da estimativa; `ai_usage.answered`). */
+  answered: z.int().min(0),
+  /** O automático: o modelo das rotas da finalidade; nulo quando as tarefas usam modelos diferentes. */
+  automatic: z.strictObject({ provider: Slug, model: z.string(), label: z.string() }).nullable(),
+  /** O custo de verdade das chamadas da finalidade na janela, em micros de dólar. */
+  spent_usd_micros: Inteiro,
+  /** Os modelos que a empresa pode escolher: os do catálogo de TODAS as tarefas da finalidade. */
+  options: z.array(TeamModelOption),
+  /**
+   * A escolha da empresa, ou nula (automático). `offered` falso: o modelo saiu do catálogo, e as chamadas voltaram ao
+   * automático; a escolha fica guardada.
+   */
+  choice: z
+    .strictObject({ provider: Slug, model: z.string(), label: z.string(), by: Pessoa, at: z.iso.datetime(), offered: z.boolean() })
+    .nullable(),
+});
+export type TeamModelPurposeState = z.infer<typeof TeamModelPurposeState>;
+
+export const TeamModelsResponse = z.strictObject({
+  /** A função `escolha_de_modelo` da empresa: desligada, nada é escolhido e as chamadas ficam no automático. */
+  enabled: z.boolean(),
+  /** A pessoa pode trocar o modelo (`politicas.gerenciar`: o Dono e o Administrador). */
+  can_change: z.boolean(),
+  /** Os 30 dias completos da estimativa, no fuso da empresa. */
+  window: z.strictObject({ from: z.iso.date(), to: z.iso.date() }),
+  /** A cotação de referência para a tela mostrar em reais (D-A3-14); nula antes da primeira leitura. */
+  usd_brl: z.strictObject({ rate: z.string().regex(/^\d{1,4}\.\d{1,6}$/), date: z.iso.date(), source: Slug }).nullable(),
+  purposes: z.array(TeamModelPurposeState),
+});
+export type TeamModelsResponse = z.infer<typeof TeamModelsResponse>;
+
+/** Trocar o modelo de uma finalidade: um modelo do catálogo, ou nulo para voltar ao automático. */
+export const SetTeamModelRequest = z.strictObject({ model: Modelo.nullable() });
+export type SetTeamModelRequest = z.infer<typeof SetTeamModelRequest>;
