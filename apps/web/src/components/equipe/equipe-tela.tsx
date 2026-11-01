@@ -13,6 +13,7 @@ import { useSessao } from '@/lib/sessao';
 import { avisoDaDecisao, chaveDaLinha, nomeDaLinha, temModoAprovacao } from './aprovacao-textos';
 import type { Historico } from './bloco-historico';
 import { EquipeConteudo } from './equipe-conteudo';
+import type { CargaDosModelos } from './modelos-textos';
 import { acaoDa, type ChaveDoMembro, ehMembro, FICHAS, modoEscrito, plataformaDe, PROXIMAS_FASES } from './textos';
 
 // "Sua equipe" (mockups/prototipo-equipe.html, P7 aprovado em 03/10/2026). Quem vê é quem acompanha campanhas e
@@ -54,6 +55,10 @@ export function EquipeTela() {
   const [linha, setLinha] = useState<string | null>(null);
   const [voltando, setVoltando] = useState<string | null>(null);
   const [anuncio, setAnuncio] = useState('');
+  // Os modelos de IA da empresa (só no Pro; A3, I13): valem para todas as marcas, então não mudam com a marca.
+  const [modelos, setModelos] = useState<CargaDosModelos>({ tipo: 'carregando' });
+  const [tentativaDosModelos, setTentativaDosModelos] = useState(0);
+  const [editandoModelo, setEditandoModelo] = useState<string | null>(null);
   /** O elemento que recebe o foco depois da próxima pintura (pelo id). */
   const focar = useRef<string | null>(null);
   const seq = useRef(0);
@@ -97,6 +102,30 @@ export function EquipeTela() {
       }),
     );
   }, [marca, tentativa]);
+
+  // Os modelos só são pedidos no Pro (no Lite, tudo fica no automático e a tela não mostra a escolha).
+  const noPro = modo === 'pro';
+  useEffect(() => {
+    if (!podeVer || !noPro) return;
+    let valendo = true;
+    setModelos({ tipo: 'carregando' });
+    disparar(
+      chamar(() => api.GET('/v1/team/models')).then((r) => {
+        if (valendo) setModelos(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro' });
+      }),
+    );
+    return () => {
+      valendo = false;
+    };
+  }, [podeVer, noPro, tentativaDosModelos]);
+
+  // Saiu do Pro com "Modelos de IA" aberto: volta para a LIA (no Lite, a entrada não existe).
+  useEffect(() => {
+    if (!noPro && escolhido === 'modelos') {
+      setEscolhido('lia');
+      setEditandoModelo(null);
+    }
+  }, [noPro, escolhido]);
 
   const carregarHistorico = useCallback(async (chave: ChaveDoMembro, brandId: string) => {
     const id = seq.current;
@@ -307,6 +336,23 @@ export function EquipeTela() {
     setOcupado(null);
   }
 
+  /** Troca o modelo de uma finalidade (ou volta ao automático); a resposta já traz a lista nova. */
+  async function escolherModelo(finalidade: string, modelo: { provider: string; model: string } | null) {
+    setOcupado(`modelo-${finalidade}`);
+    const purpose = finalidade as 'conversa' | 'analise' | 'texto';
+    const r = await chamar(() => api.PUT('/v1/team/models/{purpose}', { params: { path: { purpose } }, body: { model: modelo } }));
+    if (r.ok) {
+      setModelos({ tipo: 'ok', dados: r.data });
+      setEditandoModelo(null);
+      focar.current = `mdl-${finalidade}-t`;
+      const p = r.data.purposes.find((x) => x.purpose === finalidade);
+      const nome = modelo ? (p?.choice?.label ?? 'o modelo escolhido') : 'o automático';
+      avisar(`Pronto: ${p?.label ?? 'a finalidade'} passa a usar ${nome} a partir da próxima resposta.`);
+      setAnuncio(`Modelo trocado: ${nome}.`);
+    } else falhou(r.problema);
+    setOcupado(null);
+  }
+
   const seletor =
     marcas && marcas.length > 1 ? (
       <label className="res-campo">
@@ -382,14 +428,28 @@ export function EquipeTela() {
           },
         }}
         quem={{ souDono, podePedir }}
+        modelos={{
+          carga: modelos,
+          acoes: {
+            ocupado,
+            editando: editandoModelo,
+            aoEditar: (finalidade) => {
+              if (!finalidade && editandoModelo) focar.current = `mdl-${editandoModelo}-trocar`;
+              setEditandoModelo(finalidade);
+            },
+            aoSalvar: (finalidade, modelo) => disparar(escolherModelo(finalidade, modelo)),
+            aoRecarregar: () => setTentativaDosModelos((n) => n + 1),
+          },
+        }}
         aoEscolher={(chave) => {
           setEscolhido(chave);
           setMostraDetalhe(true);
           setDesligando(null);
           setRecusando(null);
           setVoltando(null);
+          setEditandoModelo(null);
           focar.current = 'eqp-det-t';
-          setAnuncio(ehMembro(chave) ? FICHAS[chave].nome : (PROXIMAS_FASES.find((f) => f.chave === chave)?.nome ?? ''));
+          setAnuncio(chave === 'modelos' ? 'Modelos de IA' : ehMembro(chave) ? FICHAS[chave].nome : (PROXIMAS_FASES.find((f) => f.chave === chave)?.nome ?? ''));
         }}
         aoVoltar={() => {
           setMostraDetalhe(false);
