@@ -2,15 +2,18 @@ import {
   PauseTeamMemberRequest,
   ProblemDetails,
   ResumeTeamMemberRequest,
+  SetTeamModelRequest,
   TeamActivityQuery,
   TeamActivityResponse,
   TeamMemberKey,
+  TeamModelPurpose,
+  TeamModelsResponse,
   TeamQuery,
   TeamResponse,
   TeamShadowQuery,
   TeamShadowResponse,
 } from '@liame/contracts';
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -26,6 +29,7 @@ import { Auditar } from '../audit/auditar.js';
 import { Auth, DuranteSuspensao, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { EquipeService } from './equipe.service.js';
+import { ModelosDaEquipeService } from './modelos.service.js';
 
 // Sua equipe (A3, I13b; protótipo P7, aprovado em 03/10/2026). Os números do Gestor de tráfego vêm do
 // caixa: ver pede `campanhas.ver` e `vendas.ver`. Desligar e ligar um funcionário pede `agentes.gerenciar`. Parar a
@@ -35,7 +39,10 @@ import { EquipeService } from './equipe.service.js';
 @ApiCookieAuth('liame_sessao')
 @Controller('team')
 export class EquipeController {
-  constructor(private readonly equipe: EquipeService) {}
+  constructor(
+    private readonly equipe: EquipeService,
+    private readonly modelos: ModelosDaEquipeService,
+  ) {}
 
   @Get()
   @Permissao('campanhas.ver', 'vendas.ver')
@@ -122,5 +129,42 @@ export class EquipeController {
   @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
   resume(@Auth() auth: AuthContext, @Param('key', { schema: TeamMemberKey }) key: string, @Body({ schema: ResumeTeamMemberRequest }) body: ResumeTeamMemberRequest): Promise<TeamResponse> {
     return this.equipe.ligar(auth, key, body);
+  }
+
+  @Get('models')
+  @Permissao('campanhas.ver', 'vendas.ver')
+  @ApiOperation({
+    summary: 'Os modelos de IA da empresa (Pro)',
+    description:
+      'Para cada finalidade (conversa, análise e textos): as tarefas e os funcionários que a usam, o automático (o modelo das rotas), os modelos do catálogo do Liame que a empresa pode escolher (os de TODAS as tarefas da finalidade, com a velocidade, a nota na rodada de confirmação e o custo estimado pelo uso dos últimos 30 dias completos, em micros de dólar) e a escolha da empresa. Vale para a empresa inteira. `enabled` falso: a função `escolha_de_modelo` está desligada, e tudo fica no automático.',
+  })
+  @ApiOkResponse({ standardSchema: TeamModelsResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  models(@Auth() auth: AuthContext): Promise<TeamModelsResponse> {
+    return this.modelos.ver(auth);
+  }
+
+  @Put('models/:purpose')
+  @HttpCode(200)
+  @Permissao('politicas.gerenciar', 'campanhas.ver', 'vendas.ver')
+  @Auditar('equipe.escolher_modelo', { recurso: 'ai_model_choice' })
+  @ApiOperation({
+    summary: 'Trocar o modelo de uma finalidade',
+    description:
+      'Um modelo do catálogo da finalidade, ou `null` para voltar ao automático; vale a partir da próxima resposta, para a empresa inteira. Só o Dono e o Administrador. Função desligada: 409 `funcao-desligada`; modelo fora do catálogo da finalidade: 422 `fora-do-catalogo`.',
+  })
+  @ApiOkResponse({ standardSchema: TeamModelsResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  @ApiUnprocessableEntityResponse({ standardSchema: ProblemDetails })
+  setModel(
+    @Auth() auth: AuthContext,
+    @Param('purpose', { schema: TeamModelPurpose }) purpose: TeamModelPurpose,
+    @Body({ schema: SetTeamModelRequest }) body: SetTeamModelRequest,
+  ): Promise<TeamModelsResponse> {
+    return this.modelos.escolher(auth, purpose, body);
   }
 }

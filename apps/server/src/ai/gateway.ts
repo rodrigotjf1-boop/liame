@@ -9,6 +9,7 @@ import { APP_CONFIG, type AppConfig } from '../config.js';
 import { DATABASE } from '../database/database.module.js';
 import { FlagService } from '../flags/flag.service.js';
 import { KillSwitchService } from '../kill-switch/kill-switch.service.js';
+import { FLAG_DA_ESCOLHA_DE_MODELO } from './escolha-de-modelo.js';
 import { type Esforco, ModelosIa } from './modelos.js';
 import { custoMicros, type LinhaDoPreco, type PrecoModelo, precoDaLinha, type TokensUsados, tokensDe } from './precos.js';
 import { limparJson, limparTexto } from './sanitizar.js';
@@ -164,6 +165,8 @@ interface Candidato {
 
 type Rota = {
   version: number;
+  /** A finalidade da tarefa (`conversa`, `analise`, `texto`…): é por ela que a empresa escolhe o modelo no Pro. */
+  purpose: string;
   provider: string;
   model: string;
   effort: Esforco | null;
@@ -280,8 +283,10 @@ export class AiGateway {
       this.logger.warn(`ia: ${req.task} (${req.workflow}) com entrada de ${tamanho} caracteres, acima do máximo de ${ENTRADA_MAXIMA}`);
       throw new AiError('entrada-grande', 'ia: entrada grande demais');
     }
+    // A escolha do modelo no Pro (D-A3-12) só vale com a função ligada para a empresa.
+    const comEscolha = await this.flags.isEnabled(FLAG_DA_ESCOLHA_DE_MODELO, this.flags.context({ ...contexto, brandId: req.brandId ?? null }));
     const db = this.db;
-    const preparo = await withContext(db, contexto, (tx) => this.preparar(tx, req));
+    const preparo = await withContext(db, contexto, (tx) => this.preparar(tx, req, comEscolha));
     if (preparo.barrado) throw new AiError(preparo.barrado, `ia: ${preparo.barrado}`, preparo.detalhe);
     const { rota, gasto, candidatos, precos } = preparo;
 
@@ -464,12 +469,12 @@ export class AiGateway {
   }
 
   /** Tudo o que se decide antes de gastar: trava, rota, limite por pessoa, teto e preços. */
-  private async preparar(tx: Tx, req: GenerateRequest): Promise<Preparo> {
+  private async preparar(tx: Tx, req: GenerateRequest, comEscolha: boolean): Promise<Preparo> {
     if (await this.switches.check(tx, { tenantId: req.tenantId, provider: 'ai', brandId: req.brandId ?? null })) return { barrado: 'travada' };
 
     const rota = (
       await tx.execute<Rota>(sql`
-        select version, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros::text as max_cost_usd_micros,
+        select version, purpose, provider, model, effort, max_output_tokens, timeout_ms, max_cost_usd_micros::text as max_cost_usd_micros,
                fallback, economy_provider, economy_model
           from liame.ai_model_route where task = ${req.task} and status = 'ativa'`)
     ).rows[0];
@@ -514,12 +519,19 @@ export class AiGateway {
 
     // A partir de 80% do teto, só o modelo econômico da rota (quando ela tem um, com eval aprovado).
     const economico = situacao === 'economico' && rota.economy_provider && rota.economy_model;
+    // A escolha da empresa no Pro (D-A3-27): o modelo escolhido vem primeiro, com o teto de UMA chamada dele, e o da rota
+    // vira a primeira reserva. Não vale no econômico, nem com o modelo fora do catálogo da tarefa (volta ao automático).
+    const escolha = comEscolha && !economico ? await this.escolhaDaEmpresa(tx, req, rota) : null;
     const candidatos: Candidato[] = economico
       ? [{ provider: rota.economy_provider!, model: rota.economy_model!, servedBy: 'economico' }]
       : [
-          { provider: rota.provider, model: rota.model, servedBy: 'principal' },
-          ...rota.fallback.map((f) => ({ provider: f.provider, model: f.model, servedBy: 'reserva' as const })),
+          ...(escolha ? [{ provider: escolha.provider, model: escolha.model, servedBy: 'principal' as const }] : []),
+          { provider: rota.provider, model: rota.model, servedBy: escolha ? 'reserva' : 'principal' },
+          ...rota.fallback
+            .filter((f) => !escolha || f.provider !== escolha.provider || f.model !== escolha.model)
+            .map((f) => ({ provider: f.provider, model: f.model, servedBy: 'reserva' as const })),
         ];
+    const rotaDoPedido: Rota = escolha ? { ...rota, max_cost_usd_micros: escolha.max_cost } : rota;
 
     // O preço que vale hoje de cada candidato, com a faixa do prompt longo quando o modelo tem (o Haiku 5.5, 0089).
     const linhas = await tx.execute<LinhaDoPreco & { provider: string; model: string }>(sql`
@@ -535,7 +547,22 @@ export class AiGateway {
          and valid_from <= (now() at time zone 'UTC')::date
        order by provider, model, valid_from desc`);
     const precos = new Map<string, PrecoModelo>(linhas.rows.map((p) => [chave(p.provider, p.model), precoDaLinha(p)]));
-    return { barrado: null, rota, gasto, candidatos, precos };
+    return { barrado: null, rota: rotaDoPedido, gasto, candidatos, precos };
+  }
+
+  /**
+   * O modelo que a empresa escolheu para a finalidade da tarefa, se ele está no catálogo DESTA tarefa (oferecido) e não é
+   * o próprio modelo da rota; senão, nulo (o automático).
+   */
+  private async escolhaDaEmpresa(tx: Tx, req: GenerateRequest, rota: Rota): Promise<{ provider: string; model: string; max_cost: string } | null> {
+    const r = await tx.execute<{ provider: string; model: string; max_cost: string }>(sql`
+      select o.provider, o.model, o.max_cost_usd_micros::text as max_cost
+        from liame.ai_model_choice c
+        join liame.ai_model_option o on o.task = ${req.task} and o.provider = c.provider and o.model = c.model and o.status = 'oferecida'
+       where c.tenant_id = ${req.tenantId} and c.purpose = ${rota.purpose}`);
+    const e = r.rows[0];
+    if (!e || (e.provider === rota.provider && e.model === rota.model)) return null;
+    return e;
   }
 
   /** Uma chamada a um modelo, dentro de um span `gen_ai` só com dados técnicos (nunca o conteúdo). */
