@@ -7,8 +7,16 @@ import { API_PREFIX } from '../setup-constants.js';
 // como o leitor do Express (V133). O pedido em JSON segue para o leitor do Nest (a rota recusa: "falta a foto").
 // O mesmo leitor serve ao logo da agência (`PUT /v1/agency/brand/logo`, A7 · W7, parte 3), até 1 MB.
 
-/** A rota que recebe o arquivo cru e as frases dela. */
-export type RotaDoArquivo = { metodo: 'POST' | 'PUT'; caminho: string; limite: number; grande: string; passa: string; semCompressao: string; interrompido: string };
+/** A rota que recebe o arquivo cru e as frases dela (o caminho exato, ou o padrão para a rota com parâmetros). */
+export type RotaDoArquivo = {
+  metodo: 'POST' | 'PUT';
+  caminho: string | RegExp;
+  limite: number;
+  grande: string;
+  passa: string;
+  semCompressao: string;
+  interrompido: string;
+};
 
 export const ROTA_DA_FOTO: RotaDoArquivo = {
   metodo: 'POST',
@@ -41,6 +49,18 @@ export const ROTA_DO_DOCUMENTO_DA_RECUPERACAO: RotaDoArquivo = {
   interrompido: 'O documento não chegou inteiro. Tente de novo.',
 };
 
+/** Os documentos do pedido da propriedade à DMS (A7, W8, parte 6a), um por vez, até 10 MB cada. */
+export const ROTA_DOS_DOCUMENTOS_DA_PROPRIEDADE: RotaDoArquivo = {
+  metodo: 'PUT',
+  // Expressão fixa (V116): o prefixo `v1` escrito, como o `API_PREFIX`.
+  caminho: /^\/v1\/ownership\/claims\/[0-9a-f-]{36}\/documents\/(documento_com_foto|documento_da_empresa)$/,
+  limite: ACCOUNT_RECOVERY_DOCUMENT_LIMITS.maxBytes,
+  grande: 'Documento grande demais',
+  passa: 'Passa de 10 MB.',
+  semCompressao: 'Envie o documento sem compressão.',
+  interrompido: 'O documento não chegou inteiro. Tente de novo.',
+};
+
 interface PedidoCru {
   method: string;
   url: string;
@@ -61,7 +81,8 @@ function cabecalho(v: string | string[] | undefined): string {
 export function leitorDaFoto(limite: number = BRAND_PHOTO_LIMITS.maxBytes, rota: RotaDoArquivo = ROTA_DA_FOTO) {
   const grandeDemais = () => new AppProblem(413, 'grande-demais', rota.grande, rota.passa);
   return (req: PedidoCru, _res: unknown, next: (err?: unknown) => void): void => {
-    if (req.method !== rota.metodo || (req.originalUrl ?? req.url).split('?')[0] !== rota.caminho) return next();
+    const caminho = (req.originalUrl ?? req.url).split('?')[0] ?? '';
+    if (req.method !== rota.metodo || (typeof rota.caminho === 'string' ? caminho !== rota.caminho : !rota.caminho.test(caminho))) return next();
     const tipo = cabecalho(req.headers['content-type']);
     if (tipo.startsWith('application/json')) return next();
     const compressao = cabecalho(req.headers['content-encoding']);

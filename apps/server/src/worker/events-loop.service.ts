@@ -22,6 +22,7 @@ import { PedidosQueEsperam } from './pedidos-que-esperam.js';
 import { PerfilLoop } from './perfil-loop.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { RelatorioMensalLoop } from './relatorio-mensal-loop.js';
+import { PropriedadePelaDmsRotina } from './propriedade-pela-dms.service.js';
 import { RecuperacaoDaContaRotina } from './recuperacao-da-conta.service.js';
 import { RelatorioDaAgenciaRotina } from './relatorio-da-agencia.service.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
@@ -65,6 +66,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly relatorio: RelatorioMensalLoop,
     private readonly relatorioDaAgencia: RelatorioDaAgenciaRotina,
     private readonly recuperacao: RecuperacaoDaContaRotina,
+    private readonly propriedadePelaDms: PropriedadePelaDmsRotina,
     private readonly estrategista: EstrategistaLoop,
     private readonly agenda: EstrategistaAgenda,
     private readonly pesquisa: PesquisaLoop,
@@ -114,6 +116,10 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       this.loop('recuperacao-avisos', 20, 60_000, async (n) => (await this.recuperacao.avisosLote(n)).length),
       this.loop('recuperacao-troca', 20, 300_000, async (n) => (await this.recuperacao.aplicarLote(n)).length),
       this.loop('recuperacao-expurgo', 50, 3_600_000, (n) => this.recuperacao.expurgarLote(n)),
+      // A propriedade pedida à DMS (A7, W8, parte 6a): os avisos a cada minuto; o expurgo e os rascunhos esquecidos de hora em hora.
+      this.loop('propriedade-dms-avisos', 20, 60_000, async (n) => (await this.propriedadePelaDms.avisosLote(n)).length),
+      this.loop('propriedade-dms-expurgo', 50, 3_600_000, (n) => this.propriedadePelaDms.expurgarLote(n)),
+      this.loop('propriedade-dms-rascunhos', 50, 3_600_000, (n) => this.propriedadePelaDms.limparRascunhosLote(n)),
       this.loop('estrategista', 3, 60_000, async (n) => (await this.estrategista.executarLote(n)).length),
       // A rotina de segunda passa por todas as marcas devidas numa volta; repete em 10 minutos.
       this.loop('estrategista-agenda', MARCAS_POR_VOLTA, 600_000, async () => (await this.agenda.agendarLote()).length),

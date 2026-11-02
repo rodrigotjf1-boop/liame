@@ -873,6 +873,29 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
   - no navegador (Chrome sem janela, com a API e o web locais), 42 execuções em 1440, 1024, 768 e 375 px, claro e escuro: pedir com os erros do formulário (o motivo na consulta e o documento cru), a espera e cancelar, parado, recusado e outro pedido, o pedido andando no código do app, quem não é o Dono, o aviso e parar, e o convite a partir da gaveta;
   - a suíte do web, com as etapas de cada situação, o documento e por que não dá para pedir.
 
+**A W8, parte 6a: a propriedade pedida à DMS quando o Dono não está mais, no servidor (02/11/2026; migration 0107; D-A7-86).** Desligada como a recuperação, até a chave pública da DMS ir para o ambiente (sem ela, 503).
+- **o pedido** (`/v1/ownership/claim` e `/v1/ownership/claims`):
+  - só um Administrador da própria empresa (não de uma agência), com o app, com os Termos de agora aceitos como dona se a DMS aprovar;
+  - um pedido em andamento por empresa, até 5 por dia;
+  - nasce como rascunho e recebe os dois documentos um por vez (o com foto e o da empresa: contrato social, alteração ou certidão da Junta), lacrados com a mesma chave da recuperação;
+  - a empresa vê, no rascunho, qual documento já foi (a leitura do app é por coluna, nunca o conteúdo);
+  - o envio exige os dois; e-mail a quem pediu e à DMS (só o protocolo);
+  - desistir: o rascunho some, o enviado fica cancelado;
+- **o Dono**, na espera, vê o pedido sobre ele (sem a nota de quem pediu) e responde "Ainda cuido da conta"; a DMS fala com os dois antes de decidir;
+- **o comando da distribuição** `propriedade-pela-dms`:
+  - `--listar` e `--ver`, que abre os dois documentos numa pasta;
+  - `--conferir`, que exige os dois documentos, o quadro de sócios e a videochamada e começa os 14 dias;
+  - `--aprovar`, só depois da espera: confere de novo quem pede e o Dono; quem pediu vira a dona, e o Dono antigo sai;
+  - `--recusar`, com o motivo;
+  - tudo vai para a auditoria da empresa;
+- **a rotina do worker:**
+  - os e-mails de cada situação, uma vez cada (o do Dono não diz o motivo: quem lê pode ser a família ou um sócio);
+  - o expurgo dos documentos 30 dias depois da decisão;
+  - o rascunho esquecido sai em 2 dias;
+- **testes:**
+  - `test/db/propriedade-pela-dms.spec.ts`: quem pode pedir, o rascunho e os documentos (o app vê qual foi, não o conteúdo), o envio, conferir, o aviso e a resposta do Dono, aprovar só depois da espera e a troca do Dono, recusar, desistir, o rascunho esquecido, o expurgo e cada restrição do banco;
+  - com as suítes de propriedade, pessoas, worker, ciclo de vida, acesso, recuperação, fotos e logo da agência, em UTC; o contrato da API sem quebra.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
