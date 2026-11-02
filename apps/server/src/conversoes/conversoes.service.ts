@@ -17,7 +17,7 @@ import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { type AcaoDeConversao, criarConectorGoogleAds } from '../connectors/google-ads/conector-google-ads.js';
 import { ESCOPO_DATA_MANAGER } from '../connectors/google-ads/data-manager.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
-import { actorLabel } from '../context/unit-of-work.interceptor.js';
+import { actorLabel, actorTypeOf } from '../context/unit-of-work.interceptor.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -274,7 +274,7 @@ export class ConversoesService {
       }
       await writeAudit(tx, {
         tenantId: quem.tenantId,
-        actorType: 'human',
+        actorType: actorTypeOf(auth),
         actorId: quem.userId,
         actorLabel: actorLabel(auth),
         actorRole: auth.roleKey,

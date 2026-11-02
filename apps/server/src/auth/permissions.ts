@@ -68,6 +68,27 @@ export const PERMISSOES_DA_COBRANCA_LIBERADA: readonly Permission[] = ['cobranca
 /** O único nível que recebe o acesso à cobrança (a mesma regra da tela de Pessoas, `grant-rules.ts`). */
 export const NIVEL_DA_COBRANCA_LIBERADA: RoleKey = 'administrador';
 
+/**
+ * O que quem vem de uma agência nunca tem na empresa, nem como Administrador (D-A7-47): convidar, remover e mudar o
+ * acesso de pessoas, e a cobrança. A sessão, o "quem sou" e as rotinas que agem sem a sessão (`pessoa-pode.ts`) tiram
+ * estas permissões do vínculo que vem de uma agência (`membership.partner_link_id`).
+ */
+export const PERMISSOES_FORA_DO_PARCEIRO: readonly Permission[] = [
+  'pessoas.convidar',
+  'pessoas.remover',
+  'pessoas.alterar_nivel',
+  'cobranca.ver',
+  'cobranca.gerenciar',
+  'cobranca.pagar',
+];
+
+/** As permissões do papel, menos as que quem vem de uma agência nunca tem (D-A7-47). */
+export function permissoesDoVinculo(doPapel: Iterable<string>, daAgencia: boolean): Set<string> {
+  const todas = new Set(doPapel);
+  if (daAgencia) for (const p of PERMISSOES_FORA_DO_PARCEIRO) todas.delete(p);
+  return todas;
+}
+
 /** Os papéis da agência (D-A7-51): só valem numa organização do tipo agência (o banco confere, migration 0099). */
 export const AGENCY_ROLES: ReadonlySet<RoleKey> = new Set<RoleKey>(['agencia_dona', 'agencia_admin', 'agencia_membro']);
 

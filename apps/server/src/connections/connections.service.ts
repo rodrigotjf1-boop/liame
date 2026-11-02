@@ -20,7 +20,7 @@ import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { type AuthContext, afterCommit, auditDetail, currentTx } from '../context/request-context.js';
-import { actorLabel } from '../context/unit-of-work.interceptor.js';
+import { actorLabel, actorTypeOf } from '../context/unit-of-work.interceptor.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { VaultService } from '../vault/vault.service.js';
@@ -487,7 +487,7 @@ export class ConnectionsService {
       returning expires_at`);
     await writeAudit(tx, {
       tenantId,
-      actorType: 'human',
+      actorType: actorTypeOf(auth),
       actorId: auth.userId,
       actorLabel: actorLabel(auth),
       actorRole: auth.roleKey,

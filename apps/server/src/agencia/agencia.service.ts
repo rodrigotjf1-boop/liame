@@ -149,8 +149,13 @@ export class AgencyService {
     const tx = currentTx();
     const agencyId = await agencyOf(tx, auth);
     const target = await this.target(tx, auth, agencyId, id);
+    // Quem sai do time sai também de todos os clientes da agência, na hora (A7, W6, parte 3).
+    const clientes = await tx.execute(sql`
+      update liame.membership set revoked_at = now()
+       where user_id = ${target.user_id} and revoked_at is null
+         and partner_link_id in (select l.id from liame.partner_link l where l.partner_org_id = ${agencyId} and l.status = 'ativo')`);
     await tx.execute(sql`update liame.membership set revoked_at = now() where id = ${id} and tenant_id = ${agencyId} and revoked_at is null`);
-    auditDetail({ before: { user_id: target.user_id, role: target.role_key } });
+    auditDetail({ before: { user_id: target.user_id, role: target.role_key, clients: clientes.rowCount ?? 0 } });
   }
 
   // ------------------------------------------------------------------ apoio

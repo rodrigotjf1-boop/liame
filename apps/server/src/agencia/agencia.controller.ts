@@ -1,5 +1,6 @@
 import {
   AgencyClientsResponse,
+  AgencyClientTeamResponse,
   AgencyInvitationResponse,
   AgencyMemberResponse,
   AgencyRequestResponse,
@@ -8,9 +9,10 @@ import {
   CreatePartnerRequestRequest,
   ProblemDetails,
   ResourceId,
+  SetAgencyClientTeamRequest,
   UpdateAgencyMemberRequest,
 } from '@liame/contracts';
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -78,6 +80,40 @@ export class AgencyController {
   @ApiNotFoundResponse({ standardSchema: ProblemDetails })
   async cancelRequest(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<void> {
     await this.vinculos.cancelarPedido(auth, id);
+  }
+
+  @Get('clients/:id/team')
+  @Permissao('agencia.time')
+  @ApiOperation({
+    summary: 'Quem do time entra no cliente',
+    description: 'O time da agência e, de quem está neste cliente, o nível e o limite; o máximo é o que o Dono deu.',
+  })
+  @ApiOkResponse({ standardSchema: AgencyClientTeamResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  clientTeam(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<AgencyClientTeamResponse> {
+    return this.vinculos.timeNoCliente(auth, id);
+  }
+
+  @Put('clients/:id/team')
+  @Auditar('agencia.escolher_time', { recurso: 'partner_link' })
+  @Permissao('agencia.time')
+  @ApiOperation({
+    summary: 'Salvar quem entra no cliente',
+    description:
+      'A lista inteira de quem do time entra, com o nível e o limite até o máximo do Dono; só com o app autenticador ativo. Quem sai da lista perde o acesso a este cliente na hora. O Dono recebe um aviso de cada pessoa nova.',
+  })
+  @ApiOkResponse({ standardSchema: AgencyClientTeamResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
+  setClientTeam(
+    @Auth() auth: AuthContext,
+    @Param('id', { schema: ResourceId }) id: string,
+    @Body({ schema: SetAgencyClientTeamRequest }) body: SetAgencyClientTeamRequest,
+  ): Promise<AgencyClientTeamResponse> {
+    return this.vinculos.escolherTime(auth, id, body);
   }
 
   @Delete('clients/:id')

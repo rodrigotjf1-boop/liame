@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CompanyRole, Email } from './auth.js';
+import { AgencyRole, CompanyRole, Email } from './auth.js';
 import { FutureDate, Micros } from './people.js';
 
 // O vínculo de parceiro (A7, W6, parte 2; ADR-017; D-A7-46 a D-A7-50): a agência pede pelo e-mail do Dono; o Dono
@@ -69,6 +69,46 @@ export const AgencyClientsResponse = z.strictObject({
   requests: z.array(AgencyRequestResponse),
 });
 export type AgencyClientsResponse = z.infer<typeof AgencyClientsResponse>;
+
+/** Uma pessoa do time da agência e, se estiver, o acesso dela neste cliente (A7, W6, parte 3; D-A7-48). */
+export const AgencyClientTeamMember = z.strictObject({
+  user_id: z.uuid(),
+  name: z.string(),
+  email: z.string(),
+  agency_role: AgencyRole,
+  /** Sem o app autenticador, a pessoa não entra em nenhum cliente (D-A7-48). */
+  mfa_enabled: z.boolean(),
+  in_client: z
+    .strictObject({ member_id: z.uuid(), role: PartnerRole, approve_limit_micros: Micros.nullable(), dual_approval: z.boolean() })
+    .nullable(),
+});
+export type AgencyClientTeamMember = z.infer<typeof AgencyClientTeamMember>;
+
+/** Quem do time entra neste cliente, e até onde (o máximo é o que o Dono deu). */
+export const AgencyClientTeamResponse = z.strictObject({
+  client: AgencyClientResponse,
+  team: z.array(AgencyClientTeamMember),
+});
+export type AgencyClientTeamResponse = z.infer<typeof AgencyClientTeamResponse>;
+
+/**
+ * Salvar quem entra no cliente (D-A7-48): a lista inteira de quem fica, com o nível e o limite de cada um, até o máximo
+ * do Dono. Quem sai da lista perde o acesso a este cliente na hora. Sem o limite, quem aprova fica com o limite do Dono.
+ */
+export const SetAgencyClientTeamRequest = z.strictObject({
+  members: z
+    .array(
+      z.strictObject({
+        user_id: z.uuid(),
+        role: PartnerRole,
+        approve_limit_micros: Micros.nullable().optional(),
+        dual_approval: z.boolean().optional(),
+      }),
+    )
+    .max(200)
+    .refine((ms) => new Set(ms.map((m) => m.user_id)).size === ms.length, { error: 'Cada pessoa aparece uma vez só' }),
+});
+export type SetAgencyClientTeamRequest = z.infer<typeof SetAgencyClientTeamRequest>;
 
 // ------------------------------------------------------------------ o lado da empresa
 

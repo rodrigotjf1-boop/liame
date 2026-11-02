@@ -22,6 +22,11 @@ export interface AuthContext {
   suspendedBrands: ReadonlySet<string>;
   /** Todas as marcas vivas da empresa ativa estão suspensas: a conta inteira fica suspensa (D-A7-40). */
   allBrandsSuspended: boolean;
+  /**
+   * O vínculo com a empresa ativa vem de uma agência (A7, W6, parte 3): a pessoa age pela agência, dentro do que o Dono
+   * deu, sem as permissões de pessoas e de cobrança (D-A7-47), e a auditoria a registra como `partner`.
+   */
+  partner?: { linkId: string; agencyId: string; agencyName: string } | null;
   mfaVerifiedAt: Date | null;
   /** A pessoa tem app autenticador ativo. */
   mfaConfigured: boolean;

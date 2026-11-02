@@ -5,7 +5,7 @@ import { sql } from 'drizzle-orm';
 import { naTransacaoDaEmpresa } from '../ai/na-empresa.js';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
-import { actorLabel } from '../context/unit-of-work.interceptor.js';
+import { actorLabel, actorTypeOf } from '../context/unit-of-work.interceptor.js';
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
@@ -231,7 +231,7 @@ export class FotosService {
       if (!linha) throw naoEncontrada();
       await writeAudit(tx, {
         tenantId: quem.tenantId,
-        actorType: 'human',
+        actorType: actorTypeOf(auth),
         actorId: quem.userId,
         actorLabel: actorLabel(auth),
         actorRole: auth.roleKey,

@@ -81,7 +81,7 @@ export class UnitOfWorkInterceptor implements NestInterceptor {
         if (declaration?.kind === 'auditar' && !declaration.manual) {
           await writeAudit(tx, {
             tenantId: declaration.scope === 'pessoa' ? null : auth.tenantId,
-            actorType: 'human',
+            actorType: actorTypeOf(auth),
             actorId: auth.userId,
             actorLabel: actorLabel(auth),
             actorRole: auth.roleKey,
@@ -111,9 +111,18 @@ export class UnitOfWorkInterceptor implements NestInterceptor {
   }
 }
 
-/** Quem era no momento: "Juliana, Administrador" (ADR-017). */
-export function actorLabel(auth: Pick<AuthContext, 'name' | 'roleKey'>): string {
-  return auth.roleKey ? `${auth.name}, ${ROLE_LABEL[auth.roleKey]}` : auth.name;
+/**
+ * Quem era no momento: "Juliana, Administrador" (ADR-017); quem vem de uma agência leva o nome dela, "Caio, Gestor ·
+ * Agência Fogo" (A7, W6, parte 3; D-A7-50: o que o time fez fica no registro com o nome da agência).
+ */
+export function actorLabel(auth: Pick<AuthContext, 'name' | 'roleKey' | 'partner'>): string {
+  const base = auth.roleKey ? `${auth.name}, ${ROLE_LABEL[auth.roleKey]}` : auth.name;
+  return auth.partner ? `${base} · ${auth.partner.agencyName}` : base;
+}
+
+/** O tipo de quem age: a pessoa, ou a pessoa que vem de uma agência (`partner`, A7 W6). */
+export function actorTypeOf(auth: Pick<AuthContext, 'partner'>): 'human' | 'partner' {
+  return auth.partner ? 'partner' : 'human';
 }
 
 function idOf(value: unknown): string | null {

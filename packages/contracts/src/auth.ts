@@ -110,7 +110,16 @@ export const MfaStatus = z.enum(['not_configured', 'required', 'verified']);
 export const MeResponse = z.strictObject({
   user: z.strictObject({ id: z.uuid(), name: z.string(), email: z.string() }),
   /** As organizações da pessoa: as empresas e, se houver, a agência em que ela trabalha (`kind`). */
-  organizations: z.array(z.strictObject({ id: z.uuid(), name: z.string(), role: RoleKey, kind: OrganizationKind })),
+  organizations: z.array(
+    z.strictObject({
+      id: z.uuid(),
+      name: z.string(),
+      role: RoleKey,
+      kind: OrganizationKind,
+      /** A empresa em que a pessoa entra pela agência (A7, W6, parte 3): qual agência. */
+      via_agency: z.strictObject({ id: z.uuid(), name: z.string() }).nullable().optional(),
+    }),
+  ),
   active_organization_id: z.uuid().nullable(),
   mfa: MfaStatus,
   /** O nível na empresa ativa exige o app autenticador e ele ainda não foi configurado. */
