@@ -96,11 +96,17 @@ function exigirQuem(por: string): string {
   return quem;
 }
 
-/** A auditoria da decisão em cada empresa (viva) de que a pessoa era a dona; sem nenhuma, na cadeia do sistema. */
-async function auditarNasEmpresas(
+/** O autor das decisões da DMS na auditoria. */
+const daDms = (por: string) => ({ quem: `Distribuição DMS (${por})`, origem: 'console' as const });
+
+/**
+ * A auditoria de uma decisão sobre o pedido em cada empresa (viva) de que a pessoa era a dona; sem nenhuma, na cadeia do
+ * sistema. A DMS (pelo comando) e a rotina do worker (a troca no fim da espera) gravam por aqui.
+ */
+export async function auditarNasEmpresas(
   tx: Tx,
-  pedido: PedidoNaDistribuicao,
-  p: { por: string; action: string; after: Record<string, unknown>; reason?: string | null },
+  pedido: { id: string; protocol: string; companies: readonly EmpresaDoPedido[] },
+  p: { quem: string; origem: 'console' | 'worker'; action: string; after: Record<string, unknown>; reason?: string | null },
 ): Promise<void> {
   const ids = pedido.companies.map((c) => c.tenant_id);
   const vivas = ids.length
@@ -109,13 +115,13 @@ async function auditarNasEmpresas(
   const base = {
     actorType: 'system' as const,
     actorId: null,
-    actorLabel: `Distribuição DMS (${p.por})`,
+    actorLabel: p.quem,
     action: p.action,
     resourceType: 'account_recovery',
     resourceId: pedido.id,
     after: { protocolo: pedido.protocol, ...p.after },
     reason: p.reason ?? null,
-    origin: 'console' as const,
+    origin: p.origem,
   };
   if (!vivas.length) {
     await writeAudit(tx, { ...base, tenantId: null });
@@ -149,10 +155,32 @@ export async function conferirPedido(
        returning applies_at`);
     const appliesAt = data(r.rows[0]!.applies_at)!;
     await auditarNasEmpresas(tx, pedido, {
-      por,
+      ...daDms(por),
       action: 'segundo_fator.recuperacao_conferir',
       after: { documento: true, socios: true, videochamada: true, aplica_em: appliesAt.toISOString() },
     });
+    return { appliesAt };
+  });
+}
+
+/**
+ * A DMS retoma o pedido que um Administrador parou, depois de falar com o Dono pelo e-mail e pelo telefone cadastrados
+ * (D-A7-64): a espera de 7 dias recomeça agora, com aviso de novo ao Dono e aos Administradores.
+ */
+export async function retomarPedido(db: Db, p: { protocolo: string; por: string; motivo: string }): Promise<{ appliesAt: Date }> {
+  const por = exigirQuem(p.por);
+  const motivo = p.motivo.trim();
+  if (motivo.length < 5 || motivo.length > 200) throw new Error('diga como a DMS confirmou com o Dono (--motivo), de 5 a 200 letras');
+  return withSystem(db, async (tx) => {
+    const pedido = await pedidoPorProtocolo(tx, p.protocolo, true);
+    if (pedido.status !== 'parado') throw new Error(`o pedido ${p.protocolo} está ${pedido.status}: só se retoma o que foi parado`);
+    const r = await tx.execute<{ applies_at: Date | string }>(sql`
+      update liame.account_recovery
+         set status = 'conferido', applies_at = now() + make_interval(days => ${DIAS_DE_ESPERA})
+       where id = ${pedido.id}
+       returning applies_at`);
+    const appliesAt = data(r.rows[0]!.applies_at)!;
+    await auditarNasEmpresas(tx, pedido, { ...daDms(por), action: 'segundo_fator.recuperacao_retomar', after: { aplica_em: appliesAt.toISOString() }, reason: motivo });
     return { appliesAt };
   });
 }
@@ -170,6 +198,6 @@ export async function recusarPedido(db: Db, p: { protocolo: string; por: string;
          set status = 'recusado', refusal_reason = ${motivo}, closed_at = now(),
              documents_expire_at = now() + make_interval(days => ${DIAS_DOS_DOCUMENTOS})
        where id = ${pedido.id}`);
-    await auditarNasEmpresas(tx, pedido, { por, action: 'segundo_fator.recuperacao_recusar', after: { situacao_antes: pedido.status }, reason: motivo });
+    await auditarNasEmpresas(tx, pedido, { ...daDms(por), action: 'segundo_fator.recuperacao_recusar', after: { situacao_antes: pedido.status }, reason: motivo });
   });
 }

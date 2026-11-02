@@ -835,6 +835,25 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
   - o teste de acesso ganhou a lista exata das rotas que valem só com a senha;
   - as suítes de entrada, segundo fator, ciclo de vida e fotos, em UTC; o contrato da API sem quebra.
 
+**A W8, parte 4b: a espera da recuperação da conta do Dono (02/11/2026; sem migration; D-A7-85).** Desligada com a 4a, até a chave pública da DMS ir para o ambiente.
+- **o aviso aos Administradores** (`GET /v1/account-recovery/notice`): na espera, o pedido do Dono aparece para os Administradores da própria empresa (não os de uma agência), com o protocolo, quando a DMS conferiu e quando o app dele é trocado;
+- **"Não reconheço este pedido"** (`POST /v1/account-recovery/{id}/stop`): o pedido para e a troca não acontece; só a DMS retoma (`recuperacao-da-conta --retomar`, com o motivo), e a espera de 7 dias recomeça;
+- **a troca no fim da espera**, numa rotina do worker de 5 em 5 minutos, numa transação só:
+  - o app antigo, o pendente e os códigos de recuperação saem;
+  - os pedidos de troca do app vencem e todas as sessões fecham;
+  - o pedido vira `aplicado`, com a auditoria em cada empresa;
+  - ao entrar com a senha, o Dono cadastra o app novo e recebe 10 códigos;
+- **os e-mails de cada situação**, pela mesma rotina, a cada minuto, uma vez cada (a marca muda só depois do envio):
+  - conferido: ao Dono e aos Administradores;
+  - parado: ao Dono e à DMS;
+  - recusado: ao Dono, com o motivo;
+  - aplicado: ao Dono e aos Administradores;
+  - cancelado depois da conferência: aos Administradores (o Dono já recebe o da API);
+- **o expurgo** dos documentos 30 dias depois da decisão, de hora em hora; o pedido fica, sem a imagem;
+- **testes:**
+  - `test/db/recuperacao-da-conta-espera.spec.ts`: o aviso, quem vê e quem para, retomar, os e-mails uma vez, a troca no fim da espera e o app novo, o cancelamento depois da conferência e o expurgo;
+  - com a 4a, o módulo do worker, segundo fator, entrada, pessoas, propriedade, ciclo de vida e acesso, em UTC; o contrato da API sem quebra.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

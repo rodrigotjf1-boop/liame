@@ -49,6 +49,7 @@ import { ComoTeAchamService } from '../results/como-te-acham.service.js';
 import { ResultsService } from '../results/results.service.js';
 import { RelatorioMensalLoop } from './relatorio-mensal-loop.js';
 import { RelatorioMensalService } from './relatorio-mensal.service.js';
+import { RecuperacaoDaContaRotina } from './recuperacao-da-conta.service.js';
 import { RelatorioDaAgenciaRotina } from './relatorio-da-agencia.service.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { RevisaoSemanalService } from './revisao-semanal.service.js';
@@ -170,6 +171,8 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     RelatorioMensalLoop,
     // O relatório da agência sem a agência por perto (A7, W7, parte 4b): o envio sozinho do dia 2 e o lembrete do dia 3.
     RelatorioDaAgenciaRotina,
+    // A espera da recuperação da conta do Dono (A7, W8, parte 4b): a troca no fim dos 7 dias, os avisos e o expurgo.
+    RecuperacaoDaContaRotina,
     // Estrategista (A3, I11): as leituras da IA pelos mesmos serviços das rotas (os cupons pedem o Action Service, que
     // pede a política e o segundo fator; nada disso escreve aqui) e a fila das demandas e das novas análises.
     PolicyService,

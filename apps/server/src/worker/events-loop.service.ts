@@ -22,6 +22,7 @@ import { PedidosQueEsperam } from './pedidos-que-esperam.js';
 import { PerfilLoop } from './perfil-loop.js';
 import { PesquisaLoop } from './pesquisa-loop.js';
 import { RelatorioMensalLoop } from './relatorio-mensal-loop.js';
+import { RecuperacaoDaContaRotina } from './recuperacao-da-conta.service.js';
 import { RelatorioDaAgenciaRotina } from './relatorio-da-agencia.service.js';
 import { RevisaoSemanalLoop } from './revisao-semanal-loop.js';
 import { SearchConsoleLoop } from './search-console-loop.js';
@@ -63,6 +64,7 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
     private readonly revisao: RevisaoSemanalLoop,
     private readonly relatorio: RelatorioMensalLoop,
     private readonly relatorioDaAgencia: RelatorioDaAgenciaRotina,
+    private readonly recuperacao: RecuperacaoDaContaRotina,
     private readonly estrategista: EstrategistaLoop,
     private readonly agenda: EstrategistaAgenda,
     private readonly pesquisa: PesquisaLoop,
@@ -107,6 +109,11 @@ export class EventsLoopService implements OnApplicationBootstrap, OnApplicationS
       // O relatório da agência (A7, W7, parte 4b): o envio sozinho do dia 2 e o lembrete do dia 3; a fila é olhada de 5 em 5 minutos.
       this.loop('relatorio-da-agencia', 20, 300_000, async (n) => (await this.relatorioDaAgencia.enviarSozinhosLote(n)).length),
       this.loop('lembrete-da-agencia', 20, 300_000, async (n) => (await this.relatorioDaAgencia.lembretesLote(n)).length),
+      // A recuperação da conta do Dono (A7, W8, parte 4b): os avisos de cada situação olhados a cada minuto; a troca no fim
+      // da espera de 5 em 5 minutos; o expurgo dos documentos de hora em hora.
+      this.loop('recuperacao-avisos', 20, 60_000, async (n) => (await this.recuperacao.avisosLote(n)).length),
+      this.loop('recuperacao-troca', 20, 300_000, async (n) => (await this.recuperacao.aplicarLote(n)).length),
+      this.loop('recuperacao-expurgo', 50, 3_600_000, (n) => this.recuperacao.expurgarLote(n)),
       this.loop('estrategista', 3, 60_000, async (n) => (await this.estrategista.executarLote(n)).length),
       // A rotina de segunda passa por todas as marcas devidas numa volta; repete em 10 minutos.
       this.loop('estrategista-agenda', MARCAS_POR_VOLTA, 600_000, async () => (await this.agenda.agendarLote()).length),

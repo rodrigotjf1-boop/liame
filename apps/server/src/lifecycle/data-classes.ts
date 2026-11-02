@@ -235,11 +235,15 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   agency_report_reminder: { class: 'INTERNAL', retention: 'com o relatório e com a agência (some com qualquer um dos dois)' },
   // A transferência da propriedade da conta (A7, W8, parte 2, migration 0105): quem pediu, para quem e a decisão.
   ownership_transfer: { class: 'PERSONAL', retention: 'com a empresa e com as pessoas (some com qualquer uma delas)' },
-  // A recuperação da conta do Dono (A7, W8, parte 4a, migration 0106; D-A7-62, D-A7-64): o pedido, a conferência da DMS
-  // (sem a imagem) e a decisão ficam com a pessoa; o documento com foto, lacrado com a chave pública da DMS, sai 30 dias
-  // depois da decisão (o expurgo chega na parte 4b).
+  // A recuperação da conta do Dono (A7, W8, partes 4a e 4b, migration 0106; D-A7-62, D-A7-64): o pedido, a conferência da
+  // DMS (sem a imagem) e a decisão ficam com a pessoa; o documento com foto, lacrado com a chave pública da DMS, sai 30
+  // dias depois da decisão, pela rotina da recuperação no worker (`recuperacao-da-conta.service.ts`, de hora em hora).
   account_recovery: { class: 'PERSONAL', retention: 'com a pessoa' },
-  account_recovery_document: { class: 'SENSITIVE', retention: '30 dias depois da decisão da DMS ou do cancelamento (D-A7-64)' },
+  account_recovery_document: {
+    class: 'SENSITIVE',
+    retention: '30 dias depois da decisão da DMS ou do cancelamento (D-A7-64)',
+    purge: { job: 'recuperacao_documento', days: 30 },
+  },
   // A empresa como cliente no meio de pagamento (A7, W2a, migration 0081): só o id dela lá (`cus_…`). O nome e o CNPJ
   // que o Asaas guarda são os da empresa, enviados na primeira cobrança.
   billing_customer: { class: 'CONFIDENTIAL', retention: 'com a empresa' },
