@@ -555,6 +555,59 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - **o Criativo não escreve anúncio que cita bebida alcoólica nesta fase:** a cláusula de advertência é obrigatória também para bar e restaurante, e a regra geral proíbe o apelo imperativo de consumo e a oferta exagerada de unidades (o "chope em dobro" e o balde esbarram nela). Quando esse anúncio entrar, entra com a cláusula posta pelo código e regra própria de texto (decisão proposta D-A4-34, `plano-a4.md` §4);
   - **não conferido** [NC]: a legislação específica de bebida alcoólica (a Lei 9.294/1996 e o que a regulamenta), o que os Padrões de Publicidade da Meta dizem de alegação de saúde em anúncio de alimento, e os anexos do CONAR para os outros ramos (o Liame começa por bares e restaurantes).
 
+
+### 6.3 A mudança dos termos e o novo aceite (02/11/2026)
+
+*Lido nas fontes oficiais em 02/11/2026 (planalto.gov.br; stj.jus.br; gov.br/anpd; a página de termos de cada empresa). Uso: a W14 e o protótipo P35 (`plano-a7.md`). Não é parecer jurídico.*
+
+- **LGPD:**
+  - **art. 8º §6º:** "Em caso de alteração de informação referida nos incisos I, II, III ou V do art. 9º desta Lei, o controlador deverá informar ao titular, com destaque de forma específica do teor das alterações, podendo o titular, nos casos em que o seu consentimento é exigido, revogá-lo caso discorde da alteração." [O]
+  - **art. 9º §2º:** mudança de finalidade não compatível com o consentimento original: informar o titular antes, e ele pode revogar o consentimento [O];
+  - **art. 9º §1º:** o consentimento é nulo se as informações não foram apresentadas "previamente com transparência, de forma clara e inequívoca" [O].
+- **CDC:**
+  - **art. 51, XIII:** são nulas as cláusulas que "autorizem o fornecedor a modificar unilateralmente o conteúdo ou a qualidade do contrato, após sua celebração" [O];
+  - **art. 54 §4º:** a cláusula que limita direito vem "redigida com destaque" [O];
+  - entre empresas, o CDC só entra com a vulnerabilidade provada: STJ, REsp 2.020.811, 3ª Turma, na notícia oficial de 21/03/2023 (o acórdão não foi lido) [O na notícia].
+- **Código Civil:**
+  - **art. 421-A:** os contratos civis e empresariais "presumem-se paritários e simétricos"; pelo inciso III, a revisão "somente ocorrerá de maneira excepcional e limitada" [O];
+  - **art. 423:** a cláusula ambígua do contrato de adesão se lê do jeito "mais favorável ao aderente" [O];
+  - **art. 424:** é nula a renúncia antecipada do aderente a direito que vem da natureza do negócio [O].
+- **Marco Civil:**
+  - **art. 7º, VIII e XI:** informações claras e completas sobre os dados pessoais, e "publicidade e clareza de eventuais políticas de uso" [O];
+  - **art. 5º, VIII e art. 15:** o registro de acesso (a data, a hora e o IP) fica guardado por 6 meses [O].
+- **Decreto 7.962/2013, art. 4º, I e IV:** o sumário do contrato antes da contratação, e o contrato disponível para guardar e reproduzir logo depois. O decreto não trata de alteração e vale para a relação de consumo [O].
+- **Prova do aceite:**
+  - **MP 2.200-2/2001, art. 10 §2º:** vale outro meio de comprovar a autoria e a integridade do documento eletrônico, "desde que admitido pelas partes como válido ou aceito pela pessoa a quem for oposto o documento" [O];
+  - **não há lista oficial** do que guardar no aceite; a data, a hora, a versão e a identificação são prática de mercado [S].
+- **Aceite tácito:** não foi achada orientação da ANPD, da Senacon ou do Procon-SP específica sobre termos de uso.
+  - O mais próximo é a recomendação conjunta de CADE, MPF, ANPD e Senacon ao WhatsApp, de 07/05/2021, sobre a nova política de privacidade, para consumidores (notícia em gov.br/anpd) [O].
+  - Ela pediu para adiar a vigência e que a empresa "se abstenha de restringir o acesso dos usuários às funcionalidades do aplicativo" a quem não aderisse.
+  - O guia de cookies da ANPD não abriu nesta leitura [NC].
+- **O prazo do aviso:** nenhuma lei achada fixa esse prazo entre empresas. Os 30 dias vêm dos Termos 15 do Liame [O nos Termos].
+- **Mercado (páginas lidas em 02/11/2026)** [O, salvo onde marcado]:
+  - **GitHub** (Terms of Service, seção R):
+    - a mudança material sai com pelo menos 30 dias, no site ou por e-mail, e vale pelo uso;
+    - o histórico é público: cada mudança é um pull request em github.com/github/site-policy.
+  - **Google** (Terms of Service):
+    - avisa com "reasonable advance notice", sem número de dias, e separa a mudança material da urgente ou legal;
+    - guarda todas as versões desde 1999, com "Comparison" entre elas (policies.google.com/terms/archive).
+  - **Google Ads** (Advertising Program Terms; a versão lida foi a da Austrália, de 09/11/2023): avisa por e-mail, a mudança vale pelo menos 30 dias depois, e "will not apply retroactively".
+  - **Slack** (User Terms): avisa por e-mail ou dentro do Slack. Quem discorda fala com a empresa cliente, que é a dona do contrato.
+  - **Stripe** (SSA, de 28/09/2026): os 30 dias valem só para aumento de tarifa e mudança adversa, e verificar a página jurídica fica por conta do usuário. É um contraexemplo.
+  - **Shopify** (15.1, de 20/10/2026): avisa por e-mail ou no painel; por motivo legal, fraude ou segurança, a mudança vale na hora.
+  - **RD Station** (2.4, versão de 02/09/2019): não tem prazo, só publica no site, e o uso vale como "expressa concordância". É um contraexemplo.
+  - **Meta:**
+    - os Termos (4.1) avisam com 30 dias, "por email ou por meio dos nossos Produtos";
+    - os Termos Comerciais têm no topo uma faixa com o dia em que valem ("Essas atualizações entrarão em vigor em 20 de novembro de 2026");
+    - o aceite por clique no Business Manager não foi conferido [NC].
+  - **Microsoft** (Services Agreement): a versão publicada em 30/07/2026 vale desde 30/09/2026, e a página "Summary of changes" numera as mudanças por seção.
+  - **Apple Developer:**
+    - as notícias listam as mudanças por seção, e o aceite é por clique ao entrar, só pelo Account Holder, em nome da organização;
+    - o que trava sem o aceite não está nas notícias oficiais [NC].
+  - **Hotmart** (cláusula L, de 21/09/2026): avisa dentro da plataforma antes da vigência, sem número de dias; quem discorda encerra o contrato na hora.
+  - **Open Terms Archive** (opentermsarchive.org): terceiros gravam cada versão dos termos dos serviços digitais.
+  - **Não conferidos** [NC]: o PayPal (a página é montada por script), o Portal do Parceiro do iFood e o Mercado Pago (que recusou o acesso, 403).
+
 ---
 
 ## 7. Regras de decisão de marketing (priors)
@@ -865,6 +918,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
 | 29/10/2026 | §10: **os preços dos modelos relidos** (about-claude/pricing, em 28 e 29/10/2026): a leitura do cache do Sonnet 5.5 em 0,05× a entrada (era 0,1× em 02/10/2026; migration 0083); o **Haiku 5.5** (`claude-haiku-5-5`), com duas faixas de preço pelo tamanho do pedido (até 100 mil tokens de entrada, US$ 0,10 / US$ 0,50; acima, cinco vezes), o `effort` de `low` a `max` e o que ele recusa; e, nos evals de 28/10/2026, o Haiku 5.5 rodando só nos Estados Unidos com o esforço `low` [testado] |
 | 29/10/2026 | §2.2: **o post no Instagram, reconferido para a Z5b, parte 2** (content publishing e a referência do `content_publishing_limit`, v26.0): o contêiner, as cinco situações dele e a conferência uma vez por minuto, a publicação, o limite (50 na referência, 100 na página geral) e o token do login unificado. Ficam **[NC]** publicar duas vezes o mesmo contêiner, o erro 9007 ao publicar o que ainda prepara a foto e o formato da data na lista dos posts |
 | 29/10/2026 | §2.2: **a foto na Página, reconferida para a Z5b, parte 3** (a referência de `/{page-id}/photos` e do `Photo`, e o "Get a Page access token" das Pages API, v26.0): o token da Página pela lista das Páginas, com as tarefas (`CREATE_CONTENT` para publicar, `MODERATE` para ler as fotos), a foto por `url` e `caption`, até 4 MB, o `name` da foto como a legenda e os erros da publicação. Ficam **[NC]** o token de usuário do sistema direto como o da Página, como a Página busca a imagem e como evitar a foto repetida |
+| 02/11/2026 | §6.3 nova: **a mudança dos termos e o novo aceite**, para a W14 e o protótipo P35: a LGPD (art. 8º §6º; art. 9º, §§ 1º e 2º), o CDC (art. 51, XIII; art. 54 §4º) e o REsp 2.020.811, o Código Civil (arts. 421-A, 423 e 424), o Marco Civil (art. 5º, VIII; art. 7º, VIII e XI; art. 15), o Decreto 7.962/2013 (art. 4º), a MP 2.200-2 (art. 10 §2º) e a recomendação de CADE, MPF, ANPD e Senacon ao WhatsApp (2021), lidos nas fontes oficiais; e como 12 empresas avisam e pedem o aceite (GitHub, Google, Google Ads, Slack, Stripe, Shopify, RD Station, Meta, Microsoft, Apple, Hotmart e o Open Terms Archive). |
 | 23/10/2026 | §18.5 (nova): **a API do Asaas, para a W2**, nas páginas oficiais: a autenticação e o `User-Agent` obrigatório para conta nova; os limites (25.000 requisições em 12 horas, sem chave de idempotência); o cliente com as notificações do Asaas desligadas; a cobrança, o QR Code do PIX e o mínimo de R$ 5; o cartão pela fatura hospedada ou pelo Checkout, e a troca de valor no cartão presa à tokenização; os avisos (o token no cabeçalho, o `id` que não muda nas reentregas, a fila que para com 15 falhas seguidas); a devolução; o Sandbox; e a nota pela API. O desenho que sai daí está no `plano-a7.md` (D-A7-27 a D-A7-33). |
 | 22/10/2026 | §18.1 e §18.4: **o dono escolheu o Asaas** (D-A7-2), com o Pix Automático pronto e desligado no início, e confirmou pelo cartão CNPJ a abertura da empresa em 30/06/2026 (a data do Pix Automático segue em 30/12/2026). A recomendação da §18.4 vira "Regra do Liame". |
 | 22/10/2026 | §18 (nova): **a cobrança do Liame** (D-A7-2 e D-A7-3, antes do código da A7). As regras do Banco Central para o Pix Automático (guia 1.3 e Resolução BCB nº 482): só recebe a empresa com CNPJ ativo há pelo menos seis meses (o da empresa chega lá em 30/12/2026); oferecer é facultativo para quem recebe; não há tarifa para quem paga; a instrução sai de 2 a 10 dias antes; até três novas tentativas em sete dias; o cancelamento pelo pagador é imediato. Oito meios de pagamento comparados nas páginas oficiais (Pix Automático, cartão, preço, nota, aviso, contrato e dados): Mercado Pago, PagBank, Stripe e Pagar.me sem o Pix Automático pela API para quem recebe; Asaas, Efí, iugu e Vindi com ele; só o Asaas emite a NFS-e. A NFS-e do Rio no padrão nacional desde 01/01/2026, e a API nacional. A escolha fica com o dono. |
