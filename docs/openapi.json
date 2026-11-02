@@ -2244,7 +2244,7 @@
     },
     "/v1/agency/clients": {
       "get": {
-        "description": "As empresas que aceitaram o vínculo (vivo, vencido ou desfeito) e os pedidos da agência (esperando, recusados e vencidos).",
+        "description": "As empresas que aceitaram o vínculo (vivo, vencido ou desfeito) e os pedidos da agência (esperando, recusados e vencidos), com o acesso de quem pede e o que pede atenção em cada empresa, só o que o nível dela ali deixa ver. O membro vê só os clientes em que está.",
         "operationId": "AgencyController_clients",
         "parameters": [],
         "responses": {
@@ -2364,6 +2364,74 @@
                                 "user_id",
                                 "name",
                                 "role"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "my_access": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "role": {
+                                "type": "string",
+                                "enum": [
+                                  "administrador",
+                                  "gestor",
+                                  "aprovador",
+                                  "somente_leitura"
+                                ]
+                              },
+                              "approve_limit_micros": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "role",
+                              "approve_limit_micros"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "attention": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": [
+                                    "integer",
+                                    "null"
+                                  ],
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "since": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "owner_name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "count",
+                                "since",
+                                "owner_name"
                               ],
                               "additionalProperties": false
                             }
@@ -3079,6 +3147,74 @@
                             ],
                             "additionalProperties": false
                           }
+                        },
+                        "my_access": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "role": {
+                              "type": "string",
+                              "enum": [
+                                "administrador",
+                                "gestor",
+                                "aprovador",
+                                "somente_leitura"
+                              ]
+                            },
+                            "approve_limit_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "role",
+                            "approve_limit_micros"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "attention": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "since": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "owner_name": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "count",
+                              "since",
+                              "owner_name"
+                            ],
+                            "additionalProperties": false
+                          }
                         }
                       },
                       "required": [
@@ -3508,6 +3644,74 @@
                               "user_id",
                               "name",
                               "role"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "my_access": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "role": {
+                              "type": "string",
+                              "enum": [
+                                "administrador",
+                                "gestor",
+                                "aprovador",
+                                "somente_leitura"
+                              ]
+                            },
+                            "approve_limit_micros": {
+                              "type": [
+                                "integer",
+                                "null"
+                              ],
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "role",
+                            "approve_limit_micros"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "attention": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ],
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "since": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "owner_name": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "count",
+                              "since",
+                              "owner_name"
                             ],
                             "additionalProperties": false
                           }

@@ -45,6 +45,21 @@ export const AgencyRequestResponse = z.strictObject({
 });
 export type AgencyRequestResponse = z.infer<typeof AgencyRequestResponse>;
 
+/**
+ * Um ponto do que pede atenção num cliente da agência (A7, W7, parte 1; D-A7-52). `kind` é texto aberto (a lista cresce;
+ * ERR-015): `suspensa` (todas as marcas vivas suspensas: só o Dono entra, e vem sozinho, com o nome do Dono e desde
+ * quando), `marca_suspensa` (parte das marcas suspensas; o resto segue), `aprovacoes` (os pedidos esperando, para quem
+ * aprova), `conta_desconectada` (as contas que perderam o acesso, para quem opera), `em_dia` (nada esperando) e
+ * `fora_do_time` (quem pede não está no time desta empresa).
+ */
+export const AgencyClientAttention = z.strictObject({
+  kind: z.string(),
+  count: z.int().min(0).nullable(),
+  since: z.string().nullable(),
+  owner_name: z.string().nullable(),
+});
+export type AgencyClientAttention = z.infer<typeof AgencyClientAttention>;
+
 /** Uma empresa que aceitou o vínculo: o que o Dono deu à agência e desde quando. */
 export const AgencyClientResponse = z.strictObject({
   id: z.uuid(),
@@ -63,6 +78,10 @@ export const AgencyClientResponse = z.strictObject({
   ended_side: z.enum(['empresa', 'agencia']).nullable(),
   /** Quem do time está nesta empresa agora, com o nível (A7, W6, parte 5); vazio no vínculo que acabou. */
   team: z.array(z.strictObject({ user_id: z.uuid(), name: z.string(), role: PartnerRole })).optional(),
+  /** O acesso de quem pede nesta empresa (A7, W7, parte 1); nulo quando a pessoa não está no time dela. */
+  my_access: z.strictObject({ role: PartnerRole, approve_limit_micros: Micros.nullable() }).nullable().optional(),
+  /** O que pede atenção nesta empresa, só o que o nível de quem pede nela deixa ver (D-A7-52); nunca a cobrança. */
+  attention: z.array(AgencyClientAttention).optional(),
 });
 export type AgencyClientResponse = z.infer<typeof AgencyClientResponse>;
 
