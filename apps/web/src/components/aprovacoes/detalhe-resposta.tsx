@@ -2,6 +2,7 @@
 
 import type { ReviewItem } from '@liame/contracts';
 import { type FormEvent, type ReactNode, type RefObject, useEffect, useId, useRef, useState } from 'react';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { Estrelas } from '@/components/avaliacoes/avaliacoes-conteudo';
 import { haQuanto } from '@/components/avaliacoes/textos';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
@@ -199,12 +200,14 @@ type Props = {
   /** Pode pedir (`campanhas.operar`): editar o texto, apagar a resposta, escrever outra. */
   podeOperar: boolean;
   temApp: boolean;
+  /** A pessoa tem chave de acesso: ela vem primeiro ao aprovar (D-A7-56). */
+  temChave?: boolean;
   /** Quem apagou a resposta e quando (o pedido de volta que a lista traz). */
   apagada: Apagada;
   titulo: RefObject<HTMLHeadingElement | null>;
   campoCodigo: RefObject<HTMLInputElement | null>;
   aoVoltar: () => void;
-  aoAprovar: (acao: AcaoDeResposta, codigo: string) => Promise<Decisao>;
+  aoAprovar: (acao: AcaoDeResposta, prova: Prova) => Promise<Decisao>;
   aoRecusar: (acao: AcaoDeResposta, motivo: string) => Promise<Decisao>;
   aoSalvarTexto: (acao: AcaoDeResposta, texto: string) => Promise<Feito>;
   aoApagar: (acao: AcaoDeResposta) => Promise<Feito>;
@@ -222,6 +225,7 @@ export function DetalheResposta({
   podeDecidir,
   podeOperar,
   temApp,
+  temChave = false,
   apagada,
   titulo,
   campoCodigo,
@@ -475,10 +479,11 @@ export function DetalheResposta({
           key={`${acao.id}:${acao.plan_hash}`}
           ids={ids}
           temApp={temApp}
+          temChave={temChave}
           campoCodigo={campoCodigo}
           motivos={MOTIVOS}
           dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale só para este texto."
-          aoAprovar={(codigo) => aoAprovar(acao, codigo)}
+          aoAprovar={(prova) => aoAprovar(acao, prova)}
           aoRecusar={(motivo) => aoRecusar(acao, motivo)}
         />
       )}

@@ -10,6 +10,7 @@ import type {
 } from '@liame/contracts';
 import { type Database, type Tx, uuidv7, withSystem } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import {
   type AuthenticationResponseJSON,
   generateAuthenticationOptions,
@@ -23,6 +24,7 @@ import { isoBase64URL } from '@simplewebauthn/server/helpers';
 import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../../config.js';
 import { DATABASE } from '../../database/database.module.js';
+import { FlagService } from '../../flags/flag.service.js';
 import { afterCommit, auditDetail, type AuthContext, currentTx } from '../../context/request-context.js';
 import { AppProblem } from '../../errors/problems.js';
 import { Mailer } from '../../mail/mailer.js';
@@ -40,6 +42,15 @@ import { AAGUID_ZERO, nomeDoGerenciador } from './gerenciadores.js';
 // entrada; na parte 9b, também pela senha (entrar sem senha: o desafio sem dono, no escopo de sistema). Cada cerimônia
 // tem um desafio de uso único, que vence em 5 minutos; o aparelho precisa confirmar a pessoa (digital, rosto ou PIN:
 // `userVerification: required`).
+
+/**
+ * A flag que segura o cadastro e a entrada sem senha (A7, W9, parte 9d; D-A7-87, item 13): desligada até o texto da
+ * Política sobre as chaves. O que já existe continua valendo (o segundo fator, as confirmações, renomear e tirar).
+ */
+export const FLAG_CHAVES = 'chaves_de_acesso';
+
+const desligada = () =>
+  new AppProblem(409, 'funcao-desligada', 'As chaves de acesso ainda não estão ligadas', 'Em breve. Por enquanto, entre e confirme com o app autenticador.');
 
 /** Até 10 chaves por pessoa (D-A7-54). */
 export const MAX_CHAVES = 10;
@@ -98,7 +109,17 @@ export class ChavesService {
     private readonly mailer: Mailer,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(DATABASE) private readonly database: Database | null,
+    private readonly modulos: ModuleRef,
   ) {}
+
+  /**
+   * A flag das chaves para a pessoa (e a empresa ativa), ou só para o ambiente (a entrada, quando ninguém entrou ainda).
+   * O FlagService mora no módulo da aplicação (como na guarda de acesso, pelo ModuleRef).
+   */
+  private async ligada(quem: { tenantId?: string | null; userId?: string | null }): Promise<boolean> {
+    const flags = this.modulos.get(FlagService, { strict: false });
+    return flags.isEnabled(FLAG_CHAVES, flags.context(quem));
+  }
 
   private get db() {
     if (!this.database) throw new Error('chaves de acesso sem banco');
@@ -109,7 +130,12 @@ export class ChavesService {
   async listar(auth: AuthContext): Promise<PasskeysResponse> {
     const tx = currentTx();
     const chaves = await this.daPessoa(tx, auth.userId);
-    return { items: chaves.map(paraResposta), max: MAX_CHAVES, has_totp: await this.temApp(tx, auth.userId) };
+    return {
+      items: chaves.map(paraResposta),
+      max: MAX_CHAVES,
+      has_totp: await this.temApp(tx, auth.userId),
+      can_create: await this.ligada({ tenantId: auth.tenantId, userId: auth.userId }),
+    };
   }
 
   /** As opções para confirmar com uma chave que a pessoa já tem (antes de cadastrar outra, ou de aprovar). */
@@ -156,6 +182,8 @@ export class ChavesService {
    * da entrada saem aqui, porque não têm uma pessoa para limpá-los no pedido seguinte dela.
    */
   async opcoesDaEntrada(ip: string | null): Promise<PasskeyCeremony> {
+    // Ninguém entrou ainda: vale a regra do ambiente (para todos). Desligada, nem gasta o limite do IP.
+    if (!(await this.ligada({}))) throw desligada();
     await this.rateLimit.consume(`entrar-chave:ip:${ip ?? '-'}`, 30, 900);
     const options = await generateAuthenticationOptions({ rpID: this.config.passkeys.rpId, userVerification: 'required' });
     const id = uuidv7();
@@ -195,6 +223,7 @@ export class ChavesService {
 
   /** As opções para cadastrar: antes, a pessoa confirma que é ela (o código do app ou uma chave), se já tem segundo fator. */
   async opcoesDeCadastro(auth: AuthContext, body: PasskeyRegistrationOptionsRequest, userAgent?: string): Promise<PasskeyCeremony> {
+    if (!(await this.ligada({ tenantId: auth.tenantId, userId: auth.userId }))) throw desligada();
     const tx = currentTx();
     await tx.execute(sql`select id from liame.app_user where id = ${auth.userId} for update`);
     const chaves = await this.daPessoa(tx, auth.userId);

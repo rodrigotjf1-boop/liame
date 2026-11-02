@@ -1,14 +1,17 @@
 'use client';
 
-import type { PartnerRequestResponse, PartnerRole } from '@liame/contracts';
+import type { PartnerRequestResponse, PartnerRole, PasskeyAssertion } from '@liame/contracts';
 import { type FormEvent, type RefObject, useId, useRef, useState } from 'react';
+import { ConfirmarComChave } from '@/components/seguranca/confirmar-com-chave';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe, novaChave, type Problema } from '@/lib/api';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
 import { dataCompleta, fimDoDia, hojeSeletor, MICROS } from '@/lib/formato';
 import { APROVAM, NIVEIS } from '@/lib/niveis';
+import { type FormasDeConfirmar, useFormasDeConfirmar } from '@/lib/sessao';
 import { cnpjTxt, daAgencia, NIVEIS_DO_PARCEIRO } from './parceiros';
 
 // "O pedido da agência" (P27 aprovado, gaveta à direita; D-A7-47): o Dono escolhe até onde o time da agência vai, o
@@ -24,9 +27,11 @@ type Props = {
   /** O pedido não está mais lá (a agência cancelou, venceu ou outra aba decidiu): a tela lê de novo. */
   aoSumir: (problema: Problema) => void;
   aoFechar: () => void;
+  /** Como a pessoa confirma, no lugar da sessão (os testes de desenho). */
+  confirmar?: FormasDeConfirmar;
 };
 
-export function GavetaDecidir({ pedido: p, nomeEmpresa, reserva, aoAceitar, aoRecusar, aoSumir, aoFechar }: Props) {
+export function GavetaDecidir({ pedido: p, nomeEmpresa, reserva, aoAceitar, aoRecusar, aoSumir, aoFechar, confirmar }: Props) {
   const ids = useId();
   const nivelInicial = useRef<HTMLInputElement>(null);
   const campoLimite = useRef<HTMLInputElement>(null);
@@ -44,28 +49,44 @@ export function GavetaDecidir({ pedido: p, nomeEmpresa, reserva, aoAceitar, aoRe
   const [enviando, setEnviando] = useState(false);
   const [recusando, setRecusando] = useState(false);
   const aprova = APROVAM.has(nivel);
+  // A confirmação: a chave de acesso primeiro, para quem tem, e o código do app ao lado (A7, W9, parte 9c3; D-A7-56).
+  const { temApp, temChave } = useFormasDeConfirmar(confirmar);
 
-  async function aceitar(e: FormEvent) {
-    e.preventDefault();
+  /** O limite, antes de qualquer confirmação: os micros (ou nada, quem não aprova); `null` = o limite não serve. */
+  function conferirLimite(): { micros: number | undefined } | null {
     setErroLimite('');
     setErroCodigo('');
     setErroGeral('');
-    let limiteMicros: number | undefined;
-    if (aprova) {
-      const valor = Number(limite);
-      if (limite.trim() === '' || !Number.isFinite(valor) || valor < 0) {
-        setErroLimite('Informe até quanto a pessoa da agência aprova sozinha (pode ser zero).');
-        campoLimite.current?.focus();
-        return;
-      }
-      limiteMicros = Math.round(valor * MICROS);
+    if (!aprova) return { micros: undefined };
+    const valor = Number(limite);
+    if (limite.trim() === '' || !Number.isFinite(valor) || valor < 0) {
+      setErroLimite('Informe até quanto a pessoa da agência aprova sozinha (pode ser zero).');
+      campoLimite.current?.focus();
+      return null;
     }
+    return { micros: Math.round(valor * MICROS) };
+  }
+
+  async function aceitar(e: FormEvent) {
+    e.preventDefault();
+    if (!temApp) return;
+    const lim = conferirLimite();
+    if (!lim) return;
     const cod = codigo.trim();
     if (!/^\d{6}$/.test(cod)) {
       setErroCodigo('O código tem 6 números. Abra o app autenticador e digite o que aparece agora.');
       campoCodigo.current?.focus();
       return;
     }
+    await mandar({ code: cod }, lim.micros);
+  }
+
+  async function comChave(passkey: PasskeyAssertion) {
+    const lim = conferirLimite();
+    if (lim) await mandar({ passkey }, lim.micros);
+  }
+
+  async function mandar(prova: Prova, limiteMicros: number | undefined) {
     setEnviando(true);
     const r = await chamar(() =>
       api.POST('/v1/partners/requests/{id}/accept', {
@@ -76,7 +97,7 @@ export function GavetaDecidir({ pedido: p, nomeEmpresa, reserva, aoAceitar, aoRe
           ...(aprova ? { approve_limit_micros: limiteMicros } : {}),
           dual_approval: aprova ? dupla : true,
           ...(ate ? { ends_at: fimDoDia(ate) } : {}),
-          code: cod,
+          ...prova,
         },
       }),
     );
@@ -87,7 +108,7 @@ export function GavetaDecidir({ pedido: p, nomeEmpresa, reserva, aoAceitar, aoRe
     }
     chave.current = novaChave();
     if (r.problema.status === 404) return aoSumir(r.problema);
-    if (r.problema.code === 'codigo-invalido' || r.problema.errors?.some((x) => x.path === 'code')) {
+    if ('code' in prova && (r.problema.code === 'codigo-invalido' || r.problema.errors?.some((x) => x.path === 'code'))) {
       setCodigo('');
       setErroCodigo('O código não confere. Digite o que aparece agora no app autenticador.');
       campoCodigo.current?.focus();
@@ -243,29 +264,41 @@ export function GavetaDecidir({ pedido: p, nomeEmpresa, reserva, aoAceitar, aoRe
             </span>
           </p>
 
-          <div className="campo">
-            <label htmlFor={`${ids}-cod`}>Código do app autenticador</label>
-            <span className="campo-dica" id={`${ids}-cod-dica`}>
-              Dar acesso a uma agência pede os 6 números do app.
-            </span>
-            <input
-              ref={campoCodigo}
-              className="input campo-mono"
-              id={`${ids}-cod`}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value)}
-              aria-invalid={erroCodigo ? true : undefined}
-              aria-describedby={`${ids}-cod-dica${erroCodigo ? ` ${ids}-cod-erro` : ''}`}
+          {temChave && (
+            <ConfirmarComChave
+              rotulo="Aceitar com a chave"
+              impedido={enviando}
+              alternativa={temApp ? 'use o código do app' : 'tente de novo'}
+              antes={() => conferirLimite() !== null}
+              aoErro={setErroGeral}
+              aoProvar={comChave}
             />
-            {erroCodigo && (
-              <p className="campo-erro" id={`${ids}-cod-erro`}>
-                {erroCodigo}
-              </p>
-            )}
-          </div>
+          )}
+          {temApp && (
+            <div className="campo">
+              <label htmlFor={`${ids}-cod`}>{temChave ? 'Ou o código do app autenticador' : 'Código do app autenticador'}</label>
+              <span className="campo-dica" id={`${ids}-cod-dica`}>
+                Dar acesso a uma agência pede a sua confirmação: a chave de acesso ou os 6 números do app.
+              </span>
+              <input
+                ref={campoCodigo}
+                className="input campo-mono"
+                id={`${ids}-cod`}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value)}
+                aria-invalid={erroCodigo ? true : undefined}
+                aria-describedby={`${ids}-cod-dica${erroCodigo ? ` ${ids}-cod-erro` : ''}`}
+              />
+              {erroCodigo && (
+                <p className="campo-erro" id={`${ids}-cod-erro`}>
+                  {erroCodigo}
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <div className="dialogo-acoes">
           {recusando ? (
@@ -283,9 +316,11 @@ export function GavetaDecidir({ pedido: p, nomeEmpresa, reserva, aoAceitar, aoRe
               <button className="btn btn--perigo" type="button" onClick={() => setRecusando(true)} disabled={enviando}>
                 Recusar
               </button>
-              <button className="btn btn--primary" type="submit" disabled={enviando} aria-busy={enviando}>
-                {enviando ? 'Aceitando…' : 'Aceitar o vínculo'}
-              </button>
+              {temApp && (
+                <button className={`btn${temChave ? '' : ' btn--primary'}`} type="submit" disabled={enviando} aria-busy={enviando}>
+                  {enviando ? 'Aceitando…' : temChave ? 'Aceitar com o código' : 'Aceitar o vínculo'}
+                </button>
+              )}
             </>
           )}
         </div>

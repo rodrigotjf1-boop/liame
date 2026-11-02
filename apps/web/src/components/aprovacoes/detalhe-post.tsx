@@ -3,6 +3,7 @@
 import type { BrandPhoto } from '@liame/contracts';
 import Link from 'next/link';
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { ApagarDasRedes, type FeitoDoApagar } from '@/components/agenda/apagar-das-redes';
 import { PreviasDoPost } from '@/components/agenda/previas-do-post';
 import { SituacaoDosCanais } from '@/components/agenda/situacao-dos-canais';
@@ -34,20 +35,22 @@ type Props = {
   podeOperar: boolean;
   podeVerContas: boolean;
   temApp: boolean;
+  /** A pessoa tem chave de acesso: ela vem primeiro ao aprovar (D-A7-56). */
+  temChave?: boolean;
   /** A foto do post (das Fotos); nula quando ela não pôde ser lida, saiu das Fotos ou quem vê não vê as Fotos. */
   foto: BrandPhoto | null;
   titulo: RefObject<HTMLHeadingElement | null>;
   campoCodigo: RefObject<HTMLInputElement | null>;
   aoVoltar: () => void;
-  aoAprovar: (acao: AcaoDePost, codigo: string) => Promise<Decisao>;
+  aoAprovar: (acao: AcaoDePost, prova: Prova) => Promise<Decisao>;
   aoRecusar: (acao: AcaoDePost, motivo: string) => Promise<Decisao>;
   aoCancelar: (acao: AcaoDePost) => Promise<Feito>;
   /** "Tentar de novo" no canal que não saiu (A6, Z5d): a tela pede, avisa e lê de novo. */
   aoTentarDeNovo: (acao: AcaoDePost, canal: string) => Promise<Feito>;
   /** "Mudar a hora" do post aprovado (A6, Z5d; D-A6-55): a tela pede com o código, avisa e abre o pedido novo. */
-  aoMudarAHora: (acao: AcaoDePost, publishAt: string, codigo: string) => Promise<Feito>;
+  aoMudarAHora: (acao: AcaoDePost, publishAt: string, prova: Prova) => Promise<Feito>;
   /** "Apagar das redes" (A6, Z5d, parte 7; D-A6-57): a tela pede com o código, avisa e abre o pedido de apagar. */
-  aoApagar: (acao: AcaoDePost, codigo: string) => Promise<FeitoDoApagar>;
+  aoApagar: (acao: AcaoDePost, prova: Prova) => Promise<FeitoDoApagar>;
   /** A foto não carregou (o endereço de 5 minutos venceu): a tela pede endereços novos. */
   aoFalharImagem: () => void;
 };
@@ -63,6 +66,7 @@ export function DetalhePost({
   podeOperar,
   podeVerContas,
   temApp,
+  temChave = false,
   foto,
   titulo,
   campoCodigo,
@@ -205,7 +209,9 @@ export function DetalhePost({
                 <ApagarDasRedes
                   id={`${ids}-apagar`}
                   deOnde={deOndeSai(post)}
-                  aoApagar={(codigo) => aoApagar(acao, codigo)}
+                  temApp={temApp}
+                  temChave={temChave}
+                  aoApagar={(prova) => aoApagar(acao, prova)}
                   aoManter={() => {
                     setApagando(false);
                     setFocarApagar((n) => n + 1);
@@ -270,7 +276,16 @@ export function DetalhePost({
           )}
           {podeMudar && (
             <div id={`${ids}-mudar`} hidden={!mudando}>
-              {mudando && <MudarAHora id={`${ids}-mudar-form`} post={post} agora={agora} aoMudar={(publishAt, codigo) => aoMudarAHora(acao, publishAt, codigo)} />}
+              {mudando && (
+                <MudarAHora
+                  id={`${ids}-mudar-form`}
+                  post={post}
+                  agora={agora}
+                  temApp={temApp}
+                  temChave={temChave}
+                  aoMudar={(publishAt, prova) => aoMudarAHora(acao, publishAt, prova)}
+                />
+              )}
             </div>
           )}
           {(post.status === 'nao_saiu' || post.status === 'em_parte') && podeVerContas && (
@@ -346,10 +361,11 @@ export function DetalhePost({
           key={`${acao.id}:${acao.plan_hash}`}
           ids={ids}
           temApp={temApp}
+          temChave={temChave}
           campoCodigo={campoCodigo}
           motivos={MOTIVOS}
           dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale para este post: mudar o texto, a foto ou os canais é outro pedido."
-          aoAprovar={(codigo) => aoAprovar(acao, codigo)}
+          aoAprovar={(prova) => aoAprovar(acao, prova)}
           aoRecusar={(motivo) => aoRecusar(acao, motivo)}
         />
       ) : (

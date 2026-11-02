@@ -53,7 +53,7 @@ export class ChavesController {
   @ApiOperation({
     summary: 'Começar a criar uma chave de acesso',
     description:
-      'Antes, a pessoa confirma que é ela: o código do app (`code`) ou uma chave que já tem (`passkey`, com o desafio de `confirmation-options`); sem nenhum, 400 `confirme-que-e-voce`. Quem ainda não tem segundo fator cria a primeira sem confirmar. Até 10 chaves (409 `limite-de-chaves`). Devolve o desafio (5 minutos, uso único) e as opções para o navegador.',
+      'Antes, a pessoa confirma que é ela: o código do app (`code`) ou uma chave que já tem (`passkey`, com o desafio de `confirmation-options`); sem nenhum, 400 `confirme-que-e-voce`. Quem ainda não tem segundo fator cria a primeira sem confirmar. Até 10 chaves (409 `limite-de-chaves`). Com a função `chaves_de_acesso` desligada para a pessoa e a empresa, 409 `funcao-desligada` (as chaves que já existem continuam valendo). Devolve o desafio (5 minutos, uso único) e as opções para o navegador.',
   })
   @ApiOkResponse({ standardSchema: PasskeyCeremony })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })

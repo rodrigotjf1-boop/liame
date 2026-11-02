@@ -30,6 +30,11 @@ export const PasskeysResponse = z.strictObject({
   max: z.number().int(),
   /** A pessoa tem o app autenticador ativo (sem ele, a última chave não sai). */
   has_totp: z.boolean(),
+  /**
+   * Dá para criar chave agora (a flag `chaves_de_acesso`, A7, W9, parte 9d): desligada, a tela não oferece criar, e o
+   * servidor recusa com 409 `funcao-desligada`. As chaves que já existem continuam na lista e valendo.
+   */
+  can_create: z.boolean(),
 });
 export type PasskeysResponse = z.infer<typeof PasskeysResponse>;
 

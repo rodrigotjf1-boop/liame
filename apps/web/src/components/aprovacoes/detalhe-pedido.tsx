@@ -2,6 +2,7 @@
 
 import type { ActionResponse } from '@liame/contracts';
 import { type RefObject, useEffect, useId, useState } from 'react';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { Icone } from '@/components/ui/icone';
 import { BarraDaDecisao, type Decisao } from './barra-da-decisao';
 import { apresentar, aprovacaoParcial, cabecalhoDe, type Grupo, identidadeDoPlano, MOTIVOS_DA_RECUSA, politicaDe, prazoDe, resultadoDe, riscoDe, ROTULO_RISCO } from './textos';
@@ -21,16 +22,18 @@ type Props = {
   podeDecidir: boolean;
   /** A conta de quem vê tem o app autenticador ativo (sem ele, o servidor não deixa aprovar). */
   temApp: boolean;
+  /** A pessoa tem chave de acesso: ela vem primeiro ao aprovar (D-A7-56). */
+  temChave?: boolean;
   titulo: RefObject<HTMLHeadingElement | null>;
   campoCodigo: RefObject<HTMLInputElement | null>;
   aoVoltar: () => void;
-  aoAprovar: (acao: ActionResponse, codigo: string) => Promise<Decisao>;
+  aoAprovar: (acao: ActionResponse, prova: Prova) => Promise<Decisao>;
   aoRecusar: (acao: ActionResponse, motivo: string) => Promise<Decisao>;
 };
 
 const MOTIVOS = MOTIVOS_DA_RECUSA.map((m) => ({ valor: m, rotulo: m }));
 
-export function DetalhePedido({ acao, grupo, agora, pro, podeDecidir, temApp, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar }: Props) {
+export function DetalhePedido({ acao, grupo, agora, pro, podeDecidir, temApp, temChave = false, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar }: Props) {
   const ids = useId();
   const [aberto, setAberto] = useState(false);
   const p = apresentar(acao);
@@ -164,10 +167,11 @@ export function DetalhePedido({ acao, grupo, agora, pro, podeDecidir, temApp, ti
           key={`${acao.id}:${acao.plan_hash}`}
           ids={ids}
           temApp={temApp}
+          temChave={temChave}
           campoCodigo={campoCodigo}
           motivos={MOTIVOS}
           dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale só para este plano."
-          aoAprovar={(codigo) => aoAprovar(acao, codigo)}
+          aoAprovar={(prova) => aoAprovar(acao, prova)}
           aoRecusar={(motivo) => aoRecusar(acao, motivo)}
         />
       ) : (

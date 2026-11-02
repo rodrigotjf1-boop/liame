@@ -40,7 +40,7 @@ export function CartaoChaves({ chaves, agora, criando, aoCriar, aoRecarregar, ao
           <h2 id="t-chaves">Chaves de acesso</h2>
           <p className="card-sub">{subtituloDasChaves(n)}</p>
         </div>
-        {dados && (
+        {dados?.can_create && (
           <button className="btn btn--primary" type="button" aria-haspopup="dialog" aria-expanded={criando} disabled={n >= max || !aceita} onClick={aoCriar}>
             <Icone nome="key" />
             {rotuloDeCriar(n)}
@@ -69,7 +69,7 @@ export function CartaoChaves({ chaves, agora, criando, aoCriar, aoRecarregar, ao
           {mensagemDe(chaves.problema)}
         </Estado>
       )}
-      {dados && !aceita && (
+      {dados?.can_create && !aceita && (
         <p className="seg-txt chave-acesso-sem-suporte" role="status">
           Este navegador não aceita chave de acesso. Para criar uma, use o Chrome, o Edge, o Safari ou o Firefox atualizados.
         </p>
@@ -108,7 +108,7 @@ export function CartaoChaves({ chaves, agora, criando, aoCriar, aoRecarregar, ao
           ))}
         </ul>
       )}
-      {dados && n >= max && <p className="seg-txt">Você chegou a {max} chaves. Para criar outra, tire uma.</p>}
+      {dados?.can_create && n >= max && <p className="seg-txt">Você chegou a {max} chaves. Para criar outra, tire uma.</p>}
     </article>
   );
 }

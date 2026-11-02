@@ -9,6 +9,7 @@ import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
 import { ApagarDasRedes, type FeitoDoApagar } from './apagar-das-redes';
 import { oQueOPostTrouxe } from './post-trouxe';
@@ -41,9 +42,27 @@ type Props = {
   aoFechar: () => void;
   /** Quem pode abrir Resultados (P33: o que o post trouxe pelo link). */
   podeVerResultados?: boolean;
+  /** Como a pessoa confirma ao apagar das redes (A7, W9, parte 9c3; D-A7-56): o app e a chave de acesso (a chave primeiro). */
+  temApp?: boolean;
+  temChave?: boolean;
 };
 
-export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, podeVerContas, reserva, aoMudar, aoFalharImagem, aoFechar, podeVerResultados = false }: Props) {
+export function GavetaPost({
+  post,
+  fuso,
+  hoje,
+  foto,
+  podeOperar,
+  podeAprovar,
+  podeVerContas,
+  reserva,
+  aoMudar,
+  aoFalharImagem,
+  aoFechar,
+  podeVerResultados = false,
+  temApp = true,
+  temChave = false,
+}: Props) {
   const ids = useId();
   const fecharBt = useRef<HTMLButtonElement>(null);
   const cancelarBt = useRef<HTMLButtonElement>(null);
@@ -123,13 +142,13 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, po
     setFocarAviso((n) => n + 1);
   }
 
-  // Com o código do app de quem apaga (D-A6-57). A recusa fica no formulário; a que diz que o post mudou (já está saindo,
+  // Com a chave de acesso ou o código do app de quem apaga (D-A6-57; D-A7-56). A recusa fica no formulário; a que diz que o post mudou (já está saindo,
   // não está mais no ar) também mostra o post como está agora.
-  async function apagarDasRedes(codigo: string): Promise<FeitoDoApagar> {
+  async function apagarDasRedes(prova: Prova): Promise<FeitoDoApagar> {
     const deOnde = deOndeSai(post);
     setErro(null);
     setAviso(null);
-    const r = await chamar(() => api.POST('/v1/posts/{id}/unpublish', { params: { path: { id: post.id } }, body: { code: codigo } }));
+    const r = await chamar(() => api.POST('/v1/posts/{id}/unpublish', { params: { path: { id: post.id } }, body: prova }));
     if (!r.ok) {
       // O código que não confere com a mesma frase de Aprovações; o resto, como o servidor escreveu (com o código de rastreio no 5xx).
       const texto = r.problema.code === 'codigo-invalido' ? erroDaDecisao(r.problema).texto : mensagemDe(r.problema);
@@ -291,6 +310,8 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, po
               <ApagarDasRedes
                 id={`${ids}-apagar`}
                 deOnde={deOndeSai(post)}
+                temApp={temApp}
+                temChave={temChave}
                 aoApagar={apagarDasRedes}
                 aoManter={() => {
                   setApagando(false);

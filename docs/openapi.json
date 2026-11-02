@@ -107560,7 +107560,7 @@
     },
     "/v1/auth/passkey-options": {
       "post": {
-        "description": "O desafio da entrada sem senha (5 minutos, uso único), sem dizer quais chaves existem: a chave que o aparelho escolher diz quem é. 30 por IP a cada 15 minutos.",
+        "description": "O desafio da entrada sem senha (5 minutos, uso único), sem dizer quais chaves existem: a chave que o aparelho escolher diz quem é. 30 por IP a cada 15 minutos. Com a função `chaves_de_acesso` desligada para todos (a regra do ambiente: ninguém entrou ainda), 409 `funcao-desligada`, sem gastar o limite: a entrada fica só com a senha.",
         "operationId": "AuthController_opcoesDaChave",
         "parameters": [],
         "responses": {
@@ -107584,6 +107584,70 @@
                   "required": [
                     "challenge_id",
                     "options"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
                   ],
                   "additionalProperties": false
                 }
@@ -112772,12 +112836,16 @@
                     },
                     "has_totp": {
                       "type": "boolean"
+                    },
+                    "can_create": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "items",
                     "max",
-                    "has_totp"
+                    "has_totp",
+                    "can_create"
                   ],
                   "additionalProperties": false
                 }
@@ -113039,7 +113107,7 @@
     },
     "/v1/me/passkeys/registration-options": {
       "post": {
-        "description": "Antes, a pessoa confirma que é ela: o código do app (`code`) ou uma chave que já tem (`passkey`, com o desafio de `confirmation-options`); sem nenhum, 400 `confirme-que-e-voce`. Quem ainda não tem segundo fator cria a primeira sem confirmar. Até 10 chaves (409 `limite-de-chaves`). Devolve o desafio (5 minutos, uso único) e as opções para o navegador.",
+        "description": "Antes, a pessoa confirma que é ela: o código do app (`code`) ou uma chave que já tem (`passkey`, com o desafio de `confirmation-options`); sem nenhum, 400 `confirme-que-e-voce`. Quem ainda não tem segundo fator cria a primeira sem confirmar. Até 10 chaves (409 `limite-de-chaves`). Com a função `chaves_de_acesso` desligada para a pessoa e a empresa, 409 `funcao-desligada` (as chaves que já existem continuam valendo). Devolve o desafio (5 minutos, uso único) e as opções para o navegador.",
         "operationId": "ChavesController_opcoesDeCadastro",
         "parameters": [],
         "requestBody": {
@@ -113512,12 +113580,16 @@
                     },
                     "has_totp": {
                       "type": "boolean"
+                    },
+                    "can_create": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "items",
                     "max",
-                    "has_totp"
+                    "has_totp",
+                    "can_create"
                   ],
                   "additionalProperties": false
                 }
@@ -113672,12 +113744,16 @@
                     },
                     "has_totp": {
                       "type": "boolean"
+                    },
+                    "can_create": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "items",
                     "max",
-                    "has_totp"
+                    "has_totp",
+                    "can_create"
                   ],
                   "additionalProperties": false
                 }

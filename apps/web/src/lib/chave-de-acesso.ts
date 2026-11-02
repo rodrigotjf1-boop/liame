@@ -1,3 +1,4 @@
+import type { MeResponse, PasskeyAssertion } from '@liame/contracts';
 import {
   browserSupportsWebAuthn,
   browserSupportsWebAuthnAutofill,
@@ -12,6 +13,18 @@ import {
 // do servidor, o aparelho pede a digital, o rosto ou o PIN e devolve o que assinou. Aqui só se traduz o resultado para a
 // tela: a resposta, ou o motivo de não ter vindo (a pessoa fechou a janela, o aparelho já tem a chave, o navegador não
 // aceita chave). O servidor confere tudo.
+
+/** A confirmação de quem decide (aprovar, apagar, mudar o contrato…; D-A7-56): a chave de acesso ou o código do app. */
+export type Prova = { code: string } | { passkey: PasskeyAssertion };
+
+/**
+ * Como a pessoa confirma: o app e a chave, pelo `/v1/me` (`mfa_methods`). Sem a lista (resposta antiga), o segundo fator
+ * configurado conta como o app, como antes da W9.
+ */
+export function formasDeConfirmar(me: Pick<MeResponse, 'mfa' | 'mfa_methods'>): { temApp: boolean; temChave: boolean } {
+  if (!me.mfa_methods) return { temApp: me.mfa !== 'not_configured', temChave: false };
+  return { temApp: me.mfa_methods.includes('totp'), temChave: me.mfa_methods.includes('chave') };
+}
 
 export type MotivoDaChave = 'cancelou' | 'ja-tem' | 'sem-suporte' | 'falhou';
 export type ResultadoDaChave = { ok: true; resposta: Record<string, unknown> } | { ok: false; motivo: MotivoDaChave };

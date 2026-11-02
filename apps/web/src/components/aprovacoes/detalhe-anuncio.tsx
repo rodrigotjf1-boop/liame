@@ -1,6 +1,7 @@
 'use client';
 
 import { type RefObject, useEffect, useId, useRef, useState } from 'react';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { TextoRico } from '@/components/resultados/pecas';
 import { ListaDeFontes, TextoComNumeros, useFontes } from '@/components/resumo/numeros';
 import { Icone } from '@/components/ui/icone';
@@ -39,6 +40,8 @@ type Props = {
   /** Pode pedir ação em campanha (`campanhas.operar`): desfazer e pedir de novo. */
   podeOperar: boolean;
   temApp: boolean;
+  /** A pessoa tem chave de acesso: ela vem primeiro ao aprovar (D-A7-56). */
+  temChave?: boolean;
   /** O mês da verba, para dizer quanto o pedido pesa até o fim dele; nulo enquanto não chegou. */
   mes: MesDoPedido | null;
   /** A gaveta "Pedir uma mudança" está aberta por este pedido. */
@@ -46,7 +49,7 @@ type Props = {
   titulo: RefObject<HTMLHeadingElement | null>;
   campoCodigo: RefObject<HTMLInputElement | null>;
   aoVoltar: () => void;
-  aoAprovar: (acao: AcaoDeAnuncio, codigo: string) => Promise<Decisao>;
+  aoAprovar: (acao: AcaoDeAnuncio, prova: Prova) => Promise<Decisao>;
   aoRecusar: (acao: AcaoDeAnuncio, motivo: string) => Promise<Decisao>;
   /** Desfazer cria o pedido de volta (que também espera a aprovação). */
   aoDesfazer: (acao: AcaoDeAnuncio) => Promise<Volta>;
@@ -58,7 +61,7 @@ type Props = {
 const MOTIVOS = MOTIVOS_DA_RECUSA.map((m) => ({ valor: m, rotulo: m }));
 type FaseDaVolta = { tipo: 'nada' } | { tipo: 'confirmando'; enviando: boolean } | { tipo: 'nao-da'; texto: string } | { tipo: 'erro'; texto: string };
 
-export function DetalheAnuncio({ acao, grupo, agora, pro, podeDecidir, podeOperar, temApp, mes, pedindo, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar, aoDesfazer, aoPedirDeNovo, aoAbrir }: Props) {
+export function DetalheAnuncio({ acao, grupo, agora, pro, podeDecidir, podeOperar, temApp, temChave = false, mes, pedindo, titulo, campoCodigo, aoVoltar, aoAprovar, aoRecusar, aoDesfazer, aoPedirDeNovo, aoAbrir }: Props) {
   const ids = useId();
   const [aberto, setAberto] = useState(false);
   const [volta, setVolta] = useState<FaseDaVolta>({ tipo: 'nada' });
@@ -368,10 +371,11 @@ export function DetalheAnuncio({ acao, grupo, agora, pro, podeDecidir, podeOpera
           key={`${acao.id}:${acao.plan_hash}`}
           ids={ids}
           temApp={temApp}
+          temChave={temChave}
           campoCodigo={campoCodigo}
           motivos={MOTIVOS}
           dica="O código de 6 números que o app autenticador mostra agora. A aprovação vale só para este plano."
-          aoAprovar={(codigo) => aoAprovar(acao, codigo)}
+          aoAprovar={(prova) => aoAprovar(acao, prova)}
           aoRecusar={(motivo) => aoRecusar(acao, motivo)}
         />
       ) : (

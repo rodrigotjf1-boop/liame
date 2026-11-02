@@ -287,7 +287,7 @@ describe('telas', () => {
     expect(leitor).not.toContain('Código do app');
     expect(leitor).not.toContain('Recusar');
     const semApp = detalhe({ temApp: false });
-    expect(semApp).toContain('Para aprovar, ative o app autenticador em <a href="/seguranca">Segurança da conta</a>.');
+    expect(semApp).toContain('Para aprovar, ative o app autenticador ou crie uma chave de acesso em <a href="/seguranca">Segurança da conta</a>.');
     expect(semApp).not.toContain('Código do app');
     expect(semApp).toMatch(/<button class="btn btn--primary ap-aprovar" type="submit" disabled=""/);
     // Recusar não depende do app.

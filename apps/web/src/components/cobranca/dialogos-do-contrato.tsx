@@ -35,7 +35,7 @@ export function DialogoTrocarPlano({ brandId, s, hoje, planos, reserva, aoFechar
       semConfirmar={conta.tipo === 'igual'}
       reserva={reserva}
       aoFechar={aoFechar}
-      enviar={(code) => pedir(() => chamar(() => api.POST('/v1/billing/subscription/plan', { body: { brand_id: brandId, plan: escolhido, code } })), aoMudar)}
+      enviar={(prova) => pedir(() => chamar(() => api.POST('/v1/billing/subscription/plan', { body: { brand_id: brandId, plan: escolhido, ...prova } })), aoMudar)}
     >
       <fieldset className="campo">
         <legend>Escolha o plano</legend>
@@ -86,7 +86,7 @@ export function DialogoCancelar({ brandId, s, reserva, aoFechar, aoMudar }: Base
       perigo
       reserva={reserva}
       aoFechar={aoFechar}
-      enviar={(code) => pedir(() => chamar(() => api.POST('/v1/billing/subscription/cancel', { body: { brand_id: brandId, code } })), aoMudar)}
+      enviar={(prova) => pedir(() => chamar(() => api.POST('/v1/billing/subscription/cancel', { body: { brand_id: brandId, ...prova } })), aoMudar)}
     >
       <p className="dlg-lead">{fim ? `A assinatura termina em ${fim}, no fim do período que você já pagou.` : 'A assinatura termina no fim do período que você já pagou.'}</p>
       <ul className="lista-dlg">
@@ -110,8 +110,8 @@ export function DialogoDesistir({ brandId, s, valorCentavos, reserva, aoFechar, 
       perigo
       reserva={reserva}
       aoFechar={aoFechar}
-      enviar={async (code) => {
-        const r = await chamar(() => api.POST('/v1/billing/subscription/withdraw', { body: { brand_id: brandId, code } }));
+      enviar={async (prova) => {
+        const r = await chamar(() => api.POST('/v1/billing/subscription/withdraw', { body: { brand_id: brandId, ...prova } }));
         if (!r.ok) return r;
         // A confirmação imediata (D-A7-19, D-A7-43): o protocolo da resposta, o mesmo do e-mail que acabou de sair.
         setProtocolo(r.data.subscription?.withdraw_protocol ?? null);

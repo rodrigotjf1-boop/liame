@@ -1,13 +1,16 @@
 'use client';
 
-import type { MemberResponse, OwnershipResponse } from '@liame/contracts';
+import type { MemberResponse, OwnershipResponse, PasskeyAssertion } from '@liame/contracts';
 import { type FormEvent, type RefObject, useId, useMemo, useRef, useState } from 'react';
+import { ConfirmarComChave } from '@/components/seguranca/confirmar-com-chave';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
 import { dataCompleta } from '@/lib/formato';
 import { NIVEIS } from '@/lib/niveis';
+import { type FormasDeConfirmar, useFormasDeConfirmar } from '@/lib/sessao';
 import { CONTINUA, depoisDoAceite, motivoDeNaoPoder, oQuePassa, primeiroNome } from './propriedade-textos';
 
 // "Transferir a propriedade" (P34 aprovado, gaveta em três passos; D-A7-59 a D-A7-61): para quem (só um Administrador
@@ -23,11 +26,13 @@ type Props = {
   /** "Convidar pessoa": a gaveta fecha e o convite abre (quem vai receber ainda não está na empresa). */
   aoConvidar: () => void;
   aoFechar: () => void;
+  /** Como a pessoa confirma, no lugar da sessão (os testes de desenho). */
+  confirmar?: FormasDeConfirmar;
 };
 
 const PASSOS = ['Para quem', 'O que muda', 'Confirmar'];
 
-export function GavetaTransferir({ membros, propriedade, empresa, reserva, aoPedir, aoConvidar, aoFechar }: Props) {
+export function GavetaTransferir({ membros, propriedade, empresa, reserva, aoPedir, aoConvidar, aoFechar, confirmar }: Props) {
   const ids = useId();
   const primeiro = useRef<HTMLInputElement>(null);
   const campoCodigo = useRef<HTMLInputElement>(null);
@@ -45,6 +50,8 @@ export function GavetaTransferir({ membros, propriedade, empresa, reserva, aoPed
   const primeiroQuePode = opcoes.findIndex((m) => !motivoDeNaoPoder(m, podem));
   const nome = escolhido ? primeiroNome(escolhido.name) : '';
   const vence = new Date(Date.now() + 7 * 86_400_000).toISOString();
+  // A confirmação: a chave de acesso primeiro, para quem tem, e o código do app ao lado (A7, W9, parte 9c3; D-A7-56).
+  const { temApp, temChave } = useFormasDeConfirmar(confirmar);
 
   async function seguir(e: FormEvent) {
     e.preventDefault();
@@ -55,22 +62,29 @@ export function GavetaTransferir({ membros, propriedade, empresa, reserva, aoPed
     }
     if (passo === 2) {
       setPasso(3);
-      setTimeout(() => campoCodigo.current?.focus(), 0);
+      // A chave vem primeiro: o foco vai para ela; sem chave, para o código.
+      setTimeout(() => (temChave ? ref.current?.querySelector<HTMLElement>('[data-foco]') : campoCodigo.current)?.focus(), 0);
       return;
     }
+    if (!temApp) return;
     if (!/^\d{6}$/.test(codigo.trim())) {
       setErro('Digite os 6 dígitos que o seu app mostra agora.');
       return campoCodigo.current?.focus();
     }
+    await mandar({ code: codigo.trim() });
+  }
+
+  async function mandar(prova: Prova) {
+    setErro('');
     setEnviando(true);
-    const r = await chamar(() => api.POST('/v1/ownership/transfers', { body: { to_user_id: para!, old_owner_stays: fica, code: codigo.trim() } }));
+    const r = await chamar(() => api.POST('/v1/ownership/transfers', { body: { to_user_id: para!, old_owner_stays: fica, ...prova } }));
     setEnviando(false);
     if (r.ok) {
       aoPedir(r.data);
       return fechar();
     }
     setErro(mensagemDe(r.problema));
-    if (r.problema.code === 'codigo-invalido' || r.problema.status === 401) campoCodigo.current?.focus();
+    if ('code' in prova && (r.problema.code === 'codigo-invalido' || r.problema.status === 401)) campoCodigo.current?.focus();
   }
 
   let corpo;
@@ -195,25 +209,38 @@ export function GavetaTransferir({ membros, propriedade, empresa, reserva, aoPed
           </div>
         </dl>
         <p className="lite-frase">
-          {nome} recebe um e-mail e o pedido no Liame, e aceita com o código do app. Até lá, nada muda, e você cancela quando quiser.
+          {nome} recebe um e-mail e o pedido no Liame, e aceita com a chave de acesso ou o código do app. Até lá, nada muda, e você cancela
+          quando quiser.
         </p>
-        <div className="campo">
-          <label htmlFor={`${ids}-cod`}>Código do app autenticador</label>
-          <input
-            ref={campoCodigo}
-            className="input num"
-            id={`${ids}-cod`}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
-            aria-describedby={`${ids}-cod-dica`}
+        {temChave && (
+          <ConfirmarComChave
+            focoInicial
+            rotulo="Enviar com a chave"
+            impedido={enviando}
+            alternativa={temApp ? 'use o código do app' : 'tente de novo'}
+            aoErro={setErro}
+            aoProvar={(passkey: PasskeyAssertion) => mandar({ passkey })}
           />
-          <span className="campo-dica" id={`${ids}-cod-dica`}>
-            O código de 6 dígitos que o seu app mostra agora.
-          </span>
-        </div>
+        )}
+        {temApp && (
+          <div className="campo">
+            <label htmlFor={`${ids}-cod`}>{temChave ? 'Ou o código do app autenticador' : 'Código do app autenticador'}</label>
+            <input
+              ref={campoCodigo}
+              className="input num"
+              id={`${ids}-cod`}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
+              aria-describedby={`${ids}-cod-dica`}
+            />
+            <span className="campo-dica" id={`${ids}-cod-dica`}>
+              O código de 6 dígitos que o seu app mostra agora.
+            </span>
+          </div>
+        )}
       </>
     );
   }
@@ -262,9 +289,11 @@ export function GavetaTransferir({ membros, propriedade, empresa, reserva, aoPed
               Voltar
             </button>
           )}
-          <button className="btn btn--primary" type="submit" disabled={enviando}>
-            {passo < 3 ? 'Continuar' : enviando ? 'Enviando…' : 'Enviar o pedido'}
-          </button>
+          {(passo < 3 || temApp) && (
+            <button className={`btn${passo === 3 && temChave ? '' : ' btn--primary'}`} type="submit" disabled={enviando}>
+              {passo < 3 ? 'Continuar' : enviando ? 'Enviando…' : temChave ? 'Enviar com o código' : 'Enviar o pedido'}
+            </button>
+          )}
         </div>
       </form>
     </dialog>
