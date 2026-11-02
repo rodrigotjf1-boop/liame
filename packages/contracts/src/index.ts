@@ -538,3 +538,12 @@ export {
   CreateAccountRecoveryQuery,
   MyAccountRecoveryResponse,
 } from './account-recovery.js';
+export {
+  CreateOwnershipClaimRequest,
+  OwnershipClaim,
+  OwnershipClaimDocumentKind,
+  OwnershipClaimDocumentParams,
+  OwnershipClaimReason,
+  OwnershipClaimResponse,
+  OwnershipClaimStatus,
+} from './ownership-claim.js';

@@ -244,6 +244,15 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
     retention: '30 dias depois da decisão da DMS ou do cancelamento (D-A7-64)',
     purge: { job: 'recuperacao_documento', days: 30 },
   },
+  // A propriedade pedida à DMS quando o Dono não está mais (A7, W8, parte 6a, migration 0107; D-A7-63, D-A7-64): o pedido e
+  // a decisão ficam com a empresa; os dois documentos, lacrados com a chave pública da DMS, saem 30 dias depois da decisão
+  // (e o rascunho esquecido sai em 2 dias), pela rotina do worker (`propriedade-pela-dms.service.ts`).
+  ownership_claim: { class: 'PERSONAL', retention: 'com a empresa; o rascunho sem envio, 2 dias' },
+  ownership_claim_document: {
+    class: 'SENSITIVE',
+    retention: '30 dias depois da decisão da DMS ou do cancelamento (D-A7-64)',
+    purge: { job: 'propriedade_documento', days: 30 },
+  },
   // A empresa como cliente no meio de pagamento (A7, W2a, migration 0081): só o id dela lá (`cus_…`). O nome e o CNPJ
   // que o Asaas guarda são os da empresa, enviados na primeira cobrança.
   billing_customer: { class: 'CONFIDENTIAL', retention: 'com a empresa' },

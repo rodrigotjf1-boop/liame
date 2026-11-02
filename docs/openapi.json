@@ -3759,6 +3759,2101 @@
         ]
       }
     },
+    "/v1/ownership/claim": {
+      "get": {
+        "description": "O pedido de quem lê (em andamento, ou o último que terminou há até 30 dias) ou, para o Dono, o pedido sobre ele na espera (`about_me`, para responder \"Ainda cuido da conta\"); e por que quem lê não pode pedir (`cannot_claim`, nulo = pode).",
+        "operationId": "PropriedadePelaDmsController_ler",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "claim": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "rascunho",
+                            "pedido",
+                            "conferido",
+                            "contestado",
+                            "aprovado",
+                            "recusado",
+                            "cancelado"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "saiu_da_sociedade",
+                            "faleceu",
+                            "perdeu_acesso"
+                          ]
+                        },
+                        "note": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "requester": {
+                          "type": "object",
+                          "properties": {
+                            "user_id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "user_id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "owner_name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "documents": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "documento_com_foto",
+                              "documento_da_empresa"
+                            ]
+                          }
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "sent_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "checked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "decide_from": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "contested_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "refusal_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "closed_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "protocol",
+                        "status",
+                        "reason",
+                        "note",
+                        "requester",
+                        "owner_name",
+                        "documents",
+                        "created_at",
+                        "sent_at",
+                        "checked_at",
+                        "decide_from",
+                        "contested_at",
+                        "refusal_reason",
+                        "closed_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mine": {
+                      "type": "boolean"
+                    },
+                    "about_me": {
+                      "type": "boolean"
+                    },
+                    "cannot_claim": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "e-o-dono",
+                        "nao-e-administrador",
+                        "vem-de-agencia",
+                        "sem-segundo-fator",
+                        "pedido-em-andamento",
+                        "indisponivel",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "claim",
+                    "mine",
+                    "about_me",
+                    "cannot_claim"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "O pedido da propriedade à DMS",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/ownership/claims": {
+      "post": {
+        "description": "Só um Administrador da própria empresa (403 `so-administrador`; quem vem de uma agência, 403 `vem-de-agencia`; o Dono, 403 `e-o-dono`), com o app autenticador (409 `sem-segundo-fator`). Um pedido em andamento por empresa (409 `pedido-em-andamento`); até 5 por dia (429). Com os Termos de agora, aceitos como dona se a DMS aprovar (409 `termos-desatualizados`). Cria o rascunho, ou atualiza o rascunho de quem pede. Sem a chave da DMS no ar, 503 `propriedade-indisponivel`.",
+        "operationId": "PropriedadePelaDmsController_comecar",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "saiu_da_sociedade",
+                      "faleceu",
+                      "perdeu_acesso"
+                    ]
+                  },
+                  "note": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 600
+                  },
+                  "terms_version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "reason",
+                  "terms_version"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "claim": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "rascunho",
+                            "pedido",
+                            "conferido",
+                            "contestado",
+                            "aprovado",
+                            "recusado",
+                            "cancelado"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "saiu_da_sociedade",
+                            "faleceu",
+                            "perdeu_acesso"
+                          ]
+                        },
+                        "note": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "requester": {
+                          "type": "object",
+                          "properties": {
+                            "user_id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "user_id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "owner_name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "documents": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "documento_com_foto",
+                              "documento_da_empresa"
+                            ]
+                          }
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "sent_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "checked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "decide_from": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "contested_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "refusal_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "closed_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "protocol",
+                        "status",
+                        "reason",
+                        "note",
+                        "requester",
+                        "owner_name",
+                        "documents",
+                        "created_at",
+                        "sent_at",
+                        "checked_at",
+                        "decide_from",
+                        "contested_at",
+                        "refusal_reason",
+                        "closed_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mine": {
+                      "type": "boolean"
+                    },
+                    "about_me": {
+                      "type": "boolean"
+                    },
+                    "cannot_claim": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "e-o-dono",
+                        "nao-e-administrador",
+                        "vem-de-agencia",
+                        "sem-segundo-fator",
+                        "pedido-em-andamento",
+                        "indisponivel",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "claim",
+                    "mine",
+                    "about_me",
+                    "cannot_claim"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Começar o pedido da propriedade à DMS",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/ownership/claims/{id}/documents/{kind}": {
+      "put": {
+        "description": "No rascunho de quem pede (404 `nao-encontrado`): `documento_com_foto` (RG ou CNH de quem pede) ou `documento_da_empresa` (contrato social, alteração ou certidão da Junta). O tipo é lido do conteúdo: só JPG, PNG ou PDF (422 `documento-formato`), até 10 MB (413 `grande-demais`). Mandar de novo troca o anterior. Lacrado com a chave pública da DMS.",
+        "operationId": "PropriedadePelaDmsController_documento",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "documento_com_foto",
+                "documento_da_empresa"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "O documento, cru, até 10 MB.",
+          "content": {
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/pdf": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "claim": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "rascunho",
+                            "pedido",
+                            "conferido",
+                            "contestado",
+                            "aprovado",
+                            "recusado",
+                            "cancelado"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "saiu_da_sociedade",
+                            "faleceu",
+                            "perdeu_acesso"
+                          ]
+                        },
+                        "note": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "requester": {
+                          "type": "object",
+                          "properties": {
+                            "user_id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "user_id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "owner_name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "documents": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "documento_com_foto",
+                              "documento_da_empresa"
+                            ]
+                          }
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "sent_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "checked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "decide_from": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "contested_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "refusal_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "closed_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "protocol",
+                        "status",
+                        "reason",
+                        "note",
+                        "requester",
+                        "owner_name",
+                        "documents",
+                        "created_at",
+                        "sent_at",
+                        "checked_at",
+                        "decide_from",
+                        "contested_at",
+                        "refusal_reason",
+                        "closed_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mine": {
+                      "type": "boolean"
+                    },
+                    "about_me": {
+                      "type": "boolean"
+                    },
+                    "cannot_claim": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "e-o-dono",
+                        "nao-e-administrador",
+                        "vem-de-agencia",
+                        "sem-segundo-fator",
+                        "pedido-em-andamento",
+                        "indisponivel",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "claim",
+                    "mine",
+                    "about_me",
+                    "cannot_claim"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Mandar um documento do pedido da propriedade",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/ownership/claims/{id}/send": {
+      "post": {
+        "description": "Com os dois documentos (422 `faltam-documentos`). E-mail a quem pediu (o protocolo) e à DMS (só o protocolo).",
+        "operationId": "PropriedadePelaDmsController_enviar",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "claim": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "rascunho",
+                            "pedido",
+                            "conferido",
+                            "contestado",
+                            "aprovado",
+                            "recusado",
+                            "cancelado"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "saiu_da_sociedade",
+                            "faleceu",
+                            "perdeu_acesso"
+                          ]
+                        },
+                        "note": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "requester": {
+                          "type": "object",
+                          "properties": {
+                            "user_id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "user_id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "owner_name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "documents": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "documento_com_foto",
+                              "documento_da_empresa"
+                            ]
+                          }
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "sent_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "checked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "decide_from": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "contested_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "refusal_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "closed_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "protocol",
+                        "status",
+                        "reason",
+                        "note",
+                        "requester",
+                        "owner_name",
+                        "documents",
+                        "created_at",
+                        "sent_at",
+                        "checked_at",
+                        "decide_from",
+                        "contested_at",
+                        "refusal_reason",
+                        "closed_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mine": {
+                      "type": "boolean"
+                    },
+                    "about_me": {
+                      "type": "boolean"
+                    },
+                    "cannot_claim": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "e-o-dono",
+                        "nao-e-administrador",
+                        "vem-de-agencia",
+                        "sem-segundo-fator",
+                        "pedido-em-andamento",
+                        "indisponivel",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "claim",
+                    "mine",
+                    "about_me",
+                    "cannot_claim"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Enviar o pedido da propriedade à DMS",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/ownership/claims/{id}": {
+      "delete": {
+        "description": "Só quem pediu. O rascunho some; o pedido enviado fica cancelado.",
+        "operationId": "PropriedadePelaDmsController_cancelar",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "claim": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "rascunho",
+                            "pedido",
+                            "conferido",
+                            "contestado",
+                            "aprovado",
+                            "recusado",
+                            "cancelado"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "saiu_da_sociedade",
+                            "faleceu",
+                            "perdeu_acesso"
+                          ]
+                        },
+                        "note": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "requester": {
+                          "type": "object",
+                          "properties": {
+                            "user_id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "user_id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "owner_name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "documents": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "documento_com_foto",
+                              "documento_da_empresa"
+                            ]
+                          }
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "sent_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "checked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "decide_from": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "contested_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "refusal_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "closed_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "protocol",
+                        "status",
+                        "reason",
+                        "note",
+                        "requester",
+                        "owner_name",
+                        "documents",
+                        "created_at",
+                        "sent_at",
+                        "checked_at",
+                        "decide_from",
+                        "contested_at",
+                        "refusal_reason",
+                        "closed_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mine": {
+                      "type": "boolean"
+                    },
+                    "about_me": {
+                      "type": "boolean"
+                    },
+                    "cannot_claim": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "e-o-dono",
+                        "nao-e-administrador",
+                        "vem-de-agencia",
+                        "sem-segundo-fator",
+                        "pedido-em-andamento",
+                        "indisponivel",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "claim",
+                    "mine",
+                    "about_me",
+                    "cannot_claim"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Desistir do pedido da propriedade",
+        "tags": [
+          "people"
+        ]
+      }
+    },
+    "/v1/ownership/claims/{id}/contest": {
+      "post": {
+        "description": "Só o Dono (403 `so-o-dono`), com o pedido sobre ele na espera (404 `nao-encontrado`). O pedido para, e a DMS fala com os dois antes de decidir.",
+        "operationId": "PropriedadePelaDmsController_contestar",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "claim": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "protocol": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "rascunho",
+                            "pedido",
+                            "conferido",
+                            "contestado",
+                            "aprovado",
+                            "recusado",
+                            "cancelado"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "saiu_da_sociedade",
+                            "faleceu",
+                            "perdeu_acesso"
+                          ]
+                        },
+                        "note": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "requester": {
+                          "type": "object",
+                          "properties": {
+                            "user_id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "user_id",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "owner_name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "documents": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "documento_com_foto",
+                              "documento_da_empresa"
+                            ]
+                          }
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "sent_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "checked_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "decide_from": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "contested_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "refusal_reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "closed_at": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "protocol",
+                        "status",
+                        "reason",
+                        "note",
+                        "requester",
+                        "owner_name",
+                        "documents",
+                        "created_at",
+                        "sent_at",
+                        "checked_at",
+                        "decide_from",
+                        "contested_at",
+                        "refusal_reason",
+                        "closed_at"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "mine": {
+                      "type": "boolean"
+                    },
+                    "about_me": {
+                      "type": "boolean"
+                    },
+                    "cannot_claim": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "e-o-dono",
+                        "nao-e-administrador",
+                        "vem-de-agencia",
+                        "sem-segundo-fator",
+                        "pedido-em-andamento",
+                        "indisponivel",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "claim",
+                    "mine",
+                    "about_me",
+                    "cannot_claim"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "liame_sessao": []
+          }
+        ],
+        "summary": "Ainda cuido da conta",
+        "tags": [
+          "people"
+        ]
+      }
+    },
     "/v1/agency/clients": {
       "get": {
         "description": "As empresas que aceitaram o vínculo (vivo, vencido ou desfeito) e os pedidos da agência (esperando, recusados e vencidos), com o acesso de quem pede e o que pede atenção em cada empresa, só o que o nível dela ali deixa ver. O membro vê só os clientes em que está.",

@@ -5,7 +5,7 @@ import { APP_CONFIG, type AppConfig } from './config.js';
 import { HubDms } from './connectors/dms/hub.js';
 import { ProblemDetailsFilter } from './errors/problem.filter.js';
 import { issuesToErrors, ValidationProblem } from './errors/problems.js';
-import { leitorDaFoto, ROTA_DO_DOCUMENTO_DA_RECUPERACAO, ROTA_DO_LOGO_DA_AGENCIA } from './fotos/leitor-da-foto.js';
+import { leitorDaFoto, ROTA_DO_DOCUMENTO_DA_RECUPERACAO, ROTA_DO_LOGO_DA_AGENCIA, ROTA_DOS_DOCUMENTOS_DA_PROPRIEDADE } from './fotos/leitor-da-foto.js';
 import { applyHttpSecurity } from './http-security.js';
 import { leitorDoCorpoSemCompressao } from './leitor-do-corpo.js';
 import { API_PREFIX, API_PREFIX_EXCLUDE } from './setup-constants.js';
@@ -22,6 +22,8 @@ export function configureApp(app: INestApplication): void {
   app.use(leitorDaFoto(ROTA_DO_LOGO_DA_AGENCIA.limite, ROTA_DO_LOGO_DA_AGENCIA));
   // E o documento com foto do pedido de recuperação da conta (A7, W8, parte 4a), até 10 MB.
   app.use(leitorDaFoto(ROTA_DO_DOCUMENTO_DA_RECUPERACAO.limite, ROTA_DO_DOCUMENTO_DA_RECUPERACAO));
+  // E os documentos do pedido da propriedade à DMS (A7, W8, parte 6a), um por vez, até 10 MB cada.
+  app.use(leitorDaFoto(ROTA_DOS_DOCUMENTOS_DA_PROPRIEDADE.limite, ROTA_DOS_DOCUMENTOS_DA_PROPRIEDADE));
   // O JSON e o formulário sem descompressão: corpo comprimido recebe 415 (o boletim do Node de 21/10/2026, LIC-451).
   leitorDoCorpoSemCompressao(app);
   app.setGlobalPrefix(API_PREFIX, { exclude: API_PREFIX_EXCLUDE });
