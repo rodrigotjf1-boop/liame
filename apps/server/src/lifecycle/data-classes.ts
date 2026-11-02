@@ -231,6 +231,8 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // mandou; e cada entrega a uma pessoa da empresa, sem o endereço nem o texto.
   agency_report_send: { class: 'PERSONAL', retention: 'com a empresa e com a agência (some com qualquer uma das duas)' },
   agency_report_delivery: { class: 'PERSONAL', retention: 'com o envio e com a pessoa (some com qualquer um dos dois)' },
+  // O lembrete do dia 3 ao time da agência (A7, W7, parte 4b, migration 0104): só que saiu e para quantas pessoas.
+  agency_report_reminder: { class: 'INTERNAL', retention: 'com o relatório e com a agência (some com qualquer um dos dois)' },
   // A empresa como cliente no meio de pagamento (A7, W2a, migration 0081): só o id dela lá (`cus_…`). O nome e o CNPJ
   // que o Asaas guarda são os da empresa, enviados na primeira cobrança.
   billing_customer: { class: 'CONFIDENTIAL', retention: 'com a empresa' },

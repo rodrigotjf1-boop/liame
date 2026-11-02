@@ -21,11 +21,11 @@ import { actorLabel, actorTypeOf } from '../context/unit-of-work.interceptor.js'
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
-import { Mailer, maskEmail } from '../mail/mailer.js';
+import { Mailer } from '../mail/mailer.js';
 import { fimDaEspera } from '../results/espera-da-agencia.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
-import { emailDoRelatorio } from '../results/relatorio-email.js';
 import { type ConteudoDoRelatorio, paraQuemVe, pessoasDaVerba, VERSOES_DO_RELATORIO } from '../results/relatorio-mensal.js';
+import { mandarOsEmails } from './emails-do-relatorio.js';
 import { enderecoPublicoDoLogo } from './logo-publico.controller.js';
 
 // O relatório do mês que a agência manda ao cliente (A7, W7, parte 4a; P29; D-A7-65 a D-A7-68; D-A7-82). A agência lê
@@ -225,49 +225,25 @@ export class AgencyReportsService {
       return { id, versao };
     });
 
-    // Os e-mails, sem transação aberta; cada resultado fica gravado na entrega (o tipo do erro, nunca o endereço).
-    const link = `${this.config.appUrl}/resultados/relatorio?marca=${lido.report.brand_id}&mes=${lido.report.month.from.slice(0, 7)}`;
-    const imagens = { logo: `${this.config.appUrl}/email/liame-logo.png`, lia: `${this.config.appUrl}/email/lia.png` };
-    let falhas = 0;
-    for (const p of para) {
-      const email = emailDoRelatorio(
-        lido.conteudo,
-        { marca: lido.marca, empresa: vinculo.client_name, nivel: p.role_key, link, imagens },
-        {
-          nome: agencia.name,
-          logoUrl: agencia.logo ? enderecoPublicoDoLogo(this.config.apiUrl, agencyId) : null,
-          logoLargura: agencia.logo_width,
-          logoAltura: agencia.logo_height,
-          comentario,
-          assinatura: auth.name,
-          versao: envio.versao,
-          responde: Boolean(agencia.reply_to),
-          primeiroNome: p.name.split(/\s+/)[0] || p.name,
-        },
-      );
-      let falha: string | null = null;
-      try {
-        await this.mailer.send({
-          to: p.email,
-          subject: email.subject,
-          text: email.text,
-          html: email.html,
-          fromName: `${agencia.name} pelo Liame`,
-          ...(agencia.reply_to ? { replyTo: agencia.reply_to } : {}),
-        });
-      } catch (err) {
-        falhas += 1;
-        falha = (err instanceof Error ? err.name : 'Erro').slice(0, 100) || 'Erro';
-        this.logger.warn(`relatório da agência ${envio.id}: envio para ${maskEmail(p.email)} falhou (${err instanceof Error ? err.message : String(err)})`);
-      }
-      await withContext(db, { tenantId: vinculo.client_id, userId: auth.userId }, (tx) =>
-        tx.execute(sql`
-          update liame.agency_report_delivery
-             set status = ${falha ? 'falhou' : 'enviado'}, attempts = attempts + 1, error = ${falha},
-                 sent_at = ${falha ? null : agora.toISOString()}::timestamptz
-           where send_id = ${envio.id} and user_id = ${p.id}`),
-      ).catch((err: unknown) => this.logger.error(`relatório da agência ${envio.id}: não gravou a entrega (${err instanceof Error ? err.message : String(err)})`));
-    }
+    // Os e-mails, sem transação aberta; cada resultado fica gravado na entrega, no contexto do cliente.
+    const falhas = await mandarOsEmails(
+      { mailer: this.mailer, config: this.config, logger: this.logger },
+      {
+        id: envio.id,
+        versao: envio.versao,
+        comentario,
+        assinatura: auth.name,
+        conteudo: lido.conteudo,
+        marca: lido.marca,
+        empresa: vinculo.client_name,
+        brandId: lido.report.brand_id,
+      },
+      { agencyId, ...agencia },
+      para,
+      async (userId, falha) => {
+        await withContext(db, { tenantId: vinculo.client_id, userId: auth.userId }, (tx) => gravarEntrega(tx, envio.id, userId, falha, agora));
+      },
+    );
     return { version: envio.versao, sent_at: agora.toISOString(), recipients: para.length - falhas, failed: falhas };
   }
 
@@ -448,7 +424,16 @@ async function ultimosEnvios(tx: Tx, agencyId: string, reportIds: string[]): Pro
   return new Map(r.rows.map((e) => [e.report_id, e]));
 }
 
-async function nomeDoDono(tx: Tx, tenantId: string): Promise<string | null> {
+/** O resultado de uma entrega: enviada (com a hora) ou falhou (com o tipo do erro). */
+export async function gravarEntrega(tx: Tx, sendId: string, userId: string, falha: string | null, agora: Date): Promise<void> {
+  await tx.execute(sql`
+    update liame.agency_report_delivery
+       set status = ${falha ? 'falhou' : 'enviado'}, attempts = attempts + 1, error = ${falha},
+           sent_at = ${falha ? null : agora.toISOString()}::timestamptz
+     where send_id = ${sendId} and user_id = ${userId}`);
+}
+
+export async function nomeDoDono(tx: Tx, tenantId: string): Promise<string | null> {
   const r = await tx.execute<{ name: string }>(sql`
     select u.name from liame.membership m join liame.app_user u on u.id = m.user_id
      where m.tenant_id = ${tenantId} and m.role_key = 'dono' and m.revoked_at is null
