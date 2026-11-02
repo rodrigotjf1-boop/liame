@@ -1,4 +1,13 @@
-import { type AccountFreshness, type ConnectedAccountResponse, type ConnectionResponse, type DiscoveredAccount, GOOGLE_ADS_SCOPE, GOOGLE_ANALYTICS_SCOPE } from '@liame/contracts';
+import {
+  type AccountFreshness,
+  type ConnectedAccountResponse,
+  type ConnectionResponse,
+  type DiscoveredAccount,
+  GOOGLE_ADS_SCOPE,
+  GOOGLE_ANALYTICS_SCOPE,
+  META_INSTAGRAM_PUBLISH_SCOPE,
+  META_PAGE_PUBLISH_SCOPE,
+} from '@liame/contracts';
 import { dataCompleta, dia, diasAte, quandoComHora } from '@/lib/formato';
 import { ESCOPO_DE_INFORMAR_VENDAS } from './vendas-google';
 
@@ -20,6 +29,9 @@ const PLATAFORMAS: Record<string, { nome: string; classe: string }> = {
   google_business: { nome: 'Perfil no Google', classe: 'perfil' },
   // A6 · P18, parte B: o site do Search Console (também vem pela autorização do Google).
   search_console: { nome: 'Search Console', classe: 'sc' },
+  // A6 · P19, parte B: a Página do Facebook e o Instagram onde o post sai (vêm pela autorização da Meta).
+  facebook_page: { nome: 'Página do Facebook', classe: 'fb' },
+  instagram: { nome: 'Instagram', classe: 'ig' },
 };
 
 /** Nome e cor da plataforma (conta ou autorização). */
@@ -28,11 +40,11 @@ export function plataforma(provider: string | null): { nome: string; classe: str
 }
 
 /**
- * Quem autoriza a conta: a Meta (Meta Ads), o Google (Google Ads, GA4, a loja do perfil e o site do Search Console numa
- * autorização só), o Regem (as lojas) ou o RegemCast (a conta de mensagens).
+ * Quem autoriza a conta: a Meta (Meta Ads, a Página e o Instagram numa autorização só), o Google (Google Ads, GA4, a loja
+ * do perfil e o site do Search Console numa autorização só), o Regem (as lojas) ou o RegemCast (a conta de mensagens).
  */
 export function autorizadorDa(provider: string | null): Autorizador | null {
-  if (provider === 'meta_ads' || provider === 'meta') return 'meta';
+  if (provider === 'meta_ads' || provider === 'meta' || provider === 'facebook_page' || provider === 'instagram') return 'meta';
   if (provider === 'google_ads' || provider === 'ga4' || provider === 'google' || provider === 'google_business' || provider === 'search_console') return 'google';
   if (provider === 'regem') return 'regem';
   if (provider === 'regemcast') return 'regemcast';
@@ -110,13 +122,18 @@ export function tituloDoGoogle(comPerfil: boolean, comSearchConsole = false): st
  * `informaVendas`: a marca tem "vendas informadas ao Google" ligado, e a autorização do Google pede essa permissão.
  * `mudaAnuncios`: as plataformas em que mudar campanhas está ligado para a empresa; sem nenhuma, o Liame só lê.
  */
-export function notaDeConectar(comRegem: boolean, informaVendas: boolean, mudaAnuncios: readonly string[] = []): string {
+export function notaDeConectar(comRegem: boolean, informaVendas: boolean, mudaAnuncios: readonly string[] = [], comPosts = false): string {
   const ida = 'Você vai para a página da plataforma, confirma lá e volta para cá.';
   const regem = comRegem ? ' No Regem, a única escrita possível é o cupom de campanha, sempre com aprovação.' : '';
   const [naMeta, noGoogle] = [mudaAnuncios.includes('meta_ads'), mudaAnuncios.includes('google_ads')];
-  if (naMeta || noGoogle) {
+  // Com os posts ligados (P19, parte B): na Meta, o Liame também publica, só o post que uma pessoa aprova.
+  if (comPosts && !naMeta && !noGoogle && !informaVendas) {
+    return `${ida} Na Meta, o Liame lê os anúncios e só publica o post que uma pessoa aprova; no Google, só lê.${regem}`;
+  }
+  if (naMeta || noGoogle || comPosts) {
     // Com a escrita ligada em alguma plataforma, a nota diz o que o Liame faz em cada uma, e o que nunca faz.
-    const meta = naMeta ? `Na Meta, o Liame lê e, ${MUDA_COM_APROVACAO} campanhas, conjuntos e anúncios.` : 'Na Meta, o Liame só lê.';
+    const posts = comPosts ? ' Publica só o post que uma pessoa aprova.' : '';
+    const meta = naMeta ? `Na Meta, o Liame lê e, ${MUDA_COM_APROVACAO} campanhas, conjuntos e anúncios.${posts}` : `Na Meta, o Liame ${comPosts ? 'lê os anúncios e só publica o post que uma pessoa aprova' : 'só lê'}.`;
     const vendas = informaVendas ? ', informa as vendas confirmadas no caixa (para a conversão que você escolher)' : '';
     const google = noGoogle
       ? `No Google, lê${vendas} e, ${MUDA_COM_APROVACAO} campanhas.`
@@ -173,7 +190,18 @@ export type ContaExistente = Pick<ConnectedAccountResponse, 'provider' | 'extern
   informa_vendas?: boolean;
   /** Meta: a autorização que hoje lê esta conta foi pela configuração de escrita (gerenciar anúncios); ausente = não se sabe. */
   escreve?: boolean;
+  /**
+   * A Página ou o Instagram: a autorização que hoje o alcança tem a permissão de publicar nele (P19, parte B); ausente =
+   * não se sabe (a autorização sem as permissões lidas, ERR-179).
+   */
+  publica?: boolean;
 };
+
+/** A permissão de publicar no canal, pela autorização; nula quando a autorização não diz (permissões não lidas). */
+function publicaPelaAutorizacao(provider: string, scopes: readonly string[] | undefined): boolean | null {
+  if (!scopes?.length || (provider !== 'facebook_page' && provider !== 'instagram')) return null;
+  return scopes.includes(provider === 'facebook_page' ? META_PAGE_PUBLISH_SCOPE : META_INSTAGRAM_PUBLISH_SCOPE);
+}
 
 /** Meta: a autorização foi pela configuração do login que também pede para gerenciar anúncios (`requested_access`). */
 export function autorizaEscrita(c: Partial<Pick<ConnectionResponse, 'provider' | 'requested_access'>>): boolean {
@@ -182,27 +210,36 @@ export function autorizaEscrita(c: Partial<Pick<ConnectionResponse, 'provider' |
 
 /**
  * As contas já ligadas, cada uma com o vencimento, a permissão de informar vendas e, na Meta, a escrita da autorização
- * que a lê hoje. A resposta de antes de 16/10/2026 não traz `requested_access`: aí a escrita fica sem se saber.
+ * que a lê hoje e, na Página e no Instagram, a permissão de publicar nele. A resposta de antes de 16/10/2026 não traz
+ * `requested_access`: aí a escrita fica sem se saber. `escritaNaMeta`: mudar campanhas na Meta está ligado para a empresa
+ * (`ads_write`); desligado, a escrita fica sem se saber, e a autorização de escrita não oferece a conta só por ela (a
+ * empresa com os posts também autoriza pela de escrita, D-A6-63, e o Liame não muda campanha dela).
  */
 export function contasExistentes(
   conexoes: (Pick<ConnectionResponse, 'accounts' | 'refresh_expires_at'> & Partial<Pick<ConnectionResponse, 'scopes' | 'provider' | 'requested_access'>>)[],
+  { escritaNaMeta = true }: { escritaNaMeta?: boolean } = {},
 ): ContaExistente[] {
   return conexoes.flatMap((c) =>
-    c.accounts.map((a) => ({
-      ...a,
-      vence_em: c.refresh_expires_at ?? null,
-      ...(c.scopes ? { informa_vendas: c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS) } : {}),
-      ...(c.provider === 'meta' && c.requested_access !== undefined ? { escreve: autorizaEscrita(c) } : {}),
-    })),
+    c.accounts.map((a) => {
+      const publica = publicaPelaAutorizacao(a.provider, c.scopes);
+      return {
+        ...a,
+        vence_em: c.refresh_expires_at ?? null,
+        ...(c.scopes ? { informa_vendas: c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS) } : {}),
+        ...(c.provider === 'meta' && c.requested_access !== undefined && escritaNaMeta ? { escreve: autorizaEscrita(c) } : {}),
+        ...(publica !== null ? { publica } : {}),
+      };
+    }),
   );
 }
 
 /**
  * `renovar`: a autorização de hoje vence antes; `permissao`: esta inclui informar vendas ao Google e a de hoje não;
  * `escrita`: esta é a de escrita da Meta e a de hoje é a de leitura (ERR-138); `token`: a conta do RegemCast passa para o
- * token novo que a distribuição registrou.
+ * token novo que a distribuição registrou; `publicar`: a Página ou o Instagram que a autorização de hoje não deixa mais
+ * publicar, e esta deixa (P19, parte B; V50).
  */
-export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean; renovar?: boolean; permissao?: boolean; escrita?: boolean; token?: boolean };
+export type Escolhivel = { conta: DiscoveredAccount; reconectar: boolean; renovar?: boolean; permissao?: boolean; escrita?: boolean; token?: boolean; publicar?: boolean };
 
 /**
  * O que a pessoa pode ligar com esta autorização: as contas novas e as que estão ligadas por outra
@@ -233,6 +270,13 @@ export function escolhiveis(
           .map((e) => `${e.provider}:${e.external_id}`)
       : [],
   );
+  // A Página e o Instagram ligados por uma autorização que não deixa mais publicar neles, quando esta deixa: ligar aqui
+  // passa o canal para esta autorização, e os posts voltam a sair nele (P19, parte B; V50).
+  const ganhamPublicar = new Set(
+    existentes
+      .filter((e) => e.disconnected_at === null && e.connection_id !== c.id && e.publica === false && publicaPelaAutorizacao(e.provider, c.scopes) === true)
+      .map((e) => `${e.provider}:${e.external_id}`),
+  );
   const fimDesta = c.refresh_expires_at ? new Date(c.refresh_expires_at).getTime() : Number.POSITIVE_INFINITY;
   const renovaveis = new Set(
     existentes
@@ -255,12 +299,16 @@ export function escolhiveis(
       .map((e) => `${e.provider}:${e.external_id}`),
   );
   return c.discovered.flatMap((d): Escolhivel[] => {
+    // A Página ou o Instagram que esta autorização não deixa publicar (a permissão foi tirada na Meta) fica fora: ligar
+    // por ela não faria o post sair (P19, parte B). A permissão que não se sabe não tira nada.
+    if (publicaPelaAutorizacao(d.provider, c.scopes) === false) return [];
     if (!d.linked) return [{ conta: d, reconectar: false }];
     const k = `${d.provider}:${d.external_id}`;
     if (d.provider === 'regemcast' && trocaDeToken.has(k)) return [{ conta: d, reconectar: true, token: true }];
     if (recusadas.has(k) || trocaDeToken.has(k)) return [{ conta: d, reconectar: true }];
     if (renovaveis.has(k)) return [{ conta: d, reconectar: true, renovar: true, ...(ganhamPermissao.has(k) ? { permissao: true } : {}) }];
     if (ganhamEscrita.has(k)) return [{ conta: d, reconectar: true, escrita: true }];
+    if (ganhamPublicar.has(k)) return [{ conta: d, reconectar: true, publicar: true }];
     return ganhamPermissao.has(k) ? [{ conta: d, reconectar: true, permissao: true }] : [];
   });
 }
@@ -341,6 +389,14 @@ export function faixaDaVolta(
         texto: `Confirme ${uma ? 'a conta' : 'as contas'} para o Liame passar a usar esta autorização. Ele muda a verba diária, pausa e retoma campanhas só com a aprovação de uma pessoa. A leitura segue sem parar.`,
       };
     }
+    // Só a Página e o Instagram que voltam a poder publicar (P19, parte B): falta confirmar que eles passam.
+    if (opcoes.every((o) => o.publicar)) {
+      return {
+        tipo: 'escolher',
+        titulo: 'A Meta autorizou o Liame a publicar de novo.',
+        texto: `Confirme ${opcoes.length === 1 ? (opcoes[0]!.conta.provider === 'instagram' ? 'o Instagram' : 'a Página') : 'a Página e o Instagram'} para os posts aprovados da marca voltarem a sair ${opcoes.length === 1 ? (opcoes[0]!.conta.provider === 'instagram' ? 'nele' : 'nela') : 'neles'}.`,
+      };
+    }
     if (a === 'regem') {
       const n = escolhiveis(conexao, existentes).length;
       return {
@@ -352,18 +408,25 @@ export function faixaDaVolta(
     }
     // A loja do perfil (P17, parte B) e o site do Search Console (P18, parte B) contam à parte: "Encontramos 4 contas e
     // 2 lojas do perfil", "Encontramos 4 contas e 2 sites no Search Console".
+    // A Página e o Instagram (P19, parte B) também: "Encontramos 2 contas, 2 Páginas e 1 Instagram".
     const lojas = conexao.discovered.filter((d) => d.provider === 'google_business').length;
     const sites = conexao.discovered.filter((d) => d.provider === 'search_console').length;
-    const total = conexao.discovered.length - lojas - sites;
+    const paginas = conexao.discovered.filter((d) => d.provider === 'facebook_page').length;
+    const instagrams = conexao.discovered.filter((d) => d.provider === 'instagram').length;
+    const total = conexao.discovered.length - lojas - sites - paginas - instagrams;
+    const outras = lojas + sites + paginas + instagrams;
     const partes = [
-      total || (!lojas && !sites) ? `${total} ${total === 1 ? 'conta' : 'contas'}` : '',
+      total || !outras ? `${total} ${total === 1 ? 'conta' : 'contas'}` : '',
       lojas ? `${lojas} ${lojas === 1 ? 'loja do perfil' : 'lojas do perfil'}` : '',
       sites ? `${sites} ${sites === 1 ? 'site' : 'sites'} no Search Console` : '',
+      paginas ? `${paginas} ${paginas === 1 ? 'Página' : 'Páginas'}` : '',
+      instagrams ? `${instagrams} Instagram` : '',
     ].filter(Boolean);
+    const posts = paginas || instagrams ? ': os posts aprovados da marca saem na Página e no Instagram que você ligar' : '';
     return {
       tipo: 'escolher',
       titulo: `${artigo(a)} autorizou. Encontramos ${listaEmPalavras(partes)}.`,
-      texto: `${resumoDaDescoberta(conexao.discovered)}. Escolha quais ligar à marca ${marca}.`,
+      texto: `${resumoDaDescoberta(conexao.discovered)}. Escolha quais ligar à marca ${marca}${posts}.`,
     };
   }
   return null;
@@ -378,12 +441,16 @@ export function resumoDaDescoberta(d: DiscoveredAccount[]): string {
   const ga4 = n('ga4');
   const lojas = n('google_business');
   const sites = n('search_console');
-  if (meta) partes.push(`${meta} ${meta === 1 ? 'conta de anúncio' : 'contas de anúncio'} da Meta`);
+  const paginas = n('facebook_page');
+  const instagrams = n('instagram');
+  if (meta) partes.push(`${meta} ${meta === 1 ? 'conta de anúncio' : 'contas de anúncio'}${paginas || instagrams ? '' : ' da Meta'}`);
   if (ads) partes.push(`${ads} do Google Ads`);
   if (ga4) partes.push(`${ga4} ${ga4 === 1 ? 'propriedade' : 'propriedades'} do GA4`);
   if (lojas) partes.push(`${lojas} ${lojas === 1 ? 'loja' : 'lojas'} do perfil da empresa`);
   if (sites) partes.push(`${sites} ${sites === 1 ? 'site' : 'sites'} do Search Console`);
-  const outras = d.length - meta - ads - ga4 - lojas - sites;
+  if (paginas) partes.push(`${paginas} ${paginas === 1 ? 'Página' : 'Páginas'} do Facebook`);
+  if (instagrams) partes.push(`${instagrams} Instagram`);
+  const outras = d.length - meta - ads - ga4 - lojas - sites - paginas - instagrams;
   if (outras) partes.push(`${outras} de outra plataforma`);
   if (!partes.length) return 'Nenhuma conta';
   return listaEmPalavras(partes);
@@ -402,11 +469,16 @@ const TITULO_DO_GRUPO: Record<string, string> = {
   regemcast: 'RegemCast',
   google_business: 'Perfil da empresa no Google',
   search_console: 'Sites no Search Console',
+  facebook_page: 'Páginas do Facebook',
+  instagram: 'Instagram',
 };
 
-/** As descobertas agrupadas por plataforma, na ordem Meta, Google Ads, GA4, as lojas do perfil e os sites do Search Console. */
+/**
+ * As descobertas agrupadas por plataforma, na ordem Meta, a Página e o Instagram (P19, parte B), Google Ads, GA4, as lojas
+ * do perfil e os sites do Search Console.
+ */
 export function gruposDaEscolha(d: DiscoveredAccount[]): { provider: string; titulo: string; contas: DiscoveredAccount[] }[] {
-  const ordem = ['meta_ads', 'google_ads', 'ga4', 'google_business', 'search_console'];
+  const ordem = ['meta_ads', 'facebook_page', 'instagram', 'google_ads', 'ga4', 'google_business', 'search_console'];
   const provedores = [...new Set(d.map((x) => x.provider))].sort((x, y) => {
     const ix = ordem.indexOf(x);
     const iy = ordem.indexOf(y);
@@ -422,15 +494,18 @@ export function gruposDaEscolha(d: DiscoveredAccount[]): { provider: string; tit
 /**
  * Rótulo do botão da escolha: "Ligar 2 contas" ou, sem nenhuma marcada, "Escolha ao menos uma". `lojas`: das marcadas,
  * quantas são lojas do perfil ("Ligar 2 contas e 1 loja", P17 parte B); `sites`, quantas são sites do Search Console
- * ("Ligar 2 contas e 1 site", "Ligar 2 contas, 1 loja e 1 site", P18 parte B).
+ * ("Ligar 2 contas e 1 site", "Ligar 2 contas, 1 loja e 1 site", P18 parte B); `paginas` e `instagrams`, as Páginas e os
+ * Instagram ("Ligar 1 Página e 1 Instagram", P19 parte B).
  */
-export function botaoLigar(n: number, lojas = 0, sites = 0): string {
+export function botaoLigar(n: number, lojas = 0, sites = 0, paginas = 0, instagrams = 0): string {
   if (!n) return 'Escolha ao menos uma';
-  const contas = n - lojas - sites;
+  const contas = n - lojas - sites - paginas - instagrams;
   const partes = [
     contas ? `${contas} ${contas === 1 ? 'conta' : 'contas'}` : '',
     lojas ? `${lojas} ${lojas === 1 ? 'loja' : 'lojas'}` : '',
     sites ? `${sites} ${sites === 1 ? 'site' : 'sites'}` : '',
+    paginas ? `${paginas} ${paginas === 1 ? 'Página' : 'Páginas'}` : '',
+    instagrams ? `${instagrams} Instagram` : '',
   ].filter(Boolean);
   return `Ligar ${listaEmPalavras(partes)}`;
 }

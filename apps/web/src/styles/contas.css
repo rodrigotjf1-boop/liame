@@ -89,6 +89,9 @@
 .plat--perfil { --plat-cor: var(--marca-ciano); }
 /* A6 · P18, parte B (mockups/prototipo-contas-search-console.html): o site do Search Console. */
 .plat--sc { --plat-cor: var(--marca-lavanda-clara); }
+/* A6 · P19, parte B (mockups/prototipo-contas-posts.html): a Página do Facebook e o Instagram onde o post sai. */
+.plat--fb { --plat-cor: var(--marca-violeta); }
+.plat--ig { --plat-cor: var(--marca-lavanda); }
 .conta-id--txt { font-family: var(--font-sans); font-size: var(--text-xs); color: var(--text-muted); }
 .contas-tabela .st .girando { width: 10px; height: 10px; border-width: 1.5px; }
 .aut-txt--perigo { display: flex; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--danger-soft); color: var(--text); }

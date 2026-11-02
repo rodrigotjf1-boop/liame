@@ -3,6 +3,7 @@
 import type { ConnectionResponse } from '@liame/contracts';
 import { Icone } from '@/components/ui/icone';
 import { dataCompleta } from '@/lib/formato';
+import type { canaisNaAutorizacao } from './canais-da-meta';
 import { contasELojas, ligadasDaAutorizacao, type perfilNaAutorizacao } from './perfil-google';
 import type { searchConsoleNaAutorizacao } from './search-console';
 import { autorizadorDa, daPlataforma, emConferencia, erroDaConexao, naPlataforma, plataforma, quemAutorizou, sobreAAutorizacaoDoGoogle, vencimentoDaAutorizacao } from './textos';
@@ -24,17 +25,22 @@ type Props = {
   perfil?: ReturnType<typeof perfilNaAutorizacao>;
   /** O que a autorização do Google diz do Search Console (`searchConsoleNaAutorizacao`); nulo ou ausente sem a função. */
   site?: ReturnType<typeof searchConsoleNaAutorizacao>;
+  /** O que a autorização da Meta diz de publicar na Página e no Instagram (`canaisNaAutorizacao`); nulo ou ausente sem os posts. */
+  canais?: ReturnType<typeof canaisNaAutorizacao>;
   /** Autorização que ainda espera a escolha (a pessoa fechou com "Agora não"): reabre a escolha. */
   aoEscolher: (() => void) | null;
   /** "Conectar de novo"; nulo = não dá para conectar de novo daqui (o RegemCast sem a autorização por clique). */
   aoReconectar: (() => void) | null;
-  /** "Autorizar o Google de novo", direto para a página do Google (o perfil recusado ou numa conta sem perfil). */
+  /**
+   * "Autorizar o Google de novo" (o perfil recusado ou numa conta sem perfil) ou "Autorizar a Meta de novo" (a permissão
+   * de publicar tirada), direto para a página da plataforma.
+   */
   aoAutorizar?: () => void;
   aoProcurar: () => void;
   aoRevogar: () => void;
 };
 
-const ICONE_DA_NOTA = { lock: 'lock', info: 'info', clock: 'clock', alert: 'alert' } as const;
+const ICONE_DA_NOTA = { lock: 'lock', info: 'info', clock: 'clock', alert: 'alert', 'alert-circle': 'alert-circle' } as const;
 
 export function CartaoAutorizacao({
   conexao: c,
@@ -44,6 +50,7 @@ export function CartaoAutorizacao({
   informaVendas = false,
   perfil = null,
   site = null,
+  canais = null,
   aoEscolher,
   aoReconectar,
   aoAutorizar,
@@ -69,9 +76,10 @@ export function CartaoAutorizacao({
           ? 'Ligada pela DMS, com o token da conta, sem prazo de validade.'
           : 'Autorizada pelo dono da conta no RegemCast, sem prazo de validade.'
         : 'Autorização da empresa, sem prazo de validade.';
-  // O que falta do perfil e do site, um aviso para cada (com as duas funções ligadas, os dois podem aparecer).
-  const notas = !falhou ? [perfil?.nota ?? null, site?.nota ?? null].filter((n): n is NonNullable<typeof n> => n !== null) : [];
-  const autorizar = !reconectar && (perfil?.acao === 'autorizar' || site?.acao === 'autorizar') && aoAutorizar;
+  // O que falta do perfil, do site e dos posts, um aviso para cada (com as duas funções ligadas, os dois podem aparecer).
+  const notas = !falhou ? [perfil?.nota ?? null, site?.nota ?? null, canais?.nota ?? null].filter((n): n is NonNullable<typeof n> => n !== null) : [];
+  const autorizar = !reconectar && (perfil?.acao === 'autorizar' || site?.acao === 'autorizar' || canais?.acao === 'autorizar') && aoAutorizar;
+  const autorizarRotulo = a === 'meta' ? 'Autorizar a Meta de novo' : 'Autorizar o Google de novo';
 
   return (
     <li className="card autorizacao">
@@ -109,10 +117,11 @@ export function CartaoAutorizacao({
           {a === 'google' && informaVendas && ' Inclui a permissão de informar vendas.'}
           {a === 'google' && perfil?.inclui && ' Inclui a permissão do perfil da empresa.'}
           {a === 'google' && site?.inclui && ' Inclui a permissão do Search Console, só de leitura.'}
+          {a === 'meta' && canais?.inclui && ` ${canais.inclui}`}
         </p>
       )}
       {notas.map((nota) => (
-        <p className="aut-txt aut-txt--atencao" key={`${nota.destaque ?? ''}${nota.texto}`}>
+        <p className={`aut-txt ${nota.perigo ? 'aut-txt--perigo' : 'aut-txt--atencao'}`} key={`${nota.destaque ?? ''}${nota.texto}`}>
           <Icone nome={ICONE_DA_NOTA[nota.icone]} pequeno />
           <span>
             {nota.destaque && <b>{nota.destaque}</b>} {nota.texto}
@@ -140,8 +149,8 @@ export function CartaoAutorizacao({
             </button>
           )}
           {autorizar && (
-            <button className="btn btn--sm btn--primary" type="button" onClick={aoAutorizar} aria-label={`Autorizar o Google de novo: autorização ${qual}`}>
-              Autorizar o Google de novo
+            <button className="btn btn--sm btn--primary" type="button" onClick={aoAutorizar} aria-label={`${autorizarRotulo}: autorização ${qual}`}>
+              {autorizarRotulo}
             </button>
           )}
           <button

@@ -1,6 +1,8 @@
 // A publicação na Meta (A6 · Z5; `base-conhecimento.md` §2.2, reconferida em 21/10/2026): as regras puras que o teste
 // da D-A6-10 (`scripts/teste-foto-meta.ts`) usa e que o post de verdade vai usar. Sem rede e sem banco.
 
+import { META_INSTAGRAM_PUBLISH_SCOPE, META_PAGE_PUBLISH_SCOPE } from '@liame/contracts';
+
 /**
  * A proporção que o post do feed do Instagram aceita (content publishing, 21/10/2026): de 4:5 (em pé) a 1,91:1 (deitada).
  * Fora disso, a Meta recusa o contêiner pela proporção, e o teste da foto não diria nada sobre o endereço.
@@ -102,10 +104,13 @@ export function procuraDosCanaisGuardada(notas: unknown): ProcuraDosCanais | nul
   return { resultado: resultado as ProcuraDosCanais['resultado'], em, paginas: contagem(paginas), instagrams: contagem(instagrams) };
 }
 
-/** A permissão de publicar na Página do Facebook (a foto pelo `POST /{page-id}/photos`; base §2.2, 21/10/2026). */
-export const PERMISSAO_DE_PUBLICAR_NA_PAGINA = 'pages_manage_posts';
-/** A permissão de publicar no Instagram (o contêiner e o `media_publish`; base §2.2, 21/10/2026). */
-export const PERMISSAO_DE_PUBLICAR_NO_INSTAGRAM = 'instagram_content_publish';
+/**
+ * A permissão de publicar na Página do Facebook (a foto pelo `POST /{page-id}/photos`; base §2.2, 21/10/2026). Vem dos
+ * contratos: a tela de Contas confere a mesma.
+ */
+export const PERMISSAO_DE_PUBLICAR_NA_PAGINA = META_PAGE_PUBLISH_SCOPE;
+/** A permissão de publicar no Instagram (o contêiner e o `media_publish`; base §2.2, 21/10/2026). Vem dos contratos. */
+export const PERMISSAO_DE_PUBLICAR_NO_INSTAGRAM = META_INSTAGRAM_PUBLISH_SCOPE;
 
 /** A Página do Facebook onde o post sai, como a autorização a alcança. */
 export type PaginaDaMeta = { id: string; nome: string; instagramId: string | null };

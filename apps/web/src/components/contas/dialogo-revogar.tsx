@@ -70,7 +70,20 @@ export function DialogoRevogar({ conexao, reserva, aoRevogar, aoFechar }: Props)
             </p>
           )}
           <p>
-            {n ? (
+            {n && (ligadas.paginas || ligadas.instagrams) ? (
+              // A Página e o Instagram (P19, parte B): não são lidos; os posts deixam de sair neles.
+              <>
+                {ligadas.contas ? (
+                  <>
+                    A leitura {ligadas.contas === 1 ? 'da' : 'das'} <b>{ligadas.contas === 1 ? 'conta' : `${ligadas.contas} contas`}</b> para agora, e os posts deixam de sair{' '}
+                  </>
+                ) : (
+                  'Os posts deixam de sair '
+                )}
+                <b>{ligadas.paginas && ligadas.instagrams ? 'na Página e no Instagram' : ligadas.paginas ? 'na Página' : 'no Instagram'}</b> desta autorização. O histórico fica, e o que
+                já foi publicado continua nas redes.
+              </>
+            ) : n ? (
               <>
                 {regem || (!ligadas.lojas && !ligadas.sites) ? (
                   <>

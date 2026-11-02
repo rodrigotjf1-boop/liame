@@ -6,6 +6,7 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { META_COM_POSTS, NOTA_DAS_PERMISSOES_DE_PUBLICAR } from './canais-da-meta';
 import { NOTA_DA_PERMISSAO_DO_PERFIL } from './perfil-google';
 import { NOTA_DA_PERMISSAO_DO_SEARCH_CONSOLE } from './search-console';
 import { type Autorizador, descricaoDoGoogle, enderecoSeguro, notaDeConectar, tituloDoGoogle } from './textos';
@@ -48,6 +49,11 @@ type Props = {
    * permissão dele, só de leitura, e o diálogo diz isso logo abaixo da opção do Google.
    */
   comSearchConsole?: boolean;
+  /**
+   * Os posts ligados para a empresa (`posts`; A6, P19 parte B): a autorização da Meta pede também publicar na Página e no
+   * Instagram, e o diálogo diz isso logo abaixo da opção da Meta.
+   */
+  comPosts?: boolean;
 };
 
 export function DialogoConectar({
@@ -62,6 +68,7 @@ export function DialogoConectar({
   mudaAnuncios = [],
   comPerfil = false,
   comSearchConsole = false,
+  comPosts = false,
   irPara = (url) => window.location.assign(url),
 }: Props) {
   const campoMarca = useRef<HTMLSelectElement>(null);
@@ -128,11 +135,26 @@ export function DialogoConectar({
             </select>
           </div>
           <div className="plataformas" role="group" aria-label="Plataforma">
-            <button className="plataforma" type="button" onClick={() => disparar(conectar('meta'))} disabled={indo !== null} aria-busy={indo === 'meta'}>
+            <button
+              className="plataforma"
+              type="button"
+              onClick={() => disparar(conectar('meta'))}
+              disabled={indo !== null}
+              aria-busy={indo === 'meta'}
+              aria-describedby={comPosts ? `${ids}-posts` : undefined}
+            >
               <span className="plat plat--meta">Meta</span>
-              <b>{indo === 'meta' ? 'Indo para a Meta…' : 'Meta Ads'}</b>
-              <span>Facebook e Instagram. Você escolhe as contas de anúncio na tela da Meta.</span>
+              <b>{indo === 'meta' ? 'Indo para a Meta…' : comPosts ? META_COM_POSTS.titulo : 'Meta Ads'}</b>
+              <span>{comPosts ? META_COM_POSTS.texto : 'Facebook e Instagram. Você escolhe as contas de anúncio na tela da Meta.'}</span>
             </button>
+            {comPosts && (
+              <p className="dialogo-nota" id={`${ids}-posts`}>
+                <Icone nome="info" pequeno />
+                <span>
+                  <b>{NOTA_DAS_PERMISSOES_DE_PUBLICAR.destaque}</b> {NOTA_DAS_PERMISSOES_DE_PUBLICAR.texto}
+                </span>
+              </p>
+            )}
             <button
               className="plataforma"
               type="button"
@@ -186,7 +208,7 @@ export function DialogoConectar({
           </div>
           <p className="dialogo-nota">
             <Icone nome="shield" pequeno />
-            <span>{notaDeConectar(aoRegem !== null, informaVendas, mudaAnuncios)}</span>
+            <span>{notaDeConectar(aoRegem !== null, informaVendas, mudaAnuncios, comPosts)}</span>
           </p>
         </div>
       </div>

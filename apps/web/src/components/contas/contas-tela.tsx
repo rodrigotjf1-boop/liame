@@ -12,6 +12,22 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { useContadorAtencao } from '@/lib/contador-atencao';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
+import {
+  avisoCanalDesligado,
+  canaisNaAutorizacao,
+  canalSemPermissao,
+  CONVITE_DOS_POSTS,
+  confirmaDesligarCanal,
+  conviteDosPosts,
+  ehCanalDaMeta,
+  ehInstagram,
+  ehPagina,
+  faixaDoCanalSemPermissao,
+  paginasEInstagram,
+  QUANDO_DO_CANAL,
+  situacaoDoCanal,
+  subDoCanal,
+} from './canais-da-meta';
 import { CartaoAutorizacao } from './cartao-autorizacao';
 import { CartaoAutorizacaoRegem } from './cartao-autorizacao-regem';
 import { CartaoVendasGoogle } from './cartao-vendas-google';
@@ -79,6 +95,9 @@ import { type ContaDasVendas, ESCOPO_DE_INFORMAR_VENDAS, esperaPorExtenso, junta
 // topo convida quem ainda não deu a permissão. Sem a função, a tela é a de sempre.
 // A6 · P18, parte B (mockups/prototipo-contas-search-console.html): o mesmo para o site do Search Console, com a função
 // `search_console` ligada para a empresa.
+// A6 · P19, parte B (mockups/prototipo-contas-posts.html): com os posts ligados para a empresa (`posts`), a Página do
+// Facebook e o Instagram são mais duas linhas da lista (não são lidos: "só publica"), a autorização da Meta diz o que
+// inclui de publicar, o topo convida quem conectou a Meta sem publicar e avisa quando a permissão de um canal foi tirada.
 // Nenhum token passa pelo navegador; quem pode ver e conectar é o servidor que decide.
 
 type Dados = {
@@ -99,6 +118,8 @@ type Dados = {
   searchConsole: boolean;
   /** Conectar o Regem vai pela autorização por clique (`regem_by_click`; ausente na resposta antiga = pela de 01/10). */
   regemPorClique: boolean;
+  /** Os posts ligados para a empresa, com a configuração da Meta que pede publicar (`posts`; ausente na resposta antiga = desligado). */
+  posts: boolean;
 };
 type Carga = { tipo: 'carregando' } | { tipo: 'ok'; dados: Dados } | { tipo: 'erro'; problema: Problema };
 type Dialogo =
@@ -176,6 +197,7 @@ export function ContasTela() {
         perfil: c.data.business_profile === true,
         searchConsole: c.data.search_console === true,
         regemPorClique: c.data.regem_by_click === true,
+        posts: c.data.posts === true,
       },
     });
   }, []);
@@ -194,7 +216,11 @@ export function ContasTela() {
   }, [conexaoDaUrl]);
 
   const dados = estado.tipo === 'ok' ? estado.dados : null;
-  const existentes = useMemo<ContaExistente[]>(() => (dados ? contasExistentes(dados.conexoes) : []), [dados]);
+  // Sem mudar campanhas na Meta, a autorização de escrita (a dos posts também vai por ela) não oferece a conta só por isso.
+  const existentes = useMemo<ContaExistente[]>(
+    () => (dados ? contasExistentes(dados.conexoes, { escritaNaMeta: dados.escritaAnuncios.includes('meta_ads') }) : []),
+    [dados],
+  );
 
   // Conferência curta da conexão acompanhada, enquanto o worker troca o código e descobre as contas.
   useEffect(() => {
@@ -244,6 +270,8 @@ export function ContasTela() {
     const variasMarcas = new Set(dados.contas.map((c) => c.brand_id)).size > 1;
     // A origem para os textos: a autorização por clique do Regem vira `clique` (uma ligação por loja, não um token).
     const origemDa = new Map(dados.conexoes.map((c) => [c.id, origemDoRegem(c)]));
+    // As permissões de cada autorização: é por elas que a Página e o Instagram sabem se ainda podem publicar.
+    const escoposDa = new Map(dados.conexoes.map((c) => [c.id, c.scopes]));
     return dados.contas.map((c) => {
       const ligada = ligadas.get(c.connected_account_id);
       const base = {
@@ -268,6 +296,11 @@ export function ContasTela() {
       if (ehSiteDoSearchConsole(c.provider)) {
         return { ...base, sub: subDoSite(ligada?.external_id ?? null), confirmacao: CONFIRMA_DESLIGAR_SITE, situacao: situacaoDoSite(c, dados.searchConsole, agora) };
       }
+      // A Página e o Instagram (P19, parte B): não são lidos ("só publica"), e a situação é a permissão de publicar.
+      if (ehCanalDaMeta(c.provider)) {
+        const escopos = ligada?.connection_id ? escoposDa.get(ligada.connection_id) : null;
+        return { ...base, sub: subDoCanal(c.provider, ligada), confirmacao: confirmaDesligarCanal(c.provider), quando: QUANDO_DO_CANAL, situacao: situacaoDoCanal(c, escopos, dados.posts) };
+      }
       return { ...base, situacao: situacaoDaConta(c) };
     });
   }, [dados, agora, podeRegem]);
@@ -286,13 +319,25 @@ export function ContasTela() {
   // O perfil da empresa no Google (ou o Search Console) ligado, o Google conectado e nenhuma autorização com a permissão
   // dele: o convite. Os dois pedem a mesma coisa (autorizar o Google de novo, e a autorização nova pede as duas
   // permissões): um convite só, o do perfil primeiro.
-  const convite = useMemo(() => {
-    if (!dados) return null;
+  // O dos posts (P19, parte B) é da Meta, e vem à parte: os dois podem aparecer.
+  const convites = useMemo(() => {
+    if (!dados) return [];
     const doPerfil = conviteDoPerfil(autorizacoes, dados.perfil);
-    if (doPerfil) return { ...doPerfil, textos: CONVITE_DO_PERFIL };
-    const doSite = conviteDoSearchConsole(autorizacoes, dados.searchConsole);
-    return doSite ? { ...doSite, textos: CONVITE_DO_SEARCH_CONSOLE } : null;
+    const doSite = doPerfil ? null : conviteDoSearchConsole(autorizacoes, dados.searchConsole);
+    const doGoogle = doPerfil ? { ...doPerfil, textos: CONVITE_DO_PERFIL } : doSite ? { ...doSite, textos: CONVITE_DO_SEARCH_CONSOLE } : null;
+    const dosPosts = conviteDosPosts(autorizacoes, dados.posts);
+    return [
+      ...(doGoogle ? [{ ...doGoogle, provider: 'google' as const }] : []),
+      ...(dosPosts ? [{ ...dosPosts, textos: CONVITE_DOS_POSTS, provider: 'meta' as const }] : []),
+    ];
   }, [dados, autorizacoes]);
+  // A Página ou o Instagram ligado cuja permissão de publicar foi tirada na Meta: o aviso do topo (o que parou e o que segue).
+  const semPermissao = useMemo(() => {
+    const canal = canalSemPermissao(linhas);
+    if (!canal) return null;
+    const outroSegue = linhas.some((l) => ehCanalDaMeta(l.provider) && l.provider !== canal.provider && l.situacao.tom === 'ok');
+    return { ...canal, ...faixaDoCanalSemPermissao(canal, outroSegue) };
+  }, [linhas]);
   // Vendas informadas ao Google: as marcas com a função ligada e o cartão de cada conta, depois da autorização que a lê.
   const vendas = useMemo(() => juntarVendas(dados?.vendas ?? []), [dados]);
   const vendasDaAutorizacao = useMemo(() => vendasPorAutorizacao(vendas.contas, dados?.conexoes ?? [], autorizacoes), [vendas, dados, autorizacoes]);
@@ -341,14 +386,28 @@ export function ContasTela() {
       const novas = f?.tipo === 'escolher' ? escolhiveis(acomp.conexao, existentes) : [];
       const lojas = novas.filter((o) => ehLojaDoPerfil(o.conta.provider)).length;
       const sites = novas.filter((o) => ehSiteDoSearchConsole(o.conta.provider)).length;
-      const n = novas.length - lojas - sites;
+      // A Página e o Instagram (P19, parte B) contam à parte.
+      const paginas = novas.filter((o) => ehPagina(o.conta.provider)).length;
+      const instagrams = novas.filter((o) => ehInstagram(o.conta.provider)).length;
+      const n = novas.length - lojas - sites - paginas - instagrams;
       const onde = naPlataforma(autorizadorDa(acomp.conexao.provider));
       const contas = `${n} ${n === 1 ? 'conta' : 'contas'}`;
       const doPerfil = `${lojas} ${lojas === 1 ? 'loja do perfil' : 'lojas do perfil'}`;
       const doSite = `${sites} ${sites === 1 ? 'site' : 'sites'} do Search Console`;
+      const canais = paginas || instagrams ? paginasEInstagram({ paginas, instagrams }) : '';
+      const doInstagram = instagrams === 1 ? (paginas === 1 ? ' e o Instagram profissional ligado a ela' : ' e o Instagram profissional ligado a uma delas') : instagrams ? ' e os Instagram profissionais ligados a elas' : '';
       faixa =
         f?.tipo !== 'escolher'
           ? null
+          : canais && !n && !lojas && !sites
+            ? // Só a Página e o Instagram (P19, parte B).
+              {
+                ...f,
+                titulo: `Encontramos ${canais} para ligar.`,
+                texto: `${paginas === 1 ? 'É a Página que esta autorização alcança' : paginas ? 'São as Páginas que esta autorização alcança' : 'É o Instagram que esta autorização alcança'}${paginas ? doInstagram : ''}. Escolha quais ligar à marca ${marcaDaVolta}.`,
+              }
+          : canais
+            ? { ...f, titulo: `Encontramos ${listaEmPalavras([n ? contas : '', canais].filter(Boolean))} para ligar ${onde}.` }
           : !lojas && !sites
             ? { ...f, titulo: `Encontramos ${n} ${n === 1 ? 'conta para ligar' : 'contas para ligar'} ${onde}.` }
             : !n && !sites
@@ -387,7 +446,9 @@ export function ContasTela() {
           ? AVISO_LOJA_DESLIGADA
           : ehSiteDoSearchConsole(l.provider)
             ? AVISO_SITE_DESLIGADO
-            : 'Conta desligada. O histórico de números fica.',
+            : ehCanalDaMeta(l.provider)
+              ? avisoCanalDesligado(l.provider)
+              : 'Conta desligada. O histórico de números fica.',
     );
     recarregarAvisos();
     await carregar();
@@ -438,10 +499,10 @@ export function ContasTela() {
   }
 
   /**
-   * Direto para a página da plataforma, com a marca da conta: "Autorizar o Google de novo" e o "Conectar de novo" do
-   * RegemCast por clique. Verdadeiro = está indo.
+   * Direto para a página da plataforma, com a marca da conta: "Autorizar o Google de novo", "Autorizar a Meta de novo"
+   * (os posts, P19 parte B) e o "Conectar de novo" do RegemCast por clique. Verdadeiro = está indo.
    */
-  async function irAutorizar(provider: 'google' | 'regemcast', brandId: string): Promise<boolean> {
+  async function irAutorizar(provider: 'google' | 'meta' | 'regemcast', brandId: string): Promise<boolean> {
     const r = await chamar(() => api.POST('/v1/connections', { body: { provider, brand_id: brandId } }));
     if (!r.ok) {
       avisar(mensagemDe(r.problema), { tipo: 'perigo' });
@@ -542,21 +603,38 @@ export function ContasTela() {
         />
       )}
 
-      {convite && (
+      {semPermissao && (
         <FaixaDeAviso
+          tipo="perigo"
+          icone={<Icone nome="alert-circle" />}
+          titulo={semPermissao.titulo}
+          texto={semPermissao.texto}
+          acao={
+            podeConectar ? (
+              <button className="btn btn--primary" type="button" onClick={() => disparar(irAutorizar('meta', semPermissao.brandId))}>
+                {CONVITE_DOS_POSTS.botao}
+              </button>
+            ) : undefined
+          }
+        />
+      )}
+
+      {convites.map((convite) => (
+        <FaixaDeAviso
+          key={convite.provider}
           tipo="acao"
           icone={<Icone nome="plug" />}
           titulo={convite.textos.titulo}
           texto={convite.textos.texto}
           acao={
             podeConectar ? (
-              <button className="btn btn--primary" type="button" onClick={() => disparar(autorizarGoogle(convite.brandId))}>
+              <button className="btn btn--primary" type="button" onClick={() => disparar(irAutorizar(convite.provider, convite.brandId))}>
                 {convite.textos.botao}
               </button>
             ) : undefined
           }
         />
-      )}
+      ))}
 
       {estado.tipo === 'carregando' && <TabelaCarregando />}
       {estado.tipo === 'erro' && (
@@ -688,15 +766,22 @@ export function ContasTela() {
                 informaVendas={vendas.marcas.has(c.brand_id) && c.scopes.includes(ESCOPO_DE_INFORMAR_VENDAS)}
                 perfil={c.provider === 'google' ? perfilNaAutorizacao(c, dados.perfil) : null}
                 site={c.provider === 'google' ? searchConsoleNaAutorizacao(c, dados.searchConsole) : null}
+                canais={c.provider === 'meta' ? canaisNaAutorizacao(c, dados.posts) : null}
                 procurando={acomp?.origem === 'procurar' && acomp.id === c.id && (!acomp.conexao || emConferencia(acomp.conexao))}
                 aoEscolher={
                   // Esperando a escolha; ou já valendo, com conta de outra autorização que vence antes (renovar), que não tem
-                  // a permissão nova (informar vendas; na Meta, a escrita, ERR-138) ou com loja do perfil (P17, parte B) ou site do
-                  // Search Console (P18, parte B) ainda por ligar.
+                  // a permissão nova (informar vendas; na Meta, a escrita, ERR-138; a de publicar, P19 parte B) ou com loja do
+                  // perfil (P17, parte B), site do Search Console (P18, parte B), Página ou Instagram (P19, parte B) por ligar.
                   (c.status === 'aguardando_escolha' && escolhiveis(c, existentes).length) ||
                   (c.status === 'ativa' &&
                     escolhiveis(c, existentes).some(
-                      (o) => o.renovar || o.permissao || o.escrita || o.token || ((ehLojaDoPerfil(o.conta.provider) || ehSiteDoSearchConsole(o.conta.provider)) && !o.conta.linked),
+                      (o) =>
+                        o.renovar ||
+                        o.permissao ||
+                        o.escrita ||
+                        o.token ||
+                        o.publicar ||
+                        ((ehLojaDoPerfil(o.conta.provider) || ehSiteDoSearchConsole(o.conta.provider) || ehCanalDaMeta(o.conta.provider)) && !o.conta.linked),
                     ))
                     ? () => setDialogo({ tipo: 'escolher', conexao: c })
                     : null
@@ -710,7 +795,7 @@ export function ContasTela() {
                       : null
                     : () => setDialogo({ tipo: 'conectar', marca: c.brand_id })
                 }
-                aoAutorizar={() => disparar(autorizarGoogle(c.brand_id))}
+                aoAutorizar={() => disparar(irAutorizar(c.provider === 'meta' ? 'meta' : 'google', c.brand_id))}
                 aoProcurar={() => disparar(procurar(c))}
                 aoRevogar={() => setDialogo({ tipo: 'revogar', conexao: c })}
               />
@@ -736,6 +821,7 @@ export function ContasTela() {
           mudaAnuncios={dados?.escritaAnuncios ?? []}
           comPerfil={Boolean(dados?.perfil)}
           comSearchConsole={Boolean(dados?.searchConsole)}
+          comPosts={Boolean(dados?.posts)}
         />
       )}
       {dialogo?.tipo === 'regem' && (

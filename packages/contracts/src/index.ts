@@ -128,6 +128,8 @@ export {
   GOOGLE_BUSINESS_SCOPE,
   LinkAccountsRequest,
   LinkAccountsResponse,
+  META_INSTAGRAM_PUBLISH_SCOPE,
+  META_PAGE_PUBLISH_SCOPE,
   OAuthCallbackQuery,
   ProfileSearch,
   SEARCH_CONSOLE_SCOPE,
