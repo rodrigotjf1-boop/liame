@@ -120,6 +120,38 @@ export const MessageTotals = z.strictObject({
 });
 export type MessageTotals = z.infer<typeof MessageTotals>;
 
+/** Um post que trouxe pedido pelo link dele no período (A6, Z7, parte b; protótipo P32). */
+export const PostResult = z.strictObject({
+  post_id: z.uuid(),
+  /** `post` (o Liame publica) ou `pacote` (a pessoa publica); texto, a lista pode crescer. */
+  kind: Slug,
+  /** A rede do link do post: `facebook` (a Página), `tiktok`, `youtube`; texto, a lista pode crescer. */
+  channel: Slug,
+  /** Quando o post saiu nessa rede; sem a data de publicação, a hora marcada. */
+  published_at: z.string(),
+  orders: z.number().int().min(0),
+  revenue_micros: Micros,
+});
+export type PostResult = z.infer<typeof PostResult>;
+
+/**
+ * Os pedidos que vieram pelo link de um post (A6, Z7, parte b; D-A6-16, D-A6-48 e D-A6-49; protótipo P32). O link é só do
+ * post: é por ele que o pedido se liga ao post, sem nome e sem telefone. O pedido com o link do post E prova de anúncio
+ * fica com o anúncio (D-A6-48). Post não é anúncio: nada aqui entra em `confirmed`.
+ */
+export const PostTotals = z.strictObject({
+  /** Confirmados, com o clique no link de um post dentro da janela e sem prova de anúncio. Já saíram de `without_origin`. */
+  orders: z.number().int().min(0),
+  revenue_micros: Micros,
+  /** Vieram pelo link de um post e têm prova de anúncio: contam em `confirmed`, e não em `orders`. */
+  with_ad_orders: z.number().int().min(0),
+  /** Os posts com o link que saíram no período (com ou sem pedido). */
+  published_posts: z.number().int().min(0),
+  /** Os posts que trouxeram pedido no período, os de mais pedidos primeiro. */
+  posts: z.array(PostResult),
+});
+export type PostTotals = z.infer<typeof PostTotals>;
+
 export const ClosedLoopResponse = z.strictObject({
   period: z.strictObject({
     from: z.string(),
@@ -150,6 +182,11 @@ export const ClosedLoopResponse = z.strictObject({
      * falta e a resposta é a de sempre. Mensagem não é anúncio: nada aqui entra em `confirmed`.
      */
     messages: MessageTotals.optional(),
+    /**
+     * Os pedidos que vieram pelo link de um post (A6, Z7, parte b; protótipo P32). Só vem quando a marca tem post com o
+     * link publicado no período, ou pedido por ele; sem isso, o campo falta e a resposta é a de sempre.
+     */
+    posts: PostTotals.optional(),
   }),
   platforms: z.array(PlatformResult),
   campaigns: z.array(CampaignResult),
@@ -433,6 +470,26 @@ export const OrderOrigin = z.strictObject({
       coupon_code: z.string(),
       /** Quando o cupom nasceu, junto com o envio. */
       sent_at: z.string(),
+    })
+    .nullable()
+    .optional(),
+  /**
+   * O post cujo link o pedido usou, dentro da janela (A6, Z7, parte b; protótipo P32); falta ou é nulo sem ele. Com
+   * `attribution.counted`, o pedido fica com o anúncio (D-A6-48); sem, a origem dele é o post (`reason` = `link_do_post`).
+   */
+  post: z
+    .strictObject({
+      id: z.uuid(),
+      /** `post` ou `pacote`. */
+      kind: Slug,
+      /** A rede do link: `facebook`, `tiktok`, `youtube`. */
+      channel: Slug,
+      /** Quando o post saiu nessa rede; nulo quando não saiu (o link existe desde a criação). */
+      published_at: z.string().nullable(),
+      /** O código só deste post no link (a evidência). */
+      link_code: z.string(),
+      /** O acesso ao cardápio pelo link do post que levou ao pedido. */
+      touch_at: z.string(),
     })
     .nullable()
     .optional(),
