@@ -8,6 +8,7 @@ import { AppProblem } from '../errors/problems.js';
 import { Mailer } from '../mail/mailer.js';
 import { VaultService } from '../vault/vault.service.js';
 import { RateLimitService } from './rate-limit.service.js';
+import { cairPorqueEntrou } from './recuperacao/recuperacao.service.js';
 import { hashRecoveryCode, newRecoveryCodes, newTotpSecret, otpauthUri, verifyTotp } from './totp.js';
 import { newToken } from './tokens.js';
 
@@ -86,7 +87,9 @@ export class MfaService {
          where id = ${auth.userId} and (totp_last_step is null or totp_last_step < ${step})`);
       if (upd.rowCount !== 1) throw invalidCode();
       await this.markSession(tx, auth, 'totp');
-      auditDetail({ after: { metodo: 'totp' } });
+      const caiu = await cairPorqueEntrou(tx, auth.userId);
+      auditDetail({ after: { metodo: 'totp', ...(caiu ? { recuperacao_cancelada: caiu } : {}) } });
+      if (caiu) this.avisarQueCaiu(auth.email, caiu, 'o app autenticador');
       return;
     }
     const used = await tx.execute<{ id: string }>(sql`
@@ -97,7 +100,9 @@ export class MfaService {
        returning id`);
     if (!used.rows[0]) throw invalidCode();
     await this.markSession(tx, auth, 'recuperacao');
-    auditDetail({ after: { metodo: 'recuperacao' } });
+    const caiu = await cairPorqueEntrou(tx, auth.userId);
+    auditDetail({ after: { metodo: 'recuperacao', ...(caiu ? { recuperacao_cancelada: caiu } : {}) } });
+    if (caiu) this.avisarQueCaiu(auth.email, caiu, 'um código de recuperação');
     this.notify(auth.email, 'Liame: código de recuperação usado', 'Um código de recuperação foi usado para entrar na sua conta. Se não foi você, troque a senha agora.');
   }
 
@@ -186,6 +191,15 @@ export class MfaService {
 
   private async markSession(tx: Tx, auth: AuthContext, method: 'totp' | 'recuperacao'): Promise<void> {
     await tx.execute(sql`update liame.session set mfa_verified_at = now(), mfa_method = ${method} where id = ${auth.sessionId}`);
+  }
+
+  /** O pedido de recuperação da conta caiu porque a pessoa entrou com o app ou com um código (D-A7-62). */
+  private avisarQueCaiu(to: string, protocolo: string, como: string): void {
+    this.notify(
+      to,
+      `Liame: pedido de recuperação cancelado (${protocolo})`,
+      `Você entrou com ${como}, e o pedido de recuperação ${protocolo} foi cancelado sozinho. Nada mudou na sua conta. Se não foi você quem entrou, troque a senha agora.`,
+    );
   }
 
   /** O aviso sai depois do commit: se a transação desfizer, ninguém recebe aviso do que não aconteceu. */

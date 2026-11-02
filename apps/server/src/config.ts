@@ -1,4 +1,6 @@
+import type { KeyObject } from 'node:crypto';
 import { z } from 'zod';
+import { chavePublicaDaDms } from './auth/recuperacao/lacre.js';
 
 // Configuração lida do ambiente e validada na subida: valor errado derruba o boot, não a requisição.
 const Env = z.object({
@@ -120,6 +122,12 @@ const Env = z.object({
   ASAAS_API_KEY: z.string().trim().min(20).max(400).optional(),
   ASAAS_API_URL: z.url().default('https://api-sandbox.asaas.com/v3'),
   ASAAS_WEBHOOK_TOKEN: z.string().min(32).max(255).optional(),
+  /**
+   * A chave PÚBLICA da DMS para lacrar o documento da recuperação da conta (A7, W8, parte 4a; D-A7-85): o DER (SPKI) em
+   * base64, numa linha, como o comando `recuperacao-da-conta --gerar-chaves` mostra. Não é segredo (a privada fica só com
+   * a DMS). Sem ela, o pedido de recuperação fica indisponível e o resto segue.
+   */
+  RECUPERACAO_CHAVE_PUBLICA: z.string().trim().min(100).max(4000).optional(),
 });
 
 export type AppConfig = {
@@ -204,6 +212,8 @@ export type AppConfig = {
    * pagamento fica indisponível.
    */
   asaas: { apiKey: string; apiUrl: string; ambiente: 'sandbox' | 'producao'; webhookToken: string | null } | null;
+  /** A chave pública da DMS para o lacre do documento da recuperação da conta; nula = a recuperação indisponível. */
+  recuperacaoChavePublica: KeyObject | null;
 };
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -393,6 +403,8 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       conversationMaxAnswers: env.AI_CONVERSATION_MAX_ANSWERS,
     },
     asaas,
+    // A chave que não abre (formato, tipo, tamanho) recusa subir: a recuperação ficaria quebrada sem ninguém ver.
+    recuperacaoChavePublica: env.RECUPERACAO_CHAVE_PUBLICA ? chavePublicaDaDms(env.RECUPERACAO_CHAVE_PUBLICA) : null,
   };
 }
 
