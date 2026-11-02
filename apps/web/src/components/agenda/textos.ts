@@ -93,7 +93,18 @@ export function situacaoDoCartao(post: Pick<PostResponse, 'status' | 'removal'>)
 /** O que sai da semana: o cancelado, o recusado e o que expirou sem aprovação não vão ao ar (o P19 também os tira). */
 const FORA_DA_SEMANA = new Set(['cancelado', 'recusado', 'expirado']);
 
-export type PostNoDia = { post: PostResponse; dia: string; hora: string; canais: string; situacao: SituacaoNaTela; rotulo: string };
+/** `pedidos`: o post que já saiu e trouxe pedido pelo link ("3 pedidos", P33); nulo nos outros. */
+export type PostNoDia = { post: PostResponse; dia: string; hora: string; canais: string; situacao: SituacaoNaTela; rotulo: string; pedidos: string | null };
+
+/** O que já saiu e pode ter trazido pedido pelo link: o post publicado (ou em parte) e o pacote que a pessoa publicou. */
+const SAIU = new Set(['publicado', 'em_parte', 'pacote_publicado']);
+
+/** "3 pedidos" no cartão do post que já saiu e trouxe pedido pelo link (P33, D-A6-53); nulo sem pedido. */
+export function pedidosDoCartao(post: Pick<PostResponse, 'status' | 'link_orders'>): string | null {
+  const n = post.link_orders?.orders ?? 0;
+  if (!n || !SAIU.has(post.status)) return null;
+  return `${n.toLocaleString('pt-BR')} ${n === 1 ? 'pedido' : 'pedidos'}`;
+}
 /**
  * Um dia da semana. `pauta`: o item da pauta do Estrategista no dia (D-A6-20 e D-A6-56), só quando nenhum post está
  * marcado nele (o post já feito cobre a pauta, como no P19); `datas`: as datas do calendário comercial.
@@ -124,7 +135,16 @@ export function telaDaAgenda(dados: PostListResponse, inicio: string, hoje: stri
     const situacao = situacaoDoCartao(post);
     const canais = canaisDoPost(post);
     const nomes = post.channels.map((c) => NOME_DO_CANAL[c.channel] ?? c.channel).join(' e ');
-    const item: PostNoDia = { post, dia, hora, canais, situacao, rotulo: `${ehPacote(post) ? 'Pacote' : 'Post'} de ${quando(dia, hora, hoje)}, ${nomes}: ${situacao.rotulo.toLowerCase()}` };
+    const pedidos = pedidosDoCartao(post);
+    const item: PostNoDia = {
+      post,
+      dia,
+      hora,
+      canais,
+      situacao,
+      pedidos,
+      rotulo: `${ehPacote(post) ? 'Pacote' : 'Post'} de ${quando(dia, hora, hoje)}, ${nomes}: ${situacao.rotulo.toLowerCase()}${pedidos ? `, ${pedidos} pelo link` : ''}`,
+    };
     porDia.set(dia, [...(porDia.get(dia) ?? []), item]);
   }
   const pautaDoDia = new Map((dados.pauta ?? []).map((p) => [p.day, p.item]));

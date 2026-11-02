@@ -8,6 +8,8 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { oQueOPostTrouxe } from './post-trouxe';
+import { PostTrouxe } from './post-trouxe-secao';
 import { PreviaDoPacote } from './previa-do-pacote';
 import { fraseDoPacote, linkCurto, NOME_DO_CANAL, NO_CANAL, noFuso, quando } from './textos';
 
@@ -32,6 +34,8 @@ type Props = {
   /** A foto não carregou (o endereço de 5 minutos venceu): a tela pede endereços novos. */
   aoFalharImagem: () => void;
   aoFechar: () => void;
+  /** Quem pode abrir Resultados (P33: o que o pacote trouxe pelo link da bio). */
+  podeVerResultados?: boolean;
 };
 
 type Ocupado = 'publiquei' | 'tirar' | 'baixar' | null;
@@ -39,7 +43,7 @@ type Ocupado = 'publiquei' | 'tirar' | 'baixar' | null;
 /** "Amanhã, às 19:00" (a primeira letra maiúscula, no começo da frase). */
 const maiuscula = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMudar, aoTirar, aoFalharImagem, aoFechar }: Props) {
+export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMudar, aoTirar, aoFalharImagem, aoFechar, podeVerResultados = false }: Props) {
   const ids = useId();
   const fecharBt = useRef<HTMLButtonElement>(null);
   const tirarBt = useRef<HTMLButtonElement>(null);
@@ -62,6 +66,8 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
   }, [focarTirar]);
 
   const canal = post.channels[0];
+  // P33: o que o pacote publicado trouxe pelo link da bio (nulo antes de a pessoa marcar "Publiquei").
+  const trouxe = oQueOPostTrouxe(post, new Date(), fuso);
   const nome = NOME_DO_CANAL[canal?.channel ?? ''] ?? canal?.channel ?? '';
   const no = NO_CANAL[canal?.channel ?? ''] ?? `em ${nome}`;
   const { dia, hora } = noFuso(new Date(post.publish_at), fuso);
@@ -159,6 +165,8 @@ export function GavetaPacote({ post, fuso, hoje, foto, podeOperar, reserva, aoMu
             <Icone nome={publicado ? 'check-circle' : 'send'} pequeno />
             {fraseDoPacote(post, fuso, hoje)}
           </p>
+          {/* P33: o pacote que a pessoa publicou diz o que trouxe pelo link da bio. */}
+          {trouxe && <PostTrouxe trouxe={trouxe} podeVerResultados={podeVerResultados} podeVerContas={false} />}
           <PreviaDoPacote
             canal={canal?.channel ?? ''}
             texto={canal?.text ?? ''}
