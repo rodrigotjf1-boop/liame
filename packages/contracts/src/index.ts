@@ -116,6 +116,7 @@ export {
 } from './actions.js';
 export {
   AccountProvider,
+  ChannelSearch,
   ConnectedAccountResponse,
   ConnectionListQuery,
   ConnectionListResponse,
