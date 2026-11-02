@@ -10,6 +10,7 @@ import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { quandoComHora } from '@/lib/formato';
 import { useSessao } from '@/lib/sessao';
+import { CartaoAgencia } from './cartao-agencia';
 import { CartaoApp } from './cartao-app';
 import { DialogoCodigos } from './dialogo-codigos';
 import { DialogoTrocarApp } from './dialogo-trocar-app';
@@ -288,6 +289,8 @@ export function SegurancaTela() {
           </div>
         )}
       </article>
+
+      <CartaoAgencia reserva={titulo} />
 
       {dialogo === 'codigos' && dados && (
         <DialogoCodigos
