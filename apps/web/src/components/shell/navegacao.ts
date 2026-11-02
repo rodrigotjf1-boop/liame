@@ -70,7 +70,7 @@ export const NAVEGACAO: GrupoNav[] = [
     id: 'parceiro',
     rotulo: 'Agência',
     itens: [
-      { href: '/agencia/clientes', rotulo: 'Clientes', icone: 'briefcase', permissao: 'agencia.clientes' },
+      { href: '/agencia/clientes', rotulo: 'Clientes', icone: 'briefcase', permissao: 'agencia.ver' },
       { href: '/agencia/time', rotulo: 'Time da agência', icone: 'users', permissao: 'agencia.ver' },
     ],
   },

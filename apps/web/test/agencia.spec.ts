@@ -1,11 +1,22 @@
 import type { AgencyClientResponse, AgencyRequestResponse } from '@liame/contracts';
 import { describe, expect, it } from 'vitest';
-import { acessoDaAgencia, clientesDaPessoa, contagemDoTime, maximoTxt, situacaoDoPedido, timeDoCliente } from '../src/components/agencia/textos';
+import {
+  acessoDaAgencia,
+  avisosDoCliente,
+  clientesDaPessoa,
+  contagemDoTime,
+  empresaFechada,
+  maximoTxt,
+  seuAcesso,
+  situacaoDoPedido,
+  timeDoCliente,
+} from '../src/components/agencia/textos';
 import { destinoInicial } from '../src/components/shell/inicio';
 import { itensVisiveis, NAVEGACAO } from '../src/components/shell/navegacao';
 
-// As telas da agência (A7, W6, parte 5; P27 aprovado): as frases de Clientes, dos pedidos e do time, e o menu e a
-// página inicial com a agência ativa (só os papéis da agência têm `agencia.*`).
+// As telas da agência (A7, W6, parte 5, e W7, parte 2; P27 aprovado): as frases de Clientes, dos pedidos, do time e do
+// que pede atenção em cada empresa, e o menu e a página inicial com a agência ativa (só os papéis da agência têm
+// `agencia.*`).
 
 const REAL = 1_000_000;
 const sp = (s: string) => s.replace(/ /g, ' ');
@@ -82,20 +93,77 @@ describe('as frases das telas da agência', () => {
   });
 });
 
+describe('o que pede atenção em cada empresa (W7, parte 2; D-A7-52)', () => {
+  const com = (...attention: NonNullable<AgencyClientResponse['attention']>) => cliente({ attention });
+  const item = (kind: string, extra: { count?: number; since?: string; owner_name?: string } = {}) => ({
+    kind,
+    count: extra.count ?? null,
+    since: extra.since ?? null,
+    owner_name: extra.owner_name ?? null,
+  });
+  const textos = (c: AgencyClientResponse, escolhe = true) => avisosDoCliente(c, escolhe).map((a) => `${a.tom}|${a.icone}|${a.texto}`);
+
+  it('cada aviso com o tom, o ícone e a frase do P27, no singular e no plural', () => {
+    expect(textos(com(item('aprovacoes', { count: 2 }), item('conta_desconectada', { count: 1 })))).toEqual([
+      'atencao|clock|2 aprovações esperando você',
+      'atencao|plug|Uma conta perdeu o acesso: reconecte em Contas conectadas.',
+    ]);
+    expect(textos(com(item('aprovacoes', { count: 1 }), item('conta_desconectada', { count: 3 })))).toEqual([
+      'atencao|clock|1 aprovação esperando você',
+      'atencao|plug|3 contas perderam o acesso: reconecte em Contas conectadas.',
+    ]);
+    expect(textos(com(item('em_dia')))).toEqual(['ok|check-circle|Tudo em dia: nada esperando você.']);
+  });
+
+  it('a conta suspensa diz desde quando e com quem falar, no dia do calendário; a marca suspensa diz quantas', () => {
+    expect(textos(com(item('suspensa', { count: 1, since: '2026-12-22', owner_name: 'Rodrigo' })))).toEqual([
+      'perigo|lock|A conta está suspensa desde 22/12/2026: só o dono entra. Fale com Rodrigo.',
+    ]);
+    expect(textos(com(item('marca_suspensa', { count: 1, since: '2026-12-01', owner_name: 'Rodrigo' })))).toEqual([
+      'perigo|lock|Uma marca está suspensa desde 01/12/2026: só o dono entra nela. Fale com Rodrigo.',
+    ]);
+    expect(textos(com(item('marca_suspensa', { count: 2, since: '2026-12-01' })))).toEqual([
+      'perigo|lock|2 marcas estão suspensas desde 01/12/2026: só o dono entra nelas. Fale com o dono.',
+    ]);
+  });
+
+  it('"Abrir a empresa" some só com a empresa inteira suspensa', () => {
+    expect(empresaFechada(com(item('suspensa', { count: 1, since: '2026-12-22' })))).toBe(true);
+    expect(empresaFechada(com(item('marca_suspensa', { count: 1, since: '2026-12-22' }), item('em_dia')))).toBe(false);
+    expect(empresaFechada(cliente())).toBe(false);
+  });
+
+  it('fora do time: quem escolhe quem entra ganha o caminho; o tipo que a tela não conhece fica de fora', () => {
+    expect(textos(com(item('fora_do_time')))).toEqual([
+      'info|info|Você não está no time desta empresa. Coloque-se em "Escolher quem entra" para ver o que pede atenção.',
+    ]);
+    expect(textos(com(item('fora_do_time')), false)).toEqual(['info|info|Você não está no time desta empresa.']);
+    expect(textos(com(item('algo_novo', { count: 1 }), item('em_dia')))).toEqual(['ok|check-circle|Tudo em dia: nada esperando você.']);
+    // Sem a lista (resposta antiga), nada.
+    expect(textos(cliente())).toEqual([]);
+  });
+
+  it('o acesso do membro: o nível e o limite dele, "sem limite" e o nível que não aprova', () => {
+    expect(sp(seuAcesso({ role: 'gestor', approve_limit_micros: 500 * REAL }))).toBe('Seu acesso: Gestor · aprova sozinho até R$ 500 por ação');
+    expect(seuAcesso({ role: 'aprovador', approve_limit_micros: null })).toBe('Seu acesso: Aprovador · aprova sem limite');
+    expect(seuAcesso({ role: 'somente_leitura', approve_limit_micros: null })).toBe('Seu acesso: Somente leitura');
+  });
+});
+
 describe('o menu e a página inicial com a agência ativa', () => {
   const daDona = (p: string) => ['agencia.ver', 'agencia.time', 'agencia.clientes'].includes(p);
   const doMembro = (p: string) => p === 'agencia.ver';
 
-  it('a dona e o administrador abrem em Clientes; o membro, no Time da agência', () => {
+  it('todos da agência abrem em Clientes (o membro vê só os clientes em que está, W7, parte 2)', () => {
     expect(destinoInicial('lite', daDona, true)).toBe('/agencia/clientes');
     expect(destinoInicial('pro', daDona, true)).toBe('/agencia/clientes');
-    expect(destinoInicial('lite', doMembro, true)).toBe('/agencia/time');
+    expect(destinoInicial('lite', doMembro, true)).toBe('/agencia/clientes');
   });
 
   it('com a agência ativa, só o grupo da agência aparece; numa empresa, ele some', () => {
     const grupos = (pode: (p: string) => boolean) => NAVEGACAO.filter((g) => !g.pessoal && itensVisiveis(g, pode, 'lite').length).map((g) => g.id);
     expect(grupos(daDona)).toEqual(['parceiro']);
-    expect(itensVisiveis(NAVEGACAO.find((g) => g.id === 'parceiro')!, doMembro, 'lite').map((i) => i.href)).toEqual(['/agencia/time']);
+    expect(itensVisiveis(NAVEGACAO.find((g) => g.id === 'parceiro')!, doMembro, 'lite').map((i) => i.href)).toEqual(['/agencia/clientes', '/agencia/time']);
     expect(grupos((p) => !p.startsWith('agencia.'))).not.toContain('parceiro');
   });
 });

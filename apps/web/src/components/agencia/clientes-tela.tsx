@@ -9,22 +9,23 @@ import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
-import { dataCompleta, iniciais } from '@/lib/formato';
 import { useSessao } from '@/lib/sessao';
+import { CartaoCliente } from './cartao-cliente';
 import { DialogoDeixar } from './dialogo-deixar';
 import { GavetaPedir } from './gaveta-pedir';
 import { GavetaQuemEntra } from './gaveta-quem-entra';
-import { acessoDaAgencia, situacaoDoPedido, timeDoCliente } from './textos';
+import { situacaoDoPedido } from './textos';
 
-// Clientes (P27 aprovado; A7, W6, parte 5): as empresas que deram acesso à agência e os pedidos dela. A dona e o
-// administrador pedem acesso, escolhem quem do time entra em cada cliente e deixam de cuidar de uma empresa; "Abrir a
-// empresa" troca para ela, como o seletor do alto do menu. O que pede atenção em cada empresa chega com a W7.
+// Clientes (P27 aprovado; A7, W6, parte 5, e W7, parte 2): as empresas que deram acesso à agência, com o que pede
+// atenção em cada uma (D-A7-52), e os pedidos dela. A dona e o administrador pedem acesso, escolhem quem do time entra em
+// cada cliente e deixam de cuidar de uma empresa; o membro vê só as empresas em que está, com o acesso dele. "Abrir a
+// empresa" troca para ela, como o seletor do alto do menu.
 
 type Estado = { tipo: 'carregando' } | { tipo: 'ok'; dados: AgencyClientsResponse } | { tipo: 'erro'; problema: Problema };
 type Painel = { tipo: 'pedir'; email?: string } | { tipo: 'time'; cliente: AgencyClientResponse } | { tipo: 'deixar'; cliente: AgencyClientResponse };
 
 export function ClientesTela() {
-  const { me, empresa, pode, trocarEmpresa } = useSessao();
+  const { empresa, pode, trocarEmpresa } = useSessao();
   const avisar = useAvisar();
   const router = useRouter();
   const [estado, setEstado] = useState<Estado>({ tipo: 'carregando' });
@@ -37,17 +38,19 @@ export function ClientesTela() {
   }, []);
 
   useEffect(() => {
-    if (pode('agencia.clientes')) disparar(carregar());
+    if (pode('agencia.ver')) disparar(carregar());
   }, [carregar, pode]);
 
-  if (!pode('agencia.clientes')) {
+  if (!pode('agencia.ver')) {
     return (
-      <Estado icone="lock" titulo="Esta tela é de quem cuida dos clientes da agência">
-        Quem escolhe os clientes de cada pessoa é a dona ou um administrador da agência.
+      <Estado icone="lock" titulo="Esta tela é de quem está numa agência">
+        Os clientes aparecem aqui com a agência ativa no seletor do alto do menu.
       </Estado>
     );
   }
 
+  // A dona e o administrador cuidam dos clientes; o membro só trabalha nos clientes em que está.
+  const cuida = pode('agencia.clientes');
   const agencia = empresa?.name ?? 'a agência';
   const dados = estado.tipo === 'ok' ? estado.dados : null;
   const vivos = dados?.clients.filter((c) => c.status === 'ativo') ?? [];
@@ -67,12 +70,18 @@ export function ClientesTela() {
           <h1 id="h-clientes" ref={titulo} tabIndex={-1}>
             Clientes
           </h1>
-          <p>As empresas que deram acesso à {agencia}. Cada dono decide até onde o time vai e pode desfazer o vínculo quando quiser.</p>
+          <p>
+            {cuida
+              ? `As empresas que deram acesso à ${agencia}. Cada dono decide até onde o time vai e pode desfazer o vínculo quando quiser.`
+              : `As empresas em que você está, pela ${agencia}. Quem escolhe os clientes de cada pessoa é a dona ou um administrador da agência.`}
+          </p>
         </div>
-        <button className="btn btn--primary" type="button" aria-haspopup="dialog" onClick={() => setPainel({ tipo: 'pedir' })}>
-          <Icone nome="user-plus" />
-          Pedir acesso a um cliente
-        </button>
+        {cuida && (
+          <button className="btn btn--primary" type="button" aria-haspopup="dialog" onClick={() => setPainel({ tipo: 'pedir' })}>
+            <Icone nome="user-plus" />
+            Pedir acesso a um cliente
+          </button>
+        )}
       </div>
 
       {estado.tipo === 'carregando' && (
@@ -96,7 +105,7 @@ export function ClientesTela() {
         </Estado>
       )}
 
-      {dados && pedidos.length > 0 && (
+      {dados && cuida && pedidos.length > 0 && (
         <>
           <div className="secao-t">
             <h2 id="pdl-t">Pedidos</h2>
@@ -131,40 +140,21 @@ export function ClientesTela() {
           </div>
           <div className="clientes" role="list" aria-labelledby="cls-t">
             {vivos.map((c) => (
-              <article className="card cliente" role="listitem" key={c.id} aria-labelledby={`cl-${c.id}`}>
-                <div className="cliente-cab">
-                  <span className="pessoa-av" aria-hidden="true">
-                    {iniciais(c.organization.name)}
-                  </span>
-                  <div>
-                    <h3 id={`cl-${c.id}`}>{c.organization.name}</h3>
-                    <p>Parceira desde {dataCompleta(c.since)}</p>
-                  </div>
-                </div>
-                <p className="cliente-acesso">{acessoDaAgencia(c)}</p>
-                <p className="cliente-time">No time desta empresa: {timeDoCliente(c)}</p>
-                <div className="cliente-acoes">
-                  {(c.team ?? []).some((p) => p.user_id === me.user.id) && (
-                    <button className="btn btn--sm btn--primary" type="button" onClick={() => disparar(abrir(c))}>
-                      Abrir a empresa
-                    </button>
-                  )}
-                  {pode('agencia.time') && (
-                    <button className="btn btn--sm" type="button" aria-haspopup="dialog" onClick={() => setPainel({ tipo: 'time', cliente: c })}>
-                      Escolher quem entra
-                    </button>
-                  )}
-                  <button className="btn btn--sm btn--perigo" type="button" aria-haspopup="dialog" onClick={() => setPainel({ tipo: 'deixar', cliente: c })}>
-                    Deixar de cuidar
-                  </button>
-                </div>
-              </article>
+              <CartaoCliente
+                key={c.id}
+                cliente={c}
+                cuida={cuida}
+                escolhe={cuida && pode('agencia.time')}
+                aoAbrir={() => disparar(abrir(c))}
+                aoEscolher={() => setPainel({ tipo: 'time', cliente: c })}
+                aoDeixar={() => setPainel({ tipo: 'deixar', cliente: c })}
+              />
             ))}
           </div>
         </>
       )}
 
-      {dados && !vivos.length && !pedidos.length && (
+      {dados && !vivos.length && !pedidos.length && cuida && (
         <div className="card vazio">
           <span className="pessoa-av pessoa-av--ag" aria-hidden="true">
             <Icone nome="users" />
@@ -174,6 +164,15 @@ export function ClientesTela() {
           <button className="btn btn--primary" type="button" aria-haspopup="dialog" onClick={() => setPainel({ tipo: 'pedir' })}>
             Pedir acesso a um cliente
           </button>
+        </div>
+      )}
+      {dados && !vivos.length && !cuida && (
+        <div className="card vazio">
+          <span className="pessoa-av pessoa-av--ag" aria-hidden="true">
+            <Icone nome="briefcase" />
+          </span>
+          <h2>Você ainda não está em nenhum cliente</h2>
+          <p className="lite-frase">A dona ou um administrador da agência coloca você nos clientes em que vai trabalhar.</p>
         </div>
       )}
       {dados && !vivos.length && pedidos.length > 0 && (

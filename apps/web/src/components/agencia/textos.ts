@@ -1,4 +1,5 @@
 import type { AgencyClientResponse, AgencyMemberResponse, AgencyRequestResponse, AgencyRole, PartnerRole } from '@liame/contracts';
+import { dataDe } from '@/components/equipe/textos';
 import { dia, moeda } from '@/lib/formato';
 import { APROVAM, NIVEIS } from '@/lib/niveis';
 
@@ -35,6 +36,55 @@ export function acessoDaAgencia(c: Pick<AgencyClientResponse, 'max_role' | 'appr
   const nivel = `A agência pode até ${NIVEIS[c.max_role].nome}`;
   if (!APROVAM.has(c.max_role)) return nivel;
   return `${nivel} · ${c.approve_limit_micros === null ? 'sem limite' : `até ${moeda(c.approve_limit_micros)} por ação`}`;
+}
+
+/** O acesso de quem é da agência neste cliente (o membro, P27): "Seu acesso: Gestor · aprova sozinho até R$ 500 por ação". */
+export function seuAcesso(a: NonNullable<AgencyClientResponse['my_access']>): string {
+  const nivel = `Seu acesso: ${NIVEIS[a.role].nome}`;
+  if (!APROVAM.has(a.role)) return nivel;
+  return `${nivel} · ${a.approve_limit_micros === null ? 'aprova sem limite' : `aprova sozinho até ${moeda(a.approve_limit_micros)} por ação`}`;
+}
+
+export type AvisoDoCliente = { tom: 'ok' | 'atencao' | 'perigo' | 'info'; icone: 'check-circle' | 'clock' | 'plug' | 'lock' | 'info'; texto: string };
+
+/**
+ * O que pede atenção num cliente (P27; A7, W7, parte 2; D-A7-52), do que o servidor mandou: ele já tirou o que o nível da
+ * pessoa ali não deixa ver. A empresa inteira suspensa vem sozinha. Um tipo que esta tela ainda não conhece fica de
+ * fora (a lista cresce; ERR-015).
+ */
+export function avisosDoCliente(c: Pick<AgencyClientResponse, 'attention'>, escolheQuemEntra: boolean): AvisoDoCliente[] {
+  const avisos: AvisoDoCliente[] = [];
+  for (const a of c.attention ?? []) {
+    const n = a.count ?? 0;
+    const dono = a.owner_name ?? 'o dono';
+    if (a.kind === 'suspensa') {
+      avisos.push({ tom: 'perigo', icone: 'lock', texto: `A conta está suspensa${a.since ? ` desde ${dataDe(a.since)}` : ''}: só o dono entra. Fale com ${dono}.` });
+    } else if (a.kind === 'marca_suspensa') {
+      const marcas = n === 1 ? 'Uma marca está suspensa' : `${n} marcas estão suspensas`;
+      avisos.push({ tom: 'perigo', icone: 'lock', texto: `${marcas}${a.since ? ` desde ${dataDe(a.since)}` : ''}: só o dono entra ${n === 1 ? 'nela' : 'nelas'}. Fale com ${dono}.` });
+    } else if (a.kind === 'aprovacoes' && n > 0) {
+      avisos.push({ tom: 'atencao', icone: 'clock', texto: `${n} ${n === 1 ? 'aprovação esperando' : 'aprovações esperando'} você` });
+    } else if (a.kind === 'conta_desconectada' && n > 0) {
+      const contas = n === 1 ? 'Uma conta perdeu o acesso' : `${n} contas perderam o acesso`;
+      avisos.push({ tom: 'atencao', icone: 'plug', texto: `${contas}: reconecte em Contas conectadas.` });
+    } else if (a.kind === 'fora_do_time') {
+      avisos.push({
+        tom: 'info',
+        icone: 'info',
+        texto: escolheQuemEntra
+          ? 'Você não está no time desta empresa. Coloque-se em "Escolher quem entra" para ver o que pede atenção.'
+          : 'Você não está no time desta empresa.',
+      });
+    } else if (a.kind === 'em_dia') {
+      avisos.push({ tom: 'ok', icone: 'check-circle', texto: 'Tudo em dia: nada esperando você.' });
+    }
+  }
+  return avisos;
+}
+
+/** A empresa inteira suspensa: ninguém da agência entra (D-A7-40), então "Abrir a empresa" some. */
+export function empresaFechada(c: Pick<AgencyClientResponse, 'attention'>): boolean {
+  return (c.attention ?? []).some((a) => a.kind === 'suspensa');
 }
 
 /** "Caio (Gestor), Bia (Aprovador)" ou "ninguém ainda". */
