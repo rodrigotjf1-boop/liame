@@ -8031,6 +8031,34 @@
                             "null"
                           ]
                         },
+                        "link_orders": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -9873,6 +9901,34 @@
                                   "string",
                                   "null"
                                 ]
+                              },
+                              "link_orders": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "orders": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "revenue_micros": {
+                                    "type": "string",
+                                    "pattern": "^-?\\d+$"
+                                  },
+                                  "with_ad_orders": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "orders",
+                                  "revenue_micros",
+                                  "with_ad_orders"
+                                ],
+                                "additionalProperties": false
                               },
                               "timezone": {
                                 "type": "string",
@@ -12369,6 +12425,34 @@
                             "null"
                           ]
                         },
+                        "link_orders": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -14027,6 +14111,34 @@
                             "null"
                           ]
                         },
+                        "link_orders": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -15666,6 +15778,34 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "link_orders": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
                         },
                         "timezone": {
                           "type": "string",
@@ -17396,6 +17536,34 @@
                             "null"
                           ]
                         },
+                        "link_orders": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -19125,6 +19293,34 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "link_orders": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
                         },
                         "timezone": {
                           "type": "string",
@@ -20894,6 +21090,34 @@
                             "null"
                           ]
                         },
+                        "link_orders": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -22662,6 +22886,34 @@
                             "null"
                           ]
                         },
+                        "link_orders": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
+                        },
                         "timezone": {
                           "type": "string",
                           "minLength": 1,
@@ -24301,6 +24553,34 @@
                             "string",
                             "null"
                           ]
+                        },
+                        "link_orders": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "revenue_micros": {
+                              "type": "string",
+                              "pattern": "^-?\\d+$"
+                            },
+                            "with_ad_orders": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "orders",
+                            "revenue_micros",
+                            "with_ad_orders"
+                          ],
+                          "additionalProperties": false
                         },
                         "timezone": {
                           "type": "string",
@@ -83488,6 +83768,34 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "link_orders": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "orders": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "revenue_micros": {
+                                "type": "string",
+                                "pattern": "^-?\\d+$"
+                              },
+                              "with_ad_orders": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "orders",
+                              "revenue_micros",
+                              "with_ad_orders"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -84224,6 +84532,34 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "link_orders": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "with_ad_orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "revenue_micros",
+                        "with_ad_orders"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -84883,6 +85219,34 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "link_orders": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "with_ad_orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "revenue_micros",
+                        "with_ad_orders"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -85794,6 +86158,34 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "link_orders": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "with_ad_orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "revenue_micros",
+                        "with_ad_orders"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -86389,6 +86781,34 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "link_orders": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "with_ad_orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "revenue_micros",
+                        "with_ad_orders"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -86984,6 +87404,34 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "link_orders": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "with_ad_orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "revenue_micros",
+                        "with_ad_orders"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -87669,6 +88117,34 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "link_orders": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "with_ad_orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "revenue_micros",
+                        "with_ad_orders"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -88412,6 +88888,34 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "link_orders": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "revenue_micros": {
+                          "type": "string",
+                          "pattern": "^-?\\d+$"
+                        },
+                        "with_ad_orders": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "orders",
+                        "revenue_micros",
+                        "with_ad_orders"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [

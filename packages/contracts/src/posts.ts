@@ -177,6 +177,19 @@ export const PostResponse = z.strictObject({
    * Página, ou a marca sem uma loja só com o cardápio ligado).
    */
   link: z.string().nullable(),
+  /**
+   * O que o post trouxe pelo link dele, desde que saiu (A6, Z7, parte b; P33, D-A6-53; a mesma conta de Resultados, P32):
+   * os pedidos confirmados no caixa sem prova de anúncio e o valor deles, e os que também têm prova de anúncio e ficam com
+   * o anúncio (D-A6-48). Nulo quando o post não tem link. Opcional: a resposta de antes de 01/11/2026 não traz.
+   */
+  link_orders: z
+    .strictObject({
+      orders: z.int().min(0),
+      revenue_micros: z.string().regex(/^-?\d+$/),
+      with_ad_orders: z.int().min(0),
+    })
+    .nullable()
+    .optional(),
 });
 export type PostResponse = z.infer<typeof PostResponse>;
 
