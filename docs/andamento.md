@@ -804,6 +804,12 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **a gaveta "Mandar ao cliente"**: quem recebe (o Dono sempre; os Administradores marcados no primeiro envio; quem recebeu antes, ao mandar de novo), o assunto, o remetente, para onde vai a resposta, o comentário e o que acontece com o e-mail do Liame;
 - **testes:** no navegador (Chrome sem janela, com a API e o web locais), 24 execuções em 1440, 1024, 768 e 375 px, claro e escuro: a lista com cada situação, o vazio do membro, revisar, comentar e mandar (com a gaveta e o aviso), o relatório já mandado com "Mandar de novo", e a conta suspensa; e a suíte do web, com as frases de cada situação, quem vem marcado, o assunto e o menu.
 
+**A W8, parte 2: a transferência da propriedade da conta no servidor (02/11/2026; migration 0105; D-A7-84).**
+- **`GET /v1/ownership`**: o Dono e desde quando; o pedido em aberto, só para o Dono e para quem recebe; para o Dono, quem pode receber (os Administradores com o app, de fora das agências) e quando pode transferir de novo;
+- **`POST /v1/ownership/transfers`**: só o Dono, com o código do app; um pedido em aberto por empresa; vale 7 dias, e até o aceite nada muda; e-mail aos dois. `DELETE` cancela (o Dono); `…/decline` recusa (quem recebe);
+- **`…/accept`**: quem recebe, com o código do app e os Termos de agora, como dona. Numa transação, o Dono antigo vira Administrador sem a cobrança, ou sai, como escolheu no pedido, e quem aceitou vira a dona; a assinatura, as contas, a equipe e o que está em andamento seguem. Quem acabou de receber a propriedade espera 7 dias para transferir de novo;
+- **testes:** `test/db/propriedade.spec.ts` (quem pede e para quem, o pedido visto só pelos dois, o aceite com os Termos e o código, o Dono antigo que fica e o que sai, a cobrança que muda de mãos, os 7 dias, cancelar, recusar e vencer, um pedido por empresa e a RLS), com as suítes de Pessoas, papéis, acesso e ciclo de vida, em UTC; o contrato da API sem quebra.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
