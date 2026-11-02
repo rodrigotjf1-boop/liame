@@ -6,6 +6,7 @@ import { atribuirPedidos } from '../../src/attribution/motor.js';
 import { gravarToques } from '../../src/attribution/toque-store.js';
 import { centavosParaMicros, gravarPedidos, type PedidoLido } from '../../src/orders/order-store.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import { ligarFlagDaEmpresa } from '../helpers/meta-de-mentira.js';
 import { APP_URL, hasDb, OWNER_URL } from './env.js';
 
 // A6 · Z7, parte b: o que cada post trouxe, em Resultados (D-A6-49; protótipo P32, aprovado em 01/11/2026). O pedido se
@@ -204,6 +205,22 @@ describe.skipIf(!hasDb)('o que cada post trouxe, em Resultados (A6 · Z7, parte 
     expect(de('p5').post).toBeNull();
     expect(de('p6').post).toBeNull();
     expect(de('p6').attribution.reason).toBe('fora_da_janela');
+  });
+
+  it('na Agenda, cada post com link diz o que trouxe pelo link desde que saiu (P33, D-A6-53): a mesma conta de Resultados', async () => {
+    await ligarFlagDaEmpresa(api, 'social_write', tenantId, true);
+    try {
+      const r = await api.call('GET', `/v1/posts?${new URLSearchParams({ brand_id: brandId, from: '2026-09-20', to: '2026-09-30' })}`, { cookie });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      const de = (id: string) => (r.body.items as { id: string; link_orders: unknown }[]).find((i) => i.id === id)?.link_orders;
+      // A: p1 e p2 pelo link, sem anúncio; p4 com anúncio conta à parte; p6 (fora da janela) e p7 (cancelado) não.
+      expect(de(postA)).toEqual({ orders: 2, revenue_micros: M(76.9), with_ad_orders: 1 });
+      expect(de(postB)).toEqual({ orders: 1, revenue_micros: M(37.2), with_ad_orders: 0 });
+      // C saiu com o link e ainda não trouxe pedido: zero, e não nulo.
+      expect(de(postC)).toEqual({ orders: 0, revenue_micros: '0', with_ad_orders: 0 });
+    } finally {
+      await ligarFlagDaEmpresa(api, 'social_write', tenantId, false);
+    }
   });
 
   it('sem post com o link no período, e na loja que os links dos posts não levam, o bloco não vem', async () => {

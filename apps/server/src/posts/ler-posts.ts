@@ -3,6 +3,7 @@ import type { Tx } from '@liame/database';
 import { type SQL, sql } from 'drizzle-orm';
 import { pedeUmPostNovo } from '../actions/post-publicacao.js';
 import { linkComRastreio } from '../links/construtor.js';
+import { pedidosDosPosts } from '../results/post-do-pedido.js';
 import { novaTentativa, recursoDoPost, situacaoDoApagar, situacaoDoPacote, situacaoDoPost } from './post-plano.js';
 
 // A leitura dos posts como as telas os veem (a Agenda e o pedido em Aprovações, A6, Z5c): o post, os canais com a conta
@@ -108,6 +109,9 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
        order by r.resource_id, r.created_at desc, r.id desc`);
     for (const l of a.rows) apagar.set(l.resource_id, l);
   }
+  // O que cada post com link trouxe pelo link dele (P33, D-A6-53): uma consulta para todos.
+  const comLink = p.rows.filter((x) => x.link_codigo).map((x) => x.id);
+  const pedidos = await pedidosDosPosts(tx, tenantId, comLink);
   return p.rows.map((l): PostResponse => {
     const canais = canaisDo.get(l.id) ?? [];
     const situacoes = canais.map((x) => x.status);
@@ -165,6 +169,13 @@ export async function lerPosts(tx: Tx, tenantId: string, filtro: SQL, prefixoDaR
         l.link_destino && l.link_origem && l.link_meio && l.link_codigo
           ? linkComRastreio(l.link_destino, { utmSource: l.link_origem, utmMedium: l.link_meio, utmCampaign: l.link_campanha, codigo: l.link_codigo })
           : null,
+      // O que o post trouxe pelo link (P33): zero quando ainda não trouxe nada; nulo sem link.
+      link_orders: l.link_codigo
+        ? (() => {
+            const x = pedidos.get(l.id);
+            return { orders: x?.orders ?? 0, revenue_micros: (x?.revenue ?? 0n).toString(), with_ad_orders: x?.comAnuncio ?? 0 };
+          })()
+        : null,
     };
   });
 }
