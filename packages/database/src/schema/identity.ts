@@ -54,6 +54,8 @@ export const membership = liame.table('membership', {
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   /** Último acesso nesta empresa (migration 0015). */
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+  /** A pessoa entra pela agência: o vínculo da agência com a empresa (migration 0101, A7 W6). */
+  partnerLinkId: uuid('partner_link_id'),
 });
 
 /** Papel (migration 0006, ADR-013). */

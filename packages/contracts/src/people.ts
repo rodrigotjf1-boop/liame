@@ -40,6 +40,8 @@ export const MemberResponse = z.strictObject({
   mfa_enabled: z.boolean(),
   /** Último acesso nesta empresa; nulo = ainda não entrou. */
   last_seen_at: z.string().nullable(),
+  /** A pessoa vem de uma agência (A7, W6, parte 3): o vínculo e o nome da agência ("da Agência Fogo", D-A7-48). */
+  partner: z.strictObject({ link_id: z.uuid(), agency_name: z.string() }).nullable().optional(),
 });
 export type MemberResponse = z.infer<typeof MemberResponse>;
 

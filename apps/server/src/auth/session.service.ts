@@ -5,7 +5,7 @@ import { sql } from 'drizzle-orm';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import type { AuthContext } from '../context/request-context.js';
 import { DATABASE } from '../database/database.module.js';
-import { NIVEL_DA_COBRANCA_LIBERADA, PERMISSOES_DA_COBRANCA_LIBERADA } from './permissions.js';
+import { NIVEL_DA_COBRANCA_LIBERADA, PERMISSOES_DA_COBRANCA_LIBERADA, permissoesDoVinculo } from './permissions.js';
 import { hashToken, newToken } from './tokens.js';
 
 export const SESSION_COOKIE = 'liame_sessao';
@@ -58,9 +58,13 @@ export class SessionService {
         tenant_status: 'ativa' | 'suspensa' | 'encerrada' | null;
         suspended_brands: string[] | null;
         all_brands_suspended: boolean;
+        partner_link_id: string | null;
+        agency_id: string | null;
+        agency_name: string | null;
       }>(sql`
         select s.id as session_id, u.id as user_id, u.email, u.name, s.mfa_verified_at, s.mfa_method, s.last_seen_at,
                m.tenant_id, m.role_key, m.last_seen_at as member_seen_at, m.billing_access, p.permissions, o.status as tenant_status,
+               m.partner_link_id, ag.id as agency_id, ag.name as agency_name,
                exists (select 1 from liame.secret x
                         where x.owner_user_id = u.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured,
                susp.brands as suspended_brands,
@@ -89,6 +93,9 @@ export class SessionService {
              where sub.tenant_id = m.tenant_id and sub.status = 'suspensa'
           ) susp on m.id is not null
           left join liame.organization o on o.id = m.tenant_id
+          -- O vínculo que vem de uma agência (A7, W6, parte 3): a agência de quem age.
+          left join liame.partner_link pl on pl.id = m.partner_link_id
+          left join liame.organization ag on ag.id = pl.partner_org_id
          where s.token_hash = ${hashToken(token)}
            and s.revoked_at is null
            and s.expires_at > now()
@@ -105,9 +112,14 @@ export class SessionService {
           update liame.membership set last_seen_at = now()
            where tenant_id = ${row.tenant_id} and user_id = ${row.user_id} and revoked_at is null`);
       }
-      const permissions = new Set(row.permissions ?? []);
+      // Quem vem de uma agência nunca tem as permissões de pessoas e de cobrança (D-A7-47): o mesmo critério do "quem sou"
+      // e de `pessoa-pode.ts`.
+      const daAgencia = row.partner_link_id !== null;
+      const permissions = permissoesDoVinculo(row.permissions ?? [], daAgencia);
       // O Administrador com a cobrança liberada pelo Dono (ADR-017; D-A7-13): o mesmo critério de `pessoa-pode.ts`.
-      if (row.role_key === NIVEL_DA_COBRANCA_LIBERADA && row.billing_access) for (const p of PERMISSOES_DA_COBRANCA_LIBERADA) permissions.add(p);
+      if (!daAgencia && row.role_key === NIVEL_DA_COBRANCA_LIBERADA && row.billing_access) {
+        for (const p of PERMISSOES_DA_COBRANCA_LIBERADA) permissions.add(p);
+      }
       return {
         userId: row.user_id,
         sessionId: row.session_id,
@@ -119,6 +131,10 @@ export class SessionService {
         tenantStatus: row.tenant_status,
         suspendedBrands: new Set(row.suspended_brands ?? []),
         allBrandsSuspended: row.all_brands_suspended === true,
+        partner:
+          row.partner_link_id && row.agency_id
+            ? { linkId: row.partner_link_id, agencyId: row.agency_id, agencyName: row.agency_name ?? 'a agência' }
+            : null,
         mfaVerifiedAt: row.mfa_verified_at ? new Date(row.mfa_verified_at) : null,
         mfaConfigured: row.mfa_configured,
         mfaMethod: row.mfa_method,

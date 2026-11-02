@@ -37,6 +37,8 @@ type MemberRow = {
   created_at: Date | string;
   mfa_enabled: boolean;
   last_seen_at: Date | string | null;
+  partner_link_id: string | null;
+  agency_name: string | null;
 };
 
 type InvitationRow = {
@@ -74,10 +76,13 @@ export class PeopleService {
     const tenantId = tenantOf(auth);
     const members = await tx.execute<MemberRow>(sql`
       select m.id, m.user_id, u.name, u.email, m.role_key, m.approve_limit_micros, m.dual_approval, m.billing_access,
-             m.expires_at, i.name as invited_by_name, m.created_at, u.mfa_enabled_at is not null as mfa_enabled, m.last_seen_at
+             m.expires_at, i.name as invited_by_name, m.created_at, u.mfa_enabled_at is not null as mfa_enabled, m.last_seen_at,
+             m.partner_link_id, ag.name as agency_name
         from liame.membership m
         join liame.app_user u on u.id = m.user_id
         left join liame.app_user i on i.id = m.invited_by
+        left join liame.partner_link pl on pl.id = m.partner_link_id
+        left join liame.organization ag on ag.id = pl.partner_org_id
        where m.tenant_id = ${tenantId} and m.revoked_at is null and (m.expires_at is null or m.expires_at > now())`);
     const invitations = await tx.execute<InvitationRow>(sql`
       select v.id, v.email, v.role_key, v.approve_limit_micros, v.dual_approval, v.billing_access, v.access_expires_at,
@@ -165,6 +170,12 @@ export class PeopleService {
     const tx = currentTx();
     const tenantId = tenantOf(auth);
     const target = await this.target(tx, auth, id);
+    // Quem vem de uma agência entra até o máximo que o Dono deu à agência, e quem escolhe o nível de cada pessoa é a
+    // agência (D-A7-48). Aqui só se tira a pessoa; para mudar, muda-se o que a agência pode (D-A7-49).
+    if (target.partner_link_id) {
+      throw new AppProblem(409, 'acesso-da-agencia', 'O acesso vem da agência',
+        `O nível de ${target.name} é escolhido por ${target.agency_name ?? 'a agência'}, até o máximo que você deu. Para mudar, mude o que a agência pode, ou tire a pessoa.`);
+    }
     const by = await this.grantor(tx, auth);
     const current: CheckedGrant = {
       role: target.role_key as InvitableRole,
@@ -249,10 +260,13 @@ export class PeopleService {
   private async target(tx: Tx, auth: AuthContext, id: string): Promise<MemberRow> {
     const r = await tx.execute<MemberRow>(sql`
       select m.id, m.user_id, u.name, u.email, m.role_key, m.approve_limit_micros, m.dual_approval, m.billing_access,
-             m.expires_at, i.name as invited_by_name, m.created_at, u.mfa_enabled_at is not null as mfa_enabled, m.last_seen_at
+             m.expires_at, i.name as invited_by_name, m.created_at, u.mfa_enabled_at is not null as mfa_enabled, m.last_seen_at,
+             m.partner_link_id, ag.name as agency_name
         from liame.membership m
         join liame.app_user u on u.id = m.user_id
         left join liame.app_user i on i.id = m.invited_by
+        left join liame.partner_link pl on pl.id = m.partner_link_id
+        left join liame.organization ag on ag.id = pl.partner_org_id
        where m.id = ${id} and m.tenant_id = ${tenantOf(auth)} and m.revoked_at is null
        for update of m`);
     const target = r.rows[0];
@@ -327,6 +341,7 @@ function toMember(r: MemberRow): MemberResponse {
     created_at: iso(r.created_at),
     mfa_enabled: r.mfa_enabled,
     last_seen_at: isoOrNull(r.last_seen_at),
+    partner: r.partner_link_id ? { link_id: r.partner_link_id, agency_name: r.agency_name ?? 'a agência' } : null,
   };
 }
 

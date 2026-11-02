@@ -11,7 +11,7 @@ import { Mailer, type MailMessage } from '../mail/mailer.js';
 import { ROLE_LABEL } from '../people/grant-rules.js';
 import { descreverAparelho, mascararIp } from './aparelho.js';
 import { burnPasswordTime, hashPassword, isBreachedPassword, verifyPassword } from './password.js';
-import { MFA_REQUIRED } from './permissions.js';
+import { MFA_REQUIRED, permissoesDoVinculo } from './permissions.js';
 import { RateLimitService } from './rate-limit.service.js';
 import { SessionService } from './session.service.js';
 import { hashToken, newToken } from './tokens.js';
@@ -262,16 +262,36 @@ export class AuthService {
        order by o.name`);
     const user = u.rows[0];
     if (!user) throw new AppProblem(401, 'nao-autenticado', 'Entre de novo', 'A sessão acabou.');
+    const pelaAgencia = await this.empresasPelaAgencia(userId);
     const activeRole = orgs.rows.find((o) => o.id === tenantId)?.role ?? null;
-    const permissions = tenantId && activeRole ? await this.permissionsOf(tx, tenantId, activeRole) : [];
+    const permissions =
+      tenantId && activeRole ? [...permissoesDoVinculo(await this.permissionsOf(tx, tenantId, activeRole), pelaAgencia.has(tenantId))] : [];
     return {
       user: { id: user.id, name: user.name, email: user.email },
-      organizations: orgs.rows,
+      organizations: orgs.rows.map((o) => ({ ...o, via_agency: pelaAgencia.get(o.id) ?? null })),
       active_organization_id: tenantId,
       mfa: !user.mfa_configured ? 'not_configured' : mfaVerifiedAt ? 'verified' : 'required',
-      mfa_enrollment_required: !user.mfa_configured && activeRole !== null && MFA_REQUIRED.has(activeRole),
+      // Quem entra pela agência usa o app em qualquer nível (D-A7-48).
+      mfa_enrollment_required: !user.mfa_configured && activeRole !== null && (MFA_REQUIRED.has(activeRole) || pelaAgencia.has(tenantId!)),
       permissions,
     };
+  }
+
+  /**
+   * As empresas em que a pessoa entra pela agência, com a agência de cada uma (A7, W6, parte 3). Só os vínculos da
+   * própria pessoa; no escopo de sistema porque o vínculo da agência com uma empresa que não é a ativa não aparece na
+   * RLS da requisição.
+   */
+  private async empresasPelaAgencia(userId: string): Promise<Map<string, { id: string; name: string }>> {
+    const r = await withSystem(this.db, (tx) =>
+      tx.execute<{ tenant_id: string; agency_id: string; agency_name: string }>(sql`
+        select m.tenant_id, a.id as agency_id, a.name as agency_name
+          from liame.membership m
+          join liame.partner_link l on l.id = m.partner_link_id
+          join liame.organization a on a.id = l.partner_org_id
+         where m.user_id = ${userId} and m.revoked_at is null and (m.expires_at is null or m.expires_at > now())`),
+    );
+    return new Map(r.rows.map((x) => [x.tenant_id, { id: x.agency_id, name: x.agency_name }]));
   }
 
   /** Papel como dado (ADR-013): o conjunto da empresa para o papel, se houver; senão, o padrão do Liame. */

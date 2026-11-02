@@ -1,6 +1,6 @@
 import type { Tx } from '@liame/database';
 import { sql } from 'drizzle-orm';
-import { NIVEL_DA_COBRANCA_LIBERADA, PERMISSOES_DA_COBRANCA_LIBERADA } from './permissions.js';
+import { NIVEL_DA_COBRANCA_LIBERADA, PERMISSOES_DA_COBRANCA_LIBERADA, PERMISSOES_FORA_DO_PARCEIRO } from './permissions.js';
 
 /**
  * A permissão vem também do acesso à cobrança que o Dono libera ao Administrador (ADR-017; D-A7-13), como na sessão:
@@ -10,6 +10,11 @@ function pelaCobrancaLiberada(permissao: string) {
   return (PERMISSOES_DA_COBRANCA_LIBERADA as readonly string[]).includes(permissao)
     ? sql`(m.billing_access and m.role_key = ${NIVEL_DA_COBRANCA_LIBERADA})`
     : sql`false`;
+}
+
+/** Quem vem de uma agência nunca tem as permissões de pessoas e de cobrança (D-A7-47), como na sessão. */
+function foraDoParceiro(permissao: string) {
+  return (PERMISSOES_FORA_DO_PARCEIRO as readonly string[]).includes(permissao) ? sql`and m.partner_link_id is null` : sql``;
 }
 
 /**
@@ -28,7 +33,7 @@ export async function pessoaPode(tx: Tx, alvo: { tenantId: string; userId: strin
         from liame.membership m
         join liame.app_user u on u.id = m.user_id and u.disabled_at is null
        where m.tenant_id = ${alvo.tenantId} and m.user_id = ${alvo.userId}
-         and m.revoked_at is null and (m.expires_at is null or m.expires_at > now())
+         and m.revoked_at is null and (m.expires_at is null or m.expires_at > now()) ${foraDoParceiro(alvo.permissao)}
          and (exists (
            select 1 from liame.role_permission rp
             where rp.role_key = m.role_key and rp.permission = ${alvo.permissao}
@@ -51,7 +56,7 @@ export async function pessoasQuePodem(tx: Tx, alvo: { tenantId: string; permissa
       from liame.membership m
       join liame.app_user u on u.id = m.user_id and u.disabled_at is null and u.email_verified_at is not null
      where m.tenant_id = ${alvo.tenantId}
-       and m.revoked_at is null and (m.expires_at is null or m.expires_at > now())
+       and m.revoked_at is null and (m.expires_at is null or m.expires_at > now()) ${foraDoParceiro(alvo.permissao)}
        and (exists (
          select 1 from liame.role_permission rp
           where rp.role_key = m.role_key and rp.permission = ${alvo.permissao}

@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
 import { MfaService } from '../auth/mfa.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
-import { actorLabel } from '../context/unit-of-work.interceptor.js';
+import { actorLabel, actorTypeOf } from '../context/unit-of-work.interceptor.js';
 import { afterCommit, auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { emitEvent } from '../events/outbox.js';
@@ -112,7 +112,7 @@ export class LifecycleService {
     // Exportar tudo é sensível: fica na auditoria, na mesma transação.
     await writeAudit(tx, {
       tenantId,
-      actorType: 'human',
+      actorType: actorTypeOf(auth),
       actorId: auth.userId,
       actorLabel: actorLabel(auth),
       actorRole: auth.roleKey,

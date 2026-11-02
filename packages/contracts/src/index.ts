@@ -30,12 +30,15 @@ export {
   AcceptPartnerRequest,
   AgencyClientResponse,
   AgencyClientsResponse,
+  AgencyClientTeamMember,
+  AgencyClientTeamResponse,
   AgencyRequestResponse,
   CreatePartnerRequestRequest,
   PartnerRequestResponse,
   PartnerResponse,
   PartnerRole,
   PartnersResponse,
+  SetAgencyClientTeamRequest,
   UpdatePartnerRequest,
 } from './partners.js';
 export { HealthResponse, ReadinessResponse } from './health.js';

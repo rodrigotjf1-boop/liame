@@ -73,8 +73,9 @@ export class AccessGuard implements CanActivate {
       if (!auth.tenantId || !auth.roleKey) {
         throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma empresa', 'Selecione uma empresa com acesso ativo.');
       }
-      // Níveis que mexem em dinheiro ou em pessoas só entram com o app autenticador ativo (ADR-013, ADR-017).
-      if (MFA_REQUIRED.has(auth.roleKey) && !auth.mfaConfigured) {
+      // Níveis que mexem em dinheiro ou em pessoas só entram com o app autenticador ativo (ADR-013, ADR-017); quem vem de
+      // uma agência, em qualquer nível (D-A7-48).
+      if ((MFA_REQUIRED.has(auth.roleKey) || auth.partner) && !auth.mfaConfigured) {
         throw new AppProblem(
           403,
           'segundo-fator-nao-configurado',

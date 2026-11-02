@@ -2,7 +2,10 @@ import type {
   AcceptPartnerRequest,
   AgencyClientResponse,
   AgencyClientsResponse,
+  AgencyClientTeamResponse,
   AgencyRequestResponse,
+  AgencyRole,
+  SetAgencyClientTeamRequest,
   CreatePartnerRequestRequest,
   PartnerRequestResponse,
   PartnerResponse,
@@ -199,6 +202,11 @@ export class VinculoService {
   async deixar(auth: AuthContext, id: string): Promise<void> {
     const tx = currentTx();
     const agencyId = await agenciaDe(tx, auth);
+    // O time sai antes do vínculo: a RLS só deixa a agência mexer no vínculo das pessoas enquanto o dela está vivo.
+    await tx.execute(sql`
+      update liame.membership set revoked_at = now()
+       where partner_link_id = ${id} and revoked_at is null
+         and exists (select 1 from liame.partner_link l where l.id = ${id} and l.partner_org_id = ${agencyId} and l.status = 'ativo')`);
     const r = await tx.execute<{ client_org_id: string }>(sql`
       update liame.partner_link
          set status = 'desfeito', ended_at = now(), ended_by = ${auth.userId}, ended_side = 'agencia'
@@ -222,6 +230,135 @@ export class VinculoService {
         }),
       );
     }
+  }
+
+  /** Quem do time da agência entra neste cliente, e até onde (A7, W6, parte 3; D-A7-48). */
+  async timeNoCliente(auth: AuthContext, id: string): Promise<AgencyClientTeamResponse> {
+    const tx = currentTx();
+    const agencyId = await agenciaDe(tx, auth);
+    const cliente = await this.clienteVivo(tx, agencyId, id, false);
+    const time = await tx.execute<{
+      user_id: string;
+      name: string;
+      email: string;
+      agency_role: AgencyRole;
+      mfa_enabled: boolean;
+      member_id: string | null;
+      role_key: PartnerRole | null;
+      approve_limit_micros: string | null;
+      dual_approval: boolean | null;
+    }>(sql`
+      select u.id as user_id, u.name, u.email, ma.role_key as agency_role, u.mfa_enabled_at is not null as mfa_enabled,
+             mc.id as member_id, mc.role_key, mc.approve_limit_micros, mc.dual_approval
+        from liame.membership ma
+        join liame.app_user u on u.id = ma.user_id
+        left join liame.membership mc on mc.user_id = ma.user_id and mc.partner_link_id = ${id} and mc.revoked_at is null
+       where ma.tenant_id = ${agencyId} and ma.revoked_at is null and (ma.expires_at is null or ma.expires_at > now())
+       order by u.name`);
+    return {
+      client: toClienteDaAgencia(cliente),
+      team: time.rows.map((t) => ({
+        user_id: t.user_id,
+        name: t.name,
+        email: t.email,
+        agency_role: t.agency_role,
+        mfa_enabled: t.mfa_enabled,
+        in_client:
+          t.member_id && t.role_key
+            ? { member_id: t.member_id, role: t.role_key, approve_limit_micros: micros(t.approve_limit_micros), dual_approval: t.dual_approval ?? true }
+            : null,
+      })),
+    };
+  }
+
+  /**
+   * Salvar quem entra no cliente (D-A7-48): a dona ou um administrador da agência escolhe quem do time entra, com o
+   * nível e o limite até o máximo do Dono; a pessoa entra só com o app autenticador ativo. Quem sai da lista perde o
+   * acesso a este cliente na hora. O Dono recebe um aviso de cada pessoa nova.
+   */
+  async escolherTime(auth: AuthContext, id: string, input: SetAgencyClientTeamRequest): Promise<AgencyClientTeamResponse> {
+    const tx = currentTx();
+    const agencyId = await agenciaDe(tx, auth);
+    const cliente = await this.clienteVivo(tx, agencyId, id, true);
+    const termos: Termos = {
+      maxRole: cliente.max_role,
+      limite: micros(cliente.approve_limit_micros),
+      dupla: cliente.dual_approval,
+      fim: isoOrNull(cliente.ends_at),
+    };
+    const doTime = await tx.execute<{ user_id: string; name: string; mfa_enabled: boolean }>(sql`
+      select u.id as user_id, u.name, u.mfa_enabled_at is not null as mfa_enabled
+        from liame.membership ma join liame.app_user u on u.id = ma.user_id
+       where ma.tenant_id = ${agencyId} and ma.revoked_at is null and (ma.expires_at is null or ma.expires_at > now())`);
+    const pessoas = new Map(doTime.rows.map((p) => [p.user_id, p]));
+    const pedidos = input.members.map((m) => {
+      const pessoa = pessoas.get(m.user_id);
+      if (!pessoa) throw new AppProblem(404, 'fora-do-time', 'Não está no time', 'Só quem está no time da agência entra num cliente.');
+      if (!pessoa.mfa_enabled) {
+        throw new AppProblem(409, 'sem-app-autenticador', 'Falta o app autenticador', `${pessoa.name} só entra num cliente com o app autenticador ativo.`);
+      }
+      return { ...m, nome: pessoa.name, acesso: dentroDoMaximo(m, termos, pessoa.name) };
+    });
+
+    const atuais = await tx.execute<{ id: string; user_id: string; role_key: PartnerRole }>(sql`
+      select id, user_id, role_key from liame.membership where partner_link_id = ${id} and revoked_at is null for update`);
+    const ficam = new Set(pedidos.map((p) => p.user_id));
+    const saem = atuais.rows.filter((a) => !ficam.has(a.user_id)).map((a) => a.id);
+    if (saem.length) {
+      await tx.execute(sql`
+        update liame.membership set revoked_at = now()
+         where partner_link_id = ${id} and revoked_at is null and id in (${sql.join(saem.map((x) => sql`${x}::uuid`), sql`, `)})`);
+    }
+    const jaEstao = new Map(atuais.rows.map((a) => [a.user_id, a.id]));
+    const novos: Array<{ nome: string; role: PartnerRole }> = [];
+    for (const p of pedidos) {
+      const existente = jaEstao.get(p.user_id);
+      if (existente) {
+        await tx.execute(sql`
+          update liame.membership
+             set role_key = ${p.acesso.role}, approve_limit_micros = ${p.acesso.limite}, dual_approval = ${p.acesso.dupla}, expires_at = ${termos.fim}
+           where id = ${existente}`);
+        continue;
+      }
+      try {
+        // Num ponto de salvamento: a pessoa que já tem acesso direto à empresa (pelo convite do Dono) não entra duas vezes.
+        await tx.transaction(async (sp) => {
+          await sp.execute(sql`
+            insert into liame.membership (id, tenant_id, user_id, role_key, approve_limit_micros, dual_approval, billing_access,
+                                          expires_at, invited_by, partner_link_id)
+            values (${uuidv7()}, ${cliente.client_id}, ${p.user_id}, ${p.acesso.role}, ${p.acesso.limite}, ${p.acesso.dupla}, false,
+                    ${termos.fim}, ${auth.userId}, ${id})`);
+        });
+      } catch (err) {
+        if ((err as { code?: string; cause?: { code?: string } }).code === '23505' || (err as { cause?: { code?: string } }).cause?.code === '23505') {
+          throw new AppProblem(409, 'ja-tem-acesso', 'Já tem acesso', `${p.nome} já tem acesso a ${cliente.client_name} por convite do Dono.`);
+        }
+        throw err;
+      }
+      novos.push({ nome: p.nome, role: p.acesso.role });
+    }
+    auditDetail({
+      resourceId: id,
+      after: { client_org_id: cliente.client_id, members: pedidos.map((p) => ({ user_id: p.user_id, role: p.acesso.role })), removed: saem.length },
+    });
+    if (novos.length) {
+      const agencia = await nomeDaOrganizacao(tx, agencyId);
+      const lista = novos.map((n) => `- ${n.nome}, como ${ROLE_LABEL[n.role]}`).join('\n');
+      for (const email of await quemAvisarNaEmpresa(this.db, cliente.client_id)) {
+        afterCommit(() =>
+          this.mailer.send({
+            to: email,
+            subject: `Liame: ${agencia.name} colocou ${novos.length === 1 ? 'uma pessoa' : `${novos.length} pessoas`} na conta de ${cliente.client_name}`,
+            text:
+              `${auth.name}, de ${agencia.name}, colocou na conta de ${cliente.client_name} no Liame:\n\n${lista}\n\n` +
+              `Cada pessoa entra com o próprio login e o app autenticador, até o máximo que você deu à agência.\n` +
+              `Veja quem tem acesso: ${this.config.appUrl}/pessoas\n` +
+              'Se você não reconhece alguém, tire a pessoa ou desfaça o vínculo com a agência.',
+          }),
+        );
+      }
+    }
+    return this.timeNoCliente(auth, id);
   }
 
   // ================================================================== o lado da empresa
@@ -353,11 +490,14 @@ export class VinculoService {
       update liame.partner_link
          set max_role = ${depois.maxRole}, approve_limit_micros = ${depois.limite}, dual_approval = ${depois.dupla}, ends_at = ${depois.fim}
        where id = ${id} and client_org_id = ${tenantId} and status = 'ativo'`);
-    auditDetail({ resourceId: id, before: detalhe(antes), after: detalhe(depois) });
+    // Quem do time estava acima do máximo novo desce para ele, na hora (D-A7-49), e o acesso de todos acaba na data nova.
+    const desceram = await this.ajustarTime(tx, tenantId, id, depois);
+    auditDetail({ resourceId: id, before: detalhe(antes), after: { ...detalhe(depois), team_lowered: desceram } });
     const empresa = await nomeDaOrganizacao(tx, tenantId);
     await this.avisarAgencia(atual.agency_id, `Liame: ${empresa.name} mudou o que ${atual.agency_name} pode`, [
       `${auth.name} mudou o que ${atual.agency_name} pode fazer na conta de ${empresa.name} no Liame.`,
       descreverTermos(depois),
+      ...(desceram ? [`${desceram === 1 ? 'Uma pessoa do time estava acima e desceu' : `${desceram} pessoas do time estavam acima e desceram`} para o novo máximo.`] : []),
     ]);
     return toParceiro({ ...atual, max_role: depois.maxRole, approve_limit_micros: depois.limite === null ? null : String(depois.limite), dual_approval: depois.dupla, ends_at: depois.fim });
   }
@@ -373,6 +513,9 @@ export class VinculoService {
     await tx.execute(sql`
       update liame.partner_link set status = 'desfeito', ended_at = now(), ended_by = ${auth.userId}, ended_side = 'empresa'
        where id = ${id} and client_org_id = ${tenantId} and status = 'ativo'`);
+    // O time inteiro da agência sai desta empresa na hora (D-A7-50).
+    await tx.execute(sql`
+      update liame.membership set revoked_at = now() where tenant_id = ${tenantId} and partner_link_id = ${id} and revoked_at is null`);
     auditDetail({ resourceId: id, before: { agency_id: atual.agency_id, max_role: atual.max_role } });
     const empresa = await nomeDaOrganizacao(tx, tenantId);
     await this.avisarAgencia(atual.agency_id, `Liame: ${empresa.name} desfez o vínculo com ${atual.agency_name}`, [
@@ -421,6 +564,44 @@ export class VinculoService {
     return vinculo;
   }
 
+  /** O vínculo vivo da agência com um cliente (a data de fim ainda não passou), preso quando vai mudar o time. */
+  private async clienteVivo(tx: Tx, agencyId: string, id: string, prender: boolean): Promise<ClienteDaAgencia> {
+    const r = await tx.execute<ClienteDaAgencia>(sql`
+      select l.id, o.id as client_id, o.name as client_name, l.max_role, l.approve_limit_micros, l.dual_approval, l.ends_at,
+             l.decided_at, l.status, l.ended_at, l.ended_side
+        from liame.partner_link l join liame.organization o on o.id = l.client_org_id
+       where l.id = ${id} and l.partner_org_id = ${agencyId} and l.status = 'ativo' and (l.ends_at is null or l.ends_at > now())
+       ${prender ? sql`for update of l` : sql``}`);
+    const cliente = r.rows[0];
+    if (!cliente) throw naoEncontrado();
+    return cliente;
+  }
+
+  /**
+   * O time da agência no novo máximo (D-A7-49): quem estava acima desce, o limite acima do novo vira o novo, e o acesso
+   * de todos acaba na data de fim nova. Uma consulta para o time inteiro. Devolve quantos desceram.
+   */
+  private async ajustarTime(tx: Tx, tenantId: string, id: string, termos: Termos): Promise<number> {
+    const r = await tx.execute<{ id: string; role_key: PartnerRole; approve_limit_micros: string | null; dual_approval: boolean }>(sql`
+      select id, role_key, approve_limit_micros, dual_approval from liame.membership
+       where tenant_id = ${tenantId} and partner_link_id = ${id} and revoked_at is null
+       for update`);
+    if (!r.rows.length) return 0;
+    const ajustes = r.rows.map((m) => ({
+      id: m.id,
+      ...ajustarAoMaximo({ role: m.role_key, limite: micros(m.approve_limit_micros), dupla: m.dual_approval }, termos),
+    }));
+    await tx.execute(sql`
+      update liame.membership m
+         set role_key = v.role_key, approve_limit_micros = v.limite, dual_approval = v.dupla, expires_at = ${termos.fim}::timestamptz
+        from (values ${sql.join(
+          ajustes.map((a) => sql`(${a.id}::uuid, ${a.role}::text, ${a.limite}::bigint, ${a.dupla}::boolean)`),
+          sql`, `,
+        )}) as v (id, role_key, limite, dupla)
+       where m.id = v.id and m.tenant_id = ${tenantId}`);
+    return ajustes.filter((a) => a.mudou).length;
+  }
+
   /** O aviso à dona e aos administradores da agência, depois do commit. */
   private async avisarAgencia(agencyId: string, subject: string, linhas: string[]): Promise<void> {
     const text = linhas.join('\n\n');
@@ -451,6 +632,46 @@ export function sobe(antes: Termos, depois: Termos): boolean {
   }
   if (antes.fim !== null && (depois.fim === null || Date.parse(depois.fim) > Date.parse(antes.fim))) return true;
   return false;
+}
+
+/**
+ * O acesso de uma pessoa do time no novo máximo do Dono (D-A7-49): o nível acima desce para o máximo; quem não aprova
+ * fica sem limite; o limite acima do máximo vira o máximo; com o "eu também aprovo" do Dono, ele vale para todos.
+ * `mudou` diz se a pessoa desceu ou perdeu limite.
+ */
+export function ajustarAoMaximo(
+  m: { role: PartnerRole; limite: number | null; dupla: boolean },
+  t: Termos,
+): { role: PartnerRole; limite: number | null; dupla: boolean; mudou: boolean } {
+  const role = ROLE_RANK[m.role] > ROLE_RANK[t.maxRole] ? t.maxRole : m.role;
+  if (!APPROVER_ROLES.has(role)) return { role, limite: null, dupla: true, mudou: role !== m.role || m.limite !== null };
+  const limite = t.limite !== null && (m.limite === null || m.limite > t.limite) ? t.limite : m.limite;
+  const dupla = t.dupla ? true : m.dupla;
+  return { role, limite, dupla, mudou: role !== m.role || limite !== m.limite || dupla !== m.dupla };
+}
+
+/**
+ * O acesso que a agência pede para uma pessoa, conferido contra o máximo do Dono (D-A7-48): nunca acima do nível, nunca
+ * acima do limite (sem limite, só se o Dono deu sem limite), e com o "eu também aprovo" quando o Dono o quis. Sem o
+ * limite, quem aprova fica com o do Dono.
+ */
+export function dentroDoMaximo(
+  m: { role: PartnerRole; approve_limit_micros?: number | null; dual_approval?: boolean },
+  t: Termos,
+  nome: string,
+): { role: PartnerRole; limite: number | null; dupla: boolean } {
+  if (ROLE_RANK[m.role] > ROLE_RANK[t.maxRole]) {
+    throw new AppProblem(403, 'acima-do-maximo', 'Acima do que o Dono deu', `${nome} não pode entrar como ${ROLE_LABEL[m.role]}: o máximo da agência neste cliente é ${ROLE_LABEL[t.maxRole]}.`);
+  }
+  if (!APPROVER_ROLES.has(m.role)) return { role: m.role, limite: null, dupla: true };
+  const limite = m.approve_limit_micros === undefined ? t.limite : m.approve_limit_micros;
+  if (t.limite !== null && (limite === null || limite > t.limite)) {
+    throw new AppProblem(403, 'limite-acima-do-maximo', 'Limite acima do que o Dono deu', `O limite de ${nome} não pode passar do limite que o Dono deu à agência.`);
+  }
+  if (t.dupla && m.dual_approval === false) {
+    throw new AppProblem(403, 'aprovacao-dupla-do-dono', 'O Dono também aprova', 'Acima do limite, o Dono também aprova: isso vale para todo o time da agência.');
+  }
+  return { role: m.role, limite, dupla: t.dupla ? true : (m.dual_approval ?? true) };
 }
 
 function detalhe(t: Termos): Record<string, unknown> {
