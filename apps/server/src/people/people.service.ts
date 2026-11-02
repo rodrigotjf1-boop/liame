@@ -1,4 +1,5 @@
 import type {
+  CompanyRole,
   CreateInvitationRequest,
   InvitableRole,
   InvitationResponse,
@@ -27,7 +28,7 @@ type MemberRow = {
   user_id: string;
   name: string;
   email: string;
-  role_key: RoleKey;
+  role_key: CompanyRole;
   approve_limit_micros: string | null;
   dual_approval: boolean;
   billing_access: boolean;

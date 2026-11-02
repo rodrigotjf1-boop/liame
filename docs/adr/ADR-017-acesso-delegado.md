@@ -69,3 +69,7 @@ O que um agente faz a pedido de um administrador segue o limite desse administra
 - **Remoção na hora:** toda requisição confere o vínculo, então a próxima chamada da pessoa naquela empresa já é recusada; as sessões seguem valendo para as outras empresas dela. A data de fim funciona do mesmo jeito.
 - **Avisos ao dono:** convite aceito (sempre); convite, mudança de acesso e remoção feitos por outra pessoa. Todo e-mail sai depois do commit (`afterCommit`); se a transação desfaz, ninguém recebe aviso do que não aconteceu. Na E5, os envios passam para o outbox.
 - **Ainda não:** transferência de propriedade, recuperação da conta do dono pela DMS, resumo semanal por pessoa (depende da auditoria, E3) e o vínculo de parceiro (A7).
+
+## Implementação do parceiro (A7, W6; P27 aprovado em 01/11/2026)
+
+- **Parte 1 (02/11/2026, migration 0099):** a agência é uma organização do tipo `agencia` (`organization.kind`, que não muda), sem marca e sem assinatura, com o time em `membership` pelos papéis Dona, Administrador e Membro da agência (dados em `role`, permissões `agencia.*`; o banco confere que papel e tipo combinam). Nasce no cadastro ("Sou agência ou consultor") ou por quem já tem login; uma por pessoa como dona. O convite do time é o mesmo das empresas. Decisões D-A7-75 e D-A7-76 (`plano-a7.md`).

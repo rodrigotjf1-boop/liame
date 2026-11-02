@@ -17,6 +17,7 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .addTag('me', 'A pessoa da sessão, o segundo fator e a empresa ativa')
     .addTag('organization', 'Empresa ativa e marcas')
     .addTag('people', 'Pessoas e acessos: convites, níveis, limites e remoção (ADR-017)')
+    .addTag('agency', 'A agência: abrir a conta da agência e o time dela, com os papéis de dona, administrador e membro (A7, W6)')
     .addTag('webhooks', 'Webhooks de saída: CloudEvents assinados no padrão Standard Webhooks (ADR-004)')
     .addTag('audit', 'Auditoria da empresa: eventos com hash encadeado e verificação (security-model §7)')
     .addTag('flags', 'Feature flags avaliadas para a sessão, no protocolo OFREP (ADR-012)')

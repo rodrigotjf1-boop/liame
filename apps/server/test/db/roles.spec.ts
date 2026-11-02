@@ -19,8 +19,10 @@ import { hasDb, OWNER_URL } from './env.js';
 
 // Matriz papel × permissão (ADR-013, ADR-017), escrita à mão de propósito: mudar um papel padrão
 // exige mudar a migration E este quadro, com revisão.
+// As permissões da agência (A7, W6, migration 0099) são só dos papéis da agência: o Dono de uma empresa tem todas as outras.
+const DA_AGENCIA = ['agencia.ver', 'agencia.time', 'agencia.clientes'];
 const MATRIX: Record<string, string[]> = {
-  dono: [...PERMISSIONS],
+  dono: PERMISSIONS.filter((p) => !DA_AGENCIA.includes(p)),
   administrador: [
     'empresa.ver', 'empresa.editar', 'marcas.ver', 'marcas.gerenciar', 'pessoas.ver', 'pessoas.convidar', 'pessoas.remover',
     'pessoas.alterar_nivel', 'auditoria.ver', 'acoes.aprovar', 'campanhas.ver', 'campanhas.operar', 'relatorios.ver',
@@ -36,8 +38,13 @@ const MATRIX: Record<string, string[]> = {
   aprovador: ['empresa.ver', 'marcas.ver', 'acoes.aprovar', 'campanhas.ver', 'relatorios.ver', 'contas.ver', 'vendas.ver', 'dossie.ver', 'conversa.usar', 'planos.ver', 'planos.decidir', 'fotos.ver'],
   somente_leitura: ['empresa.ver', 'marcas.ver', 'campanhas.ver', 'relatorios.ver', 'contas.ver', 'vendas.ver', 'dossie.ver', 'conversa.usar', 'planos.ver', 'fotos.ver'],
   so_relatorios: [],
+  // Os papéis da agência (D-A7-51): a dona e o administrador cuidam do time e dos clientes; o membro só vê.
+  agencia_dona: ['agencia.ver', 'agencia.time', 'agencia.clientes'],
+  agencia_admin: ['agencia.ver', 'agencia.time', 'agencia.clientes'],
+  agencia_membro: ['agencia.ver'],
 };
 const APPROVERS = new Set(['administrador', 'gestor', 'aprovador']);
+const DA_AGENCIA_PAPEIS = new Set(['agencia_dona', 'agencia_admin', 'agencia_membro']);
 const ANY_ID = '0192f1d4-3c1a-7b2e-9a10-5f1e2d3c4b5a';
 
 describe.skipIf(!hasDb)('papéis como dado', () => {
@@ -59,6 +66,26 @@ describe.skipIf(!hasDb)('papéis como dado', () => {
     });
     if (APPROVERS.has(role)) await enableMfa(api, s.cookie!);
     return { email, cookie: s.cookie!, me: s.body };
+  }
+
+  /** A agência (A7, W6): quem já tem login abre a conta da agência e convida o time; todo o time usa o app autenticador. */
+  async function agencia() {
+    const s = await signupAndLogin(api, undefined, 'Empresa da Dona da Agência');
+    const aberta = await api.call('POST', '/v1/agencies', { cookie: s.cookie, body: { name: 'Agência dos Papéis' } });
+    expect(aberta.status).toBe(201);
+    await enableMfa(api, s.cookie);
+    const sessions: Record<string, string> = { agencia_dona: s.cookie };
+    for (const role of ['agencia_admin', 'agencia_membro']) {
+      const email = uniqueEmail(role);
+      expect((await api.call('POST', '/v1/agency/invitations', { cookie: s.cookie, body: { email, role } })).status).toBe(201);
+      const m = await api.call('POST', '/v1/invitations/signup', {
+        body: { token: tokenFrom(api.mailer, email), name: role, password: PASSWORD, terms_version: TERMOS },
+      });
+      expect(m.status).toBe(200);
+      await enableMfa(api, m.cookie!);
+      sessions[role] = m.cookie!;
+    }
+    return sessions;
   }
 
   beforeAll(async () => {
@@ -84,8 +111,10 @@ describe.skipIf(!hasDb)('papéis como dado', () => {
 
   it('cada papel passa ou é barrado em TODA rota com permissão, conforme a matriz', async () => {
     const dono = await owner();
-    const sessions: Record<string, string> = { dono: dono.cookie };
-    for (const role of Object.keys(MATRIX).filter((r) => r !== 'dono')) sessions[role] = (await member(dono, role)).cookie;
+    const sessions: Record<string, string> = { dono: dono.cookie, ...(await agencia()) };
+    for (const role of Object.keys(MATRIX).filter((r) => r !== 'dono' && !DA_AGENCIA_PAPEIS.has(r))) {
+      sessions[role] = (await member(dono, role)).cookie;
+    }
 
     const routes = listRoutes(api.app).filter((r) => r.access?.kind === 'permissao');
     expect(routes.length).toBeGreaterThan(5);

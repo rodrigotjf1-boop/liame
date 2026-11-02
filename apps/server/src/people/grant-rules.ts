@@ -14,6 +14,10 @@ export const ROLE_LABEL: Record<RoleKey, string> = {
   aprovador: 'Aprovador',
   somente_leitura: 'Somente leitura',
   so_relatorios: 'Só relatórios por e-mail',
+  // Os papéis da agência (A7, W6; D-A7-51), com os nomes do P27 aprovado.
+  agencia_dona: 'Dona da agência',
+  agencia_admin: 'Administrador da agência',
+  agencia_membro: 'Membro da agência',
 };
 
 /** Quem concede: o nível e o limite do próprio vínculo na empresa ativa. */

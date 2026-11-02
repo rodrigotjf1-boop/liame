@@ -1,11 +1,14 @@
 export {
   AcceptedResponse,
+  AgencyRole,
+  CompanyRole,
   Email,
   ForgotPasswordRequest,
   LegalTermsResponse,
   LoginRequest,
   MeResponse,
   MfaStatus,
+  OrganizationKind,
   Password,
   PASSWORD_MIN,
   ResetPasswordRequest,
@@ -15,6 +18,14 @@ export {
   TermsVersion,
   TokenRequest,
 } from './auth.js';
+export {
+  AgencyInvitationResponse,
+  AgencyMemberResponse,
+  AgencyTeamResponse,
+  CreateAgencyInvitationRequest,
+  CreateAgencyRequest,
+  UpdateAgencyMemberRequest,
+} from './agency.js';
 export { HealthResponse, ReadinessResponse } from './health.js';
 export { MfaVerifyRequest, RecoveryCodesResponse, TotpCodeRequest, TotpSetupResponse } from './mfa.js';
 export {
@@ -35,6 +46,7 @@ export {
   OrganizationResponse,
 } from './tenancy.js';
 export {
+  AgencyInvitableRole,
   CreateInvitationRequest,
   InvitableRole,
   InvitationPreviewResponse,

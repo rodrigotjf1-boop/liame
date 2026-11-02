@@ -1,4 +1,11 @@
-import type { InvitableRole, InvitationPreviewResponse, InvitationSignupRequest, MeResponse } from '@liame/contracts';
+import type {
+  AgencyInvitableRole,
+  InvitableRole,
+  InvitationPreviewResponse,
+  InvitationSignupRequest,
+  MeResponse,
+  OrganizationKind,
+} from '@liame/contracts';
 import { type Database, type Tx, uuidv7, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -20,13 +27,15 @@ type OpenInvitation = {
   id: string;
   tenant_id: string;
   email: string;
-  role_key: InvitableRole;
+  /** Um nível da empresa, ou um papel do time da agência (A7, W6). */
+  role_key: InvitableRole | AgencyInvitableRole;
   approve_limit_micros: string | null;
   dual_approval: boolean;
   billing_access: boolean;
   access_expires_at: Date | string | null;
   invited_by: string;
   organization_name: string;
+  organization_kind: OrganizationKind;
   invited_by_name: string;
 };
 
@@ -63,6 +72,7 @@ export class InvitationAcceptService {
       const u = await tx.execute(sql`select 1 from liame.app_user where email = ${inv.email}`);
       return {
         organization_name: inv.organization_name,
+        organization_kind: inv.organization_kind,
         role: inv.role_key,
         email: inv.email,
         invited_by_name: inv.invited_by_name,
@@ -129,7 +139,7 @@ export class InvitationAcceptService {
   private async open(tx: Tx, token: string, lock: boolean): Promise<OpenInvitation> {
     const r = await tx.execute<OpenInvitation>(sql`
       select v.id, v.tenant_id, v.email, v.role_key, v.approve_limit_micros, v.dual_approval, v.billing_access,
-             v.access_expires_at, v.invited_by, o.name as organization_name, u.name as invited_by_name
+             v.access_expires_at, v.invited_by, o.name as organization_name, o.kind as organization_kind, u.name as invited_by_name
         from liame.invitation v
         join liame.organization o on o.id = v.tenant_id
         join liame.app_user u on u.id = v.invited_by
@@ -168,18 +178,22 @@ export class InvitationAcceptService {
       subject: memberId,
       data: { member_id: memberId, user_id: userId, role: inv.role_key, invitation_id: inv.id },
     });
-    // O dono recebe um aviso quando o convite é aceito (ADR-017).
+    // O dono recebe um aviso quando o convite é aceito (ADR-017); na agência, a dona (A7, W6), com o caminho do time.
+    const agencia = inv.organization_kind === 'agencia';
     const owners = await tx.execute<{ email: string }>(sql`
       select u.email from liame.membership m join liame.app_user u on u.id = m.user_id
-       where m.tenant_id = ${inv.tenant_id} and m.role_key = 'dono' and m.revoked_at is null`);
+       where m.tenant_id = ${inv.tenant_id} and m.role_key = ${agencia ? 'agencia_dona' : 'dono'} and m.revoked_at is null`);
     for (const { email } of owners.rows) {
       outbox.push({
         to: email,
         subject: `Liame: ${name} aceitou o convite`,
-        text:
-          `${name} (${inv.email}) aceitou o convite de ${inv.invited_by_name} e agora tem acesso a ${inv.organization_name} ` +
-          `como ${ROLE_LABEL[inv.role_key]}.\n\nVeja quem tem acesso: ${this.config.appUrl}/pessoas\n` +
-          'Se você não reconhece esta pessoa, remova o acesso dela.',
+        text: agencia
+          ? `${name} (${inv.email}) aceitou o convite de ${inv.invited_by_name} e agora está no time de ${inv.organization_name} ` +
+            `como ${ROLE_LABEL[inv.role_key]}. A pessoa só entra num cliente quando alguém da agência a coloca nele.\n\n` +
+            `Veja o time: ${this.config.appUrl}/agencia/time\nSe você não reconhece esta pessoa, tire-a do time.`
+          : `${name} (${inv.email}) aceitou o convite de ${inv.invited_by_name} e agora tem acesso a ${inv.organization_name} ` +
+            `como ${ROLE_LABEL[inv.role_key]}.\n\nVeja quem tem acesso: ${this.config.appUrl}/pessoas\n` +
+            'Se você não reconhece esta pessoa, remova o acesso dela.',
       });
     }
   }

@@ -75,6 +75,7 @@ describe.skipIf(!hasDb)('pessoas e convites', () => {
     const preview = await api.call('POST', '/v1/invitations/preview', { body: { token } });
     expect(preview.body).toEqual({
       organization_name: 'Pizzaria Convite',
+      organization_kind: 'empresa',
       role: 'administrador',
       email,
       invited_by_name: 'Pessoa de Teste',
