@@ -1,7 +1,7 @@
 'use client';
 
 import type { OwnershipResponse } from '@liame/contracts';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { ConfirmaNaLinha } from '@/components/ui/confirma-na-linha';
 import { api, chamar, mensagemDe } from '@/lib/api';
@@ -18,9 +18,11 @@ type Props = {
   empresa: string;
   aoTransferir: () => void;
   aoMudar: (aviso: string) => void;
+  /** Para quem não é o Dono: o caminho do pedido da propriedade à DMS (A7, W8, parte 6b). */
+  caminhoDaDms?: ReactNode;
 };
 
-export function CartaoPropriedade({ propriedade: p, souDono, empresa, aoTransferir, aoMudar }: Props) {
+export function CartaoPropriedade({ propriedade: p, souDono, empresa, aoTransferir, aoMudar, caminhoDaDms }: Props) {
   const avisar = useAvisar();
   const [cancelando, setCancelando] = useState(false);
   const [enviando, setEnviando] = useState(false);
@@ -52,7 +54,12 @@ export function CartaoPropriedade({ propriedade: p, souDono, empresa, aoTransfer
   if (!souDono && p.addressed_to_me && p.pending) {
     corpo = <p className="lite-frase">{primeiroNome(p.owner.name)} pediu para passar a propriedade para você. Veja o pedido no alto da página.</p>;
   } else if (!souDono) {
-    corpo = <p className="lite-frase">Só {primeiroNome(p.owner.name)} transfere a propriedade.</p>;
+    corpo = (
+      <>
+        <p className="lite-frase">Só {primeiroNome(p.owner.name)} transfere a propriedade.</p>
+        {caminhoDaDms}
+      </>
+    );
   } else {
     const s = situacaoDoDono(p);
     if (s === 'pedido' && p.pending) {

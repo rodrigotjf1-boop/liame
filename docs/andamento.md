@@ -896,6 +896,19 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
   - `test/db/propriedade-pela-dms.spec.ts`: quem pode pedir, o rascunho e os documentos (o app vê qual foi, não o conteúdo), o envio, conferir, o aviso e a resposta do Dono, aprovar só depois da espera e a troca do Dono, recusar, desistir, o rascunho esquecido, o expurgo e cada restrição do banco;
   - com as suítes de propriedade, pessoas, worker, ciclo de vida, acesso, recuperação, fotos e logo da agência, em UTC; o contrato da API sem quebra.
 
+**A W8, parte 6b: as telas do pedido da propriedade à DMS (02/11/2026; web; sem migration). Com ela, a W8 está completa no código.** Desligada como a recuperação, até a chave pública da DMS ir para o ambiente.
+- **no cartão "A propriedade da conta", para o Administrador da própria empresa**:
+  - "O Dono não pode mais cuidar da conta?" e "Pedir a propriedade à DMS";
+  - depois, a situação do pedido (em análise, em espera com a data da decisão, respondido pelo Dono, recusado com o motivo, cancelado), "Desistir do pedido" (confirmado na linha) e "Continuar o pedido" no rascunho;
+- **a gaveta "Pedir a propriedade à DMS"**, como o P34:
+  - o que aconteceu, o documento com foto, o documento da empresa, o que a DMS precisa saber (até 600 letras) e o que acontece depois;
+  - mais o aceite dos Termos como dona, se a DMS aprovar;
+  - o envio em partes (o rascunho, os dois documentos, o envio), e a faixa com o protocolo;
+- **para o Dono**, no alto de Pessoas e acessos: o pedido sobre ele na espera, com a data a partir da qual a DMS pode aprovar e "Ainda cuido da conta"; respondido, a faixa;
+- **testes:**
+  - no navegador, 26 execuções em 1440, 1024, 768 e 375 px, claro e escuro: pedir (os erros, os dois documentos, os Termos e o envio em partes na ordem), a gaveta sem rolagem de lado, desistir, recusado, quem não pode pedir, e o Dono que responde;
+  - a suíte do web, com os motivos, a situação do pedido e quando o caminho aparece.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
