@@ -36,7 +36,7 @@ Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada a
 
 3.3. Quem pode aprovar gasto ou administrar a conta precisa ativar o **segundo fator por aplicativo autenticador**. Código por e-mail não vale como segundo fator.
 
-3.4. Você é responsável por proteger as suas credenciais e deve nos avisar imediatamente se suspeitar de uso indevido. A recuperação da conta do Dono é feita por nós, com verificação da identidade e do CNPJ, nunca por outro usuário.
+3.4. Você é responsável por proteger as suas credenciais e deve nos avisar imediatamente se suspeitar de uso indevido. A recuperação da conta do Dono é feita por nós, com verificação da identidade e do CNPJ, depois de uma videochamada e de uma espera de segurança de 7 dias, com aviso ao Dono e aos Administradores; nunca por outro usuário. Quando o Dono não está mais, quem representa a empresa pode pedir a propriedade à DMS, que decide depois de avisar o Dono e esperar 14 dias.
 
 ## 4. Pessoas convidadas (acesso delegado)
 
