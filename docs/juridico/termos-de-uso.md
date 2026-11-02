@@ -46,6 +46,14 @@ Estes Termos regem o uso do **Liame**, uma plataforma de marketing em que cada a
 
 4.3. O Dono pode remover um acesso a qualquer momento, com efeito imediato. Ninguém recebe mais poderes do que quem o convidou, e só o Dono transfere a propriedade, altera a cobrança ou exclui a conta.
 
+4.4. **Agências e consultores.** Uma agência ou um consultor com time pode abrir uma conta de agência no Liame e pedir, pelo e-mail do Dono, para cuidar da conta de uma empresa. O pedido só vale com o aceite do Dono, que escolhe o nível máximo do time da agência (nunca o de Dono), o limite de aprovação por ação e, se quiser, uma data de fim, e confirma com o código do aplicativo autenticador.
+
+4.5. **A agência age em nome do Cliente, dentro do que o Dono deu.** A agência escolhe quem do time dela entra, sempre até esse máximo. Cada pessoa entra com o próprio login e o aplicativo autenticador, e o Dono recebe um aviso de cada pessoa nova. Ninguém da agência convida ou remove pessoas, vê ou paga a cobrança, transfere ou exclui a conta. O Cliente responde pelo que a agência faz dentro do acesso que concedeu, como no item 4.2. O que a agência cobra do Cliente e o contrato entre os dois são assunto deles: o Liame não faz parte dessa relação.
+
+4.6. **O vínculo se desfaz pelos dois lados.** O Dono ou a agência desfazem o vínculo quando quiserem, com efeito imediato: o time inteiro da agência perde o acesso, e o outro lado recebe um e-mail. O que o time fez continua no registro de atividades, com o nome da agência.
+
+4.7. **A conta da agência.** Quem abre a conta da agência responde pelo time que convida. A conta da agência não tem marca nem assinatura: cada empresa paga a própria assinatura (item 10).
+
 ## 5. Contas e sistemas conectados
 
 5.1. Para trabalhar, o Liame precisa que você conecte as suas contas (por exemplo: contas de anúncios, páginas, perfis, WhatsApp e sistema de vendas). Ao conectar, você declara que tem autorização para isso e nos autoriza a acessá-las e operá-las **dentro do que você configurar e aprovar**.

@@ -22,7 +22,7 @@ Este Contrato faz parte dos [Termos de Uso do Liame](termos-de-uso.md) e regula 
 
 ## 3. Instruções do Cliente
 
-3.1. São instruções do Cliente: estes Termos e este Contrato, as configurações que ele faz no Liame (contas conectadas, públicos, consentimentos, regras, limites) e as aprovações dadas pelos usuários autorizados, inclusive pelas pessoas que ele convidou.
+3.1. São instruções do Cliente: estes Termos e este Contrato, as configurações que ele faz no Liame (contas conectadas, públicos, consentimentos, regras, limites) e as aprovações dadas pelos usuários autorizados, inclusive pelas pessoas que ele convidou e pelo time da agência que ele aceitou (Termos, 4.4 a 4.6).
 
 3.2. O Liame trata os dados **somente conforme essas instruções**. Se considerar que uma instrução viola a lei, o Liame avisa o Cliente e pode deixar de cumpri-la.
 
@@ -36,7 +36,7 @@ O Cliente se compromete a:
 4. informar os seus clientes sobre o tratamento, na sua própria política de privacidade;
 5. **não** usar o Liame para tratar dados pessoais sensíveis, para direcionar publicidade a crianças e adolescentes, nem para fins políticos ou eleitorais;
 6. atender os pedidos dos titulares, com o apoio do Liame (cláusula 7);
-7. responder pelas pessoas que convidar para a conta.
+7. responder pelas pessoas que convidar para a conta e pela agência que aceitar, que age em nome do Cliente e segundo as instruções dele.
 
 ## 5. Obrigações do Liame
 
@@ -123,6 +123,7 @@ Este Contrato vale enquanto houver tratamento de dados do Cliente pelo Liame e, 
 - Criptografia em trânsito (TLS) e em repouso; dados pessoais cifrados com **chave própria de cada cliente**; chaves mestras guardadas fora do banco de dados, em serviço de gestão de chaves.
 - Separação entre clientes no aplicativo e no banco de dados (segurança por linha forçada), com testes automáticos que tentam acessar dados de outro cliente.
 - Segundo fator por aplicativo autenticador para quem aprova gasto ou administra a conta; convites de uso único, com validade e restritos ao e-mail convidado; remoção de acesso imediata.
+- Vínculo de agência só com o aceite do Dono e o código do aplicativo, até o nível que ele deu, com o desvínculo imediato.
 - Registro de auditoria que não pode ser alterado, com prova diária publicada fora do sistema (registro público de transparência e carimbo de tempo).
 - Credenciais de terceiros nunca aparecem em registros técnicos, telas, respostas de API ou textos enviados à IA.
 - O telefone do comprador vindo do Regem ou do RegemCast é transformado, na chegada, num código pseudonimizado com a chave própria do Cliente e não é guardado; pedidos de marketplaces chegam sem identificação do comprador.
