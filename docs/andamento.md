@@ -990,6 +990,12 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **"tem o app" e "tem chave"** saem do `/v1/me` (`mfa_methods`; `lib/chave-de-acesso.ts`, `formasDeConfirmar`): o "segundo fator configurado" de antes inclui a chave desde a 9a;
 - **testes:** `apps/web/test/confirmar-com-chave.spec.ts` (a regra, a hora nova sem o código e as três telas nas três situações); as suítes de Aprovações e da Agenda.
 
+**A W9, parte 9c3b: a chave primeiro no contrato, na agência e na propriedade (02/11/2026; tela; sem migration; P28; D-A7-56).** Com ela, a W9 fica completa no código.
+- **o contrato da assinatura** (trocar de plano, cancelar e desistir): "… com a chave" primeiro, em vermelho cheio quando a ação é de perigo; o código do app ao lado;
+- **Pessoas e acessos:** pedir e receber a propriedade ("Enviar com a chave", "Aceitar com a chave"; os Termos conferidos antes de abrir a janela do aparelho), aceitar a agência e subir o que ela pode ("Aceitar com a chave", "Salvar com a chave"; o limite conferido antes);
+- **como a tela sabe:** `useFormasDeConfirmar` (`lib/sessao.tsx`), pela sessão; fora dela (os testes de desenho), como antes, só o app. Encerrar a conta ainda não tem tela; o servidor já aceita a chave (9b2);
+- **testes:** `apps/web/test/confirmar-com-chave.spec.ts` (o diálogo do contrato nas três situações e a gaveta de receber a propriedade); as suítes de Pessoas e da cobrança.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

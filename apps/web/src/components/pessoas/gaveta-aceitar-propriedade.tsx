@@ -1,17 +1,21 @@
 'use client';
 
-import type { OwnershipResponse, OwnershipTransfer } from '@liame/contracts';
+import type { OwnershipResponse, OwnershipTransfer, PasskeyAssertion } from '@liame/contracts';
 import { type FormEvent, type RefObject, useId, useRef, useState } from 'react';
+import { ConfirmarComChave } from '@/components/seguranca/confirmar-com-chave';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
+import type { Prova } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
 import { useTermos } from '@/lib/entrada';
 import { dataCompleta, quandoComHora } from '@/lib/formato';
+import { type FormasDeConfirmar, useFormasDeConfirmar } from '@/lib/sessao';
 import { CONTINUA, fraseDepoisDoAceite, oQuePassa, primeiroNome } from './propriedade-textos';
 
 // "Aceitar a propriedade" (P34 aprovado; D-A7-60): o que passa para quem aceita e o que continua, o aceite dos Termos
-// de Uso como dona e o código do app. Na hora do aceite, a conta passa a ser dela.
+// de Uso como dona e a confirmação: a chave de acesso primeiro, para quem tem, e o código do app ao lado (A7, W9, parte
+// 9c3; D-A7-56). Na hora do aceite, a conta passa a ser dela.
 
 type Props = {
   pedido: OwnershipTransfer;
@@ -19,9 +23,11 @@ type Props = {
   reserva: RefObject<HTMLElement | null>;
   aoAceitar: (r: OwnershipResponse) => void;
   aoFechar: () => void;
+  /** Como a pessoa confirma, no lugar da sessão (os testes de desenho). */
+  confirmar?: FormasDeConfirmar;
 };
 
-export function GavetaAceitarPropriedade({ pedido: p, empresa, reserva, aoAceitar, aoFechar }: Props) {
+export function GavetaAceitarPropriedade({ pedido: p, empresa, reserva, aoAceitar, aoFechar, confirmar }: Props) {
   const ids = useId();
   const campoTermos = useRef<HTMLInputElement>(null);
   const campoCodigo = useRef<HTMLInputElement>(null);
@@ -32,22 +38,38 @@ export function GavetaAceitarPropriedade({ pedido: p, empresa, reserva, aoAceita
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
   const de = primeiroNome(p.from.name);
+  const { temApp, temChave } = useFormasDeConfirmar(confirmar);
+
+  /** Os Termos carregados e aceitos, antes de qualquer confirmação. */
+  function conferirTermos(): boolean {
+    setErro('');
+    if (!termos) {
+      setErro(semTermos ? mensagemDe(semTermos) : 'Os Termos ainda estão carregando. Tente de novo em instantes.');
+      return false;
+    }
+    if (!aceito) {
+      setErro('Para aceitar a propriedade, leia e aceite os Termos de Uso como dona da conta.');
+      campoTermos.current?.focus();
+      return false;
+    }
+    return true;
+  }
 
   async function aceitar(e: FormEvent) {
     e.preventDefault();
-    setErro('');
-    if (!termos) return setErro(semTermos ? mensagemDe(semTermos) : 'Os Termos ainda estão carregando. Tente de novo em instantes.');
-    if (!aceito) {
-      setErro('Para aceitar a propriedade, leia e aceite os Termos de Uso como dona da conta.');
-      return campoTermos.current?.focus();
-    }
+    if (!temApp || !conferirTermos()) return;
     if (!/^\d{6}$/.test(codigo.trim())) {
       setErro('Digite os 6 dígitos que o seu app mostra agora.');
       return campoCodigo.current?.focus();
     }
+    await mandar({ code: codigo.trim() });
+  }
+
+  async function mandar(prova: Prova) {
+    if (!termos) return;
     setEnviando(true);
     const r = await chamar(() =>
-      api.POST('/v1/ownership/transfers/{id}/accept', { params: { path: { id: p.id } }, body: { code: codigo.trim(), terms_version: termos.version } }),
+      api.POST('/v1/ownership/transfers/{id}/accept', { params: { path: { id: p.id } }, body: { ...prova, terms_version: termos.version } }),
     );
     setEnviando(false);
     if (r.ok) {
@@ -130,31 +152,45 @@ export function GavetaAceitarPropriedade({ pedido: p, empresa, reserva, aoAceita
               como dona da conta da {empresa}.
             </span>
           </label>
-          <div className="campo">
-            <label htmlFor={`${ids}-cod`}>Código do app autenticador</label>
-            <input
-              ref={campoCodigo}
-              className="input num"
-              id={`${ids}-cod`}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              value={codigo}
-              onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
-              aria-describedby={`${ids}-cod-dica`}
+          {temChave && (
+            <ConfirmarComChave
+              rotulo="Aceitar com a chave"
+              impedido={enviando}
+              alternativa={temApp ? 'use o código do app' : 'tente de novo'}
+              antes={conferirTermos}
+              aoErro={setErro}
+              aoProvar={(passkey: PasskeyAssertion) => mandar({ passkey })}
             />
-            <span className="campo-dica" id={`${ids}-cod-dica`}>
-              O código de 6 dígitos que o seu app mostra agora.
-            </span>
-          </div>
+          )}
+          {temApp && (
+            <div className="campo">
+              <label htmlFor={`${ids}-cod`}>{temChave ? 'Ou o código do app autenticador' : 'Código do app autenticador'}</label>
+              <input
+                ref={campoCodigo}
+                className="input num"
+                id={`${ids}-cod`}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
+                aria-describedby={`${ids}-cod-dica`}
+              />
+              <span className="campo-dica" id={`${ids}-cod-dica`}>
+                O código de 6 dígitos que o seu app mostra agora.
+              </span>
+            </div>
+          )}
         </div>
         <div className="dialogo-acoes">
           <button className="btn" type="button" onClick={fechar} disabled={enviando}>
             Voltar
           </button>
-          <button className="btn btn--primary" type="submit" disabled={enviando}>
-            {enviando ? 'Aceitando…' : 'Aceitar a propriedade'}
-          </button>
+          {temApp && (
+            <button className={`btn${temChave ? '' : ' btn--primary'}`} type="submit" disabled={enviando}>
+              {enviando ? 'Aceitando…' : temChave ? 'Aceitar com o código' : 'Aceitar a propriedade'}
+            </button>
+          )}
         </div>
       </form>
     </dialog>

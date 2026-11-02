@@ -5,6 +5,8 @@ import { ApagarDasRedes } from '@/components/agenda/apagar-das-redes';
 import { BarraDaDecisao } from '@/components/aprovacoes/barra-da-decisao';
 import { MudarAHora } from '@/components/aprovacoes/mudar-a-hora';
 import { erroDaHoraNova } from '@/components/aprovacoes/post-textos';
+import { DialogoComCodigo } from '@/components/cobranca/dialogo-com-codigo';
+import { GavetaAceitarPropriedade } from '@/components/pessoas/gaveta-aceitar-propriedade';
 import { formasDeConfirmar } from '@/lib/chave-de-acesso';
 
 // A chave de acesso primeiro onde se pede o código do app (A7, W9, parte 9c3; P28; D-A7-56): a regra de quem tem o app e
@@ -89,5 +91,61 @@ describe('apagar das redes e mudar a hora', () => {
     const ambos = texto(renderToStaticMarkup(createElement(MudarAHora, { id: 'm', post, agora, temApp: true, temChave: true, aoMudar: nada })));
     expect(ambos).toContain('Ou o código do app');
     expect(ambos).toContain('Mudar com o código');
+  });
+});
+
+describe('o contrato da assinatura e a propriedade (parte 9c3b)', () => {
+  const dialogo = (confirmar: { temApp: boolean; temChave: boolean }, perigo = false) =>
+    renderToStaticMarkup(
+      createElement(DialogoComCodigo, {
+        titulo: 'Cancelar a assinatura',
+        children: 'A assinatura segue até o fim do mês.',
+        dica: 'Mudar o contrato pede a sua confirmação.',
+        rotulo: 'Cancelar a assinatura',
+        rotuloEnviando: 'Cancelando…',
+        perigo,
+        reserva: createRef<HTMLElement>(),
+        aoFechar: () => {},
+        enviar: async () => ({ ok: true as const }),
+        confirmar,
+      }),
+    );
+
+  it('o diálogo do contrato: a chave primeiro (no vermelho cheio, quando a ação é de perigo); o código só com o app', () => {
+    const so = dialogo({ temApp: false, temChave: true }, true);
+    expect(texto(so)).toContain('Cancelar a assinatura com a chave');
+    expect(texto(so)).not.toContain('Código do app autenticador');
+    expect(so).toContain('btn--perigo-cheio');
+    const ambos = texto(dialogo({ temApp: true, temChave: true }));
+    expect(ambos).toContain('Cancelar a assinatura com a chave');
+    expect(ambos).toContain('Ou o código do app autenticador');
+    expect(ambos).toContain('Cancelar a assinatura com o código');
+    const app = texto(dialogo({ temApp: true, temChave: false }));
+    expect(app).toContain('Código do app autenticador');
+    expect(app).not.toContain('com a chave');
+    expect(texto(dialogo({ temApp: false, temChave: false }))).toContain('ative o app autenticador ou crie uma chave de acesso em Segurança da conta');
+  });
+
+  it('receber a propriedade: "Aceitar com a chave", com o código ao lado só para quem tem o app', () => {
+    const pedido = {
+      id: 'd0000000-0000-4000-8000-000000000001',
+      from: { user_id: 'd0000000-0000-4000-8000-000000000002', name: 'Paulo Mendes' },
+      to: { user_id: 'd0000000-0000-4000-8000-000000000003', name: 'Ana Lima', email: 'ana@teste.liame.dev' },
+      old_owner_stays: true,
+      status: 'pedido' as const,
+      created_at: '2026-11-01T15:00:00Z',
+      expires_at: '2026-11-08T15:00:00Z',
+      decided_at: null,
+    };
+    const gaveta = (confirmar: { temApp: boolean; temChave: boolean }) =>
+      texto(renderToStaticMarkup(createElement(GavetaAceitarPropriedade, { pedido, empresa: 'Mister Burgers', reserva: createRef<HTMLElement>(), aoAceitar: () => {}, aoFechar: () => {}, confirmar })));
+    const so = gaveta({ temApp: false, temChave: true });
+    expect(so).toContain('Aceitar com a chave');
+    expect(so).not.toContain('Código do app autenticador');
+    expect(so).not.toContain('Aceitar a propriedade');
+    const ambos = gaveta({ temApp: true, temChave: true });
+    expect(ambos).toContain('Ou o código do app autenticador');
+    expect(ambos).toContain('Aceitar com o código');
+    expect(gaveta({ temApp: true, temChave: false })).toContain('Aceitar a propriedade');
   });
 });

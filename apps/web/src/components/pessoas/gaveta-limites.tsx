@@ -1,13 +1,15 @@
 'use client';
 
-import type { MemberResponse, PartnerResponse, PartnerRole } from '@liame/contracts';
+import type { MemberResponse, PartnerResponse, PartnerRole, PasskeyAssertion } from '@liame/contracts';
 import { type FormEvent, type RefObject, useId, useRef, useState } from 'react';
+import { ConfirmarComChave } from '@/components/seguranca/confirmar-com-chave';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe, novaChave, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { MICROS } from '@/lib/formato';
 import { APROVAM, NIVEIS } from '@/lib/niveis';
+import { type FormasDeConfirmar, useFormasDeConfirmar } from '@/lib/sessao';
 import { efeitosDaMudanca, type Maximo, NIVEIS_DO_PARCEIRO, sobe } from './parceiros';
 
 // "O que a agência pode" (P27 aprovado, gaveta à direita; D-A7-49): o Dono muda o máximo do time da agência. Baixar vale
@@ -21,9 +23,14 @@ type Props = {
   aoSalvar: (aviso: string) => void;
   aoSumir: (problema: Problema) => void;
   aoFechar: () => void;
+  /** Como a pessoa confirma, no lugar da sessão (os testes de desenho). */
+  confirmar?: FormasDeConfirmar;
 };
 
-export function GavetaLimites({ parceiro: p, time, reserva, aoSalvar, aoSumir, aoFechar }: Props) {
+/** O que vai para a API: o que mudou e, para subir, a confirmação (o código do app ou a chave de acesso). */
+type Mudancas = { max_role?: PartnerRole; approve_limit_micros?: number; dual_approval?: boolean; code?: string; passkey?: PasskeyAssertion };
+
+export function GavetaLimites({ parceiro: p, time, reserva, aoSalvar, aoSumir, aoFechar, confirmar }: Props) {
   const ids = useId();
   const nivelAtual = useRef<HTMLInputElement>(null);
   const campoLimite = useRef<HTMLInputElement>(null);
@@ -46,29 +53,52 @@ export function GavetaLimites({ parceiro: p, time, reserva, aoSalvar, aoSumir, a
   const depois: Maximo = { nivel, limite: aprova ? (limiteLido ?? antes.limite) : null, dupla: aprova ? dupla : true };
   const pedeCodigo = sobe(antes, depois);
   const efeitos = efeitosDaMudanca(antes, depois, time);
+  // Subir confirma: a chave de acesso primeiro, para quem tem, e o código do app ao lado (A7, W9, parte 9c3; D-A7-56).
+  const { temApp, temChave } = useFormasDeConfirmar(confirmar);
 
-  async function salvar(e: FormEvent) {
-    e.preventDefault();
+  /** O que mudou, depois de conferir o limite: `null` = o limite não serve; vazio = nada mudou. */
+  function mudancasDaTela(): Mudancas | null {
     setErroLimite('');
     setErroCodigo('');
     setErroGeral('');
     if (aprova && limiteLido === null) {
       setErroLimite('Informe até quanto a pessoa da agência aprova sozinha (pode ser zero).');
       campoLimite.current?.focus();
-      return;
+      return null;
     }
-    const cod = codigo.trim();
-    if (pedeCodigo && !/^\d{6}$/.test(cod)) {
-      setErroCodigo('Para subir, digite os 6 números do app autenticador.');
-      campoCodigo.current?.focus();
-      return;
-    }
-    const mudancas: { max_role?: PartnerRole; approve_limit_micros?: number; dual_approval?: boolean; code?: string } = {};
+    const mudancas: Mudancas = {};
     if (nivel !== p.max_role) mudancas.max_role = nivel;
     if (aprova && limiteLido !== null && (limiteLido !== p.approve_limit_micros || !APROVAM.has(p.max_role))) mudancas.approve_limit_micros = limiteLido;
     if (aprova && dupla !== p.dual_approval) mudancas.dual_approval = dupla;
+    return mudancas;
+  }
+
+  async function salvar(e: FormEvent) {
+    e.preventDefault();
+    const mudancas = mudancasDaTela();
+    if (!mudancas) return;
     if (!Object.keys(mudancas).length) return fechar();
-    if (pedeCodigo) mudancas.code = cod;
+    if (pedeCodigo) {
+      if (!temApp) return;
+      const cod = codigo.trim();
+      if (!/^\d{6}$/.test(cod)) {
+        setErroCodigo('Para subir, digite os 6 números do app autenticador.');
+        campoCodigo.current?.focus();
+        return;
+      }
+      mudancas.code = cod;
+    }
+    await mandar(mudancas);
+  }
+
+  async function comChave(passkey: PasskeyAssertion) {
+    const mudancas = mudancasDaTela();
+    if (!mudancas) return;
+    if (!Object.keys(mudancas).length) return fechar();
+    await mandar({ ...mudancas, passkey });
+  }
+
+  async function mandar(mudancas: Mudancas) {
     setEnviando(true);
     const r = await chamar(() =>
       api.PATCH('/v1/partners/{id}', { params: { path: { id: p.id } }, headers: { 'Idempotency-Key': chave.current }, body: mudancas }),
@@ -80,7 +110,7 @@ export function GavetaLimites({ parceiro: p, time, reserva, aoSalvar, aoSumir, a
     }
     chave.current = novaChave();
     if (r.problema.status === 404) return aoSumir(r.problema);
-    if (r.problema.code === 'codigo-invalido' || r.problema.errors?.some((x) => x.path === 'code')) {
+    if (mudancas.code && (r.problema.code === 'codigo-invalido' || r.problema.errors?.some((x) => x.path === 'code'))) {
       setCodigo('');
       setErroCodigo(
         r.problema.code === 'codigo-invalido'
@@ -186,11 +216,21 @@ export function GavetaLimites({ parceiro: p, time, reserva, aoSalvar, aoSumir, a
             ))}
           </ul>
 
-          {pedeCodigo && (
+          {pedeCodigo && temChave && (
+            <ConfirmarComChave
+              rotulo="Salvar com a chave"
+              impedido={enviando}
+              alternativa={temApp ? 'use o código do app' : 'tente de novo'}
+              antes={() => mudancasDaTela() !== null}
+              aoErro={setErroGeral}
+              aoProvar={comChave}
+            />
+          )}
+          {pedeCodigo && temApp && (
             <div className="campo">
-              <label htmlFor={`${ids}-cod`}>Código do app autenticador</label>
+              <label htmlFor={`${ids}-cod`}>{temChave ? 'Ou o código do app autenticador' : 'Código do app autenticador'}</label>
               <span className="campo-dica" id={`${ids}-cod-dica`}>
-                Subir o nível ou o limite pede os 6 números do app. Baixar, não.
+                Subir o nível ou o limite pede a sua confirmação: a chave de acesso ou os 6 números do app. Baixar, não.
               </span>
               <input
                 ref={campoCodigo}
@@ -216,9 +256,11 @@ export function GavetaLimites({ parceiro: p, time, reserva, aoSalvar, aoSumir, a
           <button className="btn" type="button" onClick={fechar} disabled={enviando}>
             Cancelar
           </button>
-          <button className="btn btn--primary" type="submit" disabled={enviando} aria-busy={enviando}>
-            {enviando ? 'Salvando…' : 'Salvar'}
-          </button>
+          {(!pedeCodigo || temApp) && (
+            <button className={`btn${pedeCodigo && temChave ? '' : ' btn--primary'}`} type="submit" disabled={enviando} aria-busy={enviando}>
+              {enviando ? 'Salvando…' : pedeCodigo && temChave ? 'Salvar com o código' : 'Salvar'}
+            </button>
+          )}
         </div>
       </form>
     </dialog>

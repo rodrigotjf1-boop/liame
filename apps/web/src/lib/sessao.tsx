@@ -6,6 +6,7 @@ import { createContext, Fragment, type ReactNode, useCallback, useContext, useEf
 import { Estado } from '@/components/ui/estado';
 import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from './api';
+import { formasDeConfirmar } from './chave-de-acesso';
 import { disparar } from '@/lib/disparar';
 
 // Sessão no navegador: quem está usando, a empresa ativa e o que a pessoa pode fazer nela.
@@ -30,6 +31,19 @@ export function useSessao(): Sessao {
   const s = useContext(SessaoContexto);
   if (!s) throw new Error('useSessao fora do SessaoProvider');
   return s;
+}
+
+/** Como a pessoa confirma: o app e a chave de acesso (A7, W9, parte 9c3; D-A7-56). */
+export type FormasDeConfirmar = { temApp: boolean; temChave: boolean };
+
+/**
+ * Como a pessoa confirma, pela sessão; `forcado` vale no lugar dela (os testes de desenho). Fora do provedor e sem
+ * `forcado`, como antes da W9: só o app.
+ */
+export function useFormasDeConfirmar(forcado?: FormasDeConfirmar): FormasDeConfirmar {
+  const s = useContext(SessaoContexto);
+  if (forcado) return forcado;
+  return s ? formasDeConfirmar(s.me) : { temApp: true, temChave: false };
 }
 
 type Estado = { tipo: 'carregando' } | { tipo: 'ok'; me: MeResponse } | { tipo: 'erro'; problema: Problema };
