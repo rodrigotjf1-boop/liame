@@ -784,6 +784,13 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **o texto do e-mail** é uma proposta: o P29 deixou o texto exato para aprovar à parte, e nada sai antes de a função ser ligada;
 - **testes:** `test/db/relatorio-da-agencia.spec.ts` (a lista, a revisão, o envio com o remetente, o "Responder", o comentário e a versão corrigida, o que o Dono vê, a espera do e-mail do Liame e quem não recebe duas vezes, a conta suspensa e o remetente com acento) e o endereço público em `marca-da-agencia.spec.ts`, com as suítes de acesso, papéis, ciclo de vida, do relatório do mês, da revisão, dos e-mails e da agência; o contrato da API sem quebra.
 
+**A W7, parte 4b: o relatório da agência sem a agência por perto (02/11/2026; migration 0104; D-A7-83; a função `parceiros` segue desligada).** Uma rotina do worker, de 5 em 5 minutos:
+- **o envio sozinho:** no dia 2, às 9h no fuso da loja, a agência que escolheu "sai sozinho" manda o relatório do mês a todos que podem receber, sem comentário, uma vez por relatório (o envio fica como `sozinho`, sem quem assina, e a auditoria da agência o registra como do sistema);
+- **o lembrete:** no dia 3, às 8h, o time da agência que revisa e ainda não mandou recebe um e-mail, uma vez (a tabela nova `agency_report_reminder`): quem está no time do cliente com um nível que vê os resultados. O lembrete diz que o e-mail do Liame sai às 9h só quando ele está ligado para a empresa;
+- **os dois** só até o dia 7, só com a função `parceiros` ligada na empresa e nunca com a marca suspensa;
+- **o envio dos e-mails** do relatório da agência ficou numa função só, para a tela e para a rotina;
+- **testes:** `test/db/relatorio-da-agencia-rotina.spec.ts` (o envio sozinho na hora certa, uma vez, a todos e sem comentário; nada depois do dia 7; o lembrete na hora certa, uma vez, só ao time no cliente; nada para quem já mandou nem com a função desligada), com o cenário comum em `test/helpers/relatorio-da-agencia.ts`, as suítes em UTC e os testes do pacote do banco.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
