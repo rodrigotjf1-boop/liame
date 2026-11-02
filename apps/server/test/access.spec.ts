@@ -7,6 +7,8 @@ import { startApi, type TestApi } from './helpers/api.js';
 // constante; grava só o evento cru (deduplicado) e responde 200, como o Asaas espera; o resto é do worker.
 // O link de confirmação do e-mail de resposta da agência (A7, W7, parte 3): público porque quem o abre lê aquele
 // endereço e pode nem ter conta; o token de uso único (24 horas) é a prova, como no e-mail do cadastro.
+// O logo da agência (A7, W7, parte 4a): público porque o programa de e-mail o busca sem login, no alto do relatório
+// que a agência manda; só a imagem de agora, em JPEG, lida no contexto da agência do endereço.
 const PUBLIC_ROUTES = [
   'GET /health',
   'GET /health/ready',
@@ -16,6 +18,7 @@ const PUBLIC_ROUTES = [
   'POST /v1/auth/password/forgot',
   'POST /v1/auth/password/reset',
   'POST /v1/agency-reply-to/confirm',
+  'GET /v1/agency-logos/:arquivo',
   'POST /v1/billing/asaas/webhook',
   'POST /v1/inbox/:provider',
   'POST /v1/inbox/:provider/:connectionId',
@@ -52,7 +55,7 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     }
   });
 
-  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10), a que lê o objeto na plataforma de anúncio (A4, X8), as duas que leem as conversões da conta no Google (A5, Y1), o começo de uma conexão (o pedido empurrado do RegemCast, Hub DMS B1), o envio de uma foto (A6, Z4), o PIX de uma fatura (A7, W2a) e o logo da agência (A7, W7)', () => {
+  it('fora da transação da requisição só rodam as rotas revisadas: as que esperam um modelo de IA (A3, I4 e I10), a que lê o objeto na plataforma de anúncio (A4, X8), as duas que leem as conversões da conta no Google (A5, Y1), o começo de uma conexão (o pedido empurrado do RegemCast, Hub DMS B1), o envio de uma foto (A6, Z4), o PIX de uma fatura (A7, W2a), o logo da agência e o relatório que ela manda ao cliente (A7, W7)', () => {
     const semTransacao = listRoutes(api.app)
       .filter((r) => r.semTransacao)
       .map((r) => `${r.method} ${r.path}`)
@@ -72,16 +75,25 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
     // `PUT /v1/agency/brand/logo` (A7, W7, parte 3): o mesmo caminho da foto, para o logo da agência: conferido e
     // regravado sem transação, o arquivo vai ao armazenamento sem transação aberta, e a marca muda com o evento de
     // auditoria (manual) numa transação curta.
+    // `GET /v1/agency-logos/:arquivo` (A7, W7, parte 4a): lê o logo de agora no contexto da agência do endereço, numa
+    // transação curta, e os bytes no armazenamento, sem transação aberta.
+    // As três do relatório da agência (A7, W7, parte 4a): a requisição está na agência e o relatório é do cliente; cada
+    // cliente é lido no contexto dele, com a pessoa da agência, numa transação curta. O envio grava o envio e as
+    // entregas na agência com a auditoria (manual), manda os e-mails sem transação aberta e grava cada resultado.
     // `GET /v1/billing/invoices/:id/pix` (A7, W2a): lê e reserva a fatura numa transação curta, com a empresa no contexto
     // da RLS; procura e cria no Asaas o cliente e a cobrança, e lê o QR Code, sem transação aberta; e grava a referência
     // da cobrança noutra transação curta. Sem auditoria: só lê e liga a fatura à cobrança dela (nenhum dinheiro muda).
     expect(semTransacao).toEqual([
       'GET /v1/actions/options',
+      'GET /v1/agency-logos/:arquivo',
+      'GET /v1/agency/clients/:id/reports/:reportId',
+      'GET /v1/agency/reports',
       'GET /v1/billing/invoices/:id/pix',
       'GET /v1/conversions/google/actions',
       'GET /v1/messaging',
       'GET /v1/messaging/campaigns/:id',
       'GET /v1/reviews/authors',
+      'POST /v1/agency/clients/:id/reports/:reportId/send',
       'POST /v1/ai/explain/attention',
       'POST /v1/ai/explain/results',
       'POST /v1/brand-photos',

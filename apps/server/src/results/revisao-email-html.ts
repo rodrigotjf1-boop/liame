@@ -51,6 +51,10 @@ export interface PecaDoEmail {
   extra?: string;
   /** A leitura vem antes das campanhas (o e-mail do mês, P24); na revisão, ela vem depois. */
   leituraAntes?: boolean;
+  /** Linhas de tabela entre o período e os números (o relatório que a agência manda: a marca dela e o comentário). */
+  antes?: string;
+  /** O texto do rodapé no lugar do "por que você recebe" (o relatório que a agência manda). */
+  rodape?: string;
 }
 
 /** A marca do topo como é mostrada (o arquivo tem o dobro, 368 × 150, para tela de alta densidade). */
@@ -270,6 +274,7 @@ export function htmlDoEmail(r: ConteudoDoEmail, quem: QuemRecebe, imagens: Image
     `<h1 style="margin:0 0 6px 0;font-family:${FONTE};font-size:24px;line-height:30px;font-weight:700;color:${TINTA};">${e(quem.marca)}</h1>` +
     `<p style="margin:0;font-family:${FONTE};font-size:14px;line-height:22px;color:${SUAVE};">${peca.periodoHtml}</p>` +
     '</td></tr>' +
+    (peca.antes ?? '') +
     // os números da semana
     `<tr><td style="padding:16px 22px 0 22px;">${cartoesDosTotais(r.totals, moeda)}</td></tr>` +
     (peca.leituraAntes ? blocoDaLeitura(r, imagens, peca.leitura) + blocoDasCampanhas(r) : blocoDasCampanhas(r) + blocoDaLeitura(r, imagens, peca.leitura)) +
@@ -283,7 +288,7 @@ export function htmlDoEmail(r: ConteudoDoEmail, quem: QuemRecebe, imagens: Image
     '</tr></table></td></tr>' +
     // o rodapé
     `<tr><td style="padding:22px 28px 26px 28px;"><table ${TABELA} width="100%" style="border-top:1px solid ${LINHA};"><tr><td style="padding-top:16px;font-family:${FONTE};font-size:12px;line-height:19px;color:${SUAVE};">` +
-    `${e(porQueRecebe(quem))}<br><b style="color:${TINTA};">Liame</b> · ${e(ASSINATURA.replace('Liame · ', ''))}` +
+    `${e(peca.rodape ?? porQueRecebe(quem))}<br><b style="color:${TINTA};">Liame</b> · ${e(ASSINATURA.replace('Liame · ', ''))}` +
     '</td></tr></table></td></tr>' +
     '</table></div>';
   // A única regra fora dos elementos: em tela estreita, o número grande encolhe para caber sem quebrar.
