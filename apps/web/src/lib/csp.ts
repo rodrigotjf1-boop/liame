@@ -11,6 +11,7 @@ export const ROTAS_PUBLICAS = [
   '/entrar',
   '/criar-conta',
   '/confirmar-email',
+  '/confirmar-resposta',
   '/esqueci-a-senha',
   '/redefinir-senha',
   '/segundo-fator',
@@ -42,13 +43,14 @@ export function origemDasImagens(ambiente: Readonly<Record<string, string | unde
   return `https://${bucket}.s3.${regiao}.amazonaws.com`;
 }
 
-function diretivas({ isDev, api, imagens }: Base, scriptSrc: string): string {
+function diretivas({ isDev, api, imagens }: Base, scriptSrc: string, imagemDaApi = false): string {
   return [
     "default-src 'self'",
     scriptSrc,
     // Atributos style do React: não executam código.
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' blob: data:${imagens ? ` ${imagens}` : ''}`,
+    // A API só entra no img-src das telas do app: o logo público da agência no relatório do dono (A7, W7, parte 5a).
+    `img-src 'self' blob: data:${imagemDaApi ? ` ${api}` : ''}${imagens ? ` ${imagens}` : ''}`,
     "font-src 'self'",
     `connect-src 'self' ${api}${isDev ? ' ws:' : ''}`,
     "worker-src 'self' blob:",
@@ -67,7 +69,7 @@ export function cspPublica(base: Base): string {
 
 /** Demais rotas: nonce da requisição, 'strict-dynamic' e o hash do script do tema. */
 export function cspComNonce(base: Base & { nonce: string; hashTema: string }): string {
-  return diretivas(base, `script-src 'self' 'nonce-${base.nonce}' 'strict-dynamic' ${base.hashTema}${base.isDev ? " 'unsafe-eval'" : ''}`);
+  return diretivas(base, `script-src 'self' 'nonce-${base.nonce}' 'strict-dynamic' ${base.hashTema}${base.isDev ? " 'unsafe-eval'" : ''}`, true);
 }
 
 /** `'sha256-…'` de um script inline (Web Crypto: vale no Node e no proxy). */

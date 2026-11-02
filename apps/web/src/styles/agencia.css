@@ -45,3 +45,22 @@
 @container (max-width: 460px) {
   .time-esc-linha { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ===== A marca da agência (P29 aprovado; A7, W7, parte 5a) ===== */
+.marca-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: var(--sp-4); align-items: start; }
+.marca-card { display: grid; gap: var(--sp-4); min-width: 0; }
+.marca-acoes { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+.logo-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); min-width: 0; }
+.logo-linha .lite-frase { flex: 1 1 200px; min-width: 0; }
+.logo-previas { display: flex; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; }
+/* O logo é a imagem da agência, regravada sobre fundo branco: aparece sobre uma placa clara nos dois temas. */
+.logo-ag-img { display: block; max-height: 48px; max-width: min(192px, 100%); width: auto; height: auto; border-radius: 6px; }
+.logo-ag { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; }
+.logo-ag--vazio { background: var(--bg-subtle); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600; }
+.logo-previa { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--text-xs); min-width: 0; }
+.logo-previa .logo-ag-img { max-height: 28px; max-width: 112px; }
+/* As duas placas mostram o fundo do e-mail (branco) e o do tema escuro, nos dois temas da tela: cor fixa de propósito. */
+.logo-previa--claro { background: #FFFFFF; color: #0B0D17; }
+.logo-previa--escuro { background: #0B0D17; color: #F4F2EC; }
+.input-arquivo { padding: 6px var(--sp-2); min-height: 40px; font-size: var(--text-sm); width: 100%; }
+.marca-st { white-space: normal; max-width: 100%; overflow-wrap: anywhere; }

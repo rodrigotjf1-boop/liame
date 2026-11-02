@@ -94,10 +94,12 @@ describe('CSP do web', () => {
     const hashTema = await hashDeScript(SCRIPT_TEMA);
     const d = diretivas(cspComNonce({ ...base, imagens: origem, nonce: 'n', hashTema }));
     essencial(d);
-    expect(d['img-src']).toEqual(["'self'", 'blob:', 'data:', origem]);
+    // Nas telas do app, a API também entra no img-src: o logo público da agência no relatório do dono (A7, W7, parte 5a).
+    expect(d['img-src']).toEqual(["'self'", 'blob:', 'data:', base.api, origem]);
     // Nenhuma outra diretiva ganha a origem do bucket; e sem ela, o img-src fica como era.
     expect(Object.entries(d).filter(([nome, valores]) => nome !== 'img-src' && valores.includes(origem ?? ''))).toEqual([]);
-    expect(diretivas(cspComNonce({ ...base, nonce: 'n', hashTema }))['img-src']).toEqual(["'self'", 'blob:', 'data:']);
+    expect(diretivas(cspComNonce({ ...base, nonce: 'n', hashTema }))['img-src']).toEqual(["'self'", 'blob:', 'data:', base.api]);
+    // As telas de entrada não mostram imagem da API.
     expect(diretivas(cspPublica(base))['img-src']).toEqual(["'self'", 'blob:', 'data:']);
   });
 

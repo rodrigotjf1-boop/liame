@@ -9,6 +9,7 @@ import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { useSessao } from '@/lib/sessao';
+import { DaAgencia } from './da-agencia';
 import { RelatorioConteudo } from './relatorio-conteudo';
 import { introDoRelatorio, mesEscrito, mesQueFecha, mesValido, naData } from './textos';
 
@@ -138,7 +139,13 @@ export function RelatorioTela() {
       </div>
     );
   } else {
-    corpo = <RelatorioConteudo relatorio={relatorio} podeVerContas={pode('contas.ver')} pode={pode} />;
+    // O que a agência mandou deste relatório (P29; A7, W7, parte 5a) vem antes dele, como no e-mail.
+    corpo = (
+      <>
+        {dados?.from_agency && <DaAgencia agencia={dados.from_agency} />}
+        <RelatorioConteudo relatorio={relatorio} podeVerContas={pode('contas.ver')} pode={pode} />
+      </>
+    );
   }
 
   return (
