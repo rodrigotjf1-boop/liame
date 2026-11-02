@@ -92,7 +92,7 @@ details.ajuda div { display: grid; gap: var(--sp-2); padding: 0 var(--sp-4) var(
 .rec-empresa { display: grid; gap: 2px; padding: var(--sp-3); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .rec-empresa small { color: var(--text-muted); }
 .rec-depois { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--bg-subtle); }
-.rec-depois h2 { font-size: var(--text-sm); font-weight: 600; }
+.rec-depois :is(h2, h3) { font-size: var(--text-sm); font-weight: 600; }
 .rec-depois ol { display: grid; gap: 6px; margin: 0; padding-left: 1.2em; list-style: decimal; font-size: var(--text-sm); color: var(--text-muted); }
 .rec-andamento { display: grid; margin: 0; padding: 0; list-style: none; }
 .rec-andamento li { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--sp-3); padding-bottom: var(--sp-4); }

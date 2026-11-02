@@ -4,6 +4,7 @@ import type {
   AccountRecoveryNotice,
   InvitationResponse,
   MemberResponse,
+  OwnershipClaimResponse,
   OwnershipResponse,
   OwnershipTransfer,
   PartnerRequestResponse,
@@ -21,6 +22,9 @@ import { api, chamar, mensagemDe, novaChave, type Problema } from '@/lib/api';
 import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
 import { AvisoDeRecuperacao } from './aviso-de-recuperacao';
+import { CaminhoDaDms } from './caminho-da-dms';
+import { GavetaPedirPropriedade } from './gaveta-pedir-propriedade';
+import { PedidoSobreODono } from './pedido-sobre-o-dono';
 import { CartaoAgencia, CartaoProtecao, TabelaNiveis } from './cartoes-informativos';
 import { CartaoPedido } from './cartao-pedido';
 import { CartaoPropriedade } from './cartao-propriedade';
@@ -51,7 +55,9 @@ type Painel =
   | { tipo: 'desfazer'; parceiro: PartnerResponse }
   // A propriedade da conta (P34; A7, W8, parte 3).
   | { tipo: 'transferir' }
-  | { tipo: 'aceitar-propriedade'; pedido: OwnershipTransfer };
+  | { tipo: 'aceitar-propriedade'; pedido: OwnershipTransfer }
+  // O pedido da propriedade à DMS quando o Dono não está mais (A7, W8, parte 6b).
+  | { tipo: 'pedir-propriedade' };
 /** A faixa do que acabou de acontecer com uma agência (P27). */
 type Resultado = { tipo?: 'acao'; titulo: string; texto: string; verCobranca?: boolean } | null;
 
@@ -67,19 +73,23 @@ export function PessoasTela() {
   const [propriedade, setPropriedade] = useState<OwnershipResponse | null>(null);
   // O pedido de recuperação do Dono na espera, para os Administradores (A7, W8, parte 5): a falha dele não esconde nada.
   const [avisoRec, setAvisoRec] = useState<AccountRecoveryNotice | null>(null);
+  // O pedido da propriedade à DMS (A7, W8, parte 6b): o de quem lê, ou, para o Dono, o pedido sobre ele na espera.
+  const [pedidoDms, setPedidoDms] = useState<OwnershipClaimResponse | null>(null);
   const titulo = useRef<HTMLHeadingElement>(null);
 
   const carregar = useCallback(async () => {
-    const [r, a, d, v] = await Promise.all([
+    const [r, a, d, v, c] = await Promise.all([
       chamar(() => api.GET('/v1/people')),
       chamar(() => api.GET('/v1/partners')),
       chamar(() => api.GET('/v1/ownership')),
       chamar(() => api.GET('/v1/account-recovery/notice')),
+      chamar(() => api.GET('/v1/ownership/claim')),
     ]);
     setEstado(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro', problema: r.problema });
     setAgencias(a.ok ? { tipo: 'ok', dados: a.data } : { tipo: 'erro', problema: a.problema });
     setPropriedade(d.ok ? d.data : null);
     setAvisoRec(v.ok ? v.data.notice : null);
+    setPedidoDms(c.ok ? c.data : null);
   }, []);
 
   useEffect(() => {
@@ -227,6 +237,7 @@ export function PessoasTela() {
         />
       )}
       {avisoRec && <AvisoDeRecuperacao aviso={avisoRec} aoMudar={(r) => setAvisoRec(r.notice)} />}
+      {pedidoDms?.about_me && pedidoDms.claim && <PedidoSobreODono pedido={pedidoDms.claim} empresa={nomeEmpresa} aoMudar={setPedidoDms} />}
       {propriedade?.addressed_to_me && propriedade.pending && (
         <PedidoDePropriedade
           pedido={propriedade.pending}
@@ -339,6 +350,14 @@ export function PessoasTela() {
                 avisar(aviso);
                 disparar(carregar());
               }}
+              caminhoDaDms={
+                <CaminhoDaDms
+                  pedido={pedidoDms}
+                  dono={primeiroNome(propriedade.owner.name)}
+                  aoPedir={() => setPainel({ tipo: 'pedir-propriedade' })}
+                  aoMudar={setPedidoDms}
+                />
+              }
             />
           )}
           <CartaoProtecao comAgencias={comAgencias} />
@@ -358,6 +377,23 @@ export function PessoasTela() {
             avisar(`Pedido enviado. ${primeiroNome(r.pending?.to.name ?? '')} recebeu um e-mail; até o aceite, nada muda.`);
           }}
           aoConvidar={() => setDialogo({ tipo: 'convidar' })}
+          aoFechar={() => setPainel(null)}
+        />
+      )}
+      {painel?.tipo === 'pedir-propriedade' && propriedade && (
+        <GavetaPedirPropriedade
+          dono={primeiroNome(propriedade.owner.name)}
+          empresa={nomeEmpresa}
+          rascunho={pedidoDms?.mine && pedidoDms.claim?.status === 'rascunho' ? pedidoDms.claim : null}
+          reserva={titulo}
+          aoEnviado={(r) => {
+            setPedidoDms(r);
+            setResultado({
+              titulo: `Pedido enviado à DMS · protocolo ${r.claim?.protocol ?? ''}`,
+              texto: `A DMS confere os documentos e marca a videochamada pelo seu e-mail. Depois, avisamos ${primeiroNome(propriedade.owner.name)} no e-mail e esperamos 14 dias antes de decidir.`,
+            });
+            titulo.current?.focus({ preventScroll: true });
+          }}
           aoFechar={() => setPainel(null)}
         />
       )}
