@@ -973,6 +973,17 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
     - fechar a janela do aparelho;
     - a conta só com chave (35 execuções verdes).
 
+**A W9, parte 9c2: a chave de acesso na entrada (02/11/2026; tela; sem migration; P28; D-A7-55 e D-A7-56).**
+- **Entrar no Liame:** "Entrar com chave de acesso", abaixo do formulário, depois de um "ou"; a chave vale pela senha e pelo código do app, e a pessoa entra direto para onde ia. A frase da senha que falta passou a lembrar a chave;
+- **o preenchimento do navegador:** o campo do e-mail oferece a chave quando o aparelho tem uma (`autocomplete="username webauthn"`). O desafio é pedido a cada visita de quem ainda não tem sessão (ver D-A7-87, item 11). O botão encerra a oferta e ela volta se a pessoa ainda não entrou;
+- **o segundo fator de quem tem chave:** "Confirme que é você", com "Confirmar com a chave de acesso" primeiro; o código do app (só de quem tem o app) e o de recuperação abrem por baixo, com `aria-expanded`. Quem só tem o app vê a tela de antes;
+- **fechar a janela do aparelho:** "Você fechou a janela da chave. Tente de novo ou entre com a senha" (ou "use um código", no segundo fator);
+- **testes:** `apps/web/test/chaves-de-acesso.spec.ts` (as frases da entrada). O roteiro no navegador roda contra a API local, com o autenticador virtual do Chrome, em 27 execuções verdes:
+  - a entrada e o segundo fator em 4 larguras e 2 temas;
+  - entrar sem senha, de verdade, direto em Segurança da conta;
+  - fechar a janela;
+  - confirmar a entrada com a chave depois da senha.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
