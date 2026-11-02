@@ -236,6 +236,7 @@ export {
   MonthlyReport,
   MonthlyReportBudget,
   MonthlyReportBudgetChange,
+  MonthlyReportFromAgency,
   MonthlyReportQuery,
   MonthlyReportResponse,
   MonthlyReportTeam,
@@ -246,6 +247,17 @@ export {
   WeeklyReviewQuery,
   WeeklyReviewResponse,
 } from './reports.js';
+export {
+  AgencyReportDetailResponse,
+  AgencyReportItem,
+  AgencyReportRecipient,
+  AgencyReportSend,
+  AgencyReportSendSummary,
+  AgencyReportSentResponse,
+  AgencyReportsQuery,
+  AgencyReportsResponse,
+  SendAgencyReportRequest,
+} from './agency-reports.js';
 export {
   BrandDossierContent,
   BrandDossierQuery,

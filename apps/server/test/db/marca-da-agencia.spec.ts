@@ -153,6 +153,18 @@ describe.skipIf(!hasDb)('a marca da agência', () => {
     const { data } = await sharp(bytes).raw().toBuffer({ resolveWithObject: true });
     expect(data[0]).toBeGreaterThan(245);
 
+    // O endereço público (o do e-mail, A7 · W7, parte 4a): sem login, o logo de agora, em JPEG, que outro site pode
+    // mostrar; outra agência ou um endereço que não é de agência, 404.
+    const publico = await fetch(`${api.base}/v1/agency-logos/${a.id}.jpg`);
+    expect(publico.status).toBe(200);
+    expect(publico.headers.get('content-type')).toBe('image/jpeg');
+    expect(publico.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
+    expect(publico.headers.get('cache-control')).toBe('public, max-age=86400');
+    expect(publico.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(Buffer.from(await publico.arrayBuffer()).equals(bytes)).toBe(true);
+    expect((await fetch(`${api.base}/v1/agency-logos/${a.membro.userId}.jpg`)).status).toBe(404);
+    expect((await fetch(`${api.base}/v1/agency-logos/nao-e-um-id.jpg`)).status).toBe(404);
+
     // Trocar: o novo entra e o anterior sai do armazenamento.
     const segundo = await logo(a.dona, await png(120, 60), 'image/png');
     expect(segundo.status).toBe(200);
@@ -182,6 +194,8 @@ describe.skipIf(!hasDb)('a marca da agência', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect((await ler(a.dona)).body.logo).toBeNull();
     expect(armazem.objetos.has(chaveDoLogo(a.id, atual!.logo_id))).toBe(false);
+    // Sem logo, o endereço público some.
+    expect((await fetch(`${api.base}/v1/agency-logos/${a.id}.jpg`)).status).toBe(404);
     expect(await acoes(a.id)).toEqual(['agencia.marca_logo', 'agencia.marca_logo', 'agencia.marca_tirar_logo']);
   });
 

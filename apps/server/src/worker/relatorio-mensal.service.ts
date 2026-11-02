@@ -18,6 +18,7 @@ import { Mailer, maskEmail } from '../mail/mailer.js';
 import { proibidasDaMarca } from '../marca/marca.service.js';
 import { MediaService } from '../media/media.service.js';
 import { AtencaoCicloService } from '../results/atencao-ciclo.service.js';
+import { fimDaEspera, OLHAR_DE_NOVO } from '../results/espera-da-agencia.js';
 import { diaNoFuso } from '../results/fora-do-normal.js';
 import { emailDoRelatorio } from '../results/relatorio-email.js';
 import {
@@ -205,8 +206,14 @@ export class RelatorioMensalService {
     if (!this.database) throw new Error('relatório do mês: sem banco');
     const db = this.database.db;
     const lido = await withSystem(db, async (tx) => {
-      const r = await tx.execute<LinhaDoRelatorio>(sql`
-        select m.tenant_id, m.brand_id, m.timezone, m.content, b.name as marca, o.name as empresa
+      // Uma agência com vínculo vivo que ainda não mandou este relatório: o e-mail do Liame a espera (D-A7-68).
+      const r = await tx.execute<LinhaDoRelatorio & { espera_agencia: boolean; fim_da_espera: Date | string }>(sql`
+        select m.tenant_id, m.brand_id, m.timezone, m.content, b.name as marca, o.name as empresa,
+               exists (select 1 from liame.partner_link l
+                        where l.client_org_id = m.tenant_id and l.status = 'ativo'
+                          and not exists (select 1 from liame.agency_report_send s
+                                           where s.report_id = m.id and s.agency_id = l.partner_org_id)) as espera_agencia,
+               ${fimDaEspera(sql`m.month_to`, sql`m.timezone`)} as fim_da_espera
           from liame.monthly_report m
           join liame.brand b on b.id = m.brand_id
           join liame.organization o on o.id = m.tenant_id
@@ -222,6 +229,9 @@ export class RelatorioMensalService {
            and mb.role_key in (${sql.join(NIVEIS_QUE_RECEBEM.map((n) => sql`${n}`), sql`, `)})
            and u.disabled_at is null and u.email_verified_at is not null
            and (d.id is null or (d.status = 'falhou' and d.attempts < ${TENTATIVAS_POR_PESSOA}))
+           -- Quem recebeu o relatório pela agência não recebe o do Liame daquele mês (D-A7-68).
+           and not exists (select 1 from liame.agency_report_delivery ad join liame.agency_report_send s on s.id = ad.send_id
+                            where s.report_id = ${reportId} and ad.user_id = u.id and ad.status = 'enviado')
          order by u.id`);
       return { relatorio, pessoas: pessoas.rows };
     });
@@ -233,6 +243,17 @@ export class RelatorioMensalService {
     if (!noPrazo(diaNoFuso(agora, relatorio.timezone), conteudo.month)) return this.fecharEnvio(reportId, 'expirado', agora);
     if (!(await this.flags.isEnabled('relatorio_email', this.flags.context({ tenantId: relatorio.tenant_id, brandId: relatorio.brand_id })))) {
       return this.fecharEnvio(reportId, 'desligado', agora);
+    }
+    // A agência ainda revisa: o e-mail espera até ela mandar ou até o dia 3, às 9h, olhando de novo a cada hora.
+    if (relatorio.espera_agencia && agora.getTime() < new Date(relatorio.fim_da_espera).getTime()) {
+      await withSystem(db, (tx) =>
+        tx.execute(sql`
+          update liame.monthly_report
+             set email_next_at = least(${agora.toISOString()}::timestamptz + ${OLHAR_DE_NOVO}::interval, ${new Date(relatorio.fim_da_espera).toISOString()}::timestamptz),
+                 updated_at = now()
+           where id = ${reportId} and email_status = 'pendente'`),
+      );
+      return { status: 'pendente', enviados: 0 };
     }
 
     const link = `${this.config.appUrl}/resultados/relatorio?marca=${relatorio.brand_id}&mes=${conteudo.month.from.slice(0, 7)}`;

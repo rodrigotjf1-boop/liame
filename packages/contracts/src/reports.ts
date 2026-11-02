@@ -240,11 +240,27 @@ export const MonthlyReport = z.strictObject({
 });
 export type MonthlyReport = z.infer<typeof MonthlyReport>;
 
+/**
+ * O que a agência mandou deste relatório (A7, W7, parte 4a; P29: a faixa da agência e o comentário no relatório que o
+ * Dono lê): o último envio dela.
+ */
+export const MonthlyReportFromAgency = z.strictObject({
+  agency_name: z.string(),
+  logo_url: z.string().nullable(),
+  version: z.int().min(1),
+  sent_at: z.string(),
+  sent_by_name: z.string().nullable(),
+  comment: z.string().nullable(),
+});
+export type MonthlyReportFromAgency = z.infer<typeof MonthlyReportFromAgency>;
+
 export const MonthlyReportResponse = z.strictObject({
   /** Nulo quando a marca ainda não tem relatório (o primeiro sai em `next_report_on`). */
   report: MonthlyReport.nullable(),
   /** O dia 1º em que sai o próximo relatório, no fuso da loja. */
   next_report_on: Dia,
   timezone: z.string(),
+  /** O que a agência mandou deste relatório; falta quando nenhuma agência mandou. */
+  from_agency: MonthlyReportFromAgency.optional(),
 });
 export type MonthlyReportResponse = z.infer<typeof MonthlyReportResponse>;

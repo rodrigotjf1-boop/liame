@@ -6,6 +6,29 @@ export interface MailMessage {
   text: string;
   /** A mesma mensagem em HTML (opcional). Vai sempre junto com o texto: quem não mostra HTML lê o texto. */
   html?: string;
+  /**
+   * O nome que aparece no remetente, no lugar do do Liame ("Agência Fogo pelo Liame", A7, W7, parte 4a; D-A7-69). O
+   * endereço continua o do Liame (é o domínio que tem a assinatura).
+   */
+  fromName?: string;
+  /** Para onde vai o "Responder" (o e-mail de resposta confirmado da agência). */
+  replyTo?: string;
+}
+
+/** O nome do remetente sem o que quebraria o cabeçalho (quebra de linha, aspas, sinais de endereço), até 100 letras. */
+export function nomeDoRemetente(nome: string): string {
+  return nome.replace(/[\r\n"<>\\]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+/**
+ * O remetente com o nome dado e o endereço do Liame: `=?UTF-8?B?…?= <endereço>` (o nome em MIME encoded-word, que é como
+ * o SES aceita acento no nome).
+ */
+export function remetenteComNome(remetente: string, nome: string): string {
+  const endereco = /<([^>]+)>/.exec(remetente)?.[1] ?? remetente.trim();
+  const limpo = nomeDoRemetente(nome);
+  if (!limpo) return remetente;
+  return `=?UTF-8?B?${Buffer.from(limpo, 'utf8').toString('base64')}?= <${endereco}>`;
 }
 
 /** Porta de envio de e-mail. Produção: Amazon SES em São Paulo (plano da A1, D-A1-4). */
@@ -44,6 +67,7 @@ export function maskEmail(email: string): string {
 export interface SesSendInput {
   FromEmailAddress: string;
   Destination: { ToAddresses: string[] };
+  ReplyToAddresses?: string[];
   Content: { Simple: { Subject: { Data: string; Charset: 'UTF-8' }; Body: { Text: { Data: string; Charset: 'UTF-8' }; Html?: { Data: string; Charset: 'UTF-8' } } } };
   ConfigurationSetName?: string;
 }
@@ -70,8 +94,9 @@ export class SesMailer extends Mailer {
 
   async send(message: MailMessage): Promise<void> {
     const r = await this.sendRaw({
-      FromEmailAddress: this.from,
+      FromEmailAddress: message.fromName ? remetenteComNome(this.from, message.fromName) : this.from,
       Destination: { ToAddresses: [message.to] },
+      ...(message.replyTo ? { ReplyToAddresses: [message.replyTo] } : {}),
       Content: {
         Simple: {
           Subject: { Data: message.subject, Charset: 'UTF-8' },

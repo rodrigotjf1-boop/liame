@@ -227,6 +227,10 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   // A marca da agência (A7, W7, parte 3, migration 0102): o logo (no armazenamento de imagens, que sai com o prefixo da
   // agência no expurgo) e o e-mail de resposta, que é o contato de alguém da agência.
   agency_brand: { class: 'PERSONAL', retention: 'com a agência' },
+  // O relatório que a agência manda ao cliente (A7, W7, parte 4a, migration 0103): o comentário assinado e o nome de quem
+  // mandou; e cada entrega a uma pessoa da empresa, sem o endereço nem o texto.
+  agency_report_send: { class: 'PERSONAL', retention: 'com a empresa e com a agência (some com qualquer uma das duas)' },
+  agency_report_delivery: { class: 'PERSONAL', retention: 'com o envio e com a pessoa (some com qualquer um dos dois)' },
   // A empresa como cliente no meio de pagamento (A7, W2a, migration 0081): só o id dela lá (`cus_…`). O nome e o CNPJ
   // que o Asaas guarda são os da empresa, enviados na primeira cobrança.
   billing_customer: { class: 'CONFIDENTIAL', retention: 'com a empresa' },

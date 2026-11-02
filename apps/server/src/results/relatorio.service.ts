@@ -1,6 +1,8 @@
 import type { MonthlyReportQuery, MonthlyReportResponse } from '@liame/contracts';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
+import { enderecoPublicoDoLogo } from '../agencia/logo-publico.controller.js';
+import { APP_CONFIG, type AppConfig } from '../config.js';
 import { type AuthContext, currentTx } from '../context/request-context.js';
 import { diaNoFuso } from './fora-do-normal.js';
 import { type ConteudoDoRelatorio, mesPedido, paraQuemVe, pessoasDaVerba, proximoRelatorio, VERSOES_DO_RELATORIO } from './relatorio-mensal.js';
@@ -22,7 +24,10 @@ type Linha = {
  */
 @Injectable()
 export class RelatorioService {
-  constructor(private readonly results: ResultsService) {}
+  constructor(
+    private readonly results: ResultsService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+  ) {}
 
   /**
    * O relatório de um mês da marca (`2026-09`) ou, sem o mês, o mais recente. A verba e a equipe só vão para quem vê as
@@ -47,7 +52,30 @@ export class RelatorioService {
     const nomes = ids.length
       ? new Map((await tx.execute<{ id: string; name: string }>(sql`select id, name from liame.app_user where id in ${ids}`)).rows.map((p) => [p.id, p.name]))
       : new Map<string, string>();
+    // O que a agência mandou deste relatório (A7, W7, parte 4a; P29): o último envio, de qualquer agência da empresa.
+    const daAgencia = linha
+      ? (
+          await tx.execute<{ agency_id: string; agency_name: string; with_logo: boolean; version: number; created_at: Date | string; sent_by_name: string | null; comment: string | null }>(sql`
+            select s.agency_id, o.name as agency_name, s.with_logo, s.version, s.created_at, s.sent_by_name, s.comment
+              from liame.agency_report_send s join liame.organization o on o.id = s.agency_id
+             where s.report_id = ${linha.id}
+             order by s.created_at desc, s.id desc
+             limit 1`)
+        ).rows[0]
+      : undefined;
     return {
+      ...(daAgencia
+        ? {
+            from_agency: {
+              agency_name: daAgencia.agency_name,
+              logo_url: daAgencia.with_logo ? enderecoPublicoDoLogo(this.config.apiUrl, daAgencia.agency_id) : null,
+              version: daAgencia.version,
+              sent_at: new Date(daAgencia.created_at).toISOString(),
+              sent_by_name: daAgencia.sent_by_name,
+              comment: daAgencia.comment,
+            },
+          }
+        : {}),
       report: linha
         ? {
             ...paraQuemVe(linha.content, auth.permissions, nomes),
