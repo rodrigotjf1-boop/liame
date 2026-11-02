@@ -81,7 +81,8 @@ export function GavetaQuemEntra({ cliente: c, reserva, aoSalvar, aoSumir, aoFech
     const membros: Array<{ user_id: string; role: PartnerRole; approve_limit_micros?: number | null }> = [];
     const erros: Record<string, string> = {};
     for (const t of time) {
-      const l = linhas[t.user_id]!;
+      const quem = t.user_id;
+      const l = linhas[quem]!;
       if (!l.entra) continue;
       if (!APROVAM.has(l.nivel)) {
         membros.push({ user_id: t.user_id, role: l.nivel });
@@ -89,12 +90,12 @@ export function GavetaQuemEntra({ cliente: c, reserva, aoSalvar, aoSumir, aoFech
       }
       const valor = Number(l.limite);
       if (l.limite.trim() === '' || !Number.isFinite(valor) || valor < 0) {
-        erros[t.user_id] = 'Informe até quanto a pessoa aprova sozinha (pode ser zero).';
+        erros[quem] = 'Informe até quanto a pessoa aprova sozinha (pode ser zero).';
         continue;
       }
       const micros = Math.round(valor * MICROS);
       if (c.approve_limit_micros !== null && micros > c.approve_limit_micros) {
-        erros[t.user_id] = `Até ${moeda(c.approve_limit_micros)}: é o que o dono deu à agência.`;
+        erros[quem] = `Até ${moeda(c.approve_limit_micros)}: é o que o dono deu à agência.`;
         continue;
       }
       membros.push({ user_id: t.user_id, role: l.nivel, approve_limit_micros: micros });
