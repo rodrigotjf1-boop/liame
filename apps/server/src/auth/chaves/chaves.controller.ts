@@ -9,7 +9,7 @@ import {
   RenamePasskeyRequest,
   ResourceId,
 } from '@liame/contracts';
-import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -23,7 +23,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Auditar, SemAuditoria } from '../../audit/auditar.js';
-import type { AuthContext } from '../../context/request-context.js';
+import { aparelhoDaRequisicao, type AuthContext } from '../../context/request-context.js';
 import { Auth, Autenticado } from '../access.js';
 import { ChavesService } from './chaves.service.js';
 
@@ -62,9 +62,8 @@ export class ChavesController {
   opcoesDeCadastro(
     @Auth() auth: AuthContext,
     @Body({ schema: PasskeyRegistrationOptionsRequest }) body: PasskeyRegistrationOptionsRequest,
-    @Headers('user-agent') ua?: string,
   ): Promise<PasskeyCeremony> {
-    return this.chaves.opcoesDeCadastro(auth, body, ua);
+    return this.chaves.opcoesDeCadastro(auth, body, aparelhoDaRequisicao() ?? undefined);
   }
 
   @Post('passkeys/confirmation-options')
@@ -90,8 +89,8 @@ export class ChavesController {
   @ApiCreatedResponse({ standardSchema: CreatePasskeyResponse })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
   @ApiConflictResponse({ standardSchema: ProblemDetails })
-  cadastrar(@Auth() auth: AuthContext, @Body({ schema: CreatePasskeyRequest }) body: CreatePasskeyRequest, @Headers('user-agent') ua?: string): Promise<CreatePasskeyResponse> {
-    return this.chaves.cadastrar(auth, body, ua);
+  cadastrar(@Auth() auth: AuthContext, @Body({ schema: CreatePasskeyRequest }) body: CreatePasskeyRequest): Promise<CreatePasskeyResponse> {
+    return this.chaves.cadastrar(auth, body, aparelhoDaRequisicao() ?? undefined);
   }
 
   @Patch('passkeys/:id')
@@ -139,7 +138,7 @@ export class ChavesController {
   })
   @ApiNoContentResponse({ description: 'Sessão verificada' })
   @ApiBadRequestResponse({ standardSchema: ProblemDetails })
-  async verificar(@Auth() auth: AuthContext, @Body({ schema: PasskeyAssertion }) body: PasskeyAssertion, @Headers('user-agent') ua?: string): Promise<void> {
-    await this.chaves.verificarSegundoFator(auth, body, ua);
+  async verificar(@Auth() auth: AuthContext, @Body({ schema: PasskeyAssertion }) body: PasskeyAssertion): Promise<void> {
+    await this.chaves.verificarSegundoFator(auth, body, aparelhoDaRequisicao() ?? undefined);
   }
 }

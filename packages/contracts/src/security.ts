@@ -4,7 +4,7 @@ import { z } from 'zod';
 // vê sobre o acesso dela. Vale para todas as empresas; nada de outra pessoa aparece aqui.
 
 export const SecuritySummaryResponse = z.strictObject({
-  /** App autenticador ativo desde; nulo = não ativado. */
+  /** O app autenticador de agora, ativo desde; nulo = sem o app (também quem entra só com chave de acesso, A7, W9). */
   mfa_enabled_since: z.string().nullable(),
   /**
    * Como esta sessão foi confirmada: `totp` (o app), `recuperacao` (um código de recuperação), `chave` (uma chave de
@@ -43,8 +43,13 @@ export const SecurityEvent = z.strictObject({
   occurred_at: z.string(),
   device: z.string().nullable(),
   ip: z.string().nullable(),
-  /** Detalhe curto quando houver (ex.: `recuperacao` quando entrou com código de recuperação). */
+  /**
+   * Detalhe curto quando houver: `recuperacao` (entrou com código de recuperação) ou `chave` (entrou ou confirmou com a
+   * chave de acesso, A7, W9).
+   */
   detail: z.string().nullable(),
+  /** O nome da chave de acesso do evento (criar, renomear, tirar, entrar ou confirmar com ela); nulo nos outros. */
+  key_name: z.string().nullable(),
 });
 export type SecurityEvent = z.infer<typeof SecurityEvent>;
 

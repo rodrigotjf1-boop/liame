@@ -21,12 +21,16 @@ const ACOES_DE_SEGURANCA = [
   'segundo_fator.ativar',
   'segundo_fator.pedir_troca',
   'segundo_fator.gerar_codigos',
+  // As chaves de acesso (A7, W9, parte 9c1; D-A7-58): criar, renomear e tirar, com o nome da chave.
+  'segundo_fator.chave_criar',
+  'segundo_fator.chave_renomear',
+  'segundo_fator.chave_tirar',
   'senha.redefinir',
   'email.confirmar',
 ];
 
 type LinhaSessao = { id: string; user_agent: string | null; ip: string | null; created_at: Date | string; last_seen_at: Date | string };
-type LinhaEvento = { action: string; occurred_at: Date | string; after: Record<string, unknown> | null };
+type LinhaEvento = { action: string; occurred_at: Date | string; after: Record<string, unknown> | null; before: Record<string, unknown> | null };
 
 const iso = (v: Date | string) => new Date(v).toISOString();
 
@@ -34,8 +38,11 @@ const iso = (v: Date | string) => new Date(v).toISOString();
 export class SecurityService {
   async summary(auth: AuthContext): Promise<SecuritySummaryResponse> {
     const tx = currentTx();
-    const r = await tx.execute<{ mfa_enabled_at: Date | string | null; restantes: string; usable_after: Date | string | null; expires_at: Date | string | null }>(sql`
-      select u.mfa_enabled_at,
+    // O app ativo é o segredo `totp` vivo, gravado na ativação. Não `app_user.mfa_enabled_at`: desde a W9 (9a), ela diz
+    // "tem segundo fator" e também se acende com a primeira chave de acesso de quem não tem o app.
+    const r = await tx.execute<{ app_desde: Date | string | null; restantes: string; usable_after: Date | string | null; expires_at: Date | string | null }>(sql`
+      select (select min(x.created_at) from liame.secret x
+               where x.owner_user_id = u.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as app_desde,
              (select count(*) from liame.recovery_code c where c.user_id = u.id and c.used_at is null) as restantes,
              t.usable_after, t.expires_at
         from liame.app_user u
@@ -47,7 +54,7 @@ export class SecurityService {
        where u.id = ${auth.userId}`);
     const row = r.rows[0];
     return {
-      mfa_enabled_since: row?.mfa_enabled_at ? iso(row.mfa_enabled_at) : null,
+      mfa_enabled_since: row?.app_desde ? iso(row.app_desde) : null,
       session_mfa_method: auth.mfaVerifiedAt ? auth.mfaMethod : null,
       recovery_codes_left: Number(row?.restantes ?? 0),
       change_request: row?.usable_after && row.expires_at ? { usable_after: iso(row.usable_after), expires_at: iso(row.expires_at) } : null,
@@ -96,7 +103,7 @@ export class SecurityService {
   /** Atividade de segurança dos últimos 30 dias, da trilha pessoal da auditoria (sem nada de empresa). */
   async events(auth: AuthContext): Promise<SecurityEventsResponse> {
     const r = await currentTx().execute<LinhaEvento>(sql`
-      select action, occurred_at, after from liame.audit_event
+      select action, occurred_at, after, before from liame.audit_event
        where tenant_id is null and actor_id = ${auth.userId}
          and occurred_at > now() - interval '30 days'
          and action in ${ACOES_DE_SEGURANCA}
@@ -106,12 +113,16 @@ export class SecurityService {
       events: r.rows.map((e) => {
         const depois = e.after ?? {};
         const texto = (k: string) => (typeof depois[k] === 'string' ? (depois[k] as string) : null);
+        // O nome da chave: depois (criar, renomear, entrar) ou antes (tirar).
+        const antes = e.before ?? {};
+        const chave = texto('chave') ?? (typeof antes.chave === 'string' ? antes.chave : null);
         return {
           action: e.action,
           occurred_at: iso(e.occurred_at),
           device: texto('aparelho'),
           ip: texto('ip'),
           detail: texto('metodo'),
+          key_name: chave,
         };
       }),
     };
