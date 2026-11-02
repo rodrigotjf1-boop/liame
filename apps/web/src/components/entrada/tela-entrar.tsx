@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
+import type { PasskeyCeremony } from '@liame/contracts';
 import { api, chamar, type Problema } from '@/lib/api';
 import { campoOfereceChave, cancelarAJanela, fraseDoMotivo, type MotivoDaChave, usarAChave, usarAChaveNoCampo } from '@/lib/chave-de-acesso';
 import { disparar } from '@/lib/disparar';
@@ -36,6 +37,8 @@ export function TelaEntrar() {
   const [enviando, setEnviando] = useState(false);
   const [comChave, setComChave] = useState(false);
   const [noCampo, setNoCampo] = useState(false);
+  // A chave na entrada só com a flag ligada para todos (A7, W9, parte 9d): a tela pergunta à API ao abrir.
+  const [chaveLigada, setChaveLigada] = useState(false);
   const refEmail = useRef<HTMLInputElement>(null);
   const montada = useRef(true);
 
@@ -63,14 +66,19 @@ export function TelaEntrar() {
    * O preenchimento do navegador: pede o desafio e espera a pessoa escolher a chave no campo do e-mail. Fechar, trocar
    * pelo botão ou sair da tela encerram a espera sem aviso; a recusa da API aparece e a oferta volta.
    */
-  async function esperarNoCampo() {
-    const o = await chamar(() => api.POST('/v1/auth/passkey-options'));
-    if (!o.ok || !montada.current) return;
-    const chave = await usarAChaveNoCampo(o.data.options);
+  async function esperarNoCampo(primeira?: PasskeyCeremony) {
+    let desafio = primeira;
+    if (!desafio) {
+      const o = await chamar(() => api.POST('/v1/auth/passkey-options'));
+      if (!o.ok || !montada.current) return;
+      desafio = o.data;
+    }
+    if (!montada.current) return;
+    const chave = await usarAChaveNoCampo(desafio.options);
     if (!chave.ok || !montada.current) return;
     setProblema(null);
     setComChave(true);
-    const entrou = await concluirComChave(o.data.challenge_id, chave.resposta);
+    const entrou = await concluirComChave(desafio.challenge_id, chave.resposta);
     setComChave(false);
     if (!entrou && montada.current) disparar(esperarNoCampo());
   }
@@ -84,9 +92,13 @@ export function TelaEntrar() {
       chamar(() => api.GET('/v1/me')).then(async (r) => {
         if (!viva) return;
         if (r.ok) return router.replace(destinoDepoisDeEntrar(r.data, volta));
+        // Desligada (409) ou sem resposta: a entrada fica só com a senha.
+        const o = await chamar(() => api.POST('/v1/auth/passkey-options'));
+        if (!viva || !o.ok) return;
+        setChaveLigada(true);
         if ((await campoOfereceChave()) && viva) {
           setNoCampo(true);
-          disparar(esperarNoCampo());
+          disparar(esperarNoCampo(o.data));
         }
       }),
     );
@@ -105,7 +117,7 @@ export function TelaEntrar() {
     setCampo(null);
     const normalizado = email.trim();
     if (!EMAIL.test(normalizado)) return falhou({ status: 0, code: 'email', title: 'E-mail inválido', detail: 'Confira o endereço, como nome@empresa.com.br.' }, 'email');
-    if (!senha) return falhou({ status: 0, code: 'senha', title: 'Falta a senha', detail: 'Digite a senha, ou entre com a chave de acesso.' }, 'senha');
+    if (!senha) return falhou({ status: 0, code: 'senha', title: 'Falta a senha', detail: chaveLigada ? 'Digite a senha, ou entre com a chave de acesso.' : 'Digite a senha da sua conta.' }, 'senha');
     setEnviando(true);
     lia.reagir('think');
     const r = await chamar(() => api.POST('/v1/auth/login', { body: { email: normalizado, password: senha } }));
@@ -187,13 +199,17 @@ export function TelaEntrar() {
         />
         <BotaoEnviar enviando={enviando}>Entrar</BotaoEnviar>
       </form>
-      <p className="entrada-ou" aria-hidden="true">
-        ou
-      </p>
-      <button className="btn entrada-com-chave" type="button" onClick={() => disparar(entrarComChave())} disabled={comChave || enviando} aria-busy={comChave}>
-        <Icone nome="key" />
-        {comChave ? 'Esperando o aparelho…' : 'Entrar com chave de acesso'}
-      </button>
+      {chaveLigada && (
+        <>
+          <p className="entrada-ou" aria-hidden="true">
+            ou
+          </p>
+          <button className="btn entrada-com-chave" type="button" onClick={() => disparar(entrarComChave())} disabled={comChave || enviando} aria-busy={comChave}>
+            <Icone nome="key" />
+            {comChave ? 'Esperando o aparelho…' : 'Entrar com chave de acesso'}
+          </button>
+        </>
+      )}
       <p className="alternativa">
         Ainda não tem conta? <Link href="/criar-conta">Criar conta</Link>
       </p>

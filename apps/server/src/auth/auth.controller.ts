@@ -15,6 +15,7 @@ import { Body, Controller, Get, HttpCode, Post, Put, Req, Res } from '@nestjs/co
 import {
   ApiAcceptedResponse,
   ApiBadRequestResponse,
+  ApiConflictResponse,
   ApiCookieAuth,
   ApiForbiddenResponse,
   ApiNoContentResponse,
@@ -107,9 +108,10 @@ export class AuthController {
   @ApiOperation({
     summary: 'Começar a entrar com a chave de acesso',
     description:
-      'O desafio da entrada sem senha (5 minutos, uso único), sem dizer quais chaves existem: a chave que o aparelho escolher diz quem é. 30 por IP a cada 15 minutos.',
+      'O desafio da entrada sem senha (5 minutos, uso único), sem dizer quais chaves existem: a chave que o aparelho escolher diz quem é. 30 por IP a cada 15 minutos. Com a função `chaves_de_acesso` desligada para todos (a regra do ambiente: ninguém entrou ainda), 409 `funcao-desligada`, sem gastar o limite: a entrada fica só com a senha.',
   })
   @ApiOkResponse({ standardSchema: PasskeyCeremony })
+  @ApiConflictResponse({ standardSchema: ProblemDetails })
   @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
   opcoesDaChave(@Req() req: HttpRequest): Promise<PasskeyCeremony> {
     return this.chaves.opcoesDaEntrada(meta(req).ip);

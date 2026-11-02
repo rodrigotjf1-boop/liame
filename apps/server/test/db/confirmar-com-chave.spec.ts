@@ -6,6 +6,7 @@ import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { AparelhoDeTeste } from '../helpers/aparelho-de-teste.js';
 import { enableMfa, ownerQuery, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import { flagDasChaves } from '../helpers/chaves.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // A chave de acesso no lugar do código do app onde ele é pedido (A7, W9, parte 9b2; D-A7-56), pelo `ConfirmacaoService`:
@@ -22,8 +23,13 @@ describe.skipIf(!hasDb)('confirmar com a chave de acesso no lugar do código do 
 
   const chamar = (metodo: string, caminho: string, cookie: string, body?: unknown) =>
     api.call(metodo, caminho, { cookie, body, headers: { 'user-agent': CHROME_WINDOWS } });
-  /** A primeira chave de quem ainda não tem segundo fator (sem confirmar; a sessão fica verificada). */
-  const primeiraChave = async (cookie: string): Promise<AparelhoDeTeste> => {
+  /**
+   * A primeira chave de quem ainda não tem segundo fator (sem confirmar; a sessão fica verificada). A flag das chaves
+   * (9d) liga pela empresa da conta.
+   */
+  const primeiraChave = async (quem: { cookie: string; me: { active_organization_id: string | null } }): Promise<AparelhoDeTeste> => {
+    await flagDasChaves(api, { tipo: 'tenant', id: quem.me.active_organization_id! }, true);
+    const cookie = quem.cookie;
     const aparelho = new AparelhoDeTeste(rp.rpId, rp.origins[0]!);
     const r = await chamar('POST', '/v1/me/passkeys/registration-options', cookie, {});
     expect(r.status, JSON.stringify(r.body)).toBe(200);
@@ -53,7 +59,7 @@ describe.skipIf(!hasDb)('confirmar com a chave de acesso no lugar do código do 
 
   it('quem só tem chave aprova um pedido com ela; sem prova, 400; o código do app não serve a quem não tem o app; o desafio vale uma vez', async () => {
     const s = await signupAndLogin(api, undefined, 'Empresa Aprova Com Chave');
-    const chave = await primeiraChave(s.cookie);
+    const chave = await primeiraChave(s);
     const recurso = await chamar('PUT', '/v1/sandbox/resources', s.cookie, {
       account_id: 'act_1',
       resource_id: 'camp_1',
@@ -89,7 +95,7 @@ describe.skipIf(!hasDb)('confirmar com a chave de acesso no lugar do código do 
 
   it('gerar códigos novos com a chave (quem só tem chave não tinha como); a chave de outra pessoa não serve; com o app, o código segue valendo', async () => {
     const s = await signupAndLogin(api, undefined, 'Empresa Codigos Com Chave');
-    const chave = await primeiraChave(s.cookie);
+    const chave = await primeiraChave(s);
     const novos = await chamar('POST', '/v1/me/mfa/recovery-codes', s.cookie, { passkey: await comChave(s.cookie, chave) });
     expect(novos.status, JSON.stringify(novos.body)).toBe(200);
     expect(RecoveryCodesResponse.parse(novos.body).recovery_codes).toHaveLength(10);
@@ -104,7 +110,7 @@ describe.skipIf(!hasDb)('confirmar com a chave de acesso no lugar do código do 
     expect([semProva.status, semProva.body.code]).toEqual([400, 'confirme-que-e-voce']);
     // As opções são as desta pessoa, mas quem assina é o aparelho de outra: a chave não é dela.
     const outra = await signupAndLogin(api, undefined, 'Empresa Outra Chave');
-    const chaveDaOutra = await primeiraChave(outra.cookie);
+    const chaveDaOutra = await primeiraChave(outra);
     const deOutra = await chamar('POST', '/v1/me/mfa/recovery-codes', s.cookie, { passkey: await comChave(s.cookie, chaveDaOutra) });
     expect([deOutra.status, deOutra.body.code]).toEqual([400, 'chave-recusada']);
 

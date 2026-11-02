@@ -128,21 +128,24 @@ export function SegurancaTela() {
         </div>
       )}
 
-      <CartaoChaves
-        chaves={chaves}
-        agora={agora}
-        criando={dialogo === 'criar-chave'}
-        aoCriar={() => setDialogo('criar-chave')}
-        aoRecarregar={() => disparar(carregarChaves())}
-        aoMudar={(novas, aviso, tirada) => {
-          setChaves({ tipo: 'ok', dados: novas });
-          avisar(aviso);
-          disparar(Promise.all([carregarResumo(), carregarEventos()]));
-          // A linha tirada sumiu: o foco vai para o título da tela.
-          if (tirada) titulo.current?.focus({ preventScroll: true });
-        }}
-        aoErro={(texto) => avisar(texto, { tipo: 'perigo' })}
-      />
+      {/* As chaves nascem desligadas (A7, W9, parte 9d): o cartão aparece quando dá para criar, ou para quem já tem chave. */}
+      {(chaves.tipo === 'erro' || (chaves.tipo === 'ok' && (chaves.dados.can_create || chaves.dados.items.length > 0))) && (
+        <CartaoChaves
+          chaves={chaves}
+          agora={agora}
+          criando={dialogo === 'criar-chave'}
+          aoCriar={() => setDialogo('criar-chave')}
+          aoRecarregar={() => disparar(carregarChaves())}
+          aoMudar={(novas, aviso, tirada) => {
+            setChaves({ tipo: 'ok', dados: novas });
+            avisar(aviso);
+            disparar(Promise.all([carregarResumo(), carregarEventos()]));
+            // A linha tirada sumiu: o foco vai para o título da tela.
+            if (tirada) titulo.current?.focus({ preventScroll: true });
+          }}
+          aoErro={(texto) => avisar(texto, { tipo: 'perigo' })}
+        />
+      )}
 
       <div className="seg-grid">
         {resumo.tipo === 'carregando' && <CartaoCarregando id="t-app-c" titulo="App autenticador" />}

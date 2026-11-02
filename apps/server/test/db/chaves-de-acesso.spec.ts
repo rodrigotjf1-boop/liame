@@ -7,6 +7,7 @@ import { currentStep, totpCode } from '../../src/auth/totp.js';
 import { APP_CONFIG, type AppConfig } from '../../src/config.js';
 import { AparelhoDeTeste } from '../helpers/aparelho-de-teste.js';
 import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import { flagDasChaves } from '../helpers/chaves.js';
 import { hasDb, OWNER_URL } from './env.js';
 
 // As chaves de acesso (A7, W9, parte 9a; P28; D-A7-54 a D-A7-58; D-A7-87), pelo caminho inteiro, com um aparelho de teste
@@ -47,11 +48,39 @@ describe.skipIf(!hasDb)('as chaves de acesso', () => {
     await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
     api = await startApi();
     rp = api.app.get<AppConfig>(APP_CONFIG).passkeys;
+    // As chaves nascem desligadas (9d): ligadas para o ambiente neste arquivo; o caso desligado tem o teste dele.
+    await flagDasChaves(api, { tipo: 'environment' }, true);
   });
   afterAll(async () => {
+    if (api) await flagDasChaves(api, { tipo: 'environment' }, null);
     await api?.close();
   });
   beforeEach(resetIpRateLimits);
+
+  it('a flag desligada (9d): o cadastro e a entrada sem senha recusam com 409; a lista diz que não dá para criar; a chave que já existe continua valendo', async () => {
+    const s = await signupAndLogin(api, undefined, 'Empresa Chaves Desligadas');
+    const chave = aparelho(GOOGLE);
+    expect((await criar(s.cookie, chave)).status).toBe(201);
+    expect((await listar(s.cookie)).can_create).toBe(true);
+    // A regra da pessoa vence a do ambiente: para ela, desligada.
+    const eu = s.me.user.id;
+    await flagDasChaves(api, { tipo: 'user', id: eu }, false);
+    try {
+      expect((await listar(s.cookie)).can_create).toBe(false);
+      const recusado = await chamar('POST', '/v1/me/passkeys/registration-options', s.cookie, await confirmarCom(s.cookie, chave));
+      expect([recusado.status, recusado.body.code]).toEqual([409, 'funcao-desligada']);
+      // O que já existe continua valendo: confirmar com a chave (gerar códigos novos, aprovar, o segundo fator).
+      const codigos = await chamar('POST', '/v1/me/mfa/recovery-codes', s.cookie, await confirmarCom(s.cookie, chave));
+      expect(codigos.status, JSON.stringify(codigos.body)).toBe(200);
+      // A entrada sem senha segue só a regra do ambiente (ninguém entrou ainda): sem ela, desligada para todos.
+      await flagDasChaves(api, { tipo: 'environment' }, null);
+      const entrada = await api.call('POST', '/v1/auth/passkey-options', {});
+      expect([entrada.status, entrada.body.code]).toEqual([409, 'funcao-desligada']);
+    } finally {
+      await flagDasChaves(api, { tipo: 'user', id: eu }, null);
+      await flagDasChaves(api, { tipo: 'environment' }, true);
+    }
+  });
 
   it('a primeira chave sem o app traz os 10 códigos; confirmar com a chave para criar outra; o mesmo gerenciador não repete; renomear e tirar', async () => {
     const s = await signupAndLogin(api, undefined, 'Empresa Só Chaves');

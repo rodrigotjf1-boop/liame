@@ -996,6 +996,17 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **como a tela sabe:** `useFormasDeConfirmar` (`lib/sessao.tsx`), pela sessão; fora dela (os testes de desenho), como antes, só o app. Encerrar a conta ainda não tem tela; o servidor já aceita a chave (9b2);
 - **testes:** `apps/web/test/confirmar-com-chave.spec.ts` (o diálogo do contrato nas três situações e a gaveta de receber a propriedade); as suítes de Pessoas e da cobrança.
 
+**A W9, parte 9d: as chaves de acesso nascem desligadas (02/11/2026; migration 0109; D-A7-87, item 13).** A linha da 9a no README jurídico pedia o texto da Política sobre as chaves antes das telas, e as telas 9c1 e 9c2 foram ao ar antes; nenhuma chave foi criada na produção.
+- **a flag `chaves_de_acesso`**, desligada:
+  - segura o cadastro: Segurança da conta não mostra o cartão (só para quem já tem chave), e `registration-options` responde 409 `funcao-desligada`;
+  - segura a entrada sem senha: a tela de entrada pergunta à API ao abrir e, desligada, fica só com a senha; `passkey-options` responde 409 sem gastar o limite do IP;
+- **o que já existe continua valendo:** o segundo fator com a chave, as confirmações, gerar códigos, renomear e tirar;
+- **ligar:** numa empresa, pelo `ligar-flag` (o cadastro e o uso); para todos, uma regra do ambiente (a entrada sem senha só aparece com ela);
+- **a lista das chaves** diz se dá para criar (`can_create`);
+- **testes:**
+  - `test/db/chaves-de-acesso.spec.ts` (a flag desligada para a pessoa: o cadastro recusa, a lista diz, a chave que existe segue valendo; e a entrada sem a regra do ambiente);
+  - `test/helpers/chaves.ts` (`flagDasChaves`): os testes das chaves ligam a flag (o ambiente num arquivo, a empresa no outro, porque no CI os dois rodam juntos).
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
