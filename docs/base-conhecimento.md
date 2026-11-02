@@ -1531,6 +1531,25 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - **preço em São Paulo** [O], pela lista pública publicada em 15/10/2026 (versão `20261015173540`): US$ 0,0405 por GB por mês até 50 TB, US$ 0,007 por mil pedidos de gravação ou de lista e US$ 0,0056 por dez mil de leitura, os mesmos de 05/10/2026;
   - **sharp 0.35.5** [O] (sharp.pixelplumbing.com/install), a biblioteca que regrava a foto: binário pronto para Linux x64 com glibc 2.28 ou mais (a imagem do contêiner, Debian bookworm, tem a 2.36) e Node 20.9 ou mais, sem script de instalação (os binários vêm em pacotes por plataforma, `@img/sharp-*`); lê "JPEG, PNG, Ultra HDR, WebP, AVIF, TIFF, GIF and SVG (input)". **O HEIC (a foto do iPhone) não está na lista:** o Liame recusa a foto em HEIC com o motivo, e o campo de arquivo da tela pede JPEG, PNG ou WebP.
 
+### 17.7 Chaves de acesso (passkeys, WebAuthn)
+
+*Verificado em 02/11/2026, para a W9 da A7 (D-A7-54 a D-A7-58, D-A7-87).*
+
+- **SimpleWebAuthn, `@simplewebauthn/server` 14.0.3** [O] (simplewebauthn.dev/docs/packages/server; MIT; 14.0.3 publicada em 25/09/2026, e o `@simplewebauthn/browser` 14.0.0 em 02/09/2026):
+  - Node 22 LTS ou mais (o Liame roda no 24);
+  - as quatro funções: `generateRegistrationOptions`, `verifyRegistrationResponse`, `generateAuthenticationOptions` e `verifyAuthenticationResponse`;
+  - `attestationType: 'none'` é o recomendado: o atestado só serve a quem confere o fabricante;
+  - guardar por chave: o id da credencial (indexado), a chave pública em bytes, o contador, os transportes, o `deviceType` (`singleDevice` ou `multiDevice`), o `backedUp` e um id WebAuthn da pessoa separado do id interno;
+  - as credenciais numa tabela própria; o contador novo depois de cada uso. O contador que não sobe pode indicar um aparelho clonado, mas alguns mandam sempre 0 (o Touch ID do macOS).
+- **Guia do Google para o servidor** [O] (developers.google.com/identity/passkeys/developer-guides/server-registration):
+  - o id da credencial como chave primária da tabela das credenciais; um id da pessoa sem dado pessoal (não usar como chave primária);
+  - guardar o AAGUID (para dizer o gerenciador), o estado de cópia e os transportes;
+  - `residentKey: 'required'`; `excludeCredentials` com as chaves que a pessoa já tem, para o mesmo gerenciador não duplicar;
+  - conferir sempre o desafio; o nome da chave pelo AAGUID, e, com o AAGUID em zeros, pelo aparelho.
+- **Lista da comunidade dos AAGUIDs** [O] (github.com/passkeydeveloper/passkey-authenticator-aaguids, `aaguid.json`, lido em 02/11/2026): só para mostrar o nome do gerenciador na tela de contas, sem garantia de que continue no ar. Os usados no Liame: `ea9b8d66-…-b6b48cb575d4` Google Password Manager; `dd4ec289-…-70fa845d4bf2` iCloud Keychain (Managed); `08987058-…`, `9ddd1817-…` e `6028b017-…` Windows Hello; `adce0002-…-0b25f1f05503` Chrome on Mac; `bada5566-…` 1Password; `531126d6-…` Dashlane. A Apple manda o AAGUID em zeros.
+- **NIST SP 800-63B-4** (§17.1): os autenticadores sincronizáveis (passkeys) são aceitos, com requisitos.
+- **Regra do Liame:** a chave vale pelo código do app (D-A7-12); o aparelho confirma a pessoa (`userVerification: required`); quem perde todas as chaves recupera pelo app ou pelos códigos, nunca pelo e-mail sozinho (D-A7-57).
+
 ---
 
 ## 18. Cobrança do Liame: meios de pagamento, Pix Automático e nota de serviço

@@ -147,6 +147,12 @@ describe.skipIf(!hasDb)('a espera da recuperação da conta do Dono', () => {
     await conferirPedido(database.db, { protocolo: pedido.protocol, por: 'Rodrigo', documento: true, socios: true, videochamada: true });
     await rotina.avisosLote(20, so(e.dono.userId));
 
+    // Uma chave de acesso do Dono (A7, W9): a troca também a tira (ela pode estar no aparelho perdido).
+    await ownerQuery(
+      `insert into liame.passkey (id, user_id, credential_id, public_key, device_type, backed_up, aaguid, name)
+       values (gen_random_uuid(), $1, $2, '\\x00', 'multiDevice', true, '00000000-0000-0000-0000-000000000000', 'Chave do celular perdido')`,
+      [e.dono.userId, `credencial_${e.dono.userId.replace(/-/g, '')}`],
+    );
     // Antes da data, nada; depois dela, a troca.
     expect(await rotina.aplicarLote(20, so(e.dono.userId))).toEqual([]);
     expect(await rotina.aplicarLote(20, so(e.dono.userId), new Date(Date.now() + 7 * DIA + 60_000))).toEqual([pedido.id]);
@@ -154,14 +160,15 @@ describe.skipIf(!hasDb)('a espera da recuperação da conta do Dono', () => {
 
     // As sessões fecharam (a do cadastro, com o app, também), o app e os códigos saíram.
     expect((await api.call('GET', '/v1/me', { cookie: e.dono.cookie })).status).toBe(401);
-    const [estado] = await ownerQuery<{ app: string; codigos: string; sessoes: string; desde: Date | null }>(
+    const [estado] = await ownerQuery<{ app: string; codigos: string; sessoes: string; chaves: string; desde: Date | null }>(
       `select (select count(*) from liame.secret where owner_user_id = $1 and tenant_id is null and purpose in ('totp', 'totp_pendente') and revoked_at is null) as app,
               (select count(*) from liame.recovery_code where user_id = $1 and used_at is null) as codigos,
               (select count(*) from liame.session where user_id = $1 and revoked_at is null) as sessoes,
+              (select count(*) from liame.passkey where user_id = $1) as chaves,
               (select mfa_enabled_at from liame.app_user where id = $1) as desde`,
       [e.dono.userId],
     );
-    expect(estado).toEqual({ app: '0', codigos: '0', sessoes: '0', desde: null });
+    expect(estado).toEqual({ app: '0', codigos: '0', sessoes: '0', chaves: '0', desde: null });
 
     // Ao entrar: o código do app antigo não vale mais; o app novo se cadastra, com códigos novos.
     const cookie = await soASenha(e.dono.email);

@@ -34,6 +34,9 @@ const ANTES_DO_SEGUNDO_FATOR = [
   'GET /v1/me',
   'POST /v1/auth/logout',
   'POST /v1/me/mfa/verify',
+  // A chave de acesso no lugar do código do app (A7, W9, parte 9a).
+  'POST /v1/me/mfa/passkey-options',
+  'POST /v1/me/mfa/passkey',
   'GET /v1/me/account-recovery',
   'POST /v1/me/account-recovery',
   'DELETE /v1/me/account-recovery/:id',

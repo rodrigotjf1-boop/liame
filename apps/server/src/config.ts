@@ -128,6 +128,15 @@ const Env = z.object({
    * a DMS). Sem ela, o pedido de recuperação fica indisponível e o resto segue.
    */
   RECUPERACAO_CHAVE_PUBLICA: z.string().trim().min(100).max(4000).optional(),
+  /**
+   * O domínio das chaves de acesso (o "RP ID" do WebAuthn; A7, W9; D-A7-87): a chave só abre este domínio e os
+   * subdomínios dele. Vazio = o domínio do `APP_URL`. Trocar depois invalida as chaves já criadas.
+   */
+  PASSKEY_RP_ID: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/)
+    .optional(),
 });
 
 export type AppConfig = {
@@ -214,6 +223,8 @@ export type AppConfig = {
   asaas: { apiKey: string; apiUrl: string; ambiente: 'sandbox' | 'producao'; webhookToken: string | null } | null;
   /** A chave pública da DMS para o lacre do documento da recuperação da conta; nula = a recuperação indisponível. */
   recuperacaoChavePublica: KeyObject | null;
+  /** As chaves de acesso: o domínio (RP ID), o nome que o aparelho mostra e as origens aceitas (a do web). */
+  passkeys: { rpId: string; rpName: string; origins: string[] };
 };
 
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -405,7 +416,18 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     asaas,
     // A chave que não abre (formato, tipo, tamanho) recusa subir: a recuperação ficaria quebrada sem ninguém ver.
     recuperacaoChavePublica: env.RECUPERACAO_CHAVE_PUBLICA ? chavePublicaDaDms(env.RECUPERACAO_CHAVE_PUBLICA) : null,
+    passkeys: dominioDasChaves(appUrl, env.PASSKEY_RP_ID),
   };
+}
+
+/** O domínio das chaves precisa ser o do web ou um domínio acima dele (o WebAuthn recusa o resto). */
+export function dominioDasChaves(appUrl: string, rpId: string | undefined): AppConfig['passkeys'] {
+  const host = new URL(appUrl).hostname;
+  const dominio = rpId ?? host;
+  if (host !== dominio && !host.endsWith(`.${dominio}`)) {
+    throw new Error(`config: PASSKEY_RP_ID (${dominio}) precisa ser o domínio do APP_URL (${host}) ou um domínio acima dele`);
+  }
+  return { rpId: dominio, rpName: 'Liame', origins: [new URL(appUrl).origin] };
 }
 
 /** Os dois endereços oficiais da API do Asaas (base §18.5): o Sandbox, para os testes, e a produção. */

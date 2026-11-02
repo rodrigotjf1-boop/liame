@@ -174,7 +174,8 @@ export class MfaService {
 
   /** A troca exige a sessão verificada pelo app, ou um pedido de troca que já passou das 24 horas. */
   private async assertCanChange(tx: Tx, auth: AuthContext): Promise<string | null> {
-    if (auth.mfaVerifiedAt && auth.mfaMethod === 'totp') return null;
+    // A chave de acesso vale pelo app (D-A7-56): quem confirmou com ela troca o app sem esperar.
+    if (auth.mfaVerifiedAt && (auth.mfaMethod === 'totp' || auth.mfaMethod === 'chave')) return null;
     const r = await tx.execute<{ id: string }>(sql`
       select id from liame.user_token
        where user_id = ${auth.userId} and purpose = 'trocar_segundo_fator' and used_at is null

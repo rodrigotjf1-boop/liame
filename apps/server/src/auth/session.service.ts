@@ -65,8 +65,10 @@ export class SessionService {
         select s.id as session_id, u.id as user_id, u.email, u.name, s.mfa_verified_at, s.mfa_method, s.last_seen_at,
                m.tenant_id, m.role_key, m.last_seen_at as member_seen_at, m.billing_access, p.permissions, o.status as tenant_status,
                m.partner_link_id, ag.id as agency_id, ag.name as agency_name,
-               exists (select 1 from liame.secret x
-                        where x.owner_user_id = u.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured,
+               -- O segundo fator: o app ou uma chave de acesso (A7, W9; D-A7-57).
+               (exists (select 1 from liame.secret x
+                         where x.owner_user_id = u.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null)
+                or exists (select 1 from liame.passkey k where k.user_id = u.id)) as mfa_configured,
                susp.brands as suspended_brands,
                -- A conta inteira suspensa: há marca suspensa e nenhuma marca viva (não arquivada) fora dela (D-A7-40).
                (susp.brands is not null and not exists (
