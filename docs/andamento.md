@@ -764,6 +764,11 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **o membro da agência** passa a ler a lista (a rota pede `agencia.ver`), mas vê só os clientes em que está, sem os pedidos da agência e sem o time;
 - **testes:** `test/db/clientes-da-agencia.spec.ts` (a dona, o membro e quem está fora; cada aviso pelo nível do gestor, do aprovador e do só leitura; a marca suspensa e a empresa inteira suspensa pela rotina da cobrança, com a função ligada e desligada), com as suítes da agência, do vínculo, do time e dos papéis, duas vezes, uma em UTC; o contrato da API sem quebra.
 
+**A W7, parte 2: a tela Clientes com o que pede atenção em cada empresa (02/11/2026; web; sem migration; a função `parceiros` segue desligada).**
+- **cada cartão** mostra o que pede atenção, com o tom, o ícone e a frase do P27: as aprovações esperando, a conta que perdeu o acesso ("reconecte em Contas conectadas"), a conta suspensa com o dono e desde quando, "Tudo em dia" e "Você não está no time desta empresa". Com a empresa inteira suspensa, "Abrir a empresa" some;
+- **o membro da agência** passa a ver Clientes (e a abrir nela): só as empresas em que está, com "Seu acesso" (o nível e o limite dele), sem pedir acesso, escolher quem entra nem deixar de cuidar, e com o vazio próprio ("Você ainda não está em nenhum cliente");
+- **testes:** no navegador (Chrome sem janela, com a API e o web locais), 19 execuções em 1440, 1024, 768 e 375 px, claro e escuro: os quatro cartões da dona com cada aviso, o membro com os clientes dele, o vazio do membro e a página inicial do membro em Clientes; e a suíte do web, com as frases de cada aviso.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

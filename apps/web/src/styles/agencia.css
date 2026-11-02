@@ -18,6 +18,15 @@
 .cliente-cab h3 { font-size: var(--text-md); overflow-wrap: anywhere; }
 .cliente-cab p { font-size: var(--text-xs); color: var(--text-muted); }
 .cliente-acesso { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+/* o que pede atenção em cada empresa (A7, W7, parte 2; D-A7-52) */
+.atencao-lista { display: grid; gap: var(--sp-2); }
+.atencao-lista li { display: flex; gap: var(--sp-2); align-items: flex-start; font-size: var(--text-sm); min-width: 0; }
+.atencao-lista li span { min-width: 0; overflow-wrap: anywhere; }
+.atencao-lista .ic { flex: none; margin-top: 2px; }
+.atencao-lista .tom-ok .ic { color: var(--success); }
+.atencao-lista .tom-atencao .ic { color: var(--warning); }
+.atencao-lista .tom-perigo .ic { color: var(--danger); }
+.atencao-lista .tom-info .ic { color: var(--link); }
 .cliente-time { font-size: var(--text-xs); color: var(--text-muted); overflow-wrap: anywhere; }
 .cliente-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: auto; padding-top: var(--sp-2); }
 .clientes-depois { margin-top: var(--sp-4); }
