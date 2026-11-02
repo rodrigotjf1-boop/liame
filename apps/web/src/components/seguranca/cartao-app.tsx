@@ -2,22 +2,26 @@
 
 import type { SecuritySummaryResponse } from '@liame/contracts';
 import { dataCompleta } from '@/lib/formato';
+import { APP_PARA_QUEM_TEM_CHAVE } from './chaves-textos';
 import { liberacao, type SituacaoApp } from './textos';
 
 // Cartão "App autenticador" nas quatro situações do protótipo aprovado: entrou com o app (troca na
-// hora), entrou com código de recuperação (pedido de 24 h), pedido feito (espera) e sem app.
+// hora), entrou com código de recuperação (pedido de 24 h), pedido feito (espera) e sem app. Sem o app e com
+// chave de acesso, o texto do P28 ("Só com chave, sem o app"; A7, W9, parte 9c1).
 
 type Props = {
   resumo: SecuritySummaryResponse;
   situacao: SituacaoApp;
   agora: Date;
   pedindo: boolean;
+  /** A pessoa tem chave de acesso: sem o app, ela entra com as chaves. */
+  temChave: boolean;
   aoTrocar: () => void;
   aoAtivar: () => void;
   aoPedirTroca: () => void;
 };
 
-export function CartaoApp({ resumo, situacao, agora, pedindo, aoTrocar, aoAtivar, aoPedirTroca }: Props) {
+export function CartaoApp({ resumo, situacao, agora, pedindo, temChave, aoTrocar, aoAtivar, aoPedirTroca }: Props) {
   const pedido = resumo.change_request ? liberacao(resumo.change_request.usable_after, agora) : null;
   return (
     <article className="card anima" style={{ ['--i' as string]: 1 }} aria-labelledby="t-app">
@@ -88,7 +92,9 @@ export function CartaoApp({ resumo, situacao, agora, pedindo, aoTrocar, aoAtivar
 
       {situacao === 'sem-app' && (
         <>
-          <p className="seg-txt">O seu nível não exige, mas o app protege a sua conta mesmo que a senha vaze. Leva um minuto.</p>
+          <p className="seg-txt">
+            {temChave ? APP_PARA_QUEM_TEM_CHAVE : 'O seu nível não exige, mas o app protege a sua conta mesmo que a senha vaze. Leva um minuto.'}
+          </p>
           <div className="seg-acoes">
             <button className="btn btn--primary" type="button" onClick={aoAtivar}>
               Ativar o app autenticador

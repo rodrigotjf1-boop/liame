@@ -12,16 +12,20 @@ import { quandoComHora } from '@/lib/formato';
 import { useSessao } from '@/lib/sessao';
 import { CartaoAgencia } from './cartao-agencia';
 import { CartaoApp } from './cartao-app';
+import { type CargaDasChaves, CartaoChaves } from './cartao-chaves';
+import { textoDosCodigos } from './chaves-textos';
 import { DialogoCodigos } from './dialogo-codigos';
 import { DialogoTrocarApp } from './dialogo-trocar-app';
+import { GavetaCriarChave } from './gaveta-criar-chave';
 import { ItemAparelho } from './item-aparelho';
 import { ondeDoEvento, situacaoDoApp, textoDoEvento } from './textos';
 
 // "Segurança da conta" (mockups/prototipo-seguranca.html): como a pessoa entra no Liame e onde a conta
-// dela está aberta. Vale para todas as empresas; tudo aqui é da própria pessoa (a API filtra pela RLS).
+// dela está aberta. Vale para todas as empresas; tudo aqui é da própria pessoa (a API filtra pela RLS). As chaves de
+// acesso no alto (A7, W9, parte 9c1; mockups/prototipo-chaves-de-acesso.html).
 
 type Carga<T> = { tipo: 'carregando' } | { tipo: 'ok'; dados: T } | { tipo: 'erro'; problema: Problema };
-type Dialogo = 'codigos' | 'trocar' | 'ativar' | null;
+type Dialogo = 'codigos' | 'trocar' | 'ativar' | 'criar-chave' | null;
 
 export function SegurancaTela() {
   const { me } = useSessao();
@@ -30,6 +34,7 @@ export function SegurancaTela() {
   const [resumo, setResumo] = useState<Carga<SecuritySummaryResponse>>({ tipo: 'carregando' });
   const [sessoes, setSessoes] = useState<Carga<SessionListResponse>>({ tipo: 'carregando' });
   const [eventos, setEventos] = useState<Carga<SecurityEventsResponse>>({ tipo: 'carregando' });
+  const [chaves, setChaves] = useState<CargaDasChaves>({ tipo: 'carregando' });
   const [dialogo, setDialogo] = useState<Dialogo>(null);
   const [pedindo, setPedindo] = useState(false);
   const [enviandoSenha, setEnviandoSenha] = useState(false);
@@ -48,15 +53,23 @@ export function SegurancaTela() {
     const r = await chamar(() => api.GET('/v1/me/security/events'));
     setEventos(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro', problema: r.problema });
   }, []);
+  const carregarChaves = useCallback(async () => {
+    const r = await chamar(() => api.GET('/v1/me/passkeys'));
+    setChaves(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro', problema: r.problema });
+  }, []);
 
   useEffect(() => {
     disparar(carregarResumo());
     disparar(carregarSessoes());
     disparar(carregarEventos());
-  }, [carregarResumo, carregarSessoes, carregarEventos]);
+    disparar(carregarChaves());
+  }, [carregarResumo, carregarSessoes, carregarEventos, carregarChaves]);
 
   const dados = resumo.tipo === 'ok' ? resumo.dados : null;
   const situacao = dados ? situacaoDoApp(dados) : null;
+  // O app de verdade (o resumo diz desde quando) e se há chave: os códigos e o app mudam de texto (D-A7-57).
+  const temApp = !!dados?.mfa_enabled_since;
+  const temChave = chaves.tipo === 'ok' && chaves.dados.items.length > 0;
 
   async function pedirTroca() {
     setPedindo(true);
@@ -115,6 +128,22 @@ export function SegurancaTela() {
         </div>
       )}
 
+      <CartaoChaves
+        chaves={chaves}
+        agora={agora}
+        criando={dialogo === 'criar-chave'}
+        aoCriar={() => setDialogo('criar-chave')}
+        aoRecarregar={() => disparar(carregarChaves())}
+        aoMudar={(novas, aviso, tirada) => {
+          setChaves({ tipo: 'ok', dados: novas });
+          avisar(aviso);
+          disparar(Promise.all([carregarResumo(), carregarEventos()]));
+          // A linha tirada sumiu: o foco vai para o título da tela.
+          if (tirada) titulo.current?.focus({ preventScroll: true });
+        }}
+        aoErro={(texto) => avisar(texto, { tipo: 'perigo' })}
+      />
+
       <div className="seg-grid">
         {resumo.tipo === 'carregando' && <CartaoCarregando id="t-app-c" titulo="App autenticador" />}
         {resumo.tipo === 'erro' && (
@@ -143,13 +172,14 @@ export function SegurancaTela() {
             situacao={situacao}
             agora={agora}
             pedindo={pedindo}
+            temChave={temChave}
             aoTrocar={() => setDialogo('trocar')}
             aoAtivar={() => setDialogo('ativar')}
             aoPedirTroca={() => disparar(pedirTroca())}
           />
         )}
 
-        {dados?.mfa_enabled_since && (
+        {dados && (temApp || temChave) && (
           <article className="card anima" style={{ ['--i' as string]: 2 }} aria-labelledby="t-cod">
             <div className="card-cab">
               <div>
@@ -160,10 +190,7 @@ export function SegurancaTela() {
             <p className="seg-num">
               <span className="mono">{dados.recovery_codes_left}</span> de 10 ainda {dados.recovery_codes_left === 1 ? 'vale' : 'valem'}
             </p>
-            <p className="seg-txt">
-              Usou vários ou acha que alguém viu? Gere códigos novos: os antigos deixam de valer na hora. Pedimos o código do app para
-              confirmar.
-            </p>
+            <p className="seg-txt">{textoDosCodigos(temApp)}</p>
             <div className="seg-acoes">
               <button className="btn" type="button" onClick={() => setDialogo('codigos')}>
                 Gerar códigos novos
@@ -269,8 +296,10 @@ export function SegurancaTela() {
                   const { texto, alerta } = textoDoEvento(e);
                   return (
                     <tr key={`${e.occurred_at}-${e.action}-${i}`}>
-                      <td className="mono">{quandoComHora(e.occurred_at, agora)}</td>
-                      <td>
+                      <td className="mono" data-rot="Quando">
+                        {quandoComHora(e.occurred_at, agora)}
+                      </td>
+                      <td data-rot="O que aconteceu">
                         {alerta ? (
                           <span className="st st--aguardando">
                             <span className="dot" aria-hidden="true" />
@@ -280,7 +309,7 @@ export function SegurancaTela() {
                           texto
                         )}
                       </td>
-                      <td>{ondeDoEvento(e)}</td>
+                      <td data-rot="Onde">{ondeDoEvento(e)}</td>
                     </tr>
                   );
                 })}
@@ -295,12 +324,27 @@ export function SegurancaTela() {
       {dialogo === 'codigos' && dados && (
         <DialogoCodigos
           restantes={dados.recovery_codes_left}
+          temApp={temApp}
+          temChave={temChave}
           reserva={titulo}
           aoGerar={() => {
             avisar('Códigos novos gerados. Os antigos deixaram de valer.');
-            disparar(Promise.all([carregarResumo(), carregarEventos()]));
+            // As chaves também: a que confirmou ganhou o último uso.
+            disparar(Promise.all([carregarResumo(), carregarEventos(), carregarChaves()]));
           }}
           aoFechar={() => setDialogo(null)}
+        />
+      )}
+      {dialogo === 'criar-chave' && (
+        <GavetaCriarChave
+          temApp={temApp}
+          temChave={temChave}
+          reserva={titulo}
+          aoCriar={() => disparar(Promise.all([carregarChaves(), carregarResumo(), carregarEventos()]))}
+          aoFechar={(aviso) => {
+            setDialogo(null);
+            if (aviso) avisar(aviso);
+          }}
         />
       )}
       {(dialogo === 'trocar' || dialogo === 'ativar') && (

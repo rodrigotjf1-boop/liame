@@ -140,6 +140,33 @@ describe.skipIf(!hasDb)('as chaves de acesso', () => {
     expect((await chamar('POST', '/v1/me/mfa/passkey-options', cookie)).body.code).toBe('ja-entrou');
   });
 
+  it('Segurança da conta (9c1): quem só tem chave não aparece com o app ativo; a atividade mostra criar, renomear, tirar e entrar com a chave, com o nome', async () => {
+    const s = await signupAndLogin(api, undefined, 'Empresa Atividade Chaves');
+    const primeira = aparelho(GOOGLE);
+    expect((await criar(s.cookie, primeira)).status).toBe(201);
+    // A primeira chave acende o segundo fator (e os 10 códigos), mas não é o app.
+    expect((await chamar('GET', '/v1/me/security', s.cookie)).body).toMatchObject({ mfa_enabled_since: null, recovery_codes_left: 10, session_mfa_method: 'chave' });
+
+    const segunda = aparelho(WINDOWS, false);
+    expect((await criar(s.cookie, segunda, await confirmarCom(s.cookie, primeira))).status).toBe(201);
+    const windows = (await listar(s.cookie)).items.find((k) => k.name === 'Windows Hello')!;
+    expect((await chamar('PATCH', `/v1/me/passkeys/${windows.id}`, s.cookie, { name: 'Notebook' })).status).toBe(200);
+    expect((await chamar('DELETE', `/v1/me/passkeys/${windows.id}`, s.cookie)).status).toBe(200);
+    const c = PasskeyCeremony.parse((await api.call('POST', '/v1/auth/passkey-options', { headers: { 'user-agent': CHROME_WINDOWS } })).body);
+    const entrou = await api.call('POST', '/v1/auth/passkey', { body: { challenge_id: c.challenge_id, response: primeira.assinar(c.options) }, headers: { 'user-agent': CHROME_WINDOWS } });
+    expect(entrou.status, JSON.stringify(entrou.body)).toBe(200);
+
+    const eventos = (await chamar('GET', '/v1/me/security/events', entrou.cookie!)).body.events as { action: string; detail: string | null; key_name: string | null }[];
+    expect(eventos.slice(0, 6).map((e) => [e.action, e.detail, e.key_name])).toEqual([
+      ['sessao.abrir', 'chave', 'Senhas do Google'],
+      ['segundo_fator.chave_tirar', null, 'Notebook'],
+      ['segundo_fator.chave_renomear', null, 'Notebook'],
+      ['segundo_fator.chave_criar', null, 'Windows Hello'],
+      ['segundo_fator.chave_criar', null, 'Senhas do Google'],
+      ['sessao.abrir', null, null],
+    ]);
+  });
+
   it('entrar sem senha com a chave (9b): a sessão nasce verificada; o desafio vale uma vez; a chave de outra pessoa, a que saiu e a pessoa desativada não entram', async () => {
     const s = await signupAndLogin(api, undefined, 'Empresa Entra Com Chave');
     const chave = aparelho(GOOGLE);

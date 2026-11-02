@@ -86,7 +86,21 @@ describe('atividade de segurança', () => {
     device: 'Chrome no Windows',
     ip: '177.52.18.x',
     detail: null,
+    key_name: null,
     ...extra,
+  });
+
+  it('as chaves de acesso na atividade (A7, W9, parte 9c1): criar, renomear, tirar e entrar com a chave, com o nome', () => {
+    const daChave = { key_name: 'Senhas do Google' };
+    expect(textoDoEvento(evento('segundo_fator.chave_criar', daChave)).texto).toBe('Criou uma chave de acesso (Senhas do Google)');
+    expect(textoDoEvento(evento('segundo_fator.chave_renomear', daChave)).texto).toBe('Renomeou uma chave de acesso (Senhas do Google)');
+    expect(textoDoEvento(evento('segundo_fator.chave_tirar', daChave)).texto).toBe('Tirou uma chave de acesso (Senhas do Google)');
+    expect(textoDoEvento(evento('sessao.abrir', { detail: 'chave', ...daChave }))).toEqual({ texto: 'Entrou com a chave de acesso (Senhas do Google)', alerta: false });
+    expect(textoDoEvento(evento('segundo_fator.verificar', { detail: 'chave', ...daChave })).texto).toBe('Entrou com a chave de acesso (Senhas do Google)');
+    expect(textoDoEvento(evento('sessao.falhar', { detail: 'chave' }))).toEqual({ texto: 'Chave de acesso recusada', alerta: true });
+    // Sem o nome (evento antigo ou sem chave), a frase fica sem os parênteses.
+    expect(textoDoEvento(evento('segundo_fator.chave_criar')).texto).toBe('Criou uma chave de acesso');
+    expect(textoDoEvento(evento('sessao.abrir')).texto).toBe('Entrou com a senha');
   });
 
   it('texto de cada ação e o que merece atenção', () => {

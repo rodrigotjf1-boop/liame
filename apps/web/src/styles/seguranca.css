@@ -23,6 +23,33 @@
 .seg-ok .ic { flex: none; margin-top: 2px; }
 .dialogo .check { align-items: flex-start; }
 .dialogo .check input { flex: none; margin-top: 2px; }
+.aviso-seg--ok { background: var(--success-soft); color: var(--text); }
+
+/* as chaves de acesso (A7, W9, parte 9c1; mockups/prototipo-chaves-de-acesso.html): o nome da peça em cada classe (V134) */
+.chave-acesso-card { margin-bottom: var(--sp-4); }
+.chave-acesso { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.chave-acesso:last-child { border-bottom: 0; }
+.chave-acesso .ap-ic, .chave-acesso-vazia .ap-ic { color: var(--ai); background: var(--ai-soft); }
+.chave-acesso-acoes { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.chave-acesso-renomear { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); min-width: 0; }
+.chave-acesso-renomear .input { width: min(100%, 260px); min-height: 32px; }
+.chave-acesso-renomear .campo-erro { flex-basis: 100%; }
+.chave-acesso-bloqueio { grid-column: 2; font-size: var(--text-sm); font-weight: 500; color: var(--warning); }
+.chave-acesso-vazia { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-3) var(--sp-4); align-items: start; }
+.chave-acesso-vazia .ap-ic { width: 52px; height: 52px; }
+.chave-acesso-vazia ul { display: grid; gap: 4px; margin: var(--sp-2) 0; padding: 0; list-style: none; font-size: var(--text-sm); color: var(--text-muted); }
+.chave-acesso-vazia li { display: flex; gap: var(--sp-2); }
+.chave-acesso-vazia li .ic { flex: none; margin-top: 3px; color: var(--success); }
+.chave-acesso-carregando { display: grid; gap: var(--sp-2); }
+/* "Confirmar com a chave": o texto quebra a linha no estreito (o botão padrão não quebra). */
+.chave-acesso-confirmar { max-width: 100%; white-space: normal; text-align: left; padding-block: var(--sp-2); }
+.chave-acesso-confirmar .ic { flex: none; }
+.chave-acesso-sem-suporte { margin-bottom: var(--sp-3); }
+.chave-acesso-passos { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--text-muted); }
+.chave-acesso-passos li { display: inline-flex; align-items: center; gap: 6px; }
+.chave-acesso-passos li[aria-current="step"] { color: var(--text); font-weight: 600; }
+.chave-acesso-passo-n { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--bg-subtle); font-family: var(--font-mono); font-size: 10px; }
+.chave-acesso-passos li[aria-current="step"] .chave-acesso-passo-n { background: var(--primary); color: var(--primary-fg); }
 
 @container pagina (max-width: 999px) {
   .seg-grid { grid-template-columns: minmax(0, 1fr); }
@@ -30,4 +57,12 @@
 @container pagina (max-width: 560px) {
   .aparelho { grid-template-columns: 44px minmax(0, 1fr); }
   .aparelho > .btn, .aparelho > .seg-acoes { grid-column: 2; justify-self: start; }
+  .chave-acesso-vazia { grid-template-columns: minmax(0, 1fr); }
+  /* A atividade vira cartões no estreito, sem rolagem para o lado (a regra do dono; o P28 marca `data-rot`). */
+  .tabela-atividade, .tabela-atividade tbody { display: block; }
+  .tabela-atividade thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tabela-atividade tr { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+  .tabela-atividade tbody tr:last-child { border-bottom: 0; }
+  .tabela-atividade tr > td, .tabela-atividade td:not(:first-child) { display: block; min-width: 0; padding: 0; border: 0; background: none; white-space: normal; }
+  .tabela-atividade td::before { content: attr(data-rot); display: block; font-family: var(--font-sans); font-size: var(--text-xs); color: var(--text-muted); }
 }

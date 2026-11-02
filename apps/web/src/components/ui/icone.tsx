@@ -10,6 +10,13 @@ const DESENHOS = {
     </>
   ),
   check: <path d="M20 6 9 17l-5-5" />,
+  // A chave de acesso (A7, W9; P28, o mesmo desenho do protótipo).
+  key: (
+    <>
+      <circle cx="7.5" cy="15.5" r="5.5" />
+      <path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" />
+    </>
+  ),
   'check-circle': (
     <>
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />

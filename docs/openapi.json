@@ -110669,6 +110669,12 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "key_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -110676,7 +110682,8 @@
                           "occurred_at",
                           "device",
                           "ip",
-                          "detail"
+                          "detail",
+                          "key_name"
                         ],
                         "additionalProperties": false
                       }
@@ -112791,16 +112798,7 @@
       "post": {
         "description": "O que o aparelho criou, com o desafio de `registration-options` (400 `desafio-vencido`; o aparelho que não confirma a pessoa, 400 `chave-recusada`). O nome vem do gerenciador e dá para trocar. O mesmo gerenciador não repete (409 `mesmo-gerenciador`). A primeira chave de quem não tem o app traz os 10 códigos de recuperação, mostrados uma vez. E-mail de aviso.",
         "operationId": "ChavesController_cadastrar",
-        "parameters": [
-          {
-            "name": "user-agent",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -113043,16 +113041,7 @@
       "post": {
         "description": "Antes, a pessoa confirma que é ela: o código do app (`code`) ou uma chave que já tem (`passkey`, com o desafio de `confirmation-options`); sem nenhum, 400 `confirme-que-e-voce`. Quem ainda não tem segundo fator cria a primeira sem confirmar. Até 10 chaves (409 `limite-de-chaves`). Devolve o desafio (5 minutos, uso único) e as opções para o navegador.",
         "operationId": "ChavesController_opcoesDeCadastro",
-        "parameters": [
-          {
-            "name": "user-agent",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
@@ -113947,16 +113936,7 @@
       "post": {
         "description": "O que o aparelho assinou, com o desafio de `passkey-options`. A sessão fica verificada, como com o código do app; o pedido de recuperação em andamento cai sozinho.",
         "operationId": "ChavesController_verificar",
-        "parameters": [
-          {
-            "name": "user-agent",
-            "required": true,
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "parameters": [],
         "requestBody": {
           "required": true,
           "content": {

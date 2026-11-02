@@ -53,14 +53,25 @@ export function detalheDoAparelho(s: SessionResponse, agora: Date): string {
 
 /** O que aconteceu, em palavras da pessoa; `alerta` marca o que merece atenção (senha errada). */
 export function textoDoEvento(e: SecurityEvent): { texto: string; alerta: boolean } {
+  // O nome da chave de acesso, quando o evento é dela (A7, W9, parte 9c1; D-A7-58).
+  const daChave = e.key_name ? ` (${e.key_name})` : '';
   switch (e.action) {
     case 'sessao.abrir':
+      if (e.detail === 'chave') return { texto: `Entrou com a chave de acesso${daChave}`, alerta: false };
       return { texto: 'Entrou com a senha', alerta: false };
     case 'sessao.falhar':
+      if (e.detail === 'chave') return { texto: 'Chave de acesso recusada', alerta: true };
       return { texto: 'Senha errada', alerta: true };
     case 'segundo_fator.verificar':
       if (e.detail === 'recuperacao') return { texto: 'Usou um código de recuperação', alerta: false };
+      if (e.detail === 'chave') return { texto: `Entrou com a chave de acesso${daChave}`, alerta: false };
       return { texto: 'Entrou com o app autenticador', alerta: false };
+    case 'segundo_fator.chave_criar':
+      return { texto: `Criou uma chave de acesso${daChave}`, alerta: false };
+    case 'segundo_fator.chave_renomear':
+      return { texto: `Renomeou uma chave de acesso${daChave}`, alerta: false };
+    case 'segundo_fator.chave_tirar':
+      return { texto: `Tirou uma chave de acesso${daChave}`, alerta: false };
     case 'segundo_fator.ativar':
       return { texto: 'Ativou o app autenticador', alerta: false };
     case 'segundo_fator.pedir_troca':

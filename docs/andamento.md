@@ -942,6 +942,37 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **o contrato:** o `code` deixou de ser obrigatório nas 13 rotas (sem quebra);
 - **testes:** `test/db/confirmar-com-chave.spec.ts` (aprovar um pedido com a chave, sem prova, o código sem o app, a origem errada, o desafio de uso único, gerar códigos novos, a chave de outra pessoa, e o código do app que segue valendo); a suíte da raiz inteira.
 
+**A W9, parte 9c1: as chaves de acesso em Segurança da conta (02/11/2026; sem migration; P28; D-A7-54 a D-A7-58).** A tela inteira do P28 para Segurança da conta:
+- **o cartão "Chaves de acesso", no alto:**
+  - quem ainda não tem chave lê o que ela faz;
+  - a lista mostra o nome, se sincroniza, quando foi criada e o último uso com o aparelho;
+  - renomear na própria linha;
+  - tirar com a confirmação na linha; a última sem o app diz por que não sai;
+- **a gaveta "Criar uma chave de acesso"**, em três passos:
+  - confirmar que é você (o código do app, ou "Confirmar com uma chave que você já tem");
+  - a janela do aparelho;
+  - o nome, que vem do gerenciador;
+  - fechar a janela do aparelho não cria nada; o aparelho que já tem a chave é avisado; a primeira chave sem o app mostra os 10 códigos antes do nome;
+- **os códigos de recuperação:** gerar com a chave (ela vem primeiro; o código do app fica ao lado); quem só tem chave vê os textos do P28 no app e nos códigos;
+- **a atividade de segurança:** "Criou", "Renomeou" e "Tirou uma chave de acesso", e "Entrou com a chave de acesso", com o nome; no estreito, a tabela vira cartões (sem rolagem para o lado);
+- **no servidor:**
+  - o "app ativo desde" lê o segredo vivo do app: a chave também acende `mfa_enabled_at` (ERR-197);
+  - a atividade traz `key_name` e as ações das chaves;
+  - as rotas das chaves deixaram de declarar o `user-agent` como parâmetro do contrato (ERR-198);
+- **diferenças do protótipo:**
+  - "Confirmar com uma chave que você já tem" é um botão secundário (no protótipo, com cara de link);
+  - o nome vai até 60 letras, como o servidor (no protótipo, 40);
+  - os 10 códigos da primeira chave sem o app aparecem no último passo da gaveta (o protótipo não tinha esse caso; D-A7-57);
+  - o aviso "Este navegador não aceita chave de acesso" e a gaveta de quem ainda não tem segundo fator, que começa no aparelho, são novos;
+- **testes:**
+  - `apps/web/test/chaves-de-acesso.spec.ts` (as frases do cartão e a tradução da janela do aparelho); `apps/web/test/seguranca.spec.ts` (a atividade com as chaves); `test/db/chaves-de-acesso.spec.ts` (o resumo sem o app e a atividade com o nome);
+  - o roteiro no navegador contra a API local, com o autenticador virtual do Chrome:
+    - as três telas em 4 larguras e 2 temas;
+    - a gaveta aberta em todas as larguras;
+    - criar, renomear, gerar códigos com a chave e tirar, de verdade;
+    - fechar a janela do aparelho;
+    - a conta só com chave (35 execuções verdes).
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
