@@ -1,8 +1,11 @@
 import {
+  AgencyClientsResponse,
   AgencyInvitationResponse,
   AgencyMemberResponse,
+  AgencyRequestResponse,
   AgencyTeamResponse,
   CreateAgencyInvitationRequest,
+  CreatePartnerRequestRequest,
   ProblemDetails,
   ResourceId,
   UpdateAgencyMemberRequest,
@@ -25,13 +28,71 @@ import { Auditar } from '../audit/auditar.js';
 import { Auth, Permissao } from '../auth/access.js';
 import type { AuthContext } from '../context/request-context.js';
 import { AgencyService } from './agencia.service.js';
+import { VinculoService } from './vinculo.service.js';
 
-// O time da agência ativa (A7, W6, parte 1; D-A7-51).
+// A agência ativa (A7, W6): o time (parte 1; D-A7-51) e os clientes, com o pedido de acesso (parte 2; D-A7-46 e D-A7-50).
 @ApiTags('agency')
 @ApiCookieAuth('liame_sessao')
 @Controller('agency')
 export class AgencyController {
-  constructor(private readonly agency: AgencyService) {}
+  constructor(
+    private readonly agency: AgencyService,
+    private readonly vinculos: VinculoService,
+  ) {}
+
+  @Get('clients')
+  @Permissao('agencia.clientes')
+  @ApiOperation({
+    summary: 'Clientes da agência',
+    description: 'As empresas que aceitaram o vínculo (vivo, vencido ou desfeito) e os pedidos da agência (esperando, recusados e vencidos).',
+  })
+  @ApiOkResponse({ standardSchema: AgencyClientsResponse })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  clients(@Auth() auth: AuthContext): Promise<AgencyClientsResponse> {
+    return this.vinculos.clientes(auth);
+  }
+
+  @Post('requests')
+  @Auditar('agencia.pedir_acesso', { recurso: 'partner_link' })
+  @Permissao('agencia.clientes')
+  @HttpCode(201)
+  @ApiOperation({
+    summary: 'Pedir acesso a um cliente',
+    description:
+      'O pedido vai para o e-mail do Dono da empresa e vale 7 dias. A resposta é a mesma exista ou não a conta do e-mail. Pedir de novo ao mesmo e-mail troca o pedido anterior; até 20 pedidos por dia.',
+  })
+  @ApiCreatedResponse({ standardSchema: AgencyRequestResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  request(@Auth() auth: AuthContext, @Body({ schema: CreatePartnerRequestRequest }) body: CreatePartnerRequestRequest): Promise<AgencyRequestResponse> {
+    return this.vinculos.pedir(auth, body);
+  }
+
+  @Delete('requests/:id')
+  @Auditar('agencia.cancelar_pedido', { recurso: 'partner_link' })
+  @Permissao('agencia.clientes')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Cancelar um pedido de acesso', description: 'O pedido em aberto deixa de valer na hora.' })
+  @ApiNoContentResponse({ description: 'Pedido cancelado' })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  async cancelRequest(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<void> {
+    await this.vinculos.cancelarPedido(auth, id);
+  }
+
+  @Delete('clients/:id')
+  @Auditar('agencia.deixar_cliente', { recurso: 'partner_link' })
+  @Permissao('agencia.clientes')
+  @HttpCode(204)
+  @ApiOperation({
+    summary: 'Deixar de cuidar de uma empresa',
+    description: 'Desfaz o vínculo pelo lado da agência, na hora e sem o código; o Dono da empresa é avisado por e-mail.',
+  })
+  @ApiNoContentResponse({ description: 'Vínculo desfeito' })
+  @ApiNotFoundResponse({ standardSchema: ProblemDetails })
+  async leave(@Auth() auth: AuthContext, @Param('id', { schema: ResourceId }) id: string): Promise<void> {
+    await this.vinculos.deixar(auth, id);
+  }
 
   @Get('team')
   @Permissao('agencia.ver')

@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest';
+import { conferirTermos, sobe } from '../src/agencia/vinculo.service.js';
+
+const REAL = 1_000_000;
+const termos = (t: Partial<Parameters<typeof sobe>[0]> = {}) => ({
+  maxRole: 'gestor' as const,
+  limite: 50 * REAL as number | null,
+  dupla: true,
+  fim: null as string | null,
+  ...t,
+});
+
+// As regras puras do vínculo de parceiro (A7, W6, parte 2; D-A7-47 e D-A7-49): o que conta como dar mais poder à agência
+// (pede o código do app) e a regra do limite, a mesma dos convites.
+describe('subir ou baixar o que a agência pode', () => {
+  it('o nível acima é subir; o abaixo é baixar', () => {
+    expect(sobe(termos(), termos({ maxRole: 'administrador' }))).toBe(true);
+    expect(sobe(termos(), termos({ maxRole: 'aprovador' }))).toBe(false);
+    expect(sobe(termos(), termos({ maxRole: 'somente_leitura', limite: null }))).toBe(false);
+    // Sair de "Somente leitura" para um nível que aprova é subir, mesmo com limite pequeno.
+    expect(sobe(termos({ maxRole: 'somente_leitura', limite: null }), termos({ maxRole: 'aprovador', limite: 1 }))).toBe(true);
+  });
+
+  it('o limite maior, ou sem limite, é subir; o menor é baixar', () => {
+    expect(sobe(termos(), termos({ limite: 60 * REAL }))).toBe(true);
+    expect(sobe(termos(), termos({ limite: null }))).toBe(true);
+    expect(sobe(termos(), termos({ limite: 40 * REAL }))).toBe(false);
+    expect(sobe(termos({ limite: null }), termos({ limite: 40 * REAL }))).toBe(false);
+    expect(sobe(termos({ limite: null }), termos({ limite: null }))).toBe(false);
+  });
+
+  it('tirar o "eu também aprovo" é subir; pôr de volta é baixar', () => {
+    expect(sobe(termos(), termos({ dupla: false }))).toBe(true);
+    expect(sobe(termos({ dupla: false }), termos({ dupla: true }))).toBe(false);
+  });
+
+  it('dar mais tempo (ou tirar a data de fim) é subir; pôr ou adiantar a data é baixar', () => {
+    const daqui30 = new Date(Date.now() + 30 * 86_400_000).toISOString();
+    const daqui60 = new Date(Date.now() + 60 * 86_400_000).toISOString();
+    expect(sobe(termos({ fim: daqui30 }), termos({ fim: daqui60 }))).toBe(true);
+    expect(sobe(termos({ fim: daqui30 }), termos({ fim: null }))).toBe(true);
+    expect(sobe(termos(), termos({ fim: daqui30 }))).toBe(false);
+    expect(sobe(termos({ fim: daqui60 }), termos({ fim: daqui30 }))).toBe(false);
+  });
+
+  it('nada muda: não sobe', () => {
+    expect(sobe(termos(), termos())).toBe(false);
+  });
+});
+
+describe('os termos do vínculo', () => {
+  it('o nível que aprova pede o limite informado (nulo é sem limite)', () => {
+    expect(() => conferirTermos({ maxRole: 'gestor', limite: undefined, dupla: true, fim: null })).toThrow();
+    expect(conferirTermos({ maxRole: 'gestor', limite: null, dupla: false, fim: null })).toEqual({ maxRole: 'gestor', limite: null, dupla: false, fim: null });
+  });
+
+  it('o nível que não aprova fica sem limite e com o "eu também aprovo"', () => {
+    expect(conferirTermos({ maxRole: 'somente_leitura', limite: 10 * REAL, dupla: false, fim: null })).toEqual({
+      maxRole: 'somente_leitura',
+      limite: null,
+      dupla: true,
+      fim: null,
+    });
+  });
+});

@@ -26,6 +26,18 @@ export {
   CreateAgencyRequest,
   UpdateAgencyMemberRequest,
 } from './agency.js';
+export {
+  AcceptPartnerRequest,
+  AgencyClientResponse,
+  AgencyClientsResponse,
+  AgencyRequestResponse,
+  CreatePartnerRequestRequest,
+  PartnerRequestResponse,
+  PartnerResponse,
+  PartnerRole,
+  PartnersResponse,
+  UpdatePartnerRequest,
+} from './partners.js';
 export { HealthResponse, ReadinessResponse } from './health.js';
 export { MfaVerifyRequest, RecoveryCodesResponse, TotpCodeRequest, TotpSetupResponse } from './mfa.js';
 export {

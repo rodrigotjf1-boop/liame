@@ -18,8 +18,8 @@ export type AgencyInvitableRole = z.infer<typeof AgencyInvitableRole>;
 /** Identificador na rota (`/v1/members/{id}`). */
 export const ResourceId = z.uuid({ error: 'Identificador inválido' });
 
-const Micros = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
-const FutureDate = z.iso.datetime({ offset: true }).refine((v) => Date.parse(v) > Date.now(), { error: 'Use uma data no futuro' });
+export const Micros = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
+export const FutureDate = z.iso.datetime({ offset: true }).refine((v) => Date.parse(v) > Date.now(), { error: 'Use uma data no futuro' });
 
 export const MemberResponse = z.strictObject({
   id: z.uuid(),
