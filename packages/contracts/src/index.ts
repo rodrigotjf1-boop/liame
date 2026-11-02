@@ -195,6 +195,8 @@ export {
   OrderOriginResponse,
   PlatformReport,
   PlatformResult,
+  PostResult,
+  PostTotals,
   SourceFreshness,
 } from './results.js';
 export {

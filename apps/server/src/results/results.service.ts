@@ -1,4 +1,14 @@
-import type { CampaignResult, ClosedLoopQuery, ClosedLoopResponse, DailyResultsResponse, OrderOriginQuery, OrderOriginResponse, PlatformReport, SourceFreshness } from '@liame/contracts';
+import type {
+  CampaignResult,
+  ClosedLoopQuery,
+  ClosedLoopResponse,
+  DailyResultsResponse,
+  OrderOriginQuery,
+  OrderOriginResponse,
+  PlatformReport,
+  PostResult,
+  SourceFreshness,
+} from '@liame/contracts';
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { MODELO_PADRAO } from '../attribution/motor.js';
@@ -6,6 +16,7 @@ import { currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { frescor } from '../media/frescor.js';
 import { PEDIDO_USOU_O_CUPOM_DA_MENSAGEM } from '../mensageria/cupom-no-pedido.js';
+import { postDoPedido } from './post-do-pedido.js';
 import { montarSerie, periodoAntes } from './serie-diaria.js';
 
 // Resultados do ciclo fechado (A2.5, F8; ADR-020, D-A2.5-6 a 8). Tudo na transação da requisição, sob
@@ -143,6 +154,8 @@ export class ResultsService {
       counted: boolean | null;
       reason: string | null;
       da_mensagem: boolean;
+      do_post: boolean;
+      post_id: string | null;
       n: string;
       receita: string;
       receita_bruta: string;
@@ -152,9 +165,10 @@ export class ResultsService {
     }>(sql`
       with pedidos as (
         select o.id, o.status, o.channel_group, o.revenue_micros, o.revenue_micros - o.refunded_micros as liquido,
-               (m.id is not null) as da_mensagem
+               (m.id is not null) as da_mensagem, (lp.link_code is not null) as do_post, lp.post_id
           from liame.order_fact o
           left join liame.message_request m on ${PEDIDO_USOU_O_CUPOM_DA_MENSAGEM}
+          ${postDoPedido(sql`o`, modelo.resposta.window_days)}
          where o.brand_id = ${q.brand_id} ${q.unit_id ? sql`and o.unit_id = ${q.unit_id}` : sql``}
            and o.status <> 'removido'
            and coalesce(o.billed_at, o.confirmed_at) >= (${q.from}::date - 1)::timestamp at time zone ${fuso}
@@ -174,11 +188,11 @@ export class ResultsService {
           left join liame.attribution_result r on r.order_id = p.id and r.model_id = ${modelo.id}
           left join custos c on c.order_id = p.id
       )
-      select status, channel_group, a_status, provider, campaign_id, counted, reason, da_mensagem, count(*)::text as n,
+      select status, channel_group, a_status, provider, campaign_id, counted, reason, da_mensagem, do_post, post_id, count(*)::text as n,
              sum(liquido)::text as receita, sum(revenue_micros)::text as receita_bruta, sum(margem)::text as margem,
              coalesce(sum(liquido) filter (where margem is not null), 0)::text as receita_com_margem,
              count(*) filter (where margem is not null)::text as pedidos_com_margem
-        from base group by 1, 2, 3, 4, 5, 6, 7, 8`);
+        from base group by 1, 2, 3, 4, 5, 6, 7, 8, 9, 10`);
 
     let pedidosConfirmados = 0;
     let receitaConfirmada = 0n;
@@ -189,6 +203,10 @@ export class ResultsService {
     // Os pedidos com o cupom de uma mensagem de WhatsApp (protótipo P15, parte C). Com prova de anúncio, o pedido
     // fica com o anúncio (decisão do dono em 10/10/2026) e só é contado em `comAnuncio`; sem, a origem é a mensagem.
     const mensagens = { orders: 0, revenue: 0n, canalProprio: 0, comAnuncio: 0 };
+    // Os pedidos pelo link de um post (protótipo P32, D-A6-49): sem prova de anúncio, a origem é o post e eles saem de
+    // "sem origem"; com prova, ficam com o anúncio (D-A6-48) e só são contados em `comAnuncio`.
+    const posts = { orders: 0, revenue: 0n, comAnuncio: 0 };
+    const porPost = new Map<string, { orders: number; revenue: bigint }>();
     const confirmadoPorCampanha = new Map<string, Confirmado>();
     const confirmadoPorProvider = new Map<string, Confirmado>();
     const soPlataforma = new Map<string, number>();
@@ -214,6 +232,7 @@ export class ResultsService {
       if (l.counted) {
         somar(confirmado, l);
         if (l.da_mensagem) mensagens.comAnuncio += Number(l.n);
+        if (l.do_post) posts.comAnuncio += Number(l.n);
         if (l.provider) {
           const p = confirmadoPorProvider.get(l.provider) ?? zeroConfirmado();
           somar(p, l);
@@ -235,12 +254,24 @@ export class ResultsService {
         // Do cardápio ou do WhatsApp, pelo cupom de uma mensagem: a origem é conhecida, e ele não conta como "sem
         // origem" (esse número mede link mal marcado). O de canal sem clique, acima, segue no canal dele.
         mensagens.canalProprio += Number(l.n);
+      } else if (l.reason === 'link_do_post') {
+        // Pelo link de um post, sem prova de anúncio: a origem é o post, e ele não conta como "sem origem" (D-A6-49).
+        posts.orders += Number(l.n);
+        posts.revenue += BigInt(l.receita);
+        if (l.post_id) {
+          const p = porPost.get(l.post_id) ?? { orders: 0, revenue: 0n };
+          p.orders += Number(l.n);
+          p.revenue += BigInt(l.receita);
+          porPost.set(l.post_id, p);
+        }
       } else {
         semOrigem.orders += Number(l.n);
         semOrigem.revenue += BigInt(l.receita);
       }
     }
     const comMensagens = mensagens.orders + mensagens.comAnuncio > 0 || (await this.haCupomDeMensagem(q, fuso));
+    const dosPosts = await this.postsDoPeriodo(q, fuso, porPost);
+    const comPosts = posts.orders + posts.comAnuncio > 0 || dosPosts.publicados > 0;
 
     // 3. Campanhas: nome e situação das que gastaram ou venderam no período.
     const idsCampanhas = [...new Set([...porCampanha.keys(), ...confirmadoPorCampanha.keys()])];
@@ -286,6 +317,17 @@ export class ResultsService {
         cancelled: { orders: cancelados.orders, revenue_micros: cancelados.revenue.toString() },
         ...(comMensagens
           ? { messages: { orders: mensagens.orders, revenue_micros: mensagens.revenue.toString(), own_channel_orders: mensagens.canalProprio, with_ad_orders: mensagens.comAnuncio } }
+          : {}),
+        ...(comPosts
+          ? {
+              posts: {
+                orders: posts.orders,
+                revenue_micros: posts.revenue.toString(),
+                with_ad_orders: posts.comAnuncio,
+                published_posts: dosPosts.publicados,
+                posts: dosPosts.itens,
+              },
+            }
           : {}),
       },
       platforms: provedores.map((p) => ({
@@ -379,11 +421,19 @@ export class ResultsService {
       mensagem_nome: string | null;
       mensagem_cupom: string | null;
       mensagem_enviada_em: Date | string | null;
+      post_id: string | null;
+      post_kind: string | null;
+      post_canal: string | null;
+      post_publicado_em: Date | string | null;
+      post_link: string | null;
+      post_toque_em: Date | string | null;
     }>(sql`
       with pedidos as (
-        select o.*, m.name as mensagem_nome, m.coupon_code as mensagem_cupom, m.coupon_created_at as mensagem_enviada_em
+        select o.*, m.name as mensagem_nome, m.coupon_code as mensagem_cupom, m.coupon_created_at as mensagem_enviada_em,
+               lp.post_id as lp_post_id, lp.link_code as lp_link, lp.canal as lp_canal, lp.toque_em as lp_toque_em
           from liame.order_fact o
           left join liame.message_request m on ${PEDIDO_USOU_O_CUPOM_DA_MENSAGEM}
+          ${postDoPedido(sql`o`, modelo.resposta.window_days)}
          where o.brand_id = ${q.brand_id} ${q.unit_id ? sql`and o.unit_id = ${q.unit_id}` : sql``}
            and o.status <> 'removido'
            and coalesce(o.billed_at, o.confirmed_at) >= (${q.from}::date - 1)::timestamp at time zone ${fuso}
@@ -396,11 +446,15 @@ export class ResultsService {
                 from liame.order_item_fact i where i.order_id = p.id and i.removed_at is null) as margem,
              r.status as a_status, r.evidence, r.confidence, r.provider, r.campaign_id, c.name as campaign_name,
              r.ad_id, a.name as ad_name, r.touch_at, r.window_days, r.counted, r.reason,
-             p.mensagem_nome, p.mensagem_cupom, p.mensagem_enviada_em
+             p.mensagem_nome, p.mensagem_cupom, p.mensagem_enviada_em,
+             sp.id as post_id, sp.kind as post_kind, p.lp_canal as post_canal, spc.published_at as post_publicado_em,
+             p.lp_link as post_link, p.lp_toque_em as post_toque_em
         from pedidos p
         left join liame.attribution_result r on r.order_id = p.id and r.model_id = ${modelo.id}
         left join liame.campaign c on c.id = r.campaign_id
         left join liame.ad a on a.id = r.ad_id
+        left join liame.social_post sp on sp.id = p.lp_post_id
+        left join liame.social_post_channel spc on spc.post_id = sp.id and spc.channel = p.lp_canal
        where true ${q.campaign_id ? sql`and r.campaign_id = ${q.campaign_id}` : sql``}
              ${q.status ? sql`and coalesce(r.status, 'sem_origem') = ${q.status}` : sql``}
        order by p.confirmed_at desc, p.id
@@ -435,6 +489,18 @@ export class ResultsService {
             l.mensagem_nome && l.mensagem_cupom && l.mensagem_enviada_em
               ? { name: l.mensagem_nome, coupon_code: l.mensagem_cupom, sent_at: new Date(l.mensagem_enviada_em).toISOString() }
               : null,
+          // O post cujo link o pedido usou, dentro da janela (P32); o post apagado não aparece.
+          post:
+            l.post_id && l.post_kind && l.post_canal && l.post_link && l.post_toque_em
+              ? {
+                  id: l.post_id,
+                  kind: l.post_kind,
+                  channel: l.post_canal,
+                  published_at: l.post_publicado_em ? new Date(l.post_publicado_em).toISOString() : null,
+                  link_code: l.post_link,
+                  touch_at: new Date(l.post_toque_em).toISOString(),
+                }
+              : null,
         };
       }),
     };
@@ -465,6 +531,44 @@ export class ResultsService {
            ${q.unit_id ? sql`and exists (select 1 from liame.connected_account ca where ca.id = m.coupon_account_id and ca.unit_id = ${q.unit_id})` : sql``}
       ) as ha`);
     return r.rows[0]?.ha === true;
+  }
+
+  /**
+   * Os posts com o link (protótipo P32): quantos saíram no período (a rede do link publicada, no dia do fuso da loja) e,
+   * dos que trouxeram pedido (`porPost`), o tipo, a rede e quando saíram, os de mais pedidos primeiro. Duas consultas de
+   * conjunto; com a loja no filtro, só os links que levam ao cardápio dela.
+   */
+  private async postsDoPeriodo(
+    q: { brand_id: string; unit_id?: string; from: string; to: string },
+    fuso: string,
+    porPost: Map<string, { orders: number; revenue: bigint }>,
+  ): Promise<{ publicados: number; itens: PostResult[] }> {
+    const tx = currentTx();
+    const publicados = await tx.execute<{ n: number }>(sql`
+      select count(distinct sp.id)::int as n
+        from liame.social_post sp
+        join liame.tracking_link tl on tl.post_id = sp.id and tl.kind = 'post'
+        join liame.social_post_channel c on c.post_id = sp.id and c.channel = tl.provider and c.status = 'publicado'
+       where sp.brand_id = ${q.brand_id} ${q.unit_id ? sql`and tl.unit_id = ${q.unit_id}` : sql``}
+         and (coalesce(c.published_at, sp.publish_at) at time zone ${fuso})::date between ${q.from}::date and ${q.to}::date`);
+    const ids = [...porPost.keys()];
+    const dados = ids.length
+      ? (
+          await tx.execute<{ id: string; kind: string; canal: string; quando: Date | string }>(sql`
+            select sp.id, sp.kind, tl.provider as canal, coalesce(c.published_at, sp.publish_at) as quando
+              from liame.social_post sp
+              join liame.tracking_link tl on tl.post_id = sp.id and tl.kind = 'post'
+              left join liame.social_post_channel c on c.post_id = sp.id and c.channel = tl.provider
+             where sp.id in ${ids}`)
+        ).rows
+      : [];
+    const itens = dados
+      .map((d): PostResult => {
+        const p = porPost.get(d.id)!;
+        return { post_id: d.id, kind: d.kind, channel: d.canal, published_at: new Date(d.quando).toISOString(), orders: p.orders, revenue_micros: p.revenue.toString() };
+      })
+      .sort((a, b) => b.orders - a.orders || Number(BigInt(b.revenue_micros) - BigInt(a.revenue_micros)) || a.published_at.localeCompare(b.published_at));
+    return { publicados: publicados.rows[0]?.n ?? 0, itens };
   }
 
   /** Marca da empresa, loja (se veio), fuso que corta o dia e o modelo de atribuição em uso. */
