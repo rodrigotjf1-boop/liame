@@ -9,8 +9,10 @@ import {
   permissaoNoDebug,
   permissoesConcedidas,
   permissoesDoDebug,
+  procuraDosCanaisGuardada,
   situacaoDoConteiner,
 } from '../src/connectors/meta/publicacao.js';
+import { procuraDosCanais, sobreOCanal } from '../src/connections/connections.service.js';
 
 // A6 · Z5, sem rede e sem banco: as regras da publicação na Meta que o teste da D-A6-10 (`scripts/teste-foto-meta.ts`)
 // usa e que o post de verdade vai usar (`base-conhecimento.md` §2.2, reconferida em 21/10/2026).
@@ -155,5 +157,29 @@ describe('a publicação na Meta: as regras puras (A6 · Z5)', () => {
     expect(erroDaMeta({})).toBe('a Meta respondeu sem dizer o erro');
     expect(erroDaMeta(null)).toBe('a Meta respondeu sem dizer o erro');
     expect(erroDaMeta({ error: { message: 'x'.repeat(900) } })).toHaveLength(500);
+  });
+
+  it('a procura da Página e do Instagram, como ficou anotada, chega à tela só quando confere (P19, parte B)', () => {
+    const em = '2026-11-01T23:50:00.000Z';
+    expect(procuraDosCanaisGuardada({ meta_canais: { resultado: 'ok', em, paginas: 2, instagrams: 1 } })).toEqual({ resultado: 'ok', em, paginas: 2, instagrams: 1 });
+    expect(procuraDosCanais({ meta_canais: { resultado: 'limite', em, paginas: 0, instagrams: 0 } })).toEqual({ result: 'limite', searched_at: em, pages: 0, instagrams: 0 });
+    // A contagem fora do formato conta zero; o resultado ou a data fora do formato, nada (o Liame não procurou).
+    expect(procuraDosCanaisGuardada({ meta_canais: { resultado: 'ok', em, paginas: -1, instagrams: 1.5 } })).toEqual({ resultado: 'ok', em, paginas: 0, instagrams: 0 });
+    expect(procuraDosCanaisGuardada({ meta_canais: { resultado: 'talvez', em, paginas: 1, instagrams: 1 } })).toBeNull();
+    expect(procuraDosCanaisGuardada({ meta_canais: { resultado: 'ok', em: 'ontem', paginas: 1, instagrams: 1 } })).toBeNull();
+    expect(procuraDosCanaisGuardada({ google_business: { resultado: 'ok', em, lojas: 1 } })).toBeNull();
+    expect(procuraDosCanaisGuardada(null)).toBeNull();
+    expect(procuraDosCanais(undefined)).toBeNull();
+  });
+
+  it('o que a tela diz da Página e do Instagram: a Página com o Instagram dela, o Instagram com a Página (P19, parte B)', () => {
+    const nomes = new Map([['17841400000000001', '@casabrasa']]);
+    expect(sobreOCanal('facebook_page', { instagramId: '17841400000000001', pagina: null }, nomes)).toEqual({ has_instagram: true, instagram_name: '@casabrasa' });
+    // A Página tem Instagram, mas o Liame não o conhece (a autorização não tem a permissão dele): tem, sem o nome.
+    expect(sobreOCanal('facebook_page', { instagramId: '17841400000000099', pagina: null }, nomes)).toEqual({ has_instagram: true, instagram_name: null });
+    expect(sobreOCanal('facebook_page', { instagramId: null, pagina: null }, nomes)).toEqual({ has_instagram: false, instagram_name: null });
+    expect(sobreOCanal('instagram', { instagramId: null, pagina: 'Casa Brasa' }, nomes)).toEqual({ page_name: 'Casa Brasa' });
+    expect(sobreOCanal('instagram', { instagramId: null, pagina: null }, nomes)).toEqual({ page_name: null });
+    expect(sobreOCanal('meta_ads', { instagramId: '17841400000000001', pagina: 'Casa Brasa' }, nomes)).toEqual({});
   });
 });

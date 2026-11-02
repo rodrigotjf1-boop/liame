@@ -1,4 +1,5 @@
 import type {
+  ChannelSearch,
   ConnectedAccountResponse,
   ConnectionListResponse,
   ConnectionResponse,
@@ -28,6 +29,7 @@ import { clienteDoDmsId, comTokenDoDmsId, recursoDoRegemcast } from '../connecto
 import type { ClienteDmsId } from '../connectors/dms/integracao-dms.js';
 import { enderecosDasPlataformas } from '../connectors/enderecos.js';
 import { FLAG_PERFIL_GOOGLE, PROVEDOR_PERFIL_GOOGLE, procuraGuardada } from '../connectors/google-business/perfil-google.js';
+import { FLAG_DOS_POSTS, PROVEDOR_INSTAGRAM, PROVEDOR_PAGINA, procuraDosCanaisGuardada } from '../connectors/meta/publicacao.js';
 import { FLAG_SEARCH_CONSOLE, PROVEDOR_SEARCH_CONSOLE, procuraDosSitesGuardada } from '../connectors/search-console/search-console.js';
 import {
   comAcessoDaLoja,
@@ -158,6 +160,9 @@ type LinhaConta = {
   unit_id: string | null;
   unit_name?: string | null;
   escopos?: string[] | null;
+  /** Só a lista e o detalhe leem: o Instagram da Página e a Página do Instagram, como a procura guardou (P19, parte B). */
+  instagram_id?: string | null;
+  pagina?: string | null;
   connected_at: Date | string;
   disconnected_at: Date | string | null;
 };
@@ -181,6 +186,34 @@ export function procuraDoPerfil(notas: unknown): ProfileSearch | null {
 export function procuraDosSites(notas: unknown): SiteSearch | null {
   const p = procuraDosSitesGuardada(notas);
   return p ? { result: p.resultado, searched_at: iso(p.em), sites: p.sites } : null;
+}
+
+/** A última procura da Página e do Instagram, como a tela lê (A6, P19 parte B); nulo = o Liame não procurou. */
+export function procuraDosCanais(notas: unknown): ChannelSearch | null {
+  const p = procuraDosCanaisGuardada(notas);
+  return p ? { result: p.resultado, searched_at: iso(p.em), pages: p.paginas, instagrams: p.instagrams } : null;
+}
+
+/** Texto que a procura guardou (o id do Instagram da Página, o nome da Página do Instagram); nulo sem ele. */
+function textoGuardado(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v.trim() : null;
+}
+
+/**
+ * O que a tela diz da Página e do Instagram (P19, parte B): a Página, se tem Instagram profissional e qual; o Instagram,
+ * de qual Página ele é. `nomes`: o nome de cada Instagram que o Liame conhece (pelas contas descobertas e pelas ligadas),
+ * pelo id. As outras plataformas não ganham nada.
+ */
+export function sobreOCanal(
+  provider: string,
+  guardado: { instagramId: string | null; pagina: string | null },
+  nomes: ReadonlyMap<string, string>,
+): Pick<DiscoveredAccount, 'has_instagram' | 'instagram_name' | 'page_name'> {
+  if (provider === PROVEDOR_PAGINA) {
+    return { has_instagram: guardado.instagramId !== null, instagram_name: guardado.instagramId ? (nomes.get(guardado.instagramId) ?? null) : null };
+  }
+  if (provider === PROVEDOR_INSTAGRAM) return { page_name: guardado.pagina };
+  return {};
 }
 
 /** O acesso da conta do Google ao site do Search Console (guardado pela procura em `provider_attributes.permissao`); nulo sem ele. */
@@ -299,13 +332,16 @@ export class ConnectionsService {
 
     // Meta: a empresa com a escrita ligada (a mesma flag que o Action Service confere) autoriza pela configuração que
     // também pede para gerenciar anúncios; as outras seguem na de leitura. Quem já estava conectado só passa a
-    // escrever depois de conectar de novo: a autorização nova assume as contas (`ligarContas`).
+    // escrever depois de conectar de novo: a autorização nova assume as contas (`ligarContas`). A empresa com os posts
+    // ligados também vai pela de escrita: é ela que pede as permissões de publicar (D-A6-17; P19, parte B, escolha b;
+    // D-A6-63). Mudar campanha continua só com a `meta_write`, que o Action Service confere a cada pedido.
     const metaDaDistribuicao = provedor === 'meta' ? this.config.oauth.meta! : null;
+    const ctxDaMarca = this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id });
     const meta = metaDaDistribuicao
       ? configuracaoDaMeta(
           metaDaDistribuicao,
           metaDaDistribuicao.writeConfigId !== null &&
-            (await this.flags.isEnabled('meta_write', this.flags.context({ tenantId, userId: auth.userId, brandId: body.brand_id }))),
+            ((await this.flags.isEnabled('meta_write', ctxDaMarca)) || (await this.flags.isEnabled(FLAG_DOS_POSTS, ctxDaMarca))),
         )
       : null;
     // Google: a empresa com as conversões ligadas (a mesma flag que a rotina de envio confere) autoriza também a
@@ -571,7 +607,19 @@ export class ConnectionsService {
       search_console: await this.flags.isEnabled(FLAG_SEARCH_CONSOLE, ctx),
       // A mesma conferência do começo da conexão do Regem (a configuração e a flag `regem_por_clique`).
       regem_by_click: await this.regemPorClique(auth, brandId ?? null),
+      // A mesma conferência do começo da conexão da Meta (a configuração que pede publicar e a flag `social_write`).
+      posts: await this.postsComPublicar(auth, brandId ?? null),
     };
+  }
+
+  /**
+   * Os posts ligados para a empresa (ou a marca) E a configuração do login da Meta que pede as permissões de publicar (a
+   * de escrita, que a distribuição configurou com elas em 28/10/2026): só então a autorização nova da Meta pede publicar
+   * na Página e no Instagram (D-A6-17; P19, parte B, escolha b). É o que o diálogo de conectar diz.
+   */
+  private async postsComPublicar(auth: AuthContext, brandId: string | null): Promise<boolean> {
+    if (!this.config.oauth.meta?.writeConfigId) return false;
+    return this.flags.isEnabled(FLAG_DOS_POSTS, this.flags.context({ tenantId: auth.tenantId, userId: auth.userId, brandId }));
   }
 
   /**
@@ -602,11 +650,17 @@ export class ConnectionsService {
     if (!linhas.length) return [];
     const contas = await currentTx().execute<LinhaConta>(sql`
       select a.id, a.brand_id, a.connection_id, a.provider, a.external_id, a.name, a.currency, a.timezone, a.status, a.status_reason, a.unit_id,
-             ${lojaEEscopos(sql`a`)}, a.connected_at, a.disconnected_at
+             ${lojaEEscopos(sql`a`)}, a.provider_attributes ->> 'instagram_id' as instagram_id, a.provider_attributes ->> 'pagina' as pagina,
+             a.connected_at, a.disconnected_at
         from liame.connected_account a
        where a.connection_id in ${linhas.map((l) => l.id)} or a.disconnected_at is null
        order by a.connected_at`);
     const ligadas = new Set(contas.rows.filter((c) => !c.disconnected_at).map((c) => `${c.provider}:${c.external_id}`));
+    // O nome de cada Instagram que o Liame conhece, pelo id: a Página diz qual é o dela (P19, parte B). A conta ligada
+    // vale mais que a descoberta (é a que a pessoa vê na lista).
+    const nomesDoInstagram = new Map<string, string>();
+    for (const l of linhas) for (const d of l.discovered ?? []) if (d.provider === PROVEDOR_INSTAGRAM) nomesDoInstagram.set(d.external_id, d.name);
+    for (const c of contas.rows) if (c.provider === PROVEDOR_INSTAGRAM && !c.disconnected_at) nomesDoInstagram.set(c.external_id, c.name);
     return linhas.map((l) => ({
       id: l.id,
       brand_id: l.brand_id,
@@ -632,10 +686,18 @@ export class ConnectionsService {
           via: typeof d.provider_attributes?.via === 'string' ? d.provider_attributes.via : null,
           ...(d.provider === PROVEDOR_PERFIL_GOOGLE ? { site: siteDaLoja(d.provider_attributes) } : {}),
           ...(d.provider === PROVEDOR_SEARCH_CONSOLE ? { site_access: acessoAoSite(d.provider_attributes) } : {}),
+          ...sobreOCanal(
+            d.provider,
+            { instagramId: textoGuardado(d.provider_attributes?.instagram_id), pagina: textoGuardado(d.provider_attributes?.pagina) },
+            nomesDoInstagram,
+          ),
         }),
       ),
-      accounts: contas.rows.filter((c) => c.connection_id === l.id).map(conta),
+      accounts: contas.rows
+        .filter((c) => c.connection_id === l.id)
+        .map((c) => ({ ...conta(c), ...sobreOCanal(c.provider, { instagramId: textoGuardado(c.instagram_id), pagina: textoGuardado(c.pagina) }, nomesDoInstagram) })),
       ...(l.provider === 'google' ? { profile_search: procuraDoPerfil(l.discovery_notes), site_search: procuraDosSites(l.discovery_notes) } : {}),
+      ...(l.provider === 'meta' ? { channel_search: procuraDosCanais(l.discovery_notes) } : {}),
     }));
   }
 

@@ -91,6 +91,22 @@ export const DiscoveredAccount = z.strictObject({
    * aqui. Opcional: a resposta de antes de 20/10/2026 não traz.
    */
   site_access: Slug.nullable().optional(),
+  /**
+   * Só na Página do Facebook (`facebook_page`): se ela tem um Instagram profissional ligado na Meta. Opcional: a resposta
+   * de antes de 01/11/2026 não traz.
+   */
+  has_instagram: z.boolean().optional(),
+  /**
+   * Só na Página do Facebook (`facebook_page`): o Instagram dela pelo usuário com a arroba, quando o Liame o conhece (esta
+   * ou outra autorização o alcança, ou ele já está ligado); nulo quando não conhece ou ela não tem. Opcional: a resposta
+   * de antes de 01/11/2026 não traz.
+   */
+  instagram_name: z.string().nullable().optional(),
+  /**
+   * Só no Instagram (`instagram`): o nome da Página a que ele está ligado na Meta (é por ela que a autorização o alcança);
+   * nulo quando não veio. Opcional: a resposta de antes de 01/11/2026 não traz.
+   */
+  page_name: z.string().nullable().optional(),
 });
 export type DiscoveredAccount = z.infer<typeof DiscoveredAccount>;
 
@@ -118,6 +134,19 @@ export const SiteSearch = z.strictObject({
 });
 export type SiteSearch = z.infer<typeof SiteSearch>;
 
+/**
+ * A última procura da Página do Facebook e do Instagram numa autorização da Meta (A6, Z5a; P19, parte B), nas mesmas
+ * palavras da procura das lojas: `ok` (com quantas Páginas e quantos Instagram, que podem ser zero), `limite`,
+ * `sem_permissao` ou `falhou`. A procura que não deu certo não se repete sozinha: a tela oferece procurar de novo.
+ */
+export const ChannelSearch = z.strictObject({
+  result: Slug,
+  searched_at: z.string(),
+  pages: z.int().min(0),
+  instagrams: z.int().min(0),
+});
+export type ChannelSearch = z.infer<typeof ChannelSearch>;
+
 export const ConnectedAccountResponse = z.strictObject({
   id: z.uuid(),
   brand_id: z.uuid(),
@@ -138,6 +167,12 @@ export const ConnectedAccountResponse = z.strictObject({
   scopes: z.array(z.string()),
   connected_at: z.string(),
   disconnected_at: z.string().nullable(),
+  /** Só na Página do Facebook: se ela tem um Instagram profissional ligado na Meta (como na conta descoberta). Opcional. */
+  has_instagram: z.boolean().optional(),
+  /** Só na Página do Facebook: o Instagram dela, com a arroba, quando o Liame o conhece (como na conta descoberta). Opcional. */
+  instagram_name: z.string().nullable().optional(),
+  /** Só no Instagram: o nome da Página a que ele está ligado na Meta (como na conta descoberta). Opcional. */
+  page_name: z.string().nullable().optional(),
 });
 export type ConnectedAccountResponse = z.infer<typeof ConnectedAccountResponse>;
 
@@ -187,6 +222,12 @@ export const ConnectionResponse = z.strictObject({
    * Opcional: a resposta de antes de 20/10/2026 não traz.
    */
   site_search: SiteSearch.nullable().optional(),
+  /**
+   * Só nas autorizações da Meta: como terminou a última procura da Página e do Instagram. Nulo = o Liame não procurou (a
+   * função dos posts desligada para a empresa, ou a permissão de publicar não veio nesta autorização). Opcional: a
+   * resposta de antes de 01/11/2026 não traz.
+   */
+  channel_search: ChannelSearch.nullable().optional(),
 });
 export type ConnectionResponse = z.infer<typeof ConnectionResponse>;
 
@@ -227,6 +268,13 @@ export const ConnectionListResponse = z.strictObject({
    * (`regem_por_clique`) que o começo da conexão confere. Opcional: a resposta de antes de 21/10/2026 não traz.
    */
   regem_by_click: z.boolean().optional(),
+  /**
+   * Os posts estão ligados para a empresa (ou para a marca do filtro; a flag `social_write`) e a distribuição tem a
+   * configuração do login da Meta que pede as permissões de publicar: a autorização nova da Meta pede também publicar na
+   * Página e no Instagram, e o Liame os procura (A6, Z5a; P19, parte B). A mesma conferência do começo da conexão e da
+   * procura. Opcional: a resposta de antes de 01/11/2026 não traz.
+   */
+  posts: z.boolean().optional(),
 });
 export type ConnectionListResponse = z.infer<typeof ConnectionListResponse>;
 

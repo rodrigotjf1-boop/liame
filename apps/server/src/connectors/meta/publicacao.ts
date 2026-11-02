@@ -85,6 +85,23 @@ export const NOTA_DOS_CANAIS = 'meta_canais';
  */
 export type ProcuraDosCanais = { resultado: 'ok' | 'limite' | 'sem_permissao' | 'falhou'; em: string; paginas: number; instagrams: number };
 
+const RESULTADOS_DOS_CANAIS: readonly string[] = ['ok', 'limite', 'sem_permissao', 'falhou'];
+const contagem = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : 0);
+
+/**
+ * A procura da Página e do Instagram como ficou anotada na conexão (`discovery_notes`, chave `meta_canais`), para a tela
+ * de Contas (P19, parte B). Anotação ausente ou fora do formato: nulo (o Liame não procurou). Contagem fora do formato
+ * conta zero, como nas lojas do Perfil e nos sites.
+ */
+export function procuraDosCanaisGuardada(notas: unknown): ProcuraDosCanais | null {
+  const n = notas && typeof notas === 'object' ? (notas as Record<string, unknown>)[NOTA_DOS_CANAIS] : null;
+  if (!n || typeof n !== 'object') return null;
+  const { resultado, em, paginas, instagrams } = n as Record<string, unknown>;
+  if (typeof resultado !== 'string' || !RESULTADOS_DOS_CANAIS.includes(resultado)) return null;
+  if (typeof em !== 'string' || Number.isNaN(new Date(em).getTime())) return null;
+  return { resultado: resultado as ProcuraDosCanais['resultado'], em, paginas: contagem(paginas), instagrams: contagem(instagrams) };
+}
+
 /** A permissão de publicar na Página do Facebook (a foto pelo `POST /{page-id}/photos`; base §2.2, 21/10/2026). */
 export const PERMISSAO_DE_PUBLICAR_NA_PAGINA = 'pages_manage_posts';
 /** A permissão de publicar no Instagram (o contêiner e o `media_publish`; base §2.2, 21/10/2026). */
