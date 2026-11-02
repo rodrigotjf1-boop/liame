@@ -195,7 +195,22 @@ export class VinculoService {
        where l.partner_org_id = ${agencyId} and l.status in ('pedido', 'recusado')
        order by l.created_at desc
        limit 500`);
-    return { clients: clientes.rows.map(toClienteDaAgencia), requests: pedidos.rows.map(toPedidoDaAgencia) };
+    // Quem do time está em cada empresa: uma consulta para todas (o vínculo vivo de cada pessoa).
+    const ids = clientes.rows.filter((c) => c.status === 'ativo').map((c) => c.id);
+    const times = ids.length
+      ? await tx.execute<{ partner_link_id: string; user_id: string; name: string; role_key: PartnerRole }>(sql`
+          select m.partner_link_id, m.user_id, u.name, m.role_key
+            from liame.membership m join liame.app_user u on u.id = m.user_id
+           where m.partner_link_id in (${sql.join(ids.map((x) => sql`${x}::uuid`), sql`, `)}) and m.revoked_at is null
+             and (m.expires_at is null or m.expires_at > now())
+           order by u.name`)
+      : { rows: [] };
+    const porVinculo = new Map<string, Array<{ user_id: string; name: string; role: PartnerRole }>>();
+    for (const t of times.rows) porVinculo.set(t.partner_link_id, [...(porVinculo.get(t.partner_link_id) ?? []), { user_id: t.user_id, name: t.name, role: t.role_key }]);
+    return {
+      clients: clientes.rows.map((c) => ({ ...toClienteDaAgencia(c), team: porVinculo.get(c.id) ?? [] })),
+      requests: pedidos.rows.map(toPedidoDaAgencia),
+    };
   }
 
   /** A agência deixa de cuidar de uma empresa (D-A7-50): corta na hora, sem o código, e avisa o Dono. */

@@ -69,7 +69,7 @@ export function MenuLateral({ id, aoFechar, modos, inerte = false }: { id: strin
     return (
       <div className="nav-grupo" key={grupo.id}>
         <p className="nav-grupo-rot rotulo-marca" id={`g-${grupo.id}`}>
-          {grupo.rotulo}
+          {grupo.id === 'parceiro' && empresa?.kind === 'agencia' ? empresa.name : grupo.rotulo}
         </p>
         <ul className="nav-lista" aria-labelledby={`g-${grupo.id}`}>
           {itens.map((item, posicao) => {

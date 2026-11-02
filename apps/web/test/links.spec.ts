@@ -265,7 +265,7 @@ describe('menu: "Links e cupons" em "Mais ferramentas"', () => {
     expect(operacao).toMatchObject({ rotulo: 'Operação', ferramenta: true });
     expect(operacao.itens).toEqual([{ href: '/links', rotulo: 'Links e cupons', icone: 'link', permissao: 'vendas.ver' }]);
     expect(itensVisiveis(operacao, (p) => p !== 'vendas.ver')).toEqual([]);
-    expect(NAVEGACAO.map((g) => g.id)).toEqual(['agencia', 'operacao', 'conta']);
+    expect(NAVEGACAO.map((g) => g.id)).toEqual(['agencia', 'parceiro', 'operacao', 'conta']);
   });
 
   it('título, "Mais ferramentas" aberto na própria tela e sem seletor Lite/Pro (a tela tem uma visão só)', () => {

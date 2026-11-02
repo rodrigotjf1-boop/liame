@@ -75,6 +75,13 @@ const DESENHOS = {
       <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
     </>
   ),
+  // Os clientes da agência (P27).
+  briefcase: (
+    <>
+      <rect width="20" height="14" x="2" y="7" rx="2" />
+      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+    </>
+  ),
   mail: (
     <>
       <rect x="2" y="4" width="20" height="16" rx="2" />

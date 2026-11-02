@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Icone } from '@/components/ui/icone';
 import { useAvisar } from '@/components/ui/avisos';
@@ -14,6 +15,7 @@ import { disparar } from '@/lib/disparar';
 
 export function SeletorEmpresa() {
   const { me, empresa, trocarEmpresa } = useSessao();
+  const router = useRouter();
   const avisar = useAvisar();
   const [aberto, setAberto] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
@@ -43,9 +45,15 @@ export function SeletorEmpresa() {
   async function escolher(id: string, nome: string) {
     setAberto(false);
     if (id === empresa?.id) return;
+    const tipoAntes = empresa?.kind;
+    const tipoDepois = me.organizations.find((o) => o.id === id)?.kind;
     const problema = await trocarEmpresa(id);
     if (problema) avisar(mensagemDe(problema), { tipo: 'perigo' });
-    else avisar(`Agora você está em ${nome}.`);
+    else {
+      avisar(`Agora você está em ${nome}.`);
+      // Da empresa para a agência (ou ao contrário), a tela aberta não existe do outro lado: vai para a página inicial.
+      if (tipoAntes !== tipoDepois) router.push('/');
+    }
   }
 
   const nome = empresa?.name ?? 'Sem empresa';
@@ -57,7 +65,7 @@ export function SeletorEmpresa() {
         disabled={!varias}
         onClick={() => setAberto((a) => !a)}
         aria-expanded={varias ? aberto : undefined}
-        aria-controls={varias ? menuId : undefined}
+        aria-controls={varias && aberto ? menuId : undefined}
         title={varias ? `${nome} · trocar de empresa` : nome}
       >
         <span className="ctx-av" aria-hidden="true">
@@ -85,7 +93,10 @@ export function SeletorEmpresa() {
               </span>
               <span className="ctx-op-txt">
                 <b>{o.name}</b>
-                <span>{NIVEIS[o.role].nome}</span>
+                <span>
+                  {NIVEIS[o.role].nome}
+                  {o.via_agency ? ` · ${o.via_agency.name}` : ''}
+                </span>
               </span>
               {o.id === empresa?.id && <Icone nome="check" pequeno />}
             </button>
