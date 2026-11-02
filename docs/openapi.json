@@ -2512,12 +2512,31 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
                   "to_user_id",
-                  "old_owner_stays",
-                  "code"
+                  "old_owner_stays"
                 ],
                 "additionalProperties": false
               }
@@ -3017,6 +3036,26 @@
                     "type": "string",
                     "pattern": "^\\d{6}$"
                   },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
+                  },
                   "terms_version": {
                     "type": "string",
                     "minLength": 1,
@@ -3024,7 +3063,6 @@
                   }
                 },
                 "required": [
-                  "code",
                   "terms_version"
                 ],
                 "additionalProperties": false
@@ -12838,11 +12876,30 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
-                  "max_role",
-                  "code"
+                  "max_role"
                 ],
                 "additionalProperties": false
               }
@@ -13548,6 +13605,26 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": false
@@ -27972,11 +28049,30 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
-                  "plan_hash",
-                  "code"
+                  "plan_hash"
                 ],
                 "additionalProperties": false
               }
@@ -38583,11 +38679,30 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
-                  "confirm_name",
-                  "code"
+                  "confirm_name"
                 ],
                 "additionalProperties": false
               }
@@ -67760,11 +67875,30 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
-                  "plan_hash",
-                  "code"
+                  "plan_hash"
                 ],
                 "additionalProperties": false
               }
@@ -99793,11 +99927,30 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
-                  "publish_at",
-                  "code"
+                  "publish_at"
                 ],
                 "additionalProperties": false
               }
@@ -100565,11 +100718,28 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
-                "required": [
-                  "code"
-                ],
                 "additionalProperties": false
               }
             }
@@ -103434,12 +103604,31 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
                   "brand_id",
-                  "plan",
-                  "code"
+                  "plan"
                 ],
                 "additionalProperties": false
               }
@@ -104224,11 +104413,30 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
-                  "brand_id",
-                  "code"
+                  "brand_id"
                 ],
                 "additionalProperties": false
               }
@@ -105669,11 +105877,30 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
-                  "brand_id",
-                  "code"
+                  "brand_id"
                 ],
                 "additionalProperties": false
               }
@@ -109019,7 +109246,7 @@
     },
     "/v1/me/mfa/recovery-codes": {
       "post": {
-        "description": "Confirma com o código do app (nunca com código de recuperação); os códigos que ainda valiam deixam de valer. Os novos aparecem uma vez só.",
+        "description": "Confirma com a chave de acesso (`passkey`) ou com o código do app (`code`), nunca com código de recuperação; sem nenhum dos dois, 400 `confirme-que-e-voce`. Os códigos que ainda valiam deixam de valer. Os novos aparecem uma vez só.",
         "operationId": "MfaController_regenerate",
         "parameters": [],
         "requestBody": {
@@ -109032,11 +109259,28 @@
                   "code": {
                     "type": "string",
                     "pattern": "^\\d{6}$"
+                  },
+                  "passkey": {
+                    "description": "A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.",
+                    "type": "object",
+                    "properties": {
+                      "challenge_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "response": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "challenge_id",
+                      "response"
+                    ],
+                    "additionalProperties": false
                   }
                 },
-                "required": [
-                  "code"
-                ],
                 "additionalProperties": false
               }
             }
@@ -109061,6 +109305,70 @@
                   },
                   "required": [
                     "recovery_codes"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer",
+                      "minimum": 400,
+                      "maximum": 599
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "instance": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "trace_id": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "description": "Campos inválidos, quando o erro é de validação",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "message"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code",
+                    "trace_id"
                   ],
                   "additionalProperties": false
                 }

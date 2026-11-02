@@ -8,6 +8,8 @@ import { EscritaRegemcast } from '../actions/escrita-regemcast.provider.js';
 import { EscritaMeta } from '../actions/escrita-meta.provider.js';
 import { EscritaRegem } from '../actions/escrita-regem.provider.js';
 import { FerramentasDeLeitura } from '../ai/registro/leituras.js';
+import { ChavesService } from '../auth/chaves/chaves.service.js';
+import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { MfaService } from '../auth/mfa.service.js';
 import { RateLimitService } from '../auth/rate-limit.service.js';
 import { CouponsService } from '../coupons/coupons.service.js';
@@ -177,10 +179,13 @@ import { WebhookDeliverer } from './webhook-deliverer.js';
     // A propriedade pedida à DMS quando o Dono não está mais (A7, W8, parte 6a): os avisos, o expurgo e os rascunhos esquecidos.
     PropriedadePelaDmsRotina,
     // Estrategista (A3, I11): as leituras da IA pelos mesmos serviços das rotas (os cupons pedem o Action Service, que
-    // pede a política e o segundo fator; nada disso escreve aqui) e a fila das demandas e das novas análises.
+    // pede a política e o segundo fator; nada disso escreve aqui) e a fila das demandas e das novas análises. O segundo
+    // fator ao aprovar é o código do app ou a chave de acesso (A7, W9, parte 9b2): os dois serviços entram pela injeção.
     PolicyService,
     RateLimitService,
     MfaService,
+    ChavesService,
+    ConfirmacaoService,
     ActionService,
     CouponsService,
     // A conferência dos pedidos que esperam (A5, Y5): o pedido de mensagem com impedimento é lido de novo de tempos em

@@ -14,6 +14,7 @@ import { AuthController, MeController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { ChavesController } from './chaves/chaves.controller.js';
 import { ChavesService } from './chaves/chaves.service.js';
+import { ConfirmacaoService } from './confirmacao.service.js';
 import { InvitationAcceptService } from './invitation-accept.service.js';
 import { InvitationController } from './invitation.controller.js';
 import { LegalController } from './legal.controller.js';
@@ -57,12 +58,14 @@ import { SessionService } from './session.service.js';
     SecurityService,
     RecuperacaoDaContaService,
     ChavesService,
+    ConfirmacaoService,
     { provide: APP_GUARD, useClass: AccessGuard },
     { provide: APP_INTERCEPTOR, useClass: UnitOfWorkInterceptor },
     // Depois da unidade de trabalho: a política é avaliada dentro da transação da requisição.
     PolicyService,
     { provide: APP_INTERCEPTOR, useClass: PolicyInterceptor },
   ],
-  exports: [APP_CONFIG, Mailer, SessionService, RateLimitService, PolicyService, MfaService],
+  // A confirmação na hora (o código do app ou a chave de acesso; D-A7-56) para quem aprova ou muda algo de risco.
+  exports: [APP_CONFIG, Mailer, SessionService, RateLimitService, PolicyService, MfaService, ConfirmacaoService],
 })
 export class AuthModule {}

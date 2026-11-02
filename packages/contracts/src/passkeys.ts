@@ -42,6 +42,16 @@ export const PasskeyAssertion = z.strictObject({ challenge_id: z.uuid(), respons
 export type PasskeyAssertion = z.infer<typeof PasskeyAssertion>;
 
 /**
+ * A chave de acesso no lugar do código do app onde ele é pedido (aprovar, mudar o contrato, gerar códigos novos; A7, W9,
+ * parte 9b2; D-A7-56): o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o
+ * `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.
+ */
+export const ChaveNoLugarDoCodigo = PasskeyAssertion.optional().meta({
+  description:
+    'A chave de acesso no lugar do código do app: o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`. Com ela, o `code` não precisa vir; sem nenhum dos dois, 400 `confirme-que-e-voce`.',
+});
+
+/**
  * Antes de cadastrar, a pessoa confirma que é ela (D-A7-54): com o código do app, ou com uma chave que já tem. Quem ainda
  * não tem segundo fator cadastra a primeira chave sem confirmar (como quem ativa o app).
  */

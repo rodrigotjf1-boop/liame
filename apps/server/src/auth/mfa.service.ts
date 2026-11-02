@@ -125,12 +125,12 @@ export class MfaService {
   }
 
   /**
-   * Códigos de recuperação novos (tela "Segurança da conta"): confirma com o código do app na hora
-   * (nunca com código de recuperação), invalida os que ainda valiam e avisa por e-mail.
+   * Códigos de recuperação novos (tela "Segurança da conta"): invalida os que ainda valiam e avisa por e-mail. Quem chama
+   * confirma antes, na mesma transação, com a chave de acesso ou o código do app (`ConfirmacaoService`; nunca com código
+   * de recuperação; D-A7-56): a rota `POST /v1/me/mfa/recovery-codes`.
    */
-  async regenerateRecoveryCodes(auth: AuthContext, code: string): Promise<RecoveryCodesResponse> {
+  async regenerateRecoveryCodes(auth: AuthContext): Promise<RecoveryCodesResponse> {
     const tx = currentTx();
-    await this.verifyStepUp(tx, auth.userId, code);
     const codes = newRecoveryCodes();
     await tx.execute(sql`delete from liame.recovery_code where user_id = ${auth.userId} and used_at is null`);
     for (const c of codes) {

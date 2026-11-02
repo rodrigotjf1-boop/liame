@@ -67,7 +67,8 @@ export class UnitOfWorkInterceptor implements NestInterceptor {
     const effects: Array<() => Promise<void>> = [];
     let replayed = false;
     const result = await withContext(database.db, ids, (tx) => {
-      const store: Parameters<typeof requestStore.run>[0] = { tx, afterCommit: effects };
+      const ua = req.headers['user-agent'];
+      const store: Parameters<typeof requestStore.run>[0] = { tx, afterCommit: effects, userAgent: typeof ua === 'string' ? ua : null };
       return requestStore.run(store, async () => {
         if (idem) {
           const claim = await claimIdempotencyKey(tx, ids, idem);

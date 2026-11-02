@@ -2,7 +2,7 @@ import type { AcceptOwnershipTransferRequest, CreateOwnershipTransferRequest, Ow
 import { type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { MfaService } from '../auth/mfa.service.js';
+import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { afterCommit, auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
@@ -39,7 +39,7 @@ const soODono = () => new AppProblem(403, 'so-o-dono', 'Só o dono', 'Só o dono
 @Injectable()
 export class PropriedadeService {
   constructor(
-    private readonly mfa: MfaService,
+    private readonly confirmacao: ConfirmacaoService,
     private readonly mailer: Mailer,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
@@ -68,7 +68,7 @@ export class PropriedadeService {
     if (!quem) {
       throw new AppProblem(422, 'nao-pode-receber', 'Essa pessoa não pode receber', 'A propriedade só vai para um Administrador da empresa que já entra com o app autenticador e não vem de uma agência.');
     }
-    await this.mfa.verifyStepUp(tx, auth.userId, body.code);
+    await this.confirmacao.confirmar(tx, auth.userId, body);
     const id = uuidv7();
     await tx.execute(sql`
       insert into liame.ownership_transfer (id, tenant_id, from_user_id, to_user_id, old_owner_stays, expires_at)
@@ -167,7 +167,7 @@ export class PropriedadeService {
     if (!(await candidatos(tx, tenantId)).some((c) => c.user_id === auth.userId)) {
       throw new AppProblem(409, 'nao-pode-receber', 'Você não pode receber agora', 'A propriedade só vai para um Administrador da empresa que entra com o app autenticador.');
     }
-    await this.mfa.verifyStepUp(tx, auth.userId, body.code);
+    await this.confirmacao.confirmar(tx, auth.userId, body);
     // Primeiro o Dono antigo deixa de ser dono (um Dono por empresa), depois quem recebeu passa a ser.
     // Quem sai deixa de ser dono também na linha que fica guardada: nada que procure o Dono o acha ali.
     const antigo = await tx.execute<{ user_id: string }>(sql`

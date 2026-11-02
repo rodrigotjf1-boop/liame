@@ -40,6 +40,8 @@ interface RequestStore {
   afterCommit: Array<() => Promise<void>>;
   /** Detalhes que o serviço acrescenta ao evento de auditoria automático da rota. */
   audit?: AuditDetail;
+  /** O navegador de quem pede (o `User-Agent`): o "onde" do último uso de uma chave de acesso (A7, W9, parte 9b2). */
+  userAgent?: string | null;
 }
 
 export interface AuditDetail {
@@ -67,6 +69,11 @@ export function afterCommit(effect: () => Promise<void>): void {
   const store = requestStore.getStore();
   if (!store) throw new Error('sem transação da requisição: afterCommit só vale dentro de uma rota autenticada');
   store.afterCommit.push(effect);
+}
+
+/** O navegador da requisição atual (`User-Agent`), quando a rota o tem; fora de uma rota, nulo. */
+export function aparelhoDaRequisicao(): string | null {
+  return requestStore.getStore()?.userAgent ?? null;
 }
 
 /** Acrescenta detalhes (recurso, antes, depois, motivo) ao evento de auditoria da rota atual. */

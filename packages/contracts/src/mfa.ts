@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChaveNoLugarDoCodigo } from './passkeys.js';
 
 // Segundo fator por app autenticador (ADR-013).
 
@@ -14,6 +15,13 @@ export const TotpCodeRequest = z.strictObject({
   code: z.string().trim().regex(/^\d{6}$/, { error: 'O código tem 6 dígitos' }),
 });
 export type TotpCodeRequest = z.infer<typeof TotpCodeRequest>;
+
+/** Gerar códigos de recuperação novos: confirmar com a chave de acesso ou com o código do app (D-A7-56). */
+export const RegenerateRecoveryCodesRequest = z.strictObject({
+  code: z.string().trim().regex(/^\d{6}$/, { error: 'O código tem 6 dígitos' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
+});
+export type RegenerateRecoveryCodesRequest = z.infer<typeof RegenerateRecoveryCodesRequest>;
 
 export const RecoveryCodesResponse = z.strictObject({
   /** Mostrados uma única vez. Cada um vale uma vez. */

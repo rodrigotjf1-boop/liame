@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChaveNoLugarDoCodigo } from './passkeys.js';
 
 // Empresa (tenant) e marcas.
 
@@ -32,10 +33,11 @@ export type CreateBrandRequest = z.infer<typeof CreateBrandRequest>;
 export const BrandListQuery = z.strictObject({ include_archived: z.enum(['true', 'false']).default('false') });
 export type BrandListQuery = z.infer<typeof BrandListQuery>;
 
-/** Encerrar a conta: só o dono, com o código do app e o nome da empresa digitado (ADR-014, ADR-017). */
+/** Encerrar a conta: só o dono, com a chave de acesso ou o código do app e o nome da empresa digitado (ADR-014, ADR-017). */
 export const CloseOrganizationRequest = z.strictObject({
   confirm_name: z.string().trim().min(1).max(200),
-  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }),
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type CloseOrganizationRequest = z.infer<typeof CloseOrganizationRequest>;
 

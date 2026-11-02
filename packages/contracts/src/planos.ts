@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChaveNoLugarDoCodigo } from './passkeys.js';
 import { ExplanationNumber, ExplanationSegment } from './ai.js';
 
 // Planos do Estrategista (A3, I11; protótipo P8, aguardando aprovação): o plano de 90 dias (objetivos, mês a mês,
@@ -162,10 +163,11 @@ export const EditPlanRequest = z.strictObject({
 });
 export type EditPlanRequest = z.infer<typeof EditPlanRequest>;
 
-/** Aprovar exige o código do app agora e o hash do plano visto (como as ações, ADR-007). */
+/** Aprovar exige a chave de acesso ou o código do app agora e o hash do plano visto (como as ações, ADR-007). */
 export const ApprovePlanRequest = z.strictObject({
   plan_hash: PlanHash,
-  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }),
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type ApprovePlanRequest = z.infer<typeof ApprovePlanRequest>;
 

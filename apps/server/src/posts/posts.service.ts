@@ -502,7 +502,7 @@ export class PostsService {
       resource_id: recursoDoPost(id),
       params: {},
     });
-    const aprovado = await this.actions.approve(auth, novo.id, { plan_hash: novo.plan_hash, code: body.code });
+    const aprovado = await this.actions.approve(auth, novo.id, { plan_hash: novo.plan_hash, code: body.code, passkey: body.passkey });
     await tx.execute(sql`update liame.social_post set action_id = ${novo.id}, updated_at = now() where id = ${id} and tenant_id = ${quem.tenantId}`);
     auditDetail({
       resourceId: id,
@@ -575,7 +575,7 @@ export class PostsService {
       },
       { de: p.action_id, versaoDepois: p.version },
     );
-    const aprovado = await this.actions.approve(auth, pedido.id, { plan_hash: pedido.plan_hash, code: body.code });
+    const aprovado = await this.actions.approve(auth, pedido.id, { plan_hash: pedido.plan_hash, code: body.code, passkey: body.passkey });
     auditDetail({
       resourceId: id,
       before: { canais_no_ar: noAr.map((c) => c.channel) },

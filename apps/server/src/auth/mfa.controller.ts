@@ -1,4 +1,4 @@
-import { MfaVerifyRequest, ProblemDetails, RecoveryCodesResponse, TotpCodeRequest, TotpSetupResponse } from '@liame/contracts';
+import { MfaVerifyRequest, ProblemDetails, RecoveryCodesResponse, RegenerateRecoveryCodesRequest, TotpCodeRequest, TotpSetupResponse } from '@liame/contracts';
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import {
   ApiAcceptedResponse,
@@ -10,8 +10,9 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import type { AuthContext } from '../context/request-context.js';
+import { type AuthContext, currentTx } from '../context/request-context.js';
 import { Auth, Autenticado } from './access.js';
+import { ConfirmacaoService } from './confirmacao.service.js';
 import { MfaService } from './mfa.service.js';
 import { Auditar } from '../audit/auditar.js';
 
@@ -19,7 +20,10 @@ import { Auditar } from '../audit/auditar.js';
 @ApiCookieAuth('liame_sessao')
 @Controller('me/mfa')
 export class MfaController {
-  constructor(private readonly mfa: MfaService) {}
+  constructor(
+    private readonly mfa: MfaService,
+    private readonly confirmacao: ConfirmacaoService,
+  ) {}
 
   @Post('totp/setup')
   @Auditar('segundo_fator.iniciar', { escopo: 'pessoa' })
@@ -70,12 +74,16 @@ export class MfaController {
   @HttpCode(200)
   @ApiOperation({
     summary: 'Gerar códigos de recuperação novos',
-    description: 'Confirma com o código do app (nunca com código de recuperação); os códigos que ainda valiam deixam de valer. Os novos aparecem uma vez só.',
+    description:
+      'Confirma com a chave de acesso (`passkey`) ou com o código do app (`code`), nunca com código de recuperação; sem nenhum dos dois, 400 `confirme-que-e-voce`. Os códigos que ainda valiam deixam de valer. Os novos aparecem uma vez só.',
   })
   @ApiOkResponse({ standardSchema: RecoveryCodesResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
   @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
-  regenerate(@Auth() auth: AuthContext, @Body({ schema: TotpCodeRequest }) body: TotpCodeRequest): Promise<RecoveryCodesResponse> {
-    return this.mfa.regenerateRecoveryCodes(auth, body.code);
+  async regenerate(@Auth() auth: AuthContext, @Body({ schema: RegenerateRecoveryCodesRequest }) body: RegenerateRecoveryCodesRequest): Promise<RecoveryCodesResponse> {
+    // Confirma antes, na transação da requisição (a chave ou o código do app; D-A7-56), e só então gera.
+    await this.confirmacao.confirmar(currentTx(), auth.userId, body);
+    return this.mfa.regenerateRecoveryCodes(auth);
   }
 
   @Post('change-request')

@@ -19,7 +19,7 @@ import { indiceDasOrigens } from '../ai/conversa/fontes.js';
 import { dinheiroDoPlano, hashDoConteudo, marcarPlano } from '../ai/estrategista/plano.js';
 import { conferirEdicao } from '../ai/estrategista/resposta.js';
 import { limparJson, limparTexto } from '../ai/sanitizar.js';
-import { MfaService } from '../auth/mfa.service.js';
+import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
 import { AppProblem } from '../errors/problems.js';
 import { proibidasDaMarca } from '../marca/marca.service.js';
@@ -97,7 +97,7 @@ function resumoDaLinha(l: LinhaResumo): PlanSummary {
 @Injectable()
 export class PlanosService {
   constructor(
-    private readonly mfa: MfaService,
+    private readonly confirmacao: ConfirmacaoService,
     private readonly resultados: ResultsService,
   ) {}
 
@@ -207,7 +207,7 @@ export class PlanosService {
     const tenantId = this.empresa(auth);
     const tx = currentTx();
     const p = await this.paraDecidir(id, body.plan_hash, 'aprovar');
-    await this.mfa.verifyStepUp(tx, auth.userId, body.code);
+    await this.confirmacao.confirmar(tx, auth.userId, body);
     await this.decidir(tenantId, id, p, auth.userId, { decision: 'aprovado', reasons: [], comment: null });
     await tx.execute(sql`update liame.plan set status = 'aprovado', updated_at = now() where id = ${id}`);
     auditDetail({ resourceId: id, after: { version: p.version, content_hash: p.content_hash, status: 'aprovado' } });
