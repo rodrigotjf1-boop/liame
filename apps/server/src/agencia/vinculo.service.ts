@@ -227,8 +227,10 @@ export class VinculoService {
     for (let i = 0; i < vivos.length; i += CLIENTES_POR_VEZ) {
       await Promise.all(
         vivos.slice(i, i + CLIENTES_POR_VEZ).map(async (c) => {
-          if (!meu.has(c.id)) return void atencao.set(c.id, [{ kind: 'fora_do_time', count: null, since: null, owner_name: null }]);
-          atencao.set(c.id, await atencaoDoCliente(this.db, this.flags, { tenantId: c.client_id, userId: auth.userId }));
+          const itens = meu.has(c.id)
+            ? await atencaoDoCliente(this.db, this.flags, { tenantId: c.client_id, userId: auth.userId })
+            : [{ kind: 'fora_do_time', count: null, since: null, owner_name: null }];
+          atencao.set(c.id, itens);
         }),
       );
     }
