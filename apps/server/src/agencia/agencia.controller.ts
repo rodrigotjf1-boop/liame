@@ -43,10 +43,11 @@ export class AgencyController {
   ) {}
 
   @Get('clients')
-  @Permissao('agencia.clientes')
+  @Permissao('agencia.ver')
   @ApiOperation({
     summary: 'Clientes da agência',
-    description: 'As empresas que aceitaram o vínculo (vivo, vencido ou desfeito) e os pedidos da agência (esperando, recusados e vencidos).',
+    description:
+      'As empresas que aceitaram o vínculo (vivo, vencido ou desfeito) e os pedidos da agência (esperando, recusados e vencidos), com o acesso de quem pede e o que pede atenção em cada empresa, só o que o nível dela ali deixa ver. O membro vê só os clientes em que está.',
   })
   @ApiOkResponse({ standardSchema: AgencyClientsResponse })
   @ApiForbiddenResponse({ standardSchema: ProblemDetails })

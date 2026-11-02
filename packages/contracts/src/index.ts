@@ -29,6 +29,7 @@ export {
 export {
   AcceptPartnerRequest,
   AgencyClientResponse,
+  AgencyClientAttention,
   AgencyClientsResponse,
   AgencyClientTeamMember,
   AgencyClientTeamResponse,

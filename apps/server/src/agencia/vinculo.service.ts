@@ -1,5 +1,6 @@
 import type {
   AcceptPartnerRequest,
+  AgencyClientAttention,
   AgencyClientResponse,
   AgencyClientsResponse,
   AgencyClientTeamResponse,
@@ -27,6 +28,7 @@ import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { FlagService } from '../flags/flag.service.js';
 import { Mailer } from '../mail/mailer.js';
 import { APPROVER_ROLES, ROLE_LABEL } from '../people/grant-rules.js';
+import { atencaoDoCliente, CLIENTES_POR_VEZ } from './atencao-dos-clientes.js';
 
 /** A função dos parceiros: sem ela, a empresa não recebe pedido e o Dono não aceita (D-A7-76). */
 export const FLAG_PARCEIROS = 'parceiros';
@@ -175,10 +177,15 @@ export class VinculoService {
     if (r.rowCount !== 1) throw naoEncontrado();
   }
 
-  /** Os clientes da agência (os vínculos aceitos, vivos ou que acabaram) e os pedidos dela. */
+  /**
+   * Os clientes da agência (os vínculos aceitos, vivos ou que acabaram) e os pedidos dela, com o acesso de quem pede e o
+   * que pede atenção em cada empresa (A7, W7, parte 1; D-A7-52). O membro (sem `agencia.clientes`) vê só os clientes em
+   * que está, sem os pedidos e sem o time.
+   */
   async clientes(auth: AuthContext): Promise<AgencyClientsResponse> {
     const tx = currentTx();
     const agencyId = await agenciaDe(tx, auth);
+    const cuidaDosClientes = auth.permissions.has('agencia.clientes');
     const clientes = await tx.execute<ClienteDaAgencia>(sql`
       select l.id, o.id as client_id, o.name as client_name, l.max_role, l.approve_limit_micros, l.dual_approval, l.ends_at,
              l.decided_at,
@@ -186,9 +193,12 @@ export class VinculoService {
              coalesce(l.ended_at, case when l.status = 'ativo' and l.ends_at <= now() then l.ends_at end) as ended_at, l.ended_side
         from liame.partner_link l join liame.organization o on o.id = l.client_org_id
        where l.partner_org_id = ${agencyId} and l.status in ('ativo', 'desfeito', 'vencido')
+         ${cuidaDosClientes ? sql`` : sql`and l.status = 'ativo' and exists (
+           select 1 from liame.membership m where m.partner_link_id = l.id and m.user_id = ${auth.userId} and m.revoked_at is null
+              and (m.expires_at is null or m.expires_at > now()))`}
        order by (l.status = 'ativo') desc, o.name, l.decided_at desc
        limit 500`);
-    const pedidos = await tx.execute<PedidoDaAgencia>(sql`
+    const pedidos = !cuidaDosClientes ? { rows: [] as PedidoDaAgencia[] } : await tx.execute<PedidoDaAgencia>(sql`
       select l.id, l.owner_email, l.requested_role, l.message, l.status, u.name as requested_by_name, l.created_at,
              l.request_expires_at, l.decided_at
         from liame.partner_link l join liame.app_user u on u.id = l.requested_by
@@ -198,17 +208,39 @@ export class VinculoService {
     // Quem do time está em cada empresa: uma consulta para todas (o vínculo vivo de cada pessoa).
     const ids = clientes.rows.filter((c) => c.status === 'ativo').map((c) => c.id);
     const times = ids.length
-      ? await tx.execute<{ partner_link_id: string; user_id: string; name: string; role_key: PartnerRole }>(sql`
-          select m.partner_link_id, m.user_id, u.name, m.role_key
+      ? await tx.execute<{ partner_link_id: string; user_id: string; name: string; role_key: PartnerRole; approve_limit_micros: string | null }>(sql`
+          select m.partner_link_id, m.user_id, u.name, m.role_key, m.approve_limit_micros
             from liame.membership m join liame.app_user u on u.id = m.user_id
            where m.partner_link_id in (${sql.join(ids.map((x) => sql`${x}::uuid`), sql`, `)}) and m.revoked_at is null
              and (m.expires_at is null or m.expires_at > now())
            order by u.name`)
       : { rows: [] };
     const porVinculo = new Map<string, Array<{ user_id: string; name: string; role: PartnerRole }>>();
-    for (const t of times.rows) porVinculo.set(t.partner_link_id, [...(porVinculo.get(t.partner_link_id) ?? []), { user_id: t.user_id, name: t.name, role: t.role_key }]);
+    const meu = new Map<string, { role: PartnerRole; approve_limit_micros: number | null }>();
+    for (const t of times.rows) {
+      porVinculo.set(t.partner_link_id, [...(porVinculo.get(t.partner_link_id) ?? []), { user_id: t.user_id, name: t.name, role: t.role_key }]);
+      if (t.user_id === auth.userId) meu.set(t.partner_link_id, { role: t.role_key, approve_limit_micros: micros(t.approve_limit_micros) });
+    }
+    // O que pede atenção, lido em cada empresa em que a pessoa está, no contexto dela (poucas por vez).
+    const atencao = new Map<string, AgencyClientAttention[]>();
+    const vivos = clientes.rows.filter((c) => c.status === 'ativo');
+    for (let i = 0; i < vivos.length; i += CLIENTES_POR_VEZ) {
+      await Promise.all(
+        vivos.slice(i, i + CLIENTES_POR_VEZ).map(async (c) => {
+          const itens = meu.has(c.id)
+            ? await atencaoDoCliente(this.db, this.flags, { tenantId: c.client_id, userId: auth.userId })
+            : [{ kind: 'fora_do_time', count: null, since: null, owner_name: null }];
+          atencao.set(c.id, itens);
+        }),
+      );
+    }
     return {
-      clients: clientes.rows.map((c) => ({ ...toClienteDaAgencia(c), team: porVinculo.get(c.id) ?? [] })),
+      clients: clientes.rows.map((c) => ({
+        ...toClienteDaAgencia(c),
+        team: cuidaDosClientes ? (porVinculo.get(c.id) ?? []) : [],
+        my_access: meu.get(c.id) ?? null,
+        ...(atencao.has(c.id) ? { attention: atencao.get(c.id)! } : {}),
+      })),
       requests: pedidos.rows.map(toPedidoDaAgencia),
     };
   }
