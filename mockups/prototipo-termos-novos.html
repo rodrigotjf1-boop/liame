@@ -1,0 +1,1514 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Termos novos · Liame</title>
+<!--
+@prototipo Liame · A7 · P35 · Os Termos novos: o aviso de 30 dias e o novo aceite (PARA APROVAÇÃO DO DONO)
+base: prototipo-chaves-de-acesso.html (P28, aprovado em 01/11/2026) para o shell, Segurança da conta e a entrada;
+      prototipo-cobranca.html (P26, aprovado em 22/10/2026) para a faixa no alto das telas e a tela no lugar do
+      conteúdo (a conta suspensa).
+pedido: o que falta no código antes do primeiro cliente de fora (roadmap §2.1; plano-a7.md §7 e §9; andamento A0-6):
+      "depois de publicados, versão nova, aviso de 30 dias e novo aceite" (decisão do dono de 28/09/2026,
+      decisoes-design.md; docs/juridico/README.md §0, item 3) e os Termos 15 ("Mudanças relevantes são avisadas por
+      e-mail e no Liame com pelo menos 30 dias de antecedência. Se não concordar, você pode cancelar sem multa antes de
+      a mudança valer."). Hoje o aceite é gravado só no cadastro e no convite (app_user.terms_version).
+lei (base-conhecimento.md §6.3, lida em 02/11/2026; não é parecer jurídico): LGPD art. 8º §6º e art. 9º §2º (mudança
+      no tratamento de dados: informar com destaque específico do que muda); CDC art. 51, XIII (a mudança unilateral
+      é nula na relação de consumo; entre empresas, o CDC só entra com vulnerabilidade provada, REsp 2.020.811);
+      Código Civil art. 421-A (o contrato empresarial se presume paritário) e art. 423 (na dúvida, a favor do
+      aderente); Marco Civil art. 7º, XI (publicidade e clareza das políticas de uso); MP 2.200-2 art. 10 §2º (outro
+      meio de comprovar a autoria, aceito pelas partes). Nenhuma lei achada fixa o prazo do aviso entre empresas: os
+      30 dias são dos Termos 15. A recomendação de CADE, MPF, ANPD e Senacon ao WhatsApp (07/05/2021, consumidores)
+      pediu para não restringir as funções de quem não aderisse: por isso a trava aqui é só da entrada da pessoa, com
+      saída, e nunca dos dados nem do trabalho da empresa.
+mercado (páginas lidas em 02/11/2026; as três trilhas):
+  tradicional: o aviso por e-mail e o uso que vale como aceite. GitHub (seção R dos Termos: pelo menos 30 dias antes
+      da mudança material, no site ou por e-mail; docs.github.com/en/site-policy/github-terms/github-terms-of-service);
+      Google Ads (pelo menos 30 dias depois do aviso, por e-mail, e "will not apply retroactively";
+      support.google.com/adspolicy/answer/54818); Slack (o aviso por e-mail ou dentro do Slack, e quem discorda fala
+      com a empresa cliente, dona do contrato; slack.com/terms-of-service/user);
+  moderno: o aviso dentro do produto com a data em que vale e o resumo por seção. Meta (Termos: 30 dias, por e-mail ou
+      nos produtos; os Termos Comerciais com a faixa "Essas atualizações entrarão em vigor em 20 de novembro de 2026"
+      no topo; facebook.com/legal/terms e facebook.com/legal/commercial_terms); Microsoft (publicado em 30/07, vale
+      em 30/09/2026, com a página "Summary of changes" numerada por seção; microsoft.com/en-us/servicesagreement e
+      /servicesagreement/updates); Apple Developer (a lista das mudanças por seção e o aceite por clique ao entrar,
+      pelo Account Holder em nome da organização; developer.apple.com/news e /help/account/access/roles);
+  inovador: o histórico aberto e a comparação. Google (todas as versões desde 1999, com "Comparison" entre uma e a
+      anterior; policies.google.com/terms/archive); GitHub site-policy (cada mudança num pull request público, a
+      material 30 dias antes; github.com/github/site-policy); Open Terms Archive (terceiros guardam cada versão dos
+      termos dos serviços digitais: o histórico tem de ser honesto; opentermsarchive.org).
+  escolhido: o moderno da Meta e da Microsoft, no padrão que o app já tem: a faixa no alto de todas as telas com o
+      dia em que vale, a gaveta "O que muda" com uma linha por mudança e a seção (como a Microsoft e a Apple), o
+      aceite por clique de cada pessoa (como a Apple) e, no dia, a tela do aceite no lugar do conteúdo só para quem não
+      aceitou (como a conta suspensa do P26), com saída. Do tradicional, o "não vale para trás" do Google Ads; do
+      inovador, o histórico das versões em Segurança da conta.
+o que tem: (1) uma tela qualquer (o Resumo) com a faixa durante o aviso, e âmbar nos últimos 7 dias; (2) a gaveta "O que
+           muda", para o Dono (com o cancelar sem multa) e para quem não é o Dono (fala com o Dono), e depois de
+           aceitar; (3) no dia, a tela do aceite no lugar do conteúdo, para o Dono e para quem não é; (4) o cadastro no
+           meio do aviso, com a frase do aceite valendo para as duas versões; (5) Segurança da conta com o cartão
+           "Termos e privacidade" (o que vale, o que você aceitou e quando, o que vem e as versões); (6) os e-mails: o
+           aviso, o lembrete de 7 dias antes e a versão retirada.
+decisões propostas junto (numeradas na sequência da A7; esperam a aprovação do dono):
+  D-A7-88 quem muda os Termos: só a distribuição, por um comando, nunca a empresa nem uma tela. A versão nova traz o
+          dia em que vale (pelo menos 30 dias depois do aviso; o comando recusa menos), os documentos que mudam (os
+          Termos de Uso, a Política de Privacidade, o Contrato de operador), o endereço do texto novo, já publicado no
+          site, com a impressão digital (hash) de cada texto, e a lista do que muda em linguagem simples (uma linha por
+          mudança, com a seção, o que é hoje e como fica). Uma versão esperando por vez; dá para retirar antes do dia,
+          com um e-mail dizendo que nada muda e que o aceite dado fica sem efeito;
+  D-A7-89 relevante ou só redação: a mudança relevante (direito, dever, preço, prazo, dado tratado, quem trata) passa
+          pelo aviso e pelo novo aceite; o ajuste de redação (erro de digitação, link, contato, número de seção) vale
+          na hora, sem aviso e sem aceite, e fica no histórico das versões com o motivo. Na dúvida, é relevante;
+  D-A7-90 o aviso: no dia da versão nova, um e-mail para cada pessoa com acesso ativo e e-mail confirmado (uma vez por
+          versão e por pessoa), com o que muda, o dia e que nada muda para trás; 7 dias antes do dia, um lembrete só
+          para quem ainda não aceitou; no Liame, a faixa no alto de todas as telas, para todos, até a pessoa aceitar,
+          âmbar e contando os dias nos últimos 7;
+  D-A7-91 o que muda, numa gaveta: cada mudança com o documento e a seção, como é hoje e como fica, em uma ou duas
+          frases; o aviso e o dia em que vale; "nada muda para trás"; os textos inteiros, o novo e o de hoje; para o
+          Dono, "não concorda? cancele sem multa até a véspera" (Termos 15), com o caminho de Plano e cobrança; para
+          quem não é o Dono, "fale com o Dono"; e "Aceitar os Termos novos";
+  D-A7-92 o aceite: por pessoa, num clique, na gaveta ou na tela do dia, com a frase do que se aceita junto do botão;
+          sem o código do app (aceitar não mexe em dinheiro nem em acesso); aceitar antes do dia tira a faixa. O aceite
+          do Dono vale também pela empresa (o contrato é dela); o das outras pessoas, por elas. Guarda-se a pessoa, a
+          versão (com o hash dos textos), o dia e a hora, onde (o aviso, a tela do dia, o cadastro, o convite) e o
+          aparelho ("Chrome no Windows"), no registro dos aceites e na auditoria encadeada (5 anos); o IP não (a
+          sessão autenticada já identifica a pessoa);
+  D-A7-93 no dia, quem não aceitou: a próxima tela é a do aceite, no lugar do conteúdo, só para essa pessoa (aceitar e
+          seguir, ler o que muda ou sair); o Dono tem também Plano e cobrança, para cancelar sem multa, e exportar os
+          dados. O servidor recusa as outras rotas dessa pessoa até o aceite (a regra no servidor, não só na tela). A
+          trava é só da entrada: nada é apagado nem suspenso, e o que a empresa já aprovou e os funcionários de IA
+          seguem trabalhando, porque pelos Termos 15 a versão nova vale para o contrato da empresa a partir do dia, e
+          quem não concorda cancela;
+  D-A7-94 quem chega no meio (o cadastro e o convite entre o aviso e o dia): a frase do aceite cita também a versão que
+          vem, com o link do que muda, e o aceite vale para as duas; essa pessoa não vê a faixa;
+  D-A7-95 onde ver depois: em Segurança da conta, o cartão "Termos e privacidade": o que vale hoje, o que você aceitou
+          e quando, o que vem (se houver) e as versões, cada uma com o que mudou, se pediu aceite e o texto daquela
+          versão.
+fora deste desenho: o texto da versão nova em si (o dono aprova e o advogado revisa antes, A0-6); os termos do Regem e
+      dos outros produtos da DMS (cada produto cuida dos seus); o aceite da agência parceira em nome do cliente (cada
+      pessoa aceita por si, e o contrato é da empresa cliente); a comparação linha a linha dos textos (o histórico
+      guarda cada versão inteira; a comparação pode vir depois).
+estados: o seletor "Situação" na faixa do topo: durante o aviso (a faixa, a gaveta do Dono e da Administradora, os
+         últimos 7 dias, depois de aceitar), no dia sem o aceite (a Administradora e o Dono), o cadastro no meio do
+         aviso, Segurança da conta (durante o aviso e depois do dia) e os três e-mails.
+regras: dados e datas de exemplo (a Mister Burgers, o Dono Rodrigo e a Administradora Juliana, com e-mails em
+        exemplo.com.br; o aviso em 02/11/2026 e os Termos novos em 02/12/2026); as mudanças da lista são exemplos tirados
+        do que já mudou desde a v0.2 (docs/juridico/README.md); estado com palavra e com cor.
+conferência: os cenários `p35-*` em window.uiuxCenarios (1440, 1024, 768 e 375 px, claro e escuro).
+fontes: plano-a7.md (§7, §9), docs/juridico/termos-de-uso.md §15, docs/juridico/README.md §0, base-conhecimento.md §6.1 e
+        §6.3, prototipo-cobranca.html (a faixa e a conta suspensa), o app (apps/web/src/components/cobranca/aviso-no-shell.tsx,
+        apps/server/src/auth/legal.controller.ts).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== 1. TOKENS: marca Liame (manual v1.0) nos papéis semânticos, iguais aos protótipos aprovados ===== */
+:root {
+  color-scheme: light dark;
+
+  /* superfícies */
+  --bg: light-dark(#F4F2EC, #0B0D17);
+  --bg-subtle: light-dark(#ECE9E1, #10131F);
+  --surface: light-dark(#FFFFFF, #151A2E);
+  --surface-2: light-dark(#FAF8F3, #1A2038);
+  --surface-hover: light-dark(#F2EFE8, #1F2645);
+  --elevated: light-dark(#FFFFFF, #1B2140);
+  --overlay: light-dark(rgb(11 13 23 / .34), rgb(3 4 10 / .66));
+  --border: light-dark(#E5E1D7, #262C49);
+  --border-strong: light-dark(#D0CBBF, #3A4166);
+
+  /* texto */
+  --text: light-dark(#0B0D17, #F4F2EC);
+  --text-muted: light-dark(#4A5068, #9AA0B4);
+  --text-subtle: light-dark(#646A80, #878EAB);
+
+  /* ação = Ciano Link (botão ciano com tinta Noite nos dois temas) */
+  --primary: #2DD4DE;
+  --primary-hover: light-dark(#26C4CE, #62E1E8);
+  --primary-fg: #0B0D17;
+  --primary-soft: light-dark(#DCF6F8, #0E2B33);
+  --link: light-dark(#0A6C75, #2DD4DE);
+
+  /* foco e fio: o ciano some no fundo claro (1,6:1); no claro entra o petróleo escuro */
+  --foco: light-dark(#008796, #2DD4DE);
+  --fio: light-dark(#009AAA, #2DD4DE);
+
+  /* Violeta IA: aqui só no fundo das notas de diálogo, como no protótipo aprovado de Contas */
+  --ai: light-dark(#5A43D8, #A08FFF);
+  --ai-fill: #7B61FF;
+  --ai-soft: light-dark(#EEEAFF, #211C45);
+
+  /* status (nunca é cor de ação); texto sobre o fundo suave passa de 4,5:1 nos dois temas */
+  --success: light-dark(#0C6F5B, #46BC9F);
+  --success-soft: light-dark(#E2F3EE, #0F2C26);
+  --warning: light-dark(#8A5F00, #FFC24B);
+  --warning-soft: light-dark(#FFF1D1, #2E2610);
+  --danger: light-dark(#B42F2F, #FF6B6B);
+  --danger-soft: light-dark(#FFE3E3, #361A1F);
+
+  /* gráficos (paleta validada com a skill dataviz; ênfase = caixa, contexto = plataforma) */
+  --chart-foco: light-dark(#009AAA, #16A0AF);
+  --chart-contexto: light-dark(#7E8499, #7C83A3);
+  --chart-grade: light-dark(#ECE9E1, #252B48);
+
+  /* QR: módulo escuro sobre fundo claro nos dois temas (leitor de QR precisa disso) */
+  --qr-fundo: #FFFFFF;
+  --qr-tinta: #0B0D17;
+
+  /* marca (logo) */
+  --logo-ink: light-dark(#0B0D17, #F4F2EC);
+  --logo-pin: light-dark(#7B61FF, #FFFFFF);
+  --marca-violeta: #7B61FF;
+  --marca-ciano: #2DD4DE;
+  --marca-lavanda: #A08FFF;
+  --marca-lavanda-clara: #CFC6FF;
+  --marca-petroleo: #1BA8B8;
+  --marca-ambar: #FFC24B;
+  --marca-coral: #FF6B6B;
+
+  /* forma */
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px light-dark(rgb(11 13 23 / .06), rgb(0 0 0 / .35));
+  --shadow: 0 1px 2px light-dark(rgb(11 13 23 / .05), rgb(0 0 0 / .4)), 0 10px 28px -14px light-dark(rgb(11 13 23 / .2), rgb(0 0 0 / .7));
+  --shadow-lg: 0 28px 56px -20px light-dark(rgb(11 13 23 / .32), rgb(0 0 0 / .75)), 0 2px 8px light-dark(rgb(11 13 23 / .08), rgb(0 0 0 / .4));
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--foco);
+
+  /* tipografia (kit: Poppins 700/500/400; 600 só em título de cartão e número) */
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Code", Consolas, monospace;
+  --text-xs: .75rem;
+  --text-sm: .8125rem;
+  --text-base: .875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-hero: clamp(2.6rem, 4.2vw, 3.25rem);
+
+  /* espaço (base 4 px) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* layout */
+  --sidebar-w: 256px;
+  --rail-w: 76px;
+  --topbar-h: 60px;
+  --content-max: 1320px;
+
+  /* movimento */
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: 140ms;
+  --dur: 220ms;
+  --dur-slow: 360ms;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ===== 2. BASE ===== */
+:root { --font-poppins: "Poppins"; --font-jetbrains: "JetBrains Mono"; }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+p, ul, ol, dl, dd, h1, h2, h3, figure, fieldset { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+html { height: 100%; -webkit-text-size-adjust: 100%; }
+body {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { line-height: 1.2; letter-spacing: -.015em; font-weight: 600; text-wrap: balance; }
+h1 { font-weight: 700; }
+a { color: var(--link); }
+:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; }
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, h3[tabindex="-1"]:focus { outline: none; }
+code { font-family: var(--font-mono); font-size: .92em; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.rotulo-marca { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--text-subtle); }
+.spacer { flex: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip-link { position: absolute; left: var(--sp-3); top: -60px; z-index: 100; padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); background: var(--primary); color: var(--primary-fg); font-weight: 600; text-decoration: none; }
+.skip-link:focus { top: var(--sp-3); }
+
+/* ===== Movimento ===== */
+@keyframes surgir { from { opacity: 0; transform: translateY(10px); } }
+@keyframes surgir-fundo { from { opacity: 0; } }
+@keyframes entrar { from { opacity: 0; transform: translateY(8px); } }
+@keyframes pisca { 50% { opacity: .35; } }
+@keyframes varre { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@keyframes gira { to { transform: rotate(360deg); } }
+.anima { animation: surgir .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== 3. FAIXA DO PROTÓTIPO (só do protótipo; não vai para o app) ===== */
+.revisao { position: relative; z-index: 50; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 8px 16px; border-bottom: 1px dashed var(--border-strong); background: var(--bg-subtle); font-size: var(--text-xs); }
+.revisao-marca { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.revisao-marca b { font-family: var(--font-mono); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.revisao-marca span { color: var(--text-muted); }
+.revisao label { flex: 1 1 280px; display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 520px; }
+.revisao select { flex: 1; min-width: 0; min-height: 30px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); padding: 0 8px; }
+.revisao .btn { min-height: 30px; }
+
+/* ===== 4. SHELL: menu lateral, trilho no tablet, gaveta no celular (igual ao aprovado) ===== */
+.app { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); overflow: hidden; background: var(--bg); }
+
+.sidebar { position: relative; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-5) var(--sp-3) var(--sp-3); border-right: 1px solid var(--border); background: var(--bg); scrollbar-width: thin; }
+.sidebar > * { flex-shrink: 0; }
+.sidebar > nav { width: 100%; }
+.sb-logo { display: flex; align-items: center; gap: var(--sp-2); height: 44px; padding: 0 var(--sp-2); margin-bottom: var(--sp-4); }
+.logo-completo { display: block; width: 116px; height: auto; }
+.logo-simbolo { display: none; width: 40px; height: 40px; }
+.sidebar .sb-fechar { display: none; margin-left: auto; }
+
+.ctx { width: 100%; display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); text-align: left; cursor: default; }
+.ctx-av { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--bg-subtle); font-weight: 600; font-size: var(--text-xs); }
+.ctx-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; }
+.ctx-txt b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-txt span { font-size: var(--text-xs); color: var(--text-muted); }
+
+.nav-grupo { margin-top: var(--sp-5); }
+.nav-grupo-rot { padding: 0 var(--sp-3); margin-bottom: var(--sp-2); }
+.nav-lista { display: grid; gap: 2px; }
+.nav-item { position: relative; width: 100%; display: flex; align-items: center; gap: var(--sp-3); height: 40px; padding: 0 var(--sp-3); border: 0; border-radius: var(--radius); background: transparent; color: var(--text-muted); font-weight: 500; text-align: left; text-decoration: none; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.nav-item:hover { background: var(--surface-hover); color: var(--text); }
+.nav-item[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.nav-item .ic { width: 18px; height: 18px; }
+.nav-item .rot { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-no { position: absolute; left: 4px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--fio); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fio) 22%, transparent); }
+.nav-cont { min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: var(--radius-full); background: var(--danger-soft); color: var(--danger); font-size: 11px; font-weight: 600; }
+.nav-mais { margin-top: var(--sp-4); }
+.nav-mais .ic { transition: transform var(--dur) var(--ease); }
+.nav-mais[aria-expanded="true"] .ic { transform: rotate(180deg); }
+.nav-mais-n { min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-full); display: inline-grid; place-items: center; background: var(--bg-subtle); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+
+.sb-rodape { margin-top: auto; padding-top: var(--sp-5); display: grid; gap: var(--sp-3); }
+.usuario { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-1) var(--sp-1) 0 var(--sp-2); }
+.av-user { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); font-size: var(--text-xs); font-weight: 600; }
+.usuario-txt { flex: 1; min-width: 0; display: grid; line-height: 1.25; margin-right: var(--sp-1); }
+.usuario-txt b { font-weight: 600; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usuario-txt span { font-size: var(--text-xs); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* seletor Lite/Pro (protótipo geral aprovado): no topo; na gaveta do celular, no rodapé do menu */
+.modo { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); }
+.modo button { height: 30px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.modo button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.modo button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.modo-top { display: inline-grid; grid-template-columns: auto auto; }
+.modo-top button { min-width: 48px; padding: 0 12px; }
+.sb-rodape .modo { display: none; }
+
+.principal { container: principal / inline-size; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.topbar { flex: none; position: relative; z-index: 5; display: flex; align-items: center; gap: var(--sp-2); height: var(--topbar-h); padding: 0 var(--sp-6); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); }
+.topbar .tb-menu { display: none; }
+.trilha { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.trilha-pai { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trilha-sep { color: var(--text-subtle); }
+.trilha strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conteudo { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; outline: none; }
+.pagina { container: pagina / inline-size; max-width: var(--content-max); margin: 0 auto; padding: var(--sp-6) var(--sp-8) var(--sp-16); }
+
+.veu { position: fixed; inset: 0; z-index: 55; background: var(--overlay); animation: surgir-fundo var(--dur) var(--ease); }
+.toast-region { position: fixed; right: var(--sp-4); bottom: var(--sp-4); z-index: 90; display: grid; gap: var(--sp-2); width: min(380px, calc(100vw - 2 * var(--sp-4))); }
+
+@container principal (max-width: 820px) {
+  .trilha-pai, .trilha-sep { display: none; }
+  .topbar { padding: 0 var(--sp-4); }
+}
+
+/* tablet: trilho só com ícones */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .app { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+  .sidebar { align-items: center; padding: var(--sp-4) var(--sp-2) var(--sp-3); }
+  .sb-logo { padding: 0; justify-content: center; }
+  .sidebar .logo-completo { display: none; }
+  .sidebar .logo-simbolo { display: block; }
+  .ctx { width: 44px; padding: 5px; justify-content: center; }
+  .ctx-txt { display: none; }
+  .nav-grupo { width: 100%; margin-top: var(--sp-3); }
+  .nav-grupo-rot { height: 1px; margin: 0 var(--sp-3) var(--sp-3); padding: 0; overflow: hidden; color: transparent; background: var(--border); }
+  .nav-item { justify-content: center; padding: 0; height: 44px; }
+  .nav-item .rot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav-item .nav-cont, .nav-item .nav-mais-n { position: absolute; top: 4px; right: 8px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; }
+  .usuario { flex-direction: column; padding: 0; }
+  .usuario-txt { display: none; }
+}
+
+/* celular: o menu vira gaveta */
+@media (max-width: 768px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 70; width: min(300px, 86vw); padding-top: calc(var(--sp-5) + env(safe-area-inset-top, 0px)); padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px)); box-shadow: var(--shadow-lg); transform: translateX(-102%); visibility: hidden; transition: transform var(--dur-slow) var(--ease), visibility 0s linear var(--dur-slow); }
+  /* Ao abrir, a visibilidade muda na hora (sem o atraso de quem fecha): o foco já pode entrar no menu. */
+  .app.gaveta .sidebar { transform: none; visibility: visible; transition: transform var(--dur-slow) var(--ease), visibility 0s linear 0s; }
+  .sidebar .sb-fechar { display: inline-flex; }
+  .sb-rodape .modo { display: grid; }
+  .topbar .modo-top { display: none; }
+  .topbar { padding: 0 var(--sp-3); }
+  .topbar .tb-menu { display: inline-flex; }
+  .trilha-pai, .trilha-sep { display: none; }
+  .pagina { padding: var(--sp-5) var(--sp-4) calc(var(--sp-12) + env(safe-area-inset-bottom)); }
+}
+
+/* Com movimento reduzido, a regra global troca 0s por 0.01ms e criaria uma transição de visibilidade:
+   até o próximo quadro o menu contaria como oculto e o foco não entraria nele. Abre sem transição (V27). */
+@media (prefers-reduced-motion: reduce) {
+  .app.gaveta .sidebar { transition: none !important; }
+}
+
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  .topbar { backdrop-filter: none; background: var(--elevated); }
+}
+
+/* ===== 5. MODOS DE EXIBIÇÃO (protótipo geral aprovado): Lite e Pro ===== */
+.modo-lite .so-pro:not(.aberto .so-pro) { display: none; }
+.modo-pro .so-lite { display: none; }
+
+/* ===== 6. COMPONENTES ===== */
+.ic { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.ic-sm { width: 15px; height: 15px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2); min-height: 38px; padding: 0 var(--sp-4); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease); }
+.btn:hover { background: var(--surface-hover); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn:disabled { opacity: .6; cursor: not-allowed; }
+.btn[aria-disabled="true"] { opacity: .62; cursor: not-allowed; }
+.btn--primary { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); font-weight: 600; }
+.btn--primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.btn--ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn--ghost:hover { background: var(--surface-hover); color: var(--text); }
+.btn--perigo { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.btn--perigo:hover { background: var(--danger-soft); }
+.btn--perigo-cheio, .btn--perigo-cheio:hover { background: var(--danger); border-color: var(--danger); color: var(--surface); font-weight: 600; }
+.btn--icon { width: 38px; padding: 0; }
+.btn--sm { min-height: 32px; padding: 0 var(--sp-3); font-size: var(--text-sm); }
+.btn--sm.btn--icon { width: 32px; }
+.link-bt { padding: 0; border: 0; background: none; color: var(--link); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-bt:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; border-radius: 2px; }
+
+.input { min-height: 40px; width: 100%; padding: 0 var(--sp-3); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); outline: none; }
+.input::placeholder { color: var(--text-subtle); }
+.input:focus-visible { border-color: var(--foco); box-shadow: var(--focus-ring); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.input[readonly] { color: var(--text-muted); }
+select.input { padding-right: var(--sp-2); }
+
+.card { position: relative; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-5); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.card-cab { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.card-cab h2 { font-size: var(--text-md); }
+.card-sub { margin-top: 2px; font-size: var(--text-sm); color: var(--text-muted); }
+.card-titulo { font-size: var(--text-md); }
+
+.view-cab { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--sp-4); margin-bottom: var(--sp-6); }
+.view-cab h1 { font-size: var(--text-2xl); }
+.view-cab p { margin-top: var(--sp-1); max-width: 64ch; color: var(--text-muted); }
+
+.st { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.st .dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+.st--aguardando { background: var(--warning-soft); color: var(--warning); }
+.st--concluido { background: var(--success-soft); color: var(--success); }
+.st--espera { background: var(--bg-subtle); color: var(--text-muted); }
+.st--perigo { background: var(--danger-soft); color: var(--danger); }
+.st--info { background: var(--primary-soft); color: var(--link); }
+.lite-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 9px; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
+.lite-frase { max-width: 70ch; font-size: var(--text-sm); line-height: 1.55; color: var(--text-muted); }
+.lite-frase b { color: var(--text); font-weight: 600; }
+.lite-frase--grande { font-size: var(--text-md); color: var(--text); }
+.eixo-nota { font-size: var(--text-xs); color: var(--text-subtle); }
+
+/* "Ver detalhes" do Lite: abre o Pro ali mesmo (nada some no Lite) */
+.detalhes-bt { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-2); margin-left: calc(-1 * var(--sp-2)); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--link); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.detalhes-bt:hover { background: var(--surface-hover); }
+.detalhes-bt:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.detalhes-bt .ic { width: 15px; height: 15px; transition: transform var(--dur) var(--ease); }
+.detalhes-bt[aria-expanded="true"] .ic { transform: rotate(180deg); }
+
+/* tabela */
+.table-wrap { position: relative; width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.tabela { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.tabela th { padding: 10px var(--sp-4); border-bottom: 1px solid var(--border); background: var(--surface-2); text-align: left; font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.tabela td, .tabela tbody th, .tabela tfoot th { padding: 12px var(--sp-4); border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+.tabela tbody th, .tabela tfoot th { font-family: var(--font-sans); font-size: var(--text-sm); letter-spacing: 0; text-transform: none; color: var(--text); background: transparent; font-weight: 600; }
+.tabela tbody tr:last-child td, .tabela tbody tr:last-child th { border-bottom: 0; }
+.tabela tfoot td, .tabela tfoot th { border-top: 1px solid var(--border-strong); border-bottom: 0; background: var(--surface-2); font-weight: 600; }
+.tabela .n { text-align: right; }
+.tabela td.acoes { text-align: right; }
+.tabela .sub { display: block; margin-top: 2px; font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--text-subtle); white-space: nowrap; }
+.tabela .forte { font-weight: 600; }
+
+/* campos */
+.campo { display: grid; gap: var(--sp-2); min-width: 0; margin: 0; padding: 0; border: 0; }
+.campo > label, .campo > legend { padding: 0; font-size: var(--text-sm); font-weight: 600; }
+.campo-dica { font-size: var(--text-xs); font-weight: 400; color: var(--text-muted); }
+.campo-erro { font-size: var(--text-sm); font-weight: 500; color: var(--danger); }
+.campo-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); font-size: var(--text-sm); }
+.check { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: var(--text-sm); cursor: pointer; }
+.check input { width: 16px; height: 16px; margin: 3px 0 0; flex: none; accent-color: var(--link); }
+.opcoes { display: grid; gap: var(--sp-2); }
+.opcao { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease); }
+.opcao:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.opcao input { width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--link); }
+.opcao-txt { display: grid; gap: 2px; font-size: var(--text-sm); }
+.opcao-txt b { font-weight: 600; }
+.opcao-txt span { color: var(--text-muted); }
+.datas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.datas label { display: grid; gap: 4px; font-size: var(--text-sm); font-weight: 500; }
+@media (max-width: 420px) { .datas { grid-template-columns: minmax(0, 1fr); } }
+
+/* diálogo (nativo, com @starting-style) */
+.dialogo { width: min(560px, calc(100vw - 32px)); max-height: min(760px, 92vh); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--elevated); color: var(--text); box-shadow: var(--shadow-lg);
+  opacity: 1; transform: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), overlay var(--dur) allow-discrete, display var(--dur) allow-discrete; }
+.dialogo:not([open]) { opacity: 0; transform: translateY(8px) scale(.98); }
+@starting-style { .dialogo[open] { opacity: 0; transform: translateY(8px) scale(.98); } }
+.dialogo::backdrop { background: var(--overlay); backdrop-filter: blur(3px); }
+.dialogo[open] { display: flex; }
+.dialogo--largo { width: min(720px, calc(100vw - 32px)); }
+.dialogo-form { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.dialogo-cab { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5); border-bottom: 1px solid var(--border); flex: none; }
+.dialogo-cab h2 { font-size: var(--text-lg); min-width: 0; overflow-wrap: anywhere; }
+.dialogo-corpo { position: relative; flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: var(--sp-5); padding: var(--sp-5); }
+.dialogo-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--sp-2); padding: var(--sp-3) var(--sp-5); border-top: 1px solid var(--border); background: var(--surface-2); flex: none; }
+.dialogo-nota { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--ai-soft); font-size: var(--text-sm); }
+.dialogo-nota .ic { flex: none; margin-top: 2px; color: var(--ai); }
+.dialogo-erro { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--danger-soft); color: var(--danger); font-size: var(--text-sm); font-weight: 500; }
+
+/* gaveta à direita (detalhe), também um <dialog> nativo: foco preso, Esc fecha */
+.dialogo--lado { width: min(520px, 100vw); max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0 0 0 auto; border-width: 0 0 0 1px; border-radius: var(--radius-xl) 0 0 var(--radius-xl); }
+.dialogo--lado:not([open]) { opacity: 0; transform: translateX(28px); }
+@starting-style { .dialogo--lado[open] { opacity: 0; transform: translateX(28px); } }
+
+/* toast */
+.toast { display: flex; align-items: center; gap: var(--sp-3); padding: 11px var(--sp-3) 11px var(--sp-4); border-radius: var(--radius-lg); background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); font-size: var(--text-sm); animation: entrar var(--dur) var(--ease); }
+.toast span { flex: 1; }
+.toast--perigo { background: var(--danger); color: var(--surface); }
+.toast.saindo { opacity: 0; transform: translateY(6px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); }
+
+/* estados: vazio, erro e carregando */
+.vazio { display: grid; justify-items: center; gap: var(--sp-3); padding: var(--sp-12) var(--sp-6); text-align: center; }
+.vazio h2, .vazio h3 { font-size: var(--text-lg); outline: none; }
+.vazio p { max-width: 48ch; color: var(--text-muted); }
+.vazio-ic { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--bg-subtle); color: var(--text-muted); }
+.vazio-ic--perigo { background: var(--danger-soft); color: var(--danger); }
+.vazio-ic--ok { background: var(--success-soft); color: var(--success); }
+.vazio-acoes { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.vazio--compacto { padding: var(--sp-8) var(--sp-4); }
+.esqueleto { display: block; height: 14px; border-radius: var(--radius-sm); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface-hover) 80%, transparent), transparent) var(--bg-subtle); background-size: 200% 100%; animation: varre 1.4s linear infinite; }
+.esqueleto--curto { width: 38%; }
+.esqueleto--medio { width: 62%; }
+.esqueleto--alto { height: 44px; width: 30%; }
+.esqueleto--bloco { height: 120px; }
+.girando { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--fio); animation: gira .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .girando { animation: none; border-top-color: var(--border-strong); } }
+
+/* faixa de aviso (Contas aprovada) + variações de atenção e informação */
+.faixa { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-5); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.faixa--acao { border-color: color-mix(in srgb, var(--fio) 45%, var(--border)); background: var(--primary-soft); }
+.faixa--perigo { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: var(--danger-soft); }
+.faixa--atencao { border-color: color-mix(in srgb, var(--warning) 40%, var(--border)); background: var(--warning-soft); }
+.faixa-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--surface); }
+.faixa--perigo .faixa-ic { color: var(--danger); }
+.faixa--atencao .faixa-ic { color: var(--warning); }
+.faixa--acao .faixa-ic { color: var(--link); }
+.faixa-txt { flex: 1; min-width: min(100%, 260px); display: grid; gap: 2px; }
+.faixa-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+.faixa--atencao .faixa-txt span, .faixa--perigo .faixa-txt span { color: var(--text); }
+.faixa .btn { flex: none; }
+
+/* filtros e chips (Contas aprovada) */
+.filtros { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface); color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--text); background: var(--text); color: var(--bg); }
+.chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.chip .num { font-size: 11px; opacity: .8; }
+
+/* plataforma (ponto de cor + nome) */
+.plat { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; background: var(--bg-subtle); color: var(--text); }
+.plat::before { content: ""; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--plat-cor, var(--text-subtle)); }
+.plat--meta { --plat-cor: var(--marca-violeta); }
+.plat--google { --plat-cor: var(--marca-petroleo); }
+.plat--ga4 { --plat-cor: var(--marca-ambar); }
+.plat--regem { --plat-cor: var(--marca-coral); }
+.plat--regemcast { --plat-cor: var(--marca-lavanda); }
+
+/* segmentado (período) */
+.seg { display: inline-flex; flex-wrap: wrap; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.seg button { min-height: 32px; padding: 0 12px; border: 0; border-radius: calc(var(--radius) - 3px); background: transparent; color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease); }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.seg button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* frescor */
+.ponto { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--success); }
+.ponto--atraso { background: var(--warning); }
+.ponto--off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-subtle); }
+
+/* confirmação na própria linha (Contas aprovada) */
+.seg-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.confirma-linha { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-2); }
+.confirma-txt { flex-basis: 100%; font-size: var(--text-xs); font-weight: 500; color: var(--danger); text-align: right; white-space: normal; }
+
+@media (max-width: 768px) {
+  .toast-region { bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 480px) {
+  .dialogo, .dialogo--largo { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+  .dialogo--lado { border-radius: 0; }
+}
+
+/* ===== A7 · P26 · Plano e cobrança ===== */
+/* Uma coluna no estreito; duas a partir de 980 px de conteúdo: a situação, o plano e a forma à esquerda; as faturas e
+   as fases à direita. Tudo pelos tokens da base. */
+.cob-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+@container pagina (min-width: 980px) { .cob-grade { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+.cob-col { display: grid; gap: var(--sp-5); min-width: 0; }
+/* sem assinatura: a situação, com os planos lado a lado, ocupa a largura toda */
+.cob-col--toda { grid-column: 1 / -1; }
+/* o cartão é uma coluna flex: o botão solto nele fica do tamanho do texto */
+.cob-grade .card > .btn { align-self: flex-start; }
+
+/* a situação: o que está acontecendo e a ação do momento */
+.sit { gap: var(--sp-4); }
+.sit--atencao { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.sit--perigo { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.sit-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.sit-titulo { font-size: var(--text-lg); outline: none; }
+.sit-frase { max-width: 62ch; font-size: var(--text-md); line-height: 1.5; }
+.sit-frase b { font-weight: 600; }
+.sit-nota { max-width: 64ch; font-size: var(--text-sm); color: var(--text-muted); }
+.sit-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.sit-continua { display: grid; gap: 6px; font-size: var(--text-sm); }
+.sit-continua li { display: flex; gap: var(--sp-2); }
+.sit-continua .ic { margin-top: 2px; }
+.sit-continua .sim { color: var(--success); }
+.sit-continua .nao { color: var(--danger); }
+
+/* os degraus do atraso, com as datas reais */
+.degraus { display: grid; gap: var(--sp-2); }
+.degrau { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: var(--sp-3); align-items: baseline; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.degrau dt { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.degrau dd { margin: 0; min-width: 0; color: var(--text-muted); }
+.degrau--agora { background: var(--warning-soft); }
+.degrau--agora dd { color: var(--text); }
+.degrau--perigo { background: var(--danger-soft); }
+.degrau--perigo dd { color: var(--text); }
+
+/* o plano */
+.plano-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-2) var(--sp-3); }
+.plano-nome { font-size: var(--text-lg); }
+.plano-preco { font-family: var(--font-mono); font-size: var(--text-xl); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plano-preco small { font-family: var(--font-sans); font-size: var(--text-sm); font-weight: 400; color: var(--text-muted); }
+.funcs { display: flex; flex-wrap: wrap; gap: 6px; }
+.func { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: var(--radius-full); background: var(--bg-subtle); font-size: var(--text-xs); font-weight: 500; }
+.func--mais { background: var(--primary-soft); color: var(--link); }
+.exemplo { font-size: var(--text-xs); color: var(--text-subtle); }
+
+/* a forma de pagamento */
+.forma { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
+.forma-ic { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--primary-soft); color: var(--link); }
+.forma-txt { display: grid; gap: 4px; min-width: 0; }
+.forma-txt b { font-weight: 600; }
+.forma-txt span { font-size: var(--text-sm); color: var(--text-muted); }
+.oferta { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-sm); }
+.oferta b { font-weight: 600; }
+.oferta span { color: var(--text-muted); }
+
+/* as faturas e as notas */
+.faturas { display: grid; }
+.fatura { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.fatura:first-child { padding-top: 0; }
+.fatura:last-child { border-bottom: 0; padding-bottom: 0; }
+.fat-mes { font-weight: 600; }
+.fat-det { font-size: var(--text-sm); color: var(--text-muted); }
+.fat-lado { display: grid; justify-items: end; align-content: start; gap: 4px; }
+.fat-valor { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fat-docs { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: 4px; }
+.fat-emissao { font-size: var(--text-xs); color: var(--text-muted); }
+.email-notas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-muted); }
+.email-notas b { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+
+/* o que acontece em cada fase do atraso */
+.fases { display: grid; }
+.fase { display: grid; grid-template-columns: 8em minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.fase:first-child { padding-top: 0; }
+.fase:last-child { border-bottom: 0; padding-bottom: 0; }
+.fase-quando { font-weight: 600; }
+.fase-quando .num { display: block; font-size: var(--text-xs); font-weight: 500; color: var(--text-muted); }
+.fase-oque { min-width: 0; color: var(--text-muted); }
+.fase--agora .fase-quando { color: var(--warning); }
+.fase--agora .fase-oque { color: var(--text); }
+.fase-volta { font-size: var(--text-sm); font-weight: 600; }
+
+/* cancelar e desistir: no fim da tela, só para o Dono */
+.cob-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-6); padding-top: var(--sp-5); border-top: 1px solid var(--border); font-size: var(--text-sm); color: var(--text-muted); }
+.cob-rodape p { flex: 1 1 260px; max-width: 64ch; }
+
+/* os planos: na tela (assinar) e na gaveta (trocar) */
+.planos { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+@container pagina (min-width: 720px) { .planos--tela { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.plano-op { display: grid; gap: var(--sp-3); padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+label.plano-op { cursor: pointer; }
+label.plano-op:has(input:checked) { border-color: var(--foco); background: var(--primary-soft); }
+.plano-op-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.plano-op-cab input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--link); }
+/* o nome não encolhe abaixo de 8em: sem espaço, o preço desce para a linha de baixo */
+.plano-op-cab b { flex: 1 1 8em; min-width: 0; font-size: var(--text-md); font-weight: 600; overflow-wrap: anywhere; }
+.plano-op-cab .plano-preco { flex: none; }
+.plano-op .plano-preco { font-size: var(--text-lg); }
+.plano-op .btn { justify-self: start; }
+/* bloco comum (não grade): o texto e o negrito correm na mesma linha */
+.conta-hoje { display: block; padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); line-height: 1.6; }
+.conta-hoje b { font-weight: 600; }
+
+/* PIX e Pix Automático */
+.qr-caixa { display: grid; justify-items: center; gap: var(--sp-3); }
+.qr { width: 188px; height: 188px; padding: 12px; border-radius: var(--radius); background: var(--qr-fundo); box-shadow: inset 0 0 0 1px var(--border); }
+.qr svg { display: block; width: 100%; height: 100%; }
+.qr rect { fill: var(--qr-tinta); }
+.pix-codigo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); width: 100%; }
+.pix-codigo code { flex: 1 1 220px; min-width: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--surface-2); font-size: 11px; overflow-wrap: anywhere; word-break: break-all; }
+.pix-espera { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.pix-pago { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--success-soft); font-size: var(--text-sm); font-weight: 500; }
+.pix-pago .ic { flex: none; margin-top: 2px; color: var(--success); }
+.pix-pendente { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--warning-soft); font-size: var(--text-sm); }
+.pix-pendente .ic { flex: none; margin-top: 2px; color: var(--warning); }
+.resumo-banco { display: grid; gap: 6px; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-2); font-size: var(--text-sm); }
+.resumo-banco > b { font-weight: 600; }
+.resumo-banco div { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); gap: var(--sp-2); }
+.resumo-banco dt { color: var(--text-muted); }
+.resumo-banco dd { margin: 0; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.so-prototipo { justify-self: start; }
+
+.dlg-lead { font-size: var(--text-md); font-weight: 600; }
+
+/* o código do app nas ações que mudam o contrato (D-A7-14) */
+.codigo-app .input { max-width: 11em; font-family: var(--font-mono); letter-spacing: .18em; }
+.lista-dlg { display: grid; gap: 6px; font-size: var(--text-sm); color: var(--text-muted); }
+.lista-dlg li { display: flex; gap: var(--sp-2); }
+.lista-dlg .ic { flex: none; margin-top: 3px; color: var(--text-subtle); }
+.lista-dlg b { color: var(--text); font-weight: 600; }
+.protocolo { display: grid; gap: var(--sp-2); padding: var(--sp-4); border-radius: var(--radius-lg); background: var(--success-soft); font-size: var(--text-sm); }
+.protocolo b { font-weight: 600; }
+
+/* quem não vê a cobrança e a conta suspensa */
+.quem-cuida { display: grid; gap: var(--sp-2); justify-items: center; font-size: var(--text-sm); }
+.quem-cuida li { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.quem-cuida .av-user { width: 28px; height: 28px; }
+
+/* o Resumo (outra tela), só para o aviso */
+.resumo-stub { color: var(--text-muted); }
+
+@media (max-width: 480px) {
+  .resumo-banco div, .degrau, .fase { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
+/* ===== estilos de Segurança da conta e da entrada, como no P28 (aprovado em 01/11/2026) ===== */
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.lite-chip { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: var(--radius-full); background: var(--bg-subtle); color: var(--text-muted); font-size: var(--text-xs); font-weight: 500; }
+
+/* Segurança da conta, como no protótipo aprovado e no app */
+.seg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); align-items: start; }
+.seg-largo { margin-top: var(--sp-4); }
+.seg-txt { font-size: var(--text-sm); color: var(--text-muted); }
+.seg-txt b { color: var(--text); }
+.seg-num { font-size: var(--text-lg); font-weight: 600; }
+.seg-num .mono { font-size: var(--text-2xl); }
+.seg-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: auto; }
+.aviso-seg { display: grid; gap: 2px; margin-bottom: var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); font-size: var(--text-sm); }
+.aviso-seg--atencao { background: var(--warning-soft); color: var(--text); }
+.aviso-seg--ok { background: var(--success-soft); color: var(--text); }
+.aparelhos { display: grid; }
+.aparelho { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.aparelho:last-child { border-bottom: 0; }
+.ap-ic { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--bg-subtle); font-family: var(--font-mono); font-size: 10px; font-weight: 600; }
+.ap-nome { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-weight: 600; overflow-wrap: anywhere; }
+.ap-meta { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+
+/* o cartão das chaves */
+.chaves-card { margin-bottom: var(--sp-4); }
+.chave { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--sp-2) var(--sp-3); padding: var(--sp-3) 0; border-bottom: 1px solid var(--border); }
+.chave:last-child { border-bottom: 0; }
+.chave .ap-ic { color: var(--ai); background: var(--ai-soft); }
+.chave-acoes { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.chave-acoes .input { width: min(100%, 260px); min-height: 32px; }
+.chave-vazia { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-3) var(--sp-4); align-items: start; }
+.chave-vazia .ap-ic { width: 52px; height: 52px; color: var(--ai); background: var(--ai-soft); }
+.chave-vazia ul { display: grid; gap: 4px; margin-top: var(--sp-2); font-size: var(--text-sm); color: var(--text-muted); }
+.chave-vazia li { display: flex; gap: var(--sp-2); }
+.chave-vazia li .ic { flex: none; margin-top: 3px; color: var(--success); }
+.st--sinc { background: var(--primary-soft); color: var(--link); }
+.chave-bloqueio { grid-column: 2; font-size: var(--text-sm); font-weight: 500; color: var(--warning); }
+
+/* passos de criar */
+.passos { display: flex; flex-wrap: wrap; gap: var(--sp-2); font-size: var(--text-xs); color: var(--text-muted); }
+.passos li { display: inline-flex; align-items: center; gap: 6px; }
+.passos li[aria-current="step"] { color: var(--text); font-weight: 600; }
+.passos .n { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--bg-subtle); font-family: var(--font-mono); font-size: 10px; }
+.passos li[aria-current="step"] .n { background: var(--primary); color: var(--primary-fg); }
+.codigos-rec { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px var(--sp-4); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--bg-subtle); font-family: var(--font-mono); font-size: var(--text-sm); }
+
+/* a entrada (fora da conta): só o formulário, sem o menu */
+.app.fora-da-conta { grid-template-columns: minmax(0, 1fr); }
+.app.fora-da-conta .sidebar, .app.fora-da-conta .topbar { display: none; }
+.entrada { display: grid; place-items: center; min-height: 100%; padding-block: var(--sp-8); }
+.entrada-card { width: min(100%, 440px); display: grid; gap: var(--sp-4); padding: var(--sp-8) var(--sp-6); border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-sm); }
+.entrada-card .logo-simbolo { display: block; width: 44px; height: 44px; }
+.entrada-card h1 { font-size: var(--text-xl); }
+.entrada-card form { display: grid; gap: var(--sp-4); }
+.entrada-card .btn { width: 100%; }
+.ou { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--sp-3); font-size: var(--text-xs); color: var(--text-muted); }
+.ou::before, .ou::after { content: ""; height: 1px; background: var(--border); }
+.sugestao { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--elevated); box-shadow: var(--shadow); font-size: var(--text-sm); text-align: left; cursor: pointer; width: 100%; color: var(--text); }
+.sugestao:hover { background: var(--surface-hover); }
+.sugestao:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.sugestao .ic { color: var(--ai); flex: none; }
+.sugestao span { display: grid; min-width: 0; }
+.sugestao small { color: var(--text-muted); font-size: var(--text-xs); overflow-wrap: anywhere; }
+.entrada-msg { padding: var(--sp-3); border-radius: var(--radius); font-size: var(--text-sm); }
+.entrada-msg--atencao { background: var(--warning-soft); }
+.entrada-msg--ok { background: var(--success-soft); }
+.entrada-alt { display: grid; gap: var(--sp-2); justify-items: center; font-size: var(--text-sm); }
+.entrada-alt button { background: none; border: 0; padding: 4px; color: var(--link); font: inherit; text-decoration: underline; cursor: pointer; }
+.entrada-alt button:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
+.entrada-nota { font-size: var(--text-xs); color: var(--text-muted); text-align: center; }
+
+/* a janela do aparelho (simulada): neutra, como a do sistema, e marcada como simulação */
+.dialogo--sistema { width: min(400px, calc(100vw - 32px)); border-radius: 16px; background: light-dark(#F5F5F7, #2A2A2E); color: light-dark(#1D1D1F, #F5F5F7); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.dialogo--sistema .dialogo-corpo { gap: var(--sp-3); text-align: center; }
+.dialogo--sistema .sis-marca { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: light-dark(#6E6E73, #A1A1A6); }
+.dialogo--sistema .sis-ic { width: 56px; height: 56px; margin: 0 auto; display: grid; place-items: center; border-radius: 16px; background: light-dark(#E8E8ED, #3A3A3F); }
+.dialogo--sistema .sis-ic .ic { width: 28px; height: 28px; }
+.dialogo--sistema h2 { font-size: 17px; font-weight: 600; }
+.dialogo--sistema p { font-size: 13px; color: light-dark(#3A3A3C, #D1D1D6); }
+.dialogo--sistema .dialogo-acoes { justify-content: center; border-top: 0; background: transparent; }
+.dialogo--sistema .btn { border-radius: 10px; }
+.dialogo--sistema .sis-qr { width: 132px; height: 132px; margin: 0 auto; border-radius: 8px; background:
+  repeating-conic-gradient(light-dark(#1D1D1F, #F5F5F7) 0 25%, transparent 0 50%) 0 0 / 22px 22px, light-dark(#FFFFFF, #1D1D1F); }
+
+/* um pedido em Aprovações, para aprovar com a chave */
+.pedido-apr { display: grid; gap: var(--sp-3); }
+.pedido-apr dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: var(--sp-3); margin: 0; }
+.pedido-apr dt { font-size: var(--text-xs); color: var(--text-muted); }
+.pedido-apr dd { margin: 2px 0 0; font-weight: 500; }
+/* O selo da decisão é uma frase: quebra a linha no estreito (sem barra lateral). */
+.pedido-apr .st { white-space: normal; max-width: 100%; }
+.confirma-chave { display: grid; gap: var(--sp-3); }
+.link-btn { justify-self: start; background: none; border: 0; padding: 4px 0; color: var(--link); font: inherit; font-size: var(--text-sm); text-decoration: underline; cursor: pointer; }
+.link-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
+
+/* Sem barra lateral (regra do dono): no espaço estreito, cada linha da atividade vira um cartão, com o rótulo. */
+.tabela-ativ td, .tabela-ativ th { white-space: normal; }
+.table-wrap:has(.tabela-ativ) { container-type: inline-size; }
+@container (max-width: 640px) {
+  .tabela-ativ thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tabela-ativ, .tabela-ativ tbody, .tabela-ativ tr, .tabela-ativ td { display: block; width: 100%; }
+  .tabela-ativ tr { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+  .tabela-ativ tbody tr:last-child { border-bottom: 0; }
+  .tabela-ativ td { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-3); padding: 3px 0; border: 0; }
+  .tabela-ativ td::before { content: attr(data-rot); color: var(--text-muted); font-family: var(--font-sans); flex: none; }
+  .tabela-ativ td > * { text-align: right; }
+}
+@container pagina (max-width: 900px) {
+  .seg-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .aparelho { grid-template-columns: 44px minmax(0, 1fr); }
+  .aparelho > .btn, .aparelho > .confirma-linha { grid-column: 2; justify-self: start; }
+  .chave-vazia { grid-template-columns: minmax(0, 1fr); }
+  .codigos-rec { grid-template-columns: minmax(0, 1fr); }
+  .entrada-card { padding: var(--sp-6) var(--sp-4); }
+}
+
+/* ===== A7 · P35 · Os Termos novos: o aviso e o novo aceite ===== */
+/* o Resumo de exemplo (só para mostrar onde a faixa aparece) */
+.res-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--sp-4); }
+.res-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--text-2xl); font-weight: 600; }
+.res-nota { margin-top: var(--sp-4); font-size: var(--text-sm); color: var(--text-muted); }
+
+/* a faixa dos Termos novos: o texto quebra a linha, o botão nunca empurra a página para o lado */
+.faixa-termos .faixa-txt b { font-weight: 600; }
+
+/* o que muda: uma mudança por bloco, o de hoje e o que fica um embaixo do outro */
+.mudancas { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
+.mudanca { display: grid; gap: var(--sp-2); min-width: 0; padding: var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.mudanca-doc { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-subtle); }
+.mudanca h3 { font-size: var(--text-md); text-wrap: balance; }
+.mudanca dl { display: grid; gap: var(--sp-2); margin: 0; }
+.mudanca dl > div { display: grid; gap: 2px; min-width: 0; }
+.mudanca dt { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); }
+.mudanca dd { margin: 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+.muda-quando { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.muda-quando .dlg-lead { flex: 1 1 260px; }
+.textos { display: grid; gap: var(--sp-2); }
+.textos h3 { font-size: var(--text-sm); }
+.textos-links { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--text-sm); }
+.textos-links a { display: inline-flex; align-items: center; gap: 6px; color: var(--link); }
+.textos-links a .ic { width: 14px; height: 14px; }
+.aceite-frase { flex: 1 1 100%; margin: 0; font-size: var(--text-xs); color: var(--text-muted); text-align: right; }
+.aceite-feito { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--radius); background: var(--success-soft); font-size: var(--text-sm); }
+.aceite-feito .ic { flex: none; margin-top: 2px; color: var(--success); }
+
+/* a tela do dia: no lugar do conteúdo, só para quem ainda não aceitou */
+.aceite-tela { max-width: 680px; margin: 0 auto; }
+.aceite-tela .card { gap: var(--sp-5); padding: var(--sp-6); }
+.aceite-tela h1 { font-size: var(--text-xl); text-wrap: balance; outline: none; }
+.aceite-ic { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--primary-soft); color: var(--link); }
+.aceite-lista { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; font-size: var(--text-sm); }
+.aceite-acoes { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.aceite-outro { display: grid; gap: var(--sp-2); padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+.aceite-outro h2 { font-size: var(--text-md); }
+.aceite-outro p, .aceite-tela .seg-txt { font-size: var(--text-sm); color: var(--text-muted); }
+
+/* Segurança da conta: o cartão Termos e privacidade */
+.termos-dl { display: grid; gap: var(--sp-3); margin: 0; }
+.termos-dl > div { display: grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr); gap: var(--sp-2) var(--sp-4); min-width: 0; }
+.termos-dl dt { font-size: var(--text-sm); color: var(--text-muted); }
+.termos-dl dd { margin: 0; display: grid; gap: var(--sp-2); justify-items: start; font-size: var(--text-sm); min-width: 0; overflow-wrap: anywhere; }
+.termos-card { container: termos / inline-size; }
+@container termos (max-width: 520px) { .termos-dl > div { grid-template-columns: minmax(0, 1fr); } }
+.versoes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
+.versao { display: grid; gap: var(--sp-2); min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); }
+.versao-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.versao-cab b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.versao p { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.termos-sub { font-size: var(--text-md); margin-top: var(--sp-2); }
+
+/* a prévia dos e-mails (fora da conta) */
+.email-tela { display: grid; justify-items: center; gap: var(--sp-4); padding-block: var(--sp-8); }
+.email-tela > p { max-width: 64ch; font-size: var(--text-sm); color: var(--text-muted); text-align: center; }
+.email-card { width: min(100%, 640px); display: grid; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-md, none); overflow: hidden; }
+.email-cab { display: grid; gap: var(--sp-1); padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--border); background: var(--surface-2); font-size: var(--text-sm); }
+.email-cab h1 { font-size: var(--text-lg); text-wrap: balance; outline: none; }
+.email-cab p { color: var(--text-muted); overflow-wrap: anywhere; }
+.email-corpo { display: grid; gap: var(--sp-3); padding: var(--sp-5); font-size: var(--text-sm); }
+.email-corpo ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.email-corpo .email-pe { padding-top: var(--sp-3); border-top: 1px solid var(--border); font-size: var(--text-xs); color: var(--text-muted); }
+.email-corpo b { font-weight: 600; }
+</style>
+</head>
+<body data-pagina="termos">
+<script>document.documentElement.classList.add('modo-lite');</script>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-atencao" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3 4.9 4.9M19.1 19.1l-1.4-1.4M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 17v2M13 11v2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-alert-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3M21 21v.01M12 7v3a2 2 0 0 1-2 2H7M3 12h.01M12 3h.01M12 16v.01M16 12h1M21 12v.01M12 21v-1"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2V2l-3 2-3-2-3 2-3-2-3 2Z"/><path d="M8 8h8M8 12h8M8 16h5"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20M6 15h4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect width="4" height="16" x="6" y="4" rx="1"/><rect width="4" height="16" x="14" y="4" rx="1"/></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2M2 13h20"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></symbol>
+  <symbol id="liame-simbolo" viewBox="0 0 512 512">
+    <g transform="translate(122.16 61.31)">
+      <path d="M31.1 0V293.76H184.32" fill="none" stroke-width="62.2" style="stroke:var(--logo-ink)"/>
+      <circle cx="235.33" cy="293.76" r="32.35" style="fill:var(--marca-ciano)"/>
+      <rect x="0" y="366.34" width="267.68" height="20.74" rx="10.37" style="fill:var(--marca-ciano)"/>
+    </g>
+  </symbol>
+</svg>
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+<p class="sr-only" id="anuncio" role="status" aria-live="polite"></p>
+
+<div class="revisao" role="region" aria-label="Controles do protótipo">
+  <p class="revisao-marca"><b>Protótipo para aprovação · A7 · P35</b><span>Termos novos: o aviso e o novo aceite · dados e datas de exemplo</span></p>
+  <label>Situação <select id="rev-cenario"></select></label>
+  <button class="btn btn--sm btn--ghost" type="button" id="rev-tema" aria-pressed="false">Tema escuro</button>
+</div>
+
+<div class="app">
+  <aside class="sidebar" id="menu-lateral" aria-label="Menu">
+    <div class="sb-logo"><svg class="logo-completo" viewBox="0 0 758.18 309" role="img" aria-label="Liame">
+        <g transform="translate(24 24)">
+          <path d="M17.5 84V211.5H84" fill="none" stroke-width="27" style="stroke:var(--logo-ink)"/>
+          <circle cx="106.14" cy="211.5" r="14.04" style="fill:var(--marca-ciano)"/>
+          <path d="M233 702V0H62V702Z" transform="translate(140.88 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <path d="M163.18 12H201.58Q212.38 12 212.38 22.8V49.2Q212.38 60 201.58 60H177.58L164.38 76.8V60H163.18Q152.38 60 152.38 49.2V22.8Q152.38 12 163.18 12Z" style="fill:var(--marca-ciano)"/>
+          <path d="M499 124H237L195 0H16L270 702H468L722 0H541ZM455 256 368 513 282 256Z" transform="translate(203.48 225) scale(0.2 -0.2)" style="fill:var(--marca-violeta)"/>
+          <clipPath id="liame-mc"><rect x="207.98" y="-57" width="480" height="282"/></clipPath>
+          <g clip-path="url(#liame-mc)" fill="none" stroke-width="31.86" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M512.05 99.93V256.86" style="stroke:var(--marca-petroleo)"/>
+            <path d="M447.98 182.7L512.05 99.93" style="stroke:var(--marca-ciano)"/>
+            <path d="M383.91 99.93L447.98 182.7" style="stroke:var(--marca-lavanda-clara)"/>
+            <path d="M383.91 256.86V99.93" style="stroke:var(--marca-lavanda)"/>
+          </g>
+          <polygon points="531.8,46.4 536.3,57.1 547.9,58 539,65.6 541.7,77 531.8,70.9 521.8,77 524.5,65.6 515.7,58 527.3,57.1" stroke-width="3.05" stroke-linejoin="round" style="fill:var(--marca-ambar);stroke:var(--marca-ambar)"/>
+          <g transform="translate(447.98 202.44) scale(1.128)"><path d="M0 15C-20 2-20-13-9-13C-4-13-1-9 0-7C1-9 4-13 9-13C20-13 20 2 0 15Z" style="fill:var(--marca-coral)"/></g>
+          <g transform="translate(386.73 80.19) scale(1.128)"><path fill-rule="evenodd" d="M0 24C-12 10-17 2-17-7A17 17 0 1 1 17-7C17 2 12 10 0 24ZM0-13.5A6.5 6.5 0 1 0 0-.5A6.5 6.5 0 1 0 0-13.5Z" style="fill:var(--logo-pin)"/></g>
+          <path d="M233 565V423H462V291H233V137H492V0H62V702H492V565Z" transform="translate(539.68 225) scale(0.2 -0.2)" style="fill:var(--logo-ink)"/>
+          <rect x="654.18" y="143.5" width="52" height="22" style="fill:var(--marca-ciano)"/>
+          <rect x="4" y="245" width="702.18" height="8" rx="4" style="fill:var(--marca-ciano)"/>
+        </g>
+      </svg><svg class="logo-simbolo" role="img" aria-label="Liame"><use href="#liame-simbolo"/></svg><button class="btn btn--icon btn--ghost sb-fechar" type="button" id="bt-fechar-menu" aria-label="Fechar menu"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <button class="ctx" type="button" disabled><span class="ctx-av" aria-hidden="true">MB</span><span class="ctx-txt"><b>Mister Burgers</b><span id="ctx-papel">Dono</span></span></button>
+    <nav aria-label="Principal">
+      <div class="nav-grupo">
+        <p class="nav-grupo-rot rotulo-marca" id="g-ag">Agência</p>
+        <ul class="nav-lista" aria-labelledby="g-ag">
+          <li><a class="nav-item" href="#resumo" data-ir="resumo" title="Resumo"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg><span class="rot">Resumo</span></a></li>
+          <li><a class="nav-item" href="#" title="Aprovações" data-fora="Fora deste protótipo: Aprovações já está no app."><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg><span class="rot">Aprovações</span></a></li>
+          <li><a class="nav-item" href="#" title="Pessoas e acessos" data-fora="Fora deste protótipo: Pessoas e acessos já está no app."><svg class="ic" aria-hidden="true"><use href="#i-user-plus"/></svg><span class="rot">Pessoas e acessos</span></a></li>
+          <li><a class="nav-item" href="#" title="Plano e cobrança" data-fora="Fora deste protótipo: Plano e cobrança já está no app; cancelar está lá."><svg class="ic" aria-hidden="true"><use href="#i-receipt"/></svg><span class="rot">Plano e cobrança</span></a></li>
+        </ul>
+      </div>
+      <button class="nav-item nav-mais so-lite" type="button" id="bt-ferramentas" aria-expanded="false" aria-controls="g-ferramentas" title="Mais ferramentas"><svg class="ic" aria-hidden="true"><use href="#i-chevron-down"/></svg><span class="rot">Mais ferramentas</span><span class="nav-mais-n" aria-hidden="true">1</span><span class="sr-only">, 1 ferramenta</span></button>
+      <div id="g-ferramentas" hidden>
+        <div class="nav-grupo">
+          <p class="nav-grupo-rot rotulo-marca" id="g-oper">Operação</p>
+          <ul class="nav-lista" aria-labelledby="g-oper">
+            <li><a class="nav-item" href="#" title="Links e cupons" data-fora="Fora deste protótipo: Links e cupons já está no app."><svg class="ic" aria-hidden="true"><use href="#i-link"/></svg><span class="rot">Links e cupons</span></a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="nav-grupo">
+        <p class="nav-grupo-rot rotulo-marca" id="g-conta">Sua conta</p>
+        <ul class="nav-lista" aria-labelledby="g-conta">
+          <li><a class="nav-item" href="#seguranca" data-ir="seguranca" title="Segurança da conta"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span class="rot">Segurança da conta</span></a></li>
+        </ul>
+      </div>
+    </nav>
+    <div class="sb-rodape">
+      <div class="modo" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false">Pro</button></div>
+      <div class="usuario"><span class="av-user" aria-hidden="true" id="usuario-av">R</span><span class="usuario-txt"><b id="usuario-nome">Rodrigo</b><span id="usuario-papel">Dono · Mister Burgers</span></span></div>
+    </div>
+  </aside>
+
+  <div class="principal">
+    <header class="topbar"><button class="btn btn--icon btn--ghost tb-menu" type="button" id="bt-menu" aria-label="Abrir menu" aria-expanded="false" aria-controls="menu-lateral"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button><div class="trilha"><span class="trilha-pai">Mister Burgers</span><span class="trilha-sep" aria-hidden="true">/</span><strong id="trilha-tela">Resumo</strong></div><span class="spacer"></span><div class="modo modo-top" id="modo-top" role="group" aria-label="Modo de exibição"><button type="button" data-modo-bt="lite" aria-pressed="true" title="Lite: o essencial; o resto em Ver detalhes">Lite</button><button type="button" data-modo-bt="pro" aria-pressed="false" title="Pro: todos os números e tabelas">Pro</button></div></header>
+    <main id="conteudo" class="conteudo" tabindex="-1">
+      <div class="pagina">
+
+<!-- uma tela qualquer do app (o Resumo), com a faixa dos Termos novos no alto -->
+<section id="tela-resumo" aria-labelledby="h-res">
+  <div id="faixa-termos"></div>
+  <div class="view-cab">
+    <div><h1 id="h-res" tabindex="-1">Bom dia, <span class="quem-nome">Rodrigo</span></h1><p>Fora deste protótipo: o Resumo já está no app. Aqui ele só mostra onde a faixa aparece; ela fica no alto de todas as telas, para todos, até a pessoa aceitar.</p></div>
+  </div>
+  <div class="res-grid">
+    <article class="card"><p class="card-sub">Vendas pelos anúncios, ontem</p><p class="res-num">R$ 1.284,00</p></article>
+    <article class="card"><p class="card-sub">Pedidos esperando você</p><p class="res-num">2</p></article>
+    <article class="card"><p class="card-sub">O que a equipe fez esta semana</p><p class="res-num">14</p></article>
+  </div>
+  <p class="res-nota">Números de exemplo.</p>
+</section>
+
+<!-- no dia, para quem não aceitou: a tela do aceite no lugar do conteúdo -->
+<section id="tela-aceite" class="aceite-tela" aria-labelledby="h-aceite" hidden>
+  <article class="card">
+    <span class="aceite-ic" aria-hidden="true"><svg class="ic" aria-hidden="true"><use href="#i-file"/></svg></span>
+    <div>
+      <h1 id="h-aceite" tabindex="-1">Os Termos novos valem desde 02/12/2026</h1>
+      <p class="seg-txt">Para continuar usando o Liame, aceite os Termos de Uso e a Política de Privacidade novos. São 4 mudanças; ler leva uns 2 minutos.</p>
+    </div>
+    <ul class="aceite-lista" id="aceite-lista"></ul>
+    <div class="aceite-acoes">
+      <button class="btn btn--primary" type="button" data-acao="aceitar">Aceitar os Termos novos</button>
+      <button class="btn" type="button" data-acao="ver-muda" aria-haspopup="dialog" aria-expanded="false">Ver o que muda</button>
+      <button class="btn btn--ghost" type="button" data-fora="Protótipo: sair leva à entrada. Na próxima vez, esta tela aparece de novo.">Sair da conta</button>
+    </div>
+    <p class="campo-dica">Ao aceitar, você concorda com os Termos de Uso e a Política de Privacidade que valem desde 02/12/2026.</p>
+    <div class="aceite-outro" id="aceite-outro"></div>
+  </article>
+</section>
+
+<!-- Segurança da conta: o cartão Termos e privacidade -->
+<section id="tela-seguranca" aria-labelledby="h-seg" hidden>
+  <div class="view-cab">
+    <div><h1 id="h-seg" tabindex="-1">Segurança da conta</h1><p>Como você entra no Liame e o que você aceitou. Fora deste protótipo: os outros cartões (chaves de acesso, app autenticador, senha, aparelhos e atividade), que já estão no app.</p></div>
+  </div>
+  <article class="card termos-card" aria-labelledby="t-termos">
+    <div class="card-cab"><div><h2 id="t-termos">Termos e privacidade</h2><p class="card-sub">Os textos que valem para a sua conta e quando você aceitou cada um.</p></div></div>
+    <dl class="termos-dl" id="termos-dl"></dl>
+    <h3 class="termos-sub">As versões</h3>
+    <ul class="versoes" id="versoes"></ul>
+  </article>
+</section>
+
+<!-- quem chega no meio do aviso: o cadastro (fora da conta) -->
+<section id="tela-cadastro" class="entrada" aria-labelledby="h-cad" hidden>
+  <div class="entrada-card">
+    <svg class="logo-simbolo" role="img" aria-label="Liame"><use href="#liame-simbolo"/></svg>
+    <div><h1 id="h-cad" tabindex="-1">Criar a conta da empresa</h1><p class="seg-txt">Fora deste protótipo: o resto do cadastro, que já está no app. Aqui só a frase do aceite muda.</p></div>
+    <form id="form-cad" novalidate>
+      <div class="campo"><label for="cad-nome">Seu nome</label><input class="input" id="cad-nome" autocomplete="name" value="Marina"></div>
+      <div class="campo"><label for="cad-email">E-mail</label><input class="input" id="cad-email" type="email" autocomplete="email" value="marina@cantina.exemplo.com.br"></div>
+      <div class="campo"><label for="cad-empresa">Nome da empresa</label><input class="input" id="cad-empresa" autocomplete="organization" value="Cantina da Marina"></div>
+      <p class="campo-dica" id="cad-dica">Ao criar a conta, você concorda com os <a href="#" data-fora="Protótipo: abre os Termos de Uso de hoje, no site.">Termos de Uso</a> e a <a href="#" data-fora="Protótipo: abre a Política de Privacidade de hoje, no site.">Política de Privacidade</a>, e também com a versão que vale a partir de 02/12/2026 (<button class="link-btn" type="button" data-acao="ver-muda-leitura" aria-haspopup="dialog" aria-expanded="false">ver o que muda</button>).</p>
+      <button class="btn btn--primary" type="submit">Criar conta</button>
+    </form>
+  </div>
+</section>
+
+<!-- a prévia dos e-mails (fora da conta) -->
+<section id="tela-email" class="email-tela" aria-labelledby="h-email" hidden>
+  <p>Prévia do e-mail, em texto simples, como os outros avisos do Liame. Uma vez por versão e por pessoa.</p>
+  <article class="email-card">
+    <div class="email-cab" id="email-cab"></div>
+    <div class="email-corpo" id="email-corpo"></div>
+  </article>
+</section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- o que muda: a gaveta, aberta pela faixa, pela tela do dia, pelo cadastro e por Segurança da conta -->
+<dialog class="dialogo dialogo--lado" id="dlg-muda" aria-labelledby="dlg-muda-t">
+  <form class="dialogo-form" id="form-muda" novalidate>
+    <div class="dialogo-cab"><h2 id="dlg-muda-t">O que muda nos Termos</h2><button class="btn btn--icon btn--ghost" type="button" data-fechar aria-label="Fechar"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dialogo-corpo" id="muda-corpo"></div>
+    <div class="dialogo-acoes" id="muda-acoes"></div>
+  </form>
+</dialog>
+
+<div class="veu" id="veu" hidden></div>
+<div class="toast-region" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------- utilidades ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const raiz = document.documentElement;
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const reduzido = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const moeda = (v, casas = 2) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: casas, maximumFractionDigits: casas });
+const numero = (v, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+const vezes = (v) => numero(v, 1) + '×';
+const pct = (v) => numero(Math.round(v * 100)) + '%';
+const ic = (nome, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#${nome}"/></svg>`;
+const params = new URLSearchParams(location.search);
+
+function anunciar(t) { const a = $('#anuncio'); if (!a) return; a.textContent = ''; setTimeout(() => { a.textContent = t; }, 30); }
+function toast(texto, { tipo = 'ok' } = {}) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (tipo === 'perigo' ? ' toast--perigo' : '');
+  const s = document.createElement('span'); s.textContent = texto; t.append(s);
+  $('.toast-region').append(t);
+  setTimeout(() => { t.classList.add('saindo'); setTimeout(() => t.remove(), 260); }, 4200);
+}
+async function copiar(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; } catch { /* sem permissão: tenta o jeito antigo */ }
+  const ta = document.createElement('textarea');
+  ta.value = texto; ta.setAttribute('readonly', ''); ta.className = 'sr-only';
+  (document.querySelector('dialog[open]') || document.body).append(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+/* ---------- tema (faixa do protótipo) ---------- */
+const btTema = $('#rev-tema');
+const temaAtual = () => raiz.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+function sincTema() { btTema.setAttribute('aria-pressed', String(temaAtual() === 'dark')); }
+btTema.addEventListener('click', () => { raiz.dataset.theme = temaAtual() === 'dark' ? 'light' : 'dark'; sincTema(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', sincTema);
+sincTema();
+
+/* ---------- gaveta do menu (celular), como na tela aprovada ---------- */
+const app = $('.app'), btMenu = $('#bt-menu'), veu = $('#veu');
+function menu(abrir) {
+  app.classList.toggle('gaveta', abrir);
+  veu.hidden = !abrir;
+  btMenu.setAttribute('aria-expanded', String(abrir));
+  $('.principal').inert = abrir;
+  $('.revisao').inert = abrir;
+  // Foco depois do commit, sem requestAnimationFrame, com uma nova tentativa (V27).
+  const alvo = abrir ? $('#bt-fechar-menu') : btMenu;
+  setTimeout(() => { alvo.focus(); if (document.activeElement !== alvo) setTimeout(() => alvo.focus(), 400); }, 0);
+}
+btMenu.addEventListener('click', () => menu(true));
+$('#bt-fechar-menu').addEventListener('click', () => menu(false));
+veu.addEventListener('click', () => menu(false));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && app.classList.contains('gaveta') && !document.querySelector('dialog[open]')) menu(false); });
+matchMedia('(max-width: 768px)').addEventListener('change', (e) => {
+  if (!e.matches && app.classList.contains('gaveta')) { app.classList.remove('gaveta'); veu.hidden = true; btMenu.setAttribute('aria-expanded', 'false'); $('.principal').inert = false; $('.revisao').inert = false; }
+});
+$$('[data-fora]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); if (app.classList.contains('gaveta')) menu(false); toast(a.dataset.fora); }));
+
+/* ---------- modos Lite e Pro (protótipo geral aprovado) ---------- */
+const shell = { modo: 'lite', ferramentas: document.body.dataset.ferramentas === 'abertas' };
+function sincFerramentas() {
+  $('#g-ferramentas').hidden = !(shell.modo === 'pro' || shell.ferramentas);
+  $('#bt-ferramentas').setAttribute('aria-expanded', String(shell.ferramentas));
+}
+$('#bt-ferramentas').addEventListener('click', () => { shell.ferramentas = !shell.ferramentas; sincFerramentas(); });
+function comModo(destino) {
+  const [base, q = ''] = destino.split('?');
+  const p = new URLSearchParams(q); p.set('modo', shell.modo);
+  return `${base}?${p}`;
+}
+function sincLinks() { $$('a[data-destino]').forEach((a) => a.setAttribute('href', comModo(a.dataset.destino))); }
+function sincDetalhesBt(bt, aberto) {
+  bt.setAttribute('aria-expanded', String(aberto));
+  const r = bt.querySelector('.rot'); if (r) r.textContent = aberto ? 'Ocultar detalhes' : 'Ver detalhes';
+}
+function definirModo(modo, { silencioso = false } = {}) {
+  if (modo !== 'lite' && modo !== 'pro') return;
+  shell.modo = modo;
+  raiz.classList.toggle('modo-lite', modo === 'lite');
+  raiz.classList.toggle('modo-pro', modo === 'pro');
+  $$('[data-modo-bt]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.modoBt === modo)));
+  $$('.aberto').forEach((e) => e.classList.remove('aberto'));
+  $$('[data-detalhes]').forEach((b) => sincDetalhesBt(b, false));
+  sincFerramentas();
+  sincLinks();
+  if (typeof window.aoMudarModo === 'function') window.aoMudarModo(modo);
+  if (!silencioso) {
+    anunciar(modo === 'pro' ? 'Modo Pro' : 'Modo Lite');
+    toast(modo === 'pro' ? 'Modo Pro: todos os números, tabelas e ferramentas.' : 'Modo Lite: o essencial; o resto fica em "Ver detalhes".');
+  }
+}
+document.addEventListener('click', (e) => {
+  const alvo = e.target instanceof Element ? e.target : null; if (!alvo) return;
+  const m = alvo.closest('[data-modo-bt]'); if (m) { definirModo(m.dataset.modoBt); return; }
+  const d = alvo.closest('[data-detalhes]');
+  if (d) {
+    const bloco = $(d.dataset.detalhes); if (!bloco) return;
+    const aberto = !bloco.classList.contains('aberto');
+    bloco.classList.toggle('aberto', aberto);
+    $$(`[data-detalhes="${d.dataset.detalhes}"]`).forEach((b) => sincDetalhesBt(b, aberto));
+  }
+});
+
+/* ---------- diálogos nativos: foco volta a quem abriu; clique no fundo e "Fechar" fecham ---------- */
+const origemDlg = new WeakMap();
+function abrirDialogo(dlg, origem = document.activeElement) {
+  if (dlg.open) return;
+  const o = origem instanceof HTMLElement && origem !== document.body ? origem : null;
+  origemDlg.set(dlg, o);
+  if (o && o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'true');
+  dlg.returnValue = ''; // Esc fecha sem valor; sem isto, a escolha anterior voltaria
+  dlg.showModal();
+}
+$$('dialog').forEach((dlg) => {
+  dlg.addEventListener('close', () => {
+    const o = origemDlg.get(dlg);
+    if (o) { if (o.getAttribute('aria-haspopup') === 'dialog') o.setAttribute('aria-expanded', 'false'); if (o.isConnected) o.focus({ preventScroll: true }); }
+    origemDlg.delete(dlg);
+  });
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg || (e.target instanceof Element && e.target.closest('[data-fechar]'))) dlg.close('cancelar');
+  });
+});
+
+/* ---------- confirmação na própria linha (como na tela aprovada) ---------- */
+function confirmarNaLinha(bt, { texto = '', rotulo, voltar = 'Cancelar', aoConfirmar }) {
+  const caixa = document.createElement('div');
+  caixa.className = 'confirma-linha';
+  caixa.innerHTML = `${texto ? `<span class="confirma-txt">${esc(texto)}</span>` : ''}<button class="btn btn--sm btn--perigo-cheio" type="button">${esc(rotulo)}</button><button class="btn btn--sm" type="button">${esc(voltar)}</button>`;
+  const [conf, canc] = caixa.querySelectorAll('button');
+  bt.replaceWith(caixa);
+  conf.focus();
+  conf.addEventListener('click', aoConfirmar);
+  canc.addEventListener('click', () => { caixa.replaceWith(bt); bt.focus(); });
+}
+
+/* ---------- cenário (faixa do protótipo) ---------- */
+const selCenario = $('#rev-cenario');
+function marcarCenario(id) { if (selCenario.value !== id) selCenario.value = id; }
+/* grupos: [{ grupo: 'Rótulo' ou null, itens: { id: 'texto' } }] */
+function preencherCenarios(grupos) {
+  selCenario.replaceChildren(...grupos.flatMap(({ grupo, itens }) => {
+    const ops = Object.entries(itens).map(([id, rot]) => new Option(rot, id));
+    if (!grupo) return ops;
+    const g = document.createElement('optgroup'); g.label = grupo; g.append(...ops); return [g];
+  }));
+}
+window.uiuxCenarios = {};
+
+/* ---------- início do shell ---------- */
+definirModo(params.get('modo') === 'pro' ? 'pro' : 'lite', { silencioso: true });
+
+
+/* ===================== A7 · P35 · Os Termos novos: o aviso e o novo aceite ===================== */
+/* Dados e datas de exemplo: o aviso saiu em 02/11/2026; os Termos novos valem em 02/12/2026 (30 dias depois). */
+(() => {
+  const VALE_EM = '02/12/2026', AVISO_EM = '02/11/2026', ATE = '01/12/2026';
+  const MUDANCAS = [
+    { doc: 'Termos de Uso · 4', titulo: 'Agências parceiras', hoje: 'Só as pessoas da sua empresa usam o Liame em nome dela.', fica: 'Uma agência que o Dono aceitar pode agir em nome da empresa, só até o nível e o limite que o Dono der. O vínculo se desfaz pelos dois lados, na hora.' },
+    { doc: 'Termos de Uso · 10 e 11', titulo: 'Cobrança, atraso e cancelamento', hoje: 'A mensalidade segue as regras gerais de pagamento.', fica: 'PIX ou cartão, pelo Asaas. Aviso no 1º dia de atraso, ações pausadas no 10º e conta suspensa no 30º. Cancelar num clique, valendo no fim do período pago; desistir em 7 dias, com a devolução integral, na primeira contratação.' },
+    { doc: 'Termos de Uso · 3', titulo: 'A conta do Dono', hoje: 'A propriedade da conta fica com quem criou a empresa.', fica: 'O Dono pode passar a propriedade para outra pessoa, com o aceite dela. Quem perder o acesso recupera a conta pela DMS, com a conferência do CNPJ.' },
+    { doc: 'Política de Privacidade · 4', titulo: 'Chaves de acesso', hoje: 'Você entra com a senha e o código do app.', fica: 'Para quem criar uma chave de acesso, guardamos só a chave pública, o nome e o último uso. A digital e o rosto nunca saem do aparelho.' },
+  ];
+  const PESSOAS = {
+    dono: { nome: 'Rodrigo', papel: 'Dono', email: 'rodrigo@misterburgers.exemplo.com.br', inicial: 'R' },
+    admin: { nome: 'Juliana', papel: 'Administradora', email: 'juliana@misterburgers.exemplo.com.br', inicial: 'J' },
+  };
+  const CENAS = [
+    { grupo: 'Durante o aviso (hoje é 05/11/2026)', itens: { 'av-faixa': 'A faixa no alto das telas (Dono)', 'av-gaveta': 'O que muda (Dono)', 'av-equipe': 'O que muda (Administradora)', 'av-ultimos': 'Os últimos 7 dias (hoje é 27/11/2026)', 'av-aceito': 'Depois de aceitar' } },
+    { grupo: 'No dia (03/12/2026), sem o aceite', itens: { 'dia-equipe': 'A tela do aceite (Administradora)', 'dia-dono': 'A tela do aceite (Dono)' } },
+    { grupo: 'Quem chega no meio do aviso', itens: { cad: 'Criar a conta' } },
+    { grupo: 'Segurança da conta', itens: { 'seg-aviso': 'Termos e privacidade, durante o aviso', 'seg-depois': 'Termos e privacidade, depois do dia' } },
+    { grupo: 'Os e-mails', itens: { 'em-aviso': 'O aviso (no dia da versão nova)', 'em-lembrete': 'O lembrete (7 dias antes)', 'em-retirada': 'A versão retirada antes do dia' } },
+  ];
+
+  const est = {};
+  function zerar(cena) {
+    const tela = cena.startsWith('dia-') ? 'aceite' : cena === 'cad' ? 'cadastro' : cena.startsWith('seg-') ? 'seguranca' : cena.startsWith('em-') ? 'email' : 'resumo';
+    Object.assign(est, {
+      cena, tela,
+      papel: cena === 'av-equipe' || cena === 'dia-equipe' ? 'admin' : 'dono',
+      fase: cena === 'av-ultimos' ? 'ultimos' : cena.startsWith('dia-') ? 'dia' : cena === 'seg-depois' ? 'depois' : 'aviso',
+      aceito: cena === 'av-aceito' || cena === 'seg-depois' ? '05/11/2026, às 09:12' : null,
+      onde: 'pelo aviso no alto da tela',
+      email: cena.startsWith('em-') ? cena.slice(3) : null,
+      leitura: false,
+    });
+  }
+  const quem = () => PESSOAS[est.papel];
+  const pendente = () => !est.aceito && est.fase !== 'depois';
+
+  /* ---------- o shell ---------- */
+  function renderShell() {
+    app.classList.toggle('fora-da-conta', est.tela === 'cadastro' || est.tela === 'email');
+    for (const a of $$('[data-ir]')) { if (a.dataset.ir === est.tela) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
+    for (const id of ['resumo', 'aceite', 'seguranca', 'cadastro', 'email']) $('#tela-' + id).hidden = est.tela !== id;
+    const p = quem();
+    $$('.quem-nome').forEach((e) => { e.textContent = p.nome; });
+    $('#ctx-papel').textContent = p.papel;
+    $('#usuario-nome').textContent = p.nome;
+    $('#usuario-papel').textContent = `${p.papel} · Mister Burgers`;
+    $('#usuario-av').textContent = p.inicial;
+    $('#trilha-tela').textContent = { resumo: 'Resumo', aceite: 'Termos novos', seguranca: 'Segurança da conta', cadastro: '', email: '' }[est.tela];
+  }
+
+  /* ---------- a faixa no alto das telas, até a pessoa aceitar ---------- */
+  function renderFaixa() {
+    const caixa = $('#faixa-termos');
+    if (!pendente() || est.fase === 'dia') { caixa.replaceChildren(); return; }
+    const ultimos = est.fase === 'ultimos';
+    caixa.innerHTML = `<div class="faixa faixa-termos ${ultimos ? 'faixa--atencao' : 'faixa--acao'}" role="region" aria-label="Termos novos">
+      <span class="faixa-ic" aria-hidden="true">${ic(ultimos ? 'i-clock' : 'i-file')}</span>
+      <p class="faixa-txt"><b>${ultimos ? 'Faltam 5 dias para os Termos novos' : `Os Termos de Uso e a Política de Privacidade mudam em ${VALE_EM}`}</b><span>${ultimos ? `Em ${VALE_EM}, quem não aceitou vê só a tela do aceite até aceitar. São ${MUDANCAS.length} mudanças.` : `São ${MUDANCAS.length} mudanças. Até lá, valem os de hoje.`}</span></p>
+      <button class="btn btn--primary" type="button" data-acao="ver-muda" aria-haspopup="dialog" aria-expanded="false">Ver o que muda</button>
+    </div>`;
+  }
+
+  /* ---------- o que muda: a gaveta ---------- */
+  const dlgMuda = $('#dlg-muda');
+  function renderGaveta() {
+    const dono = est.papel === 'dono', dia = est.fase === 'dia';
+    const lista = MUDANCAS.map((m) => `<li class="mudanca"><p class="mudanca-doc">${esc(m.doc)}</p><h3>${esc(m.titulo)}</h3><dl><div><dt>Como é hoje</dt><dd>${esc(m.hoje)}</dd></div><div><dt>Como fica</dt><dd>${esc(m.fica)}</dd></div></dl></li>`).join('');
+    const nota = est.leitura ? ''
+      : est.aceito ? `<p class="aceite-feito">${ic('i-check-circle')}<span>Você aceitou em ${esc(est.aceito)}.</span></p>`
+        : dono ? `<p class="dialogo-nota">${ic('i-info')}<span>Não concorda? ${dia ? 'Você pode cancelar a assinatura em Plano e cobrança, sem multa; vale no fim do período pago, e os dados ficam para exportar.' : `Você pode cancelar sem multa até ${ATE}, em Plano e cobrança (Termos 15). Até lá, a empresa segue com os Termos de hoje.`}</span></p>`
+          : `<p class="dialogo-nota">${ic('i-info')}<span>Não concorda? Fale com o Dono da Mister Burgers: só ele cancela a assinatura.</span></p>`;
+    $('#muda-corpo').innerHTML = `
+      <div class="muda-quando"><p class="dlg-lead">${dia ? `Valem desde ${VALE_EM}.` : `Valem a partir de ${VALE_EM}. Até lá, valem os de hoje.`}</p><span class="st st--info"><span class="dot"></span>Aviso de ${AVISO_EM}</span></div>
+      <ol class="mudancas" role="list" aria-label="As mudanças">${lista}</ol>
+      <p class="seg-txt">Nada muda para trás: o que já foi feito segue as regras de quando foi feito.</p>
+      <div class="textos"><h3>Os textos inteiros</h3>
+        <div class="textos-links"><a href="#" data-fora-din="Protótipo: abre os Termos de Uso novos, no site do Liame.">${ic('i-external')}Termos de Uso novos</a><a href="#" data-fora-din="Protótipo: abre a Política de Privacidade nova, no site do Liame.">${ic('i-external')}Política de Privacidade nova</a><a href="#" data-fora-din="Protótipo: abre os Termos de Uso e a Política de hoje, no site do Liame.">${ic('i-external')}Os de hoje</a></div>
+      </div>
+      ${nota}`;
+    $('#muda-acoes').innerHTML = est.leitura || est.aceito
+      ? '<button class="btn" type="button" data-fechar>Fechar</button>'
+      : `<p class="aceite-frase">Ao aceitar, você concorda com os Termos de Uso e a Política de Privacidade que valem ${dia ? 'desde' : 'a partir de'} ${VALE_EM}.</p><button class="btn" type="button" data-fechar>${dia ? 'Voltar' : 'Depois'}</button><button class="btn btn--primary" type="submit">Aceitar os Termos novos</button>`;
+  }
+  function abrirMuda(origem, { leitura = false } = {}) { est.leitura = leitura; renderGaveta(); abrirDialogo(dlgMuda, origem); }
+
+  /* ---------- o aceite: por pessoa, num clique ---------- */
+  function aceitar(onde) {
+    est.aceito = est.fase === 'dia' ? '03/12/2026, às 08:40' : est.fase === 'ultimos' ? '27/11/2026, às 10:05' : '05/11/2026, às 09:12';
+    est.onde = onde;
+    if (dlgMuda.open) dlgMuda.close('ok');
+    if (est.tela === 'aceite') est.tela = 'resumo';
+    renderTudo();
+    toast(`Pronto: você aceitou os Termos de ${VALE_EM}.`);
+    focarTitulo();
+  }
+
+  /* ---------- no dia: a tela do aceite no lugar do conteúdo ---------- */
+  function renderAceite() {
+    $('#aceite-lista').innerHTML = MUDANCAS.map((m) => `<li><b>${esc(m.titulo)}</b> (${esc(m.doc)})</li>`).join('');
+    $('#aceite-outro').innerHTML = est.papel === 'dono'
+      ? `<h2>Não concorda?</h2><p>Você pode cancelar a assinatura em Plano e cobrança, sem multa (vale no fim do período pago), e exportar os dados da empresa antes. A equipe de IA da Mister Burgers segue trabalhando; só a sua entrada espera o aceite.</p><div class="aceite-acoes"><button class="btn" type="button" data-fora-din="Fora deste protótipo: Plano e cobrança já está no app; cancelar está lá.">Plano e cobrança</button><button class="btn" type="button" data-fora-din="Fora deste protótipo: exportar os dados já está no app.">Exportar os dados</button></div>`
+      : '<h2>Não concorda?</h2><p>Fale com o Dono da Mister Burgers: só ele cancela a assinatura. Enquanto isso, a equipe de IA da empresa segue trabalhando; só a sua entrada espera o aceite.</p>';
+  }
+
+  /* ---------- Segurança da conta: Termos e privacidade ---------- */
+  function renderSeguranca() {
+    const depois = est.fase === 'depois';
+    const linha = (dt, dd) => `<div><dt>${dt}</dt><dd>${dd}</dd></div>`;
+    const ler = (qual) => `<a href="#" data-fora-din="Protótipo: abre o texto ${qual}, no site do Liame.">Ler o texto</a>`;
+    $('#termos-dl').innerHTML = [
+      linha('Valem hoje', `<span>Os de ${depois ? VALE_EM : '10/10/2026'}</span>${ler(depois ? `de ${VALE_EM}` : 'de 10/10/2026')}`),
+      linha('Você aceitou', est.aceito ? `<span>Os de ${VALE_EM}, em ${esc(est.aceito)}, ${esc(est.onde)}</span>` : '<span>Os de 25/09/2026, ao criar a conta, em 28/09/2026. O ajuste de 10/10/2026 não pede aceite.</span>'),
+      depois ? '' : linha('Vêm aí', `<span>Os de ${VALE_EM}, avisados em ${AVISO_EM}</span>${est.aceito ? '<span class="st st--concluido"><span class="dot"></span>Aceitos</span>' : '<span class="st st--aguardando"><span class="dot"></span>Falta o seu aceite</span>'}<button class="btn btn--sm${est.aceito ? '' : ' btn--primary'}" type="button" data-acao="ver-muda" aria-haspopup="dialog" aria-expanded="false">Ver o que muda</button>`),
+    ].join('');
+    const versao = (data, st, texto, extra = '') => `<li class="versao"><div class="versao-cab"><b>${data}</b>${st}</div><p>${texto}</p>${extra}</li>`;
+    $('#versoes').innerHTML = [
+      versao(VALE_EM, depois ? '<span class="st st--concluido"><span class="dot"></span>Vale hoje</span>' : '<span class="st st--info"><span class="dot"></span>Vem aí</span>', `${MUDANCAS.length} mudanças: ${MUDANCAS.map((m) => m.titulo).join('; ')}. Avisada em ${AVISO_EM}; pede o aceite de cada pessoa.`, `<div class="textos-links"><button class="link-btn" type="button" data-acao="ver-muda-leitura" aria-haspopup="dialog" aria-expanded="false">O que mudou</button></div>`),
+      versao('10/10/2026', depois ? '<span class="st st--espera"><span class="dot"></span>Valeu até 01/12/2026</span>' : '<span class="st st--concluido"><span class="dot"></span>Vale hoje</span>', 'Ajuste de redação: o contato do encarregado de dados. Valeu na hora, sem aviso e sem aceite.'),
+      versao('25/09/2026', '<span class="st st--espera"><span class="dot"></span>Valeu até 09/10/2026</span>', 'A primeira versão publicada.'),
+    ].join('');
+  }
+
+  /* ---------- os e-mails (texto simples, como os outros avisos) ---------- */
+  function renderEmail() {
+    const p = PESSOAS.dono;
+    const nao = `<p>Não concorda? Você pode cancelar a assinatura sem multa até ${ATE}, em Plano e cobrança.</p>`;
+    const EMAILS = {
+      aviso: { assunto: `Os Termos do Liame mudam em ${VALE_EM}`, quando: `${AVISO_EM}, 10:00`, corpo: `<p>Olá, ${p.nome}.</p><p>Os Termos de Uso e a Política de Privacidade do Liame mudam em <b>${VALE_EM}</b>. Até lá, valem os de hoje.</p><p>O que muda:</p><ul>${MUDANCAS.map((m) => `<li><b>${esc(m.titulo)}</b> (${esc(m.doc)}): ${esc(m.fica)}</li>`).join('')}</ul><p>Nada muda para trás: o que já foi feito segue as regras de quando foi feito.</p><p>Para ler os detalhes e aceitar, entre no Liame: a faixa no alto das telas leva ao que muda. Os textos inteiros estão no site do Liame.</p>${nao}<p>Em ${VALE_EM}, quem ainda não tiver aceitado vê a tela do aceite ao entrar, antes das outras.</p>` },
+      lembrete: { assunto: 'Faltam 7 dias para os Termos novos do Liame', quando: '25/11/2026, 10:00', corpo: `<p>Olá, ${p.nome}.</p><p>Os Termos de Uso e a Política de Privacidade novos valem em <b>${VALE_EM}</b>, e você ainda não aceitou. Leva uns 2 minutos: entre no Liame e use a faixa no alto da tela.</p><p>Se não aceitar até lá, você verá a tela do aceite ao entrar, antes das outras. A equipe de IA da empresa segue trabalhando.</p>${nao}` },
+      retirada: { assunto: 'A mudança dos Termos do Liame foi cancelada', quando: '20/11/2026, 10:00', corpo: `<p>Olá, ${p.nome}.</p><p>A mudança dos Termos de Uso e da Política de Privacidade que avisamos em ${AVISO_EM} não vai acontecer. Os Termos de hoje continuam valendo, e você não precisa fazer nada.</p><p>Se você já tinha aceitado a versão nova, esse aceite fica sem efeito. Quando houver outra mudança, avisamos de novo, com 30 dias.</p>` },
+    };
+    const e = EMAILS[est.email];
+    $('#email-cab').innerHTML = `<h1 id="h-email" tabindex="-1">${esc(e.assunto)}</h1><p>De: Liame &lt;avisos@agencialiame.com&gt; · Para: ${esc(p.email)}</p><p>${esc(e.quando)}</p>`;
+    $('#email-corpo').innerHTML = `${e.corpo}<p class="email-pe">Você recebe este e-mail porque tem acesso ao Liame. Para quem não é o Dono, a linha do cancelamento diz: "Não concorda? Fale com o Dono da empresa: só ele cancela a assinatura." Dúvidas: suporte@agencialiame.com.</p>`;
+  }
+
+  function renderTudo() {
+    renderShell();
+    renderFaixa();
+    if (est.tela === 'aceite') renderAceite();
+    if (est.tela === 'seguranca') renderSeguranca();
+    if (est.tela === 'email') renderEmail();
+  }
+
+  /* ---------- ações ---------- */
+  document.addEventListener('click', (e) => {
+    const alvo = e.target instanceof Element ? e.target : null; if (!alvo) return;
+    const f = alvo.closest('[data-fora-din]');
+    if (f) { e.preventDefault(); toast(f.dataset.foraDin); return; }
+    const a = alvo.closest('[data-acao]'); if (!a) return;
+    if (a.dataset.acao === 'ver-muda') abrirMuda(a);
+    else if (a.dataset.acao === 'ver-muda-leitura') abrirMuda(a, { leitura: true });
+    else if (a.dataset.acao === 'aceitar') aceitar('na tela do dia');
+  });
+  $('#form-muda').addEventListener('submit', (e) => { e.preventDefault(); aceitar(est.fase === 'dia' ? 'na tela do dia' : 'pelo aviso no alto da tela'); });
+  $('#form-cad').addEventListener('submit', (e) => { e.preventDefault(); toast(`Protótipo: a conta é criada, e o aceite vale para as duas versões, a de hoje e a de ${VALE_EM}. A Marina não vê a faixa.`); });
+
+  /* ---------- navegação e situação ---------- */
+  function focarTitulo() {
+    const alvo = $({ resumo: '#h-res', aceite: '#h-aceite', seguranca: '#h-seg', cadastro: '#h-cad', email: '#h-email' }[est.tela]);
+    setTimeout(() => { alvo?.focus({ preventScroll: false }); }, 0);
+  }
+  function irPara(tela) {
+    if (app.classList.contains('gaveta')) menu(false);
+    if (est.fase === 'dia' && !est.aceito) { est.tela = 'aceite'; renderTudo(); toast('Para abrir as outras telas, aceite os Termos novos.'); focarTitulo(); return; }
+    est.tela = tela; renderTudo(); focarTitulo();
+  }
+  $$('[data-ir]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); irPara(a.dataset.ir); }));
+  preencherCenarios(CENAS);
+  selCenario.addEventListener('change', () => { for (const d of $$('dialog[open]')) d.close('cancelar'); zerar(selCenario.value); renderTudo(); anunciar('Protótipo: ' + selCenario.selectedOptions[0].text); });
+
+  /* ---------- começo ---------- */
+  zerar('av-faixa');
+  marcarCenario('av-faixa');
+  renderTudo();
+
+  /* ---------- cenários (conferidos no Chrome sem janela) ---------- */
+  const todas = [1440, 1024, 768, 375], pontas = [1440, 375];
+  const exige = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const texto = (sel) => ($(sel)?.innerText ?? '').replace(/\s+/g, ' ').trim();
+  async function preparar(cena) { for (const d of $$('dialog[open]')) d.close('cancelar'); selCenario.value = cena; zerar(cena); renderTudo(); await esperar(150); }
+  const cen = (id, larguras, fn) => { window.uiuxCenarios['p35-' + id] = { larguras, executar: async () => { await fn(); await esperar(200); } }; };
+  const abrirPelaFaixa = async () => { $('#faixa-termos [data-acao="ver-muda"]').click(); await esperar(300); exige(dlgMuda.open, 'a gaveta não abriu'); };
+
+  cen('av-faixa', todas, async () => { await preparar('av-faixa'); exige(texto('#faixa-termos').includes(`mudam em ${VALE_EM}`), 'a faixa do aviso'); exige(!!$('#faixa-termos [data-acao="ver-muda"]'), 'o botão da faixa'); });
+  cen('av-gaveta', todas, async () => { await preparar('av-gaveta'); await abrirPelaFaixa(); exige($$('.mudanca').length === 4, 'as 4 mudanças'); exige(texto('#muda-corpo').includes(`cancelar sem multa até ${ATE}`), 'o caminho do Dono'); exige(texto('#muda-acoes').includes('Aceitar os Termos novos'), 'o botão de aceitar'); });
+  cen('fluxo-aceitar', pontas, async () => {
+    await preparar('av-faixa'); await abrirPelaFaixa(); $('#form-muda').requestSubmit(); await esperar(300);
+    exige(!dlgMuda.open, 'a gaveta não fechou'); exige(!$('#faixa-termos .faixa'), 'a faixa não saiu');
+    $('[data-ir="seguranca"]').click(); await esperar(200); exige(texto('#termos-dl').includes('em 05/11/2026, às 09:12, pelo aviso no alto da tela'), 'o aceite em Segurança da conta');
+  });
+  cen('fluxo-depois', [1440], async () => {
+    await preparar('av-faixa'); await abrirPelaFaixa(); $('#muda-acoes [data-fechar]').click(); await esperar(250);
+    exige(!dlgMuda.open && !!$('#faixa-termos .faixa'), '"Depois" fecha e a faixa fica');
+    exige(document.activeElement === $('#faixa-termos [data-acao="ver-muda"]'), 'o foco não voltou ao botão da faixa');
+  });
+  cen('av-equipe', todas, async () => { await preparar('av-equipe'); await abrirPelaFaixa(); exige(texto('#muda-corpo').includes('Fale com o Dono da Mister Burgers'), 'a nota da equipe'); exige(!texto('#muda-corpo').includes('cancelar sem multa'), 'quem não é o Dono não cancela'); });
+  cen('av-ultimos', todas, async () => { await preparar('av-ultimos'); exige(!!$('#faixa-termos .faixa--atencao'), 'a faixa âmbar'); exige(texto('#faixa-termos').includes('Faltam 5 dias'), 'a contagem dos dias'); });
+  cen('av-aceito', pontas, async () => { await preparar('av-aceito'); exige(!$('#faixa-termos .faixa'), 'sem faixa depois do aceite'); });
+  cen('dia-equipe', todas, async () => {
+    await preparar('dia-equipe'); exige(!$('#tela-aceite').hidden, 'a tela do aceite');
+    exige(texto('#h-aceite') === `Os Termos novos valem desde ${VALE_EM}`, 'o título'); exige($$('#aceite-lista li').length === 4, 'a lista');
+    exige(texto('#aceite-outro').includes('Fale com o Dono'), 'a saída de quem não é o Dono');
+  });
+  cen('fluxo-dia', pontas, async () => {
+    await preparar('dia-equipe'); $('[data-ir="seguranca"]').click(); await esperar(200); exige(!$('#tela-aceite').hidden, 'o menu tirou da tela do aceite');
+    $('#tela-aceite [data-acao="aceitar"]').click(); await esperar(300); exige(!$('#tela-resumo').hidden && !$('#faixa-termos .faixa'), 'aceitou e não foi ao Resumo sem faixa');
+  });
+  cen('dia-dono', todas, async () => {
+    await preparar('dia-dono'); exige(texto('#aceite-outro').includes('Plano e cobrança'), 'o caminho do Dono');
+    $('#tela-aceite [data-acao="ver-muda"]').click(); await esperar(300); exige(dlgMuda.open && texto('#muda-corpo').includes(`Valem desde ${VALE_EM}`), 'a gaveta no dia');
+  });
+  cen('cad', todas, async () => {
+    await preparar('cad'); exige(!$('#menu-lateral').getClientRects().length, 'o menu aparece no cadastro'); exige(texto('#cad-dica').includes(`a partir de ${VALE_EM}`), 'a frase do aceite');
+    $('[data-acao="ver-muda-leitura"]').click(); await esperar(300); exige(dlgMuda.open && !texto('#muda-acoes').includes('Aceitar'), 'a gaveta só para ler');
+  });
+  cen('seg-aviso', todas, async () => { await preparar('seg-aviso'); const t = texto('#termos-dl'); exige(t.includes('Falta o seu aceite') && t.includes('10/10/2026'), 'o cartão durante o aviso'); exige($$('.versao').length === 3, 'as três versões'); });
+  cen('seg-depois', todas, async () => { await preparar('seg-depois'); exige(texto('#termos-dl').includes(`Os de ${VALE_EM}`), 'vale a nova'); exige(!texto('#termos-dl').includes('Vêm aí'), 'nada vem aí'); });
+  cen('em-aviso', todas, async () => { await preparar('em-aviso'); exige(texto('#h-email') === `Os Termos do Liame mudam em ${VALE_EM}`, 'o assunto do aviso'); exige($$('#email-corpo li').length === 4, 'as mudanças no e-mail'); });
+  cen('em-lembrete', pontas, async () => { await preparar('em-lembrete'); exige(texto('#h-email') === 'Faltam 7 dias para os Termos novos do Liame', 'o assunto do lembrete'); });
+  cen('em-retirada', pontas, async () => { await preparar('em-retirada'); exige(texto('#email-corpo').includes('não vai acontecer'), 'a versão retirada'); });
+  cen('gaveta-menu', [375, 768], async () => {
+    await preparar('av-faixa');
+    btMenu.click(); await esperar(500);
+    exige(app.classList.contains('gaveta'), 'a gaveta do menu não abriu');
+    exige(document.activeElement === $('#bt-fechar-menu'), 'o foco não foi para o botão de fechar');
+    menu(false); await esperar(300);
+  });
+})();
+</script>
+</body>
+</html>
