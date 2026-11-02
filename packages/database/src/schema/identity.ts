@@ -12,6 +12,8 @@ export const organization = liame.table('organization', {
   cnpj: text('cnpj'),
   timezone: text('timezone').notNull().default('America/Sao_Paulo'),
   status: text('status').notNull().default('ativa'),
+  /** A empresa (o cliente) ou a agência (o time que cuida de empresas; migration 0099, A7 W6). Não muda. */
+  kind: text('kind').notNull().default('empresa'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
   suspendedAt: timestamp('suspended_at', { withTimezone: true }),

@@ -6,6 +6,8 @@ import { PolicyInterceptor } from '../policy/politica.js';
 import { PolicyService } from '../policy/policy.service.js';
 import { createMailer, Mailer } from '../mail/mailer.js';
 import { AccessGuard } from './access.guard.js';
+import { AgencyAccountController } from './agencia-conta.controller.js';
+import { AgencyAccountService } from './agencia-conta.service.js';
 import { AuthController, MeController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { InvitationAcceptService } from './invitation-accept.service.js';
@@ -20,7 +22,7 @@ import { SessionService } from './session.service.js';
 
 @Global()
 @Module({
-  controllers: [AuthController, MeController, MfaController, InvitationController, LegalController, SecurityController],
+  controllers: [AuthController, MeController, MfaController, InvitationController, LegalController, SecurityController, AgencyAccountController],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
     {
@@ -33,6 +35,7 @@ import { SessionService } from './session.service.js';
     AuthService,
     MfaService,
     InvitationAcceptService,
+    AgencyAccountService,
     SecurityService,
     { provide: APP_GUARD, useClass: AccessGuard },
     { provide: APP_INTERCEPTOR, useClass: UnitOfWorkInterceptor },

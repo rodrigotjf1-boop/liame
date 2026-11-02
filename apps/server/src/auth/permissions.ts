@@ -1,4 +1,4 @@
-import type { RoleKey } from '@liame/contracts';
+import type { AgencyRole, RoleKey } from '@liame/contracts';
 
 // Permissões finas (ADR-013): a rota declara a permissão, nunca o nome do papel.
 // Aqui fica o VOCABULÁRIO (o app não sobe se uma rota pedir permissão fora dele). O que cada papel
@@ -48,6 +48,11 @@ export const PERMISSIONS = [
   // Fotos dos produtos (A6, Z4, migration 0076): ver, e enviar, mudar o produto e apagar (D-A6-19).
   'fotos.ver',
   'fotos.enviar',
+  // A agência (A7, W6, migration 0099; D-A7-51): ver a agência (o time e, depois, os clientes), cuidar do time (convidar,
+  // mudar o papel, tirar) e cuidar dos clientes (pedir acesso, deixar um cliente). Só os papéis da agência têm.
+  'agencia.ver',
+  'agencia.time',
+  'agencia.clientes',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -63,10 +68,25 @@ export const PERMISSOES_DA_COBRANCA_LIBERADA: readonly Permission[] = ['cobranca
 /** O único nível que recebe o acesso à cobrança (a mesma regra da tela de Pessoas, `grant-rules.ts`). */
 export const NIVEL_DA_COBRANCA_LIBERADA: RoleKey = 'administrador';
 
-/** Níveis que mexem em dinheiro ou em pessoas: segundo fator obrigatório (ADR-013, ADR-017). */
-export const MFA_REQUIRED: ReadonlySet<RoleKey> = new Set<RoleKey>(['dono', 'administrador', 'gestor', 'aprovador']);
+/** Os papéis da agência (D-A7-51): só valem numa organização do tipo agência (o banco confere, migration 0099). */
+export const AGENCY_ROLES: ReadonlySet<RoleKey> = new Set<RoleKey>(['agencia_dona', 'agencia_admin', 'agencia_membro']);
 
-/** Ordem de poder: ninguém concede um nível acima do próprio (ADR-017). */
+/**
+ * Níveis que mexem em dinheiro ou em pessoas: segundo fator obrigatório (ADR-013, ADR-017). Na agência, todo o time
+ * entra com o app autenticador (o convite do P27 já diz isso), porque cada pessoa dele trabalha nas contas dos clientes.
+ */
+export const MFA_REQUIRED: ReadonlySet<RoleKey> = new Set<RoleKey>([
+  'dono',
+  'administrador',
+  'gestor',
+  'aprovador',
+  ...AGENCY_ROLES,
+]);
+
+/**
+ * Ordem de poder: ninguém concede um nível acima do próprio (ADR-017). Os papéis da agência ficam fora da escala das
+ * empresas (zero): a ordem deles, dentro da agência, é `AGENCY_RANK`.
+ */
 export const ROLE_RANK: Record<RoleKey, number> = {
   dono: 100,
   administrador: 80,
@@ -74,6 +94,16 @@ export const ROLE_RANK: Record<RoleKey, number> = {
   aprovador: 40,
   somente_leitura: 20,
   so_relatorios: 10,
+  agencia_dona: 0,
+  agencia_admin: 0,
+  agencia_membro: 0,
+};
+
+/** A ordem dentro da agência (D-A7-51): a dona, o administrador e o membro. */
+export const AGENCY_RANK: Record<AgencyRole, number> = {
+  agencia_dona: 100,
+  agencia_admin: 80,
+  agencia_membro: 20,
 };
 
 export function isKnownPermission(permission: string): permission is Permission {

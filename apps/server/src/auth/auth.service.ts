@@ -1,4 +1,4 @@
-import type { AcceptedResponse, LoginRequest, MeResponse, ResetPasswordRequest, RoleKey, SignupRequest } from '@liame/contracts';
+import type { AcceptedResponse, LoginRequest, MeResponse, OrganizationKind, ResetPasswordRequest, RoleKey, SignupRequest } from '@liame/contracts';
 import { type Database, type Tx, uuidv7, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -8,6 +8,7 @@ import { auditDetail, type AuthContext, currentTx } from '../context/request-con
 import { DATABASE } from '../database/database.module.js';
 import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { Mailer, type MailMessage } from '../mail/mailer.js';
+import { ROLE_LABEL } from '../people/grant-rules.js';
 import { descreverAparelho, mascararIp } from './aparelho.js';
 import { burnPasswordTime, hashPassword, isBreachedPassword, verifyPassword } from './password.js';
 import { MFA_REQUIRED } from './permissions.js';
@@ -81,20 +82,23 @@ export class AuthService {
         await tx.execute(sql`
           insert into liame.app_user (id, email, name, password_hash, terms_version, terms_accepted_at)
           values (${userId}, ${input.email}, ${input.name}, ${passwordHash}, ${input.terms_version}, now())`);
-        await tx.execute(sql`insert into liame.organization (id, name, cnpj) values (${tenantId}, ${input.company.name}, ${input.company.cnpj ?? null})`);
+        // "Sou agência ou consultor" (A7, W6; D-A7-45): a agência nasce com a dona, sem marca e sem assinatura.
+        const agencia = input.kind === 'agencia';
+        await tx.execute(sql`insert into liame.organization (id, name, cnpj, kind)
+                             values (${tenantId}, ${input.company.name}, ${input.company.cnpj ?? null}, ${agencia ? 'agencia' : 'empresa'})`);
         await tx.execute(sql`insert into liame.membership (id, tenant_id, user_id, role_key, dual_approval, billing_access)
-                             values (${uuidv7()}, ${tenantId}, ${userId}, 'dono', false, true)`);
-        await tx.execute(sql`insert into liame.brand (id, tenant_id, name) values (${uuidv7()}, ${tenantId}, ${input.company.name})`);
+                             values (${uuidv7()}, ${tenantId}, ${userId}, ${agencia ? 'agencia_dona' : 'dono'}, false, ${!agencia})`);
+        if (!agencia) await tx.execute(sql`insert into liame.brand (id, tenant_id, name) values (${uuidv7()}, ${tenantId}, ${input.company.name})`);
         await writeAudit(tx, {
           tenantId,
           actorType: 'human',
           actorId: userId,
-          actorLabel: `${input.name}, Dono`,
-          actorRole: 'dono',
-          action: 'conta.criar',
+          actorLabel: `${input.name}, ${ROLE_LABEL[agencia ? 'agencia_dona' : 'dono']}`,
+          actorRole: agencia ? 'agencia_dona' : 'dono',
+          action: agencia ? 'agencia.abrir' : 'conta.criar',
           resourceType: 'organization',
           resourceId: tenantId,
-          after: { company: input.company.name, terms_version: input.terms_version },
+          after: { company: input.company.name, terms_version: input.terms_version, ...(agencia ? { kind: 'agencia' } : {}) },
           traceId: activeTraceId(),
           origin: 'api',
         });
@@ -251,8 +255,8 @@ export class AuthService {
              exists (select 1 from liame.secret x
                       where x.owner_user_id = app_user.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured
         from liame.app_user where id = ${userId}`);
-    const orgs = await tx.execute<{ id: string; name: string; role: RoleKey }>(sql`
-      select o.id, o.name, m.role_key as role
+    const orgs = await tx.execute<{ id: string; name: string; role: RoleKey; kind: OrganizationKind }>(sql`
+      select o.id, o.name, m.role_key as role, o.kind
         from liame.membership m join liame.organization o on o.id = m.tenant_id
        where m.user_id = ${userId} and m.revoked_at is null and (m.expires_at is null or m.expires_at > now())
        order by o.name`);

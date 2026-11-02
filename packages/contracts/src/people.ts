@@ -1,12 +1,19 @@
 import { z } from 'zod';
-import { Email, Password, RoleKey, TermsVersion } from './auth.js';
+import { CompanyRole, Email, OrganizationKind, Password, RoleKey, TermsVersion } from './auth.js';
 
 // Pessoas e acessos (ADR-017): o dono convida por e-mail quem administra por ele.
 // Dinheiro em micros (1 real = 1.000.000), como no resto do modelo de dados.
 
-/** Níveis que se convidam: o dono não se convida, a propriedade só se transfere. */
-export const InvitableRole = RoleKey.exclude(['dono']);
+/**
+ * Níveis que se convidam numa empresa: o dono não se convida, a propriedade só se transfere. Os papéis da agência ficam
+ * de fora: só valem na agência, pelo convite do time dela (`agency.ts`).
+ */
+export const InvitableRole = CompanyRole.exclude(['dono']);
 export type InvitableRole = z.infer<typeof InvitableRole>;
+
+/** Papéis que se convidam no time da agência (D-A7-51): a dona não se convida, como o dono. */
+export const AgencyInvitableRole = RoleKey.extract(['agencia_admin', 'agencia_membro']);
+export type AgencyInvitableRole = z.infer<typeof AgencyInvitableRole>;
 
 /** Identificador na rota (`/v1/members/{id}`). */
 export const ResourceId = z.uuid({ error: 'Identificador inválido' });
@@ -19,7 +26,8 @@ export const MemberResponse = z.strictObject({
   user_id: z.uuid(),
   name: z.string(),
   email: z.string(),
-  role: RoleKey,
+  /** O nível na empresa: os papéis da agência nunca aparecem aqui. */
+  role: CompanyRole,
   /** Limite de aprovação por ação; nulo = sem limite (só o dono concede). */
   approve_limit_micros: Micros.nullable(),
   /** Acima do limite, o dono também aprova. */
@@ -81,7 +89,10 @@ export type UpdateMemberRequest = z.infer<typeof UpdateMemberRequest>;
 /** O que o link do convite mostra antes de aceitar. */
 export const InvitationPreviewResponse = z.strictObject({
   organization_name: z.string(),
-  role: InvitableRole,
+  /** A empresa, ou a agência quando o convite é para o time dela (A7, W6). */
+  organization_kind: OrganizationKind,
+  /** O nível do convite: um da empresa ou, no time da agência, Administrador ou Membro da agência. */
+  role: RoleKey.exclude(['dono', 'agencia_dona']),
   email: z.string(),
   invited_by_name: z.string(),
   /** O e-mail convidado já tem conta: a tela pede para entrar em vez de criar o login. */
