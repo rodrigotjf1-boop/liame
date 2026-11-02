@@ -1,5 +1,7 @@
 'use client';
 
+import type { MyAccountRecoveryResponse } from '@liame/contracts';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { api, chamar, type Problema } from '@/lib/api';
@@ -7,6 +9,7 @@ import { disparar } from '@/lib/disparar';
 import { voltaSegura } from '@/lib/entrada';
 import { useCena, useLia } from './lia';
 import { AvisoProblema, BotaoEnviar } from './pecas';
+import { emAndamento } from './recuperacao-textos';
 
 // Segundo fator na entrada (ADR-013): código do app ou um código de recuperação (uso único).
 
@@ -23,14 +26,25 @@ export function TelaSegundoFator() {
   const [enviando, setEnviando] = useState(false);
   const campo = useRef<HTMLInputElement>(null);
 
+  // A recuperação da conta pela DMS (A7, W8, parte 5): se há pedido andando e se dá para pedir. Sem a leitura, o texto
+  // de antes ("fale com o suporte").
+  const [rec, setRec] = useState<MyAccountRecoveryResponse | null>(null);
+  const pedidoAndando = emAndamento(rec?.recovery ?? null);
+  const paginaDaRecuperacao = `/segundo-fator/recuperacao?volta=${encodeURIComponent(volta)}`;
+
   // Só fica aqui quem entrou e ainda não confirmou o app.
   useEffect(() => {
     let viva = true;
     disparar(
-      chamar(() => api.GET('/v1/me')).then((r) => {
+      chamar(() => api.GET('/v1/me')).then(async (r) => {
         if (!viva) return;
         if (!r.ok) return router.replace(`/entrar?volta=${encodeURIComponent(volta)}`);
-        if (r.data.mfa === 'required') return setPronto(true);
+        if (r.data.mfa === 'required') {
+          setPronto(true);
+          const l = await chamar(() => api.GET('/v1/me/account-recovery'));
+          if (viva && l.ok) setRec(l.data);
+          return;
+        }
         if (r.data.mfa_enrollment_required) return router.replace(`/segundo-fator/ativar?volta=${encodeURIComponent(volta)}`);
         router.replace(volta);
       }),
@@ -145,14 +159,33 @@ export function TelaSegundoFator() {
           {recuperacao ? 'Usar o código do app' : 'Usar um código de recuperação'}
         </button>
       </p>
-      <details className="ajuda">
+      <details className="ajuda" open={pedidoAndando || undefined}>
         <summary>Perdeu o celular?</summary>
         <div>
           <p>
             Entre com um dos seus códigos de recuperação. Depois de entrar, peça a troca do app: por segurança, a troca vale em 24 horas e avisamos
             você por e-mail.
           </p>
-          <p>Sem o celular e sem os códigos, fale com o suporte.</p>
+          {pedidoAndando ? (
+            <p>
+              Você tem um pedido de recuperação em andamento (<span className="num">{rec?.recovery?.protocol}</span>).{' '}
+              <Link className="link-bt" href={paginaDaRecuperacao}>
+                Ver o pedido
+              </Link>
+            </p>
+          ) : rec?.cannot_request === null ? (
+            <>
+              <p>
+                <b>Sem o celular e sem os códigos?</b> Peça a recuperação da conta. A DMS confere quem você é e, depois de uma espera de segurança, você
+                cadastra o app de novo.
+              </p>
+              <Link className="btn" href={paginaDaRecuperacao}>
+                Pedir a recuperação da conta
+              </Link>
+            </>
+          ) : (
+            <p>Sem o celular e sem os códigos, fale com o suporte{rec ? `: ${rec.support.email}` : ''}.</p>
+          )}
         </div>
       </details>
       <p className="alternativa">

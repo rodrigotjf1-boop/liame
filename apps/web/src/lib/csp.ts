@@ -16,6 +16,7 @@ export const ROTAS_PUBLICAS = [
   '/redefinir-senha',
   '/segundo-fator',
   '/segundo-fator/ativar',
+  '/segundo-fator/recuperacao',
   '/convite',
 ] as const;
 

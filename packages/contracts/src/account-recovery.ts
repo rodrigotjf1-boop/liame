@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SupportContact } from './conversa.js';
 
 // A recuperação da conta do Dono (A7, W8, parte 4; ADR-013; P34 aprovado; D-A7-62, D-A7-64; D-A7-85): quem perdeu o
 // celular e os códigos de recuperação pede na própria entrada, depois da senha, com o documento com foto. A DMS confere
@@ -62,6 +63,8 @@ export const MyAccountRecoveryResponse = z.strictObject({
    * app para recuperar), `pedido-em-andamento` ou `indisponivel` (a recuperação ainda não está ligada: fale com o suporte).
    */
   cannot_request: z.enum(['nao-e-dono', 'ja-entrou', 'sem-segundo-fator', 'pedido-em-andamento', 'indisponivel']).nullable(),
+  /** O atendimento da Liame, para quem não pode pedir pela entrada (A7, W8, parte 5). */
+  support: SupportContact,
 });
 export type MyAccountRecoveryResponse = z.infer<typeof MyAccountRecoveryResponse>;
 

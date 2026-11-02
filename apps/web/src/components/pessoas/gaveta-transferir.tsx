@@ -110,10 +110,10 @@ export function GavetaTransferir({ membros, propriedade, empresa, reserva, aoPed
             );
           })}
         </div>
-        <p className="lite-frase">Quem vai receber ainda não está aqui? Convide como Administrador e volte quando a pessoa entrar e ativar o app.</p>
-        <div className="prop-acoes">
+        <p className="lite-frase">
+          Quem vai receber ainda não está aqui?{' '}
           <button
-            className="btn btn--sm"
+            className="link-bt"
             type="button"
             aria-haspopup="dialog"
             onClick={() => {
@@ -121,9 +121,10 @@ export function GavetaTransferir({ membros, propriedade, empresa, reserva, aoPed
               aoConvidar();
             }}
           >
-            Convidar pessoa
-          </button>
-        </div>
+            Convide como Administrador
+          </button>{' '}
+          e volte quando a pessoa entrar e ativar o app.
+        </p>
       </fieldset>
     );
   } else if (passo === 2) {

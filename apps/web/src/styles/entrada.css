@@ -87,6 +87,29 @@ details.ajuda div { display: grid; gap: var(--sp-2); padding: 0 var(--sp-4) var(
 .girando { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: gira .7s linear infinite; }
 @keyframes gira { to { transform: rotate(360deg); } }
 
+/* ===== A recuperação da conta do Dono (P34 aprovado; A7, W8, parte 5) ===== */
+.rec-empresas { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; }
+.rec-empresa { display: grid; gap: 2px; padding: var(--sp-3); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.rec-empresa small { color: var(--text-muted); }
+.rec-depois { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--bg-subtle); }
+.rec-depois h2 { font-size: var(--text-sm); font-weight: 600; }
+.rec-depois ol { display: grid; gap: 6px; margin: 0; padding-left: 1.2em; list-style: decimal; font-size: var(--text-sm); color: var(--text-muted); }
+.rec-andamento { display: grid; margin: 0; padding: 0; list-style: none; }
+.rec-andamento li { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--sp-3); padding-bottom: var(--sp-4); }
+.rec-andamento li:last-child { padding-bottom: 0; }
+.rec-andamento li::after { content: ""; position: absolute; left: 13px; top: 30px; bottom: 2px; width: 2px; background: var(--border); }
+.rec-andamento li:last-child::after { display: none; }
+.rec-andamento .marca { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--bg-subtle); color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
+.rec-andamento li[data-st="feito"] .marca { background: var(--success-soft); color: var(--success); }
+.rec-andamento li[data-st="agora"] .marca { background: var(--primary); color: var(--primary-fg); }
+.rec-andamento li[data-st="parado"] .marca { background: var(--warning-soft); color: var(--warning); }
+.rec-andamento .txt { display: grid; gap: 2px; min-width: 0; font-size: var(--text-sm); }
+.rec-andamento .txt b { font-weight: 600; }
+.rec-andamento .txt > span { color: var(--text-muted); overflow-wrap: anywhere; }
+.rec-acoes { display: grid; gap: var(--sp-2); justify-items: center; font-size: var(--text-sm); }
+.rec-acoes .confirma-linha { justify-content: center; }
+.rec-nota { font-size: var(--text-xs); color: var(--text-muted); text-align: center; }
+
 @media (max-width: 1023px) {
   .entrada { grid-template-columns: minmax(0, 1fr); }
   .palco { display: none; }

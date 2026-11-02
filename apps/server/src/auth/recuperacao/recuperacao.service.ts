@@ -128,7 +128,7 @@ export class RecuperacaoDaContaService {
     const tx = currentTx();
     const [donoDe, recovery] = await Promise.all([empresasDoDono(tx, auth.userId), this.ultimo(tx, auth.userId)]);
     const ownerOf = semId(donoDe);
-    return { recovery, owner_of: ownerOf, cannot_request: this.porQueNao(auth, ownerOf, recovery) };
+    return { recovery, owner_of: ownerOf, cannot_request: this.porQueNao(auth, ownerOf, recovery), support: ATENDIMENTO };
   }
 
   /** O pedido, com o documento com foto cru no corpo. */
