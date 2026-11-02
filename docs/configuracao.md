@@ -270,6 +270,20 @@ Os funcionários de IA nascem desligados para todas as empresas (flag `ia`). Sem
 
 Devoluções permanentes e reclamações: a lista de supressão da conta vem ligada para as duas (conta criada depois de 25/11/2019); o SES aceita e não entrega para endereço suprimido. O Gmail não manda reclamação ao SES. Falha de envio não desfaz a operação: fica no log com o motivo.
 
+## Recuperação da conta (A7, W8, parte 4a; D-A7-85)
+
+| Variável | Para quê | Padrão |
+| --- | --- | --- |
+| `RECUPERACAO_CHAVE_PUBLICA` | A chave PÚBLICA da DMS que lacra o documento com foto do pedido de recuperação: o DER (SPKI) em base64, numa linha, RSA com pelo menos 3.072 bits. Não é segredo. A chave que não abre recusa subir. Vazio = o pedido de recuperação responde 503 e a tela manda falar com o suporte | — |
+
+O par de chaves sai do comando da distribuição, uma vez, no computador da DMS:
+
+```
+node apps/server/dist/scripts/recuperacao-da-conta.js --gerar-chaves --pasta <pasta fora do repositório>
+```
+
+A chave privada fica na pasta (`recuperacao-privada.pem`), só nesse computador e numa cópia de segurança fora do repositório: sem ela, os documentos já lacrados não abrem. A pública vai para a variável da API no EasyPanel. Trocar a chave vale para os pedidos novos; os antigos abrem com a privada antiga.
+
 ## Eventos e webhooks (ADR-004)
 
 | Variável | Para quê | Padrão |

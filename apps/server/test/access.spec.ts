@@ -27,6 +27,18 @@ const PUBLIC_ROUTES = [
   'GET /v1/legal/terms',
 ].sort();
 
+// As rotas que valem com a sessão que só passou pela senha (ADR-013): ler quem entrou, sair, provar o segundo fator e,
+// para o Dono sem o celular e sem os códigos, a recuperação da conta (A7, W8, parte 4a; D-A7-62). Rota nova aqui é
+// decisão consciente: ela fica ao alcance de quem só tem a senha.
+const ANTES_DO_SEGUNDO_FATOR = [
+  'GET /v1/me',
+  'POST /v1/auth/logout',
+  'POST /v1/me/mfa/verify',
+  'GET /v1/me/account-recovery',
+  'POST /v1/me/account-recovery',
+  'DELETE /v1/me/account-recovery/:id',
+].sort();
+
 describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
   let api: TestApi;
 
@@ -43,6 +55,14 @@ describe('A1-4: toda rota declara o acesso e nega sem sessão', () => {
       .map((r) => `${r.method} ${r.path}`)
       .sort();
     expect(publicas).toEqual(PUBLIC_ROUTES);
+  });
+
+  it('a lista de rotas que valem antes do segundo fator é exatamente a esperada (só a senha basta para elas)', () => {
+    const antes = listRoutes(api.app)
+      .filter((r) => r.access?.kind === 'autenticado' && r.access.beforeMfa)
+      .map((r) => `${r.method} ${r.path}`)
+      .sort();
+    expect(antes).toEqual(ANTES_DO_SEGUNDO_FATOR);
   });
 
   it('toda rota não pública responde 401 sem cookie', async () => {

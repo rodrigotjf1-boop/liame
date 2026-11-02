@@ -20,11 +20,23 @@ import { SecurityService } from './security.service.js';
 import { MfaController } from './mfa.controller.js';
 import { MfaService } from './mfa.service.js';
 import { RateLimitService } from './rate-limit.service.js';
+import { RecuperacaoDaContaController } from './recuperacao/recuperacao.controller.js';
+import { RecuperacaoDaContaService } from './recuperacao/recuperacao.service.js';
 import { SessionService } from './session.service.js';
 
 @Global()
 @Module({
-  controllers: [AuthController, MeController, MfaController, InvitationController, LegalController, SecurityController, AgencyAccountController, AgencyReplyToController],
+  controllers: [
+    AuthController,
+    MeController,
+    MfaController,
+    InvitationController,
+    LegalController,
+    SecurityController,
+    AgencyAccountController,
+    AgencyReplyToController,
+    RecuperacaoDaContaController,
+  ],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
     {
@@ -40,6 +52,7 @@ import { SessionService } from './session.service.js';
     AgencyAccountService,
     AgencyReplyToService,
     SecurityService,
+    RecuperacaoDaContaService,
     { provide: APP_GUARD, useClass: AccessGuard },
     { provide: APP_INTERCEPTOR, useClass: UnitOfWorkInterceptor },
     // Depois da unidade de trabalho: a política é avaliada dentro da transação da requisição.

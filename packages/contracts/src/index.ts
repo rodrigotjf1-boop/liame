@@ -527,3 +527,12 @@ export {
   OwnershipResponse,
   OwnershipTransfer,
 } from './ownership.js';
+export {
+  ACCOUNT_RECOVERY_DOCUMENT_LIMITS,
+  AccountRecovery,
+  AccountRecoveryCompany,
+  AccountRecoveryReason,
+  AccountRecoveryStatus,
+  CreateAccountRecoveryQuery,
+  MyAccountRecoveryResponse,
+} from './account-recovery.js';

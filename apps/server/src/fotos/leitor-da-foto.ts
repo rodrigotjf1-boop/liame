@@ -1,4 +1,4 @@
-import { AGENCY_LOGO_LIMITS, BRAND_PHOTO_LIMITS } from '@liame/contracts';
+import { ACCOUNT_RECOVERY_DOCUMENT_LIMITS, AGENCY_LOGO_LIMITS, BRAND_PHOTO_LIMITS } from '@liame/contracts';
 import { AppProblem } from '../errors/problems.js';
 import { API_PREFIX } from '../setup-constants.js';
 
@@ -28,6 +28,17 @@ export const ROTA_DO_LOGO_DA_AGENCIA: RotaDoArquivo = {
   passa: 'Passa de 1 MB.',
   semCompressao: 'Envie o logo sem compressão.',
   interrompido: 'O logo não chegou inteiro. Tente de novo.',
+};
+
+/** O documento com foto do pedido de recuperação da conta (A7, W8, parte 4a), até 10 MB. */
+export const ROTA_DO_DOCUMENTO_DA_RECUPERACAO: RotaDoArquivo = {
+  metodo: 'POST',
+  caminho: `/${API_PREFIX}/me/account-recovery`,
+  limite: ACCOUNT_RECOVERY_DOCUMENT_LIMITS.maxBytes,
+  grande: 'Documento grande demais',
+  passa: 'Passa de 10 MB.',
+  semCompressao: 'Envie o documento sem compressão.',
+  interrompido: 'O documento não chegou inteiro. Tente de novo.',
 };
 
 interface PedidoCru {

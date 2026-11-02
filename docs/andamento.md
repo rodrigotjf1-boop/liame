@@ -816,6 +816,25 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
 - **o pedido no alto, para quem recebe**: quem pediu, até quando vale e o que o Dono vira, com "Ver e aceitar" e "Recusar" (confirmado na linha); **a gaveta "Receber a propriedade"**: o que passa e o que continua, o aceite dos Termos de Uso como dona e o código do app. Depois do aceite, a faixa "Agora você é a dona", com "Ver a cobrança", e a sessão lê as permissões de novo;
 - **testes:** no navegador (Chrome sem janela, com a API e o web locais), 44 execuções em 1440, 1024, 768 e 375 px, claro e escuro: transferir nos três passos (com o erro de quem não escolheu), cancelar, a espera de 7 dias, ver e aceitar (com o erro sem os Termos), recusar, o convite a partir da gaveta, quem não é o Dono, e cada gaveta aberta sem nada rolando para o lado; e a suíte do web, com quem pode receber (a mesma regra do servidor), a situação do cartão e as frases.
 
+**A W8, parte 4a: a recuperação da conta do Dono no servidor (02/11/2026; migration 0106; D-A7-85).** Nasce desligada: sem a variável `RECUPERACAO_CHAVE_PUBLICA`, o pedido responde 503.
+- **o pedido na entrada** (`/v1/me/account-recovery`), depois da senha e antes do app:
+  - só para quem é o Dono de alguma empresa viva; um pedido em andamento por pessoa, até 3 por dia;
+  - o motivo vai na consulta e o documento com foto (JPG, PNG ou PDF, até 10 MB, com o tipo lido do conteúdo) vai cru no corpo;
+  - o pedido vale para a pessoa e guarda as empresas de que ela é a dona, com o CNPJ, para a DMS conferir na Receita;
+  - protocolo `REC-AAAA-NNNN`; e-mail à pessoa e à DMS (o da DMS só com o protocolo);
+- **o documento lacrado** com a chave pública da DMS (RSA-OAEP e AES-256-GCM), numa tabela à parte que o papel do app grava e não lê; só o comando, com a chave privada no computador da DMS, abre;
+- **cancelar**, e **o pedido que cai sozinho** quando o Dono entra com o app ou com um código de recuperação, com aviso por e-mail;
+- **o comando da distribuição** `recuperacao-da-conta`:
+  - `--gerar-chaves`, `--listar` e `--ver`, que abre o documento numa pasta;
+  - `--conferir`, que exige o documento, o quadro de sócios e a videochamada e começa a espera de 7 dias;
+  - `--recusar`, com o motivo que a pessoa lê;
+  - a decisão vai para a auditoria de cada empresa da pessoa, sem a imagem;
+  - os e-mails dessas decisões saem pelo worker, na parte 4b;
+- **testes:**
+  - `test/db/recuperacao-da-conta.spec.ts`: o lacre e quem abre, quem não pode pedir, o formato e o tamanho, cancelar, cair ao entrar com o app e com um código, o limite do dia, conferir e recusar, a auditoria e a RLS;
+  - o teste de acesso ganhou a lista exata das rotas que valem só com a senha;
+  - as suítes de entrada, segundo fator, ciclo de vida e fotos, em UTC; o contrato da API sem quebra.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).
