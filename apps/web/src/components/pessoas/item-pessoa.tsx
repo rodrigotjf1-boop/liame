@@ -2,8 +2,9 @@
 
 import type { MemberResponse } from '@liame/contracts';
 import { useEffect, useRef, useState } from 'react';
-import { iniciais, quando } from '@/lib/formato';
+import { dia, iniciais, quando } from '@/lib/formato';
 import { EXIGEM_APP, NIVEIS } from '@/lib/niveis';
+import { daAgencia } from './parceiros';
 import { detalhesDe } from './textos';
 import { disparar } from '@/lib/disparar';
 
@@ -36,8 +37,10 @@ export function ItemPessoa({ pessoa: p, voce, souDono, podeAlterar, podeRemover,
     }
   }, [confirmando]);
 
-  // O dono é intocável e ninguém mexe no próprio acesso (ADR-017): sem botões nesses casos.
+  // O dono é intocável e ninguém mexe no próprio acesso (ADR-017): sem botões nesses casos. O nível de quem vem de uma
+  // agência é a agência que escolhe, até o máximo do Dono (D-A7-48): aqui só se tira a pessoa.
   const editavel = p.role !== 'dono' && !voce;
+  const alteravel = podeAlterar && !p.partner;
 
   async function removerAgora() {
     setRemovendo(true);
@@ -58,7 +61,10 @@ export function ItemPessoa({ pessoa: p, voce, souDono, podeAlterar, podeRemover,
           {p.name}
           {voce && <span className="lite-chip">Você</span>}
         </p>
-        <p className="pessoa-email">{p.email}</p>
+        <p className="pessoa-email">
+          {p.email}
+          {p.partner ? ` · ${daAgencia(p.partner.agency_name)}` : ''}
+        </p>
         <p className="pessoa-det">{detalhesDe(p, souDono)}</p>
         <p className="pessoa-meta">
           <span className={`nivel-chip nivel-chip--${NIVEIS[p.role].chip}`}>{NIVEIS[p.role].nome}</span>
@@ -75,10 +81,11 @@ export function ItemPessoa({ pessoa: p, voce, souDono, podeAlterar, podeRemover,
               </span>
             )
           )}
+          {p.partner && <span>Entrou pela agência {dia(p.created_at) === 'hoje' ? 'hoje' : `em ${dia(p.created_at)}`}</span>}
           <span>{p.last_seen_at ? `Último acesso: ${quando(p.last_seen_at)}` : 'Ainda não entrou'}</span>
         </p>
       </div>
-      {editavel && (podeAlterar || podeRemover) && (
+      {editavel && (alteravel || podeRemover) && (
         <div className="pessoa-acoes">
           {confirmando ? (
             <>
@@ -104,7 +111,7 @@ export function ItemPessoa({ pessoa: p, voce, souDono, podeAlterar, podeRemover,
             </>
           ) : (
             <>
-              {podeAlterar && (
+              {alteravel && (
                 <button className="btn btn--sm" type="button" onClick={aoAlterar}>
                   Alterar
                 </button>
