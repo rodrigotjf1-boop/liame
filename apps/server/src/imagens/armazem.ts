@@ -59,9 +59,9 @@ function exigirNome(nome: string | undefined): void {
 export const MAIOR_LEITURA_BYTES = 20 * 1024 * 1024;
 
 // As chaves que o Liame grava e os prefixos que apaga. A foto das Fotos (`t/{empresa}/b/{marca}/foto_produto/{id}.jpg`)
-// e a miniatura dela; o recorte do post do Instagram (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`, A6 · Z5b).
-// Conferidas parte por parte antes de qualquer gravação, leitura ou apagamento: nada fora do desenho chega ao disco ou
-// ao bucket.
+// e a miniatura dela; o recorte do post do Instagram (`t/{empresa}/b/{marca}/post/{post}-instagram.jpg`, A6 · Z5b); o
+// logo da agência (`t/{agência}/agencia/logo/{id}.jpg`, A7 · W7, parte 3). Conferidas parte por parte antes de qualquer
+// gravação, leitura ou apagamento: nada fora do desenho chega ao disco ou ao bucket.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function ehUuid(s: string): boolean {
@@ -76,7 +76,9 @@ function semFinal(arquivo: string, finais: readonly string[]): string {
 
 function chaveValida(chave: string): boolean {
   const p = chave.split('/');
-  if (chave.length > 300 || p.length !== 6 || p[0] !== 't' || p[2] !== 'b') return false;
+  if (chave.length > 300 || p[0] !== 't') return false;
+  if (p.length === 5) return p[2] === 'agencia' && p[3] === 'logo' && ehUuid(p[1] ?? '') && ehUuid(semFinal(p[4] ?? '', ['.jpg']));
+  if (p.length !== 6 || p[2] !== 'b') return false;
   const arquivo = p[5] ?? '';
   const id = p[4] === 'foto_produto' ? semFinal(arquivo, ['-mini.jpg', '.jpg']) : p[4] === 'post' ? semFinal(arquivo, ['-instagram.jpg']) : '';
   return ehUuid(p[1] ?? '') && ehUuid(p[3] ?? '') && ehUuid(id);

@@ -58,3 +58,61 @@ export type CreateAgencyInvitationRequest = z.infer<typeof CreateAgencyInvitatio
 /** Mudar o papel de alguém do time (Administrador ↔ Membro). */
 export const UpdateAgencyMemberRequest = z.strictObject({ role: AgencyInvitableRole });
 export type UpdateAgencyMemberRequest = z.infer<typeof UpdateAgencyMemberRequest>;
+
+// ------------------------------------------------------------------ a marca da agência (A7, W7, parte 3; D-A7-69, D-A7-81)
+
+/** O logo da agência: PNG ou JPG, até 1 MB (SVG não, porque pode levar código; D-A7-69). */
+export const AGENCY_LOGO_LIMITS = {
+  /** O arquivo enviado: até 1 MB. */
+  maxBytes: 1024 * 1024,
+  /** O lado menor do arquivo enviado: 32 px ou mais. */
+  minShortSide: 32,
+  /** O lado maior do arquivo enviado: até 4.000 px. */
+  maxLongSide: 4000,
+  /** A cópia guardada cabe em 384 × 96 px (o logo aparece até 48 px de altura, em tela de alta densidade). */
+  storedMaxWidth: 384,
+  storedMaxHeight: 96,
+} as const;
+
+/** Como o relatório do mês sai (D-A7-67): a agência revisa e manda (com o lembrete do dia 3), ou sai sozinho no dia 2. */
+export const AgencyReportMode = z.enum(['revisar', 'sozinho']);
+export type AgencyReportMode = z.infer<typeof AgencyReportMode>;
+
+/** A marca da agência como a agência a vê: o nome, o logo, o e-mail de resposta e como o relatório sai. */
+export const AgencyBrandResponse = z.strictObject({
+  name: z.string(),
+  /** O logo regravado pelo servidor; o endereço vale poucos minutos. Nulo sem logo ou sem o armazenamento de imagens. */
+  logo: z
+    .strictObject({
+      url: z.string().nullable(),
+      width: z.int().min(1).max(AGENCY_LOGO_LIMITS.storedMaxWidth),
+      height: z.int().min(1).max(AGENCY_LOGO_LIMITS.storedMaxHeight),
+      updated_at: z.string(),
+    })
+    .nullable(),
+  /** O e-mail que vale no "Responder" do relatório: só depois do link de confirmação. */
+  reply_to: z.strictObject({ email: z.string(), confirmed_at: z.string() }).nullable(),
+  /** O e-mail novo esperando o link de confirmação (vale 24 horas). */
+  pending_reply_to: z.strictObject({ email: z.string(), expires_at: z.string() }).nullable(),
+  report_mode: AgencyReportMode,
+  /** O armazenamento de imagens está configurado (sem ele, o logo não é aceito). */
+  logo_available: z.boolean(),
+});
+export type AgencyBrandResponse = z.infer<typeof AgencyBrandResponse>;
+
+/**
+ * Mudar a marca: o nome da agência, o e-mail de resposta (`null` tira; um e-mail novo manda o link de confirmação e só
+ * vale depois dele) e como o relatório sai. O que não vem fica como está.
+ */
+export const UpdateAgencyBrandRequest = z
+  .strictObject({
+    name: z.string().trim().min(1, { error: 'Falta o nome da agência' }).max(60, { error: 'Até 60 caracteres' }).optional(),
+    reply_to_email: Email.nullable().optional(),
+    report_mode: AgencyReportMode.optional(),
+  })
+  .refine((v) => [v.name, v.reply_to_email, v.report_mode].some((x) => x !== undefined), { error: 'Envie pelo menos um campo' });
+export type UpdateAgencyBrandRequest = z.infer<typeof UpdateAgencyBrandRequest>;
+
+/** O e-mail de resposta confirmado pelo link: o nome da agência e o endereço que passou a valer. */
+export const AgencyReplyToConfirmedResponse = z.strictObject({ agency_name: z.string(), email: z.string() });
+export type AgencyReplyToConfirmedResponse = z.infer<typeof AgencyReplyToConfirmedResponse>;

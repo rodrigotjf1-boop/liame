@@ -8,6 +8,8 @@ import { createMailer, Mailer } from '../mail/mailer.js';
 import { AccessGuard } from './access.guard.js';
 import { AgencyAccountController } from './agencia-conta.controller.js';
 import { AgencyAccountService } from './agencia-conta.service.js';
+import { AgencyReplyToController } from './resposta-da-agencia.controller.js';
+import { AgencyReplyToService } from './resposta-da-agencia.js';
 import { AuthController, MeController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { InvitationAcceptService } from './invitation-accept.service.js';
@@ -22,7 +24,7 @@ import { SessionService } from './session.service.js';
 
 @Global()
 @Module({
-  controllers: [AuthController, MeController, MfaController, InvitationController, LegalController, SecurityController, AgencyAccountController],
+  controllers: [AuthController, MeController, MfaController, InvitationController, LegalController, SecurityController, AgencyAccountController, AgencyReplyToController],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
     {
@@ -36,6 +38,7 @@ import { SessionService } from './session.service.js';
     MfaService,
     InvitationAcceptService,
     AgencyAccountService,
+    AgencyReplyToService,
     SecurityService,
     { provide: APP_GUARD, useClass: AccessGuard },
     { provide: APP_INTERCEPTOR, useClass: UnitOfWorkInterceptor },
