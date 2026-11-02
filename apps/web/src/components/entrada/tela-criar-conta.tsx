@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { type FormEvent, type InputHTMLAttributes, useRef, useState } from 'react';
 import { api, chamar, type Problema } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
@@ -8,7 +9,9 @@ import { useTermos } from '@/lib/entrada';
 import { useCena, useLia } from './lia';
 import { Aviso, AvisoProblema, BotaoEnviar, CampoSenha, SENHA_MIN } from './pecas';
 
-// Criar conta: a conta é da empresa; o dono convida quem cuida do marketing depois (ADR-017).
+// Criar conta: a conta é da empresa; o dono convida quem cuida do marketing depois (ADR-017). Com `?conta=agencia`, é a
+// conta da agência ou do consultor com time (A7, W6, parte 6; D-A7-45): o time, sem marca e sem assinatura. Enquanto os
+// parceiros não abrem para todos, o modo agência só aparece por esse link (D-A7-79).
 // A resposta é a mesma exista ou não o e-mail (não revela contas); a confirmação chega por e-mail.
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -17,6 +20,7 @@ const CAMPO_DA_API: Record<string, Campo> = { name: 'nome', email: 'email', pass
 
 export function TelaCriarConta() {
   const lia = useLia();
+  const agencia = useSearchParams().get('conta') === 'agencia';
   const { termos, problema: problemaTermos, recarregar } = useTermos();
   const [valores, setValores] = useState({ nome: '', email: '', senha: '', empresa: '', cnpj: '' });
   const [mostrar, setMostrar] = useState(false);
@@ -51,7 +55,7 @@ export function TelaCriarConta() {
     if (!valores.nome.trim()) novos.nome = 'Digite o seu nome.';
     if (!EMAIL.test(email)) novos.email = 'Digite um e-mail válido, como nome@empresa.com.br.';
     if (valores.senha.length < SENHA_MIN) novos.senha = `Use pelo menos ${SENHA_MIN} caracteres (uma frase serve).`;
-    if (!valores.empresa.trim()) novos.empresa = 'Digite o nome da empresa, como aparece para os clientes.';
+    if (!valores.empresa.trim()) novos.empresa = agencia ? 'Digite o nome da agência.' : 'Digite o nome da empresa, como aparece para os clientes.';
     if (cnpj && cnpj.length !== 14) novos.cnpj = 'O CNPJ tem 14 dígitos. Se preferir, deixe em branco.';
     if (Object.keys(novos).length) return mostrarErros(novos);
     if (!termos) return;
@@ -66,6 +70,7 @@ export function TelaCriarConta() {
           password: valores.senha,
           company: { name: valores.empresa.trim(), ...(cnpj ? { cnpj } : {}) },
           terms_version: termos.version,
+          ...(agencia ? { kind: 'agencia' as const } : {}),
         },
       }),
     );
@@ -126,8 +131,12 @@ export function TelaCriarConta() {
   return (
     <section className="tela" aria-labelledby="t-criar">
       <div className="tela-cab">
-        <h1 id="t-criar">Criar conta</h1>
-        <p>A conta é da sua empresa. Depois, você convida quem cuida do marketing com você.</p>
+        <h1 id="t-criar">{agencia ? 'Criar a conta da agência' : 'Criar conta'}</h1>
+        <p>
+          {agencia
+            ? 'Para a agência ou o consultor com time. A agência pede acesso aos clientes pelo e-mail do dono de cada empresa, que decide até onde o time vai. A conta da agência não tem marca nem assinatura.'
+            : 'A conta é da sua empresa. Depois, você convida quem cuida do marketing com você.'}
+        </p>
       </div>
       <AvisoProblema problema={problema ?? problemaTermos} />
       <form className="form" ref={form} onSubmit={(e) => disparar(criar(e))} noValidate>
@@ -144,7 +153,7 @@ export function TelaCriarConta() {
           aoMostrar={() => setMostrar((m) => !m)}
           erro={erros.senha}
         />
-        {campoTexto('empresa', 'Nome da empresa', { autoComplete: 'organization', required: true })}
+        {campoTexto('empresa', agencia ? 'Nome da agência' : 'Nome da empresa', { autoComplete: 'organization', required: true })}
         <div className="campo">
           <label htmlFor="cc-cnpj">
             CNPJ <span className="campo-dica">(opcional)</span>
@@ -179,11 +188,16 @@ export function TelaCriarConta() {
             .
           </p>
         )}
-        <BotaoEnviar enviando={enviando || !termos}>Criar conta</BotaoEnviar>
+        <BotaoEnviar enviando={enviando || !termos}>{agencia ? 'Criar a conta da agência' : 'Criar conta'}</BotaoEnviar>
       </form>
       <p className="alternativa">
         Já tem conta? <Link href="/entrar">Entrar</Link>
       </p>
+      {agencia && (
+        <p className="alternativa">
+          É uma empresa? <Link href="/criar-conta">Criar a conta da empresa</Link>
+        </p>
+      )}
     </section>
   );
 }
