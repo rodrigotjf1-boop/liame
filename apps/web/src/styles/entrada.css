@@ -47,6 +47,13 @@
 .entrada a.campo-dica { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
 .link-bt { padding: 0; border: 0; background: none; color: var(--link); font: inherit; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .alternativa { text-align: center; font-size: var(--text-sm); color: var(--text-muted); }
+/* A chave de acesso na entrada (A7, W9, parte 9c2; P28): o "ou" entre a senha e a chave, e o botão da chave na largura toda */
+.entrada-ou { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--sp-3); font-size: var(--text-xs); color: var(--text-muted); }
+.entrada-ou::before, .entrada-ou::after { content: ""; height: 1px; background: var(--border); }
+.entrada .entrada-com-chave { width: 100%; }
+.entrada .entrada-com-chave .ic { color: var(--ai); }
+.segundo-fator-alt { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-2) var(--sp-4); }
+.entrada .segundo-fator-codigo { width: 100%; }
 
 /* avisos */
 .aviso { display: flex; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); font-size: var(--text-sm); }

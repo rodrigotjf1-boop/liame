@@ -1,9 +1,11 @@
 import {
   browserSupportsWebAuthn,
+  browserSupportsWebAuthnAutofill,
   type PublicKeyCredentialCreationOptionsJSON,
   type PublicKeyCredentialRequestOptionsJSON,
   startAuthentication,
   startRegistration,
+  WebAuthnAbortService,
 } from '@simplewebauthn/browser';
 
 // A janela do aparelho para as chaves de acesso (A7, W9, parte 9c; P28; D-A7-54 a D-A7-58): o navegador recebe as opções
@@ -39,6 +41,40 @@ export async function usarAChave(opcoes: Record<string, unknown>): Promise<Resul
     return { ok: true, resposta: resposta as unknown as Record<string, unknown> };
   } catch (err) {
     return { ok: false, motivo: motivoDoErro(err) };
+  }
+}
+
+/**
+ * O navegador oferece a chave no próprio campo do e-mail (o preenchimento, "conditional UI"; D-A7-55). O campo precisa
+ * de `autocomplete="username webauthn"`.
+ */
+export async function campoOfereceChave(): Promise<boolean> {
+  try {
+    return navegadorAceitaChave() && (await browserSupportsWebAuthnAutofill());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Espera a pessoa escolher a chave no preenchimento do campo. Fica pendente até ela escolher; outra cerimônia (o botão
+ * "Entrar com chave de acesso") ou `cancelarAJanela` a encerram, e aí volta `cancelou`.
+ */
+export async function usarAChaveNoCampo(opcoes: Record<string, unknown>): Promise<ResultadoDaChave> {
+  try {
+    const resposta = await startAuthentication({ optionsJSON: opcoes as unknown as PublicKeyCredentialRequestOptionsJSON, useBrowserAutofill: true });
+    return { ok: true, resposta: resposta as unknown as Record<string, unknown> };
+  } catch (err) {
+    return { ok: false, motivo: motivoDoErro(err) };
+  }
+}
+
+/** Encerra a cerimônia pendente (ao sair da tela). */
+export function cancelarAJanela(): void {
+  try {
+    WebAuthnAbortService.cancelCeremony();
+  } catch {
+    /* nada pendente */
   }
 }
 

@@ -72,4 +72,9 @@ describe('a janela do aparelho', () => {
     expect(fraseDoMotivo('sem-suporte', 'entre com a senha')).toBe('Este navegador não aceita chave de acesso. Entre com a senha.');
     expect(fraseDoMotivo('falhou', 'entre com a senha')).toBe('O aparelho não conseguiu usar a chave. Tente de novo ou entre com a senha.');
   });
+
+  it('as frases da entrada (A7, W9, parte 9c2): na tela de entrar e no segundo fator, as do P28', () => {
+    expect(fraseDoMotivo('cancelou', 'entre com a senha')).toBe('Você fechou a janela da chave. Tente de novo ou entre com a senha.');
+    expect(fraseDoMotivo('cancelou', 'use um código')).toBe('Você fechou a janela da chave. Tente de novo ou use um código.');
+  });
 });
