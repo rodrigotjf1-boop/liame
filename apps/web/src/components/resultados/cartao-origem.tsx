@@ -6,6 +6,7 @@ import { useDetalhes } from '@/lib/modo';
 import { BarraDividida } from './desenhos';
 import type { OrigemLite } from './graficos';
 import { LinhaMensagens } from './linha-mensagens';
+import { LinhaPosts } from './linha-posts';
 import { BotaoDetalhes, TextoRico } from './pecas';
 import type { CartaoOrigem as Dados } from './textos';
 
@@ -13,7 +14,8 @@ import type { CartaoOrigem as Dados } from './textos';
 // gráficos, 07/10/2026), uma barra só: com prova de anúncio, canais sem clique e cardápio e WhatsApp sem prova. No
 // Pro (protótipo P1), os sem origem (com a porcentagem sobre os canais com clique), os canais sem clique e os cancelados.
 // Com cupom de mensagem no período (protótipo P15, parte C), uma linha a mais diz o que veio pelas mensagens de
-// WhatsApp: no modo simples, embaixo da barra; no Pro, embaixo dos dois blocos.
+// WhatsApp: no modo simples, embaixo da barra; no Pro, embaixo dos dois blocos. Com post com o link no período
+// (protótipo P32), a linha dos posts vem embaixo da das mensagens, e no Pro, a lista dos posts que trouxeram pedido.
 
 type Props = {
   origem: Dados;
@@ -22,9 +24,11 @@ type Props = {
   podeVerContas: boolean;
   /** Quem pode abrir a tela Mensagens ganha o atalho na linha das mensagens. */
   podeVerMensagens: boolean;
+  /** Quem pode abrir a Agenda ganha o atalho na linha dos posts. */
+  podeVerAgenda?: boolean;
 };
 
-export function CartaoOrigem({ origem, lite, podeVerContas, podeVerMensagens }: Props) {
+export function CartaoOrigem({ origem, lite, podeVerContas, podeVerMensagens, podeVerAgenda = false }: Props) {
   const d = useDetalhes();
   return (
     <article className="card" aria-labelledby="t-origem">
@@ -73,6 +77,7 @@ export function CartaoOrigem({ origem, lite, podeVerContas, podeVerMensagens }: 
                 </p>
               )}
               {origem.mensagens && <LinhaMensagens frase={origem.mensagens} podeVerMensagens={podeVerMensagens} />}
+              {origem.posts && <LinhaPosts frase={origem.posts} podeVerAgenda={podeVerAgenda} />}
             </div>
           )}
           {!d.pro && <BotaoDetalhes aberto={d.aberto} controla="origem-pro" aoAlternar={d.alternar} />}
@@ -83,6 +88,7 @@ export function CartaoOrigem({ origem, lite, podeVerContas, podeVerMensagens }: 
               <p className="lite-frase">{origem.semOrigem.frase}</p>
               <p className="eixo-nota">O motivo de cada um aparece em Pedido a pedido, no filtro “Sem origem”.</p>
               {origem.notaDasMensagens && <p className="eixo-nota">{origem.notaDasMensagens}</p>}
+              {origem.notaDosPosts && <p className="eixo-nota">{origem.notaDosPosts}</p>}
               {origem.cancelados && <p className="eixo-nota">{origem.cancelados}</p>}
             </section>
             <section className="bloco" aria-labelledby="t-canais">
@@ -131,6 +137,7 @@ export function CartaoOrigem({ origem, lite, podeVerContas, podeVerMensagens }: 
             </section>
           </div>
           {d.pro && origem.mensagens && <LinhaMensagens frase={origem.mensagens} podeVerMensagens={podeVerMensagens} />}
+          {d.pro && origem.posts && <LinhaPosts frase={origem.posts} posts={origem.postsQueTrouxeram} podeVerAgenda={podeVerAgenda} />}
         </>
       )}
     </article>

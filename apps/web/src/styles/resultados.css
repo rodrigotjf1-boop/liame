@@ -102,6 +102,16 @@
 .ms-linha a { color: var(--link); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .ms-linha a:focus-visible { outline: 2px solid var(--foco); outline-offset: 2px; border-radius: 2px; }
 .card > .ms-linha { margin-top: var(--sp-3); }
+/* A linha dos posts e, no Pro, os posts que trouxeram pedido (mockups/prototipo-posts-resultados.html, A6 · P32, aprovado
+   em 01/11/2026): a linha é a das mensagens; a lista, uma linha por post, com a rede embaixo do título. */
+.desenho-b > .ps-linha { margin-top: var(--sp-2); }
+.card > .ps-posts { margin-top: var(--sp-3); }
+.ps-posts { display: grid; gap: 6px; max-width: 78ch; margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.ps-posts li { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px var(--sp-3); padding: 6px 0; border-bottom: 1px solid var(--border); min-width: 0; }
+.ps-posts li:last-child { border-bottom: 0; }
+.ps-posts li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.ps-posts li > span:first-child small { display: block; color: var(--text-muted); font-size: var(--text-xs); }
+.ps-posts .num { color: var(--text); font-weight: 600; white-space: nowrap; }
 
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-3); }
 .kpi { display: grid; align-content: start; gap: 2px; min-width: 0; padding: var(--sp-3) var(--sp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }

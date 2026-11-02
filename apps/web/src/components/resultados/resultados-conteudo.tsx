@@ -58,6 +58,8 @@ type Props = {
   vendasAoGoogle?: LinhaDasVendas | null;
   /** Quem pode abrir a tela Mensagens ganha o atalho na linha das mensagens (protótipo P15, parte C). */
   podeVerMensagens?: boolean;
+  /** Quem pode abrir a Agenda ganha o atalho na linha dos posts e na gaveta do pedido que veio por um post (protótipo P32). */
+  podeVerAgenda?: boolean;
   /** A consulta de "Como os anúncios rodaram" (protótipo P23); o cartão só aparece com a função ligada para a empresa. */
   anuncios?: AnunciosDaTela | null;
   /**
@@ -91,6 +93,7 @@ export function ResultadosConteudo({
   pedir = null,
   vendasAoGoogle = null,
   podeVerMensagens = false,
+  podeVerAgenda = false,
   anuncios = null,
   google = null,
 }: Props) {
@@ -157,10 +160,10 @@ export function ResultadosConteudo({
           />
         )}
         {!pro && <CartaoConversas linhas={graficos.conversas} />}
-        <CartaoOrigem origem={tela.origem} lite={graficos.origem} podeVerContas={podeVerContas} podeVerMensagens={podeVerMensagens} />
+        <CartaoOrigem origem={tela.origem} lite={graficos.origem} podeVerContas={podeVerContas} podeVerMensagens={podeVerMensagens} podeVerAgenda={podeVerAgenda} />
         {/* P18: depois de "De onde vieram os pedidos". Uma marca, um cartão. */}
         {google && <CartaoGoogle key={google.consulta.brand_id} consulta={google.consulta} periodo={google.periodo} podeVerContas={podeVerContas} />}
-        <CartaoPedidos consulta={consulta} fuso={tela.base.fuso} loja={loja} modelo={modelo} reserva={reserva} />
+        <CartaoPedidos consulta={consulta} fuso={tela.base.fuso} loja={loja} modelo={modelo} reserva={reserva} podeVerAgenda={podeVerAgenda} />
       </div>
       <DicaDosDesenhos />
     </>

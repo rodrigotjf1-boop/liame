@@ -545,8 +545,13 @@ export function origemLiteDe(r: ClosedLoopResponse, b: Base): OrigemLite | null 
     { classe: 'foco', n: tot.confirmed.orders, rotulo: 'de anúncios, com prova' },
     { classe: 'c1', n: semClique, rotulo: 'de aplicativos de entrega, balcão e outros canais sem clique' },
     // Os que vieram pelo cupom de uma mensagem seguem nesta parte: eles não têm prova de anúncio, e a barra aprovada
-    // não ganhou cor nova (protótipo P15, parte C). Quem diz quantos são é a linha das mensagens, embaixo.
-    { classe: 'c2', n: tot.without_origin.orders + (tot.messages?.own_channel_orders ?? 0), rotulo: 'do cardápio e do WhatsApp, sem prova de anúncio' },
+    // não ganhou cor nova (protótipo P15, parte C). Quem diz quantos são é a linha das mensagens, embaixo. Os que
+    // vieram pelo link de um post também (protótipo P32), com a linha dos posts.
+    {
+      classe: 'c2',
+      n: tot.without_origin.orders + (tot.messages?.own_channel_orders ?? 0) + (tot.posts?.orders ?? 0),
+      rotulo: 'do cardápio e do WhatsApp, sem prova de anúncio',
+    },
   ];
   const todos = itens.reduce((s, i) => s + i.n, 0);
   const partes = itens

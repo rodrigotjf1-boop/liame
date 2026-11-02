@@ -1,6 +1,7 @@
 import type { ClosedLoopResponse, OrderOrigin } from '@liame/contracts';
 import { reaisDeMicros } from '@/lib/formato';
-import { dataNoFuso, diaHoraNoFuso, diaMes, grupoDeCanal, nomesDe } from './textos';
+import { doPost, ondeEstavaOLink, redeDoPost, tituloDoPost } from './posts';
+import { dataNoFuso, diaHoraNoFuso, diaMes, grupoDeCanal, horaNoFuso, nomesDe } from './textos';
 
 // "Pedido a pedido" e a gaveta "Origem do pedido" (protótipo P1): de onde veio cada pedido, com a
 // evidência, a janela e a confiança que a API devolve (`GET /v1/results/orders`). Sem dado pessoal: o
@@ -31,9 +32,12 @@ export function daMensagem(o: OrderOrigin): o is OrderOrigin & { message: Mensag
   return !!o.message && o.attribution.status === 'sem_origem' && !o.attribution.counted;
 }
 
+/** A origem é conhecida sem prova de anúncio: a mensagem (P15, parte C) ou o post (P32). */
+const origemSemAnuncio = (o: OrderOrigin) => daMensagem(o) || doPost(o);
+
 export function filtrarPedidos(lista: OrderOrigin[], f: FiltroPedidos): OrderOrigin[] {
-  if (f === 'com') return lista.filter((o) => !cancelado(o) && (o.attribution.counted || daMensagem(o)));
-  if (f === 'sem') return lista.filter((o) => !cancelado(o) && o.attribution.status === 'sem_origem' && !daMensagem(o));
+  if (f === 'com') return lista.filter((o) => !cancelado(o) && (o.attribution.counted || origemSemAnuncio(o)));
+  if (f === 'sem') return lista.filter((o) => !cancelado(o) && o.attribution.status === 'sem_origem' && !origemSemAnuncio(o));
   if (f === 'cancelados') return lista.filter(cancelado);
   return lista;
 }
@@ -79,8 +83,8 @@ export type Confianca = { rotulo: string; classe: 'concluido' | 'info' | 'espera
 
 export function confiancaDe(o: OrderOrigin): Confianca {
   if (cancelado(o)) return { rotulo: 'Cancelado · fora do ROAS', classe: 'perigo', ponto: true };
-  // O cupom é só daquela mensagem: quem o usou veio por ela.
-  if (daMensagem(o)) return { rotulo: 'Alta', classe: 'concluido', ponto: true };
+  // O cupom é só daquela mensagem, e o link é só daquele post: quem os usou veio por eles.
+  if (origemSemAnuncio(o)) return { rotulo: 'Alta', classe: 'concluido', ponto: true };
   if (o.attribution.status === 'sem_origem') return { rotulo: 'Sem origem', classe: 'espera', ponto: false };
   if (o.attribution.status === 'plataforma') return { rotulo: 'Só a plataforma', classe: 'espera', ponto: true };
   if (o.attribution.confidence === 'alta') return { rotulo: 'Alta', classe: 'concluido', ponto: true };
@@ -117,8 +121,13 @@ export function motivoDe(reason: string | null, janela: number): string {
 
 export type CelulaOrigem = { principal: string; sub: string | null; forte: boolean };
 
-/** Coluna "Origem" da tabela. */
-export function origemDoPedido(o: OrderOrigin): CelulaOrigem {
+/** O post do pedido como a tela o chama ("Post de sexta, 25/09, às 19:00"); sem a data de publicação, "Post da marca". */
+function nomeDoPost(p: NonNullable<OrderOrigin['post']>, fuso: string): string {
+  return p.published_at ? tituloDoPost({ kind: p.kind, published_at: p.published_at }, fuso) : p.kind === 'pacote' ? 'Pacote da marca' : 'Post da marca';
+}
+
+/** Coluna "Origem" da tabela. `fuso`: o da loja, para o nome do post (P32). */
+export function origemDoPedido(o: OrderOrigin, fuso = 'America/Sao_Paulo'): CelulaOrigem {
   const a = o.attribution;
   if (a.campaign) {
     const plat = a.provider ? nomesDe(a.provider).nome : null;
@@ -127,6 +136,7 @@ export function origemDoPedido(o: OrderOrigin): CelulaOrigem {
   }
   if (a.status === 'plataforma' && a.provider) return { principal: nomesDe(a.provider).nome, sub: 'sem campanha identificada', forte: true };
   if (daMensagem(o)) return { principal: o.message.name, sub: 'Mensagem de WhatsApp · cupom da mensagem', forte: true };
+  if (doPost(o)) return { principal: nomeDoPost(o.post, fuso), sub: `${redeDoPost(o.post.channel)} · link do post`, forte: true };
   return { principal: motivoDe(a.reason, a.window_days), sub: null, forte: false };
 }
 
@@ -149,6 +159,7 @@ export type DetalheDoPedido = {
     | { tipo: 'campanha'; campanha: string; plataforma: { nome: string; classe: string } | null; nota: string }
     | { tipo: 'plataforma'; plataforma: { nome: string; classe: string }; nota: string }
     | { tipo: 'mensagem'; mensagem: string; nota: string }
+    | { tipo: 'post'; post: string; rede: string; nota: string }
     | { tipo: 'sem'; motivo: string }
     | { tipo: 'cancelado'; campanha: string | null; plataforma: string | null };
   confianca: Confianca;
@@ -170,6 +181,18 @@ function frasesDaEvidencia(o: OrderOrigin, janela: number, fuso: string): string
       `O cupom ${o.message.coupon_code} nasceu com a mensagem “${o.message.name}”, enviada em ${diaDoEnvio(o.message, fuso)}, e é só dela.`,
       'Quem recebeu a mensagem é com o RegemCast: o Liame não vê nome nem telefone, só o cupom no pedido.',
       'O pedido conta em Mensagens e fica fora do retorno dos anúncios: mensagem não é anúncio.',
+    ];
+  }
+  if (doPost(o)) {
+    // P32: o link é só daquele post; o id de clique que a rede põe no link não faz dele um anúncio (D-A6-48).
+    const p = o.post;
+    const saiu = p.published_at ? `que saiu em ${diaMes(dataNoFuso(new Date(p.published_at), fuso))}, às ${horaNoFuso(new Date(p.published_at), fuso)}` : '';
+    return [
+      p.kind === 'pacote'
+        ? `O link é só deste pacote: ele foi ${ondeEstavaOLink(p)}${saiu ? `, no pacote ${saiu}` : ''}.`
+        : `O link é só deste post: ele foi ${ondeEstavaOLink(p)}${saiu ? `, ${saiu}` : ''}, aprovado com o código do app.`,
+      'O cardápio do Regem guardou o código do link no acesso que virou o pedido. O id de clique da rede pode vir junto, mas o código diz que o clique foi no post, e não num anúncio.',
+      'O pedido conta nos posts e fica fora do retorno dos anúncios: post não é anúncio.',
     ];
   }
   switch (a.evidence) {
@@ -246,6 +269,7 @@ function alvoDoToque(a: OrderOrigin['attribution']): { em: string; por: string }
 function textoDaEvidencia(o: OrderOrigin, fuso: string, janela: number): string {
   const a = o.attribution;
   if (daMensagem(o)) return `Cupom ${o.message.coupon_code}, da mensagem “${o.message.name}” · usado no próprio pedido · confiança alta`;
+  if (doPost(o)) return `Link do post, com o código ${o.post.link_code} só dele · acesso ao cardápio ${tempoAntes(o.post.touch_at, o.confirmed_at)} antes do pedido · confiança alta`;
   const partes: string[] = [];
   const quem = a.provider ? nomesDe(a.provider) : null;
   const alvo = alvoDoToque(a);
@@ -333,6 +357,7 @@ export function detalheDoPedido(o: OrderOrigin, ctx: { fuso: string; loja: strin
   else if (a.campaign) resultado = { tipo: 'campanha', campanha: a.campaign.name, plataforma: plat ? { nome: plat.nome, classe: plat.classe } : null, nota: 'conta no ROAS confirmado' };
   else if (a.status === 'plataforma' && plat) resultado = { tipo: 'plataforma', plataforma: { nome: plat.nome, classe: plat.classe }, nota: `conta no total ${plat.de}, fora das campanhas` };
   else if (daMensagem(o)) resultado = { tipo: 'mensagem', mensagem: o.message.name, nota: 'conta em Mensagens, fora do retorno dos anúncios' };
+  else if (doPost(o)) resultado = { tipo: 'post', post: nomeDoPost(o.post, ctx.fuso), rede: redeDoPost(o.post.channel), nota: 'conta nos posts, fora do retorno dos anúncios' };
   else resultado = { tipo: 'sem', motivo: motivoDe(a.reason, janela) };
 
   const comoSabe = cancel
@@ -341,11 +366,20 @@ export function detalheDoPedido(o: OrderOrigin, ctx: { fuso: string; loja: strin
   // O pedido que usou o cupom de uma mensagem e tem prova de anúncio fica com o anúncio: a gaveta diz por quê, porque
   // em Mensagens ele aparece entre os pedidos do cupom.
   if (!cancel && o.message && a.counted) comoSabe.push(`Este pedido também usou o cupom da mensagem “${o.message.name}”. Como tem prova de anúncio, ele fica com o anúncio.`);
+  // O mesmo com o link de um post (P32, D-A6-48): ele aparece entre os pedidos pelos posts, e fica com o anúncio.
+  if (!cancel && o.post && a.counted) comoSabe.push(`Este pedido também veio pelo link de um post (${nomeDoPost(o.post, ctx.fuso)}). Como tem prova de anúncio, ele fica com o anúncio.`);
 
   // A mensagem que trouxe o pedido (nula quando a origem é outra, ou o pedido foi cancelado).
   const msg = !cancel && daMensagem(o) ? o.message : null;
+  // O post que trouxe o pedido (P32): quando saiu e o acesso pelo link dele.
+  const post = !cancel && doPost(o) ? o.post : null;
   const linhaDoTempo: DetalheDoPedido['linhaDoTempo'] = [];
   if (msg) linhaDoTempo.push({ iso: msg.sent_at, quando: diaHoraNoFuso(msg.sent_at, ctx.fuso), oque: `Mensagem “${msg.name}” enviada pelo RegemCast`, usado: false });
+  if (post?.published_at) {
+    const onde = post.channel === 'facebook' ? 'na Página do Facebook' : `no ${redeDoPost(post.channel)}`;
+    linhaDoTempo.push({ iso: post.published_at, quando: diaHoraNoFuso(post.published_at, ctx.fuso), oque: `${post.kind === 'pacote' ? 'Pacote publicado' : 'Post publicado'} ${onde}`, usado: false });
+  }
+  if (post) linhaDoTempo.push({ iso: post.touch_at, quando: diaHoraNoFuso(post.touch_at, ctx.fuso), oque: 'Acesso ao cardápio pelo link do post', usado: true });
   if (a.touch_at && a.evidence && a.evidence !== 'cupom') linhaDoTempo.push({ iso: a.touch_at, quando: diaHoraNoFuso(a.touch_at, ctx.fuso), oque: oQueFoiOToque(o), usado: true });
   linhaDoTempo.push({
     iso: o.confirmed_at,
@@ -359,7 +393,7 @@ export function detalheDoPedido(o: OrderOrigin, ctx: { fuso: string; loja: strin
     dados,
     resultado,
     confianca: confiancaDe(o),
-    evidencia: { texto: textoDaEvidencia(o, ctx.fuso, janela), tom: cancel ? 'cancelado' : a.status === 'sem_origem' && !daMensagem(o) ? 'sem' : 'normal' },
+    evidencia: { texto: textoDaEvidencia(o, ctx.fuso, janela), tom: cancel ? 'cancelado' : a.status === 'sem_origem' && !origemSemAnuncio(o) ? 'sem' : 'normal' },
     comoSabe,
     linhaDoTempo,
     margem: cancel
