@@ -163,7 +163,7 @@ describe('o menu e a página inicial com a agência ativa', () => {
   it('com a agência ativa, só o grupo da agência aparece; numa empresa, ele some', () => {
     const grupos = (pode: (p: string) => boolean) => NAVEGACAO.filter((g) => !g.pessoal && itensVisiveis(g, pode, 'lite').length).map((g) => g.id);
     expect(grupos(daDona)).toEqual(['parceiro']);
-    expect(itensVisiveis(NAVEGACAO.find((g) => g.id === 'parceiro')!, doMembro, 'lite').map((i) => i.href)).toEqual(['/agencia/clientes', '/agencia/time']);
+    expect(itensVisiveis(NAVEGACAO.find((g) => g.id === 'parceiro')!, doMembro, 'lite').map((i) => i.href)).toEqual(['/agencia/clientes', '/agencia/relatorios', '/agencia/time']);
     expect(grupos((p) => !p.startsWith('agencia.'))).not.toContain('parceiro');
   });
 });
