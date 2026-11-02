@@ -71,6 +71,8 @@ export const NAVEGACAO: GrupoNav[] = [
     rotulo: 'Agência',
     itens: [
       { href: '/agencia/clientes', rotulo: 'Clientes', icone: 'briefcase', permissao: 'agencia.ver' },
+      // Os relatórios do mês dos clientes (P29; A7, W7, parte 5b).
+      { href: '/agencia/relatorios', rotulo: 'Relatórios', icone: 'file', permissao: 'agencia.ver' },
       { href: '/agencia/time', rotulo: 'Time da agência', icone: 'users', permissao: 'agencia.ver' },
       // A marca da agência (P29; A7, W7, parte 5a): a dona e o administrador.
       { href: '/agencia/marca', rotulo: 'A marca da agência', icone: 'palette', permissao: 'agencia.clientes' },
@@ -102,6 +104,8 @@ export function itemAtual(caminho: string, href: string): boolean {
 const SUBTELAS: Record<string, { titulo: string; modos: boolean }> = {
   '/resultados/revisao': { titulo: 'Resultados · Revisão da semana', modos: false },
   '/resultados/relatorio': { titulo: 'Resultados · Relatório do mês', modos: false },
+  // Revisar e mandar o relatório de um cliente (P29; A7, W7, parte 5b).
+  '/agencia/relatorios/revisar': { titulo: 'Relatórios · Revisar e mandar', modos: false },
 };
 
 export function tituloDa(caminho: string): string {
