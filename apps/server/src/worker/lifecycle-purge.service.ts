@@ -332,8 +332,12 @@ export class LifecyclePurgeService {
     });
 
     // Antes de tudo, as imagens da empresa (ADR-021, item 6): elas não são cifradas pela chave dela. Se o armazenamento
-    // falhar, nada mais acontece hoje, e o expurgo tenta de novo amanhã.
-    const temFotos = await withSystem(this.db, (tx) => tx.execute(sql`select 1 from liame.brand_photo where tenant_id = ${tenantId} limit 1`));
+    // falhar, nada mais acontece hoje, e o expurgo tenta de novo amanhã. A agência com a marca salva pode ter logos no
+    // mesmo prefixo (A7, W7, parte 3), inclusive um anterior que não saiu na troca.
+    const temFotos = await withSystem(this.db, (tx) =>
+      tx.execute(sql`select 1 from liame.brand_photo where tenant_id = ${tenantId}
+                     union all select 1 from liame.agency_brand where tenant_id = ${tenantId} limit 1`),
+    );
     if (temFotos.rows[0]) await this.armazem.apagarPrefixo(prefixoDaEmpresa(tenantId));
 
     // Primeiro a chave: se algo falhar depois, o dado pessoal já está ilegível (crypto-shredding).

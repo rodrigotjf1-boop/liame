@@ -1,12 +1,34 @@
-import { BRAND_PHOTO_LIMITS } from '@liame/contracts';
+import { AGENCY_LOGO_LIMITS, BRAND_PHOTO_LIMITS } from '@liame/contracts';
 import { AppProblem } from '../errors/problems.js';
 import { API_PREFIX } from '../setup-constants.js';
 
 // O leitor do corpo da rota que recebe a foto (`POST /v1/brand-photos`): o arquivo vem cru, e o leitor do Nest só lê
 // JSON (até 100 kb). Este junta os bytes até 10 MB e entrega o Buffer à rota; acima disso, 413 pelo filtro de erros,
 // como o leitor do Express (V133). O pedido em JSON segue para o leitor do Nest (a rota recusa: "falta a foto").
+// O mesmo leitor serve ao logo da agência (`PUT /v1/agency/brand/logo`, A7 · W7, parte 3), até 1 MB.
 
-const CAMINHO = `/${API_PREFIX}/brand-photos`;
+/** A rota que recebe o arquivo cru e as frases dela. */
+export type RotaDoArquivo = { metodo: 'POST' | 'PUT'; caminho: string; limite: number; grande: string; passa: string; semCompressao: string; interrompido: string };
+
+export const ROTA_DA_FOTO: RotaDoArquivo = {
+  metodo: 'POST',
+  caminho: `/${API_PREFIX}/brand-photos`,
+  limite: BRAND_PHOTO_LIMITS.maxBytes,
+  grande: 'Foto grande demais',
+  passa: 'Passa de 10 MB.',
+  semCompressao: 'Envie a foto sem compressão.',
+  interrompido: 'A foto não chegou inteira. Tente de novo.',
+};
+
+export const ROTA_DO_LOGO_DA_AGENCIA: RotaDoArquivo = {
+  metodo: 'PUT',
+  caminho: `/${API_PREFIX}/agency/brand/logo`,
+  limite: AGENCY_LOGO_LIMITS.maxBytes,
+  grande: 'Logo grande demais',
+  passa: 'Passa de 1 MB.',
+  semCompressao: 'Envie o logo sem compressão.',
+  interrompido: 'O logo não chegou inteiro. Tente de novo.',
+};
 
 interface PedidoCru {
   method: string;
@@ -24,20 +46,17 @@ function cabecalho(v: string | string[] | undefined): string {
   return (Array.isArray(v) ? (v[0] ?? '') : (v ?? '')).toLowerCase();
 }
 
-function grandeDemais(): AppProblem {
-  return new AppProblem(413, 'grande-demais', 'Foto grande demais', 'Passa de 10 MB.');
-}
-
-/** O middleware: só toca no `POST` da rota de envio que não vem em JSON. */
-export function leitorDaFoto(limite: number = BRAND_PHOTO_LIMITS.maxBytes) {
+/** O middleware: só toca no método e no caminho da rota de envio, no pedido que não vem em JSON. */
+export function leitorDaFoto(limite: number = BRAND_PHOTO_LIMITS.maxBytes, rota: RotaDoArquivo = ROTA_DA_FOTO) {
+  const grandeDemais = () => new AppProblem(413, 'grande-demais', rota.grande, rota.passa);
   return (req: PedidoCru, _res: unknown, next: (err?: unknown) => void): void => {
-    if (req.method !== 'POST' || (req.originalUrl ?? req.url).split('?')[0] !== CAMINHO) return next();
+    if (req.method !== rota.metodo || (req.originalUrl ?? req.url).split('?')[0] !== rota.caminho) return next();
     const tipo = cabecalho(req.headers['content-type']);
     if (tipo.startsWith('application/json')) return next();
     const compressao = cabecalho(req.headers['content-encoding']);
     if (compressao && compressao !== 'identity') {
       req.resume();
-      return next(new AppProblem(415, 'formato-nao-suportado', 'Formato não suportado', 'Envie a foto sem compressão.'));
+      return next(new AppProblem(415, 'formato-nao-suportado', 'Formato não suportado', rota.semCompressao));
     }
     const declarado = Number(cabecalho(req.headers['content-length']) || NaN);
     if (Number.isFinite(declarado) && declarado > limite) {
@@ -68,7 +87,7 @@ export function leitorDaFoto(limite: number = BRAND_PHOTO_LIMITS.maxBytes) {
       req.body = Buffer.concat(partes, total);
       terminar();
     });
-    req.on('aborted', () => terminar(new AppProblem(400, 'envio-interrompido', 'Envio interrompido', 'A foto não chegou inteira. Tente de novo.')));
-    req.on('error', () => terminar(new AppProblem(400, 'envio-interrompido', 'Envio interrompido', 'A foto não chegou inteira. Tente de novo.')));
+    req.on('aborted', () => terminar(new AppProblem(400, 'envio-interrompido', 'Envio interrompido', rota.interrompido)));
+    req.on('error', () => terminar(new AppProblem(400, 'envio-interrompido', 'Envio interrompido', rota.interrompido)));
   };
 }

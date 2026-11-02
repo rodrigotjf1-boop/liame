@@ -224,6 +224,9 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   people_digest: { class: 'PERSONAL', retention: 'com a empresa e com a pessoa (some com qualquer uma das duas)' },
   // O vínculo de parceiro (A7, W6, parte 2): o e-mail do Dono a quem a agência pediu.
   partner_link: { class: 'PERSONAL', retention: 'com a agência e com a empresa (some com qualquer uma das duas)' },
+  // A marca da agência (A7, W7, parte 3, migration 0102): o logo (no armazenamento de imagens, que sai com o prefixo da
+  // agência no expurgo) e o e-mail de resposta, que é o contato de alguém da agência.
+  agency_brand: { class: 'PERSONAL', retention: 'com a agência' },
   // A empresa como cliente no meio de pagamento (A7, W2a, migration 0081): só o id dela lá (`cus_…`). O nome e o CNPJ
   // que o Asaas guarda são os da empresa, enviados na primeira cobrança.
   billing_customer: { class: 'CONFIDENTIAL', retention: 'com a empresa' },

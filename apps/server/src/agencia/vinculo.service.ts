@@ -746,7 +746,7 @@ function formatarCnpj(c: string): string {
 // ------------------------------------------------------------------ quem pede
 
 /** A agência ativa: as permissões `agencia.*` só existem nos papéis da agência, e o tipo é conferido de novo aqui. */
-async function agenciaDe(tx: Tx, auth: AuthContext): Promise<string> {
+export async function agenciaDe(tx: Tx, auth: AuthContext): Promise<string> {
   if (!auth.tenantId) throw new AppProblem(403, 'sem-empresa-ativa', 'Escolha uma organização', 'Selecione a agência para continuar.');
   const r = await tx.execute<{ kind: string }>(sql`select kind from liame.organization where id = ${auth.tenantId}`);
   if (r.rows[0]?.kind !== 'agencia') {

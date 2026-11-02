@@ -19,11 +19,16 @@ export {
   TokenRequest,
 } from './auth.js';
 export {
+  AGENCY_LOGO_LIMITS,
+  AgencyBrandResponse,
   AgencyInvitationResponse,
   AgencyMemberResponse,
+  AgencyReplyToConfirmedResponse,
+  AgencyReportMode,
   AgencyTeamResponse,
   CreateAgencyInvitationRequest,
   CreateAgencyRequest,
+  UpdateAgencyBrandRequest,
   UpdateAgencyMemberRequest,
 } from './agency.js';
 export {
