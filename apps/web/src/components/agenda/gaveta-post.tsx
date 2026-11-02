@@ -11,6 +11,8 @@ import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
 import { ApagarDasRedes, type FeitoDoApagar } from './apagar-das-redes';
+import { oQueOPostTrouxe } from './post-trouxe';
+import { PostTrouxe } from './post-trouxe-secao';
 import { PreviasDoPost } from './previas-do-post';
 import { SituacaoDosCanais } from './situacao-dos-canais';
 import { avisoDoApagar, deOndeSai, fraseDaSituacao, linkCurto, NO_CANAL, noFuso, podeApagar, quando, situacaoDoCartao } from './textos';
@@ -37,9 +39,11 @@ type Props = {
   /** A foto não carregou (o endereço de 5 minutos venceu): a tela pede endereços novos. */
   aoFalharImagem: () => void;
   aoFechar: () => void;
+  /** Quem pode abrir Resultados (P33: o que o post trouxe pelo link). */
+  podeVerResultados?: boolean;
 };
 
-export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, podeVerContas, reserva, aoMudar, aoFalharImagem, aoFechar }: Props) {
+export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, podeVerContas, reserva, aoMudar, aoFalharImagem, aoFechar, podeVerResultados = false }: Props) {
   const ids = useId();
   const fecharBt = useRef<HTMLButtonElement>(null);
   const cancelarBt = useRef<HTMLButtonElement>(null);
@@ -76,6 +80,8 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, po
   const situacao = situacaoDoCartao(post);
   const naoApagou = avisoDoApagar(post);
   const pedidoEm = noFuso(new Date(post.created_at), fuso);
+  // P33: o que o post que já saiu trouxe (os pedidos pelo link e os números de cada rede); nulo antes de sair.
+  const trouxe = oQueOPostTrouxe(post, agora, fuso);
 
   async function cancelar() {
     if (!post.action_id) return;
@@ -192,6 +198,7 @@ export function GavetaPost({ post, fuso, hoje, foto, podeOperar, podeAprovar, po
               <span>{naoApagou}</span>
             </p>
           )}
+          {trouxe && <PostTrouxe trouxe={trouxe} podeVerResultados={podeVerResultados} podeVerContas={podeVerContas} />}
           <PreviasDoPost key={post.id} post={post} foto={foto} aoFalharImagem={aoFalharImagem} />
           <section aria-labelledby={`${ids}-sit`}>
             <h3 className="rotulo-marca" id={`${ids}-sit`}>

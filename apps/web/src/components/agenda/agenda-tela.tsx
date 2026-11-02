@@ -34,6 +34,8 @@ export function AgendaTela() {
   const podeVerContas = pode('contas.ver');
   const podeAprovar = pode('acoes.aprovar');
   const podeVerFotos = pode('fotos.ver');
+  // O atalho "Ver em Resultados", na gaveta do post que já saiu (P33).
+  const podeVerResultados = pode('vendas.ver');
   const titulo = useRef<HTMLHeadingElement>(null);
   const seguinte = useRef<HTMLButtonElement>(null);
   const [marcas, setMarcas] = useState<BrandResponse[] | null>(null);
@@ -362,6 +364,7 @@ export function AgendaTela() {
           aoTirar={tirou}
           aoFalharImagem={() => marca && disparar(carregarFotos(marca))}
           aoFechar={() => setAberto(null)}
+          podeVerResultados={podeVerResultados}
         />
       )}
       {postAberto && carga.tipo === 'ok' && !ehPacote(postAberto) && (
@@ -378,6 +381,7 @@ export function AgendaTela() {
           aoMudar={trocarPost}
           aoFalharImagem={() => marca && disparar(carregarFotos(marca))}
           aoFechar={() => setAberto(null)}
+          podeVerResultados={podeVerResultados}
         />
       )}
       {novoAberto && carga.tipo === 'ok' && marca && (
@@ -470,6 +474,8 @@ function Dia({
                   <span className={`ag-st${tom ? ` ag-st--${tom}` : ''}`}>
                     <Icone nome={p.situacao.icone} pequeno />
                     {p.situacao.rotulo}
+                    {/* P33: o post que já saiu diz quantos pedidos trouxe pelo link. */}
+                    {p.pedidos && ` · ${p.pedidos}`}
                   </span>
                 </button>
               </li>
