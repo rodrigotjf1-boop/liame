@@ -2,7 +2,7 @@ import type { CloseOrganizationRequest, ExportResponse, OrganizationResponse } f
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { activeTraceId, writeAudit } from '../audit/audit.js';
-import { MfaService } from '../auth/mfa.service.js';
+import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { actorLabel, actorTypeOf } from '../context/unit-of-work.interceptor.js';
 import { afterCommit, auditDetail, type AuthContext, currentTx } from '../context/request-context.js';
@@ -20,7 +20,7 @@ const EXPORT_LIMIT = 50_000;
 @Injectable()
 export class LifecycleService {
   constructor(
-    private readonly mfa: MfaService,
+    private readonly confirmacao: ConfirmacaoService,
     private readonly budget: BudgetService,
     private readonly mailer: Mailer,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -37,7 +37,7 @@ export class LifecycleService {
     if (input.confirm_name.toLocaleLowerCase('pt-BR') !== org.name.trim().toLocaleLowerCase('pt-BR')) {
       throw new ValidationProblem([{ path: 'confirm_name', message: 'Digite o nome da empresa exatamente como aparece.' }]);
     }
-    await this.mfa.verifyStepUp(tx, auth.userId, input.code);
+    await this.confirmacao.confirmar(tx, auth.userId, input);
     await tx.execute(sql`
       update liame.organization
          set status = 'suspensa', suspended_at = now(), purge_after = now() + make_interval(days => ${GRACE_DAYS}),

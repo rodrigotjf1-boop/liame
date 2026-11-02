@@ -12,7 +12,7 @@ import type {
 import { type Database, withContext } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { MfaService } from '../auth/mfa.service.js';
+import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { NIVEL_DA_COBRANCA_LIBERADA } from '../auth/permissions.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { afterCommit, type AuthContext, auditDetail, currentTx } from '../context/request-context.js';
@@ -103,7 +103,7 @@ export class CobrancaService {
   constructor(
     @Inject(DATABASE) private readonly database: Database | null,
     private readonly flags: FlagService,
-    private readonly mfa: MfaService,
+    private readonly confirmacao: ConfirmacaoService,
     private readonly meio: MeioAsaas,
     private readonly mailer: Mailer,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -295,7 +295,7 @@ export class CobrancaService {
   async trocarPlano(auth: AuthContext, req: ChangePlanRequest): Promise<BillingResponse> {
     await this.paraMudar(auth, req.brand_id);
     const tx = currentTx();
-    await this.mfa.verifyStepUp(tx, auth.userId, req.code);
+    await this.confirmacao.confirmar(tx, auth.userId, req);
     const s = await assinaturaVivaTravada(tx, req.brand_id);
     if (!s) throw semAssinatura();
     exigirEmDia(s);
@@ -320,7 +320,7 @@ export class CobrancaService {
   async cancelar(auth: AuthContext, req: CancelSubscriptionRequest): Promise<BillingResponse> {
     await this.paraMudar(auth, req.brand_id);
     const tx = currentTx();
-    await this.mfa.verifyStepUp(tx, auth.userId, req.code);
+    await this.confirmacao.confirmar(tx, auth.userId, req);
     const s = await assinaturaVivaTravada(tx, req.brand_id);
     if (!s) throw semAssinatura();
     const r = await cancelar(tx, s, auth.userId, new Date());
@@ -343,7 +343,7 @@ export class CobrancaService {
   async desistir(auth: AuthContext, req: WithdrawSubscriptionRequest): Promise<BillingResponse> {
     await this.paraMudar(auth, req.brand_id);
     const tx = currentTx();
-    await this.mfa.verifyStepUp(tx, auth.userId, req.code);
+    await this.confirmacao.confirmar(tx, auth.userId, req);
     const s = await assinaturaVivaTravada(tx, req.brand_id);
     if (!s) throw semAssinatura();
     // O mesmo instante na gravação (`ended_at`) e no protocolo: a tela, que o tira do `ended_at`, e o e-mail dão o mesmo.

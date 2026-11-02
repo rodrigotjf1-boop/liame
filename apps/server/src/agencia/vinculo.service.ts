@@ -17,7 +17,7 @@ import type {
 import { type Database, type Tx, uuidv7 } from '@liame/database';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { MfaService } from '../auth/mfa.service.js';
+import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { ROLE_RANK } from '../auth/permissions.js';
 import { RateLimitService } from '../auth/rate-limit.service.js';
 import { donoDoEmail, quemAvisarNaAgencia, quemAvisarNaEmpresa } from '../auth/vinculo-de-parceiro.js';
@@ -112,7 +112,7 @@ export class VinculoService {
     private readonly rateLimit: RateLimitService,
     private readonly mailer: Mailer,
     private readonly flags: FlagService,
-    private readonly mfa: MfaService,
+    private readonly confirmacao: ConfirmacaoService,
   ) {}
 
   private get db(): Database {
@@ -451,7 +451,7 @@ export class VinculoService {
     if (!(await this.ligada(tenantId, auth.userId))) throw desligada();
     const pedido = await this.pedidoAoDono(tx, auth, id);
     const termos = conferirTermos({ maxRole: input.max_role, limite: input.approve_limit_micros, dupla: input.dual_approval, fim: input.ends_at ?? null });
-    await this.mfa.verifyStepUp(tx, auth.userId, input.code);
+    await this.confirmacao.confirmar(tx, auth.userId, input);
     // O vínculo que venceu pela data de fim sai do caminho; o vivo impede um segundo.
     await tx.execute(sql`
       update liame.partner_link set status = 'vencido', ended_at = ends_at
@@ -528,10 +528,10 @@ export class VinculoService {
       fim: input.ends_at !== undefined ? input.ends_at : antes.fim,
     });
     if (sobe(antes, depois)) {
-      if (!input.code) {
-        throw new ValidationProblem([{ path: 'code', message: 'Subir o nível ou o limite pede os 6 números do app.' }]);
+      if (!input.code && !input.passkey) {
+        throw new ValidationProblem([{ path: 'code', message: 'Subir o nível ou o limite pede a sua chave de acesso ou os 6 números do app.' }]);
       }
-      await this.mfa.verifyStepUp(tx, auth.userId, input.code);
+      await this.confirmacao.confirmar(tx, auth.userId, input);
     }
     await tx.execute(sql`
       update liame.partner_link

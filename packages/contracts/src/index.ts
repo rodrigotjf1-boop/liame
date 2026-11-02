@@ -48,7 +48,7 @@ export {
   UpdatePartnerRequest,
 } from './partners.js';
 export { HealthResponse, ReadinessResponse } from './health.js';
-export { MfaVerifyRequest, RecoveryCodesResponse, TotpCodeRequest, TotpSetupResponse } from './mfa.js';
+export { MfaVerifyRequest, RecoveryCodesResponse, RegenerateRecoveryCodesRequest, TotpCodeRequest, TotpSetupResponse } from './mfa.js';
 export {
   RevokedSessionsResponse,
   SecurityEvent,
@@ -549,6 +549,7 @@ export {
 } from './ownership-claim.js';
 export {
   CreatePasskeyRequest,
+  ChaveNoLugarDoCodigo,
   CreatePasskeyResponse,
   Passkey,
   PasskeyAssertion,

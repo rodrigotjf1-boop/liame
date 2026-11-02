@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChaveNoLugarDoCodigo } from './passkeys.js';
 import { TermsVersion } from './auth.js';
 
 // A propriedade da conta (A7, W8, parte 2; ADR-017; P34 aprovado; D-A7-59 a D-A7-61): só o Dono transfere, para um
@@ -36,17 +37,19 @@ export const OwnershipResponse = z.strictObject({
 });
 export type OwnershipResponse = z.infer<typeof OwnershipResponse>;
 
-/** Pedir a transferência: para quem, se o Dono fica como Administrador, e o código do app. */
+/** Pedir a transferência: para quem, se o Dono fica como Administrador, e a chave de acesso ou o código do app. */
 export const CreateOwnershipTransferRequest = z.strictObject({
   to_user_id: z.uuid(),
   old_owner_stays: z.boolean(),
-  code: CodigoDoApp,
+  code: CodigoDoApp.optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type CreateOwnershipTransferRequest = z.infer<typeof CreateOwnershipTransferRequest>;
 
-/** Aceitar a propriedade: o código do app e a versão dos Termos que a dona nova aceita como dona. */
+/** Aceitar a propriedade: a chave de acesso ou o código do app e a versão dos Termos que a dona nova aceita como dona. */
 export const AcceptOwnershipTransferRequest = z.strictObject({
-  code: CodigoDoApp,
+  code: CodigoDoApp.optional(),
+  passkey: ChaveNoLugarDoCodigo,
   terms_version: TermsVersion,
 });
 export type AcceptOwnershipTransferRequest = z.infer<typeof AcceptOwnershipTransferRequest>;

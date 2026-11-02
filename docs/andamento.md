@@ -934,6 +934,14 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
   - `test/db/chaves-de-acesso.spec.ts`, com o aparelho de teste devolvendo o identificador da pessoa, como a chave de verdade: a sessão verificada, o aviso de acesso novo, o evento na auditoria, o desafio de uso único, a origem errada, o aparelho que não confirma a pessoa, sem o identificador ou com o de outra pessoa, a chave nunca cadastrada, a pessoa desativada e a chave tirada;
   - o `access.spec` com as duas rotas públicas; com as suítes de entrada, segurança e auditoria, em UTC.
 
+**A W9, parte 9b2: a chave de acesso no lugar do código do app (02/11/2026; sem migration; D-A7-56, D-A7-87).** As telas vêm na parte 9c.
+- **onde:** em tudo o que pedia o código do app agora (13 rotas): aprovar um pedido ou um post, mudar a hora e apagar um post, aprovar um plano, encerrar a conta, trocar, cancelar e desistir da assinatura, aceitar a agência e subir o que ela pode, pedir e aceitar a propriedade e gerar códigos de recuperação novos;
+- **como:** o `passkey` (o que o aparelho assinou, com o desafio de `/v1/me/passkeys/confirmation-options`) ao lado do `code`, que ficou opcional; sem nenhum dos dois, 400 `confirme-que-e-voce`;
+- **um só serviço confere** (`ConfirmacaoService`): a chave ou o código do app, nunca código de recuperação; as duas formas dividem o limite de tentativas da pessoa; o último uso da chave guarda o aparelho de quem confirmou;
+- **quem só tem chave** passa a aprovar e a gerar códigos novos (antes, só com o app);
+- **o contrato:** o `code` deixou de ser obrigatório nas 13 rotas (sem quebra);
+- **testes:** `test/db/confirmar-com-chave.spec.ts` (aprovar um pedido com a chave, sem prova, o código sem o app, a origem errada, o desafio de uso único, gerar códigos novos, a chave de outra pessoa, e o código do app que segue valendo); a suíte da raiz inteira.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

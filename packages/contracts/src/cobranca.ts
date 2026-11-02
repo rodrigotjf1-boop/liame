@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChaveNoLugarDoCodigo } from './passkeys.js';
 
 // Plano e cobrança (A7, W1; protótipo P26, aprovado em 22/10/2026; `plano-a7.md` D-A7-4, D-A7-13 a D-A7-26). Os
 // planos do produto, a assinatura de cada marca e as faturas. Os valores vão em centavos, como texto (cabem em bigint).
@@ -181,13 +182,15 @@ export type SubscribeRequest = z.infer<typeof SubscribeRequest>;
 export const ChangePlanRequest = z.strictObject({
   brand_id: z.uuid(),
   plan: Slug,
-  code: CodigoDoApp,
+  code: CodigoDoApp.optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type ChangePlanRequest = z.infer<typeof ChangePlanRequest>;
 
 export const CancelSubscriptionRequest = z.strictObject({
   brand_id: z.uuid(),
-  code: CodigoDoApp,
+  code: CodigoDoApp.optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type CancelSubscriptionRequest = z.infer<typeof CancelSubscriptionRequest>;
 
@@ -196,7 +199,8 @@ export type KeepSubscriptionRequest = z.infer<typeof KeepSubscriptionRequest>;
 
 export const WithdrawSubscriptionRequest = z.strictObject({
   brand_id: z.uuid(),
-  code: CodigoDoApp,
+  code: CodigoDoApp.optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type WithdrawSubscriptionRequest = z.infer<typeof WithdrawSubscriptionRequest>;
 

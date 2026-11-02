@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChaveNoLugarDoCodigo } from './passkeys.js';
 
 // Os posts da marca (A6, Z5; protótipo P19, aprovado pelo dono em 21/10/2026): a foto das Fotos, os canais (o Instagram
 // e a Página do Facebook, ligados à marca em Contas conectadas), o texto de cada canal e a hora. O post vira um pedido em
@@ -51,20 +52,22 @@ export type CreatePostRequest = z.infer<typeof CreatePostRequest>;
 
 /**
  * Mudar a hora de um post aprovado que ainda espera a hora (A6, Z5d; P19; D-A6-23 e D-A6-55): a hora nova (entre 8h e 22h
- * no fuso da empresa, depois de agora e até 60 dias) e o código do app de quem aprova de novo.
+ * no fuso da empresa, depois de agora e até 60 dias) e a confirmação de quem aprova de novo (a chave de acesso ou o código do app).
  */
 export const ReschedulePostRequest = z.strictObject({
   publish_at: z.iso.datetime({ offset: true }),
-  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }),
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type ReschedulePostRequest = z.infer<typeof ReschedulePostRequest>;
 
 /**
- * Apagar das redes o post que o Liame publicou (A6, Z5d, parte 6; P19; D-A6-57): o código do app de quem aprova. Sai de
+ * Apagar das redes o post que o Liame publicou (A6, Z5d, parte 6; P19; D-A6-57): a chave de acesso ou o código do app de quem aprova. Sai de
  * cada canal em que o post está no ar.
  */
 export const UnpublishPostRequest = z.strictObject({
-  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }),
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type UnpublishPostRequest = z.infer<typeof UnpublishPostRequest>;
 

@@ -20,7 +20,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { activeTraceId, canonicalJson, sha256, writeAudit } from '../audit/audit.js';
-import { MfaService } from '../auth/mfa.service.js';
+import { ConfirmacaoService } from '../auth/confirmacao.service.js';
 import { pessoasQuePodem } from '../auth/pessoa-pode.js';
 import { APP_CONFIG, type AppConfig } from '../config.js';
 import { PROVEDOR_PERFIL_GOOGLE as PROVEDOR_DO_PERFIL } from '../connectors/google-business/perfil-google.js';
@@ -261,7 +261,7 @@ export class ActionService {
     private readonly budget: BudgetService,
     private readonly switches: KillSwitchService,
     private readonly flags: FlagService,
-    private readonly mfa: MfaService,
+    private readonly confirmacao: ConfirmacaoService,
     private readonly mailer: Mailer,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
@@ -894,7 +894,7 @@ export class ActionService {
     // O plano de uma mensagem muda sozinho na plataforma: a pessoa aprova o de agora (A5, Y5). Antes do código do app,
     // para ela não gastar um código num pedido que ainda não pode ser aprovado.
     if (TOOLS[row.tool]?.revalidateOnApproval) await this.conferirOPlanoDeAgora(tx, tenantId, row);
-    await this.mfa.verifyStepUp(tx, auth.userId, input.code);
+    await this.confirmacao.confirmar(tx, auth.userId, input);
 
     const m = await tx.execute<{ role_key: string; approve_limit_micros: string | null }>(sql`
       select role_key, approve_limit_micros from liame.membership

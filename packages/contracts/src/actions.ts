@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChaveNoLugarDoCodigo } from './passkeys.js';
 import { AutonomyMode, BudgetImpact, PolicyDecision, RiskLevel } from './policy.js';
 import { PostResponse } from './posts.js';
 import { ReviewItem } from './reviews.js';
@@ -31,10 +32,14 @@ export type CreateActionRequest = z.infer<typeof CreateActionRequest>;
 export const UpdateActionRequest = z.strictObject({ params: z.record(z.string(), z.unknown()) });
 export type UpdateActionRequest = z.infer<typeof UpdateActionRequest>;
 
-/** Aprovar exige o código do app autenticador agora (fora do chat, ADR-007) e o hash do plano visto. */
+/**
+ * Aprovar exige confirmar agora (fora do chat, ADR-007), com a chave de acesso ou o código do app (D-A7-56), e o hash do
+ * plano visto.
+ */
 export const ApproveActionRequest = z.strictObject({
   plan_hash: z.string().regex(/^[0-9a-f]{64}$/),
-  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }),
+  code: z.string().regex(/^\d{6}$/, { error: 'Digite os 6 números do app' }).optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type ApproveActionRequest = z.infer<typeof ApproveActionRequest>;
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ChaveNoLugarDoCodigo } from './passkeys.js';
 import { AgencyRole, CompanyRole, Email } from './auth.js';
 import { FutureDate, Micros } from './people.js';
 
@@ -169,17 +170,18 @@ export const PartnersResponse = z.strictObject({
 });
 export type PartnersResponse = z.infer<typeof PartnersResponse>;
 
-/** Aceitar: o nível máximo, o limite, "acima disso, eu também aprovo" e a data de fim, com o código do app (D-A7-47). */
+/** Aceitar: o nível máximo, o limite, "acima disso, eu também aprovo" e a data de fim, com a chave de acesso ou o código do app (D-A7-47). */
 export const AcceptPartnerRequest = z.strictObject({
   max_role: PartnerRole,
   approve_limit_micros: Micros.nullable().optional(),
   dual_approval: z.boolean().default(true),
   ends_at: FutureDate.nullable().optional(),
-  code: CodigoDoApp,
+  code: CodigoDoApp.optional(),
+  passkey: ChaveNoLugarDoCodigo,
 });
 export type AcceptPartnerRequest = z.infer<typeof AcceptPartnerRequest>;
 
-/** Mudar o que a agência pode: baixar vale sem o código; subir pede o código do app (D-A7-49). */
+/** Mudar o que a agência pode: baixar vale sem o código; subir pede a chave de acesso ou o código do app (D-A7-49). */
 export const UpdatePartnerRequest = z
   .strictObject({
     max_role: PartnerRole.optional(),
@@ -187,6 +189,7 @@ export const UpdatePartnerRequest = z
     dual_approval: z.boolean().optional(),
     ends_at: FutureDate.nullable().optional(),
     code: CodigoDoApp.optional(),
+    passkey: ChaveNoLugarDoCodigo,
   })
   .refine((v) => [v.max_role, v.approve_limit_micros, v.dual_approval, v.ends_at].some((x) => x !== undefined), {
     error: 'Envie pelo menos um campo',
