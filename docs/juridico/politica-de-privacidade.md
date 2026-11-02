@@ -38,8 +38,11 @@ Encarregado pelo tratamento de dados pessoais: **Rodrigo de Oliveira**, pelo e-m
 | **Uso do produto:** ações, aprovações e configurações, com o registro de auditoria de quem fez o quê; e, na empresa com a IA ligada, as avaliações que você fizer das explicações dela, os pedidos que a LIA registrar para a equipe a seu pedido, as suas decisões sobre os planos do Estrategista e os endereços de página que você pedir para o Pesquisador ler; e, quando a sombra do Gestor de tráfego for ligada, as suas decisões sobre a autonomia dele | Gerados pelo uso |
 | **Fotos dos produtos** (quando a função for ligada para a empresa): as fotos que a empresa envia para os posts, com o produto, o que aparece nelas, quem enviou e quando. O Liame guarda uma cópia regravada, **sem os dados do aparelho** (como a localização) e **sem o nome do arquivo**. A foto não deve mostrar pessoas que dê para reconhecer (Termos, item 9.4) | Você e as pessoas da sua empresa |
 | **Pessoas convidadas:** nome, e-mail e nível de acesso de quem o Dono convidou | O Dono da conta |
+| **Agências:** o nome e o CNPJ da agência; o nome, o e-mail e o papel de quem está no time dela; o e-mail do Dono a quem a agência pediu acesso e o que o Dono deu à agência | A agência e o Dono da conta |
 | **Cobrança:** plano, valores, notas fiscais e status de pagamento. Os dados do cartão são tratados pelo processador de pagamento; o Liame não os guarda | Você e o processador de pagamento |
 | **Atendimento:** mensagens trocadas com a LIA e com o suporte, inclusive pelo WhatsApp | Você |
+
+Quando uma agência pede acesso, o Liame não diz a ela se o e-mail tem conta; o nome da empresa só aparece para a agência depois do aceite.
 
 **Site agencialiame.com:** o site não tem formulário de cadastro nem cookies de publicidade. A conversa de demonstração com a LIA roda no seu navegador e não é gravada; se você escolher continuar no WhatsApp, a conversa passa a seguir também as regras do WhatsApp. O nosso provedor de rede (Cloudflare) mede as visitas de forma agregada, sem cookies, e pode usar cookies estritamente necessários de segurança.
 
