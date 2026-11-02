@@ -13,7 +13,7 @@ import { hasDb, OWNER_URL } from './env.js';
 // que assina como um de verdade: a primeira chave sem o app (sem confirmar, com os 10 códigos); confirmar com a chave
 // para criar outra; o mesmo gerenciador não repete; renomear e tirar (a última não sai sem o app); a chave no lugar do
 // código do app na entrada, recusando origem errada e aparelho que não confirma a pessoa; o pedido de recuperação que
-// cai; e as restrições do banco.
+// cai; entrar sem senha com a chave (parte 9b); e as restrições do banco.
 
 const GOOGLE = 'ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4';
 const WINDOWS = '08987058-cadc-4b81-b6e1-30de50dcbe96';
@@ -138,6 +138,72 @@ describe.skipIf(!hasDb)('as chaves de acesso', () => {
     expect((await api.call('GET', '/v1/me/account-recovery', { cookie })).body.recovery).toMatchObject({ status: 'cancelado', cancelled_by: 'entrou' });
     // De novo na mesma sessão: já entrou.
     expect((await chamar('POST', '/v1/me/mfa/passkey-options', cookie)).body.code).toBe('ja-entrou');
+  });
+
+  it('entrar sem senha com a chave (9b): a sessão nasce verificada; o desafio vale uma vez; a chave de outra pessoa, a que saiu e a pessoa desativada não entram', async () => {
+    const s = await signupAndLogin(api, undefined, 'Empresa Entra Com Chave');
+    const chave = aparelho(GOOGLE);
+    expect((await criar(s.cookie, chave)).status).toBe(201);
+    const comoNavegador = { 'user-agent': CHROME_WINDOWS };
+    const opcoes = async () => {
+      const r = await api.call('POST', '/v1/auth/passkey-options', { headers: comoNavegador });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      return PasskeyCeremony.parse(r.body);
+    };
+    const entrar = async (a: AparelhoDeTeste, o: Parameters<AparelhoDeTeste['assinar']>[1] = {}) => {
+      const c = await opcoes();
+      return api.call('POST', '/v1/auth/passkey', { body: { challenge_id: c.challenge_id, response: a.assinar(c.options, o) }, headers: comoNavegador });
+    };
+    const eventos = async () =>
+      ownerQuery<{ action: string; after: Record<string, unknown> | null }>(
+        `select e.action, e."after" from liame.audit_event e join liame.app_user u on u.id = e.actor_id
+          where u.email = $1 and e.tenant_id is null and e.action in ('sessao.abrir', 'sessao.falhar') order by e.chain_seq`,
+        [s.email],
+      );
+
+    // As opções não dizem quais chaves existem: a do aparelho diz quem é.
+    const c = await opcoes();
+    expect((c.options as { allowCredentials?: unknown[] }).allowCredentials ?? []).toEqual([]);
+    expect(c.options).toMatchObject({ rpId: rp.rpId, userVerification: 'required' });
+    const r = await api.call('POST', '/v1/auth/passkey', { body: { challenge_id: c.challenge_id, response: chave.assinar(c.options) }, headers: comoNavegador });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(MeResponse.parse(r.body)).toMatchObject({ user: { email: s.email }, mfa: 'verified', mfa_methods: ['chave'] });
+    expect(await me(r.cookie!)).toMatchObject({ mfa: 'verified' });
+    const [sessao] = await ownerQuery<{ mfa_method: string; verificada: boolean }>(
+      `select mfa_method, mfa_verified_at is not null as verificada from liame.session
+        where user_id = (select id from liame.app_user where email = $1) order by created_at desc limit 1`,
+      [s.email],
+    );
+    expect(sessao).toEqual({ mfa_method: 'chave', verificada: true });
+    // Como na entrada com senha: o aviso de acesso novo (outro navegador) e o evento na auditoria da pessoa.
+    expect(api.mailer.sent.filter((m) => m.to === s.email && m.subject === 'Liame: novo acesso à sua conta')).toHaveLength(1);
+    expect((await eventos()).at(-1)).toEqual({ action: 'sessao.abrir', after: expect.objectContaining({ metodo: 'chave', chave: 'Senhas do Google', aparelho: 'Chrome no Windows' }) });
+    expect((await listar(r.cookie!)).items[0]).toMatchObject({ last_used_where: 'Chrome no Windows' });
+
+    // O desafio vale uma vez.
+    const repetida = await api.call('POST', '/v1/auth/passkey', { body: { challenge_id: c.challenge_id, response: chave.assinar(c.options) }, headers: comoNavegador });
+    expect([repetida.status, repetida.body.code]).toEqual([400, 'desafio-vencido']);
+    // Origem errada, aparelho que não confirma a pessoa, sem o identificador ou com o de outra pessoa: recusada, e a falha
+    // fica na auditoria da dona da chave.
+    for (const o of [{ origem: 'https://outro.exemplo' }, { uv: false }, { usuario: null }, { usuario: 'identificador_de_outra_pessoa' }]) {
+      const recusada = await entrar(chave, o);
+      expect([recusada.status, recusada.body.code, recusada.cookie ?? null], JSON.stringify(o)).toEqual([401, 'chave-recusada', null]);
+    }
+    expect((await eventos()).filter((e) => e.action === 'sessao.falhar')).toHaveLength(4);
+    expect((await eventos()).at(-1)?.after).toMatchObject({ metodo: 'chave' });
+    // A chave que nunca foi cadastrada não diz de quem seria.
+    expect((await entrar(aparelho(WINDOWS))).body.code).toBe('chave-desconhecida');
+    // A pessoa desativada não entra, nem com a chave certa.
+    await ownerQuery(`update liame.app_user set disabled_at = now() where email = $1`, [s.email]);
+    expect((await entrar(chave)).body.code).toBe('chave-recusada');
+    await ownerQuery(`update liame.app_user set disabled_at = null where email = $1`, [s.email]);
+    // A chave tirada da conta não abre mais (ela continua no gerenciador do aparelho).
+    const outra = aparelho(WINDOWS);
+    expect((await criar(r.cookie!, outra, await confirmarCom(r.cookie!, chave))).status).toBe(201);
+    const tirar = (await listar(r.cookie!)).items.find((k) => k.name === 'Senhas do Google')!;
+    expect((await chamar('DELETE', `/v1/me/passkeys/${tirar.id}`, r.cookie!)).status).toBe(200);
+    expect((await entrar(chave)).body.code).toBe('chave-desconhecida');
+    expect((await entrar(outra)).status).toBe(200);
   });
 
   it('as restrições do banco (V119): cada check recusa o valor errado, pelo nome', async () => {

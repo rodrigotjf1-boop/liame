@@ -15,6 +15,9 @@ const PUBLIC_ROUTES = [
   'POST /v1/auth/signup',
   'POST /v1/auth/verify-email',
   'POST /v1/auth/login',
+  // Entrar sem senha com a chave de acesso (A7, W9, parte 9b): a chave vale pela senha e pelo código do app.
+  'POST /v1/auth/passkey-options',
+  'POST /v1/auth/passkey',
   'POST /v1/auth/password/forgot',
   'POST /v1/auth/password/reset',
   'POST /v1/agency-reply-to/confirm',

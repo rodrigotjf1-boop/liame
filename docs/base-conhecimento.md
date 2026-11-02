@@ -1548,7 +1548,7 @@ Destino único para **conversões offline**, **Customer Match** e **enhanced con
   - conferir sempre o desafio; o nome da chave pelo AAGUID, e, com o AAGUID em zeros, pelo aparelho.
 - **Lista da comunidade dos AAGUIDs** [O] (github.com/passkeydeveloper/passkey-authenticator-aaguids, `aaguid.json`, lido em 02/11/2026): só para mostrar o nome do gerenciador na tela de contas, sem garantia de que continue no ar. Os usados no Liame: `ea9b8d66-…-b6b48cb575d4` Google Password Manager; `dd4ec289-…-70fa845d4bf2` iCloud Keychain (Managed); `08987058-…`, `9ddd1817-…` e `6028b017-…` Windows Hello; `adce0002-…-0b25f1f05503` Chrome on Mac; `bada5566-…` 1Password; `531126d6-…` Dashlane. A Apple manda o AAGUID em zeros.
 - **NIST SP 800-63B-4** (§17.1): os autenticadores sincronizáveis (passkeys) são aceitos, com requisitos.
-- **Regra do Liame:** a chave vale pelo código do app (D-A7-12); o aparelho confirma a pessoa (`userVerification: required`); quem perde todas as chaves recupera pelo app ou pelos códigos, nunca pelo e-mail sozinho (D-A7-57).
+- **Regra do Liame:** a chave vale pelo código do app (D-A7-12); o aparelho confirma a pessoa (`userVerification: required`); quem perde todas as chaves recupera pelo app ou pelos códigos, nunca pelo e-mail sozinho (D-A7-57). Na entrada sem senha (D-A7-55), as opções não listam as chaves (`allowCredentials` vazio: a chave do aparelho diz quem é), e o servidor confere, além da assinatura, o identificador que a chave devolve (`userHandle`) com o id WebAuthn da pessoa; a chave que não existe mais não diz de quem seria.
 
 ---
 

@@ -3,6 +3,8 @@ import {
   ForgotPasswordRequest,
   LoginRequest,
   MeResponse,
+  PasskeyAssertion,
+  PasskeyCeremony,
   ProblemDetails,
   ResetPasswordRequest,
   SignupRequest,
@@ -14,6 +16,7 @@ import {
   ApiAcceptedResponse,
   ApiBadRequestResponse,
   ApiCookieAuth,
+  ApiForbiddenResponse,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
@@ -24,6 +27,7 @@ import {
 import type { AuthContext } from '../context/request-context.js';
 import { Auth, Autenticado, Publico } from './access.js';
 import { AuthService, type RequestMeta } from './auth.service.js';
+import { ChavesService } from './chaves/chaves.service.js';
 import { SessionService } from './session.service.js';
 import { Auditar, SemAuditoria } from '../audit/auditar.js';
 
@@ -46,6 +50,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly sessions: SessionService,
+    private readonly chaves: ChavesService,
   ) {}
 
   @Post('signup')
@@ -91,6 +96,45 @@ export class AuthController {
     @Res({ passthrough: true }) res: HttpResponse,
   ): Promise<MeResponse> {
     const { token, me } = await this.auth.login(body, meta(req));
+    res.setHeader('set-cookie', this.sessions.cookie(token));
+    return me;
+  }
+
+  @Post('passkey-options')
+  @SemAuditoria('só cria o desafio da entrada (5 minutos, uso único); a entrada é auditada na rota seguinte, na conta de quem entrou')
+  @Publico()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Começar a entrar com a chave de acesso',
+    description:
+      'O desafio da entrada sem senha (5 minutos, uso único), sem dizer quais chaves existem: a chave que o aparelho escolher diz quem é. 30 por IP a cada 15 minutos.',
+  })
+  @ApiOkResponse({ standardSchema: PasskeyCeremony })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  opcoesDaChave(@Req() req: HttpRequest): Promise<PasskeyCeremony> {
+    return this.chaves.opcoesDaEntrada(meta(req).ip);
+  }
+
+  @Post('passkey')
+  @Auditar('sessao.abrir', { manual: true, escopo: 'pessoa' })
+  @Publico()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Entrar com a chave de acesso',
+    description:
+      'O que o aparelho assinou, com o desafio de `passkey-options`. A chave vale pela senha e pelo código do app: a sessão já nasce verificada. A chave que saiu da conta, 401 `chave-desconhecida`; a que não confere (ou a pessoa desativada), 401 `chave-recusada`; o desafio vencido ou já usado, 400 `desafio-vencido`. Como na entrada com senha: o e-mail por confirmar (403), o aviso de acesso novo por e-mail e o pedido de recuperação em andamento, que cai sozinho.',
+  })
+  @ApiOkResponse({ standardSchema: MeResponse })
+  @ApiBadRequestResponse({ standardSchema: ProblemDetails })
+  @ApiUnauthorizedResponse({ standardSchema: ProblemDetails })
+  @ApiForbiddenResponse({ standardSchema: ProblemDetails })
+  @ApiTooManyRequestsResponse({ standardSchema: ProblemDetails })
+  async entrarComChave(
+    @Body({ schema: PasskeyAssertion }) body: PasskeyAssertion,
+    @Req() req: HttpRequest,
+    @Res({ passthrough: true }) res: HttpResponse,
+  ): Promise<MeResponse> {
+    const { token, me } = await this.auth.entrarComChave(body, meta(req));
     res.setHeader('set-cookie', this.sessions.cookie(token));
     return me;
   }

@@ -1,4 +1,4 @@
-import type { AcceptedResponse, LoginRequest, MeResponse, OrganizationKind, ResetPasswordRequest, RoleKey, SignupRequest } from '@liame/contracts';
+import type { AcceptedResponse, LoginRequest, MeResponse, OrganizationKind, PasskeyAssertion, ResetPasswordRequest, RoleKey, SignupRequest } from '@liame/contracts';
 import { type Database, type Tx, uuidv7, withSystem } from '@liame/database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
@@ -10,9 +10,11 @@ import { AppProblem, ValidationProblem } from '../errors/problems.js';
 import { Mailer, type MailMessage } from '../mail/mailer.js';
 import { ROLE_LABEL } from '../people/grant-rules.js';
 import { descreverAparelho, mascararIp } from './aparelho.js';
+import { ChavesService } from './chaves/chaves.service.js';
 import { burnPasswordTime, hashPassword, isBreachedPassword, verifyPassword } from './password.js';
 import { MFA_REQUIRED, permissoesDoVinculo } from './permissions.js';
 import { RateLimitService } from './rate-limit.service.js';
+import { cairPorqueEntrou } from './recuperacao/recuperacao.service.js';
 import { SessionService } from './session.service.js';
 import { hashToken, newToken } from './tokens.js';
 
@@ -48,6 +50,7 @@ export class AuthService {
     private readonly sessions: SessionService,
     private readonly rateLimit: RateLimitService,
     private readonly mailer: Mailer,
+    private readonly chaves: ChavesService,
   ) {}
 
   private get db() {
@@ -147,22 +150,9 @@ export class AuthService {
         outbox.push(await this.confirmationMail(tx, user.id, input.email));
         return { kind: 'nao_confirmado' };
       }
-      const m = await tx.execute<{ tenant_id: string }>(sql`
-        select tenant_id from liame.membership
-         where user_id = ${user.id} and revoked_at is null and (expires_at is null or expires_at > now())
-         order by created_at limit 1`);
-      const tenantId = m.rows[0]?.tenant_id ?? null;
-      // Aviso de acesso novo (ADR-013): primeiro login deste navegador em 90 dias, numa conta que já tinha acessos.
-      const seen = await tx.execute<{ same: boolean; any: boolean }>(sql`
-        select coalesce(bool_or(user_agent is not distinct from ${meta.userAgent}), false) as same, count(*) > 0 as any
-          from liame.session where user_id = ${user.id} and created_at > now() - interval '90 days'`);
-      if (seen.rows[0]?.any && !seen.rows[0].same) {
-        outbox.push({
-          to: input.email,
-          subject: 'Liame: novo acesso à sua conta',
-          text: `Sua conta foi acessada de um navegador ou aparelho novo.\n\nSe foi você, não precisa fazer nada. Se não foi, troque a senha agora: ${this.config.appUrl}/esqueci-a-senha`,
-        });
-      }
+      const tenantId = await this.primeiraEmpresa(tx, user.id);
+      const aviso = await this.avisoDeAcessoNovo(tx, user.id, input.email, meta);
+      if (aviso) outbox.push(aviso);
       const token = await this.sessions.create(tx, { userId: user.id, tenantId, ip: meta.ip, userAgent: meta.userAgent });
       await this.auditPerson(tx, user.id, 'sessao.abrir', onde(meta));
       return { kind: 'ok', token, userId: user.id, tenantId };
@@ -181,6 +171,79 @@ export class AuthService {
     const { userId, tenantId } = result;
     const me = await withSystem(this.db, (tx) => this.loadMe(tx, userId, tenantId, null), { userId });
     return { token: result.token, me };
+  }
+
+  /**
+   * Entrar sem senha, com a chave de acesso (A7, W9, parte 9b; D-A7-55): a chave vale pela senha e pelo código do app (o
+   * aparelho e o desbloqueio dele), e a sessão nasce verificada. As regras da entrada com senha valem iguais: o limite por
+   * IP, a pessoa desativada, o e-mail por confirmar, o aviso de acesso novo e a auditoria da pessoa (com o método e a
+   * chave). O pedido de recuperação em andamento cai, como ao provar o segundo fator.
+   */
+  async entrarComChave(body: PasskeyAssertion, meta: RequestMeta): Promise<{ token: string; me: MeResponse }> {
+    await this.rateLimit.consume(`entrar:ip:${meta.ip ?? '-'}`, 30, 900);
+    const outbox: MailMessage[] = [];
+    const result = await withSystem(this.db, async (tx): Promise<LoginOutcome | { kind: 'desconhecida' }> => {
+      const e = await this.chaves.conferirEntrada(tx, body, meta.userAgent);
+      if (e.kind === 'desconhecida') return e;
+      if (e.kind === 'recusada') return { kind: 'falhou', userId: e.userId };
+      if (!e.emailVerificado) {
+        outbox.push(await this.confirmationMail(tx, e.userId, e.email));
+        return { kind: 'nao_confirmado' };
+      }
+      const tenantId = await this.primeiraEmpresa(tx, e.userId);
+      const aviso = await this.avisoDeAcessoNovo(tx, e.userId, e.email, meta);
+      if (aviso) outbox.push(aviso);
+      const token = await this.sessions.create(tx, { userId: e.userId, tenantId, ip: meta.ip, userAgent: meta.userAgent, mfaMethod: 'chave' });
+      const caiu = await cairPorqueEntrou(tx, e.userId);
+      if (caiu) {
+        outbox.push({
+          to: e.email,
+          subject: `Liame: pedido de recuperação cancelado (${caiu})`,
+          text: `Você entrou com uma chave de acesso, e o pedido de recuperação ${caiu} foi cancelado sozinho. Nada mudou na sua conta. Se não foi você quem entrou, troque a senha agora.\n\n${this.config.appUrl}`,
+        });
+      }
+      await this.auditPerson(tx, e.userId, 'sessao.abrir', { ...onde(meta), metodo: 'chave', chave: e.chave, ...(caiu ? { recuperacao_cancelada: caiu } : {}) });
+      return { kind: 'ok', token, userId: e.userId, tenantId };
+    });
+
+    if (result.kind === 'desconhecida') {
+      throw new AppProblem(401, 'chave-desconhecida', 'Esta chave não abre mais o Liame', 'Ela pode ter sido tirada da conta. Entre com o e-mail e a senha.');
+    }
+    if (result.kind === 'falhou') {
+      const failedUser = result.userId;
+      await withSystem(this.db, (tx) => this.auditPerson(tx, failedUser, 'sessao.falhar', { ...onde(meta), metodo: 'chave' }));
+      throw new AppProblem(401, 'chave-recusada', 'A chave não foi aceita', 'O aparelho não confirmou a chave. Tente de novo ou entre com o e-mail e a senha.');
+    }
+    if (result.kind === 'nao_confirmado') {
+      await this.deliver(outbox);
+      throw new AppProblem(403, 'email-nao-confirmado', 'Confirme seu e-mail', 'Enviamos de novo o link de confirmação.');
+    }
+    await this.deliver(outbox);
+    const { userId, tenantId } = result;
+    const me = await withSystem(this.db, (tx) => this.loadMe(tx, userId, tenantId, new Date()), { userId });
+    return { token: result.token, me };
+  }
+
+  /** A empresa que a sessão abre: o vínculo vivo mais antigo da pessoa. */
+  private async primeiraEmpresa(tx: Tx, userId: string): Promise<string | null> {
+    const m = await tx.execute<{ tenant_id: string }>(sql`
+      select tenant_id from liame.membership
+       where user_id = ${userId} and revoked_at is null and (expires_at is null or expires_at > now())
+       order by created_at limit 1`);
+    return m.rows[0]?.tenant_id ?? null;
+  }
+
+  /** Aviso de acesso novo (ADR-013): primeiro login deste navegador em 90 dias, numa conta que já tinha acessos. */
+  private async avisoDeAcessoNovo(tx: Tx, userId: string, email: string, meta: RequestMeta): Promise<MailMessage | null> {
+    const seen = await tx.execute<{ same: boolean; any: boolean }>(sql`
+      select coalesce(bool_or(user_agent is not distinct from ${meta.userAgent}), false) as same, count(*) > 0 as any
+        from liame.session where user_id = ${userId} and created_at > now() - interval '90 days'`);
+    if (!seen.rows[0]?.any || seen.rows[0].same) return null;
+    return {
+      to: email,
+      subject: 'Liame: novo acesso à sua conta',
+      text: `Sua conta foi acessada de um navegador ou aparelho novo.\n\nSe foi você, não precisa fazer nada. Se não foi, troque a senha agora: ${this.config.appUrl}/esqueci-a-senha`,
+    };
   }
 
   async logout(auth: AuthContext): Promise<void> {

@@ -32,6 +32,9 @@ const WITHOUT_AUDIT = [
   'POST /v1/ai/explain/attention',
   'POST /v1/ai/explain/results',
   'POST /v1/ai/feedback',
+  // Entrar sem senha com a chave (A7, W9, parte 9b1): só cria o desafio da entrada, sem dono (5 minutos, uso único); a
+  // entrada é auditada na rota seguinte, na conta de quem entrou (`sessao.abrir` ou `sessao.falhar`).
+  'POST /v1/auth/passkey-options',
   'POST /v1/auth/password/forgot',
   // O aviso do Asaas (A7, W2a, parte 2): como a inbox, o registro é o próprio `inbox_event`, cru e deduplicado; o que
   // muda a cobrança (o pagamento) é auditado pela releitura, no `pagarFatura`.
