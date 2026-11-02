@@ -44,6 +44,11 @@ const WITHOUT_AUDIT = [
   'POST /v1/inbox/:provider',
   'POST /v1/inbox/:provider/:connectionId',
   'POST /v1/invitations/preview',
+  // As chaves de acesso (A7, W9, parte 9a): só abrem a cerimônia (o desafio de 5 minutos, de uso único); o que muda a
+  // conta (criar a chave, provar o segundo fator) é auditado na rota seguinte.
+  'POST /v1/me/mfa/passkey-options',
+  'POST /v1/me/passkeys/confirmation-options',
+  'POST /v1/me/passkeys/registration-options',
   'POST /v1/ofrep/v1/evaluate/flags',
   'POST /v1/ofrep/v1/evaluate/flags/:key',
   'POST /v1/policies/evaluate',
