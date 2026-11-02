@@ -854,6 +854,25 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
   - `test/db/recuperacao-da-conta-espera.spec.ts`: o aviso, quem vê e quem para, retomar, os e-mails uma vez, a troca no fim da espera e o app novo, o cancelamento depois da conferência e o expurgo;
   - com a 4a, o módulo do worker, segundo fator, entrada, pessoas, propriedade, ciclo de vida e acesso, em UTC; o contrato da API sem quebra.
 
+**A W8, parte 5: as telas da recuperação da conta do Dono (02/11/2026; web; sem migration).** A recuperação continua desligada até a chave pública da DMS ir para o ambiente: sem ela, a entrada diz "fale com o suporte", com o e-mail do atendimento.
+- **"Perdeu o celular?", na etapa do código do app**:
+  - para o Dono que pode pedir, o texto do P34 e "Pedir a recuperação da conta";
+  - com um pedido andando, o protocolo e "Ver o pedido" (o quadro já abre);
+  - para quem não é o Dono, o contato do suporte;
+- **o pedido** (`/segundo-fator/recuperacao`):
+  - as empresas de que a pessoa é a dona, com o CNPJ;
+  - o que aconteceu e o documento com foto (JPG, PNG ou PDF, até 10 MB, conferidos antes de enviar), com o erro em cada campo;
+  - o que acontece depois e o aviso de que a DMS nunca pede documento por e-mail, WhatsApp ou pela LIA;
+- **o andamento**, na mesma página:
+  - as etapas de cada situação (pedido, conferido, parado, aplicado, recusado, cancelado);
+  - "Achou o celular ou os códigos?", com o caminho de volta ao código;
+  - "Cancelar o pedido", confirmado na linha, e "Fazer outro pedido" quando o último terminou;
+- **o aviso aos Administradores**, no alto de Pessoas e acessos: quem pediu, quando a DMS conferiu e quando o app é trocado, com "Não reconheço este pedido" (confirmado na linha) e a faixa do pedido parado;
+- **a correção da parte 3** (ERR-195): o passo 1 de "Transferir a propriedade" volta ao P34, com "Convide como Administrador" dentro da frase;
+- **testes:**
+  - no navegador (Chrome sem janela, com a API e o web locais), 42 execuções em 1440, 1024, 768 e 375 px, claro e escuro: pedir com os erros do formulário (o motivo na consulta e o documento cru), a espera e cancelar, parado, recusado e outro pedido, o pedido andando no código do app, quem não é o Dono, o aviso e parar, e o convite a partir da gaveta;
+  - a suíte do web, com as etapas de cada situação, o documento e por que não dá para pedir.
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

@@ -1,6 +1,7 @@
 'use client';
 
 import type {
+  AccountRecoveryNotice,
   InvitationResponse,
   MemberResponse,
   OwnershipResponse,
@@ -19,6 +20,7 @@ import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, novaChave, type Problema } from '@/lib/api';
 import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
+import { AvisoDeRecuperacao } from './aviso-de-recuperacao';
 import { CartaoAgencia, CartaoProtecao, TabelaNiveis } from './cartoes-informativos';
 import { CartaoPedido } from './cartao-pedido';
 import { CartaoPropriedade } from './cartao-propriedade';
@@ -63,17 +65,21 @@ export function PessoasTela() {
   const [resultado, setResultado] = useState<Resultado>(null);
   // A propriedade da conta: lida junto; a falha dela não esconde a lista (o cartão só não aparece).
   const [propriedade, setPropriedade] = useState<OwnershipResponse | null>(null);
+  // O pedido de recuperação do Dono na espera, para os Administradores (A7, W8, parte 5): a falha dele não esconde nada.
+  const [avisoRec, setAvisoRec] = useState<AccountRecoveryNotice | null>(null);
   const titulo = useRef<HTMLHeadingElement>(null);
 
   const carregar = useCallback(async () => {
-    const [r, a, d] = await Promise.all([
+    const [r, a, d, v] = await Promise.all([
       chamar(() => api.GET('/v1/people')),
       chamar(() => api.GET('/v1/partners')),
       chamar(() => api.GET('/v1/ownership')),
+      chamar(() => api.GET('/v1/account-recovery/notice')),
     ]);
     setEstado(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro', problema: r.problema });
     setAgencias(a.ok ? { tipo: 'ok', dados: a.data } : { tipo: 'erro', problema: a.problema });
     setPropriedade(d.ok ? d.data : null);
+    setAvisoRec(v.ok ? v.data.notice : null);
   }, []);
 
   useEffect(() => {
@@ -220,6 +226,7 @@ export function PessoasTela() {
           }
         />
       )}
+      {avisoRec && <AvisoDeRecuperacao aviso={avisoRec} aoMudar={(r) => setAvisoRec(r.notice)} />}
       {propriedade?.addressed_to_me && propriedade.pending && (
         <PedidoDePropriedade
           pedido={propriedade.pending}

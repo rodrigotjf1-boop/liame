@@ -83,7 +83,7 @@ describe.skipIf(!hasDb)('a recuperação da conta do Dono', () => {
     const d = await dono('Lacre');
     const cookie = await soASenha(d.email);
     const antes = await minha(cookie);
-    expect(antes).toEqual({ recovery: null, owner_of: [{ name: d.empresa, cnpj: null }], cannot_request: null });
+    expect(antes).toEqual({ recovery: null, owner_of: [{ name: d.empresa, cnpj: null }], cannot_request: null, support: ATENDIMENTO });
 
     const original = jpg();
     const r = await pedir(cookie, original);

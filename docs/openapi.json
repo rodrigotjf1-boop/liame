@@ -108694,12 +108694,33 @@
                         "indisponivel",
                         null
                       ]
+                    },
+                    "support": {
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "type": "string"
+                        },
+                        "hours": {
+                          "type": "string"
+                        },
+                        "response_time": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "email",
+                        "hours",
+                        "response_time"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "recovery",
                     "owner_of",
-                    "cannot_request"
+                    "cannot_request",
+                    "support"
                   ],
                   "additionalProperties": false
                 }
@@ -108911,12 +108932,33 @@
                         "indisponivel",
                         null
                       ]
+                    },
+                    "support": {
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "type": "string"
+                        },
+                        "hours": {
+                          "type": "string"
+                        },
+                        "response_time": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "email",
+                        "hours",
+                        "response_time"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "recovery",
                     "owner_of",
-                    "cannot_request"
+                    "cannot_request",
+                    "support"
                   ],
                   "additionalProperties": false
                 }
@@ -109551,12 +109593,33 @@
                         "indisponivel",
                         null
                       ]
+                    },
+                    "support": {
+                      "type": "object",
+                      "properties": {
+                        "email": {
+                          "type": "string"
+                        },
+                        "hours": {
+                          "type": "string"
+                        },
+                        "response_time": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "email",
+                        "hours",
+                        "response_time"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
                     "recovery",
                     "owner_of",
-                    "cannot_request"
+                    "cannot_request",
+                    "support"
                   ],
                   "additionalProperties": false
                 }
