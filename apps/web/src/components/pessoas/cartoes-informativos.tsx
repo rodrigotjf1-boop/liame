@@ -10,15 +10,18 @@ const PROTECAO = [
   'Você remove o acesso na hora, e a pessoa sai de todas as sessões.',
   'A conta é sempre sua: só o dono transfere a propriedade, muda a cobrança ou exclui a conta.',
 ];
+/** A linha a mais, com as agências (P27): entra antes da última. */
+const PROTECAO_AGENCIA = 'Uma agência só entra com o seu aceite, até onde você escolher, e sai quando você desfizer o vínculo.';
 
-export function CartaoProtecao() {
+export function CartaoProtecao({ comAgencias = false }: { comAgencias?: boolean }) {
+  const linhas = comAgencias ? [...PROTECAO.slice(0, -1), PROTECAO_AGENCIA, PROTECAO.at(-1)!] : PROTECAO;
   return (
     <article className="card anima" style={{ ['--i' as string]: 2 }} aria-labelledby="ap-t">
       <h2 className="card-titulo" id="ap-t">
         Como o seu acesso fica protegido
       </h2>
       <ul className="protecao">
-        {PROTECAO.map((t) => (
+        {linhas.map((t) => (
           <li key={t}>
             <Icone nome="check" pequeno />
             <span>{t}</span>
@@ -29,7 +32,20 @@ export function CartaoProtecao() {
   );
 }
 
-export function CartaoAgencia() {
+export function CartaoAgencia({ comAgencias = false }: { comAgencias?: boolean }) {
+  if (comAgencias) {
+    return (
+      <article className="card anima" style={{ ['--i' as string]: 3 }} aria-labelledby="ag-t">
+        <h2 className="card-titulo" id="ag-t">
+          Agência ou consultor com time
+        </h2>
+        <p className="lite-frase">
+          A agência pede para cuidar da conta pelo seu e-mail. Você escolhe até onde o time dela vai e o limite de gasto, vê cada
+          pessoa pelo nome e desfaz o vínculo quando quiser. A cobrança fica sempre com você.
+        </p>
+      </article>
+    );
+  }
   return (
     <article className="card anima" style={{ ['--i' as string]: 3 }} aria-labelledby="ag-t">
       <h2 className="card-titulo" id="ag-t">
@@ -54,7 +70,7 @@ const LINHAS: [string, Celula[]][] = [
 ];
 const COLUNAS = ['Ver resultados', 'Aprovar', 'Operar campanhas e equipe', 'Convidar e remover pessoas', 'Cobrança', 'Transferir ou excluir a conta'];
 
-export function TabelaNiveis() {
+export function TabelaNiveis({ comAgencias = false }: { comAgencias?: boolean }) {
   return (
     <article className="card anima" style={{ ['--i' as string]: 4, marginTop: 'var(--sp-4)' }} aria-labelledby="nv-t">
       <div className="card-cab">
@@ -81,7 +97,7 @@ export function TabelaNiveis() {
               <tr key={nivel}>
                 <th scope="row">{nivel}</th>
                 {celulas.map(([tipo, texto], i) => (
-                  <td key={COLUNAS[i]}>
+                  <td key={COLUNAS[i]} data-rot={COLUNAS[i]}>
                     <span className={tipo}>{texto}</span>
                   </td>
                 ))}
@@ -90,6 +106,12 @@ export function TabelaNiveis() {
           </tbody>
         </table>
       </div>
+      {comAgencias && (
+        <p className="tabela-nota">
+          Quem vem de uma agência segue a mesma tabela, até o nível que você deu à agência, com duas diferenças: nunca convida nem remove
+          pessoas da sua empresa e nunca vê a cobrança, nem como Administrador.
+        </p>
+      )}
     </article>
   );
 }

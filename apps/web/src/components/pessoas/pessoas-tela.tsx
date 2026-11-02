@@ -1,33 +1,54 @@
 'use client';
 
-import type { InvitationResponse, MemberResponse, PeopleResponse } from '@liame/contracts';
+import type { InvitationResponse, MemberResponse, PartnerRequestResponse, PartnerResponse, PartnersResponse, PeopleResponse } from '@liame/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAvisar } from '@/components/ui/avisos';
 import { Estado } from '@/components/ui/estado';
+import { Faixa } from '@/components/ui/faixa';
 import { Icone } from '@/components/ui/icone';
 import { api, chamar, mensagemDe, novaChave, type Problema } from '@/lib/api';
+import { NIVEIS } from '@/lib/niveis';
 import { useSessao } from '@/lib/sessao';
 import { CartaoAgencia, CartaoProtecao, TabelaNiveis } from './cartoes-informativos';
+import { CartaoPedido } from './cartao-pedido';
 import { DialogoAcesso, type ModoDialogo } from './dialogo-acesso';
+import { DialogoDesfazer } from './dialogo-desfazer';
+import { GavetaDecidir } from './gaveta-decidir';
+import { GavetaLimites } from './gaveta-limites';
+import { ItemAgencia } from './item-agencia';
 import { ItemConvite } from './item-convite';
 import { ItemPessoa } from './item-pessoa';
+import { contagemComAgencias, separarPorAgencia } from './parceiros';
 import { contagem } from './textos';
 import { disparar } from '@/lib/disparar';
 
 // "Pessoas e acessos" (protótipo aprovado, ADR-017): quem pode entrar na conta e o que cada um pode fazer.
 
 type Estado = { tipo: 'carregando' } | { tipo: 'ok'; dados: PeopleResponse } | { tipo: 'erro'; problema: Problema };
+/** As agências: lidas junto com as pessoas; a falha delas não esconde a lista (a tela diz que não leu). */
+type Agencias = { tipo: 'ok'; dados: PartnersResponse } | { tipo: 'erro'; problema: Problema } | null;
+/** As gavetas e o diálogo das agências (P27). */
+type Painel =
+  | { tipo: 'decidir'; pedido: PartnerRequestResponse }
+  | { tipo: 'limites'; parceiro: PartnerResponse }
+  | { tipo: 'desfazer'; parceiro: PartnerResponse };
+/** A faixa do que acabou de acontecer com uma agência (P27). */
+type Resultado = { tipo?: 'acao'; titulo: string; texto: string } | null;
 
 export function PessoasTela() {
   const { me, empresa, pode } = useSessao();
   const avisar = useAvisar();
   const [estado, setEstado] = useState<Estado>({ tipo: 'carregando' });
   const [dialogo, setDialogo] = useState<ModoDialogo | null>(null);
+  const [agencias, setAgencias] = useState<Agencias>(null);
+  const [painel, setPainel] = useState<Painel | null>(null);
+  const [resultado, setResultado] = useState<Resultado>(null);
   const titulo = useRef<HTMLHeadingElement>(null);
 
   const carregar = useCallback(async () => {
-    const r = await chamar(() => api.GET('/v1/people'));
+    const [r, a] = await Promise.all([chamar(() => api.GET('/v1/people')), chamar(() => api.GET('/v1/partners'))]);
     setEstado(r.ok ? { tipo: 'ok', dados: r.data } : { tipo: 'erro', problema: r.problema });
+    setAgencias(a.ok ? { tipo: 'ok', dados: a.data } : { tipo: 'erro', problema: a.problema });
   }, []);
 
   useEffect(() => {
@@ -35,6 +56,15 @@ export function PessoasTela() {
   }, [carregar, pode]);
 
   const dados = estado.tipo === 'ok' ? estado.dados : null;
+  const parceiros = agencias?.tipo === 'ok' ? agencias.dados : null;
+  const comAgencias = parceiros?.enabled === true || (parceiros?.partners.length ?? 0) > 0;
+  // Quem vem de uma agência aparece dentro da linha dela; sem a agência na lista (o vínculo acabou), fica com as outras.
+  const { diretas, porVinculo } = useMemo(() => {
+    const s = separarPorAgencia(dados?.members ?? []);
+    const vivas = new Set((parceiros?.partners ?? []).map((x) => x.id));
+    for (const [link, time] of s.porVinculo) if (!vivas.has(link)) s.diretas.push(...time);
+    return s;
+  }, [dados, parceiros]);
   const euMembro = dados?.members.find((m) => m.user_id === me.user.id) ?? null;
   const ocupados = useMemo(
     () => new Set([...(dados?.members ?? []).map((m) => m.email), ...(dados?.invitations ?? []).map((c) => c.email)]),
@@ -70,6 +100,30 @@ export function PessoasTela() {
     avisar(`Convite para ${c.email} cancelado. O link deixou de funcionar.`);
     await carregar();
     titulo.current?.focus({ preventScroll: true });
+  }
+
+  async function recusarPedido(p: PartnerRequestResponse): Promise<boolean> {
+    const r = await chamar(() => api.POST('/v1/partners/requests/{id}/refuse', { params: { path: { id: p.id } } }));
+    if (!r.ok && r.problema.status !== 404) {
+      avisar(mensagemDe(r.problema), { tipo: 'perigo' });
+      return false;
+    }
+    if (r.ok) {
+      avisar('Pedido recusado. A agência recebeu um e-mail.');
+      setResultado({
+        titulo: `Você recusou o pedido de ${p.agency.name}`,
+        texto: 'A agência recebeu um e-mail dizendo que o pedido não foi aceito, sem o motivo. Ela pode pedir de novo, e você decide outra vez.',
+      });
+    } else avisar('Este pedido não está mais esperando: a agência cancelou, ou ele venceu.');
+    await carregar();
+    titulo.current?.focus({ preventScroll: true });
+    return true;
+  }
+
+  function painelSumiu(problema: Problema) {
+    setPainel(null);
+    avisar(problema.status === 404 ? 'Isso mudou enquanto a gaveta estava aberta. A lista foi lida de novo.' : mensagemDe(problema), { tipo: 'perigo' });
+    disparar(carregar());
   }
 
   // Reenviar = convidar de novo com os mesmos dados: o link antigo deixa de valer e o prazo recomeça.
@@ -113,12 +167,49 @@ export function PessoasTela() {
         )}
       </div>
 
+      {resultado && <Faixa tipo={resultado.tipo} icone={<Icone nome={resultado.tipo ? 'check-circle' : 'info'} />} titulo={resultado.titulo} texto={resultado.texto} />}
+      {agencias?.tipo === 'erro' && (
+        <Faixa
+          tipo="atencao"
+          icone={<Icone nome="alert" />}
+          titulo="Não deu para ler as agências"
+          texto={`Os pedidos e as agências com acesso não apareceram agora. ${mensagemDe(agencias.problema)}`}
+          acao={
+            <button className="btn btn--sm" type="button" onClick={() => disparar(carregar())}>
+              Tentar de novo
+            </button>
+          }
+        />
+      )}
+      {souDono &&
+        parceiros?.requests.map((p) => (
+          <CartaoPedido
+            key={p.id}
+            pedido={p}
+            nomeEmpresa={nomeEmpresa}
+            agora={new Date()}
+            aoDecidir={() => setPainel({ tipo: 'decidir', pedido: p })}
+            aoRecusar={() => recusarPedido(p)}
+          />
+        ))}
+
       <div className="acessos-grid">
         <article className="card anima" style={{ ['--i' as string]: 1 }} aria-labelledby="ac-t" aria-busy={estado.tipo === 'carregando'}>
           <div className="card-cab">
             <div>
               <h2 id="ac-t">Com acesso</h2>
-              <p className="card-sub">{dados ? contagem(dados.members.length, dados.invitations.length) : ' '}</p>
+              <p className="card-sub">
+                {dados
+                  ? parceiros && (parceiros.partners.length || parceiros.requests.length)
+                    ? contagemComAgencias(
+                        diretas.length,
+                        dados.invitations.length,
+                        souDono ? parceiros.requests.length : 0,
+                        parceiros.partners.map((x) => ({ nome: x.agency.name, pessoas: porVinculo.get(x.id)?.length ?? 0 })),
+                      )
+                    : contagem(dados.members.length, dados.invitations.length)
+                  : ' '}
+              </p>
             </div>
           </div>
           {estado.tipo === 'carregando' && <Carregando />}
@@ -139,7 +230,7 @@ export function PessoasTela() {
           )}
           {dados && (
             <ul className="pessoas">
-              {dados.members.map((p) => (
+              {diretas.map((p) => (
                 <ItemPessoa
                   key={p.id}
                   pessoa={p}
@@ -149,6 +240,20 @@ export function PessoasTela() {
                   podeRemover={pode('pessoas.remover')}
                   aoAlterar={() => setDialogo({ tipo: 'alterar', pessoa: p })}
                   aoRemover={() => remover(p)}
+                />
+              ))}
+              {parceiros?.partners.map((x) => (
+                <ItemAgencia
+                  key={x.id}
+                  parceiro={x}
+                  time={porVinculo.get(x.id) ?? []}
+                  nomeEmpresa={nomeEmpresa}
+                  meuId={me.user.id}
+                  souDono={souDono}
+                  podeRemover={pode('pessoas.remover')}
+                  aoMudar={() => setPainel({ tipo: 'limites', parceiro: x })}
+                  aoDesfazer={() => setPainel({ tipo: 'desfazer', parceiro: x })}
+                  aoRemoverPessoa={remover}
                 />
               ))}
               {dados.invitations.map((c) => (
@@ -164,12 +269,62 @@ export function PessoasTela() {
           )}
         </article>
         <div className="acessos-lado">
-          <CartaoProtecao />
-          <CartaoAgencia />
+          <CartaoProtecao comAgencias={comAgencias} />
+          <CartaoAgencia comAgencias={comAgencias} />
         </div>
       </div>
-      <TabelaNiveis />
+      <TabelaNiveis comAgencias={comAgencias} />
 
+      {painel?.tipo === 'decidir' && (
+        <GavetaDecidir
+          pedido={painel.pedido}
+          nomeEmpresa={nomeEmpresa}
+          reserva={titulo}
+          aoAceitar={(aviso, nivel) => {
+            avisar(aviso);
+            setResultado({
+              tipo: 'acao',
+              titulo: `${painel.pedido.agency.name} entrou como parceira`,
+              texto: `Agora a agência escolhe quem do time entra, até ${NIVEIS[nivel].nome}. Você recebe um aviso de cada pessoa nova.`,
+            });
+            disparar(carregar());
+          }}
+          aoRecusar={() => recusarPedido(painel.pedido)}
+          aoSumir={painelSumiu}
+          aoFechar={() => setPainel(null)}
+        />
+      )}
+      {painel?.tipo === 'limites' && (
+        <GavetaLimites
+          parceiro={painel.parceiro}
+          time={porVinculo.get(painel.parceiro.id) ?? []}
+          reserva={titulo}
+          aoSalvar={(aviso) => {
+            avisar(aviso);
+            disparar(carregar());
+          }}
+          aoSumir={painelSumiu}
+          aoFechar={() => setPainel(null)}
+        />
+      )}
+      {painel?.tipo === 'desfazer' && (
+        <DialogoDesfazer
+          parceiro={painel.parceiro}
+          pessoas={porVinculo.get(painel.parceiro.id)?.length ?? 0}
+          nomeEmpresa={nomeEmpresa}
+          reserva={titulo}
+          aoDesfazer={(aviso) => {
+            avisar(aviso, { tipo: 'perigo' });
+            setResultado({
+              titulo: `Você desfez o vínculo com ${painel.parceiro.agency.name}`,
+              texto: 'As pessoas da agência saíram na hora. O que elas fizeram continua no registro de atividades, com o nome da agência. A agência recebeu um e-mail.',
+            });
+            disparar(carregar());
+            titulo.current?.focus({ preventScroll: true });
+          }}
+          aoFechar={() => setPainel(null)}
+        />
+      )}
       {dialogo && euMembro && (
         <DialogoAcesso
           modo={dialogo}

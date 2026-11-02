@@ -19,6 +19,20 @@
 .protecao li { display: flex; gap: var(--sp-2); }
 .protecao .ic { flex: none; margin-top: 3px; color: var(--success); }
 .tabela-niveis td { white-space: normal; min-width: 96px; }
+.tabela-niveis th { white-space: normal; }
+/* Sem barra lateral (regra do dono; P27 aprovado): no espaço estreito, cada nível vira um cartão, com o rótulo de cada
+   coluna (`data-rot`). */
+.table-wrap:has(.tabela-niveis) { container-type: inline-size; }
+@container (max-width: 760px) {
+  .tabela-niveis thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tabela-niveis, .tabela-niveis tbody, .tabela-niveis tr, .tabela-niveis td, .tabela-niveis tbody th { display: block; width: 100%; }
+  .tabela-niveis tr { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
+  .tabela-niveis tbody tr:last-child { border-bottom: 0; }
+  .tabela-niveis tbody th { padding: 0 0 var(--sp-2); border: 0; }
+  .tabela-niveis td { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-3); min-width: 0; padding: 3px 0; border: 0; }
+  .tabela-niveis td::before { content: attr(data-rot); color: var(--text-muted); text-align: left; }
+  .tabela-niveis td > span { text-align: right; }
+}
 .tabela-niveis .sim { color: var(--success); font-weight: 600; }
 .tabela-niveis .nao { color: var(--text-muted); }
 .tabela-niveis .parcial { color: var(--warning); font-weight: 600; }
@@ -33,8 +47,38 @@
 .pessoa-esq { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-4) 0; border-bottom: 1px solid var(--border); }
 .pessoa-esq:last-child { border-bottom: 0; }
 
+/* ===== As agências em Pessoas e acessos (P27 aprovado; A7, W6, parte 4) ===== */
+.pessoa-av--ag { border-radius: 11px; background: var(--ai-soft); color: var(--ai); }
+.nivel-chip--ag { background: var(--warning-soft); color: var(--text); }
+/* o time da agência dentro da lista "Com acesso" */
+.ag-time { grid-column: 1 / -1; display: grid; margin: var(--sp-2) 0 0; padding-left: var(--sp-4); border-left: 2px solid var(--border); }
+.ag-time .pessoa { padding-block: var(--sp-3); }
+.ag-time-vazio { grid-column: 1 / -1; margin-top: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--bg-subtle); font-size: var(--text-sm); color: var(--text-muted); }
+/* o pedido no alto de Pessoas e acessos */
+.pedido { display: grid; gap: var(--sp-3); margin-bottom: var(--sp-4); border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+.pedido-cab { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.pedido h2 { font-size: var(--text-lg); text-wrap: balance; overflow-wrap: anywhere; }
+.pedido-msg { margin: 0; padding: var(--sp-3) var(--sp-4); border-left: 3px solid var(--border-strong); border-radius: 0 var(--radius) var(--radius) 0; background: var(--bg-subtle); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.pedido-dados { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--sp-3) var(--sp-4); margin: 0; }
+.pedido-dados dt { font-size: var(--text-xs); color: var(--text-muted); }
+.pedido-dados dd { margin: 2px 0 0; font-size: var(--text-sm); font-weight: 500; overflow-wrap: anywhere; }
+.pedido-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.campo-mono { font-family: var(--font-mono); font-size: var(--text-sm); }
+.limite-linha { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.ag-fixo { display: flex; gap: var(--sp-2); margin: 0; padding: var(--sp-3); border: 1px dashed var(--border-strong); border-radius: var(--radius); font-size: var(--text-sm); color: var(--text-muted); }
+.ag-fixo .ic { flex: none; margin-top: 2px; }
+.ag-fixo b { color: var(--text); font-weight: 600; }
+.ag-lista { display: grid; gap: var(--sp-2); margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); color: var(--text-muted); }
+.ag-lista:empty { display: none; }
+.ag-lista li { display: flex; gap: var(--sp-2); }
+.ag-lista .ic { flex: none; margin-top: 3px; }
+.tabela-nota { margin-top: var(--sp-3); font-size: var(--text-sm); color: var(--text-muted); max-width: 72ch; }
+
 @container pagina (max-width: 999px) {
   .acessos-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@container pagina (max-width: 559px) {
+  .ag-time { padding-left: var(--sp-3); }
 }
 @container pagina (max-width: 479px) {
   .view-cab h1 { font-size: var(--text-xl); }
