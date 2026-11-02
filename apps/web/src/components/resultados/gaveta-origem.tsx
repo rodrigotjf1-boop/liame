@@ -1,6 +1,7 @@
 'use client';
 
 import type { ClosedLoopResponse, OrderOrigin } from '@liame/contracts';
+import Link from 'next/link';
 import { type RefObject, useMemo } from 'react';
 import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
@@ -17,9 +18,11 @@ type Props = {
   modelo: ClosedLoopResponse['model'];
   reserva: RefObject<HTMLElement | null>;
   aoFechar: () => void;
+  /** Quem pode abrir a Agenda ganha o atalho para o post, no pedido que veio pelo link de um post (P32). */
+  podeVerAgenda?: boolean;
 };
 
-export function GavetaOrigem({ pedido, fuso, loja, modelo, reserva, aoFechar }: Props) {
+export function GavetaOrigem({ pedido, fuso, loja, modelo, reserva, aoFechar, podeVerAgenda = false }: Props) {
   const { ref, fechar, devolverFoco } = useDialogo({ reserva });
   const d = useMemo(() => detalheDoPedido(pedido, { fuso, loja, modelo }), [pedido, fuso, loja, modelo]);
   const r = d.resultado;
@@ -101,6 +104,19 @@ export function GavetaOrigem({ pedido, fuso, loja, modelo, reserva, aoFechar }: 
                   <span className="eixo-nota">{r.nota}</span>
                 </>
               )}
+              {r.tipo === 'post' && (
+                <>
+                  <span>
+                    <b>{r.post}</b>
+                  </span>
+                  <span className="plat">{r.rede}</span>
+                  <span className={`st st--${d.confianca.classe}`}>
+                    {d.confianca.ponto && <span className="dot" aria-hidden="true" />}
+                    {d.confianca.rotulo}
+                  </span>
+                  <span className="eixo-nota">{r.nota}</span>
+                </>
+              )}
               {r.tipo === 'sem' && (
                 <>
                   <span className="st st--espera">Sem origem</span>
@@ -140,6 +156,11 @@ export function GavetaOrigem({ pedido, fuso, loja, modelo, reserva, aoFechar }: 
                 <li key={s}>{s}</li>
               ))}
             </ul>
+            {r.tipo === 'post' && podeVerAgenda && (
+              <p className="lite-frase">
+                <Link href="/agenda">Ver o post na Agenda</Link>
+              </p>
+            )}
           </section>
 
           <section className="det-bloco" aria-labelledby="det-tempo">
@@ -169,7 +190,11 @@ export function GavetaOrigem({ pedido, fuso, loja, modelo, reserva, aoFechar }: 
           <p className="det-modelo">{d.modelo}</p>
           <p className="dialogo-nota">
             <Icone nome="shield" pequeno />
-            <span>Sem dado pessoal: o Liame não guarda nome nem telefone do cliente. A conversa e o pedido se ligam por um identificador pseudonimizado.</span>
+            <span>
+              {r.tipo === 'post'
+                ? 'Sem dado pessoal: o Liame não guarda nome nem telefone do cliente. O pedido se liga ao post só pelo código do link.'
+                : 'Sem dado pessoal: o Liame não guarda nome nem telefone do cliente. A conversa e o pedido se ligam por um identificador pseudonimizado.'}
+            </span>
           </p>
         </div>
       </div>

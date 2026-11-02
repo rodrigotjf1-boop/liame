@@ -2,6 +2,7 @@ import type { ClosedLoopResponse, ConfirmedResult, ConnectionResponse, PlatformR
 import { plataforma } from '@/components/contas/textos';
 import type { NomeIcone } from '@/components/ui/icone';
 import { inteiro, reaisDeMicros } from '@/lib/formato';
+import { linhaDosPosts, notaDosPosts, type PostNaLista, postsQueTrouxeram } from './posts';
 
 // Regras e frases de "Resultados" (mockups/prototipo-resultados.html, P1 aprovado em 29/09/2026). A conta
 // é do servidor (ROAS, margem, cobertura e veredito vêm prontos da API); aqui só se escolhe o que mostrar.
@@ -886,6 +887,12 @@ export type CartaoOrigem =
       mensagens: Frase | null;
       /** No Pro, em "Pedidos sem origem": os pedidos que saíram da conta por terem vindo pelo cupom de uma mensagem. */
       notaDasMensagens: string | null;
+      /** A linha dos posts (P32); nula quando a marca não tem post com o link no período. */
+      posts: Frase | null;
+      /** No Pro, em "Pedidos sem origem": os pedidos que saíram da conta por terem vindo pelo link de um post. */
+      notaDosPosts: string | null;
+      /** No Pro, os posts que trouxeram pedido. */
+      postsQueTrouxeram: PostNaLista[];
     };
 
 /**
@@ -944,6 +951,10 @@ export function origemDe(r: ClosedLoopResponse, b: Base, fontes: Fonte[]): Carta
     notaDasMensagens: saem
       ? `Fora desta conta: ${plural(saem, 'pedido', 'pedidos')} do cardápio e do WhatsApp que ${saem === 1 ? 'veio' : 'vieram'} pelo cupom de uma mensagem. A origem ${saem === 1 ? 'dele' : 'deles'} é a mensagem.`
       : null,
+    // Os pedidos pelo link de um post (P32) também já saíram de `without_origin` no servidor.
+    posts: tot.posts ? linhaDosPosts(tot.posts, b.hoje) : null,
+    notaDosPosts: tot.posts ? notaDosPosts(tot.posts) : null,
+    postsQueTrouxeram: tot.posts ? postsQueTrouxeram(tot.posts.posts, b.fuso) : [],
     semOrigem: {
       porcentagem: porcentagem(tot.without_origin.share_pct),
       frase: `${inteiro(tot.without_origin.orders)} de ${inteiro(comClique)} pedidos do cardápio online e do WhatsApp não têm evidência de anúncio. Pedido sem evidência fica sem origem: o Liame não chuta.`,

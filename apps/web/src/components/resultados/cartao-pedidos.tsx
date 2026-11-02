@@ -28,9 +28,11 @@ type Props = {
   loja: string | null;
   modelo: ClosedLoopResponse['model'];
   reserva: RefObject<HTMLElement | null>;
+  /** Quem pode abrir a Agenda ganha, na gaveta, o atalho para o post (P32). */
+  podeVerAgenda?: boolean;
 };
 
-export function CartaoPedidos({ consulta, fuso, loja, modelo, reserva }: Props) {
+export function CartaoPedidos({ consulta, fuso, loja, modelo, reserva, podeVerAgenda = false }: Props) {
   const d = useDetalhes();
   const [carga, setCarga] = useState<Carga>({ tipo: 'parado' });
   const [filtro, setFiltro] = useState<FiltroPedidos>('todos');
@@ -146,7 +148,7 @@ export function CartaoPedidos({ consulta, fuso, loja, modelo, reserva }: Props) 
                 <tbody>
                   {visiveis.map((o) => {
                     const numero = numeroDoPedido(o.external_id);
-                    const origem = origemDoPedido(o);
+                    const origem = origemDoPedido(o, fuso);
                     const conf = confiancaDe(o);
                     const esteAberto = aberto?.order_id === o.order_id;
                     return (
@@ -197,7 +199,7 @@ export function CartaoPedidos({ consulta, fuso, loja, modelo, reserva }: Props) 
           {anuncio}
         </p>
       </div>
-      {aberto && <GavetaOrigem pedido={aberto} fuso={fuso} loja={loja} modelo={modelo} reserva={reserva} aoFechar={() => setAberto(null)} />}
+      {aberto && <GavetaOrigem pedido={aberto} fuso={fuso} loja={loja} modelo={modelo} reserva={reserva} aoFechar={() => setAberto(null)} podeVerAgenda={podeVerAgenda} />}
     </article>
   );
 }

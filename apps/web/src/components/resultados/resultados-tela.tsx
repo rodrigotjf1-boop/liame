@@ -308,6 +308,7 @@ export function ResultadosTela() {
           pedir={pedir}
           vendasAoGoogle={linhaDoGoogle}
           podeVerMensagens={podeVerCampanhas}
+          podeVerAgenda={podeVerCampanhas}
           anuncios={anuncios}
           google={google}
         />
