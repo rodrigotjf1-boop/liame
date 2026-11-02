@@ -69,21 +69,31 @@ export function situacaoDaLojaDoPerfil(c: AccountFreshness, funcaoLigada: boolea
 /** A autorização do Google inclui a permissão do perfil. */
 export const incluiOPerfil = (c: Pick<ConnectionResponse, 'scopes'>): boolean => c.scopes.includes(GOOGLE_BUSINESS_SCOPE);
 
-/** Contas de anúncio, lojas do perfil e sites do Search Console ligados por esta autorização (os desligados não contam). */
-export function ligadasDaAutorizacao(c: Pick<ConnectionResponse, 'accounts'>): { contas: number; lojas: number; sites: number } {
+/**
+ * Contas de anúncio, lojas do perfil, sites do Search Console, Páginas e Instagram ligados por esta autorização (os
+ * desligados não contam).
+ */
+export function ligadasDaAutorizacao(c: Pick<ConnectionResponse, 'accounts'>): { contas: number; lojas: number; sites: number; paginas: number; instagrams: number } {
   const ativas = c.accounts.filter((a) => a.disconnected_at === null);
   const lojas = ativas.filter((a) => ehLojaDoPerfil(a.provider)).length;
   const sites = ativas.filter((a) => ehSiteDoSearchConsole(a.provider)).length;
-  return { contas: ativas.length - lojas - sites, lojas, sites };
+  const paginas = ativas.filter((a) => a.provider === 'facebook_page').length;
+  const instagrams = ativas.filter((a) => a.provider === 'instagram').length;
+  return { contas: ativas.length - lojas - sites - paginas - instagrams, lojas, sites, paginas, instagrams };
 }
 
-/** "3 contas", "3 contas e 1 loja", "1 loja", "3 contas e 1 site", "3 contas, 1 loja e 1 site" (o cabeçalho do cartão). */
-export function contasELojas({ contas, lojas, sites = 0 }: { contas: number; lojas: number; sites?: number }): string {
+/**
+ * "3 contas", "3 contas e 1 loja", "1 loja", "3 contas e 1 site", "3 contas, 1 loja e 1 site", "2 contas, 1 Página e 1
+ * Instagram" (o cabeçalho do cartão).
+ */
+export function contasELojas({ contas, lojas, sites = 0, paginas = 0, instagrams = 0 }: { contas: number; lojas: number; sites?: number; paginas?: number; instagrams?: number }): string {
   const c = contas === 1 ? '1 conta' : `${contas} contas`;
   const partes = [
-    contas || (!lojas && !sites) ? c : '',
+    contas || (!lojas && !sites && !paginas && !instagrams) ? c : '',
     lojas ? (lojas === 1 ? '1 loja' : `${lojas} lojas`) : '',
     sites ? (sites === 1 ? '1 site' : `${sites} sites`) : '',
+    paginas ? (paginas === 1 ? '1 Página' : `${paginas} Páginas`) : '',
+    instagrams ? `${instagrams} Instagram` : '',
   ].filter(Boolean);
   return listaEmPalavras(partes);
 }
@@ -93,7 +103,8 @@ export function lojasPorLigar(c: Pick<ConnectionResponse, 'discovered'>): Discov
   return c.discovered.filter((d) => ehLojaDoPerfil(d.provider) && !d.linked);
 }
 
-export type NotaDoPerfil = { icone: 'lock' | 'info' | 'clock' | 'alert'; destaque: string | null; texto: string };
+/** `perigo`: o aviso do que parou (a permissão de publicar tirada na Meta, P19 parte B), em vermelho; sem ele, atenção. */
+export type NotaDoPerfil = { icone: 'lock' | 'info' | 'clock' | 'alert' | 'alert-circle'; destaque: string | null; texto: string; perigo?: boolean };
 
 /**
  * O que o cartão da autorização do Google diz do perfil, com a função ligada (nulo sem ela): se a autorização inclui a

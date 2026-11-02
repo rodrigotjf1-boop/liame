@@ -191,7 +191,7 @@ describe('a autorização do Google com o Search Console', () => {
 
   it('contas, lojas e sites contam à parte: no cabeçalho do cartão e no diálogo de revogar', () => {
     const c = conexao({ accounts: [conta('google_ads', '1'), conta('google_ads', '2'), conta('ga4', '3'), conta('search_console', DOMINIO), conta('search_console', ENDERECO, { disconnected_at: local(15, 9) })] });
-    expect(ligadasDaAutorizacao(c)).toEqual({ contas: 3, lojas: 0, sites: 1 });
+    expect(ligadasDaAutorizacao(c)).toEqual({ contas: 3, lojas: 0, sites: 1, paginas: 0, instagrams: 0 });
     expect(contasELojas({ contas: 3, lojas: 0, sites: 1 })).toBe('3 contas e 1 site');
     expect(contasELojas({ contas: 3, lojas: 1, sites: 2 })).toBe('3 contas, 1 loja e 2 sites');
     expect(contasELojas({ contas: 0, lojas: 0, sites: 1 })).toBe('1 site');

@@ -6,6 +6,7 @@ import { Icone } from '@/components/ui/icone';
 import { useDialogo } from '@/components/ui/use-dialogo';
 import { api, chamar, mensagemDe } from '@/lib/api';
 import { disparar } from '@/lib/disparar';
+import { avisoDosCanaisLigados, ehCanalDaMeta, ehInstagram, ehPagina, NOTA_DA_ESCOLHA_DOS_CANAIS, subDaEscolhaDoCanal } from './canais-da-meta';
 import { ehLojaDoPerfil, siteDaLoja } from './perfil-google';
 import { avisoDeLigar, ehSiteDoSearchConsole, notaDaPrimeiraLeitura, subDaEscolhaDoSite } from './search-console';
 import { botaoLigar, type ContaExistente, escolhiveis, gruposDaEscolha, idDaConta } from './textos';
@@ -43,11 +44,20 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const comEscrita = new Set(opcoes.filter((o) => o.escrita).map((o) => chave(o.conta.provider, o.conta.external_id)));
   // A conta do RegemCast com o token novo da distribuição: também só troca.
   const tokenNovo = new Set(opcoes.filter((o) => o.token).map((o) => chave(o.conta.provider, o.conta.external_id)));
-  const soTrocaA = (k: string) => renovaveis.has(k) || comPermissao.has(k) || comEscrita.has(k) || tokenNovo.has(k);
-  // Reconectar já vem marcado; uma conta nova só, também. Várias novas: a pessoa escolhe (nada ligado sem querer).
+  // A Página e o Instagram que a autorização de hoje não deixa mais publicar, e esta deixa (P19, parte B): também só troca.
+  const voltaAPublicar = new Set(opcoes.filter((o) => o.publicar).map((o) => chave(o.conta.provider, o.conta.external_id)));
+  const soTrocaA = (k: string) => renovaveis.has(k) || comPermissao.has(k) || comEscrita.has(k) || tokenNovo.has(k) || voltaAPublicar.has(k);
+  // Reconectar já vem marcado; uma conta nova só, também. Várias novas: a pessoa escolhe (nada ligado sem querer). A
+  // Página e o Instagram (P19, parte B): o Instagram e a Página dele vêm marcados (sem Instagram, a primeira Página),
+  // e nada se liga antes de a pessoa confirmar.
   const [marcadas, setMarcadas] = useState<Set<string>>(() => {
     const iniciais = new Set(reconectaveis);
     if (livres.length === 1) iniciais.add(chave(livres[0]!.provider, livres[0]!.external_id));
+    const novos = livres.filter((d) => !d.linked);
+    const instagrams = novos.filter((d) => ehInstagram(d.provider));
+    const paginas = novos.filter((d) => ehPagina(d.provider)).sort((x, y) => x.name.localeCompare(y.name, 'pt-BR'));
+    const doInstagram = paginas.filter((p) => instagrams.some((i) => p.instagram_name === i.name || i.page_name === p.name));
+    for (const d of [...instagrams, ...(doInstagram.length ? doInstagram : paginas.slice(0, 1))]) iniciais.add(chave(d.provider, d.external_id));
     return iniciais;
   });
   const [enviando, setEnviando] = useState(false);
@@ -60,7 +70,9 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   // botão, na nota e no aviso.
   const comLoja = livres.some((d) => ehLojaDoPerfil(d.provider));
   const comSite = livres.some((d) => ehSiteDoSearchConsole(d.provider));
-  const comConta = livres.some((d) => !ehLojaDoPerfil(d.provider) && !ehSiteDoSearchConsole(d.provider));
+  // A Página e o Instagram (P19, parte B) também: não são lidos, e o botão os conta à parte.
+  const comCanal = livres.some((d) => ehCanalDaMeta(d.provider));
+  const comConta = livres.some((d) => !ehLojaDoPerfil(d.provider) && !ehSiteDoSearchConsole(d.provider) && !ehCanalDaMeta(d.provider));
 
   function alternar(k: string, marcar: boolean) {
     setMarcadas((atual) => {
@@ -92,6 +104,24 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
     const ganhouEscrita = contas.some((d) => comEscrita.has(chave(d.provider, d.external_id)));
     const lojasLigadas = r.data.linked.filter((a) => ehLojaDoPerfil(a.provider)).length;
     const sitesLigados = r.data.linked.filter((a) => ehSiteDoSearchConsole(a.provider)).length;
+    const paginasLigadas = r.data.linked.filter((a) => ehPagina(a.provider)).length;
+    const instagramsLigados = r.data.linked.filter((a) => ehInstagram(a.provider)).length;
+    const outrasLigadas = novas - paginasLigadas - instagramsLigados;
+    const jaLigadas = ja ? ` ${ja === 1 ? '1 já estava ligada' : `${ja} já estavam ligadas`} a uma marca.` : '';
+    // A Página e o Instagram (P19, parte B): o aviso diz onde os posts passam a sair; com contas novas junto, as duas frases.
+    if (paginasLigadas || instagramsLigados) {
+      const canais = avisoDosCanaisLigados(paginasLigadas, instagramsLigados);
+      const voltou = contas.some((d) => voltaAPublicar.has(chave(d.provider, d.external_id)));
+      aoLigar(
+        voltou && !outrasLigadas
+          ? `${paginasLigadas + instagramsLigados === 1 ? (paginasLigadas ? 'A Página passou' : 'O Instagram passou') : 'A Página e o Instagram passaram'} para a autorização nova da Meta: os posts aprovados da marca voltam a sair ${paginasLigadas + instagramsLigados === 1 ? (paginasLigadas ? 'nela' : 'nele') : 'neles'}.`
+          : outrasLigadas
+            ? `${outrasLigadas === 1 ? 'Conta ligada' : 'Contas ligadas'}. A primeira leitura (90 dias) começou e leva alguns minutos. ${canais}${jaLigadas}`
+            : `${canais}${jaLigadas}`,
+      );
+      fechar();
+      return;
+    }
     aoLigar(
       novas && (comLoja || comSite) && !soRenovou
         ? `${avisoDeLigar({ contas: novas - lojasLigadas - sitesLigados, lojas: lojasLigadas, sites: sitesLigados }, { lojas: comLoja, sites: comSite })}${
@@ -115,6 +145,8 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
   const n = marcadas.size;
   const lojasMarcadas = livres.filter((d) => ehLojaDoPerfil(d.provider) && marcadas.has(chave(d.provider, d.external_id))).length;
   const sitesMarcados = livres.filter((d) => ehSiteDoSearchConsole(d.provider) && marcadas.has(chave(d.provider, d.external_id))).length;
+  const paginasMarcadas = livres.filter((d) => ehPagina(d.provider) && marcadas.has(chave(d.provider, d.external_id))).length;
+  const instagramsMarcados = livres.filter((d) => ehInstagram(d.provider) && marcadas.has(chave(d.provider, d.external_id))).length;
   return (
     <dialog
       ref={ref}
@@ -166,6 +198,9 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
                       ) : ehSiteDoSearchConsole(d.provider) ? (
                         // O site do Search Console: o domínio inteiro ou um endereço, e o acesso da conta do Google.
                         <span className="escolha-sub">{subDaEscolhaDoSite(d)}</span>
+                      ) : ehCanalDaMeta(d.provider) ? (
+                        // A Página com o Instagram dela, o Instagram com a Página (P19, parte B), no lugar do código da Meta.
+                        <span className="escolha-sub">{subDaEscolhaDoCanal(d)}</span>
                       ) : (
                         <span className="mono">{idDaConta(d.provider, d.external_id)}</span>
                       )}
@@ -175,6 +210,7 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
                     {reconectar && !soTrocaA(k) && <span className="lite-chip lite-chip--perigo">desconectada: ligar de novo</span>}
                     {comEscrita.has(k) && <span className="lite-chip">passa a aceitar mudanças aprovadas</span>}
                     {tokenNovo.has(k) && <span className="lite-chip">passa para o token novo</span>}
+                    {voltaAPublicar.has(k) && <span className="lite-chip">volta a publicar</span>}
                     {renovaveis.has(k) && <span className="lite-chip lite-chip--atraso">a autorização atual vence antes: renovar</span>}
                     {comPermissao.has(k) && !renovaveis.has(k) && (
                       <span className="lite-chip">{d.provider === 'google_ads' ? 'passa a poder informar vendas' : 'passa para esta autorização'}</span>
@@ -187,7 +223,11 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
           <p className="dialogo-nota">
             <Icone nome="clock" pequeno />
             <span>
-              {soTroca
+              {comCanal && !comConta && !comLoja && !comSite
+                ? `${NOTA_DA_ESCOLHA_DOS_CANAIS} As contas de anúncio seguem como estão.`
+                : comCanal
+                  ? `A primeira leitura das contas traz os últimos 90 dias e leva alguns minutos. ${NOTA_DA_ESCOLHA_DOS_CANAIS}`
+                  : soTroca
                 ? 'Estas contas já são lidas pelo Liame. Ligar aqui só passa a leitura para a autorização nova: nada é desligado, e os números seguem sem parar.'
                 : comLoja || comSite
                   ? notaDaPrimeiraLeitura({ contas: comConta, lojas: comLoja, sites: comSite })
@@ -200,7 +240,7 @@ export function DialogoEscolher({ conexao, existentes, marca, reserva, aoLigar, 
             Agora não
           </button>
           <button className="btn btn--primary" type="submit" disabled={!n || enviando} aria-busy={enviando}>
-            {enviando ? 'Ligando…' : botaoLigar(n, lojasMarcadas, sitesMarcados)}
+            {enviando ? 'Ligando…' : botaoLigar(n, lojasMarcadas, sitesMarcados, paginasMarcadas, instagramsMarcados)}
           </button>
         </div>
       </form>

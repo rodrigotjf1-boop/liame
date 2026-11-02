@@ -20,6 +20,8 @@ export type ContaDaTabela = {
   revogar?: boolean;
   /** O que a confirmação na linha diz antes de desligar (loja do perfil: "O Liame para de ler as avaliações…"). */
   confirmacao?: string;
+  /** A coluna "Última leitura" no lugar da data (a Página e o Instagram: "só publica", P19 parte B). */
+  quando?: string;
   brandId: string;
   situacao: SituacaoConta;
 };
@@ -81,7 +83,7 @@ export function LinhaConta({ conta: c, agora, podeConectar, aoReconectar, aoDesl
       <td>
         <span className="quando">
           <span className="rotulo-celular">Última leitura: </span>
-          {ultimaLeitura(c.situacao.ultimaLeituraEm, agora)}
+          {c.quando ?? ultimaLeitura(c.situacao.ultimaLeituraEm, agora)}
         </span>
       </td>
       <td className="acoes">
@@ -113,7 +115,16 @@ export function LinhaConta({ conta: c, agora, podeConectar, aoReconectar, aoDesl
               className="btn btn--sm btn--ghost"
               type="button"
               onClick={() => setConfirmando(true)}
-              aria-label={c.revogar ? `Revogar o acesso à loja ${c.nome}` : `Desligar ${c.nome}`}
+              aria-label={
+                c.revogar
+                  ? `Revogar o acesso à loja ${c.nome}`
+                  : // A Página costuma ter o nome da conta de anúncio: o rótulo diz qual é (P19, parte B).
+                    c.provider === 'facebook_page'
+                    ? `Desligar a Página ${c.nome}`
+                    : c.provider === 'instagram'
+                      ? `Desligar o Instagram ${c.nome}`
+                      : `Desligar ${c.nome}`
+              }
             >
               {c.revogar ? 'Revogar' : 'Desligar'}
             </button>

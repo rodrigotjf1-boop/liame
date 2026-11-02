@@ -33,6 +33,14 @@ export const GOOGLE_BUSINESS_SCOPE = 'https://www.googleapis.com/auth/business.m
 export const SEARCH_CONSOLE_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
 
 /**
+ * As permissões de publicar da Meta (A6, Z5): a da Página do Facebook e a do Instagram. A autorização da Meta que as
+ * concedeu alcança a Página e o Instagram onde o post sai. Públicas: a tela de Contas confere se a autorização as tem
+ * (a coluna `scopes`, relida a cada procura; vazia = não se sabe, ERR-179).
+ */
+export const META_PAGE_PUBLISH_SCOPE = 'pages_manage_posts';
+export const META_INSTAGRAM_PUBLISH_SCOPE = 'instagram_content_publish';
+
+/**
  * Plataforma da conta ligada. `google_business`: a loja do Perfil da Empresa no Google; `search_console`: um site do
  * Search Console (as duas vêm na autorização do Google, cada uma com a função dela ligada). `facebook_page` e
  * `instagram`: a Página e o Instagram onde o post sai (vêm na autorização da Meta com a permissão de publicar, com a
