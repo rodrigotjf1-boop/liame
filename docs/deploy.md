@@ -109,7 +109,7 @@ Menus em português, como aparecem no painel. Em cada serviço: **Fonte → Gith
 | `TERMS_VERSION` | ✔ | ✔ | a versão publicada no site: `2026-10-16` (desde 16/10/2026; antes, `2026-09-29`). Trocar só depois de as páginas novas estarem no ar; vale para cadastro e convite novos, ninguém precisa aceitar de novo |
 | `TERMS_URL` · `PRIVACY_URL` | ✔ | ✔ | `https://agencialiame.com/termos/` · `https://agencialiame.com/privacidade/` |
 | `META_APP_ID` · `META_LOGIN_CONFIG_ID` | ✔ | ✔ | `1399495602273174` · `1068233099319648` |
-| `META_LOGIN_CONFIG_ID_ESCRITA` | ✔ | — | o ID da configuração de **escrita** do login da Meta (A4), quando ela existir; sem ela, todas as empresas autorizam pela de leitura |
+| `META_LOGIN_CONFIG_ID_ESCRITA` | ✔ | — | o ID da configuração de **escrita** do login da Meta (A4; também a que pede publicar, para a empresa com os posts), quando ela existir; sem ela, todas as empresas autorizam pela de leitura, e a lista das conexões diz que os posts não estão prontos |
 | `META_APP_SECRET` **S** | ✔ | ✔ | Configurações do app → Básico → Chave Secreta do app |
 | `GOOGLE_OAUTH_CLIENT_ID` | ✔ | ✔ | `285693801008-armp76vqm8543v88bhcd19um2k1vitnq.apps.googleusercontent.com` |
 | `GOOGLE_OAUTH_CLIENT_SECRET` **S** | ✔ | ✔ | a chave ativa do cliente "Liame API" (gerenciador de senhas) |

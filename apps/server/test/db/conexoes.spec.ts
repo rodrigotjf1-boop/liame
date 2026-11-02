@@ -449,6 +449,100 @@ describe.skipIf(!hasDb)('conectar contas (OAuth)', () => {
     }
   });
 
+  it('Meta: o que a tela de Contas lê da Página e do Instagram, e os posts autorizam pela configuração que pede publicar (P19, parte B)', async () => {
+    const e = await empresa('Casa Brasa Contas dos Posts');
+    const vizinha = await empresa('Casa Brasa Sem Posts');
+    const iniciar = async (quem: { cookie: string; brandId: string }) => {
+      const r = await api.call('POST', '/v1/connections', { cookie: quem.cookie, body: { provider: 'meta', brand_id: quem.brandId } });
+      expect(r.status).toBe(201);
+      const url = new URL(r.body.authorize_url);
+      return { id: r.body.id as string, config: url.searchParams.get('config_id'), estado: url.searchParams.get('state')! };
+    };
+    const conectar = async () => {
+      const c = await iniciar(e);
+      expect((await voltar(e.cookie, { state: c.estado, code: 'codigo-meta-bom' })).status).toBe(303);
+      expect(await processador.processarLote(5, { tenantIds: [e.tenantId] })).toBe(1);
+      return c.id;
+    };
+    type Canal = { provider: string; external_id: string; name: string; has_instagram?: boolean; instagram_name?: string | null; page_name?: string | null };
+    type Item = { id: string; provider: string; channel_search?: unknown; discovered: Canal[]; accounts: Canal[] };
+    const lista = async (quem: { cookie: string }) => (await api.call('GET', '/v1/connections', { cookie: quem.cookie })).body as { items: Item[]; posts?: boolean };
+    const item = async (id: string) => (await lista(e)).items.find((i) => i.id === id)!;
+    const canal = (cs: Canal[], provider: string, externalId: string) => cs.find((c) => c.provider === provider && c.external_id === externalId)!;
+    metaPosts.permissoes = {
+      status: 200,
+      corpo: { data: ['pages_show_list', 'pages_manage_posts', 'instagram_content_publish', 'ads_read'].map((permission) => ({ permission, status: 'granted' })) },
+    };
+    metaPosts.paginas = {
+      status: 200,
+      corpo: {
+        data: [
+          { id: '102030405060708', name: 'Casa Brasa', instagram_business_account: { id: '17841400000000001', username: 'casabrasa' } },
+          { id: '102030405060709', name: 'Casa Brasa Eventos' },
+        ],
+      },
+    };
+    try {
+      // (1) Sem a função dos posts: a lista diz que não, a autorização vai pela configuração de leitura e não há procura.
+      expect((await lista(e)).posts).toBe(false);
+      expect((await iniciar(e)).config).toBe(CONFIG_LEITURA);
+      const semFuncao = await conectar();
+      expect((await item(semFuncao)).channel_search).toBeNull();
+
+      // (2) Com a função (e a escrita dos anúncios desligada): a lista diz que sim, e a autorização vai pela configuração
+      // de escrita, a que pede as permissões de publicar (D-A6-63). A vizinha segue como estava.
+      await ligarFlagDaEmpresa(api, 'social_write', e.tenantId, true);
+      expect((await lista(e)).posts).toBe(true);
+      expect((await lista(vizinha)).posts).toBe(false);
+      expect((await iniciar(e)).config).toBe(CONFIG_ESCRITA);
+      expect((await iniciar(vizinha)).config).toBe(CONFIG_LEITURA);
+
+      // (3) A procura, como a tela lê: quantas Páginas e quantos Instagram; a Página diz qual Instagram tem (ou que não tem),
+      // o Instagram diz de qual Página é, e a conta de anúncio não ganha nada disso.
+      const comFuncao = await conectar();
+      const achada = await item(comFuncao);
+      expect(achada.channel_search).toEqual({ result: 'ok', searched_at: expect.any(String), pages: 2, instagrams: 1 });
+      expect(canal(achada.discovered, 'facebook_page', '102030405060708')).toMatchObject({ has_instagram: true, instagram_name: '@casabrasa' });
+      expect(canal(achada.discovered, 'facebook_page', '102030405060709')).toMatchObject({ has_instagram: false, instagram_name: null });
+      expect(canal(achada.discovered, 'instagram', '17841400000000001')).toMatchObject({ name: '@casabrasa', page_name: 'Casa Brasa' });
+      const anuncio = achada.discovered.find((d) => d.provider === 'meta_ads')!;
+      expect(['has_instagram', 'instagram_name', 'page_name'].filter((k) => k in anuncio)).toEqual([]);
+
+      // (4) Ligadas, as contas dizem o mesmo na lista (é o que cada linha de Contas conectadas mostra).
+      const ligar = await api.call('POST', `/v1/connections/${comFuncao}/accounts`, {
+        cookie: e.cookie,
+        body: { accounts: [{ provider: 'facebook_page', external_id: '102030405060708' }, { provider: 'instagram', external_id: '17841400000000001' }] },
+      });
+      expect(ligar.status, JSON.stringify(ligar.body)).toBe(200);
+      const ligada = await item(comFuncao);
+      expect(canal(ligada.accounts, 'facebook_page', '102030405060708')).toMatchObject({ name: 'Casa Brasa', has_instagram: true, instagram_name: '@casabrasa' });
+      expect(canal(ligada.accounts, 'instagram', '17841400000000001')).toMatchObject({ name: '@casabrasa', page_name: 'Casa Brasa' });
+
+      // (5) Uma autorização só com a permissão da Página não alcança o Instagram, mas a Página diz qual é o dela: o Liame o
+      // conhece pela conta ligada.
+      metaPosts.permissoes = { status: 200, corpo: { data: ['pages_show_list', 'pages_manage_posts'].map((permission) => ({ permission, status: 'granted' })) } };
+      const soPagina = await conectar();
+      const daPagina = await item(soPagina);
+      expect(daPagina.discovered.filter((d) => d.provider === 'instagram')).toEqual([]);
+      expect(canal(daPagina.discovered, 'facebook_page', '102030405060708')).toMatchObject({ has_instagram: true, instagram_name: '@casabrasa' });
+      expect(daPagina.channel_search).toMatchObject({ result: 'ok', pages: 2, instagrams: 0 });
+
+      // (6) A procura de novo que bate no limite: a tela lê o limite (e oferece procurar de novo), com as Páginas já conhecidas.
+      metaPosts.paginas = { status: 400, corpo: { error: { message: 'Application request limit reached', type: 'OAuthException', code: 4 } } };
+      expect((await api.call('POST', `/v1/connections/${comFuncao}/discover`, { cookie: e.cookie })).status).toBe(202);
+      expect(await processador.processarLote(5, { tenantIds: [e.tenantId] })).toBe(1);
+      const noLimite = await item(comFuncao);
+      expect(noLimite.channel_search).toMatchObject({ result: 'limite', pages: 0, instagrams: 0 });
+      expect(noLimite.discovered.filter((d) => d.provider === 'facebook_page')).toHaveLength(2);
+      // O detalhe diz o mesmo que a lista.
+      expect((await api.call('GET', `/v1/connections/${comFuncao}`, { cookie: e.cookie })).body.channel_search).toMatchObject({ result: 'limite' });
+    } finally {
+      metaPosts.permissoes = null;
+      metaPosts.paginas = null;
+      await ligarFlagDaEmpresa(api, 'social_write', e.tenantId, false);
+    }
+  });
+
   it('Google: PKCE, Google Ads e GA4 na mesma autorização, procurar de novo pelo refresh token e revogar', async () => {
     const e = await empresa('Casa Brasa Google Conexões');
     const inicio = await api.call('POST', '/v1/connections', { cookie: e.cookie, body: { provider: 'google', brand_id: e.brandId } });

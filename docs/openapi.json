@@ -27220,6 +27220,21 @@
                                     "null"
                                   ],
                                   "pattern": "^[a-z0-9_]+$"
+                                },
+                                "has_instagram": {
+                                  "type": "boolean"
+                                },
+                                "instagram_name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "page_name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
                                 }
                               },
                               "required": [
@@ -27317,6 +27332,21 @@
                                     "string",
                                     "null"
                                   ]
+                                },
+                                "has_instagram": {
+                                  "type": "boolean"
+                                },
+                                "instagram_name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "page_name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
                                 }
                               },
                               "required": [
@@ -27390,6 +27420,38 @@
                               "sites"
                             ],
                             "additionalProperties": false
+                          },
+                          "channel_search": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "properties": {
+                              "result": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9_]+$"
+                              },
+                              "searched_at": {
+                                "type": "string"
+                              },
+                              "pages": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "instagrams": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              }
+                            },
+                            "required": [
+                              "result",
+                              "searched_at",
+                              "pages",
+                              "instagrams"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
@@ -27438,6 +27500,9 @@
                       "type": "boolean"
                     },
                     "regem_by_click": {
+                      "type": "boolean"
+                    },
+                    "posts": {
                       "type": "boolean"
                     }
                   },
@@ -27947,6 +28012,21 @@
                               "null"
                             ],
                             "pattern": "^[a-z0-9_]+$"
+                          },
+                          "has_instagram": {
+                            "type": "boolean"
+                          },
+                          "instagram_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "page_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -28044,6 +28124,21 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "has_instagram": {
+                            "type": "boolean"
+                          },
+                          "instagram_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "page_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -28115,6 +28210,38 @@
                         "result",
                         "searched_at",
                         "sites"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "channel_search": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "result": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "searched_at": {
+                          "type": "string"
+                        },
+                        "pages": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "instagrams": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "result",
+                        "searched_at",
+                        "pages",
+                        "instagrams"
                       ],
                       "additionalProperties": false
                     }
@@ -28467,6 +28594,21 @@
                             "type": "string"
                           },
                           "disconnected_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "has_instagram": {
+                            "type": "boolean"
+                          },
+                          "instagram_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "page_name": {
                             "type": [
                               "string",
                               "null"
@@ -28869,6 +29011,21 @@
                               "null"
                             ],
                             "pattern": "^[a-z0-9_]+$"
+                          },
+                          "has_instagram": {
+                            "type": "boolean"
+                          },
+                          "instagram_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "page_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -28966,6 +29123,21 @@
                               "string",
                               "null"
                             ]
+                          },
+                          "has_instagram": {
+                            "type": "boolean"
+                          },
+                          "instagram_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "page_name": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -29037,6 +29209,38 @@
                         "result",
                         "searched_at",
                         "sites"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "channel_search": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "result": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_]+$"
+                        },
+                        "searched_at": {
+                          "type": "string"
+                        },
+                        "pages": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "instagrams": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "result",
+                        "searched_at",
+                        "pages",
+                        "instagrams"
                       ],
                       "additionalProperties": false
                     }
