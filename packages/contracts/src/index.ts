@@ -547,3 +547,14 @@ export {
   OwnershipClaimResponse,
   OwnershipClaimStatus,
 } from './ownership-claim.js';
+export {
+  CreatePasskeyRequest,
+  CreatePasskeyResponse,
+  Passkey,
+  PasskeyAssertion,
+  PasskeyCeremony,
+  PasskeyRegistrationOptionsRequest,
+  PasskeysResponse,
+  RenamePasskeyRequest,
+  WebAuthnJson,
+} from './passkeys.js';

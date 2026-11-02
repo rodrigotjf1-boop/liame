@@ -1,0 +1,185 @@
+import { resolve } from 'node:path';
+import { CreatePasskeyResponse, MeResponse, PasskeyCeremony, PasskeysResponse } from '@liame/contracts';
+import { runMigrations } from '@liame/database';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { chavePublicaDaDms, gerarChaves } from '../../src/auth/recuperacao/lacre.js';
+import { currentStep, totpCode } from '../../src/auth/totp.js';
+import { APP_CONFIG, type AppConfig } from '../../src/config.js';
+import { AparelhoDeTeste } from '../helpers/aparelho-de-teste.js';
+import { enableMfa, ownerQuery, PASSWORD, resetIpRateLimits, signupAndLogin, startApi, type TestApi } from '../helpers/api.js';
+import { hasDb, OWNER_URL } from './env.js';
+
+// As chaves de acesso (A7, W9, parte 9a; P28; D-A7-54 a D-A7-58; D-A7-87), pelo caminho inteiro, com um aparelho de teste
+// que assina como um de verdade: a primeira chave sem o app (sem confirmar, com os 10 códigos); confirmar com a chave
+// para criar outra; o mesmo gerenciador não repete; renomear e tirar (a última não sai sem o app); a chave no lugar do
+// código do app na entrada, recusando origem errada e aparelho que não confirma a pessoa; o pedido de recuperação que
+// cai; e as restrições do banco.
+
+const GOOGLE = 'ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4';
+const WINDOWS = '08987058-cadc-4b81-b6e1-30de50dcbe96';
+const CHROME_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
+
+describe.skipIf(!hasDb)('as chaves de acesso', () => {
+  let api: TestApi;
+  let rp: AppConfig['passkeys'];
+
+  const aparelho = (aaguid?: string, sincroniza = true) => new AparelhoDeTeste(rp.rpId, rp.origins[0]!, aaguid, sincroniza);
+  const chamar = (metodo: string, caminho: string, cookie: string, body?: unknown) =>
+    api.call(metodo, caminho, { cookie, body, headers: { 'user-agent': CHROME_WINDOWS } });
+  const cerimonia = async (caminho: string, cookie: string, body: unknown = {}) => {
+    const r = await chamar('POST', caminho, cookie, body);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    return PasskeyCeremony.parse(r.body);
+  };
+  const criar = async (cookie: string, a: AparelhoDeTeste, confirmar: unknown = {}, nome?: string) => {
+    const c = await cerimonia('/v1/me/passkeys/registration-options', cookie, confirmar);
+    return chamar('POST', '/v1/me/passkeys', cookie, { challenge_id: c.challenge_id, response: a.criar(c.options), ...(nome ? { name: nome } : {}) });
+  };
+  const confirmarCom = async (cookie: string, a: AparelhoDeTeste) => {
+    const c = await cerimonia('/v1/me/passkeys/confirmation-options', cookie);
+    return { passkey: { challenge_id: c.challenge_id, response: a.assinar(c.options) } };
+  };
+  const listar = async (cookie: string) => PasskeysResponse.parse((await chamar('GET', '/v1/me/passkeys', cookie)).body);
+  const me = async (cookie: string) => MeResponse.parse((await api.call('GET', '/v1/me', { cookie })).body);
+  const soASenha = async (email: string) => (await api.call('POST', '/v1/auth/login', { body: { email, password: PASSWORD } })).cookie!;
+
+  beforeAll(async () => {
+    await runMigrations({ connectionString: OWNER_URL, dir: resolve(process.cwd(), '../../packages/database/migrations') });
+    api = await startApi();
+    rp = api.app.get<AppConfig>(APP_CONFIG).passkeys;
+  });
+  afterAll(async () => {
+    await api?.close();
+  });
+  beforeEach(resetIpRateLimits);
+
+  it('a primeira chave sem o app traz os 10 códigos; confirmar com a chave para criar outra; o mesmo gerenciador não repete; renomear e tirar', async () => {
+    const s = await signupAndLogin(api, undefined, 'Empresa Só Chaves');
+    const primeiro = aparelho();
+    const r = await criar(s.cookie, primeiro);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const criada = CreatePasskeyResponse.parse(r.body);
+    expect(criada.passkey).toMatchObject({ name: 'Chave sincronizada', synced: true, last_used_at: null });
+    expect(criada.recovery_codes).toHaveLength(10);
+    // A sessão ficou verificada com a chave, e o /me mostra a forma de segundo fator.
+    expect(await me(s.cookie)).toMatchObject({ mfa: 'verified', mfa_methods: ['chave'] });
+    expect(api.mailer.sent.filter((m) => m.to === s.email && m.subject === 'Liame: chave de acesso criada')).toHaveLength(1);
+
+    // Para criar outra: confirmar que é ela (sem nada, 400; com código sem ter o app, 400; com a chave, passa).
+    expect((await chamar('POST', '/v1/me/passkeys/registration-options', s.cookie, {})).body.code).toBe('confirme-que-e-voce');
+    expect((await chamar('POST', '/v1/me/passkeys/registration-options', s.cookie, { code: '123456' })).body.code).toBe('sem-app');
+    const google = aparelho(GOOGLE);
+    const segunda = await criar(s.cookie, google, await confirmarCom(s.cookie, primeiro));
+    expect(segunda.status, JSON.stringify(segunda.body)).toBe(201);
+    expect(CreatePasskeyResponse.parse(segunda.body)).toMatchObject({ passkey: { name: 'Senhas do Google' }, recovery_codes: null });
+    // O mesmo gerenciador não repete; o desafio não vale duas vezes.
+    const repetida = await criar(s.cookie, aparelho(GOOGLE), await confirmarCom(s.cookie, primeiro));
+    expect([repetida.status, repetida.body.code]).toEqual([409, 'mesmo-gerenciador']);
+    const c = await cerimonia('/v1/me/passkeys/registration-options', s.cookie, await confirmarCom(s.cookie, primeiro));
+    const windows = aparelho(WINDOWS, false);
+    expect((await chamar('POST', '/v1/me/passkeys', s.cookie, { challenge_id: c.challenge_id, response: windows.criar(c.options) })).status).toBe(201);
+    expect((await chamar('POST', '/v1/me/passkeys', s.cookie, { challenge_id: c.challenge_id, response: windows.criar(c.options) })).body.code).toBe('desafio-vencido');
+
+    const lista = await listar(s.cookie);
+    expect(lista).toMatchObject({ max: 10, has_totp: false });
+    expect(lista.items.map((k) => [k.name, k.synced])).toEqual([
+      ['Chave sincronizada', true],
+      ['Senhas do Google', true],
+      ['Windows Hello', false],
+    ]);
+    // A chave usada para confirmar ganha o último uso, com o aparelho.
+    expect(lista.items[0]).toMatchObject({ last_used_where: 'Chrome no Windows' });
+
+    // Renomear e tirar; a última não sai sem o app.
+    const [a, b, w] = lista.items;
+    expect((await chamar('PATCH', `/v1/me/passkeys/${a!.id}`, s.cookie, { name: 'Celular da loja' })).body.items[0].name).toBe('Celular da loja');
+    expect((await chamar('DELETE', `/v1/me/passkeys/${w!.id}`, s.cookie)).status).toBe(200);
+    expect((await chamar('DELETE', `/v1/me/passkeys/${b!.id}`, s.cookie)).status).toBe(200);
+    const ultima = await chamar('DELETE', `/v1/me/passkeys/${a!.id}`, s.cookie);
+    expect([ultima.status, ultima.body.code]).toEqual([409, 'ultima-chave']);
+    expect(api.mailer.sent.filter((m) => m.to === s.email && m.subject === 'Liame: chave de acesso tirada')).toHaveLength(2);
+  });
+
+  it('com o app: criar confirma com o código; na entrada, a chave vale pelo código do app; o pedido de recuperação cai', async () => {
+    const s = await signupAndLogin(api, undefined, 'Empresa Com App');
+    const { secret } = await enableMfa(api, s.cookie);
+    await ownerQuery(`update liame.app_user set totp_last_step = null where email = $1`, [s.email]);
+    const chave = aparelho(GOOGLE);
+    const r = await criar(s.cookie, chave, { code: totpCode(secret, currentStep()) });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(CreatePasskeyResponse.parse(r.body).recovery_codes).toBeNull();
+
+    // A sessão só da senha: o /me pede o segundo fator e mostra as duas formas.
+    const cookie = await soASenha(s.email);
+    expect(await me(cookie)).toMatchObject({ mfa: 'required', mfa_methods: ['totp', 'chave'] });
+    // Um pedido de recuperação em andamento, para ver que cai ao entrar com a chave.
+    const config = api.app.get<AppConfig>(APP_CONFIG);
+    config.recuperacaoChavePublica = chavePublicaDaDms(gerarChaves(3072).publica);
+    const pedido = await api.call('POST', '/v1/me/account-recovery?reason=outro', { cookie, raw: { data: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2]), type: 'image/jpeg' } });
+    expect(pedido.status, JSON.stringify(pedido.body)).toBe(201);
+
+    // Origem errada e aparelho que não confirma a pessoa: recusados (e o desafio já foi usado).
+    let c = await cerimonia('/v1/me/mfa/passkey-options', cookie);
+    expect((await chamar('POST', '/v1/me/mfa/passkey', cookie, { challenge_id: c.challenge_id, response: chave.assinar(c.options, { origem: 'https://outro.exemplo' }) })).body.code).toBe('chave-recusada');
+    expect((await chamar('POST', '/v1/me/mfa/passkey', cookie, { challenge_id: c.challenge_id, response: chave.assinar(c.options) })).body.code).toBe('desafio-vencido');
+    c = await cerimonia('/v1/me/mfa/passkey-options', cookie);
+    expect((await chamar('POST', '/v1/me/mfa/passkey', cookie, { challenge_id: c.challenge_id, response: chave.assinar(c.options, { uv: false }) })).body.code).toBe('chave-recusada');
+    // Outra pessoa não usa a chave de quem não é ela.
+    const outra = await signupAndLogin(api, undefined, 'Empresa Outra');
+    await enableMfa(api, outra.cookie);
+    expect((await chamar('POST', '/v1/me/mfa/passkey-options', await soASenha(outra.email))).body.code).toBe('sem-chave');
+
+    c = await cerimonia('/v1/me/mfa/passkey-options', cookie);
+    const ok = await chamar('POST', '/v1/me/mfa/passkey', cookie, { challenge_id: c.challenge_id, response: chave.assinar(c.options) });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(204);
+    expect(await me(cookie)).toMatchObject({ mfa: 'verified' });
+    const [sessao] = await ownerQuery<{ mfa_method: string }>(`select mfa_method from liame.session where user_id = (select id from liame.app_user where email = $1) order by created_at desc limit 1`, [s.email]);
+    expect(sessao?.mfa_method).toBe('chave');
+    expect((await api.call('GET', '/v1/me/account-recovery', { cookie })).body.recovery).toMatchObject({ status: 'cancelado', cancelled_by: 'entrou' });
+    // De novo na mesma sessão: já entrou.
+    expect((await chamar('POST', '/v1/me/mfa/passkey-options', cookie)).body.code).toBe('ja-entrou');
+  });
+
+  it('as restrições do banco (V119): cada check recusa o valor errado, pelo nome', async () => {
+    const s = await signupAndLogin(api, undefined, 'Empresa Restricoes Chaves');
+    const [u] = await ownerQuery<{ id: string }>(`select id from liame.app_user where email = $1`, [s.email]);
+    const restricao = async (texto: string, params: unknown[] = []): Promise<string | undefined> => {
+      try {
+        await ownerQuery(texto, params);
+        return undefined;
+      } catch (err) {
+        const e = err as { constraint?: string; message?: string };
+        return e.constraint ?? `sem restrição: ${e.message}`;
+      }
+    };
+    expect(await restricao(`update liame.app_user set webauthn_user_id = 'curto' where id = $1`, [u!.id])).toBe('app_user_webauthn_user_id_check');
+    const chave = (o: Record<string, string>) =>
+      restricao(
+        `insert into liame.passkey (id, user_id, credential_id, public_key, counter, device_type, backed_up, aaguid, name, last_used_where)
+         values (gen_random_uuid(), $1, $2, '\\x00', $3, $4, true, $5, $6, $7)`,
+        [u!.id, o.credencial ?? `cred_${Date.now()}_abcdefghij`, o.contador ?? '0', o.tipo ?? 'multiDevice', o.aaguid ?? '00000000-0000-0000-0000-000000000000', o.nome ?? 'Chave', o.onde ?? null],
+      );
+    expect(await chave({})).toBeUndefined();
+    expect(await chave({ credencial: 'curta' })).toBe('passkey_credential_id_check');
+    expect(await chave({ contador: '-1' })).toBe('passkey_counter_check');
+    expect(await chave({ tipo: 'algum' })).toBe('passkey_device_type_check');
+    expect(await chave({ aaguid: 'ABC' })).toBe('passkey_aaguid_check');
+    expect(await chave({ nome: '' })).toBe('passkey_name_check');
+    expect(await chave({ onde: '' })).toBe('passkey_last_used_where_check');
+    const desafio = (proposito: string, desafioTexto: string, comPessoa: boolean) =>
+      restricao(
+        `insert into liame.webauthn_challenge (id, user_id, purpose, challenge, expires_at) values (gen_random_uuid(), $1, $2, $3, now())`,
+        [comPessoa ? u!.id : null, proposito, desafioTexto],
+      );
+    expect(await desafio('cadastrar', 'desafio_bem_comprido_123', true)).toBeUndefined();
+    expect(await desafio('entrar', 'desafio_bem_comprido_123', false)).toBeUndefined();
+    expect(await desafio('abrir', 'desafio_bem_comprido_123', true)).toBe('webauthn_challenge_purpose_check');
+    expect(await desafio('cadastrar', 'curto', true)).toBe('webauthn_challenge_challenge_check');
+    expect(await desafio('entrar', 'desafio_bem_comprido_123', true)).toBe('webauthn_challenge_dono');
+    expect(await desafio('cadastrar', 'desafio_bem_comprido_123', false)).toBe('webauthn_challenge_dono');
+    expect(await restricao(`update liame.session set mfa_method = 'chave' where user_id = $1`, [u!.id])).toBeUndefined();
+    expect(await restricao(`update liame.session set mfa_method = 'sms' where user_id = $1`, [u!.id])).toBe('session_mfa_method_check');
+    await ownerQuery(`delete from liame.passkey where user_id = $1`, [u!.id]);
+    await ownerQuery(`delete from liame.webauthn_challenge where user_id = $1 or (user_id is null and challenge = 'desafio_bem_comprido_123')`, [u!.id]);
+  });
+});

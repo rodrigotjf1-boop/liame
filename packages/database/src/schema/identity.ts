@@ -36,6 +36,8 @@ export const appUser = liame.table('app_user', {
   /** Termos aceitos ao criar o login: versão e quando (migration 0016). */
   termsVersion: text('terms_version'),
   termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
+  /** O identificador da pessoa nas chaves de acesso, aleatório e sem dado pessoal (migration 0108, A7 W9). */
+  webauthnUserId: text('webauthn_user_id'),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

@@ -24,6 +24,11 @@ export const DATA_CLASSES: Record<string, TableClassification> = {
   secret: { class: 'SECRET', retention: 'até revogar; com a empresa ou a pessoa' },
   tenant_key: { class: 'SECRET', retention: 'destruída no expurgo da empresa (crypto-shredding)' },
   recovery_code: { class: 'SECRET', retention: 'enquanto o segundo fator estiver ativo' },
+  // As chaves de acesso (A7, W9, migration 0108; D-A7-87): a chave PÚBLICA, o gerenciador, se sincroniza e o último uso
+  // (nada da biometria); até a pessoa tirar, ou com a pessoa. O desafio de cada cerimônia vence em 5 minutos e sai no
+  // próximo pedido da pessoa.
+  passkey: { class: 'PERSONAL', retention: 'até a pessoa tirar; com a pessoa' },
+  webauthn_challenge: { class: 'INTERNAL', retention: '5 minutos (sai no próximo pedido da pessoa)' },
   invitation: { class: 'PERSONAL', retention: 'com a empresa' },
   role: { class: 'PUBLIC', retention: 'do produto' },
   role_permission: { class: 'INTERNAL', retention: 'do produto e da empresa' },

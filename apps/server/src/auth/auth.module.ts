@@ -12,6 +12,8 @@ import { AgencyReplyToController } from './resposta-da-agencia.controller.js';
 import { AgencyReplyToService } from './resposta-da-agencia.js';
 import { AuthController, MeController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { ChavesController } from './chaves/chaves.controller.js';
+import { ChavesService } from './chaves/chaves.service.js';
 import { InvitationAcceptService } from './invitation-accept.service.js';
 import { InvitationController } from './invitation.controller.js';
 import { LegalController } from './legal.controller.js';
@@ -36,6 +38,7 @@ import { SessionService } from './session.service.js';
     AgencyAccountController,
     AgencyReplyToController,
     RecuperacaoDaContaController,
+    ChavesController,
   ],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
@@ -53,6 +56,7 @@ import { SessionService } from './session.service.js';
     AgencyReplyToService,
     SecurityService,
     RecuperacaoDaContaService,
+    ChavesService,
     { provide: APP_GUARD, useClass: AccessGuard },
     { provide: APP_INTERCEPTOR, useClass: UnitOfWorkInterceptor },
     // Depois da unidade de trabalho: a política é avaliada dentro da transação da requisição.

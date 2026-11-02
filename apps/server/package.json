@@ -32,6 +32,7 @@
     "@openfeature/core": "catalog:",
     "@openfeature/server-sdk": "catalog:",
     "@opentelemetry/api": "catalog:",
+    "@simplewebauthn/server": "catalog:",
     "ai": "catalog:",
     "drizzle-orm": "catalog:",
     "pg-boss": "catalog:",

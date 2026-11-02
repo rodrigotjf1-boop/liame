@@ -250,10 +250,15 @@ export class AuthService {
   }
 
   async loadMe(tx: Tx, userId: string, tenantId: string | null, mfaVerifiedAt: Date | null): Promise<MeResponse> {
-    const u = await tx.execute<{ id: string; name: string; email: string; mfa_configured: boolean }>(sql`
+    const u = await tx.execute<{ id: string; name: string; email: string; mfa_configured: boolean; tem_app: boolean; tem_chave: boolean }>(sql`
       select id, name, email,
              exists (select 1 from liame.secret x
-                      where x.owner_user_id = app_user.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as mfa_configured
+                      where x.owner_user_id = app_user.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null) as tem_app,
+             exists (select 1 from liame.passkey k where k.user_id = app_user.id) as tem_chave,
+             -- O segundo fator: o app ou uma chave de acesso (A7, W9; D-A7-57).
+             (exists (select 1 from liame.secret x
+                       where x.owner_user_id = app_user.id and x.tenant_id is null and x.purpose = 'totp' and x.revoked_at is null)
+              or exists (select 1 from liame.passkey k where k.user_id = app_user.id)) as mfa_configured
         from liame.app_user where id = ${userId}`);
     const orgs = await tx.execute<{ id: string; name: string; role: RoleKey; kind: OrganizationKind }>(sql`
       select o.id, o.name, m.role_key as role, o.kind
@@ -273,6 +278,7 @@ export class AuthService {
       mfa: !user.mfa_configured ? 'not_configured' : mfaVerifiedAt ? 'verified' : 'required',
       // Quem entra pela agência usa o app em qualquer nível (D-A7-48).
       mfa_enrollment_required: !user.mfa_configured && activeRole !== null && (MFA_REQUIRED.has(activeRole) || pelaAgencia.has(tenantId!)),
+      mfa_methods: [...(user.tem_app ? (['totp'] as const) : []), ...(user.tem_chave ? (['chave'] as const) : [])],
       permissions,
     };
   }

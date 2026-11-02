@@ -6,8 +6,11 @@ import { z } from 'zod';
 export const SecuritySummaryResponse = z.strictObject({
   /** App autenticador ativo desde; nulo = não ativado. */
   mfa_enabled_since: z.string().nullable(),
-  /** Como esta sessão foi confirmada: pelo app, por código de recuperação ou ainda não. */
-  session_mfa_method: z.enum(['totp', 'recuperacao']).nullable(),
+  /**
+   * Como esta sessão foi confirmada: `totp` (o app), `recuperacao` (um código de recuperação), `chave` (uma chave de
+   * acesso, A7, W9) ou nulo (ainda não). Texto aberto: a lista cresce (base §14, ERR-015).
+   */
+  session_mfa_method: z.string().regex(/^[a-z_]{2,30}$/).nullable(),
   /** Quantos dos códigos de recuperação ainda valem. */
   recovery_codes_left: z.int().min(0).max(10),
   /** Pedido de troca do app (aparelho perdido): vale a partir de `usable_after`, até `expires_at`. */

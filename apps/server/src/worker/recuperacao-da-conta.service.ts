@@ -104,7 +104,7 @@ export function emailsDaSituacao(p: PedidoParaAvisar, admins: readonly Administr
         {
           to: p.dono.email,
           subject: `Liame: o app autenticador da sua conta foi trocado (${p.protocol})`,
-          text: `Terminou a espera do pedido ${p.protocol}: o app autenticador antigo e os códigos de recuperação deixaram de valer, e todas as sessões foram fechadas. Entre com o seu e-mail e a senha: você lê o QR do app novo e recebe 10 códigos novos.${link}`,
+          text: `Terminou a espera do pedido ${p.protocol}: o app autenticador antigo, as chaves de acesso e os códigos de recuperação deixaram de valer, e todas as sessões foram fechadas. Entre com o seu e-mail e a senha: você lê o QR do app novo e recebe 10 códigos novos.${link}`,
         },
         ...aosAdmins(
           () => `Liame: o app autenticador de ${dono} foi trocado`,
@@ -158,6 +158,10 @@ export class RecuperacaoDaContaRotina {
           update liame.secret set revoked_at = now()
            where owner_user_id = ${p.user_id} and tenant_id is null and purpose in ('totp', 'totp_pendente') and revoked_at is null`);
         await tx.execute(sql`delete from liame.recovery_code where user_id = ${p.user_id} and used_at is null`);
+        // As chaves de acesso também saem (A7, W9): quem perdeu o aparelho perdeu as chaves dele, e a recuperação recomeça
+        // o segundo fator do zero.
+        await tx.execute(sql`delete from liame.passkey where user_id = ${p.user_id}`);
+        await tx.execute(sql`delete from liame.webauthn_challenge where user_id = ${p.user_id}`);
         await tx.execute(sql`update liame.user_token set used_at = now() where user_id = ${p.user_id} and purpose = 'trocar_segundo_fator' and used_at is null`);
         await tx.execute(sql`update liame.session set revoked_at = now() where user_id = ${p.user_id} and revoked_at is null`);
         await tx.execute(sql`update liame.app_user set totp_last_step = null, mfa_enabled_at = null where id = ${p.user_id}`);

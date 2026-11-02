@@ -47,6 +47,10 @@ catalog:
   # binário vem pronto por plataforma (`@img/sharp-*`, glibc no contêiner), sem script de instalação; a LGPL do libvips
   # já é aceita no CI. A mesma versão que o Next já traz no web.
   sharp: 0.35.5
+  # As chaves de acesso (passkeys; A7, W9; D-A7-87; base §17.7): a verificação WebAuthn no servidor (MIT; Node 22+), a
+  # biblioteca de referência do guia do Google e do GitHub. As duas pontas (servidor e navegador) na mesma linha 14.
+  '@simplewebauthn/server': 14.0.3
+  '@simplewebauthn/browser': 14.0.0
   '@openfeature/server-sdk': 1.23.0
   '@openfeature/core': 1.12.0
 

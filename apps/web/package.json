@@ -15,6 +15,7 @@
     "@liame/contracts": "workspace:*",
     "@liame/sdk": "workspace:*",
     "@liame/telemetry": "workspace:*",
+    "@simplewebauthn/browser": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",

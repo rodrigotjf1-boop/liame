@@ -909,6 +909,20 @@ Falta da W3: o fim (parte 4) — o que acontece quando a assinatura termina (can
   - no navegador, 26 execuções em 1440, 1024, 768 e 375 px, claro e escuro: pedir (os erros, os dois documentos, os Termos e o envio em partes na ordem), a gaveta sem rolagem de lado, desistir, recusado, quem não pode pedir, e o Dono que responde;
   - a suíte do web, com os motivos, a situação do pedido e quando o caminho aparece.
 
+**A W9, parte 9a: as chaves de acesso no servidor (02/11/2026; migration 0108; D-A7-87).** As telas vêm na parte 9c; até lá, nada aparece para ninguém.
+- **a biblioteca** `@simplewebauthn/server` 14.0.3 (e a do navegador, 14.0.0, para a 9c), fixadas no catálogo;
+- **criar uma chave** em `/v1/me/passkeys`:
+  - antes, confirmar com o código do app ou com uma chave que a pessoa já tem; a primeira de quem não tem segundo fator entra sem confirmar;
+  - o aparelho confirma a pessoa; o nome vem do gerenciador (AAGUID) e dá para trocar;
+  - até 10 chaves, o mesmo gerenciador não repete;
+  - a primeira chave sem o app traz os 10 códigos de recuperação; e-mail a cada chave criada ou tirada;
+- **a lista, renomear e tirar**: a última não sai sem o app;
+- **a chave no lugar do código do app na entrada** (`/v1/me/mfa/passkey-options` e `/v1/me/mfa/passkey`, antes do segundo fator); o pedido de recuperação em andamento cai sozinho;
+- **o segundo fator** conta como configurado com o app ou com uma chave; o `/v1/me` diz quais a pessoa tem; a recuperação aplicada também tira as chaves;
+- **testes:**
+  - `test/db/chaves-de-acesso.spec.ts`, com um aparelho de teste que assina como um de verdade (P-256, CBOR): a primeira chave sem o app, confirmar com a chave para criar outra, o mesmo gerenciador, o desafio de uso único, renomear e tirar, a chave na entrada (recusando origem errada e o aparelho que não confirma a pessoa), o pedido de recuperação que cai e cada restrição do banco;
+  - com as suítes de recuperação, segundo fator, entrada, segurança, acesso, ciclo de vida, worker, pessoas e propriedade, em UTC; o contrato da API sem quebra (o método da sessão virou texto aberto).
+
 ## Hub DMS · F2 (o Liame na credencial nova)
 
 O plano da F2 do Hub DMS (decisões F2-1 a F2-8 do dono, 15/10/2026) tem uma etapa no Liame, a **A3**: consertar o achado A2 e comparar as duas credenciais do RegemCast (a de hoje, `rct_it_`, e a do DMS ID com a ligação) nas 10 ferramentas de leitura, até 14 dias seguidos sem diferença, cada uma comparada 50 vezes ou mais (F2-7). A porta do RegemCast já aceita a credencial nova, desligada (RegemCast #118, 16/10/2026).

@@ -270,6 +270,12 @@ Os funcionários de IA nascem desligados para todas as empresas (flag `ia`). Sem
 
 Devoluções permanentes e reclamações: a lista de supressão da conta vem ligada para as duas (conta criada depois de 25/11/2019); o SES aceita e não entrega para endereço suprimido. O Gmail não manda reclamação ao SES. Falha de envio não desfaz a operação: fica no log com o motivo.
 
+## Chaves de acesso (A7, W9; D-A7-87)
+
+| Variável | Para quê | Padrão |
+| --- | --- | --- |
+| `PASSKEY_RP_ID` | O domínio das chaves de acesso (o "RP ID" do WebAuthn): a chave só abre este domínio e os subdomínios dele. Precisa ser o domínio do `APP_URL` ou um domínio acima dele (o app recusa subir com outro). Trocar depois invalida as chaves já criadas | o domínio do `APP_URL` |
+
 ## Recuperação da conta (A7, W8, parte 4a; D-A7-85)
 
 | Variável | Para quê | Padrão |

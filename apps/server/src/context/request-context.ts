@@ -31,7 +31,7 @@ export interface AuthContext {
   /** A pessoa tem app autenticador ativo. */
   mfaConfigured: boolean;
   /** Como a sessão provou o segundo fator. */
-  mfaMethod: 'totp' | 'recuperacao' | null;
+  mfaMethod: 'totp' | 'recuperacao' | 'chave' | null;
 }
 
 interface RequestStore {
